@@ -1,0 +1,644 @@
+{
+  "$schema": "issues.schema.json",
+  "project": {
+    "name": "Font Manager",
+    "spec_url": "https://claude.ai/code/artifact/b90dd55a-4c52-4f44-b868-46878caa6f11",
+    "breakdown_url": "https://claude.ai/code/artifact/195e5ba6-05c4-4eae-b5a3-092d9361acd5",
+    "board_title": "Font Manager — Development",
+    "board_columns": ["Backlog", "Ready", "In progress", "In review", "Done"]
+  },
+  "milestones": [
+    { "title": "Phase 1 — MVP", "description": "Core library, views, search with language filter, activation on Windows/macOS/Linux, duplicates and problems. Gate: all non-functional targets met on the 10k reference library." },
+    { "title": "Phase 2 — v1.0 (internal)", "description": "Inspection depth, body text layouts, Compare, Quick Collection, smart collections, licensing, background agent, release engineering. Gate: daily-driver quality." },
+    { "title": "Phase 3 — v1.5 (internal)", "description": "Web export, specimens, online catalogs, visual similarity, Pairing Studio, local API endpoint, CLI, MCP server, shared libraries. Gate: developer and studio personas served." },
+    { "title": "Phase 4 — v2.0 (public release)", "description": "Plugin IPC, Adobe and Sketch plugins, missing-fonts watcher, find by image, Font Switch, native shell decision, public release. Gate: InDesign auto-activation works." }
+  ],
+  "labels": [
+    { "name": "type:epic", "color": "5319E7", "description": "Epic — parent of stories (sub-issues)" },
+    { "name": "type:story", "color": "0E8A16", "description": "Story — a few days of work with acceptance criteria" },
+    { "name": "phase:1", "color": "1D76DB", "description": "Phase 1 — MVP" },
+    { "name": "phase:2", "color": "1D76DB", "description": "Phase 2 — v1.0" },
+    { "name": "phase:3", "color": "1D76DB", "description": "Phase 3 — v1.5" },
+    { "name": "phase:4", "color": "1D76DB", "description": "Phase 4 — v2.0" },
+    { "name": "size:S", "color": "C2E0C6", "description": "≤ 1 day" },
+    { "name": "size:M", "color": "7FD48A", "description": "2–3 days" },
+    { "name": "size:L", "color": "2E9E4F", "description": "4–5 days" },
+    { "name": "track:core", "color": "F9D0C4", "description": "Rust core / fm-api / fm-core" },
+    { "name": "track:ui", "color": "FBCA04", "description": "Tauri + Vue frontend" },
+    { "name": "track:platform", "color": "D93F0B", "description": "OS-specific code in fm-platform (needs extra review)" },
+    { "name": "track:ops", "color": "BFD4F2", "description": "CI, packaging, benchmarks, docs" },
+    { "name": "track:data", "color": "E4E669", "description": "Data files (charsets, classification)" },
+    { "name": "track:plugins", "color": "D4C5F9", "description": "App plugins, CLI, MCP" },
+    { "name": "human", "color": "B60205", "description": "Needs a human: spike, ADR, decision, or interactive setup — the harness skips these" },
+    { "name": "harness:ready", "color": "0052CC", "description": "All blockers closed; the harness may pick this up" },
+    { "name": "harness:in-progress", "color": "0052CC", "description": "The harness is working on this" },
+    { "name": "harness:blocked", "color": "0052CC", "description": "The harness stopped and needs a human" },
+    { "name": "criteria:tbd", "color": "EEEEEE", "description": "Acceptance criteria to be written at the end of the previous phase" }
+  ],
+  "epics": [
+    {
+      "id": "E1", "title": "Foundation and fm-api", "phase": 1, "track": "core",
+      "summary": "The workspace, the CI matrix, the API contract and the reference library. Nothing in E2–E9 starts before E1.1–E1.3 are merged.",
+      "stories": [
+        { "id": "E1.1", "title": "Create the monorepo and workspace", "size": "M", "track": "ops", "human": true, "depends": [],
+          "criteria": [
+            "Layout matches the Repository layout section of the breakdown (crates/, apps/desktop, plugins/, data/, fixtures/, scripts/, docs/)",
+            "`cargo build` and `pnpm install` succeed on a clean clone",
+            "`clippy -D warnings`, `rustfmt`, `cargo-deny`, ESLint and Prettier wired as `pnpm lint`",
+            "The five ADRs committed under docs/adr/ (Tauri, fontations, SQLite/FTS5, in-place library, open-core teams)"
+          ] },
+        { "id": "E1.2", "title": "CI matrix", "size": "M", "track": "ops", "human": true, "depends": ["E1.1"],
+          "criteria": [
+            "GitHub Actions runs lint, `cargo nextest`, Vitest and a Tauri debug build on windows-latest, macos-latest and ubuntu-latest on every PR",
+            "A stale generated types.ts fails the build",
+            "cargo and pnpm caches are used; a warm run finishes in under 10 minutes per OS"
+          ] },
+        { "id": "E1.3", "title": "fm-api skeleton", "size": "L", "track": "core", "human": true, "depends": ["E1.1"],
+          "criteria": [
+            "fm-api defines the service traits (Library, Search, Preview, Activation, Organization, Export, Workflows) with request/response/error types",
+            "All types derive serde and specta; an ApiVersion constant and a typed Event enum exist",
+            "`pnpm gen:types` produces apps/desktop/src/api/types.ts",
+            "A MockApi implements every trait for frontend development"
+          ] },
+        { "id": "E1.4", "title": "Reference library", "size": "M", "track": "ops", "depends": ["E1.1"],
+          "criteria": [
+            "scripts/build-reference-library.sh downloads ~10,000 OFL/Apache/UFL fonts (Google Fonts repo plus Fontshare) into a local folder with a manifest of hashes",
+            "A 200-font subset is committed under fixtures/fonts/ including variable, color, TTC, WOFF2, a broken file and a Type 1 file",
+            "The script is idempotent and resumable"
+          ] },
+        { "id": "E1.5", "title": "Tauri app skeleton", "size": "M", "track": "ui", "depends": ["E1.3"],
+          "criteria": [
+            "apps/desktop opens a window on all three platforms with Vue 3, Pinia, Vue Router and the generated API client",
+            "One Tauri command (get_app_info) round-trips through fm-api",
+            "Dark/light theme follows the OS"
+          ] },
+        { "id": "E1.6", "title": "Logging, config and app paths", "size": "S", "track": "core", "depends": ["E1.1"],
+          "criteria": [
+            "tracing with a rotating log file",
+            "Config lives in the platform app-data folder",
+            "fm-platform exposes paths for data, cache, logs and the library folder on each OS"
+          ] },
+        { "id": "E1.7", "title": "Error model and telemetry switch", "size": "S", "track": "core", "depends": ["E1.3"],
+          "criteria": [
+            "One FmError type with user-facing message plus developer detail; errors cross the API as structured data",
+            "Telemetry and crash reporting exist as a config flag defaulting to off; nothing is sent when off"
+          ] }
+      ]
+    },
+    {
+      "id": "E2", "title": "Scanner and parser", "phase": 1, "track": "core",
+      "summary": "Turns folders into faces. With E3 it is the MVP's critical path.",
+      "stories": [
+        { "id": "E2.1", "title": "Font file discovery", "size": "S", "track": "core", "depends": ["E1.3"],
+          "criteria": [
+            "Given a source folder, lists every file with a font extension (ttf, otf, ttc, otc, woff, woff2, pfb, pfa, dfont) recursively",
+            "Skips hidden folders; follows symlinks once",
+            "Reports count and total size"
+          ] },
+        { "id": "E2.2", "title": "Parse with fontations", "size": "L", "track": "core", "depends": ["E1.4"],
+          "criteria": [
+            "read-fonts yields all faces in a TTC; family/subfamily (name IDs 1/2); typographic family/subfamily (16/17); PostScript name; version; foundry; designer; copyright; license text and URL; OS/2 weight/width/fsType; post italic angle; fvar axes and named instances; GSUB/GPOS feature tags; cmap code points",
+            "A malformed file returns Health::Broken(reason) instead of panicking",
+            "A cargo-fuzz target runs 10 minutes clean"
+          ] },
+        { "id": "E2.3", "title": "Hashing and change detection", "size": "S", "track": "core", "depends": ["E2.2"],
+          "criteria": [
+            "Each file gets a blake3 hash",
+            "A rescan skips files whose size and mtime are unchanged; a changed file is re-parsed",
+            "A removed file is marked gone, not deleted from the index"
+          ] },
+        { "id": "E2.4", "title": "Family grouping", "size": "M", "track": "core", "depends": ["E2.2"],
+          "criteria": [
+            "Faces group by typographic family with fallback to family",
+            "Styles sort weight → width → slant; variable named instances appear as styles of their family",
+            "The 200-font fixture groups into the expected families (snapshot test)"
+          ] },
+        { "id": "E2.5", "title": "Watched folders", "size": "M", "track": "core", "depends": ["E2.3"],
+          "criteria": [
+            "notify events (create, modify, remove, rename) update the index within 1 s",
+            "A debounce coalesces bursts",
+            "A periodic full rescan (configurable, default 1 h) catches missed events",
+            "A source can be paused and resumed"
+          ] },
+        { "id": "E2.6", "title": "Health checks", "size": "S", "track": "core", "depends": ["E2.2"],
+          "criteria": [
+            "Broken/truncated files, missing cmap, zero glyphs and legacy formats (Type 1, dfont, bitmap) are flagged with a reason",
+            "WOFF/WOFF2 are parsed for preview and marked convertible"
+          ] },
+        { "id": "E2.7", "title": "Scan progress events", "size": "S", "track": "core", "depends": ["E2.5"],
+          "criteria": [
+            "The API emits ScanStarted, ScanProgress {done, total}, ScanFinished {added, changed, removed, problems}",
+            "The UI stays responsive during a 10k scan"
+          ] }
+      ]
+    },
+    {
+      "id": "E3", "title": "Index and search", "phase": 1, "track": "core",
+      "summary": "Turns faces into something searchable, including the language and character-set filter.",
+      "stories": [
+        { "id": "E3.1", "title": "SQLite schema and migrations", "size": "M", "track": "core", "depends": ["E1.3"],
+          "criteria": [
+            "Tables as in the spec's data model; migrations run on startup",
+            "The index is rebuildable from sources through an API call",
+            "Corruption on open triggers a rebuild, not a crash"
+          ] },
+        { "id": "E3.2", "title": "Persist scan results", "size": "M", "track": "core", "depends": ["E3.1", "E2.4"],
+          "criteria": [
+            "E2 output lands in font_file and face in one transaction per batch of 500",
+            "10,000 fonts persist in under 10 s on the reference machine"
+          ] },
+        { "id": "E3.3", "title": "FTS5 search", "size": "M", "track": "core", "depends": ["E3.2"],
+          "criteria": [
+            "A query over family, style, PostScript name, foundry, designer and tags returns ranked, grouped-by-family results in under 50 ms on 10k fonts",
+            "Typo tolerance via trigram tokenizer",
+            "Style words narrow styles"
+          ] },
+        { "id": "E3.4", "title": "Filters", "size": "M", "track": "core", "depends": ["E3.3"],
+          "criteria": [
+            "Filters for classification, weight range, width, slant, variable, color, format, feature tag, license type, source, health and activation state compose with AND and apply with search",
+            "Each filter shows its result count"
+          ] },
+        { "id": "E3.5", "title": "Classification heuristics", "size": "L", "track": "core", "depends": ["E2.2"],
+          "criteria": [
+            "When the font gives no class (OS/2 panose/family class), heuristics on glyph outlines assign serif / sans / slab / mono / script / display with a confidence",
+            "The fixture's 200 fonts are ≥ 90% correctly classed against a hand-labeled list"
+          ] },
+        { "id": "E3.6", "title": "Character-set data", "size": "M", "track": "data", "depends": [],
+          "criteria": [
+            "data/charsets/*.json defines required characters per language for Latin-script European languages, Cyrillic languages, Greek, Turkish, Vietnamese, Arabic, Hebrew, Thai, Devanagari and CJK basics",
+            "A schema and a validation test exist; contributions are a PR to a data file",
+            "Sources (Hyperglot, Google Fonts language data) are credited in data/charsets/README.md"
+          ] },
+        { "id": "E3.7", "title": "Coverage at scan time", "size": "M", "track": "core", "depends": ["E3.2", "E3.6"],
+          "criteria": [
+            "Each face stores a compact bitset of its cmap",
+            "Per-language coverage is computed from E3.6 and stored",
+            "locl language systems are recorded from GSUB"
+          ] },
+        { "id": "E3.8", "title": "Supports filter (language and character set)", "size": "M", "track": "core", "depends": ["E3.7", "E3.4"],
+          "criteria": [
+            "Filter by one or more languages (AND) or by pasted text",
+            "Results include \"missing N\" with the exact characters for near-misses within 5 characters",
+            "Filtering 10k fonts by language returns in under 50 ms",
+            "A locl badge shows for fonts with localized forms for the chosen language"
+          ] }
+      ]
+    },
+    {
+      "id": "E4", "title": "Preview rendering", "phase": 1, "track": "core",
+      "summary": "Produces pixels: native webview rendering for the list, a core rasterizer for thumbnails and later the CLI and MCP.",
+      "stories": [
+        { "id": "E4.1", "title": "Webview font loading", "size": "M", "track": "ui", "depends": ["E1.5", "E3.2"],
+          "criteria": [
+            "A Tauri asset-protocol route serves a font file by face ID",
+            "The Vue list renders a preview row with @font-face pointing at it; variable fonts render with font-variation-settings",
+            "1,000 rows scrolled do not leak font faces (unused faces unloaded)"
+          ] },
+        { "id": "E4.2", "title": "Core rasterizer", "size": "L", "track": "core", "depends": ["E2.2"],
+          "criteria": [
+            "fm-core renders a text string with a given face, size, color and axis values to a PNG via rustybuzz shaping and swash/cosmic-text rasterization",
+            "Output matches the OS rendering closely enough for thumbnails (visual comparison documented)",
+            "Reusable by grid thumbnails, the CLI and the MCP render_preview"
+          ] },
+        { "id": "E4.3", "title": "Preview cache", "size": "S", "track": "core", "depends": ["E4.2"],
+          "criteria": [
+            "Rendered thumbnails are cached on disk keyed by face hash plus settings hash with an LRU cap (default 500 MB, configurable)",
+            "A cache hit returns in under 2 ms"
+          ] },
+        { "id": "E4.4", "title": "Preview controls", "size": "M", "track": "ui", "depends": ["E4.1"],
+          "criteria": [
+            "Sample text (custom, pangrams in 10 languages, lorem, alphabet, numerals, font name), size 8–300, line height, tracking, alignment, text/background colors and a light/dark preview surface apply to all rows live",
+            "Settings persist per view"
+          ] },
+        { "id": "E4.5", "title": "Dynamic previews", "size": "S", "track": "ui", "depends": ["E3.7", "E4.4"],
+          "criteria": [
+            "When the sample text contains characters a font lacks, the row falls back to text drawn from the font's own coverage (its script or its symbols)",
+            "A small \"fallback\" hint is shown"
+          ] }
+      ]
+    },
+    {
+      "id": "E5", "title": "UI shell", "phase": 1, "track": "ui",
+      "summary": "The window people use. Starts against MockApi so it runs in parallel with E2–E4.",
+      "stories": [
+        { "id": "E5.1", "title": "Three-column layout", "size": "M", "track": "ui", "depends": ["E1.5"],
+          "criteria": [
+            "Sidebar, font list and inspector with draggable dividers",
+            "The inspector collapses under 1,100 px and reopens with a shortcut; state restored on relaunch",
+            "Matches the spec's main-window drawing"
+          ] },
+        { "id": "E5.2", "title": "Virtualized font list", "size": "L", "track": "ui", "depends": ["E5.1", "E4.1"],
+          "criteria": [
+            "List view renders 10,000 families at 60 fps on the reference machine with row recycling",
+            "Expanding a family shows its styles inline",
+            "Keyboard navigation (arrows, Enter, Tab) and multi-select work"
+          ] },
+        { "id": "E5.3", "title": "Grid and waterfall views", "size": "M", "track": "ui", "depends": ["E5.2", "E4.3"],
+          "criteria": [
+            "Grid cards with thumbnails from E4.3",
+            "Waterfall shows the sample text at 6 sizes per family",
+            "Switching views keeps selection and scroll position by family"
+          ] },
+        { "id": "E5.4", "title": "Detail list view", "size": "L", "track": "ui", "depends": ["E5.2"],
+          "criteria": [
+            "Table mode with the spec's columns: activation dot, name, style count, weight line, weight range, format badge, version, manufacturer, location, license, date added, tags",
+            "Columns sortable, reorderable, hideable; configuration persisted",
+            "Preview strip above the table with its own size slider"
+          ] },
+        { "id": "E5.5", "title": "Search box and filter chips", "size": "M", "track": "ui", "depends": ["E3.3", "E3.8"],
+          "criteria": [
+            "/ focuses search; results update within 50 ms of typing (debounced 80 ms)",
+            "Filter chips from E3.4 and E3.8 show under the list title with counts",
+            "A chip set can be saved as a smart collection (stub until E14)"
+          ] },
+        { "id": "E5.6", "title": "Inspector: Info tab", "size": "S", "track": "ui", "depends": ["E5.1"],
+          "criteria": [
+            "Shows every field from E2.2 for the selected face with copy-on-click for names and paths",
+            "Shows the activation button and the health badge"
+          ] },
+        { "id": "E5.7", "title": "Sidebar sources", "size": "M", "track": "ui", "depends": ["E2.5", "E5.1"],
+          "criteria": [
+            "Add, pause, resume and remove source folders through a native folder picker",
+            "Scan progress inline from E2.7",
+            "The System source is listed read-only"
+          ] },
+        { "id": "E5.8", "title": "Command palette and shortcuts", "size": "M", "track": "ui", "depends": ["E5.1"],
+          "criteria": [
+            "Ctrl/Cmd+K palette lists every action with fuzzy search",
+            "The spec's keyboard model is implemented",
+            "Every action is reachable without a mouse"
+          ] },
+        { "id": "E5.9", "title": "Settings window", "size": "S", "track": "ui", "depends": ["E5.1", "E1.6"],
+          "criteria": [
+            "Sections: Sources, Activation, Appearance (theme, density), Advanced (cache size, rescan interval, logs folder)",
+            "Changes apply immediately"
+          ] },
+        { "id": "E5.10", "title": "Accessibility baseline", "size": "M", "track": "ui", "depends": ["E5.2"],
+          "criteria": [
+            "Every interactive element has a label; focus rings visible",
+            "Screen reader announces family, style and activation state in the list",
+            "Contrast ≥ AA for chrome; reduce-motion honored"
+          ] }
+      ]
+    },
+    {
+      "id": "E6", "title": "Activation", "phase": 1, "track": "platform",
+      "summary": "The only MVP epic that touches the OS: spike first, then one implementation per platform with an integration test each.",
+      "stories": [
+        { "id": "E6.1", "title": "Activation spike (ADR)", "size": "M", "track": "platform", "human": true, "depends": ["E1.4"],
+          "criteria": [
+            "A throwaway program on each OS registers a font from an arbitrary path for the session and for the user, and a second process can use it without restart",
+            "Findings recorded in an ADR, including Windows per-user registry behavior on Windows 10 and 11 and macOS scope semantics"
+          ] },
+        { "id": "E6.2", "title": "FontActivator trait", "size": "S", "track": "platform", "depends": ["E6.1", "E1.3"],
+          "criteria": [
+            "activate(faces, Mode) -> Result<Vec<Outcome>>, deactivate, list_active, conflicts(faces)",
+            "Errors are per-face, not all-or-nothing",
+            "A MockActivator exists for tests"
+          ] },
+        { "id": "E6.3", "title": "Windows implementation", "size": "L", "track": "platform", "depends": ["E6.2"],
+          "criteria": [
+            "Session: AddFontResourceExW plus WM_FONTCHANGE, removed on quit",
+            "Permanent: HKCU\\…\\Fonts entry pointing at the file in place, no admin prompt",
+            "Integration test launches a second process and finds the family via DirectWrite enumeration"
+          ] },
+        { "id": "E6.4", "title": "macOS implementation", "size": "L", "track": "platform", "depends": ["E6.2"],
+          "criteria": [
+            "CTFontManagerRegisterFontsForURL with session scope and user scope",
+            "Registration errors mapped to Outcome",
+            "Integration test enumerates via CoreText from a child process"
+          ] },
+        { "id": "E6.5", "title": "Linux implementation", "size": "M", "track": "platform", "depends": ["E6.2"],
+          "criteria": [
+            "Symlinks under ~/.local/share/fonts/font-manager/{session,permanent}/ plus fontconfig refresh",
+            "Session links removed on quit and on next start if left behind",
+            "Integration test uses fc-list"
+          ] },
+        { "id": "E6.6", "title": "Activation service", "size": "M", "track": "core", "depends": ["E6.3", "E6.4", "E6.5"],
+          "criteria": [
+            "Activate/deactivate by face, family, collection or set through fm-api; state persisted",
+            "\"Reactivate on launch\" restores the last session's activations",
+            "The status bar count updates via events; 100 faces activate in under 500 ms"
+          ] },
+        { "id": "E6.7", "title": "Conflicts", "size": "M", "track": "core", "depends": ["E6.6"],
+          "criteria": [
+            "Activating a face whose PostScript name matches a system or already-active font prompts keep / replace for session / cancel",
+            "A Conflicts view lists every clash and its winner",
+            "The app never deregisters fonts it did not register"
+          ] },
+        { "id": "E6.8", "title": "UI: activation controls", "size": "S", "track": "ui", "depends": ["E6.6", "E5.2"],
+          "criteria": [
+            "Activation dot on rows and cards; button in the inspector; A / Shift+A shortcuts",
+            "\"Deactivate all\" and \"Deactivate everything not in the current set\" in the palette",
+            "A toast with undo for bulk actions"
+          ] }
+      ]
+    },
+    {
+      "id": "E7", "title": "Organization", "phase": 1, "track": "core",
+      "summary": "Collections, tags, favorites, ratings, sidecar metadata and project sets.",
+      "stories": [
+        { "id": "E7.1", "title": "Collections", "size": "M", "track": "core", "depends": ["E3.2", "E5.1"],
+          "criteria": [
+            "Create, rename, nest, reorder and delete collections",
+            "Add faces or families by drag or palette; a face can be in many",
+            "Counts in the sidebar"
+          ] },
+        { "id": "E7.2", "title": "Tags, favorites, ratings", "size": "M", "track": "core", "depends": ["E7.1"],
+          "criteria": [
+            "Free-form tags with autocomplete; favorite toggle; 1–5 stars",
+            "All filterable; the Info tab edits them"
+          ] },
+        { "id": "E7.3", "title": "Sidecar metadata", "size": "L", "track": "core", "depends": ["E7.2", "E2.5"],
+          "criteria": [
+            "Collections, tags, ratings and notes for faces in a source are mirrored to <source>/.fontlibrary/<family-hash>.json",
+            "A change on disk (another machine via sync) merges on scan",
+            "Conflicts surface as a Problems entry; data is never silently lost"
+          ] },
+        { "id": "E7.4", "title": "Project sets", "size": "M", "track": "core", "depends": ["E7.1", "E6.6"],
+          "criteria": [
+            "Named sets of faces; activate/deactivate a set in one action",
+            "Export/import as JSON referencing faces by hash with a report of unmatched entries"
+          ] }
+      ]
+    },
+    {
+      "id": "E8", "title": "Duplicates and problems", "phase": 1, "track": "core",
+      "summary": "Find duplicates and broken files, resolve them safely with undo.",
+      "stories": [
+        { "id": "E8.1", "title": "Duplicate detection", "size": "M", "track": "core", "depends": ["E3.2"],
+          "criteria": [
+            "Exact duplicates by hash and near-duplicates by PostScript name plus version at different paths are listed in groups",
+            "Each group shows the recommended keeper (newest version, then the one in the library folder), paths and sizes"
+          ] },
+        { "id": "E8.2", "title": "Problems view", "size": "S", "track": "ui", "depends": ["E8.1", "E2.6", "E6.7"],
+          "criteria": [
+            "One view lists duplicates, broken files, legacy formats, sidecar conflicts and activation conflicts with filters",
+            "Counts in the sidebar and status bar"
+          ] },
+        { "id": "E8.3", "title": "Resolve with undo", "size": "M", "track": "core", "depends": ["E8.2"],
+          "criteria": [
+            "\"Keep this one\" moves the other copies to the OS trash (never permanent delete)",
+            "The action is undoable from a toast for 10 s and from the Problems history",
+            "A dry-run shows what will move"
+          ] }
+      ]
+    },
+    {
+      "id": "E9", "title": "Packaging, performance and the MVP gate", "phase": 1, "track": "ops",
+      "summary": "Runs alongside the other epics from sprint 2 so the numbers are watched while the code is written.",
+      "stories": [
+        { "id": "E9.1", "title": "Performance harness", "size": "M", "track": "ops", "depends": ["E1.4", "E3.3"],
+          "criteria": [
+            "scripts/bench.sh runs cold start, first scan of the reference library, incremental update, search latency, 100-face activation and idle memory on each platform and writes a JSON report",
+            "CI runs it nightly on main and posts a trend; a PR can request it via the `bench` label"
+          ] },
+        { "id": "E9.2", "title": "Performance budgets in CI", "size": "S", "track": "ops", "depends": ["E9.1"],
+          "criteria": [
+            "A PR that regresses any target in the spec's non-functional table by more than 10% fails the check and is flagged on the PR"
+          ] },
+        { "id": "E9.3", "title": "Dev builds", "size": "M", "track": "ops", "depends": ["E1.5"],
+          "criteria": [
+            "Unsigned installers from main: .msi/.exe, .dmg, AppImage",
+            "Artifacts attached to each nightly; version from the Cargo manifest plus the commit hash"
+          ] },
+        { "id": "E9.4", "title": "Crash safety", "size": "S", "track": "ops", "depends": ["E2.6", "E3.1"],
+          "criteria": [
+            "The fuzz corpus from E2.2 runs in CI weekly",
+            "Opening the fixture's broken fonts, a corrupted database and a missing source folder each produce a Problems entry, not a crash",
+            "A panic hook writes a crash log and restarts cleanly"
+          ] },
+        { "id": "E9.5", "title": "User docs, first pass", "size": "S", "track": "ops", "depends": ["E5.8"],
+          "criteria": [
+            "docs/ holds Getting started, Sources, Activation and Keyboard shortcuts pages generated into a static site",
+            "The in-app Help menu links to them"
+          ] }
+      ]
+    },
+
+    { "id": "E10", "title": "Variable fonts and OpenType", "phase": 2, "track": "ui", "depends": ["E4.1", "E5.6"],
+      "summary": "Axes tab, pinned instances, Features tab, stylistic-set names, CSS value copy.",
+      "stories": [
+        { "id": "E10.1", "title": "Axes tab with sliders, numeric input and named instances", "size": "M", "track": "ui" },
+        { "id": "E10.2", "title": "Pin an instance as a virtual style", "size": "S", "track": "core" },
+        { "id": "E10.3", "title": "Features tab listing every GSUB/GPOS feature with friendly names and live toggles", "size": "M", "track": "ui" },
+        { "id": "E10.4", "title": "Stylistic-set names from the font", "size": "S", "track": "core" },
+        { "id": "E10.5", "title": "CSS value copy for axes and features", "size": "S", "track": "ui" }
+      ] },
+    { "id": "E11", "title": "Glyphs and font info", "phase": 2, "track": "ui", "depends": ["E3.7", "E4.2"],
+      "summary": "Glyph map, glyph detail, coverage list, glyph compare, SVG export.",
+      "stories": [
+        { "id": "E11.1", "title": "Glyph map by Unicode block with search by character, code point and glyph name", "size": "L", "track": "ui" },
+        { "id": "E11.2", "title": "Glyph detail: code point, name, advance, producing features", "size": "S", "track": "ui" },
+        { "id": "E11.3", "title": "Language and script coverage list", "size": "S", "track": "ui" },
+        { "id": "E11.4", "title": "Glyph compare overlay between two fonts", "size": "M", "track": "ui" },
+        { "id": "E11.5", "title": "Export glyph as SVG", "size": "S", "track": "core" }
+      ] },
+    { "id": "E12", "title": "Body text layouts", "phase": 2, "track": "ui", "depends": ["E4.4"],
+      "summary": "Block model, six presets, drag-to-resize, per-block editor, width lock, template files.",
+      "stories": [
+        { "id": "E12.1", "title": "Block model and six presets (Book, Columns, Magazine, Quote, Characters, Waterfall)", "size": "M", "track": "ui" },
+        { "id": "E12.2", "title": "Drag-to-resize size and line height; pinch on trackpads", "size": "M", "track": "ui" },
+        { "id": "E12.3", "title": "Per-block properties editor (size, line height, tracking, paragraph spacing, indent, columns, alignment)", "size": "M", "track": "ui" },
+        { "id": "E12.4", "title": "Layout width lock", "size": "S", "track": "ui" },
+        { "id": "E12.5", "title": "Plain-text template files, duplicate, revert, version history", "size": "M", "track": "core" }
+      ] },
+    { "id": "E13", "title": "Compare and Quick Collection", "phase": 2, "track": "ui", "depends": ["E5.2", "E7.2"],
+      "summary": "Compare modes, named comparisons, Quick Collection, multi-tagging, notes.",
+      "stories": [
+        { "id": "E13.1", "title": "Pin 2–4 fonts; side-by-side, stacked and overlay modes", "size": "M", "track": "ui" },
+        { "id": "E13.2", "title": "Named, reopenable comparisons", "size": "S", "track": "core" },
+        { "id": "E13.3", "title": "Quick Collection with one-key add and review flow", "size": "M", "track": "ui" },
+        { "id": "E13.4", "title": "Multi-tagging panel and drag-to-tag", "size": "M", "track": "ui" },
+        { "id": "E13.5", "title": "Notes on fonts", "size": "S", "track": "core" }
+      ] },
+    { "id": "E14", "title": "Smart collections", "phase": 2, "track": "core", "depends": ["E3.4", "E7.1"],
+      "summary": "Rule editor, live evaluation, defaults, save-chips-as-smart-collection.",
+      "stories": [
+        { "id": "E14.1", "title": "Rule editor with AND/OR over every filter dimension", "size": "M", "track": "ui" },
+        { "id": "E14.2", "title": "Live evaluation on index change", "size": "M", "track": "core" },
+        { "id": "E14.3", "title": "Defaults: Recently added, Recently activated, Variable, Monospace, Web-licensed, Problems", "size": "S", "track": "core" },
+        { "id": "E14.4", "title": "Save filter chips as a smart collection", "size": "S", "track": "ui" }
+      ] },
+    { "id": "E15", "title": "Licensing", "phase": 2, "track": "core", "depends": ["E2.2", "E7.2"],
+      "summary": "Badges from the file, declared license per family, Usage filter, CSV inventory.",
+      "stories": [
+        { "id": "E15.1", "title": "fsType and open-license badges", "size": "S", "track": "core" },
+        { "id": "E15.2", "title": "Declared license type, seats, date, attached receipt per family", "size": "M", "track": "core" },
+        { "id": "E15.3", "title": "Usage filter combining file permissions and declared type", "size": "S", "track": "core" },
+        { "id": "E15.4", "title": "CSV license inventory export", "size": "S", "track": "core" }
+      ] },
+    { "id": "E16", "title": "Appearance tools", "phase": 2, "track": "ui", "depends": ["E4.4"],
+      "summary": "Metrics overlay, outline mode, smoothing, tracking, auto size, color palettes, density.",
+      "stories": [
+        { "id": "E16.1", "title": "Metrics overlay, outline mode, font smoothing toggle, tracking slider", "size": "M", "track": "ui" },
+        { "id": "E16.2", "title": "Auto size by x-height or cap height", "size": "M", "track": "core" },
+        { "id": "E16.3", "title": "Color-font palette picker", "size": "S", "track": "ui" },
+        { "id": "E16.4", "title": "Compact/comfortable density", "size": "S", "track": "ui" }
+      ] },
+    { "id": "E17", "title": "Background agent", "phase": 2, "track": "platform", "depends": ["E6.6"],
+      "summary": "Tray / menu-bar item keeping session activations alive; start at login.",
+      "stories": [
+        { "id": "E17.1", "title": "Tray / menu-bar item keeping session activations alive with the window closed", "size": "M", "track": "platform" },
+        { "id": "E17.2", "title": "Start-at-login option (Windows, macOS)", "size": "S", "track": "platform" },
+        { "id": "E17.3", "title": "Autostart on Linux via .desktop entry", "size": "S", "track": "platform" }
+      ] },
+    { "id": "E18", "title": "Release engineering", "phase": 2, "track": "ops", "depends": ["E9.3"],
+      "summary": "Signing, notarization, Flatpak, AppImage, updater, package manifests.",
+      "stories": [
+        { "id": "E18.1", "title": "Code signing and notarization on macOS, signed Windows installer, Flatpak manifest and AppImage", "size": "L", "track": "ops", "human": true },
+        { "id": "E18.2", "title": "In-app updater with signed releases", "size": "M", "track": "ops" },
+        { "id": "E18.3", "title": "winget and Homebrew cask manifests", "size": "S", "track": "ops" },
+        { "id": "E18.4", "title": "Reproducible build documentation", "size": "S", "track": "ops" }
+      ] },
+    { "id": "E19", "title": "Accessibility and localization audit", "phase": 2, "track": "ui", "depends": ["E5.10"],
+      "summary": "WCAG 2.2 AA pass, string externalization, RTL, localized pangrams.",
+      "stories": [
+        { "id": "E19.1", "title": "Full keyboard and screen-reader pass against WCAG 2.2 AA", "size": "M", "track": "ui" },
+        { "id": "E19.2", "title": "String externalization and a second locale to prove it", "size": "M", "track": "ui" },
+        { "id": "E19.3", "title": "RTL layout check", "size": "S", "track": "ui" },
+        { "id": "E19.4", "title": "Localized pangrams", "size": "S", "track": "data" }
+      ] },
+
+    { "id": "E20", "title": "Web export", "phase": 3, "track": "core", "depends": ["E10", "E15"],
+      "summary": "WOFF2, subsetting, fonts.css, snippets, framework presets, license guard.",
+      "stories": [
+        { "id": "E20.1", "title": "WOFF2/WOFF conversion", "size": "M", "track": "core" },
+        { "id": "E20.2", "title": "Subsetting by Unicode range, named preset or pasted text via klippa", "size": "L", "track": "core" },
+        { "id": "E20.3", "title": "Generated fonts.css with @font-face, unicode-range, variable weight ranges", "size": "M", "track": "core" },
+        { "id": "E20.4", "title": "font-feature-settings / font-variation-settings snippets from the current preview state", "size": "S", "track": "ui" },
+        { "id": "E20.5", "title": "Tailwind, CSS custom properties and Next.js localFont presets", "size": "S", "track": "core" },
+        { "id": "E20.6", "title": "License guard on export", "size": "S", "track": "core" }
+      ] },
+    { "id": "E21", "title": "Specimen export", "phase": 3, "track": "core", "depends": ["E12"],
+      "summary": "HTML specimen, PDF, collection PDF.",
+      "stories": [
+        { "id": "E21.1", "title": "Self-contained HTML specimen for a family", "size": "M", "track": "core" },
+        { "id": "E21.2", "title": "PDF via headless print", "size": "M", "track": "core" },
+        { "id": "E21.3", "title": "PDF of a collection for client sign-off", "size": "S", "track": "core" }
+      ] },
+    { "id": "E22", "title": "Online catalogs", "phase": 3, "track": "core", "depends": ["E2.5", "E4.4"],
+      "summary": "Catalog adapter trait, Google Fonts, Fontshare, downloads with provenance.",
+      "stories": [
+        { "id": "E22.1", "title": "Catalog adapter trait and Google Fonts implementation with metadata cache", "size": "L", "track": "core" },
+        { "id": "E22.2", "title": "Browse a catalog with the same preview controls", "size": "M", "track": "ui" },
+        { "id": "E22.3", "title": "Download a family into a chosen source with provenance", "size": "M", "track": "core" },
+        { "id": "E22.4", "title": "Update check for downloaded families", "size": "S", "track": "core" },
+        { "id": "E22.5", "title": "Fontshare adapter", "size": "M", "track": "core" },
+        { "id": "E22.6", "title": "Adobe Fonts explanatory note", "size": "S", "track": "ui" }
+      ] },
+    { "id": "E23", "title": "Visual similarity", "phase": 3, "track": "core", "depends": ["E4.2", "E3.5"],
+      "summary": "Glyph fingerprints, nearest-neighbour search, Find similar action, rule-based pairing.",
+      "stories": [
+        { "id": "E23.1", "title": "Glyph fingerprint vector computed at scan time", "size": "L", "track": "core" },
+        { "id": "E23.2", "title": "Nearest-neighbour search with score and reasons", "size": "M", "track": "core" },
+        { "id": "E23.3", "title": "\"Find similar\" as a first-class action in list, inspector and palette", "size": "S", "track": "ui" },
+        { "id": "E23.4", "title": "Metrics-based rule pairing suggestions in Compare", "size": "M", "track": "core" }
+      ] },
+    { "id": "E24", "title": "Pairing Studio", "phase": 3, "track": "ui", "depends": ["E12", "E21"],
+      "summary": "Layouts in their own panel with a font per block, multiple panels, print and PDF.",
+      "stories": [
+        { "id": "E24.1", "title": "Open a body text layout in its own panel", "size": "M", "track": "ui" },
+        { "id": "E24.2", "title": "Font per block", "size": "M", "track": "ui" },
+        { "id": "E24.3", "title": "Multiple panels side by side", "size": "M", "track": "ui" },
+        { "id": "E24.4", "title": "Print and PDF from a panel", "size": "S", "track": "ui" }
+      ] },
+    { "id": "E25", "title": "Local API endpoint", "phase": 3, "track": "core", "depends": ["E1.3"],
+      "summary": "Localhost endpoint over fm-api with bearer token, event stream, versioning.",
+      "stories": [
+        { "id": "E25.1", "title": "Localhost HTTP endpoint exposing every fm-api service with a bearer token shown in Settings", "size": "L", "track": "core" },
+        { "id": "E25.2", "title": "Typed event stream over SSE/WebSocket", "size": "M", "track": "core" },
+        { "id": "E25.3", "title": "Version negotiation and deprecation notes", "size": "S", "track": "core" },
+        { "id": "E25.4", "title": "CLI and MCP share the endpoint (client crate)", "size": "S", "track": "core" }
+      ] },
+    { "id": "E26", "title": "CLI", "phase": 3, "track": "plugins", "depends": ["E25", "E20", "E23"],
+      "summary": "clap binary `fm` with --json everywhere, direct-link and endpoint modes.",
+      "stories": [
+        { "id": "E26.1", "title": "clap skeleton with --json and exit codes", "size": "S", "track": "plugins" },
+        { "id": "E26.2", "title": "scan, list, search --supports, info, coverage, similar", "size": "M", "track": "plugins" },
+        { "id": "E26.3", "title": "activate, deactivate, sets export/import", "size": "S", "track": "plugins" },
+        { "id": "E26.4", "title": "export --woff2 --css, specimen, preview --out", "size": "M", "track": "plugins" },
+        { "id": "E26.5", "title": "doctor (duplicates, broken files, conflicts)", "size": "S", "track": "plugins" },
+        { "id": "E26.6", "title": "Direct-link mode when the app is closed, endpoint mode when open", "size": "M", "track": "plugins" },
+        { "id": "E26.7", "title": "Shell completions and man page", "size": "S", "track": "plugins" }
+      ] },
+    { "id": "E27", "title": "MCP server", "phase": 3, "track": "plugins", "depends": ["E25", "E23", "E20"],
+      "summary": "rmcp server hosted in the app; primitives, workflows, render_preview, grants, stdio shim.",
+      "stories": [
+        { "id": "E27.1", "title": "rmcp server hosted in the app over streamable HTTP, opt-in in Settings with client config snippets", "size": "L", "track": "plugins" },
+        { "id": "E27.2", "title": "Primitive tools: search_fonts, get_font, list_collections, list_sets, check_coverage, find_similar, get_pairings, get_license, activate_fonts, deactivate_fonts, tag_fonts, export_web", "size": "L", "track": "plugins" },
+        { "id": "E27.3", "title": "render_preview and compare_preview returning PNG", "size": "M", "track": "plugins" },
+        { "id": "E27.4", "title": "Workflow tools: pick_fonts_for_brief, prepare_for_web, build_specimen", "size": "L", "track": "plugins" },
+        { "id": "E27.5", "title": "Resources (font://, collection://, set://) and prompts", "size": "S", "track": "plugins" },
+        { "id": "E27.6", "title": "Per-tool grants and confirmation toasts for mutating tools", "size": "M", "track": "plugins" },
+        { "id": "E27.7", "title": "stdio shim binary", "size": "S", "track": "plugins" },
+        { "id": "E27.8", "title": "End-to-end test with Claude Desktop and Claude Code", "size": "M", "track": "plugins", "human": true }
+      ] },
+    { "id": "E28", "title": "Shared libraries", "phase": 3, "track": "core", "depends": ["E7.3", "E7.4"],
+      "summary": "Sidecar merge hardening, cross-machine sets, sync-service docs.",
+      "stories": [
+        { "id": "E28.1", "title": "Sidecar merge hardened for concurrent edits with a conflict UI", "size": "M", "track": "core" },
+        { "id": "E28.2", "title": "Set export by hash across machines", "size": "S", "track": "core" },
+        { "id": "E28.3", "title": "Docs for Dropbox, iCloud, OneDrive, Google Drive and SMB setups", "size": "S", "track": "ops" }
+      ] },
+
+    { "id": "E29", "title": "Plugin IPC", "phase": 4, "track": "plugins", "depends": ["E17", "E25"],
+      "summary": "Named pipe / Unix socket endpoint, font matching, document-scoped activation.",
+      "stories": [
+        { "id": "E29.1", "title": "Named pipe / Unix socket endpoint with a versioned message schema", "size": "M", "track": "platform" },
+        { "id": "E29.2", "title": "fonts_needed → match by PostScript name, full name, family + style with a report of unmatched names", "size": "M", "track": "core" },
+        { "id": "E29.3", "title": "Document-scoped session activation and \"deactivate when document closes\" offer", "size": "M", "track": "core" },
+        { "id": "E29.4", "title": "Background agent handles IPC with the window closed", "size": "S", "track": "platform" }
+      ] },
+    { "id": "E30", "title": "Adobe plugin", "phase": 4, "track": "plugins", "depends": ["E29"],
+      "summary": "UXP plugin for InDesign and Photoshop; Illustrator via UXP or CEP; installer; missing-fonts panel.",
+      "stories": [
+        { "id": "E30.0", "title": "UXP API spike: document-open and font-missing events per app (ADR)", "size": "M", "track": "plugins", "human": true },
+        { "id": "E30.1", "title": "UXP plugin for InDesign and Photoshop reacting to document open and missing-font events", "size": "L", "track": "plugins" },
+        { "id": "E30.2", "title": "Illustrator via UXP or CEP depending on API availability", "size": "L", "track": "plugins" },
+        { "id": "E30.3", "title": "Plugin installer and signing", "size": "M", "track": "plugins", "human": true },
+        { "id": "E30.4", "title": "\"N fonts missing\" panel with one-click activate", "size": "M", "track": "plugins" }
+      ] },
+    { "id": "E31", "title": "Sketch plugin", "phase": 4, "track": "plugins", "depends": ["E29"],
+      "summary": "JavaScript plugin on document open, packaged in Sketch's plugin format.",
+      "stories": [
+        { "id": "E31.1", "title": "JavaScript plugin on document open", "size": "M", "track": "plugins" },
+        { "id": "E31.2", "title": "Packaging through Sketch's plugin format", "size": "S", "track": "plugins" }
+      ] },
+    { "id": "E32", "title": "Missing-fonts watcher", "phase": 4, "track": "core", "depends": ["E29"],
+      "summary": "Parse font references from design and office documents and offer to activate.",
+      "stories": [
+        { "id": "E32.1", "title": "Parse font references from .indd, .ai, .psd, .sketch, .fig, .docx, .pptx", "size": "L", "track": "core" },
+        { "id": "E32.2", "title": "Offer to activate from a dropped or opened document", "size": "M", "track": "ui" },
+        { "id": "E32.3", "title": "Affinity documents when their format is understood", "size": "L", "track": "core" }
+      ] },
+    { "id": "E33", "title": "Find by image and pairing model", "phase": 4, "track": "core", "depends": ["E23"],
+      "summary": "Glyph isolation from screenshots; a small local pairing model.",
+      "stories": [
+        { "id": "E33.1", "title": "Isolate glyphs from a screenshot and match against fingerprints", "size": "L", "track": "core" },
+        { "id": "E33.2", "title": "Small local pairing model trained on curated pairings", "size": "L", "track": "core" }
+      ] },
+    { "id": "E34", "title": "Font Switch", "phase": 4, "track": "plugins", "depends": ["E29"],
+      "summary": "Drag a font from the app onto selected text in a design app.",
+      "stories": [
+        { "id": "E34.1", "title": "Drag a font from the app onto selected text in a design app where the target accepts a drop", "size": "L", "track": "platform" },
+        { "id": "E34.2", "title": "Per-app adapters", "size": "M", "track": "plugins" }
+      ] },
+    { "id": "E35", "title": "Native shell decision", "phase": 4, "track": "ui", "depends": ["E9.1"],
+      "summary": "Measure the webview with all features on; prototype native if targets are missed; record an ADR.",
+      "stories": [
+        { "id": "E35.1", "title": "Measure the webview against memory and scroll targets with all features on", "size": "S", "track": "ops", "human": true },
+        { "id": "E35.2", "title": "If missed: prototype the list in iced or GPUI against fm-api", "size": "L", "track": "ui", "human": true },
+        { "id": "E35.3", "title": "Decide and record an ADR", "size": "S", "track": "ops", "human": true }
+      ] },
+    { "id": "E36", "title": "Public release", "phase": 4, "track": "ops", "depends": ["E30", "E31", "E32"],
+      "summary": "Security review, privacy policy, website, store submissions, community files, v2.0 tag.",
+      "stories": [
+        { "id": "E36.1", "title": "Security review of the local endpoint and MCP grants", "size": "M", "track": "ops", "human": true },
+        { "id": "E36.2", "title": "Privacy policy and telemetry opt-in flow", "size": "S", "track": "ops", "human": true },
+        { "id": "E36.3", "title": "Website, screenshots, Getting started video", "size": "M", "track": "ops", "human": true },
+        { "id": "E36.4", "title": "Flathub, winget, Homebrew submissions", "size": "M", "track": "ops", "human": true },
+        { "id": "E36.5", "title": "Issue templates, contributing guide, code of conduct", "size": "S", "track": "ops" }
+      ] }
+  ]
+}
