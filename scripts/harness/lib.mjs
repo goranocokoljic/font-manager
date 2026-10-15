@@ -223,7 +223,7 @@ export function gh(args, { input, allowFail = false } = {}) {
   } catch (e) {
     if (allowFail) return null;
     const msg = (e.stderr || e.message || '').toString().trim();
-    throw new Error(`gh ${args.slice(0, 3).join(' ')} failed: ${msg}`);
+    throw new Error(`gh ${args.slice(0, 3).join(' ')} failed: ${msg}`, { cause: e });
   }
 }
 

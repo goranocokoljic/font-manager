@@ -1,0 +1,11 @@
+# Prettier owns the frontend and the plugins; Rust has rustfmt, docs are hand-written.
+/*
+!/apps/
+!/plugins/
+!/package.json
+node_modules/
+dist/
+target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/icons/
+apps/desktop/src/api/types.ts

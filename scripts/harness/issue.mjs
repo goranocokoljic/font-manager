@@ -75,6 +75,7 @@ function main() {
       const hits = parseCriteria(issue.body).filter((c) => c.numeric);
       for (const c of hits) console.log(`#${c.index}: ${c.text}`);
       process.exit(hits.length ? 0 : 1);
+      break; // unreachable; keeps the switch explicit
     }
     case 'tick':
     case 'pending': {

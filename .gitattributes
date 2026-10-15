@@ -1,0 +1,12 @@
+# One line ending everywhere, so rustfmt, Prettier and the types.ts diff check
+# give the same answer on Windows, macOS and Linux.
+* text=auto eol=lf
+*.ps1 text eol=lf
+*.png binary
+*.ico binary
+*.icns binary
+*.ttf binary
+*.otf binary
+*.ttc binary
+*.woff binary
+*.woff2 binary

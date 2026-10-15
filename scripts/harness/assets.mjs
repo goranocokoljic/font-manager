@@ -30,7 +30,7 @@ function main() {
   if (!files.length) throw new Error(`no .png files in ${dir}`);
 
   try { git(['fetch', '-q', 'origin', BRANCH]); } catch { /* first publish: branch does not exist yet */ }
-  let base = '';
+  let base;
   try { base = git(['rev-parse', '--verify', '-q', `refs/remotes/origin/${BRANCH}`]); } catch { base = ''; }
 
   const tmp = mkdtempSync(join(tmpdir(), 'go-assets-'));

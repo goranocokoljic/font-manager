@@ -44,7 +44,7 @@ export function readStore(dir = KB_DIR) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => {
     try { return JSON.parse(readFileSync(join(dir, f), 'utf8')); }
-    catch (e) { throw new Error(`${f} is not valid JSON: ${e.message}`); }
+    catch (e) { throw new Error(`${f} is not valid JSON: ${e.message}`, { cause: e }); }
   });
 }
 
