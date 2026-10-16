@@ -235,7 +235,7 @@ function Start-ReviewCycle {
     $rec = [ordered]@{
         review_cycle = $N; max_cycles = $Max
         review_start = (Get-Date); review_end = $null; fix_start = $null; fix_end = $null
-        must = 0; should = 0; rejected = 0; resolved = 0; raw = 0; findings_source = 'none'
+        must = 0; should = 0; rejected = 0; resolved = 0; raw = 0; findings_source = 'none'; by_lens = $null
         fixed = $null; disputed = $null
         out = 0.0; in = 0.0; review_out = 0.0; fix_out = 0.0; turns = 0; tools = 0
     }
@@ -297,19 +297,21 @@ function Write-Analytics {
     $totalOut = 0.0; foreach ($p in $script:RunPhases.Values) { $totalOut += $p.out }
     $apportion = { param($o) if ($BilledUsd -gt 0 -and $totalOut -gt 0) { [math]::Round($BilledUsd * $o / $totalOut, 4) } else { 0.0 } }
 
-    # Fallback: a cycle without a review_done marker is counted from its review file.
+    # Read each cycle's review file: always for the per-lens split (the dashboard's
+    # verifier-by-lens view), and for the counts when no review_done marker came.
     foreach ($c in $script:RunCycles) {
-        if ($c.findings_source -eq 'marker') { continue }
         $rf = Join-Path $script:Work ('.harness/reviews/issue-{0}-review-{1}.md' -f $s.issue, $c.review_cycle)
         if (-not (Test-Path $rf)) { continue }
         $r = Invoke-Node 'review-counts.mjs' @($rf)
-        if ($r.Code -eq 0) {
-            try {
-                $counts = $r.Out | ConvertFrom-Json
-                foreach ($k in 'must', 'should', 'rejected', 'resolved', 'raw') { $c[$k] = [int]$counts.$k }
+        if ($r.Code -ne 0) { continue }
+        try {
+            $counts = $r.Out | ConvertFrom-Json -AsHashtable
+            $c.by_lens = $counts.by_lens
+            if ($c.findings_source -ne 'marker') {
+                foreach ($k in 'must', 'should', 'rejected', 'resolved', 'raw') { $c[$k] = [int]$counts[$k] }
                 $c.findings_source = 'review-file'
-            } catch { }
-        }
+            }
+        } catch { }
     }
 
     $cycleRecs = @(foreach ($c in $script:RunCycles) {
@@ -319,6 +321,7 @@ function Write-Analytics {
             mode = $(if ($c.review_cycle -eq 1) { 'full' } else { 'verify' })
             findings = [ordered]@{ must = $c.must; should = $c.should; rejected = $c.rejected; resolved = $c.resolved; raw = $c.raw }
             findings_source = $c.findings_source
+            by_lens = $c.by_lens
             dispositions = $(if ($null -ne $c.fixed -or $null -ne $c.disputed) { [ordered]@{ fixed = [int]($c.fixed ?? 0); disputed = [int]($c.disputed ?? 0) } } else { $null })
             review_sec = Get-Sec $c.review_start $c.review_end; fix_sec = Get-Sec $c.fix_start $c.fix_end
             cycle_sec = Get-Sec $c.review_start $end

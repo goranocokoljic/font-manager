@@ -19,12 +19,13 @@ as briefed in `dev-docs/HARNESS-ADAPTATION.md`.
 | `scripts/harness/epic-sync.mjs` | summary comment on the epic when a story closes; closes done epics |
 | `scripts/harness/loop-check.mjs` | convergence guard after each story |
 | `scripts/harness/assets.mjs` | publishes UI screenshots to the `harness-assets` branch |
-| `scripts/harness/review-counts.mjs` | parses a review file's findings index |
+| `scripts/harness/review-counts.mjs` | parses a review file's findings index (counts + per-lens split) |
+| `scripts/harness/dashboard/` | local telemetry dashboard: `pnpm dashboard` |
 | `dev-docs/harness/parking-lot.md` | out-of-diff review notes for human triage |
 | `dev-docs/harness/review-rules.md` | graduated lessons (generated; imported by `CLAUDE.md`) |
 | `.harness/` (git-ignored) | logs, state, CI verdicts, reviews, notes, telemetry, `fm-run-summary.md` |
 
-Tests: `node --test scripts/harness/harness.test.mjs`.
+Tests: `node --test "scripts/harness/**/*.test.mjs"` (part of `pnpm test`).
 
 ## Before the first run
 
@@ -159,6 +160,31 @@ read them and use grep.
 | `fm-run-summary.md` | one table row per finished story |
 | `state/<lane>.json` | the running story's stage and session (resume after a restart) |
 | `logs/` | raw stream-json per stage run |
+
+### The dashboard
+
+```powershell
+pnpm dashboard        # http://localhost:8090 — reads .harness/ fresh on every request
+```
+
+A local, zero-dependency page (`scripts/harness/dashboard/`, adapted from the
+toprope dev-cycle dashboard; `--port`, `--data <dir>`). It refreshes every 30 s
+and follows the OS light/dark theme; every chart has a table view. Filters:
+period, lane, outcome.
+
+| View | What it answers |
+|------|-----------------|
+| Running now | which story each lane is on, its stage, spend vs budget (`.harness/state/`) |
+| KPIs | stories done/blocked, billed cost, over budget, claim→green, CI first-pass green, confirmed must per story, verifier rejection rate, advisory count, PureContext calls |
+| Billed cost per day, by stage | where the money went: build, ci-fix, review, finalize (real billed cost) |
+| Confirmed must findings per story | first-review blockers over time with a rolling average; falling means the KB works |
+| Findings by lens | per lens: confirmed must / should / rejected by the verifier; a lens with a high rejection share needs a narrower charter |
+| Where the cost and the time go | billed cost and median time per stage, plus the (free) CI wait |
+| Billed vs budget | each story against its size budget |
+| CI failures by platform | which OS breaks first; local preflight is Windows, so macOS/Linux reds are platform bugs |
+| Review cycles | full review (cycle 1) vs verify cycles: must, should, rejected, resolved, fixed, disputed |
+| Stories | sortable table; expand a row for its stage runs, review cycles (with the per-lens split) and build phases |
+| Epics, Review KB, Parking lot | stories per epic, lesson lifecycle counts, out-of-diff notes waiting for triage |
 
 When a story's issue closes, `epic-sync.mjs` posts its summary line on the epic
 (lane start and end, or `-EpicSync`) and closes an epic whose stories are all closed.

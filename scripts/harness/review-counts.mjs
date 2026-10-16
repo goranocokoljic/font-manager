@@ -17,6 +17,8 @@
 //   REJECTED   the verifier could not reproduce it                     -> rejected (not a blocker)
 //   ADVISORY   a should finding (never verified, never blocks)         -> should
 // Rows are the truth; `raw` comes from the "Counts: ... (raw=N unique=M)" line.
+// `by_lens` credits each row to every lens in its "Lens IDs" cell:
+//   { "COR": { must, should, rejected, resolved }, ... }
 
 import { readFileSync } from 'node:fs';
 import { isMain } from './lib.mjs';
@@ -27,7 +29,8 @@ export function countFindings(text) {
   const lines = text.split(/\r?\n/);
   const start = lines.findIndex((l) => /^##\s+Findings index/i.test(l.trim()));
   const c = { must: 0, should: 0, rejected: 0, resolved: 0, raw: 0, unique: 0 };
-  if (start < 0) return { ...c, source: 'none' };
+  const byLens = {};
+  if (start < 0) return { ...c, by_lens: byLens, source: 'none' };
   let header = null;
   for (let i = start + 1; i < lines.length; i++) {
     const line = lines[i].trim();
@@ -41,13 +44,22 @@ export function countFindings(text) {
     const sev = cells[header.indexOf('sev')] ?? '';
     const status = cells[header.indexOf('status')] ?? '';
     c.unique++;
-    if (status === 'rejected') c.rejected++;
-    else if (status === 'resolved') c.resolved++;
-    else if (sev === 'must' && MUST_STATUSES.has(status)) c.must++;
-    else if (sev === 'should') c.should++;
+    let bucket = null;
+    if (status === 'rejected') bucket = 'rejected';
+    else if (status === 'resolved') bucket = 'resolved';
+    else if (sev === 'must' && MUST_STATUSES.has(status)) bucket = 'must';
+    else if (sev === 'should') bucket = 'should';
+    if (bucket) c[bucket]++;
+    // Credit every lens that raised the row: the verifier's verdict per lens is
+    // the false-positive signal (a lens whose musts get rejected is too loose).
+    const lensCell = cells[header.indexOf('lens ids')] ?? '';
+    for (const lens of new Set([...lensCell.matchAll(/\b([a-z0-9]{2,6})-\d+/g)].map((m) => m[1].toUpperCase()))) {
+      byLens[lens] ??= { must: 0, should: 0, rejected: 0, resolved: 0 };
+      if (bucket) byLens[lens][bucket]++;
+    }
   }
   if (!c.raw) c.raw = c.unique;
-  return { ...c, source: 'index' };
+  return { ...c, by_lens: byLens, source: 'index' };
 }
 
 export function markerLine(c, cycle) {

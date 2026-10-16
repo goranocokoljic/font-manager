@@ -188,7 +188,13 @@ COR-1 | CONFIRMED | ...
 describe('review counts', () => {
   test('counts verified rows of the index only', () => {
     const c = countFindings(REVIEW);
-    assert.deepEqual({ ...c }, { must: 1, should: 1, rejected: 1, resolved: 0, raw: 4, unique: 3, source: 'index' });
+    const { by_lens: byLens, ...counts } = c;
+    assert.deepEqual(counts, { must: 1, should: 1, rejected: 1, resolved: 0, raw: 4, unique: 3, source: 'index' });
+    assert.deepEqual(byLens, {
+      COR: { must: 1, should: 0, rejected: 1, resolved: 0 },
+      TST: { must: 1, should: 0, rejected: 0, resolved: 0 },
+      SPEC: { must: 0, should: 1, rejected: 0, resolved: 0 },
+    });
     assert.equal(markerLine(c, 1), 'GOCYCLE_METRIC: review_done | review_cycle=1 | must=1 should=1 rejected=1 resolved=0 raw=4');
   });
 
