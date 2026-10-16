@@ -16,6 +16,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 fm-api.workspace = true
 tauri = { version = "2", features = [] }
 
+[dev-dependencies]
+serde_json.workspace = true
+tauri = { version = "2", features = ["test"] }
+
 [lints]
 workspace = true
 

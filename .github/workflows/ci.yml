@@ -79,6 +79,12 @@ jobs:
       - name: Frontend and harness tests
         run: pnpm test
 
+      - name: Playwright browser
+        run: pnpm --filter @fm/desktop exec playwright install --with-deps chromium
+
+      - name: UI end-to-end tests (browser mode on the mock API)
+        run: pnpm test:e2e
+
       - name: Generated types are up to date
         shell: bash
         run: |

@@ -1,0 +1,27 @@
+/* Light and dark palettes. The webview reports the OS appearance through
+   prefers-color-scheme, so the theme follows the OS with no code. */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+  --fm-bg: #ffffff;
+  --fm-fg: #1a1a1a;
+  --fm-muted: #595959;
+  --fm-border: #d4d4d4;
+  --fm-danger: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fm-bg: #1c1c1e;
+    --fm-fg: #ececec;
+    --fm-muted: #a6a6a6;
+    --fm-border: #3a3a3c;
+    --fm-danger: #ff8a80;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--fm-bg);
+  color: var(--fm-fg);
+}
