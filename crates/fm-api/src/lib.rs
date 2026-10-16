@@ -7,6 +7,40 @@
 //!
 //! From v1.0 this is a public contract: add fields as `Option<T>` or with
 //! `#[serde(default)]`; never remove or rename one.
+//!
+//! Shape of the contract (ADR 0006):
+//! - one trait per service ([`LibraryService`], [`SearchService`],
+//!   [`PreviewService`], [`ActivationService`], [`OrganizationService`],
+//!   [`ExportService`], [`WorkflowService`]); [`Api`] is all of them plus
+//!   [`EventSource`];
+//! - every method takes one request value and returns [`ApiResult`];
+//! - methods are synchronous; long work (a scan) returns a [`JobId`] at once
+//!   and reports through [`Event`]s;
+//! - [`mock::MockApi`] implements every trait on in-memory sample data.
+
+pub mod activation;
+pub mod common;
+pub mod error;
+pub mod event;
+pub mod export;
+pub mod ids;
+pub mod library;
+pub mod mock;
+pub mod organization;
+pub mod preview;
+pub mod search;
+pub mod workflows;
+
+pub use activation::ActivationService;
+pub use error::{ApiError, ApiResult, ErrorCode};
+pub use event::{Event, EventSource};
+pub use export::ExportService;
+pub use ids::{CollectionId, FaceId, FamilyId, JobId, SetId, SourceId, TagId};
+pub use library::LibraryService;
+pub use organization::OrganizationService;
+pub use preview::PreviewService;
+pub use search::SearchService;
+pub use workflows::WorkflowService;
 
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +48,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 1,
+    minor: 2,
     patch: 0,
 };
 
@@ -35,19 +69,119 @@ impl std::fmt::Display for ApiVersion {
     }
 }
 
+/// Everything an adapter needs: every service plus the event stream.
+///
+/// Implemented automatically for any type that implements all of them, so an
+/// adapter can hold `Arc<dyn Api>` and not care whether it is the core or the mock.
+pub trait Api:
+    LibraryService
+    + SearchService
+    + PreviewService
+    + ActivationService
+    + OrganizationService
+    + ExportService
+    + WorkflowService
+    + EventSource
+    + Send
+    + Sync
+{
+}
+
+impl<T> Api for T where
+    T: LibraryService
+        + SearchService
+        + PreviewService
+        + ActivationService
+        + OrganizationService
+        + ExportService
+        + WorkflowService
+        + EventSource
+        + Send
+        + Sync
+{
+}
+
+/// Every type that crosses the API, registered for TypeScript generation.
+///
+/// A new request, response or event type must be added here, or the UI will
+/// not see it (types only reached through another type are picked up anyway).
+pub fn types() -> specta::Types {
+    macro_rules! register {
+        ($($t:ty),* $(,)?) => { specta::Types::default()$(.register::<$t>())* };
+    }
+    register!(
+        ApiVersion,
+        ApiError,
+        Event,
+        // library
+        library::AppInfo,
+        library::Source,
+        library::AddSourceRequest,
+        library::SetSourcePausedRequest,
+        library::ScanRequest,
+        library::ListFamiliesRequest,
+        common::Paged<library::FamilySummary>,
+        library::FamilySummary,
+        library::Family,
+        library::FaceDetail,
+        library::Problem,
+        // search
+        search::SearchRequest,
+        search::SearchResponse,
+        search::CoverageRequest,
+        search::CoverageReport,
+        search::LanguagePreset,
+        search::SimilarRequest,
+        search::SimilarFace,
+        // preview
+        preview::PreviewRequest,
+        preview::PreviewImage,
+        preview::FontSource,
+        // activation
+        activation::ActivateRequest,
+        activation::DeactivateRequest,
+        activation::ActivationOutcome,
+        activation::ActiveFace,
+        activation::Conflict,
+        // organization
+        organization::Collection,
+        organization::CreateCollectionRequest,
+        organization::RenameCollectionRequest,
+        organization::CollectionFacesRequest,
+        organization::Tag,
+        organization::TagFacesRequest,
+        organization::UntagFacesRequest,
+        organization::UserMetaUpdate,
+        organization::ProjectSet,
+        organization::CreateSetRequest,
+        organization::SetExport,
+        organization::ImportSetResponse,
+        // export
+        export::ExportWebRequest,
+        export::ExportWebResponse,
+        export::LicenseInventoryRequest,
+        export::LicenseInventory,
+        // workflows
+        workflows::BriefRequest,
+        workflows::Shortlist,
+        workflows::PrepareForWebRequest,
+        workflows::PrepareForWebResponse,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.1.0");
+        assert_eq!(API_VERSION.to_string(), "0.2.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":1,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":2,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }
