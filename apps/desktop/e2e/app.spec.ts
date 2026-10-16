@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('opens the shell and shows the app info from the API client', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Font Manager' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All fonts' })).toBeVisible();
   const info = page.getByTestId('app-info');
   await expect(info).toContainText('Font Manager (mock)');
   await expect(info).toContainText(/\d+\.\d+\.\d+/);
