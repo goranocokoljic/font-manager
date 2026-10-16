@@ -18,6 +18,10 @@ fm-core.workspace = true
 tauri = { version = "2", features = [] }
 tracing = "0.1"
 
+[dev-dependencies]
+serde_json.workspace = true
+tauri = { version = "2", features = ["test"] }
+
 [lints]
 workspace = true
 

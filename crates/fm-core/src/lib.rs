@@ -6,9 +6,13 @@
 //! consumer reaches it through `fm-api`.
 
 pub mod config;
+pub mod error;
 pub mod logging;
 pub mod startup;
+pub mod telemetry;
 #[cfg(test)]
 mod test_support;
 
 pub use config::{Config, LogLevel};
+pub use error::{FmError, FmResult};
+pub use telemetry::{CrashReport, Report, Telemetry, TelemetrySettings, TelemetrySink};
