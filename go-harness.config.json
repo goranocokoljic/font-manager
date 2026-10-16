@@ -1,8 +1,11 @@
 {
   "_comment": "go-harness settings. Every key is optional; missing keys use the defaults in scripts/harness/lib.mjs. See dev-docs/harness/go-harness.md.",
 
-  "_merge": "human = the harness never merges (Phase 1). auto-sm = merge size S and M on green; L, track:platform and any change under crates/fm-api always wait for a human. There is no 'auto'.",
-  "merge": "human",
+  "_merge": "human = the harness never merges. auto = the harness merges a story when CI is green on a branch up to date with main, the review has no open must, the budget held and no existing fm-api type changed (outside contract_epics). Tracks in auto_merge.exclude_tracks always wait for a human; the lane goes on meanwhile.",
+  "merge": "auto",
+
+  "_auto_merge": "exclude_tracks: tracks a human always merges. max_branch_updates: how often the harness brings a PR up to date with main (then CI again) before it gives up.",
+  "auto_merge": { "exclude_tracks": ["platform"], "max_branch_updates": 3 },
 
   "base_branch": "main",
 
@@ -24,7 +27,7 @@
     "ui": { "tracks": ["ui"], "worktree": "../font-manager-ui" }
   },
 
-  "_lane_max_unmerged": "How many ready PRs a lane may leave waiting for a human merge before it stops picking new stories.",
+  "_lane_max_unmerged": "merge: human only. How many ready PRs a lane may leave waiting for a human merge before it stops picking new stories.",
   "lane_max_unmerged": 1,
 
   "review": {

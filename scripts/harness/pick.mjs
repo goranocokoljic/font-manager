@@ -14,7 +14,7 @@
 //   4. open, and unassigned or assigned to the harness bot
 // Then, per lane:
 //   - one story in an ACTIVE stage per lane (claimed, PR missing or still draft) -> resume it
-//   - at most `lane_max_unmerged` ready-for-human PRs waiting per lane
+//   - at most `lane_max_unmerged` ready-for-human PRs waiting per lane (merge: human only)
 //   - a candidate whose predicted areas overlap an open harness PR of the OTHER lane waits
 // Ordering inside a lane: phase, epic number, story number, size.
 //
@@ -87,7 +87,10 @@ export function planLane(lane, world, cfg, { issues = null, bot = '', checkDeps 
   const active = claimed.filter((s) => { const p = prOf(s); return !p || p.isDraft; });
   if (active.length) return result('resume', active.sort(compareStories)[0]);
   const waiting = claimed.filter((s) => prOf(s) && !prOf(s).isDraft);
-  if (waiting.length >= cfg.lane_max_unmerged) {
+  // With merge: auto every green, reviewed PR merges itself; the ones still
+  // waiting are left for a human on purpose (an excluded track, a contract
+  // change), so they do not hold the lane.
+  if (cfg.merge !== 'auto' && waiting.length >= cfg.lane_max_unmerged) {
     reasons.push({ why: `${waiting.length} PR(s) wait for a human merge: ${waiting.map((s) => `#${prOf(s).number}`).join(', ')}` });
     return result('wait', null);
   }

@@ -17,6 +17,7 @@ import { countFindings, markerLine } from './review-counts.mjs';
 import { applyItems, matchesPaths, retrieveDigest, rulesMarkdown, readStore } from './kb.mjs';
 import { matchCheck, osOf, excerpt } from './ci-wait.mjs';
 import { summaryLine } from './epic-sync.mjs';
+import { contractRemovals, commitCi, decide } from './merge-check.mjs';
 
 const cfg = structuredClone(DEFAULT_CONFIG);
 
@@ -256,6 +257,68 @@ describe('ci-wait helpers', () => {
     assert.match(ex, /error\[E0308\]: mismatched types\n {2}--> crates/);
     assert.doesNotMatch(ex, /2026-10-16T/);
     assert.ok(ex.split('\n').length < 20);
+  });
+});
+
+describe('auto merge', () => {
+  const auto = { ...structuredClone(DEFAULT_CONFIG), merge: 'auto' };
+  const facts = (extra = {}) => ({
+    state: 'OPEN', isDraft: false, mergeable: 'MERGEABLE', sha: 'abc', baseSha: 'def1234567', behindBy: 0,
+    mainCi: 'success', removals: [], track: 'core', epic: 'E3', ...extra,
+  });
+
+  test('merges a green, reviewed, up-to-date PR', () => {
+    assert.equal(decide(facts(), auto).action, 'merge');
+    assert.equal(decide(facts({ mainCi: 'pending' }), auto).action, 'merge');
+  });
+
+  test('brings a PR that is behind main up to date first', () => {
+    assert.deepEqual(decide(facts({ behindBy: 2 }), auto), { action: 'update', reasons: ['2 commit(s) behind main'] });
+  });
+
+  test('leaves platform PRs and changed fm-api types for a human; contract epics may change types', () => {
+    assert.equal(decide(facts({ track: 'platform' }), auto).action, 'human');
+    assert.match(decide(facts({ removals: ['total: number,'] }), auto).reasons[0], /changes existing fm-api types/);
+    assert.equal(decide(facts({ removals: ['total: number,'], epic: 'E1' }), auto).action, 'merge');
+  });
+
+  test('blocks on conflicts and drafts; stops when main is red', () => {
+    assert.equal(decide(facts({ mergeable: 'CONFLICTING' }), auto).action, 'block');
+    assert.equal(decide(facts({ isDraft: true }), auto).action, 'block');
+    assert.equal(decide(facts({ mainCi: 'failure', track: 'platform' }), auto).action, 'stop');
+  });
+
+  test('only removed or rewritten lines of the generated types count as a contract change', () => {
+    const diff = [
+      'diff --git a/crates/fm-api/src/search.rs b/crates/fm-api/src/search.rs',
+      '-    pub old: u32,',
+      'diff --git a/apps/desktop/src/api/types.ts b/apps/desktop/src/api/types.ts',
+      '--- a/apps/desktop/src/api/types.ts',
+      '+++ b/apps/desktop/src/api/types.ts',
+      '-export const API_VERSION: ApiVersion = { major: 0, minor: 2, patch: 0 };',
+      '+export const API_VERSION: ApiVersion = { major: 0, minor: 3, patch: 0 };',
+      '+\tnewField?: string | null,',
+      '-"permanent";',
+      '+"permanent" | "pinned";',
+    ].join('\n');
+    assert.deepEqual(contractRemovals(diff), ['"permanent";']);
+    assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => l !== '-"permanent";').join('\n')), []);
+  });
+
+  test('main CI is red if any required check failed, pending until all completed', () => {
+    assert.equal(commitCi([{ status: 'completed', conclusion: 'success' }, { status: 'in_progress', conclusion: null }]), 'pending');
+    assert.equal(commitCi([{ status: 'completed', conclusion: 'failure' }, { status: 'queued', conclusion: null }]), 'failure');
+    assert.equal(commitCi([{ status: 'completed', conclusion: 'success' }]), 'success');
+    assert.equal(commitCi([]), 'pending');
+  });
+
+  test('a ready PR left for a human does not hold the lane in auto mode', () => {
+    const w = {
+      stories: [story('E6.2', { track: 'platform', labels: ['type:story', 'harness:in-progress'] }), story('E1.6')],
+      prs: [{ number: 90, storyId: 'E6.2', isDraft: false, areas: [], headRefName: 'E6.2-x' }],
+    };
+    assert.equal(planLane('core', w, cfg, { checkDeps: () => [] }).action, 'wait');
+    assert.equal(planLane('core', w, auto, { checkDeps: () => [] }).story.id, 'E1.6');
   });
 });
 

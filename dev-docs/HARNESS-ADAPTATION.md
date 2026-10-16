@@ -239,6 +239,13 @@ config flag `merge: human`.
 merges stories of size S and M on green, and leaves L stories and anything with
 `track: platform` for a human. Never `merge: auto` for platform or `fm-api` changes.
 
+> **Superseded by the owner on 2026-10-16:** `merge: auto` replaces `auto-sm`. The
+> harness merges any size when CI is green on a branch up to date with `main`, the
+> review has no open `must`, and the budget held. `track: platform` still always waits
+> for a human. Additive `fm-api` changes (new types, new optional fields) merge; a
+> change to an existing `fm-api` type outside the contract epics still waits for a
+> human. See `dev-docs/harness/go-harness.md`, "Merge gate".
+
 ---
 
 ## 7. Budgets and telemetry
