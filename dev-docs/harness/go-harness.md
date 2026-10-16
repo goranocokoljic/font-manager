@@ -46,6 +46,7 @@ Tests: `node --test "scripts/harness/**/*.test.mjs"` (part of `pnpm test`).
 ./go-harness.ps1 -Lane core -NoWorktree -MaxStories 1   # first loop: one story, in this checkout, watched
 ./go-harness.ps1 -Lane core                 # terminal 1
 ./go-harness.ps1 -Lane ui                   # terminal 2
+./go-harness.ps1 -Lane core -MaxStories 10 -StopOnBlock   # night run (merge: auto)
 ./go-harness.ps1 -Lane core -Issues 42,43   # only these (still Definition-of-Ready checked)
 ./go-harness.ps1 -EpicSync                  # post epic summaries for stories a human merged
 ./go-harness.ps1 -GraduateOnly              # KB graduation review
@@ -62,6 +63,7 @@ Tests: `node --test "scripts/harness/**/*.test.mjs"` (part of `pnpm test`).
 | `-NoWorktree` | off | run in this checkout instead of the lane worktree |
 | `-NoWaitForReset`, `-MaxWaits` | wait, 12 | usage limits: sleep until reset, re-dispatch the same attempt |
 | `-MaxConsecutiveFails` | 3 | blocked stories in a row → stop the lane |
+| `-StopOnBlock` | off | stop the lane at the first blocked story (night runs) |
 | `-NoLoopGuard`, `-NoGraduate` | off | skip the guard / the graduation review |
 | `-Panel`, `-NoPanel` | auto | force the pinned panel on (JetBrains terminal) or off |
 
@@ -78,8 +80,9 @@ pick (DoR) → claim → build → CI → [ci-fix → CI]* → review → CI →
   bot as assignee. Lane order: phase, epic, story, size. A story whose predicted
   areas (crates and frontend paths named in its body, plus its track's home)
   overlap the other lane's open story PR waits. A lane resumes its claimed
-  story whose PR is still a draft, and stops picking while
-  `lane_max_unmerged` ready PRs wait for a human.
+  story whose PR is still a draft. With `merge: human` it stops picking while
+  `lane_max_unmerged` ready PRs wait for a human; with `merge: auto` a PR left
+  for a human does not hold the lane.
 - **build** — read the issue, epic, ADR, PureContext `get_task_context`, KB
   pitfalls; branch `E3.2-slug` off `origin/main`; implement core → api →
   adapter; tests per criterion; preflight (`pnpm lint`, `cargo nextest run
@@ -98,12 +101,35 @@ pick (DoR) → claim → build → CI → [ci-fix → CI]* → review → CI →
   comment (test + CI job URL / bench number / screenshot); PR body table;
   summary comment; `gh pr ready`.
 - **merge gate** — `merge: human`: never merges; the PR waits for you.
-  `merge: auto-sm`: merges S and M; L, `track: platform` and any PR touching
-  `crates/fm-api` wait for a human. There is no `auto`.
+  `merge: auto`: see "Merge gate" below.
 
 Later stages resume the build conversation (`claude --resume <session>`), so the
 fixer keeps the implementation intent. `.harness/notes/issue-<n>.md` is the
 memory if a cold start is needed, and the decision record reviewers read.
+
+## Merge gate
+
+`go-harness.config.json` → `merge`:
+
+- `human` — the harness never merges. The ready PR waits for you.
+- `auto` — after finalize, `scripts/harness/merge-check.mjs` decides:
+
+| Verdict | When | What the harness does |
+|---|---|---|
+| merge | CI green on all three OS, review has no open `must`, budget held, branch up to date with `main` | squash-merge (pinned to the checked head commit), delete the branch |
+| update | the branch is behind `main` | `gh pr update-branch`, then CI again (red → ci-fix as usual), then the gate again; at most `auto_merge.max_branch_updates` (3) times |
+| human | track in `auto_merge.exclude_tracks` (`platform`), over budget, or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, leave it ready; the lane goes on |
+| block | conflict with `main`, a draft, or the merge call failed | `harness:blocked` |
+| stop | the newest commit on `main` has a failed required check | merge nothing; stop the lane |
+
+Merging only a branch that is up to date with `main` and green means `main` after
+the merge is the exact tree CI just tested, even with two lanes merging. Adding to
+`fm-api` (new types, new optional fields) only adds lines to `types.ts`, so it
+merges; removing or rewriting a line means an existing type changed.
+
+Night run: `./go-harness.ps1 -Lane core -MaxStories 10 -StopOnBlock` in one
+terminal, the same with `-Lane ui` in another. `-StopOnBlock` stops the lane at the
+first story that ends blocked, instead of going on to the next one.
 
 ## Stop conditions → `harness:blocked` + a comment with why and what was tried
 
@@ -211,6 +237,7 @@ pick; then commit the changed files in a PR.
 | CI `timeout` | raise `ci.timeout_min`; check the runners |
 | check never matches | the job names differ: set `ci.required_checks` to the names `gh pr checks` shows |
 | `pc 0` in yellow | `claude mcp list`; `resolve_repo` on the worktree path |
-| lane says WAIT | a ready PR waits for your merge (`lane_max_unmerged`) |
+| lane says WAIT | `merge: human` and a ready PR waits for your merge (`lane_max_unmerged`) |
+| lane stopped: "main is red" | fix `main` first; the harness merges nothing onto a red `main` |
 | a story stays `harness:in-progress` after you merged | it closes with the PR (`Closes #n`); `-EpicSync` posts its epic line |
 | leftovers in a worktree | the harness stashes them before a new story: `git -C ../font-manager-core stash list` |

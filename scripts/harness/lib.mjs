@@ -40,6 +40,7 @@ export const DEFAULT_CONFIG = {
     ui: { tracks: ['ui'], worktree: '../font-manager-ui' },
   },
   lane_max_unmerged: 1,
+  auto_merge: { exclude_tracks: ['platform'], max_branch_updates: 3 },
   review: { max_cycles: 3, model: 'inherit' },
   contract_epics: ['E1', 'E25'],
   close_epics: true,

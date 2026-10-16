@@ -19,9 +19,12 @@
 #     Windows/macOS/Linux matrix (scripts/harness/ci-wait.mjs) — no tokens are
 #     spent waiting. A red OS loops back to a ci-fix stage with the job log;
 #     3 failures -> harness:blocked. Numeric criteria add the bench job.
-#   - THE HUMAN GATE. `merge: human` (default) leaves a green, reviewed, ready
-#     PR and never merges; `merge: auto-sm` merges size S/M except platform
-#     and fm-api changes. Stop conditions set harness:blocked with a comment.
+#   - THE MERGE GATE. `merge: human` leaves a green, reviewed, ready PR and
+#     never merges. `merge: auto` merges it when CI is green on a branch that
+#     is up to date with main, the review has no open must, the budget held
+#     and no existing fm-api type changed; platform-track PRs and contract
+#     changes wait for a human while the lane goes on (merge-check.mjs).
+#     Stop conditions set harness:blocked with a comment.
 #   - BUDGETS by size (S 1x, M 2.5x, L 5x the base in go-harness.config.json).
 #   - TELEMETRY in .harness/ (git-ignored): per-stage runs, review cycles,
 #     one record per story, and fm-run-summary.md. Epics get a summary
@@ -33,6 +36,7 @@
 #   ./go-harness.ps1 -DryRun                       # which story each lane would pick and why; touches nothing
 #   ./go-harness.ps1 -Lane core                    # work the core lane until nothing is ready
 #   ./go-harness.ps1 -Lane ui -MaxStories 1        # one ui story, then stop
+#   ./go-harness.ps1 -Lane core -MaxStories 10 -StopOnBlock   # night run: 10 stories, stop at the first blocked one
 #   ./go-harness.ps1 -Lane core -Issues 42         # only these issues (still Definition-of-Ready checked)
 #   ./go-harness.ps1 -Lane core -NoWorktree        # run in THIS checkout (to watch the first story)
 #   ./go-harness.ps1 -Lane core -Model fable       # default opus
@@ -75,6 +79,9 @@ param(
     # This many stories in a row blocked/failed looks systemic -> stop the lane.
     [ValidateRange(1, 100)]
     [int]$MaxConsecutiveFails = 3,
+
+    # Stop the lane at the first story that ends blocked or failed (night runs).
+    [switch]$StopOnBlock,
 
     [switch]$NoLoopGuard,
     [switch]$NoGraduate,
@@ -137,6 +144,7 @@ $script:SessionId   = ''
 $script:PcCalls     = 0              # PureContext tool calls in the current claude run
 $script:ConsecFails = 0
 $script:HadFailures = $false
+$script:StopReason  = $null   # set by the merge gate when main is red
 $script:Work        = $PSScriptRoot  # the checkout claude runs in (lane worktree)
 
 $script:RunPhases = [ordered]@{}; $script:RunCycles = @(); $script:CurPhase = $null
@@ -674,7 +682,7 @@ function New-StoryState {
         budget_usd = [double]($SizeFactor[$Pick.size] ?? 5.0) * $BaseUsd; numeric = $numeric
         stage = 'build'; after_ci = 'review'; session = ''; pr = $(if ($Pick.pr) { [int]$Pick.pr.number } else { 0 })
         claim_ts = (Get-Date).ToString('o'); green_ts = $null
-        ci_attempts = 0; ci_failed_platforms = @(); finalize_runs = 0
+        ci_attempts = 0; ci_failed_platforms = @(); finalize_runs = 0; merge_updates = 0
         billed_usd = 0.0; purecontext_calls = 0; review_rounds = 0; must_total = 0; must_fixed = 0; should_total = 0; rejected_total = 0
         bench = $null
     }
@@ -729,32 +737,65 @@ function Block-Story {
     Complete-Story -Outcome 'blocked' -Reason $Reason
 }
 
-# The merge gate. merge: human -> leave the ready PR. merge: auto-sm -> merge
-# size S/M unless the story is platform track or the PR touches crates/fm-api.
+# The merge gate. merge: human -> leave the ready PR for a person.
+# merge: auto -> scripts/harness/merge-check.mjs decides:
+#   merge  : green on all OS, reviewed, within budget, up to date with main -> squash-merge
+#   update : behind main -> merge main into the branch and run CI again (returns 'again')
+#   human  : excluded track (platform) or a changed existing fm-api type -> leave it, lane goes on
+#   block  : conflict with main, or the merge itself failed -> harness:blocked
+#   stop   : main is red -> leave it and stop the lane
+# Returns 'again' when the story must loop through CI before the gate runs again.
 function Invoke-MergeGate {
     $s = $script:Story
-    $script:Phase = 'merge'; $script:PhaseDetail = "$($Cfg.merge)"
-    if ($Cfg.merge -ne 'auto-sm') {
+    $script:Phase = 'merge'; $script:PhaseDetail = "$($Cfg.merge)"; $script:StageStart = Get-Date
+    if ($Cfg.merge -ne 'auto') {
         Write-Log "=== #$($s.issue) $($s.id) READY - PR #$($s.pr) is green and reviewed; merge: human, so a human merges it. ===" 'Green'
         Complete-Story -Outcome 'ready'
         return
     }
-    $files = @((gh pr view $s.pr --json files -q '.files[].path' 2>$null) -split "`r?`n" | Where-Object { $_ })
-    $why = @()
-    if ($s.size -notin 'S', 'M') { $why += "size $($s.size)" }
-    if ($s.track -eq 'platform') { $why += 'track platform' }
-    if ($files | Where-Object { $_ -like 'crates/fm-api/*' }) { $why += 'touches crates/fm-api' }
-    if ($why) {
-        Write-Log "=== #$($s.issue) READY - auto-sm leaves it for a human ($($why -join ', ')). ===" 'Green'
-        gh pr comment $s.pr --body "go-harness: green and reviewed. Not auto-merged ($($why -join ', ')) — a human merges this one." 2>$null | Out-Null
-        Complete-Story -Outcome 'ready'
+    if (Test-OverBudget) {
+        $why = Get-BudgetReason
+        Write-Log "=== #$($s.issue) READY - not auto-merged: $why. ===" 'Yellow'
+        gh pr comment $s.pr --body "go-harness: green and reviewed, but not auto-merged: $why. A human merges this one." 2>$null | Out-Null
+        Complete-Story -Outcome 'ready' -Reason $why
         return
     }
-    gh pr merge $s.pr --squash --delete-branch 2>&1 | ForEach-Object { Write-Log "    $_" 'DarkGray' }
-    if ($LASTEXITCODE -ne 0) { Complete-Story -Outcome 'ready' -Reason 'auto-merge failed; left for a human'; return }
-    gh issue edit $s.issue --remove-label 'harness:in-progress' 2>$null | Out-Null
-    Write-Log "=== #$($s.issue) $($s.id) MERGED (auto-sm). ===" 'Green'
-    Complete-Story -Outcome 'merged'
+    $r = Invoke-Node 'merge-check.mjs' @('--pr', "$($s.pr)", '--track', "$($s.track)", '--epic', "$($s.epic)")
+    $mc = $null; try { $mc = $r.Out | ConvertFrom-Json -Depth 10 } catch { }
+    if (-not $mc) { Block-Story -Reason "merge-check failed: $($r.Err.Trim())"; return }
+    $why = ($mc.reasons -join '; ')
+    switch ($mc.action) {
+        'human' {
+            Write-Log "=== #$($s.issue) READY - left for a human: $why. The lane goes on. ===" 'Yellow'
+            gh pr comment $s.pr --body "go-harness: green and reviewed. Not auto-merged: $why. A human merges this one." 2>$null | Out-Null
+            Complete-Story -Outcome 'ready' -Reason $why
+        }
+        'stop' {
+            Write-Log "=== #$($s.issue) READY - not merged: $why. Stopping the lane. ===" 'Red'
+            $script:StopReason = $why
+            Complete-Story -Outcome 'ready' -Reason $why
+        }
+        'block' { Block-Story -Reason "auto-merge: $why" }
+        'update' {
+            $max = [int]($Cfg.auto_merge.max_branch_updates ?? 3)
+            $s.merge_updates = [int]$s.merge_updates + 1
+            if ($s.merge_updates -gt $max) { Block-Story -Reason "main moved $max times while this PR waited to merge"; return }
+            Write-Log "    $why - updating the branch with main ($($s.merge_updates)/$max), then CI again" 'Yellow'
+            $out = gh pr update-branch $s.pr 2>&1
+            if ($LASTEXITCODE -ne 0) { Block-Story -Reason "could not update the branch with main: $(($out | Out-String).Trim())"; return }
+            $s.stage = 'ci'; $s.after_ci = 'merge'
+            return 'again'
+        }
+        'merge' {
+            $out = gh pr merge $s.pr --squash --delete-branch --match-head-commit $mc.sha 2>&1
+            $out | ForEach-Object { Write-Log "    $_" 'DarkGray' }
+            if ($LASTEXITCODE -ne 0) { Block-Story -Reason "auto-merge failed: $(($out | Out-String).Trim())"; return }
+            gh issue edit $s.issue --remove-label 'harness:in-progress' 2>$null | Out-Null
+            Write-Log "=== #$($s.issue) $($s.id) MERGED (auto). ===" 'Green'
+            Complete-Story -Outcome 'merged'
+        }
+        default { Block-Story -Reason "merge-check returned '$($mc.action)'" }
+    }
 }
 
 # --------------------------------------------------------------------------
@@ -825,7 +866,7 @@ function Invoke-Story {
                     $s.stage = 'ci'; $s.after_ci = 'finalize'
                 } else { $s.stage = 'merge' }
             }
-            'merge' { Invoke-MergeGate; return }
+            'merge' { if (@(Invoke-MergeGate) -notcontains 'again') { return } }
             default { Block-Story -Reason "unknown stage '$($s.stage)' in saved state"; return }
         }
     }
@@ -1068,12 +1109,23 @@ try {
         $ranAny = $true
         Invoke-Story
         $count++
-        $outcome = $script:Done[$script:Story.id]
+        $doneId = $script:Story.id
+        $outcome = $script:Done[$doneId]
         $script:Story = $null; $script:Phase = $null; $script:Stage = ''
         Draw-Panel
 
+        if ($script:StopReason) {
+            $script:RunState = 'stopped'; $script:HadFailures = $true
+            Write-Log "=== Stopping the lane: $($script:StopReason) ===" 'Red'
+            break
+        }
         if ($outcome -in 'blocked', 'failed') {
             $script:HadFailures = $true; $script:ConsecFails++
+            if ($StopOnBlock) {
+                $script:RunState = 'stopped'
+                Write-Log "=== $doneId ended $outcome and -StopOnBlock is set. Stopping the lane. ===" 'Red'
+                break
+            }
             if ($script:ConsecFails -ge $MaxConsecutiveFails) {
                 $script:RunState = 'stopped'
                 Write-Log "=== $($script:ConsecFails) stories in a row blocked - looks systemic. Stopping the lane. ===" 'Red'
