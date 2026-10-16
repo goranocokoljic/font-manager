@@ -4,3 +4,11 @@
 //! search and filters, coverage, previews, activation, export and catalog
 //! adapters. Nothing outside this crate computes anything about fonts; every
 //! consumer reaches it through `fm-api`.
+
+pub mod config;
+pub mod logging;
+pub mod startup;
+#[cfg(test)]
+mod test_support;
+
+pub use config::{Config, LogLevel};

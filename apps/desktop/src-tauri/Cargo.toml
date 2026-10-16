@@ -14,7 +14,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
 fm-api.workspace = true
+fm-core.workspace = true
 tauri = { version = "2", features = [] }
+tracing = "0.1"
 
 [lints]
 workspace = true
