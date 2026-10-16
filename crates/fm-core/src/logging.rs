@@ -165,4 +165,20 @@ mod tests {
             .expect("not a folder");
         assert_eq!(err.code, ErrorCode::Io);
     }
+
+    // The only test that installs the process-wide logger.
+    #[test]
+    fn init_installs_the_global_logger_once() {
+        let dir = TempDir::new("log-global");
+        let guard = init(dir.path(), LogLevel::Info).expect("first init");
+        tracing::info!("global hello");
+        let second = init(dir.path(), LogLevel::Info).expect_err("second init");
+        assert_eq!(second.code, ErrorCode::Conflict);
+        drop(guard);
+        let text: String = log_files(dir.path())
+            .iter()
+            .map(|p| fs::read_to_string(p).expect("read"))
+            .collect();
+        assert!(text.contains("global hello"), "{text}");
+    }
 }
