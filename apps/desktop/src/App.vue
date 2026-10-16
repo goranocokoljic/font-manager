@@ -1,22 +1,15 @@
 <script setup lang="ts">
-import { formatApiVersion } from './api/version';
-
-const apiVersion = formatApiVersion();
+import { RouterView } from 'vue-router';
 </script>
 
 <template>
   <main class="shell">
-    <h1>Font Manager</h1>
-    <p>API {{ apiVersion }}</p>
+    <RouterView />
   </main>
 </template>
 
 <style>
-:root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
-}
 .shell {
-  padding: 2rem;
+  min-height: 100vh;
 }
 </style>
