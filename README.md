@@ -22,6 +22,23 @@ pnpm dev             # run the app
 
 `pnpm lint` needs `cargo install --locked cargo-nextest cargo-deny`.
 
+## Reference library
+
+The performance budgets are measured against ~10,000 OFL, Apache and UFL fonts (the
+Google Fonts repository at a pinned commit, the static instances Google Fonts serves for
+its variable families, and the OFL families of Fontshare). Download them once:
+
+```
+scripts/build-reference-library.sh --dest ~/fm-reference-library    # several GB; resumable
+export FM_REFERENCE_LIBRARY=~/fm-reference-library
+```
+
+The script writes `manifest.tsv` (sha256, size, licence, source, path) into the folder.
+Run it again after an interruption: it continues where it stopped and re-downloads
+nothing that is complete. Performance tests are skipped when `FM_REFERENCE_LIBRARY` is
+not set. The 200-font test corpus in [fixtures/fonts](fixtures/fonts/) is picked from
+this library by `scripts/reference-library/fixtures.mjs`.
+
 Contributors and coding agents: read [CLAUDE.md](CLAUDE.md) first. Decisions are in
 [docs/adr](docs/adr/).
 
