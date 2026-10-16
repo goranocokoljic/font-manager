@@ -1,0 +1,194 @@
+//! Organization service: collections, tags, user metadata and project sets.
+
+use serde::{Deserialize, Serialize};
+
+use crate::search::Filters;
+use crate::{ApiResult, CollectionId, FaceId, SetId, TagId};
+
+/// A manual collection, or a smart one when `rules` is set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Collection {
+    /// Id.
+    pub id: CollectionId,
+    /// Parent, for nesting; absent at the top level.
+    pub parent: Option<CollectionId>,
+    /// Name.
+    pub name: String,
+    /// Smart collection rules; absent for a manual collection.
+    pub rules: Option<Filters>,
+    /// Faces in it now.
+    pub face_count: u32,
+}
+
+/// Create a collection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateCollectionRequest {
+    /// Name; unique among its siblings.
+    pub name: String,
+    /// Parent.
+    #[serde(default)]
+    pub parent: Option<CollectionId>,
+    /// Rules, to make it smart.
+    #[serde(default)]
+    pub rules: Option<Filters>,
+}
+
+/// Rename a collection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameCollectionRequest {
+    /// The collection.
+    pub collection: CollectionId,
+    /// New name.
+    pub name: String,
+}
+
+/// Add faces to, or remove them from, a manual collection.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionFacesRequest {
+    /// The collection; a smart one is `InvalidRequest`.
+    pub collection: CollectionId,
+    /// The faces.
+    pub faces: Vec<FaceId>,
+}
+
+/// A tag.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Tag {
+    /// Id.
+    pub id: TagId,
+    /// Name.
+    pub name: String,
+    /// Faces carrying it.
+    pub face_count: u32,
+}
+
+/// Attach tags to faces; tags that do not exist yet are created.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TagFacesRequest {
+    /// The faces.
+    pub faces: Vec<FaceId>,
+    /// Tag names.
+    pub tags: Vec<String>,
+}
+
+/// Detach tags from faces.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UntagFacesRequest {
+    /// The faces.
+    pub faces: Vec<FaceId>,
+    /// The tags.
+    pub tags: Vec<TagId>,
+}
+
+/// Change user metadata on faces; absent fields are left as they are.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UserMetaUpdate {
+    /// The faces.
+    pub faces: Vec<FaceId>,
+    /// Favorite or not.
+    #[serde(default)]
+    pub favorite: Option<bool>,
+    /// 1–5 stars; 0 clears the rating.
+    #[serde(default)]
+    pub rating: Option<u8>,
+    /// Notes; an empty string clears them.
+    #[serde(default)]
+    pub notes: Option<String>,
+}
+
+/// A project set: fonts activated together.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectSet {
+    /// Id.
+    pub id: SetId,
+    /// Name.
+    pub name: String,
+    /// The faces.
+    pub faces: Vec<FaceId>,
+}
+
+/// Create a project set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateSetRequest {
+    /// Name.
+    pub name: String,
+    /// The faces.
+    pub faces: Vec<FaceId>,
+}
+
+/// One font of an exported set, referenced by content so a teammate's copy
+/// at another path still matches.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetEntry {
+    /// Family name.
+    pub family: String,
+    /// Style name.
+    pub style: String,
+    /// blake3 hash of the file, hex.
+    pub hash: String,
+}
+
+/// A project set as portable JSON (no files).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SetExport {
+    /// Set name.
+    pub name: String,
+    /// Its fonts.
+    pub fonts: Vec<SetEntry>,
+}
+
+/// The result of importing a set.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportSetResponse {
+    /// The new set, holding the fonts found in this library.
+    pub set: ProjectSet,
+    /// Fonts not found in this library.
+    pub missing: Vec<SetEntry>,
+}
+
+/// Collections, tags, user metadata and project sets.
+pub trait OrganizationService {
+    /// Every collection, parents before children.
+    fn list_collections(&self) -> ApiResult<Vec<Collection>>;
+    /// Create a collection.
+    fn create_collection(&self, req: CreateCollectionRequest) -> ApiResult<Collection>;
+    /// Rename a collection.
+    fn rename_collection(&self, req: RenameCollectionRequest) -> ApiResult<Collection>;
+    /// Delete a collection and its children. Faces are not touched.
+    fn delete_collection(&self, collection: CollectionId) -> ApiResult<()>;
+    /// Add faces to a manual collection.
+    fn add_to_collection(&self, req: CollectionFacesRequest) -> ApiResult<Collection>;
+    /// Remove faces from a manual collection.
+    fn remove_from_collection(&self, req: CollectionFacesRequest) -> ApiResult<Collection>;
+    /// Every tag.
+    fn list_tags(&self) -> ApiResult<Vec<Tag>>;
+    /// Attach tags; returns the tags touched.
+    fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>>;
+    /// Detach tags.
+    fn untag_faces(&self, req: UntagFacesRequest) -> ApiResult<()>;
+    /// Favorite, rating, notes.
+    fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()>;
+    /// Every project set.
+    fn list_sets(&self) -> ApiResult<Vec<ProjectSet>>;
+    /// Create a project set.
+    fn create_set(&self, req: CreateSetRequest) -> ApiResult<ProjectSet>;
+    /// Delete a project set. Faces are not touched.
+    fn delete_set(&self, set: SetId) -> ApiResult<()>;
+    /// A set as portable JSON.
+    fn export_set(&self, set: SetId) -> ApiResult<SetExport>;
+    /// Create a set from portable JSON, matching fonts by hash.
+    fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse>;
+}

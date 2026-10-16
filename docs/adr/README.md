@@ -10,5 +10,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0003](0003-sqlite-fts5-for-the-index.md) | SQLite with FTS5 for the index | Accepted |
 | [0004](0004-index-fonts-in-place.md) | Index fonts in place; no vault | Accepted |
 | [0005](0005-open-core-for-teams.md) | Teams through synced folders; open-core team server later | Accepted |
+| [0006](0006-shape-of-the-fm-api-contract.md) | Shape of the fm-api contract | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.
