@@ -10,7 +10,7 @@
   "base_branch": "main",
 
   "_budget": "Per-story budget in USD = size factor x base. S = 1x, M = 2.5x, L = 5x. A story over budget stops with harness:blocked.",
-  "budget_base_usd": 15,
+  "budget_base_usd": 20,
 
   "ci": {
     "required_checks": ["ci / windows", "ci / macos", "ci / linux"],
