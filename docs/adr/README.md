@@ -11,5 +11,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0004](0004-index-fonts-in-place.md) | Index fonts in place; no vault | Accepted |
 | [0005](0005-open-core-for-teams.md) | Teams through synced folders; open-core team server later | Accepted |
 | [0006](0006-shape-of-the-fm-api-contract.md) | Shape of the fm-api contract | Accepted |
+| [0007](0007-app-paths-config-and-logs.md) | App folders, config and logs per OS | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

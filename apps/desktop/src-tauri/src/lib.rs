@@ -58,9 +58,21 @@ pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri
 
 /// Starts the desktop app.
 pub fn run() {
+    // App folders, settings and the rotating log file. The guard lives until
+    // `run` returns so buffered log lines are flushed on exit. A failure here
+    // is reported but does not stop the app: it runs on default settings.
+    let startup = match fm_core::startup::init() {
+        Ok(startup) => Some(startup),
+        Err(e) => {
+            eprintln!("font manager: {e}");
+            None
+        }
+    };
     let api: Arc<dyn Api> = Arc::new(MockApi::new());
     if let Err(e) = setup(tauri::Builder::default(), api).run(tauri::generate_context!()) {
+        tracing::error!(error = %e, "font manager failed to start");
         eprintln!("font manager failed to start: {e}");
+        drop(startup); // flush the log before exit skips destructors
         std::process::exit(1);
     }
 }
