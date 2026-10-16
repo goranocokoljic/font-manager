@@ -787,9 +787,17 @@ function Invoke-MergeGate {
             return 'again'
         }
         'merge' {
-            $out = gh pr merge $s.pr --squash --delete-branch --match-head-commit $mc.sha 2>&1
+            # No --delete-branch: gh also deletes the LOCAL branch, which fails
+            # because the lane worktree has it checked out. Delete both by hand.
+            $branch = (gh pr view $s.pr --json headRefName -q .headRefName 2>$null | Out-String).Trim()
+            $out = gh pr merge $s.pr --squash --match-head-commit $mc.sha 2>&1
             $out | ForEach-Object { Write-Log "    $_" 'DarkGray' }
             if ($LASTEXITCODE -ne 0) { Block-Story -Reason "auto-merge failed: $(($out | Out-String).Trim())"; return }
+            if ($branch) {
+                git -C $script:Work checkout --detach 2>&1 | Out-Null
+                git -C $script:Work branch -D $branch 2>&1 | Out-Null
+                gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$branch" 2>&1 | Out-Null
+            }
             gh issue edit $s.issue --remove-label 'harness:in-progress' 2>$null | Out-Null
             Write-Log "=== #$($s.issue) $($s.id) MERGED (auto). ===" 'Green'
             Complete-Story -Outcome 'merged'
