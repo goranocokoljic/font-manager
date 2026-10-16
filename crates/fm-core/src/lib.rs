@@ -8,6 +8,7 @@
 pub mod config;
 pub mod error;
 pub mod logging;
+pub mod scanner;
 pub mod startup;
 pub mod telemetry;
 #[cfg(test)]
