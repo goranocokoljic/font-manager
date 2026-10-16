@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>go-harness dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='1' y='8' width='3' height='7' rx='1' fill='%232a78d6'/%3E%3Crect x='6' y='4' width='3' height='11' rx='1' fill='%232a78d6'/%3E%3Crect x='11' y='1' width='3' height='14' rx='1' fill='%232a78d6'/%3E%3C/svg%3E">
+<style>
+:root {
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #6f6d68;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --series-1: #2a78d6;
+  --series-2: #1baf7a;
+  --series-3: #eda100;
+  --series-4: #4a3aa7;
+  --series-5: #e87ba4;
+  --deemph: #c3c2b7;
+  --status-good: #0ca30c;
+  --status-warning: #b07800;
+  --status-critical: #d03b3b;
+  --must: #c43a3a;
+  --should: #e3a21a;
+  --rejected: #b9b8ae;
+  --accent-wash: rgba(42,120,214,0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #9a988f;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5;
+    --series-2: #199e70;
+    --series-3: #c98500;
+    --series-4: #9085e9;
+    --series-5: #d55181;
+    --deemph: #52514e;
+    --status-warning: #fab219;
+    --must: #e66767;
+    --should: #d9a02a;
+    --rejected: #5d5c57;
+    --accent-wash: rgba(57,135,229,0.12);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--text-primary); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color: var(--series-1); text-decoration: none; }
+a:hover { text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--series-1); outline-offset: 2px; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 20px 24px 64px; }
+header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 14px; flex-wrap: wrap; }
+header h1 { font-size: 19px; font-weight: 650; margin: 0; }
+.asof { color: var(--text-muted); font-size: 12.5px; margin-left: auto; }
+button { font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 7px; padding: 5px 12px; cursor: pointer; }
+button:hover { background: var(--accent-wash); }
+.filters { display: flex; gap: 18px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+.filter { display: inline-flex; gap: 8px; align-items: center; }
+.seg { display: inline-flex; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+.seg button { border: none; background: transparent; border-radius: 6px; padding: 4px 12px; color: var(--text-secondary); }
+.seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--text-primary); font-weight: 600; }
+.filter-label { color: var(--text-muted); font-size: 12.5px; }
+
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 18px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.tile .label { color: var(--text-secondary); font-size: 12.5px; }
+.tile .value { font-size: 25px; font-weight: 620; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.tile .sub { color: var(--text-muted); font-size: 12px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.tile.warn .value { color: var(--status-warning); }
+
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+@media (max-width: 1100px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 860px) { .grid, .grid-3 { grid-template-columns: 1fr; } }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; margin-bottom: 14px; }
+.grid .card { margin-bottom: 0; }
+.card-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.card-head h2 { font-size: 14px; font-weight: 650; margin: 0; }
+.card-head .spacer { flex: 1; }
+.tbl-toggle { font-size: 12px; padding: 2px 9px; color: var(--text-muted); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin: 2px 0 8px; font-size: 12.5px; color: var(--text-secondary); }
+.legend .item { display: inline-flex; align-items: center; gap: 6px; }
+.legend .sw { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+.legend .ln { width: 16px; height: 2.5px; border-radius: 2px; display: inline-block; }
+.footnote { color: var(--text-muted); font-size: 11.5px; margin-top: 8px; }
+.chart-body svg { display: block; }
+.chart-body, .scroll-x { overflow-x: auto; }
+
+table.data { border-collapse: collapse; width: 100%; font-size: 13px; }
+table.data th { text-align: left; color: var(--text-muted); font-weight: 550; font-size: 12px; border-bottom: 1px solid var(--grid); padding: 6px 10px 6px 0; white-space: nowrap; }
+table.data td { border-bottom: 1px solid var(--grid); padding: 6px 10px 6px 0; vertical-align: top; }
+table.data td.num, table.data th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.data tr:last-child td { border-bottom: none; }
+table.data th button.sort { border: none; background: none; padding: 0; color: inherit; font: inherit; }
+table.data th button.sort:hover { color: var(--text-primary); }
+tr.expandable { cursor: pointer; }
+tr.expandable:hover td { background: var(--accent-wash); }
+tr.detail-row > td { background: color-mix(in srgb, var(--surface-1) 60%, var(--page)); padding: 14px 16px; }
+.detail h3 { font-size: 12.5px; font-weight: 650; margin: 12px 0 6px; color: var(--text-secondary); }
+.detail h3:first-child { margin-top: 0; }
+.chev { border: none; background: none; padding: 0 4px; color: var(--text-muted); display: inline-block; transition: transform .12s; }
+.chev[aria-expanded="true"] { transform: rotate(90deg); }
+.status { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.mini-bar { background: var(--series-1); height: 8px; border-radius: 0 3px 3px 0; display: inline-block; vertical-align: middle; }
+.over { color: var(--status-critical); font-weight: 600; }
+.muted { color: var(--text-muted); }
+.lanes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.lane { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.lane b { font-weight: 650; }
+.pill { display: inline-block; font-size: 11.5px; padding: 1px 8px; border-radius: 99px; background: var(--accent-wash); color: var(--text-secondary); }
+
+#tooltip { position: fixed; z-index: 10; pointer-events: none; display: none; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.18); padding: 8px 11px; font-size: 12.5px; max-width: 320px; }
+#tooltip .tt-title { color: var(--text-muted); font-size: 11.5px; margin-bottom: 4px; }
+#tooltip .tt-row { display: flex; align-items: center; gap: 7px; margin: 2px 0; }
+#tooltip .tt-key { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+#tooltip .tt-val { font-weight: 650; font-variant-numeric: tabular-nums; }
+#tooltip .tt-lab { color: var(--text-secondary); }
+main.loading { opacity: 0.55; transition: opacity .15s; }
+.empty { color: var(--text-muted); padding: 18px 0; }
+.section-title { font-size: 15px; font-weight: 650; margin: 22px 0 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>go-harness dashboard</h1>
+    <span class="asof" id="asof" aria-live="polite"></span>
+    <button id="refresh" type="button">Refresh</button>
+  </header>
+
+  <div class="filters">
+    <span class="filter"><span class="filter-label" id="f-period">Period</span><span class="seg" id="seg-period" role="group" aria-labelledby="f-period"></span></span>
+    <span class="filter"><span class="filter-label" id="f-lane">Lane</span><span class="seg" id="seg-lane" role="group" aria-labelledby="f-lane"></span></span>
+    <span class="filter"><span class="filter-label" id="f-outcome">Outcome</span><span class="seg" id="seg-outcome" role="group" aria-labelledby="f-outcome"></span></span>
+  </div>
+
+  <main id="main">
+    <div class="card" id="card-now"></div>
+    <section class="kpis" id="kpis" aria-label="Totals"></section>
+    <p class="empty" id="empty" hidden>No finished stories yet. Run a lane (./go-harness.ps1 -Lane core) and this fills in after its first story.</p>
+    <div id="charts">
+      <section class="grid">
+        <div class="card" id="card-cost"></div>
+        <div class="card" id="card-trend"></div>
+        <div class="card" id="card-lens"></div>
+        <div class="card" id="card-stages"></div>
+        <div class="card" id="card-budget"></div>
+        <div class="card" id="card-ci"></div>
+      </section>
+      <div class="section-title">Review cycles</div>
+      <div class="card" id="card-cycles"></div>
+      <div class="section-title">Stories</div>
+      <div class="card" id="card-stories"></div>
+    </div>
+    <section class="grid grid-3">
+      <div class="card" id="card-epics"></div>
+      <div class="card" id="card-lessons"></div>
+      <div class="card" id="card-parking"></div>
+    </section>
+  </main>
+</div>
+<div id="tooltip" aria-hidden="true"></div>
+
+<script type="module">
+import {
+  STAGES, collapseStories, filterStories, scope, kpis, costByDay, mustTrend, lensRows,
+  cycleRows, stageRows, ciByOs, budgetRows, epicRows, lessonSummary, TREND_WINDOW,
+} from '/stats.mjs';
+
+/* ------------------------------------------------------------------ state */
+const state = {
+  data: null,
+  period: 'all', lane: 'all', outcome: 'all',
+  sort: { key: 'ts', dir: -1 },
+  expanded: new Set(),
+  tableMode: new Set(),
+};
+const STAGE_VAR = { build: '--series-1', 'ci-fix': '--series-3', review: '--series-4', finalize: '--series-2' };
+const VERDICT = [
+  { key: 'must', label: 'confirmed must', css: '--must' },
+  { key: 'should', label: 'should (advisory)', css: '--should' },
+  { key: 'rejected', label: 'rejected by verifier', css: '--rejected' },
+];
+const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+/* ------------------------------------------------------------- formatters */
+const fmtInt = (n) => (n == null ? '—' : Math.round(n).toLocaleString('en-US'));
+function fmtUsd(v) {
+  if (v == null || isNaN(v)) return '—';
+  if (v >= 1000) return '$' + Math.round(v).toLocaleString('en-US');
+  if (v >= 100) return '$' + v.toFixed(0);
+  return '$' + v.toFixed(2);
+}
+function fmtDur(sec) {
+  if (sec == null || isNaN(sec)) return '—';
+  if (sec < 60) return Math.round(sec) + 's';
+  if (sec < 3600) return Math.round(sec / 60) + 'm';
+  const h = Math.floor(sec / 3600), m = Math.round((sec - h * 3600) / 60);
+  return h + 'h' + (m ? ' ' + m + 'm' : '');
+}
+const pct = (v) => (v == null ? '—' : Math.round(v * 100) + '%');
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDay = (d) => MONTHS[d.getMonth()] + ' ' + d.getDate();
+const fmtDateTime = (d) => fmtDay(d) + ', ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+const fmtCtx = (t) => (t == null ? '—' : Math.round(t / 1000) + 'k');
+const shortModel = (m) => (m ? m.replace(/^claude-/, '') : '—');
+
+/* ------------------------------------------------------------ dom helpers */
+function h(tag, attrs, ...children) {
+  const node = document.createElement(tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') node.className = v;
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const c of children.flat()) if (c != null) node.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return node;
+}
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function s(tag, attrs, ...children) {
+  const node = document.createElementNS(SVG_NS, tag);
+  if (attrs) for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  }
+  for (const c of children.flat()) if (c != null) node.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return node;
+}
+function roundedTopRect(x, y, w, hgt, r) {
+  r = Math.max(0, Math.min(r, w / 2, hgt));
+  return `M${x},${y + hgt} L${x},${y + r} Q${x},${y} ${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + hgt} Z`;
+}
+function niceTicks(max, count) {
+  if (max <= 0) return [0, 1];
+  const rough = max / count, mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  let step = mag;
+  for (const m of [1, 2, 5, 10]) if (rough <= m * mag) { step = m * mag; break; }
+  const ticks = [];
+  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(v);
+  if (ticks[ticks.length - 1] < max) ticks.push(ticks[ticks.length - 1] + step);
+  return ticks;
+}
+const issueUrl = (n) => (state.data.repoUrl ? `${state.data.repoUrl}/issues/${n}` : null);
+const prUrl = (n) => (state.data.repoUrl ? `${state.data.repoUrl}/pull/${n}` : null);
+const link = (href, text, stop) => (href ? h('a', { href, target: '_blank', rel: 'noopener', onclick: stop ? (e) => e.stopPropagation() : null }, text) : text);
+
+/* ---------------------------------------------------------------- tooltip */
+const tooltip = document.getElementById('tooltip');
+function tipShow(evt, title, rows) {
+  tooltip.textContent = '';
+  if (title) tooltip.append(h('div', { class: 'tt-title' }, title));
+  for (const r of rows) {
+    const row = h('div', { class: 'tt-row' });
+    if (r.color) { const key = h('span', { class: 'tt-key' }); key.style.background = r.color; row.append(key); }
+    row.append(h('span', { class: 'tt-val' }, r.value));
+    if (r.label) row.append(h('span', { class: 'tt-lab' }, r.label));
+    tooltip.append(row);
+  }
+  tooltip.style.display = 'block';
+  const pad = 14, rect = tooltip.getBoundingClientRect();
+  let x = evt.clientX + pad, y = evt.clientY + pad;
+  if (x + rect.width > innerWidth - 8) x = evt.clientX - rect.width - pad;
+  if (y + rect.height > innerHeight - 8) y = evt.clientY - rect.height - pad;
+  tooltip.style.left = x + 'px'; tooltip.style.top = y + 'px';
+}
+const tipHide = () => { tooltip.style.display = 'none'; };
+/** Pointer and keyboard both show the tooltip for an SVG hit target. */
+function hover(el, title, rows) {
+  el.addEventListener('pointermove', (e) => tipShow(e, title, rows()));
+  el.addEventListener('pointerleave', tipHide);
+  el.addEventListener('focus', (e) => { const r = e.target.getBoundingClientRect(); tipShow({ clientX: r.x + r.width / 2, clientY: r.y + 20 }, title, rows()); });
+  el.addEventListener('blur', tipHide);
+  return el;
+}
+
+/* --------------------------------------------------------- generic  card */
+function renderCard(cardEl, cfg) {
+  cardEl.textContent = '';
+  const showTable = state.tableMode.has(cfg.id);
+  cardEl.append(h('div', { class: 'card-head' },
+    h('h2', null, cfg.title), h('span', { class: 'spacer' }),
+    cfg.table ? h('button', { type: 'button', class: 'tbl-toggle', 'aria-label': `${cfg.title}: show as ${showTable ? 'chart' : 'table'}`,
+      onclick: () => { showTable ? state.tableMode.delete(cfg.id) : state.tableMode.add(cfg.id); renderAll(); } }, showTable ? 'chart' : 'table') : null));
+  if (cfg.legend && !showTable) {
+    const lg = h('div', { class: 'legend' });
+    for (const item of cfg.legend) { const sw = h('span', { class: item.type === 'line' ? 'ln' : 'sw' }); sw.style.background = item.color; lg.append(h('span', { class: 'item' }, sw, item.label)); }
+    cardEl.append(lg);
+  }
+  const body = h('div', { class: 'chart-body' });
+  cardEl.append(body);
+  if (showTable) body.append(dataTable(cfg.table.cols, cfg.table.rows));
+  else cfg.renderChart(body);
+  if (cfg.note) cardEl.append(h('div', { class: 'footnote' }, cfg.note));
+}
+function dataTable(cols, rows) {
+  if (!rows.length) return h('div', { class: 'empty' }, 'No data in this range.');
+  const cls = (c) => (c.num ? 'num' : null);
+  return h('div', { class: 'scroll-x' }, h('table', { class: 'data' },
+    h('thead', null, h('tr', null, cols.map((c) => h('th', { class: cls(c), scope: 'col' }, c.label)))),
+    h('tbody', null, rows.map((r) => h('tr', null, r.map((cell, i) => h('td', { class: cls(cols[i]) }, cell)))))));
+}
+const chartWidth = (el) => Math.max(320, el.clientWidth || 560);
+function yAxis(svg, ticks, y, x1, x2, fmt) {
+  for (const tv of ticks) {
+    svg.append(s('line', { x1, x2, y1: y(tv), y2: y(tv), stroke: cssVar('--grid'), 'stroke-width': 1 }));
+    svg.append(s('text', { x: x1 - 7, y: y(tv) + 4, 'text-anchor': 'end', 'font-size': 11, fill: cssVar('--text-muted') }, fmt(tv)));
+  }
+  svg.append(s('line', { x1, x2, y1: y(0), y2: y(0), stroke: cssVar('--baseline'), 'stroke-width': 1 }));
+}
+
+/* ------------------------------------- chart: billed cost / day by stage */
+function renderCostCard(runs) {
+  const days = costByDay(runs);
+  const legend = STAGES.map((st) => ({ label: st, color: cssVar(STAGE_VAR[st]) }));
+  renderCard(document.getElementById('card-cost'), {
+    id: 'cost', title: 'Billed cost per day, by stage', legend,
+    note: 'Real billed cost (total_cost_usd of each claude stage run). CI waiting costs no tokens and is not here.',
+    table: {
+      cols: [{ label: 'Date' }, ...STAGES.map((st) => ({ label: st, num: true })), { label: 'Total', num: true }, { label: 'Stories' }],
+      rows: days.filter((d) => d.total > 0).map((d) => [fmtDay(d.date), ...STAGES.map((st) => fmtUsd(d.sums[st])), fmtUsd(d.total), d.issues.join(', ')]),
+    },
+    renderChart: (el) => {
+      if (!days.length) { el.append(h('div', { class: 'empty' }, 'No data in this range.')); return; }
+      const W = chartWidth(el), M = { t: 14, r: 8, b: 26, l: 46 }, plotH = 180, HGT = plotH + M.t + M.b;
+      const ticks = niceTicks(Math.max(...days.map((d) => d.total), 0.01), 4), yMax = ticks[ticks.length - 1];
+      const y = (v) => M.t + plotH - (v / yMax) * plotH;
+      const band = (W - M.l - M.r) / days.length, barW = Math.min(26, Math.max(2, band - 3));
+      const svg = s('svg', { width: W, height: HGT, viewBox: `0 0 ${W} ${HGT}`, role: 'img', 'aria-label': 'Billed cost per day by stage' });
+      yAxis(svg, ticks, y, M.l, W - M.r, fmtUsd);
+      const every = Math.max(1, Math.ceil(days.length / 8));
+      days.forEach((d, i) => {
+        const cx = M.l + band * i + band / 2;
+        if (i % every === 0) svg.append(s('text', { x: cx, y: HGT - 8, 'text-anchor': 'middle', 'font-size': 11, fill: cssVar('--text-muted') }, fmtDay(d.date)));
+        let acc = 0;
+        const segs = STAGES.map((st, si) => ({ v: d.sums[st], color: legend[si].color })).filter((x) => x.v > 0);
+        segs.forEach((seg, si) => {
+          const bottom = y(acc) - (si ? 1 : 0); acc += seg.v; const top = y(acc);
+          const hgt = Math.max(0.5, bottom - top);
+          svg.append(si === segs.length - 1 ? s('path', { d: roundedTopRect(cx - barW / 2, top, barW, hgt, 3), fill: seg.color }) : s('rect', { x: cx - barW / 2, y: top, width: barW, height: hgt, fill: seg.color }));
+        });
+        if (d.total > 0) svg.append(hover(s('rect', { x: M.l + band * i, y: M.t, width: band, height: plotH, fill: 'transparent', tabindex: 0 }), fmtDay(d.date),
+          () => [...STAGES.filter((st) => d.sums[st]).map((st, si) => ({ color: cssVar(STAGE_VAR[st]), value: fmtUsd(d.sums[st]), label: st })), { value: fmtUsd(d.total), label: 'total · ' + d.issues.join(', ') }]));
+      });
+      el.append(svg);
+    },
+  });
+}
+
+/* ------------------------------------ chart: cycle-1 must findings trend */
+function renderTrendCard(cycles, stories) {
+  const pts = mustTrend(cycles, stories);
+  const raw = cssVar('--deemph'), acc = cssVar('--must');
+  renderCard(document.getElementById('card-trend'), {
+    id: 'trend', title: 'Confirmed must findings in the first review, per story',
+    legend: [{ label: 'per story', color: raw, type: 'line' }, { label: `rolling avg (${TREND_WINDOW})`, color: acc, type: 'line' }],
+    note: 'Only findings the verifier confirmed. Falling = the review KB and the implementer notes are working. Zero is the target.',
+    table: {
+      cols: [{ label: 'Story' }, { label: 'Date' }, { label: 'Must', num: true }, { label: 'Should', num: true }, { label: 'Rejected', num: true }, { label: 'Rolling avg', num: true }],
+      rows: pts.map((p) => [p.id ?? '#' + p.issue, fmtDay(p.date), String(p.must), String(p.should), String(p.rejected), p.roll.toFixed(1)]),
+    },
+    renderChart: (el) => {
+      if (pts.length < 2) { el.append(h('div', { class: 'empty' }, pts.length ? `One reviewed story so far: ${pts[0].must} confirmed must.` : 'No reviewed stories in this range.')); return; }
+      const W = chartWidth(el), M = { t: 14, r: 14, b: 26, l: 34 }, plotW = W - M.l - M.r, plotH = 180, HGT = plotH + M.t + M.b;
+      const ticks = niceTicks(Math.max(...pts.map((p) => p.must), 1), 4), yMax = ticks[ticks.length - 1];
+      const x = (i) => M.l + (i / (pts.length - 1)) * plotW, y = (v) => M.t + plotH - (v / yMax) * plotH;
+      const svg = s('svg', { width: W, height: HGT, viewBox: `0 0 ${W} ${HGT}`, role: 'img', 'aria-label': 'Confirmed must findings per story' });
+      yAxis(svg, ticks, y, M.l, W - M.r, fmtInt);
+      const every = Math.max(1, Math.ceil(pts.length / 7));
+      pts.forEach((p, i) => { if (i % every === 0) svg.append(s('text', { x: x(i), y: HGT - 8, 'text-anchor': 'middle', 'font-size': 11, fill: cssVar('--text-muted') }, p.id ?? fmtDay(p.date))); });
+      const path = (f) => 'M' + pts.map((p, i) => `${x(i).toFixed(1)},${y(f(p)).toFixed(1)}`).join(' L');
+      svg.append(s('path', { d: path((p) => p.must), fill: 'none', stroke: raw, 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+      svg.append(s('path', { d: path((p) => p.roll), fill: 'none', stroke: acc, 'stroke-width': 2.5, 'stroke-linejoin': 'round' }));
+      const last = pts[pts.length - 1];
+      svg.append(s('circle', { cx: x(pts.length - 1), cy: y(last.roll), r: 4.5, fill: acc, stroke: cssVar('--surface-1'), 'stroke-width': 2 }));
+      svg.append(s('text', { x: x(pts.length - 1) - 8, y: y(last.roll) - 9, 'text-anchor': 'end', 'font-size': 11.5, fill: cssVar('--text-secondary') }, last.roll.toFixed(1)));
+      pts.forEach((p, i) => svg.append(hover(s('circle', { cx: x(i), cy: y(p.must), r: 9, fill: 'transparent', tabindex: 0 }), `${p.id ?? '#' + p.issue} · ${fmtDay(p.date)}`,
+        () => [{ color: raw, value: String(p.must), label: 'confirmed must' }, { value: String(p.should), label: 'should' }, { value: String(p.rejected), label: 'rejected' }, { color: acc, value: p.roll.toFixed(1), label: 'rolling avg' }])));
+      el.append(svg);
+    },
+  });
+}
+
+/* ---------------------------------------- horizontal stacked bars helper */
+function hStacked(el, rows, keys, label, fmtEnd) {
+  if (!rows.length) { el.append(h('div', { class: 'empty' }, 'No data in this range.')); return; }
+  // Right margin holds the end label ("$46.00 · 27m", "14 · 50% rej.").
+  const W = chartWidth(el), M = { t: 4, r: 118, b: 4, l: 72 }, rowH = 28, barH = 16;
+  const HGT = M.t + rows.length * rowH + M.b, plotW = W - M.l - M.r;
+  const maxV = Math.max(...rows.map((r) => keys.reduce((a, k) => a + (r[k.key] || 0), 0)), 1);
+  const svg = s('svg', { width: W, height: HGT, viewBox: `0 0 ${W} ${HGT}`, role: 'img', 'aria-label': label });
+  svg.append(s('line', { x1: M.l, x2: M.l, y1: M.t, y2: HGT - M.b, stroke: cssVar('--baseline'), 'stroke-width': 1 }));
+  rows.forEach((r, i) => {
+    const cy = M.t + rowH * i + rowH / 2;
+    svg.append(s('text', { x: M.l - 8, y: cy + 4, 'text-anchor': 'end', 'font-size': 12, fill: cssVar('--text-secondary') }, r.name));
+    let x = M.l;
+    for (const k of keys) {
+      const v = r[k.key] || 0; if (!v) continue;
+      const w = Math.max(1, (v / maxV) * plotW);
+      svg.append(s('rect', { x, y: cy - barH / 2, width: Math.max(1, w - 1.5), height: barH, rx: 2, fill: cssVar(k.css) }));
+      x += w;
+    }
+    svg.append(s('text', { x: x + 7, y: cy + 4, 'font-size': 11.5, fill: cssVar('--text-secondary') }, fmtEnd(r)));
+    svg.append(hover(s('rect', { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: 'transparent', tabindex: 0 }), r.name,
+      () => keys.map((k) => ({ color: cssVar(k.css), value: String(r[k.key] || 0), label: k.label })).concat(r.extra ? [{ value: r.extra, label: '' }] : [])));
+  });
+  el.append(svg);
+}
+
+/* --------------------------------------- chart: verifier verdict by lens */
+function renderLensCard(cycles) {
+  const rows = lensRows(cycles);
+  renderCard(document.getElementById('card-lens'), {
+    id: 'lens', title: 'Review findings by lens: what the verifier kept',
+    legend: VERDICT.map((v) => ({ label: v.label, color: cssVar(v.css) })),
+    note: 'First (full) reviews only. A lens whose musts are mostly rejected is too loose: narrow its charter in .claude/commands/fm-review.md.',
+    table: {
+      cols: [{ label: 'Lens' }, { label: 'Confirmed must', num: true }, { label: 'Should', num: true }, { label: 'Rejected', num: true }, { label: 'Rejected share of musts', num: true }],
+      rows: rows.map((r) => [r.lens, String(r.must), String(r.should), String(r.rejected), pct(r.rejectRate)]),
+    },
+    renderChart: (el) => hStacked(el, rows.map((r) => ({ ...r, name: r.lens, extra: `${pct(r.rejectRate)} of musts rejected` })), VERDICT, 'Findings by lens and verifier verdict',
+      (r) => (r.rejectRate == null ? String(r.total) : `${r.total} · ${pct(r.rejectRate)} rej.`)),
+  });
+}
+
+/* ----------------------------------------- chart: where cost & time go */
+function renderStagesCard(runs, stories) {
+  const rows = stageRows(runs, stories);
+  const claude = rows.filter((r) => r.stage !== 'ci wait');
+  renderCard(document.getElementById('card-stages'), {
+    id: 'stages', title: 'Where the cost and the time go',
+    note: 'Bars: real billed cost per stage. "ci wait" is the harness waiting for the 3-OS matrix (story wall time minus claude time): it costs no tokens.',
+    table: {
+      cols: [{ label: 'Stage' }, { label: 'Runs', num: true }, { label: 'Median time', num: true }, { label: 'Billed', num: true }, { label: 'Share', num: true }, { label: 'PureContext calls', num: true }],
+      rows: rows.map((r) => [r.stage, String(r.runs), fmtDur(r.medianSec), r.stage === 'ci wait' ? '$0' : fmtUsd(r.billed), r.stage === 'ci wait' ? '—' : pct(r.share), r.stage === 'ci wait' ? '—' : fmtInt(r.pc)]),
+    },
+    renderChart: (el) => {
+      hStacked(el, claude.map((r) => ({ name: r.stage, billed: r.billed, extra: `median ${fmtDur(r.medianSec)} · ${r.runs} runs` })),
+        [{ key: 'billed', label: 'billed', css: '--series-1' }], 'Billed cost per stage', (r) => `${fmtUsd(r.billed)} · ${fmtDur(claude.find((c) => c.stage === r.name).medianSec)}`);
+      const wait = rows.find((r) => r.stage === 'ci wait');
+      el.append(h('div', { class: 'footnote' }, `Median CI wait per story: ${fmtDur(wait.medianSec)}.`));
+    },
+  });
+}
+
+/* --------------------------------------------- chart: budget vs billed */
+function renderBudgetCard(stories) {
+  const rows = budgetRows(stories).slice(0, 15);
+  renderCard(document.getElementById('card-budget'), {
+    id: 'budget', title: 'Billed vs budget per story (newest 15)',
+    legend: [{ label: 'billed', color: cssVar('--series-1') }, { label: 'over budget', color: cssVar('--must') }, { label: 'budget', color: cssVar('--text-secondary'), type: 'line' }],
+    note: 'Budget = size factor (S 1x, M 2.5x, L 5x) x budget_base_usd. Over budget stops the story with harness:blocked.',
+    table: {
+      cols: [{ label: 'Story' }, { label: 'Size' }, { label: 'Billed', num: true }, { label: 'Budget', num: true }, { label: 'Used', num: true }],
+      rows: rows.map((r) => [r.id ?? '#' + r.issue, r.size ?? '—', fmtUsd(r.billed), fmtUsd(r.budget), r.budget ? pct(r.billed / r.budget) : '—']),
+    },
+    renderChart: (el) => {
+      if (!rows.length) { el.append(h('div', { class: 'empty' }, 'No data in this range.')); return; }
+      const W = chartWidth(el), M = { t: 4, r: 70, b: 4, l: 72 }, rowH = 24, barH = 14;
+      const HGT = M.t + rows.length * rowH + M.b, plotW = W - M.l - M.r;
+      const maxV = Math.max(...rows.map((r) => Math.max(r.billed, r.budget || 0)), 0.01);
+      const svg = s('svg', { width: W, height: HGT, viewBox: `0 0 ${W} ${HGT}`, role: 'img', 'aria-label': 'Billed cost against budget per story' });
+      rows.forEach((r, i) => {
+        const cy = M.t + rowH * i + rowH / 2;
+        svg.append(s('text', { x: M.l - 8, y: cy + 4, 'text-anchor': 'end', 'font-size': 12, fill: cssVar('--text-secondary') }, `${r.id ?? '#' + r.issue} ${r.size ?? ''}`));
+        svg.append(s('rect', { x: M.l, y: cy - barH / 2, width: Math.max(1, (r.billed / maxV) * plotW), height: barH, rx: 2, fill: cssVar(r.over ? '--must' : '--series-1') }));
+        if (r.budget) { const bx = M.l + (r.budget / maxV) * plotW; svg.append(s('line', { x1: bx, x2: bx, y1: cy - barH / 2 - 3, y2: cy + barH / 2 + 3, stroke: cssVar('--text-secondary'), 'stroke-width': 2 })); }
+        svg.append(s('text', { x: M.l + (Math.max(r.billed, r.budget || 0) / maxV) * plotW + 7, y: cy + 4, 'font-size': 11.5, fill: cssVar('--text-secondary') }, r.budget ? pct(r.billed / r.budget) : fmtUsd(r.billed)));
+        svg.append(hover(s('rect', { x: 0, y: cy - rowH / 2, width: W, height: rowH, fill: 'transparent', tabindex: 0 }), r.id ?? '#' + r.issue,
+          () => [{ color: cssVar(r.over ? '--must' : '--series-1'), value: fmtUsd(r.billed), label: 'billed' }, { value: fmtUsd(r.budget), label: `budget (${r.size ?? '?'})` }]));
+      });
+      el.append(svg);
+    },
+  });
+}
+
+/* --------------------------------------------------- chart: CI failures */
+function renderCiCard(stories, k) {
+  const rows = ciByOs(stories);
+  renderCard(document.getElementById('card-ci'), {
+    id: 'ci', title: 'CI failures by platform',
+    note: `Counted per red CI wait. First-pass green: ${k.ciFirstPass} of ${k.ciReached} stories that reached green. Local preflight runs on Windows, so macOS and Linux failures are the platform-specific ones.`,
+    table: { cols: [{ label: 'Platform' }, { label: 'Failures', num: true }], rows: rows.map((r) => [r.os, String(r.failures)]) },
+    renderChart: (el) => hStacked(el, rows.map((r) => ({ name: r.os, failures: r.failures })), [{ key: 'failures', label: 'red CI runs', css: '--status-critical' }], 'CI failures by platform', (r) => String(r.failures)),
+  });
+}
+
+/* ------------------------------------------------------------ cycle table */
+function renderCyclesCard(cycles) {
+  const rows = cycleRows(cycles);
+  const card = document.getElementById('card-cycles');
+  card.textContent = '';
+  card.append(dataTable(
+    [{ label: 'Cycle', num: true }, { label: 'Mode' }, { label: 'Reviews', num: true }, { label: 'Confirmed must', num: true }, { label: 'Should', num: true }, { label: 'Rejected', num: true }, { label: 'Resolved', num: true }, { label: 'Fixed', num: true }, { label: 'Disputed', num: true }, { label: 'Median review', num: true }, { label: 'Median fix', num: true }],
+    rows.map((r) => [String(r.cycle), r.mode, String(r.runs), String(r.must), String(r.should), String(r.rejected), String(r.resolved), String(r.fixed), String(r.disputed), fmtDur(r.medianReviewSec), fmtDur(r.medianFixSec)]),
+  ));
+  card.append(h('div', { class: 'footnote' }, 'Cycle 1 is the full review. Later cycles only verify the fix: "resolved" = a confirmed must the fix removed, must = still open or newly broken by the fix. A must still open after cycle 3 blocks the story.'));
+}
+
+/* ---------------------------------------------------------- stories table */
+const COLS = [
+  { key: '_chev', label: '' },
+  { key: 'id', label: 'Story', sort: true },
+  { key: 'ts', label: 'Finished', sort: true },
+  { key: 'lane', label: 'Lane', sort: true },
+  { key: 'size', label: 'Size', sort: true },
+  { key: 'outcome', label: 'Outcome', sort: true },
+  { key: 'pr', label: 'PR' },
+  { key: 'billed_usd', label: 'Billed / budget', sort: true, num: true },
+  { key: 'ci_attempts', label: 'CI reds', sort: true, num: true },
+  { key: 'review_rounds', label: 'Review rounds', sort: true, num: true },
+  { key: 'must_fixed', label: 'Must fixed', sort: true, num: true },
+  { key: 'should_total', label: 'Advisory', sort: true, num: true },
+  { key: 'rejected_total', label: 'Rejected', sort: true, num: true },
+  { key: 'purecontext_calls', label: 'PureContext', sort: true, num: true },
+  { key: 'claim_to_green_sec', label: 'Claim → green', sort: true, num: true },
+];
+function sortVal(t, key) {
+  if (key === 'ts') return t.date.getTime();
+  if (key === 'id') { const m = /^E(\d+)\.(\d+)/.exec(t.id ?? ''); return m ? Number(m[1]) * 1000 + Number(m[2]) : t.issue; }
+  const v = t[key];
+  return v == null ? -Infinity : v;
+}
+function outcomeChip(o) {
+  const m = { merged: ['✓', '--status-good'], ready: ['◆', '--status-good'], blocked: ['⊘', '--status-warning'], failed: ['✕', '--status-critical'] }[o] ?? ['?', '--text-muted'];
+  const dot = h('span', { 'aria-hidden': 'true' }, m[0]); dot.style.color = `var(${m[1]})`;
+  return h('span', { class: 'status' }, dot, o === 'ready' ? 'ready (PR)' : o);
+}
+function renderStories(stories) {
+  const card = document.getElementById('card-stories');
+  card.textContent = '';
+  if (!stories.length) { card.append(h('div', { class: 'empty' }, 'No stories in this range.')); return; }
+  const sorted = [...stories].sort((a, b) => { const av = sortVal(a, state.sort.key), bv = sortVal(b, state.sort.key); return (av < bv ? -1 : av > bv ? 1 : 0) * state.sort.dir; });
+  const thead = h('thead', null, h('tr', null, COLS.map((c) => {
+    const on = state.sort.key === c.key;
+    const label = c.label + (on ? (state.sort.dir === 1 ? ' ▲' : ' ▼') : '');
+    return h('th', { class: c.num ? 'num' : null, scope: 'col', 'aria-sort': on ? (state.sort.dir === 1 ? 'ascending' : 'descending') : null },
+      c.sort ? h('button', { type: 'button', class: 'sort', onclick: () => { state.sort = on ? { key: c.key, dir: -state.sort.dir } : { key: c.key, dir: c.key === 'ts' ? -1 : 1 }; renderAll(); } }, label) : label);
+  })));
+  const tbody = h('tbody');
+  for (const t of sorted) {
+    const key = String(t.issue), open = state.expanded.has(key);
+    const toggle = () => { open ? state.expanded.delete(key) : state.expanded.add(key); renderAll(); };
+    const over = t.budget_usd && t.billed_usd > t.budget_usd;
+    tbody.append(h('tr', { class: 'expandable', onclick: toggle },
+      h('td', null, h('button', { type: 'button', class: 'chev', 'aria-expanded': String(open), 'aria-label': `Details for ${t.id ?? '#' + t.issue}`, onclick: (e) => { e.stopPropagation(); toggle(); } }, '›')),
+      h('td', null, link(issueUrl(t.issue), `${t.id ?? ''} #${t.issue}`, true)),
+      h('td', null, fmtDateTime(t.date)),
+      h('td', null, t.lane ?? '—'),
+      h('td', null, t.size ?? '—'),
+      h('td', null, outcomeChip(t.outcome), t.reason ? h('div', { class: 'muted', style: 'font-size:12px;max-width:260px' }, t.reason) : null),
+      h('td', null, t.pr ? link(prUrl(t.pr), '#' + t.pr, true) : '—'),
+      h('td', { class: 'num' }, h('span', { class: over ? 'over' : null }, fmtUsd(t.billed_usd)), h('span', { class: 'muted' }, ' / ' + fmtUsd(t.budget_usd))),
+      h('td', { class: 'num' }, String(t.ci_attempts ?? 0), t.ci_failed_platforms?.length ? h('div', { class: 'muted', style: 'font-size:12px' }, [...new Set(t.ci_failed_platforms)].join(', ')) : null),
+      h('td', { class: 'num' }, String(t.review_rounds ?? 0)),
+      h('td', { class: 'num' }, String(t.must_fixed ?? 0)),
+      h('td', { class: 'num' }, String(t.should_total ?? 0)),
+      h('td', { class: 'num' }, String(t.rejected_total ?? 0)),
+      h('td', { class: 'num' }, h('span', { class: t.purecontext_calls ? null : 'over' }, String(t.purecontext_calls ?? 0))),
+      h('td', { class: 'num' }, fmtDur(t.claim_to_green_sec)),
+    ));
+    if (open) tbody.append(h('tr', { class: 'detail-row' }, h('td', { colspan: String(COLS.length) }, storyDetail(t))));
+  }
+  card.append(h('div', { class: 'scroll-x' }, h('table', { class: 'data' }, thead, tbody)));
+  card.append(h('div', { class: 'footnote' }, 'Billed sums every stage run of the story (re-runs after a block included). Red PureContext = the story ran without the index.'));
+}
+function storyDetail(t) {
+  const runs = state.data.runs.filter((r) => r.issue === t.issue).sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const cycles = state.data.cycles.filter((c) => c.issue === t.issue).sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+  const d = h('div', { class: 'detail' });
+  d.append(h('h3', null, 'Stage runs'));
+  d.append(dataTable(
+    [{ label: 'When' }, { label: 'Stage' }, { label: 'Attempt', num: true }, { label: 'Outcome' }, { label: 'Model' }, { label: 'Time', num: true }, { label: 'Billed', num: true }, { label: 'PureContext', num: true }, { label: 'Peak ctx', num: true }],
+    runs.map((r) => [fmtDateTime(new Date(r.ts)), r.stage, String(r.attempt ?? 1), r.outcome, shortModel(r.model_ran), fmtDur(r.total_sec), fmtUsd(r.billed_cost_usd), String(r.purecontext_calls ?? 0), fmtCtx(Math.max(0, ...(r.phases ?? []).map((p) => p.peak_ctx_tokens ?? 0)))]),
+  ));
+  if (cycles.length) {
+    d.append(h('h3', null, 'Review cycles'));
+    d.append(dataTable(
+      [{ label: 'Cycle', num: true }, { label: 'Mode' }, { label: 'Must', num: true }, { label: 'Should', num: true }, { label: 'Rejected', num: true }, { label: 'Resolved', num: true }, { label: 'Fixed', num: true }, { label: 'Disputed', num: true }, { label: 'By lens' }, { label: 'Review', num: true }, { label: 'Fix', num: true }],
+      cycles.map((c) => [String(c.review_cycle), c.mode ?? (c.review_cycle === 1 ? 'full' : 'verify'), String(c.findings?.must ?? 0), String(c.findings?.should ?? 0), String(c.findings?.rejected ?? 0), String(c.findings?.resolved ?? 0),
+        String(c.dispositions?.fixed ?? '—'), String(c.dispositions?.disputed ?? '—'),
+        c.by_lens ? Object.entries(c.by_lens).map(([l, v]) => `${l} ${v.must}m/${v.should}s/${v.rejected}r`).join(' · ') : '—', fmtDur(c.review_sec), fmtDur(c.fix_sec)]),
+    ));
+  }
+  const phases = runs.filter((r) => r.stage === 'build').flatMap((r) => r.phases ?? []);
+  if (phases.length) {
+    d.append(h('h3', null, 'Build stage phases'));
+    d.append(dataTable([{ label: 'Phase' }, { label: 'Time', num: true }, { label: 'Turns', num: true }, { label: 'Tool calls', num: true }, { label: 'PureContext', num: true }, { label: 'Est. cost', num: true }],
+      phases.map((p) => [p.phase, fmtDur(p.duration_sec), fmtInt(p.turns ?? 0), fmtInt(p.tool_calls ?? 0), fmtInt(p.purecontext_calls ?? 0), fmtUsd(p.est_cost_usd)])));
+  }
+  d.append(h('div', { class: 'footnote' }, `Claimed ${t.first_claim_ts ? fmtDateTime(new Date(t.first_claim_ts)) : '—'} · CI green ${t.green_ts ? fmtDateTime(new Date(t.green_ts)) : 'never'} · ${t.attempts > 1 ? t.attempts + ' harness attempts · ' : ''}phase costs are estimates; stage costs are billed`));
+  return d;
+}
+
+/* -------------------------------------------------------- running lanes */
+function renderNow(lanes) {
+  const card = document.getElementById('card-now');
+  card.textContent = '';
+  card.append(h('div', { class: 'card-head' }, h('h2', null, 'Running now')));
+  if (!lanes.length) { card.append(h('div', { class: 'muted' }, 'No lane is working a story.')); return; }
+  const box = h('div', { class: 'lanes' });
+  for (const l of lanes) {
+    const over = l.budget_usd && l.billed_usd > 0.8 * l.budget_usd;
+    box.append(h('div', { class: 'lane' },
+      h('div', null, h('span', { class: 'pill' }, `lane ${l.lane ?? '?'}`), ' ', h('b', null, link(issueUrl(l.issue), `${l.id} #${l.issue}`)), ' ', l.title ?? ''),
+      h('div', { class: 'muted', style: 'margin-top:4px' },
+        `stage ${l.stage} · `, h('span', { class: over ? 'over' : null }, `${fmtUsd(l.billed_usd)} of ${fmtUsd(l.budget_usd)}`),
+        ` · CI reds ${l.ci_attempts ?? 0} · PR ${l.pr ? '#' + l.pr : '—'} · claimed ${l.claim_ts ? fmtDateTime(new Date(l.claim_ts)) : '—'}`)));
+  }
+  card.append(box);
+}
+
+/* ----------------------------------------------------- epics, KB, parking */
+function renderEpics(stories) {
+  const card = document.getElementById('card-epics');
+  card.textContent = '';
+  card.append(h('div', { class: 'card-head' }, h('h2', null, 'Epics')));
+  const rows = epicRows(stories);
+  if (!rows.length) { card.append(h('div', { class: 'empty' }, 'No stories in this range.')); return; }
+  card.append(dataTable([{ label: 'Epic' }, { label: 'Done', num: true }, { label: 'Blocked', num: true }, { label: 'Billed', num: true }],
+    rows.map((r) => [h('span', { title: r.ids.join(', ') }, r.epic), String(r.done), String(r.blocked), fmtUsd(r.billed)])));
+  card.append(h('div', { class: 'footnote' }, 'Stories the harness finished. The epic page on GitHub has the full count and a summary line per closed story.'));
+}
+function renderLessons(lessons) {
+  const card = document.getElementById('card-lessons');
+  card.textContent = '';
+  const by = lessonSummary(lessons);
+  card.append(h('div', { class: 'card-head' }, h('h2', null, 'Review KB')));
+  card.append(h('div', { class: 'muted', style: 'margin-bottom:6px' }, `${by.candidate} candidate · ${by.active} active · ${by.graduated} graduated · ${by.retired} retired`));
+  if (!lessons.length) { card.append(h('div', { class: 'empty' }, 'No lessons yet.')); return; }
+  const sorted = [...lessons].sort((a, b) => (b.occurrences || 0) - (a.occurrences || 0)).slice(0, 12);
+  const maxOcc = Math.max(...sorted.map((l) => l.occurrences || 0), 1);
+  card.append(dataTable([{ label: 'Lesson' }, { label: 'Severity' }, { label: 'Status' }, { label: 'Seen', num: true }],
+    sorted.map((l) => { const bar = h('span', { class: 'mini-bar' }); bar.style.width = Math.max(4, ((l.occurrences || 0) / maxOcc) * 50) + 'px'; return [h('span', { title: l.rule ?? '' }, l.title || l.id), l.severity ?? '—', l.status ?? '—', h('span', null, bar, ' ', String(l.occurrences ?? 0))]; })));
+  card.append(h('div', { class: 'footnote' }, 'Not affected by filters. Active = injected into the implementer; graduated = in every agent\'s context (human decision: ./go-harness.ps1 -GraduateOnly).'));
+}
+function renderParking(items) {
+  const card = document.getElementById('card-parking');
+  card.textContent = '';
+  card.append(h('div', { class: 'card-head' }, h('h2', null, 'Parking lot')));
+  card.append(h('div', { class: 'muted', style: 'margin-bottom:6px' }, `${items.length} out-of-diff note(s) waiting for triage`));
+  if (!items.length) { card.append(h('div', { class: 'empty' }, 'Nothing parked.')); return; }
+  card.append(dataTable([{ label: 'Story' }, { label: 'Note' }], items.slice(-10).reverse().map((p) => [p.story, h('span', { style: 'word-break:break-word' }, p.note)])));
+  card.append(h('div', { class: 'footnote' }, 'Out-of-diff review notes never become issues on their own. Triage dev-docs/harness/parking-lot.md in batches.'));
+}
+
+/* ------------------------------------------------------------------ KPIs */
+function renderKpis(k, any) {
+  const v = (x) => (any ? x : '—');
+  const tiles = [
+    { label: 'Stories', value: v(String(k.stories)), sub: `${k.done} done (${k.merged} merged) · ${k.blocked} blocked` },
+    { label: 'Billed cost', value: v(fmtUsd(k.billed)), sub: `median ${fmtUsd(k.medianBilledDone)} per done story` },
+    { label: 'Over budget', value: v(String(k.overBudget)), sub: `of ${k.stories} stories`, warn: k.overBudget > 0 },
+    { label: 'Claim → green', value: fmtDur(k.medianClaimToGreen), sub: 'median, done stories' },
+    { label: 'CI first-pass green', value: k.ciReached ? pct(k.ciFirstPass / k.ciReached) : '—', sub: `${k.ciFirstPass} of ${k.ciReached} with no ci-fix` },
+    { label: 'Must / story', value: k.mustPerStory == null ? '—' : String(k.mustPerStory), sub: `median, first review · ${k.mustFixed} fixed in all` },
+    { label: 'Verifier rejected', value: pct(k.rejectRate), sub: `${k.rejected} must findings thrown out` },
+    { label: 'Advisory (should)', value: v(String(k.should)), sub: 'first reviews · never auto-fixed' },
+    { label: 'PureContext / story', value: k.pcPerStory == null ? '—' : fmtInt(k.pcPerStory), sub: `median calls · ${k.pcZero} with none`, warn: k.pcZero > 0 },
+  ];
+  const el = document.getElementById('kpis');
+  el.textContent = '';
+  for (const t of tiles) el.append(h('div', { class: 'tile' + (t.warn ? ' warn' : '') }, h('div', { class: 'label' }, t.label), h('div', { class: 'value' }, t.value), h('div', { class: 'sub' }, t.sub)));
+}
+
+/* --------------------------------------------------------------- filters */
+function renderSeg(id, name, options, current) {
+  const el = document.getElementById(id);
+  el.textContent = '';
+  for (const o of options) el.append(h('button', { type: 'button', 'aria-pressed': String(current === o.value), 'data-fk': `${name}-${o.value}`, onclick: () => { state[name] = o.value; renderAll(); } }, o.label));
+}
+
+/* ------------------------------------------------------------- render all */
+function renderAll() {
+  if (!state.data) return;
+  const focus = document.activeElement?.dataset?.fk;
+  tipHide();
+  renderSeg('seg-period', 'period', [{ value: 'all', label: 'All time' }, { value: '90', label: '90d' }, { value: '30', label: '30d' }, { value: '7', label: '7d' }], state.period);
+  renderSeg('seg-lane', 'lane', [{ value: 'all', label: 'All' }, { value: 'core', label: 'core' }, { value: 'ui', label: 'ui' }], state.lane);
+  renderSeg('seg-outcome', 'outcome', [{ value: 'all', label: 'All' }, { value: 'done', label: 'ready + merged' }, { value: 'blocked', label: 'blocked' }], state.outcome);
+
+  const all = collapseStories(state.data.stories);
+  const stories = filterStories(all, state);
+  const runs = scope(state.data.runs, stories);
+  const cycles = scope(state.data.cycles, stories);
+  const k = kpis(stories, runs, cycles);
+
+  renderNow(state.data.lanes);
+  renderKpis(k, all.length > 0);
+  document.getElementById('empty').hidden = all.length > 0;
+  document.getElementById('charts').hidden = all.length === 0;
+  if (all.length) {
+    renderCostCard(runs);
+    renderTrendCard(cycles, stories);
+    renderLensCard(cycles);
+    renderStagesCard(runs, stories);
+    renderBudgetCard(stories);
+    renderCiCard(stories, k);
+    renderCyclesCard(cycles);
+    renderStories(stories);
+  }
+  renderEpics(stories);
+  renderLessons(state.data.lessons);
+  renderParking(state.data.parking);
+
+  const f = state.data.files;
+  const newest = [f.stories.mtime, f.runs.mtime, f.cycles.mtime].filter(Boolean).sort().pop();
+  const skipped = f.stories.skipped + f.runs.skipped + f.cycles.skipped;
+  document.getElementById('asof').textContent = `${all.length} stories · ${state.data.runs.length} stage runs · data updated ${newest ? fmtDateTime(new Date(newest)) : '—'}${skipped ? ` · ${skipped} unreadable line(s) skipped` : ''}`;
+  if (focus) document.querySelector(`[data-fk="${CSS.escape(focus)}"]`)?.focus();
+}
+
+/* ----------------------------------------------------------------- fetch */
+let lastSignature = '';
+async function load(manual) {
+  const main = document.getElementById('main');
+  main.classList.add('loading');
+  try {
+    const res = await fetch('/api/data', { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const sig = JSON.stringify([data.files, data.lanes, data.lessons.length, data.parking.length]);
+    if (manual || sig !== lastSignature || !state.data) { lastSignature = sig; state.data = data; renderAll(); }
+  } catch (err) {
+    document.getElementById('asof').textContent = 'Failed to load data: ' + err.message;
+  } finally {
+    main.classList.remove('loading');
+  }
+}
+document.getElementById('refresh').addEventListener('click', () => load(true));
+setInterval(() => load(false), 30000);
+let resizeTimer = null;
+addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderAll, 150); });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+load(true);
+</script>
+</body>
+</html>

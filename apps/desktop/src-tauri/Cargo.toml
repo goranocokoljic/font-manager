@@ -1,0 +1,23 @@
+[package]
+name = "fm-app"
+description = "Font Manager desktop shell (Tauri 2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+name = "fm_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+fm-api.workspace = true
+tauri = { version = "2", features = [] }
+
+[lints]
+workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }

@@ -1,0 +1,4 @@
+# unwrap/expect/panic are denied in the workspace lints; tests may use them.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true

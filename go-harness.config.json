@@ -1,0 +1,43 @@
+{
+  "_comment": "go-harness settings. Every key is optional; missing keys use the defaults in scripts/harness/lib.mjs. See dev-docs/harness/go-harness.md.",
+
+  "_merge": "human = the harness never merges (Phase 1). auto-sm = merge size S and M on green; L, track:platform and any change under crates/fm-api always wait for a human. There is no 'auto'.",
+  "merge": "human",
+
+  "base_branch": "main",
+
+  "_budget": "Per-story budget in USD = size factor x base. S = 1x, M = 2.5x, L = 5x. A story over budget stops with harness:blocked.",
+  "budget_base_usd": 15,
+
+  "ci": {
+    "required_checks": ["ci / windows", "ci / macos", "ci / linux"],
+    "bench_check": "bench / bench",
+    "bench_workflow": "bench.yml",
+    "bench_artifact": "bench-report",
+    "timeout_min": 75,
+    "poll_sec": 30,
+    "retry_budget": 3
+  },
+
+  "lanes": {
+    "core": { "tracks": ["core", "platform", "data", "ops", "plugins"], "worktree": "../font-manager-core" },
+    "ui": { "tracks": ["ui"], "worktree": "../font-manager-ui" }
+  },
+
+  "_lane_max_unmerged": "How many ready PRs a lane may leave waiting for a human merge before it stops picking new stories.",
+  "lane_max_unmerged": 1,
+
+  "review": {
+    "max_cycles": 3,
+    "_model": "Model for the review lens subagents: inherit (same as the run), sonnet, opus or fable.",
+    "model": "inherit"
+  },
+
+  "_contract_epics": "Epics in which a change to an existing fm-api request/response type is expected. Anywhere else it stops the story for a human.",
+  "contract_epics": ["E1", "E25"],
+
+  "close_epics": true,
+
+  "_bot_login": "GitHub login the harness assigns stories to. Empty = the login gh is authenticated as.",
+  "bot_login": ""
+}

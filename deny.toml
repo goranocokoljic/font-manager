@@ -1,0 +1,46 @@
+# cargo-deny: licences, advisories, bans and sources for the whole workspace.
+# The project is MIT OR Apache-2.0; strong copyleft dependencies are not allowed.
+# Add a licence to `allow` only when a dependency needs it, with a reason.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+  # proc-macro-error is unmaintained. It comes in only through the GTK3 bindings
+  # Tauri 2 uses on Linux (gtk3-macros) and no safe upgrade exists. Revisit when
+  # Tauri moves its Linux backend off gtk-rs 0.18.
+  { id = "RUSTSEC-2024-0370", reason = "transitive via the Tauri 2 Linux GTK3 stack; no fix available" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.9
+allow = [
+  "MIT",
+  "MIT-0",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "Zlib",
+  "Unicode-3.0",
+  "CC0-1.0",
+  # Weak, file-level copyleft. Allowed because Tauri 2 depends on it (cssparser,
+  # selectors); it puts no terms on our own files. GPL, LGPL and AGPL stay blocked.
+  "MPL-2.0",
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
