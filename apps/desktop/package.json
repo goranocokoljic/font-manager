@@ -7,13 +7,17 @@
     "build": "vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
-    "vue": "3.5.44"
+    "pinia": "4.1.0",
+    "vue": "3.5.44",
+    "vue-router": "5.4.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@tauri-apps/cli": "2.12.3",
     "@vitejs/plugin-vue": "6.0.10",
     "@vue/test-utils": "2.5.1",
