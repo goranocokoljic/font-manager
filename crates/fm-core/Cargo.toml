@@ -14,7 +14,7 @@ fm-platform.workspace = true
 read-fonts = "0.45"
 serde.workspace = true
 serde_json.workspace = true
-skrifa = "0.48.0"
+skrifa = "0.48"
 tracing = "0.1"
 tracing-appender = "0.2.5"
 tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt", "std", "registry", "smallvec"] }
