@@ -16,15 +16,20 @@
 //! - A file that cannot be read keeps its previous entry and is reported in
 //!   [`Rescan::failed`]. Its old size and time stay, so the next rescan tries
 //!   it again.
+//!
+//! [`FileIndex::refresh`] applies the same rules to only the paths a watcher
+//! event names, so one changed file does not walk the whole source folder.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::parser::{ParsedFile, parse};
-use crate::scanner::{Discovery, FoundFile, Unreadable};
+use crate::scanner::discovery::is_hidden;
+use crate::scanner::{Discovery, FoundFile, Unreadable, discover, is_font_file};
 use crate::{FmError, FmResult};
 
 /// The blake3 hash of a file's bytes.
@@ -163,35 +168,7 @@ impl FileIndex {
 
         for file in &discovery.files {
             found.insert(file.path.as_path());
-            if let Some(previous) = self.files.get_mut(&file.path)
-                && previous.same_stamp(file)
-            {
-                previous.gone = false;
-                out.unchanged.push(file.path.clone());
-                continue;
-            }
-            let known = self.files.contains_key(&file.path);
-            match hash_and_parse(&file.path) {
-                Ok((hash, parsed)) => {
-                    self.insert(IndexedFile {
-                        path: file.path.clone(),
-                        size: file.size,
-                        modified: file.modified,
-                        hash,
-                        parsed,
-                        gone: false,
-                    });
-                    if known {
-                        out.changed.push(file.path.clone());
-                    } else {
-                        out.added.push(file.path.clone());
-                    }
-                }
-                Err(error) => out.failed.push(Unreadable {
-                    path: file.path.clone(),
-                    error,
-                }),
-            }
+            self.update(file, &mut out);
         }
 
         for entry in self.files.values_mut() {
@@ -213,6 +190,141 @@ impl FileIndex {
         out.changed.sort();
         out.unchanged.sort();
         out
+    }
+
+    /// Brings the entries for `paths` up to date, by the same rules as
+    /// [`FileIndex::rescan`]. The paths are what file-system events under the
+    /// source folder `root` named:
+    ///
+    /// - a font file that exists is read again unless its size and time are
+    ///   unchanged;
+    /// - a folder that exists (created, or renamed into place) is discovered
+    ///   and rescanned on its own;
+    /// - a path that no longer exists marks its entry, and every entry under
+    ///   it (a removed or renamed-away folder), gone.
+    ///
+    /// Paths outside `root`, inside a hidden folder or without a font
+    /// extension are ignored, as [`discover`] would ignore them.
+    pub fn refresh(&mut self, root: &Path, paths: &[PathBuf]) -> Rescan {
+        let mut out = Rescan::default();
+        let mut seen = HashSet::with_capacity(paths.len());
+        for path in paths {
+            if !seen.insert(path.as_path()) || !Self::watched(root, path) {
+                continue;
+            }
+            match fs::metadata(path) {
+                Ok(meta) if meta.is_dir() => match discover(path) {
+                    Ok(discovery) => out.extend(self.rescan(path, &discovery)),
+                    Err(error) => out.failed.push(Unreadable {
+                        path: path.clone(),
+                        error,
+                    }),
+                },
+                Ok(meta) if meta.is_file() && is_font_file(path) => {
+                    let file = FoundFile {
+                        path: path.clone(),
+                        size: meta.len(),
+                        modified: meta.modified().ok(),
+                    };
+                    self.update(&file, &mut out);
+                }
+                Ok(_) => {}
+                Err(e) if e.kind() == io::ErrorKind::NotFound => self.mark_gone(path, &mut out),
+                Err(e) => out.failed.push(Unreadable {
+                    path: path.clone(),
+                    error: FmError::io("A font file could not be read.", path, &e),
+                }),
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// Whether a path under `root` is one [`discover`] would reach: no
+    /// folder from `root` down to it is hidden. A file's own name may start
+    /// with `.`; a folder's may not.
+    fn watched(root: &Path, path: &Path) -> bool {
+        let Ok(relative) = path.strip_prefix(root) else {
+            return false;
+        };
+        let mut names: Vec<_> = relative.iter().collect();
+        if !path.is_dir() {
+            names.pop();
+        }
+        !names.into_iter().any(is_hidden)
+    }
+
+    /// Reads `file` again unless its entry has the same size and time.
+    fn update(&mut self, file: &FoundFile, out: &mut Rescan) {
+        if let Some(previous) = self.files.get_mut(&file.path)
+            && previous.same_stamp(file)
+        {
+            previous.gone = false;
+            out.unchanged.push(file.path.clone());
+            return;
+        }
+        let known = self.files.contains_key(&file.path);
+        match hash_and_parse(&file.path) {
+            Ok((hash, parsed)) => {
+                self.insert(IndexedFile {
+                    path: file.path.clone(),
+                    size: file.size,
+                    modified: file.modified,
+                    hash,
+                    parsed,
+                    gone: false,
+                });
+                if known {
+                    out.changed.push(file.path.clone());
+                } else {
+                    out.added.push(file.path.clone());
+                }
+            }
+            Err(error) => out.failed.push(Unreadable {
+                path: file.path.clone(),
+                error,
+            }),
+        }
+    }
+
+    /// Marks the entry for `path`, and every entry under it, gone.
+    fn mark_gone(&mut self, path: &Path, out: &mut Rescan) {
+        for entry in self.files.values_mut() {
+            if !entry.gone && entry.path.starts_with(path) {
+                entry.gone = true;
+                out.gone.push(entry.path.clone());
+            }
+        }
+    }
+}
+
+impl Rescan {
+    /// Whether nothing was added, changed, marked gone or failed.
+    pub fn is_quiet(&self) -> bool {
+        self.added.is_empty()
+            && self.changed.is_empty()
+            && self.gone.is_empty()
+            && self.failed.is_empty()
+    }
+
+    fn extend(&mut self, other: Rescan) {
+        self.added.extend(other.added);
+        self.changed.extend(other.changed);
+        self.unchanged.extend(other.unchanged);
+        self.gone.extend(other.gone);
+        self.failed.extend(other.failed);
+    }
+
+    fn sort(&mut self) {
+        for list in [
+            &mut self.added,
+            &mut self.changed,
+            &mut self.unchanged,
+            &mut self.gone,
+        ] {
+            list.sort();
+            list.dedup();
+        }
     }
 }
 
@@ -543,5 +655,115 @@ mod tests {
         let entry = index.get(&path).expect("indexed");
         assert_eq!(entry.hash, FileHash::of(b"not a font"));
         assert!(matches!(entry.parsed.health, Health::Broken(_)));
+    }
+
+    #[test]
+    fn a_refresh_reads_only_the_named_files() {
+        let tmp = TempDir::new("refresh-files");
+        let root = tmp.path();
+        let a = root.join("a.ttf");
+        let b = root.join("Schrift-ü/b.ttf");
+        put(&a, &fixture(REGULAR));
+        put(&b, &fixture(OTHER));
+        let mut index = FileIndex::new();
+        rescan(&mut index, root);
+        let new = root.join("new.otf");
+        put(&new, &fixture(REGULAR));
+        let time = modified(&b) + Duration::from_secs(10);
+        put(&b, &fixture(REGULAR));
+        set_modified(&b, time);
+        fs::remove_file(&a).expect("remove");
+
+        let report = index.refresh(root, &[new.clone(), b.clone(), a.clone(), new.clone()]);
+
+        assert_eq!(report.added, vec![new.clone()]);
+        assert_eq!(report.changed, vec![b.clone()]);
+        assert_eq!(report.gone, vec![a.clone()]);
+        assert!(report.unchanged.is_empty() && report.failed.is_empty());
+        assert!(!report.is_quiet());
+        assert_eq!(
+            index.get(&b).expect("indexed").hash,
+            FileHash::of(&fixture(REGULAR))
+        );
+        assert!(index.get(&a).expect("still indexed").gone);
+
+        // Nothing changed since: the same paths are a quiet refresh.
+        let again = index.refresh(root, &[new.clone(), b.clone(), a.clone()]);
+        assert_eq!(again.unchanged, vec![b, new]);
+        assert!(again.is_quiet());
+    }
+
+    #[test]
+    fn a_refresh_of_a_folder_rescans_it_and_a_removed_folder_is_gone() {
+        let tmp = TempDir::new("refresh-folder");
+        let root = tmp.path();
+        let mut index = FileIndex::new();
+        rescan(&mut index, root);
+        let folder = root.join("incoming");
+        put(&folder.join("a.ttf"), &fixture(REGULAR));
+        put(&folder.join("deep/b.ttf"), &fixture(OTHER));
+
+        let report = index.refresh(root, std::slice::from_ref(&folder));
+        assert_eq!(
+            report.added,
+            vec![folder.join("a.ttf"), folder.join("deep/b.ttf")]
+        );
+
+        fs::remove_dir_all(&folder).expect("remove folder");
+        let report = index.refresh(root, std::slice::from_ref(&folder));
+        assert_eq!(
+            report.gone,
+            vec![folder.join("a.ttf"), folder.join("deep/b.ttf")]
+        );
+        assert_eq!(index.len(), 2);
+    }
+
+    #[test]
+    fn a_refresh_ignores_what_discovery_would_skip() {
+        let tmp = TempDir::new("refresh-skip");
+        let root = tmp.path().join("source");
+        let outside = tmp.path().join("other/a.ttf");
+        let hidden_folder = root.join(".cache");
+        let in_hidden = hidden_folder.join("b.ttf");
+        let not_a_font = root.join("readme.txt");
+        let hidden_file = root.join(".c.ttf");
+        put(&outside, &fixture(REGULAR));
+        put(&in_hidden, &fixture(REGULAR));
+        put(&not_a_font, b"text");
+        put(&hidden_file, &fixture(REGULAR));
+        let mut index = FileIndex::new();
+
+        let report = index.refresh(
+            &root,
+            &[
+                outside,
+                hidden_folder,
+                in_hidden,
+                not_a_font,
+                hidden_file.clone(),
+            ],
+        );
+
+        // A hidden file is listed by discovery too; only hidden folders are skipped.
+        assert_eq!(report.added, vec![hidden_file]);
+        assert_eq!(index.len(), 1);
+        assert_eq!(report.added, rescan(&mut FileIndex::new(), &root).added);
+    }
+
+    #[test]
+    fn a_refresh_of_a_broken_file_indexes_it_as_broken() {
+        let tmp = TempDir::new("refresh-broken");
+        let root = tmp.path();
+        let path = root.join("broken.ttf");
+        put(&path, b"not a font");
+        let mut index = FileIndex::new();
+
+        let report = index.refresh(root, std::slice::from_ref(&path));
+
+        assert_eq!(report.added, vec![path.clone()]);
+        assert!(matches!(
+            index.get(&path).expect("indexed").parsed.health,
+            Health::Broken(_)
+        ));
     }
 }

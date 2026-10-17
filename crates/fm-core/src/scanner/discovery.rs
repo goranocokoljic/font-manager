@@ -197,7 +197,7 @@ impl Walk {
 }
 
 /// A hidden folder by the cross-platform rule: its name starts with `.`.
-fn is_hidden(name: &OsStr) -> bool {
+pub(crate) fn is_hidden(name: &OsStr) -> bool {
     name.as_encoded_bytes().first() == Some(&b'.')
 }
 
