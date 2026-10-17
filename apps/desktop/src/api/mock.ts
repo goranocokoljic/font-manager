@@ -7,8 +7,12 @@ import {
   type ActivationMode,
   type ActivationOutcome,
   type AppInfo,
+  type Event,
   type FaceDetail,
   type FaceId,
+  type JobId,
+  type Source,
+  type SourceId,
   type Target,
 } from './types';
 
@@ -161,9 +165,47 @@ const systemClash: Partial<Record<FaceId, string>> = {
   6: '/System/Library/Fonts/JetBrainsMono-Regular.ttf',
 };
 
-/** A mock client with its own activation state. */
-export function createMockClient(): FmClient {
+/** The sources of the Rust mock: one watched folder and the system fonts. */
+export const mockSources: Source[] = [
+  { id: 1, path: '/Users/demo/Fonts', kind: 'watched', paused: false, faceCount: 7 },
+  { id: 2, path: '/System/Library/Fonts', kind: 'system', paused: false, faceCount: 0 },
+];
+
+/** Options of a mock client. */
+export interface MockOptions {
+  /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
+  scanStepMs?: number;
+}
+
+/** Folders the mock folder picker returns, one per call; `null` is a cancel. */
+export const mockPickedFolders: (string | null)[] = [];
+
+/** A mock client with its own activation and source state. */
+export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
+  const sources = structuredClone(mockSources);
+  const handlers = new Set<(event: Event) => void>();
+  let nextId = 100;
+  let picks = 0;
+  const emit = (event: Event) => handlers.forEach((h) => h(event));
+  const findSource = (id: SourceId) => {
+    const s = sources.find((s) => s.id === id);
+    if (!s)
+      throw { code: 'notFound' as const, message: `Source ${id} was not found.`, detail: null };
+    return s;
+  };
+  // Emits a scan of `files` files: progress steps, then the finish.
+  const runScan = (job: JobId, files: number) => {
+    const steps = [...Array(files + 1).keys()];
+    const step = options.scanStepMs ?? 0;
+    steps.forEach((done, i) =>
+      setTimeout(() => emit({ type: 'scanProgress', job, done, total: files }), i * step),
+    );
+    setTimeout(
+      () => emit({ type: 'scanFinished', job, added: 0, removed: 0, problems: 1 }),
+      steps.length * step,
+    );
+  };
   const find = (id: FaceId) => mockFaces.find((f) => f.face.id === id);
   const notFound = (id: FaceId) => ({
     code: 'notFound' as const,
@@ -209,7 +251,57 @@ export function createMockClient(): FmClient {
               outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
             },
       ),
+    listSources: async () => structuredClone(sources),
+    addSource: async (req) => {
+      if (!req.path.trim())
+        throw { code: 'invalidRequest', message: 'Choose a folder to add.', detail: null };
+      if (sources.some((s) => s.path === req.path))
+        throw { code: 'conflict', message: 'This folder is already in the library.', detail: null };
+      const source: Source = {
+        id: ++nextId,
+        path: req.path,
+        kind: 'watched',
+        paused: false,
+        faceCount: 0,
+      };
+      sources.push(source);
+      return structuredClone(source);
+    },
+    removeSource: async (id) => {
+      if (findSource(id).kind === 'system')
+        throw {
+          code: 'permissionDenied',
+          message: 'System fonts cannot be removed.',
+          detail: null,
+        };
+      sources.splice(
+        sources.findIndex((s) => s.id === id),
+        1,
+      );
+      emit({ type: 'libraryChanged', source: id, added: [], removed: [], updated: [] });
+    },
+    setSourcePaused: async (req) => {
+      const s = findSource(req.source);
+      s.paused = req.paused;
+      return structuredClone(s);
+    },
+    scan: async (req) => {
+      const files =
+        req.source == null
+          ? sources.reduce((n, s) => n + s.faceCount, 0)
+          : findSource(req.source).faceCount;
+      const job = ++nextId;
+      runScan(job, files);
+      return job;
+    },
+    onEvent: async (handler) => {
+      handlers.add(handler);
+      return () => handlers.delete(handler);
+    },
+    pickFolder: async () =>
+      mockPickedFolders.length ? mockPickedFolders.shift()! : `/Users/demo/Added ${++picks}`,
   };
 }
 
-export const mockClient: FmClient = createMockClient();
+// Browser mode (e2e) steps scans slowly enough to see the inline progress.
+export const mockClient: FmClient = createMockClient({ scanStepMs: 150 });
