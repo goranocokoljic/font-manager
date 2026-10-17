@@ -217,15 +217,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       throw { code: 'notFound' as const, message: `Source ${id} was not found.`, detail: null };
     return s;
   };
-  // Emits a scan of `files` files: progress steps, then the finish.
-  const runScan = (job: JobId, files: number) => {
+  // Emits a scan of `files` files: the start, progress steps, then the finish.
+  const runScan = (job: JobId, source: SourceId | null, files: number) => {
     const steps = [...Array(files + 1).keys()];
     const step = options.scanStepMs ?? 0;
+    setTimeout(() => emit({ type: 'scanStarted', job, source }), 0);
     steps.forEach((done, i) =>
       setTimeout(() => emit({ type: 'scanProgress', job, done, total: files }), i * step),
     );
     setTimeout(
-      () => emit({ type: 'scanFinished', job, added: 0, removed: 0, problems: 1 }),
+      () => emit({ type: 'scanFinished', job, added: 0, changed: 0, removed: 0, problems: 1 }),
       steps.length * step,
     );
   };
@@ -314,7 +315,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           ? sources.reduce((n, s) => n + s.faceCount, 0)
           : findSource(req.source).faceCount;
       const job = ++nextId;
-      runScan(job, files);
+      runScan(job, req.source ?? null, files);
       return job;
     },
     onEvent: async (handler) => {

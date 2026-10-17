@@ -790,6 +790,10 @@ impl LibraryService for MockApi {
             .iter()
             .filter(|f| f.detail.face.health != Health::Ok)
             .count() as u32;
+        st.emit(Event::ScanStarted {
+            job,
+            source: req.source,
+        });
         st.emit(Event::ScanProgress {
             job,
             done: files,
@@ -798,6 +802,7 @@ impl LibraryService for MockApi {
         st.emit(Event::ScanFinished {
             job,
             added: 0,
+            changed: 0,
             removed: 0,
             problems,
         });

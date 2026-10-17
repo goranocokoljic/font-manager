@@ -122,6 +122,30 @@ describe('sources store', () => {
     expect(store.otherScan).toBeNull();
   });
 
+  it('shows a scan of one source started elsewhere on that source', async () => {
+    let send: (e: Event) => void = () => {};
+    setClient({
+      ...client,
+      onEvent: async (h) => {
+        send = h;
+        return () => {};
+      },
+    });
+    const store = useSourcesStore();
+    await store.load();
+    send({ type: 'scanStarted', job: 40, source: 2 });
+    expect(store.progressOf(2)).toEqual({ done: 0, total: 0 });
+    expect(store.progressOf(1)).toBeNull();
+    expect(store.otherScan).toBeNull();
+    send({ type: 'scanProgress', job: 40, done: 3, total: 11 });
+    expect(store.progressOf(2)).toEqual({ done: 3, total: 11 });
+    send({ type: 'scanFinished', job: 40, added: 5, changed: 2, removed: 1, problems: 0 });
+    expect(store.progressOf(2)).toBeNull();
+    // A late start for an ended job does not bring it back.
+    send({ type: 'scanStarted', job: 40, source: 2 });
+    expect(store.progressOf(2)).toBeNull();
+  });
+
   it('ignores progress that arrives after the scan ended', async () => {
     let send: (e: Event) => void = () => {};
     setClient({
@@ -132,7 +156,7 @@ describe('sources store', () => {
       },
       // The finish is emitted before the reply, as the Rust mock does.
       scan: async () => {
-        send({ type: 'scanFinished', job: 9, added: 0, removed: 0, problems: 0 });
+        send({ type: 'scanFinished', job: 9, added: 0, changed: 0, removed: 0, problems: 0 });
         return 9;
       },
     });

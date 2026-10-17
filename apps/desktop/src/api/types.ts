@@ -290,6 +290,12 @@ export type ErrorCode =
 
 /**  Something changed. */
 export type Event = 
+/**  A scan started. Progress and the finish follow under the same job. */
+{ type: "scanStarted"; 
+/**  The scan. */
+job: JobId; 
+/**  The source it scans, or every source when absent. */
+source?: SourceId | null } | 
 /**  A scan made progress. */
 { type: "scanProgress"; 
 /**  The scan. */
@@ -304,6 +310,8 @@ total: number } |
 job: JobId; 
 /**  Faces added. */
 added: number; 
+/**  Faces whose file changed and was read again. */
+changed?: number; 
 /**  Faces removed. */
 removed: number; 
 /**  Problems found. */

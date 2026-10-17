@@ -163,12 +163,24 @@ impl FileIndex {
     /// of [`crate::scanner::discover`] on `root`. Entries outside `root` are
     /// left alone, so each source folder rescans on its own.
     pub fn rescan(&mut self, root: &Path, discovery: &Discovery) -> Rescan {
+        self.rescan_with(root, discovery, &mut |_| {})
+    }
+
+    /// [`FileIndex::rescan`], calling `progress` with the number of files of
+    /// `discovery` done after each one, so a scan job can report progress.
+    pub fn rescan_with(
+        &mut self,
+        root: &Path,
+        discovery: &Discovery,
+        progress: &mut dyn FnMut(usize),
+    ) -> Rescan {
         let mut out = Rescan::default();
         let mut found = HashSet::with_capacity(discovery.files.len());
 
-        for file in &discovery.files {
+        for (i, file) in discovery.files.iter().enumerate() {
             found.insert(file.path.as_path());
             self.update(file, &mut out);
+            progress(i + 1);
         }
 
         for entry in self.files.values_mut() {

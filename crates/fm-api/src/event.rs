@@ -11,6 +11,15 @@ use crate::{ApiError, FaceId, JobId, SourceId};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum Event {
+    /// A scan started. Progress and the finish follow under the same job.
+    #[serde(rename_all = "camelCase")]
+    ScanStarted {
+        /// The scan.
+        job: JobId,
+        /// The source it scans, or every source when absent.
+        #[serde(default)]
+        source: Option<SourceId>,
+    },
     /// A scan made progress.
     #[serde(rename_all = "camelCase")]
     ScanProgress {
@@ -28,6 +37,9 @@ pub enum Event {
         job: JobId,
         /// Faces added.
         added: u32,
+        /// Faces whose file changed and was read again.
+        #[serde(default)]
+        changed: u32,
         /// Faces removed.
         removed: u32,
         /// Problems found.
@@ -87,5 +99,48 @@ mod tests {
             r#"{"type":"scanProgress","job":3,"done":10,"total":40}"#
         );
         assert_eq!(serde_json::from_str::<Event>(&json).unwrap(), e);
+    }
+
+    #[test]
+    fn scan_started_names_its_source() {
+        let e = Event::ScanStarted {
+            job: JobId(4),
+            source: Some(SourceId(2)),
+        };
+        let json = serde_json::to_string(&e).unwrap();
+        assert_eq!(json, r#"{"type":"scanStarted","job":4,"source":2}"#);
+        assert_eq!(serde_json::from_str::<Event>(&json).unwrap(), e);
+    }
+
+    #[test]
+    fn scan_finished_reports_changed_faces() {
+        let e = Event::ScanFinished {
+            job: JobId(5),
+            added: 7,
+            changed: 3,
+            removed: 2,
+            problems: 1,
+        };
+        let json = serde_json::to_string(&e).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"scanFinished","job":5,"added":7,"changed":3,"removed":2,"problems":1}"#
+        );
+        assert_eq!(serde_json::from_str::<Event>(&json).unwrap(), e);
+    }
+
+    #[test]
+    fn scan_finished_without_changed_still_reads() {
+        // Events written before `changed` existed still deserialize.
+        let old = r#"{"type":"scanFinished","job":5,"added":7,"removed":2,"problems":1}"#;
+        let e: Event = serde_json::from_str(old).unwrap();
+        assert!(matches!(
+            e,
+            Event::ScanFinished {
+                changed: 0,
+                added: 7,
+                ..
+            }
+        ));
     }
 }
