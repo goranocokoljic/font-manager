@@ -1,11 +1,13 @@
 // Sample answers for browser mode (Playwright) and unit tests, shaped like
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
-import type { FmClient } from './client';
+import type { FmClient, FullSettings } from './client';
 import {
   API_VERSION,
   type ActivationMode,
   type ActivationOutcome,
+  type ApiError,
+  type AppFolders,
   type AppInfo,
   type Event,
   type FaceDetail,
@@ -171,6 +173,26 @@ export const mockSources: Source[] = [
   { id: 2, path: '/System/Library/Fonts', kind: 'system', paused: false, faceCount: 0 },
 ];
 
+/** `Settings::default()` in fm-api. */
+export const defaultSettings: FullSettings = {
+  activationMode: 'session',
+  onConflict: 'keepExisting',
+  theme: 'system',
+  density: 'comfortable',
+  cacheLimitMb: 1024,
+  rescanIntervalMinutes: 60,
+};
+
+/** The app folders of the Rust mock. */
+export const mockFolders: AppFolders = {
+  config: '/home/demo/.config/font-manager',
+  data: '/home/demo/.local/share/font-manager',
+  cache: '/home/demo/.cache/font-manager',
+  logs: '/home/demo/.local/state/font-manager/logs',
+};
+
+const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
+
 /** Options of a mock client. */
 export interface MockOptions {
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
@@ -180,13 +202,14 @@ export interface MockOptions {
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
 export const mockPickedFolders: (string | null)[] = [];
 
-/** A mock client with its own activation and source state. */
+/** A mock client with its own activation, source and settings state. */
 export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
   const sources = structuredClone(mockSources);
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
   let picks = 0;
+  let settings = { ...defaultSettings };
   const emit = (event: Event) => handlers.forEach((h) => h(event));
   const findSource = (id: SourceId) => {
     const s = sources.find((s) => s.id === id);
@@ -300,6 +323,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     pickFolder: async () =>
       mockPickedFolders.length ? mockPickedFolders.shift()! : `/Users/demo/Added ${++picks}`,
+    getSettings: async () => ({ ...settings }),
+    // The same ranges as `Settings::apply` in fm-api.
+    updateSettings: async (req) => {
+      const mb = req.cacheLimitMb;
+      if (mb != null && (mb < 64 || mb > 16384))
+        throw invalid('The cache size must be between 64 and 16384 MB.');
+      const min = req.rescanIntervalMinutes;
+      if (min != null && min > 1440)
+        throw invalid('The rescan interval must be between 0 (off) and 1440 minutes.');
+      const next = { ...settings };
+      for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
+      settings = next;
+      return { ...settings };
+    },
+    getAppFolders: async () => ({ ...mockFolders }),
   };
 }
 

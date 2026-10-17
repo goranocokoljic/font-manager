@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { RouterLink, useRoute } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
@@ -36,6 +36,7 @@ useActions([
 ]);
 
 const paletteChord = chordOf(ACTIONS.palette)!;
+const settingsChord = chordOf(ACTIONS.settings)!;
 
 // The selected face is in the URL (`#/?face=3`) so a reload keeps it; the
 // font list (E5.2) selects by changing the query.
@@ -98,6 +99,13 @@ const groups = [
       >
         Commands <kbd>{{ formatChord(paletteChord) }}</kbd>
       </button>
+      <RouterLink
+        :to="{ name: 'settings' }"
+        class="hint"
+        :aria-keyshortcuts="ariaShortcut(settingsChord)"
+      >
+        Settings <kbd>{{ formatChord(settingsChord) }}</kbd>
+      </RouterLink>
       <p v-if="app.error" role="alert" class="error">{{ app.error.message }}</p>
       <dl v-else-if="app.info" class="info" data-testid="app-info">
         <dt>App</dt>
@@ -161,6 +169,7 @@ const groups = [
   background: transparent;
   color: inherit;
   font: inherit;
+  text-decoration: none;
 }
 .hint kbd {
   font: inherit;

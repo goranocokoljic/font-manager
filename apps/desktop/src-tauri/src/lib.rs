@@ -9,22 +9,35 @@ use fm_api::library::{
     AddSourceRequest, AppInfo, FaceDetail, ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
-use fm_api::{Api, ApiError, ApiResult, ErrorCode, FaceId, JobId, SourceId};
+use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
+use fm_api::{Api, ApiError, ApiResult, ErrorCode, FaceId, JobId, SettingsService, SourceId};
+use fm_core::SettingsStore;
 use tauri::{Emitter, Runtime, State};
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
 
 /// The API every command talks to. `fm-core` does not implement [`Api`] yet,
-/// so the shell serves [`MockApi`] until it does.
+/// so the shell serves [`MockApi`] until it does; the settings already come
+/// from `fm-core`'s [`SettingsStore`] when the app folders were found.
 pub struct AppState {
     api: Arc<dyn Api>,
+    settings: Option<Arc<dyn SettingsService + Send + Sync>>,
 }
 
 impl AppState {
     /// Wraps an API implementation for Tauri's managed state.
     pub fn new(api: Arc<dyn Api>) -> Self {
-        Self { api }
+        Self {
+            api,
+            settings: None,
+        }
+    }
+
+    /// Serves the settings from `settings` instead of the API.
+    pub fn with_settings(mut self, settings: Arc<dyn SettingsService + Send + Sync>) -> Self {
+        self.settings = Some(settings);
+        self
     }
 }
 
@@ -47,6 +60,27 @@ where
             ApiError::new(ErrorCode::Internal, "The app could not finish the request.")
                 .with_detail(e.to_string())
         })?
+}
+
+/// Runs a synchronous settings call on the blocking pool, on the settings
+/// store when there is one, else on the API.
+async fn call_settings<T, F>(state: &AppState, f: F) -> ApiResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&dyn SettingsService) -> ApiResult<T> + Send + 'static,
+{
+    match &state.settings {
+        Some(store) => {
+            let store = Arc::clone(store);
+            tauri::async_runtime::spawn_blocking(move || f(store.as_ref()))
+                .await
+                .map_err(|e| {
+                    ApiError::new(ErrorCode::Internal, "The app could not finish the request.")
+                        .with_detail(e.to_string())
+                })?
+        }
+        None => call(state, move |api| f(api)).await,
+    }
 }
 
 /// What the running app is: name, version, API contract and platform.
@@ -112,13 +146,36 @@ async fn scan(state: State<'_, AppState>, req: ScanRequest) -> ApiResult<JobId> 
     call(&state, move |api| api.scan(req)).await
 }
 
+/// The user's settings.
+#[tauri::command]
+async fn get_settings(state: State<'_, AppState>) -> ApiResult<Settings> {
+    call_settings(&state, |s| s.get_settings()).await
+}
+
+/// Changes and saves some settings; returns all of them.
+#[tauri::command]
+async fn update_settings(state: State<'_, AppState>, req: SettingsUpdate) -> ApiResult<Settings> {
+    call_settings(&state, move |s| s.update_settings(req)).await
+}
+
+/// Where the app keeps its config, data, cache and logs.
+#[tauri::command]
+async fn get_app_folders(state: State<'_, AppState>) -> ApiResult<AppFolders> {
+    call_settings(&state, |s| s.app_folders()).await
+}
+
 /// Registers the shared state and every command on a builder.
 pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri::Builder<R> {
+    setup_state(builder, AppState::new(api))
+}
+
+/// Registers this state and every command on a builder.
+pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> tauri::Builder<R> {
     // Subscribe before the first command can run, so no event is missed; a
     // thread forwards the stream to the webview until the API drops it.
-    let events = api.subscribe();
+    let events = state.api.subscribe();
     builder
-        .manage(AppState::new(api))
+        .manage(state)
         .setup(move |app| {
             let handle = app.handle().clone();
             std::thread::Builder::new()
@@ -141,7 +198,10 @@ pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri
             add_source,
             remove_source,
             set_source_paused,
-            scan
+            scan,
+            get_settings,
+            update_settings,
+            get_app_folders
         ])
 }
 
@@ -158,8 +218,12 @@ pub fn run() {
         }
     };
     let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let mut state = AppState::new(api);
+    if let Some(startup) = &startup {
+        state = state.with_settings(Arc::new(SettingsStore::new(&startup.paths)));
+    }
     let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
-    if let Err(e) = setup(builder, api).run(tauri::generate_context!()) {
+    if let Err(e) = setup_state(builder, state).run(tauri::generate_context!()) {
         tracing::error!(error = %e, "font manager failed to start");
         eprintln!("font manager failed to start: {e}");
         drop(startup); // flush the log before exit skips destructors

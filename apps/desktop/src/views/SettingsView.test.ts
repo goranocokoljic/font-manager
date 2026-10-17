@@ -1,0 +1,122 @@
+import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import App from '../App.vue';
+import { setClient, type FmClient } from '../api/client';
+import { createMockClient, mockFolders } from '../api/mock';
+import { createAppRouter } from '../router';
+
+vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
+
+let client: FmClient;
+
+beforeEach(() => {
+  client = createMockClient();
+  setClient(client);
+  delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.density;
+});
+
+afterEach(() => setClient(undefined));
+
+async function mountAt(path: string) {
+  const router = createAppRouter();
+  await router.push(path);
+  const wrapper = mount(App, {
+    global: { plugins: [createPinia(), router] },
+    attachTo: document.body,
+  });
+  await router.isReady();
+  await flushPromises();
+  return { wrapper, router };
+}
+
+const radio = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label: string) =>
+  wrapper
+    .findAll('label')
+    .find((l) => l.text() === label)!
+    .get('input');
+
+describe('Settings window', () => {
+  it('has the four sections as tabs and opens Sources first', async () => {
+    const { wrapper } = await mountAt('/settings');
+    expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
+      'Sources',
+      'Activation',
+      'Appearance',
+      'Advanced',
+    ]);
+    expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Sources');
+    expect(wrapper.text()).toContain('/Users/demo/Fonts');
+    expect(wrapper.text()).toContain('System fonts');
+    wrapper.unmount();
+  });
+
+  it('applies the theme and density the moment they change, and saves them', async () => {
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    await radio(wrapper, 'Dark').setValue(true);
+    await flushPromises();
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    await radio(wrapper, 'Compact').setValue(true);
+    await flushPromises();
+    expect(document.documentElement.dataset.density).toBe('compact');
+    expect(await client.getSettings()).toMatchObject({ theme: 'dark', density: 'compact' });
+    wrapper.unmount();
+  });
+
+  it('saves the activation choices', async () => {
+    const { wrapper } = await mountAt('/settings?section=activation');
+    await radio(wrapper, 'Permanently (also after a restart)').setValue(true);
+    await radio(wrapper, 'Activate this font anyway').setValue(true);
+    await flushPromises();
+    expect(await client.getSettings()).toMatchObject({
+      activationMode: 'permanent',
+      onConflict: 'replace',
+    });
+    wrapper.unmount();
+  });
+
+  it('saves a valid number, and puts the saved value back after a bad one', async () => {
+    const { wrapper } = await mountAt('/settings?section=advanced');
+    const [cache, rescan] = wrapper.findAll('input[type="number"]');
+    await cache.setValue('2048');
+    await flushPromises();
+    expect((await client.getSettings()).cacheLimitMb).toBe(2048);
+
+    await cache.setValue('1');
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain('between 64 and 16384');
+    expect((cache.element as HTMLInputElement).value).toBe('2048');
+
+    await rescan.setValue('');
+    await flushPromises();
+    expect((rescan.element as HTMLInputElement).value).toBe('60');
+    expect((await client.getSettings()).rescanIntervalMinutes).toBe(60);
+
+    await rescan.setValue('0');
+    await flushPromises();
+    expect((await client.getSettings()).rescanIntervalMinutes).toBe(0);
+    expect(wrapper.text()).toContain(mockFolders.logs);
+    wrapper.unmount();
+  });
+
+  it('moves between sections with the arrow keys and closes on Escape', async () => {
+    const { wrapper, router } = await mountAt('/settings');
+    const tablist = wrapper.get('[role="tablist"]');
+    await tablist.trigger('keydown', { key: 'ArrowDown' });
+    await flushPromises();
+    expect(router.currentRoute.value.query.section).toBe('activation');
+    expect(document.activeElement?.id).toBe('tab-activation');
+    await tablist.trigger('keydown', { key: 'End' });
+    await flushPromises();
+    expect(router.currentRoute.value.query.section).toBe('advanced');
+    await tablist.trigger('keydown', { key: 'ArrowDown' });
+    await flushPromises();
+    expect(router.currentRoute.value.query.section).toBe('sources');
+
+    await wrapper.get('.settings').trigger('keydown', { key: 'Escape' });
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('home');
+    wrapper.unmount();
+  });
+});

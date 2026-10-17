@@ -59,7 +59,7 @@ impl Default for WatchSettings {
 impl WatchSettings {
     /// The defaults with the rescan interval the user set.
     pub fn from_config(config: &Config) -> Self {
-        let minutes = u64::from(config.rescan_interval_minutes.max(1));
+        let minutes = u64::from(config.settings.rescan_interval_minutes.max(1));
         Self {
             rescan_interval: Duration::from_secs(minutes * 60),
             ..Self::default()
@@ -948,10 +948,8 @@ mod tests {
             WatchSettings::from_config(&Config::default()).rescan_interval,
             Duration::from_secs(60 * 60)
         );
-        let config = Config {
-            rescan_interval_minutes: 0,
-            ..Config::default()
-        };
+        let mut config = Config::default();
+        config.settings.rescan_interval_minutes = 0;
         assert_eq!(
             WatchSettings::from_config(&config).rescan_interval,
             Duration::from_secs(60)

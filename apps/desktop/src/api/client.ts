@@ -8,6 +8,7 @@ import type {
   ActivateRequest,
   ActivationOutcome,
   AddSourceRequest,
+  AppFolders,
   AppInfo,
   DeactivateRequest,
   Event,
@@ -16,9 +17,14 @@ import type {
   JobId,
   ScanRequest,
   SetSourcePausedRequest,
+  Settings,
+  SettingsUpdate,
   Source,
   SourceId,
 } from './types';
+
+/** Settings as a response carries them: every field present. */
+export type FullSettings = Required<Settings>;
 
 /** The Tauri event channel `fm_app_lib::EVENT_CHANNEL` forwards fm-api events on. */
 export const EVENT_CHANNEL = 'fm://event';
@@ -36,6 +42,9 @@ export interface FmClient {
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
   setSourcePaused(req: SetSourcePausedRequest): Promise<Source>;
+  getSettings(): Promise<FullSettings>;
+  updateSettings(req: SettingsUpdate): Promise<FullSettings>;
+  getAppFolders(): Promise<AppFolders>;
   scan(req: ScanRequest): Promise<JobId>;
   /** Subscribes to the fm-api event stream; the UI subscribes, it does not poll. */
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
@@ -53,6 +62,9 @@ export const tauriClient: FmClient = {
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),
   setSourcePaused: (req) => invoke<Source>('set_source_paused', { req }),
+  getSettings: () => invoke<FullSettings>('get_settings'),
+  updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
+  getAppFolders: () => invoke<AppFolders>('get_app_folders'),
   scan: (req) => invoke<JobId>('scan', { req }),
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {

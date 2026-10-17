@@ -1,0 +1,74 @@
+import { defineStore } from 'pinia';
+import { computed, ref } from 'vue';
+import { useClient, type FullSettings } from '../api/client';
+import type { ApiError, AppFolders, SettingsUpdate } from '../api/types';
+
+/**
+ * The user's settings and the app folders, as fm-api reports them. Every change is
+ * sent at once and the answer replaces the local copy, so what the window shows is
+ * what was saved. The sources live in the sources store.
+ */
+export const useSettingsStore = defineStore('settings', () => {
+  const settings = ref<FullSettings | null>(null);
+  const folders = ref<AppFolders | null>(null);
+  /** The last request that failed, for the Settings window to show. */
+  const error = ref<ApiError | null>(null);
+
+  // Changes run one after another, so a slow answer never overwrites a newer one.
+  let queue: Promise<unknown> = Promise.resolve();
+  function enqueue<T>(work: () => Promise<T>): Promise<T> {
+    const next = queue.then(work, work);
+    queue = next.catch(() => undefined);
+    return next;
+  }
+
+  async function attempt(work: () => Promise<void>): Promise<boolean> {
+    try {
+      await work();
+      error.value = null;
+      return true;
+    } catch (e) {
+      error.value = e as ApiError;
+      return false;
+    }
+  }
+
+  /** Reads the settings (at app start, so the appearance applies everywhere). */
+  function load(): Promise<boolean> {
+    return attempt(async () => {
+      settings.value = await useClient().getSettings();
+    });
+  }
+
+  /** Reads what only the Settings window shows: the app folders. */
+  function loadWindow(): Promise<boolean> {
+    return attempt(async () => {
+      folders.value = await useClient().getAppFolders();
+    });
+  }
+
+  /** Changes some settings; false (and `error` set) when the API refused. */
+  function update(patch: SettingsUpdate): Promise<boolean> {
+    return enqueue(() =>
+      attempt(async () => {
+        settings.value = await useClient().updateSettings(patch);
+      }),
+    );
+  }
+
+  /** What the Activate button does; session until the settings are read. */
+  const activationMode = computed(() => settings.value?.activationMode ?? 'session');
+  /** What activation does on a name clash; keep the existing font until read. */
+  const onConflict = computed(() => settings.value?.onConflict ?? 'keepExisting');
+
+  return {
+    settings,
+    folders,
+    error,
+    activationMode,
+    onConflict,
+    load,
+    loadWindow,
+    update,
+  };
+});

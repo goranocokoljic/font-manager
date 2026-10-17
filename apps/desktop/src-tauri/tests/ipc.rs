@@ -2,15 +2,15 @@
 
 use std::error::Error;
 use std::sync::Arc;
-
-use fm_api::activation::{ActivationOutcome, OutcomeStatus};
 use std::sync::mpsc;
 use std::time::Duration;
 
+use fm_api::activation::{ActivationOutcome, OutcomeStatus};
 use fm_api::library::{AppInfo, FaceDetail, LibraryService, Source, SourceKind};
 use fm_api::mock::MockApi;
-use fm_api::{API_VERSION, Event, FaceId, JobId};
-use fm_app_lib::{EVENT_CHANNEL, setup};
+use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
+use fm_api::{API_VERSION, ApiResult, Event, FaceId, JobId, SettingsService};
+use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
 use tauri::test::{
     INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder, mock_context, noop_assets,
@@ -33,7 +33,14 @@ fn invoke_with(cmd: &str, args: serde_json::Value) -> Result<IpcResponse, Box<dy
 
 /// A mock app over a fresh `MockApi`, with its main window.
 fn app() -> Result<(App<MockRuntime>, WebviewWindow<MockRuntime>), Box<dyn Error>> {
-    let app = setup(mock_builder(), Arc::new(MockApi::new())).build(mock_context(noop_assets()))?;
+    app_on(setup(mock_builder(), Arc::new(MockApi::new())))
+}
+
+/// A mock app built from this builder, with its main window.
+fn app_on(
+    builder: tauri::Builder<MockRuntime>,
+) -> Result<(App<MockRuntime>, WebviewWindow<MockRuntime>), Box<dyn Error>> {
+    let app = builder.build(mock_context(noop_assets()))?;
     let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default()).build()?;
     Ok((app, webview))
 }
@@ -132,6 +139,73 @@ fn activate_and_deactivate_report_one_outcome_per_face() {
     .deserialize()
     .unwrap();
     assert!(matches!(off[0].outcome, OutcomeStatus::Skipped { .. }));
+}
+
+#[test]
+fn update_settings_returns_every_setting_in_camel_case() {
+    let json: serde_json::Value = invoke_with(
+        "update_settings",
+        serde_json::json!({ "req": { "theme": "dark", "cacheLimitMb": 256 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(json["theme"], "dark");
+    assert_eq!(json["cacheLimitMb"], 256);
+    assert_eq!(json["density"], "comfortable");
+}
+
+#[test]
+fn an_out_of_range_setting_is_an_api_error() {
+    let err = invoke_with(
+        "update_settings",
+        serde_json::json!({ "req": { "rescanIntervalMinutes": 99999 } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+}
+
+/// A settings store that is not the API, to prove the commands use it.
+struct Store;
+
+impl SettingsService for Store {
+    fn get_settings(&self) -> ApiResult<Settings> {
+        Ok(Settings {
+            theme: Theme::Light,
+            ..Settings::default()
+        })
+    }
+    fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
+        self.get_settings()?.apply(&req)
+    }
+    fn app_folders(&self) -> ApiResult<AppFolders> {
+        Ok(AppFolders {
+            config: "/store/config".into(),
+            data: "/store/data".into(),
+            cache: "/store/cache".into(),
+            logs: "/store/logs".into(),
+        })
+    }
+}
+
+#[test]
+fn the_settings_store_serves_the_settings_commands() {
+    let state = AppState::new(Arc::new(MockApi::new())).with_settings(Arc::new(Store));
+    let (_app, webview) = app_on(setup_state(mock_builder(), state)).unwrap();
+    let settings: Settings = send(&webview, "get_settings", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(settings.theme, Theme::Light);
+    let folders: AppFolders = send(&webview, "get_app_folders", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(folders.logs, "/store/logs");
 }
 
 #[test]

@@ -4,6 +4,7 @@ import { setClient, tauriClient, type FmClient } from '../api/client';
 import { createMockClient, mockFaces } from '../api/mock';
 import type { ApiError, FaceDetail, Target } from '../api/types';
 import { parseFaceId, useSelectionStore } from './selection';
+import { useSettingsStore } from './settings';
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke, isTauri: () => false }));
@@ -92,6 +93,7 @@ describe('selection store', () => {
     expect(activate).toHaveBeenLastCalledWith({
       target: { kind: 'faces', faces: [1] },
       mode: 'permanent',
+      onConflict: 'keepExisting',
     });
     expect(store.detail?.face.active).toBe('permanent');
     await store.toggleActivation('permanent');
@@ -126,6 +128,31 @@ describe('selection store', () => {
     await store.toggleActivation();
     expect(store.outcome).toMatchObject({ status: 'conflict', with: { kind: 'system' } });
     expect(store.detail?.face.active).toBeNull();
+  });
+
+  it('the Activate button uses the activation mode chosen in Settings', async () => {
+    const activate = vi.spyOn(client, 'activate');
+    await useSettingsStore().update({ activationMode: 'permanent' });
+    const store = useSelectionStore();
+    await store.select(1);
+    await store.toggleActivation();
+    expect(activate).toHaveBeenLastCalledWith(expect.objectContaining({ mode: 'permanent' }));
+    expect(store.detail?.face.active).toBe('permanent');
+    // Active in any mode, the button deactivates.
+    await store.toggleActivation();
+    expect(store.detail?.face.active).toBeNull();
+    // The A key still means this session.
+    await store.toggleActivation('session');
+    expect(store.detail?.face.active).toBe('session');
+  });
+
+  it('activates over a name clash when Settings say so', async () => {
+    await useSettingsStore().update({ onConflict: 'replace' });
+    const store = useSelectionStore();
+    await store.select(6);
+    await store.toggleActivation();
+    expect(store.outcome).toEqual({ status: 'done' });
+    expect(store.detail?.face.active).toBe('session');
   });
 
   it('turns a rejected activation into a failed outcome', async () => {

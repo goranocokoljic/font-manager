@@ -9,6 +9,7 @@ import type {
   OutcomeStatus,
   Target,
 } from '../api/types';
+import { useSettingsStore } from './settings';
 
 /** A face id from a route query value (`?face=3`), or null when there is none. */
 export function parseFaceId(value: unknown): FaceId | null {
@@ -70,13 +71,16 @@ export const useSelectionStore = defineStore('selection', () => {
   );
 
   /**
-   * Session (default): activates the selected face for the session, or deactivates it
-   * when active. Permanent: activates it permanently (a session activation becomes
-   * permanent), or deactivates it when it is already permanent.
+   * No mode (the Activate button): deactivates the selected face when active, or
+   * activates it in the mode chosen in Settings. Session: the same, always for the
+   * session. Permanent: activates it permanently (a session activation becomes
+   * permanent), or deactivates it when it is already permanent. Name clashes follow
+   * the Settings choice.
    */
-  async function toggleActivation(mode: ActivationMode = 'session'): Promise<void> {
+  async function toggleActivation(mode?: ActivationMode): Promise<void> {
     const face = detail.value?.face;
     if (!face || busy.value) return;
+    const settings = useSettingsStore();
     const target: Target = { kind: 'faces', faces: [face.id] };
     const deactivate = mode === 'permanent' ? face.active === 'permanent' : face.active !== null;
     busy.value = true;
@@ -84,7 +88,11 @@ export const useSelectionStore = defineStore('selection', () => {
       const client = useClient();
       const results = deactivate
         ? await client.deactivate({ target })
-        : await client.activate({ target, mode });
+        : await client.activate({
+            target,
+            mode: mode ?? settings.activationMode,
+            onConflict: settings.onConflict,
+          });
       outcome.value = results.find((r) => r.face === face.id)?.outcome ?? null;
     } catch (e) {
       outcome.value = { status: 'failed', error: e as ApiError };
