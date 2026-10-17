@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/charsets/charset.schema.json",
+  "title": "Font Manager character-set file",
+  "description": "Language presets: the characters a font must cover to set a language. One file per script group; every *.json file in data/charsets except this schema follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "languages"],
+  "properties": {
+    "$schema": { "const": "./charset.schema.json" },
+    "languages": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/language" }
+    }
+  },
+  "$defs": {
+    "chars": {
+      "description": "Characters separated by one space. Each item is exactly one Unicode scalar value, written precomposed (NFC) where Unicode has a precomposed form. No item appears twice.",
+      "type": "string",
+      "pattern": "^\\S( \\S)*$"
+    },
+    "language": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "name", "script", "base", "source"],
+      "properties": {
+        "code": {
+          "description": "BCP 47 tag: ISO 639 language, optionally with an ISO 15924 script (sr-Cyrl). Unique across all files.",
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?$"
+        },
+        "name": {
+          "description": "English name shown in the UI (\"Serbian (Cyrillic)\").",
+          "type": "string",
+          "minLength": 1
+        },
+        "script": {
+          "description": "ISO 15924 script code (Latn, Cyrl, Hans, Jpan, Kore).",
+          "type": "string",
+          "pattern": "^[A-Z][a-z]{3}$"
+        },
+        "otLanguage": {
+          "description": "OpenType language-system tag, without padding (SRB, TRK). Used to look for locl forms.",
+          "type": "string",
+          "pattern": "^[A-Z]{2,4}$"
+        },
+        "base": {
+          "$ref": "#/$defs/chars",
+          "description": "Characters required to set the language. A font supports the language when it covers all of them."
+        },
+        "auxiliary": {
+          "$ref": "#/$defs/chars",
+          "description": "Characters seen in loanwords, names or older spelling. Reported, never required. No overlap with base."
+        },
+        "source": {
+          "description": "Where the base set comes from: hyperglot, google-fonts (Google Fonts language data), or project (curated here; see README).",
+          "enum": ["hyperglot", "google-fonts", "project"]
+        }
+      }
+    }
+  }
+}
