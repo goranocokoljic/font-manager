@@ -4,7 +4,9 @@ import { setClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, mockFaces } from '../api/mock';
 import type { FaceSummary } from '../api/types';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
+import { NUMERALS, PANGRAMS } from '../preview/sampleText';
 import { clearFaceAxes } from '../preview/variations';
+import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import FacePreviewList from './FacePreviewList.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -144,5 +146,75 @@ describe('FacePreviewList', () => {
     expect(loader.inUse).toBe(0);
     loader.trim();
     expect(fonts.faces.size).toBe(0);
+  });
+});
+
+describe('FacePreviewList preview settings', () => {
+  const faces = [inter, mono];
+  const settings = (patch: Partial<PreviewSettings>): PreviewSettings => ({
+    ...DEFAULT_PREVIEW,
+    ...patch,
+  });
+
+  it('applies the sample, size, spacing, alignment and colors to every row', async () => {
+    const list = mount(FacePreviewList, {
+      props: {
+        faces,
+        preview: settings({
+          sample: 'numerals',
+          sizePx: 96,
+          lineHeight: 1.5,
+          trackingEm: 0.05,
+          align: 'end',
+          textColor: '#aa0000',
+          backgroundColor: '#00ff00',
+          surface: 'dark',
+        }),
+      },
+    });
+    await flushPromises();
+    const samples = list.findAll('.sample');
+    expect(samples).toHaveLength(2);
+    for (const sample of samples) {
+      const style = (sample.element as HTMLElement).style;
+      expect(sample.text()).toBe(NUMERALS);
+      expect(style.fontSize).toBe('96px');
+      expect(style.lineHeight).toBe('1.5');
+      expect(style.letterSpacing).toBe('0.05em');
+      expect(style.textAlign).toBe('end');
+      expect(style.color).toBe('rgb(170, 0, 0)');
+    }
+    const viewport = list.get('.viewport');
+    expect((viewport.element as HTMLElement).style.backgroundColor).toBe('rgb(0, 255, 0)');
+    expect(viewport.classes()).toContain('surface-dark');
+    // 96 px × 1.5 + label and padding.
+    expect(list.get('[role="listitem"]').attributes('style')).toContain('height: 174px');
+  });
+
+  it('updates all rows live when the settings change', async () => {
+    const list = mount(FacePreviewList, { props: { faces, preview: settings({}) } });
+    await flushPromises();
+    expect(list.get('.viewport').classes()).not.toContain('surface-light');
+    await list.setProps({
+      preview: settings({ sample: 'pangram', language: 'el', sizePx: 12, surface: 'light' }),
+    });
+    for (const sample of list.findAll('.sample')) {
+      expect(sample.text()).toBe(PANGRAMS.el.text);
+      expect((sample.element as HTMLElement).style.fontSize).toBe('12px');
+    }
+    expect(list.get('.viewport').classes()).toContain('surface-light');
+  });
+
+  it('shows each face its own name for the font-name sample', async () => {
+    const list = mount(FacePreviewList, {
+      props: { faces, preview: settings({ sample: 'fontName' }) },
+    });
+    await flushPromises();
+    const texts = list.findAll('.sample').map((s) => s.text());
+    expect(texts).toEqual([
+      `${inter.familyName} ${inter.style}`,
+      `${mono.familyName} ${mono.style}`,
+    ]);
+    expect(texts[0]).not.toBe(texts[1]);
   });
 });
