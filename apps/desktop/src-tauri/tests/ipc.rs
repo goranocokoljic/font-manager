@@ -9,7 +9,7 @@ use fm_api::activation::{ActivationOutcome, OutcomeStatus};
 use fm_api::library::{AppInfo, FaceDetail, LibraryService, Source, SourceKind};
 use fm_api::mock::MockApi;
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
-use fm_api::{API_VERSION, ApiResult, Event, FaceId, JobId, SettingsService};
+use fm_api::{API_VERSION, ApiResult, Event, FaceId, JobId, SettingsService, SourceId};
 use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
 use tauri::test::{
@@ -292,6 +292,13 @@ fn scan_progress_is_forwarded_to_the_webview() {
     let next = || -> Event {
         serde_json::from_str(&rx.recv_timeout(Duration::from_secs(5)).unwrap()).unwrap()
     };
+    assert_eq!(
+        next(),
+        Event::ScanStarted {
+            job,
+            source: Some(SourceId(1))
+        }
+    );
     assert!(matches!(next(), Event::ScanProgress { job: j, .. } if j == job));
     assert!(matches!(next(), Event::ScanFinished { job: j, .. } if j == job));
 }

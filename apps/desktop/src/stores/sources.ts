@@ -18,7 +18,7 @@ export const useSourcesStore = defineStore('sources', () => {
   const error = ref<ApiError | null>(null);
   /** Running scans by job. */
   const scans = reactive(new Map<JobId, ScanProgress>());
-  /** The source a job scans, for scans this store started (`null`: every source). */
+  /** The source a job scans, from its start event or the store's own request (`null`: every source). */
   const jobSource = reactive(new Map<JobId, SourceId | null>());
   /** Jobs whose end arrived; a late `scan()` reply must not bring them back. */
   const ended = new Set<JobId>();
@@ -49,6 +49,11 @@ export const useSourcesStore = defineStore('sources', () => {
 
   function onEvent(event: Event): void {
     switch (event.type) {
+      case 'scanStarted':
+        if (ended.has(event.job)) break;
+        if (!scans.has(event.job)) scans.set(event.job, { done: 0, total: 0 });
+        if (!jobSource.has(event.job)) jobSource.set(event.job, event.source ?? null);
+        break;
       case 'scanProgress':
         if (!ended.has(event.job)) scans.set(event.job, { done: event.done, total: event.total });
         break;
@@ -112,7 +117,7 @@ export const useSourcesStore = defineStore('sources', () => {
     if (done) sources.value = sources.value.filter((s) => s.id !== source);
   }
 
-  /** The running scan of one source, if this store started it. */
+  /** The running scan of one source, wherever it was started. */
   function progressOf(source: SourceId): ScanProgress | null {
     for (const [job, s] of jobSource) if (s === source) return scans.get(job) ?? null;
     return null;

@@ -184,16 +184,17 @@ fn events_are_pushed_to_every_subscriber() {
     ))
     .unwrap();
     let got: Vec<Event> = a.try_iter().collect();
-    assert!(matches!(got[0], Event::ScanProgress { job: j, .. } if j == job));
-    assert!(matches!(got[1], Event::ScanFinished { problems: 1, .. }));
+    assert_eq!(got[0], Event::ScanStarted { job, source: None });
+    assert!(matches!(got[1], Event::ScanProgress { job: j, .. } if j == job));
+    assert!(matches!(got[2], Event::ScanFinished { problems: 1, .. }));
     assert_eq!(
-        got[2],
+        got[3],
         Event::ActivationChanged {
             activated: vec![FaceId(1)],
             deactivated: vec![]
         }
     );
-    assert_eq!(b.try_iter().count(), 3);
+    assert_eq!(b.try_iter().count(), 4);
     drop(b); // a dropped subscriber does not break the next send
     api.deactivate(DeactivateRequest::default()).unwrap();
     assert_eq!(a.try_iter().count(), 1);
