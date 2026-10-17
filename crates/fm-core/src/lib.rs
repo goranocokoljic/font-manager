@@ -5,6 +5,7 @@
 //! adapters. Nothing outside this crate computes anything about fonts; every
 //! consumer reaches it through `fm-api`.
 
+pub mod charsets;
 pub mod config;
 pub mod error;
 pub mod grouping;

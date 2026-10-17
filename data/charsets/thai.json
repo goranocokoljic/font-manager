@@ -1,0 +1,14 @@
+{
+  "$schema": "./charset.schema.json",
+  "languages": [
+    {
+      "code": "th",
+      "name": "Thai",
+      "script": "Thai",
+      "otLanguage": "THA",
+      "base": "ก ข ฃ ค ฅ ฆ ง จ ฉ ช ซ ฌ ญ ฎ ฏ ฐ ฑ ฒ ณ ด ต ถ ท ธ น บ ป ผ ฝ พ ฟ ภ ม ย ร ฤ ล ฦ ว ศ ษ ส ห ฬ อ ฮ ฯ ะ ั า ำ ิ ี ึ ื ุ ู ฺ ฿ เ แ โ ใ ไ ๅ ๆ ็ ่ ้ ๊ ๋ ์ ํ ๎",
+      "auxiliary": "๏ ๐ ๑ ๒ ๓ ๔ ๕ ๖ ๗ ๘ ๙ ๚ ๛",
+      "source": "hyperglot"
+    }
+  ]
+}

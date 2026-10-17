@@ -1,0 +1,32 @@
+{
+  "$schema": "./charset.schema.json",
+  "languages": [
+    {
+      "code": "hi",
+      "name": "Hindi",
+      "script": "Deva",
+      "otLanguage": "HIN",
+      "base": "ँ ं ः अ आ इ ई उ ऊ ऋ ए ऐ ओ औ क ख ग घ ङ च छ ज झ ञ ट ठ ड ढ ण त थ द ध न ऩ प फ ब भ म य र ऱ ल ळ ऴ व श ष स ह ़ ा ि ी ु ू ृ े ै ो ौ ् । ॥",
+      "auxiliary": "ऑ ॉ ॐ क़ ख़ ग़ ज़ ड़ ढ़ फ़ य़ ० १ २ ३ ४ ५ ६ ७ ८ ९",
+      "source": "hyperglot"
+    },
+    {
+      "code": "mr",
+      "name": "Marathi",
+      "script": "Deva",
+      "otLanguage": "MAR",
+      "base": "ँ ं ः अ आ इ ई उ ऊ ऋ ए ऐ ओ औ क ख ग घ ङ च छ ज झ ञ ट ठ ड ढ ण त थ द ध न ऩ प फ ब भ म य र ऱ ल ळ ऴ व श ष स ह ़ ा ि ी ु ू ृ े ै ो ौ ् । ॥",
+      "auxiliary": "ऑ ॉ ॐ क़ ख़ ग़ ज़ ड़ ढ़ फ़ य़ ० १ २ ३ ४ ५ ६ ७ ८ ९ ॲ",
+      "source": "hyperglot"
+    },
+    {
+      "code": "ne",
+      "name": "Nepali",
+      "script": "Deva",
+      "otLanguage": "NEP",
+      "base": "ँ ं ः अ आ इ ई उ ऊ ऋ ए ऐ ओ औ क ख ग घ ङ च छ ज झ ञ ट ठ ड ढ ण त थ द ध न ऩ प फ ब भ म य र ऱ ल ळ ऴ व श ष स ह ़ ा ि ी ु ू ृ े ै ो ौ ् । ॥",
+      "auxiliary": "ऑ ॉ ॐ क़ ख़ ग़ ज़ ड़ ढ़ फ़ य़ ० १ २ ३ ४ ५ ६ ७ ८ ९",
+      "source": "hyperglot"
+    }
+  ]
+}

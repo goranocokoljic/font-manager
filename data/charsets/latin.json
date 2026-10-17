@@ -1,0 +1,282 @@
+{
+  "$schema": "./charset.schema.json",
+  "languages": [
+    {
+      "code": "en",
+      "name": "English",
+      "script": "Latn",
+      "otLanguage": "ENG",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z a b c d e f g h i j k l m n o p q r s t u v w x y z",
+      "source": "hyperglot"
+    },
+    {
+      "code": "de",
+      "name": "German",
+      "script": "Latn",
+      "otLanguage": "DEU",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ä Ö Ü a b c d e f g h i j k l m n o p q r s t u v w x y z ä ö ü ß",
+      "auxiliary": "ẞ",
+      "source": "hyperglot"
+    },
+    {
+      "code": "fr",
+      "name": "French",
+      "script": "Latn",
+      "otLanguage": "FRA",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z À Â Æ Ç É È Ê Ë Î Ï Ô Œ Ù Û Ü Ÿ a b c d e f g h i j k l m n o p q r s t u v w x y z à â æ ç é è ê ë î ï ô œ ù û ü ÿ",
+      "source": "hyperglot"
+    },
+    {
+      "code": "es",
+      "name": "Spanish",
+      "script": "Latn",
+      "otLanguage": "ESP",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á É Í Ñ Ó Ú Ü a b c d e f g h i j k l m n o p q r s t u v w x y z á é í ñ ó ú ü ¡ ¿",
+      "source": "hyperglot"
+    },
+    {
+      "code": "it",
+      "name": "Italian",
+      "script": "Latn",
+      "otLanguage": "ITA",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z À È É Ì Ò Ù a b c d e f g h i j k l m n o p q r s t u v w x y z à è é ì ò ù",
+      "auxiliary": "Í Î Ó Ú í î ó ú",
+      "source": "hyperglot"
+    },
+    {
+      "code": "pt",
+      "name": "Portuguese",
+      "script": "Latn",
+      "otLanguage": "PTG",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z À Á Â Ã Ç É Ê Í Ó Ô Õ Ú a b c d e f g h i j k l m n o p q r s t u v w x y z à á â ã ç é ê í ó ô õ ú",
+      "auxiliary": "Ü ü",
+      "source": "hyperglot"
+    },
+    {
+      "code": "ca",
+      "name": "Catalan",
+      "script": "Latn",
+      "otLanguage": "CAT",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z À Ç É È Í Ï Ó Ò Ú Ü a b c d e f g h i j k l m n o p q r s t u v w x y z à ç é è í ï ó ò ú ü ·",
+      "source": "hyperglot"
+    },
+    {
+      "code": "gl",
+      "name": "Galician",
+      "script": "Latn",
+      "otLanguage": "GAL",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á É Í Ñ Ó Ú a b c d e f g h i j k l m n o p q r s t u v w x y z á é í ñ ó ú",
+      "auxiliary": "Ü ü",
+      "source": "hyperglot"
+    },
+    {
+      "code": "eu",
+      "name": "Basque",
+      "script": "Latn",
+      "otLanguage": "EUQ",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ñ a b c d e f g h i j k l m n o p q r s t u v w x y z ñ",
+      "auxiliary": "Ç Ü ç ü",
+      "source": "hyperglot"
+    },
+    {
+      "code": "nl",
+      "name": "Dutch",
+      "script": "Latn",
+      "otLanguage": "NLD",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z É Ë Ï a b c d e f g h i j k l m n o p q r s t u v w x y z é ë ï",
+      "auxiliary": "Á Í Ó Ú È Ö Ü á í ó ú è ö ü",
+      "source": "hyperglot"
+    },
+    {
+      "code": "da",
+      "name": "Danish",
+      "script": "Latn",
+      "otLanguage": "DAN",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Æ Ø Å a b c d e f g h i j k l m n o p q r s t u v w x y z æ ø å",
+      "auxiliary": "É é",
+      "source": "hyperglot"
+    },
+    {
+      "code": "nb",
+      "name": "Norwegian Bokmål",
+      "script": "Latn",
+      "otLanguage": "NOR",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Æ Ø Å a b c d e f g h i j k l m n o p q r s t u v w x y z æ ø å",
+      "auxiliary": "É È Ê Ó Ò Ô é è ê ó ò ô",
+      "source": "hyperglot"
+    },
+    {
+      "code": "sv",
+      "name": "Swedish",
+      "script": "Latn",
+      "otLanguage": "SVE",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Å Ä Ö a b c d e f g h i j k l m n o p q r s t u v w x y z å ä ö",
+      "auxiliary": "É é",
+      "source": "hyperglot"
+    },
+    {
+      "code": "fi",
+      "name": "Finnish",
+      "script": "Latn",
+      "otLanguage": "FIN",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ä Ö a b c d e f g h i j k l m n o p q r s t u v w x y z ä ö",
+      "auxiliary": "Å Š Ž å š ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "is",
+      "name": "Icelandic",
+      "script": "Latn",
+      "otLanguage": "ISL",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á Ð É Í Ó Ú Ý Þ Æ Ö a b c d e f g h i j k l m n o p q r s t u v w x y z á ð é í ó ú ý þ æ ö",
+      "source": "hyperglot"
+    },
+    {
+      "code": "ga",
+      "name": "Irish",
+      "script": "Latn",
+      "otLanguage": "IRI",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á É Í Ó Ú a b c d e f g h i j k l m n o p q r s t u v w x y z á é í ó ú",
+      "source": "hyperglot"
+    },
+    {
+      "code": "cy",
+      "name": "Welsh",
+      "script": "Latn",
+      "otLanguage": "WEL",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Â Ê Î Ô Û Ŵ Ŷ a b c d e f g h i j k l m n o p q r s t u v w x y z â ê î ô û ŵ ŷ",
+      "auxiliary": "À È Ì Ò Ù Á É Í Ó Ú Ý Ä Ë Ï Ö Ü Ÿ à è ì ò ù á é í ó ú ý ä ë ï ö ü ÿ",
+      "source": "hyperglot"
+    },
+    {
+      "code": "mt",
+      "name": "Maltese",
+      "script": "Latn",
+      "otLanguage": "MTS",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ċ Ġ Ħ Ż À È Ì Ò Ù a b c d e f g h i j k l m n o p q r s t u v w x y z ċ ġ ħ ż à è ì ò ù",
+      "source": "hyperglot"
+    },
+    {
+      "code": "pl",
+      "name": "Polish",
+      "script": "Latn",
+      "otLanguage": "PLK",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ą Ć Ę Ł Ń Ó Ś Ź Ż a b c d e f g h i j k l m n o p q r s t u v w x y z ą ć ę ł ń ó ś ź ż",
+      "source": "hyperglot"
+    },
+    {
+      "code": "cs",
+      "name": "Czech",
+      "script": "Latn",
+      "otLanguage": "CSY",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á Č Ď É Ě Í Ň Ó Ř Š Ť Ú Ů Ý Ž a b c d e f g h i j k l m n o p q r s t u v w x y z á č ď é ě í ň ó ř š ť ú ů ý ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "sk",
+      "name": "Slovak",
+      "script": "Latn",
+      "otLanguage": "SKY",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á Ä Č Ď É Í Ĺ Ľ Ň Ó Ô Ŕ Š Ť Ú Ý Ž a b c d e f g h i j k l m n o p q r s t u v w x y z á ä č ď é í ĺ ľ ň ó ô ŕ š ť ú ý ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "hu",
+      "name": "Hungarian",
+      "script": "Latn",
+      "otLanguage": "HUN",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Á É Í Ó Ö Ő Ú Ü Ű a b c d e f g h i j k l m n o p q r s t u v w x y z á é í ó ö ő ú ü ű",
+      "source": "hyperglot"
+    },
+    {
+      "code": "ro",
+      "name": "Romanian",
+      "script": "Latn",
+      "otLanguage": "ROM",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ă Â Î Ș Ț a b c d e f g h i j k l m n o p q r s t u v w x y z ă â î ș ț",
+      "source": "hyperglot"
+    },
+    {
+      "code": "sl",
+      "name": "Slovenian",
+      "script": "Latn",
+      "otLanguage": "SLV",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Č Š Ž a b c d e f g h i j k l m n o p q r s t u v w x y z č š ž",
+      "auxiliary": "Ć Đ ć đ",
+      "source": "hyperglot"
+    },
+    {
+      "code": "hr",
+      "name": "Croatian",
+      "script": "Latn",
+      "otLanguage": "HRV",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Č Ć Đ Š Ž a b c d e f g h i j k l m n o p q r s t u v w x y z č ć đ š ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "bs",
+      "name": "Bosnian",
+      "script": "Latn",
+      "otLanguage": "BOS",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Č Ć Đ Š Ž a b c d e f g h i j k l m n o p q r s t u v w x y z č ć đ š ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "sr-Latn",
+      "name": "Serbian (Latin)",
+      "script": "Latn",
+      "otLanguage": "SRB",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Č Ć Đ Š Ž a b c d e f g h i j k l m n o p q r s t u v w x y z č ć đ š ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "sq",
+      "name": "Albanian",
+      "script": "Latn",
+      "otLanguage": "SQI",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ç Ë a b c d e f g h i j k l m n o p q r s t u v w x y z ç ë",
+      "source": "hyperglot"
+    },
+    {
+      "code": "et",
+      "name": "Estonian",
+      "script": "Latn",
+      "otLanguage": "ETI",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ä Õ Ö Ü Š Ž a b c d e f g h i j k l m n o p q r s t u v w x y z ä õ ö ü š ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "lv",
+      "name": "Latvian",
+      "script": "Latn",
+      "otLanguage": "LVI",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ā Č Ē Ģ Ī Ķ Ļ Ņ Š Ū Ž a b c d e f g h i j k l m n o p q r s t u v w x y z ā č ē ģ ī ķ ļ ņ š ū ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "lt",
+      "name": "Lithuanian",
+      "script": "Latn",
+      "otLanguage": "LTH",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ą Č Ę Ė Į Š Ų Ū Ž a b c d e f g h i j k l m n o p q r s t u v w x y z ą č ę ė į š ų ū ž",
+      "source": "hyperglot"
+    },
+    {
+      "code": "tr",
+      "name": "Turkish",
+      "script": "Latn",
+      "otLanguage": "TRK",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Ç Ğ Ö Ş Ü a b c d e f g h i j k l m n o p q r s t u v w x y z ç ğ ö ş ü İ ı",
+      "auxiliary": "Â Î Û â î û",
+      "source": "hyperglot"
+    },
+    {
+      "code": "vi",
+      "name": "Vietnamese",
+      "script": "Latn",
+      "otLanguage": "VIT",
+      "base": "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z Đ À Ả Ã Á Ạ Ă Ằ Ẳ Ẵ Ắ Ặ Â Ầ Ẩ Ẫ Ấ Ậ È Ẻ Ẽ É Ẹ Ê Ề Ể Ễ Ế Ệ Ì Ỉ Ĩ Í Ị Ò Ỏ Õ Ó Ọ Ô Ồ Ổ Ỗ Ố Ộ Ơ Ờ Ở Ỡ Ớ Ợ Ù Ủ Ũ Ú Ụ Ư Ừ Ử Ữ Ứ Ự Ỳ Ỷ Ỹ Ý Ỵ a b c d e f g h i j k l m n o p q r s t u v w x y z đ à ả ã á ạ ă ằ ẳ ẵ ắ ặ â ầ ẩ ẫ ấ ậ è ẻ ẽ é ẹ ê ề ể ễ ế ệ ì ỉ ĩ í ị ò ỏ õ ó ọ ô ồ ổ ỗ ố ộ ơ ờ ở ỡ ớ ợ ù ủ ũ ú ụ ư ừ ử ữ ứ ự ỳ ỷ ỹ ý ỵ",
+      "source": "hyperglot"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "$schema": "./charset.schema.json",
+  "languages": [
+    {
+      "code": "ru",
+      "name": "Russian",
+      "script": "Cyrl",
+      "otLanguage": "RUS",
+      "base": "А Б В Г Д Е Ё Ж З И Й К Л М Н О П Р С Т У Ф Х Ц Ч Ш Щ Ъ Ы Ь Э Ю Я а б в г д е ё ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ы ь э ю я",
+      "source": "hyperglot"
+    },
+    {
+      "code": "uk",
+      "name": "Ukrainian",
+      "script": "Cyrl",
+      "otLanguage": "UKR",
+      "base": "А Б В Г Ґ Д Е Є Ж З И І Ї Й К Л М Н О П Р С Т У Ф Х Ц Ч Ш Щ Ь Ю Я а б в г ґ д е є ж з и і ї й к л м н о п р с т у ф х ц ч ш щ ь ю я",
+      "source": "hyperglot"
+    },
+    {
+      "code": "be",
+      "name": "Belarusian",
+      "script": "Cyrl",
+      "otLanguage": "BEL",
+      "base": "А Б В Г Д Е Ё Ж З І Й К Л М Н О П Р С Т У Ў Ф Х Ц Ч Ш Ы Ь Э Ю Я а б в г д е ё ж з і й к л м н о п р с т у ў ф х ц ч ш ы ь э ю я",
+      "source": "hyperglot"
+    },
+    {
+      "code": "bg",
+      "name": "Bulgarian",
+      "script": "Cyrl",
+      "otLanguage": "BGR",
+      "base": "А Б В Г Д Е Ж З И Й К Л М Н О П Р С Т У Ф Х Ц Ч Ш Щ Ъ Ь Ю Я а б в г д е ж з и й к л м н о п р с т у ф х ц ч ш щ ъ ь ю я",
+      "auxiliary": "Ѝ ѝ",
+      "source": "hyperglot"
+    },
+    {
+      "code": "sr-Cyrl",
+      "name": "Serbian (Cyrillic)",
+      "script": "Cyrl",
+      "otLanguage": "SRB",
+      "base": "А Б В Г Д Ђ Е Ж З И Ј К Л Љ М Н Њ О П Р С Т Ћ У Ф Х Ц Ч Џ Ш а б в г д ђ е ж з и ј к л љ м н њ о п р с т ћ у ф х ц ч џ ш",
+      "source": "hyperglot"
+    },
+    {
+      "code": "mk",
+      "name": "Macedonian",
+      "script": "Cyrl",
+      "otLanguage": "MKD",
+      "base": "А Б В Г Д Ѓ Е Ж З Ѕ И Ј К Л Љ М Н Њ О П Р С Т Ќ У Ф Х Ц Ч Џ Ш а б в г д ѓ е ж з ѕ и ј к л љ м н њ о п р с т ќ у ф х ц ч џ ш",
+      "auxiliary": "Ѐ Ѝ ѐ ѝ",
+      "source": "hyperglot"
+    }
+  ]
+}
