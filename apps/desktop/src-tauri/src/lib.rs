@@ -2,20 +2,33 @@
 //! `fm-api`. Each command takes the shared [`Api`] from Tauri state, calls one
 //! service method off the async runtime (ADR 0006) and returns its result as is.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use fm_api::activation::{ActivateRequest, ActivationOutcome, DeactivateRequest};
+use fm_api::common::Paged;
 use fm_api::library::{
-    AddSourceRequest, AppInfo, FaceDetail, ScanRequest, SetSourcePausedRequest, Source,
+    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, ScanRequest,
+    SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
+use fm_api::preview::PreviewService;
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
-use fm_api::{Api, ApiError, ApiResult, ErrorCode, FaceId, JobId, SettingsService, SourceId};
+use fm_api::{
+    Api, ApiError, ApiResult, ErrorCode, FaceId, FamilyId, JobId, SettingsService, SourceId,
+};
 use fm_core::SettingsStore;
-use tauri::{Emitter, Runtime, State};
+use tauri::http::{Response, StatusCode, header};
+use tauri::{Emitter, Manager, Runtime, State};
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
+
+/// The URI scheme the webview loads font files from, by face id:
+/// `fmfont://localhost/<face>` (`http://fmfont.localhost/<face>` on Windows).
+/// Only files of faces the API knows are served, so the webview needs no file
+/// system scope over the user's folders.
+pub const FONT_SCHEME: &str = "fmfont";
 
 /// The API every command talks to. `fm-core` does not implement [`Api`] yet,
 /// so the shell serves [`MockApi`] until it does; the settings already come
@@ -83,6 +96,61 @@ where
     }
 }
 
+/// Answers a request on [`FONT_SCHEME`] whose URI path is `/<face id>`: the
+/// face's font file with its media type, or a status with one plain sentence.
+pub fn font_response(api: &dyn PreviewService, uri_path: &str) -> Response<Vec<u8>> {
+    let Some(face) = uri_path
+        .strip_prefix('/')
+        .and_then(|id| id.parse::<u32>().ok())
+        .map(FaceId)
+    else {
+        return error_response(StatusCode::BAD_REQUEST, "The font address is not valid.");
+    };
+    let file = api.font_source(face).and_then(|source| {
+        fm_core::font_file::read_font_file(Path::new(&source.path)).map_err(ApiError::from)
+    });
+    match file {
+        Ok(file) => font_ok(file.mime, file.bytes),
+        Err(e) => {
+            tracing::debug!(face = face.0, code = ?e.code, detail = ?e.detail, "font not served");
+            let status = match e.code {
+                ErrorCode::NotFound => StatusCode::NOT_FOUND,
+                ErrorCode::PermissionDenied => StatusCode::FORBIDDEN,
+                ErrorCode::Unsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            error_response(status, &e.message)
+        }
+    }
+}
+
+/// Font loads are CORS requests and the app page has another origin than
+/// [`FONT_SCHEME`], so every answer allows any origin.
+fn font_ok(mime: &str, bytes: Vec<u8>) -> Response<Vec<u8>> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, mime)
+        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+        .header(header::CACHE_CONTROL, "no-cache")
+        .body(bytes)
+        .unwrap_or_else(|_| Response::new(Vec::new()))
+}
+
+fn error_response(status: StatusCode, message: &str) -> Response<Vec<u8>> {
+    let mut response = Response::new(message.as_bytes().to_vec());
+    *response.status_mut() = status;
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        header::HeaderValue::from_static("text/plain; charset=utf-8"),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        header::HeaderValue::from_static("*"),
+    );
+    response
+}
+
 /// What the running app is: name, version, API contract and platform.
 #[tauri::command]
 async fn get_app_info(state: State<'_, AppState>) -> ApiResult<AppInfo> {
@@ -93,6 +161,21 @@ async fn get_app_info(state: State<'_, AppState>) -> ApiResult<AppInfo> {
 #[tauri::command]
 async fn get_face(state: State<'_, AppState>, face: FaceId) -> ApiResult<FaceDetail> {
     call(&state, move |api| api.get_face(face)).await
+}
+
+/// One page of families.
+#[tauri::command]
+async fn list_families(
+    state: State<'_, AppState>,
+    req: ListFamiliesRequest,
+) -> ApiResult<Paged<FamilySummary>> {
+    call(&state, move |api| api.list_families(req)).await
+}
+
+/// One family with its faces.
+#[tauri::command]
+async fn get_family(state: State<'_, AppState>, family: FamilyId) -> ApiResult<Family> {
+    call(&state, move |api| api.get_family(family)).await
 }
 
 /// Activates faces; one outcome per face.
@@ -176,6 +259,14 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let events = state.api.subscribe();
     builder
         .manage(state)
+        .register_asynchronous_uri_scheme_protocol(FONT_SCHEME, |ctx, request, responder| {
+            let api = Arc::clone(&ctx.app_handle().state::<AppState>().api);
+            let path = request.uri().path().to_owned();
+            // Reading a file blocks; keep it off the webview's thread.
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(font_response(api.as_ref(), &path));
+            });
+        })
         .setup(move |app| {
             let handle = app.handle().clone();
             std::thread::Builder::new()
@@ -192,6 +283,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_face,
+            list_families,
+            get_family,
             activate,
             deactivate,
             list_sources,

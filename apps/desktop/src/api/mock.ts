@@ -12,6 +12,10 @@ import {
   type Event,
   type FaceDetail,
   type FaceId,
+  type FaceSummary,
+  type Family,
+  type FamilyId,
+  type FamilySummary,
   type JobId,
   type Source,
   type SourceId,
@@ -197,6 +201,44 @@ const invalid = (message: string): ApiError => ({ code: 'invalidRequest', messag
 export interface MockOptions {
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
   scanStepMs?: number;
+  /** Extra one-face families after the sample ones, for long lists (e2e). */
+  extraFaces?: number;
+}
+
+/** Id of the first extra face and family; above every sample id. */
+export const EXTRA_ID_BASE = 1000;
+
+/** Extra face `i`: every other one variable, so long lists mix both kinds. */
+function extraFace(i: number): FaceDetail {
+  const id = EXTRA_ID_BASE + i;
+  const detail = structuredClone(mockFaces[i % 2 === 0 ? 0 : 1]!);
+  detail.face = {
+    ...detail.face,
+    id,
+    family: id,
+    familyName: `Sample ${i + 1}`,
+    postscriptName: `Sample${i + 1}-Regular`,
+  };
+  detail.path = `/Users/demo/Fonts/Samples/Sample${i + 1}.ttf`;
+  detail.hash = String(id).padStart(64, '0');
+  return detail;
+}
+
+/** The list row of a family, from its faces. */
+function familySummary(faces: FaceSummary[]): FamilySummary {
+  const first = faces[0]!;
+  const active = faces.filter((f) => f.active).length;
+  return {
+    id: first.family,
+    name: first.familyName,
+    styleCount: faces.length,
+    formats: [...new Set(faces.map((f) => f.format))],
+    foundry: null,
+    classification: null,
+    isVariable: faces.some((f) => f.isVariable),
+    activation: active === 0 ? 'inactive' : active === faces.length ? 'active' : 'partial',
+    added: '2026-10-01T00:00:00Z',
+  };
 }
 
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
@@ -230,7 +272,17 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       steps.length * step,
     );
   };
-  const find = (id: FaceId) => mockFaces.find((f) => f.face.id === id);
+  const faces = [
+    ...mockFaces,
+    ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFace(i)),
+  ];
+  const find = (id: FaceId) => faces.find((f) => f.face.id === id);
+  const summary = (f: FaceDetail): FaceSummary => ({
+    ...structuredClone(f.face),
+    active: active.get(f.face.id) ?? null,
+  });
+  const familyFaces = (family: FamilyId) =>
+    faces.filter((f) => f.face.family === family).map(summary);
   const notFound = (id: FaceId) => ({
     code: 'notFound' as const,
     message: `Face ${id} was not found.`,
@@ -248,6 +300,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       detail.face.active = active.get(id) ?? null;
       return detail;
     },
+    // Families in id order (the sample ones first); `sort` is not mocked.
+    listFamilies: async (req) => {
+      const ids = [...new Set(faces.map((f) => f.face.family))];
+      const offset = req.page?.offset ?? 0;
+      const limit = req.page?.limit ?? 100;
+      return {
+        items: ids.slice(offset, offset + limit).map((id) => familySummary(familyFaces(id))),
+        total: ids.length,
+      };
+    },
+    getFamily: async (id) => {
+      const list = familyFaces(id);
+      if (!list.length)
+        throw { code: 'notFound' as const, message: `Family ${id} was not found.`, detail: null };
+      const designer = find(list[0]!.id)!.designer;
+      return { summary: familySummary(list), designer, faces: list } satisfies Family;
+    },
+    // Same origin as the page; e2e serves fixture fonts on this path.
+    fontUrl: (id) => `/fmfont/${id}`,
     activate: async (req) =>
       ids(req.target).map((id): ActivationOutcome => {
         const f = find(id);
@@ -342,5 +413,15 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   };
 }
 
+/** `?mockFaces=1000` before the hash adds that many extra faces (e2e long lists). */
+function extraFacesFromUrl(): number {
+  if (typeof location === 'undefined') return 0;
+  const n = Number(new URLSearchParams(location.search).get('mockFaces'));
+  return Number.isInteger(n) && n > 0 ? Math.min(n, 100_000) : 0;
+}
+
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
-export const mockClient: FmClient = createMockClient({ scanStepMs: 150 });
+export const mockClient: FmClient = createMockClient({
+  scanStepMs: 150,
+  extraFaces: extraFacesFromUrl(),
+});

@@ -1,6 +1,6 @@
 // The typed client over the fm-api Tauri commands. Every call to Tauri goes
 // through here; components and stores never call `invoke` themselves.
-import { invoke, isTauri } from '@tauri-apps/api/core';
+import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { mockClient } from './mock';
@@ -14,7 +14,12 @@ import type {
   Event,
   FaceDetail,
   FaceId,
+  Family,
+  FamilyId,
+  FamilySummary,
   JobId,
+  ListFamiliesRequest,
+  Paged,
   ScanRequest,
   SetSourcePausedRequest,
   Settings,
@@ -29,6 +34,9 @@ export type FullSettings = Required<Settings>;
 /** The Tauri event channel `fm_app_lib::EVENT_CHANNEL` forwards fm-api events on. */
 export const EVENT_CHANNEL = 'fm://event';
 
+/** The URI scheme `fm_app_lib::FONT_SCHEME` serves font files on, by face id. */
+export const FONT_SCHEME = 'fmfont';
+
 /** Stops an event subscription. */
 export type Unsubscribe = () => void;
 
@@ -36,6 +44,10 @@ export type Unsubscribe = () => void;
 export interface FmClient {
   getAppInfo(): Promise<AppInfo>;
   getFace(face: FaceId): Promise<FaceDetail>;
+  listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
+  getFamily(family: FamilyId): Promise<Family>;
+  /** The URL the webview loads a face's font file from (for `@font-face`). */
+  fontUrl(face: FaceId): string;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   listSources(): Promise<Source[]>;
@@ -56,6 +68,9 @@ export interface FmClient {
 export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
+  listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
+  getFamily: (family) => invoke<Family>('get_family', { family }),
+  fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listSources: () => invoke<Source[]>('list_sources'),
