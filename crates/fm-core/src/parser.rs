@@ -86,7 +86,7 @@ pub struct ParsedFace {
 }
 
 impl ParsedFace {
-    fn empty(index: u32, health: Health) -> Self {
+    pub(crate) fn empty(index: u32, health: Health) -> Self {
         Self {
             index,
             family: None,
