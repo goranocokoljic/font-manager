@@ -3,22 +3,11 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 import PaneDivider from '../components/PaneDivider.vue';
-import {
-  INSPECTOR,
-  LAYOUT_STORAGE_KEY,
-  SIDEBAR,
-  clampWidth,
-  isInspectorShortcut,
-  useLayoutStore,
-} from './layout';
+import { INSPECTOR, LAYOUT_STORAGE_KEY, SIDEBAR, clampWidth, useLayoutStore } from './layout';
 
 function freshStore() {
   setActivePinia(createPinia());
   return useLayoutStore();
-}
-
-function key(init: KeyboardEventInit) {
-  return new KeyboardEvent('keydown', init);
 }
 
 beforeEach(() => localStorage.clear());
@@ -102,20 +91,6 @@ describe('layout store', () => {
   it('gives the initial width for anything not a finite number', () => {
     expect(clampWidth(Number.NaN, SIDEBAR)).toBe(SIDEBAR.initial);
     expect(clampWidth(null, SIDEBAR)).toBe(SIDEBAR.initial);
-  });
-});
-
-describe('inspector shortcut', () => {
-  it('is Ctrl+I or Cmd+I', () => {
-    expect(isInspectorShortcut(key({ key: 'i', ctrlKey: true }))).toBe(true);
-    expect(isInspectorShortcut(key({ key: 'I', metaKey: true }))).toBe(true);
-  });
-
-  it('ignores other keys and extra modifiers', () => {
-    expect(isInspectorShortcut(key({ key: 'i' }))).toBe(false);
-    expect(isInspectorShortcut(key({ key: 'I', ctrlKey: true, shiftKey: true }))).toBe(false);
-    expect(isInspectorShortcut(key({ key: 'i', ctrlKey: true, altKey: true }))).toBe(false);
-    expect(isInspectorShortcut(key({ key: 'k', ctrlKey: true }))).toBe(false);
   });
 });
 

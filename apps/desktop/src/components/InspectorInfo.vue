@@ -83,7 +83,7 @@ const outcomeMessage = computed(() => message(selection.outcome));
             :aria-pressed="d.face.active !== null"
             :disabled="!canActivate || selection.busy"
             :title="d.face.health.kind === 'ok' ? undefined : d.face.health.reason"
-            @click="selection.toggleActivation"
+            @click="selection.toggleActivation()"
           >
             {{ d.face.active ? 'Deactivate' : 'Activate' }}
           </button>

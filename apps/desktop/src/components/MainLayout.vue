@@ -1,27 +1,44 @@
 <script setup lang="ts">
 // The main window: sidebar | font list | inspector, with a status bar below.
 // Widths and inspector visibility come from the layout store; this component
-// only wires the window width and the shortcut into it.
-import { onBeforeUnmount, onMounted } from 'vue';
-import {
-  INSPECTOR,
-  NARROW_WIDTH,
-  SIDEBAR,
-  isInspectorShortcut,
-  useLayoutStore,
-} from '../stores/layout';
+// wires the window width into it and offers the layout actions (inspector
+// toggle, go to a column). Each column is a tab stop, so Tab moves between columns.
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { ACTIONS } from '../keyboard/keymap';
+import { useActions } from '../stores/commands';
+import { INSPECTOR, NARROW_WIDTH, SIDEBAR, useLayoutStore } from '../stores/layout';
 import PaneDivider from './PaneDivider.vue';
 
 const layout = useLayoutStore();
+const sidebar = ref<HTMLElement | null>(null);
+const list = ref<HTMLElement | null>(null);
+const inspector = ref<HTMLElement | null>(null);
 
 let query: MediaQueryList | undefined;
 const onWidthChange = (e: { matches: boolean }) => layout.setNarrow(e.matches);
 
-function onKeyDown(e: KeyboardEvent): void {
-  if (!isInspectorShortcut(e)) return;
-  e.preventDefault();
-  layout.toggleInspector();
+async function goToInspector(): Promise<void> {
+  if (!layout.inspectorVisible) layout.toggleInspector();
+  await nextTick();
+  inspector.value?.focus();
 }
+
+useActions([
+  {
+    id: ACTIONS.inspector,
+    title: 'Show or hide the inspector',
+    group: 'View',
+    run: layout.toggleInspector,
+  },
+  {
+    id: 'focus.sidebar',
+    title: 'Go to the sidebar',
+    group: 'Go',
+    run: () => sidebar.value?.focus(),
+  },
+  { id: 'focus.list', title: 'Go to the font list', group: 'Go', run: () => list.value?.focus() },
+  { id: 'focus.inspector', title: 'Go to the inspector', group: 'Go', run: goToInspector },
+]);
 
 onMounted(() => {
   query = window.matchMedia?.(`(max-width: ${NARROW_WIDTH - 0.02}px)`);
@@ -29,12 +46,10 @@ onMounted(() => {
     onWidthChange(query);
     query.addEventListener('change', onWidthChange);
   }
-  window.addEventListener('keydown', onKeyDown);
 });
 
 onBeforeUnmount(() => {
   query?.removeEventListener('change', onWidthChange);
-  window.removeEventListener('keydown', onKeyDown);
 });
 </script>
 
@@ -43,7 +58,9 @@ onBeforeUnmount(() => {
     <div class="columns">
       <nav
         id="fm-sidebar"
-        class="sidebar"
+        ref="sidebar"
+        class="sidebar column"
+        tabindex="0"
         aria-label="Library"
         :style="{ width: `${layout.sidebarWidth}px` }"
       >
@@ -58,7 +75,7 @@ onBeforeUnmount(() => {
         :direction="1"
         @resize="layout.setSidebarWidth"
       />
-      <main class="list">
+      <main ref="list" class="list column" tabindex="0" aria-label="Fonts">
         <slot name="list" />
       </main>
       <template v-if="layout.inspectorVisible">
@@ -73,7 +90,9 @@ onBeforeUnmount(() => {
         />
         <aside
           id="fm-inspector"
-          class="inspector"
+          ref="inspector"
+          class="inspector column"
+          tabindex="0"
           aria-label="Inspector"
           :style="{ width: `${layout.inspectorWidth}px` }"
         >
@@ -110,6 +129,10 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 320px;
   overflow: hidden;
+}
+.column:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: -2px;
 }
 .status {
   display: flex;

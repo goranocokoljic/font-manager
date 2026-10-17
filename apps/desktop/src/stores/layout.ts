@@ -23,11 +23,6 @@ export function clampWidth(value: unknown, bounds: { min: number; max: number; i
   return Math.min(bounds.max, Math.max(bounds.min, Math.round(value)));
 }
 
-/** True for Ctrl+I or Cmd+I with no other modifier: the inspector shortcut. */
-export function isInspectorShortcut(e: KeyboardEvent): boolean {
-  return (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'i';
-}
-
 function readSaved(storage: Storage | undefined): SavedLayout {
   let raw: Partial<SavedLayout> = {};
   try {

@@ -4,15 +4,37 @@ import { useRoute } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
+import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
+import { useActions, useCommandsStore } from '../stores/commands';
 import { useLayoutStore } from '../stores/layout';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 
 const app = useAppStore();
 const layout = useLayoutStore();
 const selection = useSelectionStore();
+const commands = useCommandsStore();
 const route = useRoute();
 onMounted(() => app.load());
+
+useActions([
+  {
+    id: ACTIONS.activateSession,
+    title: 'Activate or deactivate for this session',
+    group: 'Activation',
+    enabled: () => selection.canActivate,
+    run: () => selection.toggleActivation('session'),
+  },
+  {
+    id: ACTIONS.activatePermanent,
+    title: 'Activate or deactivate permanently',
+    group: 'Activation',
+    enabled: () => selection.canActivate,
+    run: () => selection.toggleActivation('permanent'),
+  },
+]);
+
+const paletteChord = chordOf(ACTIONS.palette)!;
 
 // The selected face is in the URL (`#/?face=3`) so a reload keeps it; the
 // font list (E5.2) selects by changing the query.
@@ -67,6 +89,14 @@ const groups = [
     </template>
 
     <template #status>
+      <button
+        type="button"
+        class="hint"
+        :aria-keyshortcuts="ariaShortcut(paletteChord)"
+        @click="commands.openPalette"
+      >
+        Commands <kbd>{{ formatChord(paletteChord) }}</kbd>
+      </button>
       <p v-if="app.error" role="alert" class="error">{{ app.error.message }}</p>
       <dl v-else-if="app.info" class="info" data-testid="app-info">
         <dt>App</dt>
@@ -123,6 +153,16 @@ const groups = [
   flex: 1;
   place-items: center;
   color: var(--fm-muted);
+}
+.hint {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.hint kbd {
+  font: inherit;
 }
 .info {
   display: flex;
