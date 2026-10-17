@@ -341,6 +341,9 @@ fn collect_features(
                 .iter()
                 .map(|record| record.feature_tag().to_string()),
         ),
+        // A null FeatureList offset means the table lists no features; shipped
+        // fonts (Londrina Solid, Long Cang) do this and render fine.
+        Err(ReadError::NullOffset) => {}
         Err(e) => problems.push(format!("The {table} feature list is malformed: {e}.")),
     }
 }
@@ -618,6 +621,33 @@ mod tests {
         // The other tables are still read.
         assert!(face.family.is_some());
         assert!(!face.code_points.is_empty());
+    }
+
+    #[test]
+    fn a_null_feature_list_is_no_features_not_broken() {
+        let mut data = read("google-repo/asapsharp/AsapSharp[wdth,wght].ttf");
+        // A null GSUB FeatureList offset (header bytes 6..8), as in Londrina Solid.
+        let gsub = table_offset(&data, table_record(&data, b"GSUB"));
+        data[gsub + 6..gsub + 8].copy_from_slice(&0u16.to_be_bytes());
+        let face = single_from(&data);
+        assert_eq!(face.health, Health::Ok);
+        // GSUB-only features are gone; GPOS features are still read.
+        assert!(
+            !face.features.iter().any(|f| f == "liga"),
+            "{:?}",
+            face.features
+        );
+        assert!(
+            face.features.iter().any(|f| f == "kern"),
+            "{:?}",
+            face.features
+        );
+    }
+
+    fn single_from(data: &[u8]) -> ParsedFace {
+        let file = parse(data);
+        assert_eq!(file.health, Health::Ok);
+        file.faces.into_iter().next().expect("one face")
     }
 
     #[test]
