@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { FullSettings } from '../api/client';
 import type { SettingsUpdate } from '../api/types';
 import CopyValue from '../components/CopyValue.vue';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
+import { useSourcesStore } from '../stores/sources';
 
 const store = useSettingsStore();
+const sources = useSourcesStore();
 const commands = useCommandsStore();
 const route = useRoute();
 const router = useRouter();
@@ -67,10 +69,17 @@ function onKey(e: KeyboardEvent): void {
 
 onMounted(async () => {
   focusTab(current.value);
-  await Promise.all([store.settings ? undefined : store.load(), store.loadWindow()]);
+  await Promise.all([
+    store.settings ? undefined : store.load(),
+    store.loadWindow(),
+    sources.load(),
+  ]);
 });
+onBeforeUnmount(() => sources.stop());
 
 const s = computed(() => store.settings);
+/** The last failure of either store. */
+const error = computed(() => store.error ?? sources.error);
 
 /** Radio choices; each change is saved at once. */
 function choose(patch: SettingsUpdate): void {
@@ -85,11 +94,6 @@ async function saveNumber(key: NumberKey, e: Event): Promise<void> {
   const text = input.value.trim();
   const ok = /^\d{1,10}$/.test(text) && (await store.update({ [key]: Number(text) }));
   if (!ok && store.settings) input.value = String(store.settings[key]);
-}
-
-const newFolder = ref('');
-async function addFolder(): Promise<void> {
-  if (await store.addSource(newFolder.value)) newFolder.value = '';
 }
 
 const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'Library folder' };
@@ -133,7 +137,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
         tabindex="0"
         class="panel"
       >
-        <p v-if="store.error" role="alert" class="error">{{ store.error.message }}</p>
+        <p v-if="error" role="alert" class="error">{{ error.message }}</p>
 
         <template v-if="current === 'sources'">
           <h2 class="heading">Sources</h2>
@@ -142,7 +146,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
             stay where they are.
           </p>
           <ul class="sources" aria-label="Sources">
-            <li v-for="source in store.sources" :key="source.id" class="source">
+            <li v-for="source in sources.sources" :key="source.id" class="source">
               <div class="source-text">
                 <span class="path">{{ source.path }}</span>
                 <span class="meta">
@@ -156,7 +160,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                   :checked="source.paused"
                   :aria-label="`Pause ${source.path}`"
                   @change="
-                    store.setSourcePaused(source.id, ($event.target as HTMLInputElement).checked)
+                    sources.setPaused(source.id, ($event.target as HTMLInputElement).checked)
                   "
                 />
                 Paused
@@ -167,19 +171,15 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :aria-label="`Remove ${source.path}`"
                 :disabled="source.kind === 'system'"
                 :title="source.kind === 'system' ? 'System fonts cannot be removed.' : undefined"
-                @click="store.removeSource(source.id)"
+                @click="sources.remove(source.id)"
               >
                 Remove
               </button>
             </li>
           </ul>
-          <form class="add" @submit.prevent="addFolder">
-            <label class="field">
-              <span>Folder to add</span>
-              <input v-model="newFolder" type="text" class="input" spellcheck="false" />
-            </label>
-            <button type="submit" class="button" :disabled="!newFolder.trim()">Add folder</button>
-          </form>
+          <div class="add">
+            <button type="button" class="button" @click="sources.add">Add folder…</button>
+          </div>
         </template>
 
         <template v-else-if="current === 'activation' && s">
@@ -408,12 +408,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
 }
 .add {
   display: flex;
-  align-items: flex-end;
   gap: 8px;
-}
-.add .field {
-  flex: 1;
-  margin: 0;
 }
 .group {
   display: flex;

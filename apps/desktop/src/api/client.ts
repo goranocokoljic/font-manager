@@ -1,6 +1,8 @@
 // The typed client over the fm-api Tauri commands. Every call to Tauri goes
 // through here; components and stores never call `invoke` themselves.
 import { invoke, isTauri } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
+import { open } from '@tauri-apps/plugin-dialog';
 import { mockClient } from './mock';
 import type {
   ActivateRequest,
@@ -9,8 +11,11 @@ import type {
   AppFolders,
   AppInfo,
   DeactivateRequest,
+  Event,
   FaceDetail,
   FaceId,
+  JobId,
+  ScanRequest,
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
@@ -20,6 +25,12 @@ import type {
 
 /** Settings as a response carries them: every field present. */
 export type FullSettings = Required<Settings>;
+
+/** The Tauri event channel `fm_app_lib::EVENT_CHANNEL` forwards fm-api events on. */
+export const EVENT_CHANNEL = 'fm://event';
+
+/** Stops an event subscription. */
+export type Unsubscribe = () => void;
 
 /** One method per Tauri command; a rejected promise carries an `ApiError`. */
 export interface FmClient {
@@ -34,6 +45,11 @@ export interface FmClient {
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
   getAppFolders(): Promise<AppFolders>;
+  scan(req: ScanRequest): Promise<JobId>;
+  /** Subscribes to the fm-api event stream; the UI subscribes, it does not poll. */
+  onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
+  /** The native folder picker; `null` when the user cancels. */
+  pickFolder(title: string): Promise<string | null>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
@@ -49,6 +65,12 @@ export const tauriClient: FmClient = {
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
+  scan: (req) => invoke<JobId>('scan', { req }),
+  onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
+  pickFolder: async (title) => {
+    const path = await open({ directory: true, multiple: false, title });
+    return typeof path === 'string' ? path : null;
+  },
 };
 
 let current: FmClient | undefined;

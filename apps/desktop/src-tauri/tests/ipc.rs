@@ -2,16 +2,21 @@
 
 use std::error::Error;
 use std::sync::Arc;
+use std::sync::mpsc;
+use std::time::Duration;
 
 use fm_api::activation::{ActivationOutcome, OutcomeStatus};
-use fm_api::library::{AppInfo, FaceDetail, LibraryService, Source};
+use fm_api::library::{AppInfo, FaceDetail, LibraryService, Source, SourceKind};
 use fm_api::mock::MockApi;
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
-use fm_api::{API_VERSION, ApiResult, FaceId, SettingsService};
-use fm_app_lib::{AppState, setup, setup_state};
+use fm_api::{API_VERSION, ApiResult, Event, FaceId, JobId, SettingsService};
+use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
-use tauri::test::{INVOKE_KEY, get_ipc_response, mock_builder, mock_context, noop_assets};
+use tauri::test::{
+    INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder, mock_context, noop_assets,
+};
 use tauri::webview::InvokeRequest;
+use tauri::{App, Listener, WebviewWindow};
 
 type IpcResponse = Result<InvokeResponseBody, serde_json::Value>;
 
@@ -22,24 +27,37 @@ fn invoke(cmd: &str) -> Result<IpcResponse, Box<dyn Error>> {
 
 /// Invokes `cmd` with JSON arguments, as the webview sends them.
 fn invoke_with(cmd: &str, args: serde_json::Value) -> Result<IpcResponse, Box<dyn Error>> {
-    invoke_on(setup(mock_builder(), Arc::new(MockApi::new())), cmd, args)
+    let (_app, webview) = app()?;
+    send(&webview, cmd, args)
 }
 
-/// Invokes `cmd` on an app built from this builder.
-fn invoke_on(
-    builder: tauri::Builder<tauri::test::MockRuntime>,
+/// A mock app over a fresh `MockApi`, with its main window.
+fn app() -> Result<(App<MockRuntime>, WebviewWindow<MockRuntime>), Box<dyn Error>> {
+    app_on(setup(mock_builder(), Arc::new(MockApi::new())))
+}
+
+/// A mock app built from this builder, with its main window.
+fn app_on(
+    builder: tauri::Builder<MockRuntime>,
+) -> Result<(App<MockRuntime>, WebviewWindow<MockRuntime>), Box<dyn Error>> {
+    let app = builder.build(mock_context(noop_assets()))?;
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default()).build()?;
+    Ok((app, webview))
+}
+
+/// Sends one command through the IPC layer of `webview`.
+fn send(
+    webview: &WebviewWindow<MockRuntime>,
     cmd: &str,
     args: serde_json::Value,
 ) -> Result<IpcResponse, Box<dyn Error>> {
-    let app = builder.build(mock_context(noop_assets()))?;
-    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default()).build()?;
     let url = if cfg!(windows) {
         "http://tauri.localhost"
     } else {
         "tauri://localhost"
     };
     Ok(get_ipc_response(
-        &webview,
+        webview,
         InvokeRequest {
             cmd: cmd.into(),
             callback: CallbackFn(0),
@@ -174,63 +192,106 @@ impl SettingsService for Store {
 
 #[test]
 fn the_settings_store_serves_the_settings_commands() {
-    let state = || AppState::new(Arc::new(MockApi::new())).with_settings(Arc::new(Store));
-    let settings: Settings = invoke_on(
-        setup_state(mock_builder(), state()),
-        "get_settings",
-        serde_json::json!({}),
-    )
-    .unwrap()
-    .unwrap()
-    .deserialize()
-    .unwrap();
-    assert_eq!(settings.theme, Theme::Light);
-    let folders: AppFolders = invoke_on(
-        setup_state(mock_builder(), state()),
-        "get_app_folders",
-        serde_json::json!({}),
-    )
-    .unwrap()
-    .unwrap()
-    .deserialize()
-    .unwrap();
-    assert_eq!(folders.logs, "/store/logs");
-}
-
-#[test]
-fn sources_can_be_listed_paused_and_removed() {
-    let sources: Vec<Source> = invoke("list_sources")
+    let state = AppState::new(Arc::new(MockApi::new())).with_settings(Arc::new(Store));
+    let (_app, webview) = app_on(setup_state(mock_builder(), state)).unwrap();
+    let settings: Settings = send(&webview, "get_settings", serde_json::json!({}))
         .unwrap()
         .unwrap()
         .deserialize()
         .unwrap();
-    assert_eq!(sources, MockApi::new().list_sources().unwrap());
-    let paused: Source = invoke_with(
-        "set_source_paused",
-        serde_json::json!({ "req": { "source": 1, "paused": true } }),
-    )
-    .unwrap()
-    .unwrap()
-    .deserialize()
-    .unwrap();
-    assert!(paused.paused);
-    let added: Source = invoke_with(
-        "add_source",
-        serde_json::json!({ "req": { "path": "/home/demo/More Fonts", "mode": { "kind": "indexInPlace" } } }),
-    )
-    .unwrap()
-    .unwrap()
-    .deserialize()
-    .unwrap();
-    assert_eq!(added.path, "/home/demo/More Fonts");
-    // The system source cannot be removed.
-    let err = invoke_with("remove_source", serde_json::json!({ "source": 2 }))
+    assert_eq!(settings.theme, Theme::Light);
+    let folders: AppFolders = send(&webview, "get_app_folders", serde_json::json!({}))
         .unwrap()
-        .unwrap_err();
-    assert_eq!(err["code"], "permissionDenied", "{err}");
-    assert!(
-        invoke_with("remove_source", serde_json::json!({ "source": 1 }))
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(folders.logs, "/store/logs");
+}
+
+#[test]
+fn sources_are_added_paused_resumed_and_removed() {
+    let (_app, webview) = app().unwrap();
+    let sources = |w| -> Vec<Source> {
+        send(w, "list_sources", serde_json::json!({}))
             .unwrap()
-            .is_ok()
-    );
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let before = sources(&webview);
+    assert!(before.iter().any(|s| s.kind == SourceKind::System));
+
+    let added: Source = send(
+        &webview,
+        "add_source",
+        serde_json::json!({ "req": { "path": "/Users/demo/More", "mode": { "kind": "indexInPlace" } } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(added.kind, SourceKind::Watched);
+    assert_eq!(sources(&webview).len(), before.len() + 1);
+
+    for paused in [true, false] {
+        let s: Source = send(
+            &webview,
+            "set_source_paused",
+            serde_json::json!({ "req": { "source": added.id, "paused": paused } }),
+        )
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+        assert_eq!(s.paused, paused);
+    }
+
+    send(
+        &webview,
+        "remove_source",
+        serde_json::json!({ "source": added.id }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(sources(&webview), before);
+}
+
+#[test]
+fn the_system_source_cannot_be_removed() {
+    let (_app, webview) = app().unwrap();
+    let err = send(
+        &webview,
+        "remove_source",
+        serde_json::json!({ "source": 2 }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "permissionDenied", "{err}");
+}
+
+#[test]
+fn scan_progress_is_forwarded_to_the_webview() {
+    let (mut app, webview) = app().unwrap();
+    // `setup` hooks run on the first turn of the event loop; one turn starts
+    // the forwarder as `run` would.
+    #[allow(deprecated)]
+    app.run_iteration(|_, _| {});
+    let (tx, rx) = mpsc::channel();
+    app.listen(EVENT_CHANNEL, move |e| {
+        let _ = tx.send(e.payload().to_owned());
+    });
+    let job: JobId = send(
+        &webview,
+        "scan",
+        serde_json::json!({ "req": { "source": 1 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    let next = || -> Event {
+        serde_json::from_str(&rx.recv_timeout(Duration::from_secs(5)).unwrap()).unwrap()
+    };
+    assert!(matches!(next(), Event::ScanProgress { job: j, .. } if j == job));
+    assert!(matches!(next(), Event::ScanFinished { job: j, .. } if j == job));
 }

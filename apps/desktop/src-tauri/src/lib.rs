@@ -5,12 +5,17 @@
 use std::sync::Arc;
 
 use fm_api::activation::{ActivateRequest, ActivationOutcome, DeactivateRequest};
-use fm_api::library::{AddSourceRequest, AppInfo, FaceDetail, SetSourcePausedRequest, Source};
+use fm_api::library::{
+    AddSourceRequest, AppInfo, FaceDetail, ScanRequest, SetSourcePausedRequest, Source,
+};
 use fm_api::mock::MockApi;
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
-use fm_api::{Api, ApiError, ApiResult, ErrorCode, FaceId, SettingsService, SourceId};
+use fm_api::{Api, ApiError, ApiResult, ErrorCode, FaceId, JobId, SettingsService, SourceId};
 use fm_core::SettingsStore;
-use tauri::{Runtime, State};
+use tauri::{Emitter, Runtime, State};
+
+/// The Tauri event every `fm_api::Event` is forwarded on.
+pub const EVENT_CHANNEL: &str = "fm://event";
 
 /// The API every command talks to. `fm-core` does not implement [`Api`] yet,
 /// so the shell serves [`MockApi`] until it does; the settings already come
@@ -108,19 +113,19 @@ async fn deactivate(
     call(&state, move |api| api.deactivate(req)).await
 }
 
-/// Every source, for the Settings window.
+/// Every source: watched folders, the library folder and the system fonts.
 #[tauri::command]
 async fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
     call(&state, |api| api.list_sources()).await
 }
 
-/// Adds a folder as a source; does not scan it.
+/// Adds a folder the user chose as a source; it is indexed in place.
 #[tauri::command]
 async fn add_source(state: State<'_, AppState>, req: AddSourceRequest) -> ApiResult<Source> {
     call(&state, move |api| api.add_source(req)).await
 }
 
-/// Forgets a source and its faces; never touches the files.
+/// Removes a source from the library; its files are not touched.
 #[tauri::command]
 async fn remove_source(state: State<'_, AppState>, source: SourceId) -> ApiResult<()> {
     call(&state, move |api| api.remove_source(source)).await
@@ -133,6 +138,12 @@ async fn set_source_paused(
     req: SetSourcePausedRequest,
 ) -> ApiResult<Source> {
     call(&state, move |api| api.set_source_paused(req)).await
+}
+
+/// Starts a scan; progress arrives on [`EVENT_CHANNEL`].
+#[tauri::command]
+async fn scan(state: State<'_, AppState>, req: ScanRequest) -> ApiResult<JobId> {
+    call(&state, move |api| api.scan(req)).await
 }
 
 /// The user's settings.
@@ -160,8 +171,24 @@ pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri
 
 /// Registers this state and every command on a builder.
 pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> tauri::Builder<R> {
+    // Subscribe before the first command can run, so no event is missed; a
+    // thread forwards the stream to the webview until the API drops it.
+    let events = state.api.subscribe();
     builder
         .manage(state)
+        .setup(move |app| {
+            let handle = app.handle().clone();
+            std::thread::Builder::new()
+                .name("fm-events".into())
+                .spawn(move || {
+                    for event in events {
+                        if let Err(e) = handle.emit(EVENT_CHANNEL, &event) {
+                            tracing::warn!(error = %e, "could not forward an event to the UI");
+                        }
+                    }
+                })?;
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_face,
@@ -171,6 +198,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             add_source,
             remove_source,
             set_source_paused,
+            scan,
             get_settings,
             update_settings,
             get_app_folders
@@ -194,7 +222,8 @@ pub fn run() {
     if let Some(startup) = &startup {
         state = state.with_settings(Arc::new(SettingsStore::new(&startup.paths)));
     }
-    if let Err(e) = setup_state(tauri::Builder::default(), state).run(tauri::generate_context!()) {
+    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    if let Err(e) = setup_state(builder, state).run(tauri::generate_context!()) {
         tracing::error!(error = %e, "font manager failed to start");
         eprintln!("font manager failed to start: {e}");
         drop(startup); // flush the log before exit skips destructors

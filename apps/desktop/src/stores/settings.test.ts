@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, tauriClient, type FmClient } from '../api/client';
-import { createMockClient, defaultSettings, mockFolders, mockSources } from '../api/mock';
+import { createMockClient, defaultSettings, mockFolders } from '../api/mock';
 import { useSettingsStore } from './settings';
 
 const invoke = vi.hoisted(() => vi.fn());
@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe('settings client', () => {
-  it('calls the settings and source Tauri commands with their arguments', async () => {
+  it('calls the settings Tauri commands with their arguments', async () => {
     invoke.mockResolvedValue(undefined);
     await tauriClient.getSettings();
     expect(invoke).toHaveBeenLastCalledWith('get_settings');
@@ -29,25 +29,16 @@ describe('settings client', () => {
     expect(invoke).toHaveBeenLastCalledWith('update_settings', { req: { theme: 'dark' } });
     await tauriClient.getAppFolders();
     expect(invoke).toHaveBeenLastCalledWith('get_app_folders');
-    await tauriClient.listSources();
-    expect(invoke).toHaveBeenLastCalledWith('list_sources');
-    await tauriClient.removeSource(3);
-    expect(invoke).toHaveBeenLastCalledWith('remove_source', { source: 3 });
-    await tauriClient.setSourcePaused({ source: 1, paused: true });
-    expect(invoke).toHaveBeenLastCalledWith('set_source_paused', {
-      req: { source: 1, paused: true },
-    });
   });
 });
 
 describe('settings store', () => {
-  it('loads the settings, then the folders and sources for the window', async () => {
+  it('loads the settings, then the folders for the window', async () => {
     const store = useSettingsStore();
     expect(await store.load()).toBe(true);
     expect(store.settings).toEqual(defaultSettings);
     expect(await store.loadWindow()).toBe(true);
     expect(store.folders?.logs).toBe(mockFolders.logs);
-    expect(store.sources).toEqual(mockSources);
   });
 
   it('applies an update from the answer and keeps the other settings', async () => {
@@ -88,27 +79,6 @@ describe('settings store', () => {
     await Promise.all([first, second]);
     expect(order).toEqual(['dark', 'light']);
     expect(store.settings?.theme).toBe('light');
-  });
-
-  it('adds, pauses and removes sources, and refuses to remove the system one', async () => {
-    const store = useSettingsStore();
-    await store.loadWindow();
-    expect(await store.addSource('  /Users/demo/Ünïcødé 字体  ')).toBe(true);
-    const added = store.sources.at(-1)!;
-    expect(added.path).toBe('/Users/demo/Ünïcødé 字体');
-    expect(await store.addSource(added.path)).toBe(false);
-    expect(store.error?.code).toBe('conflict');
-    expect(await store.addSource('   ')).toBe(false);
-    expect(store.error?.code).toBe('invalidRequest');
-
-    expect(await store.setSourcePaused(1, true)).toBe(true);
-    expect(store.sources.find((s) => s.id === 1)?.paused).toBe(true);
-
-    expect(await store.removeSource(2)).toBe(false);
-    expect(store.error?.code).toBe('permissionDenied');
-    expect(store.sources.some((s) => s.id === 2)).toBe(true);
-    expect(await store.removeSource(added.id)).toBe(true);
-    expect(store.sources.some((s) => s.id === added.id)).toBe(false);
   });
 
   it('falls back to the request defaults before the settings are read', () => {

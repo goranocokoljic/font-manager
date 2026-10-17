@@ -62,16 +62,16 @@ test('the activation choice applies to the next activation', async ({ page }) =>
 
 test('a folder can be added, paused and removed; the system source stays', async ({ page }) => {
   await page.goto('/#/settings');
-  await page.getByLabel('Folder to add').fill('/Users/demo/More fonts');
-  await page.getByRole('button', { name: 'Add folder' }).click();
+  // The mock folder picker answers `/Users/demo/Added 1` on its first call.
+  await page.getByRole('button', { name: 'Add folder…' }).click();
   const list = page.getByRole('list', { name: 'Sources' });
-  await expect(list).toContainText('/Users/demo/More fonts');
-  await expect(page.getByLabel('Folder to add')).toHaveValue('');
+  const added = '/Users/demo/Added 1';
+  await expect(list).toContainText(added);
 
-  await page.getByRole('checkbox', { name: 'Pause /Users/demo/More fonts' }).check();
-  await expect(page.getByRole('checkbox', { name: 'Pause /Users/demo/More fonts' })).toBeChecked();
-  await page.getByRole('button', { name: 'Remove /Users/demo/More fonts' }).click();
-  await expect(list).not.toContainText('/Users/demo/More fonts');
+  await page.getByRole('checkbox', { name: `Pause ${added}` }).check();
+  await expect(page.getByRole('checkbox', { name: `Pause ${added}` })).toBeChecked();
+  await page.getByRole('button', { name: `Remove ${added}` }).click();
+  await expect(list).not.toContainText(added);
   await expect(page.getByRole('button', { name: 'Remove /System/Library/Fonts' })).toBeDisabled();
 });
 
@@ -95,7 +95,6 @@ for (const scheme of ['light', 'dark'] as const) {
   test(`form fields are outlined at 3:1 or more (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto('/#/settings');
-    expect(await borderContrast(page, 'Folder to add')).toBeGreaterThanOrEqual(3);
     await tab(page, 'Advanced').click();
     for (const name of ['Preview cache size (MB)', 'Rescan sources every (minutes)'])
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);

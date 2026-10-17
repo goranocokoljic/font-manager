@@ -11,13 +11,13 @@ import {
   parseMeta, parseCriteria, isNumericCriterion, compareStories, areaOf, areasOverlap,
   predictAreas, storyBudget, laneOf, DEFAULT_CONFIG,
 } from './lib.mjs';
-import { staticReadiness, planLane, humanWaits } from './pick.mjs';
+import { staticReadiness, planLane, humanWaits, HUMAN_MERGE } from './pick.mjs';
 import { editCriterion } from './issue.mjs';
 import { countFindings, markerLine } from './review-counts.mjs';
 import { applyItems, matchesPaths, retrieveDigest, rulesMarkdown, readStore } from './kb.mjs';
-import { matchCheck, osOf, excerpt } from './ci-wait.mjs';
+import { matchCheck, osOf, excerpt, infraReason } from './ci-wait.mjs';
 import { summaryLine } from './epic-sync.mjs';
-import { contractRemovals, commitCi, decide } from './merge-check.mjs';
+import { contractRemovals, commitCi, decide, latestPerName } from './merge-check.mjs';
 
 const cfg = structuredClone(DEFAULT_CONFIG);
 
@@ -258,6 +258,13 @@ describe('ci-wait helpers', () => {
     assert.doesNotMatch(ex, /2026-10-16T/);
     assert.ok(ex.split('\n').length < 20);
   });
+
+  test('a job GitHub refused to start is an infra problem, a failed test is not', () => {
+    const billing = [{ message: "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings" }];
+    assert.match(infraReason(billing), /not started because/);
+    assert.equal(infraReason([{ message: 'Process completed with exit code 100.' }]), null);
+    assert.equal(infraReason([]), null);
+  });
 });
 
 describe('auto merge', () => {
@@ -282,8 +289,8 @@ describe('auto merge', () => {
     assert.equal(decide(facts({ removals: ['total: number,'], epic: 'E1' }), auto).action, 'merge');
   });
 
-  test('blocks on conflicts and drafts; stops when main is red', () => {
-    assert.equal(decide(facts({ mergeable: 'CONFLICTING' }), auto).action, 'block');
+  test('syncs on conflicts, blocks drafts, stops when main is red', () => {
+    assert.equal(decide(facts({ mergeable: 'CONFLICTING' }), auto).action, 'sync');
     assert.equal(decide(facts({ isDraft: true }), auto).action, 'block');
     assert.equal(decide(facts({ mainCi: 'failure', track: 'platform' }), auto).action, 'stop');
   });
@@ -312,14 +319,53 @@ describe('auto merge', () => {
     assert.equal(commitCi([]), 'pending');
   });
 
+  test('a re-run that passed replaces the failed run of the same check', () => {
+    const runs = [
+      { name: 'linux', status: 'completed', conclusion: 'failure', started_at: '2026-10-17T16:30:00Z' },
+      { name: 'linux', status: 'completed', conclusion: 'success', started_at: '2026-10-17T17:00:00Z' },
+      { name: 'windows', status: 'completed', conclusion: 'success', started_at: '2026-10-17T16:30:00Z' },
+    ];
+    assert.equal(commitCi(runs), 'failure');
+    assert.equal(commitCi(latestPerName(runs)), 'success');
+  });
+
   test('a ready PR left for a human does not hold the lane in auto mode', () => {
     const w = {
-      stories: [story('E6.2', { track: 'platform', labels: ['type:story', 'harness:in-progress'] }), story('E1.6')],
+      stories: [story('E6.2', { track: 'platform', labels: ['type:story', 'harness:in-progress', HUMAN_MERGE] }), story('E1.6')],
       prs: [{ number: 90, storyId: 'E6.2', isDraft: false, areas: [], headRefName: 'E6.2-x' }],
     };
     assert.equal(planLane('core', w, cfg, { checkDeps: () => [] }).action, 'wait');
     assert.equal(planLane('core', w, auto, { checkDeps: () => [] }).story.id, 'E1.6');
   });
+
+  test('a ready PR not left for a human goes back to the merge gate in auto mode', () => {
+    const w = {
+      stories: [story('E3.6', { labels: ['type:story', 'harness:in-progress'] }), story('E1.6')],
+      prs: [{ number: 226, storyId: 'E3.6', isDraft: false, areas: [], headRefName: 'E3.6-x' }],
+    };
+    const p = planLane('core', w, auto, { checkDeps: () => [] });
+    assert.equal(p.action, 'resume');
+    assert.equal(p.story.id, 'E3.6');
+    assert.equal(p.story.pr.draft, false);
+  });
+
+  test('in_flight counts claimed stories of every lane, not those left for a human', () => {
+    const w = {
+      stories: [
+        story('E5.9', { track: 'ui', labels: ['type:story', 'harness:in-progress'] }),
+        story('E6.2', { track: 'platform', labels: ['type:story', 'harness:in-progress', HUMAN_MERGE] }),
+        story('E2.6', { body: 'fm-core' }),
+      ],
+      prs: [
+        { number: 225, storyId: 'E5.9', isDraft: true, areas: ['crates/fm-core'], headRefName: 'E5.9-x' },
+        { number: 230, storyId: 'E6.2', isDraft: false, areas: ['crates/fm-platform'], headRefName: 'E6.2-x' },
+      ],
+    };
+    const p = planLane('core', w, auto, { checkDeps: () => [] });
+    assert.equal(p.action, 'idle');
+    assert.equal(p.in_flight, 1);
+  });
+
 });
 
 test('epic summary line names cost, CI and review', () => {

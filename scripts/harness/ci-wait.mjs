@@ -7,9 +7,11 @@
 //   node scripts/harness/ci-wait.mjs --pr 57 [--bench] [--out .harness/ci/issue-42.json]
 //
 // Verdict JSON (stdout, and --out when given):
-//   { status: "green"|"red"|"timeout"|"no-ci", sha, checks: [{name, os, conclusion, url}],
+//   { status: "green"|"red"|"conflict"|"infra"|"timeout"|"no-ci", sha, checks: [{name, os, conclusion, url}],
 //     failed: [{name, os, url, excerpt}], bench: null | {status, metrics, failed[], note} }
-// Exit: 0 green, 1 red (a required check or a bench metric failed), 2 timeout / no CI, 3 error.
+//   conflict — the PR conflicts with main, so GitHub starts no CI for it
+//   infra    — GitHub did not run the jobs (billing, spending limit): no code fix helps
+// Exit: 0 green, 1 red (a required check or a bench metric failed), 2 anything else, 3 error.
 //
 // Required checks come from go-harness.config.json `ci.required_checks`
 // ("ci / windows" ...). A check run matches when its name equals the entry or
@@ -52,6 +54,21 @@ export function excerpt(log, max = 120) {
   return picked.slice(-max).join('\n');
 }
 
+/** GitHub refused to run the job (account problem), from its annotations; null when it ran. */
+export function infraReason(annotations) {
+  const hit = (annotations ?? []).find((a) =>
+    /not started because|spending limit|payments have failed|billing/i.test(a.message ?? ''));
+  return hit ? hit.message.trim() : null;
+}
+
+function annotations(id) {
+  return ghJson(['api', `repos/{owner}/{repo}/check-runs/${id}/annotations`], { allowFail: true }) ?? [];
+}
+
+function mergeable(pr) {
+  return ghJson(['pr', 'view', String(pr), '--json', 'mergeable'], { allowFail: true })?.mergeable ?? 'UNKNOWN';
+}
+
 function checkRuns(sha) {
   const pages = ghJson(['api', '--paginate', '--slurp', `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`]) ?? [];
   // Keep the newest run per name (a re-run leaves the old one behind).
@@ -67,10 +84,12 @@ function jobLog(id) {
   return gh(['api', `repos/{owner}/{repo}/actions/jobs/${id}/logs`], { allowFail: true }) ?? '';
 }
 
-async function waitFor(sha, names, cfg, deadline) {
+async function waitFor(sha, names, cfg, deadline, pr = null) {
   for (;;) {
     const runs = checkRuns(sha);
     const found = names.map((n) => ({ want: n, run: matchCheck(n, runs) }));
+    // No run yet and the PR conflicts with main: GitHub will never start one.
+    if (pr && found.every((f) => !f.run) && mergeable(pr) === 'CONFLICTING') return 'conflict';
     const done = found.every((f) => f.run && f.run.status === 'completed');
     const failedEarly = found.some((f) => f.run && f.run.status === 'completed' && f.run.conclusion !== 'success');
     // A red required check settles the verdict; do not wait for the slow OS.
@@ -118,8 +137,10 @@ async function main() {
   if (!existsSync('.github/workflows/ci.yml')) {
     verdict = { status: 'no-ci', sha, checks: [], failed: [], bench: null, note: '.github/workflows/ci.yml does not exist (E1.2 not merged?)' };
   } else {
-    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline);
-    if (!found) {
+    const found = await waitFor(sha, cfg.ci.required_checks, cfg, deadline, pr.number);
+    if (found === 'conflict') {
+      verdict = { status: 'conflict', sha, checks: [], failed: [], bench: null, note: 'the PR conflicts with main, so no CI runs' };
+    } else if (!found) {
       verdict = { status: 'timeout', sha, checks: [], failed: [], bench: null, note: `required checks not finished after ${cfg.ci.timeout_min} min` };
     } else {
       const checks = found.map((f) => ({
@@ -128,7 +149,10 @@ async function main() {
       const failed = checks
         .filter((c) => c.conclusion !== 'success' && c.conclusion !== 'missing' && c.id)
         .map((c) => ({ name: c.name, os: c.os, url: c.url, excerpt: excerpt(jobLog(c.id)) }));
-      verdict = { status: failed.length ? 'red' : 'green', sha, checks, failed, bench: null };
+      const infra = failed.map((c) => infraReason(annotations(checks.find((k) => k.name === c.name).id))).find(Boolean);
+      verdict = infra
+        ? { status: 'infra', sha, checks, failed, bench: null, note: infra }
+        : { status: failed.length ? 'red' : 'green', sha, checks, failed, bench: null };
     }
   }
   if (args.bench && verdict.status === 'green') {

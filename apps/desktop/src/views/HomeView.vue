@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
+import SourcesSidebar from '../components/SourcesSidebar.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
 import { useActions, useCommandsStore } from '../stores/commands';
@@ -45,9 +46,8 @@ watch(
   { immediate: true },
 );
 
-// Sidebar groups from the spec's information architecture; E5.7 and later fill them.
+// Sidebar groups from the spec's information architecture; later stories fill them.
 const groups = [
-  'Sources',
   'Collections',
   'Smart collections',
   'Project sets',
@@ -60,6 +60,7 @@ const groups = [
 <template>
   <MainLayout>
     <template #sidebar>
+      <SourcesSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>

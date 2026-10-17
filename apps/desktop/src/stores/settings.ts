@@ -1,17 +1,16 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient, type FullSettings } from '../api/client';
-import type { ApiError, AppFolders, SettingsUpdate, Source, SourceId } from '../api/types';
+import type { ApiError, AppFolders, SettingsUpdate } from '../api/types';
 
 /**
- * The user's settings, the app folders and the sources, as fm-api reports them. Every
- * change is sent at once and the answer replaces the local copy, so what the window
- * shows is what was saved.
+ * The user's settings and the app folders, as fm-api reports them. Every change is
+ * sent at once and the answer replaces the local copy, so what the window shows is
+ * what was saved. The sources live in the sources store.
  */
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<FullSettings | null>(null);
   const folders = ref<AppFolders | null>(null);
-  const sources = ref<Source[]>([]);
   /** The last request that failed, for the Settings window to show. */
   const error = ref<ApiError | null>(null);
 
@@ -41,13 +40,10 @@ export const useSettingsStore = defineStore('settings', () => {
     });
   }
 
-  /** Reads what only the Settings window shows: the folders and the sources. */
+  /** Reads what only the Settings window shows: the app folders. */
   function loadWindow(): Promise<boolean> {
     return attempt(async () => {
-      const client = useClient();
-      const [f, s] = await Promise.all([client.getAppFolders(), client.listSources()]);
-      folders.value = f;
-      sources.value = s;
+      folders.value = await useClient().getAppFolders();
     });
   }
 
@@ -60,39 +56,6 @@ export const useSettingsStore = defineStore('settings', () => {
     );
   }
 
-  function replaceSource(next: Source): void {
-    sources.value = sources.value.map((s) => (s.id === next.id ? next : s));
-  }
-
-  /** Adds a folder as a source, indexed in place (ADR 0004). */
-  function addSource(path: string): Promise<boolean> {
-    return enqueue(() =>
-      attempt(async () => {
-        const added = await useClient().addSource({
-          path: path.trim(),
-          mode: { kind: 'indexInPlace' },
-        });
-        sources.value = [...sources.value, added];
-      }),
-    );
-  }
-
-  /** Forgets a source and its faces; the files stay where they are. */
-  function removeSource(id: SourceId): Promise<boolean> {
-    return enqueue(() =>
-      attempt(async () => {
-        await useClient().removeSource(id);
-        sources.value = sources.value.filter((s) => s.id !== id);
-      }),
-    );
-  }
-
-  function setSourcePaused(id: SourceId, paused: boolean): Promise<boolean> {
-    return enqueue(() =>
-      attempt(async () => replaceSource(await useClient().setSourcePaused({ source: id, paused }))),
-    );
-  }
-
   /** What the Activate button does; session until the settings are read. */
   const activationMode = computed(() => settings.value?.activationMode ?? 'session');
   /** What activation does on a name clash; keep the existing font until read. */
@@ -101,15 +64,11 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     settings,
     folders,
-    sources,
     error,
     activationMode,
     onConflict,
     load,
     loadWindow,
     update,
-    addSource,
-    removeSource,
-    setSourcePaused,
   };
 });
