@@ -85,6 +85,47 @@ describe('inspector info tab', () => {
     expect(wrapper.text()).toContain('Copied');
   });
 
+  it('shows and copies the name ID 1 and 2 values apart from the typographic names', async () => {
+    const mock = createMockClient();
+    setClient({
+      ...mock,
+      getFace: async (id) => ({
+        ...(await mock.getFace(id)),
+        legacyFamily: 'Inter Display',
+        legacyStyle: 'Book',
+      }),
+    });
+    const wrapper = await mountWith(1);
+    const row = (label: string) => {
+      const dt = wrapper.findAll('dt').find((el) => el.text() === label);
+      return dt?.element.nextElementSibling?.textContent ?? '';
+    };
+    expect(row('Family (name ID 1)')).toContain('Inter Display');
+    expect(row('Style (name ID 2)')).toContain('Book');
+    await wrapper.get('button[aria-label^="Copy family (name ID 1)"]').trigger('click');
+    await flushPromises();
+    expect(copyText).toHaveBeenLastCalledWith('Inter Display');
+    await wrapper.get('button[aria-label^="Copy style (name ID 2)"]').trigger('click');
+    await flushPromises();
+    expect(copyText).toHaveBeenLastCalledWith('Book');
+  });
+
+  it('shows a dash when the name ID 1 and 2 values are absent', async () => {
+    const mock = createMockClient();
+    setClient({
+      ...mock,
+      getFace: async (id) => ({
+        ...(await mock.getFace(id)),
+        legacyFamily: null,
+        legacyStyle: null,
+      }),
+    });
+    const wrapper = await mountWith(1);
+    expect(wrapper.find('button[aria-label^="Copy family (name ID 1)"]').exists()).toBe(false);
+    const dt = wrapper.findAll('dt').find((el) => el.text() === 'Style (name ID 2)');
+    expect(dt?.element.nextElementSibling?.textContent?.trim()).toBe('—');
+  });
+
   it('says when the clipboard refuses', async () => {
     copyText.mockRejectedValue(new Error('denied'));
     const wrapper = await mountWith(1);
