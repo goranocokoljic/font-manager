@@ -370,6 +370,11 @@ pub trait LibraryService {
     fn set_source_paused(&self, req: SetSourcePausedRequest) -> ApiResult<Source>;
     /// Start a scan; `Busy` when one is running.
     fn scan(&self, req: ScanRequest) -> ApiResult<JobId>;
+    /// Rebuild the index from the sources: every file of every source is read
+    /// again by a full scan, reported like `scan`. Face ids, tags, ratings,
+    /// collections, sets and activation state are kept. `Busy` when a scan is
+    /// running.
+    fn rebuild_index(&self) -> ApiResult<JobId>;
     /// One page of families.
     fn list_families(&self, req: ListFamiliesRequest) -> ApiResult<Paged<FamilySummary>>;
     /// One family with its faces.

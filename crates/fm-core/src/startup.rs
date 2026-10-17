@@ -1,5 +1,6 @@
 //! What every entry point (the app, the CLI) does first: find the app
-//! folders, read the settings and start logging.
+//! folders, read the settings, start logging and open the index (which runs
+//! its migrations).
 
 use std::fs;
 
@@ -7,6 +8,7 @@ use fm_api::{ApiError, ErrorCode};
 use fm_platform::AppPaths;
 
 use crate::config::Config;
+use crate::index::{INDEX_FILE, Index, Opened, Rebuilt};
 use crate::logging::{self, LogGuard};
 
 /// The app folders, the settings and the log guard. Keep it alive until exit.
@@ -18,6 +20,11 @@ pub struct Startup {
     pub config: Config,
     /// Flushes the log file when dropped.
     pub log: LogGuard,
+    /// The library index, migrated to the current schema.
+    pub index: Index,
+    /// Set when the index file was damaged and replaced by a fresh one; the
+    /// caller scans [`Rebuilt::sources`] to fill it again.
+    pub rebuilt: Option<Rebuilt>,
 }
 
 /// Resolves the folders for the current user, reads the settings and makes
@@ -37,7 +44,27 @@ pub fn init() -> Result<Startup, ApiError> {
         logs = %paths.logs.display(),
         "font manager starting"
     );
-    Ok(Startup { paths, config, log })
+    let Opened { index, rebuilt } = open_index(&paths)?;
+    if let Some(r) = &rebuilt {
+        tracing::warn!(
+            reason = %r.reason,
+            sources = r.sources.len(),
+            "library index was damaged and is rebuilt from the sources"
+        );
+    }
+    Ok(Startup {
+        paths,
+        config,
+        log,
+        index,
+        rebuilt,
+    })
+}
+
+/// Opens the index in the app-data folder and runs its migrations. A damaged
+/// file is replaced, not reported (see [`Index::open`]).
+pub fn open_index(paths: &AppPaths) -> Result<Opened, ApiError> {
+    Ok(Index::open(&paths.data.join(INDEX_FILE))?)
 }
 
 /// Creates the app-owned folders (never the library folder, which the user
@@ -82,6 +109,30 @@ mod tests {
             !paths.library.exists(),
             "the library folder is the user's to create"
         );
+    }
+
+    #[test]
+    fn open_index_creates_and_migrates_the_database_in_the_data_folder() {
+        let dir = TempDir::new("startup-index");
+        let paths = paths_in(&dir);
+        prepare(&paths).expect("prepared");
+        let opened = open_index(&paths).expect("opened");
+        assert!(paths.data.join(INDEX_FILE).is_file());
+        assert!(opened.rebuilt.is_none());
+        assert_eq!(
+            opened.index.schema_version().expect("version"),
+            crate::index::SCHEMA_VERSION
+        );
+    }
+
+    #[test]
+    fn open_index_rebuilds_a_damaged_file_instead_of_failing() {
+        let dir = TempDir::new("startup-index-damaged");
+        let paths = paths_in(&dir);
+        prepare(&paths).expect("prepared");
+        fs::write(paths.data.join(INDEX_FILE), b"not a database").expect("damage");
+        let opened = open_index(&paths).expect("rebuilt, not an error");
+        assert!(opened.rebuilt.is_some());
     }
 
     #[test]

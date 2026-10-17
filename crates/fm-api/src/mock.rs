@@ -809,6 +809,12 @@ impl LibraryService for MockApi {
         Ok(job)
     }
 
+    fn rebuild_index(&self) -> ApiResult<JobId> {
+        // The sample data is the "folders": a rebuild re-reads all of it and
+        // keeps every id and user choice, like the core.
+        self.scan(ScanRequest::default())
+    }
+
     fn list_families(&self, req: ListFamiliesRequest) -> ApiResult<Paged<FamilySummary>> {
         let st = self.state();
         let mut rows: Vec<FamilySummary> = st
