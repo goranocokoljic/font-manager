@@ -203,6 +203,7 @@ fn face(
         _ => Health::Ok,
     };
     let open_license = (embedding == Embedding::Installable).then_some(OpenLicense::Ofl);
+    let char_set: BTreeSet<char> = chars.iter().flat_map(|s| s.chars()).collect();
     MockFace {
         detail: FaceDetail {
             face: FaceSummary {
@@ -260,9 +261,14 @@ fn face(
             favorite: false,
             rating: None,
             notes: None,
+            legacy_family: Some(family.1.into()),
+            legacy_style: Some(style.into()),
+            foundry: None,
+            italic_angle: Some(if slant == Slant::Upright { 0.0 } else { -10.0 }),
+            code_point_count: Some(char_set.len() as u32),
         },
         source: SourceId(1),
-        chars: chars.iter().flat_map(|s| s.chars()).collect(),
+        chars: char_set,
         system_clash: None,
     }
 }
@@ -467,10 +473,9 @@ impl State {
     fn detail(&self, f: &MockFace) -> FaceDetail {
         let mut d = f.detail.clone();
         d.face = self.summary(f);
-        d.designer = self
-            .family(d.face.family)
-            .ok()
-            .map(|fam| fam.designer.into());
+        let family = self.family(d.face.family).ok();
+        d.designer = family.map(|fam| fam.designer.into());
+        d.foundry = family.map(|fam| fam.foundry.into());
         d.tags = self
             .face_tags
             .get(&d.face.id)

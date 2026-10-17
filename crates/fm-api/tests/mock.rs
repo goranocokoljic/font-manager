@@ -461,3 +461,33 @@ fn problems_list_unsupported_files_and_system_clashes() {
         ]
     );
 }
+
+#[test]
+fn face_detail_carries_the_parsed_names_angle_and_coverage() {
+    let api = api();
+    let italic = api.get_face(FaceId(2)).unwrap();
+    assert_eq!(italic.legacy_family.as_deref(), Some("Inter"));
+    assert_eq!(italic.legacy_style.as_deref(), Some("Italic"));
+    assert_eq!(italic.foundry.as_deref(), Some("rsms"));
+    assert_eq!(italic.italic_angle, Some(-10.0));
+    assert!(italic.code_point_count.is_some_and(|n| n > 0));
+    assert_eq!(api.get_face(FaceId(1)).unwrap().italic_angle, Some(0.0));
+}
+
+#[test]
+fn face_detail_without_the_newer_fields_still_reads() {
+    let mut json = serde_json::to_value(api().get_face(FaceId(1)).unwrap()).unwrap();
+    let obj = json.as_object_mut().unwrap();
+    for key in [
+        "legacyFamily",
+        "legacyStyle",
+        "foundry",
+        "italicAngle",
+        "codePointCount",
+    ] {
+        assert!(obj.remove(key).is_some(), "{key} is on the wire");
+    }
+    let detail: fm_api::library::FaceDetail = serde_json::from_value(json).unwrap();
+    assert_eq!(detail.legacy_family, None);
+    assert_eq!(detail.code_point_count, None);
+}

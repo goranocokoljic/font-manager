@@ -2,16 +2,29 @@
 // through here; components and stores never call `invoke` themselves.
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { mockClient } from './mock';
-import type { AppInfo } from './types';
+import type {
+  ActivateRequest,
+  ActivationOutcome,
+  AppInfo,
+  DeactivateRequest,
+  FaceDetail,
+  FaceId,
+} from './types';
 
 /** One method per Tauri command; a rejected promise carries an `ApiError`. */
 export interface FmClient {
   getAppInfo(): Promise<AppInfo>;
+  getFace(face: FaceId): Promise<FaceDetail>;
+  activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
+  deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
 export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
+  getFace: (face) => invoke<FaceDetail>('get_face', { face }),
+  activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
+  deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
 };
 
 let current: FmClient | undefined;
