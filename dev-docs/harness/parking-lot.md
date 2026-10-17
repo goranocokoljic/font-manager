@@ -33,3 +33,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E2.7 #50] apps/desktop/src-tauri/src/lib.rs:220 — `LibraryService::scan` still goes through `MockApi`, so `fm_core::scanner::ScanJob` has no production caller until a core `Api` exists (E3).
 - [E2.7 #50] crates/fm-core/src/scanner/changes.rs:271 — `FileIndex::update` reports a gone entry that reappears with an unchanged stamp as `unchanged` (and with a new stamp as `changed`), so `Rescan`, `refresh` and `ScanFinished.added` never count a returned file as added.
 - [E2.7 #50] crates/fm-core/src/scanner/watch.rs:507 — the watcher runs its own discover + `FileIndex::rescan` instead of `ScanJob`, so watcher-triggered scans emit no ScanStarted/ScanProgress/ScanFinished and the two scan paths can drift.
+
+## 2026-10-18
+
+- [E3.1 #51] crates/fm-api/src/lib.rs:51 — E2.7 (#230) added `Event::ScanStarted` without bumping `API_VERSION`, against the doc's "bumped on every contract change".
+- [E3.1 #51] crates/fm-api/src/mock.rs:751 — `MockApi::remove_source` silently drops active faces from `st.active`, while the new `fm_core::Index::remove_source` refuses with `Conflict` (rule 3); the mock and the core disagree.

@@ -1,0 +1,20 @@
+{
+  "id": "one-subsystem-failing-at-startup-must-not-take-down-the-othe",
+  "title": "One subsystem failing at startup must not take down the others",
+  "category": "error-handling",
+  "rule": "In a startup or init function that sets up several independent parts (folders, settings, logging, the index), do not `?` the result of an optional part after the others are built. Keep its Result in the returned struct (or return it separately) and log it, so a newer-schema or locked index does not drop the settings store and the log guard. Make the field type `Result<_, ApiError>` so a later `?` does not compile silently.",
+  "rationale": "E3.1 (#51): `startup::init` used `open_index(&paths)?` after logging started; an index from a newer app made init fail, and the desktop app then ran without its SettingsStore and log file.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    51
+  ],
+  "file_globs": [
+    "crates/fm-core/src/startup.rs",
+    "apps/desktop/src-tauri/src/lib.rs",
+    "crates/fm-cli/src/**"
+  ],
+  "first_seen": "2026-10-17T22:07:14.076Z",
+  "last_seen": "2026-10-17T22:07:14.076Z"
+}

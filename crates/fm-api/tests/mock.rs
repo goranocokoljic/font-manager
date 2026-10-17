@@ -201,6 +201,31 @@ fn events_are_pushed_to_every_subscriber() {
 }
 
 #[test]
+fn rebuild_index_rescans_every_source_and_keeps_activation() {
+    let api = api();
+    api.activate(acts(
+        &[1],
+        ActivationMode::Session,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    let families = api.list_families(ListFamiliesRequest::default()).unwrap();
+    let events = api.subscribe();
+
+    let job = api.rebuild_index().unwrap();
+
+    let got: Vec<Event> = events.try_iter().collect();
+    assert_eq!(got[0], Event::ScanStarted { job, source: None });
+    assert!(matches!(got.last(), Some(Event::ScanFinished { job: j, .. }) if *j == job));
+    let active: Vec<FaceId> = api.list_active().unwrap().iter().map(|a| a.face).collect();
+    assert_eq!(active, [FaceId(1)]);
+    assert_eq!(
+        api.list_families(ListFamiliesRequest::default()).unwrap(),
+        families
+    );
+}
+
+#[test]
 fn search_groups_by_family_and_reports_near_misses() {
     let api = api();
     let r = api

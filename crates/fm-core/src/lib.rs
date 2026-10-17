@@ -9,6 +9,7 @@ pub mod charsets;
 pub mod config;
 pub mod error;
 pub mod grouping;
+pub mod index;
 pub mod logging;
 pub mod parser;
 pub mod scanner;
@@ -20,5 +21,6 @@ mod test_support;
 
 pub use config::{Config, LogLevel};
 pub use error::{FmError, FmResult};
+pub use index::Index;
 pub use settings::SettingsStore;
 pub use telemetry::{CrashReport, Report, Telemetry, TelemetrySettings, TelemetrySink};
