@@ -1,0 +1,19 @@
+{
+  "id": "form-field-outlines-need-3-1-contrast-against-the-background",
+  "title": "Form-field outlines need 3:1 contrast against the background",
+  "category": "accessibility",
+  "rule": "A text, number or select field whose fill matches the surface behind it is identified only by its border, so that border must reach 3:1 against the background in every theme (light, OS dark, forced dark). Use the `--fm-control-border` token, not `--fm-border` (≈1.5:1, for dividers only), and add a Playwright check that computes the ratio from the computed border and body colors under both color schemes.",
+  "rationale": "E5.9 (#72): the new Settings inputs used `--fm-border` (#d4d4d4 on #fff, #3a3a3c on #1c1c1e ≈ 1.5:1), so empty fields were not discoverable (WCAG 1.4.11).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    72
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/styles/**/*.css"
+  ],
+  "first_seen": "2026-10-17T16:33:14.180Z",
+  "last_seen": "2026-10-17T16:33:14.180Z"
+}
