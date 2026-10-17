@@ -292,7 +292,7 @@ h3 {
 }
 dl {
   display: grid;
-  grid-template-columns: minmax(96px, auto) 1fr;
+  grid-template-columns: 120px minmax(0, 1fr);
   gap: 4px 8px;
   margin: 0;
 }
