@@ -1,8 +1,8 @@
 //! Font file discovery: the first step of a scan.
 //!
 //! [`discover`] walks a source folder and lists every file with a font
-//! extension, with its size. It reads folder listings and file sizes only; it
-//! never opens, moves or changes a file (ADR 0004).
+//! extension, with its size and modification time. It reads folder listings
+//! and file metadata only; it never opens, moves or changes a file (ADR 0004).
 //!
 //! - Hidden folders (a name that starts with `.`) are skipped. The source
 //!   folder itself is walked even when its own name is hidden: the user chose it.
@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use crate::{FmError, FmResult};
 
@@ -33,6 +34,10 @@ pub struct FoundFile {
     pub path: PathBuf,
     /// The size in bytes.
     pub size: u64,
+    /// The last modification time; `None` when the file system does not
+    /// report one. With [`FoundFile::size`] it tells a rescan whether the file
+    /// changed.
+    pub modified: Option<SystemTime>,
 }
 
 /// An entry the walk could not read. The walk goes on without it.
@@ -140,7 +145,7 @@ impl Walk {
                 }
             } else if file_type.is_file() && is_font_file(&path) {
                 match entry.metadata() {
-                    Ok(meta) => self.add(path, canonical_dir.join(&name), meta.len()),
+                    Ok(meta) => self.add(path, canonical_dir.join(&name), &meta),
                     Err(e) => self.unreadable(&path, "A font file could not be read.", &e),
                 }
             }
@@ -163,7 +168,7 @@ impl Walk {
                 self.enter(path, target);
             }
         } else if meta.is_file() && is_font_file(&path) {
-            self.add(path, target, meta.len());
+            self.add(path, target, &meta);
         }
     }
 
@@ -173,9 +178,13 @@ impl Walk {
         }
     }
 
-    fn add(&mut self, path: PathBuf, canonical: PathBuf, size: u64) {
+    fn add(&mut self, path: PathBuf, canonical: PathBuf, meta: &fs::Metadata) {
         if self.seen_files.insert(canonical) {
-            self.out.files.push(FoundFile { path, size });
+            self.out.files.push(FoundFile {
+                path,
+                size: meta.len(),
+                modified: meta.modified().ok(),
+            });
         }
     }
 
@@ -302,6 +311,22 @@ mod tests {
         assert_eq!(found.total_size, 2_607);
         let sizes: Vec<u64> = found.files.iter().map(|f| f.size).collect();
         assert_eq!(sizes, [100, 2_500, 7]);
+    }
+
+    #[test]
+    fn records_each_file_modification_time() {
+        let tmp = TempDir::new("discover-time");
+        let root = tmp.path();
+        write(&root.join("a.ttf"), 1);
+        let time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        fs::File::options()
+            .write(true)
+            .open(root.join("a.ttf"))
+            .and_then(|f| f.set_modified(time))
+            .unwrap();
+
+        let found = discover(root).unwrap();
+        assert_eq!(found.files[0].modified, Some(time));
     }
 
     #[test]
