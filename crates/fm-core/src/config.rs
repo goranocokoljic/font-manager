@@ -20,6 +20,10 @@ pub struct Config {
     pub log_level: LogLevel,
     /// Anonymous usage statistics. Off unless the user turns it on (rule 7).
     pub telemetry: bool,
+    /// Minutes between two full rescans of every watched source folder, the
+    /// fallback for file-system events the OS did not deliver. Values below 1
+    /// count as 1.
+    pub rescan_interval_minutes: u32,
 }
 
 impl Default for Config {
@@ -27,6 +31,7 @@ impl Default for Config {
         Self {
             log_level: LogLevel::Info,
             telemetry: false,
+            rescan_interval_minutes: 60,
         }
     }
 }
@@ -109,6 +114,7 @@ mod tests {
         assert_eq!(config, Config::default());
         assert!(!config.telemetry);
         assert_eq!(config.log_level, LogLevel::Info);
+        assert_eq!(config.rescan_interval_minutes, 60);
     }
 
     #[test]
@@ -118,6 +124,7 @@ mod tests {
         let config = Config {
             log_level: LogLevel::Debug,
             telemetry: true,
+            rescan_interval_minutes: 5,
         };
         config.save(&path).expect("saved");
         assert_eq!(Config::load(&path).expect("loaded"), config);
@@ -145,6 +152,13 @@ mod tests {
         let config = Config::load(&path).expect("loaded");
         assert_eq!(config.log_level, LogLevel::Warn);
         assert!(!config.telemetry);
+        assert_eq!(config.rescan_interval_minutes, 60);
+
+        fs::write(&path, r#"{"rescanIntervalMinutes": 15}"#).expect("write");
+        assert_eq!(
+            Config::load(&path).expect("loaded").rescan_interval_minutes,
+            15
+        );
     }
 
     #[test]
