@@ -39,8 +39,12 @@ test('names and paths copy on click', async ({ page, context }) => {
     ['PostScript name', 'Inter-Regular'],
     ['path', '/Users/demo/Fonts/Inter/Inter[wght].ttf'],
   ]) {
-    await panel.getByRole('button', { name: `Copy ${label}: ${value}` }).click();
-    await expect(panel.getByRole('status').filter({ hasText: 'Copied' })).toBeVisible();
+    const button = panel.getByRole('button', { name: `Copy ${label}: ${value}` });
+    await button.click();
+    // The status next to this button: an earlier "Copied" may still show for 1.5 s.
+    await expect(button.locator('xpath=following-sibling::*[@role="status"][1]')).toHaveText(
+      'Copied',
+    );
     expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(value);
   }
 });
