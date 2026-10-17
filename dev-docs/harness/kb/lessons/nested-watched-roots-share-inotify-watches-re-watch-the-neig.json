@@ -1,0 +1,19 @@
+{
+  "id": "nested-watched-roots-share-inotify-watches-re-watch-the-neig",
+  "title": "Nested watched roots share inotify watches: re-watch the neighbours after an unwatch",
+  "category": "platform-parity",
+  "rule": "If two watched roots can nest, unwatching one must re-watch every still-active root that contains it or lies inside it (outer first). notify's inotify backend keeps one watch per folder, shared by nested roots, and `unwatch` drops every watch under the path; Windows and macOS keep separate per-root watches, so the bug shows only on Linux. Test it: pause the outer root and remove the inner one, then assert a new file under the inner folder is indexed within the latency criterion.",
+  "rationale": "E2.5 (#48): pausing or removing one of two nested sources silently stopped events for the other on Linux until the hourly rescan.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    48
+  ],
+  "file_globs": [
+    "crates/fm-core/src/scanner/**",
+    "crates/fm-platform/src/**"
+  ],
+  "first_seen": "2026-10-17T16:17:39.331Z",
+  "last_seen": "2026-10-17T16:17:39.331Z"
+}

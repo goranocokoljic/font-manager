@@ -1,0 +1,19 @@
+{
+  "id": "a-recursive-file-watch-is-per-folder-on-linux-never-make-a-s",
+  "title": "A recursive file watch is per-folder on Linux: never make a source all-or-nothing on it",
+  "category": "platform-parity",
+  "rule": "When a watch on a source folder fails (notify `watch(root, Recursive)`), fail the source only when the root itself cannot be read. inotify watches every subfolder on its own and returns an error for one unreadable subfolder or at fs.inotify.max_user_watches, where ReadDirectoryChangesW and FSEvents watch the root alone and succeed. Keep the source, log the partial watch, and let the scans cover the rest; add a test with an OS-watcher stand-in that reports MaxFilesWatch.",
+  "rationale": "E2.5 (#48): `Worker::add` and resume propagated the recursive watch error, so on Linux a source with one chmod-000 subfolder or a large library was never added or resumed, while Windows and macOS worked.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    48
+  ],
+  "file_globs": [
+    "crates/fm-core/src/scanner/**",
+    "crates/fm-platform/src/**"
+  ],
+  "first_seen": "2026-10-17T16:17:39.331Z",
+  "last_seen": "2026-10-17T16:17:39.331Z"
+}
