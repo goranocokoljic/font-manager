@@ -3,10 +3,11 @@ name: go-cycle
 description: |
   One Font Manager story, one stage at a time, driven by go-harness.ps1:
   build (read → branch → implement → preflight → draft PR), ci-fix (repair a
-  red CI matrix), review (/fm-review loop, max 3 cycles), finalize (tick
+  red CI matrix), sync (merge main and resolve conflicts), review
+  (/fm-review loop, max 3 cycles), finalize (tick
   criteria with evidence, summary, PR ready). Emits GOCYCLE_PHASE and
   GOCYCLE_METRIC markers and ends every stage with a GOCYCLE_ sentinel.
-  Invoke as: /go-cycle {issue-number} --stage build|ci-fix|review|finalize
+  Invoke as: /go-cycle {issue-number} --stage build|ci-fix|sync|review|finalize
   Triggers on: go-cycle, work a story, harness stage.
 allowed-tools:
   - Bash
@@ -37,6 +38,7 @@ not bend" are the hard constraints of every stage.
 |-------|-------|-----------|
 | `build` | — | a draft PR with green local preflight |
 | `ci-fix` | `--ci <verdict.json> --attempt k/3` | a pushed fix for the failing platform(s) |
+| `sync` | `--pr <n> --attempt k/2` | main merged into the branch, conflicts resolved, pushed |
 | `review` | `--cycles N` (default 3) | zero open `must` findings, KB distilled |
 | `finalize` | `--ci <verdict.json>` | criteria ticked with evidence, PR ready |
 
@@ -277,6 +279,48 @@ packages on the runner.
 - Add a line to the notes' CI section: OS, cause, fix.
 
 End: `GOCYCLE_OK`. (The harness waits for CI again and counts attempts.)
+
+---
+
+## Stage `sync`
+
+`GOCYCLE_PHASE: ci | sync k/2`
+
+The PR conflicts with `main`, so GitHub runs no CI on it. Another story merged
+first and touched the same lines. Merge `main` in; never rebase a pushed branch.
+
+```bash
+gh pr checkout {pr} && git pull --ff-only          # the story branch, as pushed
+git fetch origin && git merge origin/main --no-edit
+git diff --name-only --diff-filter=U                # the conflicted files
+```
+
+For every conflicted file:
+
+- **Keep both sides' intent.** Read what each side added: this story (the
+  notes, the PR body) and the story that merged first (`git log origin/main`,
+  its PR). Usually both added things next to each other: keep both.
+- **Same thing added twice** (a field, a setting, a helper both sides wrote):
+  keep ONE and move every caller on both sides to it. Prefer the one on
+  `main` (other code already uses it) unless this story's design clearly owns
+  the thing (say why in the commit body). Grep both sides for the name.
+- `Cargo.lock` / `pnpm-lock.yaml`: take `main`'s (`git checkout --theirs`), then
+  let the build regenerate it. `apps/desktop/src/api/types.ts`: regenerate
+  (`pnpm gen:types`), never hand-merge. `dev-docs/harness/parking-lot.md`:
+  keep every line of both sides.
+- Also check files that merged **without** a conflict but no longer fit
+  together (a `Cargo.toml` with two `[dependencies]` tables, a renamed function).
+  The preflight finds most of these.
+
+Then run the full preflight (stage `build`, phase `preflight`). Commit the merge
+(`Merge main into {id}`, body: what each conflict was and what you kept), push,
+and add a line to the notes' CI section.
+
+Stop conditions still apply. Resolving the conflict would change an existing
+`fm-api` type outside `contract_epics`, or would drop behaviour either side
+needs → `GOCYCLE_BLOCKED` with the files and the choice a human must make.
+
+End: `GOCYCLE_OK`. (The harness waits for CI again.)
 
 ---
 

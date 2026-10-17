@@ -15,11 +15,16 @@
 // Then, per lane:
 //   - one story in an ACTIVE stage per lane (claimed, PR missing or still draft) -> resume it
 //   - at most `lane_max_unmerged` ready-for-human PRs waiting per lane (merge: human only)
+//   - merge: auto -> a claimed story with a ready PR goes back through CI and the
+//     merge gate (it stopped on a red main, or the lane stopped), unless it is
+//     labelled harness:human-merge (left for a person on purpose)
 //   - a candidate whose predicted areas overlap an open harness PR of the OTHER lane waits
 // Ordering inside a lane: phase, epic number, story number, size.
 //
 // Output (stdout, one JSON object unless --dry-run):
-//   { lane, action: "resume"|"start"|"wait"|"idle", story, reasons[], waiting_on_human[] }
+//   { lane, action: "resume"|"start"|"wait"|"idle", story, reasons[], waiting_on_human[], in_flight }
+//   in_flight: stories claimed by the harness in ANY lane (not left for a human).
+//   A lane that is idle while in_flight > 0 may find work once those land.
 
 import {
   loadConfig, laneOf, parseMeta, compareStories, predictAreas, areaOf, areasOverlap,
@@ -27,6 +32,7 @@ import {
 } from './lib.mjs';
 
 const EXCLUDE = ['human', 'criteria:tbd', 'harness:in-progress', 'harness:blocked'];
+export const HUMAN_MERGE = 'harness:human-merge';
 const STORY_BRANCH = /^(E\d+\.\d+)-/;
 const MAX_CHECKED = 15; // blocked_by calls per lane per pick
 
@@ -77,9 +83,10 @@ export function planLane(lane, world, cfg, { issues = null, bot = '', checkDeps 
   const prOf = (s) => prs.find((p) => p.storyId === s.meta.id) ?? null;
   const mine = stories.filter((s) => laneOf(s.meta.track, cfg) === lane);
   const reasons = [];
+  const inFlight = stories.filter((s) => s.labels.includes('harness:in-progress') && !s.labels.includes(HUMAN_MERGE)).length;
   const result = (action, story, extra = {}) => ({
     lane, action, story: story ? describe(story, cfg, prOf(story)) : null, reasons, ...extra,
-    waiting_on_human: humanWaits(stories),
+    waiting_on_human: humanWaits(stories), in_flight: inFlight,
   });
 
   // Lane capacity: an active story (claimed, PR missing or draft) is resumed, not doubled.
@@ -87,10 +94,12 @@ export function planLane(lane, world, cfg, { issues = null, bot = '', checkDeps 
   const active = claimed.filter((s) => { const p = prOf(s); return !p || p.isDraft; });
   if (active.length) return result('resume', active.sort(compareStories)[0]);
   const waiting = claimed.filter((s) => prOf(s) && !prOf(s).isDraft);
-  // With merge: auto every green, reviewed PR merges itself; the ones still
-  // waiting are left for a human on purpose (an excluded track, a contract
-  // change), so they do not hold the lane.
-  if (cfg.merge !== 'auto' && waiting.length >= cfg.lane_max_unmerged) {
+  // With merge: auto a ready PR not left for a human goes back to the merge
+  // gate; the ones labelled harness:human-merge do not hold the lane.
+  if (cfg.merge === 'auto') {
+    const again = waiting.filter((s) => !s.labels.includes(HUMAN_MERGE));
+    if (again.length) return result('resume', again.sort(compareStories)[0]);
+  } else if (waiting.length >= cfg.lane_max_unmerged) {
     reasons.push({ why: `${waiting.length} PR(s) wait for a human merge: ${waiting.map((s) => `#${prOf(s).number}`).join(', ')}` });
     return result('wait', null);
   }

@@ -6,12 +6,13 @@
 //   node scripts/harness/merge-check.mjs --pr 57 --track core --epic E3
 //
 // Verdict JSON (stdout):
-//   { action: "merge"|"update"|"human"|"block"|"stop", reasons[], sha, behind_by, main_ci }
+//   { action: "merge"|"update"|"sync"|"human"|"block"|"stop", reasons[], sha, behind_by, main_ci }
 //   merge  — green, reviewed, up to date with main: merge at `sha`
 //   update — behind main: bring the branch up to date, then CI runs again
+//   sync   — conflicts with main: the sync stage merges main and resolves them
 //   human  — a merge a person must decide (excluded track, a changed fm-api type)
-//   block  — cannot merge (conflict with main, draft, closed)
-//   stop   — main itself is red: merge nothing until a person fixes main
+//   block  — cannot merge (draft, closed)
+//   stop   — main itself is red: merge nothing until main is green again
 // Exit: 0 on any verdict, 3 on error.
 
 import { loadConfig, ghJson, parseArgs, isMain } from './lib.mjs';
@@ -39,6 +40,16 @@ export function contractRemovals(diff) {
   return out;
 }
 
+/** The newest run per check name: a re-run leaves the old (failed) one behind. */
+export function latestPerName(runs) {
+  const byName = new Map();
+  for (const r of runs) {
+    const prev = byName.get(r.name);
+    if (!prev || new Date(r.started_at ?? 0) > new Date(prev.started_at ?? 0)) byName.set(r.name, r);
+  }
+  return [...byName.values()];
+}
+
 /** Overall conclusion of the check runs on one commit: success, failure or pending. */
 export function commitCi(runs) {
   if (!runs.length) return 'pending';
@@ -53,7 +64,7 @@ export function decide(f, cfg) {
   if (f.state !== 'OPEN') return { action: 'block', reasons: [`PR is ${f.state.toLowerCase()}`] };
   if (f.isDraft) return { action: 'block', reasons: ['PR is still a draft'] };
   if (f.mainCi === 'failure') return { action: 'stop', reasons: [`main is red at ${f.baseSha.slice(0, 7)}; merge nothing until it is fixed`] };
-  if (f.mergeable === 'CONFLICTING') return { action: 'block', reasons: ['the branch conflicts with main'] };
+  if (f.mergeable === 'CONFLICTING') return { action: 'sync', reasons: ['the branch conflicts with main'] };
   if ((cfg.auto_merge?.exclude_tracks ?? []).includes(f.track)) reasons.push(`track ${f.track} is merged by a human`);
   if (f.removals.length && !(cfg.contract_epics ?? []).includes(f.epic)) {
     reasons.push(`changes existing fm-api types (${f.removals.length} line(s) of ${TYPES_TS} removed or rewritten)`);
@@ -78,7 +89,7 @@ function gather(pr, track, epic, cfg) {
   const cmp = ghJson(['api', `repos/{owner}/{repo}/compare/${base.sha}...${v.headRefOid}`]);
   const runs = ghJson(['api', `repos/{owner}/{repo}/commits/${base.sha}/check-runs?per_page=100`])?.check_runs ?? [];
   const required = (cfg.ci.required_checks ?? []).map((n) => n.toLowerCase().split('/').pop().trim());
-  const mainRuns = runs.filter((r) => required.includes(r.name.toLowerCase()) || required.includes(r.name.toLowerCase().split('/').pop().trim()));
+  const mainRuns = latestPerName(runs).filter((r) => required.includes(r.name.toLowerCase()) || required.includes(r.name.toLowerCase().split('/').pop().trim()));
   return {
     state: v.state,
     isDraft: v.isDraft,
