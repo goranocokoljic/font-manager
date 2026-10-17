@@ -1,9 +1,10 @@
 // Sample answers for browser mode (Playwright) and unit tests, shaped like
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
-// data plus the set of faces it has activated, so the UI can round-trip.
+// data plus the faces it has activated (and how), so the UI can round-trip.
 import type { FmClient } from './client';
 import {
   API_VERSION,
+  type ActivationMode,
   type ActivationOutcome,
   type AppInfo,
   type FaceDetail,
@@ -162,7 +163,7 @@ const systemClash: Partial<Record<FaceId, string>> = {
 
 /** A mock client with its own activation state. */
 export function createMockClient(): FmClient {
-  const active = new Set<FaceId>();
+  const active = new Map<FaceId, ActivationMode>();
   const find = (id: FaceId) => mockFaces.find((f) => f.face.id === id);
   const notFound = (id: FaceId) => ({
     code: 'notFound' as const,
@@ -170,7 +171,7 @@ export function createMockClient(): FmClient {
     detail: null,
   });
   const ids = (target: Target | null | undefined): FaceId[] =>
-    target?.kind === 'faces' ? target.faces : [...active];
+    target?.kind === 'faces' ? target.faces : [...active.keys()];
 
   return {
     getAppInfo: async () => mockAppInfo,
@@ -178,7 +179,7 @@ export function createMockClient(): FmClient {
       const f = find(id);
       if (!f) throw notFound(id);
       const detail = structuredClone(f);
-      detail.face.active = active.has(id) ? 'session' : null;
+      detail.face.active = active.get(id) ?? null;
       return detail;
     },
     activate: async (req) =>
@@ -188,14 +189,15 @@ export function createMockClient(): FmClient {
         const health = f.face.health;
         if (health.kind !== 'ok')
           return { face: id, outcome: { status: 'skipped', reason: health.reason } };
-        if (active.has(id)) return { face: id, outcome: { status: 'unchanged' } };
+        const mode = req.mode ?? 'session';
+        if (active.get(id) === mode) return { face: id, outcome: { status: 'unchanged' } };
         const clash = systemClash[id];
         if (clash && req.onConflict !== 'replace')
           return {
             face: id,
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
           };
-        active.add(id);
+        active.set(id, mode);
         return { face: id, outcome: { status: 'done' } };
       }),
     deactivate: async (req) =>
