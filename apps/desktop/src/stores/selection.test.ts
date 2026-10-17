@@ -83,6 +83,43 @@ describe('selection store', () => {
     expect(store.detail?.face.active).toBeNull();
   });
 
+  it('activates permanently, upgrades a session activation and deactivates a permanent one', async () => {
+    const activate = vi.spyOn(client, 'activate');
+    const deactivate = vi.spyOn(client, 'deactivate');
+    const store = useSelectionStore();
+    await store.select(1);
+    await store.toggleActivation('permanent');
+    expect(activate).toHaveBeenLastCalledWith({
+      target: { kind: 'faces', faces: [1] },
+      mode: 'permanent',
+    });
+    expect(store.detail?.face.active).toBe('permanent');
+    await store.toggleActivation('permanent');
+    expect(deactivate).toHaveBeenCalledOnce();
+    expect(store.detail?.face.active).toBeNull();
+
+    await store.toggleActivation('session');
+    expect(store.detail?.face.active).toBe('session');
+    await store.toggleActivation('permanent');
+    expect(store.detail?.face.active).toBe('permanent');
+    // A session toggle on a permanently active face deactivates it.
+    await store.toggleActivation('session');
+    expect(store.detail?.face.active).toBeNull();
+  });
+
+  it('can activate only a loaded, healthy face with no request in flight', async () => {
+    const store = useSelectionStore();
+    expect(store.canActivate).toBe(false);
+    await store.select(7); // unsupported
+    expect(store.canActivate).toBe(false);
+    await store.select(1);
+    expect(store.canActivate).toBe(true);
+    const pending = store.toggleActivation();
+    expect(store.canActivate).toBe(false);
+    await pending;
+    expect(store.canActivate).toBe(true);
+  });
+
   it('reports a conflict and leaves the face inactive', async () => {
     const store = useSelectionStore();
     await store.select(6);

@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useClient } from '../api/client';
-import type { ApiError, FaceDetail, FaceId, OutcomeStatus, Target } from '../api/types';
+import type {
+  ActivationMode,
+  ApiError,
+  FaceDetail,
+  FaceId,
+  OutcomeStatus,
+  Target,
+} from '../api/types';
 
 /** A face id from a route query value (`?face=3`), or null when there is none. */
 export function parseFaceId(value: unknown): FaceId | null {
@@ -57,17 +64,27 @@ export const useSelectionStore = defineStore('selection', () => {
     await load(id);
   }
 
-  /** Activates the selected face for the session, or deactivates it when active. */
-  async function toggleActivation(): Promise<void> {
+  /** The selected face can be activated: it is loaded, healthy and no request is in flight. */
+  const canActivate = computed(
+    () => detail.value?.face.health.kind === 'ok' && !busy.value && !loading.value,
+  );
+
+  /**
+   * Session (default): activates the selected face for the session, or deactivates it
+   * when active. Permanent: activates it permanently (a session activation becomes
+   * permanent), or deactivates it when it is already permanent.
+   */
+  async function toggleActivation(mode: ActivationMode = 'session'): Promise<void> {
     const face = detail.value?.face;
     if (!face || busy.value) return;
     const target: Target = { kind: 'faces', faces: [face.id] };
+    const deactivate = mode === 'permanent' ? face.active === 'permanent' : face.active !== null;
     busy.value = true;
     try {
       const client = useClient();
-      const results = face.active
+      const results = deactivate
         ? await client.deactivate({ target })
-        : await client.activate({ target });
+        : await client.activate({ target, mode });
       outcome.value = results.find((r) => r.face === face.id)?.outcome ?? null;
     } catch (e) {
       outcome.value = { status: 'failed', error: e as ApiError };
@@ -77,5 +94,15 @@ export const useSelectionStore = defineStore('selection', () => {
     if (faceId.value === face.id) await load(face.id);
   }
 
-  return { faceId, detail, error, loading, busy, outcome, select, toggleActivation };
+  return {
+    faceId,
+    detail,
+    error,
+    loading,
+    busy,
+    outcome,
+    canActivate,
+    select,
+    toggleActivation,
+  };
 });
