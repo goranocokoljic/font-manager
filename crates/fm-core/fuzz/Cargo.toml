@@ -1,0 +1,25 @@
+# cargo-fuzz targets for the parser path (ADR 0002). Not a workspace member:
+# it builds on nightly with `cargo +nightly fuzz`, see fuzz_targets/parse.rs.
+[package]
+name = "fm-core-fuzz"
+version = "0.0.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+fm-core = { path = ".." }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "parse"
+path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

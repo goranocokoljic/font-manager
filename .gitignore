@@ -28,3 +28,9 @@ Thumbs.db
 
 # Tauri build output (schemas are regenerated on every build)
 apps/desktop/src-tauri/gen/
+
+# cargo-fuzz build output and generated corpus (crates/*/fuzz)
+crates/*/fuzz/target/
+crates/*/fuzz/corpus/
+crates/*/fuzz/artifacts/
+crates/*/fuzz/coverage/
