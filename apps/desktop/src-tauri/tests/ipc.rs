@@ -6,10 +6,14 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use fm_api::activation::{ActivationOutcome, OutcomeStatus};
-use fm_api::library::{AppInfo, FaceDetail, LibraryService, Source, SourceKind};
+use fm_api::common::Paged;
+use fm_api::library::{
+    AppInfo, FaceDetail, Family, FamilySummary, LibraryService, ListFamiliesRequest, Source,
+    SourceKind,
+};
 use fm_api::mock::MockApi;
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
-use fm_api::{API_VERSION, ApiResult, Event, FaceId, JobId, SettingsService, SourceId};
+use fm_api::{API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SettingsService, SourceId};
 use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
 use tauri::test::{
@@ -105,6 +109,30 @@ fn get_face_returns_the_face_detail() {
         .deserialize()
         .unwrap();
     assert_eq!(detail, MockApi::new().get_face(FaceId(1)).unwrap());
+}
+
+#[test]
+fn families_round_trip_through_fm_api() {
+    let api = MockApi::new();
+    let page: Paged<FamilySummary> = invoke_with("list_families", serde_json::json!({ "req": {} }))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(
+        page,
+        api.list_families(ListFamiliesRequest::default()).unwrap()
+    );
+    let family: Family = invoke_with("get_family", serde_json::json!({ "family": 1 }))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(family, api.get_family(FamilyId(1)).unwrap());
+    let err = invoke_with("get_family", serde_json::json!({ "family": 999 }))
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(err["code"], "notFound", "{err}");
 }
 
 #[test]

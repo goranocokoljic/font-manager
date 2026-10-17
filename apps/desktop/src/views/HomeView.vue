@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import FacePreviewList from '../components/FacePreviewList.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
@@ -9,14 +10,20 @@ import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap'
 import { useAppStore } from '../stores/app';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useLayoutStore } from '../stores/layout';
+import { useLibraryStore } from '../stores/library';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 
 const app = useAppStore();
 const layout = useLayoutStore();
 const selection = useSelectionStore();
 const commands = useCommandsStore();
+const library = useLibraryStore();
 const route = useRoute();
-onMounted(() => app.load());
+onMounted(() => {
+  void app.load();
+  void library.load();
+});
+onBeforeUnmount(() => void library.stop());
 
 useActions([
   {
@@ -81,8 +88,10 @@ const groups = [
           Inspector
         </button>
       </header>
-      <section class="empty" aria-label="Font list">
-        <p>No fonts yet. Add a folder to start your library.</p>
+      <FacePreviewList v-if="library.faces.length" :faces="library.faces" />
+      <section v-else class="empty" aria-label="Font list">
+        <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
+        <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
       </section>
     </template>
 
