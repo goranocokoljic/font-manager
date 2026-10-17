@@ -18,6 +18,7 @@ use std::path::Path;
 use fm_api::common::{Axis, AxisValue, FontFormat, Health, NamedInstance};
 use read_fonts::types::Tag;
 use read_fonts::{CollectionRef, FontRef, ReadError, TableProvider};
+use serde::{Deserialize, Serialize};
 use skrifa::MetadataProvider;
 use skrifa::string::StringId;
 
@@ -37,7 +38,11 @@ pub struct ParsedFile {
 }
 
 /// One face of a font file.
-#[derive(Debug, Clone, PartialEq)]
+///
+/// The index stores it as JSON (`face.parsed`), without the code points: they
+/// go into `face.coverage` as packed ranges.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ParsedFace {
     /// The face's index in its collection; 0 for a single font.
     pub index: u32,
@@ -80,6 +85,7 @@ pub struct ParsedFace {
     /// Feature tags from `GSUB` and `GPOS`, sorted, without duplicates.
     pub features: Vec<String>,
     /// Code points mapped by `cmap`, sorted, without duplicates.
+    #[serde(skip)]
     pub code_points: Vec<u32>,
     /// Whether this face could be read in full.
     pub health: Health,

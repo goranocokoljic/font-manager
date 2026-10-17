@@ -105,7 +105,7 @@ pub fn group_families<'a>(
 }
 
 /// The name a face is grouped under: name ID 16, else 1, else the file stem.
-fn family_name(path: &Path, face: &ParsedFace) -> String {
+pub(crate) fn family_name(path: &Path, face: &ParsedFace) -> String {
     first_name([&face.typographic_family, &face.family]).unwrap_or_else(|| {
         path.file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
@@ -122,6 +122,23 @@ fn first_name<const N: usize>(names: [&Option<String>; N]) -> Option<String> {
         .find(|name| !name.is_empty())
 }
 
+/// The style of the face itself, not of its named instances: name ID 17,
+/// else 2, else "Regular", with the OS/2 weight and width and the slant.
+pub(crate) fn face_style(path: &Path, face: &ParsedFace) -> Style {
+    let name = first_name([&face.typographic_subfamily, &face.subfamily])
+        .unwrap_or_else(|| DEFAULT_STYLE.to_owned());
+    Style {
+        slant: static_slant(face.italic_angle, &name),
+        name,
+        weight: face.weight.unwrap_or(DEFAULT_WEIGHT),
+        width: face.width.unwrap_or(DEFAULT_WIDTH),
+        path: path.to_path_buf(),
+        face_index: face.index,
+        instance: None,
+        postscript_name: face.postscript_name.clone(),
+    }
+}
+
 /// Names that differ only in case or white space are one family.
 fn family_key(name: &str) -> String {
     collapse_spaces(name).to_lowercase()
@@ -134,19 +151,8 @@ fn collapse_spaces(s: &str) -> String {
 /// The styles a face contributes: one per named instance of a variable face,
 /// else the face itself.
 fn styles_of(path: &Path, face: &ParsedFace) -> Vec<Style> {
-    let face_style = first_name([&face.typographic_subfamily, &face.subfamily])
-        .unwrap_or_else(|| DEFAULT_STYLE.to_owned());
-    let face_slant = static_slant(face.italic_angle, &face_style);
-    let base = Style {
-        name: face_style,
-        weight: face.weight.unwrap_or(DEFAULT_WEIGHT),
-        width: face.width.unwrap_or(DEFAULT_WIDTH),
-        slant: face_slant,
-        path: path.to_path_buf(),
-        face_index: face.index,
-        instance: None,
-        postscript_name: face.postscript_name.clone(),
-    };
+    let base = face_style(path, face);
+    let face_slant = base.slant;
     if !face.is_variable() || face.named_instances.is_empty() {
         return vec![base];
     }
