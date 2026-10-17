@@ -581,6 +581,66 @@ mod tests {
         assert!(matches!(file.faces[0].health, Health::Broken(_)));
     }
 
+    /// The byte offset of the table record for `tag` in a single font's
+    /// table directory (12-byte header, then 16-byte records).
+    fn table_record(data: &[u8], tag: &[u8; 4]) -> usize {
+        let count = usize::from(u16::from_be_bytes([data[4], data[5]]));
+        (0..count)
+            .map(|i| 12 + 16 * i)
+            .find(|&at| &data[at..at + 4] == tag)
+            .expect("table record")
+    }
+
+    fn table_offset(data: &[u8], record: usize) -> usize {
+        let bytes: [u8; 4] = data[record + 8..record + 12].try_into().expect("offset");
+        u32::from_be_bytes(bytes) as usize
+    }
+
+    fn broken_reason(face: &ParsedFace) -> &str {
+        match &face.health {
+            Health::Broken(reason) => reason,
+            other => panic!("expected broken, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_malformed_table_inside_the_file_breaks_the_face() {
+        let mut data = read("google-repo/castoro/Castoro[wght].ttf");
+        // Shrink the OS/2 record to 10 bytes: still inside the file, too short
+        // for the table.
+        let record = table_record(&data, b"OS/2");
+        data[record + 12..record + 16].copy_from_slice(&10u32.to_be_bytes());
+        let file = parse(&data);
+        let face = &file.faces[0];
+        let reason = broken_reason(face);
+        assert!(reason.contains("OS/2 table is malformed"), "{reason}");
+        assert_eq!(face.weight, None);
+        // The other tables are still read.
+        assert!(face.family.is_some());
+        assert!(!face.code_points.is_empty());
+    }
+
+    #[test]
+    fn a_malformed_feature_list_breaks_the_face() {
+        let mut data = read("google-repo/asapsharp/AsapSharp[wdth,wght].ttf");
+        // Point the GSUB FeatureList offset (header bytes 6..8) past the table.
+        let gsub = table_offset(&data, table_record(&data, b"GSUB"));
+        data[gsub + 6..gsub + 8].copy_from_slice(&u16::MAX.to_be_bytes());
+        let file = parse(&data);
+        let face = &file.faces[0];
+        let reason = broken_reason(face);
+        assert!(
+            reason.contains("GSUB feature list is malformed"),
+            "{reason}"
+        );
+        // GPOS features are still read.
+        assert!(
+            face.features.iter().any(|f| f == "kern"),
+            "{:?}",
+            face.features
+        );
+    }
+
     #[test]
     fn data_that_is_not_a_font_is_broken() {
         let cases: [&[u8]; 5] = [b"", b"ab", b"\0\0\0", b"not a font at all", &[0xff; 64]];
