@@ -19,7 +19,7 @@ look() { if fc-list ":family=$1" family | grep -q .; then echo true; else echo f
 row() { local r; r="$(look "$2")"; rows+=("| $1 | $r |"); printf '%-62s %s\n' "$1" "$r"; }
 start_watch() {
     local ready; ready="$(mktemp -u)"
-    python3 "$here/linux-watch.py" "$1" "$ready" 45 > "$ready.out" 2>&1 & echo $! > "$ready.pid"
+    python3 "$here/linux-watch.py" "$1" "$ready" 60 > "$ready.out" 2>&1 & echo $! > "$ready.pid"
     while [ ! -f "$ready" ]; do sleep 0.2; done; echo "$ready"
 }
 end_watch() { gone "$(cat "$2.pid")"; local r; r="$(cat "$2.out")"; rows+=("| $1 | $r |"); printf '%-62s %s\n' "$1" "$r"; }
@@ -34,6 +34,9 @@ fc-cache -f >/dev/null
 # after a crash).
 row "session: before" "$session_fam"
 w="$(start_watch "$session_fam")"
+# fontconfig compares folder times at 1 s resolution against the time it last
+# loaded; a change in that same second is missed. Real apps start long before.
+sleep 2
 ln -sf "$session_path" "$fonts/session/"
 row "session: symlink, no fc-cache, new process" "$session_fam"
 fc-cache "$fonts" >/dev/null
