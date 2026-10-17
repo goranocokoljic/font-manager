@@ -90,7 +90,7 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
 - **Idle.** Nothing to start, but the other lane still has a story in flight
   (its merge can close a dependency or free an overlapping area): the lane waits
   `idle.poll_min` (10) minutes and asks the picker again, for at most
-  `idle.max_hours` (8). Nothing in flight anywhere → the lane ends.
+  `idle.max_hours` (8). Nothing in flight anywhere on two picks in a row (one poll apart) → the lane ends; the second pick covers the other lane being between two stories.
 - **build** — read the issue, epic, ADR, PureContext `get_task_context`, KB
   pitfalls; branch `E3.2-slug` off `origin/main`; implement core → api →
   adapter; tests per criterion; preflight (`pnpm lint`, `cargo nextest run
