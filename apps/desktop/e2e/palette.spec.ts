@@ -60,15 +60,20 @@ test('keyboard only: activate, go to columns and hide the inspector', async ({ p
   await page.keyboard.press('Enter');
   await expect(state).toHaveText('Active for this session');
 
-  // Tab moves column by column: sidebar, then the list.
+  // Tab moves from a column into its controls; columns follow in order:
+  // sidebar, its divider, then the list.
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('sidebar');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('navigation', { name: 'Library' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('separator', { name: 'Resize sidebar' })).toBeFocused();
-  await page.keyboard.press('Tab');
+  await expect(page.getByRole('button', { name: 'Add folder' })).toBeFocused();
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('font list');
+  await page.keyboard.press('Enter');
   await expect(page.getByRole('main')).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('separator', { name: 'Resize sidebar' })).toBeFocused();
 
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('hide insp');
