@@ -38,3 +38,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E3.1 #51] crates/fm-api/src/lib.rs:51 — E2.7 (#230) added `Event::ScanStarted` without bumping `API_VERSION`, against the doc's "bumped on every contract change".
 - [E3.1 #51] crates/fm-api/src/mock.rs:751 — `MockApi::remove_source` silently drops active faces from `st.active`, while the new `fm_core::Index::remove_source` refuses with `Conflict` (rule 3); the mock and the core disagree.
+- [E2.6 #49] crates/fm-core/src/telemetry.rs:137 — a wuff panic caught by `catch_unwind` in `parser::decompress_web` still runs the installed crash hook, so a handled malformed WOFF could be sent as a crash report when crash reports are on.
