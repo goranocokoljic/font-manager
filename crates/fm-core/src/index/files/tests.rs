@@ -582,3 +582,63 @@ fn the_reference_library_persists_in_under_ten_seconds() {
     );
     assert!(elapsed < Duration::from_secs(10), "{elapsed:?}");
 }
+
+/// COR-1 (review cycle 1): a gone file is not read again, so a face row that
+/// did not load back must not be deleted when the gone flag is written.
+#[test]
+fn a_gone_file_keeps_faces_that_did_not_load_back_and_their_user_data() {
+    let dir = TempDir::new("files-gone-untrusted");
+    let fonts = dir.path().join("fonts");
+    let ttc = copy_fixture(&fonts, COLLECTION, "collection.ttc");
+    let (scanned, first) = scan(&fonts);
+    let faces = scanned.get(&ttc).expect("file").parsed.faces.len();
+    assert!(faces > 1, "the collection has several faces");
+    let (mut index, source, _) = open_db(&dir);
+    index.apply_rescan(source, &scanned, &first).expect("apply");
+
+    // The last face carries user data, and its row does not load back.
+    let last = faces - 1;
+    index
+        .conn
+        .execute_batch(&format!(
+            "INSERT INTO tag (id, name) VALUES (1, 'display');
+             INSERT INTO face_tag SELECT id, 1 FROM face WHERE collection_index = {last};
+             INSERT INTO user_meta (face_id, rating)
+                 SELECT id, 4 FROM face WHERE collection_index = {last};
+             UPDATE face SET parsed = 'from another version' WHERE collection_index = {last};"
+        ))
+        .expect("user data");
+    let mut loaded = index.load_files().expect("load");
+    assert_eq!(loaded.get(&ttc).expect("file").parsed.faces.len(), last);
+
+    // The folder goes offline: the file is gone.
+    fs::remove_file(&ttc).expect("remove");
+    let report = rescan(&mut loaded, &fonts);
+    assert_eq!(report.gone, std::slice::from_ref(&ttc));
+    index.apply_rescan(source, &loaded, &report).expect("apply");
+
+    assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM face"), faces);
+    assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM face_tag"), 1);
+    assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM user_meta"), 1);
+    assert_eq!(
+        count(&index.conn, "SELECT COUNT(*) FROM font_file WHERE gone = 1"),
+        1
+    );
+}
+
+#[test]
+fn a_gone_file_not_yet_in_the_index_is_written_in_full() {
+    let (mut index, source) = memory_db();
+    let mut files = FileIndex::new();
+    let mut file = copies(1, STATIC).remove(0);
+    file.gone = true;
+    let path = file.path.clone();
+    files.insert(file.clone());
+    let report = Rescan {
+        gone: vec![path.clone()],
+        ..Rescan::default()
+    };
+    let done = index.apply_rescan(source, &files, &report).expect("apply");
+    assert_eq!(done.faces, 1);
+    assert_eq!(index.load_files().expect("load").get(&path), Some(&file));
+}

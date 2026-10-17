@@ -52,6 +52,10 @@ enum Write<'a> {
     File(&'a IndexedFile),
     /// The file was not read again; only clear its gone flag.
     Found(&'a Path),
+    /// The file is no longer found; only set its gone flag. Its faces were
+    /// not read again, so they stay as they are (ADR 0004). A file not yet
+    /// in the index is written in full.
+    Gone(&'a IndexedFile),
 }
 
 const UPSERT_FILE: &str = "
@@ -85,6 +89,8 @@ WHERE file_id = ?1 AND collection_index >= ?2
 
 const MARK_FOUND: &str = "UPDATE font_file SET gone = 0 WHERE path = ?1 AND gone = 1";
 
+const MARK_GONE: &str = "UPDATE font_file SET gone = 1 WHERE path = ?1";
+
 impl Index {
     /// Writes `files`, found under the source `source`, in transactions of
     /// [`BATCH_SIZE`] files.
@@ -111,22 +117,28 @@ impl Index {
         self.write_batches(source, &writes, progress)
     }
 
-    /// Writes what one rescan of the source `source` changed: added, changed
-    /// and gone files in full, and the gone flag of unchanged files that came
-    /// back. `index` is the file index the rescan updated.
+    /// Writes what one rescan of the source `source` changed: added and
+    /// changed files in full, and only the gone flag of files that went away
+    /// or came back unchanged. `index` is the file index the rescan updated.
+    ///
+    /// A gone file was not read, so its faces in `index` may be fewer than
+    /// the database holds (a row that did not load back); its face rows, and
+    /// the user data on them, are never touched.
     pub fn apply_rescan(
         &mut self,
         source: SourceId,
         index: &FileIndex,
         rescan: &Rescan,
     ) -> FmResult<Persisted> {
-        let full = rescan
-            .added
-            .iter()
-            .chain(&rescan.changed)
-            .chain(&rescan.gone);
-        let writes: Vec<_> = full
+        let read = rescan.added.iter().chain(&rescan.changed);
+        let writes: Vec<_> = read
             .filter_map(|path| index.get(path).map(Write::File))
+            .chain(
+                rescan
+                    .gone
+                    .iter()
+                    .filter_map(|path| index.get(path).map(Write::Gone)),
+            )
             .chain(rescan.unchanged.iter().map(|p| Write::Found(p)))
             .collect();
         self.write_batches(source, &writes, &mut |_| {})
@@ -231,6 +243,15 @@ impl Index {
                         tx.prepare_cached(MARK_FOUND)
                             .and_then(|mut s| s.execute([path_to_sql(path)]))
                             .map_err(|e| db_error(&e))?;
+                    }
+                    Write::Gone(file) => {
+                        let marked = tx
+                            .prepare_cached(MARK_GONE)
+                            .and_then(|mut s| s.execute([path_to_sql(&file.path)]))
+                            .map_err(|e| db_error(&e))?;
+                        if marked == 0 {
+                            out.faces += write_file(&tx, source, file)?;
+                        }
                     }
                 }
             }
