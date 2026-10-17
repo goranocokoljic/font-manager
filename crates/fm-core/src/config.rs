@@ -114,6 +114,7 @@ mod tests {
         assert_eq!(config, Config::default());
         assert!(!config.telemetry);
         assert_eq!(config.log_level, LogLevel::Info);
+        assert_eq!(config.settings.rescan_interval_minutes, 60);
     }
 
     #[test]
@@ -155,6 +156,16 @@ mod tests {
         assert_eq!(config.log_level, LogLevel::Warn);
         assert!(!config.telemetry);
         assert_eq!(config.settings, Settings::default());
+        assert_eq!(config.settings.rescan_interval_minutes, 60);
+
+        fs::write(&path, r#"{"rescanIntervalMinutes": 15}"#).expect("write");
+        assert_eq!(
+            Config::load(&path)
+                .expect("loaded")
+                .settings
+                .rescan_interval_minutes,
+            15
+        );
     }
 
     #[test]
