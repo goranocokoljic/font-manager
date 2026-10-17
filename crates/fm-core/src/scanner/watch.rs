@@ -21,6 +21,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -28,7 +29,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use fm_api::ErrorCode;
-use notify::{EventKind, RecommendedWatcher, RecursiveMode, Watcher as _};
+use notify::{EventKind, RecommendedWatcher, RecursiveMode};
 
 use crate::scanner::{FileIndex, Rescan, discover};
 use crate::{Config, FmError, FmResult};
@@ -177,11 +178,23 @@ impl Watcher {
         settings: WatchSettings,
         on_update: impl FnMut(WatchUpdate) + Send + 'static,
     ) -> FmResult<Self> {
+        Self::start_with::<RecommendedWatcher>(index, settings, on_update)
+    }
+
+    /// [`Watcher::start`] over any OS watcher; tests put in one that fails.
+    fn start_with<W: notify::Watcher + Send + 'static>(
+        index: Arc<Mutex<FileIndex>>,
+        settings: WatchSettings,
+        on_update: impl FnMut(WatchUpdate) + Send + 'static,
+    ) -> FmResult<Self> {
         let (tx, rx) = mpsc::channel();
         let events = tx.clone();
-        let os = notify::recommended_watcher(move |event| {
-            let _ = events.send(Msg::Fs(event));
-        })
+        let os = W::new(
+            move |event| {
+                let _ = events.send(Msg::Fs(event));
+            },
+            notify::Config::default(),
+        )
         .map_err(|e| watch_error("File changes cannot be watched.", Path::new(""), e))?;
         let worker = Worker {
             os,
@@ -243,8 +256,8 @@ struct Source {
     next_rescan: Option<Instant>,
 }
 
-struct Worker {
-    os: RecommendedWatcher,
+struct Worker<W> {
+    os: W,
     index: Arc<Mutex<FileIndex>>,
     settings: WatchSettings,
     on_update: Box<dyn FnMut(WatchUpdate) + Send>,
@@ -252,7 +265,7 @@ struct Worker {
     debounce: Debounce,
 }
 
-impl Worker {
+impl<W: notify::Watcher> Worker<W> {
     fn run(mut self, rx: &Receiver<Msg>) {
         loop {
             let msg = match self.deadline() {
@@ -323,9 +336,7 @@ impl Worker {
             return Err(FmError::invalid("The source is not a folder.")
                 .with_detail(root.display().to_string()));
         }
-        self.os
-            .watch(root, RecursiveMode::Recursive)
-            .map_err(|e| watch_error("The source folder could not be watched.", root, e))?;
+        self.watch(root)?;
         self.sources.insert(
             root.to_path_buf(),
             Source {
@@ -343,30 +354,76 @@ impl Worker {
             .remove(root)
             .ok_or_else(|| not_a_source(root))?;
         if !source.paused {
-            let _ = self.os.unwatch(root);
+            self.unwatch(root);
         }
         self.debounce.forget(root);
         Ok(())
     }
 
     fn pause(&mut self, root: &Path, paused: bool) -> FmResult<()> {
-        let source = self
-            .sources
-            .get_mut(root)
-            .ok_or_else(|| not_a_source(root))?;
+        let source = self.sources.get(root).ok_or_else(|| not_a_source(root))?;
         if source.paused == paused {
             return Ok(());
         }
-        if paused {
-            let _ = self.os.unwatch(root);
-            self.debounce.forget(root);
-        } else {
-            self.os
-                .watch(root, RecursiveMode::Recursive)
-                .map_err(|e| watch_error("The source folder could not be watched.", root, e))?;
+        if !paused {
+            self.watch(root)?;
         }
-        source.paused = paused;
+        if let Some(source) = self.sources.get_mut(root) {
+            source.paused = paused;
+        }
+        if paused {
+            self.unwatch(root);
+            self.debounce.forget(root);
+        }
         Ok(())
+    }
+
+    /// Watches `root` for events. A source whose folder can be read counts as
+    /// watched even when part of its tree is not: inotify (Linux) watches
+    /// every subfolder on its own and fails on an unreadable one or at the
+    /// watch limit, where the other OS watch the root alone. The first scan
+    /// and the periodic rescan cover what the events miss.
+    fn watch(&mut self, root: &Path) -> FmResult<()> {
+        let Err(e) = self.os.watch(root, RecursiveMode::Recursive) else {
+            return Ok(());
+        };
+        if fs::read_dir(root).is_err() {
+            return Err(watch_error(
+                "The source folder could not be watched.",
+                root,
+                e,
+            ));
+        }
+        tracing::warn!(
+            "{} is only partly watched; the periodic rescan covers the rest: {e}",
+            root.display()
+        );
+        Ok(())
+    }
+
+    /// Stops watching `root`, then watches again the active sources that nest
+    /// with it: inotify (Linux) keeps one watch per folder, shared by nested
+    /// sources, and unwatching a folder drops every watch below it.
+    fn unwatch(&mut self, root: &Path) {
+        let _ = self.os.unwatch(root);
+        let nested: Vec<PathBuf> = self
+            .sources
+            .iter()
+            .filter(|(other, s)| {
+                !s.paused
+                    && other.as_path() != root
+                    && (other.starts_with(root) || root.starts_with(other))
+            })
+            .map(|(other, _)| other.clone())
+            .collect();
+        // Outer sources first (a parent sorts before its children), so an
+        // inner source is watched again after its parent's watch is renewed.
+        for other in nested {
+            let _ = self.os.unwatch(&other);
+            if let Err(e) = self.watch(&other) {
+                tracing::warn!("cannot watch {} again: {e}", other.display());
+            }
+        }
     }
 
     fn event(&mut self, event: notify::Result<notify::Event>) {
@@ -519,12 +576,16 @@ mod tests {
 
     impl Fixture {
         fn new(label: &str, settings: WatchSettings) -> Self {
+            Self::with::<RecommendedWatcher>(label, settings)
+        }
+
+        fn with<W: notify::Watcher + Send + 'static>(label: &str, settings: WatchSettings) -> Self {
             let tmp = TempDir::new(label);
             let root = tmp.path().join("Schriften ü");
             fs::create_dir_all(&root).expect("create source");
             let index = Arc::new(Mutex::new(FileIndex::new()));
             let (tx, updates) = mpsc::channel();
-            let watcher = Watcher::start(index.clone(), settings, move |u| {
+            let watcher = Watcher::start_with::<W>(index.clone(), settings, move |u| {
                 let _ = tx.send(u);
             })
             .expect("start watcher");
@@ -559,6 +620,32 @@ mod tests {
 
         fn indexed(&self, rel: &str) -> Option<crate::scanner::IndexedFile> {
             lock(&self.index).get(&self.root.join(rel)).cloned()
+        }
+    }
+
+    /// The OS watcher, but every watch reports the inotify watch limit, as
+    /// Linux does when it has watched only part of a large source.
+    struct OverLimit(RecommendedWatcher);
+
+    impl notify::Watcher for OverLimit {
+        fn new<F: notify::EventHandler>(
+            handler: F,
+            config: notify::Config,
+        ) -> notify::Result<Self> {
+            RecommendedWatcher::new(handler, config).map(Self)
+        }
+
+        fn watch(&mut self, path: &Path, mode: RecursiveMode) -> notify::Result<()> {
+            self.0.watch(path, mode)?;
+            Err(notify::Error::new(notify::ErrorKind::MaxFilesWatch).add_path(path.to_path_buf()))
+        }
+
+        fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+            self.0.unwatch(path)
+        }
+
+        fn kind() -> notify::WatcherKind {
+            RecommendedWatcher::kind()
         }
     }
 
@@ -723,6 +810,49 @@ mod tests {
         fs::remove_file(&path).expect("remove");
         let took = f.until(|i| gone(i, &path));
         assert!(took < WITHIN, "remove after resume took {took:?}");
+    }
+
+    #[test]
+    fn nested_sources_stay_watched_when_one_is_paused_or_removed() {
+        let f = Fixture::new("watch-nested", WatchSettings::default());
+        let inner = f.root.join("inner");
+        fs::create_dir_all(&inner).expect("create inner");
+        f.watcher.add_source(&inner).expect("add inner");
+        loop {
+            let update = f.next(Duration::from_secs(5)).expect("inner first scan");
+            if update.source == inner && update.trigger == Trigger::Added {
+                break;
+            }
+        }
+
+        // The outer source paused: the inner one still sees its events.
+        f.watcher.set_paused(&f.root, true).expect("pause outer");
+        let a = inner.join("a.ttf");
+        put(&a, &fixture(REGULAR));
+        let took = f.until(|i| present(i, &a));
+        assert!(took < WITHIN, "inner create took {took:?}");
+        f.watcher.set_paused(&f.root, false).expect("resume outer");
+
+        // The inner source removed: the outer one still sees events below it.
+        f.watcher.remove_source(&inner).expect("remove inner");
+        let b = inner.join("b.ttf");
+        put(&b, &fixture(OTHER));
+        let took = f.until(|i| present(i, &b));
+        assert!(took < WITHIN, "outer create took {took:?}");
+    }
+
+    #[test]
+    fn a_partly_watched_source_is_added_and_resumed() {
+        // `with` asserts the first scan, so the add did not fail.
+        let f = Fixture::with::<OverLimit>("watch-partly", WatchSettings::default());
+        let path = f.root.join("a.ttf");
+        put(&path, &fixture(REGULAR));
+        f.until(|i| present(i, &path));
+
+        f.watcher.set_paused(&f.root, true).expect("pause");
+        f.watcher.set_paused(&f.root, false).expect("resume");
+        let update = f.next(Duration::from_secs(5)).expect("resume rescan");
+        assert_eq!(update.trigger, Trigger::Resumed);
     }
 
     #[test]
