@@ -1,8 +1,8 @@
 //! Font file discovery: the first step of a scan.
 //!
 //! [`discover`] walks a source folder and lists every file with a font
-//! extension, with its size and modification time. It reads folder listings and file sizes only; it
-//! never opens, moves or changes a file (ADR 0004).
+//! extension, with its size and modification time. It reads folder listings
+//! and file metadata only; it never opens, moves or changes a file (ADR 0004).
 //!
 //! - Hidden folders (a name that starts with `.`) are skipped. The source
 //!   folder itself is walked even when its own name is hidden: the user chose it.
