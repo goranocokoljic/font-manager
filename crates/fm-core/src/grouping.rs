@@ -369,6 +369,8 @@ mod tests {
             ("Regular", 400, 5, 0.0),
             ("Light", 300, 5, 0.0),
             ("Oblique", 400, 5, -10.0),
+            // Narrower but slanted: width must win over slant.
+            ("Condensed Italic", 400, 3, -12.0),
         ] {
             faces.push(ParsedFace {
                 width: Some(width),
@@ -387,6 +389,7 @@ mod tests {
                 vec![
                     "Light",
                     "Condensed",
+                    "Condensed Italic",
                     "Regular",
                     "Italic",
                     "Oblique",
