@@ -19,6 +19,9 @@ Anek Malayalam Condensed
   ExtraLight | 250 3 Upright | google-static/anekmalayalam/AnekMalayalam_Condensed-ExtraLight.ttf#0
 Anybody Expanded
   Medium Italic | 500 7 Italic | google-static/anybody/Anybody_Expanded-MediumItalic.ttf#0
+Archivo
+  SemiBold | 600 5 Upright | fontshare/archivo/Archivo-SemiBold.woff2#0
+  Bold | 700 5 Upright | fontshare/archivo/Archivo-Bold.woff2#0
 Archivo Narrow
   Italic | 400 5 Italic | google-repo/archivonarrow/ArchivoNarrow-Italic[wght].ttf#0 instance 0
   Medium Italic | 500 5 Italic | google-repo/archivonarrow/ArchivoNarrow-Italic[wght].ttf#0 instance 1
@@ -54,6 +57,8 @@ Atkinson Hyperlegible Mono
   Italic | 400 5 Italic | google-static/atkinsonhyperlegiblemono/AtkinsonHyperlegibleMono-Italic.ttf#0
 Averia Sans Libre
   Light | 300 5 Upright | google-repo/averiasanslibre/AveriaSansLibre-Light.ttf#0
+Azeret Mono
+  ExtraBold Italic | 800 5 Italic | fontshare/azeret-mono/AzeretMono-ExtraBoldItalic.woff#0
 Barlow
   Bold Italic | 700 5 Italic | google-repo/barlow/Barlow-BoldItalic.ttf#0
 Barlow Condensed
@@ -63,6 +68,8 @@ Barlow Semi Condensed
 Basic
   Regular | 400 5 Upright | google-repo/basic/Basic-Regular.ttf#0
 Be Vietnam Pro
+  Thin | 100 5 Upright | fontshare/beVietnam-pro/BeVietnamPro-Thin.woff#0
+  SemiBold Italic | 600 5 Italic | fontshare/beVietnam-pro/BeVietnamPro-SemiBoldItalic.woff2#0
   Bold | 700 5 Upright | fontshare/beVietnam-pro/BeVietnamPro-Bold.otf#0
 Bebas Neue
   Regular | 400 5 Upright | fontshare/bebas-neue/BebasNeue-Regular.otf#0
@@ -150,7 +157,9 @@ Encode Sans SC
 Engagement
   Regular | 400 5 Upright | google-repo/engagement/Engagement-Regular.ttf#0
 Epilogue
+  Thin | 100 5 Upright | fontshare/epilogue/Epilogue-Thin.woff2#0
   Thin | 100 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 0
+  Thin Italic | 100 5 Italic | fontshare/epilogue/Epilogue-ThinItalic.woff2#0
   ExtraLight | 200 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 1
   Light | 300 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 2
   Regular | 400 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 3
@@ -171,6 +180,8 @@ Exo
   Black Italic | 900 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 8
 Fahkwang
   Medium Italic | 500 5 Italic | google-repo/fahkwang/Fahkwang-MediumItalic.ttf#0
+Familjen Grotesk
+  Bold Italic | 700 5 Italic | fontshare/familjen-grotesk/FamiljenGrotesk-BoldItalic.woff#0
 Fredoka
   SemiBold | 600 5 Upright | google-static/fredoka/Fredoka-SemiBold.ttf#0
 Gantari
@@ -229,7 +240,16 @@ Instrument Serif
 Italiana
   Regular | 400 5 Upright | google-repo/italiana/Italiana-Regular.ttf#0
 JetBrains Mono
+  Thin | 100 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 0
+  ExtraLight | 200 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 1
+  Light | 300 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 2
+  Regular | 400 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 3
+  Medium | 500 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 4
+  SemiBold | 600 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 5
   Bold | 700 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Bold.otf#0
+  Bold | 700 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 6
+  ExtraBold | 800 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2#0 instance 7
+  ExtraBold Italic | 800 5 Italic | fontshare/jet-brains-mono/JetBrainsMono-ExtraBoldItalic.woff#0
 Jost
   Thin Italic | 100 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 0
   ExtraLight Italic | 200 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 1
@@ -308,6 +328,8 @@ Manuale
   ExtraBold Italic | 800 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 5
 Marcellus SC
   Regular | 400 5 Upright | google-repo/marcellussc/MarcellusSC-Regular.ttf#0
+Merriweather Sans
+  SemiBold | 600 5 Upright | fontshare/merriweather-sans/MerriweatherSans-SemiBold.woff2#0
 Micro 5
   Regular | 400 5 Upright | google-repo/micro5/Micro5-Regular.ttf#0
 Miniver
@@ -316,6 +338,8 @@ Mona Sans
   Black Italic | 900 5 Italic | google-static/monasans/MonaSans-BlackItalic.ttf#0
 Mona Sans Expanded
   Black Italic | 900 7 Italic | google-static/monasans/MonaSans_Expanded-BlackItalic.ttf#0
+Montserrat
+  Light Italic | 300 5 Italic | fontshare/montserrat/Montserrat-LightItalic.woff2#0
 Mulish
   ExtraLight | 200 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 0
   Light | 300 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 1
@@ -414,6 +438,8 @@ Open Sans Hebrew Condensed
   Light | 300 3 Upright | google-repo/opensanshebrewcondensed/OpenSansHebrewCondensed-Light.ttf#0
 Oregano
   Regular | 400 5 Upright | google-repo/oregano/Oregano-Regular.ttf#0
+Outfit
+  Light | 300 5 Upright | fontshare/outfit/Outfit-Light.woff2#0
 Overlock
   Bold | 700 5 Upright | google-repo/overlock/Overlock-Bold.ttf#0
 Oxanium
@@ -444,11 +470,14 @@ Plus Jakarta Sans
   Medium | 500 5 Upright | google-static/plusjakartasans/PlusJakartaSans-Medium.ttf#0
 Pontano Sans
   SemiBold | 600 5 Upright | google-static/pontanosans/PontanoSans-SemiBold.ttf#0
+Poppins
+  Medium | 500 5 Upright | fontshare/poppins/Poppins-Medium.woff2#0
 Press Start 2P
   Regular | 400 5 Upright | google-repo/pressstart2p/PressStart2P-Regular.ttf#0
 Proza Libre
   Regular | 400 5 Upright | google-repo/prozalibre/ProzaLibre-Regular.ttf#0
 Public Sans
+  Thin | 100 5 Upright | fontshare/public-sans/PublicSans-Variable.woff#0
   Bold | 700 5 Upright | fontshare/public-sans/PublicSans-Bold.ttf#0
   Black | 900 5 Upright | fontshare/public-sans/PublicSans-Black.otf#0
 Radio Canada Big
@@ -490,6 +519,8 @@ Slackey
 Solitreo
   Regular | 400 5 Upright | google-repo/solitreo/Solitreo-Regular.ttf#0
 Sora
+  Light | 300 5 Upright | fontshare/sora/Sora-Light.woff#0
+  Italic | 400 5 Italic | fontshare/sora/Sora-Italic.woff2#0
   Medium Italic | 500 5 Italic | fontshare/sora/Sora-MediumItalic.ttf#0
 Sour Gummy
   Thin Italic | 100 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 0
@@ -501,6 +532,8 @@ Sour Gummy
   Bold Italic | 700 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 6
   ExtraBold Italic | 800 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 7
   Black Italic | 900 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 8
+Space Grotesk
+  SemiBold | 600 5 Upright | fontshare/space-grotesk/SpaceGrotesk-SemiBold.woff2#0
 Spline Sans
   Light | 300 5 Upright | fontshare/spline-sans/SplineSans-Light.ttf#0
 Spline Sans Mono

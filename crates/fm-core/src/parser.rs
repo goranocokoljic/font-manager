@@ -7,12 +7,21 @@
 //! Malformed data is never a panic. A file whose header cannot be read is
 //! [`Health::Broken`] with no faces; a face whose tables are malformed or cut
 //! off is listed with its own `Broken` health and whatever could still be
-//! read, and a file whose faces are all broken is broken as a whole. A
-//! table that is simply absent is not an error: its fields stay empty. Formats
-//! fontations does not read (WOFF, WOFF2, Type 1, dfont) are recognized by
-//! their magic bytes and returned as [`Health::Unsupported`] without faces.
+//! read, and a file whose faces are all broken is broken as a whole. An
+//! optional table that is absent is not an error: its fields stay empty. A
+//! face without `cmap` or `maxp`, with zero glyphs, or with neither outlines
+//! nor bitmaps is broken; a face with only monochrome bitmap strikes is
+//! [`Health::Unsupported`].
+//!
+//! WOFF and WOFF2 files are decompressed to their TrueType or OpenType data
+//! and parsed like any other font; they keep their web format and are
+//! [convertible](ParsedFile::is_convertible). Formats fontations does not read
+//! (Type 1, dfont, the bitmap formats `.fon`, `.fnt`, BDF and PCF) are
+//! recognized by their magic bytes and returned as [`Health::Unsupported`]
+//! without faces.
 
 use std::fs;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use fm_api::common::{Axis, AxisValue, FontFormat, Health, NamedInstance};
@@ -35,6 +44,15 @@ pub struct ParsedFile {
     pub health: Health,
     /// Every face, in file order (one for a single font, all of a collection).
     pub faces: Vec<ParsedFace>,
+}
+
+impl ParsedFile {
+    /// Whether this is a web font (WOFF, WOFF2) that decompressed to a usable
+    /// desktop font, so it can be converted to TTF or OTF for activation.
+    pub fn is_convertible(&self) -> bool {
+        matches!(self.format, Some(FontFormat::Woff | FontFormat::Woff2))
+            && self.faces.iter().any(|f| f.health == Health::Ok)
+    }
 }
 
 /// One face of a font file.
@@ -144,8 +162,8 @@ pub fn parse(data: &[u8]) -> ParsedFile {
     match &magic {
         b"ttcf" => parse_collection(data),
         [0, 1, 0, 0] | b"true" | b"OTTO" => parse_single(data, &magic),
-        b"wOFF" => unsupported(FontFormat::Woff, "WOFF files are not parsed yet."),
-        b"wOF2" => unsupported(FontFormat::Woff2, "WOFF2 files are not parsed yet."),
+        b"wOFF" => parse_web(data, FontFormat::Woff),
+        b"wOF2" => parse_web(data, FontFormat::Woff2),
         _ if is_type1(data) => unsupported(
             FontFormat::Type1,
             "Type 1 fonts are detected but not parsed.",
@@ -153,6 +171,10 @@ pub fn parse(data: &[u8]) -> ParsedFile {
         [0, 0, 1, 0] => unsupported(
             FontFormat::Dfont,
             "Mac resource-fork fonts are detected but not parsed.",
+        ),
+        _ if is_bitmap(data) => unsupported(
+            FontFormat::Bitmap,
+            "Bitmap fonts (.fon, .fnt, BDF, PCF) are detected but not parsed.",
         ),
         _ => broken_file(None, "The file is not a font format Font Manager can read."),
     }
@@ -165,7 +187,14 @@ fn parse_single(data: &[u8], magic: &[u8; 4]) -> ParsedFile {
         FontFormat::Ttf
     };
     match FontRef::new(data) {
-        Ok(font) => with_faces(format, vec![parse_face(&font, 0)]),
+        Ok(font) => {
+            let format = if is_bitmap_only(&font) {
+                FontFormat::Bitmap
+            } else {
+                format
+            };
+            with_faces(format, vec![parse_face(&font, 0)])
+        }
         Err(e) => broken_file(Some(format), format!("The font header is malformed: {e}.")),
     }
 }
@@ -185,7 +214,9 @@ fn parse_collection(data: &[u8]) -> ParsedFile {
     }
     let mut format = FontFormat::Ttc;
     let mut faces = Vec::new();
+    let mut bitmap_only = true;
     for (index, font) in (0..collection.len()).zip(collection.iter()) {
+        bitmap_only &= font.as_ref().is_ok_and(is_bitmap_only);
         match font {
             Ok(font) => {
                 if index == 0 && font.table_data(Tag::new(b"CFF ")).is_some() {
@@ -199,20 +230,112 @@ fn parse_collection(data: &[u8]) -> ParsedFile {
             )),
         }
     }
+    // A collection of bitmap-only fonts is a bitmap font, whatever its
+    // container.
+    if bitmap_only {
+        format = FontFormat::Bitmap;
+    }
     with_faces(format, faces)
 }
 
-/// A file whose faces are all broken is broken as a whole, with the first
-/// face's reason; otherwise it is `Ok` and each face carries its own health.
-fn with_faces(format: FontFormat, faces: Vec<ParsedFace>) -> ParsedFile {
-    let health = match faces.first() {
-        Some(ParsedFace {
-            health: Health::Broken(reason),
-            ..
-        }) if faces.iter().all(|f| matches!(f.health, Health::Broken(_))) => {
-            Health::Broken(reason.clone())
+/// The largest font a WOFF or WOFF2 file may decompress to, and the largest
+/// plausible compression ratio; the same limits `wuff` applies to WOFF2.
+const MAX_WEB_FONT_SFNT: u64 = 128 * 1024 * 1024;
+const MAX_WEB_FONT_RATIO: u64 = 100;
+
+/// Decompresses a WOFF or WOFF2 file and parses the font inside. The faces
+/// keep the web format.
+fn parse_web(data: &[u8], format: FontFormat) -> ParsedFile {
+    let name = if format == FontFormat::Woff {
+        "WOFF"
+    } else {
+        "WOFF2"
+    };
+    let Some(sfnt) = decompress_web(data, format) else {
+        return broken_file(
+            Some(format),
+            format!("The {name} data is malformed and cannot be decompressed."),
+        );
+    };
+    let mut file = match sfnt.get(..4).and_then(|m| <[u8; 4]>::try_from(m).ok()) {
+        Some(magic) if &magic == b"ttcf" => parse_collection(&sfnt),
+        Some(magic @ ([0, 1, 0, 0] | [b't', b'r', b'u', b'e'] | [b'O', b'T', b'T', b'O'])) => {
+            parse_single(&sfnt, &magic)
         }
-        _ => Health::Ok,
+        _ => {
+            return broken_file(
+                Some(format),
+                format!("The {name} file holds no TrueType or OpenType font."),
+            );
+        }
+    };
+    file.format = Some(format);
+    file
+}
+
+/// The TrueType or OpenType data inside a WOFF or WOFF2 file; `None` when it
+/// cannot be decompressed. `wuff` returns errors for malformed data, but it
+/// indexes slices on some paths, so a panic is caught and treated as
+/// malformed data too: a bad file must never take the scan down.
+fn decompress_web(data: &[u8], format: FontFormat) -> Option<Vec<u8>> {
+    if format == FontFormat::Woff && !woff1_size_is_plausible(data) {
+        return None;
+    }
+    let decoded = panic::catch_unwind(AssertUnwindSafe(|| {
+        if format == FontFormat::Woff {
+            wuff::decompress_woff1(data)
+        } else {
+            wuff::decompress_woff2(data)
+        }
+    }));
+    decoded.ok()?.ok()
+}
+
+/// Whether the decompressed size a WOFF 1 file declares is within the limits.
+/// `wuff` reserves each table's declared length before inflating it, so an
+/// absurd length would be a huge allocation from a small file.
+fn woff1_size_is_plausible(data: &[u8]) -> bool {
+    let be_u32 = |at: usize| {
+        data.get(at..at + 4)
+            .and_then(|b| <[u8; 4]>::try_from(b).ok())
+            .map(u32::from_be_bytes)
+    };
+    let Some(count) = data.get(12..14).map(|b| u16::from_be_bytes([b[0], b[1]])) else {
+        return false;
+    };
+    let mut total: u64 = 0;
+    for i in 0..usize::from(count) {
+        // 44-byte header, then 20-byte entries; origLength is at +12.
+        let Some(length) = be_u32(44 + 20 * i + 12) else {
+            return false;
+        };
+        total += u64::from(length);
+    }
+    let len = data.len() as u64;
+    total <= MAX_WEB_FONT_SFNT && total <= len.saturating_mul(MAX_WEB_FONT_RATIO)
+}
+
+/// A file with no usable face takes its health from its faces: broken when
+/// every face is broken (with the first face's reason), otherwise unsupported
+/// (with the first unsupported reason). A file with a usable face is `Ok` and
+/// each face carries its own health.
+fn with_faces(format: FontFormat, faces: Vec<ParsedFace>) -> ParsedFile {
+    let first_broken = faces.iter().find_map(|f| match &f.health {
+        Health::Broken(reason) => Some(reason),
+        _ => None,
+    });
+    let first_unsupported = faces.iter().find_map(|f| match &f.health {
+        Health::Unsupported(reason) => Some(reason),
+        _ => None,
+    });
+    let health = if faces.iter().any(|f| f.health == Health::Ok) {
+        Health::Ok
+    } else if let Some(reason) = first_unsupported {
+        Health::Unsupported(reason.clone())
+    } else if let Some(reason) = first_broken {
+        Health::Broken(reason.clone())
+    } else {
+        Health::Ok
     };
     ParsedFile {
         format: Some(format),
@@ -284,17 +407,67 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
     features.dedup();
     face.features = features;
 
-    if present(font.cmap(), "cmap", &mut problems).is_some() {
-        let mut code_points: Vec<u32> = font.charmap().mappings().map(|(cp, _)| cp).collect();
-        code_points.sort_unstable();
-        code_points.dedup();
-        face.code_points = code_points;
+    match font.cmap() {
+        Ok(_) => {
+            let mut code_points: Vec<u32> = font.charmap().mappings().map(|(cp, _)| cp).collect();
+            code_points.sort_unstable();
+            code_points.dedup();
+            face.code_points = code_points;
+        }
+        Err(ReadError::TableIsMissing(_)) if !has_record(font, b"cmap") => {
+            problems.push("The font has no cmap table, so no character maps to a glyph.".to_owned())
+        }
+        Err(ReadError::TableIsMissing(_)) => {} // cut off, reported above
+        Err(e) => problems.push(format!("The cmap table is malformed: {e}.")),
+    }
+
+    match font.maxp() {
+        Ok(maxp) if maxp.num_glyphs() == 0 => problems.push("The font has no glyphs.".to_owned()),
+        Ok(_) => {}
+        Err(ReadError::TableIsMissing(_)) if !has_record(font, b"maxp") => {
+            problems.push("The font has no maxp table, so its glyph count is unknown.".to_owned());
+        }
+        Err(ReadError::TableIsMissing(_)) => {} // cut off, reported above
+        Err(e) => problems.push(format!("The maxp table is malformed: {e}.")),
+    }
+
+    let bitmap_only = is_bitmap_only(font);
+    if !bitmap_only && !has_glyph_images(font) {
+        problems.push("The font has neither glyph outlines nor bitmaps.".to_owned());
     }
 
     if !problems.is_empty() {
         face.health = Health::Broken(problems.join(" "));
+    } else if bitmap_only {
+        face.health = Health::Unsupported(
+            "Bitmap-only fonts are detected but cannot be activated.".to_owned(),
+        );
     }
     face
+}
+
+/// Whether the face draws its glyphs with outlines (`glyf`, `CFF`, `CFF2`) or
+/// color images (`CBDT`, `sbix`, `SVG`). Color bitmaps (emoji) render and
+/// activate like outlines.
+fn has_glyph_images(font: &FontRef<'_>) -> bool {
+    [b"glyf", b"CFF ", b"CFF2", b"CBDT", b"sbix", b"SVG "]
+        .iter()
+        .any(|tag| has_record(font, tag))
+}
+
+/// Whether the face has only monochrome bitmap strikes (`EBDT`, Apple
+/// `bdat`): the legacy bitmap kind, recognized but not activated.
+fn is_bitmap_only(font: &FontRef<'_>) -> bool {
+    !has_glyph_images(font) && (has_record(font, b"EBDT") || has_record(font, b"bdat"))
+}
+
+/// Whether the table directory lists `tag`, readable or not.
+fn has_record(font: &FontRef<'_>, tag: &[u8; 4]) -> bool {
+    let tag = Tag::new(tag);
+    font.table_directory()
+        .table_records()
+        .iter()
+        .any(|record| record.tag() == tag)
 }
 
 fn read_variations(font: &FontRef<'_>, face: &mut ParsedFace) {
@@ -371,6 +544,27 @@ fn is_type1(data: &[u8]) -> bool {
     data.starts_with(&[0x80, 0x01])
         || data.starts_with(b"%!PS-AdobeFont")
         || data.starts_with(b"%!FontType1")
+}
+
+/// The bitmap formats fontations does not read: a Windows `.fon` (a 16-bit
+/// NE executable holding font resources), a bare Windows `.fnt` (version 2 or
+/// 3, its size field equal to the file size), X11 BDF and PCF.
+fn is_bitmap(data: &[u8]) -> bool {
+    let le_u32 = |at: usize| {
+        data.get(at..at + 4)
+            .and_then(|b| <[u8; 4]>::try_from(b).ok())
+            .map(u32::from_le_bytes)
+    };
+    let ne_executable = data.starts_with(b"MZ")
+        && le_u32(0x3c)
+            .and_then(|at| data.get(at as usize..(at as usize).checked_add(2)?))
+            .is_some_and(|sig| sig == b"NE");
+    let fnt = (data.starts_with(&[0, 2]) || data.starts_with(&[0, 3]))
+        && le_u32(2).is_some_and(|size| size as usize == data.len());
+    ne_executable
+        || fnt
+        || data.starts_with(b"STARTFONT ")
+        || data.starts_with(&[1, b'f', b'c', b'p'])
 }
 
 fn broken_file(format: Option<FontFormat>, reason: impl Into<String>) -> ParsedFile {
@@ -725,26 +919,250 @@ mod tests {
     fn formats_fontations_does_not_read_are_unsupported() {
         let cases = [
             (
-                read("fontshare/archivo/Archivo-Bold.woff2"),
-                FontFormat::Woff2,
-            ),
-            (
-                read("fontshare/azeret-mono/AzeretMono-ExtraBoldItalic.woff"),
-                FontFormat::Woff,
-            ),
-            (
                 read("type1/inconsolata/Inconsolata-zi4r.pfb"),
                 FontFormat::Type1,
             ),
             (b"%!PS-AdobeFont-1.0: Test".to_vec(), FontFormat::Type1),
             (vec![0, 0, 1, 0, 0, 0, 0, 0], FontFormat::Dfont),
+            (fon(), FontFormat::Bitmap),
+            (fnt(), FontFormat::Bitmap),
+            (
+                b"STARTFONT 2.1\nFONT -misc-fixed\n".to_vec(),
+                FontFormat::Bitmap,
+            ),
+            (vec![1, b'f', b'c', b'p', 9, 0, 0, 0], FontFormat::Bitmap),
         ];
         for (data, format) in cases {
             let file = parse(&data);
             assert_eq!(file.format, Some(format));
-            assert!(matches!(file.health, Health::Unsupported(_)), "{format:?}");
+            let Health::Unsupported(reason) = &file.health else {
+                panic!("{format:?}: expected unsupported, got {:?}", file.health);
+            };
+            assert!(reason.contains("detected but not parsed"), "{reason}");
             assert!(file.faces.is_empty());
+            assert!(!file.is_convertible());
         }
+    }
+
+    /// A minimal Windows `.fon`: an MZ stub whose `e_lfanew` points at an NE
+    /// header.
+    fn fon() -> Vec<u8> {
+        let mut data = vec![0; 0x48];
+        data[..2].copy_from_slice(b"MZ");
+        data[0x3c..0x40].copy_from_slice(&0x40u32.to_le_bytes());
+        data[0x40..0x42].copy_from_slice(b"NE");
+        data
+    }
+
+    /// A minimal bare Windows `.fnt`: version 3, size field equal to the size.
+    fn fnt() -> Vec<u8> {
+        let mut data = vec![0; 148];
+        data[..2].copy_from_slice(&0x0300u16.to_le_bytes());
+        data[2..6].copy_from_slice(&148u32.to_le_bytes());
+        data
+    }
+
+    #[test]
+    fn look_alikes_of_the_bitmap_formats_are_broken() {
+        let mut pe = fon();
+        pe[0x40..0x42].copy_from_slice(b"PE");
+        let mut short_fnt = fnt();
+        short_fnt.truncate(100);
+        let mut far_fon = fon();
+        far_fon[0x3c..0x40].copy_from_slice(&u32::MAX.to_le_bytes());
+        for data in [
+            pe,
+            short_fnt,
+            far_fon,
+            b"MZ".to_vec(),
+            b"STARTFONTX".to_vec(),
+        ] {
+            let file = parse(&data);
+            assert!(
+                matches!(file.health, Health::Broken(_)),
+                "{:?}",
+                file.health
+            );
+        }
+    }
+
+    #[test]
+    fn woff_and_woff2_are_parsed_and_convertible() {
+        let cases = [
+            (
+                "fontshare/archivo/Archivo-Bold.woff2",
+                FontFormat::Woff2,
+                "Archivo-Bold",
+            ),
+            (
+                "fontshare/azeret-mono/AzeretMono-ExtraBoldItalic.woff",
+                FontFormat::Woff,
+                "AzeretMono-ExtraBoldItalic",
+            ),
+        ];
+        for (rel, format, postscript) in cases {
+            let file = parse(&read(rel));
+            assert_eq!(file.format, Some(format), "{rel}");
+            assert_eq!(file.health, Health::Ok, "{rel}");
+            assert!(file.is_convertible(), "{rel}");
+            let face = &file.faces[0];
+            assert_eq!(face.health, Health::Ok, "{rel}");
+            assert_eq!(face.postscript_name.as_deref(), Some(postscript), "{rel}");
+            assert!(face.code_points.contains(&u32::from('A')), "{rel}");
+            assert!(face.weight.is_some_and(|w| w >= 700), "{rel}");
+        }
+        let variable = single("fontshare/jet-brains-mono/JetBrainsMono-Variable.woff2");
+        assert!(variable.is_variable());
+    }
+
+    #[test]
+    fn desktop_fonts_are_not_convertible() {
+        assert!(!parse(&read("google-repo/castoro/Castoro[wght].ttf")).is_convertible());
+        assert!(!parse(&read("derived/agdasima/agdasima.ttc")).is_convertible());
+    }
+
+    #[test]
+    fn malformed_woff_and_woff2_are_broken_not_convertible() {
+        for rel in [
+            "fontshare/archivo/Archivo-Bold.woff2",
+            "fontshare/azeret-mono/AzeretMono-ExtraBoldItalic.woff",
+        ] {
+            let data = read(rel);
+            // Cut in half: the compressed data ends early.
+            let file = parse(&data[..data.len() / 2]);
+            let Health::Broken(reason) = &file.health else {
+                panic!("{rel}: expected broken, got {:?}", file.health);
+            };
+            assert!(reason.contains("cannot be decompressed"), "{reason}");
+            assert!(file.faces.is_empty());
+            assert!(!file.is_convertible());
+            assert!(matches!(
+                file.format,
+                Some(FontFormat::Woff | FontFormat::Woff2)
+            ));
+        }
+        for data in [b"wOFF".to_vec(), b"wOF2\0\0\0\0".to_vec()] {
+            assert!(matches!(parse(&data).health, Health::Broken(_)));
+        }
+    }
+
+    #[test]
+    fn a_woff_declaring_a_huge_table_is_broken_without_inflating_it() {
+        let original = read("fontshare/azeret-mono/AzeretMono-ExtraBoldItalic.woff");
+        assert!(woff1_size_is_plausible(&original));
+        let mut data = original;
+        // origLength of the first table entry (44-byte header, +12).
+        data[56..60].copy_from_slice(&u32::MAX.to_be_bytes());
+        assert!(!woff1_size_is_plausible(&data));
+        let file = parse(&data);
+        assert!(
+            matches!(file.health, Health::Broken(_)),
+            "{:?}",
+            file.health
+        );
+    }
+
+    #[test]
+    fn every_prefix_and_flipped_byte_of_a_web_font_parses_without_panicking() {
+        for rel in [
+            "fontshare/outfit/Outfit-Light.woff2",
+            "fontshare/sora/Sora-Light.woff",
+        ] {
+            let original = read(rel);
+            for len in (0..original.len()).step_by(331) {
+                let _ = parse(&original[..len]);
+            }
+            for i in (0..original.len()).step_by(173) {
+                let mut data = original.clone();
+                data[i] ^= 0xff;
+                let _ = parse(&data);
+            }
+        }
+    }
+
+    /// The fixture with table record tags replaced; each replacement must keep
+    /// the directory sorted, as read-fonts finds tables by binary search.
+    fn retagged(rel: &str, changes: &[(&[u8; 4], &[u8; 4])]) -> Vec<u8> {
+        let mut data = read(rel);
+        for (from, to) in changes {
+            let record = table_record(&data, from);
+            data[record..record + 4].copy_from_slice(*to);
+        }
+        data
+    }
+
+    const STATIC_TTF: &str = "google-static/anekmalayalam/AnekMalayalam_Condensed-ExtraLight.ttf";
+
+    #[test]
+    fn a_face_without_cmap_is_broken() {
+        let file = parse(&retagged(STATIC_TTF, &[(b"cmap", b"cmaq")]));
+        let reason = broken_reason(&file.faces[0]);
+        assert!(reason.contains("no cmap table"), "{reason}");
+        assert!(matches!(file.health, Health::Broken(_)));
+        // The names are still read.
+        assert!(file.faces[0].family.is_some());
+    }
+
+    #[test]
+    fn a_face_without_maxp_is_broken() {
+        let file = parse(&retagged(STATIC_TTF, &[(b"maxp", b"maxq")]));
+        let reason = broken_reason(&file.faces[0]);
+        assert!(reason.contains("no maxp table"), "{reason}");
+    }
+
+    #[test]
+    fn a_face_with_zero_glyphs_is_broken() {
+        let mut data = read(STATIC_TTF);
+        // maxp.numGlyphs is at bytes 4..6 of the table.
+        let maxp = table_offset(&data, table_record(&data, b"maxp"));
+        data[maxp + 4..maxp + 6].copy_from_slice(&0u16.to_be_bytes());
+        let file = parse(&data);
+        let reason = broken_reason(&file.faces[0]);
+        assert!(reason.contains("no glyphs"), "{reason}");
+    }
+
+    #[test]
+    fn a_face_without_outlines_or_bitmaps_is_broken() {
+        let file = parse(&retagged(STATIC_TTF, &[(b"glyf", b"glyq")]));
+        let reason = broken_reason(&file.faces[0]);
+        assert!(
+            reason.contains("neither glyph outlines nor bitmaps"),
+            "{reason}"
+        );
+    }
+
+    #[test]
+    fn a_face_with_only_monochrome_bitmaps_is_an_unsupported_bitmap_font() {
+        let file = parse(&retagged(
+            STATIC_TTF,
+            &[(b"GDEF", b"EBDT"), (b"glyf", b"glyq")],
+        ));
+        assert_eq!(file.format, Some(FontFormat::Bitmap));
+        let Health::Unsupported(reason) = &file.health else {
+            panic!("expected unsupported, got {:?}", file.health);
+        };
+        assert!(reason.contains("Bitmap-only"), "{reason}");
+        assert_eq!(file.faces[0].health, file.health);
+        assert!(file.faces[0].family.is_some());
+    }
+
+    #[test]
+    fn a_face_with_color_bitmaps_is_ok() {
+        let file = parse(&retagged(
+            STATIC_TTF,
+            &[(b"GDEF", b"CBDT"), (b"glyf", b"glyq")],
+        ));
+        assert_eq!(file.format, Some(FontFormat::Ttf));
+        assert_eq!(file.health, Health::Ok);
+    }
+
+    #[test]
+    fn a_truncated_font_reports_the_cut_not_a_missing_table() {
+        let file = parse(&read("derived/agdasima/agdasima-truncated.ttf"));
+        let reason = broken_reason(&file.faces[0]);
+        assert!(!reason.contains("no cmap table"), "{reason}");
+        assert!(!reason.contains("no maxp table"), "{reason}");
+        assert!(reason.contains("cmap table is cut off"), "{reason}");
     }
 
     #[test]
@@ -770,7 +1188,7 @@ mod tests {
     }
 
     #[test]
-    fn every_sfnt_fixture_parses_with_names() {
+    fn every_fixture_parses_with_names_or_is_flagged() {
         let manifest = fs::read_to_string(fixture("manifest.tsv")).expect("manifest");
         let mut typographic = 0;
         for line in manifest.lines().skip(1) {
@@ -779,7 +1197,7 @@ mod tests {
             let file = parse(&read(path));
             match kind {
                 "broken" => assert!(matches!(file.health, Health::Broken(_)), "{path}"),
-                "woff" | "woff2" | "type1" => {
+                "type1" => {
                     assert!(matches!(file.health, Health::Unsupported(_)), "{path}");
                 }
                 _ => {
@@ -795,6 +1213,11 @@ mod tests {
                     if kind == "variable" {
                         assert!(file.faces[0].is_variable(), "{path}");
                     }
+                    assert_eq!(
+                        file.is_convertible(),
+                        matches!(kind, "woff" | "woff2"),
+                        "{path}"
+                    );
                 }
             }
         }
