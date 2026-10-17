@@ -302,6 +302,22 @@ pub struct FaceDetail {
     pub rating: Option<u8>,
     /// User notes.
     pub notes: Option<String>,
+    /// Family name as written in name ID 1 (the typographic one is
+    /// `face.family_name`).
+    #[serde(default)]
+    pub legacy_family: Option<String>,
+    /// Style name as written in name ID 2 (the typographic one is `face.style`).
+    #[serde(default)]
+    pub legacy_style: Option<String>,
+    /// Foundry or manufacturer (name ID 8).
+    #[serde(default)]
+    pub foundry: Option<String>,
+    /// `post.italicAngle` in degrees (0 for upright, negative leans right).
+    #[serde(default)]
+    pub italic_angle: Option<f32>,
+    /// Code points the Unicode `cmap` maps.
+    #[serde(default)]
+    pub code_point_count: Option<u32>,
 }
 
 /// What kind of health problem.

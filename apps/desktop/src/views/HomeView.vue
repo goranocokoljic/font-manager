@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { onMounted } from 'vue';
+import { onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import { useAppStore } from '../stores/app';
 import { useLayoutStore } from '../stores/layout';
+import { parseFaceId, useSelectionStore } from '../stores/selection';
 
 const app = useAppStore();
 const layout = useLayoutStore();
+const selection = useSelectionStore();
+const route = useRoute();
 onMounted(() => app.load());
+
+// The selected face is in the URL (`#/?face=3`) so a reload keeps it; the
+// font list (E5.2) selects by changing the query.
+watch(
+  () => route.query.face,
+  (face) => selection.select(parseFaceId(face)),
+  { immediate: true },
+);
 
 // Sidebar groups from the spec's information architecture; E5.7 and later fill them.
 const groups = [
@@ -50,7 +63,7 @@ const groups = [
     </template>
 
     <template #inspector>
-      <p class="placeholder">Nothing selected</p>
+      <InspectorPanel />
     </template>
 
     <template #status>
@@ -109,11 +122,6 @@ const groups = [
   display: grid;
   flex: 1;
   place-items: center;
-  color: var(--fm-muted);
-}
-.placeholder {
-  margin: 0;
-  padding: 16px;
   color: var(--fm-muted);
 }
 .info {

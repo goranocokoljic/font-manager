@@ -4,9 +4,10 @@
 
 use std::sync::Arc;
 
-use fm_api::library::AppInfo;
+use fm_api::activation::{ActivateRequest, ActivationOutcome, DeactivateRequest};
+use fm_api::library::{AppInfo, FaceDetail};
 use fm_api::mock::MockApi;
-use fm_api::{Api, ApiError, ApiResult, ErrorCode};
+use fm_api::{Api, ApiError, ApiResult, ErrorCode, FaceId};
 use tauri::{Runtime, State};
 
 /// The API every command talks to. `fm-core` does not implement [`Api`] yet,
@@ -49,11 +50,40 @@ async fn get_app_info(state: State<'_, AppState>) -> ApiResult<AppInfo> {
     call(&state, |api| api.app_info()).await
 }
 
+/// Full detail of one face, for the inspector.
+#[tauri::command]
+async fn get_face(state: State<'_, AppState>, face: FaceId) -> ApiResult<FaceDetail> {
+    call(&state, move |api| api.get_face(face)).await
+}
+
+/// Activates faces; one outcome per face.
+#[tauri::command]
+async fn activate(
+    state: State<'_, AppState>,
+    req: ActivateRequest,
+) -> ApiResult<Vec<ActivationOutcome>> {
+    call(&state, move |api| api.activate(req)).await
+}
+
+/// Deactivates faces the app registered; one outcome per face.
+#[tauri::command]
+async fn deactivate(
+    state: State<'_, AppState>,
+    req: DeactivateRequest,
+) -> ApiResult<Vec<ActivationOutcome>> {
+    call(&state, move |api| api.deactivate(req)).await
+}
+
 /// Registers the shared state and every command on a builder.
 pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri::Builder<R> {
     builder
         .manage(AppState::new(api))
-        .invoke_handler(tauri::generate_handler![get_app_info])
+        .invoke_handler(tauri::generate_handler![
+            get_app_info,
+            get_face,
+            activate,
+            deactivate
+        ])
 }
 
 /// Starts the desktop app.

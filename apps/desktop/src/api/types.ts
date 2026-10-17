@@ -377,6 +377,19 @@ export type FaceDetail = {
 	rating: number | null,
 	/**  User notes. */
 	notes: string | null,
+	/**
+	 *  Family name as written in name ID 1 (the typographic one is
+	 *  `face.family_name`).
+	 */
+	legacyFamily?: string | null,
+	/**  Style name as written in name ID 2 (the typographic one is `face.style`). */
+	legacyStyle?: string | null,
+	/**  Foundry or manufacturer (name ID 8). */
+	foundry?: string | null,
+	/**  `post.italicAngle` in degrees (0 for upright, negative leans right). */
+	italicAngle?: number | null,
+	/**  Code points the Unicode `cmap` maps. */
+	codePointCount?: number | null,
 };
 
 /**  One face (style) inside a font file; a collection file has several. */

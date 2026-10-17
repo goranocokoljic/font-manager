@@ -39,7 +39,7 @@ describe('app shell', () => {
       message: 'The app could not finish the request.',
       detail: null,
     };
-    setClient({ getAppInfo: () => Promise.reject(failure) });
+    setClient({ ...mockClient, getAppInfo: () => Promise.reject(failure) });
     const wrapper = await mountApp();
     expect(wrapper.get('[role="alert"]').text()).toBe(failure.message);
     expect(wrapper.find('[data-testid="app-info"]').exists()).toBe(false);
@@ -67,6 +67,7 @@ describe('app store', () => {
     setActivePinia(createPinia());
     let fail = true;
     const client: FmClient = {
+      ...mockClient,
       getAppInfo: () =>
         fail
           ? Promise.reject({ code: 'internal', message: 'x', detail: null })
