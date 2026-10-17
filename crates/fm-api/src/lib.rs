@@ -11,7 +11,7 @@
 //! Shape of the contract (ADR 0006):
 //! - one trait per service ([`LibraryService`], [`SearchService`],
 //!   [`PreviewService`], [`ActivationService`], [`OrganizationService`],
-//!   [`ExportService`], [`WorkflowService`]); [`Api`] is all of them plus
+//!   [`ExportService`], [`WorkflowService`], [`SettingsService`]); [`Api`] is all of them plus
 //!   [`EventSource`];
 //! - every method takes one request value and returns [`ApiResult`];
 //! - methods are synchronous; long work (a scan) returns a [`JobId`] at once
@@ -29,6 +29,7 @@ pub mod mock;
 pub mod organization;
 pub mod preview;
 pub mod search;
+pub mod settings;
 pub mod workflows;
 
 pub use activation::ActivationService;
@@ -40,6 +41,7 @@ pub use library::LibraryService;
 pub use organization::OrganizationService;
 pub use preview::PreviewService;
 pub use search::SearchService;
+pub use settings::SettingsService;
 pub use workflows::WorkflowService;
 
 use serde::{Deserialize, Serialize};
@@ -48,7 +50,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 2,
+    minor: 3,
     patch: 0,
 };
 
@@ -81,6 +83,7 @@ pub trait Api:
     + OrganizationService
     + ExportService
     + WorkflowService
+    + SettingsService
     + EventSource
     + Send
     + Sync
@@ -95,6 +98,7 @@ impl<T> Api for T where
         + OrganizationService
         + ExportService
         + WorkflowService
+        + SettingsService
         + EventSource
         + Send
         + Sync
@@ -166,6 +170,10 @@ pub fn types() -> specta::Types {
         workflows::Shortlist,
         workflows::PrepareForWebRequest,
         workflows::PrepareForWebResponse,
+        // settings
+        settings::Settings,
+        settings::SettingsUpdate,
+        settings::AppFolders,
     )
 }
 
@@ -175,13 +183,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.2.0");
+        assert_eq!(API_VERSION.to_string(), "0.3.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":2,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":3,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

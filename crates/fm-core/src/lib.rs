@@ -11,6 +11,7 @@ pub mod grouping;
 pub mod logging;
 pub mod parser;
 pub mod scanner;
+pub mod settings;
 pub mod startup;
 pub mod telemetry;
 #[cfg(test)]
@@ -18,4 +19,5 @@ mod test_support;
 
 pub use config::{Config, LogLevel};
 pub use error::{FmError, FmResult};
+pub use settings::SettingsStore;
 pub use telemetry::{CrashReport, Report, Telemetry, TelemetrySettings, TelemetrySink};

@@ -9,6 +9,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use fm_api::settings::Settings;
 use fm_api::{ApiError, ErrorCode};
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,9 @@ pub struct Config {
     pub log_level: LogLevel,
     /// Anonymous usage statistics. Off unless the user turns it on (rule 7).
     pub telemetry: bool,
+    /// What the Settings window edits, stored at the top level of the file.
+    #[serde(flatten)]
+    pub settings: Settings,
 }
 
 impl Default for Config {
@@ -27,6 +31,7 @@ impl Default for Config {
         Self {
             log_level: LogLevel::Info,
             telemetry: false,
+            settings: Settings::default(),
         }
     }
 }
@@ -118,6 +123,10 @@ mod tests {
         let config = Config {
             log_level: LogLevel::Debug,
             telemetry: true,
+            settings: Settings {
+                cache_limit_mb: 256,
+                ..Settings::default()
+            },
         };
         config.save(&path).expect("saved");
         assert_eq!(Config::load(&path).expect("loaded"), config);
@@ -145,6 +154,28 @@ mod tests {
         let config = Config::load(&path).expect("loaded");
         assert_eq!(config.log_level, LogLevel::Warn);
         assert!(!config.telemetry);
+        assert_eq!(config.settings, Settings::default());
+    }
+
+    #[test]
+    fn settings_sit_at_the_top_level_of_the_file() {
+        let dir = TempDir::new("config-flat");
+        let path = dir.path().join("config.json");
+        fs::write(
+            &path,
+            r#"{"theme": "dark", "cacheLimitMb": 128, "telemetry": true}"#,
+        )
+        .expect("write");
+        let config = Config::load(&path).expect("loaded");
+        assert_eq!(config.settings.theme, fm_api::settings::Theme::Dark);
+        assert_eq!(config.settings.cache_limit_mb, 128);
+        assert!(config.telemetry);
+        config.save(&path).expect("saved");
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
+        assert_eq!(json["theme"], "dark");
+        assert_eq!(json["rescanIntervalMinutes"], 60);
+        assert!(json.get("settings").is_none());
     }
 
     #[test]

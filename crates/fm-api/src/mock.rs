@@ -36,13 +36,14 @@ use crate::search::{
     CoverageReport, CoverageRequest, FamilyHit, Filters, LanguageCoverage, LanguagePreset, Missing,
     SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
 };
+use crate::settings::{AppFolders, Settings, SettingsUpdate};
 use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
 use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
     EventSource, ExportService, FaceId, FamilyId, JobId, LibraryService, OrganizationService,
-    PreviewService, SearchService, SetId, SourceId, TagId, WorkflowService,
+    PreviewService, SearchService, SetId, SettingsService, SourceId, TagId, WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
@@ -112,6 +113,7 @@ struct State {
     tags: Vec<Tag>,
     face_tags: HashMap<FaceId, BTreeSet<TagId>>,
     sets: Vec<ProjectSet>,
+    settings: Settings,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -432,6 +434,7 @@ impl State {
             tags: Vec::new(),
             face_tags: HashMap::new(),
             sets: Vec::new(),
+            settings: Settings::default(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -1559,6 +1562,27 @@ impl WorkflowService for MockApi {
             on_conflict: ConflictPolicy::KeepExisting,
         })?;
         Ok(PrepareForWebResponse { activated, export })
+    }
+}
+
+impl SettingsService for MockApi {
+    fn get_settings(&self) -> ApiResult<Settings> {
+        Ok(self.state().settings)
+    }
+
+    fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
+        let mut st = self.state();
+        st.settings = st.settings.apply(&req)?;
+        Ok(st.settings)
+    }
+
+    fn app_folders(&self) -> ApiResult<AppFolders> {
+        Ok(AppFolders {
+            config: "/home/demo/.config/font-manager".into(),
+            data: "/home/demo/.local/share/font-manager".into(),
+            cache: "/home/demo/.cache/font-manager".into(),
+            logs: "/home/demo/.local/state/font-manager/logs".into(),
+        })
     }
 }
 

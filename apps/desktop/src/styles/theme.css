@@ -1,5 +1,5 @@
 /* Light and dark palettes. The webview reports the OS appearance through
-   prefers-color-scheme, so the theme follows the OS with no code. */
+   prefers-color-scheme, so the `system` theme follows the OS with no code. */
 :root {
   color-scheme: light dark;
   font-family: system-ui, sans-serif;
@@ -15,8 +15,14 @@
   --fm-warning: #8a4b00;
 }
 
+/* The Settings theme (`data-theme` on the root, set by App.vue): `system` follows
+   the OS, `light` and `dark` override it. */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --fm-bg: #1c1c1e;
     --fm-surface: #242426;
     --fm-fg: #ececec;
@@ -27,6 +33,31 @@
     --fm-success: #7bd88f;
     --fm-warning: #ffb74d;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --fm-bg: #1c1c1e;
+  --fm-surface: #242426;
+  --fm-fg: #ececec;
+  --fm-muted: #a6a6a6;
+  --fm-border: #3a3a3c;
+  --fm-danger: #ff8a80;
+  --fm-accent: #6ea8ff;
+  --fm-success: #7bd88f;
+  --fm-warning: #ffb74d;
+}
+
+/* The Settings density (`data-density` on the root). */
+:root {
+  --fm-row-height: 32px;
+  --fm-gap: 8px;
+}
+
+:root[data-density='compact'] {
+  font-size: 12px;
+  --fm-row-height: 24px;
+  --fm-gap: 4px;
 }
 
 body {

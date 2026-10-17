@@ -66,6 +66,18 @@ export type ApiVersion = {
 	patch: number,
 };
 
+/**  The per-user folders the app keeps its own files in (ADR 0007). */
+export type AppFolders = {
+	/**  Holds `config.json`. */
+	config: string,
+	/**  Holds the index database. */
+	data: string,
+	/**  Holds the preview cache. */
+	cache: string,
+	/**  Holds the daily log files. */
+	logs: string,
+};
+
 /**  What the running app is. */
 export type AppInfo = {
 	/**  Product name. */
@@ -236,6 +248,13 @@ export type DeactivateRequest = {
 	/**  What to deactivate; everything the app activated when absent. */
 	target?: Target | null,
 };
+
+/**  How much space the lists use. */
+export type Density = 
+/**  Room to breathe. */
+"comfortable" | 
+/**  More rows on screen. */
+"compact";
 
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
@@ -926,6 +945,46 @@ export type SetSourcePausedRequest = {
 	paused: boolean,
 };
 
+/**
+ *  The user's settings. Missing keys take their defaults.
+ * 
+ *  The TypeScript type marks every field optional because of the defaults;
+ *  a response always carries all of them.
+ */
+export type Settings = {
+	/**  What the Activate button does. */
+	activationMode?: ActivationMode,
+	/**  What activation does when a face clashes with another font. */
+	onConflict?: ConflictPolicy,
+	/**  Light, dark or the OS appearance. */
+	theme?: Theme,
+	/**  Comfortable or compact lists. */
+	density?: Density,
+	/**  The largest size of the preview cache, in megabytes (64–16384). */
+	cacheLimitMb?: number,
+	/**
+	 *  Minutes between automatic rescans of the sources; 0 turns them off
+	 *  (at most 1440, one day).
+	 */
+	rescanIntervalMinutes?: number,
+};
+
+/**  Change some settings; absent fields keep their value. */
+export type SettingsUpdate = {
+	/**  What the Activate button does. */
+	activationMode?: ActivationMode | null,
+	/**  What activation does when a face clashes with another font. */
+	onConflict?: ConflictPolicy | null,
+	/**  Light, dark or the OS appearance. */
+	theme?: Theme | null,
+	/**  Comfortable or compact lists. */
+	density?: Density | null,
+	/**  The largest size of the preview cache, in megabytes. */
+	cacheLimitMb?: number | null,
+	/**  Minutes between automatic rescans; 0 turns them off. */
+	rescanIntervalMinutes?: number | null,
+};
+
 /**  The shortlist for a brief. */
 export type Shortlist = {
 	/**  Best first. */
@@ -1051,6 +1110,15 @@ collection: CollectionId } |
 /**  Set id. */
 set: SetId };
 
+/**  The colors of the app. */
+export type Theme = 
+/**  Follow the OS appearance. */
+"system" | 
+/**  Always light. */
+"light" | 
+/**  Always dark. */
+"dark";
+
 /**  Detach tags from faces. */
 export type UntagFacesRequest = {
 	/**  The faces. */
@@ -1086,4 +1154,4 @@ export type WeightRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 2, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 3, patch: 0 };

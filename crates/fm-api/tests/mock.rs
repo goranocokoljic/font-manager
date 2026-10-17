@@ -491,3 +491,35 @@ fn face_detail_without_the_newer_fields_still_reads() {
     assert_eq!(detail.legacy_family, None);
     assert_eq!(detail.code_point_count, None);
 }
+
+#[test]
+fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
+    use fm_api::settings::{Density, Settings, SettingsUpdate, Theme};
+    let api = api();
+    assert_eq!(api.get_settings().unwrap(), Settings::default());
+    let next = api
+        .update_settings(SettingsUpdate {
+            theme: Some(Theme::Dark),
+            on_conflict: Some(ConflictPolicy::Replace),
+            ..SettingsUpdate::default()
+        })
+        .unwrap();
+    assert_eq!(next.theme, Theme::Dark);
+    assert_eq!(next.on_conflict, ConflictPolicy::Replace);
+    assert_eq!(api.get_settings().unwrap(), next);
+
+    let err = api
+        .update_settings(SettingsUpdate {
+            density: Some(Density::Compact),
+            cache_limit_mb: Some(1),
+            ..SettingsUpdate::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert_eq!(
+        api.get_settings().unwrap(),
+        next,
+        "a rejected update is not half-applied"
+    );
+    assert!(api.app_folders().unwrap().logs.ends_with("logs"));
+}
