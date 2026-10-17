@@ -3,13 +3,5 @@ import { RouterView } from 'vue-router';
 </script>
 
 <template>
-  <main class="shell">
-    <RouterView />
-  </main>
+  <RouterView />
 </template>
-
-<style>
-.shell {
-  min-height: 100vh;
-}
-</style>
