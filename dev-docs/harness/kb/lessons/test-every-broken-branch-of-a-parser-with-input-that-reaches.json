@@ -1,0 +1,20 @@
+{
+  "id": "test-every-broken-branch-of-a-parser-with-input-that-reaches",
+  "title": "Test every Broken branch of a parser with input that reaches it",
+  "category": "testing",
+  "rule": "For each code path that turns malformed font data into Health::Broken (header error, table out of bounds, table present but malformed, sub-structure malformed), add a test with a crafted or mutated fixture that reaches that exact branch and asserts Broken with a reason naming the table. Sweeps that only check 'no panic' (`let _ = parse(...)`) do not count as coverage of the Broken behavior.",
+  "rationale": "E2.2 (#45): only the 'table cut off' branch was tested; replacing the malformed-table arm with `table.ok()` left all 19 parser tests green, so in-bounds table damage could silently regress to Health::Ok.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    45
+  ],
+  "file_globs": [
+    "crates/fm-core/src/parser*",
+    "crates/fm-core/src/**/parse*.rs",
+    "crates/fm-core/src/health*"
+  ],
+  "first_seen": "2026-10-17T00:25:08.283Z",
+  "last_seen": "2026-10-17T00:25:08.283Z"
+}
