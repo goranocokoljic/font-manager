@@ -1184,6 +1184,7 @@ try {
 
     $count = 0
     $idleSince = $null
+    $zeroSeen = $false
     $pickFails = 0
     while ($MaxStories -eq 0 -or $count -lt $MaxStories) {
         $pickArgs = @('--lane', $Lane, '--claim') + $(if ($Issues) { @('--issues', ($Issues -join ',')) } else { @() })
@@ -1205,15 +1206,22 @@ try {
             # overlapping area. Wait and ask again instead of ending the run.
             $maxIdle = [double]($Cfg.idle.max_hours ?? 8)
             if (-not $idleSince) { $idleSince = Get-Date }
-            if (-not $NoIdleWait -and [int]$plan.in_flight -gt 0 -and ((Get-Date) - $idleSince).TotalHours -lt $maxIdle) {
+            # in_flight 0 once is not enough: the other lane may be between two
+            # stories (its last merge just landed, its next claim not made yet).
+            # Ask one more time after a poll before ending the run.
+            $inFlight = [int]$plan.in_flight
+            $recheck = $inFlight -eq 0 -and -not $zeroSeen
+            $zeroSeen = $inFlight -eq 0
+            if (-not $NoIdleWait -and ($inFlight -gt 0 -or $recheck) -and ((Get-Date) - $idleSince).TotalHours -lt $maxIdle) {
                 $script:RunState = 'idle'
-                Wait-Minutes ([double]($Cfg.idle.poll_min ?? 10)) "$($plan.in_flight) story(ies) still in flight; asking the picker again"
+                $why = if ($inFlight -gt 0) { "$inFlight story(ies) still in flight" } else { 'nothing in flight; checking once more in case the other lane is between stories' }
+                Wait-Minutes ([double]($Cfg.idle.poll_min ?? 10)) "$why; asking the picker again"
                 $script:RunState = 'running'
                 continue
             }
             break
         }
-        $idleSince = $null
+        $idleSince = $null; $zeroSeen = $false
         if ($plan.action -eq 'resume') { Write-Log "=== resuming #$($plan.story.number) $($plan.story.id) (claimed by the harness) ===" 'Cyan' }
         else { Write-Log "=== picked #$($plan.story.number) $($plan.story.id) $($plan.story.title) [$($plan.story.size), $($plan.story.track), budget `$$($plan.story.budget_usd)] ===" 'Cyan' }
 
