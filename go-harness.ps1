@@ -36,7 +36,9 @@
 #   ./go-harness.ps1 -DryRun                       # which story each lane would pick and why; touches nothing
 #   ./go-harness.ps1 -Lane core                    # work the core lane until nothing is ready
 #   ./go-harness.ps1 -Lane ui -MaxStories 1        # one ui story, then stop
-#   ./go-harness.ps1 -Lane core -MaxStories 10 -StopOnBlock   # night run: 10 stories, stop at the first blocked one
+#   ./go-harness.ps1 -Lane core -MaxStories 10     # night run: 10 stories; a blocked story is skipped, the lane goes on
+#   ./go-harness.ps1 -Lane core -MaxStories 10 -StopOnBlock   # ...or stop at the first blocked one
+#   ./go-harness.ps1 -Lane core -Graduate          # ask the KB graduation question at the end (interactive)
 #   ./go-harness.ps1 -Lane core -Issues 42         # only these issues (still Definition-of-Ready checked)
 #   ./go-harness.ps1 -Lane core -NoWorktree        # run in THIS checkout (to watch the first story)
 #   ./go-harness.ps1 -Lane core -Model fable       # default opus
@@ -83,7 +85,14 @@ param(
     # Stop the lane at the first story that ends blocked or failed (night runs).
     [switch]$StopOnBlock,
 
+    # Idle while the other lane still works: end at once instead of waiting
+    # (idle.poll_min / idle.max_hours in go-harness.config.json).
+    [switch]$NoIdleWait,
+
     [switch]$NoLoopGuard,
+    # Ask the interactive KB graduation question when the lane ends. Off by
+    # default, so an unattended run never waits for a key (-GraduateOnly later).
+    [switch]$Graduate,
     [switch]$NoGraduate,
     [switch]$GraduateOnly,
     [switch]$DryRun,
@@ -401,6 +410,7 @@ function Get-PanelLines {
     else { $line1 += Seg ("   model {0} (asked {1}!)" -f $fam, $script:ModelArg) $C.boldred }
     if ($script:RunState -eq 'stopped') { $line1 += Seg '   STOPPED' $C.boldred }
     elseif ($script:RunState -eq 'paused') { $line1 += Seg '   ⏸ LIMIT — resuming after reset' $C.yellow }
+    elseif ($script:RunState -eq 'idle') { $line1 += Seg '   IDLE — waiting for the other lane' $C.yellow }
 
     $q = @(Seg ' stories: ' $C.gray)
     foreach ($k in $script:Done.Keys) {
@@ -605,6 +615,7 @@ function Invoke-Stage {
     $okCond = switch ($Stage) {
         'build'    { 'a draft PR exists for this story and the local preflight passed' }
         'ci-fix'   { 'the CI failure is fixed, the preflight passed and the fix is pushed' }
+        'sync'     { 'main is merged into the branch, every conflict is resolved, the preflight passed and the merge is pushed' }
         'review'   { 'the last review has zero open must findings and the bookkeeping commit is pushed' }
         'finalize' { 'criteria are ticked or marked pending with evidence, the summary is posted and the PR is ready (or a fix was pushed for CI)' }
     }
@@ -677,12 +688,17 @@ function New-StoryState {
     }
     $meta = Get-NodeJson 'issue.mjs' @('meta', "$($Pick.number)")
     $numeric = @($meta.criteria | Where-Object { $_.numeric }).Count -gt 0
+    # A ready (non-draft) PR is finished work that did not merge yet (main was
+    # red, or the lane stopped): check CI on it again, then the merge gate.
+    $ready = $Pick.pr -and -not $Pick.pr.draft
+    if ($ready) { Write-Log "    PR #$($Pick.pr.number) is ready: CI again, then the merge gate" 'DarkGray' }
     return [ordered]@{
         issue = [int]$Pick.number; id = $Pick.id; title = $Pick.title; epic = $Pick.epic; size = $Pick.size; track = $Pick.track
         budget_usd = [double]($SizeFactor[$Pick.size] ?? 5.0) * $BaseUsd; numeric = $numeric
-        stage = 'build'; after_ci = 'review'; session = ''; pr = $(if ($Pick.pr) { [int]$Pick.pr.number } else { 0 })
+        stage = $(if ($ready) { 'ci' } else { 'build' }); after_ci = $(if ($ready) { 'merge' } else { 'review' })
+        session = ''; pr = $(if ($Pick.pr) { [int]$Pick.pr.number } else { 0 })
         claim_ts = (Get-Date).ToString('o'); green_ts = $null
-        ci_attempts = 0; ci_failed_platforms = @(); finalize_runs = 0; merge_updates = 0
+        ci_attempts = 0; ci_failed_platforms = @(); finalize_runs = 0; merge_updates = 0; sync_runs = 0
         billed_usd = 0.0; purecontext_calls = 0; review_rounds = 0; must_total = 0; must_fixed = 0; should_total = 0; rejected_total = 0
         bench = $null
     }
@@ -737,13 +753,55 @@ function Block-Story {
     Complete-Story -Outcome 'blocked' -Reason $Reason
 }
 
+function Wait-Minutes {
+    param([double]$Minutes, [string]$Why)
+    $until = (Get-Date).AddMinutes($Minutes)
+    Write-Log "    [wait] $Why - next check at $($until.ToString('HH:mm'))" 'Yellow'
+    while ((Get-Date) -lt $until) { Start-Sleep -Seconds 30; Draw-Panel }
+}
+
+# Main is red. Re-run its failed jobs once per main commit (a flaky test),
+# then check every main_red.poll_min minutes. $true once main is green again;
+# $false after main_red.max_hours.
+function Wait-MainGreen {
+    $poll = [double]($Cfg.main_red.poll_min ?? 10)
+    $deadline = (Get-Date).AddHours([double]($Cfg.main_red.max_hours ?? 6))
+    $rerun = @{}
+    while ((Get-Date) -lt $deadline) {
+        $run = @(gh run list --branch $Cfg.base_branch --workflow ci.yml --limit 1 --json 'databaseId,status,conclusion,headSha' 2>$null | ConvertFrom-Json) | Select-Object -First 1
+        if ($run -and $run.status -eq 'completed' -and $run.conclusion -eq 'success') {
+            Write-Log "    main is green again at $($run.headSha.Substring(0, 7))" 'Green'
+            return $true
+        }
+        if ($run -and $run.status -eq 'completed' -and -not $rerun[$run.headSha]) {
+            $rerun[$run.headSha] = $true
+            Write-Log "    main is red at $($run.headSha.Substring(0, 7)): re-running its failed jobs once (flaky test?)" 'Yellow'
+            gh run rerun $run.databaseId --failed 2>&1 | Out-Null
+        }
+        Wait-Minutes $poll 'main is red; no merge until it is green'
+    }
+    return $false
+}
+
+# A ready PR a person merges on purpose: the picker does not take it back.
+function Set-HumanMerge {
+    param([string]$Why)
+    $s = $script:Story
+    gh pr comment $s.pr --body "go-harness: green and reviewed. Not auto-merged: $Why. A human merges this one." 2>$null | Out-Null
+    gh label create 'harness:human-merge' --color 'FBCA04' --description 'Green and reviewed; go-harness leaves the merge to a person' 2>$null | Out-Null
+    gh issue edit $s.issue --add-label 'harness:human-merge' 2>$null | Out-Null
+}
+
 # The merge gate. merge: human -> leave the ready PR for a person.
 # merge: auto -> scripts/harness/merge-check.mjs decides:
 #   merge  : green on all OS, reviewed, within budget, up to date with main -> squash-merge
 #   update : behind main -> merge main into the branch and run CI again (returns 'again')
-#   human  : excluded track (platform) or a changed existing fm-api type -> leave it, lane goes on
-#   block  : conflict with main, or the merge itself failed -> harness:blocked
-#   stop   : main is red -> leave it and stop the lane
+#   sync   : conflict with main -> the sync stage resolves it, then CI again (returns 'again')
+#   human  : excluded track (platform) or a changed existing fm-api type -> label
+#            harness:human-merge, leave it, lane goes on
+#   block  : draft/closed, or the merge itself failed -> harness:blocked
+#   stop   : main is red -> re-run its failed jobs once, wait for green (main_red),
+#            then the gate again; still red after main_red.max_hours -> stop the lane
 # Returns 'again' when the story must loop through CI before the gate runs again.
 function Invoke-MergeGate {
     $s = $script:Story
@@ -756,7 +814,7 @@ function Invoke-MergeGate {
     if (Test-OverBudget) {
         $why = Get-BudgetReason
         Write-Log "=== #$($s.issue) READY - not auto-merged: $why. ===" 'Yellow'
-        gh pr comment $s.pr --body "go-harness: green and reviewed, but not auto-merged: $why. A human merges this one." 2>$null | Out-Null
+        Set-HumanMerge -Why $why
         Complete-Story -Outcome 'ready' -Reason $why
         return
     }
@@ -767,13 +825,20 @@ function Invoke-MergeGate {
     switch ($mc.action) {
         'human' {
             Write-Log "=== #$($s.issue) READY - left for a human: $why. The lane goes on. ===" 'Yellow'
-            gh pr comment $s.pr --body "go-harness: green and reviewed. Not auto-merged: $why. A human merges this one." 2>$null | Out-Null
+            Set-HumanMerge -Why $why
             Complete-Story -Outcome 'ready' -Reason $why
         }
         'stop' {
-            Write-Log "=== #$($s.issue) READY - not merged: $why. Stopping the lane. ===" 'Red'
-            $script:StopReason = $why
+            Write-Log "=== #$($s.issue) not merged yet: $why ===" 'Yellow'
+            if (Wait-MainGreen) { return 'again' }   # stage stays 'merge': the gate runs again
+            Write-Log "=== #$($s.issue) READY - main stayed red for $($Cfg.main_red.max_hours ?? 6) h. Stopping the lane; the next run merges this PR. ===" 'Red'
+            $script:StopReason = "main stayed red: $why"
             Complete-Story -Outcome 'ready' -Reason $why
+        }
+        'sync' {
+            Write-Log "    $why - the sync stage resolves it, then CI again" 'Yellow'
+            $s.stage = 'sync'; $s.after_ci = 'merge'
+            return 'again'
         }
         'block' { Block-Story -Reason "auto-merge: $why" }
         'update' {
@@ -849,12 +914,32 @@ function Invoke-Story {
                         if ($s.ci_attempts -ge $CiBudget) { Block-Story -Reason "CI failed $($s.ci_attempts) times (last: $($failedOs -join ', '))" -Tried "$($s.ci_attempts - 1) ci-fix stage(s); see $ciFile in the lane worktree"; return }
                         $s.stage = 'ci-fix'
                     }
+                    'conflict' {
+                        Write-Log "    $($v.note) - the sync stage resolves it" 'Yellow'
+                        $s.stage = 'sync'   # after_ci stays: CI, then where this story was going
+                    }
+                    'infra' {
+                        # No code fix helps (billing, spending limit). Keep the story
+                        # claimed with its saved state: the next run resumes it here.
+                        $script:StopReason = "GitHub did not run CI: $($v.note)"
+                        Write-Log "=== #$($s.issue) CI not run by GitHub: $($v.note) ===" 'Red'
+                        Save-State
+                        return
+                    }
                     default { Block-Story -Reason "CI $($v.status): $($v.note)"; return }
                 }
             }
             'ci-fix' {
                 $r = Invoke-Stage 'ci-fix' "--ci $ciFile --attempt $($s.ci_attempts)/$CiBudget"
                 if ($r.Verdict -ne 'ok') { Block-Story -Reason "ci-fix: $($r.Reason)"; return }
+                $s.stage = 'ci'
+            }
+            'sync' {
+                $s.sync_runs = [int]$s.sync_runs + 1
+                $max = [int]($Cfg.auto_merge.max_syncs ?? 2)
+                if ($s.sync_runs -gt $max) { Block-Story -Reason "the branch conflicted with main $max times"; return }
+                $r = Invoke-Stage 'sync' "--pr $($s.pr) --attempt $($s.sync_runs)/$max"
+                if ($r.Verdict -ne 'ok') { Block-Story -Reason "sync: $($r.Reason)"; return }
                 $s.stage = 'ci'
             }
             'review' {
@@ -1098,17 +1183,38 @@ try {
     $r = Invoke-Node 'epic-sync.mjs' @('--dir', $HarnessDir); if ($r.Out.Trim()) { Write-Log "    $($r.Out.Trim())" 'DarkGray' }
 
     $count = 0
+    $idleSince = $null
+    $pickFails = 0
     while ($MaxStories -eq 0 -or $count -lt $MaxStories) {
         $pickArgs = @('--lane', $Lane, '--claim') + $(if ($Issues) { @('--issues', ($Issues -join ',')) } else { @() })
-        try { $plan = Get-NodeJson 'pick.mjs' $pickArgs } catch { Write-Log "=== picker failed: $($_.Exception.Message) ===" 'Red'; $script:HadFailures = $true; break }
+        try { $plan = Get-NodeJson 'pick.mjs' $pickArgs; $pickFails = 0 }
+        catch {
+            # GitHub hiccups at night: retry a few times before giving up.
+            $pickFails++
+            Write-Log "=== picker failed ($pickFails/3): $($_.Exception.Message) ===" 'Red'
+            if ($pickFails -ge 3) { $script:HadFailures = $true; break }
+            Wait-Minutes 2 'retrying the picker'
+            continue
+        }
         if ($plan.action -notin 'start', 'resume') {
             Write-Log "=== lane $Lane $($plan.action.ToUpper()) - nothing to start ===" 'Yellow'
             foreach ($x in $plan.reasons) { Write-Log "    $(if ($x.id) { "#$($x.number) $($x.id): " })$($x.why)" 'DarkGray' }
             $hw = @($plan.waiting_on_human | Where-Object { $_.blocks.Count -gt 0 })
             if ($hw) { Write-Log '    waiting on a human:' 'Yellow'; foreach ($h in $hw) { Write-Log "      #$($h.number) $($h.title) -> blocks $($h.blocks -join ', ')" 'Yellow' } }
+            # The other lane still works: its merge can free a dependency or an
+            # overlapping area. Wait and ask again instead of ending the run.
+            $maxIdle = [double]($Cfg.idle.max_hours ?? 8)
+            if (-not $idleSince) { $idleSince = Get-Date }
+            if (-not $NoIdleWait -and [int]$plan.in_flight -gt 0 -and ((Get-Date) - $idleSince).TotalHours -lt $maxIdle) {
+                $script:RunState = 'idle'
+                Wait-Minutes ([double]($Cfg.idle.poll_min ?? 10)) "$($plan.in_flight) story(ies) still in flight; asking the picker again"
+                $script:RunState = 'running'
+                continue
+            }
             break
         }
-        if ($plan.action -eq 'resume') { Write-Log "=== resuming #$($plan.story.number) $($plan.story.id) (claimed, PR draft or missing) ===" 'Cyan' }
+        $idleSince = $null
+        if ($plan.action -eq 'resume') { Write-Log "=== resuming #$($plan.story.number) $($plan.story.id) (claimed by the harness) ===" 'Cyan' }
         else { Write-Log "=== picked #$($plan.story.number) $($plan.story.id) $($plan.story.title) [$($plan.story.size), $($plan.story.track), budget `$$($plan.story.budget_usd)] ===" 'Cyan' }
 
         $script:Story = New-StoryState $plan.story
@@ -1152,5 +1258,6 @@ try {
 }
 finally { Close-Panel }
 
-if ($ranAny -and -not $NoGraduate) { Invoke-GraduationReview }
+if ($ranAny -and $Graduate -and -not $NoGraduate) { Invoke-GraduationReview }
+elseif ($ranAny) { Write-Host '    KB graduation skipped (unattended). Review lessons any time: ./go-harness.ps1 -GraduateOnly' -ForegroundColor DarkGray }
 if ($script:HadFailures) { exit 1 }
