@@ -6,7 +6,13 @@
 //! `sources.json` backup next to the database, and the next scan reads the
 //! folders again. [`Index::rebuild`] does the same on request, without losing
 //! ids, tags, ratings, collections or activation state.
+//!
+//! Scan results land in `font_file` and `face` through
+//! [`Index::persist_files`] and [`Index::apply_rescan`], one transaction per
+//! [`BATCH_SIZE`] files, and come back as a scanner `FileIndex` through
+//! [`Index::load_files`].
 
+mod files;
 mod schema;
 mod sources;
 
@@ -21,6 +27,7 @@ use rusqlite::Connection;
 
 use crate::error::{FmError, FmResult};
 
+pub use files::{BATCH_SIZE, Persisted};
 pub use schema::SCHEMA_VERSION;
 
 /// The file name of the index in the app-data folder.

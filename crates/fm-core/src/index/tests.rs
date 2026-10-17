@@ -80,6 +80,7 @@ fn fresh_database_has_every_table_of_the_data_model() {
                 "size",
                 "mtime",
                 "health",
+                "gone",
             ][..],
         ),
         (
@@ -101,6 +102,8 @@ fn fresh_database_has_every_table_of_the_data_model() {
                 "scripts",
                 "metrics",
                 "fstype",
+                "parsed",
+                "coverage",
             ][..],
         ),
         (

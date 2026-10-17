@@ -114,8 +114,22 @@ CREATE TABLE activation (
 );
 ";
 
+/// What a scan needs to load its file index back (E3.2).
+///
+/// - `font_file.gone`: the last rescan did not find the file; it stays with
+///   its faces and user data (ADR 0004).
+/// - `face.parsed`: the whole parsed face as JSON, so a loaded index equals
+///   the one that was saved. `NULL` or unreadable JSON means "read again".
+/// - `face.coverage`: the code points as packed little-endian `u32` pairs
+///   (first, last) of each run, a fraction of one row per code point.
+const V2: &str = "
+ALTER TABLE font_file ADD COLUMN gone INTEGER NOT NULL DEFAULT 0 CHECK (gone IN (0, 1));
+ALTER TABLE face ADD COLUMN parsed TEXT;
+ALTER TABLE face ADD COLUMN coverage BLOB;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

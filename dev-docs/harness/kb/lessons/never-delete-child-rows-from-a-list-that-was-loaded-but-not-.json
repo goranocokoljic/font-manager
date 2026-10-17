@@ -1,0 +1,19 @@
+{
+  "id": "never-delete-child-rows-from-a-list-that-was-loaded-but-not-",
+  "title": "Never delete child rows from a list that was loaded but not re-read",
+  "category": "data-integrity",
+  "rule": "When writing an entry back to the index that this pass did not read from the source again (a gone file, an unchanged file, anything restored from the database), write only the fields that changed (a flag, a stamp). Do not run the 'delete the children the entry no longer has' step: the in-memory list may be short because some rows failed to load, and the delete then cascades away tags, ratings, collections and sets. Run that delete only after a fresh read of the source, and add a test that damages one child row, marks the parent gone and asserts the child rows and their user data survive.",
+  "rationale": "E3.2 (#52): apply_rescan rewrote gone files in full from the loaded FileIndex; a face row that did not load back was then deleted by DELETE_OLD_FACES, and ON DELETE CASCADE removed its user data.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    52
+  ],
+  "file_globs": [
+    "crates/fm-core/src/index/**",
+    "crates/fm-core/src/scanner/**"
+  ],
+  "first_seen": "2026-10-17T22:43:10.167Z",
+  "last_seen": "2026-10-17T22:43:10.167Z"
+}
