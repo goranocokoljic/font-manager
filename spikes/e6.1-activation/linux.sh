@@ -25,13 +25,15 @@ start_watch() {
 end_watch() { gone "$(cat "$2.pid")"; local r; r="$(cat "$2.out")"; rows+=("| $1 | $r |"); printf '%-62s %s\n' "$1" "$r"; }
 
 echo "== $(. /etc/os-release && echo "$PRETTY_NAME"), fontconfig $(fc-list --version 2>&1 | grep -o '[0-9.]*$')"
+# The app creates its folders at first start, long before it activates
+# anything; a running app only watches folders that existed when it started.
+mkdir -p "$fonts/session"
 fc-cache -f >/dev/null
 
 # Session: links under <fonts>/session/, removed on quit (and on the next start
 # after a crash).
 row "session: before" "$session_fam"
 w="$(start_watch "$session_fam")"
-mkdir -p "$fonts/session"
 ln -sf "$session_path" "$fonts/session/"
 row "session: symlink, no fc-cache, new process" "$session_fam"
 fc-cache "$fonts" >/dev/null
@@ -50,7 +52,9 @@ row "user: symlink + fc-cache, new process" "$user_fam"
 # The link must follow the file: a moved file leaves a dangling link.
 moved="$(mktemp -d)/$(basename "$user_path")"; cp "$user_path" "$moved"
 ln -sf "$moved" "$fonts/"; fc-cache "$fonts" >/dev/null; rm "$moved"; fc-cache "$fonts" >/dev/null
-row "user: target file deleted (dangling link), new process" "$user_fam"
+row "user: target file deleted (dangling link) + fc-cache, new process" "$user_fam"
+fc-cache -f "$fonts" >/dev/null
+row "user: dangling link + fc-cache -f, new process" "$user_fam"
 rm -f "$fonts/$(basename "$user_path")"; fc-cache "$fonts" >/dev/null
 row "user: link removed, new process" "$user_fam"
 
