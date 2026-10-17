@@ -862,6 +862,9 @@ mod tests {
         let path = f.root.join("a.ttf");
         put(&path, &fixture(REGULAR));
         f.until(|i| present(i, &path));
+        // The write's own update can still be on the way; it must not be
+        // taken for the resume rescan.
+        f.settle();
 
         f.watcher.set_paused(&f.root, true).expect("pause");
         f.watcher.set_paused(&f.root, false).expect("resume");
