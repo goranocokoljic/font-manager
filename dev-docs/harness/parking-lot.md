@@ -41,3 +41,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E4.1 #59] apps/desktop/src-tauri/src/lib.rs:171 — the shell still serves `MockApi`, whose face paths do not exist, so every `fmfont` request returns 404 and every preview row says "Preview not available" in the real app until `fm-core` implements `Api`.
 - [E4.1 #59] apps/desktop/src/stores/library.ts:32 — the interim face feed issues one `getFamily` IPC per family on every `libraryChanged`/`scanFinished` (~10k calls on the reference library); E5.2 (#65) must replace it with paged families.
 - [E4.1 #59] crates/fm-api/src/preview.rs:55 — `FontSource.path` is a `String`, so a font at a non-UTF-8 path cannot be served by the `fmfont` route exactly.
+- [E2.6 #49] crates/fm-core/src/telemetry.rs:137 — a wuff panic caught by `catch_unwind` in `parser::decompress_web` still runs the installed crash hook, so a handled malformed WOFF could be sent as a crash report when crash reports are on.

@@ -22,8 +22,8 @@ use crate::{FmError, FmResult};
 
 /// The file extensions of the font formats the scanner knows, lower case.
 /// Matching ignores ASCII case.
-pub const FONT_EXTENSIONS: [&str; 9] = [
-    "ttf", "otf", "ttc", "otc", "woff", "woff2", "pfb", "pfa", "dfont",
+pub const FONT_EXTENSIONS: [&str; 13] = [
+    "ttf", "otf", "ttc", "otc", "woff", "woff2", "pfb", "pfa", "dfont", "fon", "fnt", "bdf", "pcf",
 ];
 
 /// A font file found in a source folder.
@@ -284,6 +284,9 @@ mod tests {
                 "Upper.TTF",
                 "a/b/c/0.ttf",
                 "a/b/c/1.otf",
+                "a/b/c/10.fnt",
+                "a/b/c/11.bdf",
+                "a/b/c/12.pcf",
                 "a/b/c/2.ttc",
                 "a/b/c/3.otc",
                 "a/b/c/4.woff",
@@ -291,6 +294,7 @@ mod tests {
                 "a/b/c/6.pfb",
                 "a/b/c/7.pfa",
                 "a/b/c/8.dfont",
+                "a/b/c/9.fon",
                 "mixed.WoFf2",
             ]
         );
