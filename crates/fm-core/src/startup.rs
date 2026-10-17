@@ -8,7 +8,7 @@ use fm_api::{ApiError, ErrorCode};
 use fm_platform::AppPaths;
 
 use crate::config::Config;
-use crate::index::{INDEX_FILE, Index, Opened, Rebuilt};
+use crate::index::{INDEX_FILE, Index, Opened};
 use crate::logging::{self, LogGuard};
 
 /// The app folders, the settings and the log guard. Keep it alive until exit.
@@ -20,11 +20,12 @@ pub struct Startup {
     pub config: Config,
     /// Flushes the log file when dropped.
     pub log: LogGuard,
-    /// The library index, migrated to the current schema.
-    pub index: Index,
-    /// Set when the index file was damaged and replaced by a fresh one; the
-    /// caller scans [`Rebuilt::sources`] to fill it again.
-    pub rebuilt: Option<Rebuilt>,
+    /// The library index, migrated to the current schema; when
+    /// [`Opened::rebuilt`] is set, the caller scans [`Rebuilt::sources`](crate::index::Rebuilt::sources)
+    /// to fill it again. An index that cannot be opened (one made by a newer
+    /// app, a locked file) is an error here, not a failed start: the paths,
+    /// the settings and the log stay usable without it.
+    pub index: Result<Opened, ApiError>,
 }
 
 /// Resolves the folders for the current user, reads the settings and makes
@@ -44,20 +45,23 @@ pub fn init() -> Result<Startup, ApiError> {
         logs = %paths.logs.display(),
         "font manager starting"
     );
-    let Opened { index, rebuilt } = open_index(&paths)?;
-    if let Some(r) = &rebuilt {
-        tracing::warn!(
+    let index = open_index(&paths);
+    match &index {
+        Ok(Opened {
+            rebuilt: Some(r), ..
+        }) => tracing::warn!(
             reason = %r.reason,
             sources = r.sources.len(),
             "library index was damaged and is rebuilt from the sources"
-        );
+        ),
+        Ok(_) => {}
+        Err(e) => tracing::error!(error = %e, "library index could not be opened"),
     }
     Ok(Startup {
         paths,
         config,
         log,
         index,
-        rebuilt,
     })
 }
 
@@ -133,6 +137,22 @@ mod tests {
         fs::write(paths.data.join(INDEX_FILE), b"not a database").expect("damage");
         let opened = open_index(&paths).expect("rebuilt, not an error");
         assert!(opened.rebuilt.is_some());
+    }
+
+    #[test]
+    fn open_index_returns_a_newer_index_as_an_error_value() {
+        let dir = TempDir::new("startup-index-newer");
+        let paths = paths_in(&dir);
+        prepare(&paths).expect("prepared");
+        let opened = open_index(&paths).expect("opened");
+        drop(opened);
+        rusqlite::Connection::open(paths.data.join(INDEX_FILE))
+            .and_then(|c| c.pragma_update(None, "user_version", crate::index::SCHEMA_VERSION + 1))
+            .expect("bump");
+        // `Startup::index` holds this value; `init` does not fail with it.
+        let err = open_index(&paths).expect_err("newer index");
+        assert_eq!(err.code, ErrorCode::Unsupported);
+        assert!(paths.config_file().is_file(), "the settings stay usable");
     }
 
     #[test]
