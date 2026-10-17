@@ -28,6 +28,8 @@ allow = [
   "Zlib",
   "Unicode-3.0",
   "CC0-1.0",
+  # Permissive, MIT-like. inotify and inotify-sys (the Linux backend of notify) use it.
+  "ISC",
   # Weak, file-level copyleft. Allowed because Tauri 2 depends on it (cssparser,
   # selectors); it puts no terms on our own files. GPL, LGPL and AGPL stay blocked.
   "MPL-2.0",
