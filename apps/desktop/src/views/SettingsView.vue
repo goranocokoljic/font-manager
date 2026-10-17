@@ -439,7 +439,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
 }
 .input {
   padding: 4px 8px;
-  border: 1px solid var(--fm-border);
+  border: 1px solid var(--fm-control-border);
   border-radius: 6px;
   background: var(--fm-bg);
   color: inherit;

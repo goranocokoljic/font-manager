@@ -74,3 +74,30 @@ test('a folder can be added, paused and removed; the system source stays', async
   await expect(list).not.toContainText('/Users/demo/More fonts');
   await expect(page.getByRole('button', { name: 'Remove /System/Library/Fonts' })).toBeDisabled();
 });
+
+/** WCAG contrast ratio of the field's border against the page background. */
+const borderContrast = (page: Page, name: string) =>
+  page.getByLabel(name).evaluate((el) => {
+    const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+    const lum = (c: string) => {
+      const [r, g, b] = rgb(c).map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const a = lum(getComputedStyle(el).borderTopColor);
+    const b = lum(getComputedStyle(document.body).backgroundColor);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`form fields are outlined at 3:1 or more (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await page.goto('/#/settings');
+    expect(await borderContrast(page, 'Folder to add')).toBeGreaterThanOrEqual(3);
+    await tab(page, 'Advanced').click();
+    for (const name of ['Preview cache size (MB)', 'Rescan sources every (minutes)'])
+      expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);
+  });
+}

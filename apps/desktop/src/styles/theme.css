@@ -9,6 +9,8 @@
   --fm-fg: #1a1a1a;
   --fm-muted: #595959;
   --fm-border: #d4d4d4;
+  /* Form-field outlines: at least 3:1 against --fm-bg (WCAG 1.4.11). */
+  --fm-control-border: #8a8a8a;
   --fm-danger: #b3261e;
   --fm-accent: #0a5fd6;
   --fm-success: #1b6e2d;
@@ -28,6 +30,7 @@
     --fm-fg: #ececec;
     --fm-muted: #a6a6a6;
     --fm-border: #3a3a3c;
+    --fm-control-border: #7a7a7c;
     --fm-danger: #ff8a80;
     --fm-accent: #6ea8ff;
     --fm-success: #7bd88f;
@@ -42,6 +45,7 @@
   --fm-fg: #ececec;
   --fm-muted: #a6a6a6;
   --fm-border: #3a3a3c;
+  --fm-control-border: #7a7a7c;
   --fm-danger: #ff8a80;
   --fm-accent: #6ea8ff;
   --fm-success: #7bd88f;
