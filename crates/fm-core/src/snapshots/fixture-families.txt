@@ -1,0 +1,596 @@
+Agdasima
+  Regular | 400 3 Upright | derived/agdasima/agdasima.ttc#1
+  Bold | 700 3 Upright | derived/agdasima/agdasima.ttc#0
+agdasima-truncated
+  Regular | 700 3 Upright | derived/agdasima/agdasima-truncated.ttf#0
+Albert Sans
+  Thin Italic | 100 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/albertsans/AlbertSans-Italic[wght].ttf#0 instance 8
+Almendra Display
+  Regular | 400 5 Upright | google-repo/almendradisplay/AlmendraDisplay-Regular.ttf#0
+Anek Malayalam Condensed
+  ExtraLight | 250 3 Upright | google-static/anekmalayalam/AnekMalayalam_Condensed-ExtraLight.ttf#0
+Anybody Expanded
+  Medium Italic | 500 7 Italic | google-static/anybody/Anybody_Expanded-MediumItalic.ttf#0
+Archivo Narrow
+  Italic | 400 5 Italic | google-repo/archivonarrow/ArchivoNarrow-Italic[wght].ttf#0 instance 0
+  Medium Italic | 500 5 Italic | google-repo/archivonarrow/ArchivoNarrow-Italic[wght].ttf#0 instance 1
+  SemiBold Italic | 600 5 Italic | google-repo/archivonarrow/ArchivoNarrow-Italic[wght].ttf#0 instance 2
+  Bold Italic | 700 5 Italic | google-repo/archivonarrow/ArchivoNarrow-Italic[wght].ttf#0 instance 3
+Aref Ruqaa Ink
+  Regular | 400 5 Upright | google-repo/arefruqaaink/ArefRuqaaInk-Regular.ttf#0
+Asap
+  SemiBold | 600 5 Upright | fontshare/asap/Asap-SemiBold.otf#0
+Asap Condensed
+  ExtraLight Italic | 250 3 Italic | google-static/asap/Asap_Condensed-ExtraLightItalic.ttf#0
+Asap Sharp
+  Thin | 100 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/asapsharp/AsapSharp[wdth,wght].ttf#0 instance 8
+Asap Sharp Expanded
+  ExtraBold Italic | 800 7 Italic | google-static/asapsharp/AsapSharp_Expanded-ExtraBoldItalic.ttf#0
+Asap Sharp SemiCondensed
+  Thin Italic | 250 4 Italic | google-static/asapsharp/AsapSharp_SemiCondensed-ThinItalic.ttf#0
+Asimovian
+  Regular | 400 5 Upright | google-repo/asimovian/Asimovian-Regular.ttf#0
+Asul
+  Bold | 700 5 Upright | google-repo/asul/Asul-Bold.ttf#0
+Atkinson Hyperlegible
+  Italic | 400 5 Italic | google-repo/atkinsonhyperlegible/AtkinsonHyperlegible-Italic.ttf#0
+Atkinson Hyperlegible Mono
+  Italic | 400 5 Italic | google-static/atkinsonhyperlegiblemono/AtkinsonHyperlegibleMono-Italic.ttf#0
+Averia Sans Libre
+  Light | 300 5 Upright | google-repo/averiasanslibre/AveriaSansLibre-Light.ttf#0
+Barlow
+  Bold Italic | 700 5 Italic | google-repo/barlow/Barlow-BoldItalic.ttf#0
+Barlow Condensed
+  Italic | 400 3 Italic | google-repo/barlowcondensed/BarlowCondensed-Italic.ttf#0
+Barlow Semi Condensed
+  ExtraLight Italic | 275 4 Italic | google-repo/barlowsemicondensed/BarlowSemiCondensed-ExtraLightItalic.ttf#0
+Basic
+  Regular | 400 5 Upright | google-repo/basic/Basic-Regular.ttf#0
+Be Vietnam Pro
+  Bold | 700 5 Upright | fontshare/beVietnam-pro/BeVietnamPro-Bold.otf#0
+Bebas Neue
+  Regular | 400 5 Upright | fontshare/bebas-neue/BebasNeue-Regular.otf#0
+  Regular | 400 5 Upright | google-repo/bebasneue/BebasNeue-Regular.ttf#0
+Bitcount Grid Single Ink
+  Thin | 100 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 1
+  Thin Italic | 100 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 3
+  ExtraLight Italic | 200 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 2
+  Light | 300 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 5
+  Light Italic | 300 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 4
+  Regular | 400 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 7
+  Italic | 400 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 6
+  Medium | 500 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 9
+  Medium Italic | 500 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 8
+  SemiBold | 600 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 11
+  SemiBold Italic | 600 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 10
+  Bold | 700 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 13
+  Bold Italic | 700 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 12
+  ExtraBold | 800 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 15
+  ExtraBold Italic | 800 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 14
+  Black | 900 5 Upright | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 17
+  Black Italic | 900 5 Italic | google-repo/bitcountgridsingleink/BitcountGridSingleInk[CRSV,ELSH,ELXP,SZP1,SZP2,XPN1,XPN2,YPN1,YPN2,slnt,wght].ttf#0 instance 16
+Cabin Condensed
+  Medium | 500 3 Upright | google-repo/cabincondensed/CabinCondensed-Medium.ttf#0
+Caesar Dressing
+  Regular | 400 5 Upright | google-repo/caesardressing/CaesarDressing-Regular.ttf#0
+Cagliostro
+  Regular | 400 5 Upright | google-repo/cagliostro/Cagliostro-Regular.ttf#0
+Cairo Play
+  ExtraLight | 200 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 0
+  Light | 300 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 1
+  Regular | 400 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 2
+  Medium | 500 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 3
+  SemiBold | 600 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 4
+  Bold | 700 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 5
+  ExtraBold | 800 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 6
+  Black | 900 5 Upright | google-repo/cairoplay/CairoPlay[slnt,wght].ttf#0 instance 7
+Cal Sans
+  Regular | 400 5 Upright | google-repo/calsans/CalSans-Regular.ttf#0
+Castoro
+  Regular | 400 5 Upright | google-repo/castoro/Castoro[wght].ttf#0 instance 0
+  Medium | 500 5 Upright | google-repo/castoro/Castoro[wght].ttf#0 instance 1
+  SemiBold | 600 5 Upright | google-repo/castoro/Castoro[wght].ttf#0 instance 2
+  Bold | 700 5 Upright | google-repo/castoro/Castoro[wght].ttf#0 instance 3
+Cherry Cream Soda
+  Regular | 400 5 Upright | google-repo/cherrycreamsoda/CherryCreamSoda-Regular.ttf#0
+Clicker Script
+  Regular | 400 5 Upright | google-repo/clickerscript/ClickerScript-Regular.ttf#0
+Comfortaa
+  Light | 300 5 Upright | google-repo/comfortaa/Comfortaa[wght].ttf#0 instance 0
+  Regular | 400 5 Upright | google-repo/comfortaa/Comfortaa[wght].ttf#0 instance 1
+  Medium | 500 5 Upright | google-repo/comfortaa/Comfortaa[wght].ttf#0 instance 2
+  SemiBold | 600 5 Upright | google-repo/comfortaa/Comfortaa[wght].ttf#0 instance 3
+  Bold | 700 5 Upright | google-repo/comfortaa/Comfortaa[wght].ttf#0 instance 4
+Cossette Texte
+  Bold | 700 5 Upright | google-repo/cossettetexte/CossetteTexte-Bold.ttf#0
+Cossette Titre
+  Bold | 700 5 Upright | google-repo/cossettetitre/CossetteTitre-Bold.ttf#0
+Crimson Pro
+  ExtraLight | 200 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 0
+  Light | 300 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 1
+  Regular | 400 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 2
+  Medium | 500 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 3
+  SemiBold | 600 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 4
+  Bold | 700 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 5
+  ExtraBold | 800 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 6
+  Black | 900 5 Upright | google-repo/crimsonpro/CrimsonPro[wght].ttf#0 instance 7
+Dai Banna SIL
+  Bold Italic | 700 5 Italic | google-repo/daibannasil/DaiBannaSIL-BoldItalic.ttf#0
+Delius Swash Caps
+  Regular | 400 5 Upright | google-repo/deliusswashcaps/DeliusSwashCaps-Regular.ttf#0
+Diplomata
+  Regular | 400 5 Upright | google-repo/diplomata/Diplomata-Regular.ttf#0
+DM Sans 18pt
+  Medium | 500 5 Upright | google-static/dmsans/DMSans_18pt-Medium.ttf#0
+DM Sans 36pt
+  Regular | 400 5 Upright | google-static/dmsans/DMSans_36pt-Regular.ttf#0
+Economica
+  Bold Italic | 700 5 Italic | google-repo/economica/Economica-BoldItalic.ttf#0
+Emblema One
+  Regular | 400 5 Upright | google-repo/emblemaone/EmblemaOne-Regular.ttf#0
+Encode Sans SC
+  Bold | 700 5 Upright | google-static/encodesanssc/EncodeSansSC-Bold.ttf#0
+Engagement
+  Regular | 400 5 Upright | google-repo/engagement/Engagement-Regular.ttf#0
+Epilogue
+  Thin | 100 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/epilogue/Epilogue[wght].ttf#0 instance 8
+Exo
+  Thin Italic | 100 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/exo/Exo-Italic[wght].ttf#0 instance 8
+Fahkwang
+  Medium Italic | 500 5 Italic | google-repo/fahkwang/Fahkwang-MediumItalic.ttf#0
+Fredoka
+  SemiBold | 600 5 Upright | google-static/fredoka/Fredoka-SemiBold.ttf#0
+Gantari
+  Thin | 100 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/gantari/Gantari[wght].ttf#0 instance 8
+Glory
+  Bold | 700 5 Upright | google-static/glory/Glory-Bold.ttf#0
+  ExtraBold Italic | 800 5 Italic | google-static/glory/Glory-ExtraBoldItalic.ttf#0
+Grenze
+  Thin | 100 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/grenze/Grenze[wght].ttf#0 instance 8
+Gveret Levin
+  Regular | 400 5 Upright | google-repo/gveretlevin/GveretLevin-Regular.ttf#0
+Hanuman
+  Thin | 100 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/hanuman/Hanuman[wght].ttf#0 instance 8
+Hedvig Letters Serif
+  Regular | 400 5 Upright | google-repo/hedviglettersserif/HedvigLettersSerif[opsz].ttf#0 instance 0
+Hind Kochi
+  Bold | 700 5 Upright | google-repo/hindkochi/HindKochi-Bold.ttf#0
+Homenaje
+  Regular | 400 5 Upright | google-repo/homenaje/Homenaje-Regular.ttf#0
+Hubot Sans
+  Bold | 700 5 Upright | google-static/hubotsans/HubotSans-Bold.ttf#0
+Hubot Sans Expanded
+  Light | 300 7 Upright | google-static/hubotsans/HubotSans_Expanded-Light.ttf#0
+IBM Plex Sans Hebrew
+  Light | 300 5 Upright | google-repo/ibmplexsanshebrew/IBMPlexSansHebrew-Light.ttf#0
+Inconsolata
+  SemiExpanded Bold | 700 6 Upright | google-repo/inconsolata/Inconsolata-SemiExpandedBold.ttf#0
+Instrument Sans SemiCondensed
+  Bold Italic | 700 4 Italic | google-static/instrumentsans/InstrumentSans_SemiCondensed-BoldItalic.ttf#0
+Instrument Serif
+  Italic | 400 5 Italic | google-repo/instrumentserif/InstrumentSerif-Italic.ttf#0
+Italiana
+  Regular | 400 5 Upright | google-repo/italiana/Italiana-Regular.ttf#0
+JetBrains Mono
+  Bold | 700 5 Upright | fontshare/jet-brains-mono/JetBrainsMono-Bold.otf#0
+Jost
+  Thin Italic | 100 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/jost/Jost-Italic[wght].ttf#0 instance 8
+Just Me Again Down Here
+  Regular | 400 5 Upright | google-repo/justmeagaindownhere/JustMeAgainDownHere.ttf#0
+K2D
+  Bold | 700 5 Upright | google-repo/k2d/K2D-Bold.ttf#0
+Karla
+  SemiBold | 600 5 Upright | google-static/karla/Karla-SemiBold.ttf#0
+Karma
+  Light | 300 5 Upright | fontshare/karma/Karma-Light.otf#0
+Kay Pho Du
+  SemiBold | 600 5 Upright | google-repo/kayphodu/KayPhoDu-SemiBold.ttf#0
+Krub
+  Bold | 700 5 Upright | google-repo/krub/Krub-Bold.ttf#0
+Kulim Park
+  Light Italic | 300 5 Italic | google-repo/kulimpark/KulimPark-LightItalic.ttf#0
+Kumar One
+  Regular | 400 5 Upright | google-repo/kumarone/KumarOne-Regular.ttf#0
+Labrada
+  Thin | 100 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/labrada/Labrada[wght].ttf#0 instance 8
+Lexend Peta
+  Thin | 250 5 Upright | google-static/lexendpeta/LexendPeta-Thin.ttf#0
+Lexend Tera
+  Thin | 100 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 1
+  ExtraLight | 250 5 Upright | google-static/lexendtera/LexendTera-ExtraLight.ttf#0
+  Light | 300 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/lexendtera/LexendTera[wght].ttf#0 instance 8
+Libre Barcode 39
+  Regular | 400 5 Upright | google-repo/librebarcode39/LibreBarcode39-Regular.ttf#0
+Libre Barcode 39 Text
+  Regular | 400 5 Upright | google-repo/librebarcode39text/LibreBarcode39Text-Regular.ttf#0
+Libre Baskerville
+  Regular | 400 5 Upright | google-repo/librebaskerville/LibreBaskerville[wght].ttf#0 instance 0
+  Medium | 500 5 Upright | google-repo/librebaskerville/LibreBaskerville[wght].ttf#0 instance 1
+  SemiBold | 600 5 Upright | google-repo/librebaskerville/LibreBaskerville[wght].ttf#0 instance 2
+  Bold | 700 5 Upright | google-repo/librebaskerville/LibreBaskerville[wght].ttf#0 instance 3
+Libre Bodoni
+  Regular | 400 5 Upright | google-repo/librebodoni/LibreBodoni[wght].ttf#0 instance 0
+  Medium | 500 5 Upright | google-repo/librebodoni/LibreBodoni[wght].ttf#0 instance 1
+  SemiBold | 600 5 Upright | google-repo/librebodoni/LibreBodoni[wght].ttf#0 instance 2
+  Bold | 700 5 Upright | google-repo/librebodoni/LibreBodoni[wght].ttf#0 instance 3
+Libre Franklin
+  ExtraBold | 800 5 Upright | google-static/librefranklin/LibreFranklin-ExtraBold.ttf#0
+Lisu Bosa
+  Black | 900 5 Upright | google-repo/lisubosa/LisuBosa-Black.ttf#0
+Mali
+  ExtraLight Italic | 275 5 Italic | google-repo/mali/Mali-ExtraLightItalic.ttf#0
+Manuale
+  Light Italic | 300 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 0
+  Italic | 400 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 1
+  Medium Italic | 500 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 2
+  SemiBold Italic | 600 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 3
+  Bold Italic | 700 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 4
+  ExtraBold Italic | 800 5 Italic | google-repo/manuale/Manuale-Italic[wght].ttf#0 instance 5
+Marcellus SC
+  Regular | 400 5 Upright | google-repo/marcellussc/MarcellusSC-Regular.ttf#0
+Micro 5
+  Regular | 400 5 Upright | google-repo/micro5/Micro5-Regular.ttf#0
+Miniver
+  Regular | 400 5 Upright | google-repo/miniver/Miniver-Regular.ttf#0
+Mona Sans
+  Black Italic | 900 5 Italic | google-static/monasans/MonaSans-BlackItalic.ttf#0
+Mona Sans Expanded
+  Black Italic | 900 7 Italic | google-static/monasans/MonaSans_Expanded-BlackItalic.ttf#0
+Mulish
+  ExtraLight | 200 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 0
+  Light | 300 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 1
+  Regular | 400 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 2
+  Medium | 500 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 3
+  SemiBold | 600 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 4
+  Bold | 700 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 5
+  ExtraBold | 800 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 6
+  Black | 900 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 7
+  ExtraBlack | 1000 5 Upright | google-repo/mulish/Mulish[wght].ttf#0 instance 8
+National Park
+  ExtraLight | 200 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 0
+  Light | 300 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 1
+  Regular | 400 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 2
+  Medium | 500 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 3
+  SemiBold | 600 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 4
+  Bold | 700 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 5
+  ExtraBold | 800 5 Upright | google-repo/nationalpark/NationalPark[wght].ttf#0 instance 6
+Neuton
+  Light | 300 5 Upright | google-repo/neuton/Neuton-Light.ttf#0
+Niramit
+  Regular | 400 5 Upright | google-repo/niramit/Niramit-Regular.ttf#0
+Nobile
+  Medium | 500 5 Upright | google-repo/nobile/Nobile-Medium.ttf#0
+Nosifer
+  Regular | 400 5 Upright | google-repo/nosifer/Nosifer-Regular.ttf#0
+Noto Rashi Hebrew
+  SemiBold | 600 5 Upright | google-static/notorashihebrew/NotoRashiHebrew-SemiBold.ttf#0
+Noto Sans Armenian
+  Thin | 100 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 4
+  Medium | 500 5 Upright | google-static/notosansarmenian/NotoSansArmenian-Medium.ttf#0
+  SemiBold | 600 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/notosansarmenian/NotoSansArmenian[wdth,wght].ttf#0 instance 8
+Noto Sans Cham
+  Thin | 100 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/notosanscham/NotoSansCham[wght].ttf#0 instance 8
+Noto Sans Georgian
+  ExtraBold | 800 5 Upright | google-static/notosansgeorgian/NotoSansGeorgian-ExtraBold.ttf#0
+Noto Sans Gurmukhi Condensed
+  Light | 300 3 Upright | google-static/notosansgurmukhi/NotoSansGurmukhi_Condensed-Light.ttf#0
+Noto Sans Khmer Condensed
+  SemiBold | 600 3 Upright | google-static/notosanskhmer/NotoSansKhmer_Condensed-SemiBold.ttf#0
+Noto Sans Khmer ExtraCondensed
+  Light | 300 2 Upright | google-static/notosanskhmer/NotoSansKhmer_ExtraCondensed-Light.ttf#0
+Noto Sans Khojki
+  Regular | 400 5 Upright | google-repo/notosanskhojki/NotoSansKhojki-Regular.ttf#0
+Noto Sans Meroitic
+  Regular | 400 5 Upright | google-repo/notosansmeroitic/NotoSansMeroitic-Regular.ttf#0
+Noto Sans Oriya UI
+  Bold | 700 5 Upright | google-repo/notosansoriyaui/NotoSansOriyaUI-Bold.ttf#0
+Noto Sans Syriac Eastern
+  Regular | 400 5 Upright | google-static/notosanssyriaceastern/NotoSansSyriacEastern-Regular.ttf#0
+Noto Sans Tamil ExtraCondensed
+  ExtraBold | 800 2 Upright | google-static/notosanstamil/NotoSansTamil_ExtraCondensed-ExtraBold.ttf#0
+Noto Serif Georgian SemiCondensed
+  Light | 300 4 Upright | google-static/notoserifgeorgian/NotoSerifGeorgian_SemiCondensed-Light.ttf#0
+Noto Serif Gurmukhi
+  Thin | 100 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/notoserifgurmukhi/NotoSerifGurmukhi[wght].ttf#0 instance 8
+Noto Serif Toto
+  Regular | 400 5 Upright | google-repo/notoseriftoto/NotoSerifToto[wght].ttf#0 instance 0
+  Medium | 500 5 Upright | google-repo/notoseriftoto/NotoSerifToto[wght].ttf#0 instance 1
+  SemiBold | 600 5 Upright | google-repo/notoseriftoto/NotoSerifToto[wght].ttf#0 instance 2
+  Bold | 700 5 Upright | google-repo/notoseriftoto/NotoSerifToto[wght].ttf#0 instance 3
+Noto Znamenny Musical Notation
+  Regular | 400 5 Upright | google-repo/notoznamennymusicalnotation/NotoZnamennyMusicalNotation-Regular.ttf#0
+Nova Cut
+  Book | 400 5 Upright | google-repo/novacut/NovaCut.ttf#0
+Nunito
+  ExtraLight Italic | 200 5 Italic | fontshare/nunito/Nunito-ExtraLightItalic.otf#0
+Oleo Script Swash Caps
+  Bold | 700 5 Upright | google-repo/oleoscriptswashcaps/OleoScriptSwashCaps-Bold.ttf#0
+Open Sans Hebrew
+  Bold | 700 5 Upright | google-repo/opensanshebrew/OpenSansHebrew-Bold.ttf#0
+Open Sans Hebrew Condensed
+  Light | 300 3 Upright | google-repo/opensanshebrewcondensed/OpenSansHebrewCondensed-Light.ttf#0
+Oregano
+  Regular | 400 5 Upright | google-repo/oregano/Oregano-Regular.ttf#0
+Overlock
+  Bold | 700 5 Upright | google-repo/overlock/Overlock-Bold.ttf#0
+Oxanium
+  SemiBold | 600 5 Upright | google-static/oxanium/Oxanium-SemiBold.ttf#0
+Oxygen
+  Light | 300 5 Upright | google-repo/oxygen/Oxygen-Light.ttf#0
+Pathway Extreme 36pt
+  SemiBold | 600 5 Upright | google-static/pathwayextreme/PathwayExtreme_36pt-SemiBold.ttf#0
+Pathway Gothic One
+  Regular | 400 5 Upright | google-repo/pathwaygothicone/PathwayGothicOne-Regular.ttf#0
+Permanent Marker
+  Regular | 400 5 Upright | google-repo/permanentmarker/PermanentMarker-Regular.ttf#0
+Petrona
+  Thin | 100 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 0
+  ExtraLight | 200 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 1
+  Light | 300 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 2
+  Regular | 400 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 3
+  Medium | 500 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 4
+  SemiBold | 600 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 5
+  Bold | 700 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 6
+  ExtraBold | 800 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 7
+  Black | 900 5 Upright | google-repo/petrona/Petrona[wght].ttf#0 instance 8
+Phetsarath
+  Regular | 400 5 Upright | google-repo/phetsarath/Phetsarath-Regular.ttf#0
+Plus Jakarta Sans
+  ExtraLight Italic | 200 5 Italic | fontshare/plus-jakarta-sans/PlusJakartaSans-ExtraLightItalic.otf#0
+  Light | 300 5 Upright | fontshare/plus-jakarta-sans/PlusJakartaSans-Light.otf#0
+  Medium | 500 5 Upright | google-static/plusjakartasans/PlusJakartaSans-Medium.ttf#0
+Pontano Sans
+  SemiBold | 600 5 Upright | google-static/pontanosans/PontanoSans-SemiBold.ttf#0
+Press Start 2P
+  Regular | 400 5 Upright | google-repo/pressstart2p/PressStart2P-Regular.ttf#0
+Proza Libre
+  Regular | 400 5 Upright | google-repo/prozalibre/ProzaLibre-Regular.ttf#0
+Public Sans
+  Bold | 700 5 Upright | fontshare/public-sans/PublicSans-Bold.ttf#0
+  Black | 900 5 Upright | fontshare/public-sans/PublicSans-Black.otf#0
+Radio Canada Big
+  Italic | 400 5 Italic | google-repo/radiocanadabig/RadioCanadaBig-Italic[wght].ttf#0 instance 0
+  Medium Italic | 500 5 Italic | google-repo/radiocanadabig/RadioCanadaBig-Italic[wght].ttf#0 instance 1
+  SemiBold Italic | 600 5 Italic | google-repo/radiocanadabig/RadioCanadaBig-Italic[wght].ttf#0 instance 2
+  Bold Italic | 700 5 Italic | google-repo/radiocanadabig/RadioCanadaBig-Italic[wght].ttf#0 instance 3
+Rajdhani
+  Bold | 700 5 Upright | fontshare/rajdhani/Rajdhani-Bold.otf#0
+Rammetto One
+  Regular | 400 5 Upright | google-repo/rammettoone/RammettoOne-Regular.ttf#0
+Rancho
+  Regular | 400 5 Upright | google-repo/rancho/Rancho-Regular.ttf#0
+Red Hat Display
+  ExtraBold | 759 5 Upright | fontshare/red-hat-display/RedHatDisplay-ExtraBold.otf#0
+  ExtraBold | 800 5 Upright | google-static/redhatdisplay/RedHatDisplay-ExtraBold.ttf#0
+Rethink Sans
+  Bold Italic | 700 5 Italic | google-static/rethinksans/RethinkSans-BoldItalic.ttf#0
+Roboto Slab
+  ExtraBold | 800 5 Upright | google-static/robotoslab/RobotoSlab-ExtraBold.ttf#0
+Rosario
+  SemiBold | 600 5 Upright | google-static/rosario/Rosario-SemiBold.ttf#0
+Roundo
+  SemiBold | 600 5 Upright | fontshare/roundo/Roundo-SemiBold.otf#0
+Rufina
+  Regular | 400 5 Upright | google-repo/rufina/Rufina-Regular.ttf#0
+Saira ExtraCondensed
+  Black | 900 2 Upright | google-repo/sairaextracondensed/SairaExtraCondensed-Black.ttf#0
+Saira Stencil
+  Italic | 400 5 Italic | google-static/sairastencil/SairaStencil-Italic.ttf#0
+Sansita
+  Bold | 700 5 Upright | google-repo/sansita/Sansita-Bold.ttf#0
+Schoolbell
+  Regular | 400 5 Upright | google-repo/schoolbell/Schoolbell-Regular.ttf#0
+Share
+  Bold Italic | 700 5 Italic | google-repo/share/Share-BoldItalic.ttf#0
+Slackey
+  Regular | 400 5 Upright | google-repo/slackey/Slackey-Regular.ttf#0
+Solitreo
+  Regular | 400 5 Upright | google-repo/solitreo/Solitreo-Regular.ttf#0
+Sora
+  Medium Italic | 500 5 Italic | fontshare/sora/Sora-MediumItalic.ttf#0
+Sour Gummy
+  Thin Italic | 100 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/sourgummy/SourGummy-Italic[wdth,wght].ttf#0 instance 8
+Spline Sans
+  Light | 300 5 Upright | fontshare/spline-sans/SplineSans-Light.ttf#0
+Spline Sans Mono
+  Light Italic | 300 5 Italic | google-repo/splinesansmono/SplineSansMono-Italic[wght].ttf#0 instance 0
+  Italic | 400 5 Italic | google-repo/splinesansmono/SplineSansMono-Italic[wght].ttf#0 instance 1
+  Medium Italic | 500 5 Italic | google-repo/splinesansmono/SplineSansMono-Italic[wght].ttf#0 instance 2
+  SemiBold Italic | 600 5 Italic | google-repo/splinesansmono/SplineSansMono-Italic[wght].ttf#0 instance 3
+  Bold Italic | 700 5 Italic | google-repo/splinesansmono/SplineSansMono-Italic[wght].ttf#0 instance 4
+Srisakdi
+  Regular | 400 5 Upright | google-repo/srisakdi/Srisakdi-Regular.ttf#0
+SUSE
+  Thin Italic | 100 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/suse/SUSE-Italic[wght].ttf#0 instance 8
+Tajawal
+  Bold | 700 5 Upright | google-repo/tajawal/Tajawal-Bold.ttf#0
+TASA Explorer
+  Regular | 400 5 Upright | google-repo/tasaexplorer/TASAExplorer[wght].ttf#0 instance 0
+  Medium | 500 5 Upright | google-repo/tasaexplorer/TASAExplorer[wght].ttf#0 instance 1
+  SemiBold | 600 5 Upright | google-repo/tasaexplorer/TASAExplorer[wght].ttf#0 instance 2
+  Bold | 700 5 Upright | google-repo/tasaexplorer/TASAExplorer[wght].ttf#0 instance 3
+  ExtraBold | 800 5 Upright | google-repo/tasaexplorer/TASAExplorer[wght].ttf#0 instance 4
+Teko
+  SemiBold | 600 5 Upright | fontshare/teko/Teko-SemiBold.ttf#0
+Thasadith
+  Italic | 400 5 Italic | google-repo/thasadith/Thasadith-Italic.ttf#0
+Tomorrow
+  Medium Italic | 500 5 Italic | google-repo/tomorrow/Tomorrow-MediumItalic.ttf#0
+Tourney
+  Thin Italic | 100 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/tourney/Tourney-Italic[wdth,wght].ttf#0 instance 8
+Tourney Condensed
+  Black Italic | 900 3 Italic | google-static/tourney/Tourney_Condensed-BlackItalic.ttf#0
+Tuffy
+  BoldItalic | 700 5 Italic | google-repo/tuffy/Tuffy-BoldItalic.ttf#0
+Ubuntu
+  Regular | 400 5 Upright | google-repo/ubuntu/Ubuntu-Regular.ttf#0
+Ubuntu Mono
+  Bold | 700 5 Upright | google-repo/ubuntumono/UbuntuMono-Bold.ttf#0
+Urbanist
+  Thin Italic | 100 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 0
+  ExtraLight Italic | 200 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 1
+  Light Italic | 300 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 2
+  Italic | 400 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 3
+  Medium Italic | 500 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 4
+  SemiBold Italic | 600 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 5
+  Bold Italic | 700 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 6
+  ExtraBold Italic | 800 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 7
+  Black Italic | 900 5 Italic | google-repo/urbanist/Urbanist-Italic[wght].ttf#0 instance 8
+Vend Sans
+  Light Italic | 300 5 Italic | google-repo/vendsans/VendSans-Italic[wght].ttf#0 instance 0
+  Italic | 400 5 Italic | google-repo/vendsans/VendSans-Italic[wght].ttf#0 instance 1
+  Medium Italic | 500 5 Italic | google-repo/vendsans/VendSans-Italic[wght].ttf#0 instance 2
+  SemiBold Italic | 600 5 Italic | google-repo/vendsans/VendSans-Italic[wght].ttf#0 instance 3
+  Bold Italic | 700 5 Italic | google-repo/vendsans/VendSans-Italic[wght].ttf#0 instance 4
+Volkhov
+  Italic | 400 5 Italic | google-repo/volkhov/Volkhov-Italic.ttf#0
+Winky Sans
+  Light | 300 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 0
+  Regular | 400 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 1
+  Medium | 500 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 2
+  SemiBold | 600 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 3
+  Bold | 700 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 4
+  ExtraBold | 800 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 5
+  Black | 900 5 Upright | google-repo/winkysans/WinkySans[wght].ttf#0 instance 6
+Wittgenstein
+  Italic | 400 5 Italic | google-static/wittgenstein/Wittgenstein-Italic.ttf#0
+Workbench
+  Close | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 3
+  Delicate | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 0
+  Evenly | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 2
+  Maximum | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 7
+  Overexposed | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 6
+  Overlapping | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 5
+  Slight | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 1
+  Touching | 400 5 Upright | google-repo/workbench/Workbench[BLED,SCAN].ttf#0 instance 4
+Zen Loop
+  Regular | 400 5 Upright | google-repo/zenloop/ZenLoop-Regular.ttf#0
+Zeyada
+  Regular | 400 5 Upright | google-repo/zeyada/Zeyada.ttf#0

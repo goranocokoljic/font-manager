@@ -5,17 +5,19 @@
   "rule": "When a test asserts that a field is shown or copied, give that field a mock value that no other field on the same screen has, and locate it by its own label or accessible name. A value shared with another field (for example name ID 1 equal to the typographic family) makes the assertion pass even when the row is missing or bound to the wrong field.",
   "rationale": "E5.6 (#69): the mock face set legacyFamily/legacyStyle equal to familyName/style, so `toContain` and the `aria-label$=\": Inter\"` copy selector passed with the name ID 1/2 rows deleted.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
+    47,
     69
   ],
   "file_globs": [
     "apps/desktop/src/**/*.test.ts",
     "apps/desktop/e2e/**/*.ts",
     "apps/desktop/src/api/mock.ts",
-    "crates/**/tests/**/*.rs"
+    "crates/**/tests/**/*.rs",
+    "crates/fm-core/src/**/*.rs"
   ],
   "first_seen": "2026-10-17T08:29:15.431Z",
-  "last_seen": "2026-10-17T08:29:15.431Z"
+  "last_seen": "2026-10-17T09:29:31.319Z"
 }

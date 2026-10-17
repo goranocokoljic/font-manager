@@ -7,6 +7,7 @@
 
 pub mod config;
 pub mod error;
+pub mod grouping;
 pub mod logging;
 pub mod parser;
 pub mod scanner;
