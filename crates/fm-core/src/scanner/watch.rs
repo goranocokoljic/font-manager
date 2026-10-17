@@ -606,6 +606,12 @@ mod tests {
             self.updates.recv_timeout(within).ok()
         }
 
+        /// Drops updates until none comes for longer than a debounced batch
+        /// takes. The index can show a change before its update is sent.
+        fn settle(&self) {
+            while self.next(Duration::from_millis(1000)).is_some() {}
+        }
+
         /// Waits until the index satisfies `done`, and returns how long it
         /// took. Fails after 5 s, so a slow runner reports a number.
         fn until(&self, done: impl Fn(&FileIndex) -> bool) -> Duration {
@@ -763,6 +769,14 @@ mod tests {
             ..WatchSettings::default()
         };
         let f = Fixture::new("watch-periodic", settings);
+        // Wait out one periodic rescan first: the OS may still report the
+        // creation of the source folder, and that event rescans it too.
+        loop {
+            let update = f.next(Duration::from_secs(5)).expect("a first rescan");
+            if update.trigger == Trigger::Rescan {
+                break;
+            }
+        }
         let ghost = f.root.join("ghost.ttf");
         // An entry for a file that is not there: its remove event was missed.
         {
@@ -876,6 +890,7 @@ mod tests {
         let path = f.root.join("a.ttf");
         put(&path, &fixture(REGULAR));
         f.until(|i| present(i, &path));
+        f.settle();
 
         f.watcher.remove_source(&f.root).expect("remove source");
         fs::remove_file(&path).expect("remove");
