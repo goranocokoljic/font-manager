@@ -21,8 +21,8 @@ use std::path::Path;
 
 use fm_api::common::FontFormat;
 use fm_api::preview::{PreviewImage, PreviewRequest};
-use read_fonts::{FileRef, TableProvider};
 use read_fonts::types::Tag;
+use read_fonts::{FileRef, TableProvider};
 use swash::FontRef;
 use swash::scale::image::{Content, Image};
 use swash::scale::{Render, ScaleContext, Source, StrikeWith};
