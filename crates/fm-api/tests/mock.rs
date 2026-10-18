@@ -252,6 +252,12 @@ fn search_groups_by_family_and_reports_near_misses() {
         .unwrap();
     let names: Vec<_> = r.families.iter().map(|h| h.family.name.as_str()).collect();
     assert_eq!(names, ["Inter", "JetBrains Mono"]);
+    // Both carry the sample's Serbian locl forms: the badge of the results.
+    assert!(
+        r.families
+            .iter()
+            .all(|h| h.missing.as_ref().is_some_and(|m| m.has_locl))
+    );
 
     // A pasted text one character short is a near-miss with the exact character.
     let filters = Filters {
@@ -268,6 +274,10 @@ fn search_groups_by_family_and_reports_near_misses() {
         })
         .unwrap();
     assert_eq!(r.families[0].missing.as_ref().unwrap().chars, ["ж"]);
+    assert!(
+        !r.families[0].missing.as_ref().unwrap().has_locl,
+        "text has no language"
+    );
 
     let report = api
         .check_coverage(CoverageRequest {

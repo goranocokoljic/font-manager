@@ -14,7 +14,9 @@
 //!   face) previews up to [`SYMBOL_SAMPLE_LEN`] characters it maps, letters
 //!   first, separated by spaces.
 //!
-//! Whitespace and control characters of the sample never count as missing.
+//! Characters a font needs no glyph for (whitespace, controls, zero-width and
+//! joiner characters, variation selectors: [`coverage::is_ignorable`]) never
+//! count as missing.
 //! A face with an empty set (no `cmap` stored, see E3.7) is not judged: it
 //! previews the sample.
 
@@ -23,7 +25,7 @@ use std::sync::LazyLock;
 use fm_api::preview::SampleFallback;
 
 use crate::charsets::{self, Charset};
-use crate::coverage::CodePointSet;
+use crate::coverage::{self, CodePointSet};
 
 /// Letters in a script fallback.
 pub const SCRIPT_SAMPLE_LEN: usize = 26;
@@ -110,7 +112,7 @@ static SCRIPTS: LazyLock<Vec<Script>> = LazyLock::new(|| match charsets::load() 
 
 /// Whether a character of the sample must be in the face.
 fn counts(c: char) -> bool {
-    !c.is_whitespace() && !c.is_control()
+    !coverage::is_ignorable(c)
 }
 
 /// The text a face that maps `set` previews for the sample `text`.
@@ -316,6 +318,15 @@ mod tests {
         let got = sample_of(&scripts(), &dingbats, "Hello");
         assert_eq!(got.text.split(' ').count(), SYMBOL_SAMPLE_LEN);
         assert!(got.text.starts_with('\u{E000}'));
+    }
+
+    #[test]
+    fn invisible_format_characters_never_count_as_missing() {
+        let text = "ab\u{200D}c\u{AD}d\u{FE0F}\u{FEFF}";
+        let got = sample_of(&scripts(), &set("ABCDabcd"), text);
+        assert_eq!(got.fallback, None);
+        assert_eq!(got.text, text);
+        assert!(got.missing.is_empty(), "{:?}", got.missing);
     }
 
     #[test]

@@ -948,7 +948,7 @@ impl SearchService for MockApi {
         let mut hits: Vec<FamilyHit> = Vec::new();
         for fam in &st.families {
             let mut faces = Vec::new();
-            let mut best_missing: Option<Vec<String>> = None;
+            let mut best_missing: Option<Missing> = None;
             for f in st.family_faces(fam.id) {
                 let s = &f.detail.face;
                 let hay = format!(
@@ -960,15 +960,18 @@ impl SearchService for MockApi {
                     continue;
                 }
                 if let Some(target) = &req.filters.supports {
-                    let (missing, _) = st.coverage(f, target)?;
+                    let (missing, per) = st.coverage(f, target)?;
                     if missing.len() > NEAR_MISS {
                         continue;
                     }
                     if best_missing
                         .as_ref()
-                        .is_none_or(|b| missing.len() < b.len())
+                        .is_none_or(|b| missing.len() < b.chars.len())
                     {
-                        best_missing = Some(missing);
+                        best_missing = Some(Missing {
+                            chars: missing,
+                            has_locl: per.iter().any(|l| l.has_locl),
+                        });
                     }
                 }
                 faces.push(s.id);
@@ -980,12 +983,11 @@ impl SearchService for MockApi {
             hits.push(FamilyHit {
                 family: st.family_summary(fam),
                 score: if name_hit { 1.0 } else { 0.5 }
-                    - best_missing.as_ref().map_or(0.0, |m| m.len() as f32 * 0.1),
+                    - best_missing
+                        .as_ref()
+                        .map_or(0.0, |m| m.chars.len() as f32 * 0.1),
                 faces,
-                missing: best_missing.map(|chars| Missing {
-                    has_locl: false,
-                    chars,
-                }),
+                missing: best_missing,
             });
         }
         hits.sort_by(|a, b| {
