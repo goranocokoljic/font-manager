@@ -1,0 +1,18 @@
+{
+  "id": "two-async-writers-of-the-same-store-state-must-guard-against",
+  "title": "Two async writers of the same store state must guard against each other",
+  "category": "correctness",
+  "rule": "When more than one async path writes the same store state (a list refetch for a new sort order, a refresh after an event), each path's 'newest answer wins' guard must also cover the other paths: an answer fetched before another writer's newer write must be dropped or fetched again. One counter per path is not enough — check the other path's counter (or share one) before writing. Add a test that holds the older request with a gate, lets the other writer land, then releases it and asserts the newer state stays.",
+  "rationale": "E5.4 (#67): after merging main, a sort-order fetch in flight when an activation event landed overwrote refreshActivation's newer families list, because only fetchFamilies bumped listGeneration; the activation dot and row label went back to 'not active'.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    67
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-10-18T09:50:58.594Z",
+  "last_seen": "2026-10-18T09:50:58.594Z"
+}
