@@ -53,3 +53,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E3.8 #58] crates/fm-core/src/index/search/tests.rs:1117 — the 10k search timing test skips timing in debug builds and CI runs debug, so the 50 ms budget is asserted only in local release runs until the E9.1 bench job.
 - [E3.8 #58] crates/fm-core/src/index/search.rs:521 — a malformed `loclLanguages` JSON in `face.parsed` is silently read as no locl, without a test.
 - [E3.8 #58] crates/fm-api/src/mock.rs:54 — the MockApi keeps its own `NEAR_MISS = 5` apart from `fm_core::coverage::NEAR_MISS`; the crate boundary forces the copy.
+- [E7.1 #82] apps/desktop/src-tauri/src/lib.rs:36 — the shell still serves `MockApi`, so the fm-core collection methods (`Index::*_collection`) are not reachable from the app; the DoD "demonstrated on the reference library" waits for the core `Api` impl.
+- [E7.1 #82] crates/fm-api/src/mock.rs:691 — the MockApi's `collection_view` counts members of gone/paused sources and evaluates smart rules, while fm-core counts visible faces only and gives smart collections 0.
