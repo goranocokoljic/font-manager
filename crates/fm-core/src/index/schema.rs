@@ -128,8 +128,96 @@ ALTER TABLE face ADD COLUMN parsed TEXT;
 ALTER TABLE face ADD COLUMN coverage BLOB;
 ";
 
+/// Text search (E3.3): one FTS5 row per face, rowid = `face.id`.
+///
+/// - The trigram tokenizer matches any three characters anywhere in a name,
+///   case-insensitively: the base of typo-tolerant search. Search only asks
+///   for single trigrams, so the table keeps no positions (`detail = 'none'`)
+///   and no column sizes (`columnsize = 0`): a 10k-font scan writes far less.
+/// - `face_fts_source` is what a row holds: the grouped family and style, the
+///   PostScript name, foundry and designer, the tags, and the file name
+///   (`NULL` for a path that is not UTF-8).
+/// - Triggers keep it in step with `face`, `face_tag` and `tag`, so every
+///   write path (scan, tagging, rebuild) updates search without knowing it.
+///   A face written again with the same names leaves its row alone.
+/// - `face.foundry` and `face.designer` are columns, written with the face,
+///   so a trigger never parses `face.parsed`; older rows are filled from it.
+/// - `face.added` is when the face was first indexed (RFC 3339, UTC), written
+///   on insert only; faces indexed before this version get the migration time.
+const V3: &str = r"
+ALTER TABLE face ADD COLUMN added TEXT;
+ALTER TABLE face ADD COLUMN foundry TEXT;
+ALTER TABLE face ADD COLUMN designer TEXT;
+UPDATE face SET
+    added = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+    foundry = CASE WHEN json_valid(parsed) THEN json_extract(parsed, '$.foundry') END,
+    designer = CASE WHEN json_valid(parsed) THEN json_extract(parsed, '$.designer') END;
+
+CREATE VIRTUAL TABLE face_fts USING fts5 (
+    family, style, postscript_name, foundry, designer, tags, file_name,
+    tokenize = 'trigram', detail = 'none', columnsize = 0
+);
+
+CREATE VIEW face_fts_source AS
+SELECT
+    face.id,
+    face.family,
+    face.subfamily,
+    face.postscript_name,
+    face.foundry,
+    face.designer,
+    (SELECT group_concat(tag.name, ' ') FROM face_tag JOIN tag ON tag.id = face_tag.tag_id
+     WHERE face_tag.face_id = face.id),
+    CASE WHEN typeof(font_file.path) = 'text' THEN substr(
+        font_file.path,
+        length(rtrim(font_file.path, replace(replace(font_file.path, '/', ''), '\', ''))) + 1
+    ) END
+FROM face JOIN font_file ON font_file.id = face.file_id;
+
+INSERT INTO face_fts (rowid, family, style, postscript_name, foundry, designer, tags, file_name)
+SELECT * FROM face_fts_source;
+
+CREATE TRIGGER face_fts_insert AFTER INSERT ON face BEGIN
+    INSERT INTO face_fts (rowid, family, style, postscript_name, foundry, designer, tags, file_name)
+    SELECT * FROM face_fts_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER face_fts_update
+AFTER UPDATE OF family, subfamily, postscript_name, foundry, designer ON face
+WHEN old.family IS NOT new.family OR old.subfamily IS NOT new.subfamily
+  OR old.postscript_name IS NOT new.postscript_name
+  OR old.foundry IS NOT new.foundry OR old.designer IS NOT new.designer
+BEGIN
+    DELETE FROM face_fts WHERE rowid = old.id;
+    INSERT INTO face_fts (rowid, family, style, postscript_name, foundry, designer, tags, file_name)
+    SELECT * FROM face_fts_source WHERE id = new.id;
+END;
+
+CREATE TRIGGER face_fts_delete AFTER DELETE ON face BEGIN
+    DELETE FROM face_fts WHERE rowid = old.id;
+END;
+
+CREATE TRIGGER face_fts_tag_insert AFTER INSERT ON face_tag BEGIN
+    UPDATE face_fts SET tags = (SELECT group_concat(tag.name, ' ') FROM face_tag JOIN tag ON tag.id = face_tag.tag_id
+         WHERE face_tag.face_id = new.face_id)
+    WHERE rowid = new.face_id;
+END;
+
+CREATE TRIGGER face_fts_tag_delete AFTER DELETE ON face_tag BEGIN
+    UPDATE face_fts SET tags = (SELECT group_concat(tag.name, ' ') FROM face_tag JOIN tag ON tag.id = face_tag.tag_id
+         WHERE face_tag.face_id = old.face_id)
+    WHERE rowid = old.face_id;
+END;
+
+CREATE TRIGGER face_fts_tag_rename AFTER UPDATE OF name ON tag BEGIN
+    UPDATE face_fts SET tags = (SELECT group_concat(tag.name, ' ') FROM face_tag JOIN tag ON tag.id = face_tag.tag_id
+         WHERE face_tag.face_id = face_fts.rowid)
+    WHERE rowid IN (SELECT face_id FROM face_tag WHERE tag_id = new.id);
+END;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -141,6 +229,11 @@ pub(crate) const TABLES: &[&str] = &[
     "collection",
     "collection_face",
     "face",
+    "face_fts",
+    "face_fts_config",
+    "face_fts_content",
+    "face_fts_data",
+    "face_fts_idx",
     "face_tag",
     "font_file",
     "project_set",

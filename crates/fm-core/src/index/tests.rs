@@ -104,6 +104,9 @@ fn fresh_database_has_every_table_of_the_data_model() {
                 "fstype",
                 "parsed",
                 "coverage",
+                "added",
+                "foundry",
+                "designer",
             ][..],
         ),
         (

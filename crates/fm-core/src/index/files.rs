@@ -70,15 +70,17 @@ RETURNING id";
 const UPSERT_FACE: &str = "
 INSERT INTO face (file_id, collection_index, family, subfamily, typographic_family,
                   postscript_name, weight, width, slant, is_variable, axes, features,
-                  fstype, parsed, coverage)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+                  fstype, parsed, coverage, foundry, designer, added)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+        strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ON CONFLICT (file_id, collection_index) DO UPDATE SET
     family = excluded.family, subfamily = excluded.subfamily,
     typographic_family = excluded.typographic_family,
     postscript_name = excluded.postscript_name, weight = excluded.weight,
     width = excluded.width, slant = excluded.slant, is_variable = excluded.is_variable,
     axes = excluded.axes, features = excluded.features, fstype = excluded.fstype,
-    parsed = excluded.parsed, coverage = excluded.coverage";
+    parsed = excluded.parsed, coverage = excluded.coverage,
+    foundry = excluded.foundry, designer = excluded.designer";
 
 /// Faces the file no longer has. An active face stays (rule 3): the app
 /// registered it, so it must stay deregistrable.
@@ -309,6 +311,8 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, file: &IndexedFile) -> FmR
                 face.fs_type.unwrap_or(0),
                 json(face)?,
                 pack_coverage(&face.code_points),
+                face.foundry,
+                face.designer,
             ])
             .map_err(|e| db_error(&e))?;
     }
@@ -350,7 +354,7 @@ fn format_to_sql(format: Option<FontFormat>) -> FmResult<String> {
     format.map_or(Ok("unknown".to_owned()), |f| text(&f))
 }
 
-fn format_from_sql(text: &str) -> Result<Option<FontFormat>, serde_json::Error> {
+pub(super) fn format_from_sql(text: &str) -> Result<Option<FontFormat>, serde_json::Error> {
     if text == "unknown" {
         return Ok(None);
     }
