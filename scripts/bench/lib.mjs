@@ -7,6 +7,7 @@
 //   { "<os>.<name>": Metric }
 // Metric: { value: number|null, unit, target: number|null, pass: boolean|null, note? }
 //   pass null = no budget, or not measured (note says why).
+// On a PR, `bench.mjs gate` adds { baseline, change, regressed } to every entry (see gate()).
 
 export const SCHEMA = 1;
 
@@ -73,6 +74,96 @@ export function failures(metrics) {
   return Object.entries(metrics).filter(([, m]) => m.pass === false).map(([k]) => k);
 }
 
+/** A PR fails the bench check when a budgeted metric is this much worse than main. */
+export const REGRESSION_TOLERANCE = 0.1;
+/** The baseline is the median of this many nightly runs on main (one run is noisy). */
+export const BASELINE_RUNS = 5;
+/** A change smaller than this share of the budget is runner noise, never a regression. */
+export const NOISE_FLOOR = 0.02;
+/** Marks the sticky PR comment of the bench job, so a new push updates it. */
+export const COMMENT_MARKER = '<!-- fm-bench -->';
+
+/**
+ * The PR regression gate. Each budgeted, measured metric of `current` gets
+ * `baseline` (median of the last `runs` nightly values on main), `change`
+ * (fraction vs the baseline) and `regressed`:
+ *   - more than `tolerance` worse than the baseline (and above the noise floor), or
+ *   - over its budget while the baseline was within it.
+ * A metric already over budget on main (known red) blocks only when it gets
+ * slower still. Without a nightly value on main the budget is the gate:
+ * `regressed` = over budget. Unbudgeted or unmeasured metrics get `regressed: null`.
+ * `history`: [{ report }] newest first, as loadHistory returns it. Returns a new report.
+ */
+export function gate(current, history, { tolerance = REGRESSION_TOLERANCE, runs = BASELINE_RUNS } = {}) {
+  const out = {};
+  for (const [key, m] of Object.entries(current)) {
+    if (m.target == null || m.value == null) {
+      out[key] = { ...m, baseline: null, change: null, regressed: null };
+      continue;
+    }
+    const values = history.slice(0, runs).map((r) => r.report?.[key]?.value).filter((v) => typeof v === 'number');
+    const baseline = values.length ? median(values) : null;
+    let regressed = m.pass === false;
+    let change = null;
+    if (baseline != null) {
+      change = baseline === 0 ? null : Math.round(((m.value - baseline) / baseline) * 1000) / 1000;
+      const slower = m.value - baseline > NOISE_FLOOR * m.target && m.value > baseline * (1 + tolerance);
+      regressed = slower || (m.pass === false && baseline <= m.target);
+    }
+    out[key] = { ...m, baseline, change, regressed };
+  }
+  return out;
+}
+
+/**
+ * The entries that make the bench check red. A gated report (a PR): the
+ * regressions and the missing OS reports. Otherwise (nightly): every metric over budget.
+ */
+export function blocking(report) {
+  const entries = Object.entries(report);
+  const gated = entries.some(([, m]) => 'regressed' in m);
+  return entries
+    .filter(([, m]) => (gated ? m.regressed === true || (m.target == null && m.pass === false) : m.pass === false))
+    .map(([k]) => k);
+}
+
+/** Why `key` blocks, in one line (a GitHub annotation, the PR comment). */
+export function reason(key, m) {
+  if (m.target == null) return `${key}: ${m.note ?? 'no report'}`;
+  const vs = m.baseline == null
+    ? `budget ${fmt(m.target)} ${m.unit}`
+    : `${fmt(m.baseline)} ${m.unit} on main${m.change == null ? '' : `, ${pct(m.change)}`}`;
+  const over = m.pass === false ? `, over the ${fmt(m.target)} ${m.unit} budget` : '';
+  return `${key}: ${fmt(m.value)} ${m.unit} vs ${vs}${over}`;
+}
+
+function pct(fraction) {
+  const p = fraction * 100;
+  return `${p > 0 ? '+' : ''}${p.toFixed(0)}%`;
+}
+
+/** The markdown section of the PR regression gate (renderTrend appends it). */
+export function renderGate(gated, { tolerance = REGRESSION_TOLERANCE } = {}) {
+  const lines = [
+    `### Regression gate — this PR vs main (fails at more than ${Math.round(tolerance * 100)}% worse)`,
+    '',
+    '| Metric | Target | Baseline | Now | Change | Verdict |',
+    '|---|---|---|---|---|---|',
+  ];
+  for (const key of Object.keys(gated).sort()) {
+    const m = gated[key];
+    if (m.target == null || m.value == null) continue;
+    const verdict = m.regressed ? '✗ regressed' : m.pass === false ? 'over budget on main too' : '✓';
+    const baseline = m.baseline == null ? '– (budget)' : `${fmt(m.baseline)} ${m.unit}`;
+    lines.push(`| ${key} | ${fmt(m.target)} ${m.unit} | ${baseline} | ${fmt(m.value)} ${m.unit} | ${m.change == null ? '' : pct(m.change)} | ${verdict} |`);
+  }
+  const blocked = blocking(gated);
+  lines.push('', blocked.length
+    ? `**Bench check failed:**\n${blocked.map((k) => `- ${reason(k, gated[k])}`).join('\n')}`
+    : `No budgeted metric regressed by more than ${Math.round(tolerance * 100)}%.`);
+  return lines.join('\n');
+}
+
 /**
  * bench-report.json from the per-OS reports. An OS in `expect` without a
  * report gets a failed `<os>.report` entry, so a crashed run is not green.
@@ -128,6 +219,7 @@ export function renderTrend(current, history, { title = 'Bench', sha = '', limit
   }
   const failed = failures(current);
   lines.push('', failed.length ? `**Over budget:** ${failed.join(', ')}` : 'Every measured metric is within its budget.');
+  if (Object.values(current).some((m) => 'regressed' in m)) lines.push('', renderGate(current));
   return lines.join('\n') + '\n';
 }
 
@@ -165,11 +257,13 @@ export function parseCli(argv, env = process.env) {
     else if (a === '--limit') opts.limit = positiveInt(a, value());
     else if (a === '--title') opts.title = value();
     else if (a === '--sha') opts.sha = value();
+    else if (a === '--pr') opts.pr = positiveInt(a, value());
+    else if (a === '--body') opts.body = value();
     else if (a === '--help' || a === '-h') opts.help = true;
     else if (!a.startsWith('--') && command !== 'run') opts.files.push(a);
     else throw new Error(`unknown argument: ${a}`);
   }
-  if (!['run', 'merge', 'history', 'trend'].includes(command)) throw new Error(`unknown command: ${command}`);
+  if (!['run', 'merge', 'history', 'gate', 'trend', 'comment'].includes(command)) throw new Error(`unknown command: ${command}`);
   if (command === 'run') opts.library ??= env.FM_REFERENCE_LIBRARY;
   return opts;
 }

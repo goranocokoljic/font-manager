@@ -22,6 +22,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadConfig, gh, ghJson, parseArgs, isMain } from './lib.mjs';
+import { blocking } from '../bench/lib.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -126,7 +127,9 @@ async function bench(prNumber, sha, cfg, deadline) {
     const file = readdirSync(dir, { recursive: true }).find((f) => String(f).endsWith('bench-report.json'));
     if (!file) return { status: 'error', note: 'bench-report.json missing from the artifact' };
     const metrics = JSON.parse(readFileSync(join(dir, String(file)), 'utf8'));
-    const failed = Object.entries(metrics).filter(([, m]) => m.pass === false).map(([k, m]) => ({ metric: k, ...m }));
+    // The PR report is gated against main (E9.2): a regression is red, a metric
+    // already over budget on main is not. An ungated report: over budget is red.
+    const failed = blocking(metrics).map((k) => ({ metric: k, ...metrics[k] }));
     return { status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion };
   } catch (e) {
     return { status: 'error', note: e.message };
