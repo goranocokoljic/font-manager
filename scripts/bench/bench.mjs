@@ -30,8 +30,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  COMMENT_MARKER, SCHEMA, blocking, failures, gate, median, merge, metric, osName, parseCli, parseRss, reason,
-  renderTable, renderTrend, rssProbe,
+  COMMENT_MARKER, SCHEMA, blocking, failures, gate, median, merge, metric, nightlyRunsArgs, osName, parseCli,
+  parseRss, reason, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -169,10 +169,7 @@ function mergeCmd(opts) {
 function historyCmd(opts) {
   if (!opts.history) throw usage('history needs --history DIR');
   const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' });
-  const runs = JSON.parse(gh([
-    'run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status', 'success',
-    '--limit', String(opts.limit ?? 14), '--json', 'databaseId,headSha,createdAt,url',
-  ]));
+  const runs = JSON.parse(gh(nightlyRunsArgs(opts.limit ?? 14)));
   for (const r of runs) {
     const dir = join(opts.history, String(r.databaseId));
     try {

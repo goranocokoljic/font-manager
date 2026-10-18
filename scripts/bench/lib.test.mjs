@@ -10,8 +10,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, COMMENT_MARKER, OSES, blocking, failures, gate, median, merge, metric, osName, parseCli, parseRss,
-  renderTable, renderTrend, rssProbe,
+  BUDGETS, COMMENT_MARKER, OSES, blocking, failures, gate, median, merge, metric, nightlyRunsArgs, osName, parseCli,
+  parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
 
@@ -183,6 +183,24 @@ describe('regression gate (E9.2)', () => {
     const history = nightly({ first_scan: 20000 });
     assert.deepEqual(blocking(gate(linux({ first_scan: 21000 }), history)), [], 'known red, not 10% slower');
     assert.deepEqual(blocking(gate(linux({ first_scan: 23000 }), history)), ['linux.first_scan']);
+  });
+
+  test('a red nightly on main is still the baseline (review E9.2: the known-red scan made every nightly red)', () => {
+    const args = nightlyRunsArgs(14);
+    assert.equal(args[args.indexOf('--status') + 1], 'completed', 'every conclusion, not only success');
+    assert.deepEqual(args.slice(0, 9), ['run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status']);
+    const dir = tmp();
+    try {
+      // What `history` leaves on disk for a red nightly: its run.json and its bench-report.
+      mkdirSync(join(dir, '1'));
+      writeFileSync(join(dir, '1', 'run.json'), JSON.stringify({ date: '2026-10-17T03:00:00Z', sha: 'a' }));
+      writeFileSync(join(dir, '1', 'bench-report.json'), JSON.stringify(linux({ first_scan: 16000, search: 10 })));
+      const gated = gate(linux({ first_scan: 16500, search: 10 }), loadHistory(dir));
+      assert.equal(gated['linux.first_scan'].baseline, 16000);
+      assert.deepEqual(blocking(gated), [], 'over budget on main too and not 10% slower: not blocked');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test('crossing the budget fails even by less than 10%', () => {

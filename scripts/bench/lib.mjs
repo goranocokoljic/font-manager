@@ -84,6 +84,19 @@ export const NOISE_FLOOR = 0.02;
 export const COMMENT_MARKER = '<!-- fm-bench -->';
 
 /**
+ * `gh run list` arguments for the nightly runs on main whose reports are the
+ * gate's baseline. Every conclusion counts: a nightly with a metric over budget
+ * (the known-red first scan) is red, and it is still the measurement of main.
+ * Its bench-report artifact is uploaded on a red run too; a run without one is skipped.
+ */
+export function nightlyRunsArgs(limit) {
+  return [
+    'run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status', 'completed',
+    '--limit', String(limit), '--json', 'databaseId,headSha,createdAt,url',
+  ];
+}
+
+/**
  * The PR regression gate. Each budgeted, measured metric of `current` gets
  * `baseline` (median of the last `runs` nightly values on main), `change`
  * (fraction vs the baseline) and `regressed`:
