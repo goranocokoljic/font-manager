@@ -192,6 +192,22 @@ fn preview_cache_on_an_empty_library_caches_nothing() {
 }
 
 #[test]
+fn preview_cache_counts_a_copy_of_a_cached_file_once() {
+    let home = TempDir::new("preview-cache-dup");
+    let library = TempDir::new("preview-cache-dup-lib");
+    fs::copy(fixtures().join(FONT), library.path().join("a.ttf")).expect("copy");
+    fs::copy(fixtures().join(FONT), library.path().join("b.ttf")).expect("copy");
+    first_scan(library.path(), home.path()).expect("scan");
+    let res = preview_cache(home.path(), 3).expect("a duplicate does not fail the run");
+    assert_eq!(
+        (res.entries, res.duplicates, res.failed),
+        (1, 1, 0),
+        "{res:?}"
+    );
+    assert_eq!(res.samples, 3);
+}
+
+#[test]
 fn preview_cache_skips_a_file_it_cannot_draw() {
     let home = TempDir::new("preview-cache-broken");
     let library = TempDir::new("preview-cache-broken-lib");

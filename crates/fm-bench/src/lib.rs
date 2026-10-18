@@ -8,6 +8,7 @@
 //!
 //! The library folder is only read. The bench home is the only place written.
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -264,6 +265,9 @@ pub struct CacheHits {
     pub bytes: u64,
     /// Files the rasterizer could not draw, skipped.
     pub failed: usize,
+    /// Files with the same bytes as one already cached: the same face, so
+    /// the same entry (the cache keys by content, not by path).
+    pub duplicates: usize,
     /// Timed hits.
     pub samples: usize,
     /// Median, in milliseconds.
@@ -277,6 +281,8 @@ pub struct CacheHits {
 /// Renders a thumbnail of the first face of up to [`CACHE_FACES`] files of
 /// the index in `home` into a fresh preview cache (`<home>/cache/previews`),
 /// then times `rounds` hits on every entry, as a grid scrolling back does.
+/// A copy of a file already cached shares its entry and is counted, not
+/// cached twice.
 pub fn preview_cache(home: &Path, rounds: usize) -> BenchResult<CacheHits> {
     let paths = home_paths(home);
     let files = startup::open_index(&paths)?.index.load_files()?;
@@ -295,12 +301,17 @@ pub fn preview_cache(home: &Path, rounds: usize) -> BenchResult<CacheHits> {
         background: None,
     };
     let mut keys = Vec::with_capacity(CACHE_FACES);
-    let mut failed = 0;
+    let mut seen = HashSet::with_capacity(CACHE_FACES);
+    let (mut failed, mut duplicates) = (0, 0);
     for file in files.files().filter(|f| !f.gone) {
         if keys.len() == CACHE_FACES {
             break;
         }
         let key = CacheKey::new(&file.hash, 0, &req);
+        if !seen.insert(key) {
+            duplicates += 1;
+            continue;
+        }
         match cache.get_or_render(&key, || render_preview_file(&file.path, 0, &req)) {
             Ok(_) => keys.push(key),
             Err(_) => failed += 1,
@@ -325,6 +336,7 @@ pub fn preview_cache(home: &Path, rounds: usize) -> BenchResult<CacheHits> {
         entries: keys.len(),
         bytes: cache.total_bytes(),
         failed,
+        duplicates,
         samples: samples.len(),
         p50_ms: percentile(&samples, 50),
         p95_ms: percentile(&samples, 95),
