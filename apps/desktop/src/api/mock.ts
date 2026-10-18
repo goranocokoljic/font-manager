@@ -9,6 +9,7 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Collection,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -17,8 +18,14 @@ import {
   type FamilyId,
   type FamilyOrder,
   type FamilySortKey,
+  type FamilyHit,
   type FamilySummary,
+  type FilterCount,
+  type FilterCounts,
+  type Filters,
   type JobId,
+  type LanguagePreset,
+  type SearchResponse,
   type Source,
   type SourceId,
   type Target,
@@ -373,6 +380,36 @@ function sortFamilies(rows: FamilySummary[], order: FamilyOrder): FamilySummary[
   return keyed.map((k) => k.row);
 }
 
+/** Language presets of the mock: a face covers one when it has the preset's script. */
+export const mockLanguages: LanguagePreset[] = [
+  { code: 'en', name: 'English', script: 'Latn' },
+  { code: 'pl', name: 'Polish', script: 'Latn' },
+  { code: 'sr-Cyrl', name: 'Serbian (Cyrillic)', script: 'Cyrl' },
+  { code: 'el', name: 'Greek', script: 'Grek' },
+];
+
+/** True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock). */
+function passes(d: FaceDetail, active: boolean, q: Filters): boolean {
+  const f = d.face;
+  const covers = (code: string) => {
+    const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
+    return !!script && d.scripts.includes(script);
+  };
+  const supports = q.supports;
+  return (
+    (q.slant == null || q.slant === f.slant) &&
+    (q.variable == null || q.variable === f.isVariable) &&
+    (q.color == null || !q.color) &&
+    (!q.formats?.length || q.formats.includes(f.format)) &&
+    (q.features ?? []).every((t) => d.features.some((x) => x.tag === t)) &&
+    (q.license == null || d.license.declared === q.license) &&
+    (!q.sources?.length || q.sources.includes(1)) &&
+    (q.active == null || q.active === active) &&
+    (q.problems == null || q.problems === (f.health.kind !== 'ok')) &&
+    (supports?.kind !== 'languages' || supports.codes.every(covers))
+  );
+}
+
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
 export const mockPickedFolders: (string | null)[] = [];
 
@@ -434,6 +471,61 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     message: `Face ${id} was not found.`,
     detail: null,
   });
+  // Family groups a search returns: name matches first, then by name (like the Rust mock).
+  const hits = (query: string, q: Filters): FamilyHit[] => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const out: FamilyHit[] = [];
+    for (const [family, details] of byFamily) {
+      const matching = details.filter((d) => {
+        const hay =
+          `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
+        return words.every((w) => hay.includes(w)) && passes(d, active.has(d.face.id), q);
+      });
+      if (!matching.length) continue;
+      const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
+      out.push({
+        family: summaryOf(family),
+        faces: matching.map((d) => d.face.id),
+        score: nameHit ? 1 : 0.5,
+        missing: q.supports ? { chars: [], hasLocl: false } : null,
+      });
+    }
+    return out.sort((a, b) => b.score! - a.score! || a.family.name.localeCompare(b.family.name));
+  };
+  // Per value, the family groups with that value chosen and the other filters kept.
+  const countEach = <T>(
+    query: string,
+    q: Filters,
+    values: T[],
+    pick: (f: Filters, v: T) => Filters,
+  ): FilterCount<T>[] =>
+    values
+      .map((value) => ({ value, count: hits(query, pick(q, value)).length }))
+      .filter((c) => c.count > 0);
+  const distinct = <T>(list: T[]) => [...new Set(list)];
+  const both = [true, false];
+  const counts = (query: string, q: Filters): FilterCounts => ({
+    slant: countEach(query, q, distinct(faces.map((d) => d.face.slant)), (f, slant) => ({
+      ...f,
+      slant,
+    })),
+    variable: countEach(query, q, both, (f, variable) => ({ ...f, variable })),
+    color: countEach(query, q, both, (f, color) => ({ ...f, color })),
+    formats: countEach(query, q, distinct(faces.map((d) => d.face.format)), (f, v) => ({
+      ...f,
+      formats: [v],
+    })),
+    features: countEach(
+      query,
+      q,
+      distinct(faces.flatMap((d) => d.features.map((x) => x.tag))).sort(),
+      (f, v) => ({ ...f, features: distinct([...(f.features ?? []), v]) }),
+    ),
+    sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] })),
+    problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
+    active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
+  });
+  const collections: Collection[] = [];
   const ids = (target: Target | null | undefined): FaceId[] =>
     target?.kind === 'faces' ? target.faces : [...active.keys()];
 
@@ -465,6 +557,38 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         throw { code: 'notFound' as const, message: `Family ${id} was not found.`, detail: null };
       const designer = find(list[0]!.id)!.designer;
       return { summary: summaryOf(id), designer, faces: list } satisfies Family;
+    },
+    search: async (req) => {
+      const query = req.query ?? '';
+      const filters = req.filters ?? {};
+      const all = hits(query, filters);
+      const offset = req.page?.offset ?? 0;
+      const limit = req.page?.limit ?? 100;
+      return {
+        families: all.slice(offset, offset + limit),
+        total: all.length,
+        counts: counts(query, filters),
+      } satisfies SearchResponse;
+    },
+    listLanguages: async () => structuredClone(mockLanguages),
+    createCollection: async (req) => {
+      const name = req.name.trim();
+      if (!name) throw invalid('Give the collection a name.');
+      if (collections.some((c) => c.name === name && c.parent === (req.parent ?? null)))
+        throw {
+          code: 'conflict',
+          message: `A collection named "${name}" already exists here.`,
+          detail: null,
+        };
+      const c: Collection = {
+        id: ++nextId,
+        parent: req.parent ?? null,
+        name,
+        rules: req.rules ?? null,
+        faceCount: 0,
+      };
+      collections.push(c);
+      return structuredClone(c);
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,

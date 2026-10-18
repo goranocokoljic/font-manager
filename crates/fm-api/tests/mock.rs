@@ -8,7 +8,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, ConflictPolicy, ConflictWith, DeactivateRequest,
     OutcomeStatus, Target,
 };
-use fm_api::common::Page;
+use fm_api::common::{FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, ImportMode,
@@ -222,6 +222,71 @@ fn rebuild_index_rescans_every_source_and_keeps_activation() {
     assert_eq!(
         api.list_families(ListFamiliesRequest::default()).unwrap(),
         families
+    );
+}
+
+#[test]
+fn search_counts_every_filter_value_with_the_other_filters_kept() {
+    let api = api();
+    let all = api.search(SearchRequest::default()).unwrap();
+    let counts = all.counts.expect("the mock reports counts");
+    // Some sample families have italics; every family has an upright face.
+    let italic = counts
+        .slant
+        .iter()
+        .find(|c| c.value == Slant::Italic)
+        .unwrap();
+    assert!(italic.count > 0 && italic.count < all.total);
+    let upright = counts
+        .slant
+        .iter()
+        .find(|c| c.value == Slant::Upright)
+        .unwrap();
+    assert_eq!(upright.count, all.total);
+    // Values with no result are left out: the sample has no color fonts.
+    assert!(counts.color.iter().all(|c| !c.value));
+    // A count is the total the search gives with that value chosen.
+    for c in &counts.formats {
+        let r = api
+            .search(SearchRequest {
+                filters: Filters {
+                    formats: vec![c.value],
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(r.total, c.count, "{:?}", c.value);
+    }
+
+    // An any-of filter is counted without its own selection, so the other formats stay.
+    let ttf = Filters {
+        formats: vec![FontFormat::Ttf],
+        ..Default::default()
+    };
+    let r = api
+        .search(SearchRequest {
+            filters: ttf.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r.counts.unwrap().formats, counts.formats);
+    // Other filters are kept: with italics only, no count is above the italic families.
+    let r = api
+        .search(SearchRequest {
+            filters: Filters {
+                slant: Some(Slant::Italic),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(
+        r.counts
+            .unwrap()
+            .formats
+            .iter()
+            .all(|c| c.count <= italic.count)
     );
 }
 
