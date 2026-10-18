@@ -133,10 +133,10 @@ memory if a cold start is needed, and the decision record reviewers read.
 
 | Verdict | When | What the harness does |
 |---|---|---|
-| merge | CI green on all three OS, review has no open `must`, budget held, branch up to date with `main` | squash-merge (pinned to the checked head commit), delete the branch |
+| merge | CI green on all three OS, review has no open `must`, branch up to date with `main` | squash-merge (pinned to the checked head commit), delete the branch |
 | update | the branch is behind `main` | `gh pr update-branch`, then CI again (red → ci-fix as usual), then the gate again; at most `auto_merge.max_branch_updates` (3) times |
 | sync | the branch conflicts with `main` | the `sync` stage, then CI, then the gate again |
-| human | track in `auto_merge.exclude_tracks` (empty in this repo; the default is `platform`), over budget, or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
+| human | track in `auto_merge.exclude_tracks` (empty in this repo; the default is `platform`) or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
 | block | a draft, or the merge call failed | `harness:blocked` |
 | stop | the newest commit on `main` has a failed required check (newest run per job) | re-run main's failed jobs once (a flaky test), check every `main_red.poll_min` (10) minutes; green → the gate again; still red after `main_red.max_hours` (6) → stop the lane, and the next run merges the PR |
 
@@ -158,7 +158,8 @@ story instead.
 CI red 3 times; a `must` finding open after 2 fix rounds; a change to an existing
 `fm-api` type outside E1/E25; a dependency not in the spec's library table or
 rejected by cargo-deny; contradictory or unverifiable criteria; a conflict with
-an ADR; the story over budget (S = 1×, M = 2.5×, L = 5× `budget_base_usd`).
+an ADR; the story over budget (S = 1×, M = 2.5×, L = 5× `budget_base_usd`) before an
+agent stage (waiting for CI and the merge gate go on).
 To retry: fix the cause, remove `harness:blocked`, run the lane again.
 
 ## The review — why it is different from tr-harness
