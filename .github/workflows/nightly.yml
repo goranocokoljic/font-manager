@@ -1,0 +1,161 @@
+# Nightly dev builds (E9.3): unsigned installers from main — .msi and .exe (NSIS) for
+# Windows, .dmg for macOS, AppImage for Linux — attached to one GitHub pre-release per
+# nightly. The version is the Cargo manifest version plus the short commit hash
+# (scripts/release/dev-build.mjs). A night without new commits on main builds nothing.
+#
+# On a pull request that touches the packaging, the same builds run as a dry run: the
+# installers are kept as workflow artifacts and no release is made.
+name: nightly
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/nightly.yml
+      - scripts/release/**
+      - apps/desktop/src-tauri/tauri.conf.json
+
+concurrency:
+  group: nightly-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    # Nightlies come from main only; a dispatch on another branch is a no-op.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      label: ${{ steps.v.outputs.label }}
+      tag: ${{ steps.v.outputs.tag }}
+      build: ${{ steps.skip.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Version (Cargo manifest + commit hash)
+        id: v
+        run: node scripts/release/dev-build.mjs version --sha "${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Skip a commit that already has its nightly
+        id: skip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.v.outputs.tag }}
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ] && gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG exists; nothing new on main."
+            echo build=false >> "$GITHUB_OUTPUT"
+          else
+            echo build=true >> "$GITHUB_OUTPUT"
+          fi
+
+  installer:
+    name: installer-${{ matrix.name }}
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+            bundles: msi,nsis
+          - name: macos
+            os: macos-latest
+            bundles: dmg
+          - name: linux
+            os: ubuntu-latest
+            bundles: appimage
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Linux system packages (Tauri, fontconfig, AppImage)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev \
+            libayatana-appindicator3-dev librsvg2-dev libfontconfig1-dev patchelf file
+
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: nightly
+          cache-on-failure: true
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # No signing identity is configured: the installers are unsigned on purpose.
+      - name: Tauri release build (${{ matrix.bundles }})
+        env:
+          # linuxdeploy is itself an AppImage; the runner has no FUSE to mount it.
+          APPIMAGE_EXTRACT_AND_RUN: 1
+          NO_STRIP: true
+        run: pnpm tauri build --ci --bundles ${{ matrix.bundles }}
+
+      - name: Gather the installers under their release names
+        shell: bash
+        run: |
+          arch=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+          node scripts/release/dev-build.mjs collect --os ${{ matrix.name }} --arch "$arch" \
+            --sha "${{ github.sha }}" --out nightly-assets
+          ls -l nightly-assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.name }}
+          path: nightly-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: release
+    needs: [plan, installer]
+    if: github.event_name != 'pull_request' && needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          path: nightly-assets
+          merge-multiple: true
+
+      - name: Publish the nightly pre-release with every installer attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.plan.outputs.tag }}
+          LABEL: ${{ needs.plan.outputs.label }}
+        run: |
+          ls -l nightly-assets
+          gh release create "$TAG" nightly-assets/* \
+            --target "${{ github.sha }}" --prerelease --latest=false \
+            --title "Nightly $LABEL" \
+            --notes "Unsigned dev build of main at ${{ github.sha }} (version $LABEL). Not for production use: Windows SmartScreen and macOS Gatekeeper warn about unsigned installers."

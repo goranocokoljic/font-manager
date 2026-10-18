@@ -107,4 +107,35 @@ describe('FontPreviewRow', () => {
     row.unmount();
     expect(loader.inUse).toBe(0);
   });
+
+  it('shows a small fallback hint when the text is a fallback', () => {
+    const plain = mount(FontPreviewRow, { props: { face: mono, text: 'Hello' } });
+    expect(plain.find('[data-testid="fallback-hint"]').exists()).toBe(false);
+    expect(plain.get('.sample').attributes('data-fallback')).toBeUndefined();
+    const script = mount(FontPreviewRow, {
+      props: {
+        face: mono,
+        text: 'abcdefghijklmnopqrstuvwxyz',
+        fallback: { kind: 'script', script: 'Latn' },
+        missing: ['Ж', 'ф'],
+      },
+    });
+    const hint = script.get('[data-testid="fallback-hint"]');
+    expect(hint.text()).toBe('Fallback');
+    expect(hint.attributes('title')).toBe('This font lacks Ж ф, so it shows its own letters.');
+    expect(hint.attributes('aria-label')).toBe(hint.attributes('title'));
+    expect(script.get('.sample').text()).toBe('abcdefghijklmnopqrstuvwxyz');
+    expect(script.get('.sample').attributes('data-fallback')).toBe('script');
+    const symbols = mount(FontPreviewRow, {
+      props: {
+        face: mono,
+        text: '★ ☆',
+        fallback: { kind: 'symbols' },
+        missing: 'abcdefghij'.split(''),
+      },
+    });
+    expect(symbols.get('[data-testid="fallback-hint"]').attributes('title')).toBe(
+      'This font lacks a b c d e f g h …, so it shows its own characters.',
+    );
+  });
 });

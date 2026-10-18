@@ -1,9 +1,15 @@
 # Rust
 target/
 
+# bench workflow: the reference library restored from the CI cache
+.cache/
+
 # Node / pnpm
 node_modules/
 dist/
+
+# Dev builds gathered by scripts/release/dev-build.mjs
+nightly-assets/
 
 # go-harness: logs, telemetry, reviews, notes, CI verdicts, screenshots (never committed)
 .harness/

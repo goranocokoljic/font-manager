@@ -215,6 +215,11 @@ pub(crate) enum Value {
     Source(SourceId),
     Problems(bool),
     Active(bool),
+    /// A user tag.
+    Tag(TagId),
+    Favorite(bool),
+    /// A `min_rating` the face's rating reaches (1–5).
+    Rating(u8),
 }
 
 impl Value {
@@ -232,6 +237,9 @@ impl Value {
             Self::Source(_) => Dim::Sources,
             Self::Problems(_) => Dim::Problems,
             Self::Active(_) => Dim::Active,
+            Self::Tag(_) => Dim::Tags,
+            Self::Favorite(_) => Dim::Favorite,
+            Self::Rating(_) => Dim::Rating,
         }
     }
 }
@@ -267,6 +275,9 @@ const LICENSES: [LicenseType; 6] = [
     LicenseType::Unknown,
 ];
 
+/// The `min_rating` values counted.
+const RATINGS: [u8; 5] = [1, 2, 3, 4, 5];
+
 /// The weight classes counted, and the widths: 1 to 9.
 const WEIGHTS: [u16; 9] = [100, 200, 300, 400, 500, 600, 700, 800, 900];
 const WIDTHS: [u16; 9] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
@@ -281,7 +292,7 @@ fn weight_span(class: u16) -> (u16, u16) {
 
 /// Every value `face` can be counted under.
 pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
-    let mut out = Vec::with_capacity(16 + facts.features.len());
+    let mut out = Vec::with_capacity(24 + facts.features.len() + facts.tags.len());
     out.extend(facts.classification.map(Value::Classification));
     for class in WEIGHTS {
         let (lo, hi) = weight_span(class);
@@ -313,6 +324,15 @@ pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
     out.push(Value::Source(facts.source));
     out.push(Value::Problems(facts.problems));
     out.push(Value::Active(facts.active));
+    out.extend(facts.tags.iter().copied().map(Value::Tag));
+    out.push(Value::Favorite(facts.favorite));
+    let rating = facts.rating.unwrap_or(0);
+    out.extend(
+        RATINGS
+            .into_iter()
+            .filter(|r| *r <= rating)
+            .map(Value::Rating),
+    );
     out
 }
 
@@ -366,7 +386,7 @@ impl<'a> Tally<'a> {
                 continue;
             };
             let dim = value.dim();
-            let others = if dim == Dim::Features {
+            let others = if matches!(dim, Dim::Features | Dim::Tags) {
                 failed
             } else {
                 failed & !dim.bit()
@@ -402,15 +422,18 @@ impl<'a> Tally<'a> {
         }
         let mut features: Vec<Tag> = Vec::new();
         let mut sources: Vec<SourceId> = Vec::new();
+        let mut tags: Vec<TagId> = Vec::new();
         for value in &self.slots.values {
             match value {
                 Value::Feature(tag) => features.push(*tag),
                 Value::Source(id) => sources.push(*id),
+                Value::Tag(id) => tags.push(*id),
                 _ => {}
             }
         }
         features.sort_unstable();
         sources.sort_unstable();
+        tags.sort_unstable();
         let bools = [true, false];
         FilterCounts {
             classification: list(CLASSES, Value::Classification, &count),
@@ -437,6 +460,9 @@ impl<'a> Tally<'a> {
             sources: list(sources, Value::Source, &count),
             problems: list(bools, Value::Problems, &count),
             active: list(bools, Value::Active, &count),
+            tags: list(tags, Value::Tag, &count),
+            favorite: list(bools, Value::Favorite, &count),
+            min_rating: list(RATINGS, Value::Rating, &count),
         }
     }
 }

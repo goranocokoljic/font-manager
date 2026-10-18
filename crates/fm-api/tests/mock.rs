@@ -16,10 +16,10 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, TagFacesRequest,
-    UserMetaUpdate,
+    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, MoveCollectionRequest,
+    RenameCollectionRequest, TagFacesRequest, UserMetaUpdate,
 };
-use fm_api::preview::PreviewRequest;
+use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
 use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, SourceId};
@@ -363,6 +363,84 @@ fn search_groups_by_family_and_reports_near_misses() {
 }
 
 #[test]
+fn collections_nest_reorder_and_take_families() {
+    let api = api();
+    let make = |name: &str, parent| {
+        api.create_collection(CreateCollectionRequest {
+            name: name.into(),
+            parent,
+            rules: None,
+        })
+        .unwrap()
+    };
+    let names = |api: &Arc<dyn Api>| -> Vec<String> {
+        api.list_collections()
+            .unwrap()
+            .into_iter()
+            .map(|c| c.name)
+            .collect()
+    };
+    let a = make("A", None);
+    let b = make("B", None);
+    let c = make("C", Some(a.id));
+    assert_eq!(names(&api), ["A", "C", "B"]);
+
+    // Reorder at the top level, then nest B under A in front of C.
+    api.move_collection(MoveCollectionRequest {
+        collection: b.id,
+        parent: None,
+        position: 0,
+    })
+    .unwrap();
+    assert_eq!(names(&api), ["B", "A", "C"]);
+    let moved = api
+        .move_collection(MoveCollectionRequest {
+            collection: b.id,
+            parent: Some(a.id),
+            position: 0,
+        })
+        .unwrap();
+    assert_eq!(moved.parent, Some(a.id));
+    assert_eq!(names(&api), ["A", "B", "C"]);
+
+    // Not into itself or a child; no two siblings with one name.
+    let cycle = api.move_collection(MoveCollectionRequest {
+        collection: a.id,
+        parent: Some(c.id),
+        position: 0,
+    });
+    assert_eq!(cycle.unwrap_err().code, ErrorCode::InvalidRequest);
+    let clash = api.rename_collection(RenameCollectionRequest {
+        collection: b.id,
+        name: "C".into(),
+    });
+    assert_eq!(clash.unwrap_err().code, ErrorCode::Conflict);
+
+    // A family adds each of its faces; a face can be in many collections.
+    let inter = api
+        .list_families(ListFamiliesRequest::default())
+        .unwrap()
+        .items[0]
+        .id;
+    let with_family = api
+        .add_to_collection(CollectionFacesRequest {
+            collection: c.id,
+            faces: vec![FaceId(3)],
+            families: vec![inter],
+        })
+        .unwrap();
+    assert_eq!(with_family.face_count, 3);
+    let also = api
+        .add_to_collection(CollectionFacesRequest {
+            collection: b.id,
+            faces: vec![FaceId(3)],
+            families: vec![],
+        })
+        .unwrap();
+    assert_eq!(also.face_count, 1);
+}
+
+#[test]
 fn collections_tags_meta_and_sets() {
     let api = api();
     let manual = api
@@ -376,6 +454,7 @@ fn collections_tags_meta_and_sets() {
         .add_to_collection(CollectionFacesRequest {
             collection: manual.id,
             faces: vec![FaceId(1), FaceId(3)],
+            families: vec![],
         })
         .unwrap();
     assert_eq!(c.face_count, 2);
@@ -394,6 +473,7 @@ fn collections_tags_meta_and_sets() {
     let refused = api.add_to_collection(CollectionFacesRequest {
         collection: smart.id,
         faces: vec![FaceId(3)],
+        families: vec![],
     });
     assert_eq!(refused.unwrap_err().code, ErrorCode::InvalidRequest);
     api.delete_collection(manual.id).unwrap();
@@ -561,6 +641,12 @@ fn problems_list_unsupported_files_and_system_clashes() {
             (7, "Unsupported".to_string())
         ]
     );
+}
+
+#[test]
+fn the_sample_library_has_no_duplicates() {
+    // Every sample file has its own hash and PostScript name.
+    assert_eq!(api().list_duplicates().unwrap(), []);
 }
 
 #[test]
@@ -756,4 +842,41 @@ fn families_sort_by_any_detail_list_column() {
         })
         .unwrap();
     assert_eq!(page.items[0].name, "Inter");
+}
+
+#[test]
+fn sample_texts_fall_back_to_the_faces_own_script() {
+    let api = api();
+    let ask = |faces: &[u32], text: &str| {
+        api.sample_texts(SampleTextRequest {
+            faces: faces.iter().map(|&f| FaceId(f)).collect(),
+            text: text.into(),
+        })
+        .expect("samples")
+    };
+    // Face 1 maps Latin, Latin Extended and Cyrillic; face 7 only Latin.
+    let got = ask(&[1, 7], "Źdźbło trawy");
+    assert_eq!(got[0].text, "Źdźbło trawy");
+    assert_eq!(got[0].fallback, None);
+    assert_eq!(got[1].face, FaceId(7));
+    assert_eq!(got[1].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(
+        got[1].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert_eq!(got[1].missing, ["Ź", "ź", "ł"]);
+    let got = ask(&[7], "The quick fox");
+    assert_eq!(
+        (got[0].text.as_str(), &got[0].fallback),
+        ("The quick fox", &None)
+    );
+    let err = api
+        .sample_texts(SampleTextRequest {
+            faces: vec![FaceId(999)],
+            text: "a".into(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }

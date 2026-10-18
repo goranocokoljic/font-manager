@@ -4,8 +4,10 @@
 // registered by the shared face loader). Variable faces render at their
 // default coordinates, or at `variations`, through `font-variation-settings`.
 // The list passes the view's preview settings (size, spacing, alignment, color).
+// When the face lacks characters of the sample, the list passes the fallback text
+// the API chose and `fallback`; the row then shows a small "Fallback" hint.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import type { Axis, AxisValue, FaceId, FaceSummary } from '../api/types';
+import type { Axis, AxisValue, FaceId, FaceSummary, SampleFallback } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { faceAxes, variationSettings } from '../preview/variations';
 
@@ -23,6 +25,10 @@ const props = withDefaults(
     /** Sample text color; inherits the list's when absent. */
     color?: string | null;
     variations?: AxisValue[];
+    /** Set when `text` is a fallback from the face's own coverage, not the sample. */
+    fallback?: SampleFallback | null;
+    /** Characters of the sample the face lacks. */
+    missing?: string[];
   }>(),
   {
     label: undefined,
@@ -33,6 +39,8 @@ const props = withDefaults(
     align: 'start',
     color: null,
     variations: () => [],
+    fallback: null,
+    missing: () => [],
   },
 );
 
@@ -94,6 +102,15 @@ const sampleStyle = computed(() => ({
   fontVariationSettings: variationSettings(axes.value, props.variations),
 }));
 
+const fallbackTitle = computed(() => {
+  if (!props.fallback) return undefined;
+  const own = props.fallback.kind === 'script' ? 'letters' : 'characters';
+  const lacks = props.missing.length
+    ? `This font lacks ${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`
+    : 'This font lacks characters of the sample text';
+  return `${lacks}, so it shows its own ${own}.`;
+});
+
 const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
 </script>
 
@@ -103,9 +120,19 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
       {{ name }}
       <slot name="detail" />
       <span v-if="face.isVariable" class="badge">Variable</span>
+      <span
+        v-if="fallback"
+        class="fallback"
+        data-testid="fallback-hint"
+        :title="fallbackTitle"
+        :aria-label="fallbackTitle"
+        >Fallback</span
+      >
       <span v-if="state === 'failed'" class="note">Preview not available</span>
     </span>
-    <span class="sample" dir="auto" :style="sampleStyle">{{ text }}</span>
+    <span class="sample" dir="auto" :style="sampleStyle" :data-fallback="fallback?.kind">{{
+      text
+    }}</span>
   </div>
 </template>
 
@@ -132,6 +159,14 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
 }
 .note {
   color: var(--fm-warning);
+}
+.fallback {
+  padding: 0 4px;
+  border: 1px solid var(--fm-border);
+  border-radius: 3px;
+  color: var(--fm-muted);
+  font-size: 10.5px;
+  line-height: 14px;
 }
 .sample {
   overflow: hidden;

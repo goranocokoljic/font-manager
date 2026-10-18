@@ -15,11 +15,14 @@ pub mod font_file;
 pub mod grouping;
 pub mod index;
 pub mod logging;
+mod parallel;
 pub mod parser;
 pub mod preview;
+pub mod sample;
 pub mod scanner;
 mod search;
 pub mod settings;
+pub mod sidecar;
 pub mod startup;
 pub mod telemetry;
 #[cfg(test)]

@@ -6,7 +6,7 @@
 //! nothing new, exports report the files they would write, and previews are a
 //! 1×1 transparent PNG.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, MutexGuard};
 
@@ -22,17 +22,19 @@ use crate::export::{
     ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest, WebFormat,
 };
 use crate::library::{
-    AddSourceRequest, AppInfo, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort,
-    FamilySummary, ImportMode, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
-    Platform, Problem, ProblemKind, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
-    StyleMark,
+    AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, ImportMode, LicenseInfo,
+    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, ScanRequest,
+    SetSourcePausedRequest, Source, SourceKind, StyleMark,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, ProjectSet, RenameCollectionRequest, SetEntry, SetExport, Tag,
-    TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    ImportSetResponse, MoveCollectionRequest, ProjectSet, RenameCollectionRequest, SetEntry,
+    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
-use crate::preview::{FontSource, PreviewImage, PreviewRequest};
+use crate::preview::{
+    FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
+};
 use crate::search::{
     CoverageReport, CoverageRequest, FamilyHit, FilterCount, FilterCounts, Filters,
     LanguageCoverage, LanguagePreset, Missing, SearchRequest, SearchResponse, SimilarFace,
@@ -615,6 +617,41 @@ impl State {
         }
     }
 
+    fn collection(&self, id: CollectionId) -> ApiResult<&Collection> {
+        self.collections
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or_else(|| ApiError::not_found(format!("Collection {id}")))
+    }
+
+    /// `Conflict` when another child of `parent` (not `except`) is called `name`.
+    fn check_sibling_name(
+        &self,
+        parent: Option<CollectionId>,
+        name: &str,
+        except: Option<CollectionId>,
+    ) -> ApiResult<()> {
+        if self
+            .collections
+            .iter()
+            .any(|c| c.parent == parent && Some(c.id) != except && c.name == name)
+        {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("A collection named \"{name}\" already exists here."),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The children of `parent` in their order, each followed by its own.
+    fn walk_collections<'a>(&'a self, parent: Option<CollectionId>, out: &mut Vec<&'a Collection>) {
+        for c in self.collections.iter().filter(|c| c.parent == parent) {
+            out.push(c);
+            self.walk_collections(Some(c.id), out);
+        }
+    }
+
     fn in_collection(&self, f: &MockFace, id: CollectionId, depth: u8) -> bool {
         let Some(c) = self.collections.iter().find(|c| c.id == id) else {
             return false;
@@ -934,6 +971,69 @@ impl LibraryService for MockApi {
         }
         Ok(out)
     }
+
+    fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
+        let st = self.state();
+        let source = |id: SourceId| st.sources.iter().find(|s| s.id == id);
+        let visible: Vec<&MockFace> = st
+            .faces
+            .iter()
+            .filter(|f| source(f.source).is_some_and(|s| !s.paused))
+            .collect();
+        let copy = |f: &MockFace| DuplicateCopy {
+            path: f.detail.path.clone(),
+            size: f.detail.file_size,
+            hash: f.detail.hash.clone(),
+            face: Some(f.detail.face.id),
+            version: f.detail.version.clone(),
+            source: f.source,
+            in_library_folder: source(f.source)
+                .is_some_and(|s| s.kind == SourceKind::LibraryFolder),
+            keep: false,
+        };
+        // Every sample file has one face, so a face stands for its file.
+        let mut near: BTreeMap<(&str, &str), Vec<&MockFace>> = BTreeMap::new();
+        let mut exact: BTreeMap<&str, Vec<&MockFace>> = BTreeMap::new();
+        for f in &visible {
+            let name = f.detail.face.postscript_name.as_str();
+            if !name.is_empty() {
+                let version = f.detail.version.as_deref().map_or("", str::trim);
+                near.entry((name, version)).or_default().push(f);
+            }
+            exact.entry(f.detail.hash.as_str()).or_default().push(f);
+        }
+        let mut groups = Vec::new();
+        let mut in_near: Vec<BTreeSet<&str>> = Vec::new();
+        for ((name, _), faces) in near {
+            let hashes: BTreeSet<&str> = faces.iter().map(|f| f.detail.hash.as_str()).collect();
+            if hashes.len() > 1 {
+                in_near.push(faces.iter().map(|f| f.detail.path.as_str()).collect());
+                groups.push(DuplicateGroup {
+                    kind: DuplicateKind::Near,
+                    postscript_name: Some(name.to_owned()),
+                    copies: faces.into_iter().map(copy).collect(),
+                });
+            }
+        }
+        for faces in exact.into_values().filter(|f| f.len() > 1) {
+            if in_near
+                .iter()
+                .any(|paths| faces.iter().all(|f| paths.contains(f.detail.path.as_str())))
+            {
+                continue;
+            }
+            let name = &faces[0].detail.face.postscript_name;
+            groups.push(DuplicateGroup {
+                kind: DuplicateKind::Exact,
+                postscript_name: (!name.is_empty()).then(|| name.clone()),
+                copies: faces.into_iter().map(copy).collect(),
+            });
+        }
+        for g in &mut groups {
+            g.choose_keeper();
+        }
+        Ok(groups)
+    }
 }
 
 impl State {
@@ -1072,6 +1172,20 @@ impl State {
             sources: self.count_each(words, q, sources, |f, v| f.sources = vec![*v])?,
             problems: self.count_each(words, q, both(), |f, v| f.problems = Some(*v))?,
             active: self.count_each(words, q, both(), |f, v| f.active = Some(*v))?,
+            tags: self.count_each(
+                words,
+                q,
+                self.tags.iter().map(|t| t.id).collect(),
+                |f, v| {
+                    if !f.tags.contains(v) {
+                        f.tags.push(*v);
+                    }
+                },
+            )?,
+            favorite: self.count_each(words, q, both(), |f, v| f.favorite = Some(*v))?,
+            min_rating: self.count_each(words, q, (1..=5).collect(), |f, v| {
+                f.min_rating = Some(*v);
+            })?,
         })
     }
 }
@@ -1178,6 +1292,85 @@ impl PreviewService for MockApi {
             collection_index: f.detail.collection_index,
             hash: f.detail.hash.clone(),
         })
+    }
+
+    /// The core's rule (`fm_core::sample`) on the mock's languages: the
+    /// sample when the face maps it, else lower-case letters of the complete
+    /// language whose script the face maps most, else its own characters.
+    fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
+        let st = self.state();
+        req.faces
+            .iter()
+            .map(|&id| {
+                let f = st.face(id)?;
+                let mut missing: Vec<String> = Vec::new();
+                for c in req.text.chars() {
+                    let s = c.to_string();
+                    if !c.is_whitespace()
+                        && !c.is_control()
+                        && !f.chars.contains(&c)
+                        && !missing.contains(&s)
+                    {
+                        missing.push(s);
+                    }
+                }
+                if missing.is_empty() {
+                    return Ok(SampleText {
+                        face: id,
+                        text: req.text.clone(),
+                        fallback: None,
+                        missing,
+                    });
+                }
+                let mut best: Option<(usize, &str, &str)> = None;
+                for (_, _, script, chars) in LANGUAGES {
+                    if !chars.chars().all(|c| f.chars.contains(&c)) {
+                        continue;
+                    }
+                    let score = LANGUAGES
+                        .iter()
+                        .filter(|l| l.2 == script)
+                        .flat_map(|l| l.3.chars())
+                        .collect::<BTreeSet<char>>()
+                        .iter()
+                        .filter(|c| f.chars.contains(c))
+                        .count();
+                    if best.is_none_or(|(top, _, _)| score > top) {
+                        best = Some((score, script, chars));
+                    }
+                }
+                let (text, fallback) = match best {
+                    Some((_, script, chars)) => (
+                        chars.chars().take(26).collect(),
+                        SampleFallback::Script {
+                            script: script.into(),
+                        },
+                    ),
+                    None => {
+                        let mut list: Vec<char> = f
+                            .chars
+                            .iter()
+                            .copied()
+                            .filter(|c| !c.is_whitespace())
+                            .collect();
+                        list.sort_by_key(|c| !c.is_alphanumeric());
+                        let text = list
+                            .iter()
+                            .take(24)
+                            .map(char::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        (text, SampleFallback::Symbols)
+                    }
+                };
+                Ok(SampleText {
+                    face: id,
+                    text,
+                    fallback: Some(fallback),
+                    missing,
+                })
+            })
+            .collect()
     }
 }
 
@@ -1287,11 +1480,9 @@ impl ActivationService for MockApi {
 impl OrganizationService for MockApi {
     fn list_collections(&self) -> ApiResult<Vec<Collection>> {
         let st = self.state();
-        Ok(st
-            .collections
-            .iter()
-            .map(|c| st.collection_view(c))
-            .collect())
+        let mut out = Vec::new();
+        st.walk_collections(None, &mut out);
+        Ok(out.into_iter().map(|c| st.collection_view(c)).collect())
     }
 
     fn create_collection(&self, req: CreateCollectionRequest) -> ApiResult<Collection> {
@@ -1305,16 +1496,7 @@ impl OrganizationService for MockApi {
         {
             return Err(ApiError::not_found(format!("Collection {p}")));
         }
-        if st
-            .collections
-            .iter()
-            .any(|c| c.parent == req.parent && c.name == name)
-        {
-            return Err(ApiError::new(
-                ErrorCode::Conflict,
-                format!("A collection named \"{name}\" already exists here."),
-            ));
-        }
+        st.check_sibling_name(req.parent, name, None)?;
         let c = Collection {
             id: CollectionId(st.next()),
             parent: req.parent,
@@ -1332,6 +1514,8 @@ impl OrganizationService for MockApi {
             return Err(ApiError::invalid("Give the collection a name."));
         }
         let mut st = self.state();
+        let parent = st.collection(req.collection)?.parent;
+        st.check_sibling_name(parent, name, Some(req.collection))?;
         let c = st
             .collections
             .iter_mut()
@@ -1339,6 +1523,41 @@ impl OrganizationService for MockApi {
             .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
         c.name = name.into();
         let c = c.clone();
+        Ok(st.collection_view(&c))
+    }
+
+    fn move_collection(&self, req: MoveCollectionRequest) -> ApiResult<Collection> {
+        let mut st = self.state();
+        let name = st.collection(req.collection)?.name.clone();
+        let mut up = req.parent;
+        while let Some(id) = up {
+            if id == req.collection {
+                return Err(ApiError::invalid(
+                    "A collection cannot go inside itself or one of its children.",
+                ));
+            }
+            up = st.collection(id)?.parent;
+        }
+        st.check_sibling_name(req.parent, &name, Some(req.collection))?;
+        let at = st
+            .collections
+            .iter()
+            .position(|c| c.id == req.collection)
+            .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
+        let mut c = st.collections.remove(at);
+        c.parent = req.parent;
+        let siblings: Vec<usize> = st
+            .collections
+            .iter()
+            .enumerate()
+            .filter(|(_, x)| x.parent == req.parent)
+            .map(|(i, _)| i)
+            .collect();
+        let at = siblings
+            .get(req.position as usize)
+            .copied()
+            .unwrap_or(st.collections.len());
+        st.collections.insert(at, c.clone());
         Ok(st.collection_view(&c))
     }
 
@@ -1375,10 +1594,18 @@ impl OrganizationService for MockApi {
 
     fn list_tags(&self) -> ApiResult<Vec<Tag>> {
         let st = self.state();
-        Ok(st.tags.iter().map(|t| tag_view(&st, t)).collect())
+        let mut tags: Vec<Tag> = st.tags.iter().map(|t| tag_view(&st, t)).collect();
+        tags.sort_by_key(|t| t.name.to_lowercase());
+        Ok(tags)
     }
 
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
+        if req.tags.iter().all(|n| n.trim().is_empty()) {
+            return Err(ApiError::invalid("Give the tag a name."));
+        }
+        if req.faces.is_empty() {
+            return Err(ApiError::invalid("Choose the fonts to tag."));
+        }
         let mut st = self.state();
         for id in &req.faces {
             st.face(*id)?;
@@ -1400,7 +1627,9 @@ impl OrganizationService for MockApi {
             for face in &req.faces {
                 st.face_tags.entry(*face).or_default().insert(id);
             }
-            touched.push(id);
+            if !touched.contains(&id) {
+                touched.push(id);
+            }
         }
         st.emit(Event::LibraryChanged {
             source: None,
@@ -1424,6 +1653,9 @@ impl OrganizationService for MockApi {
                 }
             }
         }
+        // A tag no face carries any more is gone, like in fm-core.
+        let used: BTreeSet<TagId> = st.face_tags.values().flatten().copied().collect();
+        st.tags.retain(|t| used.contains(&t.id));
         st.emit(Event::LibraryChanged {
             source: None,
             added: Vec::new(),
@@ -1559,8 +1791,13 @@ fn edit_members(api: &MockApi, req: CollectionFacesRequest, add: bool) -> ApiRes
     for id in &req.faces {
         st.face(*id)?;
     }
+    let mut faces = req.faces;
+    for family in &req.families {
+        st.family(*family)?;
+        faces.extend(st.family_faces(*family).map(|f| f.detail.face.id));
+    }
     let members = st.members.entry(c.id).or_default();
-    for id in req.faces {
+    for id in faces {
         if add {
             members.insert(id);
         } else {

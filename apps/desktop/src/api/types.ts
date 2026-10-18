@@ -149,7 +149,10 @@ export type Classification =
 /**  Symbols, icons, dingbats. */
 "symbol";
 
-/**  A manual collection, or a smart one when `rules` is set. */
+/**
+ *  A manual collection, or a smart one when `rules` is set. Siblings are
+ *  ordered by the user; `list_collections` returns them in that order.
+ */
 export type Collection = {
 	/**  Id. */
 	id: CollectionId,
@@ -169,6 +172,8 @@ export type CollectionFacesRequest = {
 	collection: CollectionId,
 	/**  The faces. */
 	faces: FaceId[],
+	/**  Whole families: every face of each, as the library lists it. */
+	families?: FamilyId[],
 };
 
 /**  A manual or smart collection. */
@@ -255,6 +260,49 @@ export type Density =
 "comfortable" | 
 /**  More rows on screen. */
 "compact";
+
+/**  One file of a duplicate group. */
+export type DuplicateCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  File size in bytes. */
+	size: number,
+	/**  blake3 hash of the file, hex; equal hashes are identical files. */
+	hash: string,
+	/**
+	 *  The face the group is about (the first face for an exact group), when
+	 *  the file parsed far enough to have one.
+	 */
+	face: FaceId | null,
+	/**  Version string (name ID 5) of that face. */
+	version: string | null,
+	/**  The source the file was found in. */
+	source: SourceId,
+	/**  The source is the library folder. */
+	inLibraryFolder: boolean,
+	/**  The recommended keeper of the group. */
+	keep: boolean,
+};
+
+/**  Files that hold the same font. The recommended keeper comes first. */
+export type DuplicateGroup = {
+	/**  Exact or near. */
+	kind: DuplicateKind,
+	/**
+	 *  The PostScript name the copies share (for an exact group, the first
+	 *  face's), when there is one.
+	 */
+	postscriptName: string | null,
+	/**  The copies, two or more, keeper first. */
+	copies: DuplicateCopy[],
+};
+
+/**  Why files are listed together as duplicates. */
+export type DuplicateKind = 
+/**  The same file (same hash) at different paths. */
+"exact" | 
+/**  The same PostScript name and version in files that differ. */
+"near";
 
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
@@ -595,9 +643,9 @@ export type FilterCount<T> = {
  *  Result counts for the filters, per value: the family groups the same
  *  search returns with that value chosen and the other filters kept. A
  *  filter that takes any of several values (classification, formats,
- *  sources) is counted without its own selection; `features`, which takes
- *  every one, is counted with its selection plus the value. Values with no
- *  result are left out.
+ *  sources) is counted without its own selection; `features` and `tags`,
+ *  which take every one, are counted with their selection plus the value.
+ *  Values with no result are left out.
  */
 export type FilterCounts = {
 	/**  Per class. */
@@ -627,6 +675,12 @@ export type FilterCounts = {
 	problems?: FilterCount<boolean>[],
 	/**  Active (true) and inactive (false). */
 	active?: FilterCount<boolean>[],
+	/**  Per tag. Like `features`, counted with the tags already chosen. */
+	tags?: FilterCount<TagId>[],
+	/**  Favorites (true) and the rest (false). */
+	favorite?: FilterCount<boolean>[],
+	/**  Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4. */
+	minRating?: FilterCount<number>[],
 };
 
 /**
@@ -838,6 +892,22 @@ export type Missing = {
 	hasLocl: boolean,
 };
 
+/**
+ *  Move a collection under another parent, or to another place among its
+ *  siblings.
+ */
+export type MoveCollectionRequest = {
+	/**  The collection. */
+	collection: CollectionId,
+	/**
+	 *  The new parent; absent for the top level. The collection itself or
+	 *  one of its children is `InvalidRequest`.
+	 */
+	parent?: CollectionId | null,
+	/**  Its place among the new siblings, 0 first; past the end means last. */
+	position: number,
+};
+
 /**  A named instance of a variable font, listed as a style. */
 export type NamedInstance = {
 	/**  Style name ("Semibold"). */
@@ -976,7 +1046,13 @@ export type ProblemKind =
 /**  Same PostScript name as a font already active from another source. */
 "activeConflict" | 
 /**  A format the app cannot activate. */
-"unsupported";
+"unsupported" | 
+/**
+ *  Sidecar metadata (`<source>/.fontlibrary/`) that could not be merged:
+ *  another machine set a field to a different value, or the sidecar file
+ *  cannot be read. Nothing is overwritten until the user decides.
+ */
+"sidecarConflict";
 
 /**  A project set: fonts activated together. */
 export type ProjectSet = {
@@ -994,6 +1070,35 @@ export type RenameCollectionRequest = {
 	collection: CollectionId,
 	/**  New name. */
 	name: string,
+};
+
+/**  Why a face previews other text than the sample. */
+export type SampleFallback = 
+/**  Letters of a script the face covers. */
+{ kind: "script"; 
+/**  ISO 15924 script (`Cyrl`). */
+script: string } | 
+/**  Characters the face maps, for a face that covers no language. */
+{ kind: "symbols" };
+
+/**  The text one face previews. */
+export type SampleText = {
+	/**  The face. */
+	face: FaceId,
+	/**  The sample text, or text from the face's own coverage. */
+	text: string,
+	/**  Set when the face lacks characters of the sample and `text` is other text. */
+	fallback?: SampleFallback | null,
+	/**  The characters of the sample the face lacks. */
+	missing?: string[],
+};
+
+/**  The text to preview some faces with, for one sample text. */
+export type SampleTextRequest = {
+	/**  The faces. */
+	faces: FaceId[],
+	/**  The sample text the user chose. */
+	text: string,
 };
 
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
@@ -1282,4 +1387,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 5, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 6, patch: 0 };

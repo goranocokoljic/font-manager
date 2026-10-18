@@ -10,6 +10,8 @@ import {
   type AppFolders,
   type AppInfo,
   type Collection,
+  type CollectionFacesRequest,
+  type CollectionId,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -26,8 +28,11 @@ import {
   type JobId,
   type LanguagePreset,
   type SearchResponse,
+  type SampleText,
   type Source,
   type SourceId,
+  type Tag,
+  type TagId,
   type Target,
 } from './types';
 
@@ -203,6 +208,56 @@ export const mockFolders: AppFolders = {
   cache: '/home/demo/.cache/font-manager',
   logs: '/home/demo/.local/state/font-manager/logs',
 };
+
+// The characters the mock faces map: basic Latin and Latin-1 (Western European);
+// faces that list `cyrl` also Latin Extended-A (Central European) and Serbian Cyrillic.
+const range = (from: number, to: number) =>
+  Array.from({ length: to - from }, (_, i) => String.fromCodePoint(from + i)).join('');
+const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
+const LATIN_EXT_A = range(0x100, 0x180);
+const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
+
+/** (script, characters the language needs), like the Rust mock's languages. */
+const MOCK_LANGUAGES: [string, string][] = [
+  ['Latn', 'abcdefghijklmnopqrstuvwxyz'],
+  ['Latn', 'aąbcćdeęfghijklłmnńoóprsśtuwyzźż'],
+  ['Latn', 'abcčćdđefghijklmnoprsštuvzž'],
+  ['Cyrl', 'абвгдђежзијклљмнњопрстћуфхцчџш'],
+];
+
+function mockChars(f: FaceDetail): Set<string> {
+  return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
+}
+
+/**
+ * The rule of `fm_core::sample` on the mock's languages: the sample when the face maps
+ * it; else letters of the complete language whose script the face maps most; else
+ * its own characters.
+ */
+export function mockSampleText(f: FaceDetail, text: string): SampleText {
+  const chars = mockChars(f);
+  const face = f.face.id;
+  const missing: string[] = [];
+  for (const c of text)
+    if (!/[\s\p{Cc}]/u.test(c) && !chars.has(c) && !missing.includes(c)) missing.push(c);
+  if (!missing.length) return { face, text, fallback: null, missing };
+  let best: { score: number; script: string; letters: string } | undefined;
+  for (const [script, letters] of MOCK_LANGUAGES) {
+    if (![...letters].every((c) => chars.has(c))) continue;
+    const all = new Set(MOCK_LANGUAGES.filter((l) => l[0] === script).flatMap((l) => [...l[1]]));
+    const score = [...all].filter((c) => chars.has(c)).length;
+    if (!best || score > best.score) best = { score, script, letters };
+  }
+  if (best)
+    return {
+      face,
+      text: [...best.letters].slice(0, 26).join(''),
+      fallback: { kind: 'script', script: best.script },
+      missing,
+    };
+  const own = [...chars].filter((c) => !/\s/u.test(c)).slice(0, 24);
+  return { face, text: own.join(' '), fallback: { kind: 'symbols' }, missing };
+}
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
 
@@ -388,8 +443,11 @@ export const mockLanguages: LanguagePreset[] = [
   { code: 'el', name: 'Greek', script: 'Grek' },
 ];
 
-/** True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock). */
-function passes(d: FaceDetail, active: boolean, q: Filters): boolean {
+/**
+ * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
+ * `tags` are the ids of its tags.
+ */
+function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): boolean {
   const f = d.face;
   const covers = (code: string) => {
     const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
@@ -406,6 +464,9 @@ function passes(d: FaceDetail, active: boolean, q: Filters): boolean {
     (!q.sources?.length || q.sources.includes(1)) &&
     (q.active == null || q.active === active) &&
     (q.problems == null || q.problems === (f.health.kind !== 'ok')) &&
+    (q.tags ?? []).every((t) => tags.includes(t)) &&
+    (q.favorite == null || q.favorite === d.favorite) &&
+    (q.minRating == null || (d.rating ?? 0) >= q.minRating) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -442,13 +503,30 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     );
   };
   const styles = Math.min(EXTRA_STYLES.length, Math.max(1, options.stylesPerFamily ?? 1));
+  // The sample faces are copied: tagging and rating edit this client's faces only.
   const faces = [
-    ...mockFaces,
+    ...mockFaces.map((f) => structuredClone(f)),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
-    return tags ? { ...structuredClone(f), tags: [...tags] } : f;
+    return tags ? { ...f, tags: [...tags] } : f;
   });
+  // Tags by id; a face holds their names (`FaceDetail.tags`), like the Rust mock.
+  const tags: { id: TagId; name: string }[] = [];
+  // Like fm-core's `COLLATE NOCASE`: only A–Z case is folded ("Äb" and "äb" are two tags).
+  const fold = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const sameName = (a: string, b: string) => fold(a) === fold(b);
+  for (const f of faces)
+    for (const name of f.tags)
+      if (!tags.some((t) => sameName(t.name, name))) tags.push({ id: ++nextId, name });
+  const tagIdsOf = (d: FaceDetail): TagId[] =>
+    tags.filter((t) => d.tags.some((n) => sameName(n, t.name))).map((t) => t.id);
+  const tagView = (t: { id: TagId; name: string }): Tag => ({
+    ...t,
+    faceCount: faces.filter((f) => f.tags.some((n) => sameName(n, t.name))).length,
+  });
+  const changed = (updated: FaceId[]) =>
+    emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated });
   // Indexes, so long lists (10,000 families) answer quickly.
   const byId = new Map(faces.map((f) => [f.face.id, f]));
   const byFamily = new Map<FamilyId, FaceDetail[]>();
@@ -471,6 +549,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     message: `Face ${id} was not found.`,
     detail: null,
   });
+  const faceOrThrow = (id: FaceId) => {
+    const f = find(id);
+    if (!f) throw notFound(id);
+    return f;
+  };
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
   const hits = (query: string, q: Filters): FamilyHit[] => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -479,7 +562,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const matching = details.filter((d) => {
         const hay =
           `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
-        return words.every((w) => hay.includes(w)) && passes(d, active.has(d.face.id), q);
+        return (
+          words.every((w) => hay.includes(w)) &&
+          passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
+          (q.collection == null || !!members.get(q.collection)?.has(d.face.id))
+        );
       });
       if (!matching.length) continue;
       const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
@@ -524,13 +611,72 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] })),
     problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
     active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
+    tags: countEach(
+      query,
+      q,
+      tags.map((t) => t.id),
+      (f, v) => ({ ...f, tags: distinct([...(f.tags ?? []), v]) }),
+    ),
+    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
+    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
   });
+  // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
+  const members = new Map<CollectionId, Set<FaceId>>();
+  const conflict = (name: string) => ({
+    code: 'conflict' as const,
+    message: `A collection named "${name}" already exists here.`,
+    detail: null,
+  });
+  const findCollection = (id: CollectionId) => {
+    const c = collections.find((c) => c.id === id);
+    if (!c)
+      throw { code: 'notFound' as const, message: `Collection ${id} was not found.`, detail: null };
+    return c;
+  };
+  const nameTaken = (parent: CollectionId | null, name: string, except?: CollectionId) =>
+    collections.some((c) => c.parent === parent && c.name === name && c.id !== except);
+  // Smart collections are not evaluated (like fm-core until E14.2): their count is 0.
+  const viewOf = (c: Collection): Collection => ({
+    ...structuredClone(c),
+    faceCount: c.rules ? 0 : (members.get(c.id)?.size ?? 0),
+  });
+  const walk = (parent: CollectionId | null): Collection[] =>
+    collections.filter((c) => c.parent === parent).flatMap((c) => [viewOf(c), ...walk(c.id)]);
+  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
+    const c = findCollection(req.collection);
+    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
+    const ids = [...req.faces];
+    for (const id of ids) if (!find(id)) throw notFound(id);
+    for (const family of req.families ?? []) {
+      const list = byFamily.get(family);
+      if (!list)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${family} was not found.`,
+          detail: null,
+        };
+      ids.push(...list.map((d) => d.face.id));
+    }
+    const set = members.get(c.id) ?? new Set<FaceId>();
+    members.set(c.id, set);
+    for (const id of ids) {
+      if (add) set.add(id);
+      else set.delete(id);
+    }
+    return viewOf(c);
+  };
   const ids = (target: Target | null | undefined): FaceId[] =>
     target?.kind === 'faces' ? target.faces : [...active.keys()];
 
   return {
     getAppInfo: async () => mockAppInfo,
+    sampleTexts: async (req) =>
+      req.faces.map((id) => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        return mockSampleText(f, req.text);
+      }),
     getFace: async (id) => {
       const f = find(id);
       if (!f) throw notFound(id);
@@ -574,12 +720,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     createCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
-      if (collections.some((c) => c.name === name && c.parent === (req.parent ?? null)))
-        throw {
-          code: 'conflict',
-          message: `A collection named "${name}" already exists here.`,
-          detail: null,
-        };
+      if (req.parent != null) findCollection(req.parent);
+      if (nameTaken(req.parent ?? null, name)) throw conflict(name);
       const c: Collection = {
         id: ++nextId,
         parent: req.parent ?? null,
@@ -588,7 +730,86 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         faceCount: 0,
       };
       collections.push(c);
-      return structuredClone(c);
+      return viewOf(c);
+    },
+    listCollections: async () => walk(null),
+    renameCollection: async (req) => {
+      const name = req.name.trim();
+      if (!name) throw invalid('Give the collection a name.');
+      const c = findCollection(req.collection);
+      if (nameTaken(c.parent, name, c.id)) throw conflict(name);
+      c.name = name;
+      return viewOf(c);
+    },
+    moveCollection: async (req) => {
+      const c = findCollection(req.collection);
+      const parent = req.parent ?? null;
+      for (let up = parent; up != null; up = findCollection(up).parent)
+        if (up === c.id)
+          throw invalid('A collection cannot go inside itself or one of its children.');
+      if (nameTaken(parent, c.name, c.id)) throw conflict(c.name);
+      collections.splice(collections.indexOf(c), 1);
+      c.parent = parent;
+      const siblings = collections.filter((x) => x.parent === parent);
+      const before = siblings[req.position];
+      collections.splice(before ? collections.indexOf(before) : collections.length, 0, c);
+      return viewOf(c);
+    },
+    deleteCollection: async (id) => {
+      findCollection(id);
+      const doomed = new Set([id]);
+      // A child can sit before its parent in the array after a move: repeat until stable.
+      for (let size = 0; size !== doomed.size;) {
+        size = doomed.size;
+        for (const c of collections) if (c.parent != null && doomed.has(c.parent)) doomed.add(c.id);
+      }
+      for (let i = collections.length - 1; i >= 0; i--)
+        if (doomed.has(collections[i]!.id)) collections.splice(i, 1);
+      for (const d of doomed) members.delete(d);
+    },
+    addToCollection: async (req) => editMembers(req, true),
+    removeFromCollection: async (req) => editMembers(req, false),
+    listTags: async () =>
+      tags.map(tagView).sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())),
+    // Like fm-core: names are trimmed, the same name in another case is the same tag.
+    tagFaces: async (req) => {
+      const names = req.tags.map((n) => n.trim()).filter(Boolean);
+      if (!names.length) throw invalid('Give the tag a name.');
+      if (!req.faces.length) throw invalid('Choose the fonts to tag.');
+      const targets = req.faces.map(faceOrThrow);
+      const named: { id: TagId; name: string }[] = [];
+      for (const name of names) {
+        let t = tags.find((x) => sameName(x.name, name));
+        if (!t) tags.push((t = { id: ++nextId, name }));
+        for (const d of targets)
+          if (!d.tags.some((n) => sameName(n, t.name))) d.tags = [...d.tags, t.name];
+        if (!named.some((x) => x.id === t.id)) named.push(t);
+      }
+      changed(req.faces);
+      return named.map(tagView);
+    },
+    untagFaces: async (req) => {
+      const targets = req.faces.map(faceOrThrow);
+      for (const id of req.tags) {
+        const t = tags.find((x) => x.id === id);
+        if (!t)
+          throw { code: 'notFound' as const, message: `Tag ${id} was not found.`, detail: null };
+        for (const d of targets) d.tags = d.tags.filter((n) => !sameName(n, t.name));
+        if (!faces.some((f) => f.tags.some((n) => sameName(n, t.name))))
+          tags.splice(tags.indexOf(t), 1);
+      }
+      changed(req.faces);
+    },
+    updateUserMeta: async (req) => {
+      if (req.rating != null && req.rating > 5)
+        throw invalid('A rating is 1 to 5 stars, or 0 to clear it.');
+      const targets = req.faces.map(faceOrThrow);
+      for (const d of targets) {
+        if (req.favorite != null) d.favorite = req.favorite;
+        if (req.rating != null) d.rating = req.rating || null;
+        if (req.notes != null) d.notes = req.notes || null;
+      }
+      changed(req.faces);
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,

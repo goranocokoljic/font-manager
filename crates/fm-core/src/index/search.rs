@@ -233,6 +233,24 @@ impl Index {
         Ok(ids)
     }
 
+    /// The visible faces of the family `family`, in id order, as search
+    /// groups them; `None` when no family has that id.
+    pub(super) fn family_faces(&self, family: FamilyId) -> FmResult<Option<Vec<FaceId>>> {
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let Some(first) = cache.rows.iter().find(|r| r.id == family.0) else {
+            return Ok(None);
+        };
+        let faces: Vec<FaceId> = cache
+            .rows
+            .iter()
+            .filter(|r| r.family_key == first.family_key)
+            .map(|r| FaceId(r.id))
+            .collect();
+        // A family's id is the id of its first face; another face's id is not one.
+        Ok((faces.first() == Some(&FaceId(family.0))).then_some(faces))
+    }
+
     /// Reads the searchable rows again when the database changed since.
     fn refresh_search_cache(&self) -> FmResult<()> {
         let data_version: i64 = self

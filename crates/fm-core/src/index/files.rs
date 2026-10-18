@@ -31,6 +31,7 @@ use super::{Index, db_error, languages};
 use crate::coverage::{self, CodePointSet};
 use crate::error::{FmError, FmResult};
 use crate::grouping::{face_style, family_name};
+use crate::parallel::map_ordered;
 use crate::parser::{ParsedFace, ParsedFile};
 use crate::scanner::{FileHash, FileIndex, IndexedFile, Rescan};
 
@@ -102,6 +103,7 @@ impl Index {
     ///
     /// On an error the failing batch is rolled back and the batches before
     /// it stay written; writing the same files again completes the job.
+    /// Then the source's sidecar metadata is merged ([`Index::sync_sidecars`]).
     pub fn persist_files<'a>(
         &mut self,
         source: SourceId,
@@ -119,7 +121,9 @@ impl Index {
         progress: &mut dyn FnMut(usize),
     ) -> FmResult<Persisted> {
         let writes: Vec<_> = files.into_iter().map(Write::File).collect();
-        self.write_batches(source, &writes, progress)
+        let out = self.write_batches(source, &writes, progress)?;
+        self.sync_after_scan(source);
+        Ok(out)
     }
 
     /// Writes what one rescan of the source `source` changed: added and
@@ -128,7 +132,8 @@ impl Index {
     ///
     /// A gone file was not read, so its faces in `index` may be fewer than
     /// the database holds (a row that did not load back); its face rows, and
-    /// the user data on them, are never touched.
+    /// the user data on them, are never touched. Then the source's sidecar
+    /// metadata is merged ([`Index::sync_sidecars`]).
     pub fn apply_rescan(
         &mut self,
         source: SourceId,
@@ -146,7 +151,9 @@ impl Index {
             )
             .chain(rescan.unchanged.iter().map(|p| Write::Found(p)))
             .collect();
-        self.write_batches(source, &writes, &mut |_| {})
+        let out = self.write_batches(source, &writes, &mut |_| {})?;
+        self.sync_after_scan(source);
+        Ok(out)
     }
 
     /// Every indexed file with its faces, gone ones included.
@@ -236,10 +243,24 @@ impl Index {
         }
         let mut out = Persisted::default();
         for batch in writes.chunks(BATCH_SIZE) {
+            // The rows are built on all cores; only the SQL runs in order.
+            let mut rows = map_ordered(
+                batch,
+                |write| match write {
+                    Write::File(file) => Some(FileRow::of(file)),
+                    _ => None,
+                },
+                &mut |_| {},
+            )
+            .into_iter();
             let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
             for write in batch {
+                let row = rows.next().flatten();
                 match write {
-                    Write::File(file) => out.faces += write_file(&tx, source, file)?,
+                    Write::File(file) => {
+                        let row = row.unwrap_or_else(|| FileRow::of(file))?;
+                        out.faces += write_file(&tx, source, &row)?;
+                    }
                     Write::Found(path) => {
                         tx.prepare_cached(MARK_FOUND)
                             .and_then(|mut s| s.execute([path_to_sql(path)]))
@@ -251,7 +272,7 @@ impl Index {
                             .and_then(|mut s| s.execute([path_to_sql(&file.path)]))
                             .map_err(|e| db_error(&e))?;
                         if marked == 0 {
-                            out.faces += write_file(&tx, source, file)?;
+                            out.faces += write_file(&tx, source, &FileRow::of(file)?)?;
                         }
                     }
                 }
@@ -265,12 +286,100 @@ impl Index {
     }
 }
 
+/// One file's `font_file` row and its `face` rows, built before the
+/// transaction so the CPU work (names, coverage, JSON) runs in parallel.
+struct FileRow<'a> {
+    file: &'a IndexedFile,
+    size: i64,
+    format: String,
+    health: String,
+    faces: Vec<FaceRow<'a>>,
+    /// One past the highest collection index: older face rows from here on
+    /// are deleted.
+    face_count: u32,
+}
+
+/// The values of one `face` row, in [`UPSERT_FACE`] order.
+struct FaceRow<'a> {
+    index: u32,
+    family: String,
+    subfamily: String,
+    typographic_family: Option<&'a str>,
+    postscript_name: &'a str,
+    weight: u16,
+    width: u16,
+    slant: String,
+    is_variable: bool,
+    axes: String,
+    features: String,
+    fs_type: u16,
+    parsed: String,
+    cmap: Vec<u8>,
+    languages: String,
+    foundry: Option<&'a str>,
+    designer: Option<&'a str>,
+    color: bool,
+    healthy: bool,
+}
+
+impl<'a> FileRow<'a> {
+    fn of(file: &'a IndexedFile) -> FmResult<Self> {
+        let size = i64::try_from(file.size)
+            .map_err(|_| FmError::internal(format!("file size {} is out of range", file.size)))?;
+        let faces = file
+            .parsed
+            .faces
+            .iter()
+            .map(|face| FaceRow::of(&file.path, face))
+            .collect::<FmResult<_>>()?;
+        Ok(Self {
+            file,
+            size,
+            format: format_to_sql(file.parsed.format)?,
+            health: json(&file.parsed.health)?,
+            faces,
+            face_count: file
+                .parsed
+                .faces
+                .iter()
+                .map(|f| f.index + 1)
+                .max()
+                .unwrap_or(0),
+        })
+    }
+}
+
+impl<'a> FaceRow<'a> {
+    fn of(path: &Path, face: &'a ParsedFace) -> FmResult<Self> {
+        let style = face_style(path, face);
+        let cmap = CodePointSet::from_code_points(face.code_points.iter().copied());
+        Ok(Self {
+            index: face.index,
+            family: family_name(path, face),
+            subfamily: style.name,
+            typographic_family: face.typographic_family.as_deref(),
+            postscript_name: face.postscript_name.as_deref().unwrap_or_default(),
+            weight: style.weight,
+            width: style.width,
+            slant: text(&style.slant)?,
+            is_variable: face.is_variable(),
+            axes: json(&face.axes)?,
+            features: json(&face.features)?,
+            fs_type: face.fs_type.unwrap_or(0),
+            parsed: json(face)?,
+            cmap: cmap.to_bytes(),
+            languages: languages::to_sql(&coverage::languages(&cmap, &face.locl_languages)),
+            foundry: face.foundry.as_deref(),
+            designer: face.designer.as_deref(),
+            color: face.color,
+            healthy: face.health == Health::Ok,
+        })
+    }
+}
+
 /// Writes one file and its faces; returns the number of faces.
-fn write_file(tx: &Transaction<'_>, source: SourceId, file: &IndexedFile) -> FmResult<usize> {
-    let size = i64::try_from(file.size)
-        .map_err(|_| FmError::internal(format!("file size {} is out of range", file.size)))?;
-    let format = format_to_sql(file.parsed.format)?;
-    let health = json(&file.parsed.health)?;
+fn write_file(tx: &Transaction<'_>, source: SourceId, row: &FileRow<'_>) -> FmResult<usize> {
+    let file = row.file;
     let file_id: i64 = tx
         .prepare_cached(UPSERT_FILE)
         .and_then(|mut s| {
@@ -279,57 +388,48 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, file: &IndexedFile) -> FmR
                     source.0,
                     path_to_sql(&file.path),
                     &file.hash.as_bytes()[..],
-                    format,
-                    size,
+                    row.format,
+                    row.size,
                     file.modified.and_then(time_to_nanos),
-                    health,
+                    row.health,
                     file.gone,
                 ],
-                |row| row.get(0),
+                |r| r.get(0),
             )
         })
         .map_err(|e| db_error(&e))?;
 
     let mut face_stmt = tx.prepare_cached(UPSERT_FACE).map_err(|e| db_error(&e))?;
-    for face in &file.parsed.faces {
-        let style = face_style(&file.path, face);
-        let cmap = CodePointSet::from_code_points(face.code_points.iter().copied());
+    for face in &row.faces {
         face_stmt
             .execute(params![
                 file_id,
                 face.index,
-                family_name(&file.path, face),
-                style.name,
+                face.family,
+                face.subfamily,
                 face.typographic_family,
-                face.postscript_name.as_deref().unwrap_or_default(),
-                style.weight,
-                style.width,
-                text(&style.slant)?,
-                face.is_variable(),
-                json(&face.axes)?,
-                json(&face.features)?,
-                face.fs_type.unwrap_or(0),
-                json(face)?,
-                cmap.to_bytes(),
-                languages::to_sql(&coverage::languages(&cmap, &face.locl_languages)),
+                face.postscript_name,
+                face.weight,
+                face.width,
+                face.slant,
+                face.is_variable,
+                face.axes,
+                face.features,
+                face.fs_type,
+                face.parsed,
+                face.cmap,
+                face.languages,
                 face.foundry,
                 face.designer,
                 face.color,
-                face.health == Health::Ok,
+                face.healthy,
             ])
             .map_err(|e| db_error(&e))?;
     }
-    let face_count = file
-        .parsed
-        .faces
-        .iter()
-        .map(|f| f.index + 1)
-        .max()
-        .unwrap_or(0);
     tx.prepare_cached(DELETE_OLD_FACES)
-        .and_then(|mut s| s.execute(params![file_id, face_count]))
+        .and_then(|mut s| s.execute(params![file_id, row.face_count]))
         .map_err(|e| db_error(&e))?;
-    Ok(file.parsed.faces.len())
+    Ok(row.faces.len())
 }
 
 /// A path as SQL: TEXT when it is UTF-8, else its native bytes as a BLOB, so
@@ -341,7 +441,7 @@ fn path_to_sql(path: &Path) -> Value {
     }
 }
 
-fn path_from_sql(value: ValueRef<'_>) -> FmResult<PathBuf> {
+pub(super) fn path_from_sql(value: ValueRef<'_>) -> FmResult<PathBuf> {
     let bad = || FmError::internal("a font file path in the index is damaged");
     match value {
         ValueRef::Text(bytes) => std::str::from_utf8(bytes)

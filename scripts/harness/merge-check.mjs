@@ -22,11 +22,18 @@ const TYPES_TS = 'apps/desktop/src/api/types.ts';
 /**
  * Lines of the generated TypeScript types that a PR removes or rewrites. An
  * additive change only adds lines; a removed line means an existing type
- * changed shape. The API_VERSION line is expected to change and is ignored.
+ * changed shape. Ignored: the API_VERSION line, doc comments, and the last
+ * member of a union that only gains new members (`"a";` becomes `"a" |`).
  */
 export function contractRemovals(diff) {
   const out = [];
+  const added = new Set();
   let inTypes = false;
+  for (const line of diff.split(/\r?\n/)) {
+    if (line.startsWith('diff --git ')) inTypes = line.endsWith(` b/${TYPES_TS}`);
+    else if (inTypes && line.startsWith('+') && !line.startsWith('+++')) added.add(line.slice(1).trim());
+  }
+  inTypes = false;
   for (const line of diff.split(/\r?\n/)) {
     if (line.startsWith('diff --git ')) {
       inTypes = line.endsWith(` b/${TYPES_TS}`);
@@ -37,6 +44,9 @@ export function contractRemovals(diff) {
     if (!text || text.startsWith('export const API_VERSION')) continue;
     // Doc comments change no type: a reworded comment is not a contract change.
     if (/^(\/\*\*?|\*\/?|\/\/)/.test(text)) continue;
+    // A union that gains a member: its old last member only gets a ` |`.
+    const base = text.endsWith(';') ? `${text.slice(0, -1).trimEnd()} |` : null;
+    if (base && [...added].some((a) => a.startsWith(base))) continue;
     out.push(text);
   }
   return out;

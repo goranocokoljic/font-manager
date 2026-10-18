@@ -1,0 +1,18 @@
+{
+  "id": "every-drag-and-drop-action-needs-a-keyboard-path",
+  "title": "Every drag-and-drop action needs a keyboard path",
+  "category": "accessibility",
+  "rule": "When a UI lets the user change structure by dragging (nest, reorder, move items into a group), give every outcome a drag can produce a keyboard-reachable control too: a row button or a palette command for each move (into, out of, up, down). Check that an outcome the keyboard can undo (Out) has a keyboard way back (In). Add a Playwright step that focuses the control and presses Enter, without dragTo, and asserts the new structure.",
+  "rationale": "E7.1 (#82): nesting an existing collection was drag-only; the row buttons offered Up, Down and Out but nothing to nest into a sibling, so keyboard users could not nest and could not undo Out.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    82
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue"
+  ],
+  "first_seen": "2026-10-18T13:30:51.284Z",
+  "last_seen": "2026-10-18T13:30:51.284Z"
+}

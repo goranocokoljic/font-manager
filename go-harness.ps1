@@ -811,13 +811,8 @@ function Invoke-MergeGate {
         Complete-Story -Outcome 'ready'
         return
     }
-    if (Test-OverBudget) {
-        $why = Get-BudgetReason
-        Write-Log "=== #$($s.issue) READY - not auto-merged: $why. ===" 'Yellow'
-        Set-HumanMerge -Why $why
-        Complete-Story -Outcome 'ready' -Reason $why
-        return
-    }
+    # No budget check here: the money is spent, the PR is green and reviewed.
+    # The budget stops new agent work (Invoke-Story), not a merge.
     $r = Invoke-Node 'merge-check.mjs' @('--pr', "$($s.pr)", '--track', "$($s.track)", '--epic', "$($s.epic)")
     $mc = $null; try { $mc = $r.Out | ConvertFrom-Json -Depth 10 } catch { }
     if (-not $mc) { Block-Story -Reason "merge-check failed: $($r.Err.Trim())"; return }
@@ -847,7 +842,17 @@ function Invoke-MergeGate {
             if ($s.merge_updates -gt $max) { Block-Story -Reason "main moved $max times while this PR waited to merge"; return }
             Write-Log "    $why - updating the branch with main ($($s.merge_updates)/$max), then CI again" 'Yellow'
             $out = gh pr update-branch $s.pr 2>&1
-            if ($LASTEXITCODE -ne 0) { Block-Story -Reason "could not update the branch with main: $(($out | Out-String).Trim())"; return }
+            if ($LASTEXITCODE -ne 0) {
+                $msg = ($out | Out-String).Trim()
+                # GitHub reports mergeable UNKNOWN until it has checked; a conflict
+                # then shows up only here. The sync stage resolves it.
+                if ($msg -match 'conflict') {
+                    Write-Log "    the branch conflicts with main - the sync stage resolves it, then CI again" 'Yellow'
+                    $s.stage = 'sync'; $s.after_ci = 'merge'
+                    return 'again'
+                }
+                Block-Story -Reason "could not update the branch with main: $msg"; return
+            }
             $s.stage = 'ci'; $s.after_ci = 'merge'
             return 'again'
         }
@@ -881,7 +886,8 @@ function Invoke-Story {
     $ciFile = ".harness/ci/issue-$($s.issue).json"
     while ($true) {
         Save-State
-        if ($s.stage -ne 'merge' -and (Test-OverBudget)) { Block-Story -Reason (Get-BudgetReason); return }
+        # Waiting for CI or merging costs nothing; only stages that run an agent stop.
+        if ($s.stage -notin 'merge', 'ci' -and (Test-OverBudget)) { Block-Story -Reason (Get-BudgetReason); return }
         switch ($s.stage) {
             'build' {
                 $r = Invoke-Stage 'build' ''
