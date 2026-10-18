@@ -21,6 +21,7 @@ use fm_api::library::LicenseType;
 use fm_api::search::{FilterCount, FilterCounts, Filters};
 use fm_api::{CollectionId, TagId};
 
+use crate::coverage::Fit;
 use crate::search::{FaceText, reaches_slant, reaches_weight, reaches_width};
 
 /// A four-letter OpenType tag.
@@ -98,6 +99,9 @@ pub(crate) enum Dim {
     Favorite,
     Rating,
     Problems,
+    /// Language or character coverage: checked against a [`Need`](crate::coverage::Need) built
+    /// once per search, so [`failed`] leaves it to [`failed_supports`].
+    Supports,
 }
 
 impl Dim {
@@ -107,6 +111,7 @@ impl Dim {
 }
 
 /// The filters `face` fails, one [`Dim::bit`] each; 0 when it passes all.
+/// `supports` is not looked at here: see [`failed_supports`].
 pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u32 {
     let f = filters;
     let checks = [
@@ -179,6 +184,17 @@ pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u
         .iter()
         .filter(|(_, pass)| !pass)
         .fold(0, |mask, (dim, _)| mask | dim.bit())
+}
+
+/// The [`Dim::Supports`] bit for a face that meets the search's [`Need`](crate::coverage::Need)
+/// as `fit`: complete or a near miss passes; `None` (the face's coverage
+/// is not known) fails.
+pub(crate) fn failed_supports(fit: Option<&Fit>) -> u32 {
+    if fit.is_some_and(Fit::passes) {
+        0
+    } else {
+        Dim::Supports.bit()
+    }
 }
 
 /// A filter value a face can be counted under.

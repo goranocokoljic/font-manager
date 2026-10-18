@@ -11,10 +11,15 @@
 //! face maps and whether the face has `locl` forms for the language. The scan
 //! stores the result per face (`face_language`); a preset the face covers
 //! nothing of and has no `locl` for has no row (`covered = 0`).
+//!
+//! A [`Need`] is what the `supports` search filter (E3.8) asks: the base
+//! characters of some presets, or the characters of a pasted text. Checking
+//! a face against it is one merge over the pages of its set.
 
 use std::sync::LazyLock;
 
 use crate::charsets::{self, Charset};
+use crate::error::{FmError, FmResult};
 
 /// The highest Unicode code point.
 const MAX_CODE_POINT: u32 = 0x10_FFFF;
@@ -186,6 +191,7 @@ impl FaceLanguage {
 }
 
 /// A preset prepared for counting.
+#[derive(Debug)]
 struct Preset {
     code: String,
     base: CodePointSet,
@@ -275,6 +281,121 @@ fn languages_of(presets: &[Preset], set: &CodePointSet, locl: &[String]) -> Vec<
             })
         })
         .collect()
+}
+
+/// A face that lacks at most this many characters of a [`Need`] is a near
+/// miss: the `supports` filter keeps it and lists what it lacks.
+pub const NEAR_MISS: usize = 5;
+
+/// What a `supports` filter (E3.8) asks of a face: the characters it must
+/// map, and the languages whose `locl` forms are reported.
+#[derive(Debug, Clone)]
+pub struct Need<'a> {
+    chars: CodePointSet,
+    /// `chars.len()`.
+    len: usize,
+    /// The chosen presets; empty for pasted text.
+    presets: Vec<&'a Preset>,
+}
+
+/// How one face meets a [`Need`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fit {
+    /// Characters of the need the face does not map.
+    pub missing: usize,
+    /// Those characters, ascending, when there are at most [`NEAR_MISS`];
+    /// empty otherwise.
+    pub chars: Vec<char>,
+    /// The face has `locl` forms for one of the chosen languages.
+    pub has_locl: bool,
+}
+
+impl Fit {
+    /// Complete, or a near miss.
+    pub fn passes(&self) -> bool {
+        self.missing <= NEAR_MISS
+    }
+}
+
+impl Need<'static> {
+    /// Every base character of every preset in `codes` (AND). An unknown
+    /// code is an `InvalidRequest` error.
+    pub fn languages(codes: &[String]) -> FmResult<Self> {
+        Need::languages_of(&PRESETS, codes)
+    }
+}
+
+impl<'a> Need<'a> {
+    fn languages_of(all: &'a [Preset], codes: &[String]) -> FmResult<Self> {
+        let presets = codes
+            .iter()
+            .map(|code| {
+                all.iter()
+                    .find(|p| p.code == *code)
+                    .ok_or_else(|| FmError::invalid(format!("Unknown language preset \"{code}\".")))
+            })
+            .collect::<FmResult<Vec<_>>>()?;
+        let chars = CodePointSet::from_code_points(presets.iter().flat_map(|p| p.base.iter()));
+        Ok(Self::new(chars, presets))
+    }
+
+    /// Every character of `text` a font draws a glyph for: whitespace,
+    /// controls and invisible format characters are left out.
+    pub fn text(text: &str) -> Self {
+        let chars = CodePointSet::from_code_points(
+            text.chars().filter(|&c| !is_ignorable(c)).map(u32::from),
+        );
+        Self::new(chars, Vec::new())
+    }
+
+    fn new(chars: CodePointSet, presets: Vec<&'a Preset>) -> Self {
+        Self {
+            len: chars.len(),
+            chars,
+            presets,
+        }
+    }
+
+    /// Asks for no character: every face meets it.
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// How a face that maps `set` and has `locl` forms for `locl`
+    /// (`script/LANG` entries) meets the need.
+    pub fn check(&self, set: &CodePointSet, locl: &[String]) -> Fit {
+        let missing = self.len - self.chars.intersection_len(set);
+        let chars = if missing <= NEAR_MISS {
+            self.chars
+                .iter()
+                .filter(|&cp| !set.contains(cp))
+                .filter_map(char::from_u32)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        Fit {
+            missing,
+            chars,
+            has_locl: !locl.is_empty() && self.presets.iter().any(|p| p.has_locl(locl)),
+        }
+    }
+}
+
+/// Characters a font needs no glyph for: whitespace, controls, the soft
+/// hyphen, zero-width and joiner characters, the BOM and variation selectors.
+fn is_ignorable(c: char) -> bool {
+    c.is_whitespace()
+        || c.is_control()
+        || matches!(
+            c,
+            '\u{AD}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{2060}'..='\u{2064}'
+                | '\u{FE00}'..='\u{FE0F}'
+                | '\u{FEFF}'
+                | '\u{E0100}'..='\u{E01EF}'
+        )
 }
 
 #[cfg(test)]
@@ -432,5 +553,79 @@ mod tests {
         assert!(PRESETS.len() >= 50);
         let got = languages(&set("Serbia"), &[]);
         assert!(got.iter().any(|l| l.code == "en" && l.covered == 6));
+    }
+
+    fn codes(codes: &[&str]) -> Vec<String> {
+        codes.iter().map(|&c| c.to_owned()).collect()
+    }
+
+    #[test]
+    fn a_need_for_languages_asks_for_every_preset() {
+        let presets = [
+            preset("xa", "Latn", None, "abc"),
+            preset("xb", "Latn", None, "cdž"),
+        ];
+        let both = Need::languages_of(&presets, &codes(&["xa", "xb"])).expect("known");
+        let one = Need::languages_of(&presets, &codes(&["xa"])).expect("known");
+        let face = set("abcd");
+        assert_eq!(one.check(&face, &[]).missing, 0, "xa alone is covered");
+        let fit = both.check(&face, &[]);
+        assert!(fit.passes());
+        assert_eq!((fit.missing, fit.chars), (1, vec!['ž']), "AND: xb's ž too");
+        let err = Need::languages_of(&presets, &codes(&["xa", "zz"])).expect_err("unknown");
+        assert_eq!(err.code(), fm_api::ErrorCode::InvalidRequest);
+        assert!(err.message().contains("zz"));
+        assert!(Need::languages_of(&presets, &[]).expect("none").is_empty());
+    }
+
+    #[test]
+    fn a_near_miss_lists_its_exact_characters_up_to_five() {
+        let need = Need::text("abcdefghij");
+        let five = need.check(&set("abcde"), &[]);
+        assert_eq!(five.missing, 5);
+        assert_eq!(five.chars, vec!['f', 'g', 'h', 'i', 'j']);
+        assert!(five.passes());
+        let six = need.check(&set("abcd"), &[]);
+        assert_eq!(six.missing, 6);
+        assert!(six.chars.is_empty(), "past a near miss: no list");
+        assert!(!six.passes());
+        let full = need.check(&set("abcdefghijk"), &[]);
+        assert_eq!((full.missing, full.chars.is_empty()), (0, true));
+    }
+
+    #[test]
+    fn pasted_text_skips_characters_without_glyphs() {
+        let need = Need::text("Š Đ\n\tš\u{200D}đ\u{FE0F}\u{AD}Š");
+        let fit = need.check(&CodePointSet::default(), &[]);
+        assert_eq!(fit.chars, vec!['Đ', 'đ', 'Š', 'š'], "once each, ascending");
+        assert!(Need::text(" \n\u{200B}").is_empty());
+        assert!(
+            !need.check(&set("ŠšĐđ"), &[]).has_locl,
+            "text has no language"
+        );
+    }
+
+    #[test]
+    fn locl_is_reported_for_any_chosen_language() {
+        let presets = [
+            preset("sr-Cyrl", "Cyrl", Some("SRB"), "бв"),
+            preset("en", "Latn", None, "ab"),
+        ];
+        let locl = ["cyrl/SRB".to_owned()];
+        let face = set("абвг");
+        let sr = Need::languages_of(&presets, &codes(&["sr-Cyrl"])).expect("known");
+        assert!(sr.check(&face, &locl).has_locl);
+        assert!(!sr.check(&face, &[]).has_locl);
+        let mixed = Need::languages_of(&presets, &codes(&["en", "sr-Cyrl"])).expect("known");
+        assert!(mixed.check(&face, &locl).has_locl);
+        let en = Need::languages_of(&presets, &codes(&["en"])).expect("known");
+        assert!(!en.check(&face, &locl).has_locl);
+    }
+
+    #[test]
+    fn the_embedded_presets_make_a_need() {
+        let need = Need::languages(&codes(&["sr-Cyrl", "sr-Latn"])).expect("known");
+        assert!(!need.is_empty());
+        assert!(Need::languages(&codes(&["xx-Nope"])).is_err());
     }
 }
