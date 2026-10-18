@@ -644,6 +644,12 @@ fn problems_list_unsupported_files_and_system_clashes() {
 }
 
 #[test]
+fn the_sample_library_has_no_duplicates() {
+    // Every sample file has its own hash and PostScript name.
+    assert_eq!(api().list_duplicates().unwrap(), []);
+}
+
+#[test]
 fn face_detail_carries_the_parsed_names_angle_and_coverage() {
     let api = api();
     let italic = api.get_face(FaceId(2)).unwrap();
