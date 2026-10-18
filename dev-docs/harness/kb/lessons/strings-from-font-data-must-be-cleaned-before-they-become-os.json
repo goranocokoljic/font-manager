@@ -1,0 +1,18 @@
+{
+  "id": "strings-from-font-data-must-be-cleaned-before-they-become-os",
+  "title": "Strings from font data must be cleaned before they become OS identifiers",
+  "category": "unsafe-ffi",
+  "rule": "Before a name from a font's name table (PostScript name, family) becomes part of an OS identifier (a registry value name, a file or symlink name, a CoreText or fontconfig key), strip control characters, U+0000 included, and fall back to the file stem when nothing is left. In the Win32 or C string wrapper, refuse an interior NUL with InvalidInput instead of passing a pointer the OS will cut short. Add a test that activates faces whose names contain a NUL (at the end, in the middle, only control characters) and asserts the returned handles equal what list_active reports.",
+  "rationale": "E6.3 (#76): a malformed PostScript name with a NUL made the HKCU value name differ from the returned handle (Win32 stops at NUL), could exhaust the suffix search, and a leading NUL wrote the (Default) value of the Fonts key.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    76
+  ],
+  "file_globs": [
+    "crates/fm-platform/**"
+  ],
+  "first_seen": "2026-10-18T22:35:39.376Z",
+  "last_seen": "2026-10-18T22:35:39.376Z"
+}
