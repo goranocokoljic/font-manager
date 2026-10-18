@@ -339,7 +339,7 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
           :aria-level="item.row.kind === 'face' ? 2 : 1"
           :aria-expanded="item.row.kind === 'family' ? item.row.expanded : undefined"
           :aria-selected="list.isSelected(item.row.key)"
-          :aria-setsize="item.row.kind === 'face' ? item.row.count : library.families.length"
+          :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
           :aria-posinset="item.row.position"
           :aria-label="rowLabel(item.row)"
           :style="{

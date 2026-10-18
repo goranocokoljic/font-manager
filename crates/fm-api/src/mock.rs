@@ -34,8 +34,9 @@ use crate::organization::{
 };
 use crate::preview::{FontSource, PreviewImage, PreviewRequest};
 use crate::search::{
-    CoverageReport, CoverageRequest, FamilyHit, Filters, LanguageCoverage, LanguagePreset, Missing,
-    SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange,
+    CoverageReport, CoverageRequest, FamilyHit, FilterCount, FilterCounts, Filters,
+    LanguageCoverage, LanguagePreset, Missing, SearchRequest, SearchResponse, SimilarFace,
+    SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::settings::{AppFolders, Settings, SettingsUpdate};
 use crate::workflows::{
@@ -935,30 +936,25 @@ impl LibraryService for MockApi {
     }
 }
 
-impl SearchService for MockApi {
-    fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse> {
-        let st = self.state();
-        let words: Vec<String> = req
-            .query
-            .split_whitespace()
-            .map(str::to_lowercase)
-            .collect();
+impl State {
+    /// The family groups a search returns, best first.
+    fn hits(&self, words: &[String], filters: &Filters) -> ApiResult<Vec<FamilyHit>> {
         let mut hits: Vec<FamilyHit> = Vec::new();
-        for fam in &st.families {
+        for fam in &self.families {
             let mut faces = Vec::new();
             let mut best_missing: Option<Missing> = None;
-            for f in st.family_faces(fam.id) {
+            for f in self.family_faces(fam.id) {
                 let s = &f.detail.face;
                 let hay = format!(
                     "{} {} {} {} {}",
                     s.family_name, s.style, s.postscript_name, fam.foundry, fam.designer
                 )
                 .to_lowercase();
-                if !words.iter().all(|w| hay.contains(w)) || !st.matches(f, &req.filters, 0)? {
+                if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, 0)? {
                     continue;
                 }
-                if let Some(target) = &req.filters.supports {
-                    let (missing, per) = st.coverage(f, target)?;
+                if let Some(target) = &filters.supports {
+                    let (missing, per) = self.coverage(f, target)?;
                     if missing.len() > NEAR_MISS {
                         continue;
                     }
@@ -979,7 +975,7 @@ impl SearchService for MockApi {
             }
             let name_hit = words.iter().any(|w| fam.name.to_lowercase().contains(w));
             hits.push(FamilyHit {
-                family: st.family_summary(fam),
+                family: self.family_summary(fam),
                 score: if name_hit { 1.0 } else { 0.5 }
                     - best_missing
                         .as_ref()
@@ -993,11 +989,108 @@ impl SearchService for MockApi {
                 .total_cmp(&a.score)
                 .then_with(|| a.family.name.cmp(&b.family.name))
         });
+        Ok(hits)
+    }
+
+    /// The count of every value in `values` with `pick` applied to the filters;
+    /// values with no result are left out (like `FilterCounts`).
+    fn count_each<T: Clone>(
+        &self,
+        words: &[String],
+        filters: &Filters,
+        values: Vec<T>,
+        pick: impl Fn(&mut Filters, &T),
+    ) -> ApiResult<Vec<FilterCount<T>>> {
+        let mut out = Vec::new();
+        for value in values {
+            let mut f = filters.clone();
+            pick(&mut f, &value);
+            let count = self.hits(words, &f)?.len() as u32;
+            if count > 0 {
+                out.push(FilterCount { value, count });
+            }
+        }
+        Ok(out)
+    }
+
+    /// Result counts per filter value, over the values the sample has.
+    fn counts(&self, words: &[String], q: &Filters) -> ApiResult<FilterCounts> {
+        fn distinct<T: PartialEq>(items: impl Iterator<Item = T>) -> Vec<T> {
+            let mut out = Vec::new();
+            for x in items {
+                if !out.contains(&x) {
+                    out.push(x);
+                }
+            }
+            out
+        }
+        let faces = || self.faces.iter();
+        let classes = distinct(self.families.iter().map(|f| f.classification));
+        let mut tags: Vec<String> =
+            distinct(faces().flat_map(|f| f.detail.features.iter().map(|x| x.tag.clone())));
+        tags.sort();
+        let mut sources = distinct(faces().map(|f| f.source));
+        sources.sort_by_key(|s| s.0);
+        let both = || vec![true, false];
+        Ok(FilterCounts {
+            classification: self
+                .count_each(words, q, classes, |f, v| f.classification = vec![*v])?,
+            weight: self.count_each(words, q, (1..=9).map(|h| h * 100).collect(), |f, v| {
+                f.weight = Some(WeightRange {
+                    min: v - 50,
+                    max: v + 49,
+                });
+            })?,
+            width: self.count_each(words, q, (1..=9).collect(), |f, v| {
+                f.width = Some(WidthRange { min: *v, max: *v });
+            })?,
+            slant: self.count_each(
+                words,
+                q,
+                distinct(faces().map(|f| f.detail.face.slant)),
+                |f, v| f.slant = Some(*v),
+            )?,
+            variable: self.count_each(words, q, both(), |f, v| f.variable = Some(*v))?,
+            color: self.count_each(words, q, both(), |f, v| f.color = Some(*v))?,
+            formats: self.count_each(
+                words,
+                q,
+                distinct(faces().map(|f| f.detail.face.format)),
+                |f, v| f.formats = vec![*v],
+            )?,
+            features: self.count_each(words, q, tags, |f, v| {
+                if !f.features.contains(v) {
+                    f.features.push(v.clone());
+                }
+            })?,
+            license: self.count_each(
+                words,
+                q,
+                distinct(faces().filter_map(|f| f.detail.license.declared)),
+                |f, v| f.license = Some(*v),
+            )?,
+            sources: self.count_each(words, q, sources, |f, v| f.sources = vec![*v])?,
+            problems: self.count_each(words, q, both(), |f, v| f.problems = Some(*v))?,
+            active: self.count_each(words, q, both(), |f, v| f.active = Some(*v))?,
+        })
+    }
+}
+
+impl SearchService for MockApi {
+    fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse> {
+        let st = self.state();
+        let words: Vec<String> = req
+            .query
+            .split_whitespace()
+            .map(str::to_lowercase)
+            .collect();
+        let hits = st.hits(&words, &req.filters)?;
+        let counts = st.counts(&words, &req.filters)?;
         let page = State::page(&hits, req.page.offset, req.page.limit);
         Ok(SearchResponse {
             families: page.items,
             total: page.total,
-            counts: None,
+            counts: Some(counts),
         })
     }
 

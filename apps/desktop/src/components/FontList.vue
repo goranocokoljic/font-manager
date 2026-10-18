@@ -86,7 +86,7 @@ const rowId = (row: ListRow) => `fm-row-${row.key.replace(':', '-')}`;
 const visible = computed(() =>
   list.rows.slice(range.value.start, range.value.end).map((row, i) => {
     const index = range.value.start + i;
-    const face = row.kind === 'face' ? row.face : library.faces.get(row.family.id)?.[0];
+    const face = row.kind === 'face' ? row.face : list.shownFaces(row.family.id)?.[0];
     return {
       row,
       index,
@@ -185,7 +185,7 @@ function onToggle(row: ListRow): void {
         :aria-level="item.row.kind === 'face' ? 2 : 1"
         :aria-expanded="item.row.kind === 'family' ? item.row.expanded : undefined"
         :aria-selected="list.isSelected(item.row.key)"
-        :aria-setsize="item.row.kind === 'face' ? item.row.count : library.families.length"
+        :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
         :aria-posinset="item.row.position"
         :aria-label="rowLabel(item.row)"
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"

@@ -12,7 +12,9 @@ use fm_api::library::{
     SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
+use fm_api::organization::{Collection, CreateCollectionRequest};
 use fm_api::preview::PreviewService;
+use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, ErrorCode, FaceId, FamilyId, JobId, SettingsService, SourceId,
@@ -196,6 +198,27 @@ async fn deactivate(
     call(&state, move |api| api.deactivate(req)).await
 }
 
+/// Searches the library: free text and filters, grouped by family, with filter counts.
+#[tauri::command]
+async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
+    call(&state, move |api| api.search(req)).await
+}
+
+/// The language presets a `supports` filter can name.
+#[tauri::command]
+async fn list_languages(state: State<'_, AppState>) -> ApiResult<Vec<LanguagePreset>> {
+    call(&state, |api| api.list_languages()).await
+}
+
+/// Creates a collection; with rules, a smart one.
+#[tauri::command]
+async fn create_collection(
+    state: State<'_, AppState>,
+    req: CreateCollectionRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.create_collection(req)).await
+}
+
 /// Every source: watched folders, the library folder and the system fonts.
 #[tauri::command]
 async fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
@@ -285,6 +308,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_face,
             list_families,
             get_family,
+            search,
+            list_languages,
+            create_collection,
             activate,
             deactivate,
             list_sources,
