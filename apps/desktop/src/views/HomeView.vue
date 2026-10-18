@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, watch } from 'vue';
-import { RouterLink, useRoute } from 'vue-router';
+import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
-import FacePreviewList from '../components/FacePreviewList.vue';
+import FontList from '../components/FontList.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
@@ -10,9 +10,11 @@ import SourcesSidebar from '../components/SourcesSidebar.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
 import { useActions, useCommandsStore } from '../stores/commands';
+import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import type { FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 
 const app = useAppStore();
@@ -21,7 +23,9 @@ const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
 const preview = usePreviewStore();
+const fontList = useFontListStore();
 const route = useRoute();
+const router = useRouter();
 onMounted(() => {
   void app.load();
   void library.load();
@@ -49,12 +53,24 @@ const paletteChord = chordOf(ACTIONS.palette)!;
 const settingsChord = chordOf(ACTIONS.settings)!;
 
 // The selected face is in the URL (`#/?face=3`) so a reload keeps it; the
-// font list (E5.2) selects by changing the query.
+// font list selects by changing the query.
 watch(
   () => route.query.face,
   (face) => selection.select(parseFaceId(face)),
   { immediate: true },
 );
+
+/** The face under the list's cursor goes to the inspector. */
+function showFace(face: FaceId): void {
+  if (parseFaceId(route.query.face) === face) return;
+  void router.replace({ query: { ...route.query, face: String(face) } });
+}
+
+/** Enter on a style: show it, opening the inspector when it is hidden. */
+function openFace(face: FaceId): void {
+  showFace(face);
+  if (!layout.inspectorVisible) layout.toggleInspector();
+}
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
 const groups = [
@@ -79,6 +95,11 @@ const groups = [
     <template #list>
       <header class="toolbar">
         <h1 class="title">All fonts</h1>
+        <p class="count" role="status">
+          <template v-if="fontList.selectedCount > 1"
+            >{{ fontList.selectedCount }} selected</template
+          >
+        </p>
         <button
           type="button"
           class="toggle"
@@ -92,10 +113,11 @@ const groups = [
         </button>
       </header>
       <PreviewControls :view="ALL_FONTS_VIEW" />
-      <FacePreviewList
-        v-if="library.faces.length"
-        :faces="library.faces"
+      <FontList
+        v-if="library.families.length"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+        @cursor-face="showFace"
+        @open="openFace"
       />
       <section v-else class="empty" aria-label="Font list">
         <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
@@ -161,6 +183,11 @@ const groups = [
   margin: 0;
   font-size: 13px;
   font-weight: 600;
+}
+.count {
+  flex: 1;
+  margin: 0;
+  color: var(--fm-muted);
 }
 .toggle {
   padding: 4px 8px;
