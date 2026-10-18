@@ -331,6 +331,16 @@ const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
 .slot.selected {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
 }
+/* The tint alone is under 3:1; a solid accent bar marks every selected row (WCAG 1.4.11). */
+.slot.selected::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 4px;
+  background: var(--fm-accent);
+  content: '';
+}
 .viewport:focus .slot.cursor {
   box-shadow: inset 0 0 0 2px var(--fm-accent);
 }

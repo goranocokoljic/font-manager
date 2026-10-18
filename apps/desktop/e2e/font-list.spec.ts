@@ -186,3 +186,48 @@ test('multi-select with Shift, Ctrl/Cmd and the mouse', async ({ page }) => {
   await expect(selected).toHaveCount(1);
   await expect(status).toHaveText('');
 });
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`selected rows are marked at 3:1 contrast or more (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    const tree = await open(page, '?mockFaces=3&mockStyles=4');
+    await tree.getByRole('treeitem', { name: 'Inter, 1 style' }).click();
+    await page.keyboard.press('Shift+ArrowDown');
+    await page.keyboard.press('Shift+ArrowDown');
+    const marks = await tree.evaluate((el) => {
+      const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+      const lum = (c: string) => {
+        const [r, g, b] = rgb(c).map((v) => {
+          const s = v / 255;
+          return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+      };
+      const ratio = (a: string, b: string) => {
+        const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+        return (hi! + 0.05) / (lo! + 0.05);
+      };
+      const background = getComputedStyle(el).backgroundColor;
+      return [...el.querySelectorAll('[role="treeitem"]')].map((row) => {
+        const bar = getComputedStyle(row, '::before');
+        return {
+          selected: row.getAttribute('aria-selected') === 'true',
+          cursor: row.id === el.getAttribute('aria-activedescendant'),
+          bar: bar.content !== 'none' && bar.content !== 'normal',
+          width: bar.width,
+          contrast: ratio(bar.backgroundColor, background),
+        };
+      });
+    });
+    const selected = marks.filter((m) => m.selected);
+    expect(selected).toHaveLength(3);
+    // Rows away from the cursor too: the cursor ring is not the only cue.
+    expect(selected.filter((m) => !m.cursor)).toHaveLength(2);
+    for (const m of selected) {
+      expect(m.bar).toBe(true);
+      expect(m.width).toBe('4px');
+      expect(m.contrast).toBeGreaterThanOrEqual(3);
+    }
+    for (const m of marks.filter((m) => !m.selected)) expect(m.bar).toBe(false);
+  });
+}
