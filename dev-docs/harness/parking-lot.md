@@ -77,3 +77,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E6.3 #76] crates/fm-platform/src/activator/mock.rs:93 — `MockActivator::activate_one` answers AlreadyActive on path alone, so a Permanent request for a session-active file keeps the Session registration (same in WindowsActivator); E6.6 should decide the upgrade rule.
 - [E6.3 #76] crates/fm-platform/tests/windows_activation.rs:1350 — scratch registry fixtures delete only their own subkey, leaving an empty `HKCU\Software\FontManager-test` on machines that run the tests.
 - [E6.3 #76] crates/fm-core/src/parser.rs:383 — name strings keep embedded control characters (NUL included), which flow into the index and the UI.
+- [E6.4 #77] crates/fm-platform/src/activator/mod.rs:183 — activate(Permanent) on a file already active in Session returns AlreadyActive(Session) on macOS too (as on Windows), so clear_session drops it at quit; E6.6 should decide the upgrade rule.
