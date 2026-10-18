@@ -49,6 +49,22 @@ nothing that is complete. Performance tests are skipped when `FM_REFERENCE_LIBRA
 not set. The 200-font test corpus in [fixtures/fonts](fixtures/fonts/) is picked from
 this library by `scripts/reference-library/fixtures.mjs`.
 
+## Performance
+
+`scripts/bench.sh` measures the budgets on this machine against the reference library:
+cold start, first scan, incremental update, search latency, 100-face activation and idle
+memory. It builds `fm-bench` in release, reads the library without changing it, writes a
+JSON report (`target/bench/bench-<os>.json`) and exits 1 when a metric is over budget.
+
+```
+scripts/bench.sh                         # uses FM_REFERENCE_LIBRARY
+scripts/bench.sh --library DIR --out report.json
+```
+
+CI runs it nightly on `main` on Windows, macOS and Linux and writes the trend against
+the earlier nightly runs into the job summary of the `bench` workflow. A PR gets the
+same run when it carries the `bench` label.
+
 Contributors and coding agents: read [CLAUDE.md](CLAUDE.md) first. Decisions are in
 [docs/adr](docs/adr/).
 
