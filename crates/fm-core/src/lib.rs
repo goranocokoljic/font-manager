@@ -16,6 +16,7 @@ pub mod grouping;
 pub mod index;
 pub mod logging;
 pub mod parser;
+pub mod preview;
 pub mod scanner;
 mod search;
 pub mod settings;
