@@ -79,6 +79,54 @@ describe('library store', () => {
     await store.stop();
   });
 
+  it('updates activation state in place when faces are activated', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const family = store.families[0]!;
+    const before = await store.facesOf(family.id);
+    expect(family.activation).toBe('inactive');
+    const face = before[0]!;
+    const getFamily = vi.spyOn(client, 'getFamily');
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'permanent' });
+    await vi.waitFor(() =>
+      expect(store.faces.get(family.id)?.find((f) => f.id === face.id)?.active).toBe('permanent'),
+    );
+    expect(store.families[0]!.activation).not.toBe('inactive');
+    // Only the family holding the face is fetched again; other cached faces stay.
+    expect(getFamily.mock.calls.map(([id]) => id)).toEqual([family.id]);
+    await client.deactivate({ target: { kind: 'faces', faces: [face.id] } });
+    await vi.waitFor(() => expect(store.families[0]!.activation).toBe('inactive'));
+    expect(store.faces.get(family.id)?.find((f) => f.id === face.id)?.active).toBeNull();
+    await store.stop();
+  });
+
+  it('keeps every face current when activation changes overlap', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const [first, second] = store.families;
+    const a = (await store.facesOf(first!.id))[0]!;
+    const b = (await store.facesOf(second!.id))[0]!;
+    // Two changes in different families; the second arrives before the first is applied.
+    const one = client.activate({ target: { kind: 'faces', faces: [a.id] }, mode: 'session' });
+    const two = client.activate({
+      target: { kind: 'faces', faces: [b.id] },
+      mode: 'permanent',
+      onConflict: 'replace', // the mock gives this face a system clash
+    });
+    await Promise.all([one, two]);
+    const activeOf = (family: number, face: number) =>
+      store.faces.get(family)?.find((f) => f.id === face)?.active;
+    await vi.waitFor(() => {
+      expect(activeOf(second!.id, b.id)).toBe('permanent');
+      expect(activeOf(first!.id, a.id)).toBe('session');
+    });
+    await store.stop();
+  });
+
   it('keeps the error of a failed load', async () => {
     client = createMockClient();
     client.listFamilies = () =>

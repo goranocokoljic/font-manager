@@ -97,7 +97,13 @@ test('expanding a family shows its styles inline', async ({ page }) => {
   const order = await tree
     .locator('[role="treeitem"]')
     .evaluateAll((rows) => rows.map((r) => r.getAttribute('aria-label')));
-  expect(order.slice(3, 8)).toEqual([SAMPLE_1, 'Regular', 'Italic', 'Bold', 'Bold Italic']);
+  expect(order.slice(3, 8)).toEqual([
+    `${SAMPLE_1}, not active`,
+    'Sample 1 Regular, not active',
+    'Sample 1 Italic, not active',
+    'Sample 1 Bold, not active',
+    'Sample 1 Bold Italic, not active',
+  ]);
   await expect(styles.nth(2).locator('.row')).toHaveAttribute('data-state', 'ready');
   await family.locator('.twisty').click();
   await expect(styles).toHaveCount(0);
@@ -124,7 +130,7 @@ test('arrows, Enter and Tab work in the list, and the inspector follows', async 
   );
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown'); // Italic
-  const italic = tree.getByRole('treeitem', { name: 'Italic', exact: true });
+  const italic = tree.getByRole('treeitem', { name: 'Sample 1 Italic, not active', exact: true });
   await expect(italic).toHaveAttribute('aria-selected', 'true');
   await expect(info.getByRole('heading', { name: 'Sample 1 Italic' })).toBeVisible();
   await page.keyboard.press('ArrowLeft'); // to the family

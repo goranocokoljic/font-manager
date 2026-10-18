@@ -65,3 +65,31 @@ export function flattenRows(
   });
   return rows;
 }
+
+/** "1 style", "4 styles". */
+export const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
+
+const FAMILY_STATE: Record<FamilySummary['activation'], string> = {
+  inactive: 'not active',
+  partial: 'partly active',
+  active: 'active',
+};
+
+/**
+ * What a screen reader announces for a row: the family and its style count, or
+ * the family and style of a face, then the activation state.
+ */
+export function rowLabel(row: ListRow): string {
+  if (row.kind === 'family') {
+    const { name, styleCount: n, activation } = row.family;
+    return `${name}, ${styleCount(n)}, ${FAMILY_STATE[activation]}`;
+  }
+  const { familyName, style, active } = row.face;
+  const state =
+    active === 'permanent'
+      ? 'active permanently'
+      : active === 'session'
+        ? 'active for this session'
+        : 'not active';
+  return `${familyName} ${style}, ${state}`;
+}

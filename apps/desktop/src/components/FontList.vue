@@ -13,7 +13,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
-import type { ListRow } from '../list/rows';
+import { rowLabel, styleCount, type ListRow } from '../list/rows';
 import type { SelectMode } from '../list/selection';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
@@ -199,8 +199,6 @@ function onToggle(row: ListRow): void {
   if (row.kind === 'family') list.toggleExpanded(row.family.id);
   viewport.value?.focus({ preventScroll: true });
 }
-
-const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
 </script>
 
 <template>
@@ -236,11 +234,7 @@ const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
         :aria-selected="list.isSelected(item.row.key)"
         :aria-setsize="item.row.kind === 'face' ? item.row.count : library.families.length"
         :aria-posinset="item.row.position"
-        :aria-label="
-          item.row.kind === 'face'
-            ? item.row.face.style
-            : `${item.row.family.name}, ${styleCount(item.row.family.styleCount)}`
-        "
+        :aria-label="rowLabel(item.row)"
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
         @click="onRowClick(item.row, $event)"
       >
