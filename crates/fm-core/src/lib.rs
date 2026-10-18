@@ -6,6 +6,7 @@
 //! consumer reaches it through `fm-api`.
 
 pub mod charsets;
+pub mod classify;
 pub mod config;
 pub mod error;
 mod filter;

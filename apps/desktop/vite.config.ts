@@ -6,5 +6,10 @@ export default defineConfig({
   plugins: [vue()],
   clearScreen: false,
   server: { port: 1420, strictPort: true, watch: { ignored: ['**/src-tauri/**'] } },
-  test: { environment: 'jsdom', include: ['src/**/*.test.ts'] },
+  test: {
+    environment: 'jsdom',
+    include: ['src/**/*.test.ts'],
+    // The contrast test reads the theme's colors (`theme.css?raw`).
+    css: { include: [/theme\.css/] },
+  },
 });

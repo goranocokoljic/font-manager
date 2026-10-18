@@ -2,7 +2,8 @@
 //!
 //! [`parse`] reads one font file from memory and returns every face in it with
 //! the metadata the index needs: names, OS/2 classes, the italic angle,
-//! variation axes and named instances, layout feature tags and cmap code points.
+//! variation axes and named instances, layout feature tags, cmap code points
+//! and the design class.
 //!
 //! Malformed data is never a panic. A file whose header cannot be read is
 //! [`Health::Broken`] with no faces; a face whose tables are malformed or cut
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use skrifa::MetadataProvider;
 use skrifa::string::StringId;
 
+use crate::classify::{self, ClassGuess};
 use crate::{FmError, FmResult};
 
 /// What [`parse`] found in one font file.
@@ -106,6 +108,10 @@ pub struct ParsedFace {
     /// No serde default: a `face.parsed` written before this field fails to
     /// load, so the next scan reads the file again and fills it.
     pub color: bool,
+    /// Design class, declared by the font or measured on its outlines; `None`
+    /// when neither says anything (see [`crate::classify`]).
+    #[serde(default)]
+    pub classification: Option<ClassGuess>,
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
@@ -137,6 +143,7 @@ impl ParsedFace {
             named_instances: Vec::new(),
             features: Vec::new(),
             color: false,
+            classification: None,
             code_points: Vec::new(),
             health,
         }
@@ -282,7 +289,7 @@ fn parse_web(data: &[u8], format: FontFormat) -> ParsedFile {
 /// cannot be decompressed. `wuff` returns errors for malformed data, but it
 /// indexes slices on some paths, so a panic is caught and treated as
 /// malformed data too: a bad file must never take the scan down.
-fn decompress_web(data: &[u8], format: FontFormat) -> Option<Vec<u8>> {
+pub(crate) fn decompress_web(data: &[u8], format: FontFormat) -> Option<Vec<u8>> {
     if format == FontFormat::Woff && !woff1_size_is_plausible(data) {
         return None;
     }
@@ -436,6 +443,12 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         Err(ReadError::TableIsMissing(_)) => {} // cut off, reported above
         Err(e) => problems.push(format!("The maxp table is malformed: {e}.")),
     }
+
+    let family = face
+        .typographic_family
+        .as_deref()
+        .or(face.family.as_deref());
+    face.classification = classify::classify(font, family, &face.code_points);
 
     let bitmap_only = is_bitmap_only(font);
     if !bitmap_only && !has_glyph_images(font) {

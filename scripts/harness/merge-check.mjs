@@ -35,6 +35,8 @@ export function contractRemovals(diff) {
     if (!inTypes || !line.startsWith('-') || line.startsWith('---')) continue;
     const text = line.slice(1).trim();
     if (!text || text.startsWith('export const API_VERSION')) continue;
+    // Doc comments change no type: a reworded comment is not a contract change.
+    if (/^(\/\*\*?|\*\/?|\/\/)/.test(text)) continue;
     out.push(text);
   }
   return out;

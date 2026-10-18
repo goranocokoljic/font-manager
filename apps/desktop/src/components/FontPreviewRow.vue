@@ -12,6 +12,8 @@ import { faceAxes, variationSettings } from '../preview/variations';
 const props = withDefaults(
   defineProps<{
     face: FaceSummary;
+    /** Name shown above the sample; "Family Style" when absent. */
+    label?: string;
     text?: string;
     sizePx?: number;
     lineHeight?: number;
@@ -23,6 +25,7 @@ const props = withDefaults(
     variations?: AxisValue[];
   }>(),
   {
+    label: undefined,
     text: 'The quick brown fox jumps over the lazy dog',
     sizePx: 28,
     lineHeight: 1.2,
@@ -91,13 +94,14 @@ const sampleStyle = computed(() => ({
   fontVariationSettings: variationSettings(axes.value, props.variations),
 }));
 
-const label = computed(() => `${props.face.familyName} ${props.face.style}`);
+const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
 </script>
 
 <template>
   <div class="row" :data-face="face.id" :data-state="state">
     <span class="label">
-      {{ label }}
+      {{ name }}
+      <slot name="detail" />
       <span v-if="face.isVariable" class="badge">Variable</span>
       <span v-if="state === 'failed'" class="note">Preview not available</span>
     </span>
