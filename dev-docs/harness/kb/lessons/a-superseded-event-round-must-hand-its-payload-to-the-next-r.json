@@ -1,0 +1,18 @@
+{
+  "id": "a-superseded-event-round-must-hand-its-payload-to-the-next-r",
+  "title": "A superseded event round must hand its payload to the next round",
+  "category": "correctness",
+  "rule": "When a store handles events with a 'newest round wins' guard (a counter that makes older async rounds return early), the newer round must also process what the dropped rounds were about: keep the ids of every unfinished round in a shared set, let each round work from the whole set, and clear it only when a round finishes as the newest. Add a test that fires two events in different groups without awaiting between them and asserts both are applied.",
+  "rationale": "E5.10 (#73): `refreshActivation` in the library store returned early when a second `activationChanged` arrived and refetched only the second event's families, so the first family's style rows kept announcing 'not active'.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    73
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-10-18T03:22:38.074Z",
+  "last_seen": "2026-10-18T03:22:38.074Z"
+}
