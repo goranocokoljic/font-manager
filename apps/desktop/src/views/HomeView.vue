@@ -5,12 +5,14 @@ import { formatApiVersion } from '../api/version';
 import FacePreviewList from '../components/FacePreviewList.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
+import PreviewControls from '../components/PreviewControls.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
+import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 
 const app = useAppStore();
@@ -18,6 +20,7 @@ const layout = useLayoutStore();
 const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
+const preview = usePreviewStore();
 const route = useRoute();
 onMounted(() => {
   void app.load();
@@ -88,7 +91,12 @@ const groups = [
           Inspector
         </button>
       </header>
-      <FacePreviewList v-if="library.faces.length" :faces="library.faces" />
+      <PreviewControls :view="ALL_FONTS_VIEW" />
+      <FacePreviewList
+        v-if="library.faces.length"
+        :faces="library.faces"
+        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+      />
       <section v-else class="empty" aria-label="Font list">
         <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
         <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>

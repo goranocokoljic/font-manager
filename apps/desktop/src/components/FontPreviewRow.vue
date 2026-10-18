@@ -3,6 +3,7 @@
 // face itself, rendered by the webview from the face's file (an `@font-face`
 // registered by the shared face loader). Variable faces render at their
 // default coordinates, or at `variations`, through `font-variation-settings`.
+// The list passes the view's preview settings (size, spacing, alignment, color).
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { Axis, AxisValue, FaceId, FaceSummary } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
@@ -13,11 +14,21 @@ const props = withDefaults(
     face: FaceSummary;
     text?: string;
     sizePx?: number;
+    lineHeight?: number;
+    /** Letter spacing in em. */
+    trackingEm?: number;
+    align?: 'start' | 'center' | 'end';
+    /** Sample text color; inherits the list's when absent. */
+    color?: string | null;
     variations?: AxisValue[];
   }>(),
   {
     text: 'The quick brown fox jumps over the lazy dog',
     sizePx: 28,
+    lineHeight: 1.2,
+    trackingEm: 0,
+    align: 'start',
+    color: null,
     variations: () => [],
   },
 );
@@ -73,6 +84,10 @@ onBeforeUnmount(() => {
 const sampleStyle = computed(() => ({
   fontFamily: `"${faceFamily(props.face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`,
   fontSize: `${props.sizePx}px`,
+  lineHeight: String(props.lineHeight),
+  letterSpacing: `${props.trackingEm}em`,
+  textAlign: props.align,
+  color: props.color ?? undefined,
   fontVariationSettings: variationSettings(axes.value, props.variations),
 }));
 
@@ -86,7 +101,7 @@ const label = computed(() => `${props.face.familyName} ${props.face.style}`);
       <span v-if="face.isVariable" class="badge">Variable</span>
       <span v-if="state === 'failed'" class="note">Preview not available</span>
     </span>
-    <span class="sample" :style="sampleStyle">{{ text }}</span>
+    <span class="sample" dir="auto" :style="sampleStyle">{{ text }}</span>
   </div>
 </template>
 
@@ -116,7 +131,6 @@ const label = computed(() => `${props.face.familyName} ${props.face.style}`);
 }
 .sample {
   overflow: hidden;
-  line-height: 1.2;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
