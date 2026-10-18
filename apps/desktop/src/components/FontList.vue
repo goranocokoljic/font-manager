@@ -13,6 +13,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
+import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleCount, type ListRow } from '../list/rows';
 import { sampleText } from '../preview/sampleText';
@@ -143,6 +144,11 @@ function onKeyDown(e: KeyboardEvent): void {
   void revealCursor();
 }
 
+/** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
+function onRowDrag(row: ListRow, e: DragEvent): void {
+  startFontDrag(e, dragKeys(list.selection.selected, row.key));
+}
+
 function onRowClick(row: ListRow, e: MouseEvent): void {
   list.click(row.key, modeOf(e));
   viewport.value?.focus({ preventScroll: true });
@@ -189,7 +195,9 @@ function onToggle(row: ListRow): void {
         :aria-posinset="item.row.position"
         :aria-label="rowLabel(item.row)"
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
+        draggable="true"
         @click="onRowClick(item.row, $event)"
+        @dragstart="onRowDrag(item.row, $event)"
       >
         <span
           v-if="item.row.kind === 'family'"

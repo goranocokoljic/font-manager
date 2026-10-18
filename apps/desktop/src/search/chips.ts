@@ -10,6 +10,7 @@ import type {
   LicenseType,
   Slant,
   SourceId,
+  TagId,
 } from '../api/types';
 
 /**
@@ -26,7 +27,10 @@ export type ChipFacet =
   | 'features'
   | 'license'
   | 'sources'
-  | 'problems';
+  | 'problems'
+  | 'tags'
+  | 'favorite'
+  | 'minRating';
 
 /** A chip's value: whatever its filter takes. */
 export type ChipValue = string | number | boolean;
@@ -60,6 +64,9 @@ const KIND: Record<ChipFacet, Kind> = {
   license: 'one',
   sources: 'any',
   problems: 'one',
+  tags: 'all',
+  favorite: 'one',
+  minRating: 'one',
 };
 
 const CLASSES: Record<Classification, string> = {
@@ -109,6 +116,13 @@ const GROUPS: { facet: ChipFacet; label: string; name: (v: ChipValue) => string 
   { facet: 'license', label: 'License', name: (v) => LICENSES[v as LicenseType] ?? String(v) },
   { facet: 'sources', label: 'Source', name: String },
   { facet: 'problems', label: 'Health', name: yesNo('Has problems', 'Healthy') },
+  { facet: 'favorite', label: 'Favorite', name: yesNo('Favorites', 'Not favorites') },
+  {
+    facet: 'minRating',
+    label: 'Rating',
+    name: (v) => (v === 5 ? '5 stars' : `${String(v)}+ stars`),
+  },
+  { facet: 'tags', label: 'Tag', name: String },
 ];
 
 /** The values a filter has chosen: a list for any/every-of filters, else zero or one. */
@@ -155,13 +169,19 @@ export function chipGroups(
   filters: Filters,
   counts: FilterCounts,
   sourceName: (id: SourceId) => string = (id) => `Source ${id}`,
+  tagName: (id: TagId) => string = (id) => `Tag ${id}`,
 ): ChipGroup[] {
   const groups: ChipGroup[] = [];
   for (const g of GROUPS) {
     const counted = (counts[g.facet] ?? []) as { value: ChipValue; count: number }[];
     const values = new Map(counted.map((c) => [c.value, c.count]));
     for (const v of chosen(filters, g.facet)) if (!values.has(v)) values.set(v, 0);
-    const name = g.facet === 'sources' ? (v: ChipValue) => sourceName(v as SourceId) : g.name;
+    const name =
+      g.facet === 'sources'
+        ? (v: ChipValue) => sourceName(v as SourceId)
+        : g.facet === 'tags'
+          ? (v: ChipValue) => tagName(v as TagId)
+          : g.name;
     const chips = [...values].map(([value, count]) => ({
       facet: g.facet,
       value,
