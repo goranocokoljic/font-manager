@@ -17,6 +17,16 @@ test('the Info tab tags, favorites and rates a face, and the chips filter by the
   await expect(panel.getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
 
   const input = panel.getByRole('combobox', { name: 'Add a tag' });
+  // The field's outline is the 3:1 form-field color (WCAG 1.4.11), not the decorative border.
+  const outline = await input.evaluate((el) => {
+    const probe = document.createElement('div');
+    probe.style.borderTop = '1px solid var(--fm-control-border)';
+    document.body.append(probe);
+    const want = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return [getComputedStyle(el).borderTopColor, want];
+  });
+  expect(outline[0]).toBe(outline[1]);
   await input.fill('display');
   await input.press('Enter');
   await expect(panel.getByRole('list', { name: 'Tags' }).getByRole('listitem')).toHaveText([

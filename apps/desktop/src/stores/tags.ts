@@ -5,6 +5,16 @@ import type { ApiError, Tag, TagId } from '../api/types';
 import { useLibraryStore } from './library';
 
 /**
+ * True when the API takes `a` and `b` as one tag: they differ only in the case
+ * of A–Z (fm-core's `tag.name` is `COLLATE NOCASE`, which folds ASCII only, so
+ * "Äb" and "äb" are two tags).
+ */
+export function sameTagName(a: string, b: string): boolean {
+  const fold = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+  return fold(a) === fold(b);
+}
+
+/**
  * Every tag the library has, A to Z, with its face count, as the API lists it.
  * The Info tab completes tag names from it and the filter chips name tag ids
  * with it. It lists again whenever the library changes (tagging is a change).
@@ -23,10 +33,14 @@ export const useTagsStore = defineStore('tags', () => {
     }
   }
 
-  /** The id of the tag called `name`; the API compares names without regard to case. */
+  /**
+   * The id of the tag called `name`: the one with exactly this name (a face
+   * detail lists names as stored), else the one the API takes as the same name.
+   */
   function idOf(name: string): TagId | null {
-    const lower = name.toLowerCase();
-    return tags.value.find((t) => t.name.toLowerCase() === lower)?.id ?? null;
+    const tag =
+      tags.value.find((t) => t.name === name) ?? tags.value.find((t) => sameTagName(t.name, name));
+    return tag?.id ?? null;
   }
 
   /** The name of tag `id`, for a chip. */

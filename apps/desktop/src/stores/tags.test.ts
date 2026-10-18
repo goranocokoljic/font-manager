@@ -6,7 +6,7 @@ import { createMockClient } from '../api/mock';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
 import { useSelectionStore } from './selection';
-import { useTagsStore } from './tags';
+import { sameTagName, useTagsStore } from './tags';
 
 let client: FmClient;
 
@@ -42,6 +42,22 @@ describe('tags, favorite and rating', () => {
     expect(tags.tags.map((t) => t.name)).toEqual(['Brand']);
   });
 
+  it('keeps names that differ beyond A–Z case apart, like the API, and removes the right one', async () => {
+    client = createMockClient({ faceTags: { 6: ['Äb'] } });
+    setClient(client);
+    await useLibraryStore().load();
+    const tags = useTagsStore();
+    const selection = useSelectionStore();
+    await selection.select(1);
+    expect(await selection.addTag('äb')).toBe(true);
+    // fm-core folds only A–Z: "Äb" and "äb" are two tags.
+    expect(tags.tags.map((t) => t.name).sort()).toEqual(['Äb', 'äb'].sort());
+    expect(tags.idOf('äb')).not.toBe(tags.idOf('Äb'));
+    expect(await selection.removeTag('äb')).toBe(true);
+    expect(selection.detail!.tags).toEqual([]);
+    expect(tags.tags.map((t) => t.name)).toEqual(['Äb']);
+  });
+
   it('sets and clears favorite and rating, and shows a refusal', async () => {
     const { selection } = await setup();
     await selection.setFavorite(true);
@@ -72,5 +88,11 @@ describe('tags, favorite and rating', () => {
       await flushPromises();
       expect(search.hits?.map((h) => h.family.id)).toEqual([1]);
     }
+  });
+
+  it('folds only A–Z case, as fm-core compares tag names', () => {
+    expect(sameTagName('Display', 'dISPLAY')).toBe(true);
+    expect(sameTagName('Äb', 'äb')).toBe(false);
+    expect(sameTagName('École', 'école')).toBe(false);
   });
 });

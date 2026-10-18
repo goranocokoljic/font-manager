@@ -153,6 +153,21 @@ fn tags_are_created_reused_without_regard_to_case_and_listed_a_to_z() {
     assert_eq!(names(&index), ["Brand 2", "Display 3", "headline 2"]);
 }
 
+/// `tag.name` is `COLLATE NOCASE`, which folds A–Z only: names that differ
+/// in the case of other letters are different tags (the UI relies on it).
+#[test]
+fn names_that_differ_beyond_ascii_case_are_different_tags() {
+    let (mut index, _) = library();
+    let regular = face(&index, "Roboto-Regular");
+    let inter = face(&index, "Inter-Regular");
+    let upper = tag(&mut index, &[regular], &["Äb"]).expect("tag")[0].id;
+    let lower = tag(&mut index, &[inter], &["äb"]).expect("tag")[0].id;
+    assert_ne!(upper, lower);
+    assert_eq!(names(&index).len(), 2);
+    untag(&mut index, &[inter], &[lower]).expect("untag");
+    assert_eq!(names(&index), ["Äb 1"]);
+}
+
 #[test]
 fn untagging_removes_the_tag_from_the_faces_and_drops_an_unused_tag() {
     let (mut index, _) = library();

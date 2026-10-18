@@ -462,7 +462,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   });
   // Tags by id; a face holds their names (`FaceDetail.tags`), like the Rust mock.
   const tags: { id: TagId; name: string }[] = [];
-  const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  // Like fm-core's `COLLATE NOCASE`: only A–Z case is folded ("Äb" and "äb" are two tags).
+  const fold = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const sameName = (a: string, b: string) => fold(a) === fold(b);
   for (const f of faces)
     for (const name of f.tags)
       if (!tags.some((t) => sameName(t.name, name))) tags.push({ id: ++nextId, name });

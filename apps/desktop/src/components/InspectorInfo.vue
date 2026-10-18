@@ -5,7 +5,7 @@
 import { computed, ref } from 'vue';
 import type { Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
 import { useSelectionStore } from '../stores/selection';
-import { useTagsStore } from '../stores/tags';
+import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
 
@@ -15,8 +15,8 @@ const d = computed(() => selection.detail);
 
 // Tag names to complete from: the library's tags the face does not have yet.
 const suggestions = computed(() => {
-  const mine = new Set((d.value?.tags ?? []).map((t) => t.toLowerCase()));
-  return tags.tags.filter((t) => !mine.has(t.name.toLowerCase()));
+  const mine = d.value?.tags ?? [];
+  return tags.tags.filter((t) => !mine.some((name) => sameTagName(name, t.name)));
 });
 const newTag = ref('');
 async function addTag(): Promise<void> {
@@ -425,7 +425,7 @@ dd {
 .tag-input {
   width: 100%;
   padding: 2px 6px;
-  border: 1px solid var(--fm-border);
+  border: 1px solid var(--fm-control-border);
   border-radius: 6px;
   background: transparent;
   color: inherit;
