@@ -134,7 +134,7 @@ memory if a cold start is needed, and the decision record reviewers read.
 | merge | CI green on all three OS, review has no open `must`, budget held, branch up to date with `main` | squash-merge (pinned to the checked head commit), delete the branch |
 | update | the branch is behind `main` | `gh pr update-branch`, then CI again (red → ci-fix as usual), then the gate again; at most `auto_merge.max_branch_updates` (3) times |
 | sync | the branch conflicts with `main` | the `sync` stage, then CI, then the gate again |
-| human | track in `auto_merge.exclude_tracks` (`platform`), over budget, or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
+| human | track in `auto_merge.exclude_tracks` (empty in this repo; the default is `platform`), over budget, or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
 | block | a draft, or the merge call failed | `harness:blocked` |
 | stop | the newest commit on `main` has a failed required check (newest run per job) | re-run main's failed jobs once (a flaky test), check every `main_red.poll_min` (10) minutes; green → the gate again; still red after `main_red.max_hours` (6) → stop the lane, and the next run merges the PR |
 

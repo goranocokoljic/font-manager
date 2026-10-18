@@ -118,7 +118,7 @@ Before every push: `pnpm lint && cargo nextest run --workspace && pnpm test && p
 Stories are worked by `go-harness.ps1` (one lane per terminal: `-Lane core`, `-Lane ui`)
 through the `/go-cycle` skill and reviewed by `/fm-review`. Manual:
 `dev-docs/harness/go-harness.md`. With `merge: auto` the harness merges green, reviewed
-stories itself; `track: platform` and changes to existing `fm-api` types wait for a human.
+stories itself, platform stories included; changes to existing `fm-api` types wait for a human.
 
 - Use the PureContext MCP index for code navigation and impact: `resolve_repo` for the
   `repoId`, `get_task_context` to orient, `prepare_change` / `check_consistency` before
