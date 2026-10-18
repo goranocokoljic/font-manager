@@ -15,6 +15,7 @@ pub mod font_file;
 pub mod grouping;
 pub mod index;
 pub mod logging;
+mod parallel;
 pub mod parser;
 pub mod sample;
 pub mod scanner;

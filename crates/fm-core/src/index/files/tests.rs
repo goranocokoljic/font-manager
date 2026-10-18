@@ -5,6 +5,7 @@ use fm_api::ErrorCode;
 use fm_api::common::Slant;
 use fm_api::library::SourceKind;
 use rusqlite::Connection;
+use rusqlite::types::ValueRef;
 
 use super::*;
 use crate::index::{INDEX_FILE, SCHEMA_VERSION};
@@ -947,4 +948,111 @@ fn a_gone_file_not_yet_in_the_index_is_written_in_full() {
     let done = index.apply_rescan(source, &files, &report).expect("apply");
     assert_eq!(done.faces, 1);
     assert_eq!(index.load_files().expect("load").get(&path), Some(&file));
+}
+
+/// One value of a snapshot row: short text as is, long text and bytes as
+/// their blake3 hash, so the snapshot stays readable and still catches a
+/// change of any byte.
+fn snapshot_value(value: ValueRef<'_>) -> String {
+    match value {
+        ValueRef::Null => "-".to_owned(),
+        ValueRef::Integer(n) => n.to_string(),
+        ValueRef::Real(x) => x.to_string(),
+        ValueRef::Text(t) if t.len() <= 48 => String::from_utf8_lossy(t).into_owned(),
+        ValueRef::Text(bytes) | ValueRef::Blob(bytes) => {
+            FileHash::of(bytes).to_hex()[..16].to_owned()
+        }
+    }
+}
+
+/// E2.8: the parallel scan gives the same result as the one-thread scan
+/// did. The snapshot was written by the scanner before E2.8; every file of
+/// `fixtures/fonts/` must have the same hash, health and faces in the file
+/// index, and the same `font_file` and `face` rows in the database.
+#[test]
+fn the_fixture_scan_matches_the_snapshot_of_the_one_thread_scan() {
+    let root = fixtures();
+    let (files, report) = scan(&root);
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    let (mut index, source) = memory_db();
+    index.apply_rescan(source, &files, &report).expect("apply");
+
+    let rel = |path: &Path| {
+        let parts: Vec<_> = path
+            .strip_prefix(&root)
+            .expect("under the fixtures")
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        parts.join("/")
+    };
+    let mut lines = Vec::new();
+    for file in files.files() {
+        let faces: Vec<String> = file
+            .parsed
+            .faces
+            .iter()
+            .map(|f| {
+                let parsed = serde_json::to_string(f).expect("face json");
+                let cps: Vec<u8> = f.code_points.iter().flat_map(|c| c.to_le_bytes()).collect();
+                format!(
+                    "#{} {:?} {} cmap={}:{}",
+                    f.index,
+                    f.health,
+                    &FileHash::of(parsed.as_bytes()).to_hex()[..16],
+                    f.code_points.len(),
+                    &FileHash::of(&cps).to_hex()[..16],
+                )
+            })
+            .collect();
+        lines.push(format!(
+            "file {} | {} | {:?} | {:?} | {}",
+            rel(&file.path),
+            file.hash,
+            file.parsed.format,
+            file.parsed.health,
+            faces.join(" ; ")
+        ));
+    }
+    let mut stmt = index
+        .conn
+        .prepare(
+            "SELECT f.path, f.hash, f.format, f.size, f.health, f.gone,
+                    a.collection_index, a.family, a.subfamily, a.typographic_family,
+                    a.postscript_name, a.weight, a.width, a.slant, a.is_variable, a.axes,
+                    a.features, a.fstype, a.parsed, a.cmap, a.languages, a.foundry,
+                    a.designer, a.is_color, a.healthy
+             FROM face a JOIN font_file f ON f.id = a.file_id",
+        )
+        .expect("prepare");
+    let mut rows = stmt.query([]).expect("query");
+    while let Some(row) = rows.next().expect("row") {
+        let path = path_from_sql(row.get_ref(0).expect("path")).expect("path");
+        let values: Vec<String> = (1..25)
+            .map(|i| snapshot_value(row.get_ref(i).expect("column")))
+            .collect();
+        lines.push(format!("row  {} | {}", rel(&path), values.join(" | ")));
+    }
+    lines.sort();
+    let actual = lines.join("\n") + "\n";
+
+    let snapshot = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/snapshots/fixture-scan.txt");
+    if std::env::var_os("FM_UPDATE_SNAPSHOTS").is_some() {
+        fs::write(&snapshot, &actual).expect("write snapshot");
+    }
+    let expected = fs::read_to_string(&snapshot)
+        .expect("read snapshot")
+        .replace("\r\n", "\n");
+    let differ: Vec<_> = actual
+        .lines()
+        .zip(expected.lines())
+        .filter(|(a, e)| a != e)
+        .take(5)
+        .collect();
+    assert!(
+        actual == expected,
+        "the fixture scan changed ({} vs {} lines); first differences: {differ:#?}",
+        actual.lines().count(),
+        expected.lines().count()
+    );
 }

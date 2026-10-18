@@ -8,7 +8,8 @@
 //   node scripts/bench/bench.mjs trend --current bench-report.json [--history DIR] [--sha SHA] [--title T]
 //
 // run: builds fm-bench in release, then measures against --library (default
-// $FM_REFERENCE_LIBRARY): first scan into a fresh index, incremental rescan,
+// $FM_REFERENCE_LIBRARY): first scan into a fresh index (budgeted per 10,000
+// files; the report gives the file count and the measured time), incremental rescan,
 // cold start (median of --runs fresh processes, spawn to first page), search
 // latency (p95 over --rounds rounds of the query set), idle memory (resident
 // set of a started process after --settle-ms) and 100-face activation (not
@@ -24,7 +25,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  SCHEMA, failures, median, merge, metric, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
+  SCHEMA, failures, firstScan, median, merge, metric, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -127,7 +128,7 @@ async function run(opts) {
       library: { path: library, files: scan.files, faces: scan.faces, unreadable: scan.failed },
       metrics: {
         cold_start: metric('cold_start', median(starts)),
-        first_scan: metric('first_scan', scan.ms),
+        first_scan: firstScan(scan.ms, scan.files),
         incremental_update: metric('incremental_update', inc.ms),
         search: metric('search', search.p95_ms),
         activation_100: metric('activation_100', null, 'no FontActivator yet (E6)'),
