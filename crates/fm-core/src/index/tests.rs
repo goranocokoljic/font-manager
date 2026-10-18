@@ -107,6 +107,8 @@ fn fresh_database_has_every_table_of_the_data_model() {
                 "added",
                 "foundry",
                 "designer",
+                "is_color",
+                "healthy",
             ][..],
         ),
         (

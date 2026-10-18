@@ -70,8 +70,8 @@ RETURNING id";
 const UPSERT_FACE: &str = "
 INSERT INTO face (file_id, collection_index, family, subfamily, typographic_family,
                   postscript_name, weight, width, slant, is_variable, axes, features,
-                  fstype, parsed, coverage, foundry, designer, added)
-VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+                  fstype, parsed, coverage, foundry, designer, is_color, healthy, added)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
         strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ON CONFLICT (file_id, collection_index) DO UPDATE SET
     family = excluded.family, subfamily = excluded.subfamily,
@@ -80,7 +80,8 @@ ON CONFLICT (file_id, collection_index) DO UPDATE SET
     width = excluded.width, slant = excluded.slant, is_variable = excluded.is_variable,
     axes = excluded.axes, features = excluded.features, fstype = excluded.fstype,
     parsed = excluded.parsed, coverage = excluded.coverage,
-    foundry = excluded.foundry, designer = excluded.designer";
+    foundry = excluded.foundry, designer = excluded.designer,
+    is_color = excluded.is_color, healthy = excluded.healthy";
 
 /// Faces the file no longer has. An active face stays (rule 3): the app
 /// registered it, so it must stay deregistrable.
@@ -313,6 +314,8 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, file: &IndexedFile) -> FmR
                 pack_coverage(&face.code_points),
                 face.foundry,
                 face.designer,
+                face.color,
+                face.health == Health::Ok,
             ])
             .map_err(|e| db_error(&e))?;
     }

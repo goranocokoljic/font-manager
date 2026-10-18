@@ -16,6 +16,16 @@ pub struct WeightRange {
     pub max: u16,
 }
 
+/// An inclusive OS/2 width-class range (1 ultra-condensed – 9 ultra-expanded).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WidthRange {
+    /// Narrowest width class.
+    pub min: u16,
+    /// Widest width class.
+    pub max: u16,
+}
+
 /// Characters a font must cover.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", tag = "kind")]
@@ -41,8 +51,10 @@ pub enum Supports {
 pub struct Filters {
     /// Any of these classes.
     pub classification: Vec<Classification>,
-    /// Weight range.
+    /// Weight range; a variable face passes when its `wght` axis reaches it.
     pub weight: Option<WeightRange>,
+    /// Width-class range; a variable face passes when its `wdth` axis reaches it.
+    pub width: Option<WidthRange>,
     /// Slant.
     pub slant: Option<Slant>,
     /// Variable (true) or static (false) only.
@@ -71,7 +83,7 @@ pub struct Filters {
     pub favorite: Option<bool>,
     /// At least this many stars.
     pub min_rating: Option<u8>,
-    /// Only faces with problems.
+    /// Health: faces with problems (true) or healthy faces (false) only.
     pub problems: Option<bool>,
 }
 
@@ -123,6 +135,55 @@ pub struct SearchResponse {
     pub families: Vec<FamilyHit>,
     /// Family groups in all pages.
     pub total: u32,
+    /// The result count of every filter value.
+    #[serde(default)]
+    pub counts: Option<FilterCounts>,
+}
+
+/// One filter value and how many family groups it would give.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FilterCount<T> {
+    /// The value.
+    pub value: T,
+    /// Family groups the search returns with this value chosen.
+    pub count: u32,
+}
+
+/// Result counts for the filters, per value: the family groups the same
+/// search returns with that value chosen and the other filters kept. A
+/// filter that takes any of several values (classification, formats,
+/// sources) is counted without its own selection; `features`, which takes
+/// every one, is counted with its selection plus the value. Values with no
+/// result are left out.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FilterCounts {
+    /// Per class.
+    pub classification: Vec<FilterCount<Classification>>,
+    /// Per weight class in hundreds (100–900): a face counts under the class
+    /// its weight rounds to; a variable face under every class it reaches.
+    pub weight: Vec<FilterCount<u16>>,
+    /// Per width class (1–9); a variable face under every class it reaches.
+    pub width: Vec<FilterCount<u16>>,
+    /// Per slant.
+    pub slant: Vec<FilterCount<Slant>>,
+    /// Variable (true) and static (false).
+    pub variable: Vec<FilterCount<bool>>,
+    /// Color (true) and not (false).
+    pub color: Vec<FilterCount<bool>>,
+    /// Per format.
+    pub formats: Vec<FilterCount<FontFormat>>,
+    /// Per OpenType feature tag.
+    pub features: Vec<FilterCount<String>>,
+    /// Per declared license type.
+    pub license: Vec<FilterCount<LicenseType>>,
+    /// Per source.
+    pub sources: Vec<FilterCount<SourceId>>,
+    /// With problems (true) and healthy (false).
+    pub problems: Vec<FilterCount<bool>>,
+    /// Active (true) and inactive (false).
+    pub active: Vec<FilterCount<bool>>,
 }
 
 /// How well one face covers some languages or text.

@@ -216,8 +216,23 @@ CREATE TRIGGER face_fts_tag_rename AFTER UPDATE OF name ON tag BEGIN
 END;
 ";
 
+/// Search filters (E3.4): what the color and health filters read, as
+/// columns written with the face, so a search never parses `face.parsed`.
+///
+/// - `face.is_color`: the face has color glyphs (`ParsedFace::color`). Faces
+///   indexed before this version are read again by the next scan (their
+///   `face.parsed` lacks `color`), which fills it.
+/// - `face.healthy`: the face's own health is `Ok`; older rows are filled
+///   from `face.parsed`.
+const V4: &str = r"
+ALTER TABLE face ADD COLUMN is_color INTEGER NOT NULL DEFAULT 0 CHECK (is_color IN (0, 1));
+ALTER TABLE face ADD COLUMN healthy INTEGER NOT NULL DEFAULT 1 CHECK (healthy IN (0, 1));
+UPDATE face SET healthy = 0
+WHERE json_valid(parsed) AND json_extract(parsed, '$.health.kind') <> 'ok';
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

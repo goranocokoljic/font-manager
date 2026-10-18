@@ -8,6 +8,7 @@
 pub mod charsets;
 pub mod config;
 pub mod error;
+mod filter;
 pub mod font_file;
 pub mod grouping;
 pub mod index;
