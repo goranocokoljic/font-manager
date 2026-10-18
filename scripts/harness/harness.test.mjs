@@ -318,6 +318,10 @@ describe('auto merge', () => {
       '+\tnewField?: string | null,',
       '-"permanent";',
       '+"permanent" | "pinned";',
+      '-\t/**  Weight range. */',
+      '+\t/**  Weight range; a variable face passes when its `wght` axis reaches it. */',
+      '- *  Old wording of a long comment.',
+      '- */',
     ].join('\n');
     assert.deepEqual(contractRemovals(diff), ['"permanent";']);
     assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => l !== '-"permanent";').join('\n')), []);
