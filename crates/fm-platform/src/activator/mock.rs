@@ -433,4 +433,26 @@ mod tests {
         assert_eq!(err.to_string(), "The font file was not found.");
         assert_eq!(err.detail, "/f/gone.ttf: os error 2");
     }
+
+    #[test]
+    fn clear_session_removes_session_registrations_and_keeps_permanent_ones() {
+        let activator = MockActivator::new();
+        activate(&activator, &[face("/f/s.ttf", "S")], Mode::Session);
+        activate(&activator, &[face("/f/p.ttf", "P")], Mode::Permanent);
+
+        let cleared = activator.clear_session().unwrap_or_default();
+
+        assert_eq!(cleared.len(), 1);
+        assert_eq!(cleared[0].path, PathBuf::from("/f/s.ttf"));
+        assert_eq!(cleared[0].status, OutcomeStatus::Deactivated);
+        assert_eq!(active_paths(&activator), vec![PathBuf::from("/f/p.ttf")]);
+    }
+
+    #[test]
+    fn clear_session_fails_when_the_activator_cannot_work() {
+        let activator = MockActivator::new();
+        activate(&activator, &[face("/f/s.ttf", "S")], Mode::Session);
+        activator.set_unavailable(true);
+        assert!(activator.clear_session().is_err());
+    }
 }

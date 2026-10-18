@@ -18,3 +18,5 @@ pub use activator::{
     MockActivator, Mode, Outcome, OutcomeStatus, Registration,
 };
 pub use paths::{AppPaths, Os, PathError};
+#[cfg(windows)]
+pub use windows::{FONTS_KEY, LEDGER_KEY, WindowsActivator};

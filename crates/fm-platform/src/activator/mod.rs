@@ -176,4 +176,16 @@ pub trait FontActivator: Send + Sync {
     /// Fonts the OS already knows whose PostScript name matches one of `faces`,
     /// without activating anything. A file never conflicts with itself.
     fn conflicts(&self, faces: &[FaceFile]) -> Result<Vec<Conflict>, ActivationError>;
+
+    /// Removes every session registration this activator made that the OS
+    /// still holds: on quit, and at start after a crash (ADR 0008). One
+    /// [`Outcome`] per session registration.
+    fn clear_session(&self) -> Result<Vec<Outcome>, ActivationError> {
+        let session: Vec<Registration> = self
+            .list_active()?
+            .into_iter()
+            .filter(|r| r.mode == Mode::Session)
+            .collect();
+        self.deactivate(&session)
+    }
 }
