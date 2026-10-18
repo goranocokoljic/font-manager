@@ -12,6 +12,10 @@
 //! A row the scan cannot trust (no read stamp after [`Index::rebuild`], JSON
 //! from another version) loads without a modification time: the scan reads
 //! that file again.
+//!
+//! Each face is written with its coverage (E3.7): the `cmap` as a
+//! [`CodePointSet`] in `face.cmap`, and its coverage of every language
+//! preset in `face.languages` (see [`crate::coverage`]).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -23,7 +27,8 @@ use rusqlite::types::{Value, ValueRef};
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde::Serialize;
 
-use super::{Index, db_error};
+use super::{Index, db_error, languages};
+use crate::coverage::{self, CodePointSet};
 use crate::error::{FmError, FmResult};
 use crate::grouping::{face_style, family_name};
 use crate::parser::{ParsedFace, ParsedFile};
@@ -31,9 +36,6 @@ use crate::scanner::{FileHash, FileIndex, IndexedFile, Rescan};
 
 /// How many files one transaction writes.
 pub const BATCH_SIZE: usize = 500;
-
-/// The highest Unicode code point; a coverage range past it is damage.
-const MAX_CODE_POINT: u32 = 0x10_FFFF;
 
 /// What a write of scan results did.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -70,16 +72,16 @@ RETURNING id";
 const UPSERT_FACE: &str = "
 INSERT INTO face (file_id, collection_index, family, subfamily, typographic_family,
                   postscript_name, weight, width, slant, is_variable, axes, features,
-                  fstype, parsed, coverage, foundry, designer, is_color, healthy, added)
+                  fstype, parsed, cmap, languages, foundry, designer, is_color, healthy, added)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
-        strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        ?20, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ON CONFLICT (file_id, collection_index) DO UPDATE SET
     family = excluded.family, subfamily = excluded.subfamily,
     typographic_family = excluded.typographic_family,
     postscript_name = excluded.postscript_name, weight = excluded.weight,
     width = excluded.width, slant = excluded.slant, is_variable = excluded.is_variable,
     axes = excluded.axes, features = excluded.features, fstype = excluded.fstype,
-    parsed = excluded.parsed, coverage = excluded.coverage,
+    parsed = excluded.parsed, cmap = excluded.cmap, languages = excluded.languages,
     foundry = excluded.foundry, designer = excluded.designer,
     is_color = excluded.is_color, healthy = excluded.healthy";
 
@@ -193,24 +195,20 @@ impl Index {
     fn load_faces(&self) -> FmResult<HashMap<i64, (Vec<ParsedFace>, bool)>> {
         let mut stmt = self
             .conn
-            .prepare(
-                "SELECT file_id, parsed, coverage FROM face ORDER BY file_id, collection_index",
-            )
+            .prepare("SELECT file_id, parsed, cmap FROM face ORDER BY file_id, collection_index")
             .map_err(|e| db_error(&e))?;
         let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
         let mut out: HashMap<i64, (Vec<ParsedFace>, bool)> = HashMap::new();
         while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
             let file_id: i64 = row.get(0).map_err(|e| db_error(&e))?;
             let parsed: Option<String> = row.get(1).map_err(|e| db_error(&e))?;
-            let coverage: Option<Vec<u8>> = row.get(2).map_err(|e| db_error(&e))?;
+            let cmap: Option<Vec<u8>> = row.get(2).map_err(|e| db_error(&e))?;
             let entry = out.entry(file_id).or_insert_with(|| (Vec::new(), true));
             let face = parsed
                 .and_then(|json| serde_json::from_str::<ParsedFace>(&json).ok())
-                .zip(
-                    coverage
-                        .as_deref()
-                        .map_or(Some(Vec::new()), unpack_coverage),
-                );
+                .zip(cmap.as_deref().map_or(Some(Vec::new()), |bytes| {
+                    CodePointSet::from_bytes(bytes).map(|set| set.iter().collect())
+                }));
             match face {
                 Some((mut face, code_points)) => {
                     face.code_points = code_points;
@@ -295,6 +293,7 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, file: &IndexedFile) -> FmR
     let mut face_stmt = tx.prepare_cached(UPSERT_FACE).map_err(|e| db_error(&e))?;
     for face in &file.parsed.faces {
         let style = face_style(&file.path, face);
+        let cmap = CodePointSet::from_code_points(face.code_points.iter().copied());
         face_stmt
             .execute(params![
                 file_id,
@@ -311,7 +310,8 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, file: &IndexedFile) -> FmR
                 json(&face.features)?,
                 face.fs_type.unwrap_or(0),
                 json(face)?,
-                pack_coverage(&face.code_points),
+                cmap.to_bytes(),
+                languages::to_sql(&coverage::languages(&cmap, &face.locl_languages)),
                 face.foundry,
                 face.designer,
                 face.color,
@@ -392,48 +392,6 @@ fn time_from_nanos(nanos: i64) -> Option<SystemTime> {
     } else {
         UNIX_EPOCH.checked_sub(offset)
     }
-}
-
-/// Sorted code points as runs: little-endian `u32` pairs (first, last).
-fn pack_coverage(code_points: &[u32]) -> Vec<u8> {
-    let mut out = Vec::new();
-    let mut points = code_points.iter().copied();
-    let Some(mut first) = points.next() else {
-        return out;
-    };
-    let mut last = first;
-    for cp in points {
-        if cp == last.wrapping_add(1) {
-            last = cp;
-            continue;
-        }
-        out.extend_from_slice(&first.to_le_bytes());
-        out.extend_from_slice(&last.to_le_bytes());
-        first = cp;
-        last = cp;
-    }
-    out.extend_from_slice(&first.to_le_bytes());
-    out.extend_from_slice(&last.to_le_bytes());
-    out
-}
-
-/// The code points of [`pack_coverage`]; `None` for bytes it cannot have made.
-fn unpack_coverage(bytes: &[u8]) -> Option<Vec<u32>> {
-    let (pairs, rest) = bytes.as_chunks::<8>();
-    if !rest.is_empty() {
-        return None;
-    }
-    let mut out = Vec::new();
-    for pair in pairs {
-        let [a, b, c, d, e, f, g, h] = *pair;
-        let first = u32::from_le_bytes([a, b, c, d]);
-        let last = u32::from_le_bytes([e, f, g, h]);
-        if first > last || last > MAX_CODE_POINT {
-            return None;
-        }
-        out.extend(first..=last);
-    }
-    Some(out)
 }
 
 #[cfg(test)]
