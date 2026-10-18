@@ -463,8 +463,12 @@ fn a_version_2_index_migrates_into_search() {
              INSERT INTO source (id, path, kind) VALUES (1, '/fonts', 'watched');
              INSERT INTO font_file (id, source_id, path, hash, format, size, mtime, health)
              VALUES (1, 1, '/fonts/old.otf', NULL, 'otf', 10, 1700000000, '\"ok\"');
-             INSERT INTO face (file_id, family, subfamily, postscript_name, weight, width, slant)
-             VALUES (1, 'Old Style', 'Regular', 'OldStyle-Regular', 400, 5, 'upright');",
+             INSERT INTO face (file_id, collection_index, family, subfamily, postscript_name,
+                               weight, width, slant, parsed)
+             VALUES (1, 0, 'Old Style', 'Regular', 'OldStyle-Regular', 400, 5, 'upright',
+                     '{\"foundry\": \"Oldtype\", \"designer\": \"Ada Penn\"}'),
+                    (1, 1, 'Bad Json', 'Regular', 'BadJson-Regular', 400, 5, 'upright',
+                     'not json');",
         )
         .expect("old rows");
     }
@@ -473,6 +477,10 @@ fn a_version_2_index_migrates_into_search() {
     let res = search(&index, "old style");
     assert_eq!(names(&res), ["Old Style"]);
     assert!(!res.families[0].family.added.is_empty());
+    // Foundry and designer come from the stored JSON; damaged JSON is skipped.
+    assert_eq!(res.families[0].family.foundry.as_deref(), Some("Oldtype"));
+    assert_eq!(names(&search(&index, "penn")), ["Old Style"]);
+    assert_eq!(names(&search(&index, "bad json")), ["Bad Json"]);
 }
 
 #[test]

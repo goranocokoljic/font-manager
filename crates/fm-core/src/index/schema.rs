@@ -131,21 +131,31 @@ ALTER TABLE face ADD COLUMN coverage BLOB;
 /// Text search (E3.3): one FTS5 row per face, rowid = `face.id`.
 ///
 /// - The trigram tokenizer matches any three characters anywhere in a name,
-///   case-insensitively: the base of typo-tolerant search.
+///   case-insensitively: the base of typo-tolerant search. Search only asks
+///   for single trigrams, so the table keeps no positions (`detail = 'none'`)
+///   and no column sizes (`columnsize = 0`): a 10k-font scan writes far less.
 /// - `face_fts_source` is what a row holds: the grouped family and style, the
-///   PostScript name, foundry and designer from the parsed face, the tags,
-///   and the file name (`NULL` for a path that is not UTF-8).
+///   PostScript name, foundry and designer, the tags, and the file name
+///   (`NULL` for a path that is not UTF-8).
 /// - Triggers keep it in step with `face`, `face_tag` and `tag`, so every
 ///   write path (scan, tagging, rebuild) updates search without knowing it.
-/// - `face.added` is when the face was first indexed (RFC 3339, UTC); faces
-///   indexed before this version get the time of the migration.
+///   A face written again with the same names leaves its row alone.
+/// - `face.foundry` and `face.designer` are columns, written with the face,
+///   so a trigger never parses `face.parsed`; older rows are filled from it.
+/// - `face.added` is when the face was first indexed (RFC 3339, UTC), written
+///   on insert only; faces indexed before this version get the migration time.
 const V3: &str = r"
 ALTER TABLE face ADD COLUMN added TEXT;
-UPDATE face SET added = strftime('%Y-%m-%dT%H:%M:%SZ', 'now');
+ALTER TABLE face ADD COLUMN foundry TEXT;
+ALTER TABLE face ADD COLUMN designer TEXT;
+UPDATE face SET
+    added = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
+    foundry = CASE WHEN json_valid(parsed) THEN json_extract(parsed, '$.foundry') END,
+    designer = CASE WHEN json_valid(parsed) THEN json_extract(parsed, '$.designer') END;
 
 CREATE VIRTUAL TABLE face_fts USING fts5 (
     family, style, postscript_name, foundry, designer, tags, file_name,
-    tokenize = 'trigram'
+    tokenize = 'trigram', detail = 'none', columnsize = 0
 );
 
 CREATE VIEW face_fts_source AS
@@ -154,8 +164,8 @@ SELECT
     face.family,
     face.subfamily,
     face.postscript_name,
-    CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.foundry') END,
-    CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.designer') END,
+    face.foundry,
+    face.designer,
     (SELECT group_concat(tag.name, ' ') FROM face_tag JOIN tag ON tag.id = face_tag.tag_id
      WHERE face_tag.face_id = face.id),
     CASE WHEN typeof(font_file.path) = 'text' THEN substr(
@@ -168,12 +178,15 @@ INSERT INTO face_fts (rowid, family, style, postscript_name, foundry, designer, 
 SELECT * FROM face_fts_source;
 
 CREATE TRIGGER face_fts_insert AFTER INSERT ON face BEGIN
-    UPDATE face SET added = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = new.id;
     INSERT INTO face_fts (rowid, family, style, postscript_name, foundry, designer, tags, file_name)
     SELECT * FROM face_fts_source WHERE id = new.id;
 END;
 
-CREATE TRIGGER face_fts_update AFTER UPDATE OF family, subfamily, postscript_name, parsed ON face
+CREATE TRIGGER face_fts_update
+AFTER UPDATE OF family, subfamily, postscript_name, foundry, designer ON face
+WHEN old.family IS NOT new.family OR old.subfamily IS NOT new.subfamily
+  OR old.postscript_name IS NOT new.postscript_name
+  OR old.foundry IS NOT new.foundry OR old.designer IS NOT new.designer
 BEGIN
     DELETE FROM face_fts WHERE rowid = old.id;
     INSERT INTO face_fts (rowid, family, style, postscript_name, foundry, designer, tags, file_name)
@@ -220,7 +233,6 @@ pub(crate) const TABLES: &[&str] = &[
     "face_fts_config",
     "face_fts_content",
     "face_fts_data",
-    "face_fts_docsize",
     "face_fts_idx",
     "face_tag",
     "font_file",
