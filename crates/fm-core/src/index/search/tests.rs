@@ -672,15 +672,6 @@ fn filters_search_cannot_apply_are_refused() {
     };
     assert_eq!(
         refused(Filters {
-            supports: Some(Supports::Text {
-                text: "ŠĐ".into()
-            }),
-            ..Filters::default()
-        }),
-        ErrorCode::Unsupported
-    );
-    assert_eq!(
-        refused(Filters {
             collection: Some(CollectionId(2)),
             ..Filters::default()
         }),
@@ -1023,6 +1014,12 @@ fn synthetic(families: usize) -> Vec<IndexedFile> {
                 .iter()
                 .map(|t| (*t).to_owned())
                 .collect();
+            // Latin; every other family Latin Extended-A, every fourth Cyrillic.
+            file.parsed.faces[0].code_points = (0x20..0x7F)
+                .chain(0xA0..0x100)
+                .chain((0x100..0x180).filter(|_| i % 2 == 0))
+                .chain((0x400..0x460).filter(|_| i % 4 == 0))
+                .collect();
             files.push(file);
         }
     }
@@ -1086,6 +1083,10 @@ fn time_queries(index: &Index, label: &str) {
                 ..Filters::default()
             },
         ),
+        // E3.8 criterion 3: filtering by language.
+        ("", languages(&["pl"])),
+        ("", languages(&["sr-Latn", "sr-Cyrl", "de"])),
+        ("sans", text("Ђорђе Đorđe ŁĄ")),
     ];
     for (query, filters) in filters {
         filtered(index, query, filters.clone());
@@ -1142,4 +1143,283 @@ fn the_reference_library_searches_in_under_50_ms() {
         .apply_rescan(source, &scanned, &report)
         .expect("persist");
     time_queries(&index, "reference library");
+}
+
+/// The base characters of the embedded preset `code`.
+fn base(code: &str) -> Vec<u32> {
+    crate::charsets::load()
+        .expect("presets")
+        .into_iter()
+        .find(|c| c.code == code)
+        .map(|c| c.base.iter().map(|&ch| u32::from(ch)).collect())
+        .expect("known preset")
+}
+
+fn languages(codes: &[&str]) -> Filters {
+    Filters {
+        supports: Some(Supports::Languages {
+            codes: codes.iter().map(|&c| c.to_owned()).collect(),
+        }),
+        ..Filters::default()
+    }
+}
+
+fn text(text: &str) -> Filters {
+    Filters {
+        supports: Some(Supports::Text { text: text.into() }),
+        ..Filters::default()
+    }
+}
+
+/// A face of `family` mapping `code_points`, with `locl` language systems.
+fn covering(family: &str, style: &str, code_points: Vec<u32>, locl: &[&str]) -> IndexedFile {
+    let weight = if style == "Bold" { 700 } else { 400 };
+    let mut file = single(&f(family, style, weight, 5, false), None, None);
+    let face = &mut file.parsed.faces[0];
+    face.code_points = code_points;
+    face.code_points.sort_unstable();
+    face.code_points.dedup();
+    face.locl_languages = locl.iter().map(|&l| l.to_owned()).collect();
+    file
+}
+
+/// `code_points` without the characters of `drop`.
+fn without(code_points: &[u32], drop: &str) -> Vec<u32> {
+    code_points
+        .iter()
+        .copied()
+        .filter(|&cp| !drop.chars().any(|c| u32::from(c) == cp))
+        .collect()
+}
+
+/// Latin, Serbian Cyrillic and near misses:
+/// - Full: English, Romanian, Serbian Latin and Cyrillic, `locl` for
+///   Serbian and Romanian; its Bold lacks ж;
+/// - Latin: English and Serbian Latin;
+/// - Almost: English and Serbian Cyrillic but ђ and ћ, `locl` for Serbian;
+/// - Five: English but five letters;
+/// - Six: English but six letters.
+fn coverage_library() -> Index {
+    let en = base("en");
+    let sr_latn = base("sr-Latn");
+    let sr_cyrl = base("sr-Cyrl");
+    let all: Vec<u32> = [en.clone(), sr_latn.clone(), sr_cyrl.clone(), base("ro")].concat();
+    let files = vec![
+        covering("Full", "Regular", all.clone(), &["cyrl/SRB", "latn/ROM"]),
+        covering("Full", "Bold", without(&all, "ж"), &[]),
+        covering("Latin", "Regular", [en.clone(), sr_latn].concat(), &[]),
+        covering(
+            "Almost",
+            "Regular",
+            [en.clone(), without(&sr_cyrl, "ђћ")].concat(),
+            &["cyrl/SRB"],
+        ),
+        covering("Five", "Regular", without(&en, "vwxyz"), &[]),
+        covering("Six", "Regular", without(&en, "uvwxyz"), &[]),
+    ];
+    indexed(&files).0
+}
+
+/// Family names with the characters their best face misses.
+fn misses(res: &SearchResponse) -> Vec<(&str, String)> {
+    res.families
+        .iter()
+        .map(|h| {
+            let missing = h
+                .missing
+                .as_ref()
+                .expect("a supports search reports missing");
+            (h.family.name.as_str(), missing.chars.concat())
+        })
+        .collect()
+}
+
+fn full(name: &str) -> (&str, String) {
+    (name, String::new())
+}
+
+#[test]
+fn languages_filter_keeps_faces_that_cover_every_language() {
+    let index = coverage_library();
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
+    assert_eq!(misses(&res), [full("Full"), full("Latin")]);
+    let res = filtered(&index, "", languages(&["sr-Latn", "sr-Cyrl"]));
+    assert_eq!(misses(&res), [full("Full")], "AND: both scripts");
+    assert_eq!(
+        styles(&index, &res, "Full"),
+        ["Regular", "Bold"],
+        "the Bold lacks one letter: a near miss, after the Regular"
+    );
+    let res = filtered(&index, "", languages(&["sr-Cyrl"]));
+    assert_eq!(misses(&res), [full("Full"), ("Almost", "ђћ".to_owned())]);
+    let res = filtered(&index, "almost", languages(&["sr-Cyrl"]));
+    assert_eq!(names(&res), ["Almost"], "text and coverage combine");
+}
+
+#[test]
+fn pasted_text_filters_by_its_characters() {
+    let index = coverage_library();
+    let res = filtered(&index, "", text("Ђорђе ћути\n"));
+    assert_eq!(
+        misses(&res),
+        [full("Full"), ("Almost", "ђћ".to_owned())],
+        "every character once, in code point order; whitespace not asked for"
+    );
+    let res = filtered(&index, "", text("Đorđe ćuti"));
+    assert_eq!(
+        misses(&res),
+        [
+            full("Full"),
+            full("Latin"),
+            ("Almost", "ćĐđ".to_owned()),
+            ("Five", "ćĐđ".to_owned()),
+            ("Six", "ućĐđ".to_owned()),
+        ],
+        "fewest missing first"
+    );
+    assert!(
+        res.families
+            .iter()
+            .all(|h| h.missing.as_ref().is_some_and(|m| !m.has_locl)),
+        "text has no language, so no locl"
+    );
+    let res = filtered(&index, "", text("  \n"));
+    assert_eq!(res.total, 5, "nothing asked for: every family");
+    assert!(res.families.iter().all(|h| h.missing.is_none()));
+}
+
+#[test]
+fn near_misses_list_the_exact_missing_characters() {
+    let index = coverage_library();
+    let res = filtered(&index, "", languages(&["en"]));
+    assert_eq!(
+        misses(&res),
+        [
+            full("Almost"),
+            full("Full"),
+            full("Latin"),
+            ("Five", "vwxyz".to_owned()),
+        ],
+        "complete families first; six missing is not a result"
+    );
+    let res = filtered(&index, "", text("ж"));
+    assert_eq!(
+        styles(&index, &res, "Full"),
+        ["Regular", "Bold"],
+        "best face first"
+    );
+    assert!(misses(&res).contains(&full("Full")), "the Regular has ж");
+    let res = filtered(&index, "", text("жђћ"));
+    assert_eq!(
+        misses(&res),
+        [
+            full("Full"),
+            ("Almost", "ђћ".to_owned()),
+            ("Five", "жђћ".to_owned()),
+            ("Latin", "жђћ".to_owned()),
+            ("Six", "жђћ".to_owned()),
+        ],
+        "a family reports its best face"
+    );
+}
+
+#[test]
+fn locl_is_reported_for_the_chosen_language() {
+    let index = coverage_library();
+    let locl = |filters: Filters| -> Vec<(String, bool)> {
+        filtered(&index, "", filters)
+            .families
+            .iter()
+            .map(|h| {
+                (
+                    h.family.name.clone(),
+                    h.missing.as_ref().is_some_and(|m| m.has_locl),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        locl(languages(&["sr-Cyrl"])),
+        [("Full".to_owned(), true), ("Almost".to_owned(), true)]
+    );
+    assert_eq!(
+        locl(languages(&["sr-Latn"])),
+        [("Full".to_owned(), false), ("Latin".to_owned(), false)],
+        "Serbian locl under cyrl is not Serbian Latin"
+    );
+    let mixed = locl(languages(&["en", "ro"]));
+    assert!(
+        mixed.contains(&("Full".to_owned(), true)),
+        "{mixed:?}: ROM under latn, for one of the languages"
+    );
+}
+
+#[test]
+fn faces_without_stored_coverage_do_not_pass() {
+    let index = coverage_library();
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = NULL WHERE postscript_name = 'Latin-Regular'",
+            [],
+        )
+        .expect("clear");
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
+    assert_eq!(names(&res), ["Full"], "not computed: not proven");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = x'0102' WHERE postscript_name = 'Full-Regular'",
+            [],
+        )
+        .expect("damage");
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
+    assert_eq!(
+        styles(&index, &res, "Full"),
+        ["Bold"],
+        "damaged: not proven"
+    );
+}
+
+#[test]
+fn an_unknown_language_is_refused() {
+    let index = coverage_library();
+    let err = index
+        .search(&SearchRequest {
+            filters: languages(&["en", "xx-Nope"]),
+            ..SearchRequest::default()
+        })
+        .expect_err("unknown preset");
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    assert!(err.message().contains("xx-Nope"));
+}
+
+#[test]
+fn counts_keep_the_supports_filter() {
+    let index = coverage_library();
+    let res = filtered(&index, "", languages(&["sr-Cyrl"]));
+    let counts = res.counts.expect("counts");
+    assert_eq!(
+        counts.weight,
+        [
+            FilterCount {
+                value: 400,
+                count: 2
+            },
+            FilterCount {
+                value: 700,
+                count: 1
+            }
+        ],
+        "Full and Almost pass; Latin, Five and Six are not counted"
+    );
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            weight: Some(WeightRange { min: 650, max: 750 }),
+            ..languages(&["sr-Cyrl"])
+        },
+    );
+    assert_eq!(names(&res), ["Full"]);
 }
