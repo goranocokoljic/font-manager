@@ -74,9 +74,11 @@ unsafe extern "C" {
 struct Cf(CFTypeRef);
 
 impl Cf {
-    /// Takes ownership of `obj`; `None` for NULL.
+    /// Takes ownership of `obj`; `None` for NULL. The `Cf` is built only for
+    /// a non-NULL `obj`: a `Cf(NULL)` would reach `CFRelease(NULL)` on drop,
+    /// which CoreFoundation answers with a trap.
     fn owned(obj: CFTypeRef) -> Option<Self> {
-        (!obj.is_null()).then_some(Self(obj))
+        if obj.is_null() { None } else { Some(Self(obj)) }
     }
 }
 
@@ -177,9 +179,8 @@ fn manager_call(
     // receives an owned CFError or stays NULL.
     let ok = unsafe { call(url.0, scope(mode), &mut err) };
     if ok {
-        if let Some(stray) = Cf::owned(err) {
-            drop(stray);
-        }
+        // Success leaves `err` NULL; release one if CoreText set it anyway.
+        drop(Cf::owned(err));
         Ok(())
     } else {
         Err(take_error(err, what))
@@ -251,5 +252,24 @@ impl Registrar for CoreText {
             }
         }
         Ok(found)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A NULL result must never be released: `CFRelease(NULL)` traps (it did,
+    /// after every successful registration, before `Cf::owned` checked first).
+    #[test]
+    fn a_null_object_is_not_owned_and_not_released() {
+        assert!(Cf::owned(ptr::null()).is_none());
+    }
+
+    #[test]
+    fn a_path_round_trips_through_a_file_url() {
+        let path = Path::new("/tmp/fm font/Schrift-ü.ttf");
+        let url = file_url(path).expect("a file URL");
+        assert_eq!(url_path(url.0).as_deref(), Some(path));
     }
 }
