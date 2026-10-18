@@ -879,6 +879,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fm-bench"
+version = "0.1.0"
+dependencies = [
+ "fm-api",
+ "fm-core",
+ "fm-platform",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fm-cli"
 version = "0.1.0"
 dependencies = [

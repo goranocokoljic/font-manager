@@ -1,6 +1,9 @@
 # Rust
 target/
 
+# bench workflow: the reference library restored from the CI cache
+.cache/
+
 # Node / pnpm
 node_modules/
 dist/
