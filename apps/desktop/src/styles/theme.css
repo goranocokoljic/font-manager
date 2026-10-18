@@ -69,3 +69,21 @@ body {
   background: var(--fm-bg);
   color: var(--fm-fg);
 }
+
+/* Keyboard focus is always visible: a 2 px accent ring on every focusable
+   element (WCAG 2.4.7). Components may draw their own, never none. */
+:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+
+/* The OS reduce-motion setting turns every animation and transition off. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

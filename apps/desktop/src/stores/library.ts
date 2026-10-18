@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, shallowReactive, shallowRef } from 'vue';
-import { useClient, type Unsubscribe } from '../api/client';
-import type { ApiError, Event, FaceSummary, FamilyId, FamilySummary } from '../api/types';
+import { useClient, type FmClient, type Unsubscribe } from '../api/client';
+import type { ApiError, Event, FaceId, FaceSummary, FamilyId, FamilySummary } from '../api/types';
 
 /** Families fetched per `listFamilies` call. */
 const PAGE = 500;
@@ -23,18 +23,25 @@ export const useLibraryStore = defineStore('library', () => {
   let unsubscribe: Promise<Unsubscribe> | undefined;
   /** Bumped by every refresh; answers to an older one are dropped. */
   let generation = 0;
+  /** Bumped by every activation change; answers to an older one are dropped. */
+  let activationRound = 0;
   const pending = new Map<FamilyId, Promise<FaceSummary[]>>();
+
+  async function listAll(client: FmClient): Promise<FamilySummary[]> {
+    const list: FamilySummary[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const page = await client.listFamilies({ page: { offset, limit: PAGE } });
+      list.push(...page.items);
+      if (!page.items.length || list.length >= page.total) break;
+    }
+    return list;
+  }
 
   async function refresh(): Promise<void> {
     const mine = ++generation;
     const client = useClient();
     try {
-      const list: FamilySummary[] = [];
-      for (let offset = 0; ; offset += PAGE) {
-        const page = await client.listFamilies({ page: { offset, limit: PAGE } });
-        list.push(...page.items);
-        if (!page.items.length || list.length >= page.total) break;
-      }
+      const list = await listAll(client);
       if (mine !== generation) return;
       families.value = list;
       faces.clear();
@@ -78,8 +85,37 @@ export const useLibraryStore = defineStore('library', () => {
     return request;
   }
 
+  /**
+   * Faces were activated or deactivated: reloads the family summaries (their
+   * activation state) and the loaded faces of the families concerned, in place,
+   * so expanded families keep their rows and the list keeps its cursor.
+   */
+  async function refreshActivation(changed: readonly FaceId[]): Promise<void> {
+    const mine = generation;
+    const round = ++activationRound;
+    const current = () => mine === generation && round === activationRound;
+    const client = useClient();
+    const ids = new Set(changed);
+    try {
+      const list = await listAll(client);
+      if (!current()) return;
+      families.value = list;
+      const stale = [...faces].filter(([, fs]) => fs.some((f) => ids.has(f.id))).map(([id]) => id);
+      await Promise.all(
+        stale.map(async (id) => {
+          const family = await client.getFamily(id);
+          if (current()) faces.set(id, family.faces);
+        }),
+      );
+    } catch {
+      // The list keeps the state it had; the next refresh brings it up to date.
+    }
+  }
+
   function onEvent(event: Event): void {
     if (event.type === 'libraryChanged' || event.type === 'scanFinished') void refresh();
+    else if (event.type === 'activationChanged')
+      void refreshActivation([...event.activated, ...event.deactivated]);
   }
 
   /** Subscribes to library changes (once) and loads the families. */

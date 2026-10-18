@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mockFaces } from '../api/mock';
 import type { FaceSummary, FamilySummary } from '../api/types';
-import { faceKey, familyKey, flattenRows } from './rows';
+import { faceKey, familyKey, flattenRows, rowLabel, type FaceRow, type FamilyRow } from './rows';
 
 const family = (id: number, name: string): FamilySummary => ({
   id,
@@ -57,5 +57,37 @@ describe('flattenRows', () => {
   it('shows an expanded family alone until its styles have loaded', () => {
     const rows = flattenRows(families, new Set([1]), () => undefined);
     expect(rows).toHaveLength(3);
+  });
+});
+
+describe('rowLabel', () => {
+  const familyRow = (styleCount: number, activation: FamilySummary['activation']): FamilyRow => ({
+    kind: 'family',
+    key: familyKey(7),
+    family: { ...family(7, 'Quartz Sans'), styleCount, activation },
+    position: 1,
+    expanded: false,
+  });
+  const faceRow = (active: FaceSummary['active']): FaceRow => ({
+    kind: 'face',
+    key: faceKey(70),
+    face: { ...face(70, 7, 'Semibold Italic'), familyName: 'Quartz Sans', active },
+    family: family(7, 'Quartz Sans'),
+    position: 1,
+    count: 1,
+  });
+
+  it('announces a family, its style count and its activation state', () => {
+    expect(rowLabel(familyRow(4, 'inactive'))).toBe('Quartz Sans, 4 styles, not active');
+    expect(rowLabel(familyRow(1, 'partial'))).toBe('Quartz Sans, 1 style, partly active');
+    expect(rowLabel(familyRow(2, 'active'))).toBe('Quartz Sans, 2 styles, active');
+  });
+
+  it('announces a style with its family and how it is active', () => {
+    expect(rowLabel(faceRow(null))).toBe('Quartz Sans Semibold Italic, not active');
+    expect(rowLabel(faceRow('session'))).toBe(
+      'Quartz Sans Semibold Italic, active for this session',
+    );
+    expect(rowLabel(faceRow('permanent'))).toBe('Quartz Sans Semibold Italic, active permanently');
   });
 });

@@ -85,6 +85,10 @@ function onKeyDown(e: KeyboardEvent): void {
 .divider:hover,
 .divider:focus-visible {
   background: var(--fm-accent);
+}
+/* The ring is the hairline widened to 3 px, so it stays between the panes. */
+.divider:focus-visible {
   outline: none;
+  box-shadow: 0 0 0 1px var(--fm-accent);
 }
 </style>

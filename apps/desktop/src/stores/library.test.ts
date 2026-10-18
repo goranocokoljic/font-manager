@@ -79,6 +79,29 @@ describe('library store', () => {
     await store.stop();
   });
 
+  it('updates activation state in place when faces are activated', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const family = store.families[0]!;
+    const before = await store.facesOf(family.id);
+    expect(family.activation).toBe('inactive');
+    const face = before[0]!;
+    const getFamily = vi.spyOn(client, 'getFamily');
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'permanent' });
+    await vi.waitFor(() =>
+      expect(store.faces.get(family.id)?.find((f) => f.id === face.id)?.active).toBe('permanent'),
+    );
+    expect(store.families[0]!.activation).not.toBe('inactive');
+    // Only the family holding the face is fetched again; other cached faces stay.
+    expect(getFamily.mock.calls.map(([id]) => id)).toEqual([family.id]);
+    await client.deactivate({ target: { kind: 'faces', faces: [face.id] } });
+    await vi.waitFor(() => expect(store.families[0]!.activation).toBe('inactive'));
+    expect(store.faces.get(family.id)?.find((f) => f.id === face.id)?.active).toBeNull();
+    await store.stop();
+  });
+
   it('keeps the error of a failed load', async () => {
     client = createMockClient();
     client.listFamilies = () =>
