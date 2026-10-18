@@ -1220,4 +1220,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 3, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 4, patch: 0 };
