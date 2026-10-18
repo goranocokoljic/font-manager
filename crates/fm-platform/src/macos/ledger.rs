@@ -24,11 +24,21 @@ pub(crate) struct Ledger {
 }
 
 impl Ledger {
-    /// Reads the ledger at `file`; a missing file is an empty ledger.
+    /// Reads the ledger at `file`; a missing file is an empty ledger. A
+    /// parent that is a file means the ledger is missing too: Unix says "not
+    /// a directory" where Windows says "not found", and both must read the
+    /// same (saving there fails later, per face).
     pub(crate) fn load(file: &Path) -> io::Result<Self> {
         match std::fs::read(file) {
             Ok(bytes) => Ok(Self::parse(&bytes)),
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                ) =>
+            {
+                Ok(Self::default())
+            }
             Err(e) => Err(e),
         }
     }
@@ -145,6 +155,19 @@ mod tests {
     fn a_missing_file_is_an_empty_ledger() {
         let (file, _) = scratch_file();
         assert_eq!(Ledger::load(&file).expect("loads"), Ledger::default());
+    }
+
+    #[test]
+    fn a_ledger_under_a_file_is_empty_on_every_os() {
+        let (_, dir) = scratch_file();
+        let _ = std::fs::create_dir_all(&dir);
+        let blocker = dir.join("blocker");
+        let _ = std::fs::write(&blocker, b"");
+        let loaded = Ledger::load(&blocker.join(LEDGER_FILE));
+        let saved = Ledger::default().save(&blocker.join(LEDGER_FILE));
+        let _ = std::fs::remove_dir_all(dir);
+        assert_eq!(loaded.expect("loads"), Ledger::default());
+        assert!(saved.is_err());
     }
 
     #[test]
