@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, OSES, failures, median, merge, metric, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
+  BUDGETS, OSES, SCAN_FILES, failures, firstScan, median, merge, metric, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
 
@@ -54,6 +54,44 @@ describe('metric', () => {
 
   test('an unknown metric is an error', () => {
     assert.throws(() => metric('fps', 1), /unknown metric/);
+  });
+});
+
+describe('first scan per 10,000 files', () => {
+  test('the measured time is scaled to the budgeted library size', () => {
+    assert.equal(SCAN_FILES, 10000);
+    // The first bench run (E9.1): macOS, 15,329 files in 22.4 s.
+    const m = firstScan(22438.5, 15329);
+    assert.equal(m.value, 14637.9);
+    assert.equal(m.pass, false);
+    assert.equal(m.target, BUDGETS.first_scan.target);
+    assert.equal(m.files, 15329);
+    assert.equal(m.measured_ms, 22438.5);
+    assert.equal(m.note, '15329 files in 22.4 s, scaled to 10,000 files');
+  });
+
+  test('a library of exactly 10,000 files keeps its time', () => {
+    const m = firstScan(9999, 10000);
+    assert.equal(m.value, 9999);
+    assert.equal(m.pass, true);
+  });
+
+  test('a smaller library is scaled up, so the budget compares like with like', () => {
+    const m = firstScan(1000, 2500);
+    assert.equal(m.value, 4000);
+    assert.equal(m.files, 2500);
+  });
+
+  test('no files is not measured, never a pass', () => {
+    const m = firstScan(12, 0);
+    assert.equal(m.value, null);
+    assert.equal(m.pass, null);
+    assert.match(m.note, /no font files/);
+  });
+
+  test('the terminal table shows the file count next to the scaled time', () => {
+    const table = renderTable({ metrics: { first_scan: firstScan(4407.3, 15329) } });
+    assert.match(table, /first_scan\s+2875\.1 ms\s+<= 10000 ms\s+ok \(15329 files in 4\.4 s, scaled to 10,000 files\)/);
   });
 });
 
@@ -192,8 +230,13 @@ describe('bench.sh end to end', () => {
     try {
       const r = spawnSync(bash, [join(ROOT, 'scripts', 'bench.sh'), '--library', join(ROOT, 'fixtures', 'fonts'),
         '--bin', bin, '--out', out, '--runs', '2', '--rounds', '2', '--settle-ms', '200'], { encoding: 'utf8' });
-      assert.equal(r.status, 0, r.stdout + r.stderr);
+      // 200 fixtures scaled to 10,000 files on a debug build mostly measure
+      // the fixed start-up cost: first_scan alone may go over on a slow
+      // runner. Any other metric over budget, or a setup error, still fails.
+      assert.ok([0, 1].includes(r.status), r.stdout + r.stderr);
       const rep = JSON.parse(readFileSync(out, 'utf8'));
+      assert.deepEqual(failures(rep.metrics).filter((m) => m !== 'first_scan'), [], r.stdout);
+      assert.equal(r.status, failures(rep.metrics).length ? 1 : 0, 'the exit code follows the report');
       assert.equal(rep.os, osName());
       assert.ok(rep.library.files >= 150, JSON.stringify(rep.library));
       assert.deepEqual(Object.keys(rep.metrics).sort(), Object.keys(BUDGETS).sort());
@@ -201,6 +244,8 @@ describe('bench.sh end to end', () => {
         assert.ok(rep.metrics[name].value > 0, `${name}: ${JSON.stringify(rep.metrics[name])}`);
       }
       assert.equal(rep.metrics.activation_100.value, null);
+      assert.equal(rep.metrics.first_scan.files, rep.library.files, 'the scaled time names its file count');
+      assert.equal(rep.metrics.first_scan.measured_ms, Math.round(rep.detail.scan.ms * 10) / 10);
       assert.equal(rep.detail.cold_start_runs.length, 2);
       assert.equal(rep.detail.incremental.added, 0, 'the rescan reads nothing new');
       assert.ok(existsSync(join(ROOT, 'fixtures', 'fonts', 'manifest.tsv')), 'the library is left in place');

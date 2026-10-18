@@ -17,6 +17,10 @@
 //!   [`Rescan::failed`]. Its old size and time stay, so the next rescan tries
 //!   it again.
 //!
+//! The files to read are read, hashed and parsed on all cores; the results
+//! are applied in discovery order, so a rescan gives the same index and the
+//! same [`Rescan`] lists as a one-thread loop (E2.8).
+//!
 //! [`FileIndex::refresh`] applies the same rules to only the paths a watcher
 //! event names, so one changed file does not walk the whole source folder.
 
@@ -27,6 +31,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::parallel::map_ordered;
 use crate::parser::{ParsedFile, parse};
 use crate::scanner::discovery::is_hidden;
 use crate::scanner::{Discovery, FoundFile, Unreadable, discover, is_font_file};
@@ -176,11 +181,25 @@ impl FileIndex {
     ) -> Rescan {
         let mut out = Rescan::default();
         let mut found = HashSet::with_capacity(discovery.files.len());
+        let mut done = 0;
 
-        for (i, file) in discovery.files.iter().enumerate() {
+        // Unchanged files first, on this thread; then every file to read,
+        // read, hashed and parsed on all cores, applied in discovery order.
+        let mut to_read = Vec::new();
+        for file in &discovery.files {
             found.insert(file.path.as_path());
-            self.update(file, &mut out);
-            progress(i + 1);
+            if self.skip_unchanged(file, &mut out) {
+                done += 1;
+                progress(done);
+            } else {
+                to_read.push(file);
+            }
+        }
+        let read = map_ordered(&to_read, |file| hash_and_parse(&file.path), &mut |n| {
+            progress(done + n)
+        });
+        for (file, result) in to_read.into_iter().zip(read) {
+            self.store(file, result, &mut out);
         }
 
         for entry in self.files.values_mut() {
@@ -268,15 +287,34 @@ impl FileIndex {
 
     /// Reads `file` again unless its entry has the same size and time.
     fn update(&mut self, file: &FoundFile, out: &mut Rescan) {
-        if let Some(previous) = self.files.get_mut(&file.path)
-            && previous.same_stamp(file)
-        {
-            previous.gone = false;
-            out.unchanged.push(file.path.clone());
-            return;
+        if !self.skip_unchanged(file, out) {
+            self.store(file, hash_and_parse(&file.path), out);
         }
+    }
+
+    /// Whether `file` has an entry with the same size and time; if so, the
+    /// entry is found again and listed as unchanged.
+    fn skip_unchanged(&mut self, file: &FoundFile, out: &mut Rescan) -> bool {
+        match self.files.get_mut(&file.path) {
+            Some(previous) if previous.same_stamp(file) => {
+                previous.gone = false;
+                out.unchanged.push(file.path.clone());
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Stores what reading `file` gave: a new or replaced entry, or a failure
+    /// that keeps the previous entry.
+    fn store(
+        &mut self,
+        file: &FoundFile,
+        read: FmResult<(FileHash, ParsedFile)>,
+        out: &mut Rescan,
+    ) {
         let known = self.files.contains_key(&file.path);
-        match hash_and_parse(&file.path) {
+        match read {
             Ok((hash, parsed)) => {
                 self.insert(IndexedFile {
                     path: file.path.clone(),
