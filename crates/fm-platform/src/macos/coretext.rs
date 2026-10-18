@@ -266,6 +266,14 @@ mod tests {
         assert!(Cf::owned(ptr::null()).is_none());
     }
 
+    /// Criterion 1: session mode is `kCTFontManagerScopeSession` (3),
+    /// permanent mode is `kCTFontManagerScopeUser` (2, `.persistent`).
+    #[test]
+    fn each_mode_registers_in_its_own_coretext_scope() {
+        assert_eq!(scope(Mode::Session), 3);
+        assert_eq!(scope(Mode::Permanent), 2);
+    }
+
     #[test]
     fn a_path_round_trips_through_a_file_url() {
         let path = Path::new("/tmp/fm font/Schrift-ü.ttf");

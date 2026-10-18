@@ -16,7 +16,8 @@
 #![allow(unsafe_code, clippy::expect_used, clippy::panic)]
 
 use std::ffi::{c_char, c_void};
-use std::path::PathBuf;
+use std::os::unix::ffi::OsStrExt;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -38,11 +39,60 @@ unsafe extern "C" {
     fn CFStringGetLength(s: CFTypeRef) -> isize;
     fn CFStringGetMaximumSizeForEncoding(length: isize, encoding: u32) -> isize;
     fn CFStringGetCString(s: CFTypeRef, buffer: *mut c_char, size: isize, encoding: u32) -> u8;
+    fn CFURLCreateFromFileSystemRepresentation(
+        allocator: CFTypeRef,
+        buffer: *const u8,
+        len: isize,
+        is_directory: u8,
+    ) -> CFTypeRef;
+    fn CFErrorGetCode(err: CFTypeRef) -> isize;
 }
 
 #[link(name = "CoreText", kind = "framework")]
 unsafe extern "C" {
     fn CTFontManagerCopyAvailableFontFamilyNames() -> CFTypeRef;
+    fn CTFontManagerUnregisterFontsForURL(
+        url: CFTypeRef,
+        scope: u32,
+        error: *mut CFTypeRef,
+    ) -> bool;
+}
+
+/// `kCTFontManagerScopeUser` and `kCTFontManagerScopeSession`.
+const SCOPE_USER: u32 = 2;
+const SCOPE_SESSION: u32 = 3;
+/// `kCTFontManagerErrorNotRegistered`.
+const NOT_REGISTERED: isize = 201;
+
+/// Asks CoreText directly to unregister `path` from `scope` and returns the
+/// error code, or 0 on success. Used on the scope the activator did NOT use:
+/// CoreText answers "not registered" there only if the activator registered
+/// the file in the other scope.
+fn unregister_code(path: &Path, scope: u32) -> isize {
+    let bytes = path.as_os_str().as_bytes();
+    // SAFETY: `bytes` lives through the call; the URL and the error are
+    // Create results released below; `err` is a local out pointer.
+    unsafe {
+        let url = CFURLCreateFromFileSystemRepresentation(
+            std::ptr::null(),
+            bytes.as_ptr(),
+            isize::try_from(bytes.len()).expect("path length"),
+            0,
+        );
+        assert!(!url.is_null(), "file URL for {}", path.display());
+        let mut err: CFTypeRef = std::ptr::null();
+        let ok = CTFontManagerUnregisterFontsForURL(url, scope, &mut err);
+        CFRelease(url);
+        let code = if err.is_null() {
+            0
+        } else {
+            CFErrorGetCode(err)
+        };
+        if !err.is_null() {
+            CFRelease(err);
+        }
+        if ok { 0 } else { code }
+    }
 }
 
 /// CoreText's answer, in this process, to "is `family` available?".
@@ -184,6 +234,12 @@ fn permanent_activation_is_seen_by_a_second_process_until_deactivated() {
         second_process_agrees(family, true),
         "a second process does not find {family} through CoreText"
     );
+    // Criterion 1: the registration is in the user scope, not the session one.
+    assert_eq!(
+        unregister_code(&reg.path, SCOPE_SESSION),
+        NOT_REGISTERED,
+        "a permanent activation must not be in the session scope"
+    );
 
     let outcomes = activator.deactivate(&[reg]).expect("activator works");
     assert_eq!(outcomes[0].status, OutcomeStatus::Deactivated);
@@ -211,6 +267,12 @@ fn session_activation_is_seen_by_a_second_process_and_gone_after_clear_session()
     assert!(
         second_process_agrees(family, true),
         "a second process does not find {family} through CoreText"
+    );
+    // Criterion 1: the registration is in the session scope, not the user one.
+    assert_eq!(
+        unregister_code(&reg.path, SCOPE_USER),
+        NOT_REGISTERED,
+        "a session activation must not be in the user scope"
     );
 
     // A fresh activator stands for quit, or for the next start after a crash.
