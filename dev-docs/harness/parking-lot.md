@@ -65,3 +65,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E8.1 #86] apps/desktop/e2e/search.spec.ts:127 — the "80 ms debounce plus under 50 ms" e2e timing check failed twice on the macOS runner (263.9 ms, 188.4 ms vs < 164 ms) with no code change since a green run; it measures runner load in browser mode, not fm-core search.
 - [E9.3 #91] apps/desktop/src-tauri/tauri.conf.json:22 — `bundle.windows.wix` is at the Tauri default, a per-machine MSI that asks for UAC at install time (NSIS is currentUser); a packaging story could record the MSI install scope in an ADR.
 - [E9.3 #91] .github/workflows/nightly.yml:85 — macos-latest builds arm64 only, so Intel Macs get no nightly; the criteria do not ask for per-arch builds.
+- [E2.8 #257] crates/fm-core/src/scanner/job.rs:113 — the `fm-scan` thread holds the `FileIndex` mutex for the whole scan, so a long first scan blocks every index reader.
+- [E2.8 #257] scripts/bench/lib.mjs:138 — the trend's Previous/Change columns compare the per-10,000-files `first_scan` with older raw-ms nightly values until those runs leave the history window.
