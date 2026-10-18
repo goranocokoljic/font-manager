@@ -97,6 +97,21 @@ describe('collections sidebar', () => {
     expect(names()).toEqual(['0:Marque', '0:Acme']);
   });
 
+  it('nests an existing collection with the In button, no drag needed', async () => {
+    const w = await mountSidebar();
+    // The first collection has no sibling above it to go into.
+    expect(w.find('button[aria-label="Move Clients into the collection above"]').exists()).toBe(
+      false,
+    );
+    await w.get('button[aria-label="Move Brand into the collection above"]').trigger('click');
+    await flushPromises();
+    expect(names()).toEqual(['0:Clients', '1:Brand']);
+    // In and Out undo each other.
+    await w.get('button[aria-label="Move Brand out of its parent"]').trigger('click');
+    await flushPromises();
+    expect(names()).toEqual(['0:Clients', '0:Brand']);
+  });
+
   it('nests or reorders a collection dragged onto another', async () => {
     const w = await mountSidebar();
     const dataTransfer = transfer();

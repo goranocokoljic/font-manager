@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // The Collections group of the sidebar: every manual and smart collection as a
 // tree, with its face count. Click one to show it in the list. Make, rename,
-// nest, reorder and delete them with the row buttons or by dragging a
+// nest (In, Out), reorder (Up, Down) and delete them with the row buttons or by dragging a
 // collection onto another (top or bottom edge: before or after it; middle:
 // inside it). Drop fonts from the list on a collection to add them; the
 // palette has an "Add selected fonts to …" command per collection. The row
@@ -55,6 +55,20 @@ function shift(row: CollectionRow, by: number): void {
   void store.move(row.collection.id, row.collection.parent, row.position + by);
 }
 
+/** The number of collections directly inside `id`. */
+function childCount(id: CollectionId): number {
+  return store.rows.filter((r) => r.collection.parent === id).length;
+}
+
+/** Nests a collection inside the sibling above it, as its last child (the keyboard's nest). */
+function moveIn(row: CollectionRow): void {
+  const above = store.rows.find(
+    (r) => r.collection.parent === row.collection.parent && r.position === row.position - 1,
+  );
+  if (!above) return;
+  void store.move(row.collection.id, above.collection.id, childCount(above.collection.id));
+}
+
 /** Moves a nested collection out, right after its parent. */
 function moveOut(row: CollectionRow): void {
   const parent = row.collection.parent == null ? undefined : rowOf(row.collection.parent);
@@ -103,8 +117,7 @@ function onDrop(row: CollectionRow, e: DragEvent): void {
   const src = id == null ? undefined : rowOf(id);
   if (!src || id === row.collection.id) return;
   if (zone === 'inside') {
-    const children = store.rows.filter((r) => r.collection.parent === row.collection.id).length;
-    void store.move(id!, row.collection.id, children);
+    void store.move(id!, row.collection.id, childCount(row.collection.id));
     return;
   }
   // The API places it among the siblings without itself.
@@ -263,6 +276,15 @@ function countLabel(n: number): string {
               @click="shift(row, 1)"
             >
               Down
+            </button>
+            <button
+              v-if="row.position > 0"
+              type="button"
+              :aria-label="`Move ${row.collection.name} into the collection above`"
+              title="Nest it inside the collection above"
+              @click="moveIn(row)"
+            >
+              In
             </button>
             <button
               v-if="row.collection.parent != null"

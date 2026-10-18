@@ -40,6 +40,14 @@ test('collections are made, renamed, nested, reordered and deleted', async ({ pa
   await expect(order).toHaveText([/Marque/, /Clients/]);
 
   await open(page, 'Clients');
+  // Nest again from the keyboard: In puts Clients inside Marque, the collection above it.
+  const into = row(page, 'Clients').getByRole('button', {
+    name: 'Move Clients into the collection above',
+  });
+  await into.focus();
+  await page.keyboard.press('Enter');
+  await expect(row(page, 'Clients')).toHaveAttribute('data-depth', '1');
+  await open(page, 'Clients');
   await row(page, 'Clients').getByRole('button', { name: 'Delete Clients' }).click();
   await expect(row(page, 'Clients')).toHaveCount(0);
 });
