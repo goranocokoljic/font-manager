@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { ref, shallowReactive, shallowRef } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
-import type { ApiError, Event, FaceSummary, FamilyId, FamilySummary } from '../api/types';
+import type {
+  ApiError,
+  Event,
+  FaceSummary,
+  FamilyId,
+  FamilyOrder,
+  FamilySummary,
+} from '../api/types';
 
 /** Families fetched per `listFamilies` call. */
 const PAGE = 500;
@@ -10,7 +17,8 @@ const PAGE = 500;
  * The families of the library, in the API's order, and the faces of the families
  * the list has needed so far. Only family summaries load up front; the faces of a
  * family are fetched when its row comes on screen or it is expanded, so 10,000
- * families cost 20 requests, not 10,000.
+ * families cost 20 requests, not 10,000. `order` is the API order the families
+ * come in (the detail list's sort column); `null` is the API's default.
  */
 export const useLibraryStore = defineStore('library', () => {
   const families = shallowRef<FamilySummary[]>([]);
@@ -20,32 +28,62 @@ export const useLibraryStore = defineStore('library', () => {
   const failed = shallowReactive(new Set<FamilyId>());
   const loaded = ref(false);
   const error = ref<ApiError | null>(null);
+  const order = shallowRef<FamilyOrder | null>(null);
   let unsubscribe: Promise<Unsubscribe> | undefined;
-  /** Bumped by every refresh; answers to an older one are dropped. */
+  /** Bumped by every refresh; face answers to an older one are dropped. */
   let generation = 0;
+  /** Bumped by every family list request; answers to an older one are dropped. */
+  let listGeneration = 0;
+  /** The library changed: the next family list that arrives also forgets the faces. */
+  let facesStale = false;
   const pending = new Map<FamilyId, Promise<FaceSummary[]>>();
 
-  async function refresh(): Promise<void> {
-    const mine = ++generation;
+  /**
+   * Fetches the family list in the current order. After a library change it also
+   * forgets the faces; a new order alone keeps them, the families did not change.
+   */
+  async function fetchFamilies(): Promise<void> {
+    const mine = ++listGeneration;
     const client = useClient();
+    const by = order.value;
     try {
       const list: FamilySummary[] = [];
       for (let offset = 0; ; offset += PAGE) {
-        const page = await client.listFamilies({ page: { offset, limit: PAGE } });
+        const page = await client.listFamilies({
+          page: { offset, limit: PAGE },
+          ...(by ? { order: by } : {}),
+        });
         list.push(...page.items);
         if (!page.items.length || list.length >= page.total) break;
       }
-      if (mine !== generation) return;
+      if (mine !== listGeneration) return;
       families.value = list;
-      faces.clear();
-      failed.clear();
-      pending.clear();
+      if (facesStale) {
+        facesStale = false;
+        faces.clear();
+        failed.clear();
+        pending.clear();
+      }
       error.value = null;
     } catch (e) {
-      if (mine === generation) error.value = e as ApiError;
+      if (mine === listGeneration) error.value = e as ApiError;
     } finally {
-      if (mine === generation) loaded.value = true;
+      if (mine === listGeneration) loaded.value = true;
     }
+  }
+
+  async function refresh(): Promise<void> {
+    generation += 1;
+    facesStale = true;
+    await fetchFamilies();
+  }
+
+  /** Orders the families by `next`; fetches them again once the store has loaded. */
+  async function setOrder(next: FamilyOrder | null): Promise<void> {
+    const now = order.value;
+    if (now?.by === next?.by && !!now?.descending === !!next?.descending) return;
+    order.value = next;
+    if (unsubscribe) await fetchFamilies();
   }
 
   /** The faces of a family, fetched once (per library version) however often it is asked. */
@@ -96,5 +134,17 @@ export const useLibraryStore = defineStore('library', () => {
     (await pending?.catch(() => undefined))?.();
   }
 
-  return { families, faces, failed, loaded, error, facesOf, load, stop, refresh };
+  return {
+    families,
+    faces,
+    failed,
+    loaded,
+    error,
+    order,
+    facesOf,
+    load,
+    stop,
+    refresh,
+    setOrder,
+  };
 });

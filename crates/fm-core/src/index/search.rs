@@ -271,6 +271,16 @@ fn summary(faces: &[&Row]) -> FamilySummary {
             .filter_map(|f| f.added.clone())
             .min()
             .unwrap_or_default(),
+        // The search rows do not carry these yet; the detail list reads
+        // `list_families`, which fills them.
+        styles: Vec::new(),
+        weight_range: None,
+        is_color: false,
+        version: None,
+        location: None,
+        open_license: None,
+        declared_license: None,
+        tags: Vec::new(),
     }
 }
 
