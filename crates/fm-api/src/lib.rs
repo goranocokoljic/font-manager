@@ -141,6 +141,8 @@ pub fn types() -> specta::Types {
         preview::PreviewRequest,
         preview::PreviewImage,
         preview::FontSource,
+        preview::SampleTextRequest,
+        preview::SampleText,
         // activation
         activation::ActivateRequest,
         activation::DeactivateRequest,

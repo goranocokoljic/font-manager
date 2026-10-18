@@ -20,6 +20,8 @@ import type {
   JobId,
   ListFamiliesRequest,
   Paged,
+  SampleText,
+  SampleTextRequest,
   ScanRequest,
   SetSourcePausedRequest,
   Settings,
@@ -48,6 +50,8 @@ export interface FmClient {
   getFamily(family: FamilyId): Promise<Family>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
+  /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
+  sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   listSources(): Promise<Source[]>;
@@ -71,6 +75,7 @@ export const tauriClient: FmClient = {
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
+  sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listSources: () => invoke<Source[]>('list_sources'),

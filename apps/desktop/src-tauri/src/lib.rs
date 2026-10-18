@@ -12,7 +12,7 @@ use fm_api::library::{
     SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
-use fm_api::preview::PreviewService;
+use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, ErrorCode, FaceId, FamilyId, JobId, SettingsService, SourceId,
@@ -174,6 +174,14 @@ async fn list_families(
 
 /// One family with its faces.
 #[tauri::command]
+async fn sample_texts(
+    state: State<'_, AppState>,
+    req: SampleTextRequest,
+) -> ApiResult<Vec<SampleText>> {
+    call(&state, move |api| api.sample_texts(req)).await
+}
+
+#[tauri::command]
 async fn get_family(state: State<'_, AppState>, family: FamilyId) -> ApiResult<Family> {
     call(&state, move |api| api.get_family(family)).await
 }
@@ -285,6 +293,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_face,
             list_families,
             get_family,
+            sample_texts,
             activate,
             deactivate,
             list_sources,

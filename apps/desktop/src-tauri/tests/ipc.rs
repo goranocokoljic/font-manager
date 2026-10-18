@@ -12,6 +12,7 @@ use fm_api::library::{
     SourceKind,
 };
 use fm_api::mock::MockApi;
+use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SettingsService, SourceId};
 use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
@@ -133,6 +134,24 @@ fn families_round_trip_through_fm_api() {
         .unwrap()
         .unwrap_err();
     assert_eq!(err["code"], "notFound", "{err}");
+}
+
+#[test]
+fn sample_texts_round_trip_through_fm_api() {
+    let req = SampleTextRequest {
+        faces: vec![FaceId(1), FaceId(7)],
+        text: "Źdźbło".into(),
+    };
+    let got: Vec<SampleText> = invoke_with(
+        "sample_texts",
+        serde_json::json!({ "req": { "faces": [1, 7], "text": "Źdźbło" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(got, MockApi::new().sample_texts(req).unwrap());
+    assert!(got[1].fallback.is_some(), "{got:?}");
 }
 
 #[test]

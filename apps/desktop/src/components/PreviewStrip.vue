@@ -1,11 +1,13 @@
 <script setup lang="ts">
 // The preview strip above the detail list: the family (or style) under the
 // cursor in the view's sample text, at the toolbar size until the strip's own
-// size slider moves; "Use toolbar size" follows the toolbar again.
-import { computed, useId } from 'vue';
+// size slider moves; "Use toolbar size" follows the toolbar again. A face that
+// lacks characters of the sample shows the API's fallback text, like the list.
+import { computed, useId, watchEffect } from 'vue';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { SIZE, type PreviewSettings } from '../stores/preview';
+import { useSamplesStore } from '../stores/samples';
 import { useViewsStore } from '../stores/views';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -13,11 +15,17 @@ const props = defineProps<{ view: string; preview: PreviewSettings }>();
 
 const list = useFontListStore();
 const views = useViewsStore();
+const samples = useSamplesStore();
 const uid = useId();
 
 const own = computed(() => views.tableFor(props.view).stripSizePx);
 const sizePx = computed(() => own.value ?? props.preview.sizePx);
 const face = computed(() => list.cursorFace);
+const sample = computed(() => (face.value ? sampleText(props.preview, face.value) : ''));
+const answer = computed(() => (face.value ? samples.get(face.value.id, sample.value) : undefined));
+watchEffect(() => {
+  if (face.value) samples.want(face.value.id, sample.value);
+});
 const label = computed(() => {
   const row = list.cursorRow;
   if (!row) return '';
@@ -62,7 +70,9 @@ function onInput(e: Event): void {
       class="sample"
       :face="face"
       :label="label"
-      :text="sampleText(preview, face)"
+      :text="answer?.text ?? sample"
+      :fallback="answer?.fallback ?? null"
+      :missing="answer?.missing ?? []"
       :size-px="sizePx"
       :line-height="preview.lineHeight"
       :tracking-em="preview.trackingEm"

@@ -18,6 +18,7 @@ import { rowLabel, styleCount, type ListRow } from '../list/rows';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
+import { useSamplesStore } from '../stores/samples';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -41,6 +42,7 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const library = useLibraryStore();
+const samples = useSamplesStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
 
@@ -87,16 +89,27 @@ const visible = computed(() =>
   list.rows.slice(range.value.start, range.value.end).map((row, i) => {
     const index = range.value.start + i;
     const face = row.kind === 'face' ? row.face : library.faces.get(row.family.id)?.[0];
+    const sample = face ? sampleText(props.preview, face) : '';
+    // The API's answer: the sample, or a fallback when the face lacks some of it.
+    const got = face ? samples.get(face.id, sample) : undefined;
     return {
       row,
       index,
       slot: index % pool.value,
       id: rowId(row),
       face,
-      text: face ? sampleText(props.preview, face) : '',
+      sample,
+      text: got?.text ?? sample,
+      fallback: got?.fallback ?? null,
+      missing: got?.missing ?? [],
     };
   }),
 );
+
+// Ask for the preview text of the faces on screen (one call per tick).
+watchEffect(() => {
+  for (const item of visible.value) if (item.face) samples.want(item.face.id, item.sample);
+});
 
 // Family rows preview their first face: fetch the faces of the rendered rows and
 // of one pool beyond each edge, so rows scrolled in already have them and their
@@ -209,6 +222,8 @@ function onToggle(row: ListRow): void {
           :tracking-em="preview.trackingEm"
           :align="preview.align"
           :color="preview.textColor"
+          :fallback="item.fallback"
+          :missing="item.missing"
         >
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>

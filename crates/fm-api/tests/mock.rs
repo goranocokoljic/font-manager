@@ -19,7 +19,7 @@ use fm_api::organization::{
     CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, TagFacesRequest,
     UserMetaUpdate,
 };
-use fm_api::preview::PreviewRequest;
+use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
 use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, SourceId};
@@ -681,4 +681,41 @@ fn families_sort_by_any_detail_list_column() {
         })
         .unwrap();
     assert_eq!(page.items[0].name, "Inter");
+}
+
+#[test]
+fn sample_texts_fall_back_to_the_faces_own_script() {
+    let api = api();
+    let ask = |faces: &[u32], text: &str| {
+        api.sample_texts(SampleTextRequest {
+            faces: faces.iter().map(|&f| FaceId(f)).collect(),
+            text: text.into(),
+        })
+        .expect("samples")
+    };
+    // Face 1 maps Latin, Latin Extended and Cyrillic; face 7 only Latin.
+    let got = ask(&[1, 7], "Źdźbło trawy");
+    assert_eq!(got[0].text, "Źdźbło trawy");
+    assert_eq!(got[0].fallback, None);
+    assert_eq!(got[1].face, FaceId(7));
+    assert_eq!(got[1].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(
+        got[1].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert_eq!(got[1].missing, ["Ź", "ź", "ł"]);
+    let got = ask(&[7], "The quick fox");
+    assert_eq!(
+        (got[0].text.as_str(), &got[0].fallback),
+        ("The quick fox", &None)
+    );
+    let err = api
+        .sample_texts(SampleTextRequest {
+            faces: vec![FaceId(999)],
+            text: "a".into(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }

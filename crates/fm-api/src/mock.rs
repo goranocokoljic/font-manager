@@ -32,7 +32,9 @@ use crate::organization::{
     ImportSetResponse, ProjectSet, RenameCollectionRequest, SetEntry, SetExport, Tag,
     TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
-use crate::preview::{FontSource, PreviewImage, PreviewRequest};
+use crate::preview::{
+    FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
+};
 use crate::search::{
     CoverageReport, CoverageRequest, FamilyHit, Filters, LanguageCoverage, LanguagePreset, Missing,
     SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange,
@@ -1083,6 +1085,85 @@ impl PreviewService for MockApi {
             collection_index: f.detail.collection_index,
             hash: f.detail.hash.clone(),
         })
+    }
+
+    /// The core's rule (`fm_core::sample`) on the mock's languages: the
+    /// sample when the face maps it, else lower-case letters of the complete
+    /// language whose script the face maps most, else its own characters.
+    fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
+        let st = self.state();
+        req.faces
+            .iter()
+            .map(|&id| {
+                let f = st.face(id)?;
+                let mut missing: Vec<String> = Vec::new();
+                for c in req.text.chars() {
+                    let s = c.to_string();
+                    if !c.is_whitespace()
+                        && !c.is_control()
+                        && !f.chars.contains(&c)
+                        && !missing.contains(&s)
+                    {
+                        missing.push(s);
+                    }
+                }
+                if missing.is_empty() {
+                    return Ok(SampleText {
+                        face: id,
+                        text: req.text.clone(),
+                        fallback: None,
+                        missing,
+                    });
+                }
+                let mut best: Option<(usize, &str, &str)> = None;
+                for (_, _, script, chars) in LANGUAGES {
+                    if !chars.chars().all(|c| f.chars.contains(&c)) {
+                        continue;
+                    }
+                    let score = LANGUAGES
+                        .iter()
+                        .filter(|l| l.2 == script)
+                        .flat_map(|l| l.3.chars())
+                        .collect::<BTreeSet<char>>()
+                        .iter()
+                        .filter(|c| f.chars.contains(c))
+                        .count();
+                    if best.is_none_or(|(top, _, _)| score > top) {
+                        best = Some((score, script, chars));
+                    }
+                }
+                let (text, fallback) = match best {
+                    Some((_, script, chars)) => (
+                        chars.chars().take(26).collect(),
+                        SampleFallback::Script {
+                            script: script.into(),
+                        },
+                    ),
+                    None => {
+                        let mut list: Vec<char> = f
+                            .chars
+                            .iter()
+                            .copied()
+                            .filter(|c| !c.is_whitespace())
+                            .collect();
+                        list.sort_by_key(|c| !c.is_alphanumeric());
+                        let text = list
+                            .iter()
+                            .take(24)
+                            .map(char::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        (text, SampleFallback::Symbols)
+                    }
+                };
+                Ok(SampleText {
+                    face: id,
+                    text,
+                    fallback: Some(fallback),
+                    missing,
+                })
+            })
+            .collect()
     }
 }
 
