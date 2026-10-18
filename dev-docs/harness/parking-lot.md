@@ -53,3 +53,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E3.8 #58] crates/fm-core/src/index/search/tests.rs:1117 — the 10k search timing test skips timing in debug builds and CI runs debug, so the 50 ms budget is asserted only in local release runs until the E9.1 bench job.
 - [E3.8 #58] crates/fm-core/src/index/search.rs:521 — a malformed `loclLanguages` JSON in `face.parsed` is silently read as no locl, without a test.
 - [E3.8 #58] crates/fm-api/src/mock.rs:54 — the MockApi keeps its own `NEAR_MISS = 5` apart from `fm_core::coverage::NEAR_MISS`; the crate boundary forces the copy.
+- [E9.1 #89] scripts/harness/ci-wait.mjs:31 — the `\bjob\b` regex fallback in `matchCheck` would match `measure (windows)` for `ci / windows` if the exact `windows` check were missing; the bench workflow avoids it only by its job names.
+- [E9.1 #89] scripts/harness/epic-sync.mjs:20 — prints `null` for not-measured bench metrics (`activation_100`, `<os>.report`) because it formats `m.value` without a null check.
