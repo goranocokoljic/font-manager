@@ -435,53 +435,47 @@ impl Index {
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         let mut collections = Collections::load(&tx)?;
         // Collections a face is in on another machine that cannot be joined
-        // here (a smart collection on the way): kept in the sidecar, so this
-        // machine never writes a removal it did not make.
-        let mut carried: HashMap<u32, Vec<Vec<String>>> = HashMap::new();
+        // here (a smart collection on the way) are kept as `collection`
+        // conflict rows and carried in the sidecar, so this machine never
+        // writes a removal it did not make. Once the way is clear (the smart
+        // collection was deleted or renamed), the merge joins them.
         for key in keys {
             let Some(face) = faces.get(key) else {
                 continue;
             };
-            let mut local = local_meta(&tx, face.id, &collections)?;
+            let held = local_meta(&tx, face.id, &collections)?;
+            let carried = carried_paths(&tx, face.id)?;
+            let mut local = held.clone();
+            local.collections.extend(carried.iter().cloned());
+            local.normalize();
             let base_entry = base_entries.get(key).copied();
-            if let Some(base_entry) = base_entry {
-                local.collections.extend(
-                    base_entry
-                        .meta
-                        .collections
-                        .iter()
-                        .filter(|p| collections.blocked(p))
-                        .cloned(),
-                );
-                local.normalize();
-            }
             let disk_entry = disk_entries.get(key).copied();
             let merged = sidecar::merge(
                 &sidecar::ancestor(base_entry, disk_entry, file_descends),
                 &local,
                 disk_entry.map_or(&empty, |e| &e.meta),
             );
-            let blocked: Vec<Vec<String>> = merged
-                .meta
-                .collections
+            // A carried path the other machines no longer have is let go.
+            for path in carried
                 .iter()
-                .filter(|p| collections.blocked(p))
-                .cloned()
-                .collect();
-            if !blocked.is_empty() {
-                carried.insert(face.id, blocked);
+                .filter(|p| !merged.meta.collections.contains(p))
+            {
+                drop_carried(&tx, face.id, path)?;
             }
-            if merged.meta != local {
-                out.conflicts += apply(
+            if merged.meta != held {
+                let applied = apply(
                     &tx,
                     src.id,
                     name,
                     face.id,
-                    &local,
+                    &held,
                     &merged.meta,
                     &mut collections,
                 )?;
-                out.faces_changed += 1;
+                out.conflicts += applied.conflicts;
+                if applied.changed {
+                    out.faces_changed += 1;
+                }
             }
             for c in &merged.conflicts {
                 out.conflicts += insert_conflict(
@@ -502,10 +496,8 @@ impl Index {
             let mut next = Sidecar::new(first.family.clone());
             for face in &family {
                 let mut meta = local_meta(&tx, face.id, &collections)?;
-                if let Some(paths) = carried.get(&face.id) {
-                    meta.collections.extend(paths.iter().cloned());
-                    meta.normalize();
-                }
+                meta.collections.extend(carried_paths(&tx, face.id)?);
+                meta.normalize();
                 if !meta.is_empty() {
                     // The entry replaces the one on disk, which the merge
                     // has taken in: it descends from it.
@@ -709,20 +701,6 @@ impl Collections {
         Some(names)
     }
 
-    /// Whether `path` runs into a smart collection here, so a face cannot be
-    /// put in it.
-    fn blocked(&self, path: &[String]) -> bool {
-        let mut parent = None;
-        for name in path {
-            match self.child(parent, name) {
-                Some((_, true)) => return true,
-                Some((id, false)) => parent = Some(id),
-                None => return false,
-            }
-        }
-        false
-    }
-
     fn child(&self, parent: Option<u32>, name: &str) -> Option<(u32, bool)> {
         self.by_id
             .iter()
@@ -791,8 +769,17 @@ fn local_meta(tx: &Transaction<'_>, face: u32, collections: &Collections) -> FmR
     Ok(meta)
 }
 
-/// Writes `merged` over `local` for one face; returns the number of new
-/// conflicts (collections that are smart here).
+/// What [`apply`] did to one face.
+struct Applied {
+    /// New conflicts (collections that cannot be joined here).
+    conflicts: usize,
+    /// Whether the index changed.
+    changed: bool,
+}
+
+/// Writes `merged` over `local`, what the index holds, for one face. A
+/// collection that cannot be joined here is carried; one that can is joined
+/// and no longer carried.
 fn apply(
     tx: &Transaction<'_>,
     source: SourceId,
@@ -801,10 +788,12 @@ fn apply(
     local: &Meta,
     merged: &Meta,
     collections: &mut Collections,
-) -> FmResult<usize> {
+) -> FmResult<Applied> {
+    let mut changed = false;
     if (local.favorite, local.rating, &local.notes)
         != (merged.favorite, merged.rating, &merged.notes)
     {
+        changed = true;
         tx.prepare_cached(
             "INSERT INTO user_meta (face_id, favorite, rating, notes) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT (face_id) DO UPDATE SET
@@ -838,20 +827,24 @@ fn apply(
                     .map_err(|_| FmError::internal("tag id out of range"))?
             }
         };
-        tx.prepare_cached("INSERT OR IGNORE INTO face_tag (face_id, tag_id) VALUES (?1, ?2)")
+        changed |= tx
+            .prepare_cached("INSERT OR IGNORE INTO face_tag (face_id, tag_id) VALUES (?1, ?2)")
             .and_then(|mut s| s.execute(params![face, id]))
-            .map_err(|e| db_error(&e))?;
+            .map_err(|e| db_error(&e))?
+            > 0;
     }
     for (key, name) in &had {
         if want.contains_key(key) {
             continue;
         }
-        tx.prepare_cached(
-            "DELETE FROM face_tag WHERE face_id = ?1
-             AND tag_id = (SELECT id FROM tag WHERE name = ?2)",
-        )
-        .and_then(|mut s| s.execute(params![face, name]))
-        .map_err(|e| db_error(&e))?;
+        changed |= tx
+            .prepare_cached(
+                "DELETE FROM face_tag WHERE face_id = ?1
+                 AND tag_id = (SELECT id FROM tag WHERE name = ?2)",
+            )
+            .and_then(|mut s| s.execute(params![face, name]))
+            .map_err(|e| db_error(&e))?
+            > 0;
         tx.prepare_cached(
             "DELETE FROM tag WHERE name = ?1
              AND NOT EXISTS (SELECT 1 FROM face_tag WHERE tag_id = tag.id)",
@@ -868,11 +861,14 @@ fn apply(
     {
         match collections.resolve(tx, path, true)? {
             Ok(Some(id)) => {
-                tx.prepare_cached(
-                    "INSERT OR IGNORE INTO collection_face (collection_id, face_id) VALUES (?1, ?2)",
-                )
-                .and_then(|mut s| s.execute(params![id, face]))
-                .map_err(|e| db_error(&e))?;
+                changed |= tx
+                    .prepare_cached(
+                        "INSERT OR IGNORE INTO collection_face (collection_id, face_id) VALUES (?1, ?2)",
+                    )
+                    .and_then(|mut s| s.execute(params![id, face]))
+                    .map_err(|e| db_error(&e))?
+                    > 0;
+                drop_carried(tx, face, path)?;
             }
             Ok(None) => {}
             Err(()) => {
@@ -888,14 +884,45 @@ fn apply(
         .filter(|p| !merged.collections.contains(p))
     {
         if let Ok(Some(id)) = collections.resolve(tx, path, false)? {
-            tx.prepare_cached(
-                "DELETE FROM collection_face WHERE collection_id = ?1 AND face_id = ?2",
-            )
-            .and_then(|mut s| s.execute(params![id, face]))
-            .map_err(|e| db_error(&e))?;
+            changed |= tx
+                .prepare_cached(
+                    "DELETE FROM collection_face WHERE collection_id = ?1 AND face_id = ?2",
+                )
+                .and_then(|mut s| s.execute(params![id, face]))
+                .map_err(|e| db_error(&e))?
+                > 0;
         }
     }
-    Ok(conflicts)
+    Ok(Applied { conflicts, changed })
+}
+
+/// The collection paths carried for `face`: on another machine it is in
+/// them, here they cannot be joined.
+fn carried_paths(tx: &Transaction<'_>, face: u32) -> FmResult<Vec<Vec<String>>> {
+    let rows: Vec<String> = tx
+        .prepare_cached(
+            "SELECT DISTINCT disk FROM sidecar_conflict WHERE face_id = ?1 AND field = ?2",
+        )
+        .and_then(|mut s| {
+            s.query_map(params![face, COLLECTION_FIELD], |row| row.get(0))?
+                .collect()
+        })
+        .map_err(|e| db_error(&e))?;
+    Ok(rows
+        .iter()
+        .filter_map(|json| serde_json::from_str(json).ok())
+        .collect())
+}
+
+/// Stops carrying `path` for `face`: it was joined, or no machine has it.
+fn drop_carried(tx: &Transaction<'_>, face: u32, path: &[String]) -> FmResult<()> {
+    let disk = serde_json::to_string(path).unwrap_or_default();
+    tx.prepare_cached(
+        "DELETE FROM sidecar_conflict WHERE face_id = ?1 AND field = ?2 AND disk = ?3",
+    )
+    .and_then(|mut s| s.execute(params![face, COLLECTION_FIELD, disk]))
+    .map_err(|e| db_error(&e))?;
+    Ok(())
 }
 
 /// Keeps a value that lost a conflict; 1 when it was not known yet.

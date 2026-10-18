@@ -782,6 +782,72 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
 }
 
 #[test]
+fn a_carried_membership_is_joined_once_the_smart_collection_is_gone() {
+    let tmp = TempDir::new("sidecar-smart-gone");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Lora-Regular", &["a"]);
+    let smart = m
+        .index
+        .create_collection(&CreateCollectionRequest {
+            name: "Serifs".into(),
+            parent: None,
+            rules: Some(fm_api::search::Filters::default()),
+        })
+        .expect("smart");
+    m.write_as_other_machine("Lora", |s| {
+        entry_mut(s, "Lora-Regular.ttf").collections = vec![names(&["Serifs"])];
+    });
+    m.scan();
+    assert_eq!(m.index.sidecar_problems().expect("problems").len(), 1);
+
+    // The smart collection goes; an unrelated edit to the family follows.
+    m.index.delete_collection(smart.id).expect("delete");
+    m.tag("Lora-Regular", &["b"]);
+    let entry = m.entry("Lora", "Lora-Regular.ttf").expect("entry");
+    assert_eq!(
+        entry.collections,
+        [names(&["Serifs"])],
+        "the other machine's membership is not written away"
+    );
+    m.scan();
+    assert_eq!(
+        m.local("Lora-Regular").collections,
+        [names(&["Serifs"])],
+        "joined here now that it can be"
+    );
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+}
+
+#[test]
+fn a_carried_membership_the_other_machine_dropped_is_let_go() {
+    let tmp = TempDir::new("sidecar-smart-dropped");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Lora-Regular", &["a"]);
+    m.index
+        .create_collection(&CreateCollectionRequest {
+            name: "Serifs".into(),
+            parent: None,
+            rules: Some(fm_api::search::Filters::default()),
+        })
+        .expect("smart");
+    m.write_as_other_machine("Lora", |s| {
+        entry_mut(s, "Lora-Regular.ttf").collections = vec![names(&["Serifs"])];
+    });
+    m.scan();
+    m.write_as_other_machine("Lora", |s| {
+        entry_mut(s, "Lora-Regular.ttf").collections.clear();
+    });
+    m.scan();
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+    assert!(
+        m.entry("Lora", "Lora-Regular.ttf")
+            .expect("entry")
+            .collections
+            .is_empty()
+    );
+}
+
+#[test]
 fn an_entry_the_other_machine_never_had_is_kept() {
     let tmp = TempDir::new("sidecar-missing-entry");
     let mut m = Machine::new(tmp.path());
