@@ -5,6 +5,7 @@ use fm_api::ErrorCode;
 use fm_api::common::Slant;
 use fm_api::library::SourceKind;
 use rusqlite::Connection;
+use rusqlite::types::ValueRef;
 
 use super::*;
 use crate::index::{INDEX_FILE, SCHEMA_VERSION};
@@ -643,6 +644,134 @@ fn a_face_without_cmap_has_no_language_rows() {
     assert!(index.face_languages(id).expect("rows").is_empty());
 }
 
+/// E4.5 criterion 1: from the stored cmap, a face that lacks characters of
+/// the sample previews letters of its script, a face that covers no language
+/// its own symbols, a face that covers the sample the sample; a face with no
+/// stored cmap keeps the sample and an unknown face is an error.
+#[test]
+fn sample_texts_fall_back_to_the_faces_own_coverage() {
+    use fm_api::preview::{SampleFallback, SampleTextRequest};
+
+    let (mut index, source) = memory_db();
+    let mut files = copies(1, STATIC);
+    let face = |path: &str, code_points: Vec<u32>| {
+        let mut file = copies(1, STATIC).remove(0);
+        file.path = PathBuf::from(path);
+        file.parsed.faces[0].code_points = code_points;
+        file
+    };
+    // A dingbat face: private-use symbols and a space, no language.
+    files.push(face(
+        "/fonts/symbols.ttf",
+        [0x20].into_iter().chain(0xE000..0xE040).collect(),
+    ));
+    files.push(face("/fonts/bare.ttf", Vec::new()));
+    index.persist_files(source, &files).expect("persist");
+    let asap = face_id(&index, "/fonts/batch/00000.ttf");
+    let symbols = face_id(&index, "/fonts/symbols.ttf");
+    let bare = face_id(&index, "/fonts/bare.ttf");
+
+    let ask = |text: &str| {
+        index
+            .sample_texts(&SampleTextRequest {
+                faces: vec![asap, symbols, bare],
+                text: text.into(),
+            })
+            .expect("samples")
+    };
+    let got = ask("Съешь же ещё");
+    assert_eq!(
+        got.iter().map(|s| s.face).collect::<Vec<_>>(),
+        [asap, symbols, bare]
+    );
+    assert_eq!(got[0].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(
+        got[0].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert!(got[0].missing.contains(&"С".to_owned()));
+    assert_eq!(
+        got[1].fallback,
+        Some(SampleFallback::Symbols),
+        "{:?}",
+        got[1]
+    );
+    let set = index.face_cmap(symbols).expect("cmap");
+    assert!(
+        got[1]
+            .text
+            .split(' ')
+            .all(|c| c.chars().all(|ch| set.contains(u32::from(ch)))),
+        "only characters the face maps: {}",
+        got[1].text
+    );
+    assert_eq!(
+        (got[2].text.as_str(), &got[2].fallback),
+        ("Съешь же ещё", &None)
+    );
+
+    let got = ask("Quick fox");
+    assert_eq!(
+        (got[0].text.as_str(), &got[0].fallback),
+        ("Quick fox", &None)
+    );
+    assert!(got[0].missing.is_empty());
+
+    let err = index
+        .sample_texts(&SampleTextRequest {
+            faces: vec![fm_api::FaceId(9_999)],
+            text: "a".into(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code(), ErrorCode::NotFound);
+}
+
+/// E4.5 review: a face whose stored cmap cannot be read is not judged (it
+/// previews the sample); the healthy faces of the same request still get
+/// their fallback.
+#[test]
+fn a_damaged_cmap_affects_only_its_own_face() {
+    use fm_api::preview::{SampleFallback, SampleTextRequest};
+
+    let (mut index, source) = memory_db();
+    let mut files = copies(2, STATIC);
+    files[1].path = PathBuf::from("/fonts/damaged.ttf");
+    index.persist_files(source, &files).expect("persist");
+    let healthy = face_id(&index, "/fonts/batch/00000.ttf");
+    let damaged = face_id(&index, "/fonts/damaged.ttf");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = x'010203' WHERE id = ?1",
+            [damaged.0],
+        )
+        .expect("damage the cmap");
+
+    let got = index
+        .sample_texts(&SampleTextRequest {
+            faces: vec![healthy, damaged],
+            text: "Съешь".into(),
+        })
+        .expect("one damaged face does not fail the request");
+    assert_eq!(got[0].face, healthy);
+    assert_eq!(
+        got[0].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert_eq!(got[0].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(got[1].face, damaged);
+    assert_eq!((got[1].text.as_str(), &got[1].fallback), ("Съешь", &None));
+    assert!(got[1].missing.is_empty());
+    assert_eq!(
+        index.face_cmap(damaged).expect_err("damaged").code(),
+        ErrorCode::Internal
+    );
+}
+
 /// New preset data (an app update) computes the stored coverage again on
 /// open, from the stored cmap and locl, without reading a font file.
 #[test]
@@ -819,4 +948,111 @@ fn a_gone_file_not_yet_in_the_index_is_written_in_full() {
     let done = index.apply_rescan(source, &files, &report).expect("apply");
     assert_eq!(done.faces, 1);
     assert_eq!(index.load_files().expect("load").get(&path), Some(&file));
+}
+
+/// One value of a snapshot row: short text as is, long text and bytes as
+/// their blake3 hash, so the snapshot stays readable and still catches a
+/// change of any byte.
+fn snapshot_value(value: ValueRef<'_>) -> String {
+    match value {
+        ValueRef::Null => "-".to_owned(),
+        ValueRef::Integer(n) => n.to_string(),
+        ValueRef::Real(x) => x.to_string(),
+        ValueRef::Text(t) if t.len() <= 48 => String::from_utf8_lossy(t).into_owned(),
+        ValueRef::Text(bytes) | ValueRef::Blob(bytes) => {
+            FileHash::of(bytes).to_hex()[..16].to_owned()
+        }
+    }
+}
+
+/// E2.8: the parallel scan gives the same result as the one-thread scan
+/// did. The snapshot was written by the scanner before E2.8; every file of
+/// `fixtures/fonts/` must have the same hash, health and faces in the file
+/// index, and the same `font_file` and `face` rows in the database.
+#[test]
+fn the_fixture_scan_matches_the_snapshot_of_the_one_thread_scan() {
+    let root = fixtures();
+    let (files, report) = scan(&root);
+    assert!(report.failed.is_empty(), "{:?}", report.failed);
+    let (mut index, source) = memory_db();
+    index.apply_rescan(source, &files, &report).expect("apply");
+
+    let rel = |path: &Path| {
+        let parts: Vec<_> = path
+            .strip_prefix(&root)
+            .expect("under the fixtures")
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
+        parts.join("/")
+    };
+    let mut lines = Vec::new();
+    for file in files.files() {
+        let faces: Vec<String> = file
+            .parsed
+            .faces
+            .iter()
+            .map(|f| {
+                let parsed = serde_json::to_string(f).expect("face json");
+                let cps: Vec<u8> = f.code_points.iter().flat_map(|c| c.to_le_bytes()).collect();
+                format!(
+                    "#{} {:?} {} cmap={}:{}",
+                    f.index,
+                    f.health,
+                    &FileHash::of(parsed.as_bytes()).to_hex()[..16],
+                    f.code_points.len(),
+                    &FileHash::of(&cps).to_hex()[..16],
+                )
+            })
+            .collect();
+        lines.push(format!(
+            "file {} | {} | {:?} | {:?} | {}",
+            rel(&file.path),
+            file.hash,
+            file.parsed.format,
+            file.parsed.health,
+            faces.join(" ; ")
+        ));
+    }
+    let mut stmt = index
+        .conn
+        .prepare(
+            "SELECT f.path, f.hash, f.format, f.size, f.health, f.gone,
+                    a.collection_index, a.family, a.subfamily, a.typographic_family,
+                    a.postscript_name, a.weight, a.width, a.slant, a.is_variable, a.axes,
+                    a.features, a.fstype, a.parsed, a.cmap, a.languages, a.foundry,
+                    a.designer, a.is_color, a.healthy
+             FROM face a JOIN font_file f ON f.id = a.file_id",
+        )
+        .expect("prepare");
+    let mut rows = stmt.query([]).expect("query");
+    while let Some(row) = rows.next().expect("row") {
+        let path = path_from_sql(row.get_ref(0).expect("path")).expect("path");
+        let values: Vec<String> = (1..25)
+            .map(|i| snapshot_value(row.get_ref(i).expect("column")))
+            .collect();
+        lines.push(format!("row  {} | {}", rel(&path), values.join(" | ")));
+    }
+    lines.sort();
+    let actual = lines.join("\n") + "\n";
+
+    let snapshot = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/snapshots/fixture-scan.txt");
+    if std::env::var_os("FM_UPDATE_SNAPSHOTS").is_some() {
+        fs::write(&snapshot, &actual).expect("write snapshot");
+    }
+    let expected = fs::read_to_string(&snapshot)
+        .expect("read snapshot")
+        .replace("\r\n", "\n");
+    let differ: Vec<_> = actual
+        .lines()
+        .zip(expected.lines())
+        .filter(|(a, e)| a != e)
+        .take(5)
+        .collect();
+    assert!(
+        actual == expected,
+        "the fixture scan changed ({} vs {} lines); first differences: {differ:#?}",
+        actual.lines().count(),
+        expected.lines().count()
+    );
 }

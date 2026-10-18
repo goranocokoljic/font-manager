@@ -6,7 +6,7 @@
 //! nothing new, exports report the files they would write, and previews are a
 //! 1×1 transparent PNG.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, MutexGuard};
 
@@ -22,17 +22,19 @@ use crate::export::{
     ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest, WebFormat,
 };
 use crate::library::{
-    AddSourceRequest, AppInfo, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort,
-    FamilySummary, ImportMode, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
-    Platform, Problem, ProblemKind, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
-    StyleMark,
+    AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, ImportMode, LicenseInfo,
+    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, ScanRequest,
+    SetSourcePausedRequest, Source, SourceKind, StyleMark,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     ImportSetResponse, MoveCollectionRequest, ProjectSet, RenameCollectionRequest, SetEntry,
     SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
-use crate::preview::{FontSource, PreviewImage, PreviewRequest};
+use crate::preview::{
+    FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
+};
 use crate::search::{
     CoverageReport, CoverageRequest, FamilyHit, FilterCount, FilterCounts, Filters,
     LanguageCoverage, LanguagePreset, Missing, SearchRequest, SearchResponse, SimilarFace,
@@ -969,6 +971,69 @@ impl LibraryService for MockApi {
         }
         Ok(out)
     }
+
+    fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
+        let st = self.state();
+        let source = |id: SourceId| st.sources.iter().find(|s| s.id == id);
+        let visible: Vec<&MockFace> = st
+            .faces
+            .iter()
+            .filter(|f| source(f.source).is_some_and(|s| !s.paused))
+            .collect();
+        let copy = |f: &MockFace| DuplicateCopy {
+            path: f.detail.path.clone(),
+            size: f.detail.file_size,
+            hash: f.detail.hash.clone(),
+            face: Some(f.detail.face.id),
+            version: f.detail.version.clone(),
+            source: f.source,
+            in_library_folder: source(f.source)
+                .is_some_and(|s| s.kind == SourceKind::LibraryFolder),
+            keep: false,
+        };
+        // Every sample file has one face, so a face stands for its file.
+        let mut near: BTreeMap<(&str, &str), Vec<&MockFace>> = BTreeMap::new();
+        let mut exact: BTreeMap<&str, Vec<&MockFace>> = BTreeMap::new();
+        for f in &visible {
+            let name = f.detail.face.postscript_name.as_str();
+            if !name.is_empty() {
+                let version = f.detail.version.as_deref().map_or("", str::trim);
+                near.entry((name, version)).or_default().push(f);
+            }
+            exact.entry(f.detail.hash.as_str()).or_default().push(f);
+        }
+        let mut groups = Vec::new();
+        let mut in_near: Vec<BTreeSet<&str>> = Vec::new();
+        for ((name, _), faces) in near {
+            let hashes: BTreeSet<&str> = faces.iter().map(|f| f.detail.hash.as_str()).collect();
+            if hashes.len() > 1 {
+                in_near.push(faces.iter().map(|f| f.detail.path.as_str()).collect());
+                groups.push(DuplicateGroup {
+                    kind: DuplicateKind::Near,
+                    postscript_name: Some(name.to_owned()),
+                    copies: faces.into_iter().map(copy).collect(),
+                });
+            }
+        }
+        for faces in exact.into_values().filter(|f| f.len() > 1) {
+            if in_near
+                .iter()
+                .any(|paths| faces.iter().all(|f| paths.contains(f.detail.path.as_str())))
+            {
+                continue;
+            }
+            let name = &faces[0].detail.face.postscript_name;
+            groups.push(DuplicateGroup {
+                kind: DuplicateKind::Exact,
+                postscript_name: (!name.is_empty()).then(|| name.clone()),
+                copies: faces.into_iter().map(copy).collect(),
+            });
+        }
+        for g in &mut groups {
+            g.choose_keeper();
+        }
+        Ok(groups)
+    }
 }
 
 impl State {
@@ -1227,6 +1292,85 @@ impl PreviewService for MockApi {
             collection_index: f.detail.collection_index,
             hash: f.detail.hash.clone(),
         })
+    }
+
+    /// The core's rule (`fm_core::sample`) on the mock's languages: the
+    /// sample when the face maps it, else lower-case letters of the complete
+    /// language whose script the face maps most, else its own characters.
+    fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
+        let st = self.state();
+        req.faces
+            .iter()
+            .map(|&id| {
+                let f = st.face(id)?;
+                let mut missing: Vec<String> = Vec::new();
+                for c in req.text.chars() {
+                    let s = c.to_string();
+                    if !c.is_whitespace()
+                        && !c.is_control()
+                        && !f.chars.contains(&c)
+                        && !missing.contains(&s)
+                    {
+                        missing.push(s);
+                    }
+                }
+                if missing.is_empty() {
+                    return Ok(SampleText {
+                        face: id,
+                        text: req.text.clone(),
+                        fallback: None,
+                        missing,
+                    });
+                }
+                let mut best: Option<(usize, &str, &str)> = None;
+                for (_, _, script, chars) in LANGUAGES {
+                    if !chars.chars().all(|c| f.chars.contains(&c)) {
+                        continue;
+                    }
+                    let score = LANGUAGES
+                        .iter()
+                        .filter(|l| l.2 == script)
+                        .flat_map(|l| l.3.chars())
+                        .collect::<BTreeSet<char>>()
+                        .iter()
+                        .filter(|c| f.chars.contains(c))
+                        .count();
+                    if best.is_none_or(|(top, _, _)| score > top) {
+                        best = Some((score, script, chars));
+                    }
+                }
+                let (text, fallback) = match best {
+                    Some((_, script, chars)) => (
+                        chars.chars().take(26).collect(),
+                        SampleFallback::Script {
+                            script: script.into(),
+                        },
+                    ),
+                    None => {
+                        let mut list: Vec<char> = f
+                            .chars
+                            .iter()
+                            .copied()
+                            .filter(|c| !c.is_whitespace())
+                            .collect();
+                        list.sort_by_key(|c| !c.is_alphanumeric());
+                        let text = list
+                            .iter()
+                            .take(24)
+                            .map(char::to_string)
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        (text, SampleFallback::Symbols)
+                    }
+                };
+                Ok(SampleText {
+                    face: id,
+                    text,
+                    fallback: Some(fallback),
+                    missing,
+                })
+            })
+            .collect()
     }
 }
 

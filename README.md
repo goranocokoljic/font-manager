@@ -22,6 +22,16 @@ pnpm dev             # run the app
 
 `pnpm lint` needs `cargo install --locked cargo-nextest cargo-deny`.
 
+## Dev builds
+
+Every night with new commits on `main`, the `nightly` workflow builds unsigned
+installers and attaches them to a GitHub pre-release named `nightly-<version>-<hash>`:
+`.msi` and `.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux. The version is
+the `[workspace.package]` version of `Cargo.toml` plus the short commit hash, for example
+`font-manager_0.1.0-1a2b3c4_windows_x64.msi`. The installers are not signed: Windows
+SmartScreen and macOS Gatekeeper warn before they open. Build one locally with
+`pnpm tauri build --bundles msi,nsis` (or `dmg`, `appimage`).
+
 ## Reference library
 
 The performance budgets are measured against ~10,000 OFL, Apache and UFL fonts (the
@@ -38,6 +48,22 @@ Run it again after an interruption: it continues where it stopped and re-downloa
 nothing that is complete. Performance tests are skipped when `FM_REFERENCE_LIBRARY` is
 not set. The 200-font test corpus in [fixtures/fonts](fixtures/fonts/) is picked from
 this library by `scripts/reference-library/fixtures.mjs`.
+
+## Performance
+
+`scripts/bench.sh` measures the budgets on this machine against the reference library:
+cold start, first scan, incremental update, search latency, 100-face activation and idle
+memory. It builds `fm-bench` in release, reads the library without changing it, writes a
+JSON report (`target/bench/bench-<os>.json`) and exits 1 when a metric is over budget.
+
+```
+scripts/bench.sh                         # uses FM_REFERENCE_LIBRARY
+scripts/bench.sh --library DIR --out report.json
+```
+
+CI runs it nightly on `main` on Windows, macOS and Linux and writes the trend against
+the earlier nightly runs into the job summary of the `bench` workflow. A PR gets the
+same run when it carries the `bench` label.
 
 Contributors and coding agents: read [CLAUDE.md](CLAUDE.md) first. Decisions are in
 [docs/adr](docs/adr/).

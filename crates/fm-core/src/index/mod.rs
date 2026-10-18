@@ -19,8 +19,10 @@
 //! merged back from them on every scan ([`Index::sync_sidecars`], E7.3).
 
 mod collections;
+mod duplicates;
 mod files;
 mod languages;
+mod samples;
 mod schema;
 mod search;
 mod sidecars;

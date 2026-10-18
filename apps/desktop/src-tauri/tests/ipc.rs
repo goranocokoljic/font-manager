@@ -13,6 +13,7 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
+use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
@@ -323,6 +324,24 @@ fn tags_favorites_and_ratings_are_edited_and_filter_over_ipc() {
     )
     .unwrap_err();
     assert_eq!(err["code"], "invalidRequest", "{err}");
+}
+
+#[test]
+fn sample_texts_round_trip_through_fm_api() {
+    let req = SampleTextRequest {
+        faces: vec![FaceId(1), FaceId(7)],
+        text: "Źdźbło".into(),
+    };
+    let got: Vec<SampleText> = invoke_with(
+        "sample_texts",
+        serde_json::json!({ "req": { "faces": [1, 7], "text": "Źdźbło" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(got, MockApi::new().sample_texts(req).unwrap());
+    assert!(got[1].fallback.is_some(), "{got:?}");
 }
 
 #[test]

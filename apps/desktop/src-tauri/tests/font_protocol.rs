@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use fm_api::mock::MockApi;
-use fm_api::preview::{FontSource, PreviewImage, PreviewRequest, PreviewService};
+use fm_api::preview::{
+    FontSource, PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+};
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
 use fm_app_lib::font_response;
 use tauri::http::{StatusCode, header};
@@ -53,6 +55,10 @@ impl PreviewService for Files {
             collection_index: 0,
             hash: String::new(),
         })
+    }
+
+    fn sample_texts(&self, _: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }
 }
 

@@ -384,7 +384,7 @@ impl<'a> Need<'a> {
 
 /// Characters a font needs no glyph for: whitespace, controls, the soft
 /// hyphen, zero-width and joiner characters, the BOM and variation selectors.
-fn is_ignorable(c: char) -> bool {
+pub(crate) fn is_ignorable(c: char) -> bool {
     c.is_whitespace()
         || c.is_control()
         || matches!(

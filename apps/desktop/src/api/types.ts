@@ -261,6 +261,49 @@ export type Density =
 /**  More rows on screen. */
 "compact";
 
+/**  One file of a duplicate group. */
+export type DuplicateCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  File size in bytes. */
+	size: number,
+	/**  blake3 hash of the file, hex; equal hashes are identical files. */
+	hash: string,
+	/**
+	 *  The face the group is about (the first face for an exact group), when
+	 *  the file parsed far enough to have one.
+	 */
+	face: FaceId | null,
+	/**  Version string (name ID 5) of that face. */
+	version: string | null,
+	/**  The source the file was found in. */
+	source: SourceId,
+	/**  The source is the library folder. */
+	inLibraryFolder: boolean,
+	/**  The recommended keeper of the group. */
+	keep: boolean,
+};
+
+/**  Files that hold the same font. The recommended keeper comes first. */
+export type DuplicateGroup = {
+	/**  Exact or near. */
+	kind: DuplicateKind,
+	/**
+	 *  The PostScript name the copies share (for an exact group, the first
+	 *  face's), when there is one.
+	 */
+	postscriptName: string | null,
+	/**  The copies, two or more, keeper first. */
+	copies: DuplicateCopy[],
+};
+
+/**  Why files are listed together as duplicates. */
+export type DuplicateKind = 
+/**  The same file (same hash) at different paths. */
+"exact" | 
+/**  The same PostScript name and version in files that differ. */
+"near";
+
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
 /**  Installable: no restriction. */
@@ -1029,6 +1072,35 @@ export type RenameCollectionRequest = {
 	name: string,
 };
 
+/**  Why a face previews other text than the sample. */
+export type SampleFallback = 
+/**  Letters of a script the face covers. */
+{ kind: "script"; 
+/**  ISO 15924 script (`Cyrl`). */
+script: string } | 
+/**  Characters the face maps, for a face that covers no language. */
+{ kind: "symbols" };
+
+/**  The text one face previews. */
+export type SampleText = {
+	/**  The face. */
+	face: FaceId,
+	/**  The sample text, or text from the face's own coverage. */
+	text: string,
+	/**  Set when the face lacks characters of the sample and `text` is other text. */
+	fallback?: SampleFallback | null,
+	/**  The characters of the sample the face lacks. */
+	missing?: string[],
+};
+
+/**  The text to preview some faces with, for one sample text. */
+export type SampleTextRequest = {
+	/**  The faces. */
+	faces: FaceId[],
+	/**  The sample text the user chose. */
+	text: string,
+};
+
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
 export type ScanRequest = {
 	/**  One source, or every source when absent. */
@@ -1315,4 +1387,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 5, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 6, patch: 0 };

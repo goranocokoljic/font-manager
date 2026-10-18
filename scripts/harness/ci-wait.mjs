@@ -69,24 +69,34 @@ function mergeable(pr) {
   return ghJson(['pr', 'view', String(pr), '--json', 'mergeable'], { allowFail: true })?.mergeable ?? 'UNKNOWN';
 }
 
-function checkRuns(sha) {
-  const pages = ghJson(['api', '--paginate', '--slurp', `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`]) ?? [];
-  // Keep the newest run per name (a re-run leaves the old one behind).
+/**
+ * The newest check run per name (a re-run leaves the old one behind). With
+ * `ignoreSkipped`, runs whose job was skipped do not count: the bench workflow
+ * runs on every PR push and skips its jobs until the `bench` label is there,
+ * which leaves a completed `bench` check without a report on the commit.
+ */
+export function latestRuns(runs, { ignoreSkipped = false } = {}) {
   const byName = new Map();
-  for (const r of pages.flatMap((p) => p.check_runs ?? [])) {
+  for (const r of runs) {
+    if (ignoreSkipped && r.conclusion === 'skipped') continue;
     const prev = byName.get(r.name);
     if (!prev || new Date(r.started_at) > new Date(prev.started_at)) byName.set(r.name, r);
   }
   return [...byName.values()];
 }
 
+function checkRuns(sha, opts) {
+  const pages = ghJson(['api', '--paginate', '--slurp', `repos/{owner}/{repo}/commits/${sha}/check-runs?per_page=100`]) ?? [];
+  return latestRuns(pages.flatMap((p) => p.check_runs ?? []), opts);
+}
+
 function jobLog(id) {
   return gh(['api', `repos/{owner}/{repo}/actions/jobs/${id}/logs`], { allowFail: true }) ?? '';
 }
 
-async function waitFor(sha, names, cfg, deadline, pr = null) {
+async function waitFor(sha, names, cfg, deadline, pr = null, opts = {}) {
   for (;;) {
-    const runs = checkRuns(sha);
+    const runs = checkRuns(sha, opts);
     const found = names.map((n) => ({ want: n, run: matchCheck(n, runs) }));
     // No run yet and the PR conflicts with main: GitHub will never start one.
     if (pr && found.every((f) => !f.run) && mergeable(pr) === 'CONFLICTING') return 'conflict';
@@ -105,7 +115,7 @@ async function bench(prNumber, sha, cfg, deadline) {
   }
   gh(['label', 'create', 'bench', '--color', 'C5DEF5', '--description', 'Runs the bench workflow on this PR'], { allowFail: true }); // exists -> no-op error
   gh(['pr', 'edit', String(prNumber), '--add-label', 'bench'], { allowFail: true });
-  const found = await waitFor(sha, [cfg.ci.bench_check], cfg, deadline);
+  const found = await waitFor(sha, [cfg.ci.bench_check], cfg, deadline, null, { ignoreSkipped: true });
   if (!found || !found[0].run) return { status: 'timeout', note: 'bench check did not finish' };
   const run = found[0].run;
   const runId = /\/actions\/runs\/(\d+)/.exec(run.details_url ?? '')?.[1];

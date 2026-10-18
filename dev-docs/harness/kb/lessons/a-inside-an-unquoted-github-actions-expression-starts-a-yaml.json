@@ -1,0 +1,18 @@
+{
+  "id": "a-inside-an-unquoted-github-actions-expression-starts-a-yaml",
+  "title": "A `#` inside an unquoted GitHub Actions expression starts a YAML comment",
+  "category": "correctness",
+  "rule": "In a workflow file, never put a `${{ }}` expression whose text contains ` #` (for example format('PR #{0}', …)) in an unquoted YAML value: YAML cuts the value at ` #`, the expression is left unclosed and GitHub rejects the whole workflow, so none of its triggers run. Build such strings in the shell step from env vars, or quote the value. Keep a test that scans every workflow line with `${{` and fails when an expression does not close before ` #`.",
+  "rationale": "E9.1 (#89): bench.yml set TITLE: ${{ … format('Bench — PR #{0}', …) … }}; GitHub reported 'The expression is not closed' and the nightly, manual and label runs never started, while the regex-only workflow tests passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    89
+  ],
+  "file_globs": [
+    ".github/workflows/**"
+  ],
+  "first_seen": "2026-10-18T11:59:11.775Z",
+  "last_seen": "2026-10-18T11:59:11.775Z"
+}

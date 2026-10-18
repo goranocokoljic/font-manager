@@ -598,6 +598,78 @@ pub struct Problem {
     pub message: String,
 }
 
+/// Why files are listed together as duplicates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum DuplicateKind {
+    /// The same file (same hash) at different paths.
+    Exact,
+    /// The same PostScript name and version in files that differ.
+    Near,
+}
+
+/// One file of a duplicate group.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateCopy {
+    /// Absolute file path.
+    pub path: String,
+    /// File size in bytes.
+    pub size: u32,
+    /// blake3 hash of the file, hex; equal hashes are identical files.
+    pub hash: String,
+    /// The face the group is about (the first face for an exact group), when
+    /// the file parsed far enough to have one.
+    pub face: Option<FaceId>,
+    /// Version string (name ID 5) of that face.
+    pub version: Option<String>,
+    /// The source the file was found in.
+    pub source: SourceId,
+    /// The source is the library folder.
+    pub in_library_folder: bool,
+    /// The recommended keeper of the group.
+    pub keep: bool,
+}
+
+/// Files that hold the same font. The recommended keeper comes first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateGroup {
+    /// Exact or near.
+    pub kind: DuplicateKind,
+    /// The PostScript name the copies share (for an exact group, the first
+    /// face's), when there is one.
+    pub postscript_name: Option<String>,
+    /// The copies, two or more, keeper first.
+    pub copies: Vec<DuplicateCopy>,
+}
+
+impl DuplicateGroup {
+    /// Orders the copies keeper first and marks the keeper: the newest
+    /// version (digit runs compared as numbers, no version last), then a copy
+    /// in the library folder, then the path A to Z. Every implementation of
+    /// [`LibraryService::list_duplicates`] uses this, so the rule is one.
+    pub fn choose_keeper(&mut self) {
+        self.copies.sort_by_cached_key(|c| {
+            let version = c
+                .version
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(natural);
+            (
+                version.is_none(),
+                std::cmp::Reverse(version),
+                !c.in_library_folder,
+                c.path.clone(),
+            )
+        });
+        for (i, copy) in self.copies.iter_mut().enumerate() {
+            copy.keep = i == 0;
+        }
+    }
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -625,6 +697,10 @@ pub trait LibraryService {
     fn get_face(&self, face: FaceId) -> ApiResult<FaceDetail>;
     /// Duplicates, broken files and conflicts.
     fn list_problems(&self) -> ApiResult<Vec<Problem>>;
+    /// Exact duplicates (same hash) and near duplicates (same PostScript name
+    /// and version in files that differ) among the files the library shows,
+    /// in groups, each with its recommended keeper first.
+    fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>>;
 }
 
 #[cfg(test)]
@@ -702,6 +778,60 @@ mod tests {
             sorted(FamilySortKey::Format, false, vec![none, var, ttf, otf]),
             [1, 2, 3, 4]
         );
+    }
+
+    fn copy(path: &str, version: Option<&str>, in_library_folder: bool) -> DuplicateCopy {
+        DuplicateCopy {
+            path: path.into(),
+            size: 1,
+            hash: String::new(),
+            face: None,
+            version: version.map(Into::into),
+            source: SourceId(1),
+            in_library_folder,
+            keep: false,
+        }
+    }
+
+    fn keeper_order(copies: Vec<DuplicateCopy>) -> Vec<String> {
+        let mut group = DuplicateGroup {
+            kind: DuplicateKind::Near,
+            postscript_name: None,
+            copies,
+        };
+        group.choose_keeper();
+        assert!(group.copies[0].keep);
+        assert_eq!(group.copies.iter().filter(|c| c.keep).count(), 1);
+        group.copies.into_iter().map(|c| c.path).collect()
+    }
+
+    #[test]
+    fn the_newest_version_is_the_keeper_even_outside_the_library_folder() {
+        let order = keeper_order(vec![
+            copy("/lib/a.ttf", Some("Version 2.9"), true),
+            copy("/b.ttf", Some("Version 2.10"), false),
+            copy("/c.ttf", None, true),
+            copy("/d.ttf", Some(" "), true),
+        ]);
+        assert_eq!(order, ["/b.ttf", "/lib/a.ttf", "/c.ttf", "/d.ttf"]);
+    }
+
+    #[test]
+    fn on_equal_versions_the_library_folder_copy_is_the_keeper_then_the_path() {
+        let order = keeper_order(vec![
+            copy("/z.ttf", Some("1.0"), false),
+            copy("/y.ttf", Some("1.0"), true),
+            copy("/a.ttf", Some("1.0"), false),
+        ]);
+        assert_eq!(order, ["/y.ttf", "/a.ttf", "/z.ttf"]);
+    }
+
+    #[test]
+    fn a_marked_keeper_that_loses_is_unmarked() {
+        let mut stale = copy("/b.ttf", Some("1.0"), false);
+        stale.keep = true;
+        let order = keeper_order(vec![stale, copy("/a.ttf", Some("2.0"), false)]);
+        assert_eq!(order, ["/a.ttf", "/b.ttf"]);
     }
 
     #[test]
