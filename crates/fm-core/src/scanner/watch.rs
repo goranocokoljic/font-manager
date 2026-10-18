@@ -556,6 +556,26 @@ mod tests {
         fs::read(path).expect("read fixture")
     }
 
+    /// Moves a folder like a user does. Windows refuses to rename a folder
+    /// while a file under it is open, and right after the folder arrived the
+    /// watcher (a trailing refresh) or a virus scanner may still be reading
+    /// one; the user's file manager tries again, so does this.
+    fn move_folder(from: &Path, to: &Path) {
+        let start = Instant::now();
+        loop {
+            match fs::rename(from, to) {
+                Ok(()) => return,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::PermissionDenied
+                        && start.elapsed() < Duration::from_secs(5) =>
+                {
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(e) => panic!("move {} -> {}: {e}", from.display(), to.display()),
+            }
+        }
+    }
+
     fn put(path: &Path, data: &[u8]) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("create folder");
@@ -726,10 +746,10 @@ mod tests {
         let a = f.root.join("incoming/a.ttf");
         let b = f.root.join("incoming/deep/b.ttf");
 
-        fs::rename(&outside, f.root.join("incoming")).expect("move in");
+        move_folder(&outside, &f.root.join("incoming"));
         f.until(|i| present(i, &a) && present(i, &b));
 
-        fs::rename(f.root.join("incoming"), &outside).expect("move out");
+        move_folder(&f.root.join("incoming"), &outside);
         f.until(|i| gone(i, &a) && gone(i, &b));
     }
 
@@ -779,9 +799,8 @@ mod tests {
         }
         let ghost = f.root.join("ghost.ttf");
         // An entry for a file that is not there: its remove event was missed.
-        {
-            let mut index = lock(&f.index);
-            index.insert(crate::scanner::IndexedFile {
+        let haunt = || {
+            lock(&f.index).insert(crate::scanner::IndexedFile {
                 path: ghost.clone(),
                 size: 1,
                 modified: None,
@@ -789,17 +808,26 @@ mod tests {
                 parsed: crate::parser::parse(b""),
                 gone: false,
             });
-        }
+        };
+        haunt();
 
         // No file-system event names it; only a rescan can find it gone.
         let start = Instant::now();
         loop {
             let update = f.next(Duration::from_secs(5)).expect("a periodic rescan");
             assert!(start.elapsed() < Duration::from_secs(5), "no rescan in 5 s");
-            if update.trigger == Trigger::Rescan
-                && update.result.expect("rescanned").gone == vec![ghost.clone()]
-            {
+            let marked = update
+                .result
+                .as_ref()
+                .is_ok_and(|r| r.gone.contains(&ghost));
+            if update.trigger == Trigger::Rescan && marked {
                 break;
+            }
+            // FSEvents can report the source folder's creation even later;
+            // that event rescans the folder and finds the ghost first. Put
+            // it back: only a periodic rescan may prove this test.
+            if marked {
+                haunt();
             }
         }
         assert!(gone(&lock(&f.index), &ghost));

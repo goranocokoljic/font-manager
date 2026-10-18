@@ -104,6 +104,17 @@ pub struct ParsedFace {
     pub named_instances: Vec<NamedInstance>,
     /// Feature tags from `GSUB` and `GPOS`, sorted, without duplicates.
     pub features: Vec<String>,
+    /// The `GSUB` language systems whose features include `locl`: the
+    /// languages the face draws local forms for, as `script/LANG` OpenType
+    /// tags trimmed of their padding (`cyrl/SRB`, `latn/ROM`), sorted,
+    /// without duplicates. No serde default: a
+    /// `face.parsed` written before this field fails to load, so the next
+    /// scan reads the file again and fills it.
+    pub locl_languages: Vec<String>,
+    /// Whether the face draws in color (`COLR`, `CBDT`, `sbix` or `SVG `).
+    /// No serde default: a `face.parsed` written before this field fails to
+    /// load, so the next scan reads the file again and fills it.
+    pub color: bool,
     /// Design class, declared by the font or measured on its outlines; `None`
     /// when neither says anything (see [`crate::classify`]).
     #[serde(default)]
@@ -138,6 +149,8 @@ impl ParsedFace {
             axes: Vec::new(),
             named_instances: Vec::new(),
             features: Vec::new(),
+            locl_languages: Vec::new(),
+            color: false,
             classification: None,
             code_points: Vec::new(),
             health,
@@ -406,6 +419,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
     let mut features = Vec::new();
     if let Some(gsub) = present(font.gsub(), "GSUB", &mut problems) {
         collect_features(gsub.feature_list(), "GSUB", &mut features, &mut problems);
+        face.locl_languages = locl_languages(&gsub, &mut problems);
     }
     if let Some(gpos) = present(font.gpos(), "GPOS", &mut problems) {
         collect_features(gpos.feature_list(), "GPOS", &mut features, &mut problems);
@@ -413,6 +427,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
     features.sort_unstable();
     features.dedup();
     face.features = features;
+    face.color = is_color(font);
 
     match font.cmap() {
         Ok(_) => {
@@ -464,6 +479,14 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
 /// activate like outlines.
 fn has_glyph_images(font: &FontRef<'_>) -> bool {
     [b"glyf", b"CFF ", b"CFF2", b"CBDT", b"sbix", b"SVG "]
+        .iter()
+        .any(|tag| has_record(font, tag))
+}
+
+/// Whether the face has color glyphs: layered vectors (`COLR`), color
+/// bitmaps (`CBDT`, `sbix`) or SVG documents.
+fn is_color(font: &FontRef<'_>) -> bool {
+    [b"COLR", b"CBDT", b"sbix", b"SVG "]
         .iter()
         .any(|tag| has_record(font, tag))
 }
@@ -538,6 +561,65 @@ fn collect_features(
         Err(ReadError::NullOffset) => {}
         Err(e) => problems.push(format!("The {table} feature list is malformed: {e}.")),
     }
+}
+
+/// The language systems of `gsub` that list a `locl` feature, sorted.
+///
+/// Only explicit language systems count: a `locl` in a script's default
+/// language system names no language. A malformed script list is a problem;
+/// a null one means the table lists no scripts.
+fn locl_languages(
+    gsub: &read_fonts::tables::gsub::Gsub<'_>,
+    problems: &mut Vec<String>,
+) -> Vec<String> {
+    const LOCL: Tag = Tag::new(b"locl");
+    let malformed = |e: ReadError| format!("The GSUB script list is malformed: {e}.");
+    let features = match gsub.feature_list() {
+        Ok(list) => list.feature_records(),
+        Err(_) => return Vec::new(), // no features, or reported by collect_features
+    };
+    let scripts = match gsub.script_list() {
+        Ok(scripts) => scripts,
+        Err(ReadError::NullOffset) => return Vec::new(),
+        Err(e) => {
+            problems.push(malformed(e));
+            return Vec::new();
+        }
+    };
+    let mut out = Vec::new();
+    for record in scripts.script_records() {
+        let script = match record.script(scripts.offset_data()) {
+            Ok(script) => script,
+            Err(e) => {
+                problems.push(malformed(e));
+                continue;
+            }
+        };
+        for lang in script.lang_sys_records() {
+            let lang_sys = match lang.lang_sys(script.offset_data()) {
+                Ok(lang_sys) => lang_sys,
+                Err(e) => {
+                    problems.push(malformed(e));
+                    continue;
+                }
+            };
+            let has_locl = lang_sys.feature_indices().iter().any(|i| {
+                features
+                    .get(usize::from(i.get()))
+                    .is_some_and(|f| f.feature_tag() == LOCL)
+            });
+            if has_locl {
+                out.push(format!(
+                    "{}/{}",
+                    record.script_tag().to_string().trim_end(),
+                    lang.lang_sys_tag().to_string().trim_end()
+                ));
+            }
+        }
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
 }
 
 /// The table when it is present and readable. An absent table is `None`
@@ -784,6 +866,39 @@ mod tests {
         assert!(face.code_points.contains(&u32::from('A')));
         assert!(face.code_points.contains(&u32::from('z')));
         assert!(face.code_points.windows(2).all(|w| w[0] < w[1]));
+    }
+
+    /// Criterion 3 of E3.7: the language systems with `locl` come from GSUB,
+    /// per script, and a script's default language system is not one.
+    #[test]
+    fn locl_language_systems_are_read_from_gsub() {
+        let asap = single("google-static/asap/Asap_Condensed-ExtraLightItalic.ttf");
+        for entry in ["latn/ROM", "latn/TRK", "latn/PLK", "latn/CAT"] {
+            assert!(
+                asap.locl_languages.contains(&entry.to_owned()),
+                "{entry}: {:?}",
+                asap.locl_languages
+            );
+        }
+        assert!(asap.locl_languages.windows(2).all(|w| w[0] < w[1]));
+        assert!(asap.locl_languages.iter().all(|e| {
+            e.split_once('/')
+                .is_some_and(|(s, l)| !s.is_empty() && !l.is_empty() && !l.ends_with(' '))
+        }));
+        assert!(asap.features.contains(&"locl".to_owned()));
+        // Roboto Slab has locl only for CAT, MOL and ROM.
+        let slab = single("google-static/robotoslab/RobotoSlab-ExtraBold.ttf");
+        assert_eq!(slab.locl_languages, ["latn/CAT", "latn/MOL", "latn/ROM"]);
+        // Castoro: locl in five language systems, not in latn's default one.
+        let castoro = single("google-repo/castoro/Castoro[wght].ttf");
+        assert_eq!(
+            castoro.locl_languages,
+            ["latn/CAT", "latn/MOL", "latn/NLD", "latn/ROM", "latn/TRK"]
+        );
+        // A face without locl records none.
+        let anek = single("google-static/anekmalayalam/AnekMalayalam_Condensed-ExtraLight.ttf");
+        assert!(!anek.features.contains(&"locl".to_owned()));
+        assert!(anek.locl_languages.is_empty());
     }
 
     #[test]
@@ -1167,6 +1282,15 @@ mod tests {
         ));
         assert_eq!(file.format, Some(FontFormat::Ttf));
         assert_eq!(file.health, Health::Ok);
+    }
+
+    #[test]
+    fn a_color_font_is_color_and_a_plain_one_is_not() {
+        assert!(single("google-repo/arefruqaaink/ArefRuqaaInk-Regular.ttf").color);
+        assert!(single("google-repo/cairoplay/CairoPlay[slnt,wght].ttf").color);
+        assert!(!single(STATIC_TTF).color);
+        let bitmaps = parse(&retagged(STATIC_TTF, &[(b"GDEF", b"CBDT")]));
+        assert!(bitmaps.faces[0].color);
     }
 
     #[test]

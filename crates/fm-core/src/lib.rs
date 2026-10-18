@@ -8,12 +8,16 @@
 pub mod charsets;
 pub mod classify;
 pub mod config;
+pub mod coverage;
 pub mod error;
+mod filter;
 pub mod font_file;
 pub mod grouping;
 pub mod index;
 pub mod logging;
+mod parallel;
 pub mod parser;
+pub mod sample;
 pub mod scanner;
 mod search;
 pub mod settings;

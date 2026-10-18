@@ -4,8 +4,8 @@
   "_merge": "human = the harness never merges. auto = the harness merges a story when CI is green on a branch up to date with main, the review has no open must, the budget held and no existing fm-api type changed (outside contract_epics). Tracks in auto_merge.exclude_tracks always wait for a human; the lane goes on meanwhile.",
   "merge": "auto",
 
-  "_auto_merge": "exclude_tracks: tracks a human always merges. max_branch_updates: how often the harness brings a PR up to date with main (then CI again) before it gives up. max_syncs: how often the sync stage may resolve conflicts with main for one story before it is blocked.",
-  "auto_merge": { "exclude_tracks": ["platform"], "max_branch_updates": 3, "max_syncs": 2 },
+  "_auto_merge": "exclude_tracks: tracks a human always merges (empty: platform stories auto-merge too, on green CI on all three OS; checked by hand at the end, decided 2026-10-18). max_branch_updates: how often the harness brings a PR up to date with main (then CI again) before it gives up. max_syncs: how often the sync stage may resolve conflicts with main for one story before it is blocked.",
+  "auto_merge": { "exclude_tracks": [], "max_branch_updates": 3, "max_syncs": 2 },
 
   "_idle": "A lane with nothing to start while the other lane still works waits poll_min minutes and asks the picker again, for at most max_hours. Nothing in flight anywhere -> the lane ends. -NoIdleWait ends it at once.",
   "idle": { "poll_min": 10, "max_hours": 8 },

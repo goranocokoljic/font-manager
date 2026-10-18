@@ -6,14 +6,20 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use fm_api::activation::{ActivationOutcome, OutcomeStatus};
-use fm_api::common::Paged;
+use fm_api::common::{Paged, Slant};
 use fm_api::library::{
     AppInfo, FaceDetail, Family, FamilySummary, LibraryService, ListFamiliesRequest, Source,
     SourceKind,
 };
 use fm_api::mock::MockApi;
+use fm_api::organization::{Collection, Tag};
+use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
+use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
-use fm_api::{API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SettingsService, SourceId};
+use fm_api::{
+    API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SearchService, SettingsService,
+    SourceId,
+};
 use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
 use tauri::test::{
@@ -133,6 +139,209 @@ fn families_round_trip_through_fm_api() {
         .unwrap()
         .unwrap_err();
     assert_eq!(err["code"], "notFound", "{err}");
+}
+
+#[test]
+fn search_returns_hits_and_filter_counts() {
+    let api = MockApi::new();
+    let req = serde_json::json!({ "req": { "query": "mono" } });
+    let r: SearchResponse = invoke_with("search", req)
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    let want = api
+        .search(SearchRequest {
+            query: "mono".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r, want);
+    assert!(r.counts.is_some());
+    let langs: Vec<LanguagePreset> = invoke("list_languages")
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(langs, api.list_languages().unwrap());
+}
+
+#[test]
+fn create_collection_saves_a_smart_collection_with_its_rules() {
+    let req = serde_json::json!({
+        "req": { "name": "Italics", "rules": { "slant": "italic" } }
+    });
+    let c: Collection = invoke_with("create_collection", req)
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(c.name, "Italics");
+    assert_eq!(c.rules.unwrap().slant, Some(Slant::Italic));
+    let err = invoke_with(
+        "create_collection",
+        serde_json::json!({ "req": { "name": " " } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+}
+
+#[test]
+fn collections_are_nested_reordered_filled_and_deleted_over_ipc() {
+    // One app for every call: the collections live in its MockApi.
+    let (_app, webview) = app().unwrap();
+    let create = |name: &str, parent: Option<u32>| -> Collection {
+        send(
+            &webview,
+            "create_collection",
+            serde_json::json!({ "req": { "name": name, "parent": parent } }),
+        )
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap()
+    };
+    let list = || -> Vec<Collection> {
+        send(&webview, "list_collections", serde_json::json!({}))
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let a = create("A", None);
+    let b = create("B", None);
+    let moved: Collection = send(
+        &webview,
+        "move_collection",
+        serde_json::json!({ "req": { "collection": b.id, "parent": a.id, "position": 0 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(moved.parent, Some(a.id));
+    let renamed: Collection = send(
+        &webview,
+        "rename_collection",
+        serde_json::json!({ "req": { "collection": b.id, "name": "Brand" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(renamed.name, "Brand");
+    let filled: Collection = send(
+        &webview,
+        "add_to_collection",
+        serde_json::json!({ "req": { "collection": b.id, "faces": [3], "families": [1] } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert!(filled.face_count >= 2, "{filled:?}");
+    let emptied: Collection = send(
+        &webview,
+        "remove_from_collection",
+        serde_json::json!({ "req": { "collection": b.id, "faces": [3] } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(emptied.face_count, filled.face_count - 1);
+    let names: Vec<_> = list().into_iter().map(|c| c.name).collect();
+    assert_eq!(names, ["A", "Brand"]);
+    send(
+        &webview,
+        "delete_collection",
+        serde_json::json!({ "collection": a.id }),
+    )
+    .unwrap()
+    .unwrap();
+    assert!(list().is_empty());
+}
+
+#[test]
+fn tags_favorites_and_ratings_are_edited_and_filter_over_ipc() {
+    // One app for every call: the tags live in its MockApi.
+    let (_app, webview) = app().unwrap();
+    let call = |cmd: &str, args: serde_json::Value| send(&webview, cmd, args).unwrap();
+    let tags = || -> Vec<Tag> {
+        call("list_tags", serde_json::json!({}))
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let made: Vec<Tag> = call(
+        "tag_faces",
+        serde_json::json!({ "req": { "faces": [1, 3], "tags": ["Display", "brand"] } }),
+    )
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(made.len(), 2);
+    let listed: Vec<_> = tags().into_iter().map(|t| (t.name, t.face_count)).collect();
+    assert_eq!(listed, [("brand".into(), 2), ("Display".into(), 2)]);
+    call(
+        "untag_faces",
+        serde_json::json!({ "req": { "faces": [1, 3], "tags": [made[1].id] } }),
+    )
+    .unwrap();
+    assert_eq!(tags().len(), 1);
+    call(
+        "update_user_meta",
+        serde_json::json!({ "req": { "faces": [1], "favorite": true, "rating": 4 } }),
+    )
+    .unwrap();
+    let face: FaceDetail = call("get_face", serde_json::json!({ "face": 1 }))
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(
+        (face.tags, face.favorite, face.rating),
+        (vec!["Display".to_owned()], true, Some(4))
+    );
+    let found: SearchResponse = call(
+        "search",
+        serde_json::json!({ "req": { "filters": { "tags": [made[0].id], "favorite": true, "minRating": 4 } } }),
+    )
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(found.total, 1);
+    let counts = found.counts.unwrap();
+    assert_eq!(
+        counts.favorite.iter().find(|c| c.value).map(|c| c.count),
+        Some(1)
+    );
+    assert!(counts.min_rating.iter().any(|c| c.value == 4));
+    assert!(counts.tags.iter().any(|c| c.value == made[0].id));
+    let err = call(
+        "update_user_meta",
+        serde_json::json!({ "req": { "faces": [1], "rating": 6 } }),
+    )
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+}
+
+#[test]
+fn sample_texts_round_trip_through_fm_api() {
+    let req = SampleTextRequest {
+        faces: vec![FaceId(1), FaceId(7)],
+        text: "Źdźbło".into(),
+    };
+    let got: Vec<SampleText> = invoke_with(
+        "sample_texts",
+        serde_json::json!({ "req": { "faces": [1, 7], "text": "Źdźbło" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(got, MockApi::new().sample_texts(req).unwrap());
+    assert!(got[1].fallback.is_some(), "{got:?}");
 }
 
 #[test]

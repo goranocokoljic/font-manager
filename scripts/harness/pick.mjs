@@ -18,7 +18,8 @@
 //   - merge: auto -> a claimed story with a ready PR goes back through CI and the
 //     merge gate (it stopped on a red main, or the lane stopped), unless it is
 //     labelled harness:human-merge (left for a person on purpose)
-//   - a candidate whose predicted areas overlap an open harness PR of the OTHER lane waits
+//   - a candidate whose predicted areas overlap an open PR of a story the OTHER lane
+//     still works on waits (blocked and human-merge PRs do not count)
 // Ordering inside a lane: phase, epic number, story number, size.
 //
 // Output (stdout, one JSON object unless --dry-run):
@@ -104,9 +105,16 @@ export function planLane(lane, world, cfg, { issues = null, bot = '', checkDeps 
     return result('wait', null);
   }
 
-  // Areas other lanes are working in right now (their open story PRs).
+  // Areas other lanes are working in right now: open PRs of stories still in
+  // flight. A PR that is blocked or waits for a human merge holds no area; if
+  // it lands later, the sync stage resolves the conflict.
+  const working = (s) => s && s.labels.includes('harness:in-progress')
+    && !s.labels.includes(HUMAN_MERGE) && !s.labels.includes('harness:blocked');
   const otherAreas = prs
-    .filter((p) => p.storyId && laneOf(stories.find((s) => s.meta.id === p.storyId)?.meta.track, cfg) !== lane)
+    .filter((p) => {
+      const s = p.storyId && stories.find((x) => x.meta.id === p.storyId);
+      return working(s) && laneOf(s.meta.track, cfg) !== lane;
+    })
     .flatMap((p) => p.areas.map((a) => ({ area: a, pr: p.number, story: p.storyId })));
 
   let candidates = mine.slice().sort(compareStories);

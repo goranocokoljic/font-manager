@@ -1,0 +1,20 @@
+{
+  "id": "the-ui-must-compare-identifiers-by-the-same-rule-as-the-core",
+  "title": "The UI must compare identifiers by the same rule as the core",
+  "category": "correctness",
+  "rule": "When the UI maps a name back to an id (tags, collections, presets), use an exact match first and then the core's own equality rule, not a stricter or looser one. fm-core's `COLLATE NOCASE` and `eq_ignore_ascii_case` fold A–Z only, so `toLowerCase()` (Unicode) can merge two names the core keeps apart and resolve the wrong id. Share one helper for the rule (for tags: `sameTagName` in `stores/tags.ts`) and test it with names that differ only in non-ASCII case (\"Äb\"/\"äb\").",
+  "rationale": "E7.2 (#83): `useTagsStore.idOf` used Unicode `toLowerCase()` while fm-core folds ASCII only, so 'Remove tag äb' could untag 'Äb' and report success.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    83
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.ts",
+    "apps/desktop/src/**/*.vue",
+    "crates/fm-core/src/index/**"
+  ],
+  "first_seen": "2026-10-18T14:13:31.983Z",
+  "last_seen": "2026-10-18T14:13:31.983Z"
+}

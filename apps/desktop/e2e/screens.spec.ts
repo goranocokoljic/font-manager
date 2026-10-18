@@ -19,6 +19,8 @@ const routes = (process.env.FM_SCREENS_ROUTES ?? '/')
   .split(',')
   .map((r) => r.trim())
   .filter(Boolean);
+// FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
+const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -36,6 +38,9 @@ test.describe('@screens', () => {
           await page.route('**/fmfont/*', (r) =>
             r.fulfill({ status: 200, contentType: 'font/ttf', body: font }),
           );
+          await page.addInitScript((entries) => {
+            for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
+          }, storage);
           await page.setViewportSize(vp);
           await page.emulateMedia({ colorScheme: scheme });
           await page.goto(`/#${path}`);

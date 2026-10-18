@@ -7,6 +7,15 @@
 //! short word shares no trigram with the right word, and still deserves an
 //! answer.
 //!
+//! Filters (E3.4, [`crate::filter`]) apply to the faces that match the
+//! text: a family is a result when one of its faces matches and passes every
+//! filter. The same pass counts the results of every filter value.
+//!
+//! The `supports` filter (E3.8) checks each face's `cmap` against the
+//! characters asked for ([`Need`]). A face that lacks at most
+//! [`NEAR_MISS`](crate::coverage::NEAR_MISS) of them is still a result: it lists what it lacks, and its
+//! family ranks after the families with a complete face.
+//!
 //! Faces of files that are gone or of paused sources are not searched.
 //!
 //! The searchable rows are read once and kept in memory until the database
@@ -18,13 +27,16 @@ use std::collections::{HashMap, HashSet};
 
 use fm_api::activation::ActivationMode;
 use fm_api::common::{Axis, FontFormat, Slant};
-use fm_api::library::{FamilyActivation, FamilySummary};
-use fm_api::search::{FamilyHit, Filters, SearchRequest, SearchResponse};
-use fm_api::{FaceId, FamilyId};
+use fm_api::library::{FamilyActivation, FamilySummary, LicenseType};
+use fm_api::search::{FamilyHit, Filters, Missing, SearchRequest, SearchResponse, Supports};
+use fm_api::{CollectionId, FaceId, FamilyId, SourceId, TagId};
+use rusqlite::OptionalExtension;
 
 use super::files::format_from_sql;
 use super::{Index, db_error};
+use crate::coverage::{CodePointSet, Fit, Need};
 use crate::error::{FmError, FmResult};
+use crate::filter::{FaceFacts, Slots, Tag, Tally, failed, failed_supports, tag, values};
 use crate::grouping::{family_key, slant_rank};
 use crate::search::{FAMILY, FIELD_COUNT, FOUNDRY, FaceText, Query};
 
@@ -34,12 +46,18 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
        fts.tags, fts.file_name, face.weight, face.width, face.slant, face.is_variable,
        face.axes, font_file.format, activation.mode, face.added,
        CASE WHEN face.is_variable AND json_valid(face.parsed)
-            THEN json_array_length(face.parsed, '$.namedInstances') END
+            THEN json_array_length(face.parsed, '$.namedInstances') END,
+       font_file.source_id, face.features, user_meta.license_type,
+       coalesce(user_meta.favorite, 0), user_meta.rating,
+       face.is_color, face.healthy, face.cmap,
+       CASE WHEN json_valid(face.parsed)
+            THEN json_extract(face.parsed, '$.loclLanguages') END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
 JOIN source ON source.id = font_file.source_id
 LEFT JOIN activation ON activation.face_id = face.id
+LEFT JOIN user_meta ON user_meta.face_id = face.id
 WHERE font_file.gone = 0 AND source.paused = 0
 ORDER BY face.id";
 
@@ -48,6 +66,8 @@ ORDER BY face.id";
 pub(super) struct SearchCache {
     stamp: Option<(i64, u64)>,
     rows: Vec<Row>,
+    /// The filter values the rows can be counted under.
+    slots: Slots,
 }
 
 /// One searchable face.
@@ -57,27 +77,38 @@ struct Row {
     /// The family name as written, and its grouping key.
     family: String,
     family_key: String,
-    foundry: Option<String>,
-    format: Option<FontFormat>,
-    is_variable: bool,
+    /// What the filters look at.
+    facts: FaceFacts,
+    /// The [`Slots`] of its filter values.
+    slots: Vec<u32>,
     active: Option<ActivationMode>,
     added: Option<String>,
     /// Styles it lists under its family: its named instances, or itself.
     styles: u32,
+    /// The code points it maps; `None` when not stored (indexed before E3.7)
+    /// or damaged.
+    cmap: Option<CodePointSet>,
+    /// Its `locl` language systems (`cyrl/SRB`).
+    locl: Vec<String>,
 }
 
 impl Index {
-    /// Ranked families for a text query, a page at a time.
+    /// Ranked families for a text query and filters, a page at a time,
+    /// with the result count of every filter value.
     ///
-    /// Filters are not applied yet (E3.4): a request with any filter set is
-    /// an [`fm_api::ErrorCode::Unsupported`] error rather than results that
-    /// ignore it.
+    /// With a `supports` filter every hit says what its best face misses
+    /// ([`FamilyHit::missing`]); an unknown language preset is
+    /// `InvalidRequest`. A smart collection is not applied yet: it is an
+    /// [`fm_api::ErrorCode::Unsupported`] error rather than results that
+    /// ignore it. An unknown collection is `NotFound`.
     pub fn search(&self, req: &SearchRequest) -> FmResult<SearchResponse> {
-        if req.filters != Filters::default() {
-            return Err(FmError::unsupported(
-                "Search filters are not available yet.",
-            ));
+        self.check_filters(&req.filters)?;
+        let need = match &req.filters.supports {
+            None => None,
+            Some(Supports::Languages { codes }) => Some(Need::languages(codes)?),
+            Some(Supports::Text { text }) => Some(Need::text(text)),
         }
+        .filter(|need| !need.is_empty());
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
@@ -97,13 +128,33 @@ impl Index {
                 members.entry(&row.family_key).or_default().push(row);
             }
         }
+        let mut tally = Tally::new(&cache.slots);
         let mut families: Vec<FamilyHit> = Vec::with_capacity(hits.len());
-        for (key, mut faces) in hits {
+        for (number, (key, faces)) in hits.into_iter().enumerate() {
+            let number = u32::try_from(number).unwrap_or(u32::MAX);
+            let mut faces: Vec<(&Row, f32, Option<Fit>)> = faces
+                .into_iter()
+                .filter_map(|(row, score)| {
+                    let mut failed = failed(&req.filters, &row.text, &row.facts);
+                    let fit = need.as_ref().and_then(|need| {
+                        let fit = row.cmap.as_ref().map(|set| need.check(set, &row.locl));
+                        failed |= failed_supports(fit.as_ref());
+                        fit
+                    });
+                    tally.add(number, failed, &row.slots);
+                    (failed == 0).then_some((row, score, fit))
+                })
+                .collect();
+            if faces.is_empty() {
+                continue;
+            }
             let Some(family) = members.get(key).map(|m| summary(m)) else {
                 continue;
             };
-            faces.sort_by(|(a, sa), (b, sb)| {
-                sb.total_cmp(sa)
+            faces.sort_by(|(a, sa, fa), (b, sb, fb)| {
+                lacking(fa.as_ref())
+                    .cmp(&lacking(fb.as_ref()))
+                    .then(sb.total_cmp(sa))
                     .then(a.text.weight.cmp(&b.text.weight))
                     .then(a.text.width.cmp(&b.text.width))
                     .then(slant_rank(a.text.slant).cmp(&slant_rank(b.text.slant)))
@@ -111,14 +162,22 @@ impl Index {
             });
             families.push(FamilyHit {
                 family,
-                score: faces.first().map_or(0.0, |(_, s)| *s),
-                faces: faces.iter().map(|(row, _)| FaceId(row.id)).collect(),
-                missing: None,
+                score: faces.first().map_or(0.0, |(_, s, _)| *s),
+                missing: faces
+                    .first()
+                    .and_then(|(_, _, fit)| fit.as_ref())
+                    .map(|fit| Missing {
+                        chars: fit.chars.iter().map(char::to_string).collect(),
+                        has_locl: fit.has_locl,
+                    }),
+                faces: faces.iter().map(|(row, _, _)| FaceId(row.id)).collect(),
             });
         }
         families.sort_by(|a, b| {
-            b.score
-                .total_cmp(&a.score)
+            let lacks = |hit: &FamilyHit| hit.missing.as_ref().map_or(0, |m| m.chars.len());
+            lacks(a)
+                .cmp(&lacks(b))
+                .then(b.score.total_cmp(&a.score))
                 .then_with(|| family_key(&a.family.name).cmp(&family_key(&b.family.name)))
                 .then(a.family.id.cmp(&b.family.id))
         });
@@ -128,7 +187,36 @@ impl Index {
             .skip(req.page.offset as usize)
             .take(req.page.limit as usize)
             .collect();
-        Ok(SearchResponse { families, total })
+        Ok(SearchResponse {
+            families,
+            total,
+            counts: Some(tally.finish()),
+        })
+    }
+
+    /// Refuses the filters search cannot apply yet, and unknown collections.
+    fn check_filters(&self, filters: &Filters) -> FmResult<()> {
+        if let Some(id) = filters.collection {
+            let smart: Option<bool> = self
+                .conn
+                .query_row(
+                    "SELECT is_smart FROM collection WHERE id = ?1",
+                    [id.0],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(|e| db_error(&e))?;
+            match smart {
+                None => return Err(FmError::not_found(format!("Collection {id}"))),
+                Some(true) => {
+                    return Err(FmError::unsupported(
+                        "Filtering by a smart collection is not available yet.",
+                    ));
+                }
+                Some(false) => {}
+            }
+        }
+        Ok(())
     }
 
     /// The ids of the faces that share a trigram with the query.
@@ -145,6 +233,24 @@ impl Index {
         Ok(ids)
     }
 
+    /// The visible faces of the family `family`, in id order, as search
+    /// groups them; `None` when no family has that id.
+    pub(super) fn family_faces(&self, family: FamilyId) -> FmResult<Option<Vec<FaceId>>> {
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let Some(first) = cache.rows.iter().find(|r| r.id == family.0) else {
+            return Ok(None);
+        };
+        let faces: Vec<FaceId> = cache
+            .rows
+            .iter()
+            .filter(|r| r.family_key == first.family_key)
+            .map(|r| FaceId(r.id))
+            .collect();
+        // A family's id is the id of its first face; another face's id is not one.
+        Ok((faces.first() == Some(&FaceId(family.0))).then_some(faces))
+    }
+
     /// Reads the searchable rows again when the database changed since.
     fn refresh_search_cache(&self) -> FmResult<()> {
         let data_version: i64 = self
@@ -155,12 +261,18 @@ impl Index {
         if self.search_cache.borrow().stamp == stamp {
             return Ok(());
         }
-        let rows = self.visible_faces()?;
-        *self.search_cache.borrow_mut() = SearchCache { stamp, rows };
+        let mut slots = Slots::default();
+        let rows = self.visible_faces(&mut slots)?;
+        *self.search_cache.borrow_mut() = SearchCache { stamp, rows, slots };
         Ok(())
     }
 
-    fn visible_faces(&self) -> FmResult<Vec<Row>> {
+    fn visible_faces(&self, slots: &mut Slots) -> FmResult<Vec<Row>> {
+        let mut tags = self.pairs("SELECT face_id, tag_id FROM face_tag", TagId)?;
+        let mut collections = self.pairs(
+            "SELECT face_id, collection_id FROM collection_face",
+            CollectionId,
+        )?;
         let mut stmt = self
             .conn
             .prepare_cached(VISIBLE_FACES)
@@ -170,6 +282,7 @@ impl Index {
         let mut slants = Names::new(name_of::<Slant>);
         let mut modes = Names::new(name_of::<ActivationMode>);
         let mut formats = Names::new(|f| format_from_sql(f).ok().flatten());
+        let mut licenses = Names::new(name_of::<LicenseType>);
         while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
             let text = |i: usize| {
                 row.get_ref(i)
@@ -189,35 +302,95 @@ impl Index {
                 Vec::new()
             };
             let instances: Option<i64> = row.get(16).map_err(|e| db_error(&e))?;
+            let id: u32 = row.get(0).map_err(|e| db_error(&e))?;
             let family = fields[FAMILY].unwrap_or_default().to_owned();
-            let foundry = fields[FOUNDRY].map(str::to_owned);
             let slant = text(10)?
                 .and_then(|s| slants.get(s))
                 .unwrap_or(Slant::Upright);
+            let active = text(14)?.and_then(|m| modes.get(m));
+            let mut features: Vec<Tag> = text(18)?.map(feature_tags).unwrap_or_default();
+            features.sort_unstable();
+            let facts = FaceFacts {
+                classification: None,
+                is_variable,
+                color: row.get(22).map_err(|e| db_error(&e))?,
+                format: text(13)?.and_then(|f| formats.get(f)),
+                features,
+                license: text(19)?.and_then(|l| licenses.get(l)),
+                foundry: fields[FOUNDRY].map(str::to_owned),
+                source: SourceId(row.get(17).map_err(|e| db_error(&e))?),
+                tags: tags.remove(&id).unwrap_or_default(),
+                collections: collections.remove(&id).unwrap_or_default(),
+                active: active.is_some(),
+                favorite: row.get(20).map_err(|e| db_error(&e))?,
+                rating: row.get(21).map_err(|e| db_error(&e))?,
+                problems: !row.get::<_, bool>(23).map_err(|e| db_error(&e))?,
+            };
+            let face_text = FaceText::new(
+                fields,
+                row.get(8).map_err(|e| db_error(&e))?,
+                row.get(9).map_err(|e| db_error(&e))?,
+                slant,
+                axes,
+            );
             out.push(Row {
-                id: row.get(0).map_err(|e| db_error(&e))?,
+                id,
                 family_key: family_key(&family),
                 family,
-                foundry,
-                text: FaceText::new(
-                    fields,
-                    row.get(8).map_err(|e| db_error(&e))?,
-                    row.get(9).map_err(|e| db_error(&e))?,
-                    slant,
-                    axes,
-                ),
-                format: text(13)?.and_then(|f| formats.get(f)),
-                is_variable,
-                active: text(14)?.and_then(|m| modes.get(m)),
+                slots: slots.intern(&values(&face_text, &facts)),
+                text: face_text,
+                facts,
+                active,
                 added: text(15)?.map(str::to_owned),
                 styles: instances
                     .and_then(|n| u32::try_from(n).ok())
                     .unwrap_or(0)
                     .max(1),
+                cmap: row
+                    .get_ref(24)
+                    .and_then(|v| Ok(v.as_blob_or_null()?))
+                    .map_err(|e| db_error(&e))?
+                    .and_then(CodePointSet::from_bytes),
+                locl: text(25)?
+                    .and_then(|json| serde_json::from_str(json).ok())
+                    .unwrap_or_default(),
             });
         }
         Ok(out)
     }
+
+    /// `(face, id)` pairs from `sql`, by face.
+    fn pairs<T>(&self, sql: &str, id: fn(u32) -> T) -> FmResult<HashMap<u32, Vec<T>>> {
+        let mut stmt = self.conn.prepare_cached(sql).map_err(|e| db_error(&e))?;
+        let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
+        let mut out: HashMap<u32, Vec<T>> = HashMap::new();
+        while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
+            let face: u32 = row.get(0).map_err(|e| db_error(&e))?;
+            out.entry(face)
+                .or_default()
+                .push(id(row.get(1).map_err(|e| db_error(&e))?));
+        }
+        Ok(out)
+    }
+}
+
+/// The four-letter tags of a `face.features` JSON array.
+fn feature_tags(json: &str) -> Vec<Tag> {
+    // Tags never need JSON escapes; read them in place, owned only if they do.
+    match serde_json::from_str::<Vec<&str>>(json) {
+        Ok(tags) => tags.into_iter().filter_map(tag).collect(),
+        Err(_) => serde_json::from_str::<Vec<String>>(json)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|t| tag(t))
+            .collect(),
+    }
+}
+
+/// Characters a face lacks of the search's need, for ordering: 0 without a
+/// `supports` filter.
+fn lacking(fit: Option<&Fit>) -> usize {
+    fit.map_or(0, |f| f.missing)
 }
 
 /// The scored faces by family key. `candidates` limits the faces looked at.
@@ -247,7 +420,7 @@ fn score<'a>(
 fn summary(faces: &[&Row]) -> FamilySummary {
     let first = faces.first();
     let mut formats: Vec<FontFormat> = Vec::new();
-    for format in faces.iter().filter_map(|f| f.format) {
+    for format in faces.iter().filter_map(|f| f.facts.format) {
         if !formats.contains(&format) {
             formats.push(format);
         }
@@ -258,9 +431,9 @@ fn summary(faces: &[&Row]) -> FamilySummary {
         name: first.map(|f| f.family.clone()).unwrap_or_default(),
         style_count: faces.iter().map(|f| f.styles).sum(),
         formats,
-        foundry: faces.iter().find_map(|f| f.foundry.clone()),
+        foundry: faces.iter().find_map(|f| f.facts.foundry.clone()),
         classification: None,
-        is_variable: faces.iter().any(|f| f.is_variable),
+        is_variable: faces.iter().any(|f| f.facts.is_variable),
         activation: match active {
             0 => FamilyActivation::Inactive,
             n if n == faces.len() => FamilyActivation::Active,
@@ -271,6 +444,16 @@ fn summary(faces: &[&Row]) -> FamilySummary {
             .filter_map(|f| f.added.clone())
             .min()
             .unwrap_or_default(),
+        // The search rows do not carry these yet; the detail list reads
+        // `list_families`, which fills them.
+        styles: Vec::new(),
+        weight_range: None,
+        is_color: false,
+        version: None,
+        location: None,
+        open_license: None,
+        declared_license: None,
+        tags: Vec::new(),
     }
 }
 

@@ -104,8 +104,10 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   stops at once and keeps the story's state; the next run resumes it at CI.
   Stories with numeric criteria (a number with ms, s, fps,
   MB) get the `bench` label on the CI wait before finalize; `bench-report.json`
-  `pass: false` counts as red. Before E9.1 there is no bench job: the agent
-  measures locally and the criterion is marked "verified locally, pending E9.1".
+  `pass: false` counts as red. The bench job (`.github/workflows/bench.yml`,
+  E9.1) runs `scripts/bench.sh` on all three OS and merges the results into
+  `bench-report.json` (`"<os>.<metric>"` entries); a metric not measured yet
+  has `pass: null` and a note.
 - **sync** — merge `origin/main` into the branch, resolve the conflicts (keep
   both sides; the same thing added twice → keep one; lock files and `types.ts`
   regenerated), full preflight, push, CI again. At most
@@ -134,7 +136,7 @@ memory if a cold start is needed, and the decision record reviewers read.
 | merge | CI green on all three OS, review has no open `must`, budget held, branch up to date with `main` | squash-merge (pinned to the checked head commit), delete the branch |
 | update | the branch is behind `main` | `gh pr update-branch`, then CI again (red → ci-fix as usual), then the gate again; at most `auto_merge.max_branch_updates` (3) times |
 | sync | the branch conflicts with `main` | the `sync` stage, then CI, then the gate again |
-| human | track in `auto_merge.exclude_tracks` (`platform`), over budget, or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
+| human | track in `auto_merge.exclude_tracks` (empty in this repo; the default is `platform`), over budget, or the PR removes/rewrites lines of `apps/desktop/src/api/types.ts` outside `contract_epics` | comment on the PR, label `harness:human-merge`, leave it ready; the lane goes on |
 | block | a draft, or the merge call failed | `harness:blocked` |
 | stop | the newest commit on `main` has a failed required check (newest run per job) | re-run main's failed jobs once (a flaky test), check every `main_red.poll_min` (10) minutes; green → the gate again; still red after `main_red.max_hours` (6) → stop the lane, and the next run merges the PR |
 

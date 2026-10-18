@@ -1,21 +1,30 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import CollectionsSidebar from '../components/CollectionsSidebar.vue';
+import FilterChips from '../components/FilterChips.vue';
 import FontList from '../components/FontList.vue';
+import FontTable from '../components/FontTable.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
+import PreviewStrip from '../components/PreviewStrip.vue';
+import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
+import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
+import { useCollectionsStore } from '../stores/collections';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import { useSearchStore } from '../stores/search';
 import type { FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
+import { useViewsStore, type ViewMode } from '../stores/views';
 
 const app = useAppStore();
 const layout = useLayoutStore();
@@ -24,11 +33,29 @@ const commands = useCommandsStore();
 const library = useLibraryStore();
 const preview = usePreviewStore();
 const fontList = useFontListStore();
+const views = useViewsStore();
+const search = useSearchStore();
+const collections = useCollectionsStore();
 const route = useRoute();
 const router = useRouter();
+
+// The table's sort column orders the families (behind the API); set before the
+// first load so the families come in that order at once.
+watch(
+  () => views.orderFor(ALL_FONTS_VIEW),
+  (order) => void library.setOrder(order),
+  { immediate: true },
+);
+const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
+const MODES: { value: ViewMode; label: string }[] = [
+  { value: 'list', label: 'List' },
+  { value: 'table', label: 'Table' },
+];
+
 onMounted(() => {
   void app.load();
   void library.load();
+  void search.loadLanguages();
 });
 onBeforeUnmount(() => void library.stop());
 
@@ -47,6 +74,12 @@ useActions([
     enabled: () => selection.canActivate,
     run: () => selection.toggleActivation('permanent'),
   },
+  ...MODES.map((m) => ({
+    id: `view.${m.value}`,
+    title: `Show fonts as a ${m.label.toLowerCase()}`,
+    group: 'View',
+    run: () => views.setMode(ALL_FONTS_VIEW, m.value),
+  })),
 ]);
 
 const paletteChord = chordOf(ACTIONS.palette)!;
@@ -73,20 +106,14 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = [
-  'Collections',
-  'Smart collections',
-  'Project sets',
-  'Tags',
-  'Problems',
-  'Online catalogs',
-];
+const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online catalogs'];
 </script>
 
 <template>
   <MainLayout>
     <template #sidebar>
       <SourcesSidebar />
+      <CollectionsSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>
@@ -94,12 +121,29 @@ const groups = [
 
     <template #list>
       <header class="toolbar">
-        <h1 class="title">All fonts</h1>
+        <h1 class="title">{{ collections.open?.name ?? 'All fonts' }}</h1>
+        <SearchBox />
         <p class="count" role="status">
           <template v-if="fontList.selectedCount > 1"
             >{{ fontList.selectedCount }} selected</template
           >
+          <template v-else-if="search.hits"
+            >{{ search.total }} {{ search.total === 1 ? 'family' : 'families' }}</template
+          >
         </p>
+        <div class="modes" role="group" aria-label="View mode">
+          <button
+            v-for="m in MODES"
+            :key="m.value"
+            type="button"
+            class="toggle"
+            :aria-pressed="mode === m.value"
+            @click="views.setMode(ALL_FONTS_VIEW, m.value)"
+          >
+            {{ m.label }}
+          </button>
+        </div>
+        <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
         <button
           type="button"
           class="toggle"
@@ -112,15 +156,21 @@ const groups = [
           Inspector
         </button>
       </header>
+      <FilterChips />
       <PreviewControls :view="ALL_FONTS_VIEW" />
+      <template v-if="fontList.families.length && mode === 'table'">
+        <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+        <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
+      </template>
       <FontList
-        v-if="library.families.length"
+        v-else-if="fontList.families.length"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
         @cursor-face="showFace"
         @open="openFace"
       />
       <section v-else class="empty" aria-label="Font list">
         <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
+        <p v-else-if="search.hits">No fonts match the search and filters.</p>
         <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
       </section>
     </template>
@@ -196,6 +246,10 @@ const groups = [
   background: transparent;
   color: inherit;
   font: inherit;
+}
+.modes {
+  display: flex;
+  gap: 4px;
 }
 .toggle[aria-pressed='true'] {
   border-color: var(--fm-accent);

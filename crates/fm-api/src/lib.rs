@@ -50,7 +50,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 3,
+    minor: 6,
     patch: 0,
 };
 
@@ -129,6 +129,7 @@ pub fn types() -> specta::Types {
         library::Family,
         library::FaceDetail,
         library::Problem,
+        library::DuplicateGroup,
         // search
         search::SearchRequest,
         search::SearchResponse,
@@ -141,6 +142,8 @@ pub fn types() -> specta::Types {
         preview::PreviewRequest,
         preview::PreviewImage,
         preview::FontSource,
+        preview::SampleTextRequest,
+        preview::SampleText,
         // activation
         activation::ActivateRequest,
         activation::DeactivateRequest,
@@ -151,6 +154,7 @@ pub fn types() -> specta::Types {
         organization::Collection,
         organization::CreateCollectionRequest,
         organization::RenameCollectionRequest,
+        organization::MoveCollectionRequest,
         organization::CollectionFacesRequest,
         organization::Tag,
         organization::TagFacesRequest,
@@ -183,13 +187,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.3.0");
+        assert_eq!(API_VERSION.to_string(), "0.6.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":3,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":6,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

@@ -9,16 +9,30 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Collection,
+  type CollectionFacesRequest,
+  type CollectionId,
   type Event,
   type FaceDetail,
   type FaceId,
   type FaceSummary,
   type Family,
   type FamilyId,
+  type FamilyOrder,
+  type FamilySortKey,
+  type FamilyHit,
   type FamilySummary,
+  type FilterCount,
+  type FilterCounts,
+  type Filters,
   type JobId,
+  type LanguagePreset,
+  type SearchResponse,
+  type SampleText,
   type Source,
   type SourceId,
+  type Tag,
+  type TagId,
   type Target,
 } from './types';
 
@@ -195,6 +209,56 @@ export const mockFolders: AppFolders = {
   logs: '/home/demo/.local/state/font-manager/logs',
 };
 
+// The characters the mock faces map: basic Latin and Latin-1 (Western European);
+// faces that list `cyrl` also Latin Extended-A (Central European) and Serbian Cyrillic.
+const range = (from: number, to: number) =>
+  Array.from({ length: to - from }, (_, i) => String.fromCodePoint(from + i)).join('');
+const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
+const LATIN_EXT_A = range(0x100, 0x180);
+const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
+
+/** (script, characters the language needs), like the Rust mock's languages. */
+const MOCK_LANGUAGES: [string, string][] = [
+  ['Latn', 'abcdefghijklmnopqrstuvwxyz'],
+  ['Latn', 'aąbcćdeęfghijklłmnńoóprsśtuwyzźż'],
+  ['Latn', 'abcčćdđefghijklmnoprsštuvzž'],
+  ['Cyrl', 'абвгдђежзијклљмнњопрстћуфхцчџш'],
+];
+
+function mockChars(f: FaceDetail): Set<string> {
+  return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
+}
+
+/**
+ * The rule of `fm_core::sample` on the mock's languages: the sample when the face maps
+ * it; else letters of the complete language whose script the face maps most; else
+ * its own characters.
+ */
+export function mockSampleText(f: FaceDetail, text: string): SampleText {
+  const chars = mockChars(f);
+  const face = f.face.id;
+  const missing: string[] = [];
+  for (const c of text)
+    if (!/[\s\p{Cc}]/u.test(c) && !chars.has(c) && !missing.includes(c)) missing.push(c);
+  if (!missing.length) return { face, text, fallback: null, missing };
+  let best: { score: number; script: string; letters: string } | undefined;
+  for (const [script, letters] of MOCK_LANGUAGES) {
+    if (![...letters].every((c) => chars.has(c))) continue;
+    const all = new Set(MOCK_LANGUAGES.filter((l) => l[0] === script).flatMap((l) => [...l[1]]));
+    const score = [...all].filter((c) => chars.has(c)).length;
+    if (!best || score > best.score) best = { score, script, letters };
+  }
+  if (best)
+    return {
+      face,
+      text: [...best.letters].slice(0, 26).join(''),
+      fallback: { kind: 'script', script: best.script },
+      missing,
+    };
+  const own = [...chars].filter((c) => !/\s/u.test(c)).slice(0, 24);
+  return { face, text: own.join(' '), fallback: { kind: 'symbols' }, missing };
+}
+
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
 
 /** Options of a mock client. */
@@ -205,6 +269,8 @@ export interface MockOptions {
   extraFaces?: number;
   /** Styles in each extra family (1–6, default 1), so families can expand (e2e). */
   stylesPerFamily?: number;
+  /** User tags per face (the sample faces have none). */
+  faceTags?: Partial<Record<FaceId, string[]>>;
 }
 
 /** Id of the first extra face and family; above every sample id. */
@@ -251,21 +317,158 @@ function extraFamily(i: number, styles: number): FaceDetail[] {
   );
 }
 
-/** The list row of a family, from its faces. */
-function familySummary(faces: FaceSummary[]): FamilySummary {
+/** The list row of a family, from its faces and their details (like the Rust mock). */
+function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySummary {
   const first = faces[0]!;
+  const detail = details[0];
   const active = faces.filter((f) => f.active).length;
+  const styles = faces
+    .map((f) => ({ weight: f.weight, italic: f.slant !== 'upright' }))
+    .sort((a, b) => a.weight - b.weight || Number(a.italic) - Number(b.italic));
+  // A variable face spans its `wght` axis; a static one sits at its weight.
+  const weights = details.flatMap((d) => {
+    const axis = d.axes.find((a) => a.tag === 'wght');
+    return [axis?.min ?? d.face.weight, axis?.max ?? d.face.weight];
+  });
+  const tags = [...new Set(details.flatMap((d) => d.tags))].sort((a, b) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()),
+  );
   return {
     id: first.family,
     name: first.familyName,
     styleCount: faces.length,
     formats: [...new Set(faces.map((f) => f.format))],
-    foundry: null,
+    foundry: detail?.foundry ?? null,
     classification: null,
     isVariable: faces.some((f) => f.isVariable),
     activation: active === 0 ? 'inactive' : active === faces.length ? 'active' : 'partial',
     added: '2026-10-01T00:00:00Z',
+    styles,
+    weightRange: weights.length ? { min: Math.min(...weights), max: Math.max(...weights) } : null,
+    isColor: false,
+    version: detail?.version ?? null,
+    location: mockSources[0]!.path,
+    openLicense: details.find((d) => d.license.openLicense)?.license.openLicense ?? null,
+    declaredLicense: details.find((d) => d.license.declared)?.license.declared ?? null,
+    tags,
   };
+}
+
+/** `a` and `b` split into digit runs (compared as numbers) and other text. */
+function compareNatural(a: string, b: string): number {
+  const parts = (s: string) => s.toLowerCase().match(/\d+|\D+/g) ?? [];
+  const pa = parts(a);
+  const pb = parts(b);
+  for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
+    const x = pa[i]!;
+    const y = pb[i]!;
+    const dx = /^\d/.test(x);
+    const dy = /^\d/.test(y);
+    // Like the Rust enum: a number run sorts before a text run.
+    const c =
+      dx && dy ? Number(x) - Number(y) : dx !== dy ? (dx ? -1 : 1) : x < y ? -1 : x > y ? 1 : 0;
+    if (c) return c;
+  }
+  return pa.length - pb.length;
+}
+
+/** The value a row has for `by`; `null` when it has none. Mirrors `FamilyOrder` in fm-api. */
+function sortValue(f: FamilySummary, by: FamilySortKey): string | number | null {
+  const text = (s: string | null | undefined) => (s?.trim() ? s.trim().toLowerCase() : null);
+  switch (by) {
+    case 'activation':
+      return ['inactive', 'partial', 'active'].indexOf(f.activation);
+    case 'name':
+      return f.name.toLowerCase();
+    case 'styleCount':
+      return f.styleCount;
+    case 'weight':
+      return f.weightRange ? f.weightRange.min * 65536 + f.weightRange.max : null;
+    case 'format':
+      return f.formats.length
+        ? `${[...f.formats].sort().join(',')} ${Number(f.isVariable)} ${Number(f.isColor ?? false)}`
+        : null;
+    case 'version':
+      return text(f.version);
+    case 'manufacturer':
+      return text(f.foundry);
+    case 'location':
+      return text(f.location);
+    case 'license':
+      return f.declaredLicense || f.openLicense
+        ? `${f.declaredLicense ?? '~'} ${f.openLicense ?? '~'}`
+        : null;
+    case 'dateAdded':
+      return f.added || null;
+    case 'tags':
+      return f.tags?.length
+        ? f.tags
+            .map((t) => t.toLowerCase())
+            .sort()
+            .join('\u0001')
+        : null;
+  }
+}
+
+/** Sorts like `FamilyOrder::sort`: missing values last, ties by name, then id. */
+function sortFamilies(rows: FamilySummary[], order: FamilyOrder): FamilySummary[] {
+  const keyed = rows.map((row) => ({ row, value: sortValue(row, order.by) }));
+  const cmp = (x: string | number, y: string | number) =>
+    order.by === 'version'
+      ? compareNatural(String(x), String(y))
+      : typeof x === 'number' && typeof y === 'number'
+        ? x - y
+        : x < y
+          ? -1
+          : x > y
+            ? 1
+            : 0;
+  keyed.sort((a, b) => {
+    const byValue =
+      a.value === null || b.value === null
+        ? Number(a.value === null) - Number(b.value === null)
+        : cmp(a.value, b.value) * (order.descending ? -1 : 1);
+    const an = a.row.name.toLowerCase();
+    const bn = b.row.name.toLowerCase();
+    return byValue || (an < bn ? -1 : an > bn ? 1 : 0) || a.row.id - b.row.id;
+  });
+  return keyed.map((k) => k.row);
+}
+
+/** Language presets of the mock: a face covers one when it has the preset's script. */
+export const mockLanguages: LanguagePreset[] = [
+  { code: 'en', name: 'English', script: 'Latn' },
+  { code: 'pl', name: 'Polish', script: 'Latn' },
+  { code: 'sr-Cyrl', name: 'Serbian (Cyrillic)', script: 'Cyrl' },
+  { code: 'el', name: 'Greek', script: 'Grek' },
+];
+
+/**
+ * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
+ * `tags` are the ids of its tags.
+ */
+function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): boolean {
+  const f = d.face;
+  const covers = (code: string) => {
+    const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
+    return !!script && d.scripts.includes(script);
+  };
+  const supports = q.supports;
+  return (
+    (q.slant == null || q.slant === f.slant) &&
+    (q.variable == null || q.variable === f.isVariable) &&
+    (q.color == null || !q.color) &&
+    (!q.formats?.length || q.formats.includes(f.format)) &&
+    (q.features ?? []).every((t) => d.features.some((x) => x.tag === t)) &&
+    (q.license == null || d.license.declared === q.license) &&
+    (!q.sources?.length || q.sources.includes(1)) &&
+    (q.active == null || q.active === active) &&
+    (q.problems == null || q.problems === (f.health.kind !== 'ok')) &&
+    (q.tags ?? []).every((t) => tags.includes(t)) &&
+    (q.favorite == null || q.favorite === d.favorite) &&
+    (q.minRating == null || (d.rating ?? 0) >= q.minRating) &&
+    (supports?.kind !== 'languages' || supports.codes.every(covers))
+  );
 }
 
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
@@ -300,10 +503,30 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     );
   };
   const styles = Math.min(EXTRA_STYLES.length, Math.max(1, options.stylesPerFamily ?? 1));
+  // The sample faces are copied: tagging and rating edit this client's faces only.
   const faces = [
-    ...mockFaces,
+    ...mockFaces.map((f) => structuredClone(f)),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
-  ];
+  ].map((f) => {
+    const tags = options.faceTags?.[f.face.id];
+    return tags ? { ...f, tags: [...tags] } : f;
+  });
+  // Tags by id; a face holds their names (`FaceDetail.tags`), like the Rust mock.
+  const tags: { id: TagId; name: string }[] = [];
+  // Like fm-core's `COLLATE NOCASE`: only A–Z case is folded ("Äb" and "äb" are two tags).
+  const fold = (s: string) => s.replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const sameName = (a: string, b: string) => fold(a) === fold(b);
+  for (const f of faces)
+    for (const name of f.tags)
+      if (!tags.some((t) => sameName(t.name, name))) tags.push({ id: ++nextId, name });
+  const tagIdsOf = (d: FaceDetail): TagId[] =>
+    tags.filter((t) => d.tags.some((n) => sameName(n, t.name))).map((t) => t.id);
+  const tagView = (t: { id: TagId; name: string }): Tag => ({
+    ...t,
+    faceCount: faces.filter((f) => f.tags.some((n) => sameName(n, t.name))).length,
+  });
+  const changed = (updated: FaceId[]) =>
+    emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated });
   // Indexes, so long lists (10,000 families) answer quickly.
   const byId = new Map(faces.map((f) => [f.face.id, f]));
   const byFamily = new Map<FamilyId, FaceDetail[]>();
@@ -319,16 +542,141 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     active: active.get(f.face.id) ?? null,
   });
   const familyFaces = (family: FamilyId) => (byFamily.get(family) ?? []).map(summary);
+  const summaryOf = (family: FamilyId) =>
+    familySummary(familyFaces(family), byFamily.get(family) ?? []);
   const notFound = (id: FaceId) => ({
     code: 'notFound' as const,
     message: `Face ${id} was not found.`,
     detail: null,
   });
+  const faceOrThrow = (id: FaceId) => {
+    const f = find(id);
+    if (!f) throw notFound(id);
+    return f;
+  };
+  // Family groups a search returns: name matches first, then by name (like the Rust mock).
+  const hits = (query: string, q: Filters): FamilyHit[] => {
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const out: FamilyHit[] = [];
+    for (const [family, details] of byFamily) {
+      const matching = details.filter((d) => {
+        const hay =
+          `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
+        return (
+          words.every((w) => hay.includes(w)) &&
+          passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
+          (q.collection == null || !!members.get(q.collection)?.has(d.face.id))
+        );
+      });
+      if (!matching.length) continue;
+      const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
+      out.push({
+        family: summaryOf(family),
+        faces: matching.map((d) => d.face.id),
+        score: nameHit ? 1 : 0.5,
+        missing: q.supports ? { chars: [], hasLocl: false } : null,
+      });
+    }
+    return out.sort((a, b) => b.score! - a.score! || a.family.name.localeCompare(b.family.name));
+  };
+  // Per value, the family groups with that value chosen and the other filters kept.
+  const countEach = <T>(
+    query: string,
+    q: Filters,
+    values: T[],
+    pick: (f: Filters, v: T) => Filters,
+  ): FilterCount<T>[] =>
+    values
+      .map((value) => ({ value, count: hits(query, pick(q, value)).length }))
+      .filter((c) => c.count > 0);
+  const distinct = <T>(list: T[]) => [...new Set(list)];
+  const both = [true, false];
+  const counts = (query: string, q: Filters): FilterCounts => ({
+    slant: countEach(query, q, distinct(faces.map((d) => d.face.slant)), (f, slant) => ({
+      ...f,
+      slant,
+    })),
+    variable: countEach(query, q, both, (f, variable) => ({ ...f, variable })),
+    color: countEach(query, q, both, (f, color) => ({ ...f, color })),
+    formats: countEach(query, q, distinct(faces.map((d) => d.face.format)), (f, v) => ({
+      ...f,
+      formats: [v],
+    })),
+    features: countEach(
+      query,
+      q,
+      distinct(faces.flatMap((d) => d.features.map((x) => x.tag))).sort(),
+      (f, v) => ({ ...f, features: distinct([...(f.features ?? []), v]) }),
+    ),
+    sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] })),
+    problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
+    active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
+    tags: countEach(
+      query,
+      q,
+      tags.map((t) => t.id),
+      (f, v) => ({ ...f, tags: distinct([...(f.tags ?? []), v]) }),
+    ),
+    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
+    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
+  });
+  // Siblings keep the array's order; the list walks the tree from it.
+  const collections: Collection[] = [];
+  const members = new Map<CollectionId, Set<FaceId>>();
+  const conflict = (name: string) => ({
+    code: 'conflict' as const,
+    message: `A collection named "${name}" already exists here.`,
+    detail: null,
+  });
+  const findCollection = (id: CollectionId) => {
+    const c = collections.find((c) => c.id === id);
+    if (!c)
+      throw { code: 'notFound' as const, message: `Collection ${id} was not found.`, detail: null };
+    return c;
+  };
+  const nameTaken = (parent: CollectionId | null, name: string, except?: CollectionId) =>
+    collections.some((c) => c.parent === parent && c.name === name && c.id !== except);
+  // Smart collections are not evaluated (like fm-core until E14.2): their count is 0.
+  const viewOf = (c: Collection): Collection => ({
+    ...structuredClone(c),
+    faceCount: c.rules ? 0 : (members.get(c.id)?.size ?? 0),
+  });
+  const walk = (parent: CollectionId | null): Collection[] =>
+    collections.filter((c) => c.parent === parent).flatMap((c) => [viewOf(c), ...walk(c.id)]);
+  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
+    const c = findCollection(req.collection);
+    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
+    const ids = [...req.faces];
+    for (const id of ids) if (!find(id)) throw notFound(id);
+    for (const family of req.families ?? []) {
+      const list = byFamily.get(family);
+      if (!list)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${family} was not found.`,
+          detail: null,
+        };
+      ids.push(...list.map((d) => d.face.id));
+    }
+    const set = members.get(c.id) ?? new Set<FaceId>();
+    members.set(c.id, set);
+    for (const id of ids) {
+      if (add) set.add(id);
+      else set.delete(id);
+    }
+    return viewOf(c);
+  };
   const ids = (target: Target | null | undefined): FaceId[] =>
     target?.kind === 'faces' ? target.faces : [...active.keys()];
 
   return {
     getAppInfo: async () => mockAppInfo,
+    sampleTexts: async (req) =>
+      req.faces.map((id) => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        return mockSampleText(f, req.text);
+      }),
     getFace: async (id) => {
       const f = find(id);
       if (!f) throw notFound(id);
@@ -336,12 +684,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       detail.face.active = active.get(id) ?? null;
       return detail;
     },
-    // Families in id order (the sample ones first); `sort` is not mocked.
+    // Families in id order (the sample ones first), or in `order`; `sort` is not mocked.
     listFamilies: async (req) => {
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
+      if (req.order) {
+        const all = sortFamilies(familyIds.map(summaryOf), req.order);
+        return { items: all.slice(offset, offset + limit), total: all.length };
+      }
       return {
-        items: familyIds.slice(offset, offset + limit).map((id) => familySummary(familyFaces(id))),
+        items: familyIds.slice(offset, offset + limit).map(summaryOf),
         total: familyIds.length,
       };
     },
@@ -350,12 +702,120 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!list.length)
         throw { code: 'notFound' as const, message: `Family ${id} was not found.`, detail: null };
       const designer = find(list[0]!.id)!.designer;
-      return { summary: familySummary(list), designer, faces: list } satisfies Family;
+      return { summary: summaryOf(id), designer, faces: list } satisfies Family;
+    },
+    search: async (req) => {
+      const query = req.query ?? '';
+      const filters = req.filters ?? {};
+      const all = hits(query, filters);
+      const offset = req.page?.offset ?? 0;
+      const limit = req.page?.limit ?? 100;
+      return {
+        families: all.slice(offset, offset + limit),
+        total: all.length,
+        counts: counts(query, filters),
+      } satisfies SearchResponse;
+    },
+    listLanguages: async () => structuredClone(mockLanguages),
+    createCollection: async (req) => {
+      const name = req.name.trim();
+      if (!name) throw invalid('Give the collection a name.');
+      if (req.parent != null) findCollection(req.parent);
+      if (nameTaken(req.parent ?? null, name)) throw conflict(name);
+      const c: Collection = {
+        id: ++nextId,
+        parent: req.parent ?? null,
+        name,
+        rules: req.rules ?? null,
+        faceCount: 0,
+      };
+      collections.push(c);
+      return viewOf(c);
+    },
+    listCollections: async () => walk(null),
+    renameCollection: async (req) => {
+      const name = req.name.trim();
+      if (!name) throw invalid('Give the collection a name.');
+      const c = findCollection(req.collection);
+      if (nameTaken(c.parent, name, c.id)) throw conflict(name);
+      c.name = name;
+      return viewOf(c);
+    },
+    moveCollection: async (req) => {
+      const c = findCollection(req.collection);
+      const parent = req.parent ?? null;
+      for (let up = parent; up != null; up = findCollection(up).parent)
+        if (up === c.id)
+          throw invalid('A collection cannot go inside itself or one of its children.');
+      if (nameTaken(parent, c.name, c.id)) throw conflict(c.name);
+      collections.splice(collections.indexOf(c), 1);
+      c.parent = parent;
+      const siblings = collections.filter((x) => x.parent === parent);
+      const before = siblings[req.position];
+      collections.splice(before ? collections.indexOf(before) : collections.length, 0, c);
+      return viewOf(c);
+    },
+    deleteCollection: async (id) => {
+      findCollection(id);
+      const doomed = new Set([id]);
+      // A child can sit before its parent in the array after a move: repeat until stable.
+      for (let size = 0; size !== doomed.size;) {
+        size = doomed.size;
+        for (const c of collections) if (c.parent != null && doomed.has(c.parent)) doomed.add(c.id);
+      }
+      for (let i = collections.length - 1; i >= 0; i--)
+        if (doomed.has(collections[i]!.id)) collections.splice(i, 1);
+      for (const d of doomed) members.delete(d);
+    },
+    addToCollection: async (req) => editMembers(req, true),
+    removeFromCollection: async (req) => editMembers(req, false),
+    listTags: async () =>
+      tags.map(tagView).sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())),
+    // Like fm-core: names are trimmed, the same name in another case is the same tag.
+    tagFaces: async (req) => {
+      const names = req.tags.map((n) => n.trim()).filter(Boolean);
+      if (!names.length) throw invalid('Give the tag a name.');
+      if (!req.faces.length) throw invalid('Choose the fonts to tag.');
+      const targets = req.faces.map(faceOrThrow);
+      const named: { id: TagId; name: string }[] = [];
+      for (const name of names) {
+        let t = tags.find((x) => sameName(x.name, name));
+        if (!t) tags.push((t = { id: ++nextId, name }));
+        for (const d of targets)
+          if (!d.tags.some((n) => sameName(n, t.name))) d.tags = [...d.tags, t.name];
+        if (!named.some((x) => x.id === t.id)) named.push(t);
+      }
+      changed(req.faces);
+      return named.map(tagView);
+    },
+    untagFaces: async (req) => {
+      const targets = req.faces.map(faceOrThrow);
+      for (const id of req.tags) {
+        const t = tags.find((x) => x.id === id);
+        if (!t)
+          throw { code: 'notFound' as const, message: `Tag ${id} was not found.`, detail: null };
+        for (const d of targets) d.tags = d.tags.filter((n) => !sameName(n, t.name));
+        if (!faces.some((f) => f.tags.some((n) => sameName(n, t.name))))
+          tags.splice(tags.indexOf(t), 1);
+      }
+      changed(req.faces);
+    },
+    updateUserMeta: async (req) => {
+      if (req.rating != null && req.rating > 5)
+        throw invalid('A rating is 1 to 5 stars, or 0 to clear it.');
+      const targets = req.faces.map(faceOrThrow);
+      for (const d of targets) {
+        if (req.favorite != null) d.favorite = req.favorite;
+        if (req.rating != null) d.rating = req.rating || null;
+        if (req.notes != null) d.notes = req.notes || null;
+      }
+      changed(req.faces);
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
-    activate: async (req) =>
-      ids(req.target).map((id): ActivationOutcome => {
+    activate: async (req) => {
+      const activated: FaceId[] = [];
+      const out = ids(req.target).map((id): ActivationOutcome => {
         const f = find(id);
         if (!f) throw notFound(id);
         const health = f.face.health;
@@ -370,17 +830,26 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
           };
         active.set(id, mode);
+        activated.push(id);
         return { face: id, outcome: { status: 'done' } };
-      }),
-    deactivate: async (req) =>
-      ids(req.target).map((id): ActivationOutcome =>
-        active.delete(id)
-          ? { face: id, outcome: { status: 'done' } }
-          : {
-              face: id,
-              outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
-            },
-      ),
+      });
+      if (activated.length) emit({ type: 'activationChanged', activated, deactivated: [] });
+      return out;
+    },
+    deactivate: async (req) => {
+      const deactivated: FaceId[] = [];
+      const out = ids(req.target).map((id): ActivationOutcome => {
+        if (!active.delete(id))
+          return {
+            face: id,
+            outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
+          };
+        deactivated.push(id);
+        return { face: id, outcome: { status: 'done' } };
+      });
+      if (deactivated.length) emit({ type: 'activationChanged', activated: [], deactivated });
+      return out;
+    },
     listSources: async () => structuredClone(sources),
     addSource: async (req) => {
       if (!req.path.trim())

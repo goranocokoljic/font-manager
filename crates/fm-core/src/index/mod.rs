@@ -15,10 +15,15 @@
 //! [`Index::search`] answers a text query with ranked families, through the
 //! FTS5 trigram table that triggers keep in step with the faces and tags.
 
+mod collections;
+mod duplicates;
 mod files;
+mod languages;
+mod samples;
 mod schema;
 mod search;
 mod sources;
+mod tags;
 
 use std::cell::RefCell;
 use std::fmt;
@@ -126,6 +131,7 @@ impl Index {
         };
         index.configure().map_err(Damage::into_error)?;
         index.migrate().map_err(Damage::into_error)?;
+        index.refresh_languages()?;
         Ok(index)
     }
 
@@ -159,6 +165,7 @@ impl Index {
         index.configure()?;
         index.check_integrity()?;
         index.migrate()?;
+        index.refresh_languages().map_err(Damage::Other)?;
         Ok(index)
     }
 

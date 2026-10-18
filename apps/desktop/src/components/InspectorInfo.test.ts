@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient, mockFaces } from '../api/mock';
 import { useSelectionStore } from '../stores/selection';
+import { useTagsStore } from '../stores/tags';
 import HealthBadge from './HealthBadge.vue';
 import InspectorInfo from './InspectorInfo.vue';
 
@@ -73,6 +74,59 @@ describe('inspector info tab', () => {
     for (const label of ['Vendor ID', 'Tags', 'Favorite', 'Rating', 'Notes', 'Face in file']) {
       expect(text).toContain(label);
     }
+  });
+
+  it('edits tags with completion, the favorite toggle and the stars', async () => {
+    setClient(createMockClient({ faceTags: { 6: ['Brand', 'Display'] } }));
+    const wrapper = await mountWith(1);
+    await useTagsStore().refresh();
+    await flushPromises();
+    // Completion offers the library's tags.
+    const options = () => wrapper.findAll('#fm-tag-names option').map((o) => o.attributes('value'));
+    expect(options()).toEqual(['Brand', 'Display']);
+
+    const input = wrapper.get('input[aria-label="Add a tag"]');
+    await input.setValue('Display');
+    await wrapper.get('form.add-tag').trigger('submit');
+    await flushPromises();
+    expect(wrapper.findAll('.tag').map((t) => t.text().replace('×', '').trim())).toEqual([
+      'Display',
+    ]);
+    expect((input.element as HTMLInputElement).value).toBe('');
+    // A tag the face has is no longer offered.
+    expect(options()).toEqual(['Brand']);
+    await wrapper.get('button[aria-label="Remove tag Display"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.findAll('.tag')).toHaveLength(0);
+
+    const favorite = wrapper.get('button.favorite');
+    expect(favorite.attributes('aria-pressed')).toBe('false');
+    await favorite.trigger('click');
+    await flushPromises();
+    expect(wrapper.get('button.favorite').attributes('aria-pressed')).toBe('true');
+    expect(useSelectionStore().detail!.favorite).toBe(true);
+
+    await wrapper.get('button[aria-label="4 stars"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-testid="rating"]').text()).toBe('4 of 5');
+    expect(wrapper.get('button[aria-label="4 stars"]').attributes('aria-pressed')).toBe('true');
+    expect(wrapper.findAll('.star.on')).toHaveLength(4);
+    // Choosing the same rating clears it.
+    await wrapper.get('button[aria-label="4 stars"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-testid="rating"]').text()).toBe('Not rated');
+  });
+
+  it('shows why a tag was refused', async () => {
+    const wrapper = await mountWith(1);
+    await wrapper.get('input[aria-label="Add a tag"]').setValue('x');
+    setClient({
+      ...createMockClient(),
+      tagFaces: () => Promise.reject({ code: 'invalidRequest', message: 'No.', detail: null }),
+    });
+    await wrapper.get('form.add-tag').trigger('submit');
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toBe('No.');
   });
 
   it('copies names and the path on click', async () => {

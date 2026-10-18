@@ -6,9 +6,10 @@
   "rationale": "E5.6 (#69): the mock face set legacyFamily/legacyStyle equal to familyName/style, so `toContain` and the `aria-label$=\": Inter\"` copy selector passed with the name ID 1/2 rows deleted.",
   "severity": "must",
   "status": "active",
-  "occurrences": 2,
+  "occurrences": 3,
   "source_issues": [
     47,
+    67,
     69
   ],
   "file_globs": [
@@ -16,8 +17,9 @@
     "apps/desktop/e2e/**/*.ts",
     "apps/desktop/src/api/mock.ts",
     "crates/**/tests/**/*.rs",
-    "crates/fm-core/src/**/*.rs"
+    "crates/fm-core/src/**/*.rs",
+    "apps/desktop/e2e/**/*.spec.ts"
   ],
   "first_seen": "2026-10-17T08:29:15.431Z",
-  "last_seen": "2026-10-17T09:29:31.319Z"
+  "last_seen": "2026-10-18T02:38:06.822Z"
 }

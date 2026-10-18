@@ -13,11 +13,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
-import type { ListRow } from '../list/rows';
-import type { SelectMode } from '../list/selection';
+import { dragKeys, startFontDrag } from '../list/drag';
+import { handleListKey, modeOf } from '../list/keys';
+import { rowLabel, styleCount, type ListRow } from '../list/rows';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
+import { useSamplesStore } from '../stores/samples';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -41,6 +43,7 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const library = useLibraryStore();
+const samples = useSamplesStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
 
@@ -86,17 +89,28 @@ const rowId = (row: ListRow) => `fm-row-${row.key.replace(':', '-')}`;
 const visible = computed(() =>
   list.rows.slice(range.value.start, range.value.end).map((row, i) => {
     const index = range.value.start + i;
-    const face = row.kind === 'face' ? row.face : library.faces.get(row.family.id)?.[0];
+    const face = row.kind === 'face' ? row.face : list.shownFaces(row.family.id)?.[0];
+    const sample = face ? sampleText(props.preview, face) : '';
+    // The API's answer: the sample, or a fallback when the face lacks some of it.
+    const got = face ? samples.get(face.id, sample) : undefined;
     return {
       row,
       index,
       slot: index % pool.value,
       id: rowId(row),
       face,
-      text: face ? sampleText(props.preview, face) : '',
+      sample,
+      text: got?.text ?? sample,
+      fallback: got?.fallback ?? null,
+      missing: got?.missing ?? [],
     };
   }),
 );
+
+// Ask for the preview text of the faces on screen (one call per tick).
+watchEffect(() => {
+  for (const item of visible.value) if (item.face) samples.want(item.face.id, item.sample);
+});
 
 // Family rows preview their first face: fetch the faces of the rendered rows and
 // of one pool beyond each edge, so rows scrolled in already have them and their
@@ -135,59 +149,17 @@ async function revealCursor(): Promise<void> {
   await nextTick();
 }
 
-function modeOf(e: KeyboardEvent | MouseEvent): SelectMode {
-  if (e.shiftKey) return 'extend';
-  if (e.ctrlKey || e.metaKey) return e instanceof KeyboardEvent ? 'keep' : 'toggle';
-  return 'replace';
-}
-
 function onKeyDown(e: KeyboardEvent): void {
-  if (e.altKey) return;
-  const mod = e.ctrlKey || e.metaKey;
   const page = Math.max(1, Math.floor(height.value / rowPx.value));
-  const row = list.cursorRow;
-  switch (e.key) {
-    case 'ArrowDown':
-      list.moveBy(1, modeOf(e));
-      break;
-    case 'ArrowUp':
-      list.moveBy(-1, modeOf(e));
-      break;
-    case 'PageDown':
-      list.moveBy(page, modeOf(e));
-      break;
-    case 'PageUp':
-      list.moveBy(-page, modeOf(e));
-      break;
-    case 'Home':
-      list.moveCursor(0, modeOf(e));
-      break;
-    case 'End':
-      list.moveCursor(count.value - 1, modeOf(e));
-      break;
-    case 'ArrowRight':
-      if (mod || e.shiftKey) return;
-      list.expandOrEnter();
-      break;
-    case 'ArrowLeft':
-      if (mod || e.shiftKey) return;
-      list.collapseOrLeave();
-      break;
-    case 'Enter':
-      if (mod || e.shiftKey || !row) return;
-      if (row.kind === 'family') list.toggleExpanded(row.family.id);
-      else emit('open', row.face.id);
-      break;
-    case ' ':
-      if (!mod) return;
-      list.toggleCursor();
-      break;
-    default:
-      if (mod && !e.shiftKey && e.key.toLowerCase() === 'a') list.selectAll();
-      else return;
-  }
+  if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
+    return;
   e.preventDefault();
   void revealCursor();
+}
+
+/** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
+function onRowDrag(row: ListRow, e: DragEvent): void {
+  startFontDrag(e, dragKeys(list.selection.selected, row.key));
 }
 
 function onRowClick(row: ListRow, e: MouseEvent): void {
@@ -199,8 +171,6 @@ function onToggle(row: ListRow): void {
   if (row.kind === 'family') list.toggleExpanded(row.family.id);
   viewport.value?.focus({ preventScroll: true });
 }
-
-const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
 </script>
 
 <template>
@@ -234,15 +204,13 @@ const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
         :aria-level="item.row.kind === 'face' ? 2 : 1"
         :aria-expanded="item.row.kind === 'family' ? item.row.expanded : undefined"
         :aria-selected="list.isSelected(item.row.key)"
-        :aria-setsize="item.row.kind === 'face' ? item.row.count : library.families.length"
+        :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
         :aria-posinset="item.row.position"
-        :aria-label="
-          item.row.kind === 'face'
-            ? item.row.face.style
-            : `${item.row.family.name}, ${styleCount(item.row.family.styleCount)}`
-        "
+        :aria-label="rowLabel(item.row)"
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
+        draggable="true"
         @click="onRowClick(item.row, $event)"
+        @dragstart="onRowDrag(item.row, $event)"
       >
         <span
           v-if="item.row.kind === 'family'"
@@ -262,6 +230,8 @@ const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
           :tracking-em="preview.trackingEm"
           :align="preview.align"
           :color="preview.textColor"
+          :fallback="item.fallback"
+          :missing="item.missing"
         >
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>

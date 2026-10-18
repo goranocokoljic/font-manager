@@ -1,0 +1,19 @@
+{
+  "id": "decode-stored-per-item-data-per-item-in-a-batch-read",
+  "title": "Decode stored per-item data per item in a batch read",
+  "category": "error-handling",
+  "rule": "When a batch API reads a stored blob per face or per file (a cmap bitset, JSON coverage, a parsed record), decode each item on its own: an item whose blob cannot be decoded gets the same answer as an item with no stored data (and a warn log), and the other items are answered. Only an unknown id or a database error fails the request. Do not `?` a decode error inside `.map(...).collect::<Result<Vec<_>>>()`. Add a test that damages one item's blob beside a healthy one and asserts the healthy one is still answered.",
+  "rationale": "E4.5 (#63): `Index::sample_texts` used `face_cmap(face)?` inside a collect, so one face with a damaged stored cmap failed the whole request and every on-screen face lost its fallback.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    63
+  ],
+  "file_globs": [
+    "crates/fm-core/src/index/**",
+    "crates/fm-core/src/**"
+  ],
+  "first_seen": "2026-10-18T11:22:29.253Z",
+  "last_seen": "2026-10-18T11:22:29.253Z"
+}

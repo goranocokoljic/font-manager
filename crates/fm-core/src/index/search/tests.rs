@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use fm_api::common::{Health, Page};
+use fm_api::common::{Classification, Health, Page};
 use fm_api::library::SourceKind;
+use fm_api::search::{FilterCount, FilterCounts, Supports, WeightRange, WidthRange};
 use fm_api::{ErrorCode, SourceId};
 use rusqlite::Connection;
 
@@ -416,13 +417,420 @@ fn the_family_row_shows_activation() {
     assert!(res.families[0].family.is_variable);
 }
 
+/// `library()` with something for every filter: Roboto Regular has `smcp`,
+/// Black Ops One is color, Source Sans is an OTF, a second source holds a
+/// broken Lora; Helvetica Neue Bold is declared a web font, favorite, five
+/// stars and tagged; Roboto Bold is active.
+fn filter_library() -> (Index, SourceId, SourceId) {
+    let mut files = library();
+    for file in &mut files {
+        let face = &mut file.parsed.faces[0];
+        match face.postscript_name.as_deref() {
+            Some("Roboto-Regular") => face.features = vec!["kern".into(), "smcp".into()],
+            Some("Roboto-Bold") => face.features = vec!["kern".into()],
+            Some("BlackOpsOne-Regular") => face.color = true,
+            Some("SourceSans-Regular") => file.parsed.format = Some(FontFormat::Otf),
+            _ => {}
+        }
+    }
+    let (mut index, first) = indexed(&files);
+    let second = index
+        .add_source("/more", SourceKind::Watched)
+        .expect("source")
+        .id;
+    let mut lora = parsed(&f("Lora", "Regular", 400, 5, false), None, None);
+    lora.health = Health::Broken("The cmap table is cut off.".into());
+    index
+        .persist_files(second, &[file("/more/Lora-Regular.ttf", vec![lora])])
+        .expect("persist");
+    let bold = face_id(&index, "HelveticaNeue-Bold");
+    index
+        .conn
+        .execute_batch(&format!(
+            "INSERT INTO user_meta (face_id, license_type, favorite, rating)
+             VALUES ({bold}, 'web', 1, 5);
+             INSERT INTO tag (id, name) VALUES (1, 'grotesk');
+             INSERT INTO face_tag VALUES ({bold}, 1);
+             INSERT INTO collection (id, name) VALUES (1, 'Picks');
+             INSERT INTO collection_face VALUES (1, {bold});
+             INSERT INTO collection (id, name, is_smart, rules) VALUES (2, 'Smart', 1, '{{}}');
+             INSERT INTO activation VALUES ({}, 'session', NULL, '2026-10-18T10:00:00Z');",
+            face_id(&index, "Roboto-Bold")
+        ))
+        .expect("user data");
+    (index, first, second)
+}
+
+fn filtered(index: &Index, query: &str, filters: Filters) -> SearchResponse {
+    index
+        .search(&SearchRequest {
+            query: query.to_owned(),
+            filters,
+            ..SearchRequest::default()
+        })
+        .expect("search")
+}
+
+/// Family names, each with its matching styles.
+fn found(index: &Index, res: &SearchResponse) -> Vec<(String, Vec<String>)> {
+    names(res)
+        .iter()
+        .map(|n| ((*n).to_owned(), styles(index, res, n)))
+        .collect()
+}
+
+fn one(family: &str, styles: &[&str]) -> Vec<(String, Vec<String>)> {
+    vec![(
+        family.to_owned(),
+        styles.iter().map(|s| (*s).to_owned()).collect(),
+    )]
+}
+
 #[test]
-fn filters_are_refused_until_they_are_built() {
-    let (index, _) = indexed(&library());
-    let mut req = SearchRequest::default();
-    req.filters.variable = Some(true);
-    let err = index.search(&req).expect_err("filters");
-    assert_eq!(err.code(), ErrorCode::Unsupported);
+fn each_filter_narrows_the_results() {
+    let (index, first, second) = filter_library();
+    let only = |set: fn(&mut Filters)| {
+        let mut filters = Filters::default();
+        set(&mut filters);
+        found(&index, &filtered(&index, "", filters))
+    };
+    assert_eq!(
+        only(|f| f.variable = Some(true)),
+        one("Inter", &["Regular"])
+    );
+    assert_eq!(
+        only(|f| f.color = Some(true)),
+        one("Black Ops One", &["Regular"])
+    );
+    assert_eq!(
+        only(|f| f.formats = vec![FontFormat::Otf]),
+        one("Source Sans", &["Regular"])
+    );
+    assert_eq!(
+        only(|f| f.width = Some(WidthRange { min: 1, max: 4 })),
+        one("Roboto Condensed", &["Regular", "Bold"])
+    );
+    assert_eq!(
+        only(|f| f.features = vec!["smcp".into()]),
+        one("Roboto", &["Regular"])
+    );
+    assert_eq!(
+        only(|f| f.license = Some(LicenseType::Web)),
+        one("Helvetica Neue", &["Bold"])
+    );
+    assert_eq!(only(|f| f.problems = Some(true)), one("Lora", &["Regular"]));
+    assert_eq!(only(|f| f.active = Some(true)), one("Roboto", &["Bold"]));
+    assert_eq!(
+        only(|f| f.slant = Some(Slant::Italic)),
+        one("Roboto", &["Italic", "Bold Italic"])
+    );
+    // A variable face passes the ranges its axes reach.
+    let heavy = only(|f| f.weight = Some(WeightRange { min: 800, max: 900 }));
+    assert_eq!(heavy, one("Inter", &["Regular"]));
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            sources: vec![second],
+            ..Filters::default()
+        },
+    );
+    assert_eq!(names(&res), ["Lora"]);
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            sources: vec![first],
+            problems: Some(false),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(res.total, 6);
+    // Faces are not classified until E3.5: a class filter finds nothing.
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            classification: vec![Classification::Sans],
+            ..Filters::default()
+        },
+    );
+    assert_eq!(res.total, 0);
+    assert!(res.counts.expect("counts").classification.is_empty());
+}
+
+#[test]
+fn filters_compose_with_and_and_apply_with_search() {
+    let (index, _, _) = filter_library();
+    let italic = Filters {
+        slant: Some(Slant::Italic),
+        ..Filters::default()
+    };
+    assert_eq!(
+        found(&index, &filtered(&index, "roboto", italic.clone())),
+        one("Roboto", &["Italic", "Bold Italic"])
+    );
+    let bold_italic = Filters {
+        weight: Some(WeightRange { min: 600, max: 900 }),
+        ..italic.clone()
+    };
+    assert_eq!(
+        found(&index, &filtered(&index, "roboto", bold_italic)),
+        one("Roboto", &["Bold Italic"])
+    );
+    // Active is Roboto Bold, upright: with italic, nothing is left.
+    let active_italic = Filters {
+        active: Some(true),
+        ..italic
+    };
+    assert_eq!(filtered(&index, "roboto", active_italic).total, 0);
+    // The filters and the text must both hold.
+    let smcp = Filters {
+        features: vec!["smcp".into(), "kern".into()],
+        weight: Some(WeightRange { min: 300, max: 500 }),
+        ..Filters::default()
+    };
+    assert_eq!(
+        found(&index, &filtered(&index, "roboto", smcp.clone())),
+        one("Roboto", &["Regular"])
+    );
+    assert_eq!(filtered(&index, "helvetica", smcp).total, 0);
+    // Style words of the query and filters narrow together.
+    let upright = Filters {
+        slant: Some(Slant::Upright),
+        ..Filters::default()
+    };
+    assert_eq!(
+        found(&index, &filtered(&index, "roboto bold", upright)),
+        vec![
+            ("Roboto".to_owned(), vec!["Bold".to_owned()]),
+            ("Roboto Condensed".to_owned(), vec!["Bold".to_owned()]),
+        ]
+    );
+    // The family row still describes the whole family.
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            active: Some(true),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(res.families[0].family.style_count, 5);
+}
+
+#[test]
+fn tags_collections_foundry_favorites_and_rating_filter_too() {
+    let (index, _, _) = filter_library();
+    let helvetica = one("Helvetica Neue", &["Bold"]);
+    for filters in [
+        Filters {
+            tags: vec![TagId(1)],
+            ..Filters::default()
+        },
+        Filters {
+            collection: Some(CollectionId(1)),
+            ..Filters::default()
+        },
+        Filters {
+            favorite: Some(true),
+            ..Filters::default()
+        },
+        Filters {
+            min_rating: Some(4),
+            ..Filters::default()
+        },
+    ] {
+        assert_eq!(
+            found(&index, &filtered(&index, "", filters.clone())),
+            helvetica,
+            "{filters:?}"
+        );
+    }
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            foundry: Some("Linotype".into()),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(names(&res), ["Helvetica Neue"]);
+}
+
+#[test]
+fn filters_search_cannot_apply_are_refused() {
+    let (index, _, _) = filter_library();
+    let refused = |filters: Filters| {
+        index
+            .search(&SearchRequest {
+                filters,
+                ..SearchRequest::default()
+            })
+            .expect_err("refused")
+            .code()
+    };
+    assert_eq!(
+        refused(Filters {
+            collection: Some(CollectionId(2)),
+            ..Filters::default()
+        }),
+        ErrorCode::Unsupported
+    );
+    assert_eq!(
+        refused(Filters {
+            collection: Some(CollectionId(99)),
+            ..Filters::default()
+        }),
+        ErrorCode::NotFound
+    );
+}
+
+/// Every counted value, as the filters that choose it on top of `base`.
+fn chosen(counts: &FilterCounts, base: &Filters) -> Vec<(String, u32, Filters)> {
+    let mut out = Vec::new();
+    let mut push = |label: String, count: u32, set: &dyn Fn(&mut Filters)| {
+        let mut filters = base.clone();
+        set(&mut filters);
+        out.push((label, count, filters));
+    };
+    for c in &counts.weight {
+        let class = c.value;
+        push(format!("weight {class}"), c.count, &|f| {
+            f.weight = Some(WeightRange {
+                min: if class <= 100 { 1 } else { class - 50 },
+                max: if class >= 900 { 1000 } else { class + 49 },
+            });
+        });
+    }
+    for c in &counts.width {
+        let class = c.value;
+        push(format!("width {class}"), c.count, &|f| {
+            f.width = Some(WidthRange {
+                min: class,
+                max: class,
+            });
+        });
+    }
+    for c in &counts.slant {
+        let v = c.value;
+        push(format!("{v:?}"), c.count, &|f| f.slant = Some(v));
+    }
+    for c in &counts.variable {
+        let v = c.value;
+        push(format!("variable {v}"), c.count, &|f| f.variable = Some(v));
+    }
+    for c in &counts.color {
+        let v = c.value;
+        push(format!("color {v}"), c.count, &|f| f.color = Some(v));
+    }
+    for c in &counts.formats {
+        let v = c.value;
+        push(format!("{v:?}"), c.count, &|f| f.formats = vec![v]);
+    }
+    for c in &counts.features {
+        let v = c.value.clone();
+        push(format!("feature {v}"), c.count, &|f| {
+            f.features.push(v.clone())
+        });
+    }
+    for c in &counts.license {
+        let v = c.value;
+        push(format!("{v:?}"), c.count, &|f| f.license = Some(v));
+    }
+    for c in &counts.sources {
+        let v = c.value;
+        push(format!("source {v}"), c.count, &|f| f.sources = vec![v]);
+    }
+    for c in &counts.problems {
+        let v = c.value;
+        push(format!("problems {v}"), c.count, &|f| f.problems = Some(v));
+    }
+    for c in &counts.active {
+        let v = c.value;
+        push(format!("active {v}"), c.count, &|f| f.active = Some(v));
+    }
+    out
+}
+
+#[test]
+fn each_filter_value_counts_its_results() {
+    let (index, _, second) = filter_library();
+    let res = filtered(&index, "", Filters::default());
+    let counts = res.counts.expect("counts");
+    let count = |list: &[FilterCount<bool>], v: bool| {
+        list.iter().find(|c| c.value == v).map_or(0, |c| c.count)
+    };
+    assert_eq!(count(&counts.variable, true), 1);
+    assert_eq!(count(&counts.variable, false), 6);
+    assert_eq!(count(&counts.color, true), 1);
+    assert_eq!(count(&counts.problems, true), 1);
+    assert_eq!(count(&counts.active, true), 1);
+    assert_eq!(
+        counts
+            .sources
+            .iter()
+            .find(|c| c.value == second)
+            .map(|c| c.count),
+        Some(1)
+    );
+    assert_eq!(
+        counts.features,
+        [
+            FilterCount {
+                value: "kern".to_owned(),
+                count: 1
+            },
+            FilterCount {
+                value: "smcp".to_owned(),
+                count: 1
+            }
+        ]
+    );
+    // Every count is the total the search returns with that value chosen,
+    // with no filter, with filters, and with a query.
+    let cases = [
+        ("", Filters::default()),
+        (
+            "",
+            Filters {
+                slant: Some(Slant::Upright),
+                variable: Some(false),
+                ..Filters::default()
+            },
+        ),
+        (
+            "roboto",
+            Filters {
+                weight: Some(WeightRange { min: 600, max: 900 }),
+                ..Filters::default()
+            },
+        ),
+        (
+            "bold",
+            Filters {
+                features: vec!["kern".into()],
+                ..Filters::default()
+            },
+        ),
+    ];
+    for (query, base) in cases {
+        let counts = filtered(&index, query, base.clone())
+            .counts
+            .expect("counts");
+        let chosen = chosen(&counts, &base);
+        assert!(!chosen.is_empty(), "{query:?} {base:?}");
+        for (label, count, filters) in chosen {
+            let total = filtered(&index, query, filters).total;
+            assert_eq!(count, total, "{query:?} {base:?}: {label}");
+        }
+    }
+    // Counts follow the text: no variable family is named Roboto.
+    let counts = filtered(&index, "roboto", Filters::default())
+        .counts
+        .expect("counts");
+    assert_eq!(count(&counts.variable, true), 0);
+    assert_eq!(count(&counts.variable, false), 2);
 }
 
 #[test]
@@ -484,6 +892,64 @@ fn a_version_2_index_migrates_into_search() {
 }
 
 #[test]
+fn a_version_3_index_migrates_into_the_filters() {
+    let dir = TempDir::new("search-migrate-v3");
+    let path = dir.path().join(INDEX_FILE);
+    {
+        let conn = Connection::open(&path).expect("open");
+        for sql in &crate::index::schema::MIGRATIONS[..3] {
+            conn.execute_batch(sql).expect("v1 to v3");
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 3;
+             INSERT INTO source (id, path, kind) VALUES (1, '/fonts', 'watched');
+             INSERT INTO font_file (id, source_id, path, hash, format, size, mtime, health)
+             VALUES (1, 1, '/fonts/old.ttc', randomblob(32), 'ttc', 10, 1700000000,
+                     '{\"kind\":\"ok\"}');
+             INSERT INTO face (file_id, collection_index, family, subfamily, postscript_name,
+                               weight, width, slant, parsed)
+             VALUES (1, 0, 'Fine Old', 'Regular', 'FineOld-Regular', 400, 5, 'upright',
+                     '{\"health\": {\"kind\": \"ok\"}}'),
+                    (1, 1, 'Cracked Old', 'Regular', 'CrackedOld-Regular', 400, 5, 'upright',
+                     '{\"health\": {\"kind\": \"broken\", \"reason\": \"cut off\"}}'),
+                    (1, 2, 'Bad Json', 'Regular', 'BadJson-Regular', 400, 5, 'upright',
+                     'not json');",
+        )
+        .expect("old rows");
+    }
+    let index = Index::open(&path).expect("open").index;
+    assert_eq!(index.schema_version().expect("version"), SCHEMA_VERSION);
+    let only = |problems| {
+        let res = filtered(
+            &index,
+            "",
+            Filters {
+                problems: Some(problems),
+                ..Filters::default()
+            },
+        );
+        names(&res)
+            .iter()
+            .map(|n| (*n).to_owned())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(only(true), ["Cracked Old"]);
+    assert_eq!(only(false), ["Bad Json", "Fine Old"]);
+    // Color is unknown until the next scan reads the files again.
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            color: Some(false),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(res.total, 3);
+    let files = index.load_files().expect("load");
+    assert!(files.files().all(|f| f.modified.is_none()), "read again");
+}
+
+#[test]
 fn another_process_writing_refreshes_the_search() {
     let dir = TempDir::new("search-other-process");
     let path = dir.path().join(INDEX_FILE);
@@ -503,6 +969,13 @@ fn another_process_writing_refreshes_the_search() {
         .expect("write");
     assert!(search(&index, "helvetica").families.is_empty());
 }
+
+/// Feature tags for synthetic faces: each has 10 to 29 of them.
+const FEATURES: [&str; 30] = [
+    "aalt", "c2sc", "calt", "case", "ccmp", "dlig", "dnom", "frac", "kern", "liga", "lnum", "locl",
+    "mark", "mkmk", "numr", "onum", "ordn", "pnum", "salt", "sinf", "smcp", "ss01", "ss02", "ss03",
+    "sups", "tnum", "zero", "subs", "swsh", "titl",
+];
 
 /// `n` families of five styles each, with made-up distinct names.
 fn synthetic(families: usize) -> Vec<IndexedFile> {
@@ -537,6 +1010,16 @@ fn synthetic(families: usize) -> Vec<IndexedFile> {
                 Some("Designer"),
             );
             file.path = PathBuf::from(format!("/fonts/{i:05}/{style}.ttf"));
+            file.parsed.faces[0].features = FEATURES[..10 + i % 20]
+                .iter()
+                .map(|t| (*t).to_owned())
+                .collect();
+            // Latin; every other family Latin Extended-A, every fourth Cyrillic.
+            file.parsed.faces[0].code_points = (0x20..0x7F)
+                .chain(0xA0..0x100)
+                .chain((0x100..0x180).filter(|_| i % 2 == 0))
+                .chain((0x400..0x460).filter(|_| i % 4 == 0))
+                .collect();
             files.push(file);
         }
     }
@@ -573,6 +1056,51 @@ fn time_queries(index: &Index, label: &str) {
         let elapsed = start.elapsed();
         eprintln!("{label}: {query:?} → {} families in {elapsed:?}", res.total);
         assert!(elapsed < BUDGET, "{label}: {query:?} took {elapsed:?}");
+    }
+    let filters = [
+        (
+            "",
+            Filters {
+                slant: Some(Slant::Italic),
+                ..Filters::default()
+            },
+        ),
+        (
+            "sans",
+            Filters {
+                weight: Some(WeightRange { min: 600, max: 900 }),
+                variable: Some(false),
+                features: vec!["smcp".into()],
+                ..Filters::default()
+            },
+        ),
+        (
+            "bold",
+            Filters {
+                formats: vec![FontFormat::Ttf, FontFormat::Otf],
+                problems: Some(false),
+                active: Some(false),
+                ..Filters::default()
+            },
+        ),
+        // E3.8 criterion 3: filtering by language.
+        ("", languages(&["pl"])),
+        ("", languages(&["sr-Latn", "sr-Cyrl", "de"])),
+        ("sans", text("Ђорђе Đorđe ŁĄ")),
+    ];
+    for (query, filters) in filters {
+        filtered(index, query, filters.clone());
+        let start = Instant::now();
+        let res = filtered(index, query, filters.clone());
+        let elapsed = start.elapsed();
+        eprintln!(
+            "{label}: {query:?} {filters:?} → {} families in {elapsed:?}",
+            res.total
+        );
+        assert!(
+            elapsed < BUDGET,
+            "{label}: {query:?} {filters:?} took {elapsed:?}"
+        );
     }
 }
 
@@ -615,4 +1143,283 @@ fn the_reference_library_searches_in_under_50_ms() {
         .apply_rescan(source, &scanned, &report)
         .expect("persist");
     time_queries(&index, "reference library");
+}
+
+/// The base characters of the embedded preset `code`.
+fn base(code: &str) -> Vec<u32> {
+    crate::charsets::load()
+        .expect("presets")
+        .into_iter()
+        .find(|c| c.code == code)
+        .map(|c| c.base.iter().map(|&ch| u32::from(ch)).collect())
+        .expect("known preset")
+}
+
+fn languages(codes: &[&str]) -> Filters {
+    Filters {
+        supports: Some(Supports::Languages {
+            codes: codes.iter().map(|&c| c.to_owned()).collect(),
+        }),
+        ..Filters::default()
+    }
+}
+
+fn text(text: &str) -> Filters {
+    Filters {
+        supports: Some(Supports::Text { text: text.into() }),
+        ..Filters::default()
+    }
+}
+
+/// A face of `family` mapping `code_points`, with `locl` language systems.
+fn covering(family: &str, style: &str, code_points: Vec<u32>, locl: &[&str]) -> IndexedFile {
+    let weight = if style == "Bold" { 700 } else { 400 };
+    let mut file = single(&f(family, style, weight, 5, false), None, None);
+    let face = &mut file.parsed.faces[0];
+    face.code_points = code_points;
+    face.code_points.sort_unstable();
+    face.code_points.dedup();
+    face.locl_languages = locl.iter().map(|&l| l.to_owned()).collect();
+    file
+}
+
+/// `code_points` without the characters of `drop`.
+fn without(code_points: &[u32], drop: &str) -> Vec<u32> {
+    code_points
+        .iter()
+        .copied()
+        .filter(|&cp| !drop.chars().any(|c| u32::from(c) == cp))
+        .collect()
+}
+
+/// Latin, Serbian Cyrillic and near misses:
+/// - Full: English, Romanian, Serbian Latin and Cyrillic, `locl` for
+///   Serbian and Romanian; its Bold lacks ж;
+/// - Latin: English and Serbian Latin;
+/// - Almost: English and Serbian Cyrillic but ђ and ћ, `locl` for Serbian;
+/// - Five: English but five letters;
+/// - Six: English but six letters.
+fn coverage_library() -> Index {
+    let en = base("en");
+    let sr_latn = base("sr-Latn");
+    let sr_cyrl = base("sr-Cyrl");
+    let all: Vec<u32> = [en.clone(), sr_latn.clone(), sr_cyrl.clone(), base("ro")].concat();
+    let files = vec![
+        covering("Full", "Regular", all.clone(), &["cyrl/SRB", "latn/ROM"]),
+        covering("Full", "Bold", without(&all, "ж"), &[]),
+        covering("Latin", "Regular", [en.clone(), sr_latn].concat(), &[]),
+        covering(
+            "Almost",
+            "Regular",
+            [en.clone(), without(&sr_cyrl, "ђћ")].concat(),
+            &["cyrl/SRB"],
+        ),
+        covering("Five", "Regular", without(&en, "vwxyz"), &[]),
+        covering("Six", "Regular", without(&en, "uvwxyz"), &[]),
+    ];
+    indexed(&files).0
+}
+
+/// Family names with the characters their best face misses.
+fn misses(res: &SearchResponse) -> Vec<(&str, String)> {
+    res.families
+        .iter()
+        .map(|h| {
+            let missing = h
+                .missing
+                .as_ref()
+                .expect("a supports search reports missing");
+            (h.family.name.as_str(), missing.chars.concat())
+        })
+        .collect()
+}
+
+fn full(name: &str) -> (&str, String) {
+    (name, String::new())
+}
+
+#[test]
+fn languages_filter_keeps_faces_that_cover_every_language() {
+    let index = coverage_library();
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
+    assert_eq!(misses(&res), [full("Full"), full("Latin")]);
+    let res = filtered(&index, "", languages(&["sr-Latn", "sr-Cyrl"]));
+    assert_eq!(misses(&res), [full("Full")], "AND: both scripts");
+    assert_eq!(
+        styles(&index, &res, "Full"),
+        ["Regular", "Bold"],
+        "the Bold lacks one letter: a near miss, after the Regular"
+    );
+    let res = filtered(&index, "", languages(&["sr-Cyrl"]));
+    assert_eq!(misses(&res), [full("Full"), ("Almost", "ђћ".to_owned())]);
+    let res = filtered(&index, "almost", languages(&["sr-Cyrl"]));
+    assert_eq!(names(&res), ["Almost"], "text and coverage combine");
+}
+
+#[test]
+fn pasted_text_filters_by_its_characters() {
+    let index = coverage_library();
+    let res = filtered(&index, "", text("Ђорђе ћути\n"));
+    assert_eq!(
+        misses(&res),
+        [full("Full"), ("Almost", "ђћ".to_owned())],
+        "every character once, in code point order; whitespace not asked for"
+    );
+    let res = filtered(&index, "", text("Đorđe ćuti"));
+    assert_eq!(
+        misses(&res),
+        [
+            full("Full"),
+            full("Latin"),
+            ("Almost", "ćĐđ".to_owned()),
+            ("Five", "ćĐđ".to_owned()),
+            ("Six", "ućĐđ".to_owned()),
+        ],
+        "fewest missing first"
+    );
+    assert!(
+        res.families
+            .iter()
+            .all(|h| h.missing.as_ref().is_some_and(|m| !m.has_locl)),
+        "text has no language, so no locl"
+    );
+    let res = filtered(&index, "", text("  \n"));
+    assert_eq!(res.total, 5, "nothing asked for: every family");
+    assert!(res.families.iter().all(|h| h.missing.is_none()));
+}
+
+#[test]
+fn near_misses_list_the_exact_missing_characters() {
+    let index = coverage_library();
+    let res = filtered(&index, "", languages(&["en"]));
+    assert_eq!(
+        misses(&res),
+        [
+            full("Almost"),
+            full("Full"),
+            full("Latin"),
+            ("Five", "vwxyz".to_owned()),
+        ],
+        "complete families first; six missing is not a result"
+    );
+    let res = filtered(&index, "", text("ж"));
+    assert_eq!(
+        styles(&index, &res, "Full"),
+        ["Regular", "Bold"],
+        "best face first"
+    );
+    assert!(misses(&res).contains(&full("Full")), "the Regular has ж");
+    let res = filtered(&index, "", text("жђћ"));
+    assert_eq!(
+        misses(&res),
+        [
+            full("Full"),
+            ("Almost", "ђћ".to_owned()),
+            ("Five", "жђћ".to_owned()),
+            ("Latin", "жђћ".to_owned()),
+            ("Six", "жђћ".to_owned()),
+        ],
+        "a family reports its best face"
+    );
+}
+
+#[test]
+fn locl_is_reported_for_the_chosen_language() {
+    let index = coverage_library();
+    let locl = |filters: Filters| -> Vec<(String, bool)> {
+        filtered(&index, "", filters)
+            .families
+            .iter()
+            .map(|h| {
+                (
+                    h.family.name.clone(),
+                    h.missing.as_ref().is_some_and(|m| m.has_locl),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        locl(languages(&["sr-Cyrl"])),
+        [("Full".to_owned(), true), ("Almost".to_owned(), true)]
+    );
+    assert_eq!(
+        locl(languages(&["sr-Latn"])),
+        [("Full".to_owned(), false), ("Latin".to_owned(), false)],
+        "Serbian locl under cyrl is not Serbian Latin"
+    );
+    let mixed = locl(languages(&["en", "ro"]));
+    assert!(
+        mixed.contains(&("Full".to_owned(), true)),
+        "{mixed:?}: ROM under latn, for one of the languages"
+    );
+}
+
+#[test]
+fn faces_without_stored_coverage_do_not_pass() {
+    let index = coverage_library();
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = NULL WHERE postscript_name = 'Latin-Regular'",
+            [],
+        )
+        .expect("clear");
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
+    assert_eq!(names(&res), ["Full"], "not computed: not proven");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = x'0102' WHERE postscript_name = 'Full-Regular'",
+            [],
+        )
+        .expect("damage");
+    let res = filtered(&index, "", languages(&["sr-Latn"]));
+    assert_eq!(
+        styles(&index, &res, "Full"),
+        ["Bold"],
+        "damaged: not proven"
+    );
+}
+
+#[test]
+fn an_unknown_language_is_refused() {
+    let index = coverage_library();
+    let err = index
+        .search(&SearchRequest {
+            filters: languages(&["en", "xx-Nope"]),
+            ..SearchRequest::default()
+        })
+        .expect_err("unknown preset");
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    assert!(err.message().contains("xx-Nope"));
+}
+
+#[test]
+fn counts_keep_the_supports_filter() {
+    let index = coverage_library();
+    let res = filtered(&index, "", languages(&["sr-Cyrl"]));
+    let counts = res.counts.expect("counts");
+    assert_eq!(
+        counts.weight,
+        [
+            FilterCount {
+                value: 400,
+                count: 2
+            },
+            FilterCount {
+                value: 700,
+                count: 1
+            }
+        ],
+        "Full and Almost pass; Latin, Five and Six are not counted"
+    );
+    let res = filtered(
+        &index,
+        "",
+        Filters {
+            weight: Some(WeightRange { min: 650, max: 750 }),
+            ..languages(&["sr-Cyrl"])
+        },
+    );
+    assert_eq!(names(&res), ["Full"]);
 }

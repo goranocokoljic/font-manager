@@ -1,10 +1,10 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { setClient } from '../api/client';
+import { setClient, useClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
-import { NUMERALS, PANGRAMS } from '../preview/sampleText';
+import { ALPHABET, PANGRAMS } from '../preview/sampleText';
 import { clearFaceAxes } from '../preview/variations';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
@@ -130,9 +130,29 @@ describe('FontList families and styles', () => {
     const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
     const row = list.get(`[data-key="family:${EXTRA_ID_BASE}"]`);
     expect(row.attributes('aria-expanded')).toBe('false');
-    expect(row.attributes('aria-label')).toBe('Sample 1, 4 styles');
+    expect(row.attributes('aria-label')).toBe('Sample 1, 4 styles, not active');
     expect(row.get('.row').attributes('data-face')).toBe(String(EXTRA_ID_BASE));
     expect(row.text()).toContain('4 styles');
+    list.unmount();
+  });
+
+  it('announces the activation state of a style and its family, and follows changes', async () => {
+    const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
+    await list.get(`[data-key="family:${EXTRA_ID_BASE}"] .twisty`).trigger('click');
+    await flushPromises();
+    const label = (key: string) => list.get(`[data-key="${key}"]`).attributes('aria-label');
+    const faces = useLibraryStore().faces.get(EXTRA_ID_BASE)!;
+    const bold = faces.find((f) => f.style === 'Bold')!;
+    await useClient().activate({ target: { kind: 'faces', faces: [bold.id] }, mode: 'session' });
+    await flushPromises();
+    expect(label(`face:${bold.id}`)).toBe('Sample 1 Bold, active for this session');
+    expect(label(`family:${EXTRA_ID_BASE}`)).toBe('Sample 1, 4 styles, partly active');
+    const others = faces.filter((f) => f.id !== bold.id).map((f) => f.id);
+    await useClient().activate({ target: { kind: 'faces', faces: others }, mode: 'permanent' });
+    await flushPromises();
+    expect(label(`face:${others[0]}`)).toMatch(/^Sample 1 \S.*, active permanently$/);
+    expect(label(`family:${EXTRA_ID_BASE}`)).toBe('Sample 1, 4 styles, active');
+    await useLibraryStore().stop();
     list.unmount();
   });
 
@@ -142,15 +162,15 @@ describe('FontList families and styles', () => {
     await flushPromises();
     const rows = items(list);
     expect(rows.map((r) => r.attributes('aria-label'))).toEqual([
-      'Inter, 1 style',
-      'JetBrains Mono, 1 style',
-      'Legacy Grotesk, 1 style',
-      'Sample 1, 4 styles',
-      'Regular',
-      'Italic',
-      'Bold',
-      'Bold Italic',
-      'Sample 2, 4 styles',
+      'Inter, 1 style, not active',
+      'JetBrains Mono, 1 style, not active',
+      'Legacy Grotesk, 1 style, not active',
+      'Sample 1, 4 styles, not active',
+      'Sample 1 Regular, not active',
+      'Sample 1 Italic, not active',
+      'Sample 1 Bold, not active',
+      'Sample 1 Bold Italic, not active',
+      'Sample 2, 4 styles, not active',
     ]);
     expect(rows[3]!.attributes('aria-expanded')).toBe('true');
     expect(rows[5]!.attributes()).toMatchObject({
@@ -288,7 +308,7 @@ describe('FontList preview settings', () => {
       {},
       {
         preview: settings({
-          sample: 'numerals',
+          sample: 'alphabet',
           sizePx: 96,
           lineHeight: 1.5,
           trackingEm: 0.05,
@@ -303,7 +323,7 @@ describe('FontList preview settings', () => {
     expect(samples).toHaveLength(3);
     for (const sample of samples) {
       const style = (sample.element as HTMLElement).style;
-      expect(sample.text()).toBe(NUMERALS);
+      expect(sample.text()).toBe(ALPHABET);
       expect(style.fontSize).toBe('96px');
       expect(style.lineHeight).toBe('1.5');
       expect(style.letterSpacing).toBe('0.05em');
@@ -322,10 +342,10 @@ describe('FontList preview settings', () => {
     const list = await listOf({}, { preview: settings({}) });
     expect(list.get('[role="tree"]').classes()).not.toContain('surface-light');
     await list.setProps({
-      preview: settings({ sample: 'pangram', language: 'el', sizePx: 12, surface: 'light' }),
+      preview: settings({ sample: 'pangram', language: 'fr', sizePx: 12, surface: 'light' }),
     });
     for (const sample of list.findAll('.sample')) {
-      expect(sample.text()).toBe(PANGRAMS.el.text);
+      expect(sample.text()).toBe(PANGRAMS.fr.text);
       expect((sample.element as HTMLElement).style.fontSize).toBe('12px');
     }
     expect(list.get('[role="tree"]').classes()).toContain('surface-light');
@@ -336,6 +356,65 @@ describe('FontList preview settings', () => {
     const list = await listOf({}, { preview: settings({ sample: 'fontName' }) });
     const texts = list.findAll('.sample').map((s) => s.text());
     expect(texts).toEqual(['Inter Regular', 'JetBrains Mono Regular', 'Legacy Grotesk Regular']);
+    list.unmount();
+  });
+});
+
+describe('FontList dynamic previews', () => {
+  const custom = (customText: string): PreviewSettings => ({
+    ...DEFAULT_PREVIEW,
+    sample: 'custom',
+    customText,
+  });
+  const rows = (list: VueWrapper) =>
+    items(list).map((item) => ({
+      text: item.get('.sample').text(),
+      hint: item.find('[data-testid="fallback-hint"]'),
+    }));
+
+  it('a face that lacks characters of the sample previews its own letters, with a hint', async () => {
+    // Inter and JetBrains Mono map Cyrillic; Legacy Grotesk maps basic Latin only.
+    const list = await listOf({}, { preview: custom('Љубав') });
+    const [inter, mono, legacy] = rows(list);
+    expect(inter!.text).toBe('Љубав');
+    expect(inter!.hint.exists()).toBe(false);
+    expect(mono!.text).toBe('Љубав');
+    expect(mono!.hint.exists()).toBe(false);
+    expect(legacy!.text).toBe('abcdefghijklmnopqrstuvwxyz');
+    expect(legacy!.hint.text()).toBe('Fallback');
+    expect(legacy!.hint.attributes('title')).toBe(
+      'This font lacks Љ у б а в, so it shows its own letters.',
+    );
+    list.unmount();
+  });
+
+  it('follows the sample live: covered text drops the fallback again', async () => {
+    const list = await listOf({}, { preview: custom('Љубав') });
+    expect(rows(list)[2]!.hint.exists()).toBe(true);
+    await list.setProps({ preview: custom('Love') });
+    await flushPromises();
+    expect(rows(list).map((r) => r.text)).toEqual(['Love', 'Love', 'Love']);
+    expect(list.find('[data-testid="fallback-hint"]').exists()).toBe(false);
+    list.unmount();
+  });
+
+  it('asks the API once per sample for the rows on screen', async () => {
+    const mock = createMockClient();
+    const calls: { faces: number[]; text: string }[] = [];
+    setClient({
+      ...mock,
+      sampleTexts: (req) => {
+        calls.push({ faces: [...req.faces], text: req.text });
+        return mock.sampleTexts(req);
+      },
+    });
+    await useLibraryStore().load();
+    const list = mount(FontList, { props: { preview: custom('Љубав') }, attachTo: document.body });
+    await flushPromises();
+    expect(calls).toEqual([{ faces: [1, 6, 7], text: 'Љубав' }]);
+    await list.setProps({ preview: { ...custom('Љубав'), sizePx: 40 } });
+    await flushPromises();
+    expect(calls).toHaveLength(1);
     list.unmount();
   });
 });

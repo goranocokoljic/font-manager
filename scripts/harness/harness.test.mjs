@@ -15,7 +15,7 @@ import { staticReadiness, planLane, humanWaits, HUMAN_MERGE } from './pick.mjs';
 import { editCriterion } from './issue.mjs';
 import { countFindings, markerLine } from './review-counts.mjs';
 import { applyItems, matchesPaths, retrieveDigest, rulesMarkdown, readStore } from './kb.mjs';
-import { matchCheck, osOf, excerpt, infraReason } from './ci-wait.mjs';
+import { matchCheck, osOf, excerpt, infraReason, latestRuns } from './ci-wait.mjs';
 import { summaryLine } from './epic-sync.mjs';
 import { contractRemovals, commitCi, decide, latestPerName } from './merge-check.mjs';
 
@@ -160,6 +160,17 @@ describe('Definition of Ready and lane planning', () => {
     assert.equal(planLane('ui', w2, cfg, { checkDeps: deps({}) }).story.id, 'E5.1');
   });
 
+  test('a blocked or human-merge PR of the other lane holds no area', () => {
+    const pr = { number: 80, storyId: 'E3.1', isDraft: true, areas: ['apps/desktop/src'], headRefName: 'E3.1-x' };
+    const ui = story('E5.1', { track: 'ui' });
+    for (const extra of ['harness:blocked', HUMAN_MERGE]) {
+      const w = world([ui, story('E3.1', { labels: ['type:story', 'harness:in-progress', extra] })], [pr]);
+      assert.equal(planLane('ui', w, cfg, { checkDeps: deps({}) }).story.id, 'E5.1', extra);
+    }
+    const blockedOnly = world([ui, story('E3.1', { labels: ['type:story', 'harness:blocked'] })], [pr]);
+    assert.equal(planLane('ui', blockedOnly, cfg, { checkDeps: deps({}) }).story.id, 'E5.1');
+  });
+
   test('lists human stories with the stories they block', () => {
     const hw = humanWaits([story('E1.1', { labels: ['type:story', 'human'] }), story('E1.4', { depends: ['E1.1'] })]);
     assert.deepEqual(hw.map((h) => [h.id, h.blocks]), [['E1.1', ['E1.4']]]);
@@ -250,6 +261,20 @@ describe('ci-wait helpers', () => {
     assert.equal(osOf('ubuntu-latest'), 'linux');
   });
 
+  test('the bench wait skips the skipped bench check an unlabeled push left behind', () => {
+    // E9.1 review: every PR push runs bench.yml with its jobs skipped; the
+    // labeled run's `bench` check appears only after the library and measure jobs.
+    const skipped = { name: 'bench', conclusion: 'skipped', status: 'completed', started_at: '2026-10-18T10:00:00Z' };
+    const real = { name: 'bench', conclusion: null, status: 'in_progress', started_at: '2026-10-18T11:00:00Z' };
+    assert.equal(matchCheck('bench / bench', latestRuns([skipped], { ignoreSkipped: true })), null, 'keep waiting');
+    assert.equal(matchCheck('bench / bench', latestRuns([skipped, real], { ignoreSkipped: true })), real);
+    // A skipped run newer than the real one (another label added) does not hide it.
+    const later = { ...skipped, started_at: '2026-10-18T12:00:00Z' };
+    assert.equal(matchCheck('bench / bench', latestRuns([real, later], { ignoreSkipped: true })), real);
+    // The required ci checks keep the newest run whatever its conclusion.
+    assert.equal(latestRuns([real, later])[0], later);
+  });
+
   test('log excerpt keeps the error and its context, drops timestamps', () => {
     const log = ['2026-10-16T10:00:00.000Z Compiling fm-core', ...Array(50).fill('noise'), '2026-10-16T10:01:00.000Z error[E0308]: mismatched types', '  --> crates/fm-core/src/a.rs:3:5'].join('\n');
     const ex = excerpt(log);
@@ -307,9 +332,18 @@ describe('auto merge', () => {
       '+\tnewField?: string | null,',
       '-"permanent";',
       '+"permanent" | "pinned";',
+      '-\tweight?: WeightRange | null,',
+      '-"unsupported";',
+      '+"unsupported" | ',
+      '+"sidecarConflict";',
+      '-\t/**  Weight range. */',
+      '+\t/**  Weight range; a variable face passes when its `wght` axis reaches it. */',
+      '- *  Old wording of a long comment.',
+      '- */',
     ].join('\n');
-    assert.deepEqual(contractRemovals(diff), ['"permanent";']);
-    assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => l !== '-"permanent";').join('\n')), []);
+    // A union that gains members is additive; a removed field is not.
+    assert.deepEqual(contractRemovals(diff), ['weight?: WeightRange | null,']);
+    assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => !l.startsWith('-\tweight')).join('\n')), []);
   });
 
   test('main CI is red if any required check failed, pending until all completed', () => {

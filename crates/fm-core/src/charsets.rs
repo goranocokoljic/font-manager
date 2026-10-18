@@ -122,6 +122,20 @@ pub fn load() -> FmResult<Vec<Charset>> {
     load_files(FILES)
 }
 
+/// A fingerprint of the embedded data files: it changes when any file does,
+/// so coverage stored against older data can be computed again.
+pub fn fingerprint() -> String {
+    let mut hasher = blake3::Hasher::new();
+    for (name, json) in FILES {
+        hasher.update(name.as_bytes());
+        hasher.update(&[0]);
+        // A checkout with CRLF line ends is the same data.
+        hasher.update(json.replace("\r\n", "\n").as_bytes());
+        hasher.update(&[0]);
+    }
+    hasher.finalize().to_hex()[..16].to_owned()
+}
+
 fn load_files(files: &[(&str, &str)]) -> FmResult<Vec<Charset>> {
     let mut out = Vec::new();
     let mut codes = BTreeSet::new();
@@ -299,6 +313,12 @@ mod tests {
                 "{name}"
             );
         }
+    }
+
+    #[test]
+    fn the_fingerprint_is_stable_and_short() {
+        assert_eq!(fingerprint(), fingerprint());
+        assert_eq!(fingerprint().len(), 16);
     }
 
     #[test]

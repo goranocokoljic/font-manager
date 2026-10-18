@@ -216,8 +216,56 @@ CREATE TRIGGER face_fts_tag_rename AFTER UPDATE OF name ON tag BEGIN
 END;
 ";
 
+/// Search filters (E3.4): what the color and health filters read, as
+/// columns written with the face, so a search never parses `face.parsed`.
+///
+/// - `face.is_color`: the face has color glyphs (`ParsedFace::color`). Faces
+///   indexed before this version are read again by the next scan (their
+///   `face.parsed` lacks `color`), which fills it.
+/// - `face.healthy`: the face's own health is `Ok`; older rows are filled
+///   from `face.parsed`.
+const V4: &str = r"
+ALTER TABLE face ADD COLUMN is_color INTEGER NOT NULL DEFAULT 0 CHECK (is_color IN (0, 1));
+ALTER TABLE face ADD COLUMN healthy INTEGER NOT NULL DEFAULT 1 CHECK (healthy IN (0, 1));
+UPDATE face SET healthy = 0
+WHERE json_valid(parsed) AND json_extract(parsed, '$.health.kind') <> 'ok';
+";
+
+/// Coverage at scan time (E3.7).
+///
+/// - `face.cmap`: the code points `cmap` maps, as a `CodePointSet` (one
+///   256-bit block per used Unicode page). It replaces `face.coverage`.
+/// - `face.languages`: how many base characters of each language preset
+///   (`data/charsets`) the face maps, and whether it has `locl` forms for the
+///   language, as one JSON object per face: `{"ro": [60, 60, 1]}` is
+///   (covered, total, has `locl`). A preset with nothing covered and no
+///   `locl` is left out. One value per face, not one row per language: a
+///   10k-font scan would otherwise write some 350,000 rows.
+/// - `index_meta`: `charsets` holds the fingerprint of the preset data
+///   `face.languages` was computed with; on open, other data computes it again.
+///
+/// Faces indexed before this version have no `cmap` and their `face.parsed`
+/// lacks `loclLanguages`, so the next scan reads their files again.
+const V5: &str = r"
+ALTER TABLE face ADD COLUMN cmap BLOB;
+ALTER TABLE face ADD COLUMN languages TEXT;
+ALTER TABLE face DROP COLUMN coverage;
+
+CREATE TABLE index_meta (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+) WITHOUT ROWID;
+";
+
+/// Collections (E7.1): `collection.position` orders the children of one
+/// parent, 0 first. Collections made before this version keep their id order.
+const V6: &str = r"
+ALTER TABLE collection ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+UPDATE collection SET position = id;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -236,6 +284,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_fts_idx",
     "face_tag",
     "font_file",
+    "index_meta",
     "project_set",
     "set_face",
     "source",

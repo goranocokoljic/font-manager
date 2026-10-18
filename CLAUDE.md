@@ -37,7 +37,8 @@ behind the `FontActivator` trait and the app-paths helpers.
    off unless the config flag is on; no accounts.
 8. **Keep the budgets.** Cold start < 1 s, 10k-font first scan < 10 s, search < 50 ms,
    100-face activation < 500 ms, idle memory < 350 MB. A change that makes the bench job
-   fail is not done.
+   fail is not done. Known red until E2.8 (#257): the first scan on Windows and macOS; a
+   story that does not make that metric slower is not blocked by it.
 
 ## Repository map
 
@@ -118,7 +119,7 @@ Before every push: `pnpm lint && cargo nextest run --workspace && pnpm test && p
 Stories are worked by `go-harness.ps1` (one lane per terminal: `-Lane core`, `-Lane ui`)
 through the `/go-cycle` skill and reviewed by `/fm-review`. Manual:
 `dev-docs/harness/go-harness.md`. With `merge: auto` the harness merges green, reviewed
-stories itself; `track: platform` and changes to existing `fm-api` types wait for a human.
+stories itself, platform stories included; changes to existing `fm-api` types wait for a human.
 
 - Use the PureContext MCP index for code navigation and impact: `resolve_repo` for the
   `repoId`, `get_task_context` to orient, `prepare_change` / `check_consistency` before

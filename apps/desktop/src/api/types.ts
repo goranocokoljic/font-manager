@@ -149,7 +149,10 @@ export type Classification =
 /**  Symbols, icons, dingbats. */
 "symbol";
 
-/**  A manual collection, or a smart one when `rules` is set. */
+/**
+ *  A manual collection, or a smart one when `rules` is set. Siblings are
+ *  ordered by the user; `list_collections` returns them in that order.
+ */
 export type Collection = {
 	/**  Id. */
 	id: CollectionId,
@@ -169,6 +172,8 @@ export type CollectionFacesRequest = {
 	collection: CollectionId,
 	/**  The faces. */
 	faces: FaceId[],
+	/**  Whole families: every face of each, as the library lists it. */
+	families?: FamilyId[],
 };
 
 /**  A manual or smart collection. */
@@ -255,6 +260,49 @@ export type Density =
 "comfortable" | 
 /**  More rows on screen. */
 "compact";
+
+/**  One file of a duplicate group. */
+export type DuplicateCopy = {
+	/**  Absolute file path. */
+	path: string,
+	/**  File size in bytes. */
+	size: number,
+	/**  blake3 hash of the file, hex; equal hashes are identical files. */
+	hash: string,
+	/**
+	 *  The face the group is about (the first face for an exact group), when
+	 *  the file parsed far enough to have one.
+	 */
+	face: FaceId | null,
+	/**  Version string (name ID 5) of that face. */
+	version: string | null,
+	/**  The source the file was found in. */
+	source: SourceId,
+	/**  The source is the library folder. */
+	inLibraryFolder: boolean,
+	/**  The recommended keeper of the group. */
+	keep: boolean,
+};
+
+/**  Files that hold the same font. The recommended keeper comes first. */
+export type DuplicateGroup = {
+	/**  Exact or near. */
+	kind: DuplicateKind,
+	/**
+	 *  The PostScript name the copies share (for an exact group, the first
+	 *  face's), when there is one.
+	 */
+	postscriptName: string | null,
+	/**  The copies, two or more, keeper first. */
+	copies: DuplicateCopy[],
+};
+
+/**  Why files are listed together as duplicates. */
+export type DuplicateKind = 
+/**  The same file (same hash) at different paths. */
+"exact" | 
+/**  The same PostScript name and version in files that differ. */
+"near";
 
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
@@ -484,6 +532,17 @@ export type FamilyHit = {
 /**  A family: faces grouped by typographic family name. */
 export type FamilyId = number;
 
+/**
+ *  An order for the family list: a key and a direction. Families without a
+ *  value for the key come last in both directions; ties go by name, then id.
+ */
+export type FamilyOrder = {
+	/**  The key. */
+	by: FamilySortKey,
+	/**  Largest (or Z, or newest) first. */
+	descending?: boolean,
+};
+
 /**  Family list order. */
 export type FamilySort = 
 /**  A to Z. */
@@ -492,6 +551,31 @@ export type FamilySort =
 "dateAdded" | 
 /**  Most styles first. */
 "styleCount";
+
+/**  What the family list can be ordered by: the columns of the detail list. */
+export type FamilySortKey = 
+/**  Inactive, then partly active, then active. */
+"activation" | 
+/**  Family name, A to Z. */
+"name" | 
+/**  Number of styles. */
+"styleCount" | 
+/**  Lightest weight, then heaviest. */
+"weight" | 
+/**  Format badge: the formats, then variable, then color. */
+"format" | 
+/**  Version, digit runs compared as numbers. */
+"version" | 
+/**  Foundry or manufacturer. */
+"manufacturer" | 
+/**  Source folder. */
+"location" | 
+/**  Declared license, then the recognized open license. */
+"license" | 
+/**  When the family was added, oldest first. */
+"dateAdded" | 
+/**  Tags. */
+"tags";
 
 /**  One row of the family list. */
 export type FamilySummary = {
@@ -513,6 +597,22 @@ export type FamilySummary = {
 	activation: FamilyActivation,
 	/**  When the first face was indexed. */
 	added: string,
+	/**  Every style on the weight line, lightest first, upright before italic. */
+	styles?: StyleMark[],
+	/**  Lightest to heaviest weight, a variable font's `wght` axis included. */
+	weightRange?: WeightRange | null,
+	/**  At least one face is a color font. */
+	isColor?: boolean,
+	/**  Version string (name ID 5) of the first face. */
+	version?: string | null,
+	/**  The source folder the family was found in. */
+	location?: string | null,
+	/**  The open license recognized in the first face that has one. */
+	openLicense?: OpenLicense | null,
+	/**  The license type the user declared, if any. */
+	declaredLicense?: LicenseType | null,
+	/**  User tags on any of its faces, by name, A to Z. */
+	tags?: string[],
 };
 
 /**  An OpenType layout feature the face provides. */
@@ -531,6 +631,58 @@ export type FeatureSetting = {
 	on: boolean,
 };
 
+/**  One filter value and how many family groups it would give. */
+export type FilterCount<T> = {
+	/**  The value. */
+	value: T,
+	/**  Family groups the search returns with this value chosen. */
+	count: number,
+};
+
+/**
+ *  Result counts for the filters, per value: the family groups the same
+ *  search returns with that value chosen and the other filters kept. A
+ *  filter that takes any of several values (classification, formats,
+ *  sources) is counted without its own selection; `features` and `tags`,
+ *  which take every one, are counted with their selection plus the value.
+ *  Values with no result are left out.
+ */
+export type FilterCounts = {
+	/**  Per class. */
+	classification?: FilterCount<Classification>[],
+	/**
+	 *  Per weight class in hundreds (100–900): a face counts under the class
+	 *  its weight rounds to; a variable face under every class it reaches.
+	 */
+	weight?: FilterCount<number>[],
+	/**  Per width class (1–9); a variable face under every class it reaches. */
+	width?: FilterCount<number>[],
+	/**  Per slant. */
+	slant?: FilterCount<Slant>[],
+	/**  Variable (true) and static (false). */
+	variable?: FilterCount<boolean>[],
+	/**  Color (true) and not (false). */
+	color?: FilterCount<boolean>[],
+	/**  Per format. */
+	formats?: FilterCount<FontFormat>[],
+	/**  Per OpenType feature tag. */
+	features?: FilterCount<string>[],
+	/**  Per declared license type. */
+	license?: FilterCount<LicenseType>[],
+	/**  Per source. */
+	sources?: FilterCount<SourceId>[],
+	/**  With problems (true) and healthy (false). */
+	problems?: FilterCount<boolean>[],
+	/**  Active (true) and inactive (false). */
+	active?: FilterCount<boolean>[],
+	/**  Per tag. Like `features`, counted with the tags already chosen. */
+	tags?: FilterCount<TagId>[],
+	/**  Favorites (true) and the rest (false). */
+	favorite?: FilterCount<boolean>[],
+	/**  Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4. */
+	minRating?: FilterCount<number>[],
+};
+
 /**
  *  Filters; every field is optional and they combine with AND. The same
  *  value is the rule of a smart collection.
@@ -538,8 +690,10 @@ export type FeatureSetting = {
 export type Filters = {
 	/**  Any of these classes. */
 	classification?: Classification[],
-	/**  Weight range. */
+	/**  Weight range; a variable face passes when its `wght` axis reaches it. */
 	weight?: WeightRange | null,
+	/**  Width-class range; a variable face passes when its `wdth` axis reaches it. */
+	width?: WidthRange | null,
 	/**  Slant. */
 	slant?: Slant | null,
 	/**  Variable (true) or static (false) only. */
@@ -568,7 +722,7 @@ export type Filters = {
 	favorite?: boolean | null,
 	/**  At least this many stars. */
 	minRating?: number | null,
-	/**  Only faces with problems. */
+	/**  Health: faces with problems (true) or healthy faces (false) only. */
 	problems?: boolean | null,
 };
 
@@ -712,6 +866,8 @@ export type ListFamiliesRequest = {
 	sort?: FamilySort,
 	/**  Window. */
 	page?: Page,
+	/**  Order by any column of the detail list; when set, it replaces `sort`. */
+	order?: FamilyOrder | null,
 };
 
 /**  Vertical metrics in font units. */
@@ -734,6 +890,22 @@ export type Missing = {
 	chars: string[],
 	/**  The face carries `locl` forms for the requested language. */
 	hasLocl: boolean,
+};
+
+/**
+ *  Move a collection under another parent, or to another place among its
+ *  siblings.
+ */
+export type MoveCollectionRequest = {
+	/**  The collection. */
+	collection: CollectionId,
+	/**
+	 *  The new parent; absent for the top level. The collection itself or
+	 *  one of its children is `InvalidRequest`.
+	 */
+	parent?: CollectionId | null,
+	/**  Its place among the new siblings, 0 first; past the end means last. */
+	position: number,
 };
 
 /**  A named instance of a variable font, listed as a style. */
@@ -894,6 +1066,35 @@ export type RenameCollectionRequest = {
 	name: string,
 };
 
+/**  Why a face previews other text than the sample. */
+export type SampleFallback = 
+/**  Letters of a script the face covers. */
+{ kind: "script"; 
+/**  ISO 15924 script (`Cyrl`). */
+script: string } | 
+/**  Characters the face maps, for a face that covers no language. */
+{ kind: "symbols" };
+
+/**  The text one face previews. */
+export type SampleText = {
+	/**  The face. */
+	face: FaceId,
+	/**  The sample text, or text from the face's own coverage. */
+	text: string,
+	/**  Set when the face lacks characters of the sample and `text` is other text. */
+	fallback?: SampleFallback | null,
+	/**  The characters of the sample the face lacks. */
+	missing?: string[],
+};
+
+/**  The text to preview some faces with, for one sample text. */
+export type SampleTextRequest = {
+	/**  The faces. */
+	faces: FaceId[],
+	/**  The sample text the user chose. */
+	text: string,
+};
+
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
 export type ScanRequest = {
 	/**  One source, or every source when absent. */
@@ -919,6 +1120,8 @@ export type SearchResponse = {
 	families: FamilyHit[],
 	/**  Family groups in all pages. */
 	total: number,
+	/**  The result count of every filter value. */
+	counts?: FilterCounts | null,
 };
 
 /**
@@ -1052,6 +1255,14 @@ export type SourceKind =
 /**  The user-chosen folder that "Copy to library folder" imports into. */
 "libraryFolder";
 
+/**  One style on a family's weight line. */
+export type StyleMark = {
+	/**  `OS/2.usWeightClass` (100–1000). */
+	weight: number,
+	/**  Italic or oblique. */
+	italic: boolean,
+};
+
 /**  Which characters to keep when subsetting. */
 export type Subset = 
 /**  Named presets (`latin`, `latin-ext`, `cyrillic`, `greek`, `vietnamese`). */
@@ -1162,4 +1373,12 @@ export type WeightRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 3, patch: 0 };
+/**  An inclusive OS/2 width-class range (1 ultra-condensed – 9 ultra-expanded). */
+export type WidthRange = {
+	/**  Narrowest width class. */
+	min: number,
+	/**  Widest width class. */
+	max: number,
+};
+
+export const API_VERSION: ApiVersion = { major: 0, minor: 6, patch: 0 };
