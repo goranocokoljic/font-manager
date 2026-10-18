@@ -484,6 +484,17 @@ export type FamilyHit = {
 /**  A family: faces grouped by typographic family name. */
 export type FamilyId = number;
 
+/**
+ *  An order for the family list: a key and a direction. Families without a
+ *  value for the key come last in both directions; ties go by name, then id.
+ */
+export type FamilyOrder = {
+	/**  The key. */
+	by: FamilySortKey,
+	/**  Largest (or Z, or newest) first. */
+	descending?: boolean,
+};
+
 /**  Family list order. */
 export type FamilySort = 
 /**  A to Z. */
@@ -492,6 +503,31 @@ export type FamilySort =
 "dateAdded" | 
 /**  Most styles first. */
 "styleCount";
+
+/**  What the family list can be ordered by: the columns of the detail list. */
+export type FamilySortKey = 
+/**  Inactive, then partly active, then active. */
+"activation" | 
+/**  Family name, A to Z. */
+"name" | 
+/**  Number of styles. */
+"styleCount" | 
+/**  Lightest weight, then heaviest. */
+"weight" | 
+/**  Format badge: the formats, then variable, then color. */
+"format" | 
+/**  Version, digit runs compared as numbers. */
+"version" | 
+/**  Foundry or manufacturer. */
+"manufacturer" | 
+/**  Source folder. */
+"location" | 
+/**  Declared license, then the recognized open license. */
+"license" | 
+/**  When the family was added, oldest first. */
+"dateAdded" | 
+/**  Tags. */
+"tags";
 
 /**  One row of the family list. */
 export type FamilySummary = {
@@ -513,6 +549,22 @@ export type FamilySummary = {
 	activation: FamilyActivation,
 	/**  When the first face was indexed. */
 	added: string,
+	/**  Every style on the weight line, lightest first, upright before italic. */
+	styles?: StyleMark[],
+	/**  Lightest to heaviest weight, a variable font's `wght` axis included. */
+	weightRange?: WeightRange | null,
+	/**  At least one face is a color font. */
+	isColor?: boolean,
+	/**  Version string (name ID 5) of the first face. */
+	version?: string | null,
+	/**  The source folder the family was found in. */
+	location?: string | null,
+	/**  The open license recognized in the first face that has one. */
+	openLicense?: OpenLicense | null,
+	/**  The license type the user declared, if any. */
+	declaredLicense?: LicenseType | null,
+	/**  User tags on any of its faces, by name, A to Z. */
+	tags?: string[],
 };
 
 /**  An OpenType layout feature the face provides. */
@@ -760,6 +812,8 @@ export type ListFamiliesRequest = {
 	sort?: FamilySort,
 	/**  Window. */
 	page?: Page,
+	/**  Order by any column of the detail list; when set, it replaces `sort`. */
+	order?: FamilyOrder | null,
 };
 
 /**  Vertical metrics in font units. */
@@ -1102,6 +1156,14 @@ export type SourceKind =
 /**  The user-chosen folder that "Copy to library folder" imports into. */
 "libraryFolder";
 
+/**  One style on a family's weight line. */
+export type StyleMark = {
+	/**  `OS/2.usWeightClass` (100–1000). */
+	weight: number,
+	/**  Italic or oblique. */
+	italic: boolean,
+};
+
 /**  Which characters to keep when subsetting. */
 export type Subset = 
 /**  Named presets (`latin`, `latin-ext`, `cyrillic`, `greek`, `vietnamese`). */
@@ -1220,4 +1282,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 4, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 5, patch: 0 };

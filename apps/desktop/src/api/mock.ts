@@ -15,6 +15,8 @@ import {
   type FaceSummary,
   type Family,
   type FamilyId,
+  type FamilyOrder,
+  type FamilySortKey,
   type FamilySummary,
   type JobId,
   type Source,
@@ -205,6 +207,8 @@ export interface MockOptions {
   extraFaces?: number;
   /** Styles in each extra family (1–6, default 1), so families can expand (e2e). */
   stylesPerFamily?: number;
+  /** User tags per face (the sample faces have none). */
+  faceTags?: Partial<Record<FaceId, string[]>>;
 }
 
 /** Id of the first extra face and family; above every sample id. */
@@ -251,21 +255,122 @@ function extraFamily(i: number, styles: number): FaceDetail[] {
   );
 }
 
-/** The list row of a family, from its faces. */
-function familySummary(faces: FaceSummary[]): FamilySummary {
+/** The list row of a family, from its faces and their details (like the Rust mock). */
+function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySummary {
   const first = faces[0]!;
+  const detail = details[0];
   const active = faces.filter((f) => f.active).length;
+  const styles = faces
+    .map((f) => ({ weight: f.weight, italic: f.slant !== 'upright' }))
+    .sort((a, b) => a.weight - b.weight || Number(a.italic) - Number(b.italic));
+  // A variable face spans its `wght` axis; a static one sits at its weight.
+  const weights = details.flatMap((d) => {
+    const axis = d.axes.find((a) => a.tag === 'wght');
+    return [axis?.min ?? d.face.weight, axis?.max ?? d.face.weight];
+  });
+  const tags = [...new Set(details.flatMap((d) => d.tags))].sort((a, b) =>
+    a.toLowerCase().localeCompare(b.toLowerCase()),
+  );
   return {
     id: first.family,
     name: first.familyName,
     styleCount: faces.length,
     formats: [...new Set(faces.map((f) => f.format))],
-    foundry: null,
+    foundry: detail?.foundry ?? null,
     classification: null,
     isVariable: faces.some((f) => f.isVariable),
     activation: active === 0 ? 'inactive' : active === faces.length ? 'active' : 'partial',
     added: '2026-10-01T00:00:00Z',
+    styles,
+    weightRange: weights.length ? { min: Math.min(...weights), max: Math.max(...weights) } : null,
+    isColor: false,
+    version: detail?.version ?? null,
+    location: mockSources[0]!.path,
+    openLicense: details.find((d) => d.license.openLicense)?.license.openLicense ?? null,
+    declaredLicense: details.find((d) => d.license.declared)?.license.declared ?? null,
+    tags,
   };
+}
+
+/** `a` and `b` split into digit runs (compared as numbers) and other text. */
+function compareNatural(a: string, b: string): number {
+  const parts = (s: string) => s.toLowerCase().match(/\d+|\D+/g) ?? [];
+  const pa = parts(a);
+  const pb = parts(b);
+  for (let i = 0; i < Math.min(pa.length, pb.length); i++) {
+    const x = pa[i]!;
+    const y = pb[i]!;
+    const dx = /^\d/.test(x);
+    const dy = /^\d/.test(y);
+    // Like the Rust enum: a number run sorts before a text run.
+    const c =
+      dx && dy ? Number(x) - Number(y) : dx !== dy ? (dx ? -1 : 1) : x < y ? -1 : x > y ? 1 : 0;
+    if (c) return c;
+  }
+  return pa.length - pb.length;
+}
+
+/** The value a row has for `by`; `null` when it has none. Mirrors `FamilyOrder` in fm-api. */
+function sortValue(f: FamilySummary, by: FamilySortKey): string | number | null {
+  const text = (s: string | null | undefined) => (s?.trim() ? s.trim().toLowerCase() : null);
+  switch (by) {
+    case 'activation':
+      return ['inactive', 'partial', 'active'].indexOf(f.activation);
+    case 'name':
+      return f.name.toLowerCase();
+    case 'styleCount':
+      return f.styleCount;
+    case 'weight':
+      return f.weightRange ? f.weightRange.min * 65536 + f.weightRange.max : null;
+    case 'format':
+      return f.formats.length
+        ? `${[...f.formats].sort().join(',')} ${Number(f.isVariable)} ${Number(f.isColor ?? false)}`
+        : null;
+    case 'version':
+      return text(f.version);
+    case 'manufacturer':
+      return text(f.foundry);
+    case 'location':
+      return text(f.location);
+    case 'license':
+      return f.declaredLicense || f.openLicense
+        ? `${f.declaredLicense ?? '~'} ${f.openLicense ?? '~'}`
+        : null;
+    case 'dateAdded':
+      return f.added || null;
+    case 'tags':
+      return f.tags?.length
+        ? f.tags
+            .map((t) => t.toLowerCase())
+            .sort()
+            .join('\u0001')
+        : null;
+  }
+}
+
+/** Sorts like `FamilyOrder::sort`: missing values last, ties by name, then id. */
+function sortFamilies(rows: FamilySummary[], order: FamilyOrder): FamilySummary[] {
+  const keyed = rows.map((row) => ({ row, value: sortValue(row, order.by) }));
+  const cmp = (x: string | number, y: string | number) =>
+    order.by === 'version'
+      ? compareNatural(String(x), String(y))
+      : typeof x === 'number' && typeof y === 'number'
+        ? x - y
+        : x < y
+          ? -1
+          : x > y
+            ? 1
+            : 0;
+  keyed.sort((a, b) => {
+    const byValue =
+      a.value === null || b.value === null
+        ? Number(a.value === null) - Number(b.value === null)
+        : cmp(a.value, b.value) * (order.descending ? -1 : 1);
+    const an = a.row.name.toLowerCase();
+    const bn = b.row.name.toLowerCase();
+    return byValue || (an < bn ? -1 : an > bn ? 1 : 0) || a.row.id - b.row.id;
+  });
+  return keyed.map((k) => k.row);
 }
 
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
@@ -303,7 +408,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const faces = [
     ...mockFaces,
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
-  ];
+  ].map((f) => {
+    const tags = options.faceTags?.[f.face.id];
+    return tags ? { ...structuredClone(f), tags: [...tags] } : f;
+  });
   // Indexes, so long lists (10,000 families) answer quickly.
   const byId = new Map(faces.map((f) => [f.face.id, f]));
   const byFamily = new Map<FamilyId, FaceDetail[]>();
@@ -319,6 +427,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     active: active.get(f.face.id) ?? null,
   });
   const familyFaces = (family: FamilyId) => (byFamily.get(family) ?? []).map(summary);
+  const summaryOf = (family: FamilyId) =>
+    familySummary(familyFaces(family), byFamily.get(family) ?? []);
   const notFound = (id: FaceId) => ({
     code: 'notFound' as const,
     message: `Face ${id} was not found.`,
@@ -336,12 +446,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       detail.face.active = active.get(id) ?? null;
       return detail;
     },
-    // Families in id order (the sample ones first); `sort` is not mocked.
+    // Families in id order (the sample ones first), or in `order`; `sort` is not mocked.
     listFamilies: async (req) => {
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
+      if (req.order) {
+        const all = sortFamilies(familyIds.map(summaryOf), req.order);
+        return { items: all.slice(offset, offset + limit), total: all.length };
+      }
       return {
-        items: familyIds.slice(offset, offset + limit).map((id) => familySummary(familyFaces(id))),
+        items: familyIds.slice(offset, offset + limit).map(summaryOf),
         total: familyIds.length,
       };
     },
@@ -350,7 +464,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!list.length)
         throw { code: 'notFound' as const, message: `Family ${id} was not found.`, detail: null };
       const designer = find(list[0]!.id)!.designer;
-      return { summary: familySummary(list), designer, faces: list } satisfies Family;
+      return { summary: summaryOf(id), designer, faces: list } satisfies Family;
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,

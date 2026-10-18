@@ -138,4 +138,124 @@ describe('library store', () => {
     expect(store.families).toEqual([]);
     expect(store.loaded).toBe(true);
   });
+
+  it('orders the families by the API order and keeps the faces it already has', async () => {
+    client = createMockClient();
+    const list = vi.spyOn(client, 'listFamilies');
+    const family = vi.spyOn(client, 'getFamily');
+    setClient(client);
+    const store = useLibraryStore();
+    await store.setOrder({ by: 'manufacturer', descending: false }); // before load: no request
+    expect(list).not.toHaveBeenCalled();
+    await store.load();
+    expect(list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ order: { by: 'manufacturer', descending: false } }),
+    );
+    // JetBrains, Old Foundry, rsms
+    expect(store.families.map((f) => f.name)).toEqual([
+      'JetBrains Mono',
+      'Legacy Grotesk',
+      'Inter',
+    ]);
+    await store.facesOf(1);
+    await store.setOrder({ by: 'manufacturer', descending: true });
+    expect(store.families.map((f) => f.name)).toEqual([
+      'Inter',
+      'Legacy Grotesk',
+      'JetBrains Mono',
+    ]);
+    expect(store.faces.has(1)).toBe(true); // a new order is not a library change
+    const calls = list.mock.calls.length;
+    await store.setOrder({ by: 'manufacturer', descending: true }); // same order: nothing
+    expect(list.mock.calls.length).toBe(calls);
+    await store.setOrder(null);
+    expect(list.mock.lastCall?.[0]).not.toHaveProperty('order');
+    expect(store.families[0]!.name).toBe('Inter');
+    expect(family).toHaveBeenCalledTimes(1);
+  });
+
+  it('an activation reload keeps the sort order, and a new order overtakes it', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.setOrder({ by: 'manufacturer', descending: false });
+    await store.load();
+    const face = (await store.facesOf(1))[0]!;
+    const list = client.listFamilies.bind(client);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let held = false;
+    // Hold the activation reload's list answer (in the old order) until a new order is set.
+    client.listFamilies = async (request) => {
+      const answer = await list(request);
+      if (!held) {
+        held = true;
+        await gate;
+      }
+      return answer;
+    };
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'session' });
+    await vi.waitFor(() => expect(held).toBe(true));
+    await store.setOrder({ by: 'manufacturer', descending: true });
+    release();
+    await vi.waitFor(() =>
+      expect(store.faces.get(1)?.find((f) => f.id === face.id)?.active).toBe('session'),
+    );
+    expect(store.families.map((f) => f.name)).toEqual([
+      'Inter',
+      'Legacy Grotesk',
+      'JetBrains Mono',
+    ]);
+    expect(store.families[0]!.activation).not.toBe('inactive');
+    await store.stop();
+  });
+
+  it('a sort fetch overtaken by an activation does not bring back the old state', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const face = (await store.facesOf(1))[0]!;
+    const list = client.listFamilies.bind(client);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let held = false;
+    // Hold the sort fetch's answer (from before the activation) until the activation lands.
+    client.listFamilies = async (request) => {
+      const answer = await list(request);
+      if (!held) {
+        held = true;
+        await gate;
+      }
+      return answer;
+    };
+    const sorting = store.setOrder({ by: 'name', descending: true });
+    await vi.waitFor(() => expect(held).toBe(true));
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'session' });
+    await vi.waitFor(() =>
+      expect(store.families.find((f) => f.id === 1)?.activation).not.toBe('inactive'),
+    );
+    release();
+    await sorting;
+    expect(store.families.map((f) => f.name)).toEqual([
+      'Legacy Grotesk',
+      'JetBrains Mono',
+      'Inter',
+    ]);
+    expect(store.families.find((f) => f.id === 1)?.activation).not.toBe('inactive');
+    await store.stop();
+  });
+
+  it('a refresh overtaken by a new order still forgets the faces', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    await store.facesOf(1);
+    const refreshing = store.refresh();
+    await store.setOrder({ by: 'name', descending: true });
+    await refreshing;
+    expect(store.faces.size).toBe(0);
+    expect(store.families[0]!.name).toBe('Legacy Grotesk');
+  });
 });

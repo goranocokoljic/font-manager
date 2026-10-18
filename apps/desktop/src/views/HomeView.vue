@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import FontList from '../components/FontList.vue';
+import FontTable from '../components/FontTable.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
+import PreviewStrip from '../components/PreviewStrip.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
+import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
 import { useActions, useCommandsStore } from '../stores/commands';
@@ -16,6 +19,7 @@ import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import type { FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
+import { useViewsStore, type ViewMode } from '../stores/views';
 
 const app = useAppStore();
 const layout = useLayoutStore();
@@ -24,8 +28,23 @@ const commands = useCommandsStore();
 const library = useLibraryStore();
 const preview = usePreviewStore();
 const fontList = useFontListStore();
+const views = useViewsStore();
 const route = useRoute();
 const router = useRouter();
+
+// The table's sort column orders the families (behind the API); set before the
+// first load so the families come in that order at once.
+watch(
+  () => views.orderFor(ALL_FONTS_VIEW),
+  (order) => void library.setOrder(order),
+  { immediate: true },
+);
+const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
+const MODES: { value: ViewMode; label: string }[] = [
+  { value: 'list', label: 'List' },
+  { value: 'table', label: 'Table' },
+];
+
 onMounted(() => {
   void app.load();
   void library.load();
@@ -47,6 +66,12 @@ useActions([
     enabled: () => selection.canActivate,
     run: () => selection.toggleActivation('permanent'),
   },
+  ...MODES.map((m) => ({
+    id: `view.${m.value}`,
+    title: `Show fonts as a ${m.label.toLowerCase()}`,
+    group: 'View',
+    run: () => views.setMode(ALL_FONTS_VIEW, m.value),
+  })),
 ]);
 
 const paletteChord = chordOf(ACTIONS.palette)!;
@@ -100,6 +125,19 @@ const groups = [
             >{{ fontList.selectedCount }} selected</template
           >
         </p>
+        <div class="modes" role="group" aria-label="View mode">
+          <button
+            v-for="m in MODES"
+            :key="m.value"
+            type="button"
+            class="toggle"
+            :aria-pressed="mode === m.value"
+            @click="views.setMode(ALL_FONTS_VIEW, m.value)"
+          >
+            {{ m.label }}
+          </button>
+        </div>
+        <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
         <button
           type="button"
           class="toggle"
@@ -113,8 +151,12 @@ const groups = [
         </button>
       </header>
       <PreviewControls :view="ALL_FONTS_VIEW" />
+      <template v-if="library.families.length && mode === 'table'">
+        <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+        <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
+      </template>
       <FontList
-        v-if="library.families.length"
+        v-else-if="library.families.length"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
         @cursor-face="showFace"
         @open="openFace"
@@ -196,6 +238,10 @@ const groups = [
   background: transparent;
   color: inherit;
   font: inherit;
+}
+.modes {
+  display: flex;
+  gap: 4px;
 }
 .toggle[aria-pressed='true'] {
   border-color: var(--fm-accent);

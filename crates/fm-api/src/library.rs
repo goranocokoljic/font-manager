@@ -7,6 +7,7 @@ use crate::common::{
     Axis, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics, NamedInstance, Page,
     Paged, Slant, Timestamp,
 };
+use crate::search::WeightRange;
 use crate::{ApiResult, ApiVersion, FaceId, FamilyId, JobId, SourceId};
 
 /// The operating system the app runs on.
@@ -132,6 +133,209 @@ pub struct ListFamiliesRequest {
     /// Window.
     #[serde(default)]
     pub page: Page,
+    /// Order by any column of the detail list; when set, it replaces `sort`.
+    #[serde(default)]
+    pub order: Option<FamilyOrder>,
+}
+
+/// What the family list can be ordered by: the columns of the detail list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum FamilySortKey {
+    /// Inactive, then partly active, then active.
+    Activation,
+    /// Family name, A to Z.
+    Name,
+    /// Number of styles.
+    StyleCount,
+    /// Lightest weight, then heaviest.
+    Weight,
+    /// Format badge: the formats, then variable, then color.
+    Format,
+    /// Version, digit runs compared as numbers.
+    Version,
+    /// Foundry or manufacturer.
+    Manufacturer,
+    /// Source folder.
+    Location,
+    /// Declared license, then the recognized open license.
+    License,
+    /// When the family was added, oldest first.
+    DateAdded,
+    /// Tags.
+    Tags,
+}
+
+/// An order for the family list: a key and a direction. Families without a
+/// value for the key come last in both directions; ties go by name, then id.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyOrder {
+    /// The key.
+    pub by: FamilySortKey,
+    /// Largest (or Z, or newest) first.
+    #[serde(default)]
+    pub descending: bool,
+}
+
+impl FamilyOrder {
+    /// Sorts `rows` in this order. Every implementation of
+    /// [`LibraryService::list_families`] uses this, so the order is one.
+    pub fn sort(&self, rows: &mut [FamilySummary]) {
+        rows.sort_by_cached_key(|f| (self.key(f), f.name.to_lowercase(), f.id.0));
+    }
+
+    /// The sort key of one row: values first (reversed when descending), then
+    /// rows without a value.
+    fn key(&self, f: &FamilySummary) -> (bool, Directed) {
+        let value = self.value(f);
+        let missing = value.is_none();
+        let value = value.unwrap_or(SortValue::Number(0));
+        (
+            missing,
+            if self.descending {
+                Directed::Down(std::cmp::Reverse(value))
+            } else {
+                Directed::Up(value)
+            },
+        )
+    }
+
+    /// The value one row has for the key; `None` when it has none.
+    fn value(&self, f: &FamilySummary) -> Option<SortValue> {
+        let text = |s: &Option<String>| {
+            s.as_deref()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| SortValue::Text(s.to_lowercase()))
+        };
+        match self.by {
+            FamilySortKey::Activation => Some(SortValue::Number(match f.activation {
+                FamilyActivation::Inactive => 0,
+                FamilyActivation::Partial => 1,
+                FamilyActivation::Active => 2,
+            })),
+            FamilySortKey::Name => Some(SortValue::Text(f.name.to_lowercase())),
+            FamilySortKey::StyleCount => Some(SortValue::Number(f.style_count.into())),
+            FamilySortKey::Weight => f
+                .weight_range
+                .map(|w| SortValue::Number((u64::from(w.min) << 16) | u64::from(w.max))),
+            FamilySortKey::Format => (!f.formats.is_empty()).then(|| {
+                let mut names: Vec<&str> = f.formats.iter().map(|x| format_name(*x)).collect();
+                names.sort_unstable();
+                SortValue::Text(format!(
+                    "{} {} {}",
+                    names.join(","),
+                    u8::from(f.is_variable),
+                    u8::from(f.is_color)
+                ))
+            }),
+            FamilySortKey::Version => f
+                .version
+                .as_deref()
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .map(|v| SortValue::Natural(natural(v))),
+            FamilySortKey::Manufacturer => text(&f.foundry),
+            FamilySortKey::Location => text(&f.location),
+            FamilySortKey::License => {
+                let declared = f.declared_license.map(license_type_name);
+                let open = f.open_license.map(open_license_name);
+                (declared.is_some() || open.is_some()).then(|| {
+                    SortValue::Text(format!(
+                        "{} {}",
+                        declared.unwrap_or("~"),
+                        open.unwrap_or("~")
+                    ))
+                })
+            }
+            FamilySortKey::DateAdded => {
+                (!f.added.is_empty()).then(|| SortValue::Text(f.added.clone()))
+            }
+            FamilySortKey::Tags => (!f.tags.is_empty()).then(|| {
+                let mut tags: Vec<String> = f.tags.iter().map(|t| t.to_lowercase()).collect();
+                tags.sort();
+                SortValue::Text(tags.join("\u{1}"))
+            }),
+        }
+    }
+}
+
+/// A sort value in ascending or descending direction.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum Directed {
+    Up(SortValue),
+    Down(std::cmp::Reverse<SortValue>),
+}
+
+/// A comparable sort value.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum SortValue {
+    Number(u64),
+    Text(String),
+    Natural(Vec<NaturalPart>),
+}
+
+/// A piece of a natural-order key: a run of digits by value, or other text.
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum NaturalPart {
+    Number(u64),
+    Text(String),
+}
+
+/// `s` split into digit runs (compared as numbers) and other text, so
+/// "Version 2.10" sorts after "Version 2.9".
+fn natural(s: &str) -> Vec<NaturalPart> {
+    let mut parts = Vec::new();
+    let mut rest = s;
+    while let Some(c) = rest.chars().next() {
+        let digit = c.is_ascii_digit();
+        let end = rest
+            .find(|ch: char| ch.is_ascii_digit() != digit)
+            .unwrap_or(rest.len());
+        let (run, tail) = rest.split_at(end);
+        parts.push(if digit {
+            NaturalPart::Number(run.parse().unwrap_or(u64::MAX))
+        } else {
+            NaturalPart::Text(run.to_lowercase())
+        });
+        rest = tail;
+    }
+    parts
+}
+
+fn format_name(f: FontFormat) -> &'static str {
+    match f {
+        FontFormat::Ttf => "ttf",
+        FontFormat::Otf => "otf",
+        FontFormat::Ttc => "ttc",
+        FontFormat::Otc => "otc",
+        FontFormat::Woff => "woff",
+        FontFormat::Woff2 => "woff2",
+        FontFormat::Type1 => "type1",
+        FontFormat::Dfont => "dfont",
+        FontFormat::Bitmap => "bitmap",
+    }
+}
+
+fn license_type_name(l: LicenseType) -> &'static str {
+    match l {
+        LicenseType::App => "app",
+        LicenseType::Desktop => "desktop",
+        LicenseType::PersonalOnly => "personalOnly",
+        LicenseType::Trial => "trial",
+        LicenseType::Unknown => "unknown",
+        LicenseType::Web => "web",
+    }
+}
+
+fn open_license_name(l: OpenLicense) -> &'static str {
+    match l {
+        OpenLicense::Apache => "apache",
+        OpenLicense::Mit => "mit",
+        OpenLicense::Ofl => "ofl",
+        OpenLicense::Ufl => "ufl",
+    }
 }
 
 /// Whether a family's faces are active.
@@ -168,6 +372,40 @@ pub struct FamilySummary {
     pub activation: FamilyActivation,
     /// When the first face was indexed.
     pub added: Timestamp,
+    /// Every style on the weight line, lightest first, upright before italic.
+    #[serde(default)]
+    pub styles: Vec<StyleMark>,
+    /// Lightest to heaviest weight, a variable font's `wght` axis included.
+    #[serde(default)]
+    pub weight_range: Option<WeightRange>,
+    /// At least one face is a color font.
+    #[serde(default)]
+    pub is_color: bool,
+    /// Version string (name ID 5) of the first face.
+    #[serde(default)]
+    pub version: Option<String>,
+    /// The source folder the family was found in.
+    #[serde(default)]
+    pub location: Option<String>,
+    /// The open license recognized in the first face that has one.
+    #[serde(default)]
+    pub open_license: Option<OpenLicense>,
+    /// The license type the user declared, if any.
+    #[serde(default)]
+    pub declared_license: Option<LicenseType>,
+    /// User tags on any of its faces, by name, A to Z.
+    #[serde(default)]
+    pub tags: Vec<String>,
+}
+
+/// One style on a family's weight line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct StyleMark {
+    /// `OS/2.usWeightClass` (100–1000).
+    pub weight: u16,
+    /// Italic or oblique.
+    pub italic: bool,
 }
 
 /// One face, as listed under its family.
@@ -383,4 +621,92 @@ pub trait LibraryService {
     fn get_face(&self, face: FaceId) -> ApiResult<FaceDetail>;
     /// Duplicates, broken files and conflicts.
     fn list_problems(&self) -> ApiResult<Vec<Problem>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn row(id: u32, name: &str, version: Option<&str>) -> FamilySummary {
+        FamilySummary {
+            id: FamilyId(id),
+            name: name.into(),
+            style_count: 1,
+            formats: vec![FontFormat::Ttf],
+            foundry: None,
+            classification: None,
+            is_variable: false,
+            activation: FamilyActivation::Inactive,
+            added: String::new(),
+            styles: Vec::new(),
+            weight_range: None,
+            is_color: false,
+            version: version.map(Into::into),
+            location: None,
+            open_license: None,
+            declared_license: None,
+            tags: Vec::new(),
+        }
+    }
+
+    fn sorted(by: FamilySortKey, descending: bool, mut rows: Vec<FamilySummary>) -> Vec<u32> {
+        FamilyOrder { by, descending }.sort(&mut rows);
+        rows.iter().map(|r| r.id.0).collect()
+    }
+
+    #[test]
+    fn versions_compare_digit_runs_as_numbers() {
+        let rows = vec![
+            row(1, "a", Some("Version 2.10")),
+            row(2, "b", Some("Version 2.9")),
+            row(3, "c", Some("version 10.0")),
+            row(4, "d", None),
+            row(5, "e", Some("  ")),
+        ];
+        assert_eq!(
+            sorted(FamilySortKey::Version, false, rows.clone()),
+            [2, 1, 3, 4, 5]
+        );
+        // Descending reverses the values only: rows without one stay last.
+        assert_eq!(sorted(FamilySortKey::Version, true, rows), [3, 1, 2, 4, 5]);
+    }
+
+    #[test]
+    fn ties_go_by_name_then_id_in_both_directions() {
+        let rows = vec![
+            row(3, "Beta", None),
+            row(2, "alpha", None),
+            row(1, "Alpha", None),
+        ];
+        assert_eq!(
+            sorted(FamilySortKey::StyleCount, false, rows.clone()),
+            [1, 2, 3]
+        );
+        assert_eq!(sorted(FamilySortKey::StyleCount, true, rows), [1, 2, 3]);
+    }
+
+    #[test]
+    fn formats_sort_by_badge_then_variable_then_color() {
+        let mut otf = row(1, "a", None);
+        otf.formats = vec![FontFormat::Otf];
+        let ttf = row(2, "b", None);
+        let mut var = row(3, "c", None);
+        var.is_variable = true;
+        let mut none = row(4, "d", None);
+        none.formats.clear();
+        assert_eq!(
+            sorted(FamilySortKey::Format, false, vec![none, var, ttf, otf]),
+            [1, 2, 3, 4]
+        );
+    }
+
+    #[test]
+    fn tags_sort_case_insensitively_and_untagged_last() {
+        let mut a = row(1, "a", None);
+        a.tags = vec!["zeta".into()];
+        let mut b = row(2, "b", None);
+        b.tags = vec!["Alpha".into(), "beta".into()];
+        let c = row(3, "c", None);
+        assert_eq!(sorted(FamilySortKey::Tags, false, vec![c, a, b]), [2, 1, 3]);
+    }
 }

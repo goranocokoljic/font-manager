@@ -1,7 +1,15 @@
 import { defineStore } from 'pinia';
 import { ref, shallowReactive, shallowRef } from 'vue';
 import { useClient, type FmClient, type Unsubscribe } from '../api/client';
-import type { ApiError, Event, FaceId, FaceSummary, FamilyId, FamilySummary } from '../api/types';
+import type {
+  ApiError,
+  Event,
+  FaceId,
+  FaceSummary,
+  FamilyId,
+  FamilyOrder,
+  FamilySummary,
+} from '../api/types';
 
 /** Families fetched per `listFamilies` call. */
 const PAGE = 500;
@@ -10,7 +18,8 @@ const PAGE = 500;
  * The families of the library, in the API's order, and the faces of the families
  * the list has needed so far. Only family summaries load up front; the faces of a
  * family are fetched when its row comes on screen or it is expanded, so 10,000
- * families cost 20 requests, not 10,000.
+ * families cost 20 requests, not 10,000. `order` is the API order the families
+ * come in (the detail list's sort column); `null` is the API's default.
  */
 export const useLibraryStore = defineStore('library', () => {
   const families = shallowRef<FamilySummary[]>([]);
@@ -20,42 +29,78 @@ export const useLibraryStore = defineStore('library', () => {
   const failed = shallowReactive(new Set<FamilyId>());
   const loaded = ref(false);
   const error = ref<ApiError | null>(null);
+  const order = shallowRef<FamilyOrder | null>(null);
   let unsubscribe: Promise<Unsubscribe> | undefined;
-  /** Bumped by every refresh; answers to an older one are dropped. */
+  /** Bumped by every refresh; face answers to an older one are dropped. */
   let generation = 0;
+  /** Bumped by every family list request; answers to an older one are dropped. */
+  let listGeneration = 0;
+  /** The library changed: the next family list that arrives also forgets the faces. */
+  let facesStale = false;
   /** Bumped by every activation change; answers to an older one are dropped. */
   let activationRound = 0;
   /** Faces changed by activation rounds that have not finished yet. */
   const unsettled = new Set<FaceId>();
   const pending = new Map<FamilyId, Promise<FaceSummary[]>>();
 
-  async function listAll(client: FmClient): Promise<FamilySummary[]> {
+  /** Every family, in the order `by` (the API default when `null`). */
+  async function listAll(client: FmClient, by: FamilyOrder | null): Promise<FamilySummary[]> {
     const list: FamilySummary[] = [];
     for (let offset = 0; ; offset += PAGE) {
-      const page = await client.listFamilies({ page: { offset, limit: PAGE } });
+      const page = await client.listFamilies({
+        page: { offset, limit: PAGE },
+        ...(by ? { order: by } : {}),
+      });
       list.push(...page.items);
       if (!page.items.length || list.length >= page.total) break;
     }
     return list;
   }
 
-  async function refresh(): Promise<void> {
-    const mine = ++generation;
+  /**
+   * Fetches the family list in the current order. After a library change it also
+   * forgets the faces; a new order alone keeps them, the families did not change.
+   */
+  async function fetchFamilies(): Promise<void> {
+    const mine = ++listGeneration;
     const client = useClient();
     try {
-      const list = await listAll(client);
-      if (mine !== generation) return;
+      let list: FamilySummary[];
+      let round: number;
+      // An activation change during the fetch may have been missed by its pages; fetch again.
+      do {
+        round = activationRound;
+        list = await listAll(client, order.value);
+      } while (round !== activationRound && mine === listGeneration);
+      if (mine !== listGeneration) return;
       families.value = list;
-      faces.clear();
-      failed.clear();
-      unsettled.clear();
-      pending.clear();
+      if (facesStale) {
+        facesStale = false;
+        faces.clear();
+        failed.clear();
+        unsettled.clear();
+        pending.clear();
+      }
       error.value = null;
     } catch (e) {
-      if (mine === generation) error.value = e as ApiError;
+      if (mine === listGeneration) error.value = e as ApiError;
     } finally {
-      if (mine === generation) loaded.value = true;
+      if (mine === listGeneration) loaded.value = true;
     }
+  }
+
+  async function refresh(): Promise<void> {
+    generation += 1;
+    facesStale = true;
+    await fetchFamilies();
+  }
+
+  /** Orders the families by `next`; fetches them again once the store has loaded. */
+  async function setOrder(next: FamilyOrder | null): Promise<void> {
+    const now = order.value;
+    if (now?.by === next?.by && !!now?.descending === !!next?.descending) return;
+    order.value = next;
+    if (unsubscribe) await fetchFamilies();
   }
 
   /** The faces of a family, fetched once (per library version) however often it is asked. */
@@ -96,24 +141,26 @@ export const useLibraryStore = defineStore('library', () => {
   async function refreshActivation(changed: readonly FaceId[]): Promise<void> {
     const mine = generation;
     const round = ++activationRound;
-    const current = () => mine === generation && round === activationRound;
+    const by = order.value;
+    // A new order fetches the list again; an answer in the old order must not win.
+    const current = () => mine === generation && round === activationRound && by === order.value;
     const client = useClient();
     // A newer round supersedes this one, so it must also refetch this one's faces.
     for (const id of changed) unsettled.add(id);
     try {
-      const list = await listAll(client);
-      if (!current()) return;
-      families.value = list;
+      const list = await listAll(client, by);
+      if (current()) families.value = list;
+      if (mine !== generation || round !== activationRound) return;
       const stale = [...faces]
         .filter(([, fs]) => fs.some((f) => unsettled.has(f.id)))
         .map(([id]) => id);
       await Promise.all(
         stale.map(async (id) => {
           const family = await client.getFamily(id);
-          if (current()) faces.set(id, family.faces);
+          if (mine === generation && round === activationRound) faces.set(id, family.faces);
         }),
       );
-      if (current()) unsettled.clear();
+      if (mine === generation && round === activationRound) unsettled.clear();
     } catch {
       // The list keeps the state it had; the next refresh brings it up to date.
     }
@@ -139,5 +186,17 @@ export const useLibraryStore = defineStore('library', () => {
     (await pending?.catch(() => undefined))?.();
   }
 
-  return { families, faces, failed, loaded, error, facesOf, load, stop, refresh };
+  return {
+    families,
+    faces,
+    failed,
+    loaded,
+    error,
+    order,
+    facesOf,
+    load,
+    stop,
+    refresh,
+    setOrder,
+  };
 });

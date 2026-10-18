@@ -11,8 +11,8 @@ use fm_api::activation::{
 use fm_api::common::Page;
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
-    AddSourceRequest, FamilySort, ImportMode, ListFamiliesRequest, ScanRequest,
-    SetSourcePausedRequest,
+    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, ImportMode,
+    ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -20,7 +20,7 @@ use fm_api::organization::{
     UserMetaUpdate,
 };
 use fm_api::preview::PreviewRequest;
-use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports};
+use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
 use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, SourceId};
 
@@ -548,4 +548,137 @@ fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
         "a rejected update is not half-applied"
     );
     assert!(api.app_folders().unwrap().logs.ends_with("logs"));
+}
+
+#[test]
+fn family_rows_carry_the_detail_list_columns() {
+    let api = api();
+    api.tag_faces(TagFacesRequest {
+        faces: vec![FaceId(3)],
+        tags: vec!["Body".into(), "brand".into()],
+    })
+    .unwrap();
+    let all = api.list_families(ListFamiliesRequest::default()).unwrap();
+    let by_name = |n: &str| all.items.iter().find(|f| f.name == n).unwrap();
+
+    let inter = by_name("Inter");
+    // Variable: the range is the `wght` axis, not the one face's 400.
+    assert_eq!(inter.weight_range, Some(WeightRange { min: 100, max: 900 }));
+    assert_eq!(inter.version.as_deref(), Some("Version 1.000"));
+    assert_eq!(inter.location.as_deref(), Some("/Users/demo/Fonts"));
+    assert_eq!(inter.open_license, Some(OpenLicense::Ofl));
+    assert!(!inter.is_color);
+
+    let serif = by_name("Source Serif 4");
+    let marks: Vec<_> = serif.styles.iter().map(|s| (s.weight, s.italic)).collect();
+    assert_eq!(marks, [(400, false), (400, true), (700, false)]);
+    assert_eq!(serif.weight_range, Some(WeightRange { min: 400, max: 700 }));
+    assert_eq!(serif.tags, ["Body", "brand"]); // A to Z, case-insensitive
+
+    let legacy = by_name("Legacy Grotesk");
+    assert_eq!(legacy.open_license, None); // restricted, no open license
+    assert!(legacy.tags.is_empty());
+}
+
+#[test]
+fn family_rows_without_the_newer_fields_still_read() {
+    let all = api().list_families(ListFamiliesRequest::default()).unwrap();
+    let mut json = serde_json::to_value(&all.items[0]).unwrap();
+    let obj = json.as_object_mut().unwrap();
+    for key in [
+        "styles",
+        "weightRange",
+        "isColor",
+        "version",
+        "location",
+        "openLicense",
+        "declaredLicense",
+        "tags",
+    ] {
+        assert!(obj.remove(key).is_some(), "{key} is on the wire");
+    }
+    let row: FamilySummary = serde_json::from_value(json).unwrap();
+    assert!(row.styles.is_empty() && row.tags.is_empty());
+    assert_eq!((row.weight_range, row.version), (None, None));
+
+    // A request without `order` is the old request.
+    let req: ListFamiliesRequest = serde_json::from_str(r#"{"sort":"styleCount"}"#).unwrap();
+    assert_eq!((req.sort, req.order), (FamilySort::StyleCount, None));
+}
+
+fn names_in(api: &Arc<dyn Api>, by: FamilySortKey, descending: bool) -> Vec<String> {
+    let page = api.list_families(ListFamiliesRequest {
+        order: Some(FamilyOrder { by, descending }),
+        ..Default::default()
+    });
+    page.map(|p| p.items.into_iter().map(|f| f.name).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn families_sort_by_any_detail_list_column() {
+    let api = api();
+    assert_eq!(
+        names_in(&api, FamilySortKey::Name, true),
+        [
+            "Source Serif 4",
+            "Legacy Grotesk",
+            "JetBrains Mono",
+            "Inter"
+        ]
+    );
+    assert_eq!(
+        names_in(&api, FamilySortKey::Manufacturer, false),
+        [
+            "Source Serif 4",
+            "JetBrains Mono",
+            "Legacy Grotesk",
+            "Inter"
+        ] // Adobe, JetBrains, Old, rsms
+    );
+    assert_eq!(
+        names_in(&api, FamilySortKey::DateAdded, true),
+        [
+            "Legacy Grotesk",
+            "JetBrains Mono",
+            "Source Serif 4",
+            "Inter"
+        ]
+    );
+    // Inter starts at 100; the others at 400, then by their heaviest weight.
+    assert_eq!(names_in(&api, FamilySortKey::Weight, false)[0], "Inter");
+    // Rows with no license come last in both directions.
+    assert_eq!(
+        names_in(&api, FamilySortKey::License, false)
+            .last()
+            .unwrap(),
+        "Legacy Grotesk"
+    );
+    assert_eq!(
+        names_in(&api, FamilySortKey::License, true).last().unwrap(),
+        "Legacy Grotesk"
+    );
+
+    api.activate(acts(
+        &[3],
+        ActivationMode::Session,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    assert_eq!(
+        names_in(&api, FamilySortKey::Activation, true)[0],
+        "Source Serif 4" // partly active
+    );
+    // `order` replaces `sort`.
+    let page = api
+        .list_families(ListFamiliesRequest {
+            sort: FamilySort::StyleCount,
+            order: Some(FamilyOrder {
+                by: FamilySortKey::Name,
+                descending: false,
+            }),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(page.items[0].name, "Inter");
 }

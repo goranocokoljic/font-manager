@@ -13,8 +13,8 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
+import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleCount, type ListRow } from '../list/rows';
-import type { SelectMode } from '../list/selection';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -135,57 +135,10 @@ async function revealCursor(): Promise<void> {
   await nextTick();
 }
 
-function modeOf(e: KeyboardEvent | MouseEvent): SelectMode {
-  if (e.shiftKey) return 'extend';
-  if (e.ctrlKey || e.metaKey) return e instanceof KeyboardEvent ? 'keep' : 'toggle';
-  return 'replace';
-}
-
 function onKeyDown(e: KeyboardEvent): void {
-  if (e.altKey) return;
-  const mod = e.ctrlKey || e.metaKey;
   const page = Math.max(1, Math.floor(height.value / rowPx.value));
-  const row = list.cursorRow;
-  switch (e.key) {
-    case 'ArrowDown':
-      list.moveBy(1, modeOf(e));
-      break;
-    case 'ArrowUp':
-      list.moveBy(-1, modeOf(e));
-      break;
-    case 'PageDown':
-      list.moveBy(page, modeOf(e));
-      break;
-    case 'PageUp':
-      list.moveBy(-page, modeOf(e));
-      break;
-    case 'Home':
-      list.moveCursor(0, modeOf(e));
-      break;
-    case 'End':
-      list.moveCursor(count.value - 1, modeOf(e));
-      break;
-    case 'ArrowRight':
-      if (mod || e.shiftKey) return;
-      list.expandOrEnter();
-      break;
-    case 'ArrowLeft':
-      if (mod || e.shiftKey) return;
-      list.collapseOrLeave();
-      break;
-    case 'Enter':
-      if (mod || e.shiftKey || !row) return;
-      if (row.kind === 'family') list.toggleExpanded(row.family.id);
-      else emit('open', row.face.id);
-      break;
-    case ' ':
-      if (!mod) return;
-      list.toggleCursor();
-      break;
-    default:
-      if (mod && !e.shiftKey && e.key.toLowerCase() === 'a') list.selectAll();
-      else return;
-  }
+  if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
+    return;
   e.preventDefault();
   void revealCursor();
 }

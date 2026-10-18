@@ -25,6 +25,7 @@ use crate::library::{
     AddSourceRequest, AppInfo, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort,
     FamilySummary, ImportMode, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
     Platform, Problem, ProblemKind, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+    StyleMark,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -34,7 +35,7 @@ use crate::organization::{
 use crate::preview::{FontSource, PreviewImage, PreviewRequest};
 use crate::search::{
     CoverageReport, CoverageRequest, FamilyHit, Filters, LanguageCoverage, LanguagePreset, Missing,
-    SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
+    SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange,
 };
 use crate::settings::{AppFolders, Settings, SettingsUpdate};
 use crate::workflows::{
@@ -508,6 +509,40 @@ impl State {
                 formats.push(f.detail.face.format);
             }
         }
+        let mut styles: Vec<StyleMark> = faces
+            .iter()
+            .map(|f| StyleMark {
+                weight: f.detail.face.weight,
+                italic: f.detail.face.slant != Slant::Upright,
+            })
+            .collect();
+        styles.sort_by_key(|s| (s.weight, s.italic));
+        // A variable face spans its `wght` axis; a static one sits at its weight.
+        let weight_range = faces
+            .iter()
+            .flat_map(|f| {
+                let axis = f.detail.axes.iter().find(|a| a.tag == "wght");
+                let w = f.detail.face.weight;
+                [
+                    axis.map_or(w, |a| a.min as u16),
+                    axis.map_or(w, |a| a.max as u16),
+                ]
+            })
+            .fold(None, |acc: Option<WeightRange>, w| {
+                Some(acc.map_or(WeightRange { min: w, max: w }, |r| WeightRange {
+                    min: r.min.min(w),
+                    max: r.max.max(w),
+                }))
+            });
+        let mut tags: Vec<String> = faces
+            .iter()
+            .flat_map(|f| self.face_tags.get(&f.detail.face.id).into_iter().flatten())
+            .filter_map(|t| self.tags.iter().find(|tag| tag.id == *t))
+            .map(|t| t.name.clone())
+            .collect();
+        tags.sort_by_key(|t| t.to_lowercase());
+        tags.dedup();
+        let first = faces.first();
         FamilySummary {
             id: fam.id,
             name: fam.name.into(),
@@ -522,6 +557,16 @@ impl State {
                 _ => FamilyActivation::Partial,
             },
             added: fam.added.into(),
+            styles,
+            weight_range,
+            is_color: false, // the sample has no color fonts
+            version: first.and_then(|f| f.detail.version.clone()),
+            location: first
+                .and_then(|f| self.sources.iter().find(|s| s.id == f.source))
+                .map(|s| s.path.clone()),
+            open_license: faces.iter().find_map(|f| f.detail.license.open_license),
+            declared_license: faces.iter().find_map(|f| f.detail.license.declared),
+            tags,
         }
     }
 
@@ -827,10 +872,13 @@ impl LibraryService for MockApi {
             })
             .map(|fam| st.family_summary(fam))
             .collect();
-        match req.sort {
-            FamilySort::Name => rows.sort_by_key(|r| r.name.to_lowercase()),
-            FamilySort::DateAdded => rows.sort_by(|a, b| b.added.cmp(&a.added)),
-            FamilySort::StyleCount => rows.sort_by_key(|r| std::cmp::Reverse(r.style_count)),
+        match (req.order, req.sort) {
+            (Some(order), _) => order.sort(&mut rows),
+            (None, FamilySort::Name) => rows.sort_by_key(|r| r.name.to_lowercase()),
+            (None, FamilySort::DateAdded) => rows.sort_by(|a, b| b.added.cmp(&a.added)),
+            (None, FamilySort::StyleCount) => {
+                rows.sort_by_key(|r| std::cmp::Reverse(r.style_count));
+            }
         }
         Ok(State::page(&rows, req.page.offset, req.page.limit))
     }
