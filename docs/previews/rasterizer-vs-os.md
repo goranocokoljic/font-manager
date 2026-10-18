@@ -8,7 +8,7 @@ user sees elsewhere.
 
 ## How it renders
 
-- Shaping: `rustybuzz` (HarfBuzz rules: kerning, ligatures, marks, Arabic and
+- Shaping: `harfrust` (HarfBuzz rules: kerning, ligatures, marks, Arabic and
   Syriac joining, Indic reordering), one run per text direction. Mixed
   left-to-right and right-to-left text is ordered with the single-line rules of
   the Unicode bidirectional algorithm.

@@ -13,8 +13,9 @@ for web export.
 
 Parse with Google's [fontations](https://github.com/googlefonts/fontations):
 `read-fonts` for tables, `skrifa` for metadata, outlines and variations, and `klippa`
-for subsetting. Shaping uses `rustybuzz`; thumbnails rasterize with `swash` or
-`cosmic-text`. The parser path has `cargo-fuzz` targets.
+for subsetting. Shaping uses `harfrust` (the HarfBuzz port on `read-fonts`; it replaced
+`rustybuzz`, which RustSec marks unmaintained, by human decision on #60); thumbnails
+rasterize with `swash` or `cosmic-text`. The parser path has `cargo-fuzz` targets.
 
 ## Consequences
 

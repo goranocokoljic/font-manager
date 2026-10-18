@@ -2,7 +2,7 @@
 //!
 //! Grid thumbnails, the CLI and the MCP `render_preview` tool all draw here;
 //! the UI font list does not (it renders with the webview's own engine through
-//! the asset protocol). Text is shaped with `rustybuzz` (HarfBuzz rules, so
+//! the asset protocol). Text is shaped with `harfrust` (HarfBuzz rules, so
 //! ligatures, kerning, marks and complex scripts come out as the OS shapes
 //! them) and each glyph is rasterized with `swash`, unhinted and grayscale
 //! antialiased, at the variation coordinates asked for. Colour glyphs (COLR,
@@ -22,7 +22,7 @@ use std::path::Path;
 use fm_api::common::FontFormat;
 use fm_api::preview::{PreviewImage, PreviewRequest};
 use read_fonts::{FileRef, TableProvider};
-use rustybuzz::ttf_parser::Tag;
+use read_fonts::types::Tag;
 use swash::FontRef;
 use swash::scale::image::{Content, Image};
 use swash::scale::{Render, ScaleContext, Source, StrikeWith};
@@ -259,7 +259,7 @@ fn check_face(sfnt: &[u8], index: u32) -> FmResult<()> {
     }
     let font = read_fonts::FontRef::from_index(sfnt, index)
         .map_err(|e| malformed(format!("the face header: {e}")))?;
-    let has = |tag: &[u8; 4]| font.table_data(read_fonts::types::Tag::new(tag)).is_some();
+    let has = |tag: &[u8; 4]| font.table_data(Tag::new(tag)).is_some();
     for required in [b"head", b"hhea", b"maxp", b"cmap", b"hmtx"] {
         if !has(required) {
             return Err(malformed(format!(
@@ -424,50 +424,62 @@ struct Placed {
 }
 
 fn draw(sfnt: &[u8], index: u32, style: &Style<'_>) -> FmResult<Raster> {
-    let mut face = rustybuzz::Face::from_slice(sfnt, index)
-        .ok_or_else(|| malformed("rustybuzz cannot read the face"))?;
+    // harfrust reads through its own `Font`, which owns its bytes; the copy
+    // lives only for this render.
+    let base = harfrust::Font::new(sfnt.to_vec(), index)
+        .ok_or_else(|| malformed("harfrust cannot read the face"))?;
     let font = FontRef::from_index(sfnt, index as usize)
         .ok_or_else(|| malformed("swash cannot read the face"))?;
 
-    let variations: Vec<rustybuzz::Variation> = style
-        .variations
-        .iter()
-        .map(|(t, value)| rustybuzz::Variation {
-            tag: Tag::from_bytes(t),
-            value: *value,
-        })
-        .collect();
-    face.set_variations(&variations);
-    let features: Vec<rustybuzz::Feature> = style
+    let face = if style.variations.is_empty() {
+        base
+    } else {
+        base.instance_builder()
+            .variations(
+                style
+                    .variations
+                    .iter()
+                    .map(|(t, value)| (Tag::new(t), *value)),
+            )
+            .build()
+    };
+    let shaper = harfrust::ShaperFont::new(&face);
+    let features: Vec<harfrust::Feature> = style
         .features
         .iter()
-        .map(|(t, on)| rustybuzz::Feature::new(Tag::from_bytes(t), u32::from(*on), ..))
+        .map(|(t, on)| harfrust::Feature::new(Tag::new(t), u32::from(*on), ..))
         .collect();
 
-    // Each direction run is shaped on its own; rustybuzz returns the glyphs
-    // of a right-to-left run already in visual order.
-    let mut glyphs: Vec<(rustybuzz::GlyphInfo, rustybuzz::GlyphPosition)> = Vec::new();
+    // Each direction run is shaped on its own; harfrust returns the glyphs
+    // of a right-to-left run already in visual order. Positions come back in
+    // font units (no scale is set).
+    let mut glyphs: Vec<(harfrust::GlyphInfo, harfrust::GlyphPosition)> = Vec::new();
     for run in visual_runs(style.text) {
-        let mut buffer = rustybuzz::UnicodeBuffer::new();
+        let mut buffer = harfrust::Buffer::new();
         buffer.push_str(&style.text[run.start..run.end]);
         buffer.set_direction(if run.rtl {
-            rustybuzz::Direction::RightToLeft
+            harfrust::Direction::RightToLeft
         } else {
-            rustybuzz::Direction::LeftToRight
+            harfrust::Direction::LeftToRight
         });
         buffer.guess_segment_properties();
-        let shaped = rustybuzz::shape(&face, &features, buffer);
+        harfrust::shape(
+            &shaper,
+            &mut buffer,
+            harfrust::ShapeOptions::new().features(&features),
+        )
+        .map_err(|e| malformed(format!("harfrust cannot shape the text: {e:?}")))?;
         glyphs.extend(
-            shaped
+            buffer
                 .glyph_infos()
                 .iter()
                 .copied()
-                .zip(shaped.glyph_positions().iter().copied()),
+                .zip(buffer.glyph_positions().iter().copied()),
         );
     }
 
     let upem = face.units_per_em();
-    if upem <= 0 {
+    if upem == 0 {
         return Err(malformed("units per em is not positive"));
     }
     let scale = style.size / upem as f32;

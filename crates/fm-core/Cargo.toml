@@ -15,7 +15,7 @@ fm-platform.workspace = true
 notify = "8.2"
 read-fonts = "0.45"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
-rustybuzz = "0.20.1"
+harfrust = "0.14"
 serde.workspace = true
 serde_json.workspace = true
 skrifa = "0.48"
