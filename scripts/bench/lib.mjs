@@ -3,6 +3,7 @@
 //
 // Per-OS report (bench.sh --out):
 //   { schema: 1, os, arch, sha, date, library: { path, files, faces }, metrics: { <name>: Metric } }
+//   first_scan is per SCAN_FILES files; it also carries { files, measured_ms }.
 // bench-report.json (the `bench` CI job; read by scripts/harness/ci-wait.mjs and epic-sync.mjs):
 //   { "<os>.<name>": Metric }
 // Metric: { value: number|null, unit, target: number|null, pass: boolean|null, note? }
@@ -22,6 +23,21 @@ export const BUDGETS = {
 };
 
 export const OSES = ['windows', 'macos', 'linux'];
+
+/** The library size of the first-scan budget: "10k-font first scan < 10 s". */
+export const SCAN_FILES = 10000;
+
+/**
+ * The first-scan metric: the measured time scaled to SCAN_FILES files, so a
+ * library of another size meets the same budget (E2.8). The metric carries
+ * the file count and the measured time, and its note says both.
+ */
+export function firstScan(ms, files) {
+  if (!files) return metric('first_scan', null, 'no font files scanned');
+  const m = metric('first_scan', (ms * SCAN_FILES) / files,
+    `${files} files in ${fmt(Math.round(ms) / 1000)} s, scaled to ${SCAN_FILES.toLocaleString('en-US')} files`);
+  return { ...m, files, measured_ms: Math.round(ms * 10) / 10 };
+}
 
 /** One metric against its budget. `value` null = not measured; give a `note`. */
 export function metric(name, value, note) {

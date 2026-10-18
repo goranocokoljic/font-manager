@@ -799,9 +799,8 @@ mod tests {
         }
         let ghost = f.root.join("ghost.ttf");
         // An entry for a file that is not there: its remove event was missed.
-        {
-            let mut index = lock(&f.index);
-            index.insert(crate::scanner::IndexedFile {
+        let haunt = || {
+            lock(&f.index).insert(crate::scanner::IndexedFile {
                 path: ghost.clone(),
                 size: 1,
                 modified: None,
@@ -809,17 +808,26 @@ mod tests {
                 parsed: crate::parser::parse(b""),
                 gone: false,
             });
-        }
+        };
+        haunt();
 
         // No file-system event names it; only a rescan can find it gone.
         let start = Instant::now();
         loop {
             let update = f.next(Duration::from_secs(5)).expect("a periodic rescan");
             assert!(start.elapsed() < Duration::from_secs(5), "no rescan in 5 s");
-            if update.trigger == Trigger::Rescan
-                && update.result.expect("rescanned").gone == vec![ghost.clone()]
-            {
+            let marked = update
+                .result
+                .as_ref()
+                .is_ok_and(|r| r.gone.contains(&ghost));
+            if update.trigger == Trigger::Rescan && marked {
                 break;
+            }
+            // FSEvents can report the source folder's creation even later;
+            // that event rescans the folder and finds the ghost first. Put
+            // it back: only a periodic rescan may prove this test.
+            if marked {
+                haunt();
             }
         }
         assert!(gone(&lock(&f.index), &ghost));

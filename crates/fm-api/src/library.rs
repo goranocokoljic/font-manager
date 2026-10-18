@@ -576,6 +576,10 @@ pub enum ProblemKind {
     ActiveConflict,
     /// A format the app cannot activate.
     Unsupported,
+    /// Sidecar metadata (`<source>/.fontlibrary/`) that could not be merged:
+    /// another machine set a field to a different value, or the sidecar file
+    /// cannot be read. Nothing is overwritten until the user decides.
+    SidecarConflict,
 }
 
 /// One entry of the Problems view.

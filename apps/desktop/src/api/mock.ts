@@ -28,6 +28,7 @@ import {
   type JobId,
   type LanguagePreset,
   type SearchResponse,
+  type SampleText,
   type Source,
   type SourceId,
   type Tag,
@@ -207,6 +208,56 @@ export const mockFolders: AppFolders = {
   cache: '/home/demo/.cache/font-manager',
   logs: '/home/demo/.local/state/font-manager/logs',
 };
+
+// The characters the mock faces map: basic Latin and Latin-1 (Western European);
+// faces that list `cyrl` also Latin Extended-A (Central European) and Serbian Cyrillic.
+const range = (from: number, to: number) =>
+  Array.from({ length: to - from }, (_, i) => String.fromCodePoint(from + i)).join('');
+const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
+const LATIN_EXT_A = range(0x100, 0x180);
+const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
+
+/** (script, characters the language needs), like the Rust mock's languages. */
+const MOCK_LANGUAGES: [string, string][] = [
+  ['Latn', 'abcdefghijklmnopqrstuvwxyz'],
+  ['Latn', 'aąbcćdeęfghijklłmnńoóprsśtuwyzźż'],
+  ['Latn', 'abcčćdđefghijklmnoprsštuvzž'],
+  ['Cyrl', 'абвгдђежзијклљмнњопрстћуфхцчџш'],
+];
+
+function mockChars(f: FaceDetail): Set<string> {
+  return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
+}
+
+/**
+ * The rule of `fm_core::sample` on the mock's languages: the sample when the face maps
+ * it; else letters of the complete language whose script the face maps most; else
+ * its own characters.
+ */
+export function mockSampleText(f: FaceDetail, text: string): SampleText {
+  const chars = mockChars(f);
+  const face = f.face.id;
+  const missing: string[] = [];
+  for (const c of text)
+    if (!/[\s\p{Cc}]/u.test(c) && !chars.has(c) && !missing.includes(c)) missing.push(c);
+  if (!missing.length) return { face, text, fallback: null, missing };
+  let best: { score: number; script: string; letters: string } | undefined;
+  for (const [script, letters] of MOCK_LANGUAGES) {
+    if (![...letters].every((c) => chars.has(c))) continue;
+    const all = new Set(MOCK_LANGUAGES.filter((l) => l[0] === script).flatMap((l) => [...l[1]]));
+    const score = [...all].filter((c) => chars.has(c)).length;
+    if (!best || score > best.score) best = { score, script, letters };
+  }
+  if (best)
+    return {
+      face,
+      text: [...best.letters].slice(0, 26).join(''),
+      fallback: { kind: 'script', script: best.script },
+      missing,
+    };
+  const own = [...chars].filter((c) => !/\s/u.test(c)).slice(0, 24);
+  return { face, text: own.join(' '), fallback: { kind: 'symbols' }, missing };
+}
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
 
@@ -620,6 +671,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
 
   return {
     getAppInfo: async () => mockAppInfo,
+    sampleTexts: async (req) =>
+      req.faces.map((id) => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        return mockSampleText(f, req.text);
+      }),
     getFace: async (id) => {
       const f = find(id);
       if (!f) throw notFound(id);

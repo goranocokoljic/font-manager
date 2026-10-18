@@ -8,14 +8,16 @@
 //! `user_meta` row per face, written on the first change.
 //!
 //! Search reads all of it (`index/search.rs`), so the filters and their
-//! counts follow every write here.
+//! counts follow every write here. Every write is mirrored to the sidecars
+//! of the faces' families (`index/sidecars.rs`).
 
 use fm_api::organization::{Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate};
 use fm_api::{FaceId, TagId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
-use super::{Index, db_error};
+use super::{Index, db_error, sidecars};
 use crate::error::{FmError, FmResult};
+use crate::sidecar::Field;
 
 /// Every tag with the number of its faces the library shows (files not gone,
 /// sources not paused), A to Z.
@@ -107,6 +109,7 @@ impl Index {
             }
         }
         tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
         let all = self.tags()?;
         Ok(ids
             .iter()
@@ -147,12 +150,15 @@ impl Index {
                 unused.execute([tag]).map_err(|e| db_error(&e))?;
             }
         }
-        tx.commit().map_err(|e| db_error(&e))
+        tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
+        Ok(())
     }
 
     /// Sets favorite, rating (1–5 stars; 0 clears it) and notes (empty
     /// clears them) on faces; fields left out stay as they are. A rating
-    /// above 5 is `InvalidRequest`; an unknown face `NotFound`.
+    /// above 5 is `InvalidRequest`; an unknown face `NotFound`. Setting a
+    /// field dismisses its sidecar conflicts on those faces.
     pub fn update_user_meta(&mut self, req: &UserMetaUpdate) -> FmResult<()> {
         if req.rating.is_some_and(|r| r > 5) {
             return Err(FmError::invalid(
@@ -167,9 +173,19 @@ impl Index {
                 write
                     .execute(params![face, req.favorite, req.rating, req.notes])
                     .map_err(|e| db_error(&e))?;
+                let set = [
+                    (Field::Favorite, req.favorite.is_some()),
+                    (Field::Rating, req.rating.is_some()),
+                    (Field::Notes, req.notes.is_some()),
+                ];
+                for (field, _) in set.into_iter().filter(|(_, set)| *set) {
+                    sidecars::resolve_conflicts(&tx, *face, field)?;
+                }
             }
         }
-        tx.commit().map_err(|e| db_error(&e))
+        tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
+        Ok(())
     }
 }
 
