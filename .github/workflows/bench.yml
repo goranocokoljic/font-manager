@@ -146,10 +146,11 @@ jobs:
       - name: Merge, trend and verdict
         env:
           GH_TOKEN: ${{ github.token }}
-          TITLE: ${{ github.event_name == 'pull_request' && format('Bench — PR #{0}', github.event.pull_request.number) || 'Nightly bench' }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           shopt -s nullglob
+          if [ -n "$PR_NUMBER" ]; then TITLE="Bench — PR #$PR_NUMBER"; else TITLE="Nightly bench"; fi
           mkdir -p out
           status=0
           node scripts/bench/bench.mjs merge --out out/bench-report.json reports/*.json || status=$?

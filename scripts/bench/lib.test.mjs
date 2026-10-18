@@ -237,6 +237,21 @@ describe('bench workflow', () => {
     assert.match(yml, /contains\(github\.event\.pull_request\.labels\.\*\.name, 'bench'\)/);
   });
 
+  test('every workflow expression closes before a YAML comment cuts it off', () => {
+    // E9.1 review: an unquoted `#` inside `${{ }}` made GitHub reject bench.yml.
+    for (const file of ['bench.yml', 'ci.yml']) {
+      const text = readFileSync(join(ROOT, '.github', 'workflows', file), 'utf8');
+      text.split('\n').forEach((line, i) => {
+        const m = /^\s*(?:- )?[\w-]+:\s+(.*)$/.exec(line);
+        if (!m || !m[1].includes('${{') || /^['"|>]/.test(m[1])) return;
+        const value = m[1].split(' #')[0];
+        const opened = value.split('${{').length - 1;
+        const closed = value.split('}}').length - 1;
+        assert.equal(closed, opened, `${file}:${i + 1}: unclosed or commented-out expression: ${line.trim()}`);
+      });
+    }
+  });
+
   test('every OS of the ci matrix is measured', () => {
     for (const os of OSES) assert.match(yml, new RegExp(`- name: ${os}\\n\\s+os: `));
   });
