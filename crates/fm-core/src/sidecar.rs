@@ -15,7 +15,10 @@
 //! entry on disk descends from the version this machine last wrote or read,
 //! that version is the ancestor. When it does not, both machines changed the
 //! entry independently (a sync client kept one of two files) and nothing is
-//! assumed common: every value that differs is kept or reported.
+//! assumed common: every value that differs is kept or reported. The file
+//! has a history too: an entry missing from the file on disk was removed
+//! only when the file descends from this machine's version; otherwise the
+//! other machine never had it and this machine's entry is kept.
 //!
 //! - Tags and collections merge as sets: what one side added is added, what
 //!   one side removed (and the other left alone) is removed. They never
@@ -68,6 +71,9 @@ pub struct Sidecar {
     /// The faces with metadata, by file and index.
     #[serde(default)]
     pub faces: Vec<FaceEntry>,
+    /// Ids of the file's last versions, newest first ([`next_file_history`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<String>,
 }
 
 impl Sidecar {
@@ -77,6 +83,7 @@ impl Sidecar {
             version: SIDECAR_VERSION,
             family: family.into(),
             faces: Vec::new(),
+            history: Vec::new(),
         }
     }
 
@@ -288,19 +295,24 @@ pub struct Merged {
 }
 
 /// The common ancestor of this machine's metadata and the sidecar entry
-/// `disk`, given `base`, the entry as this machine last wrote or read it.
+/// `disk`, given `base`, the entry as this machine last wrote or read it,
+/// and whether the file on disk descends from this machine's version of it
+/// (`file_descends`, see [`descends`]).
 ///
 /// - No base (a new machine, a rebuilt index): nothing in common.
-/// - No entry on disk, or one equal to the base, or one whose history holds
-///   the base's version: the base.
+/// - An entry equal to the base, or one whose history holds the base's
+///   version: the base.
+/// - No entry on disk: the base when the file descends from this machine's
+///   version (the other machine removed the entry), else nothing in common
+///   (the other machine never had it).
 /// - Else the two changed independently: nothing in common, so every value
 ///   either side has set is kept, and different values are a conflict.
-pub fn ancestor(base: Option<&FaceEntry>, disk: Option<&FaceEntry>) -> Meta {
+pub fn ancestor(base: Option<&FaceEntry>, disk: Option<&FaceEntry>, file_descends: bool) -> Meta {
     let Some(base) = base else {
         return Meta::default();
     };
     let descends = match disk {
-        None => true,
+        None => file_descends,
         Some(disk) => {
             disk.meta == base.meta
                 || base
@@ -322,14 +334,46 @@ pub fn next_history(meta: &Meta, prior: Option<&FaceEntry>) -> Vec<String> {
     if let Some(prior) = prior.filter(|p| p.meta == *meta && !p.history.is_empty()) {
         return prior.history.clone();
     }
-    let parent = prior.and_then(|p| p.history.first());
+    extend(
+        meta,
+        prior.map(|p| p.history.as_slice()).unwrap_or_default(),
+    )
+}
+
+/// The history of the file `next` written over `prior`, the file it
+/// replaces: unchanged when its entries are, else a new version id first.
+pub fn next_file_history(next: &Sidecar, prior: Option<&Sidecar>) -> Vec<String> {
+    if let Some(prior) = prior.filter(|p| p.faces == next.faces && !p.history.is_empty()) {
+        return prior.history.clone();
+    }
+    extend(
+        &next.faces,
+        prior.map(|p| p.history.as_slice()).unwrap_or_default(),
+    )
+}
+
+/// Whether the file `disk` is `base` or descends from it.
+pub fn descends(base: &Sidecar, disk: &Sidecar) -> bool {
+    disk.faces == base.faces
+        || base
+            .history
+            .first()
+            .is_some_and(|rev| disk.history.contains(rev))
+}
+
+/// `history` with the id of a new version holding `content` first.
+fn extend<T: Serialize + ?Sized>(content: &T, history: &[String]) -> Vec<String> {
     let mut hasher = blake3::Hasher::new();
-    hasher.update(serde_json::to_string(meta).unwrap_or_default().as_bytes());
+    hasher.update(
+        serde_json::to_string(content)
+            .unwrap_or_default()
+            .as_bytes(),
+    );
     hasher.update(b"\n");
-    hasher.update(parent.map_or("", String::as_str).as_bytes());
+    hasher.update(history.first().map_or("", String::as_str).as_bytes());
     let rev = hasher.finalize().to_hex()[..HASH_DIGITS].to_owned();
     std::iter::once(rev)
-        .chain(prior.into_iter().flat_map(|p| p.history.iter().cloned()))
+        .chain(history.iter().cloned())
         .take(HISTORY)
         .collect()
 }

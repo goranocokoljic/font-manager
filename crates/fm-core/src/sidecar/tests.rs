@@ -186,11 +186,11 @@ fn a_change_made_on_top_of_this_machines_version_has_that_version_as_ancestor() 
     let ours = entry(meta(false, Some(4), None, &["a"]), None);
     let theirs = entry(meta(false, Some(2), None, &[]), Some(&ours));
     let later = entry(meta(false, Some(1), None, &[]), Some(&theirs));
-    assert_eq!(ancestor(Some(&ours), Some(&theirs)), ours.meta);
+    assert_eq!(ancestor(Some(&ours), Some(&theirs), true), ours.meta);
     // Versions this machine missed in between do not matter.
-    assert_eq!(ancestor(Some(&ours), Some(&later)), ours.meta);
+    assert_eq!(ancestor(Some(&ours), Some(&later), true), ours.meta);
     let merged = merge(
-        &ancestor(Some(&ours), Some(&later)),
+        &ancestor(Some(&ours), Some(&later), true),
         &ours.meta,
         &later.meta,
     );
@@ -206,7 +206,7 @@ fn two_changes_of_the_same_version_conflict() {
     let older = entry(meta(false, Some(3), None, &["x"]), None);
     let ours = entry(meta(false, Some(4), None, &[]), Some(&older));
     let theirs = entry(meta(false, Some(2), None, &["x"]), Some(&older));
-    let base = ancestor(Some(&ours), Some(&theirs));
+    let base = ancestor(Some(&ours), Some(&theirs), true);
     assert_eq!(base, Meta::default());
     let merged = merge(&base, &ours.meta, &theirs.meta);
     assert_eq!(merged.meta.rating, Some(4));
@@ -217,7 +217,7 @@ fn two_changes_of_the_same_version_conflict() {
 #[test]
 fn without_a_base_nothing_is_common() {
     let theirs = entry(meta(true, None, None, &[]), None);
-    assert_eq!(ancestor(None, Some(&theirs)), Meta::default());
+    assert_eq!(ancestor(None, Some(&theirs), true), Meta::default());
 }
 
 #[test]
@@ -227,8 +227,40 @@ fn an_unchanged_or_missing_entry_has_the_base_as_ancestor() {
         history: Vec::new(),
         ..base.clone()
     };
-    assert_eq!(ancestor(Some(&base), Some(&same)), base.meta);
-    assert_eq!(ancestor(Some(&base), None), base.meta);
+    assert_eq!(ancestor(Some(&base), Some(&same), false), base.meta);
+    assert_eq!(ancestor(Some(&base), None, true), base.meta);
+}
+
+#[test]
+fn a_missing_entry_is_a_removal_only_in_a_file_that_descends_from_ours() {
+    let base = entry(meta(false, None, None, &["a"]), None);
+    // The other machine removed it from our version of the file.
+    assert_eq!(ancestor(Some(&base), None, true), base.meta);
+    // The other machine wrote its file without ever having the entry.
+    assert_eq!(ancestor(Some(&base), None, false), Meta::default());
+    let merged = merge(
+        &ancestor(Some(&base), None, false),
+        &base.meta,
+        &Meta::default(),
+    );
+    assert_eq!(merged.meta, base.meta, "nothing is removed on a guess");
+}
+
+#[test]
+fn a_file_descends_through_its_history() {
+    let mut ours = Sidecar::new("A");
+    ours.faces.push(entry(meta(true, None, None, &[]), None));
+    ours.history = next_file_history(&ours, None);
+    let mut theirs = ours.clone();
+    theirs.faces.clear();
+    theirs.history = next_file_history(&theirs, Some(&ours));
+    assert!(descends(&ours, &theirs));
+    assert!(descends(&ours, &ours));
+    let mut unrelated = Sidecar::new("A");
+    unrelated.history = next_file_history(&unrelated, None);
+    assert!(!descends(&ours, &unrelated));
+    // An unchanged file keeps its history.
+    assert_eq!(next_file_history(&ours, Some(&ours)), ours.history);
 }
 
 #[test]

@@ -425,23 +425,52 @@ impl Index {
         let disk_entries = disk
             .as_ref()
             .map_or_else(|| base_entries.clone(), Sidecar::entries);
+        // An entry missing on disk was removed there only when the file
+        // descends from this machine's version of it.
+        let file_descends = disk.as_ref().is_none_or(|d| sidecar::descends(&base, d));
 
         // Merge every indexed face the file or the base mentions.
         let keys: BTreeSet<&FaceKey> = disk_entries.keys().chain(base_entries.keys()).collect();
         let empty = Meta::default();
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         let mut collections = Collections::load(&tx)?;
+        // Collections a face is in on another machine that cannot be joined
+        // here (a smart collection on the way): kept in the sidecar, so this
+        // machine never writes a removal it did not make.
+        let mut carried: HashMap<u32, Vec<Vec<String>>> = HashMap::new();
         for key in keys {
             let Some(face) = faces.get(key) else {
                 continue;
             };
-            let local = local_meta(&tx, face.id, &collections)?;
+            let mut local = local_meta(&tx, face.id, &collections)?;
+            let base_entry = base_entries.get(key).copied();
+            if let Some(base_entry) = base_entry {
+                local.collections.extend(
+                    base_entry
+                        .meta
+                        .collections
+                        .iter()
+                        .filter(|p| collections.blocked(p))
+                        .cloned(),
+                );
+                local.normalize();
+            }
             let disk_entry = disk_entries.get(key).copied();
             let merged = sidecar::merge(
-                &sidecar::ancestor(base_entries.get(key).copied(), disk_entry),
+                &sidecar::ancestor(base_entry, disk_entry, file_descends),
                 &local,
                 disk_entry.map_or(&empty, |e| &e.meta),
             );
+            let blocked: Vec<Vec<String>> = merged
+                .meta
+                .collections
+                .iter()
+                .filter(|p| collections.blocked(p))
+                .cloned()
+                .collect();
+            if !blocked.is_empty() {
+                carried.insert(face.id, blocked);
+            }
             if merged.meta != local {
                 out.conflicts += apply(
                     &tx,
@@ -472,7 +501,11 @@ impl Index {
         let new_base = if let Some(first) = family.first() {
             let mut next = Sidecar::new(first.family.clone());
             for face in &family {
-                let meta = local_meta(&tx, face.id, &collections)?;
+                let mut meta = local_meta(&tx, face.id, &collections)?;
+                if let Some(paths) = carried.get(&face.id) {
+                    meta.collections.extend(paths.iter().cloned());
+                    meta.normalize();
+                }
                 if !meta.is_empty() {
                     // The entry replaces the one on disk, which the merge
                     // has taken in: it descends from it.
@@ -496,6 +529,7 @@ impl Index {
                 );
             }
             next.normalize();
+            next.history = sidecar::next_file_history(&next, Some(disk.as_ref().unwrap_or(&base)));
             tx.commit().map_err(|e| db_error(&e))?;
             let mut stamp = disk_stamp;
             if disk.as_ref() != Some(&next) && !(disk.is_none() && next.faces.is_empty()) {
@@ -673,6 +707,20 @@ impl Collections {
         }
         names.reverse();
         Some(names)
+    }
+
+    /// Whether `path` runs into a smart collection here, so a face cannot be
+    /// put in it.
+    fn blocked(&self, path: &[String]) -> bool {
+        let mut parent = None;
+        for name in path {
+            match self.child(parent, name) {
+                Some((_, true)) => return true,
+                Some((id, false)) => parent = Some(id),
+                None => return false,
+            }
+        }
+        false
     }
 
     fn child(&self, parent: Option<u32>, name: &str) -> Option<(u32, bool)> {
@@ -953,7 +1001,7 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
     if field == COLLECTION_FIELD {
         let path: Vec<String> = serde_json::from_str(disk).unwrap_or_default();
         return format!(
-            "Another machine put this font in the collection \"{}\", which is a smart collection here, so it was not added.",
+            "Another machine put this font in the collection \"{}\", which is a smart collection here, so it was not added here. The other machines keep it.",
             path.join(" / ")
         );
     }

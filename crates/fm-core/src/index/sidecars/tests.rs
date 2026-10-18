@@ -173,6 +173,7 @@ fn write_changed(path: &Path, text: &str) {
 /// `sidecar` edited by another machine: each entry it changes records the
 /// value it replaced, as this build writes it.
 fn other_machine_edit(mut sidecar: Sidecar, edit: impl FnOnce(&mut Sidecar)) -> Sidecar {
+    let file_before = sidecar.clone();
     let before: std::collections::HashMap<_, _> =
         sidecar.faces.iter().map(|f| (f.key(), f.clone())).collect();
     edit(&mut sidecar);
@@ -180,7 +181,16 @@ fn other_machine_edit(mut sidecar: Sidecar, edit: impl FnOnce(&mut Sidecar)) -> 
         face.history = sidecar::next_history(&face.meta, before.get(&face.key()));
     }
     sidecar.normalize();
+    sidecar.history = sidecar::next_file_history(&sidecar, Some(&file_before));
     sidecar
+}
+
+/// The sidecar text as it is on disk now.
+fn read_sidecar(path: &Path) -> Sidecar {
+    match sidecar::parse(&std::fs::read_to_string(path).expect("read")) {
+        Parsed::Sidecar(s) => s,
+        other => panic!("not a sidecar: {other:?}"),
+    }
 }
 
 fn entry_mut<'a>(sidecar: &'a mut Sidecar, file: &str) -> &'a mut Meta {
@@ -696,6 +706,114 @@ fn smart_collection_on_the_way_is_a_problem_not_a_lost_membership() {
         "{}",
         problems[0].message
     );
+    // The membership stays in the sidecar for the machine that made it,
+    // through this machine's later edits and scans.
+    m.tag("Lora-Regular", &["b"]);
+    m.scan();
+    let entry = m.entry("Lora", "Lora-Regular.ttf").expect("entry");
+    assert_eq!(entry.collections, [names(&["Serifs"])]);
+    assert_eq!(entry.tags, ["a", "b"]);
+}
+
+#[test]
+fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
+    let tmp = TempDir::new("sidecar-smart-round-trip");
+    // Two machines over one synced folder: "Serifs" is manual on B and
+    // smart on A.
+    let mut b = Machine::new(tmp.path());
+    let serifs = b
+        .index
+        .create_collection(&CreateCollectionRequest {
+            name: "Serifs".into(),
+            parent: None,
+            rules: None,
+        })
+        .expect("manual");
+    b.index
+        .add_to_collection(&CollectionFacesRequest {
+            collection: serifs.id,
+            faces: vec![b.face("Lora-Regular")],
+            families: Vec::new(),
+        })
+        .expect("add");
+
+    let mut a = Index::open_in_memory().expect("open");
+    a.create_collection(&CreateCollectionRequest {
+        name: "Serifs".into(),
+        parent: None,
+        rules: Some(fm_api::search::Filters::default()),
+    })
+    .expect("smart");
+    let a_source = a
+        .add_source(&tmp.path().to_string_lossy(), SourceKind::Watched)
+        .expect("source")
+        .id;
+    a.persist_files(a_source, &files(tmp.path()))
+        .expect("scan a");
+    assert_eq!(a.sidecar_problems().expect("problems").len(), 1);
+    let lora = a
+        .conn
+        .query_row(
+            "SELECT id FROM face WHERE postscript_name = 'Lora-Regular'",
+            [],
+            |r| r.get(0),
+        )
+        .map(FaceId)
+        .expect("face");
+    a.tag_faces(&TagFacesRequest {
+        faces: vec![lora],
+        tags: vec!["from-a".into()],
+    })
+    .expect("tag on a");
+    // Make sure B sees a new stamp, whatever the file system's time step.
+    let path = b.sidecar_path("Lora");
+    let text = std::fs::read_to_string(&path).expect("read");
+    write_changed(&path, &text);
+
+    b.scan();
+    let local = b.local("Lora-Regular");
+    assert_eq!(
+        local.collections,
+        [names(&["Serifs"])],
+        "B keeps its membership"
+    );
+    assert_eq!(local.tags, ["from-a"]);
+    assert!(b.index.sidecar_problems().expect("problems").is_empty());
+}
+
+#[test]
+fn an_entry_the_other_machine_never_had_is_kept() {
+    let tmp = TempDir::new("sidecar-missing-entry");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Inter-Regular", &["x"]);
+    let older = m.sidecar("Inter");
+    // This machine adds an entry; the other machine, from the older file,
+    // rates another face; the sync client keeps the other machine's file.
+    m.tag("Inter-Bold", &["mine"]);
+    let theirs = other_machine_edit(older, |s| {
+        entry_mut(s, "Inter-Regular.ttf").rating = Some(5);
+    });
+    write_changed(&m.sidecar_path("Inter"), &theirs.to_json());
+
+    m.scan();
+    assert_eq!(m.local("Inter-Bold").tags, ["mine"], "not wiped");
+    assert_eq!(m.local("Inter-Regular").rating, Some(5));
+    let on_disk = read_sidecar(&m.sidecar_path("Inter"));
+    assert!(on_disk.faces.iter().any(|f| f.file == "sub/Inter-Bold.ttf"));
+}
+
+#[test]
+fn an_entry_the_other_machine_removed_is_removed() {
+    let tmp = TempDir::new("sidecar-removed-entry");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Inter-Regular", &["x"]);
+    m.tag("Inter-Bold", &["gone"]);
+    m.write_as_other_machine("Inter", |s| {
+        s.faces.retain(|f| f.file != "sub/Inter-Bold.ttf");
+    });
+    m.scan();
+    assert!(m.local("Inter-Bold").is_empty());
+    assert_eq!(m.local("Inter-Regular").tags, ["x"]);
 }
 
 #[test]
