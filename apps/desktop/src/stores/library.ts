@@ -65,7 +65,13 @@ export const useLibraryStore = defineStore('library', () => {
     const mine = ++listGeneration;
     const client = useClient();
     try {
-      const list = await listAll(client, order.value);
+      let list: FamilySummary[];
+      let round: number;
+      // An activation change during the fetch may have been missed by its pages; fetch again.
+      do {
+        round = activationRound;
+        list = await listAll(client, order.value);
+      } while (round !== activationRound && mine === listGeneration);
       if (mine !== listGeneration) return;
       families.value = list;
       if (facesStale) {

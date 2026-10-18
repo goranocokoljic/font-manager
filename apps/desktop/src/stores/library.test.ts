@@ -210,6 +210,42 @@ describe('library store', () => {
     await store.stop();
   });
 
+  it('a sort fetch overtaken by an activation does not bring back the old state', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    const face = (await store.facesOf(1))[0]!;
+    const list = client.listFamilies.bind(client);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let held = false;
+    // Hold the sort fetch's answer (from before the activation) until the activation lands.
+    client.listFamilies = async (request) => {
+      const answer = await list(request);
+      if (!held) {
+        held = true;
+        await gate;
+      }
+      return answer;
+    };
+    const sorting = store.setOrder({ by: 'name', descending: true });
+    await vi.waitFor(() => expect(held).toBe(true));
+    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'session' });
+    await vi.waitFor(() =>
+      expect(store.families.find((f) => f.id === 1)?.activation).not.toBe('inactive'),
+    );
+    release();
+    await sorting;
+    expect(store.families.map((f) => f.name)).toEqual([
+      'Legacy Grotesk',
+      'JetBrains Mono',
+      'Inter',
+    ]);
+    expect(store.families.find((f) => f.id === 1)?.activation).not.toBe('inactive');
+    await store.stop();
+  });
+
   it('a refresh overtaken by a new order still forgets the faces', async () => {
     client = createMockClient();
     setClient(client);
