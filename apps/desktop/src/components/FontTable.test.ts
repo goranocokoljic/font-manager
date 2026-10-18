@@ -121,6 +121,21 @@ describe('FontTable', () => {
     expect(cell(legacy, 'license').text()).toBe('');
   });
 
+  it('shows the tags of a family, A to Z, in its own Tags cell', async () => {
+    // Values no other cell on the row has, so a cell bound to another field cannot pass.
+    const t = await tableOf({ faceTags: { 6: ['zeta-tag', 'Alpha-tag'] } });
+    const mono = rows(t).find((r) => nameOf(r) === 'JetBrains Mono')!;
+    expect(cell(mono, 'tags').text()).toBe('Alpha-tag, zeta-tag');
+    expect(
+      rows(t)
+        .filter((r) => nameOf(r) !== 'JetBrains Mono')
+        .map((r) => cell(r, 'tags').text()),
+    ).toEqual(['', '']);
+    expect(
+      mono.findAll('[role="gridcell"]').filter((c) => c.text().includes('zeta-tag')),
+    ).toHaveLength(1);
+  });
+
   it('draws italic styles as hollow dots on the weight line', async () => {
     const t = await tableOf({ extraFaces: 1, stylesPerFamily: 4 });
     const sample = rows(t).find((r) => nameOf(r) === 'Sample 1')!;

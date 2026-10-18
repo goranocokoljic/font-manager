@@ -207,6 +207,8 @@ export interface MockOptions {
   extraFaces?: number;
   /** Styles in each extra family (1–6, default 1), so families can expand (e2e). */
   stylesPerFamily?: number;
+  /** User tags per face (the sample faces have none). */
+  faceTags?: Partial<Record<FaceId, string[]>>;
 }
 
 /** Id of the first extra face and family; above every sample id. */
@@ -406,7 +408,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const faces = [
     ...mockFaces,
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
-  ];
+  ].map((f) => {
+    const tags = options.faceTags?.[f.face.id];
+    return tags ? { ...structuredClone(f), tags: [...tags] } : f;
+  });
   // Indexes, so long lists (10,000 families) answer quickly.
   const byId = new Map(faces.map((f) => [f.face.id, f]));
   const byFamily = new Map<FamilyId, FaceDetail[]>();
