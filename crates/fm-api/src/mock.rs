@@ -6,7 +6,7 @@
 //! nothing new, exports report the files they would write, and previews are a
 //! 1×1 transparent PNG.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, MutexGuard};
 
@@ -22,10 +22,10 @@ use crate::export::{
     ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest, WebFormat,
 };
 use crate::library::{
-    AddSourceRequest, AppInfo, FaceDetail, FaceSummary, Family, FamilyActivation, FamilySort,
-    FamilySummary, ImportMode, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
-    Platform, Problem, ProblemKind, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
-    StyleMark,
+    AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, ImportMode, LicenseInfo,
+    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, ScanRequest,
+    SetSourcePausedRequest, Source, SourceKind, StyleMark,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -968,6 +968,69 @@ impl LibraryService for MockApi {
             }
         }
         Ok(out)
+    }
+
+    fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
+        let st = self.state();
+        let source = |id: SourceId| st.sources.iter().find(|s| s.id == id);
+        let visible: Vec<&MockFace> = st
+            .faces
+            .iter()
+            .filter(|f| source(f.source).is_some_and(|s| !s.paused))
+            .collect();
+        let copy = |f: &MockFace| DuplicateCopy {
+            path: f.detail.path.clone(),
+            size: f.detail.file_size,
+            hash: f.detail.hash.clone(),
+            face: Some(f.detail.face.id),
+            version: f.detail.version.clone(),
+            source: f.source,
+            in_library_folder: source(f.source)
+                .is_some_and(|s| s.kind == SourceKind::LibraryFolder),
+            keep: false,
+        };
+        // Every sample file has one face, so a face stands for its file.
+        let mut near: BTreeMap<(&str, &str), Vec<&MockFace>> = BTreeMap::new();
+        let mut exact: BTreeMap<&str, Vec<&MockFace>> = BTreeMap::new();
+        for f in &visible {
+            let name = f.detail.face.postscript_name.as_str();
+            if !name.is_empty() {
+                let version = f.detail.version.as_deref().map_or("", str::trim);
+                near.entry((name, version)).or_default().push(f);
+            }
+            exact.entry(f.detail.hash.as_str()).or_default().push(f);
+        }
+        let mut groups = Vec::new();
+        let mut in_near: Vec<BTreeSet<&str>> = Vec::new();
+        for ((name, _), faces) in near {
+            let hashes: BTreeSet<&str> = faces.iter().map(|f| f.detail.hash.as_str()).collect();
+            if hashes.len() > 1 {
+                in_near.push(faces.iter().map(|f| f.detail.path.as_str()).collect());
+                groups.push(DuplicateGroup {
+                    kind: DuplicateKind::Near,
+                    postscript_name: Some(name.to_owned()),
+                    copies: faces.into_iter().map(copy).collect(),
+                });
+            }
+        }
+        for faces in exact.into_values().filter(|f| f.len() > 1) {
+            if in_near
+                .iter()
+                .any(|paths| faces.iter().all(|f| paths.contains(f.detail.path.as_str())))
+            {
+                continue;
+            }
+            let name = &faces[0].detail.face.postscript_name;
+            groups.push(DuplicateGroup {
+                kind: DuplicateKind::Exact,
+                postscript_name: (!name.is_empty()).then(|| name.clone()),
+                copies: faces.into_iter().map(copy).collect(),
+            });
+        }
+        for g in &mut groups {
+            g.choose_keeper();
+        }
+        Ok(groups)
     }
 }
 

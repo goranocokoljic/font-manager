@@ -341,7 +341,7 @@ fn path_to_sql(path: &Path) -> Value {
     }
 }
 
-fn path_from_sql(value: ValueRef<'_>) -> FmResult<PathBuf> {
+pub(super) fn path_from_sql(value: ValueRef<'_>) -> FmResult<PathBuf> {
     let bad = || FmError::internal("a font file path in the index is damaged");
     match value {
         ValueRef::Text(bytes) => std::str::from_utf8(bytes)

@@ -16,6 +16,7 @@
 //! FTS5 trigram table that triggers keep in step with the faces and tags.
 
 mod collections;
+mod duplicates;
 mod files;
 mod languages;
 mod schema;
