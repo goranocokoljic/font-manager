@@ -468,8 +468,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
-    activate: async (req) =>
-      ids(req.target).map((id): ActivationOutcome => {
+    activate: async (req) => {
+      const activated: FaceId[] = [];
+      const out = ids(req.target).map((id): ActivationOutcome => {
         const f = find(id);
         if (!f) throw notFound(id);
         const health = f.face.health;
@@ -484,17 +485,26 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
           };
         active.set(id, mode);
+        activated.push(id);
         return { face: id, outcome: { status: 'done' } };
-      }),
-    deactivate: async (req) =>
-      ids(req.target).map((id): ActivationOutcome =>
-        active.delete(id)
-          ? { face: id, outcome: { status: 'done' } }
-          : {
-              face: id,
-              outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
-            },
-      ),
+      });
+      if (activated.length) emit({ type: 'activationChanged', activated, deactivated: [] });
+      return out;
+    },
+    deactivate: async (req) => {
+      const deactivated: FaceId[] = [];
+      const out = ids(req.target).map((id): ActivationOutcome => {
+        if (!active.delete(id))
+          return {
+            face: id,
+            outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
+          };
+        deactivated.push(id);
+        return { face: id, outcome: { status: 'done' } };
+      });
+      if (deactivated.length) emit({ type: 'activationChanged', activated: [], deactivated });
+      return out;
+    },
     listSources: async () => structuredClone(sources),
     addSource: async (req) => {
       if (!req.path.trim())

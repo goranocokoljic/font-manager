@@ -237,7 +237,3 @@ export function dateText(iso: string, locale?: string): string {
   if (!iso || Number.isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(d);
 }
-
-export function styleCountText(n: number): string {
-  return n === 1 ? '1 style' : `${n} styles`;
-}

@@ -69,3 +69,28 @@ body {
   background: var(--fm-bg);
   color: var(--fm-fg);
 }
+
+/* Placeholder text uses the muted color (AA in both themes); the browser's
+   default grey is under 4.5:1 on the dark background. */
+::placeholder {
+  color: var(--fm-muted);
+  opacity: 1;
+}
+
+/* Keyboard focus is always visible: a 2 px accent ring on every focusable
+   element (WCAG 2.4.7). Components may draw their own, never none. */
+:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+
+/* The OS reduce-motion setting turns every animation and transition off. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

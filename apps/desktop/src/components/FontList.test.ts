@@ -1,7 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { setClient } from '../api/client';
+import { setClient, useClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { NUMERALS, PANGRAMS } from '../preview/sampleText';
@@ -130,9 +130,29 @@ describe('FontList families and styles', () => {
     const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
     const row = list.get(`[data-key="family:${EXTRA_ID_BASE}"]`);
     expect(row.attributes('aria-expanded')).toBe('false');
-    expect(row.attributes('aria-label')).toBe('Sample 1, 4 styles');
+    expect(row.attributes('aria-label')).toBe('Sample 1, 4 styles, not active');
     expect(row.get('.row').attributes('data-face')).toBe(String(EXTRA_ID_BASE));
     expect(row.text()).toContain('4 styles');
+    list.unmount();
+  });
+
+  it('announces the activation state of a style and its family, and follows changes', async () => {
+    const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
+    await list.get(`[data-key="family:${EXTRA_ID_BASE}"] .twisty`).trigger('click');
+    await flushPromises();
+    const label = (key: string) => list.get(`[data-key="${key}"]`).attributes('aria-label');
+    const faces = useLibraryStore().faces.get(EXTRA_ID_BASE)!;
+    const bold = faces.find((f) => f.style === 'Bold')!;
+    await useClient().activate({ target: { kind: 'faces', faces: [bold.id] }, mode: 'session' });
+    await flushPromises();
+    expect(label(`face:${bold.id}`)).toBe('Sample 1 Bold, active for this session');
+    expect(label(`family:${EXTRA_ID_BASE}`)).toBe('Sample 1, 4 styles, partly active');
+    const others = faces.filter((f) => f.id !== bold.id).map((f) => f.id);
+    await useClient().activate({ target: { kind: 'faces', faces: others }, mode: 'permanent' });
+    await flushPromises();
+    expect(label(`face:${others[0]}`)).toMatch(/^Sample 1 \S.*, active permanently$/);
+    expect(label(`family:${EXTRA_ID_BASE}`)).toBe('Sample 1, 4 styles, active');
+    await useLibraryStore().stop();
     list.unmount();
   });
 
@@ -142,15 +162,15 @@ describe('FontList families and styles', () => {
     await flushPromises();
     const rows = items(list);
     expect(rows.map((r) => r.attributes('aria-label'))).toEqual([
-      'Inter, 1 style',
-      'JetBrains Mono, 1 style',
-      'Legacy Grotesk, 1 style',
-      'Sample 1, 4 styles',
-      'Regular',
-      'Italic',
-      'Bold',
-      'Bold Italic',
-      'Sample 2, 4 styles',
+      'Inter, 1 style, not active',
+      'JetBrains Mono, 1 style, not active',
+      'Legacy Grotesk, 1 style, not active',
+      'Sample 1, 4 styles, not active',
+      'Sample 1 Regular, not active',
+      'Sample 1 Italic, not active',
+      'Sample 1 Bold, not active',
+      'Sample 1 Bold Italic, not active',
+      'Sample 2, 4 styles, not active',
     ]);
     expect(rows[3]!.attributes('aria-expanded')).toBe('true');
     expect(rows[5]!.attributes()).toMatchObject({

@@ -104,7 +104,7 @@ test('columns sort, reorder and hide, and the setup survives a reload', async ({
     .click();
   await expect(
     page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first(),
-  ).toHaveAttribute('aria-label', 'Inter, 1 style');
+  ).toHaveAttribute('aria-label', 'Inter, 1 style, not active');
 });
 
 test('the preview strip shows the selected family with its own size slider', async ({ page }) => {

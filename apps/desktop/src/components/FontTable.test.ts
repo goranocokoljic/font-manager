@@ -97,7 +97,7 @@ describe('FontTable', () => {
       'Tags',
     ]);
     const inter = rows(t)[0]!;
-    expect(inter.attributes('aria-label')).toBe('Inter, 1 style');
+    expect(inter.attributes('aria-label')).toBe('Inter, 1 style, not active');
     expect(cell(inter, 'activation').text()).toBe('Inactive');
     expect(cell(inter, 'styleCount').text()).toBe('1');
     expect(cell(inter, 'weightRange').text()).toBe('100–900'); // the wght axis

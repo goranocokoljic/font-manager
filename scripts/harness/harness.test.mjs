@@ -160,6 +160,17 @@ describe('Definition of Ready and lane planning', () => {
     assert.equal(planLane('ui', w2, cfg, { checkDeps: deps({}) }).story.id, 'E5.1');
   });
 
+  test('a blocked or human-merge PR of the other lane holds no area', () => {
+    const pr = { number: 80, storyId: 'E3.1', isDraft: true, areas: ['apps/desktop/src'], headRefName: 'E3.1-x' };
+    const ui = story('E5.1', { track: 'ui' });
+    for (const extra of ['harness:blocked', HUMAN_MERGE]) {
+      const w = world([ui, story('E3.1', { labels: ['type:story', 'harness:in-progress', extra] })], [pr]);
+      assert.equal(planLane('ui', w, cfg, { checkDeps: deps({}) }).story.id, 'E5.1', extra);
+    }
+    const blockedOnly = world([ui, story('E3.1', { labels: ['type:story', 'harness:blocked'] })], [pr]);
+    assert.equal(planLane('ui', blockedOnly, cfg, { checkDeps: deps({}) }).story.id, 'E5.1');
+  });
+
   test('lists human stories with the stories they block', () => {
     const hw = humanWaits([story('E1.1', { labels: ['type:story', 'human'] }), story('E1.4', { depends: ['E1.1'] })]);
     assert.deepEqual(hw.map((h) => [h.id, h.blocks]), [['E1.1', ['E1.4']]]);
@@ -307,6 +318,10 @@ describe('auto merge', () => {
       '+\tnewField?: string | null,',
       '-"permanent";',
       '+"permanent" | "pinned";',
+      '-\t/**  Weight range. */',
+      '+\t/**  Weight range; a variable face passes when its `wght` axis reaches it. */',
+      '- *  Old wording of a long comment.',
+      '- */',
     ].join('\n');
     assert.deepEqual(contractRemovals(diff), ['"permanent";']);
     assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => l !== '-"permanent";').join('\n')), []);

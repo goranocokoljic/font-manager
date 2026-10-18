@@ -15,7 +15,6 @@ import {
   dateText,
   formatBadges,
   licenseBadge,
-  styleCountText,
   visibleColumns,
   weightPosition,
   weightRangeText,
@@ -23,7 +22,7 @@ import {
   type ColumnId,
 } from '../list/columns';
 import { handleListKey, modeOf } from '../list/keys';
-import type { ListRow } from '../list/rows';
+import { rowLabel, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -267,11 +266,6 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
 
 const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
   row.kind === 'face' ? (row.face.active ? 'active' : 'inactive') : row.family.activation;
-
-const rowLabel = (row: ListRow) =>
-  row.kind === 'face'
-    ? row.face.style
-    : `${row.family.name}, ${styleCountText(row.family.styleCount)}`;
 </script>
 
 <template>

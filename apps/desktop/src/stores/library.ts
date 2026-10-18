@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, shallowReactive, shallowRef } from 'vue';
-import { useClient, type Unsubscribe } from '../api/client';
+import { useClient, type FmClient, type Unsubscribe } from '../api/client';
 import type {
   ApiError,
   Event,
+  FaceId,
   FaceSummary,
   FamilyId,
   FamilyOrder,
@@ -36,7 +37,25 @@ export const useLibraryStore = defineStore('library', () => {
   let listGeneration = 0;
   /** The library changed: the next family list that arrives also forgets the faces. */
   let facesStale = false;
+  /** Bumped by every activation change; answers to an older one are dropped. */
+  let activationRound = 0;
+  /** Faces changed by activation rounds that have not finished yet. */
+  const unsettled = new Set<FaceId>();
   const pending = new Map<FamilyId, Promise<FaceSummary[]>>();
+
+  /** Every family, in the order `by` (the API default when `null`). */
+  async function listAll(client: FmClient, by: FamilyOrder | null): Promise<FamilySummary[]> {
+    const list: FamilySummary[] = [];
+    for (let offset = 0; ; offset += PAGE) {
+      const page = await client.listFamilies({
+        page: { offset, limit: PAGE },
+        ...(by ? { order: by } : {}),
+      });
+      list.push(...page.items);
+      if (!page.items.length || list.length >= page.total) break;
+    }
+    return list;
+  }
 
   /**
    * Fetches the family list in the current order. After a library change it also
@@ -45,23 +64,15 @@ export const useLibraryStore = defineStore('library', () => {
   async function fetchFamilies(): Promise<void> {
     const mine = ++listGeneration;
     const client = useClient();
-    const by = order.value;
     try {
-      const list: FamilySummary[] = [];
-      for (let offset = 0; ; offset += PAGE) {
-        const page = await client.listFamilies({
-          page: { offset, limit: PAGE },
-          ...(by ? { order: by } : {}),
-        });
-        list.push(...page.items);
-        if (!page.items.length || list.length >= page.total) break;
-      }
+      const list = await listAll(client, order.value);
       if (mine !== listGeneration) return;
       families.value = list;
       if (facesStale) {
         facesStale = false;
         faces.clear();
         failed.clear();
+        unsettled.clear();
         pending.clear();
       }
       error.value = null;
@@ -116,8 +127,43 @@ export const useLibraryStore = defineStore('library', () => {
     return request;
   }
 
+  /**
+   * Faces were activated or deactivated: reloads the family summaries (their
+   * activation state) and the loaded faces of the families concerned, in place,
+   * so expanded families keep their rows and the list keeps its cursor.
+   */
+  async function refreshActivation(changed: readonly FaceId[]): Promise<void> {
+    const mine = generation;
+    const round = ++activationRound;
+    const by = order.value;
+    // A new order fetches the list again; an answer in the old order must not win.
+    const current = () => mine === generation && round === activationRound && by === order.value;
+    const client = useClient();
+    // A newer round supersedes this one, so it must also refetch this one's faces.
+    for (const id of changed) unsettled.add(id);
+    try {
+      const list = await listAll(client, by);
+      if (current()) families.value = list;
+      if (mine !== generation || round !== activationRound) return;
+      const stale = [...faces]
+        .filter(([, fs]) => fs.some((f) => unsettled.has(f.id)))
+        .map(([id]) => id);
+      await Promise.all(
+        stale.map(async (id) => {
+          const family = await client.getFamily(id);
+          if (mine === generation && round === activationRound) faces.set(id, family.faces);
+        }),
+      );
+      if (mine === generation && round === activationRound) unsettled.clear();
+    } catch {
+      // The list keeps the state it had; the next refresh brings it up to date.
+    }
+  }
+
   function onEvent(event: Event): void {
     if (event.type === 'libraryChanged' || event.type === 'scanFinished') void refresh();
+    else if (event.type === 'activationChanged')
+      void refreshActivation([...event.activated, ...event.deactivated]);
   }
 
   /** Subscribes to library changes (once) and loads the families. */
