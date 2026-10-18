@@ -71,3 +71,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E2.8 #257] crates/fm-core/src/scanner/job.rs:113 — the `fm-scan` thread holds the `FileIndex` mutex for the whole scan, so a long first scan blocks every index reader.
 - [E2.8 #257] scripts/bench/lib.mjs:138 — the trend's Previous/Change columns compare the per-10,000-files `first_scan` with older raw-ms nightly values until those runs leave the history window.
 - [E9.2 #90] scripts/bench/bench.mjs:173 — before E9.2 the nightly trend table listed only successful nightly runs, so it had no history while the first scan is known red (fixed in E9.2 by `nightlyRunsArgs`; the E9.1 trend summaries already published lacked the comparison).
+
+## 2026-10-19
+- [E6.3 #76] issue #76 / docs/adr/0008-font-activation.md — criterion 1's text ("AddFontResourceExW plus WM_FONTCHANGE") contradicts accepted ADR 0008 (HKCU value for both modes); the issue text could be updated.
+- [E6.3 #76] crates/fm-platform/src/activator/mock.rs:93 — `MockActivator::activate_one` answers AlreadyActive on path alone, so a Permanent request for a session-active file keeps the Session registration (same in WindowsActivator); E6.6 should decide the upgrade rule.
+- [E6.3 #76] crates/fm-platform/tests/windows_activation.rs:1350 — scratch registry fixtures delete only their own subkey, leaving an empty `HKCU\Software\FontManager-test` on machines that run the tests.
+- [E6.3 #76] crates/fm-core/src/parser.rs:383 — name strings keep embedded control characters (NUL included), which flow into the index and the UI.
