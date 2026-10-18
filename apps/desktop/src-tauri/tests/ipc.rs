@@ -6,14 +6,19 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use fm_api::activation::{ActivationOutcome, OutcomeStatus};
-use fm_api::common::Paged;
+use fm_api::common::{Paged, Slant};
 use fm_api::library::{
     AppInfo, FaceDetail, Family, FamilySummary, LibraryService, ListFamiliesRequest, Source,
     SourceKind,
 };
 use fm_api::mock::MockApi;
+use fm_api::organization::Collection;
+use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
-use fm_api::{API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SettingsService, SourceId};
+use fm_api::{
+    API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SearchService, SettingsService,
+    SourceId,
+};
 use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
 use tauri::test::{
@@ -133,6 +138,52 @@ fn families_round_trip_through_fm_api() {
         .unwrap()
         .unwrap_err();
     assert_eq!(err["code"], "notFound", "{err}");
+}
+
+#[test]
+fn search_returns_hits_and_filter_counts() {
+    let api = MockApi::new();
+    let req = serde_json::json!({ "req": { "query": "mono" } });
+    let r: SearchResponse = invoke_with("search", req)
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    let want = api
+        .search(SearchRequest {
+            query: "mono".into(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r, want);
+    assert!(r.counts.is_some());
+    let langs: Vec<LanguagePreset> = invoke("list_languages")
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(langs, api.list_languages().unwrap());
+}
+
+#[test]
+fn create_collection_saves_a_smart_collection_with_its_rules() {
+    let req = serde_json::json!({
+        "req": { "name": "Italics", "rules": { "slant": "italic" } }
+    });
+    let c: Collection = invoke_with("create_collection", req)
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(c.name, "Italics");
+    assert_eq!(c.rules.unwrap().slant, Some(Slant::Italic));
+    let err = invoke_with(
+        "create_collection",
+        serde_json::json!({ "req": { "name": " " } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
 }
 
 #[test]

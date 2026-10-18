@@ -10,6 +10,8 @@ import type {
   AddSourceRequest,
   AppFolders,
   AppInfo,
+  Collection,
+  CreateCollectionRequest,
   DeactivateRequest,
   Event,
   FaceDetail,
@@ -18,9 +20,12 @@ import type {
   FamilyId,
   FamilySummary,
   JobId,
+  LanguagePreset,
   ListFamiliesRequest,
   Paged,
   ScanRequest,
+  SearchRequest,
+  SearchResponse,
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
@@ -46,6 +51,12 @@ export interface FmClient {
   getFace(face: FaceId): Promise<FaceDetail>;
   listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
   getFamily(family: FamilyId): Promise<Family>;
+  /** Free text and filters, grouped by family, with the count of every filter value. */
+  search(req: SearchRequest): Promise<SearchResponse>;
+  /** The language presets a `supports` filter can name. */
+  listLanguages(): Promise<LanguagePreset[]>;
+  /** Creates a collection; with `rules`, a smart one. */
+  createCollection(req: CreateCollectionRequest): Promise<Collection>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
@@ -70,6 +81,9 @@ export const tauriClient: FmClient = {
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
+  search: (req) => invoke<SearchResponse>('search', { req }),
+  listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
+  createCollection: (req) => invoke<Collection>('create_collection', { req }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
