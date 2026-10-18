@@ -59,7 +59,9 @@ const views = useViewsStore();
 const config = computed(() => views.tableFor(props.view));
 const columns = computed(() => visibleColumns(config.value));
 const gridTemplate = computed(() =>
-  columns.value.map((c) => (c.id === 'name' ? `minmax(${c.width}px, 1fr)` : `${c.width}px`)).join(' '),
+  columns.value
+    .map((c) => (c.id === 'name' ? `minmax(${c.width}px, 1fr)` : `${c.width}px`))
+    .join(' '),
 );
 const minWidth = computed(() => columns.value.reduce((n, c) => n + c.width, 0));
 
@@ -105,7 +107,12 @@ const visible = computed(() =>
 watchEffect(() => {
   const row = list.cursorRow;
   const id = row?.family.id;
-  if (row?.kind === 'family' && id !== undefined && !library.faces.has(id) && !library.failed.has(id))
+  if (
+    row?.kind === 'family' &&
+    id !== undefined &&
+    !library.faces.has(id) &&
+    !library.failed.has(id)
+  )
     void library.facesOf(id).catch(() => undefined);
 });
 
@@ -262,7 +269,9 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
   row.kind === 'face' ? (row.face.active ? 'active' : 'inactive') : row.family.activation;
 
 const rowLabel = (row: ListRow) =>
-  row.kind === 'face' ? row.face.style : `${row.family.name}, ${styleCountText(row.family.styleCount)}`;
+  row.kind === 'face'
+    ? row.face.style
+    : `${row.family.name}, ${styleCountText(row.family.styleCount)}`;
 </script>
 
 <template>
@@ -314,9 +323,7 @@ const rowLabel = (row: ListRow) =>
           >
             <span :class="{ 'visually-hidden': col.id === 'activation' }">{{ col.label }}</span>
             <span v-if="col.id === 'activation'" class="dot" aria-hidden="true" />
-            <span class="arrow" aria-hidden="true">{{
-              SORT_ARROW[ariaSort(config, col.id)]
-            }}</span>
+            <span class="arrow" aria-hidden="true">{{ SORT_ARROW[ariaSort(config, col.id)] }}</span>
           </button>
         </div>
       </div>

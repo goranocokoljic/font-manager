@@ -99,7 +99,9 @@ export const defaultTable = (): TableConfig => ({
  * cannot be hidden, a bad sort is no sort and the strip size is clamped.
  */
 export function normalizeTable(raw: unknown): TableConfig {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof TableConfig, unknown>>;
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<
+    Record<keyof TableConfig, unknown>
+  >;
   const order: ColumnId[] = [];
   for (const id of Array.isArray(r.order) ? r.order : [])
     if (isColumnId(id) && !order.includes(id)) order.push(id);

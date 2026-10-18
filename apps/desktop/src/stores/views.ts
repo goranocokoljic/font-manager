@@ -27,7 +27,9 @@ export interface ViewState {
 const MODES: readonly ViewMode[] = ['list', 'table'];
 
 export function normalizeView(raw: unknown): ViewState {
-  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof ViewState, unknown>>;
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<
+    Record<keyof ViewState, unknown>
+  >;
   return {
     mode: MODES.includes(r.mode as ViewMode) ? (r.mode as ViewMode) : 'list',
     table: normalizeTable(r.table),

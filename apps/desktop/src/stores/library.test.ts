@@ -90,4 +90,52 @@ describe('library store', () => {
     expect(store.families).toEqual([]);
     expect(store.loaded).toBe(true);
   });
+
+  it('orders the families by the API order and keeps the faces it already has', async () => {
+    client = createMockClient();
+    const list = vi.spyOn(client, 'listFamilies');
+    const family = vi.spyOn(client, 'getFamily');
+    setClient(client);
+    const store = useLibraryStore();
+    await store.setOrder({ by: 'manufacturer', descending: false }); // before load: no request
+    expect(list).not.toHaveBeenCalled();
+    await store.load();
+    expect(list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ order: { by: 'manufacturer', descending: false } }),
+    );
+    // JetBrains, Old Foundry, rsms
+    expect(store.families.map((f) => f.name)).toEqual([
+      'JetBrains Mono',
+      'Legacy Grotesk',
+      'Inter',
+    ]);
+    await store.facesOf(1);
+    await store.setOrder({ by: 'manufacturer', descending: true });
+    expect(store.families.map((f) => f.name)).toEqual([
+      'Inter',
+      'Legacy Grotesk',
+      'JetBrains Mono',
+    ]);
+    expect(store.faces.has(1)).toBe(true); // a new order is not a library change
+    const calls = list.mock.calls.length;
+    await store.setOrder({ by: 'manufacturer', descending: true }); // same order: nothing
+    expect(list.mock.calls.length).toBe(calls);
+    await store.setOrder(null);
+    expect(list.mock.lastCall?.[0]).not.toHaveProperty('order');
+    expect(store.families[0]!.name).toBe('Inter');
+    expect(family).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refresh overtaken by a new order still forgets the faces', async () => {
+    client = createMockClient();
+    setClient(client);
+    const store = useLibraryStore();
+    await store.load();
+    await store.facesOf(1);
+    const refreshing = store.refresh();
+    await store.setOrder({ by: 'name', descending: true });
+    await refreshing;
+    expect(store.faces.size).toBe(0);
+    expect(store.families[0]!.name).toBe('Legacy Grotesk');
+  });
 });
