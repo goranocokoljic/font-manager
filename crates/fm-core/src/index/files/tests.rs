@@ -727,6 +727,50 @@ fn sample_texts_fall_back_to_the_faces_own_coverage() {
     assert_eq!(err.code(), ErrorCode::NotFound);
 }
 
+/// E4.5 review: a face whose stored cmap cannot be read is not judged (it
+/// previews the sample); the healthy faces of the same request still get
+/// their fallback.
+#[test]
+fn a_damaged_cmap_affects_only_its_own_face() {
+    use fm_api::preview::{SampleFallback, SampleTextRequest};
+
+    let (mut index, source) = memory_db();
+    let mut files = copies(2, STATIC);
+    files[1].path = PathBuf::from("/fonts/damaged.ttf");
+    index.persist_files(source, &files).expect("persist");
+    let healthy = face_id(&index, "/fonts/batch/00000.ttf");
+    let damaged = face_id(&index, "/fonts/damaged.ttf");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = x'010203' WHERE id = ?1",
+            [damaged.0],
+        )
+        .expect("damage the cmap");
+
+    let got = index
+        .sample_texts(&SampleTextRequest {
+            faces: vec![healthy, damaged],
+            text: "Съешь".into(),
+        })
+        .expect("one damaged face does not fail the request");
+    assert_eq!(got[0].face, healthy);
+    assert_eq!(
+        got[0].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert_eq!(got[0].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(got[1].face, damaged);
+    assert_eq!((got[1].text.as_str(), &got[1].fallback), ("Съешь", &None));
+    assert!(got[1].missing.is_empty());
+    assert_eq!(
+        index.face_cmap(damaged).expect_err("damaged").code(),
+        ErrorCode::Internal
+    );
+}
+
 /// New preset data (an app update) computes the stored coverage again on
 /// open, from the stored cmap and locl, without reading a font file.
 #[test]
