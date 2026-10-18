@@ -1,0 +1,20 @@
+{
+  "id": "a-merge-of-synced-copies-must-not-read-a-missing-item-as-a-r",
+  "title": "A merge of synced copies must not read a missing item as a removal unless the copy descends from ours",
+  "category": "data-integrity",
+  "rule": "When merging a file another machine may have written (sidecars, synced JSON), treat an item that is missing on disk as removed only when the disk copy provably descends from the version this machine last wrote or read (a version history in the file). Otherwise use an empty ancestor so nothing is removed on a guess. The same goes for anything this machine could not apply (for example a collection that is smart here): keep it in the copy it writes back, stored durably, so it never writes a removal it did not make. Test both with two machines over one folder: a concurrent copy without the item, and a round trip of the item this machine could not apply.",
+  "rationale": "E7.3 (#84): an entry missing from a sync client's kept file wiped this machine's metadata, and a membership blocked by a smart collection here was written away and then deleted on the machine that made it.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    84
+  ],
+  "file_globs": [
+    "crates/fm-core/src/sidecar.rs",
+    "crates/fm-core/src/index/sidecars.rs",
+    "crates/fm-core/src/**/sync*.rs"
+  ],
+  "first_seen": "2026-10-18T15:10:47.533Z",
+  "last_seen": "2026-10-18T15:10:47.533Z"
+}

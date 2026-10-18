@@ -57,3 +57,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E7.1 #82] crates/fm-api/src/mock.rs:691 — the MockApi's `collection_view` counts members of gone/paused sources and evaluates smart rules, while fm-core counts visible faces only and gives smart collections 0.
 - [E7.2 #83] crates/fm-core/src/index/collections.rs:252 — the inline "every face exists" loop duplicates the new `ensure_faces` in `index/tags.rs`; the two can drift.
 - [E7.2 #83] apps/desktop/src/stores/search.test.ts:148 — the "10,000 result families within 50 ms" timing test failed 3 of 6 local full-suite Vitest runs (54–65 ms) and passes alone; its search is a stub, so it measures machine load.
+- [E7.3 #84] crates/fm-core/src/index/sources.rs:70 — `add_source` accepts OS font folders (incl. the per-user folder permanent activation targets) as ordinary watched sources; nothing assigns `SourceKind::System` outside mocks, so sidecars can be written into such a folder.
+- [E7.3 #84] crates/fm-api/src/library.rs:627 — `list_problems` exists only in the mock; `Index::sidecar_problems()` reaches the Problems view only once E8.2 aggregates it.
