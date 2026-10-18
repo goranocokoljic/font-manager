@@ -12,7 +12,10 @@
 
 export const SCHEMA = 1;
 
-/** The budgets of CLAUDE.md rule 8. target null = reported, not budgeted. */
+/**
+ * The budgets of CLAUDE.md rule 8, plus story budgets (preview_cache_hit: E4.3,
+ * "a cache hit returns in under 2 ms"). target null = reported, not budgeted.
+ */
 export const BUDGETS = {
   cold_start: { unit: 'ms', target: 1000 },
   first_scan: { unit: 'ms', target: 10000 },
@@ -20,6 +23,7 @@ export const BUDGETS = {
   search: { unit: 'ms', target: 50 },
   activation_100: { unit: 'ms', target: 500 },
   idle_memory: { unit: 'MB', target: 350 },
+  preview_cache_hit: { unit: 'ms', target: 2 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];
