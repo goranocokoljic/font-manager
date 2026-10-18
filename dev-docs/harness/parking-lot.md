@@ -43,6 +43,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E4.1 #59] crates/fm-api/src/preview.rs:55 — `FontSource.path` is a `String`, so a font at a non-UTF-8 path cannot be served by the `fmfont` route exactly.
 - [E2.6 #49] crates/fm-core/src/telemetry.rs:137 — a wuff panic caught by `catch_unwind` in `parser::decompress_web` still runs the installed crash hook, so a handled malformed WOFF could be sent as a crash report when crash reports are on.
 - [E5.4 #67] apps/desktop/src/components/FontTable.vue:1281 — the variable-range span on the weight line (35% fg over bg) is about 2.2:1 light / 2.9:1 dark, under 3:1; the Variable badge and Weight column carry the same information.
+- [E3.4 #54] crates/fm-api/src/mock.rs:592 — the MockApi weight filter checks only the static weight and ignores the `wght` axis, so in browser mode a range like 800–900 leaves variable Inter out while fm-core includes it.
 - [E3.5 #55] crates/fm-core/src/index/search.rs:262 — `FamilySummary.classification` is still hard-coded `None`; fill it from `ParsedFace.classification` once E3.4 (#240) merges.
 - [E5.10 #73] apps/desktop/src/api/mock.ts:360 — in the TS mock's `activate`, `notFound` thrown mid-map leaves faces already processed active without an `activationChanged` emit (mock only).
 - [E5.4 #67] apps/desktop/src/stores/library.ts:86 — main's `refresh` could land after a newer `refreshActivation` and reset activation state; covered by the cycle-3 fetchFamilies refetch (3fb2911), parked for a human to confirm.
