@@ -29,8 +29,8 @@ use crate::library::{
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, ProjectSet, RenameCollectionRequest, SetEntry, SetExport, Tag,
-    TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    ImportSetResponse, MoveCollectionRequest, ProjectSet, RenameCollectionRequest, SetEntry,
+    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
 use crate::preview::{FontSource, PreviewImage, PreviewRequest};
 use crate::search::{
@@ -612,6 +612,41 @@ impl State {
                 }
                 Ok((all, per))
             }
+        }
+    }
+
+    fn collection(&self, id: CollectionId) -> ApiResult<&Collection> {
+        self.collections
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or_else(|| ApiError::not_found(format!("Collection {id}")))
+    }
+
+    /// `Conflict` when another child of `parent` (not `except`) is called `name`.
+    fn check_sibling_name(
+        &self,
+        parent: Option<CollectionId>,
+        name: &str,
+        except: Option<CollectionId>,
+    ) -> ApiResult<()> {
+        if self
+            .collections
+            .iter()
+            .any(|c| c.parent == parent && Some(c.id) != except && c.name == name)
+        {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("A collection named \"{name}\" already exists here."),
+            ));
+        }
+        Ok(())
+    }
+
+    /// The children of `parent` in their order, each followed by its own.
+    fn walk_collections<'a>(&'a self, parent: Option<CollectionId>, out: &mut Vec<&'a Collection>) {
+        for c in self.collections.iter().filter(|c| c.parent == parent) {
+            out.push(c);
+            self.walk_collections(Some(c.id), out);
         }
     }
 
@@ -1287,11 +1322,9 @@ impl ActivationService for MockApi {
 impl OrganizationService for MockApi {
     fn list_collections(&self) -> ApiResult<Vec<Collection>> {
         let st = self.state();
-        Ok(st
-            .collections
-            .iter()
-            .map(|c| st.collection_view(c))
-            .collect())
+        let mut out = Vec::new();
+        st.walk_collections(None, &mut out);
+        Ok(out.into_iter().map(|c| st.collection_view(c)).collect())
     }
 
     fn create_collection(&self, req: CreateCollectionRequest) -> ApiResult<Collection> {
@@ -1305,16 +1338,7 @@ impl OrganizationService for MockApi {
         {
             return Err(ApiError::not_found(format!("Collection {p}")));
         }
-        if st
-            .collections
-            .iter()
-            .any(|c| c.parent == req.parent && c.name == name)
-        {
-            return Err(ApiError::new(
-                ErrorCode::Conflict,
-                format!("A collection named \"{name}\" already exists here."),
-            ));
-        }
+        st.check_sibling_name(req.parent, name, None)?;
         let c = Collection {
             id: CollectionId(st.next()),
             parent: req.parent,
@@ -1332,6 +1356,8 @@ impl OrganizationService for MockApi {
             return Err(ApiError::invalid("Give the collection a name."));
         }
         let mut st = self.state();
+        let parent = st.collection(req.collection)?.parent;
+        st.check_sibling_name(parent, name, Some(req.collection))?;
         let c = st
             .collections
             .iter_mut()
@@ -1339,6 +1365,41 @@ impl OrganizationService for MockApi {
             .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
         c.name = name.into();
         let c = c.clone();
+        Ok(st.collection_view(&c))
+    }
+
+    fn move_collection(&self, req: MoveCollectionRequest) -> ApiResult<Collection> {
+        let mut st = self.state();
+        let name = st.collection(req.collection)?.name.clone();
+        let mut up = req.parent;
+        while let Some(id) = up {
+            if id == req.collection {
+                return Err(ApiError::invalid(
+                    "A collection cannot go inside itself or one of its children.",
+                ));
+            }
+            up = st.collection(id)?.parent;
+        }
+        st.check_sibling_name(req.parent, &name, Some(req.collection))?;
+        let at = st
+            .collections
+            .iter()
+            .position(|c| c.id == req.collection)
+            .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
+        let mut c = st.collections.remove(at);
+        c.parent = req.parent;
+        let siblings: Vec<usize> = st
+            .collections
+            .iter()
+            .enumerate()
+            .filter(|(_, x)| x.parent == req.parent)
+            .map(|(i, _)| i)
+            .collect();
+        let at = siblings
+            .get(req.position as usize)
+            .copied()
+            .unwrap_or(st.collections.len());
+        st.collections.insert(at, c.clone());
         Ok(st.collection_view(&c))
     }
 
@@ -1559,8 +1620,13 @@ fn edit_members(api: &MockApi, req: CollectionFacesRequest, add: bool) -> ApiRes
     for id in &req.faces {
         st.face(*id)?;
     }
+    let mut faces = req.faces;
+    for family in &req.families {
+        st.family(*family)?;
+        faces.extend(st.family_faces(*family).map(|f| f.detail.face.id));
+    }
     let members = st.members.entry(c.id).or_default();
-    for id in req.faces {
+    for id in faces {
         if add {
             members.insert(id);
         } else {

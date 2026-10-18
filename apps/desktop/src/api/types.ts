@@ -149,7 +149,10 @@ export type Classification =
 /**  Symbols, icons, dingbats. */
 "symbol";
 
-/**  A manual collection, or a smart one when `rules` is set. */
+/**
+ *  A manual collection, or a smart one when `rules` is set. Siblings are
+ *  ordered by the user; `list_collections` returns them in that order.
+ */
 export type Collection = {
 	/**  Id. */
 	id: CollectionId,
@@ -169,6 +172,8 @@ export type CollectionFacesRequest = {
 	collection: CollectionId,
 	/**  The faces. */
 	faces: FaceId[],
+	/**  Whole families: every face of each, as the library lists it. */
+	families?: FamilyId[],
 };
 
 /**  A manual or smart collection. */
@@ -836,6 +841,22 @@ export type Missing = {
 	chars: string[],
 	/**  The face carries `locl` forms for the requested language. */
 	hasLocl: boolean,
+};
+
+/**
+ *  Move a collection under another parent, or to another place among its
+ *  siblings.
+ */
+export type MoveCollectionRequest = {
+	/**  The collection. */
+	collection: CollectionId,
+	/**
+	 *  The new parent; absent for the top level. The collection itself or
+	 *  one of its children is `InvalidRequest`.
+	 */
+	parent?: CollectionId | null,
+	/**  Its place among the new siblings, 0 first; past the end means last. */
+	position: number,
 };
 
 /**  A named instance of a variable font, listed as a style. */

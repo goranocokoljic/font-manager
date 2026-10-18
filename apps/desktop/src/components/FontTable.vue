@@ -21,6 +21,7 @@ import {
   type Column,
   type ColumnId,
 } from '../list/columns';
+import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
@@ -147,6 +148,11 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   e.preventDefault();
   void revealCursor();
+}
+
+/** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
+function onRowDrag(row: ListRow, e: DragEvent): void {
+  startFontDrag(e, dragKeys(list.selection.selected, row.key));
 }
 
 function onRowClick(row: ListRow, e: MouseEvent): void {
@@ -347,7 +353,9 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
             height: `${ROW_PX}px`,
             transform: `translateY(${item.index * ROW_PX}px)`,
           }"
+          draggable="true"
           @click="onRowClick(item.row, $event)"
+          @dragstart="onRowDrag(item.row, $event)"
         >
           <div
             v-for="(col, c) in columns"
