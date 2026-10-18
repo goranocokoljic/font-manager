@@ -25,6 +25,8 @@ export const useLibraryStore = defineStore('library', () => {
   let generation = 0;
   /** Bumped by every activation change; answers to an older one are dropped. */
   let activationRound = 0;
+  /** Faces changed by activation rounds that have not finished yet. */
+  const unsettled = new Set<FaceId>();
   const pending = new Map<FamilyId, Promise<FaceSummary[]>>();
 
   async function listAll(client: FmClient): Promise<FamilySummary[]> {
@@ -46,6 +48,7 @@ export const useLibraryStore = defineStore('library', () => {
       families.value = list;
       faces.clear();
       failed.clear();
+      unsettled.clear();
       pending.clear();
       error.value = null;
     } catch (e) {
@@ -95,18 +98,22 @@ export const useLibraryStore = defineStore('library', () => {
     const round = ++activationRound;
     const current = () => mine === generation && round === activationRound;
     const client = useClient();
-    const ids = new Set(changed);
+    // A newer round supersedes this one, so it must also refetch this one's faces.
+    for (const id of changed) unsettled.add(id);
     try {
       const list = await listAll(client);
       if (!current()) return;
       families.value = list;
-      const stale = [...faces].filter(([, fs]) => fs.some((f) => ids.has(f.id))).map(([id]) => id);
+      const stale = [...faces]
+        .filter(([, fs]) => fs.some((f) => unsettled.has(f.id)))
+        .map(([id]) => id);
       await Promise.all(
         stale.map(async (id) => {
           const family = await client.getFamily(id);
           if (current()) faces.set(id, family.faces);
         }),
       );
+      if (current()) unsettled.clear();
     } catch {
       // The list keeps the state it had; the next refresh brings it up to date.
     }

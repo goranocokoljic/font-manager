@@ -74,6 +74,17 @@ describe.each([
   });
 });
 
+describe('text the browser colors by default', () => {
+  it('placeholders use the muted color at full opacity', () => {
+    // `muted` is in the checked text colors above; the browser default is not.
+    const start = theme.indexOf('::placeholder {');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const rule = theme.slice(start, theme.indexOf('}', start));
+    expect(rule).toMatch(/\bcolor:\s*var\(--fm-muted\)/);
+    expect(rule).toMatch(/\bopacity:\s*1\b/);
+  });
+});
+
 describe('palettes stay in step', () => {
   it('the OS dark mode uses the dark palette', () => {
     const media = theme.slice(theme.indexOf('@media (prefers-color-scheme: dark)'));

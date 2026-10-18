@@ -156,3 +156,40 @@ for (const reducedMotion of ['reduce', 'no-preference'] as const) {
     else expect(await moving(page)).toBeGreaterThan(0);
   });
 }
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`placeholder text is at least 4.5:1 in the ${colorScheme} theme`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme });
+    await open(page);
+    await page.getByRole('tree', { name: 'Font list' }).focus();
+    await page.keyboard.press('ControlOrMeta+k');
+    const input = page.getByRole('dialog').getByRole('combobox');
+    await expect(input).toHaveAttribute('placeholder', /\S/);
+    const ratio = await input.evaluate((el) => {
+      const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+      const lum = (c: number[]) => {
+        const lin = c.map((v) => {
+          const s = v / 255;
+          return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
+      };
+      // The first opaque background behind the input.
+      let node: Element | null = el;
+      let bg = 'rgb(255, 255, 255)';
+      while (node) {
+        const c = getComputedStyle(node).backgroundColor;
+        if (c !== 'rgba(0, 0, 0, 0)' && c !== 'transparent') {
+          bg = c;
+          break;
+        }
+        node = node.parentElement;
+      }
+      const ph = getComputedStyle(el, '::placeholder');
+      if (parseFloat(ph.opacity) < 1) return 0;
+      const [a, b] = [lum(rgb(ph.color)), lum(rgb(bg))].sort((x, y) => y - x);
+      return (a! + 0.05) / (b! + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+}
