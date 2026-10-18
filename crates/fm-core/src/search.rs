@@ -288,28 +288,51 @@ fn style_need(word: &str) -> Option<Need> {
 
 /// Whether the face's style, or its variable axes, meet `need`.
 fn satisfies(face: &FaceText, need: Need) -> bool {
-    let axis = |tag: &str| face.axes.iter().find(|a| a.tag == tag);
     match need {
-        Need::Weight(w) => {
-            face.weight == w
-                || axis("wght").is_some_and(|a| a.min <= f32::from(w) && f32::from(w) <= a.max)
-        }
-        Need::Width(lo, hi) => {
-            (lo..=hi).contains(&face.width)
-                || axis("wdth")
-                    .is_some_and(|a| a.min <= width_percent(hi) && width_percent(lo) <= a.max)
-        }
-        Need::Sloped => {
-            face.slant != Slant::Upright
-                || axis("ital").is_some_and(|a| a.max >= 0.5)
-                || axis("slnt").is_some_and(|a| a.min < 0.0 || a.max > 0.0)
-        }
-        Need::Upright => {
-            face.slant == Slant::Upright
-                || axis("ital").is_some_and(|a| a.min < 0.5)
-                || axis("slnt").is_some_and(|a| a.min <= 0.0 && 0.0 <= a.max)
-        }
+        Need::Weight(w) => reaches_weight(face, w, w),
+        Need::Width(lo, hi) => reaches_width(face, lo, hi),
+        Need::Sloped => reaches_slant(face, Slant::Italic) || reaches_slant(face, Slant::Oblique),
+        Need::Upright => reaches_slant(face, Slant::Upright),
     }
+}
+
+impl FaceText {
+    fn axis(&self, tag: &str) -> Option<&Axis> {
+        self.axes.iter().find(|a| a.tag == tag)
+    }
+}
+
+/// Whether the face's weight class, or its `wght` axis, reaches `lo..=hi`.
+pub(crate) fn reaches_weight(face: &FaceText, lo: u16, hi: u16) -> bool {
+    (lo..=hi).contains(&face.weight)
+        || face
+            .axis("wght")
+            .is_some_and(|a| a.min <= f32::from(hi) && f32::from(lo) <= a.max)
+}
+
+/// Whether the face's width class, or its `wdth` axis, reaches `lo..=hi`.
+pub(crate) fn reaches_width(face: &FaceText, lo: u16, hi: u16) -> bool {
+    (lo..=hi).contains(&face.width)
+        || face
+            .axis("wdth")
+            .is_some_and(|a| a.min <= width_percent(hi) && width_percent(lo) <= a.max)
+}
+
+/// Whether the face has `slant`, or its `ital` / `slnt` axis reaches it.
+pub(crate) fn reaches_slant(face: &FaceText, slant: Slant) -> bool {
+    face.slant == slant
+        || match slant {
+            Slant::Italic => face.axis("ital").is_some_and(|a| a.max >= 0.5),
+            Slant::Oblique => face
+                .axis("slnt")
+                .is_some_and(|a| a.min < 0.0 || a.max > 0.0),
+            Slant::Upright => {
+                face.axis("ital").is_some_and(|a| a.min < 0.5)
+                    || face
+                        .axis("slnt")
+                        .is_some_and(|a| a.min <= 0.0 && 0.0 <= a.max)
+            }
+        }
 }
 
 /// An OS/2 width class as the `wdth` axis percentage (OpenType spec).

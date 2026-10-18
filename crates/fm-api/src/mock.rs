@@ -589,6 +589,7 @@ impl State {
         let tags = self.face_tags.get(&s.id);
         let ok = (q.classification.is_empty() || q.classification.contains(&fam.classification))
             && q.weight.is_none_or(|w| (w.min..=w.max).contains(&s.weight))
+            && q.width.is_none_or(|w| (w.min..=w.max).contains(&s.width))
             && q.slant.is_none_or(|sl| sl == s.slant)
             && q.variable.is_none_or(|v| v == s.is_variable)
             && q.color.is_none_or(|c| !c) // the sample has no color fonts
@@ -946,6 +947,7 @@ impl SearchService for MockApi {
         Ok(SearchResponse {
             families: page.items,
             total: page.total,
+            counts: None,
         })
     }
 

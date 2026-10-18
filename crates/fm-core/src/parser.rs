@@ -104,6 +104,10 @@ pub struct ParsedFace {
     pub named_instances: Vec<NamedInstance>,
     /// Feature tags from `GSUB` and `GPOS`, sorted, without duplicates.
     pub features: Vec<String>,
+    /// Whether the face draws in color (`COLR`, `CBDT`, `sbix` or `SVG `).
+    /// No serde default: a `face.parsed` written before this field fails to
+    /// load, so the next scan reads the file again and fills it.
+    pub color: bool,
     /// Design class, declared by the font or measured on its outlines; `None`
     /// when neither says anything (see [`crate::classify`]).
     #[serde(default)]
@@ -138,6 +142,7 @@ impl ParsedFace {
             axes: Vec::new(),
             named_instances: Vec::new(),
             features: Vec::new(),
+            color: false,
             classification: None,
             code_points: Vec::new(),
             health,
@@ -413,6 +418,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
     features.sort_unstable();
     features.dedup();
     face.features = features;
+    face.color = is_color(font);
 
     match font.cmap() {
         Ok(_) => {
@@ -464,6 +470,14 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
 /// activate like outlines.
 fn has_glyph_images(font: &FontRef<'_>) -> bool {
     [b"glyf", b"CFF ", b"CFF2", b"CBDT", b"sbix", b"SVG "]
+        .iter()
+        .any(|tag| has_record(font, tag))
+}
+
+/// Whether the face has color glyphs: layered vectors (`COLR`), color
+/// bitmaps (`CBDT`, `sbix`) or SVG documents.
+fn is_color(font: &FontRef<'_>) -> bool {
+    [b"COLR", b"CBDT", b"sbix", b"SVG "]
         .iter()
         .any(|tag| has_record(font, tag))
 }
@@ -1167,6 +1181,15 @@ mod tests {
         ));
         assert_eq!(file.format, Some(FontFormat::Ttf));
         assert_eq!(file.health, Health::Ok);
+    }
+
+    #[test]
+    fn a_color_font_is_color_and_a_plain_one_is_not() {
+        assert!(single("google-repo/arefruqaaink/ArefRuqaaInk-Regular.ttf").color);
+        assert!(single("google-repo/cairoplay/CairoPlay[slnt,wght].ttf").color);
+        assert!(!single(STATIC_TTF).color);
+        let bitmaps = parse(&retagged(STATIC_TTF, &[(b"GDEF", b"CBDT")]));
+        assert!(bitmaps.faces[0].color);
     }
 
     #[test]

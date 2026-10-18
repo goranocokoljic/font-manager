@@ -531,6 +531,52 @@ export type FeatureSetting = {
 	on: boolean,
 };
 
+/**  One filter value and how many family groups it would give. */
+export type FilterCount<T> = {
+	/**  The value. */
+	value: T,
+	/**  Family groups the search returns with this value chosen. */
+	count: number,
+};
+
+/**
+ *  Result counts for the filters, per value: the family groups the same
+ *  search returns with that value chosen and the other filters kept. A
+ *  filter that takes any of several values (classification, formats,
+ *  sources) is counted without its own selection; `features`, which takes
+ *  every one, is counted with its selection plus the value. Values with no
+ *  result are left out.
+ */
+export type FilterCounts = {
+	/**  Per class. */
+	classification?: FilterCount<Classification>[],
+	/**
+	 *  Per weight class in hundreds (100–900): a face counts under the class
+	 *  its weight rounds to; a variable face under every class it reaches.
+	 */
+	weight?: FilterCount<number>[],
+	/**  Per width class (1–9); a variable face under every class it reaches. */
+	width?: FilterCount<number>[],
+	/**  Per slant. */
+	slant?: FilterCount<Slant>[],
+	/**  Variable (true) and static (false). */
+	variable?: FilterCount<boolean>[],
+	/**  Color (true) and not (false). */
+	color?: FilterCount<boolean>[],
+	/**  Per format. */
+	formats?: FilterCount<FontFormat>[],
+	/**  Per OpenType feature tag. */
+	features?: FilterCount<string>[],
+	/**  Per declared license type. */
+	license?: FilterCount<LicenseType>[],
+	/**  Per source. */
+	sources?: FilterCount<SourceId>[],
+	/**  With problems (true) and healthy (false). */
+	problems?: FilterCount<boolean>[],
+	/**  Active (true) and inactive (false). */
+	active?: FilterCount<boolean>[],
+};
+
 /**
  *  Filters; every field is optional and they combine with AND. The same
  *  value is the rule of a smart collection.
@@ -538,8 +584,10 @@ export type FeatureSetting = {
 export type Filters = {
 	/**  Any of these classes. */
 	classification?: Classification[],
-	/**  Weight range. */
+	/**  Weight range; a variable face passes when its `wght` axis reaches it. */
 	weight?: WeightRange | null,
+	/**  Width-class range; a variable face passes when its `wdth` axis reaches it. */
+	width?: WidthRange | null,
 	/**  Slant. */
 	slant?: Slant | null,
 	/**  Variable (true) or static (false) only. */
@@ -568,7 +616,7 @@ export type Filters = {
 	favorite?: boolean | null,
 	/**  At least this many stars. */
 	minRating?: number | null,
-	/**  Only faces with problems. */
+	/**  Health: faces with problems (true) or healthy faces (false) only. */
 	problems?: boolean | null,
 };
 
@@ -919,6 +967,8 @@ export type SearchResponse = {
 	families: FamilyHit[],
 	/**  Family groups in all pages. */
 	total: number,
+	/**  The result count of every filter value. */
+	counts?: FilterCounts | null,
 };
 
 /**
@@ -1162,4 +1212,12 @@ export type WeightRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 3, patch: 0 };
+/**  An inclusive OS/2 width-class range (1 ultra-condensed – 9 ultra-expanded). */
+export type WidthRange = {
+	/**  Narrowest width class. */
+	min: number,
+	/**  Widest width class. */
+	max: number,
+};
+
+export const API_VERSION: ApiVersion = { major: 0, minor: 4, patch: 0 };
