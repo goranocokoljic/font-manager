@@ -8,6 +8,9 @@
 //! A smart collection keeps its rules here too; it fills itself, so faces
 //! cannot be added to it. Its rules are not evaluated yet (E14.2), so its
 //! count is 0.
+//!
+//! Every change to what a face is in, or to the names on the way to it, is
+//! mirrored to the sidecars of the faces' families (`index/sidecars.rs`).
 
 use std::collections::HashMap;
 
@@ -20,7 +23,7 @@ use fm_api::search::Filters;
 use fm_api::{ErrorCode, FaceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
-use super::{Index, db_error};
+use super::{Index, db_error, sidecars};
 use crate::error::{FmError, FmResult};
 
 /// Every collection with the number of its faces the library shows (files
@@ -102,18 +105,12 @@ impl Index {
             ensure_exists(&tx, parent)?;
         }
         ensure_free_name(&tx, req.parent, name, None)?;
-        tx.execute(
-            "INSERT INTO collection (parent_id, name, is_smart, rules, position)
-             VALUES (?1, ?2, ?3, ?4,
-                     (SELECT coalesce(max(position) + 1, 0) FROM collection
-                      WHERE parent_id IS ?1))",
-            params![req.parent.map(|p| p.0), name, rules.is_some(), rules],
-        )
-        .map_err(|e| db_error(&e))?;
-        let id = CollectionId(
-            u32::try_from(tx.last_insert_rowid())
-                .map_err(|_| FmError::internal("collection id out of range"))?,
-        );
+        let id = CollectionId(insert_collection(
+            &tx,
+            req.parent.map(|p| p.0),
+            name,
+            rules.as_deref(),
+        )?);
         tx.commit().map_err(|e| db_error(&e))?;
         self.collection(id)
     }
@@ -129,7 +126,9 @@ impl Index {
             params![req.collection.0, name],
         )
         .map_err(|e| db_error(&e))?;
+        sidecars::mark_collection_dirty(&tx, req.collection.0)?;
         tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
         self.collection(req.collection)
     }
 
@@ -189,20 +188,25 @@ impl Index {
                     .map_err(|e| db_error(&e))?;
             }
         }
+        sidecars::mark_collection_dirty(&tx, req.collection.0)?;
         tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
         self.collection(req.collection)
     }
 
     /// Deletes a collection and its children. Faces are not touched.
     pub fn delete_collection(&mut self, id: CollectionId) -> FmResult<()> {
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        sidecars::mark_collection_dirty(&tx, id.0)?;
         // `ON DELETE CASCADE` removes the children and the memberships.
-        let deleted = self
-            .conn
+        let deleted = tx
             .execute("DELETE FROM collection WHERE id = ?1", [id.0])
             .map_err(|e| db_error(&e))?;
         if deleted == 0 {
             return Err(FmError::not_found(format!("Collection {id}")));
         }
+        tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
         Ok(())
     }
 
@@ -262,8 +266,28 @@ impl Index {
             }
         }
         tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
         self.collection(req.collection)
     }
+}
+
+/// Inserts a collection last among the children of `parent`; returns its id.
+pub(super) fn insert_collection(
+    tx: &Transaction<'_>,
+    parent: Option<u32>,
+    name: &str,
+    rules: Option<&str>,
+) -> FmResult<u32> {
+    tx.execute(
+        "INSERT INTO collection (parent_id, name, is_smart, rules, position)
+         VALUES (?1, ?2, ?3, ?4,
+                 (SELECT coalesce(max(position) + 1, 0) FROM collection
+                  WHERE parent_id IS ?1))",
+        params![parent, name, rules.is_some(), rules],
+    )
+    .map_err(|e| db_error(&e))?;
+    u32::try_from(tx.last_insert_rowid())
+        .map_err(|_| FmError::internal("collection id out of range"))
 }
 
 /// Appends the children of `parent`, each followed by its own children.
