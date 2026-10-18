@@ -264,8 +264,81 @@ ALTER TABLE collection ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
 UPDATE collection SET position = id;
 ";
 
+/// Sidecar metadata (E7.3, `index/sidecars.rs`).
+///
+/// - `sidecar_dirty`: faces whose user metadata changed since their family's
+///   sidecar was last written. Triggers fill it from every write to
+///   `face_tag`, `user_meta` and `collection_face`, so no write path can
+///   forget the mirror; a renamed or moved collection marks its faces in
+///   `index/collections.rs`. No foreign key: a deleted face's row is dropped
+///   by the next write of the sidecars. The triggers test for the row
+///   instead of `INSERT OR IGNORE`: an outer upsert's conflict handling
+///   would override theirs and fail on a face marked twice.
+/// - `sidecar_base`: each sidecar file as this machine last wrote or read
+///   it, the base of the three-way merge, restricted to the faces this
+///   machine has indexed. `stamp` is the file's size and modification time
+///   then: a scan that finds the same stamp does not read the file again.
+/// - `sidecar_conflict`: a value from a sidecar that lost to this machine's
+///   one, kept until the user sets the field again; `field = 'file'` (no
+///   face) is a sidecar that cannot be read, kept until it can.
+const V7: &str = r"
+CREATE TABLE sidecar_dirty (
+    face_id  INTEGER PRIMARY KEY
+) WITHOUT ROWID;
+
+CREATE TABLE sidecar_base (
+    source_id  INTEGER NOT NULL REFERENCES source (id) ON DELETE CASCADE,
+    file       TEXT    NOT NULL,
+    content    TEXT    NOT NULL,
+    stamp      TEXT,
+    PRIMARY KEY (source_id, file)
+) WITHOUT ROWID;
+
+CREATE TABLE sidecar_conflict (
+    id         INTEGER PRIMARY KEY,
+    source_id  INTEGER NOT NULL REFERENCES source (id) ON DELETE CASCADE,
+    file       TEXT    NOT NULL,
+    face_id    INTEGER REFERENCES face (id) ON DELETE CASCADE,
+    field      TEXT    NOT NULL,
+    local      TEXT,
+    disk       TEXT    NOT NULL
+);
+CREATE UNIQUE INDEX sidecar_conflict_value
+    ON sidecar_conflict (source_id, file, coalesce(face_id, 0), field, disk);
+CREATE INDEX sidecar_conflict_face ON sidecar_conflict (face_id);
+
+CREATE TRIGGER sidecar_dirty_tag_insert AFTER INSERT ON face_tag BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT new.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = new.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_tag_delete AFTER DELETE ON face_tag BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT old.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = old.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_meta_insert AFTER INSERT ON user_meta BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT new.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = new.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_meta_update AFTER UPDATE ON user_meta BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT new.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = new.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_meta_delete AFTER DELETE ON user_meta BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT old.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = old.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_collection_insert AFTER INSERT ON collection_face BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT new.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = new.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_collection_delete AFTER DELETE ON collection_face BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT old.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = old.face_id);
+END;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -287,6 +360,9 @@ pub(crate) const TABLES: &[&str] = &[
     "index_meta",
     "project_set",
     "set_face",
+    "sidecar_base",
+    "sidecar_conflict",
+    "sidecar_dirty",
     "source",
     "tag",
     "user_meta",

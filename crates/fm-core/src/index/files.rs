@@ -103,6 +103,7 @@ impl Index {
     ///
     /// On an error the failing batch is rolled back and the batches before
     /// it stay written; writing the same files again completes the job.
+    /// Then the source's sidecar metadata is merged ([`Index::sync_sidecars`]).
     pub fn persist_files<'a>(
         &mut self,
         source: SourceId,
@@ -120,7 +121,9 @@ impl Index {
         progress: &mut dyn FnMut(usize),
     ) -> FmResult<Persisted> {
         let writes: Vec<_> = files.into_iter().map(Write::File).collect();
-        self.write_batches(source, &writes, progress)
+        let out = self.write_batches(source, &writes, progress)?;
+        self.sync_after_scan(source);
+        Ok(out)
     }
 
     /// Writes what one rescan of the source `source` changed: added and
@@ -129,7 +132,8 @@ impl Index {
     ///
     /// A gone file was not read, so its faces in `index` may be fewer than
     /// the database holds (a row that did not load back); its face rows, and
-    /// the user data on them, are never touched.
+    /// the user data on them, are never touched. Then the source's sidecar
+    /// metadata is merged ([`Index::sync_sidecars`]).
     pub fn apply_rescan(
         &mut self,
         source: SourceId,
@@ -147,7 +151,9 @@ impl Index {
             )
             .chain(rescan.unchanged.iter().map(|p| Write::Found(p)))
             .collect();
-        self.write_batches(source, &writes, &mut |_| {})
+        let out = self.write_batches(source, &writes, &mut |_| {})?;
+        self.sync_after_scan(source);
+        Ok(out)
     }
 
     /// Every indexed file with its faces, gone ones included.

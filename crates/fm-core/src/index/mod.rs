@@ -14,6 +14,9 @@
 //!
 //! [`Index::search`] answers a text query with ranked families, through the
 //! FTS5 trigram table that triggers keep in step with the faces and tags.
+//!
+//! The user's metadata is mirrored to sidecar files in each source and
+//! merged back from them on every scan ([`Index::sync_sidecars`], E7.3).
 
 mod collections;
 mod duplicates;
@@ -22,6 +25,7 @@ mod languages;
 mod samples;
 mod schema;
 mod search;
+mod sidecars;
 mod sources;
 mod tags;
 
@@ -39,6 +43,7 @@ use crate::error::{FmError, FmResult};
 
 pub use files::{BATCH_SIZE, Persisted};
 pub use schema::SCHEMA_VERSION;
+pub use sidecars::SidecarSync;
 
 /// The file name of the index in the app-data folder.
 pub const INDEX_FILE: &str = "index.db";

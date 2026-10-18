@@ -1046,7 +1046,13 @@ export type ProblemKind =
 /**  Same PostScript name as a font already active from another source. */
 "activeConflict" | 
 /**  A format the app cannot activate. */
-"unsupported";
+"unsupported" | 
+/**
+ *  Sidecar metadata (`<source>/.fontlibrary/`) that could not be merged:
+ *  another machine set a field to a different value, or the sidecar file
+ *  cannot be read. Nothing is overwritten until the user decides.
+ */
+"sidecarConflict";
 
 /**  A project set: fonts activated together. */
 export type ProjectSet = {

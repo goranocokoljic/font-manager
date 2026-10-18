@@ -21,6 +21,7 @@ pub mod sample;
 pub mod scanner;
 mod search;
 pub mod settings;
+pub mod sidecar;
 pub mod startup;
 pub mod telemetry;
 #[cfg(test)]
