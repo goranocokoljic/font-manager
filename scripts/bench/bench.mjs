@@ -5,7 +5,9 @@
 //                                      [--settle-ms N] [--bin PATH] [--no-build] [--home DIR]
 //   node scripts/bench/bench.mjs merge --out bench-report.json bench-*.json
 //   node scripts/bench/bench.mjs history --history DIR [--limit N]        # previous nightly reports (gh)
+//   node scripts/bench/bench.mjs gate --current bench-report.json [--history DIR] [--out FILE]   # PR only
 //   node scripts/bench/bench.mjs trend --current bench-report.json [--history DIR] [--sha SHA] [--title T]
+//   node scripts/bench/bench.mjs comment --pr N --body trend.md          # sticky PR comment (gh)
 //
 // run: builds fm-bench in release, then measures against --library (default
 // $FM_REFERENCE_LIBRARY): first scan into a fresh index (budgeted per 10,000
@@ -16,8 +18,12 @@
 // measured until the FontActivator lands, E6). Writes the per-OS JSON report
 // (default target/bench/bench-<os>.json) and prints a table.
 // The library is only read; the index lives in a throwaway home folder.
+// gate: marks each budgeted metric against the median of the last nightly runs on
+// main (lib.mjs gate()); a PR fails at more than 10% worse, or newly over budget.
+// It writes the marked report (default: in place) and a GitHub annotation per regression.
 //
-// Exit code: 0 within budget, 1 a metric over budget, 2 usage or setup error.
+// Exit code: 0 within budget (gate: no regression), 1 a metric over budget
+// (gate: a regression), 2 usage or setup error.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -25,7 +31,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  SCHEMA, failures, firstScan, median, merge, metric, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
+  COMMENT_MARKER, SCHEMA, blocking, failures, firstScan, gate, median, merge, metric, nightlyRunsArgs, osName,
+  parseCli, parseRss, reason, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -163,10 +170,7 @@ function mergeCmd(opts) {
 function historyCmd(opts) {
   if (!opts.history) throw usage('history needs --history DIR');
   const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' });
-  const runs = JSON.parse(gh([
-    'run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status', 'success',
-    '--limit', String(opts.limit ?? 14), '--json', 'databaseId,headSha,createdAt,url',
-  ]));
+  const runs = JSON.parse(gh(nightlyRunsArgs(opts.limit ?? 14)));
   for (const r of runs) {
     const dir = join(opts.history, String(r.databaseId));
     try {
@@ -191,6 +195,38 @@ export function loadHistory(dir) {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+function gateCmd(opts) {
+  if (!opts.current) throw usage('gate needs --current bench-report.json');
+  const gated = gate(readJson(opts.current), loadHistory(opts.history));
+  writeFileSync(opts.out ?? opts.current, JSON.stringify(gated, null, 2) + '\n');
+  const blocked = blocking(gated);
+  // GitHub turns these lines into annotations on the PR's checks page.
+  for (const k of blocked) console.log(`::error title=Bench regression::${reason(k, gated[k])}`);
+  console.log(blocked.length ? `regressed: ${blocked.join(', ')}` : 'no budgeted metric regressed');
+  return blocked.length ? 1 : 0;
+}
+
+/** Creates or updates the one bench comment on the PR (found by COMMENT_MARKER). */
+function commentCmd(opts) {
+  if (!opts.pr || !opts.body) throw usage('comment needs --pr N --body FILE');
+  const dir = mkdtempSync(join(tmpdir(), 'fm-bench-comment-'));
+  const file = join(dir, 'body.md');
+  try {
+    writeFileSync(file, `${COMMENT_MARKER}\n${readFileSync(opts.body, 'utf8')}`);
+    const gh = (args) => execFileSync('gh', args, { encoding: 'utf8' }).trim();
+    const id = gh([
+      'api', '--paginate', `repos/{owner}/{repo}/issues/${opts.pr}/comments`,
+      '--jq', `.[] | select(.body | startswith(${JSON.stringify(COMMENT_MARKER)})) | .id`,
+    ]).split('\n')[0];
+    if (id) gh(['api', '--method', 'PATCH', `repos/{owner}/{repo}/issues/comments/${id}`, '-F', `body=@${file}`]);
+    else gh(['api', '--method', 'POST', `repos/{owner}/{repo}/issues/${opts.pr}/comments`, '-F', `body=@${file}`]);
+    console.log(`${id ? 'updated' : 'posted'} the bench comment on PR #${opts.pr}`);
+    return 0;
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function trendCmd(opts) {
   if (!opts.current) throw usage('trend needs --current bench-report.json');
   const md = renderTrend(readJson(opts.current), loadHistory(opts.history), {
@@ -211,10 +247,10 @@ async function main() {
   try {
     const opts = parseCli(process.argv.slice(2));
     if (opts.help) {
-      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 20).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
+      console.log(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 26).map((l) => l.replace(/^\/\/ ?/, '')).join('\n'));
       return 0;
     }
-    const commands = { run, merge: mergeCmd, history: historyCmd, trend: trendCmd };
+    const commands = { run, merge: mergeCmd, history: historyCmd, gate: gateCmd, trend: trendCmd, comment: commentCmd };
     return await commands[opts.command](opts);
   } catch (err) {
     console.error(`bench: ${err.message}`);

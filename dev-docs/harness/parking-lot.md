@@ -70,3 +70,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E9.3 #91] .github/workflows/nightly.yml:85 — macos-latest builds arm64 only, so Intel Macs get no nightly; the criteria do not ask for per-arch builds.
 - [E2.8 #257] crates/fm-core/src/scanner/job.rs:113 — the `fm-scan` thread holds the `FileIndex` mutex for the whole scan, so a long first scan blocks every index reader.
 - [E2.8 #257] scripts/bench/lib.mjs:138 — the trend's Previous/Change columns compare the per-10,000-files `first_scan` with older raw-ms nightly values until those runs leave the history window.
+- [E9.2 #90] scripts/bench/bench.mjs:173 — before E9.2 the nightly trend table listed only successful nightly runs, so it had no history while the first scan is known red (fixed in E9.2 by `nightlyRunsArgs`; the E9.1 trend summaries already published lacked the comparison).

@@ -10,7 +10,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, OSES, SCAN_FILES, failures, firstScan, median, merge, metric, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
+  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, blocking, failures, firstScan, gate, median, merge, metric,
+  nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
 
@@ -189,6 +190,127 @@ describe('trend', () => {
   });
 });
 
+describe('regression gate (E9.2)', () => {
+  const linux = (values) => merge([report('linux', values)], ['linux']);
+  const nightly = (...values) =>
+    values.map((v, i) => ({ date: `2026-10-${String(17 - i).padStart(2, '0')}T03:00:00Z`, sha: 'a', report: linux(v) }));
+
+  test('more than 10% worse than main fails, 10% or less passes', () => {
+    const history = nightly({ cold_start: 400 });
+    const bad = gate(linux({ cold_start: 441 }), history)['linux.cold_start'];
+    assert.deepEqual([bad.baseline, bad.change, bad.regressed], [400, 0.103, true]);
+    assert.equal(gate(linux({ cold_start: 440 }), history)['linux.cold_start'].regressed, false);
+    assert.equal(gate(linux({ cold_start: 300 }), history)['linux.cold_start'].regressed, false, 'faster is fine');
+  });
+
+  test('every budgeted target of the non-functional table is gated', () => {
+    const budgeted = Object.entries(BUDGETS).filter(([, b]) => b.target != null).map(([k]) => k);
+    const base = Object.fromEntries(budgeted.map((k) => [k, BUDGETS[k].target / 2]));
+    const worse = Object.fromEntries(budgeted.map((k) => [k, (BUDGETS[k].target / 2) * 1.2]));
+    assert.deepEqual(blocking(gate(linux(worse), nightly(base))).sort(), budgeted.map((k) => `linux.${k}`).sort());
+  });
+
+  test('the baseline is the median of the last nightly runs, so one noisy night does not move it', () => {
+    const history = nightly({ search: 30 }, { search: 10 }, { search: 10 }, { search: 11 }, { search: 10 }, { search: 99 });
+    const m = gate(linux({ search: 12 }), history)['linux.search'];
+    assert.equal(m.baseline, 10, 'median of the newest 5; the 6th run is not used');
+    assert.equal(m.regressed, true);
+  });
+
+  test('a metric over budget on main too blocks only when it gets slower still', () => {
+    const history = nightly({ first_scan: 20000 });
+    assert.deepEqual(blocking(gate(linux({ first_scan: 21000 }), history)), [], 'known red, not 10% slower');
+    assert.deepEqual(blocking(gate(linux({ first_scan: 23000 }), history)), ['linux.first_scan']);
+  });
+
+  test('a red nightly on main is still the baseline (review E9.2: the known-red scan made every nightly red)', () => {
+    const args = nightlyRunsArgs(14);
+    assert.equal(args[args.indexOf('--status') + 1], 'completed', 'every conclusion, not only success');
+    assert.deepEqual(args.slice(0, 9), ['run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status']);
+    const dir = tmp();
+    try {
+      // What `history` leaves on disk for a red nightly: its run.json and its bench-report.
+      mkdirSync(join(dir, '1'));
+      writeFileSync(join(dir, '1', 'run.json'), JSON.stringify({ date: '2026-10-17T03:00:00Z', sha: 'a' }));
+      writeFileSync(join(dir, '1', 'bench-report.json'), JSON.stringify(linux({ first_scan: 16000, search: 10 })));
+      const gated = gate(linux({ first_scan: 16500, search: 10 }), loadHistory(dir));
+      assert.equal(gated['linux.first_scan'].baseline, 16000);
+      assert.deepEqual(blocking(gated), [], 'over budget on main too and not 10% slower: not blocked');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('crossing the budget fails even by less than 10%', () => {
+    assert.equal(gate(linux({ cold_start: 1020 }), nightly({ cold_start: 980 }))['linux.cold_start'].regressed, true);
+  });
+
+  test('without a nightly value on main the budget is the gate', () => {
+    assert.deepEqual(blocking(gate(linux({ search: 51 }), [])), ['linux.search']);
+    const m = gate(linux({ search: 40 }), [])['linux.search'];
+    assert.deepEqual([m.baseline, m.change, m.regressed], [null, null, false]);
+  });
+
+  test('a change below the noise floor of the budget is not a regression', () => {
+    // 2 -> 2.5 ms is +25% but 1% of the 50 ms budget: runner jitter.
+    assert.equal(gate(linux({ search: 2.5 }), nightly({ search: 2 }))['linux.search'].regressed, false);
+  });
+
+  test('unbudgeted and unmeasured metrics never block; a missing OS report does', () => {
+    const current = merge([report('linux', { incremental_update: 900, activation_100: null })], ['linux', 'macos']);
+    const gated = gate(current, nightly({ incremental_update: 100, activation_100: 100 }));
+    assert.equal(gated['linux.incremental_update'].regressed, null);
+    assert.equal(gated['linux.activation_100'].regressed, null);
+    assert.deepEqual(blocking(gated), ['macos.report']);
+  });
+
+  test('an ungated (nightly) report blocks on every metric over budget', () => {
+    const r = linux({ first_scan: 20000, search: 10 });
+    assert.deepEqual(blocking(r), failures(r));
+  });
+
+  test('the trend shows the gate with the reason of each regression', () => {
+    const history = nightly({ search: 10, cold_start: 300 });
+    const md = renderTrend(gate(linux({ search: 20, cold_start: 300 }), history), history);
+    assert.match(md, /### Regression gate — this PR vs main \(fails at more than 10% worse\)/);
+    assert.match(md, /\| linux\.search \| 50 ms \| 10 ms \| 20 ms \| \+100% \| ✗ regressed \|/);
+    assert.match(md, /\| linux\.cold_start \| 1000 ms \| 300 ms \| 300 ms \| 0% \| ✓ \|/);
+    assert.match(md, /\*\*Bench check failed:\*\*\n- linux\.search: 20 ms vs 10 ms on main, \+100%/);
+    assert.doesNotMatch(renderTrend(linux({ search: 20 }), []), /Regression gate/, 'nightly has no gate');
+  });
+
+  test('gate on the command line annotates the regression, writes the report and exits 1', () => {
+    const dir = tmp();
+    try {
+      mkdirSync(join(dir, 'h', '1'), { recursive: true });
+      writeFileSync(join(dir, 'h', '1', 'run.json'), JSON.stringify({ date: '2026-10-17T03:00:00Z', sha: 'a' }));
+      writeFileSync(join(dir, 'h', '1', 'bench-report.json'), JSON.stringify(linux({ search: 10, cold_start: 300 })));
+      const cli = (values) => {
+        const file = join(dir, 'bench-report.json');
+        writeFileSync(file, JSON.stringify(linux(values)));
+        const args = [join(ROOT, 'scripts', 'bench', 'bench.mjs'), 'gate', '--current', file, '--history', join(dir, 'h')];
+        const r = spawnSync(process.execPath, args, { encoding: 'utf8' });
+        return { ...r, report: JSON.parse(readFileSync(file, 'utf8')) };
+      };
+      const bad = cli({ search: 20, cold_start: 300 });
+      assert.equal(bad.status, 1, bad.stderr);
+      assert.match(bad.stdout, /^::error title=Bench regression::linux\.search: 20 ms vs 10 ms on main, \+100%$/m);
+      assert.equal(bad.report['linux.search'].regressed, true);
+      const good = cli({ search: 10.5, cold_start: 290 });
+      assert.equal(good.status, 0, good.stderr);
+      assert.doesNotMatch(good.stdout, /::error/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('the PR comment carries a marker so a new push updates it', () => {
+    assert.match(COMMENT_MARKER, /^<!-- .+ -->$/);
+    assert.equal(parseCli(['comment', '--pr', '7', '--body', 't.md']).pr, 7);
+    assert.equal(parseCli(['gate', '--current', 'r.json']).current, 'r.json');
+  });
+});
+
 describe('cli', () => {
   test('run is the default command and the library comes from the environment', () => {
     const o = parseCli(['--runs', '3'], { FM_REFERENCE_LIBRARY: '/lib' });
@@ -295,6 +417,14 @@ describe('bench workflow', () => {
         assert.equal(closed, opened, `${file}:${i + 1}: unclosed or commented-out expression: ${line.trim()}`);
       });
     }
+  });
+
+  test('a PR is gated against main and flagged with a comment (E9.2)', () => {
+    assert.match(yml, /if \[ -n "\$PR_NUMBER" \]; then[\s\S]*?bench\.mjs gate --current out\/bench-report\.json --history history \|\| status=\$\?/);
+    const gateAt = yml.indexOf('bench.mjs gate');
+    assert.ok(gateAt > yml.indexOf('bench.mjs history') && gateAt < yml.indexOf('bench.mjs trend'), 'history, gate, trend');
+    assert.match(yml, /if: always\(\) && github\.event_name == 'pull_request'\n\s+continue-on-error: true[\s\S]*?bench\.mjs comment --pr "\$PR_NUMBER" --body out\/trend\.md/);
+    assert.match(yml, / {2}bench:\n[\s\S]*?permissions:\n\s+contents: read\n\s+actions: read\n\s+pull-requests: write/);
   });
 
   test('every OS of the ci matrix is measured', () => {
