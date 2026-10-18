@@ -847,7 +847,17 @@ function Invoke-MergeGate {
             if ($s.merge_updates -gt $max) { Block-Story -Reason "main moved $max times while this PR waited to merge"; return }
             Write-Log "    $why - updating the branch with main ($($s.merge_updates)/$max), then CI again" 'Yellow'
             $out = gh pr update-branch $s.pr 2>&1
-            if ($LASTEXITCODE -ne 0) { Block-Story -Reason "could not update the branch with main: $(($out | Out-String).Trim())"; return }
+            if ($LASTEXITCODE -ne 0) {
+                $msg = ($out | Out-String).Trim()
+                # GitHub reports mergeable UNKNOWN until it has checked; a conflict
+                # then shows up only here. The sync stage resolves it.
+                if ($msg -match 'conflict') {
+                    Write-Log "    the branch conflicts with main - the sync stage resolves it, then CI again" 'Yellow'
+                    $s.stage = 'sync'; $s.after_ci = 'merge'
+                    return 'again'
+                }
+                Block-Story -Reason "could not update the branch with main: $msg"; return
+            }
             $s.stage = 'ci'; $s.after_ci = 'merge'
             return 'again'
         }
