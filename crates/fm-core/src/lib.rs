@@ -17,6 +17,7 @@ pub mod index;
 pub mod logging;
 mod parallel;
 pub mod parser;
+pub mod preview;
 pub mod sample;
 pub mod scanner;
 mod search;
