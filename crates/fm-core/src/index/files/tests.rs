@@ -643,6 +643,134 @@ fn a_face_without_cmap_has_no_language_rows() {
     assert!(index.face_languages(id).expect("rows").is_empty());
 }
 
+/// E4.5 criterion 1: from the stored cmap, a face that lacks characters of
+/// the sample previews letters of its script, a face that covers no language
+/// its own symbols, a face that covers the sample the sample; a face with no
+/// stored cmap keeps the sample and an unknown face is an error.
+#[test]
+fn sample_texts_fall_back_to_the_faces_own_coverage() {
+    use fm_api::preview::{SampleFallback, SampleTextRequest};
+
+    let (mut index, source) = memory_db();
+    let mut files = copies(1, STATIC);
+    let face = |path: &str, code_points: Vec<u32>| {
+        let mut file = copies(1, STATIC).remove(0);
+        file.path = PathBuf::from(path);
+        file.parsed.faces[0].code_points = code_points;
+        file
+    };
+    // A dingbat face: private-use symbols and a space, no language.
+    files.push(face(
+        "/fonts/symbols.ttf",
+        [0x20].into_iter().chain(0xE000..0xE040).collect(),
+    ));
+    files.push(face("/fonts/bare.ttf", Vec::new()));
+    index.persist_files(source, &files).expect("persist");
+    let asap = face_id(&index, "/fonts/batch/00000.ttf");
+    let symbols = face_id(&index, "/fonts/symbols.ttf");
+    let bare = face_id(&index, "/fonts/bare.ttf");
+
+    let ask = |text: &str| {
+        index
+            .sample_texts(&SampleTextRequest {
+                faces: vec![asap, symbols, bare],
+                text: text.into(),
+            })
+            .expect("samples")
+    };
+    let got = ask("Съешь же ещё");
+    assert_eq!(
+        got.iter().map(|s| s.face).collect::<Vec<_>>(),
+        [asap, symbols, bare]
+    );
+    assert_eq!(got[0].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(
+        got[0].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert!(got[0].missing.contains(&"С".to_owned()));
+    assert_eq!(
+        got[1].fallback,
+        Some(SampleFallback::Symbols),
+        "{:?}",
+        got[1]
+    );
+    let set = index.face_cmap(symbols).expect("cmap");
+    assert!(
+        got[1]
+            .text
+            .split(' ')
+            .all(|c| c.chars().all(|ch| set.contains(u32::from(ch)))),
+        "only characters the face maps: {}",
+        got[1].text
+    );
+    assert_eq!(
+        (got[2].text.as_str(), &got[2].fallback),
+        ("Съешь же ещё", &None)
+    );
+
+    let got = ask("Quick fox");
+    assert_eq!(
+        (got[0].text.as_str(), &got[0].fallback),
+        ("Quick fox", &None)
+    );
+    assert!(got[0].missing.is_empty());
+
+    let err = index
+        .sample_texts(&SampleTextRequest {
+            faces: vec![fm_api::FaceId(9_999)],
+            text: "a".into(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code(), ErrorCode::NotFound);
+}
+
+/// E4.5 review: a face whose stored cmap cannot be read is not judged (it
+/// previews the sample); the healthy faces of the same request still get
+/// their fallback.
+#[test]
+fn a_damaged_cmap_affects_only_its_own_face() {
+    use fm_api::preview::{SampleFallback, SampleTextRequest};
+
+    let (mut index, source) = memory_db();
+    let mut files = copies(2, STATIC);
+    files[1].path = PathBuf::from("/fonts/damaged.ttf");
+    index.persist_files(source, &files).expect("persist");
+    let healthy = face_id(&index, "/fonts/batch/00000.ttf");
+    let damaged = face_id(&index, "/fonts/damaged.ttf");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = x'010203' WHERE id = ?1",
+            [damaged.0],
+        )
+        .expect("damage the cmap");
+
+    let got = index
+        .sample_texts(&SampleTextRequest {
+            faces: vec![healthy, damaged],
+            text: "Съешь".into(),
+        })
+        .expect("one damaged face does not fail the request");
+    assert_eq!(got[0].face, healthy);
+    assert_eq!(
+        got[0].fallback,
+        Some(SampleFallback::Script {
+            script: "Latn".into()
+        })
+    );
+    assert_eq!(got[0].text, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(got[1].face, damaged);
+    assert_eq!((got[1].text.as_str(), &got[1].fallback), ("Съешь", &None));
+    assert!(got[1].missing.is_empty());
+    assert_eq!(
+        index.face_cmap(damaged).expect_err("damaged").code(),
+        ErrorCode::Internal
+    );
+}
+
 /// New preset data (an app update) computes the stored coverage again on
 /// open, from the stored cmap and locl, without reading a font file.
 #[test]

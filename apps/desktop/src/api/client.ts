@@ -27,6 +27,8 @@ import type {
   MoveCollectionRequest,
   Paged,
   RenameCollectionRequest,
+  SampleText,
+  SampleTextRequest,
   ScanRequest,
   SearchRequest,
   SearchResponse,
@@ -85,6 +87,8 @@ export interface FmClient {
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
+  /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
+  sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   listSources(): Promise<Source[]>;
@@ -121,6 +125,7 @@ export const tauriClient: FmClient = {
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
+  sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listSources: () => invoke<Source[]>('list_sources'),

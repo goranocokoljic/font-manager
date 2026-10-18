@@ -1066,6 +1066,35 @@ export type RenameCollectionRequest = {
 	name: string,
 };
 
+/**  Why a face previews other text than the sample. */
+export type SampleFallback = 
+/**  Letters of a script the face covers. */
+{ kind: "script"; 
+/**  ISO 15924 script (`Cyrl`). */
+script: string } | 
+/**  Characters the face maps, for a face that covers no language. */
+{ kind: "symbols" };
+
+/**  The text one face previews. */
+export type SampleText = {
+	/**  The face. */
+	face: FaceId,
+	/**  The sample text, or text from the face's own coverage. */
+	text: string,
+	/**  Set when the face lacks characters of the sample and `text` is other text. */
+	fallback?: SampleFallback | null,
+	/**  The characters of the sample the face lacks. */
+	missing?: string[],
+};
+
+/**  The text to preview some faces with, for one sample text. */
+export type SampleTextRequest = {
+	/**  The faces. */
+	faces: FaceId[],
+	/**  The sample text the user chose. */
+	text: string,
+};
+
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
 export type ScanRequest = {
 	/**  One source, or every source when absent. */

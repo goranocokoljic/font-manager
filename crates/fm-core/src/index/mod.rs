@@ -19,6 +19,7 @@ mod collections;
 mod duplicates;
 mod files;
 mod languages;
+mod samples;
 mod schema;
 mod search;
 mod sources;

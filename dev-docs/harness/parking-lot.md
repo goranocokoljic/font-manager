@@ -48,6 +48,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.10 #73] apps/desktop/src/api/mock.ts:360 — in the TS mock's `activate`, `notFound` thrown mid-map leaves faces already processed active without an `activationChanged` emit (mock only).
 - [E5.4 #67] apps/desktop/src/stores/library.ts:86 — main's `refresh` could land after a newer `refreshActivation` and reset activation state; covered by the cycle-3 fetchFamilies refetch (3fb2911), parked for a human to confirm.
 - [E3.7 #57] crates/fm-api/src/mock.rs:604 — the MockApi's `has_locl` is hard-coded (sr-Cyrl with 'б'), so its locl answers will differ from fm-core's `script/LANG` matching once coverage is wired to the API.
+- [E4.5 #63] apps/desktop/src-tauri/src/lib.rs:322 — the shell still serves MockApi with no fm-core-backed PreviewService, so the app shows the mock's fallback rule, not `fm_core::sample`, and the criteria cannot be shown on the reference library in the app yet.
+- [E4.5 #63] apps/desktop/src/list/rows.ts:82 — the treeitem `aria-label` hides the row's badges (Variable, and now Fallback) from screen readers.
 - [E3.8 #58] crates/fm-api/src/mock.rs:981 — the MockApi ranks supports hits by score minus 0.1 per missing character, so a name-matching near miss can rank above a complete family, while fm-core ranks complete families first.
 - [E3.8 #58] crates/fm-core/src/coverage.rs:252 — if the embedded presets fail to load, every language search reports "Unknown language preset" instead of saying the presets are unavailable.
 - [E3.8 #58] crates/fm-core/src/index/search/tests.rs:1117 — the 10k search timing test skips timing in debug builds and CI runs debug, so the 50 ms budget is asserted only in local release runs until the E9.1 bench job.

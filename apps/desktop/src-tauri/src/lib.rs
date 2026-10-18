@@ -16,7 +16,7 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
     RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
-use fm_api::preview::PreviewService;
+use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
@@ -179,6 +179,14 @@ async fn list_families(
 }
 
 /// One family with its faces.
+#[tauri::command]
+async fn sample_texts(
+    state: State<'_, AppState>,
+    req: SampleTextRequest,
+) -> ApiResult<Vec<SampleText>> {
+    call(&state, move |api| api.sample_texts(req)).await
+}
+
 #[tauri::command]
 async fn get_family(state: State<'_, AppState>, family: FamilyId) -> ApiResult<Family> {
     call(&state, move |api| api.get_family(family)).await
@@ -397,6 +405,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             tag_faces,
             untag_faces,
             update_user_meta,
+            sample_texts,
             activate,
             deactivate,
             list_sources,
