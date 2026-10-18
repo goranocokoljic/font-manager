@@ -1,0 +1,35 @@
+# E6.1 activation spike: runs the throwaway programs in spikes/e6.1-activation/
+# on each OS and puts the results in the job summary. Report-only: it is not a
+# required check and changes nothing outside the runner. See
+# docs/adr/0008-font-activation.md.
+name: spike-activation
+
+on:
+  pull_request:
+    paths: [spikes/e6.1-activation/**, .github/workflows/spike-activation.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    name: spike ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-2022 is build 20348 (Windows 10 21H2 code base); windows-2025
+        # is build 26100 (Windows 11 24H2 code base).
+        os: [windows-2022, windows-2025, macos-14, macos-15, macos-26, ubuntu-22.04, ubuntu-24.04]
+    steps:
+      - uses: actions/checkout@v7
+      - if: runner.os == 'Windows'
+        run: pwsh -NoProfile -File spikes/e6.1-activation/windows.ps1
+      - if: runner.os == 'macOS'
+        run: bash spikes/e6.1-activation/macos.sh
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends fontconfig
+          bash spikes/e6.1-activation/linux.sh

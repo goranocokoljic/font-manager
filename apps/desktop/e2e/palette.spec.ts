@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const palette = (page: Page) => page.getByRole('dialog', { name: 'Command palette' });
 const query = (page: Page) => page.getByRole('combobox', { name: 'Search commands' });
-const options = (page: Page) => page.getByRole('option');
+const options = (page: Page) => palette(page).getByRole('option');
 const inspector = (page: Page) => page.getByRole('complementary', { name: 'Inspector' });
 
 test.beforeEach(async ({ page }) => {
