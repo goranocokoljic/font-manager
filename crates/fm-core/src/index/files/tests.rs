@@ -453,7 +453,7 @@ fn rows_that_cannot_be_trusted_are_read_again() {
         .conn
         .execute_batch(&format!(
             "UPDATE face SET parsed = '{{\"not\": \"a face\"}}' WHERE file_id = {};
-             UPDATE face SET coverage = x'010203' WHERE file_id = {};",
+             UPDATE face SET cmap = x'010203' WHERE file_id = {};",
             id(0),
             id(1)
         ))
@@ -491,19 +491,185 @@ fn a_version_1_index_migrates_and_its_files_are_read_again() {
     assert_eq!(old.modified, None, "no trusted stamp: read again");
 }
 
+/// A version 4 index (coverage as runs, no locl) migrates: the old column
+/// goes, the faces and their ids stay, and their files are read again.
 #[test]
-fn coverage_packs_into_runs_and_refuses_damage() {
-    let points = [0x20, 0x21, 0x22, 0x41, 0x10_FFFF];
-    let packed = pack_coverage(&points);
-    assert_eq!(packed.len(), 3 * 8);
-    assert_eq!(unpack_coverage(&packed).as_deref(), Some(&points[..]));
-    assert_eq!(pack_coverage(&[]), Vec::<u8>::new());
-    assert_eq!(unpack_coverage(&[]), Some(Vec::new()));
-    assert_eq!(unpack_coverage(&[1, 2, 3]), None, "not whole pairs");
-    let backwards = [5u32.to_le_bytes(), 4u32.to_le_bytes()].concat();
-    assert_eq!(unpack_coverage(&backwards), None);
-    let huge = [0u32.to_le_bytes(), u32::MAX.to_le_bytes()].concat();
-    assert_eq!(unpack_coverage(&huge), None, "past U+10FFFF");
+fn a_version_4_index_migrates_and_its_faces_are_read_again() {
+    let dir = TempDir::new("files-migrate-v4");
+    let path = dir.path().join(INDEX_FILE);
+    let parsed = {
+        let mut face = copies(1, STATIC).remove(0).parsed.faces.remove(0);
+        face.locl_languages.clear();
+        let mut json: serde_json::Value = serde_json::to_value(&face).expect("json");
+        json.as_object_mut()
+            .expect("object")
+            .remove("loclLanguages");
+        json.to_string()
+    };
+    {
+        let conn = Connection::open(&path).expect("open");
+        for sql in &crate::index::schema::MIGRATIONS[..4] {
+            conn.execute_batch(sql).expect("old schema");
+        }
+        conn.execute_batch("PRAGMA user_version = 4;")
+            .expect("version");
+        conn.execute_batch("INSERT INTO source (id, path, kind) VALUES (1, '/fonts', 'watched');")
+            .expect("old source");
+        conn.execute(
+            "INSERT INTO font_file (id, source_id, path, hash, format, size, mtime, health)
+             VALUES (7, 1, '/fonts/old.ttf', zeroblob(32), 'ttf', 10, 1700000000, ?1)",
+            [serde_json::to_string(&Health::Ok).expect("health")],
+        )
+        .expect("old file");
+        conn.execute(
+            "INSERT INTO face (id, file_id, family, subfamily, postscript_name, weight, width,
+                               slant, parsed, coverage)
+             VALUES (42, 7, 'Asap', 'Regular', 'Asap-Regular', 400, 5, 'upright', ?1,
+                     x'200000007e000000')",
+            [&parsed],
+        )
+        .expect("old face");
+    }
+    let index = Index::open(&path).expect("open").index;
+    assert_eq!(index.schema_version().expect("version"), SCHEMA_VERSION);
+    let has_coverage: i64 = index
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('face') WHERE name = 'coverage'",
+            [],
+            |r| r.get(0),
+        )
+        .expect("columns");
+    assert_eq!(has_coverage, 0, "the run column is gone");
+    assert_eq!(
+        count(&index.conn, "SELECT COUNT(*) FROM face WHERE id = 42"),
+        1
+    );
+    assert!(
+        index
+            .face_languages(fm_api::FaceId(42))
+            .expect("rows")
+            .is_empty()
+    );
+    let loaded = index.load_files().expect("load");
+    let old = loaded.get(Path::new("/fonts/old.ttf")).expect("kept");
+    assert_eq!(old.modified, None, "no locl in face.parsed: read again");
+}
+
+fn face_id(index: &Index, path: &str) -> fm_api::FaceId {
+    let id: u32 = index
+        .conn
+        .query_row(
+            "SELECT face.id FROM face JOIN font_file ON font_file.id = face.file_id
+             WHERE font_file.path = ?1 AND collection_index = 0",
+            [path],
+            |r| r.get(0),
+        )
+        .expect("face");
+    fm_api::FaceId(id)
+}
+
+/// Criterion 1: the face's `cmap` is stored as a bitset, one 34-byte block
+/// per used Unicode page, and it is exactly the parsed code points.
+#[test]
+fn each_face_stores_its_cmap_as_a_compact_bitset() {
+    let (mut index, source) = memory_db();
+    let files = copies(1, STATIC);
+    index.persist_files(source, &files).expect("persist");
+    let points = &files[0].parsed.faces[0].code_points;
+    let blob: Vec<u8> = index
+        .conn
+        .query_row("SELECT cmap FROM face", [], |r| r.get(0))
+        .expect("cmap");
+    let set = CodePointSet::from_bytes(&blob).expect("a bitset");
+    assert_eq!(set.iter().collect::<Vec<_>>(), *points);
+    let mut pages: Vec<u32> = points.iter().map(|cp| cp >> 8).collect();
+    pages.dedup();
+    assert_eq!(blob.len(), pages.len() * 34);
+    assert!(
+        blob.len() < points.len() * 4,
+        "{} bytes for {} code points",
+        blob.len(),
+        points.len()
+    );
+}
+
+/// Criteria 2 and 3: the scan stores per-language coverage computed from
+/// the presets, with `locl` from GSUB, and replaces it when the file changes.
+/// The stored value has no row for a preset the face covers nothing of.
+#[test]
+fn per_language_coverage_is_stored_with_the_face() {
+    let (mut index, source) = memory_db();
+    let mut files = copies(1, STATIC);
+    let face = &files[0].parsed.faces[0];
+    assert!(face.locl_languages.contains(&"latn/ROM".to_owned()));
+    index.persist_files(source, &files).expect("persist");
+    let id = face_id(&index, "/fonts/batch/00000.ttf");
+    let rows = index.face_languages(id).expect("rows");
+    let row = |code: &str| rows.iter().find(|l| l.code == code).cloned();
+
+    let en = row("en").expect("en");
+    assert!(en.is_complete() && en.total > 26, "{en:?}");
+    assert!(!en.has_locl, "English has no locl in Asap");
+    let ro = row("ro").expect("ro");
+    assert!(ro.has_locl, "Asap has latn/ROM locl");
+    assert!(row("tr").is_some_and(|l| l.has_locl));
+    assert_eq!(row("ar"), None, "no Arabic: no row");
+    assert!(rows.iter().all(|l| l.covered <= l.total));
+
+    // The file changes: no lower-case ASCII letters, no locl. The rows follow.
+    let face = &mut files[0].parsed.faces[0];
+    face.code_points.retain(|&cp| !(0x61..=0x7A).contains(&cp));
+    face.locl_languages.clear();
+    index.persist_files(source, &files).expect("persist again");
+    assert_eq!(face_id(&index, "/fonts/batch/00000.ttf"), id, "same face");
+    let after = index.face_languages(id).expect("rows");
+    let en = after
+        .iter()
+        .find(|l| l.code == "en")
+        .expect("en still partly covered");
+    assert!(!en.is_complete());
+    assert!(after.iter().all(|l| !l.has_locl));
+}
+
+#[test]
+fn a_face_without_cmap_has_no_language_rows() {
+    let (mut index, source) = memory_db();
+    let mut files = copies(1, STATIC);
+    files[0].parsed.faces[0].code_points.clear();
+    files[0].parsed.faces[0].locl_languages.clear();
+    index.persist_files(source, &files).expect("persist");
+    let id = face_id(&index, "/fonts/batch/00000.ttf");
+    assert!(index.face_languages(id).expect("rows").is_empty());
+}
+
+/// New preset data (an app update) computes the stored coverage again on
+/// open, from the stored cmap and locl, without reading a font file.
+#[test]
+fn coverage_is_computed_again_when_the_presets_change() {
+    let dir = TempDir::new("files-presets");
+    let (mut index, source, path) = open_db(&dir);
+    let files = copies(2, STATIC);
+    index.persist_files(source, &files).expect("persist");
+    let id = face_id(&index, "/fonts/batch/00001.ttf");
+    let before = index.face_languages(id).expect("rows");
+    assert!(!before.is_empty());
+    index
+        .conn
+        .execute_batch(
+            "UPDATE face SET languages = NULL;
+             UPDATE index_meta SET value = 'older data' WHERE key = 'charsets';",
+        )
+        .expect("pretend older data");
+    drop(index);
+
+    let mut index = Index::open(&path).expect("reopen").index;
+    assert_eq!(index.face_languages(id).expect("rows"), before);
+    assert_eq!(
+        index.refresh_languages().expect("refresh"),
+        0,
+        "same data: no work"
+    );
 }
 
 #[test]
@@ -552,6 +718,14 @@ fn ten_thousand_files_persist_in_under_ten_seconds() {
     assert_eq!(done.files, 10_000);
     assert_eq!(done.batches, 20);
     assert_eq!(loaded.len(), 10_000);
+    let with_coverage = count(
+        &index.conn,
+        "SELECT COUNT(*) FROM face WHERE cmap IS NOT NULL AND languages IS NOT NULL",
+    );
+    assert_eq!(
+        with_coverage, done.faces,
+        "coverage is part of the timed write"
+    );
     // The budget is for release builds. Unoptimized test builds on shared CI
     // runners take 8 s normally and up to 15 s on a busy Windows runner, so
     // they get three times the room. Release numbers come from scripts/bench.sh.

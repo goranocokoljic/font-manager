@@ -16,6 +16,7 @@
 //! FTS5 trigram table that triggers keep in step with the faces and tags.
 
 mod files;
+mod languages;
 mod schema;
 mod search;
 mod sources;
@@ -126,6 +127,7 @@ impl Index {
         };
         index.configure().map_err(Damage::into_error)?;
         index.migrate().map_err(Damage::into_error)?;
+        index.refresh_languages()?;
         Ok(index)
     }
 
@@ -159,6 +161,7 @@ impl Index {
         index.configure()?;
         index.check_integrity()?;
         index.migrate()?;
+        index.refresh_languages().map_err(Damage::Other)?;
         Ok(index)
     }
 

@@ -231,8 +231,34 @@ UPDATE face SET healthy = 0
 WHERE json_valid(parsed) AND json_extract(parsed, '$.health.kind') <> 'ok';
 ";
 
+/// Coverage at scan time (E3.7).
+///
+/// - `face.cmap`: the code points `cmap` maps, as a `CodePointSet` (one
+///   256-bit block per used Unicode page). It replaces `face.coverage`.
+/// - `face.languages`: how many base characters of each language preset
+///   (`data/charsets`) the face maps, and whether it has `locl` forms for the
+///   language, as one JSON object per face: `{"ro": [60, 60, 1]}` is
+///   (covered, total, has `locl`). A preset with nothing covered and no
+///   `locl` is left out. One value per face, not one row per language: a
+///   10k-font scan would otherwise write some 350,000 rows.
+/// - `index_meta`: `charsets` holds the fingerprint of the preset data
+///   `face.languages` was computed with; on open, other data computes it again.
+///
+/// Faces indexed before this version have no `cmap` and their `face.parsed`
+/// lacks `loclLanguages`, so the next scan reads their files again.
+const V5: &str = r"
+ALTER TABLE face ADD COLUMN cmap BLOB;
+ALTER TABLE face ADD COLUMN languages TEXT;
+ALTER TABLE face DROP COLUMN coverage;
+
+CREATE TABLE index_meta (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+) WITHOUT ROWID;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -251,6 +277,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_fts_idx",
     "face_tag",
     "font_file",
+    "index_meta",
     "project_set",
     "set_face",
     "source",
