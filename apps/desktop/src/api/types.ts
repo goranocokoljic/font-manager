@@ -600,9 +600,9 @@ export type FilterCount<T> = {
  *  Result counts for the filters, per value: the family groups the same
  *  search returns with that value chosen and the other filters kept. A
  *  filter that takes any of several values (classification, formats,
- *  sources) is counted without its own selection; `features`, which takes
- *  every one, is counted with its selection plus the value. Values with no
- *  result are left out.
+ *  sources) is counted without its own selection; `features` and `tags`,
+ *  which take every one, are counted with their selection plus the value.
+ *  Values with no result are left out.
  */
 export type FilterCounts = {
 	/**  Per class. */
@@ -632,6 +632,12 @@ export type FilterCounts = {
 	problems?: FilterCount<boolean>[],
 	/**  Active (true) and inactive (false). */
 	active?: FilterCount<boolean>[],
+	/**  Per tag. Like `features`, counted with the tags already chosen. */
+	tags?: FilterCount<TagId>[],
+	/**  Favorites (true) and the rest (false). */
+	favorite?: FilterCount<boolean>[],
+	/**  Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4. */
+	minRating?: FilterCount<number>[],
 };
 
 /**

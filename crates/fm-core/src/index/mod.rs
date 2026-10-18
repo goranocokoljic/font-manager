@@ -21,6 +21,7 @@ mod languages;
 mod schema;
 mod search;
 mod sources;
+mod tags;
 
 use std::cell::RefCell;
 use std::fmt;

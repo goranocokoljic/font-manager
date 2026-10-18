@@ -49,6 +49,43 @@ describe('filter chips', () => {
     expect(woff2).toMatchObject({ label: 'WOFF2', count: 0, selected: true });
   });
 
+  it('shows favorite, rating and tag chips, tags by name', () => {
+    const groups = chipGroups(
+      { tags: [4] },
+      {
+        favorite: [{ value: true, count: 2 }],
+        minRating: [
+          { value: 3, count: 4 },
+          { value: 5, count: 1 },
+        ],
+        tags: [
+          { value: 4, count: 6 },
+          { value: 9, count: 2 },
+        ],
+      },
+      undefined,
+      (id) => (id === 4 ? 'display' : 'brand'),
+    );
+    expect(groups.map((g) => g.label)).toEqual(['Favorite', 'Rating', 'Tag']);
+    expect(groups[0]!.chips.map((c) => c.label)).toEqual(['Favorites']);
+    expect(groups[1]!.chips.map((c) => c.label)).toEqual(['3+ stars', '5 stars']);
+    expect(groups[2]!.chips.map((c) => [c.label, c.count, c.selected])).toEqual([
+      ['display', 6, true],
+      ['brand', 2, false],
+    ]);
+  });
+
+  it('tags add up (every one), rating and favorite take one value', () => {
+    let f = toggleChip({}, 'tags', 4);
+    f = toggleChip(f, 'tags', 9);
+    expect(f).toEqual({ tags: [4, 9] });
+    expect(toggleChip(f, 'tags', 4)).toEqual({ tags: [9] });
+    f = toggleChip({}, 'minRating', 3);
+    expect(toggleChip(f, 'minRating', 5)).toEqual({ minRating: 5 });
+    expect(toggleChip(f, 'minRating', 3)).toEqual({});
+    expect(toggleChip({}, 'favorite', true)).toEqual({ favorite: true });
+  });
+
   it('leaves out groups the API counted nothing for', () => {
     expect(chipGroups({}, {})).toEqual([]);
   });

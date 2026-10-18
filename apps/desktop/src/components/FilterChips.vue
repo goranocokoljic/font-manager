@@ -12,9 +12,11 @@ import {
 } from '../search/chips';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
+import { useTagsStore } from '../stores/tags';
 
 const search = useSearchStore();
 const sources = useSourcesStore();
+const tags = useTagsStore();
 
 /** A source chip shows the folder's name. */
 function sourceName(id: SourceId): string {
@@ -22,7 +24,7 @@ function sourceName(id: SourceId): string {
   return path?.split(/[\\/]/).filter(Boolean).pop() ?? `Source ${id}`;
 }
 
-const groups = computed(() => chipGroups(search.filters, search.counts, sourceName));
+const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
 const languages = computed(() => chosenLanguages(search.filters));
 const addable = computed(() => search.languages.filter((l) => !languages.value.includes(l.code)));
 const filtering = computed(() => hasFilters(search.filters));

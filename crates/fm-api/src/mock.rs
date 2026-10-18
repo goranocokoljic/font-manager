@@ -1107,6 +1107,20 @@ impl State {
             sources: self.count_each(words, q, sources, |f, v| f.sources = vec![*v])?,
             problems: self.count_each(words, q, both(), |f, v| f.problems = Some(*v))?,
             active: self.count_each(words, q, both(), |f, v| f.active = Some(*v))?,
+            tags: self.count_each(
+                words,
+                q,
+                self.tags.iter().map(|t| t.id).collect(),
+                |f, v| {
+                    if !f.tags.contains(v) {
+                        f.tags.push(*v);
+                    }
+                },
+            )?,
+            favorite: self.count_each(words, q, both(), |f, v| f.favorite = Some(*v))?,
+            min_rating: self.count_each(words, q, (1..=5).collect(), |f, v| {
+                f.min_rating = Some(*v);
+            })?,
         })
     }
 }
@@ -1436,10 +1450,18 @@ impl OrganizationService for MockApi {
 
     fn list_tags(&self) -> ApiResult<Vec<Tag>> {
         let st = self.state();
-        Ok(st.tags.iter().map(|t| tag_view(&st, t)).collect())
+        let mut tags: Vec<Tag> = st.tags.iter().map(|t| tag_view(&st, t)).collect();
+        tags.sort_by_key(|t| t.name.to_lowercase());
+        Ok(tags)
     }
 
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
+        if req.tags.iter().all(|n| n.trim().is_empty()) {
+            return Err(ApiError::invalid("Give the tag a name."));
+        }
+        if req.faces.is_empty() {
+            return Err(ApiError::invalid("Choose the fonts to tag."));
+        }
         let mut st = self.state();
         for id in &req.faces {
             st.face(*id)?;
@@ -1461,7 +1483,9 @@ impl OrganizationService for MockApi {
             for face in &req.faces {
                 st.face_tags.entry(*face).or_default().insert(id);
             }
-            touched.push(id);
+            if !touched.contains(&id) {
+                touched.push(id);
+            }
         }
         st.emit(Event::LibraryChanged {
             source: None,
@@ -1485,6 +1509,9 @@ impl OrganizationService for MockApi {
                 }
             }
         }
+        // A tag no face carries any more is gone, like in fm-core.
+        let used: BTreeSet<TagId> = st.face_tags.values().flatten().copied().collect();
+        st.tags.retain(|t| used.contains(&t.id));
         st.emit(Event::LibraryChanged {
             source: None,
             added: Vec::new(),

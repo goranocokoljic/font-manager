@@ -14,7 +14,7 @@ use fm_api::library::{
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
-    RenameCollectionRequest,
+    RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
 use fm_api::preview::PreviewService;
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
@@ -271,6 +271,30 @@ async fn remove_from_collection(
     call(&state, move |api| api.remove_from_collection(req)).await
 }
 
+/// Every tag, A to Z, with its face count (the Info tab completes from it).
+#[tauri::command]
+async fn list_tags(state: State<'_, AppState>) -> ApiResult<Vec<Tag>> {
+    call(&state, |api| api.list_tags()).await
+}
+
+/// Puts tags on faces, creating new ones; returns the tags named.
+#[tauri::command]
+async fn tag_faces(state: State<'_, AppState>, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
+    call(&state, move |api| api.tag_faces(req)).await
+}
+
+/// Takes tags off faces.
+#[tauri::command]
+async fn untag_faces(state: State<'_, AppState>, req: UntagFacesRequest) -> ApiResult<()> {
+    call(&state, move |api| api.untag_faces(req)).await
+}
+
+/// Sets favorite, rating or notes on faces.
+#[tauri::command]
+async fn update_user_meta(state: State<'_, AppState>, req: UserMetaUpdate) -> ApiResult<()> {
+    call(&state, move |api| api.update_user_meta(req)).await
+}
+
 /// Every source: watched folders, the library folder and the system fonts.
 #[tauri::command]
 async fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
@@ -369,6 +393,10 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             delete_collection,
             add_to_collection,
             remove_from_collection,
+            list_tags,
+            tag_faces,
+            untag_faces,
+            update_user_meta,
             activate,
             deactivate,
             list_sources,

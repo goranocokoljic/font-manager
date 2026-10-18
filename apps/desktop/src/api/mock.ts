@@ -30,6 +30,8 @@ import {
   type SearchResponse,
   type Source,
   type SourceId,
+  type Tag,
+  type TagId,
   type Target,
 } from './types';
 
@@ -390,8 +392,11 @@ export const mockLanguages: LanguagePreset[] = [
   { code: 'el', name: 'Greek', script: 'Grek' },
 ];
 
-/** True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock). */
-function passes(d: FaceDetail, active: boolean, q: Filters): boolean {
+/**
+ * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
+ * `tags` are the ids of its tags.
+ */
+function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): boolean {
   const f = d.face;
   const covers = (code: string) => {
     const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
@@ -408,6 +413,9 @@ function passes(d: FaceDetail, active: boolean, q: Filters): boolean {
     (!q.sources?.length || q.sources.includes(1)) &&
     (q.active == null || q.active === active) &&
     (q.problems == null || q.problems === (f.health.kind !== 'ok')) &&
+    (q.tags ?? []).every((t) => tags.includes(t)) &&
+    (q.favorite == null || q.favorite === d.favorite) &&
+    (q.minRating == null || (d.rating ?? 0) >= q.minRating) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -444,13 +452,28 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     );
   };
   const styles = Math.min(EXTRA_STYLES.length, Math.max(1, options.stylesPerFamily ?? 1));
+  // The sample faces are copied: tagging and rating edit this client's faces only.
   const faces = [
-    ...mockFaces,
+    ...mockFaces.map((f) => structuredClone(f)),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
-    return tags ? { ...structuredClone(f), tags: [...tags] } : f;
+    return tags ? { ...f, tags: [...tags] } : f;
   });
+  // Tags by id; a face holds their names (`FaceDetail.tags`), like the Rust mock.
+  const tags: { id: TagId; name: string }[] = [];
+  const sameName = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  for (const f of faces)
+    for (const name of f.tags)
+      if (!tags.some((t) => sameName(t.name, name))) tags.push({ id: ++nextId, name });
+  const tagIdsOf = (d: FaceDetail): TagId[] =>
+    tags.filter((t) => d.tags.some((n) => sameName(n, t.name))).map((t) => t.id);
+  const tagView = (t: { id: TagId; name: string }): Tag => ({
+    ...t,
+    faceCount: faces.filter((f) => f.tags.some((n) => sameName(n, t.name))).length,
+  });
+  const changed = (updated: FaceId[]) =>
+    emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated });
   // Indexes, so long lists (10,000 families) answer quickly.
   const byId = new Map(faces.map((f) => [f.face.id, f]));
   const byFamily = new Map<FamilyId, FaceDetail[]>();
@@ -473,6 +496,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     message: `Face ${id} was not found.`,
     detail: null,
   });
+  const faceOrThrow = (id: FaceId) => {
+    const f = find(id);
+    if (!f) throw notFound(id);
+    return f;
+  };
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
   const hits = (query: string, q: Filters): FamilyHit[] => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -483,7 +511,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
         return (
           words.every((w) => hay.includes(w)) &&
-          passes(d, active.has(d.face.id), q) &&
+          passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
           (q.collection == null || !!members.get(q.collection)?.has(d.face.id))
         );
       });
@@ -530,6 +558,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] })),
     problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
     active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
+    tags: countEach(
+      query,
+      q,
+      tags.map((t) => t.id),
+      (f, v) => ({ ...f, tags: distinct([...(f.tags ?? []), v]) }),
+    ),
+    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
+    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
@@ -674,6 +710,48 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     addToCollection: async (req) => editMembers(req, true),
     removeFromCollection: async (req) => editMembers(req, false),
+    listTags: async () =>
+      tags.map(tagView).sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase())),
+    // Like fm-core: names are trimmed, the same name in another case is the same tag.
+    tagFaces: async (req) => {
+      const names = req.tags.map((n) => n.trim()).filter(Boolean);
+      if (!names.length) throw invalid('Give the tag a name.');
+      if (!req.faces.length) throw invalid('Choose the fonts to tag.');
+      const targets = req.faces.map(faceOrThrow);
+      const named: { id: TagId; name: string }[] = [];
+      for (const name of names) {
+        let t = tags.find((x) => sameName(x.name, name));
+        if (!t) tags.push((t = { id: ++nextId, name }));
+        for (const d of targets)
+          if (!d.tags.some((n) => sameName(n, t.name))) d.tags = [...d.tags, t.name];
+        if (!named.some((x) => x.id === t.id)) named.push(t);
+      }
+      changed(req.faces);
+      return named.map(tagView);
+    },
+    untagFaces: async (req) => {
+      const targets = req.faces.map(faceOrThrow);
+      for (const id of req.tags) {
+        const t = tags.find((x) => x.id === id);
+        if (!t)
+          throw { code: 'notFound' as const, message: `Tag ${id} was not found.`, detail: null };
+        for (const d of targets) d.tags = d.tags.filter((n) => !sameName(n, t.name));
+        if (!faces.some((f) => f.tags.some((n) => sameName(n, t.name))))
+          tags.splice(tags.indexOf(t), 1);
+      }
+      changed(req.faces);
+    },
+    updateUserMeta: async (req) => {
+      if (req.rating != null && req.rating > 5)
+        throw invalid('A rating is 1 to 5 stars, or 0 to clear it.');
+      const targets = req.faces.map(faceOrThrow);
+      for (const d of targets) {
+        if (req.favorite != null) d.favorite = req.favorite;
+        if (req.rating != null) d.rating = req.rating || null;
+        if (req.notes != null) d.notes = req.notes || null;
+      }
+      changed(req.faces);
+    },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
     activate: async (req) => {

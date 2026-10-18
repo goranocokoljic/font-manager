@@ -1,14 +1,34 @@
 <script setup lang="ts">
 // The Info tab: every field fm-api reports for the selected face, its health
-// and the activation button. Names and paths copy on click.
-import { computed } from 'vue';
+// and the activation button. Names and paths copy on click. Tags, favorite
+// and rating are edited here; the API stores them.
+import { computed, ref } from 'vue';
 import type { Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
 import { useSelectionStore } from '../stores/selection';
+import { useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
 
 const selection = useSelectionStore();
+const tags = useTagsStore();
 const d = computed(() => selection.detail);
+
+// Tag names to complete from: the library's tags the face does not have yet.
+const suggestions = computed(() => {
+  const mine = new Set((d.value?.tags ?? []).map((t) => t.toLowerCase()));
+  return tags.tags.filter((t) => !mine.has(t.name.toLowerCase()));
+});
+const newTag = ref('');
+async function addTag(): Promise<void> {
+  if (!newTag.value.trim()) return;
+  if (await selection.addTag(newTag.value)) newTag.value = '';
+}
+const STARS = [1, 2, 3, 4, 5] as const;
+const starLabel = (n: number) => `${n} ${n === 1 ? 'star' : 'stars'}`;
+/** Choosing the rating the face has clears it. */
+function rate(n: number): void {
+  void selection.setRating(d.value?.rating === n ? 0 : n);
+}
 
 const formats: Record<FontFormat, string> = {
   ttf: 'TrueType (TTF)',
@@ -217,13 +237,71 @@ const outcomeMessage = computed(() => message(selection.outcome));
 
       <section aria-labelledby="fm-info-user">
         <h3 id="fm-info-user">Your notes</h3>
+        <p v-if="selection.editError" role="alert" class="error">
+          {{ selection.editError.message }}
+        </p>
         <dl>
-          <dt>Tags</dt>
-          <dd>{{ list(d.tags) }}</dd>
+          <dt id="fm-info-tags">Tags</dt>
+          <dd>
+            <ul class="tags" aria-labelledby="fm-info-tags">
+              <li v-for="t in d.tags" :key="t" class="tag">
+                {{ t }}
+                <button
+                  type="button"
+                  class="untag"
+                  :aria-label="`Remove tag ${t}`"
+                  @click="selection.removeTag(t)"
+                >
+                  ×
+                </button>
+              </li>
+            </ul>
+            <form class="add-tag" @submit.prevent="addTag">
+              <input
+                v-model="newTag"
+                class="tag-input"
+                list="fm-tag-names"
+                aria-label="Add a tag"
+                placeholder="Add a tag…"
+                autocomplete="off"
+              />
+              <datalist id="fm-tag-names">
+                <option v-for="t in suggestions" :key="t.id" :value="t.name" />
+              </datalist>
+            </form>
+          </dd>
           <dt>Favorite</dt>
-          <dd>{{ d.favorite ? 'Yes' : 'No' }}</dd>
-          <dt>Rating</dt>
-          <dd>{{ d.rating ? `${d.rating} of 5` : '—' }}</dd>
+          <dd>
+            <button
+              type="button"
+              class="favorite"
+              :aria-pressed="d.favorite"
+              @click="selection.setFavorite(!d.favorite)"
+            >
+              <span aria-hidden="true">{{ d.favorite ? '♥' : '♡' }}</span> Favorite
+            </button>
+          </dd>
+          <dt id="fm-info-rating">Rating</dt>
+          <dd>
+            <div class="stars" role="group" aria-labelledby="fm-info-rating">
+              <button
+                v-for="n in STARS"
+                :key="n"
+                type="button"
+                class="star"
+                :class="{ on: (d.rating ?? 0) >= n }"
+                :aria-label="starLabel(n)"
+                :aria-pressed="d.rating === n"
+                :title="d.rating === n ? 'Clear the rating' : starLabel(n)"
+                @click="rate(n)"
+              >
+                {{ (d.rating ?? 0) >= n ? '★' : '☆' }}
+              </button>
+              <span class="state" data-testid="rating">{{
+                d.rating ? `${d.rating} of 5` : 'Not rated'
+              }}</span>
+            </div>
+          </dd>
           <dt>Notes</dt>
           <dd>{{ show(d.notes) }}</dd>
         </dl>
@@ -314,5 +392,65 @@ dd {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 0 0 8px;
+  border: 1px solid var(--fm-border);
+  border-radius: 999px;
+}
+.untag,
+.favorite,
+.star {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.untag {
+  padding: 0 6px;
+  color: var(--fm-muted);
+}
+.tag-input {
+  width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--fm-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.favorite {
+  padding: 0;
+}
+.favorite[aria-pressed='true'] span {
+  color: var(--fm-danger);
+}
+.stars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.star {
+  padding: 0 2px;
+  color: var(--fm-muted);
+  font-size: 16px;
+}
+.star.on {
+  color: var(--fm-accent);
+}
+.stars .state {
+  margin-left: 6px;
 }
 </style>
