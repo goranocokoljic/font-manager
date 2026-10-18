@@ -151,6 +151,7 @@ pub fn types() -> specta::Types {
         organization::Collection,
         organization::CreateCollectionRequest,
         organization::RenameCollectionRequest,
+        organization::MoveCollectionRequest,
         organization::CollectionFacesRequest,
         organization::Tag,
         organization::TagFacesRequest,

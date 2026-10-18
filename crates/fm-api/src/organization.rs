@@ -3,9 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::search::Filters;
-use crate::{ApiResult, CollectionId, FaceId, SetId, TagId};
+use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId};
 
-/// A manual collection, or a smart one when `rules` is set.
+/// A manual collection, or a smart one when `rules` is set. Siblings are
+/// ordered by the user; `list_collections` returns them in that order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Collection {
@@ -45,6 +46,21 @@ pub struct RenameCollectionRequest {
     pub name: String,
 }
 
+/// Move a collection under another parent, or to another place among its
+/// siblings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MoveCollectionRequest {
+    /// The collection.
+    pub collection: CollectionId,
+    /// The new parent; absent for the top level. The collection itself or
+    /// one of its children is `InvalidRequest`.
+    #[serde(default)]
+    pub parent: Option<CollectionId>,
+    /// Its place among the new siblings, 0 first; past the end means last.
+    pub position: u32,
+}
+
 /// Add faces to, or remove them from, a manual collection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -53,6 +69,9 @@ pub struct CollectionFacesRequest {
     pub collection: CollectionId,
     /// The faces.
     pub faces: Vec<FaceId>,
+    /// Whole families: every face of each, as the library lists it.
+    #[serde(default)]
+    pub families: Vec<FamilyId>,
 }
 
 /// A tag.
@@ -167,9 +186,11 @@ pub trait OrganizationService {
     fn create_collection(&self, req: CreateCollectionRequest) -> ApiResult<Collection>;
     /// Rename a collection.
     fn rename_collection(&self, req: RenameCollectionRequest) -> ApiResult<Collection>;
+    /// Nest a collection under another one, or reorder it among its siblings.
+    fn move_collection(&self, req: MoveCollectionRequest) -> ApiResult<Collection>;
     /// Delete a collection and its children. Faces are not touched.
     fn delete_collection(&self, collection: CollectionId) -> ApiResult<()>;
-    /// Add faces to a manual collection.
+    /// Add faces or families to a manual collection; a face can be in many.
     fn add_to_collection(&self, req: CollectionFacesRequest) -> ApiResult<Collection>;
     /// Remove faces from a manual collection.
     fn remove_from_collection(&self, req: CollectionFacesRequest) -> ApiResult<Collection>;

@@ -12,12 +12,16 @@ use fm_api::library::{
     SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
-use fm_api::organization::{Collection, CreateCollectionRequest};
+use fm_api::organization::{
+    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
+    RenameCollectionRequest,
+};
 use fm_api::preview::PreviewService;
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
-    Api, ApiError, ApiResult, ErrorCode, FaceId, FamilyId, JobId, SettingsService, SourceId,
+    Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, SettingsService,
+    SourceId,
 };
 use fm_core::SettingsStore;
 use tauri::http::{Response, StatusCode, header};
@@ -219,6 +223,54 @@ async fn create_collection(
     call(&state, move |api| api.create_collection(req)).await
 }
 
+/// Every collection, parents before children, siblings in the user's order.
+#[tauri::command]
+async fn list_collections(state: State<'_, AppState>) -> ApiResult<Vec<Collection>> {
+    call(&state, |api| api.list_collections()).await
+}
+
+/// Renames a collection.
+#[tauri::command]
+async fn rename_collection(
+    state: State<'_, AppState>,
+    req: RenameCollectionRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.rename_collection(req)).await
+}
+
+/// Nests a collection under another one, or reorders it among its siblings.
+#[tauri::command]
+async fn move_collection(
+    state: State<'_, AppState>,
+    req: MoveCollectionRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.move_collection(req)).await
+}
+
+/// Deletes a collection and its children; the faces are not touched.
+#[tauri::command]
+async fn delete_collection(state: State<'_, AppState>, collection: CollectionId) -> ApiResult<()> {
+    call(&state, move |api| api.delete_collection(collection)).await
+}
+
+/// Adds faces or whole families to a manual collection.
+#[tauri::command]
+async fn add_to_collection(
+    state: State<'_, AppState>,
+    req: CollectionFacesRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.add_to_collection(req)).await
+}
+
+/// Removes faces or whole families from a manual collection.
+#[tauri::command]
+async fn remove_from_collection(
+    state: State<'_, AppState>,
+    req: CollectionFacesRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.remove_from_collection(req)).await
+}
+
 /// Every source: watched folders, the library folder and the system fonts.
 #[tauri::command]
 async fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
@@ -310,7 +362,13 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_family,
             search,
             list_languages,
+            list_collections,
             create_collection,
+            rename_collection,
+            move_collection,
+            delete_collection,
+            add_to_collection,
+            remove_from_collection,
             activate,
             deactivate,
             list_sources,

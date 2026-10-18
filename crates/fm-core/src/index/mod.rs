@@ -15,6 +15,7 @@
 //! [`Index::search`] answers a text query with ranked families, through the
 //! FTS5 trigram table that triggers keep in step with the faces and tags.
 
+mod collections;
 mod files;
 mod languages;
 mod schema;

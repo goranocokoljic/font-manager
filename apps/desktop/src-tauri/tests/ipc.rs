@@ -187,6 +187,82 @@ fn create_collection_saves_a_smart_collection_with_its_rules() {
 }
 
 #[test]
+fn collections_are_nested_reordered_filled_and_deleted_over_ipc() {
+    // One app for every call: the collections live in its MockApi.
+    let (_app, webview) = app().unwrap();
+    let create = |name: &str, parent: Option<u32>| -> Collection {
+        send(
+            &webview,
+            "create_collection",
+            serde_json::json!({ "req": { "name": name, "parent": parent } }),
+        )
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap()
+    };
+    let list = || -> Vec<Collection> {
+        send(&webview, "list_collections", serde_json::json!({}))
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let a = create("A", None);
+    let b = create("B", None);
+    let moved: Collection = send(
+        &webview,
+        "move_collection",
+        serde_json::json!({ "req": { "collection": b.id, "parent": a.id, "position": 0 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(moved.parent, Some(a.id));
+    let renamed: Collection = send(
+        &webview,
+        "rename_collection",
+        serde_json::json!({ "req": { "collection": b.id, "name": "Brand" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(renamed.name, "Brand");
+    let filled: Collection = send(
+        &webview,
+        "add_to_collection",
+        serde_json::json!({ "req": { "collection": b.id, "faces": [3], "families": [1] } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert!(filled.face_count >= 2, "{filled:?}");
+    let emptied: Collection = send(
+        &webview,
+        "remove_from_collection",
+        serde_json::json!({ "req": { "collection": b.id, "faces": [3] } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(emptied.face_count, filled.face_count - 1);
+    let names: Vec<_> = list().into_iter().map(|c| c.name).collect();
+    assert_eq!(names, ["A", "Brand"]);
+    send(
+        &webview,
+        "delete_collection",
+        serde_json::json!({ "collection": a.id }),
+    )
+    .unwrap()
+    .unwrap();
+    assert!(list().is_empty());
+}
+
+#[test]
 fn get_face_of_an_unknown_face_is_an_api_error() {
     let err = invoke_with("get_face", serde_json::json!({ "face": 999 }))
         .unwrap()

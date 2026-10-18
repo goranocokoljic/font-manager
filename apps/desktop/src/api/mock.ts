@@ -10,6 +10,8 @@ import {
   type AppFolders,
   type AppInfo,
   type Collection,
+  type CollectionFacesRequest,
+  type CollectionId,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -479,7 +481,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const matching = details.filter((d) => {
         const hay =
           `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
-        return words.every((w) => hay.includes(w)) && passes(d, active.has(d.face.id), q);
+        return (
+          words.every((w) => hay.includes(w)) &&
+          passes(d, active.has(d.face.id), q) &&
+          (q.collection == null || !!members.get(q.collection)?.has(d.face.id))
+        );
       });
       if (!matching.length) continue;
       const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
@@ -525,7 +531,52 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
     active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
   });
+  // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
+  const members = new Map<CollectionId, Set<FaceId>>();
+  const conflict = (name: string) => ({
+    code: 'conflict' as const,
+    message: `A collection named "${name}" already exists here.`,
+    detail: null,
+  });
+  const findCollection = (id: CollectionId) => {
+    const c = collections.find((c) => c.id === id);
+    if (!c)
+      throw { code: 'notFound' as const, message: `Collection ${id} was not found.`, detail: null };
+    return c;
+  };
+  const nameTaken = (parent: CollectionId | null, name: string, except?: CollectionId) =>
+    collections.some((c) => c.parent === parent && c.name === name && c.id !== except);
+  // Smart collections are not evaluated (like fm-core until E14.2): their count is 0.
+  const viewOf = (c: Collection): Collection => ({
+    ...structuredClone(c),
+    faceCount: c.rules ? 0 : (members.get(c.id)?.size ?? 0),
+  });
+  const walk = (parent: CollectionId | null): Collection[] =>
+    collections.filter((c) => c.parent === parent).flatMap((c) => [viewOf(c), ...walk(c.id)]);
+  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
+    const c = findCollection(req.collection);
+    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
+    const ids = [...req.faces];
+    for (const id of ids) if (!find(id)) throw notFound(id);
+    for (const family of req.families ?? []) {
+      const list = byFamily.get(family);
+      if (!list)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${family} was not found.`,
+          detail: null,
+        };
+      ids.push(...list.map((d) => d.face.id));
+    }
+    const set = members.get(c.id) ?? new Set<FaceId>();
+    members.set(c.id, set);
+    for (const id of ids) {
+      if (add) set.add(id);
+      else set.delete(id);
+    }
+    return viewOf(c);
+  };
   const ids = (target: Target | null | undefined): FaceId[] =>
     target?.kind === 'faces' ? target.faces : [...active.keys()];
 
@@ -574,12 +625,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     createCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
-      if (collections.some((c) => c.name === name && c.parent === (req.parent ?? null)))
-        throw {
-          code: 'conflict',
-          message: `A collection named "${name}" already exists here.`,
-          detail: null,
-        };
+      if (req.parent != null) findCollection(req.parent);
+      if (nameTaken(req.parent ?? null, name)) throw conflict(name);
       const c: Collection = {
         id: ++nextId,
         parent: req.parent ?? null,
@@ -588,8 +635,45 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         faceCount: 0,
       };
       collections.push(c);
-      return structuredClone(c);
+      return viewOf(c);
     },
+    listCollections: async () => walk(null),
+    renameCollection: async (req) => {
+      const name = req.name.trim();
+      if (!name) throw invalid('Give the collection a name.');
+      const c = findCollection(req.collection);
+      if (nameTaken(c.parent, name, c.id)) throw conflict(name);
+      c.name = name;
+      return viewOf(c);
+    },
+    moveCollection: async (req) => {
+      const c = findCollection(req.collection);
+      const parent = req.parent ?? null;
+      for (let up = parent; up != null; up = findCollection(up).parent)
+        if (up === c.id)
+          throw invalid('A collection cannot go inside itself or one of its children.');
+      if (nameTaken(parent, c.name, c.id)) throw conflict(c.name);
+      collections.splice(collections.indexOf(c), 1);
+      c.parent = parent;
+      const siblings = collections.filter((x) => x.parent === parent);
+      const before = siblings[req.position];
+      collections.splice(before ? collections.indexOf(before) : collections.length, 0, c);
+      return viewOf(c);
+    },
+    deleteCollection: async (id) => {
+      findCollection(id);
+      const doomed = new Set([id]);
+      // A child can sit before its parent in the array after a move: repeat until stable.
+      for (let size = 0; size !== doomed.size;) {
+        size = doomed.size;
+        for (const c of collections) if (c.parent != null && doomed.has(c.parent)) doomed.add(c.id);
+      }
+      for (let i = collections.length - 1; i >= 0; i--)
+        if (doomed.has(collections[i]!.id)) collections.splice(i, 1);
+      for (const d of doomed) members.delete(d);
+    },
+    addToCollection: async (req) => editMembers(req, true),
+    removeFromCollection: async (req) => editMembers(req, false),
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
     activate: async (req) => {

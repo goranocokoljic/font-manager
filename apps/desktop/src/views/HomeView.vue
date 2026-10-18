@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
@@ -14,6 +15,7 @@ import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
+import { useCollectionsStore } from '../stores/collections';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
@@ -33,6 +35,7 @@ const preview = usePreviewStore();
 const fontList = useFontListStore();
 const views = useViewsStore();
 const search = useSearchStore();
+const collections = useCollectionsStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -103,20 +106,14 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = [
-  'Collections',
-  'Smart collections',
-  'Project sets',
-  'Tags',
-  'Problems',
-  'Online catalogs',
-];
+const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online catalogs'];
 </script>
 
 <template>
   <MainLayout>
     <template #sidebar>
       <SourcesSidebar />
+      <CollectionsSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>
@@ -124,7 +121,7 @@ const groups = [
 
     <template #list>
       <header class="toolbar">
-        <h1 class="title">All fonts</h1>
+        <h1 class="title">{{ collections.open?.name ?? 'All fonts' }}</h1>
         <SearchBox />
         <p class="count" role="status">
           <template v-if="fontList.selectedCount > 1"
