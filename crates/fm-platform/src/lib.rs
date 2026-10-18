@@ -6,10 +6,15 @@
 //! tray and the IPC transport. Platform differences are
 //! documented in an ADR, never hidden in `cfg` branches elsewhere.
 
+pub mod activator;
 pub mod fs;
 mod linux;
 mod macos;
 pub mod paths;
 mod windows;
 
+pub use activator::{
+    ActivationError, ActivationErrorKind, Conflict, ConflictKind, FaceFile, FontActivator,
+    MockActivator, Mode, Outcome, OutcomeStatus, Registration,
+};
 pub use paths::{AppPaths, Os, PathError};
