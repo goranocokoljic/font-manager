@@ -197,16 +197,8 @@ impl Keys {
             }
             Err(e) => return OutcomeStatus::Failed(io_error(&e, &face.path.display().to_string())),
         }
-        let stem = face
-            .path
-            .file_stem()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let base = if face.postscript_name.trim().is_empty() {
-            stem.as_str()
-        } else {
-            face.postscript_name.as_str()
-        };
+        let base = value_name_base(face);
+        let base = base.as_str();
         let name = match self.free_name(base) {
             Ok(Some(name)) => name,
             Ok(None) => {
@@ -238,6 +230,10 @@ impl Keys {
 
     fn deactivate_one(&self, registration: &Registration) -> OutcomeStatus {
         let name = registration.handle.as_os_str();
+        if name.to_string_lossy().contains('\0') {
+            // `activate` never issues such a name; Win32 would read a shorter one.
+            return OutcomeStatus::NotOurs;
+        }
         let (mode, recorded) = match self.ledger_entry(name) {
             Ok(Some(entry)) => entry,
             Ok(None) => return OutcomeStatus::NotOurs,
@@ -344,6 +340,33 @@ impl FontActivator for WindowsActivator {
             }
         }
         Ok(conflicts)
+    }
+}
+
+/// The start of the registry value name for `face`: its PostScript name
+/// without control characters (a malformed name table can hold a NUL, which
+/// Win32 would read as the end of the name), else the file name, else "Font".
+fn value_name_base(face: &FaceFile) -> String {
+    let clean = |s: &str| -> String {
+        s.chars()
+            .filter(|c| !c.is_control())
+            .collect::<String>()
+            .trim()
+            .to_owned()
+    };
+    let from_name = clean(&face.postscript_name);
+    if !from_name.is_empty() {
+        return from_name;
+    }
+    let from_file = face
+        .path
+        .file_stem()
+        .map(|s| clean(&s.to_string_lossy()))
+        .unwrap_or_default();
+    if from_file.is_empty() {
+        "Font".to_owned()
+    } else {
+        from_file
     }
 }
 
@@ -772,5 +795,64 @@ mod tests {
         assert_eq!(s.activator.list_active(), Ok(regs.clone()));
         let outcomes = s.activator.deactivate(&regs).unwrap_or_default();
         assert_eq!(outcomes[0].status, OutcomeStatus::Deactivated);
+    }
+
+    /// A malformed name table can hold a NUL in the PostScript name. Win32
+    /// stops reading a name there, so the handle must never contain one.
+    #[test]
+    fn a_postscript_name_with_nul_or_control_characters_gets_a_clean_value_name() {
+        let s = Scratch::new();
+        let a = s.font("A.ttf");
+        let b = s.font("B.ttf");
+        let c = s.font("C.ttf");
+        let regs = activated(s.activator.activate(
+            &[face(&a, "Foo\0"), face(&b, "Foo\0Bold"), face(&c, "\0\t")],
+            Mode::Session,
+        ));
+
+        let handles: Vec<_> = regs.iter().map(|r| r.handle.clone()).collect();
+        assert_eq!(
+            handles,
+            vec![
+                OsString::from("Foo (Font Manager)"),
+                OsString::from("FooBold (Font Manager)"),
+                OsString::from("C (Font Manager)"),
+            ]
+        );
+        assert_eq!(s.activator.list_active(), Ok(regs.clone()));
+        // The unnamed (Default) value of the Fonts key is never written.
+        assert_eq!(s.fonts().get_string(OsStr::new("")).ok().flatten(), None);
+        let outcomes = s.activator.deactivate(&regs).unwrap_or_default();
+        assert!(
+            outcomes
+                .iter()
+                .all(|o| o.status == OutcomeStatus::Deactivated)
+        );
+    }
+
+    #[test]
+    fn a_handle_with_a_nul_is_not_ours_and_deletes_nothing() {
+        let s = Scratch::new();
+        let path = s.font("Foo.ttf");
+        let regs = activated(s.activator.activate(&[face(&path, "Foo")], Mode::Permanent));
+        let forged = Registration {
+            path: path.clone(),
+            mode: Mode::Permanent,
+            handle: OsString::from("Foo (Font Manager)\0tail"),
+        };
+        let outcomes = s.activator.deactivate(&[forged]).unwrap_or_default();
+        assert_eq!(outcomes[0].status, OutcomeStatus::NotOurs);
+        assert_eq!(s.activator.list_active(), Ok(regs));
+    }
+
+    #[test]
+    fn the_registry_wrapper_refuses_a_nul_inside_a_name_or_data() {
+        let s = Scratch::new();
+        let fonts = s.fonts();
+        let err = fonts.set_string(OsStr::new("A\0B"), OsStr::new("x"));
+        assert_eq!(err.map_err(|e| e.kind()), Err(io::ErrorKind::InvalidInput));
+        let err = fonts.set_string(OsStr::new("A"), OsStr::new("C:\\a\0b"));
+        assert_eq!(err.map_err(|e| e.kind()), Err(io::ErrorKind::InvalidInput));
+        assert_eq!(fonts.get_string(OsStr::new("A")).ok().flatten(), None);
     }
 }

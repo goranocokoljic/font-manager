@@ -19,9 +19,18 @@ use windows::core::PCWSTR;
 #[derive(Debug)]
 pub(crate) struct Key(HKEY);
 
-/// `s` as a NUL-terminated UTF-16 string.
-fn wide(s: &OsStr) -> Vec<u16> {
-    s.encode_wide().chain(std::iter::once(0)).collect()
+/// `s` as a NUL-terminated UTF-16 string. A NUL inside `s` is refused:
+/// Win32 would stop reading there and act on a different name or value.
+fn wide(s: &OsStr) -> io::Result<Vec<u16>> {
+    let mut units: Vec<u16> = s.encode_wide().collect();
+    if units.contains(&0) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "registry name or data contains a NUL character",
+        ));
+    }
+    units.push(0);
+    Ok(units)
 }
 
 fn check(code: windows::Win32::Foundation::WIN32_ERROR) -> io::Result<()> {
@@ -37,7 +46,7 @@ impl Key {
     /// Opens `subkey` of `HKEY_CURRENT_USER` for reading and writing,
     /// creating it (and its parents) when it is not there. Needs no admin rights.
     pub(crate) fn create_current_user(subkey: &str) -> io::Result<Key> {
-        let name = wide(OsStr::new(subkey));
+        let name = wide(OsStr::new(subkey))?;
         let mut key = HKEY::default();
         // SAFETY: `name` is NUL-terminated and outlives the call; `key` is a
         // valid out pointer; no class, no security attributes, no disposition.
@@ -63,7 +72,7 @@ impl Key {
     #[cfg(test)]
     pub(crate) fn delete_current_user_tree(subkey: &str) -> io::Result<()> {
         use windows::Win32::System::Registry::RegDeleteTreeW;
-        let name = wide(OsStr::new(subkey));
+        let name = wide(OsStr::new(subkey))?;
         // SAFETY: `name` is NUL-terminated and outlives the call.
         let code = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, PCWSTR(name.as_ptr())) };
         if code == ERROR_FILE_NOT_FOUND {
@@ -75,7 +84,7 @@ impl Key {
     /// The string data of value `name`; `None` when there is no such value or
     /// it is not a string.
     pub(crate) fn get_string(&self, name: &OsStr) -> io::Result<Option<OsString>> {
-        let name = wide(name);
+        let name = wide(name)?;
         let mut kind = REG_VALUE_TYPE::default();
         let mut buf: Vec<u16> = vec![0; 260];
         loop {
@@ -110,8 +119,8 @@ impl Key {
 
     /// Writes value `name` as `REG_SZ` with `data`.
     pub(crate) fn set_string(&self, name: &OsStr, data: &OsStr) -> io::Result<()> {
-        let name = wide(name);
-        let bytes: Vec<u8> = wide(data).into_iter().flat_map(u16::to_le_bytes).collect();
+        let name = wide(name)?;
+        let bytes: Vec<u8> = wide(data)?.into_iter().flat_map(u16::to_le_bytes).collect();
         // SAFETY: `name` is NUL-terminated; `bytes` is the NUL-terminated
         // UTF-16 data, as `REG_SZ` expects.
         let code =
@@ -121,7 +130,7 @@ impl Key {
 
     /// Deletes value `name`. `false` when there was no such value.
     pub(crate) fn delete_value(&self, name: &OsStr) -> io::Result<bool> {
-        let name = wide(name);
+        let name = wide(name)?;
         // SAFETY: `name` is NUL-terminated and outlives the call.
         let code = unsafe { RegDeleteValueW(self.0, PCWSTR(name.as_ptr())) };
         if code == ERROR_FILE_NOT_FOUND {
