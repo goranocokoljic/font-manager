@@ -42,3 +42,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E4.1 #59] apps/desktop/src/stores/library.ts:32 — the interim face feed issues one `getFamily` IPC per family on every `libraryChanged`/`scanFinished` (~10k calls on the reference library); E5.2 (#65) must replace it with paged families.
 - [E4.1 #59] crates/fm-api/src/preview.rs:55 — `FontSource.path` is a `String`, so a font at a non-UTF-8 path cannot be served by the `fmfont` route exactly.
 - [E2.6 #49] crates/fm-core/src/telemetry.rs:137 — a wuff panic caught by `catch_unwind` in `parser::decompress_web` still runs the installed crash hook, so a handled malformed WOFF could be sent as a crash report when crash reports are on.
+- [E3.4 #54] crates/fm-api/src/mock.rs:592 — the MockApi weight filter checks only the static weight and ignores the `wght` axis, so in browser mode a range like 800–900 leaves variable Inter out while fm-core includes it.
