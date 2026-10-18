@@ -1,0 +1,20 @@
+{
+  "id": "a-baseline-from-ci-history-must-not-filter-on-a-status-the-k",
+  "title": "A baseline from CI history must not filter on a status the known-red runs never reach",
+  "category": "correctness",
+  "rule": "When a gate compares a PR with earlier runs on main (bench, size, coverage), select those runs by event and completion, not by `--status success`: a run that measures main but ends red (a metric known over budget) is still the baseline, and its artifact must be uploaded with `if: always()`. Skip runs without the artifact instead. Test the run query arguments and a red baseline report read through the same loader the CI uses, not only a hand-built history.",
+  "rationale": "E9.2 (#90): `bench.mjs history` listed only successful nightly runs; every nightly was red on the known-red first scan, so the PR gate never had a baseline, fell back to the absolute budget and would have failed every benched PR. Unit tests passed because they built the history by hand.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    90
+  ],
+  "file_globs": [
+    "scripts/bench/**",
+    ".github/workflows/**",
+    "scripts/harness/**"
+  ],
+  "first_seen": "2026-10-18T17:39:59.083Z",
+  "last_seen": "2026-10-18T17:39:59.083Z"
+}
