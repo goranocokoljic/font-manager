@@ -43,3 +43,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E4.1 #59] crates/fm-api/src/preview.rs:55 — `FontSource.path` is a `String`, so a font at a non-UTF-8 path cannot be served by the `fmfont` route exactly.
 - [E2.6 #49] crates/fm-core/src/telemetry.rs:137 — a wuff panic caught by `catch_unwind` in `parser::decompress_web` still runs the installed crash hook, so a handled malformed WOFF could be sent as a crash report when crash reports are on.
 - [E3.5 #55] crates/fm-core/src/index/search.rs:262 — `FamilySummary.classification` is still hard-coded `None`; fill it from `ParsedFace.classification` once E3.4 (#240) merges.
+- [E6.2 #75] .harness/notes/issue-75.md:1 — issue #76 (E6.3) criterion 1 still names `AddFontResourceExW`; ADR 0008 replaced it with the per-user HKCU value, so the criterion needs a human edit before E6.3 starts.
