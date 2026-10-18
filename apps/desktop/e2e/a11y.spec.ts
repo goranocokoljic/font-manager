@@ -94,8 +94,7 @@ test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) =
     const ring = await page.evaluate(() => {
       const el = document.activeElement;
       if (!el || el === document.body) return null;
-      // The ring is an outline on the element, or on a :focus-within wrapper
-      // drawn as a box-shadow (the list's cursor row).
+      // The ring is an outline of at least 2 px, or a box-shadow ring (the pane divider).
       const s = getComputedStyle(el);
       const width = parseFloat(s.outlineWidth);
       const visible = (s.outlineStyle !== 'none' && width >= 2) || s.boxShadow !== 'none';
