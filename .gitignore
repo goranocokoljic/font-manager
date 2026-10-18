@@ -5,6 +5,9 @@ target/
 node_modules/
 dist/
 
+# Dev builds gathered by scripts/release/dev-build.mjs
+nightly-assets/
+
 # go-harness: logs, telemetry, reviews, notes, CI verdicts, screenshots (never committed)
 .harness/
 .review-diff.patch

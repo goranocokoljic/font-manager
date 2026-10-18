@@ -22,6 +22,16 @@ pnpm dev             # run the app
 
 `pnpm lint` needs `cargo install --locked cargo-nextest cargo-deny`.
 
+## Dev builds
+
+Every night with new commits on `main`, the `nightly` workflow builds unsigned
+installers and attaches them to a GitHub pre-release named `nightly-<version>-<hash>`:
+`.msi` and `.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux. The version is
+the `[workspace.package]` version of `Cargo.toml` plus the short commit hash, for example
+`font-manager_0.1.0-1a2b3c4_windows_x64.msi`. The installers are not signed: Windows
+SmartScreen and macOS Gatekeeper warn before they open. Build one locally with
+`pnpm tauri build --bundles msi,nsis` (or `dmg`, `appimage`).
+
 ## Reference library
 
 The performance budgets are measured against ~10,000 OFL, Apache and UFL fonts (the
