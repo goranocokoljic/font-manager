@@ -8,7 +8,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, ConflictPolicy, ConflictWith, DeactivateRequest,
     OutcomeStatus, Target,
 };
-use fm_api::common::Page;
+use fm_api::common::{FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, ImportMode,
@@ -16,8 +16,8 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, TagFacesRequest,
-    UserMetaUpdate,
+    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, MoveCollectionRequest,
+    RenameCollectionRequest, TagFacesRequest, UserMetaUpdate,
 };
 use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -226,6 +226,71 @@ fn rebuild_index_rescans_every_source_and_keeps_activation() {
 }
 
 #[test]
+fn search_counts_every_filter_value_with_the_other_filters_kept() {
+    let api = api();
+    let all = api.search(SearchRequest::default()).unwrap();
+    let counts = all.counts.expect("the mock reports counts");
+    // Some sample families have italics; every family has an upright face.
+    let italic = counts
+        .slant
+        .iter()
+        .find(|c| c.value == Slant::Italic)
+        .unwrap();
+    assert!(italic.count > 0 && italic.count < all.total);
+    let upright = counts
+        .slant
+        .iter()
+        .find(|c| c.value == Slant::Upright)
+        .unwrap();
+    assert_eq!(upright.count, all.total);
+    // Values with no result are left out: the sample has no color fonts.
+    assert!(counts.color.iter().all(|c| !c.value));
+    // A count is the total the search gives with that value chosen.
+    for c in &counts.formats {
+        let r = api
+            .search(SearchRequest {
+                filters: Filters {
+                    formats: vec![c.value],
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(r.total, c.count, "{:?}", c.value);
+    }
+
+    // An any-of filter is counted without its own selection, so the other formats stay.
+    let ttf = Filters {
+        formats: vec![FontFormat::Ttf],
+        ..Default::default()
+    };
+    let r = api
+        .search(SearchRequest {
+            filters: ttf.clone(),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(r.counts.unwrap().formats, counts.formats);
+    // Other filters are kept: with italics only, no count is above the italic families.
+    let r = api
+        .search(SearchRequest {
+            filters: Filters {
+                slant: Some(Slant::Italic),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .unwrap();
+    assert!(
+        r.counts
+            .unwrap()
+            .formats
+            .iter()
+            .all(|c| c.count <= italic.count)
+    );
+}
+
+#[test]
 fn search_groups_by_family_and_reports_near_misses() {
     let api = api();
     let r = api
@@ -298,6 +363,84 @@ fn search_groups_by_family_and_reports_near_misses() {
 }
 
 #[test]
+fn collections_nest_reorder_and_take_families() {
+    let api = api();
+    let make = |name: &str, parent| {
+        api.create_collection(CreateCollectionRequest {
+            name: name.into(),
+            parent,
+            rules: None,
+        })
+        .unwrap()
+    };
+    let names = |api: &Arc<dyn Api>| -> Vec<String> {
+        api.list_collections()
+            .unwrap()
+            .into_iter()
+            .map(|c| c.name)
+            .collect()
+    };
+    let a = make("A", None);
+    let b = make("B", None);
+    let c = make("C", Some(a.id));
+    assert_eq!(names(&api), ["A", "C", "B"]);
+
+    // Reorder at the top level, then nest B under A in front of C.
+    api.move_collection(MoveCollectionRequest {
+        collection: b.id,
+        parent: None,
+        position: 0,
+    })
+    .unwrap();
+    assert_eq!(names(&api), ["B", "A", "C"]);
+    let moved = api
+        .move_collection(MoveCollectionRequest {
+            collection: b.id,
+            parent: Some(a.id),
+            position: 0,
+        })
+        .unwrap();
+    assert_eq!(moved.parent, Some(a.id));
+    assert_eq!(names(&api), ["A", "B", "C"]);
+
+    // Not into itself or a child; no two siblings with one name.
+    let cycle = api.move_collection(MoveCollectionRequest {
+        collection: a.id,
+        parent: Some(c.id),
+        position: 0,
+    });
+    assert_eq!(cycle.unwrap_err().code, ErrorCode::InvalidRequest);
+    let clash = api.rename_collection(RenameCollectionRequest {
+        collection: b.id,
+        name: "C".into(),
+    });
+    assert_eq!(clash.unwrap_err().code, ErrorCode::Conflict);
+
+    // A family adds each of its faces; a face can be in many collections.
+    let inter = api
+        .list_families(ListFamiliesRequest::default())
+        .unwrap()
+        .items[0]
+        .id;
+    let with_family = api
+        .add_to_collection(CollectionFacesRequest {
+            collection: c.id,
+            faces: vec![FaceId(3)],
+            families: vec![inter],
+        })
+        .unwrap();
+    assert_eq!(with_family.face_count, 3);
+    let also = api
+        .add_to_collection(CollectionFacesRequest {
+            collection: b.id,
+            faces: vec![FaceId(3)],
+            families: vec![],
+        })
+        .unwrap();
+    assert_eq!(also.face_count, 1);
+}
+
+#[test]
 fn collections_tags_meta_and_sets() {
     let api = api();
     let manual = api
@@ -311,6 +454,7 @@ fn collections_tags_meta_and_sets() {
         .add_to_collection(CollectionFacesRequest {
             collection: manual.id,
             faces: vec![FaceId(1), FaceId(3)],
+            families: vec![],
         })
         .unwrap();
     assert_eq!(c.face_count, 2);
@@ -329,6 +473,7 @@ fn collections_tags_meta_and_sets() {
     let refused = api.add_to_collection(CollectionFacesRequest {
         collection: smart.id,
         faces: vec![FaceId(3)],
+        families: vec![],
     });
     assert_eq!(refused.unwrap_err().code, ErrorCode::InvalidRequest);
     api.delete_collection(manual.id).unwrap();
@@ -496,6 +641,12 @@ fn problems_list_unsupported_files_and_system_clashes() {
             (7, "Unsupported".to_string())
         ]
     );
+}
+
+#[test]
+fn the_sample_library_has_no_duplicates() {
+    // Every sample file has its own hash and PostScript name.
+    assert_eq!(api().list_duplicates().unwrap(), []);
 }
 
 #[test]

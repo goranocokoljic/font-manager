@@ -2,21 +2,26 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import CollectionsSidebar from '../components/CollectionsSidebar.vue';
+import FilterChips from '../components/FilterChips.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
+import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useAppStore } from '../stores/app';
+import { useCollectionsStore } from '../stores/collections';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import { useSearchStore } from '../stores/search';
 import type { FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useViewsStore, type ViewMode } from '../stores/views';
@@ -29,6 +34,8 @@ const library = useLibraryStore();
 const preview = usePreviewStore();
 const fontList = useFontListStore();
 const views = useViewsStore();
+const search = useSearchStore();
+const collections = useCollectionsStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -48,6 +55,7 @@ const MODES: { value: ViewMode; label: string }[] = [
 onMounted(() => {
   void app.load();
   void library.load();
+  void search.loadLanguages();
 });
 onBeforeUnmount(() => void library.stop());
 
@@ -98,20 +106,14 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = [
-  'Collections',
-  'Smart collections',
-  'Project sets',
-  'Tags',
-  'Problems',
-  'Online catalogs',
-];
+const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online catalogs'];
 </script>
 
 <template>
   <MainLayout>
     <template #sidebar>
       <SourcesSidebar />
+      <CollectionsSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>
@@ -119,10 +121,14 @@ const groups = [
 
     <template #list>
       <header class="toolbar">
-        <h1 class="title">All fonts</h1>
+        <h1 class="title">{{ collections.open?.name ?? 'All fonts' }}</h1>
+        <SearchBox />
         <p class="count" role="status">
           <template v-if="fontList.selectedCount > 1"
             >{{ fontList.selectedCount }} selected</template
+          >
+          <template v-else-if="search.hits"
+            >{{ search.total }} {{ search.total === 1 ? 'family' : 'families' }}</template
           >
         </p>
         <div class="modes" role="group" aria-label="View mode">
@@ -150,19 +156,21 @@ const groups = [
           Inspector
         </button>
       </header>
+      <FilterChips />
       <PreviewControls :view="ALL_FONTS_VIEW" />
-      <template v-if="library.families.length && mode === 'table'">
+      <template v-if="fontList.families.length && mode === 'table'">
         <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
         <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
       </template>
       <FontList
-        v-else-if="library.families.length"
+        v-else-if="fontList.families.length"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
         @cursor-face="showFace"
         @open="openFace"
       />
       <section v-else class="empty" aria-label="Font list">
         <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
+        <p v-else-if="search.hits">No fonts match the search and filters.</p>
         <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
       </section>
     </template>

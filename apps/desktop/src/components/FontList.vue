@@ -13,6 +13,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
+import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleCount, type ListRow } from '../list/rows';
 import { sampleText } from '../preview/sampleText';
@@ -88,7 +89,7 @@ const rowId = (row: ListRow) => `fm-row-${row.key.replace(':', '-')}`;
 const visible = computed(() =>
   list.rows.slice(range.value.start, range.value.end).map((row, i) => {
     const index = range.value.start + i;
-    const face = row.kind === 'face' ? row.face : library.faces.get(row.family.id)?.[0];
+    const face = row.kind === 'face' ? row.face : list.shownFaces(row.family.id)?.[0];
     const sample = face ? sampleText(props.preview, face) : '';
     // The API's answer: the sample, or a fallback when the face lacks some of it.
     const got = face ? samples.get(face.id, sample) : undefined;
@@ -156,6 +157,11 @@ function onKeyDown(e: KeyboardEvent): void {
   void revealCursor();
 }
 
+/** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
+function onRowDrag(row: ListRow, e: DragEvent): void {
+  startFontDrag(e, dragKeys(list.selection.selected, row.key));
+}
+
 function onRowClick(row: ListRow, e: MouseEvent): void {
   list.click(row.key, modeOf(e));
   viewport.value?.focus({ preventScroll: true });
@@ -198,11 +204,13 @@ function onToggle(row: ListRow): void {
         :aria-level="item.row.kind === 'face' ? 2 : 1"
         :aria-expanded="item.row.kind === 'family' ? item.row.expanded : undefined"
         :aria-selected="list.isSelected(item.row.key)"
-        :aria-setsize="item.row.kind === 'face' ? item.row.count : library.families.length"
+        :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
         :aria-posinset="item.row.position"
         :aria-label="rowLabel(item.row)"
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
+        draggable="true"
         @click="onRowClick(item.row, $event)"
+        @dragstart="onRowDrag(item.row, $event)"
       >
         <span
           v-if="item.row.kind === 'family'"

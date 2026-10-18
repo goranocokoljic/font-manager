@@ -257,8 +257,15 @@ CREATE TABLE index_meta (
 ) WITHOUT ROWID;
 ";
 
+/// Collections (E7.1): `collection.position` orders the children of one
+/// parent, 0 first. Collections made before this version keep their id order.
+const V6: &str = r"
+ALTER TABLE collection ADD COLUMN position INTEGER NOT NULL DEFAULT 0;
+UPDATE collection SET position = id;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

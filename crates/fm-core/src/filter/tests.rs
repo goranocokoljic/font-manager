@@ -411,6 +411,84 @@ fn feature_counts_keep_the_features_already_chosen() {
     assert_eq!(count(&counts.features, &"liga".to_owned()), 0);
 }
 
+/// One family per face: (tags, favorite, rating).
+fn rated(faces: &[(&[u32], bool, Option<u8>)]) -> Vec<Vec<(FaceText, FaceFacts)>> {
+    faces
+        .iter()
+        .map(|(tags, favorite, rating)| {
+            vec![(
+                upright(400),
+                FaceFacts {
+                    tags: tags.iter().copied().map(TagId).collect(),
+                    favorite: *favorite,
+                    rating: *rating,
+                    ..FaceFacts::new(SourceId(1))
+                },
+            )]
+        })
+        .collect()
+}
+
+#[test]
+fn tag_favorite_and_rating_counts() {
+    let families = rated(&[
+        (&[1, 2], true, Some(5)),
+        (&[1], false, Some(2)),
+        (&[], true, None),
+    ]);
+    let counts = tally(&Filters::default(), &families);
+    assert_eq!(count(&counts.tags, &TagId(1)), 2);
+    assert_eq!(count(&counts.tags, &TagId(2)), 1);
+    assert_eq!(count(&counts.favorite, &true), 2);
+    assert_eq!(count(&counts.favorite, &false), 1);
+    // "At least n stars": the 5-star face counts under every value, the
+    // 2-star one under 1 and 2, the unrated one under none.
+    assert_eq!(count(&counts.min_rating, &1), 2);
+    assert_eq!(count(&counts.min_rating, &2), 2);
+    assert_eq!(count(&counts.min_rating, &3), 1);
+    assert_eq!(count(&counts.min_rating, &5), 1);
+    let values: Vec<u8> = counts.min_rating.iter().map(|c| c.value).collect();
+    assert_eq!(values, [1, 2, 3, 4, 5]);
+
+    // Favorites only: the other filters count inside favorites, favorite
+    // itself still counts both values.
+    let favorites = Filters {
+        favorite: Some(true),
+        ..Filters::default()
+    };
+    let counts = tally(&favorites, &families);
+    assert_eq!(count(&counts.tags, &TagId(1)), 1);
+    assert_eq!(count(&counts.min_rating, &2), 1);
+    assert_eq!(count(&counts.favorite, &false), 1);
+
+    // At least 3 stars: rating counts every value, the rest count inside it.
+    let three = Filters {
+        min_rating: Some(3),
+        ..Filters::default()
+    };
+    let counts = tally(&three, &families);
+    assert_eq!(count(&counts.min_rating, &1), 2);
+    assert_eq!(count(&counts.favorite, &true), 1);
+    assert_eq!(count(&counts.favorite, &false), 0);
+}
+
+#[test]
+fn tag_counts_keep_the_tags_already_chosen() {
+    let families = rated(&[
+        (&[1, 2], false, None),
+        (&[1], false, None),
+        (&[2], false, None),
+    ]);
+    let one = Filters {
+        tags: vec![TagId(1)],
+        ..Filters::default()
+    };
+    let counts = tally(&one, &families);
+    // Tag 1 and 2: only the first family has both.
+    assert_eq!(count(&counts.tags, &TagId(1)), 2);
+    assert_eq!(count(&counts.tags, &TagId(2)), 1);
+}
+
 #[test]
 fn counts_list_values_in_a_fixed_order() {
     let counts = tally(&Filters::default(), &three_families());

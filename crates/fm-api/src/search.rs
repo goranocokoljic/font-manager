@@ -153,9 +153,9 @@ pub struct FilterCount<T> {
 /// Result counts for the filters, per value: the family groups the same
 /// search returns with that value chosen and the other filters kept. A
 /// filter that takes any of several values (classification, formats,
-/// sources) is counted without its own selection; `features`, which takes
-/// every one, is counted with its selection plus the value. Values with no
-/// result are left out.
+/// sources) is counted without its own selection; `features` and `tags`,
+/// which take every one, are counted with their selection plus the value.
+/// Values with no result are left out.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct FilterCounts {
@@ -184,6 +184,12 @@ pub struct FilterCounts {
     pub problems: Vec<FilterCount<bool>>,
     /// Active (true) and inactive (false).
     pub active: Vec<FilterCount<bool>>,
+    /// Per tag. Like `features`, counted with the tags already chosen.
+    pub tags: Vec<FilterCount<TagId>>,
+    /// Favorites (true) and the rest (false).
+    pub favorite: Vec<FilterCount<bool>>,
+    /// Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4.
+    pub min_rating: Vec<FilterCount<u8>>,
 }
 
 /// How well one face covers some languages or text.

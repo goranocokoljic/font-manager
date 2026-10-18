@@ -10,6 +10,7 @@ import type {
   Target,
 } from '../api/types';
 import { useSettingsStore } from './settings';
+import { useTagsStore } from './tags';
 
 /** A face id from a route query value (`?face=3`), or null when there is none. */
 export function parseFaceId(value: unknown): FaceId | null {
@@ -102,6 +103,51 @@ export const useSelectionStore = defineStore('selection', () => {
     if (faceId.value === face.id) await load(face.id);
   }
 
+  /** The last tag, favorite or rating edit the API refused; cleared by the next one. */
+  const editError = ref<ApiError | null>(null);
+
+  /**
+   * Runs one edit of the selected face's tags or user metadata, then fetches
+   * its detail and the tag list again; true when the API took it.
+   */
+  async function edit(work: (face: FaceId) => Promise<unknown>): Promise<boolean> {
+    const id = detail.value?.face.id;
+    if (id === undefined) return false;
+    let ok = true;
+    try {
+      await work(id);
+      editError.value = null;
+    } catch (e) {
+      editError.value = e as ApiError;
+      ok = false;
+    }
+    await useTagsStore().refresh();
+    if (faceId.value === id) await load(id);
+    return ok;
+  }
+
+  /** Puts a tag on the selected face; a new name makes a new tag. */
+  function addTag(name: string): Promise<boolean> {
+    return edit((face) => useClient().tagFaces({ faces: [face], tags: [name] }));
+  }
+
+  /** Takes a tag (by name, as the detail lists it) off the selected face. */
+  function removeTag(name: string): Promise<boolean> {
+    const tag = useTagsStore().idOf(name);
+    if (tag === null) return Promise.resolve(false);
+    return edit((face) => useClient().untagFaces({ faces: [face], tags: [tag] }));
+  }
+
+  /** Makes the selected face a favorite, or not. */
+  function setFavorite(favorite: boolean): Promise<boolean> {
+    return edit((face) => useClient().updateUserMeta({ faces: [face], favorite }));
+  }
+
+  /** Rates the selected face 1–5 stars; 0 clears the rating. */
+  function setRating(rating: number): Promise<boolean> {
+    return edit((face) => useClient().updateUserMeta({ faces: [face], rating }));
+  }
+
   return {
     faceId,
     detail,
@@ -109,8 +155,13 @@ export const useSelectionStore = defineStore('selection', () => {
     loading,
     busy,
     outcome,
+    editError,
     canActivate,
     select,
     toggleActivation,
+    addTag,
+    removeTag,
+    setFavorite,
+    setRating,
   };
 });

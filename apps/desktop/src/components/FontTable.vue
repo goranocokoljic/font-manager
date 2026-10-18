@@ -21,6 +21,7 @@ import {
   type Column,
   type ColumnId,
 } from '../list/columns';
+import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
@@ -147,6 +148,11 @@ function onKeyDown(e: KeyboardEvent): void {
     return;
   e.preventDefault();
   void revealCursor();
+}
+
+/** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
+function onRowDrag(row: ListRow, e: DragEvent): void {
+  startFontDrag(e, dragKeys(list.selection.selected, row.key));
 }
 
 function onRowClick(row: ListRow, e: MouseEvent): void {
@@ -339,7 +345,7 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
           :aria-level="item.row.kind === 'face' ? 2 : 1"
           :aria-expanded="item.row.kind === 'family' ? item.row.expanded : undefined"
           :aria-selected="list.isSelected(item.row.key)"
-          :aria-setsize="item.row.kind === 'face' ? item.row.count : library.families.length"
+          :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
           :aria-posinset="item.row.position"
           :aria-label="rowLabel(item.row)"
           :style="{
@@ -347,7 +353,9 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
             height: `${ROW_PX}px`,
             transform: `translateY(${item.index * ROW_PX}px)`,
           }"
+          draggable="true"
           @click="onRowClick(item.row, $event)"
+          @dragstart="onRowDrag(item.row, $event)"
         >
           <div
             v-for="(col, c) in columns"

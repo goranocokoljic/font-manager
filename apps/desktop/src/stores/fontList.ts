@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { computed, shallowReactive, shallowRef, watch } from 'vue';
-import type { FaceSummary, FamilyId } from '../api/types';
+import type { FaceSummary, FamilyId, FamilySummary } from '../api/types';
 import { familyKey, flattenRows, type ListRow, type RowKey } from '../list/rows';
 import {
   EMPTY_SELECTION,
@@ -12,19 +12,32 @@ import {
   type SelectMode,
 } from '../list/selection';
 import { useLibraryStore } from './library';
+import { useSearchStore } from './search';
 
 /**
  * The font list's view state: which families are expanded, the cursor and the
- * selected rows. Not saved; a relaunch starts with everything collapsed.
+ * selected rows. Not saved; a relaunch starts with everything collapsed. The
+ * list shows the search results while a search or filter is on (an expanded
+ * family shows its matching styles only), else the whole library.
  */
 export const useFontListStore = defineStore('fontList', () => {
   const library = useLibraryStore();
   const expanded = shallowReactive(new Set<FamilyId>());
   const selection = shallowRef<ListSelection>(EMPTY_SELECTION);
 
-  const rows = computed<ListRow[]>(() =>
-    flattenRows(library.families, expanded, (id) => library.faces.get(id)),
+  const search = useSearchStore();
+
+  const families = computed<FamilySummary[]>(
+    () => search.hits?.map((h) => h.family) ?? library.families,
   );
+  /** The faces of a family the list shows: with search results, the matching ones. */
+  function shownFaces(id: FamilyId): FaceSummary[] | undefined {
+    const all = library.faces.get(id);
+    const only = search.hits ? search.matchingFaces.get(id) : undefined;
+    return all && only ? all.filter((f) => only.has(f.id)) : all;
+  }
+
+  const rows = computed<ListRow[]>(() => flattenRows(families.value, expanded, shownFaces));
   const keys = computed(() => rows.value.map((r) => r.key));
   const indexOf = computed(() => new Map(keys.value.map((k, i) => [k, i])));
 
@@ -44,7 +57,7 @@ export const useFontListStore = defineStore('fontList', () => {
   const cursorFace = computed<FaceSummary | undefined>(() => {
     const row = cursorRow.value;
     if (!row) return undefined;
-    return row.kind === 'face' ? row.face : library.faces.get(row.family.id)?.[0];
+    return row.kind === 'face' ? row.face : shownFaces(row.family.id)?.[0];
   });
 
   const isSelected = (key: RowKey) => selection.value.selected.has(key);
@@ -112,6 +125,8 @@ export const useFontListStore = defineStore('fontList', () => {
   }
 
   return {
+    families,
+    shownFaces,
     expanded,
     selection,
     rows,
