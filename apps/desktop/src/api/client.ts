@@ -35,6 +35,10 @@ import type {
   SettingsUpdate,
   Source,
   SourceId,
+  Tag,
+  TagFacesRequest,
+  UntagFacesRequest,
+  UserMetaUpdate,
 } from './types';
 
 /** Settings as a response carries them: every field present. */
@@ -71,6 +75,14 @@ export interface FmClient {
   /** Adds faces or whole families to a manual collection. */
   addToCollection(req: CollectionFacesRequest): Promise<Collection>;
   removeFromCollection(req: CollectionFacesRequest): Promise<Collection>;
+  /** Every tag, A to Z, with its face count. */
+  listTags(): Promise<Tag[]>;
+  /** Puts tags on faces, creating new ones; resolves to the tags named. */
+  tagFaces(req: TagFacesRequest): Promise<Tag[]>;
+  /** Takes tags off faces; a tag left on no face is gone. */
+  untagFaces(req: UntagFacesRequest): Promise<void>;
+  /** Favorite, rating (0 clears it) and notes; fields left out stay. */
+  updateUserMeta(req: UserMetaUpdate): Promise<void>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
@@ -104,6 +116,10 @@ export const tauriClient: FmClient = {
   deleteCollection: (collection) => invoke<void>('delete_collection', { collection }),
   addToCollection: (req) => invoke<Collection>('add_to_collection', { req }),
   removeFromCollection: (req) => invoke<Collection>('remove_from_collection', { req }),
+  listTags: () => invoke<Tag[]>('list_tags'),
+  tagFaces: (req) => invoke<Tag[]>('tag_faces', { req }),
+  untagFaces: (req) => invoke<void>('untag_faces', { req }),
+  updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),

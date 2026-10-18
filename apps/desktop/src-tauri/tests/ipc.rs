@@ -12,7 +12,7 @@ use fm_api::library::{
     SourceKind,
 };
 use fm_api::mock::MockApi;
-use fm_api::organization::Collection;
+use fm_api::organization::{Collection, Tag};
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
@@ -260,6 +260,69 @@ fn collections_are_nested_reordered_filled_and_deleted_over_ipc() {
     .unwrap()
     .unwrap();
     assert!(list().is_empty());
+}
+
+#[test]
+fn tags_favorites_and_ratings_are_edited_and_filter_over_ipc() {
+    // One app for every call: the tags live in its MockApi.
+    let (_app, webview) = app().unwrap();
+    let call = |cmd: &str, args: serde_json::Value| send(&webview, cmd, args).unwrap();
+    let tags = || -> Vec<Tag> {
+        call("list_tags", serde_json::json!({}))
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+    let made: Vec<Tag> = call(
+        "tag_faces",
+        serde_json::json!({ "req": { "faces": [1, 3], "tags": ["Display", "brand"] } }),
+    )
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(made.len(), 2);
+    let listed: Vec<_> = tags().into_iter().map(|t| (t.name, t.face_count)).collect();
+    assert_eq!(listed, [("brand".into(), 2), ("Display".into(), 2)]);
+    call(
+        "untag_faces",
+        serde_json::json!({ "req": { "faces": [1, 3], "tags": [made[1].id] } }),
+    )
+    .unwrap();
+    assert_eq!(tags().len(), 1);
+    call(
+        "update_user_meta",
+        serde_json::json!({ "req": { "faces": [1], "favorite": true, "rating": 4 } }),
+    )
+    .unwrap();
+    let face: FaceDetail = call("get_face", serde_json::json!({ "face": 1 }))
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(
+        (face.tags, face.favorite, face.rating),
+        (vec!["Display".to_owned()], true, Some(4))
+    );
+    let found: SearchResponse = call(
+        "search",
+        serde_json::json!({ "req": { "filters": { "tags": [made[0].id], "favorite": true, "minRating": 4 } } }),
+    )
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(found.total, 1);
+    let counts = found.counts.unwrap();
+    assert_eq!(
+        counts.favorite.iter().find(|c| c.value).map(|c| c.count),
+        Some(1)
+    );
+    assert!(counts.min_rating.iter().any(|c| c.value == 4));
+    assert!(counts.tags.iter().any(|c| c.value == made[0].id));
+    let err = call(
+        "update_user_meta",
+        serde_json::json!({ "req": { "faces": [1], "rating": 6 } }),
+    )
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
 }
 
 #[test]
