@@ -1,0 +1,19 @@
+{
+  "id": "a-label-gated-workflow-leaves-skipped-check-runs-whoever-wai",
+  "title": "A label-gated workflow leaves skipped check runs: whoever waits on that check must ignore them",
+  "category": "correctness",
+  "rule": "When a workflow runs on every PR event and skips its jobs until a label or condition is present, each skipped job still leaves a completed check run with conclusion `skipped` on the commit. Code that waits for that check by name (scripts/harness/ci-wait.mjs and similar) must ignore `skipped` runs, or the workflow must not produce a check with that name on the skipped path; otherwise the wait returns at once with a run that has no artifact. Test the wait with a skipped run before and after the real run.",
+  "rationale": "E9.1 (#89): bench.yml ran on opened/synchronize with all jobs skipped; ci-wait added the `bench` label and read the leftover skipped `bench` check before the labeled run's job existed, so the artifact download failed and the harness got no bench numbers.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    89
+  ],
+  "file_globs": [
+    ".github/workflows/**",
+    "scripts/harness/**"
+  ],
+  "first_seen": "2026-10-18T11:59:11.775Z",
+  "last_seen": "2026-10-18T11:59:11.775Z"
+}

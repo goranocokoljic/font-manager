@@ -556,6 +556,26 @@ mod tests {
         fs::read(path).expect("read fixture")
     }
 
+    /// Moves a folder like a user does. Windows refuses to rename a folder
+    /// while a file under it is open, and right after the folder arrived the
+    /// watcher (a trailing refresh) or a virus scanner may still be reading
+    /// one; the user's file manager tries again, so does this.
+    fn move_folder(from: &Path, to: &Path) {
+        let start = Instant::now();
+        loop {
+            match fs::rename(from, to) {
+                Ok(()) => return,
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::PermissionDenied
+                        && start.elapsed() < Duration::from_secs(5) =>
+                {
+                    thread::sleep(Duration::from_millis(50));
+                }
+                Err(e) => panic!("move {} -> {}: {e}", from.display(), to.display()),
+            }
+        }
+    }
+
     fn put(path: &Path, data: &[u8]) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("create folder");
@@ -726,10 +746,10 @@ mod tests {
         let a = f.root.join("incoming/a.ttf");
         let b = f.root.join("incoming/deep/b.ttf");
 
-        fs::rename(&outside, f.root.join("incoming")).expect("move in");
+        move_folder(&outside, &f.root.join("incoming"));
         f.until(|i| present(i, &a) && present(i, &b));
 
-        fs::rename(f.root.join("incoming"), &outside).expect("move out");
+        move_folder(&f.root.join("incoming"), &outside);
         f.until(|i| gone(i, &a) && gone(i, &b));
     }
 

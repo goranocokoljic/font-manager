@@ -1,0 +1,168 @@
+# Performance budgets (CLAUDE.md rule 8) on the reference library, on all three OS.
+# Nightly on main, by hand, or on a PR that carries the `bench` label.
+#
+# library    restores the ~10k-font reference library from one cross-OS cache entry
+#            (built here on a cache miss: one copy, not three, fits the cache limit)
+# measure    scripts/bench.sh on each OS -> bench-<os>.json
+# bench      merges them into bench-report.json (artifact `bench-report`, read by
+#            scripts/harness/ci-wait.mjs as the check "bench / bench") and writes the
+#            trend against the last nightly runs on main into the job summary
+#
+# Job names must not be windows/macos/linux: ci-wait matches check runs by job name
+# and those belong to the required ci jobs.
+name: bench
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled]
+
+concurrency:
+  group: bench-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  LIBRARY: .cache/reference-library
+
+jobs:
+  library:
+    name: reference library
+    if: >-
+      github.event_name != 'pull_request' ||
+      (contains(github.event.pull_request.labels.*.name, 'bench') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'bench'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      key: ${{ steps.key.outputs.key }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: key
+        run: echo "key=reference-library-${{ hashFiles('scripts/reference-library/lib.mjs', 'scripts/reference-library/build.mjs') }}" >> "$GITHUB_OUTPUT"
+
+      - id: cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.LIBRARY }}
+          key: ${{ steps.key.outputs.key }}
+          enableCrossOsArchive: true
+          lookup-only: true
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Build the reference library (resumable; a second pass picks up failed downloads)
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          scripts/build-reference-library.sh --dest "$LIBRARY" ||
+            scripts/build-reference-library.sh --dest "$LIBRARY"
+
+      - if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.LIBRARY }}
+          key: ${{ steps.key.outputs.key }}
+          enableCrossOsArchive: true
+
+  measure:
+    name: measure (${{ matrix.name }})
+    needs: library
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-latest
+          - name: linux
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: bench
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.LIBRARY }}
+          key: ${{ needs.library.outputs.key }}
+          enableCrossOsArchive: true
+          fail-on-cache-miss: true
+
+      - name: scripts/bench.sh
+        shell: bash
+        run: scripts/bench.sh --library "$LIBRARY" --out "bench-${{ matrix.name }}.json"
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-os-${{ matrix.name }}
+          path: bench-${{ matrix.name }}.json
+          if-no-files-found: ignore
+
+  bench:
+    name: bench
+    needs: [library, measure]
+    if: always() && needs.library.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bench-os-*
+          path: reports
+          merge-multiple: true
+
+      - name: Merge, trend and verdict
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          shopt -s nullglob
+          if [ -n "$PR_NUMBER" ]; then TITLE="Bench — PR #$PR_NUMBER"; else TITLE="Nightly bench"; fi
+          mkdir -p out
+          status=0
+          node scripts/bench/bench.mjs merge --out out/bench-report.json reports/*.json || status=$?
+          cp reports/*.json out/ 2>/dev/null || true
+          node scripts/bench/bench.mjs history --history history --limit 14 || echo "no history: the trend shows this run only"
+          node scripts/bench/bench.mjs trend --current out/bench-report.json --history history \
+            --sha "$SHA" --title "$TITLE" --out out/trend.md
+          cat out/trend.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-report
+          path: out/

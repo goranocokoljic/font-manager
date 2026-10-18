@@ -1,0 +1,23 @@
+[package]
+name = "fm-bench"
+description = "Font Manager performance driver: times fm-core start, scan, rescan and search for scripts/bench.sh."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "fm-bench"
+path = "src/main.rs"
+
+[dependencies]
+fm-api.workspace = true
+fm-core.workspace = true
+fm-platform.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

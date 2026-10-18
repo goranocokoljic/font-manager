@@ -104,8 +104,10 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   stops at once and keeps the story's state; the next run resumes it at CI.
   Stories with numeric criteria (a number with ms, s, fps,
   MB) get the `bench` label on the CI wait before finalize; `bench-report.json`
-  `pass: false` counts as red. Before E9.1 there is no bench job: the agent
-  measures locally and the criterion is marked "verified locally, pending E9.1".
+  `pass: false` counts as red. The bench job (`.github/workflows/bench.yml`,
+  E9.1) runs `scripts/bench.sh` on all three OS and merges the results into
+  `bench-report.json` (`"<os>.<metric>"` entries); a metric not measured yet
+  has `pass: null` and a note.
 - **sync** — merge `origin/main` into the branch, resolve the conflicts (keep
   both sides; the same thing added twice → keep one; lock files and `types.ts`
   regenerated), full preflight, push, CI again. At most
