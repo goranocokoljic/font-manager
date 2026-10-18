@@ -27,7 +27,7 @@ function previewFaces(page: Page) {
   return page.evaluate(() => {
     const faces = [...document.fonts].filter((f) => f.family.includes('fm-face-'));
     return {
-      rows: document.querySelectorAll('[role="listitem"]').length,
+      rows: document.querySelectorAll('[role="treeitem"]').length,
       total: faces.length,
       loaded: faces.filter((f) => f.status === 'loaded').length,
     };
@@ -71,8 +71,8 @@ test('a face that cannot load falls back and says so', async ({ page }) => {
 test('1,000 rows scrolled do not leak font faces', async ({ page }) => {
   await serveFonts(page);
   await page.goto('/?mockFaces=1000#/');
-  const list = page.getByRole('region', { name: 'Font list' });
-  await expect(list.getByRole('listitem').first()).toBeVisible();
+  const list = page.getByRole('tree', { name: 'Font list' });
+  await expect(list.getByRole('treeitem').first()).toBeVisible();
   let steps = 0;
   for (;;) {
     const atEnd = await list.evaluate((el) => {
@@ -89,5 +89,5 @@ test('1,000 rows scrolled do not leak font faces', async ({ page }) => {
     if (atEnd) break;
   }
   expect(steps).toBeGreaterThan(50);
-  await expect(list.getByRole('listitem').last()).toHaveAttribute('aria-posinset', '1003');
+  await expect(list.getByRole('treeitem').last()).toHaveAttribute('aria-posinset', '1003');
 });

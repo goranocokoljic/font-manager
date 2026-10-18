@@ -22,7 +22,7 @@ async function open(page: Page) {
 test('preview controls apply to all rows live and persist after a reload', async ({ page }) => {
   await open(page);
   const controls = page.getByRole('group', { name: 'Preview settings' });
-  const samples = page.locator('[role="listitem"] .sample');
+  const samples = page.locator('[role="treeitem"] .sample');
   const count = await samples.count();
   expect(count).toBeGreaterThan(1);
 
@@ -45,7 +45,7 @@ test('preview controls apply to all rows live and persist after a reload', async
     await expect(sample).toHaveCSS('text-align', 'center');
     await expect(sample).toHaveCSS('color', 'rgb(170, 0, 0)');
   }
-  const list = page.getByRole('region', { name: 'Font list' });
+  const list = page.getByRole('tree', { name: 'Font list' });
   await expect(list).toHaveCSS('background-color', 'rgb(255, 238, 204)');
   await expect(list).toHaveAttribute('data-surface', 'dark');
 

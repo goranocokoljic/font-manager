@@ -201,27 +201,54 @@ const invalid = (message: string): ApiError => ({ code: 'invalidRequest', messag
 export interface MockOptions {
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
   scanStepMs?: number;
-  /** Extra one-face families after the sample ones, for long lists (e2e). */
+  /** Extra families after the sample ones, for long lists (e2e). */
   extraFaces?: number;
+  /** Styles in each extra family (1–6, default 1), so families can expand (e2e). */
+  stylesPerFamily?: number;
 }
 
 /** Id of the first extra face and family; above every sample id. */
 export const EXTRA_ID_BASE = 1000;
 
-/** Extra face `i`: every other one variable, so long lists mix both kinds. */
-function extraFace(i: number): FaceDetail {
-  const id = EXTRA_ID_BASE + i;
-  const detail = structuredClone(mockFaces[i % 2 === 0 ? 0 : 1]!);
-  detail.face = {
-    ...detail.face,
-    id,
-    family: id,
-    familyName: `Sample ${i + 1}`,
-    postscriptName: `Sample${i + 1}-Regular`,
-  };
-  detail.path = `/Users/demo/Fonts/Samples/Sample${i + 1}.ttf`;
-  detail.hash = String(id).padStart(64, '0');
-  return detail;
+/** Styles of an extra family, the most common first; a family takes the first N. */
+const EXTRA_STYLES = [
+  { style: 'Regular', weight: 400, slant: 'upright' },
+  { style: 'Bold', weight: 700, slant: 'upright' },
+  { style: 'Italic', weight: 400, slant: 'italic' },
+  { style: 'Bold Italic', weight: 700, slant: 'italic' },
+  { style: 'Light', weight: 300, slant: 'upright' },
+  { style: 'Black', weight: 900, slant: 'upright' },
+] as const;
+
+/**
+ * The faces of extra family `i`, sorted like `Family.faces` (weight, then slant).
+ * Every other family is variable, so long lists mix both kinds. With one style per
+ * family, face and family ids are both `EXTRA_ID_BASE + i`.
+ */
+function extraFamily(i: number, styles: number): FaceDetail[] {
+  const family = EXTRA_ID_BASE + i;
+  const faces = EXTRA_STYLES.slice(0, styles).map((s, k) => {
+    const id = EXTRA_ID_BASE + i * styles + k;
+    const detail = structuredClone(mockFaces[i % 2 === 0 ? 0 : 1]!);
+    const tag = s.style.replace(' ', '');
+    detail.face = {
+      ...detail.face,
+      id,
+      family,
+      familyName: `Sample ${i + 1}`,
+      style: s.style,
+      weight: s.weight,
+      slant: s.slant,
+      postscriptName: `Sample${i + 1}-${tag}`,
+    };
+    detail.path = `/Users/demo/Fonts/Samples/Sample${i + 1}-${tag}.ttf`;
+    detail.hash = String(id).padStart(64, '0');
+    return detail;
+  });
+  const rank = (slant: string) => (slant === 'upright' ? 0 : 1);
+  return faces.sort(
+    (a, b) => a.face.weight - b.face.weight || rank(a.face.slant) - rank(b.face.slant),
+  );
 }
 
 /** The list row of a family, from its faces. */
@@ -272,17 +299,26 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       steps.length * step,
     );
   };
+  const styles = Math.min(EXTRA_STYLES.length, Math.max(1, options.stylesPerFamily ?? 1));
   const faces = [
     ...mockFaces,
-    ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFace(i)),
+    ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ];
-  const find = (id: FaceId) => faces.find((f) => f.face.id === id);
+  // Indexes, so long lists (10,000 families) answer quickly.
+  const byId = new Map(faces.map((f) => [f.face.id, f]));
+  const byFamily = new Map<FamilyId, FaceDetail[]>();
+  for (const f of faces) {
+    const list = byFamily.get(f.face.family);
+    if (list) list.push(f);
+    else byFamily.set(f.face.family, [f]);
+  }
+  const familyIds = [...byFamily.keys()];
+  const find = (id: FaceId) => byId.get(id);
   const summary = (f: FaceDetail): FaceSummary => ({
     ...structuredClone(f.face),
     active: active.get(f.face.id) ?? null,
   });
-  const familyFaces = (family: FamilyId) =>
-    faces.filter((f) => f.face.family === family).map(summary);
+  const familyFaces = (family: FamilyId) => (byFamily.get(family) ?? []).map(summary);
   const notFound = (id: FaceId) => ({
     code: 'notFound' as const,
     message: `Face ${id} was not found.`,
@@ -302,12 +338,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     // Families in id order (the sample ones first); `sort` is not mocked.
     listFamilies: async (req) => {
-      const ids = [...new Set(faces.map((f) => f.face.family))];
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
       return {
-        items: ids.slice(offset, offset + limit).map((id) => familySummary(familyFaces(id))),
-        total: ids.length,
+        items: familyIds.slice(offset, offset + limit).map((id) => familySummary(familyFaces(id))),
+        total: familyIds.length,
       };
     },
     getFamily: async (id) => {
@@ -413,15 +448,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   };
 }
 
-/** `?mockFaces=1000` before the hash adds that many extra faces (e2e long lists). */
-function extraFacesFromUrl(): number {
+/**
+ * A positive whole number from the page URL, before the hash: `?mockFaces=1000` adds
+ * that many extra families, `?mockStyles=4` gives each of them four styles (e2e).
+ */
+function countFromUrl(name: string, max: number): number {
   if (typeof location === 'undefined') return 0;
-  const n = Number(new URLSearchParams(location.search).get('mockFaces'));
-  return Number.isInteger(n) && n > 0 ? Math.min(n, 100_000) : 0;
+  const n = Number(new URLSearchParams(location.search).get(name));
+  return Number.isInteger(n) && n > 0 ? Math.min(n, max) : 0;
 }
 
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
-  extraFaces: extraFacesFromUrl(),
+  extraFaces: countFromUrl('mockFaces', 100_000),
+  stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
 });
