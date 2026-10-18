@@ -318,13 +318,18 @@ describe('auto merge', () => {
       '+\tnewField?: string | null,',
       '-"permanent";',
       '+"permanent" | "pinned";',
+      '-\tweight?: WeightRange | null,',
+      '-"unsupported";',
+      '+"unsupported" | ',
+      '+"sidecarConflict";',
       '-\t/**  Weight range. */',
       '+\t/**  Weight range; a variable face passes when its `wght` axis reaches it. */',
       '- *  Old wording of a long comment.',
       '- */',
     ].join('\n');
-    assert.deepEqual(contractRemovals(diff), ['"permanent";']);
-    assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => l !== '-"permanent";').join('\n')), []);
+    // A union that gains members is additive; a removed field is not.
+    assert.deepEqual(contractRemovals(diff), ['weight?: WeightRange | null,']);
+    assert.deepEqual(contractRemovals(diff.split('\n').filter((l) => !l.startsWith('-\tweight')).join('\n')), []);
   });
 
   test('main CI is red if any required check failed, pending until all completed', () => {
