@@ -350,7 +350,7 @@ fn format_to_sql(format: Option<FontFormat>) -> FmResult<String> {
     format.map_or(Ok("unknown".to_owned()), |f| text(&f))
 }
 
-fn format_from_sql(text: &str) -> Result<Option<FontFormat>, serde_json::Error> {
+pub(super) fn format_from_sql(text: &str) -> Result<Option<FontFormat>, serde_json::Error> {
     if text == "unknown" {
         return Ok(None);
     }

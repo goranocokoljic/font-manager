@@ -140,7 +140,7 @@ pub(crate) fn face_style(path: &Path, face: &ParsedFace) -> Style {
 }
 
 /// Names that differ only in case or white space are one family.
-fn family_key(name: &str) -> String {
+pub(crate) fn family_key(name: &str) -> String {
     collapse_spaces(name).to_lowercase()
 }
 
@@ -231,7 +231,7 @@ fn instance_slant(ital: Option<f32>, slnt: Option<f32>, face: Slant, name: &str)
 }
 
 /// Upright, then italic, then oblique: the order of [`Slant`]'s variants.
-fn slant_rank(slant: Slant) -> u8 {
+pub(crate) fn slant_rank(slant: Slant) -> u8 {
     match slant {
         Slant::Upright => 0,
         Slant::Italic => 1,

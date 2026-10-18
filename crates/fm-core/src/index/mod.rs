@@ -11,11 +11,16 @@
 //! [`Index::persist_files`] and [`Index::apply_rescan`], one transaction per
 //! [`BATCH_SIZE`] files, and come back as a scanner `FileIndex` through
 //! [`Index::load_files`].
+//!
+//! [`Index::search`] answers a text query with ranked families, through the
+//! FTS5 trigram table that triggers keep in step with the faces and tags.
 
 mod files;
 mod schema;
+mod search;
 mod sources;
 
+use std::cell::RefCell;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -44,6 +49,8 @@ pub struct Index {
     conn: Connection,
     /// The database file; `None` for an in-memory index.
     path: Option<PathBuf>,
+    /// What [`Index::search`] read last, until the database changes.
+    search_cache: RefCell<search::SearchCache>,
 }
 
 impl fmt::Debug for Index {
@@ -112,7 +119,11 @@ impl Index {
     /// A fresh index in memory, for tests and one-off tools.
     pub fn open_in_memory() -> FmResult<Self> {
         let conn = Connection::open_in_memory().map_err(|e| db_error(&e))?;
-        let mut index = Self { conn, path: None };
+        let mut index = Self {
+            conn,
+            path: None,
+            search_cache: RefCell::default(),
+        };
         index.configure().map_err(Damage::into_error)?;
         index.migrate().map_err(Damage::into_error)?;
         Ok(index)
@@ -143,6 +154,7 @@ impl Index {
         let mut index = Self {
             conn,
             path: Some(path.to_path_buf()),
+            search_cache: RefCell::default(),
         };
         index.configure()?;
         index.check_integrity()?;
