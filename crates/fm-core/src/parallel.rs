@@ -4,6 +4,11 @@
 //! into its index row. Each item is independent of the others, so the work
 //! runs on one thread per core (E2.8: the 10 s first-scan budget). The
 //! caller sees the same results, in the same order, as a plain loop.
+//!
+//! Reading a file mostly waits for the disk. [`map_ordered_io`] runs that
+//! work on more threads than cores, so the disk always has requests queued
+//! (E2.9: on the macOS bench runner, three threads, one per core, took 4 to
+//! 20 s to read the reference library that Linux read in 2 s).
 
 use std::num::NonZero;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -13,6 +18,27 @@ use std::thread;
 /// Below this many items a plain loop on the calling thread is faster than
 /// starting threads.
 const MIN_PARALLEL: usize = 16;
+
+/// Threads per core for work that waits for the disk.
+const IO_THREADS_PER_CORE: usize = 4;
+
+/// The fewest threads for work that waits for the disk, however few cores
+/// there are: a disk serves several requests at a time.
+const MIN_IO_THREADS: usize = 16;
+
+/// The most threads for work that waits for the disk. Each one holds the
+/// file it reads, so this also bounds the memory a scan holds at once.
+const MAX_IO_THREADS: usize = 32;
+
+/// One thread per core.
+fn cpu_threads() -> usize {
+    thread::available_parallelism().map_or(1, NonZero::get)
+}
+
+/// Threads for work that waits for the disk on `cores` cores.
+fn io_threads(cores: usize) -> usize {
+    (cores * IO_THREADS_PER_CORE).clamp(MIN_IO_THREADS, MAX_IO_THREADS)
+}
 
 /// `items.iter().map(work).collect()`, run on up to one thread per core.
 ///
@@ -27,9 +53,32 @@ where
     R: Send,
     F: Fn(&T) -> R + Sync,
 {
-    let threads = thread::available_parallelism()
-        .map_or(1, NonZero::get)
-        .min(items.len());
+    map_on(cpu_threads(), items, work, progress)
+}
+
+/// [`map_ordered`] for work that mostly waits for the disk, such as reading
+/// a file: on [`io_threads`] threads, more than there are cores.
+pub(crate) fn map_ordered_io<T, R, F>(
+    items: &[T],
+    work: F,
+    progress: &mut dyn FnMut(usize),
+) -> Vec<R>
+where
+    T: Sync,
+    R: Send,
+    F: Fn(&T) -> R + Sync,
+{
+    map_on(io_threads(cpu_threads()), items, work, progress)
+}
+
+/// [`map_ordered`] on up to `threads` threads.
+fn map_on<T, R, F>(threads: usize, items: &[T], work: F, progress: &mut dyn FnMut(usize)) -> Vec<R>
+where
+    T: Sync,
+    R: Send,
+    F: Fn(&T) -> R + Sync,
+{
+    let threads = threads.min(items.len());
     if threads <= 1 || items.len() < MIN_PARALLEL {
         return items
             .iter()
@@ -149,5 +198,74 @@ mod tests {
         ids.sort_by_key(|id| format!("{id:?}"));
         ids.dedup();
         assert!(ids.len() > 1, "{ids:?}");
+    }
+
+    /// A map under test: `map_ordered` or `map_ordered_io` on `usize` items.
+    type Map = fn(&[usize], &(dyn Fn(&usize) -> usize + Sync), &mut dyn FnMut(usize)) -> Vec<usize>;
+
+    /// The most items `map` ran at the same time, each waiting 5 ms as a read
+    /// waits for the disk; checks the results on the way.
+    fn peak_at_once(items: usize, map: Map) -> usize {
+        let items: Vec<usize> = (0..items).collect();
+        let (now, peak) = (AtomicUsize::new(0), AtomicUsize::new(0));
+        let out = map(
+            &items,
+            &|&n| {
+                let running = now.fetch_add(1, Ordering::SeqCst) + 1;
+                peak.fetch_max(running, Ordering::SeqCst);
+                thread::sleep(Duration::from_millis(5));
+                now.fetch_sub(1, Ordering::SeqCst);
+                n * 2
+            },
+            &mut |_| {},
+        );
+        assert_eq!(out, items.iter().map(|n| n * 2).collect::<Vec<_>>());
+        peak.into_inner()
+    }
+
+    #[test]
+    fn disk_work_gets_more_threads_than_cores_within_bounds() {
+        assert_eq!(io_threads(1), MIN_IO_THREADS);
+        assert_eq!(io_threads(3), MIN_IO_THREADS);
+        assert_eq!(io_threads(6), 6 * IO_THREADS_PER_CORE);
+        assert_eq!(io_threads(64), MAX_IO_THREADS);
+        assert!((1..MAX_IO_THREADS).all(|cores| io_threads(cores) > cores));
+    }
+
+    #[test]
+    fn disk_work_overlaps_more_items_than_there_are_cores() {
+        let cores = cpu_threads();
+        let threads = io_threads(cores);
+        let peak = peak_at_once(threads * 4, |i, w, p| map_ordered_io(i, w, p));
+        assert!(peak > cores, "{peak} at once on {cores} cores");
+        assert!(peak <= threads, "{peak} at once, {threads} threads");
+    }
+
+    #[test]
+    fn cpu_work_stays_at_one_thread_per_core() {
+        let cores = cpu_threads();
+        let peak = peak_at_once(io_threads(cores) * 4, |i, w, p| map_ordered(i, w, p));
+        assert!(peak <= cores, "{peak} at once on {cores} cores");
+    }
+
+    #[test]
+    fn disk_work_keeps_the_order_and_counts_progress_on_the_caller() {
+        let items: Vec<u64> = (0..300).collect();
+        let caller = thread::current().id();
+        let mut seen = 0;
+        let out = map_ordered_io(
+            &items,
+            |&n| {
+                thread::sleep(Duration::from_micros((300 - n) * 10));
+                n + 7
+            },
+            &mut |done| {
+                assert_eq!(thread::current().id(), caller);
+                seen += 1;
+                assert_eq!(done, seen);
+            },
+        );
+        assert_eq!(seen, items.len());
+        assert_eq!(out, items.iter().map(|n| n + 7).collect::<Vec<_>>());
     }
 }

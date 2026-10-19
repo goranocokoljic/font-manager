@@ -38,8 +38,6 @@ behind the `FontActivator` trait and the app-paths helpers.
 8. **Keep the budgets.** Cold start < 1 s, 10k-font first scan < 10 s, search < 50 ms,
    100-face activation < 500 ms, idle memory < 350 MB. A change that makes the bench job
    fail is not done. macOS has its own 100-face activation budget of 1 s (ADR 0008).
-   Known red until E2.9 (#276): the first scan on macOS; a story that does not make
-   that metric slower is not blocked by it.
 
 ## Repository map
 
