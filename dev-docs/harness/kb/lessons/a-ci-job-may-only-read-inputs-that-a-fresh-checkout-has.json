@@ -1,0 +1,21 @@
+{
+  "id": "a-ci-job-may-only-read-inputs-that-a-fresh-checkout-has",
+  "title": "A CI job may only read inputs that a fresh checkout has",
+  "category": "correctness",
+  "rule": "When a workflow step reads a folder or file from the repository (a fuzz corpus, fixtures, a baseline, generated data), check that the path is tracked: `git ls-files <path>` is not empty and `git check-ignore <path>` finds no rule. Data that lives only in a developer's working tree (a gitignored corpus, a local cache) is absent on the runner, so the step fails before it does anything. Commit a (minimized) copy under an un-ignored path, or create or fetch it in the job, and mark raw-byte data `binary` in .gitattributes when a `text=auto eol=lf` rule applies. The workflow's own PR run is the test: it must reach the real work, not only build.",
+  "rationale": "E9.4 (#92): the weekly fuzz workflow passed `fuzz/corpus/parse`, which .gitignore excludes; on the runner libFuzzer exited with 'No such file or directory' before fuzzing, so the criterion 'the E2.2 corpus runs in CI weekly' was not delivered.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    92
+  ],
+  "file_globs": [
+    ".github/workflows/**",
+    "crates/*/fuzz/**",
+    ".gitignore",
+    ".gitattributes"
+  ],
+  "first_seen": "2026-10-19T02:08:12.809Z",
+  "last_seen": "2026-10-19T02:08:12.809Z"
+}
