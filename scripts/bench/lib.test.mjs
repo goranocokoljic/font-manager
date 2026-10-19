@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, blocking, failures, firstScan, gate, median, merge, metric,
+  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, blocking, failures, firstScan, gate, median, merge, metric, target,
   nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
@@ -40,7 +40,7 @@ describe('metric', () => {
   });
 
   test('a metric not measured carries its reason and does not pass', () => {
-    const m = metric('activation_100', null, 'no FontActivator yet (E6)');
+    const m = metric('activation_100', null, 'no FontActivator yet (E6)', 'linux');
     assert.deepEqual(m, { value: null, unit: 'ms', target: 500, pass: null, note: 'no FontActivator yet (E6)' });
     assert.deepEqual(failures({ a: m }), []);
   });
@@ -53,8 +53,19 @@ describe('metric', () => {
     assert.equal(BUDGETS.activation_100.target, 500);
   });
 
+  test('an OS with its own budget is measured against it (ADR 0008)', () => {
+    assert.equal(target('activation_100', 'macos'), 1000);
+    assert.equal(target('activation_100', 'windows'), 500);
+    assert.equal(target('activation_100', 'linux'), 500);
+    assert.equal(target('first_scan', 'macos'), 10000);
+    assert.equal(metric('activation_100', 800, undefined, 'macos').pass, true);
+    assert.equal(metric('activation_100', 800, undefined, 'windows').pass, false);
+    assert.equal(metric('activation_100', 800, undefined, 'macos').target, 1000);
+  });
+
   test('an unknown metric is an error', () => {
     assert.throws(() => metric('fps', 1), /unknown metric/);
+    assert.throws(() => target('fps'), /unknown metric/);
   });
 });
 
