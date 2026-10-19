@@ -336,6 +336,33 @@ fn batch_call(
     results
 }
 
+fn register_urls(paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+    batch_call(
+        CTFontManagerRegisterFontsForURLs,
+        "CTFontManagerRegisterFontsForURLs",
+        paths,
+        mode,
+    )
+}
+
+/// Files per parallel registration call: at most [`MAX_WORKERS`] calls and at
+/// least [`MIN_PER_CALL`] files each, so a small request stays one call.
+fn chunk_sizes(files: usize, workers: usize) -> Vec<usize> {
+    let calls = workers
+        .clamp(1, MAX_WORKERS)
+        .min(files / MIN_PER_CALL)
+        .max(1);
+    let (base, extra) = (files / calls, files % calls);
+    (0..calls)
+        .map(|i| base + usize::from(i < extra))
+        .filter(|&n| n > 0)
+        .collect()
+}
+
+/// More parallel calls than this gained nothing on the timing spike.
+const MAX_WORKERS: usize = 8;
+const MIN_PER_CALL: usize = 8;
+
 /// The CoreText registrar the app uses.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CoreText;
@@ -360,12 +387,42 @@ impl Registrar for CoreText {
     }
 
     fn register_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
-        batch_call(
-            CTFontManagerRegisterFontsForURLs,
-            "CTFontManagerRegisterFontsForURLs",
-            paths,
-            mode,
-        )
+        // fontd reads every file it registers, one after another within a
+        // call: 100 files took 0.7–1.9 s in one call on a 3-core CI Mac and
+        // about half that in parallel calls (E6.6 timing spike).
+        let workers = std::thread::available_parallelism().map_or(1, usize::from);
+        let parts = chunk_sizes(paths.len(), workers);
+        if parts.len() < 2 {
+            return register_urls(paths, mode);
+        }
+        let mut slices = Vec::with_capacity(parts.len());
+        let mut rest = paths;
+        for size in parts {
+            let (part, tail) = rest.split_at(size);
+            slices.push(part);
+            rest = tail;
+        }
+        std::thread::scope(|s| {
+            let handles: Vec<_> = slices
+                .iter()
+                .map(|part| (part.len(), s.spawn(move || register_urls(part, mode))))
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|(len, handle)| {
+                    handle.join().unwrap_or_else(|_| {
+                        vec![
+                            Err(RegistrarError {
+                                code: 0,
+                                detail: "CTFontManagerRegisterFontsForURLs: worker panicked"
+                                    .to_owned(),
+                            });
+                            len
+                        ]
+                    })
+                })
+                .collect()
+        })
     }
 
     fn unregister_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
@@ -445,6 +502,31 @@ mod tests {
     fn each_mode_registers_in_its_own_coretext_scope() {
         assert_eq!(scope(Mode::Session), 3);
         assert_eq!(scope(Mode::Permanent), 2);
+    }
+
+    #[test]
+    fn a_request_splits_into_ordered_parallel_calls_of_at_least_eight_files() {
+        assert_eq!(chunk_sizes(0, 4), Vec::<usize>::new());
+        assert_eq!(chunk_sizes(5, 4), vec![5]);
+        assert_eq!(chunk_sizes(20, 4), vec![10, 10]);
+        assert_eq!(chunk_sizes(100, 3), vec![34, 33, 33]);
+        assert_eq!(chunk_sizes(100, 64).len(), MAX_WORKERS);
+        assert_eq!(chunk_sizes(100, 0), vec![100]);
+        for (files, workers) in [(99, 3), (100, 8), (17, 2), (1000, 16)] {
+            assert_eq!(chunk_sizes(files, workers).iter().sum::<usize>(), files);
+        }
+    }
+
+    /// Parallel calls keep one result per path, in order.
+    #[test]
+    fn register_all_answers_every_path_in_order() {
+        let paths: Vec<PathBuf> = (0..20)
+            .map(|i| PathBuf::from(format!("/nonexistent/fm-{i}.ttf")))
+            .collect();
+        let refs: Vec<&Path> = paths.iter().map(PathBuf::as_path).collect();
+        let results = CoreText.register_all(&refs, Mode::Session);
+        assert_eq!(results.len(), paths.len());
+        assert!(results.iter().all(Result::is_err), "{results:?}");
     }
 
     #[test]
