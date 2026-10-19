@@ -97,3 +97,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.3 #66] apps/desktop/src/components/FontList.vue:763 — the list's row height changes with the preview size without re-anchoring, so another family moves to the top.
 - [E6.7 #80] crates/fm-platform/src/activator/mock.rs:132 — `MockActivator` cannot remove `installed` fonts, so a "never deregister a foreign font" test cannot observe the app deregistering one.
 - [E6.7 #80] crates/fm-core/src/activation.rs:600 — `clashes()` turns every non-app clash into `ConflictWith::System`, also for `ConflictKind::User`, so the prompt and the Conflicts view call a user-installed font a system font.
+- [E7.4 #85] crates/fm-core/src/scanner/changes.rs:42 — `FileHash` formats hex but cannot parse it, so callers use `blake3::Hash::from_hex` directly and the hash format lives in two places.
