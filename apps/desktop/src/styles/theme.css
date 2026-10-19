@@ -94,3 +94,24 @@ body {
     scroll-behavior: auto !important;
   }
 }
+
+/* A preview surface other than `auto` overrides the theme inside a font view only
+   (list, grid, waterfall). */
+.surface-light {
+  color-scheme: light;
+  --fm-bg: #ffffff;
+  --fm-fg: #1a1a1a;
+  --fm-muted: #595959;
+  --fm-border: #d4d4d4;
+  --fm-accent: #0a5fd6;
+  --fm-warning: #8a4b00;
+}
+.surface-dark {
+  color-scheme: dark;
+  --fm-bg: #1c1c1e;
+  --fm-fg: #ececec;
+  --fm-muted: #a6a6a6;
+  --fm-border: #3a3a3c;
+  --fm-accent: #6ea8ff;
+  --fm-warning: #ffb74d;
+}

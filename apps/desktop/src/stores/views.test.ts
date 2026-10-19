@@ -71,9 +71,19 @@ describe('views store', () => {
   it('falls back to the defaults when the saved entry is damaged', () => {
     localStorage.setItem(VIEWS_STORAGE_KEY, '{not json');
     expect(freshStore().modeFor(ALL_FONTS_VIEW)).toBe('list');
-    localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify({ all: { mode: 'grid', table: 5 } }));
+    localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify({ all: { mode: 'mosaic', table: 5 } }));
     const store = freshStore();
     expect(store.modeFor(ALL_FONTS_VIEW)).toBe('list');
     expect(store.tableFor(ALL_FONTS_VIEW)).toEqual(defaultTable());
+  });
+
+  it('keeps the grid and waterfall modes, with no API order', async () => {
+    const store = freshStore();
+    for (const mode of ['grid', 'waterfall'] as const) {
+      store.setMode(ALL_FONTS_VIEW, mode);
+      await nextTick();
+      expect(freshStore().modeFor(ALL_FONTS_VIEW)).toBe(mode);
+      expect(store.orderFor(ALL_FONTS_VIEW)).toBeNull();
+    }
   });
 });

@@ -15,10 +15,10 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 
 | Key | What it does |
 |-----|--------------|
-| `Up` and `Down` | Go to the previous or next row |
+| `Up` and `Down` | Go to the previous or next row (in the grid: the card above or below) |
 | `Page Up` and `Page Down` | Go up or down one screen |
 | `Home` and `End` | Go to the first or last row |
-| `Right` and `Left` | Show or hide the styles of a family |
+| `Right` and `Left` | Show or hide the styles of a family (in the grid: go to the next or previous card) |
 | `Enter` | Show or hide the styles of a family, or open a style |
 | `Shift+Up` and `Shift+Down` | Add the next rows to the selection |
 | `Ctrl+Space` | Add the row to the selection, or take it out |
@@ -27,6 +27,8 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `Shift+A` | Activate or deactivate the selected fonts permanently |
 | `1` | Show the fonts as a list |
 | `2` | Show the fonts as a table |
+| `3` | Show the fonts as a grid of cards |
+| `4` | Show the fonts as a waterfall: the preview text at six sizes |
 | `Space` | Quick look at the font (coming in a later version) |
 | `C` | Add the font to the compare view (coming in a later version) |
 

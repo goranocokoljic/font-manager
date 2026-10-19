@@ -28,6 +28,8 @@ import {
   type Filters,
   type JobId,
   type LanguagePreset,
+  type PreviewImage,
+  type PreviewRequest,
   type SearchResponse,
   type SampleText,
   type Source,
@@ -258,6 +260,40 @@ export function mockSampleText(f: FaceDetail, text: string): SampleText {
     };
   const own = [...chars].filter((c) => !/\s/u.test(c)).slice(0, 24);
   return { face, text: own.join(' '), fallback: { kind: 'symbols' }, missing };
+}
+
+/** A 1×1 transparent PNG: what the Rust mock's `render_preview` returns. */
+const PNG_1X1 = [
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+  0x89, 0x00, 0x00, 0x00, 0x0a, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+  0x42, 0x60, 0x82,
+];
+
+/**
+ * A mock thumbnail: in a browser, the text drawn black on transparent in the
+ * browser's sans-serif (so e2e screenshots show something); else the 1×1 PNG.
+ */
+export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewImage> {
+  const sizePx = req.sizePx ?? 0;
+  if (typeof OffscreenCanvas === 'undefined' || sizePx <= 0)
+    return { width: 1, height: 1, png: [...PNG_1X1] };
+  const font = `${sizePx}px sans-serif`;
+  const probe = new OffscreenCanvas(1, 1).getContext('2d');
+  if (!probe) return { width: 1, height: 1, png: [...PNG_1X1] };
+  probe.font = font;
+  const width = Math.max(1, Math.ceil(probe.measureText(req.text).width));
+  const height = Math.max(1, Math.ceil(sizePx * 1.3));
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return { width: 1, height: 1, png: [...PNG_1X1] };
+  ctx.font = font;
+  ctx.fillStyle = req.foreground ?? '#000000';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(req.text, 0, height / 2);
+  const blob = await canvas.convertToBlob({ type: 'image/png' });
+  return { width, height, png: [...new Uint8Array(await blob.arrayBuffer())] };
 }
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
@@ -814,6 +850,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
+    renderPreview: async (req) => {
+      const sizePx = req.sizePx ?? NaN;
+      if (!(sizePx >= 8 && sizePx <= 300))
+        throw invalid('Preview size must be between 8 and 300 px.');
+      if (!find(req.face)) throw notFound(req.face);
+      return mockPreviewImage(req);
+    },
     activate: async (req) => {
       const activated: FaceId[] = [];
       const out = ids(req.target).map((id): ActivationOutcome => {
