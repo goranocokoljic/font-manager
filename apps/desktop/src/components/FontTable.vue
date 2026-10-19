@@ -21,6 +21,7 @@ import {
   type Column,
   type ColumnId,
 } from '../list/columns';
+import { rowActivation } from '../list/activation';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, type ListRow } from '../list/rows';
@@ -29,6 +30,7 @@ import { useScrollAnchor } from '../list/anchor';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useViewsStore } from '../stores/views';
+import ActivationDot from './ActivationDot.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -279,9 +281,6 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
       return { text: (fam.tags ?? []).join(', ') };
   }
 }
-
-const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
-  row.kind === 'face' ? (row.face.active ? 'active' : 'inactive') : row.family.activation;
 </script>
 
 <template>
@@ -332,7 +331,7 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
             @click="views.sortBy(view, col.id)"
           >
             <span :class="{ 'visually-hidden': col.id === 'activation' }">{{ col.label }}</span>
-            <span v-if="col.id === 'activation'" class="dot" aria-hidden="true" />
+            <ActivationDot v-if="col.id === 'activation'" state="inactive" />
             <span class="arrow" aria-hidden="true">{{ SORT_ARROW[ariaSort(config, col.id)] }}</span>
           </button>
         </div>
@@ -377,7 +376,7 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
             :data-column="col.id"
           >
             <template v-if="col.id === 'activation'">
-              <span class="dot" :class="dotState(item.row)" aria-hidden="true" />
+              <ActivationDot :state="rowActivation(item.row)" />
               <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="col.id === 'name'">
@@ -546,23 +545,6 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
 }
 .col-activation {
   justify-content: center;
-}
-.dot {
-  display: inline-block;
-  flex: none;
-  width: 8px;
-  height: 8px;
-  box-sizing: border-box;
-  border: 1.5px solid var(--fm-muted);
-  border-radius: 50%;
-}
-.dot.active {
-  border-color: var(--fm-accent);
-  background: var(--fm-accent);
-}
-.dot.partial {
-  border-color: var(--fm-accent);
-  background: linear-gradient(90deg, var(--fm-accent) 50%, transparent 50%);
 }
 .line {
   position: relative;

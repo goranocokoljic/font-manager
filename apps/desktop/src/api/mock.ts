@@ -707,8 +707,22 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     }
     return viewOf(c);
   };
-  const ids = (target: Target | null | undefined): FaceId[] =>
-    target?.kind === 'faces' ? target.faces : [...active.keys()];
+  // Like the Rust mock: faces and families; no target means every active face.
+  const ids = (target: Target | null | undefined): FaceId[] => {
+    if (!target) return [...active.keys()];
+    if (target.kind === 'faces') return target.faces;
+    if (target.kind === 'family') {
+      const list = byFamily.get(target.family);
+      if (!list)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${target.family} was not found.`,
+          detail: null,
+        };
+      return list.map((d) => d.face.id);
+    }
+    throw invalid(`The mock cannot act on a ${target.kind}.`);
+  };
 
   return {
     getAppInfo: async () => mockAppInfo,

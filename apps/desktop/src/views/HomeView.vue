@@ -25,7 +25,7 @@ import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
-import type { FaceId } from '../api/types';
+import type { ActivationMode, FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useViewsStore, type ViewMode } from '../stores/views';
 
@@ -69,20 +69,39 @@ onBeforeUnmount(() => {
   void activation.stop();
 });
 
+// One style (or nothing) selected: A acts on the inspector's face, which shows the
+// outcome. Several rows or a family: on all of them, with a toast that can undo it.
+const bulkSelection = computed(() => {
+  const rows = fontList.selectedRows;
+  return rows.length > 1 || rows[0]?.kind === 'family';
+});
+const canToggle = () => (bulkSelection.value ? !activation.busy : selection.canActivate);
+const toggle = (mode: ActivationMode) =>
+  bulkSelection.value
+    ? activation.toggleRows(fontList.selectedRows, mode)
+    : selection.toggleActivation(mode);
+
 useActions([
   {
     id: ACTIONS.activateSession,
     title: 'Activate or deactivate for this session',
     group: 'Activation',
-    enabled: () => selection.canActivate,
-    run: () => selection.toggleActivation('session'),
+    enabled: canToggle,
+    run: () => toggle('session'),
   },
   {
     id: ACTIONS.activatePermanent,
     title: 'Activate or deactivate permanently',
     group: 'Activation',
-    enabled: () => selection.canActivate,
-    run: () => selection.toggleActivation('permanent'),
+    enabled: canToggle,
+    run: () => toggle('permanent'),
+  },
+  {
+    id: 'activation.deactivateAll',
+    title: 'Deactivate all',
+    group: 'Activation',
+    enabled: () => activation.count > 0 && !activation.busy,
+    run: () => activation.deactivateAll(),
   },
   // Keys 1–4 switch the view mode, in the order of the toolbar buttons.
   ...MODES.map((m, i) => ({

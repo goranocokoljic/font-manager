@@ -3,6 +3,7 @@ import { onMounted, watchEffect } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import { useClient } from './api/client';
 import CommandPalette from './components/CommandPalette.vue';
+import ToastMessage from './components/ToastMessage.vue';
 import { HELP_PAGES } from './help';
 import { ACTIONS } from './keyboard/keymap';
 import { useActions, useShortcuts } from './stores/commands';
@@ -43,4 +44,5 @@ watchEffect(() => {
 <template>
   <RouterView />
   <CommandPalette />
+  <ToastMessage />
 </template>

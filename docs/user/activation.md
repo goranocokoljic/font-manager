@@ -11,8 +11,34 @@ system where the file is.
 | For this session | `A` | Until you quit Font Manager. |
 | Permanent | `Shift+A` | Also after a restart, until you deactivate the font. |
 
-Select one or more fonts and press the key. Press it again to deactivate them. In the
-settings, under **Activation**, you choose which kind the **Activate** button uses.
+Select one or more fonts and press the key. Press it again to deactivate them. If only
+some of the selected fonts are active, the key activates the rest. A family activates or
+deactivates with all its styles. In the settings, under **Activation**, you choose which
+kind the **Activate** button in the inspector uses.
+
+## See what is active
+
+Every row in the list and every card in the grid has a dot:
+
+| Dot | Meaning |
+|-----|---------|
+| Empty circle | Not active |
+| Half filled | Some styles of the family are active |
+| Filled | Active |
+
+The status bar shows how many fonts are active.
+
+## Deactivate all
+
+Press `Ctrl+K` and choose **Deactivate all**. All fonts that Font Manager activated stop
+being active, for this session and permanent ones.
+
+## Undo
+
+When you activate or deactivate many fonts at once (several rows, a family, or
+**Deactivate all**), a message at the bottom of the window tells you what changed. Click **Undo** in the message to put every font back as it
+was, in the same kind of activation. The message goes away after 10 seconds. It stays
+while the pointer is on it.
 
 ## Rules that keep your system safe
 

@@ -54,6 +54,10 @@ export const useFontListStore = defineStore('fontList', () => {
   );
   const cursorRow = computed(() => rows.value[cursorIndex.value]);
   const selectedCount = computed(() => selection.value.selected.size);
+  /** The selected rows, in list order. */
+  const selectedRows = computed(() =>
+    rows.value.filter((r) => selection.value.selected.has(r.key)),
+  );
 
   /** The face the cursor shows: a style row's face, or a family's first face. */
   const cursorFace = computed<FaceSummary | undefined>(() => {
@@ -156,6 +160,7 @@ export const useFontListStore = defineStore('fontList', () => {
     cursorRow,
     cursorFace,
     selectedCount,
+    selectedRows,
     isSelected,
     anchor,
     anchorIndex,
