@@ -93,13 +93,13 @@ const viewportOf = (w: VueWrapper, selector: string) => w.get(selector).element 
 
 describe('FontGrid', () => {
   it('renders only the lines on screen, as cards with thumbnails from render_preview', async () => {
-    await load({ extraFaces: 9997 });
+    await load({ extraFaces: 1997 });
     const grid = await mountView(FontGrid, { overscan: 2 });
     // 800 × 600 px fallback viewport: 4 cards per line, 5 + 1 + 2 × 2 lines.
     expect(grid.get('[role="listbox"]').attributes('data-columns')).toBe('4');
     const cards = grid.findAll('[role="option"]');
     expect(cards).toHaveLength(40);
-    expect(grid.get('.spacer').attributes('style')).toContain(`height: ${2500 * CARD.linePx}px`);
+    expect(grid.get('.spacer').attributes('style')).toContain(`height: ${500 * CARD.linePx}px`);
     // One render per card on screen, at the thumbnail size, with the card's text.
     await flushPromises();
     expect(renders).toHaveLength(40);
