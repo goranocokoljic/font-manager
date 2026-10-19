@@ -1,0 +1,18 @@
+{
+  "id": "no-early-return-between-moving-a-user-file-and-writing-its-u",
+  "title": "No early return between moving a user file and writing its undo record",
+  "category": "data-integrity",
+  "rule": "When an action moves user files (to the trash, to another folder) and logs the moves for undo, never `?` out of the loop after a file has moved. Collect each move's result, then write the log and the index flags in one transaction after the loop; if that write fails, move the files back before returning the error. Add a test whose stand-in moves the files and then breaks the log table, and assert every file is back and nothing was announced.",
+  "rationale": "E8.3 (#88): keep_copy marked each trashed file gone with its own UPDATE and `?` inside the loop and wrote the undo log after it; a database error after a successful move left the file in the trash with no resolution row, so the user could not undo it.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    88
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-19T22:14:29.805Z",
+  "last_seen": "2026-10-19T22:14:29.805Z"
+}
