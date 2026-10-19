@@ -453,6 +453,43 @@ fn the_problems_view_answers_in_camel_case() {
 }
 
 #[test]
+fn keep_this_one_round_trips_dry_run_keep_history_and_undo() {
+    let mock = MockApi::new();
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf";
+    mock.add_copy(FaceId(3), copy).unwrap();
+    let (_app, webview) = app_on(setup(mock_builder(), Arc::new(mock))).unwrap();
+    let call = |cmd: &str, args: serde_json::Value| -> serde_json::Value {
+        send(&webview, cmd, args)
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+
+    let groups = call("list_duplicates", serde_json::json!({}));
+    let keep = groups[0]["copies"][0]["path"].as_str().unwrap().to_owned();
+    let other = groups[0]["copies"][1]["path"].as_str().unwrap().to_owned();
+    assert_eq!(groups[0]["kind"], "exact");
+    assert!(groups[0]["copies"][0]["keep"].as_bool().unwrap());
+
+    let req = |dry_run: bool| serde_json::json!({ "req": { "keep": keep, "trash": [other], "dryRun": dry_run } });
+    let plan = call("keep_copy", req(true));
+    assert_eq!(plan["dryRun"], true);
+    assert_eq!(plan["id"], serde_json::Value::Null);
+    assert_eq!(plan["moves"][0]["status"], "planned");
+
+    let done = call("keep_copy", req(false));
+    assert_eq!(done["moves"][0]["status"], "trashed");
+    let id = done["id"].as_u64().unwrap();
+    let history = call("list_resolutions", serde_json::json!({}));
+    assert_eq!(history[0]["id"], id);
+
+    let undone = call("undo_resolution", serde_json::json!({ "resolution": id }));
+    assert_eq!(undone["undone"], true);
+    assert_eq!(undone["moves"][0]["status"], "restored");
+}
+
+#[test]
 fn update_settings_returns_every_setting_in_camel_case() {
     let json: serde_json::Value = invoke_with(
         "update_settings",

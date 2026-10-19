@@ -2,7 +2,10 @@
 // The Problems view: duplicates, broken files, legacy formats, sidecar and
 // activation conflicts in one list, filtered by group. The filter is in the URL
 // (`#/problems?kind=duplicates`), so the sidebar links open it filtered.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+// Duplicates are resolved here (E8.3): "Keep this one" shows the dry run, asks
+// once, moves the other copies to the trash and offers undo in a toast; the
+// history below the list undoes any earlier action.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCommandsStore } from '../stores/commands';
 import {
@@ -12,6 +15,7 @@ import {
   useProblemsStore,
   type ProblemGroupId,
 } from '../stores/problems';
+import type { Resolution, TrashMoveStatus } from '../api/types';
 
 const store = useProblemsStore();
 const commands = useCommandsStore();
@@ -20,6 +24,38 @@ const router = useRouter();
 
 const filter = computed(() => problemGroup(route.query.kind)?.id);
 const rows = computed(() => store.inGroup(filter.value));
+const showDuplicates = computed(
+  () =>
+    (filter.value === undefined || filter.value === 'duplicates') && store.duplicates.length > 0,
+);
+const planned = computed(() => store.plan?.moves.filter((m) => m.status === 'planned') ?? []);
+const notMoving = computed(() => store.plan?.moves.filter((m) => m.status !== 'planned') ?? []);
+
+function copies(n: number): string {
+  return n === 1 ? '1 copy' : `${n} copies`;
+}
+
+/** One line about an action: what moved, what stayed. */
+function summary(r: Resolution): string {
+  const count = (s: TrashMoveStatus) => r.moves.filter((m) => m.status === s).length;
+  const moved = count('trashed') + count('restored');
+  const parts = [r.undone ? `Put back ${copies(moved)}.` : `Moved ${copies(moved)} to the trash.`];
+  const stayed = count('skipped') + count('failed');
+  if (stayed)
+    parts.push(`${copies(stayed)} stayed where ${stayed === 1 ? 'it was' : 'they were'}.`);
+  return parts.join(' ');
+}
+
+// The confirm dialog takes the focus, so Enter confirms and Escape cancels.
+const confirmButton = ref<HTMLButtonElement | null>(null);
+watch(
+  () => store.plan,
+  async (p) => {
+    if (!p) return;
+    await nextTick();
+    confirmButton.value?.focus();
+  },
+);
 
 function setFilter(group: ProblemGroupId | undefined): void {
   void router.replace({ query: group ? { kind: group } : {} });
@@ -32,7 +68,8 @@ function close(): void {
 function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape' && !commands.open && !e.defaultPrevented) {
     e.preventDefault();
-    close();
+    if (store.plan) store.cancelPlan();
+    else close();
   }
 }
 
@@ -94,7 +131,126 @@ onBeforeUnmount(() => store.stop());
           </tr>
         </tbody>
       </table>
+
+      <section v-if="showDuplicates" aria-labelledby="duplicates-title" class="section">
+        <h2 id="duplicates-title" class="h2">Resolve duplicates</h2>
+        <p class="note">
+          Keep one copy of each font. The other copies move to the trash, and you can undo it.
+        </p>
+        <p v-if="store.actionError" role="alert" class="error">{{ store.actionError.message }}</p>
+        <div
+          v-for="(g, gi) in store.duplicates"
+          :key="`${gi}-${g.copies[0]?.path}`"
+          role="group"
+          :aria-label="g.postscriptName ?? 'Identical files'"
+          class="group"
+        >
+          <h3 class="h3">
+            {{ g.postscriptName ?? 'Identical files' }}
+            <span class="muted">{{
+              g.kind === 'exact' ? 'identical files' : 'same font, different files'
+            }}</span>
+          </h3>
+          <ul class="copies">
+            <li v-for="c in g.copies" :key="c.path" class="copy">
+              <span class="path">{{ c.path }}</span>
+              <span v-if="c.version" class="muted">{{ c.version }}</span>
+              <span v-if="c.keep" class="badge">Recommended</span>
+              <button
+                type="button"
+                class="button"
+                :aria-label="`Keep this one: ${c.path}`"
+                @click="store.planKeep(g, c.path)"
+              >
+                Keep this one
+              </button>
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section v-if="store.history.length" aria-labelledby="history-title" class="section">
+        <h2 id="history-title" class="h2">History</h2>
+        <table aria-labelledby="history-title" class="table">
+          <thead>
+            <tr>
+              <th scope="col">When</th>
+              <th scope="col">Kept</th>
+              <th scope="col">What happened</th>
+              <th scope="col"><span class="sr-only">Undo</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in store.history" :key="r.id ?? r.at">
+              <td>{{ r.at }}</td>
+              <td class="path">{{ r.kept }}</td>
+              <td>{{ summary(r) }}</td>
+              <td>
+                <button
+                  v-if="!r.undone && r.id !== null"
+                  type="button"
+                  class="button"
+                  :aria-label="`Undo: ${summary(r)}`"
+                  @click="store.undo(r.id)"
+                >
+                  Undo
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
     </main>
+
+    <div
+      v-if="store.plan"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="plan-title"
+      class="dialog"
+    >
+      <h2 id="plan-title" class="h2">Move {{ copies(planned.length) }} to the trash?</h2>
+      <p class="note">
+        Keeping <span class="path">{{ store.plan.kept }}</span>
+      </p>
+      <ul v-if="planned.length" aria-label="Will move to the trash" class="copies">
+        <li v-for="m in planned" :key="m.path" class="path">{{ m.path }}</li>
+      </ul>
+      <ul v-if="notMoving.length" aria-label="Will stay" class="copies">
+        <li v-for="m in notMoving" :key="m.path">
+          <span class="path">{{ m.path }}</span> — {{ m.message }}
+        </li>
+      </ul>
+      <div class="actions">
+        <button type="button" class="button" @click="store.cancelPlan()">Cancel</button>
+        <button
+          ref="confirmButton"
+          type="button"
+          class="button primary"
+          :disabled="!planned.length"
+          @click="store.confirmPlan()"
+        >
+          Move to trash
+        </button>
+      </div>
+    </div>
+
+    <div class="toast-region" role="status" aria-live="polite">
+      <div v-if="store.toast" class="toast" data-testid="undo-toast">
+        <span>{{ summary(store.toast) }}</span>
+        <button
+          v-if="store.toast.id !== null"
+          type="button"
+          class="button"
+          @click="store.toast.id !== null && store.undo(store.toast.id)"
+        >
+          Undo
+        </button>
+        <button type="button" class="button" aria-label="Dismiss" @click="store.dismissToast()">
+          ×
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -166,6 +322,101 @@ onBeforeUnmount(() => store.stop());
 .path {
   font-family: ui-monospace, monospace;
   font-size: 11.5px;
+}
+.section {
+  margin-top: 24px;
+}
+.h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.muted {
+  margin-inline-start: 6px;
+  color: var(--fm-muted);
+  font-weight: normal;
+}
+.group {
+  margin: 0 0 12px;
+}
+.copies {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--fm-border);
+}
+.copy .path {
+  flex: 1;
+}
+.badge {
+  padding: 0 6px;
+  border: 1px solid var(--fm-accent);
+  border-radius: 8px;
+  color: var(--fm-accent);
+}
+.dialog {
+  position: fixed;
+  inset-block-start: 20%;
+  inset-inline: 0;
+  width: min(560px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 16px;
+  border: 1px solid var(--fm-border);
+  border-radius: 8px;
+  background: var(--fm-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  overflow-wrap: anywhere;
+}
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.primary {
+  border-color: var(--fm-accent);
+  color: var(--fm-accent);
+}
+.button:disabled {
+  opacity: 0.5;
+}
+.toast-region {
+  position: fixed;
+  inset-block-end: 16px;
+  inset-inline: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--fm-border);
+  border-radius: 8px;
+  background: var(--fm-bg);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
+  pointer-events: auto;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .button {
   padding: 4px 10px;

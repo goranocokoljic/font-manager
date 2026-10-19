@@ -821,6 +821,22 @@ export type ImportSetResponse = {
 /**  A long-running job (a scan); its progress arrives as events. */
 export type JobId = number;
 
+/**
+ *  "Keep this one": keep one copy of a duplicate font and move the other
+ *  copies to the OS trash (E8.3).
+ */
+export type KeepCopyRequest = {
+	/**  The copy to keep ([`DuplicateCopy::path`]). */
+	keep: string,
+	/**
+	 *  The copies to move to the trash; each must be listed with `keep` in a
+	 *  group of [`LibraryService::list_duplicates`].
+	 */
+	trash: string[],
+	/**  Only say what would move; touch nothing. */
+	dryRun?: boolean,
+};
+
 /**  Coverage of one language preset. */
 export type LanguageCoverage = {
 	/**  Preset code. */
@@ -1112,6 +1128,31 @@ export type RenameCollectionRequest = {
 	name: string,
 };
 
+/**
+ *  A "Keep this one" action: the copy kept and the copies moved to the
+ *  trash. Listed in the Problems history until undone or forgotten.
+ */
+export type Resolution = {
+	/**
+	 *  The action, for [`LibraryService::undo_resolution`]; `None` for a dry
+	 *  run or when nothing moved.
+	 */
+	id: ResolutionId | null,
+	/**  The copy kept. */
+	kept: string,
+	/**  When it happened. */
+	at: string,
+	/**  It was a dry run: nothing moved. */
+	dryRun: boolean,
+	/**  Every moved copy was put back. */
+	undone: boolean,
+	/**  The copies, in the order of the request. */
+	moves: TrashMove[],
+};
+
+/**  A "Keep this one" action of the Problems view, for undo. */
+export type ResolutionId = number;
+
 /**  Why a face previews other text than the sample. */
 export type SampleFallback = 
 /**  Letters of a script the face covers. */
@@ -1391,6 +1432,29 @@ export type Theme =
 /**  Always dark. */
 "dark";
 
+/**  One copy of a [`Resolution`]. */
+export type TrashMove = {
+	/**  The copy's path in the library. */
+	path: string,
+	/**  What happened to it. */
+	status: TrashMoveStatus,
+	/**  Why it was skipped or failed, in one sentence. */
+	message: string | null,
+};
+
+/**  What happened, or would happen, to one copy. */
+export type TrashMoveStatus = 
+/**  Dry run: it would move to the trash. */
+"planned" | 
+/**  It is in the trash. */
+"trashed" | 
+/**  Undo put it back. */
+"restored" | 
+/**  It was not moved and stays where it is (`message` says why). */
+"skipped" | 
+/**  The move or the undo failed (`message` says why). */
+"failed";
+
 /**  Detach tags from faces. */
 export type UntagFacesRequest = {
 	/**  The faces. */
@@ -1434,4 +1498,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 6, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 7, patch: 0 };

@@ -12,7 +12,8 @@ use fm_api::common::{FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, ImportMode,
-    ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest,
+    KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest,
+    TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -22,7 +23,7 @@ use fm_api::organization::{
 use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
-use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, SourceId};
+use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, ResolutionId, SourceId};
 
 fn api() -> Arc<dyn Api> {
     Arc::new(MockApi::new())
@@ -922,4 +923,87 @@ fn sample_texts_fall_back_to_the_faces_own_script() {
         })
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+/// A mock whose face 3 has a second copy, an exact duplicate.
+#[allow(clippy::unwrap_used)] // test setup: a failure fails the test
+fn with_copy() -> (Arc<dyn Api>, String, String) {
+    let mock = MockApi::new();
+    let copy = "/Users/demo/Downloads/SourceSerif4-Regular.otf".to_owned();
+    mock.add_copy(FaceId(3), &copy).unwrap();
+    let api: Arc<dyn Api> = Arc::new(mock);
+    let original = api.get_face(FaceId(3)).unwrap().path;
+    (api, original, copy)
+}
+
+fn keep(keep: &str, trash: &str, dry_run: bool) -> KeepCopyRequest {
+    KeepCopyRequest {
+        keep: keep.into(),
+        trash: vec![trash.into()],
+        dry_run,
+    }
+}
+
+#[test]
+fn keep_this_one_trashes_the_other_copy_and_undo_brings_it_back() {
+    let (api, original, copy) = with_copy();
+    assert_eq!(api.list_duplicates().unwrap().len(), 1);
+    let events = api.subscribe();
+
+    let plan = api.keep_copy(keep(&original, &copy, true)).unwrap();
+    assert_eq!((plan.id, plan.dry_run), (None, true));
+    assert_eq!(plan.moves[0].status, TrashMoveStatus::Planned);
+    assert_eq!(
+        api.list_duplicates().unwrap().len(),
+        1,
+        "a dry run moves nothing"
+    );
+    assert_eq!(api.list_resolutions().unwrap(), []);
+
+    let done = api.keep_copy(keep(&original, &copy, false)).unwrap();
+    let id = done.id.expect("recorded for undo");
+    assert_eq!(done.moves[0].status, TrashMoveStatus::Trashed);
+    assert_eq!(api.list_duplicates().unwrap(), []);
+    assert_eq!(api.list_resolutions().unwrap(), [done]);
+    assert!(matches!(
+        events.try_iter().last(),
+        Some(Event::LibraryChanged { removed, .. }) if removed.len() == 1
+    ));
+
+    let undone = api.undo_resolution(id).unwrap();
+    assert!(undone.undone);
+    assert_eq!(undone.moves[0].status, TrashMoveStatus::Restored);
+    assert_eq!(api.list_duplicates().unwrap().len(), 1);
+    assert_eq!(api.list_resolutions().unwrap(), [undone]);
+}
+
+#[test]
+fn keep_this_one_skips_an_active_copy_and_refuses_a_stranger() {
+    let (api, original, copy) = with_copy();
+    let copy_face = api.list_duplicates().unwrap()[0]
+        .copies
+        .iter()
+        .find(|c| c.path == copy)
+        .and_then(|c| c.face)
+        .unwrap();
+    api.activate(acts(
+        &[copy_face.0],
+        ActivationMode::Session,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+
+    let r = api.keep_copy(keep(&original, &copy, false)).unwrap();
+    assert_eq!(r.id, None, "nothing moved, nothing to undo");
+    assert_eq!(r.moves[0].status, TrashMoveStatus::Skipped);
+    assert!(r.moves[0].message.as_deref().unwrap().contains("active"));
+
+    let err = api
+        .keep_copy(keep(&original, "/Users/demo/notes.txt", false))
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert_eq!(
+        api.undo_resolution(ResolutionId(999)).unwrap_err().code,
+        ErrorCode::NotFound
+    );
 }

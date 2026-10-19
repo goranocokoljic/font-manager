@@ -15,6 +15,7 @@ import {
   type CollectionFacesRequest,
   type CollectionId,
   type Conflict,
+  type DuplicateGroup,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -33,6 +34,7 @@ import {
   type PreviewImage,
   type PreviewRequest,
   type Problem,
+  type Resolution,
   type SearchResponse,
   type SampleText,
   type Source,
@@ -317,6 +319,8 @@ export interface MockOptions {
   faceTags?: Partial<Record<FaceId, string[]>>;
   /** Problems entries after the ones the sample faces have (files the mock has no face for). */
   extraProblems?: Problem[];
+  /** Duplicate groups (files the mock has no face for), keeper first. */
+  duplicates?: DuplicateGroup[];
 }
 
 /**
@@ -345,6 +349,39 @@ export const mockExtraProblems: Problem[] = [
     path: '/Users/demo/Fonts/.fontlibrary/meta.json',
     other: null,
     message: 'Another computer set a different rating for Inter Regular.',
+  },
+];
+
+/**
+ * The duplicate group behind the `duplicateFile` entry of `mockExtraProblems`: the
+ * library-folder copy is the keeper, the Downloads copy the duplicate.
+ */
+export const mockDuplicates: DuplicateGroup[] = [
+  {
+    kind: 'exact',
+    postscriptName: 'Quarto-Regular',
+    copies: [
+      {
+        path: '/Users/demo/Fonts/Quarto-Regular.otf',
+        size: 81234,
+        hash: 'a1'.repeat(32),
+        face: null,
+        version: 'Version 1.100',
+        source: 1,
+        inLibraryFolder: true,
+        keep: true,
+      },
+      {
+        path: '/Users/demo/Downloads/Quarto-Regular.otf',
+        size: 81234,
+        hash: 'a1'.repeat(32),
+        face: null,
+        version: 'Version 1.100',
+        source: 1,
+        inLibraryFolder: false,
+        keep: false,
+      },
+    ],
   },
 ];
 
@@ -558,6 +595,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   let picks = 0;
   let settings = { ...defaultSettings };
   const emit = (event: Event) => handlers.forEach((h) => h(event));
+  // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
+  const trashed = new Set<string>();
+  const resolutions: Resolution[] = [];
+  const duplicates = (): DuplicateGroup[] =>
+    structuredClone(options.duplicates ?? [])
+      .map((g) => ({ ...g, copies: g.copies.filter((c) => !trashed.has(c.path)) }))
+      .filter((g) => g.copies.length > 1);
   const findSource = (id: SourceId) => {
     const s = sources.find((s) => s.id === id);
     if (!s)
@@ -995,8 +1039,53 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           });
         return out;
       }),
-      ...structuredClone(options.extraProblems ?? []),
+      ...structuredClone(options.extraProblems ?? []).filter(
+        (p) => !trashed.has(p.path) && !(p.other !== null && trashed.has(p.other)),
+      ),
     ],
+    listDuplicates: async () => duplicates(),
+    keepCopy: async (req) => {
+      // The rule of `KeepCopyRequest::check`: only a copy listed with the keeper moves.
+      const groups = duplicates().filter((g) => g.copies.some((c) => c.path === req.keep));
+      if (!groups.length) throw invalid(`${req.keep} is not a duplicate any more.`);
+      if (!req.trash.length) throw invalid('Choose at least one copy to move to the trash.');
+      for (const path of req.trash)
+        if (path === req.keep || !groups.some((g) => g.copies.some((c) => c.path === path)))
+          throw invalid(`${path} is not a copy of the font you keep.`);
+      const dryRun = req.dryRun ?? false;
+      const resolution: Resolution = {
+        id: dryRun ? null : ++nextId,
+        kept: req.keep,
+        at: '2026-10-16T09:00:00Z',
+        dryRun,
+        undone: false,
+        moves: req.trash.map((path) => ({
+          path,
+          status: dryRun ? 'planned' : 'trashed',
+          message: null,
+        })),
+      };
+      if (!dryRun) {
+        req.trash.forEach((p) => trashed.add(p));
+        resolutions.unshift(resolution);
+        emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
+      }
+      return structuredClone(resolution);
+    },
+    listResolutions: async () => structuredClone(resolutions),
+    undoResolution: async (id) => {
+      const r = resolutions.find((r) => r.id === id);
+      if (!r)
+        throw { code: 'notFound' as const, message: `Action ${id} was not found.`, detail: null };
+      for (const m of r.moves)
+        if (m.status === 'trashed') {
+          trashed.delete(m.path);
+          m.status = 'restored';
+        }
+      r.undone = true;
+      emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [] });
+      return structuredClone(r);
+    },
     listSources: async () => structuredClone(sources),
     addSource: async (req) => {
       if (!req.path.trim())
@@ -1088,6 +1177,7 @@ function countFromUrl(name: string, max: number): number {
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
   extraProblems: mockExtraProblems,
+  duplicates: mockDuplicates,
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
 });

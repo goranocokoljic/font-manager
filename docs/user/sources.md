@@ -54,4 +54,29 @@ shows the same number. Select it to open the **Problems** view. The view lists:
 Select a group at the top of the view, or in the sidebar, to see only that group.
 Font Manager does not change any file when it lists a problem.
 
+### Resolve duplicates
+
+Under **Resolve duplicates**, each duplicate font shows all its copies. The copy
+marked **Recommended** is the newest version, or the copy in your library folder.
+
+1. Select **Keep this one** next to the copy you want to keep.
+2. Font Manager shows the copies that will move to the trash. Nothing has moved yet.
+3. Select **Move to trash** to continue, or **Cancel** to stop.
+
+The other copies go to the trash of your system: the Recycle Bin on Windows, the
+Trash on macOS and Linux. Font Manager never deletes a file.
+
+To undo, select **Undo** in the message at the bottom of the window. The message
+stays for 10 seconds. After that, use **Undo** in the **History** list of the
+Problems view. Undo puts every copy back where it was.
+
+Some copies do not move:
+
+- A copy that is active. Deactivate it first.
+- A copy on a drive that has no trash, for example a network drive or a USB drive
+  on Windows.
+
+Undo does not replace a file that is now at the old path. Move that file away,
+then select **Undo** again. If you emptied the trash, the copy cannot come back.
+
 Next: [Activation](activation.md).

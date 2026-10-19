@@ -13,5 +13,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0006](0006-shape-of-the-fm-api-contract.md) | Shape of the fm-api contract | Accepted |
 | [0007](0007-app-paths-config-and-logs.md) | App folders, config and logs per OS | Accepted |
 | [0008](0008-font-activation.md) | Font activation per OS | Accepted |
+| [0009](0009-os-trash.md) | The OS trash per OS | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

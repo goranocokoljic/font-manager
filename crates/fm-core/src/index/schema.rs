@@ -361,8 +361,38 @@ CREATE TABLE last_session (
 ) WITHOUT ROWID;
 ";
 
+/// "Keep this one" (E8.3, `resolve.rs`): the Problems history and what undo
+/// needs.
+///
+/// - `resolution`: one action; `kept` is the copy kept, as the user saw it.
+/// - `resolution_move`: each copy of the action in request order: its
+///   `path` (stored like `font_file.path`), the `display` path the API
+///   shows, its `TrashMoveStatus` (camelCase serde name), a message, and
+///   where the OS trash put it (`location`, `info`: the `Trashed` the
+///   platform returned, stored the same way), which undo moves back.
+const V9: &str = r"
+CREATE TABLE resolution (
+    id      INTEGER PRIMARY KEY,
+    at      TEXT NOT NULL,
+    kept    TEXT NOT NULL,
+    undone  INTEGER NOT NULL DEFAULT 0 CHECK (undone IN (0, 1))
+);
+
+CREATE TABLE resolution_move (
+    resolution_id  INTEGER NOT NULL REFERENCES resolution (id) ON DELETE CASCADE,
+    position       INTEGER NOT NULL,
+    path           NOT NULL,
+    display        TEXT NOT NULL,
+    status         TEXT NOT NULL,
+    message        TEXT,
+    location,
+    info,
+    PRIMARY KEY (resolution_id, position)
+) WITHOUT ROWID;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -385,6 +415,8 @@ pub(crate) const TABLES: &[&str] = &[
     "index_meta",
     "last_session",
     "project_set",
+    "resolution",
+    "resolution_move",
     "set_face",
     "sidecar_base",
     "sidecar_conflict",

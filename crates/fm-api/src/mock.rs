@@ -23,9 +23,10 @@ use crate::export::{
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
-    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, ImportMode, LicenseInfo,
-    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, ScanRequest,
-    SetSourcePausedRequest, Source, SourceKind, StyleMark,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, ImportMode, KeepCopyRequest,
+    LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind,
+    Resolution, ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove,
+    TrashMoveStatus,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -47,7 +48,8 @@ use crate::workflows::{
 use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
     EventSource, ExportService, FaceId, FamilyId, JobId, LibraryService, OrganizationService,
-    PreviewService, SearchService, SetId, SettingsService, SourceId, TagId, WorkflowService,
+    PreviewService, ResolutionId, SearchService, SetId, SettingsService, SourceId, TagId,
+    WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
@@ -122,6 +124,11 @@ struct State {
     face_tags: HashMap<FaceId, BTreeSet<TagId>>,
     sets: Vec<ProjectSet>,
     settings: Settings,
+    /// Paths "Keep this one" moved to the trash; their faces are no longer
+    /// listed as duplicates.
+    trashed: BTreeSet<String>,
+    /// "Keep this one" actions, oldest first.
+    resolutions: Vec<Resolution>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -161,7 +168,29 @@ impl MockApi {
         // in a way that matters to a mock, so a poisoned lock is still used.
         self.state.lock().unwrap_or_else(|e| e.into_inner())
     }
+
+    /// Adds a copy of `face`'s file at `path`: the same hash under a new face
+    /// id in the same source, so the sample library has an exact duplicate.
+    pub fn add_copy(&self, face: FaceId, path: &str) -> ApiResult<FaceId> {
+        let mut st = self.state();
+        let id = FaceId(st.next());
+        let original = st.face(face)?;
+        let mut detail = original.detail.clone();
+        detail.face.id = id;
+        detail.path = path.to_owned();
+        let copy = MockFace {
+            detail,
+            source: original.source,
+            chars: original.chars.clone(),
+            system_clash: original.system_clash,
+        };
+        st.faces.push(copy);
+        Ok(id)
+    }
 }
+
+/// Why a copy the app activated is not moved to the trash (rule 3).
+const ACTIVE_COPY: &str = "This copy is active. Deactivate it first, then move it to the trash.";
 
 #[allow(clippy::too_many_arguments)]
 fn face(
@@ -445,6 +474,8 @@ impl State {
             face_tags: HashMap::new(),
             sets: Vec::new(),
             settings: Settings::default(),
+            trashed: BTreeSet::new(),
+            resolutions: Vec::new(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -997,6 +1028,7 @@ impl LibraryService for MockApi {
             .faces
             .iter()
             .filter(|f| source(f.source).is_some_and(|s| !s.paused))
+            .filter(|f| !st.trashed.contains(&f.detail.path))
             .collect();
         let copy = |f: &MockFace| DuplicateCopy {
             path: f.detail.path.clone(),
@@ -1051,6 +1083,98 @@ impl LibraryService for MockApi {
             g.choose_keeper();
         }
         Ok(groups)
+    }
+
+    fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {
+        req.check(&self.list_duplicates()?)?;
+        let mut st = self.state();
+        let faces_at = |st: &State, path: &str| -> Vec<FaceId> {
+            st.faces
+                .iter()
+                .filter(|f| f.detail.path == path)
+                .map(|f| f.detail.face.id)
+                .collect()
+        };
+        let mut moves = Vec::new();
+        let mut removed = Vec::new();
+        for path in &req.trash {
+            let faces = faces_at(&st, path);
+            let (status, message) = if faces.iter().any(|f| st.active.contains_key(f)) {
+                (TrashMoveStatus::Skipped, Some(ACTIVE_COPY.to_owned()))
+            } else if req.dry_run {
+                (TrashMoveStatus::Planned, None)
+            } else {
+                removed.extend(faces);
+                (TrashMoveStatus::Trashed, None)
+            };
+            moves.push(TrashMove {
+                path: path.clone(),
+                status,
+                message,
+            });
+        }
+        let moved = moves.iter().any(|m| m.status == TrashMoveStatus::Trashed);
+        let resolution = Resolution {
+            id: moved.then(|| ResolutionId(st.next())),
+            kept: req.keep,
+            at: MOCK_NOW.to_owned(),
+            dry_run: req.dry_run,
+            undone: false,
+            moves,
+        };
+        if moved {
+            for m in &resolution.moves {
+                if m.status == TrashMoveStatus::Trashed {
+                    st.trashed.insert(m.path.clone());
+                }
+            }
+            st.resolutions.push(resolution.clone());
+            st.emit(Event::LibraryChanged {
+                source: None,
+                added: Vec::new(),
+                removed,
+                updated: Vec::new(),
+            });
+        }
+        Ok(resolution)
+    }
+
+    fn list_resolutions(&self) -> ApiResult<Vec<Resolution>> {
+        Ok(self.state().resolutions.iter().rev().cloned().collect())
+    }
+
+    fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution> {
+        let mut st = self.state();
+        let i = st
+            .resolutions
+            .iter()
+            .position(|r| r.id == Some(resolution))
+            .ok_or_else(|| ApiError::not_found(format!("Action {resolution}")))?;
+        let mut back = Vec::new();
+        let mut r = st.resolutions[i].clone();
+        for m in &mut r.moves {
+            if m.status == TrashMoveStatus::Trashed {
+                st.trashed.remove(&m.path);
+                back.extend(
+                    st.faces
+                        .iter()
+                        .filter(|f| f.detail.path == m.path)
+                        .map(|f| f.detail.face.id),
+                );
+                m.status = TrashMoveStatus::Restored;
+            }
+        }
+        r.undone = true;
+        st.resolutions[i] = r.clone();
+        if !back.is_empty() {
+            st.emit(Event::LibraryChanged {
+                source: None,
+                added: back,
+                removed: Vec::new(),
+                updated: Vec::new(),
+            });
+        }
+        Ok(r)
     }
 }
 

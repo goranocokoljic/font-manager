@@ -8,7 +8,9 @@ use crate::common::{
     Paged, Slant, Timestamp,
 };
 use crate::search::WeightRange;
-use crate::{ApiResult, ApiVersion, FaceId, FamilyId, JobId, SourceId};
+use crate::{
+    ApiError, ApiResult, ApiVersion, ErrorCode, FaceId, FamilyId, JobId, ResolutionId, SourceId,
+};
 
 /// The operating system the app runs on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
@@ -724,6 +726,111 @@ impl DuplicateGroup {
     }
 }
 
+/// "Keep this one": keep one copy of a duplicate font and move the other
+/// copies to the OS trash (E8.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct KeepCopyRequest {
+    /// The copy to keep ([`DuplicateCopy::path`]).
+    pub keep: String,
+    /// The copies to move to the trash; each must be listed with `keep` in a
+    /// group of [`LibraryService::list_duplicates`].
+    pub trash: Vec<String>,
+    /// Only say what would move; touch nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+impl KeepCopyRequest {
+    /// Checks the request against the duplicate groups `groups`: something
+    /// to keep and something to trash, no path twice, and every copy to
+    /// trash listed with `keep` in one group. So only a duplicate of a copy
+    /// that stays can ever be moved. Every implementation of
+    /// [`LibraryService::keep_copy`] uses this, so the rule is one.
+    pub fn check(&self, groups: &[DuplicateGroup]) -> ApiResult<()> {
+        let invalid = |m: String| Err(ApiError::new(ErrorCode::InvalidRequest, m));
+        if self.keep.trim().is_empty() {
+            return invalid("Choose the copy to keep.".to_owned());
+        }
+        if self.trash.is_empty() {
+            return invalid("Choose at least one copy to move to the trash.".to_owned());
+        }
+        let mut seen = std::collections::HashSet::new();
+        for path in &self.trash {
+            if *path == self.keep {
+                return invalid("The copy to keep cannot also move to the trash.".to_owned());
+            }
+            if !seen.insert(path) {
+                return invalid(format!("{path} is listed twice."));
+            }
+        }
+        let with_keep: Vec<&DuplicateGroup> = groups
+            .iter()
+            .filter(|g| g.copies.iter().any(|c| c.path == self.keep))
+            .collect();
+        if with_keep.is_empty() {
+            return invalid(format!("{} is not a duplicate any more.", self.keep));
+        }
+        for path in &self.trash {
+            if !with_keep
+                .iter()
+                .any(|g| g.copies.iter().any(|c| c.path == *path))
+            {
+                return invalid(format!("{path} is not a copy of the font you keep."));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// What happened, or would happen, to one copy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum TrashMoveStatus {
+    /// Dry run: it would move to the trash.
+    Planned,
+    /// It is in the trash.
+    Trashed,
+    /// Undo put it back.
+    Restored,
+    /// It was not moved and stays where it is (`message` says why).
+    Skipped,
+    /// The move or the undo failed (`message` says why).
+    Failed,
+}
+
+/// One copy of a [`Resolution`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashMove {
+    /// The copy's path in the library.
+    pub path: String,
+    /// What happened to it.
+    pub status: TrashMoveStatus,
+    /// Why it was skipped or failed, in one sentence.
+    pub message: Option<String>,
+}
+
+/// A "Keep this one" action: the copy kept and the copies moved to the
+/// trash. Listed in the Problems history until undone or forgotten.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Resolution {
+    /// The action, for [`LibraryService::undo_resolution`]; `None` for a dry
+    /// run or when nothing moved.
+    pub id: Option<ResolutionId>,
+    /// The copy kept.
+    pub kept: String,
+    /// When it happened.
+    pub at: Timestamp,
+    /// It was a dry run: nothing moved.
+    pub dry_run: bool,
+    /// Every moved copy was put back.
+    pub undone: bool,
+    /// The copies, in the order of the request.
+    pub moves: Vec<TrashMove>,
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -755,6 +862,19 @@ pub trait LibraryService {
     /// and version in files that differ) among the files the library shows,
     /// in groups, each with its recommended keeper first.
     fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>>;
+    /// "Keep this one" (E8.3): moves the other copies to the OS trash, never
+    /// deleting them, and records the action for undo. With `dry_run`, only
+    /// says what would move. A copy that cannot move (the app activated it,
+    /// its drive has no trash) is `Skipped` and stays where it is.
+    /// `InvalidRequest` when a copy is not a duplicate of `keep`;
+    /// `NotFound` when the copy to keep is not there.
+    fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution>;
+    /// The "Keep this one" actions, newest first, for the Problems history.
+    fn list_resolutions(&self) -> ApiResult<Vec<Resolution>>;
+    /// Puts the copies an action moved back from the trash. A copy that
+    /// cannot come back (another file is at its path, the trash was emptied)
+    /// is `Failed` and the others still come back; calling again retries it.
+    fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution>;
 }
 
 #[cfg(test)]
@@ -955,5 +1075,58 @@ mod tests {
             copies: Vec::new(),
         };
         assert_eq!(empty.problems(), []);
+    }
+
+    fn groups() -> Vec<DuplicateGroup> {
+        let group = |paths: &[&str]| DuplicateGroup {
+            kind: DuplicateKind::Exact,
+            postscript_name: None,
+            copies: paths.iter().map(|p| copy(p, None, false)).collect(),
+        };
+        vec![
+            group(&["/a.ttf", "/b.ttf", "/c.ttf"]),
+            group(&["/x.ttf", "/y.ttf"]),
+        ]
+    }
+
+    fn keep(keep: &str, trash: &[&str]) -> ApiResult<()> {
+        KeepCopyRequest {
+            keep: keep.into(),
+            trash: trash.iter().map(|&p| p.into()).collect(),
+            dry_run: false,
+        }
+        .check(&groups())
+    }
+
+    #[test]
+    fn copies_of_the_kept_font_may_go_to_the_trash() {
+        assert_eq!(keep("/b.ttf", &["/a.ttf", "/c.ttf"]), Ok(()));
+        assert_eq!(keep("/y.ttf", &["/x.ttf"]), Ok(()));
+    }
+
+    #[test]
+    fn only_duplicates_of_a_copy_that_stays_can_go_to_the_trash() {
+        let code = |r: ApiResult<()>| r.expect_err("refused").code;
+        // Another group's file, the kept copy itself, a path twice, a
+        // keeper that is no duplicate, nothing to keep or to trash.
+        assert_eq!(code(keep("/a.ttf", &["/x.ttf"])), ErrorCode::InvalidRequest);
+        assert_eq!(code(keep("/a.ttf", &["/a.ttf"])), ErrorCode::InvalidRequest);
+        assert_eq!(
+            code(keep("/a.ttf", &["/b.ttf", "/b.ttf"])),
+            ErrorCode::InvalidRequest
+        );
+        assert_eq!(
+            code(keep("/home/notes.txt", &["/a.ttf"])),
+            ErrorCode::InvalidRequest
+        );
+        assert_eq!(code(keep("", &["/a.ttf"])), ErrorCode::InvalidRequest);
+        assert_eq!(code(keep("/a.ttf", &[])), ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn a_dry_run_is_off_unless_asked() {
+        let req: KeepCopyRequest =
+            serde_json::from_str(r#"{"keep":"/a.ttf","trash":["/b.ttf"]}"#).expect("parses");
+        assert!(!req.dry_run);
     }
 }

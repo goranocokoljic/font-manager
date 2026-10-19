@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
-import type { ApiError, Event, Problem, ProblemKind } from '../api/types';
+import type {
+  ApiError,
+  DuplicateGroup,
+  Event,
+  Problem,
+  ProblemKind,
+  Resolution,
+  ResolutionId,
+} from '../api/types';
+
+/** How long the undo toast stays after "Keep this one" (E8.3: undoable from a toast for 10 s). */
+export const UNDO_WINDOW_MS = 10_000;
 
 /** A filter of the Problems view: a group of `ProblemKind`s under one label. */
 export type ProblemGroupId =
@@ -39,11 +50,24 @@ export function groupOf(kind: ProblemKind): ProblemGroup | undefined {
 /**
  * The Problems view and its counts (sidebar, status bar): `list_problems` as fm-api
  * reports it. Read again on every library, scan and activation event; the UI never polls.
+ *
+ * "Keep this one" (E8.3): the duplicate groups, the dry-run `plan` the user confirms,
+ * the undo `toast` (gone after `UNDO_WINDOW_MS`), and the `history` of actions, each
+ * undoable from there for as long as it is listed.
  */
 export const useProblemsStore = defineStore('problems', () => {
   const problems = ref<Problem[]>([]);
   const error = ref<ApiError | null>(null);
   const loaded = ref(false);
+  const duplicates = ref<DuplicateGroup[]>([]);
+  const history = ref<Resolution[]>([]);
+  /** The dry run of a "Keep this one", waiting for the user to confirm. */
+  const plan = ref<Resolution | null>(null);
+  /** The last action, offered for undo until the timer ends. */
+  const toast = ref<Resolution | null>(null);
+  /** The error of the last keep or undo. */
+  const actionError = ref<ApiError | null>(null);
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
   let unsubscribe: Promise<Unsubscribe> | undefined;
   /** Bumped by every read; an answer to an older read is dropped. */
   let round = 0;
@@ -71,9 +95,16 @@ export const useProblemsStore = defineStore('problems', () => {
   async function refresh(): Promise<void> {
     const mine = ++round;
     try {
-      const list = await useClient().listProblems();
+      const client = useClient();
+      const [list, groups, actions] = await Promise.all([
+        client.listProblems(),
+        client.listDuplicates(),
+        client.listResolutions(),
+      ]);
       if (mine !== round) return;
       problems.value = list;
+      duplicates.value = groups;
+      history.value = actions;
       error.value = null;
     } catch (e) {
       if (mine === round) error.value = e as ApiError;
@@ -91,6 +122,74 @@ export const useProblemsStore = defineStore('problems', () => {
       void refresh();
   }
 
+  function dismissToast(): void {
+    clearTimeout(toastTimer);
+    toastTimer = undefined;
+    toast.value = null;
+  }
+
+  function showToast(resolution: Resolution): void {
+    dismissToast();
+    toast.value = resolution;
+    toastTimer = setTimeout(dismissToast, UNDO_WINDOW_MS);
+  }
+
+  /** Asks fm-api what keeping `keep` would move (a dry run) and holds it as the `plan`. */
+  async function planKeep(group: DuplicateGroup, keep: string): Promise<void> {
+    actionError.value = null;
+    try {
+      plan.value = await useClient().keepCopy({
+        keep,
+        trash: group.copies.filter((c) => c.path !== keep).map((c) => c.path),
+        dryRun: true,
+      });
+    } catch (e) {
+      actionError.value = e as ApiError;
+    }
+  }
+
+  function cancelPlan(): void {
+    plan.value = null;
+  }
+
+  /** Moves what the `plan` listed to the trash and offers the undo. */
+  async function confirmPlan(): Promise<void> {
+    const p = plan.value;
+    if (!p) return;
+    plan.value = null;
+    const trash = p.moves.filter((m) => m.status === 'planned').map((m) => m.path);
+    if (!trash.length) return;
+    try {
+      showToast(await useClient().keepCopy({ keep: p.kept, trash, dryRun: false }));
+    } catch (e) {
+      actionError.value = e as ApiError;
+    }
+    await refresh();
+  }
+
+  /** Puts the copies of an action back (from the toast or the history). */
+  async function undo(id: ResolutionId): Promise<Resolution | undefined> {
+    actionError.value = null;
+    if (toast.value?.id === id) dismissToast();
+    try {
+      const r = await useClient().undoResolution(id);
+      if (!r.undone) {
+        const failed = r.moves.find((m) => m.status === 'failed');
+        actionError.value = {
+          code: 'io',
+          message: failed?.message ?? 'Some copies could not be put back.',
+          detail: null,
+        };
+      }
+      return r;
+    } catch (e) {
+      actionError.value = e as ApiError;
+      return undefined;
+    } finally {
+      await refresh();
+    }
+  }
+
   /** Subscribes to the events that change the list (once) and reads it. */
   async function load(): Promise<void> {
     unsubscribe ??= useClient().onEvent(onEvent);
@@ -100,10 +199,31 @@ export const useProblemsStore = defineStore('problems', () => {
 
   /** Stops listening to events. */
   async function stop(): Promise<void> {
+    dismissToast();
     const pending = unsubscribe;
     unsubscribe = undefined;
     (await pending?.catch(() => undefined))?.();
   }
 
-  return { problems, error, loaded, total, counts, inGroup, load, stop, refresh };
+  return {
+    problems,
+    error,
+    loaded,
+    total,
+    counts,
+    inGroup,
+    load,
+    stop,
+    refresh,
+    duplicates,
+    history,
+    plan,
+    toast,
+    actionError,
+    planKeep,
+    cancelPlan,
+    confirmPlan,
+    undo,
+    dismissToast,
+  };
 });

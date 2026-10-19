@@ -10,8 +10,8 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::library::{
-    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, Problem,
-    ScanRequest, SetSourcePausedRequest, Source,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, KeepCopyRequest,
+    ListFamiliesRequest, Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -24,8 +24,8 @@ use fm_api::preview::{
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
-    Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, SettingsService,
-    SourceId,
+    Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
+    SettingsService, SourceId,
 };
 use fm_core::SettingsStore;
 use tauri::http::{Response, StatusCode, header};
@@ -250,6 +250,34 @@ async fn list_problems(state: State<'_, AppState>) -> ApiResult<Vec<Problem>> {
     call(&state, |api| api.list_problems()).await
 }
 
+/// Duplicate groups, each with its recommended keeper first (Problems view).
+#[tauri::command]
+async fn list_duplicates(state: State<'_, AppState>) -> ApiResult<Vec<DuplicateGroup>> {
+    call(&state, |api| api.list_duplicates()).await
+}
+
+/// "Keep this one": moves the other copies to the OS trash, or with
+/// `dryRun` only says what would move.
+#[tauri::command]
+async fn keep_copy(state: State<'_, AppState>, req: KeepCopyRequest) -> ApiResult<Resolution> {
+    call(&state, move |api| api.keep_copy(req)).await
+}
+
+/// The "Keep this one" actions, newest first (Problems history).
+#[tauri::command]
+async fn list_resolutions(state: State<'_, AppState>) -> ApiResult<Vec<Resolution>> {
+    call(&state, |api| api.list_resolutions()).await
+}
+
+/// Puts the copies of a "Keep this one" action back from the trash.
+#[tauri::command]
+async fn undo_resolution(
+    state: State<'_, AppState>,
+    resolution: ResolutionId,
+) -> ApiResult<Resolution> {
+    call(&state, move |api| api.undo_resolution(resolution)).await
+}
+
 /// Searches the library: free text and filters, grouped by family, with filter counts.
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -459,6 +487,10 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             conflicts,
             list_conflicts,
             list_problems,
+            list_duplicates,
+            keep_copy,
+            list_resolutions,
+            undo_resolution,
             list_sources,
             add_source,
             remove_source,

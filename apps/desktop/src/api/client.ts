@@ -18,6 +18,7 @@ import type {
   Conflict,
   CreateCollectionRequest,
   DeactivateRequest,
+  DuplicateGroup,
   Event,
   FaceDetail,
   FaceId,
@@ -25,6 +26,7 @@ import type {
   FamilyId,
   FamilySummary,
   JobId,
+  KeepCopyRequest,
   LanguagePreset,
   ListFamiliesRequest,
   MoveCollectionRequest,
@@ -33,6 +35,8 @@ import type {
   PreviewRequest,
   Problem,
   RenameCollectionRequest,
+  Resolution,
+  ResolutionId,
   SampleText,
   SampleTextRequest,
   ScanRequest,
@@ -108,6 +112,14 @@ export interface FmClient {
   listConflicts(): Promise<Clash[]>;
   /** Duplicates, broken and legacy files, sidecar and activation conflicts (the Problems view). */
   listProblems(): Promise<Problem[]>;
+  /** Duplicate groups, each with its recommended keeper first. */
+  listDuplicates(): Promise<DuplicateGroup[]>;
+  /** "Keep this one": moves the other copies to the OS trash; `dryRun` only plans. */
+  keepCopy(req: KeepCopyRequest): Promise<Resolution>;
+  /** The "Keep this one" actions, newest first (the Problems history). */
+  listResolutions(): Promise<Resolution[]>;
+  /** Puts the copies of an action back from the trash. */
+  undoResolution(resolution: ResolutionId): Promise<Resolution>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -152,6 +164,10 @@ export const tauriClient: FmClient = {
   conflicts: (target) => invoke<Conflict[]>('conflicts', { target }),
   listConflicts: () => invoke<Clash[]>('list_conflicts'),
   listProblems: () => invoke<Problem[]>('list_problems'),
+  listDuplicates: () => invoke<DuplicateGroup[]>('list_duplicates'),
+  keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
+  listResolutions: () => invoke<Resolution[]>('list_resolutions'),
+  undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),
