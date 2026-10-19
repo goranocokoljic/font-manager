@@ -1,0 +1,19 @@
+{
+  "id": "wiring-that-only-the-app-s-entry-point-runs-must-go-through-",
+  "title": "Wiring that only the app's entry point runs must go through a helper the tests also call",
+  "category": "testing",
+  "rule": "When a feature is switched on in `run()`/`main` (a Tauri menu, a menu or window event handler, a plugin, a tray), put that wiring in one small function that takes and returns the builder, call it from `run()`, and build the mock app through the same function in an integration test that asserts the feature (menu items and ids, handler effect). Tests of the pure helpers alone do not count: deleting the wiring from `run()` leaves them green. If one OS cannot run the test (muda menus need the main thread on macOS), gate only that OS with `cfg(not(target_os = ...))`.",
+  "rationale": "E9.5 (#93): the native Help menu (criterion 2) was set with `.menu(help::menu).on_menu_event(...)` in `run()`, which no test calls; the menu-id helpers were tested, so removing the menu kept every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    93
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/src/**",
+    "apps/desktop/src-tauri/tests/**"
+  ],
+  "first_seen": "2026-10-19T03:00:42.420Z",
+  "last_seen": "2026-10-19T03:00:42.420Z"
+}
