@@ -11,19 +11,23 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use fm_api::SourceId;
+use fm_api::activation::{
+    ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, OutcomeStatus, Target,
+};
 use fm_api::common::Page;
 use fm_api::ids::FaceId;
 use fm_api::library::SourceKind;
 use fm_api::preview::PreviewRequest;
 use fm_api::search::SearchRequest;
-use fm_core::Index;
+use fm_api::{ActivationService, SourceId};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
 use fm_core::preview::render_preview_file;
 use fm_core::scanner::{FileIndex, discover};
+use fm_core::{ActivationManager, Index};
 use fm_core::{logging, startup};
 use fm_platform::AppPaths;
 use serde::Serialize;
@@ -249,6 +253,72 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
         slowest: slowest.1,
         families,
     })
+}
+
+/// Faces one activation request registers in the budget (100-face activation).
+pub const ACTIVATION_FACES: u32 = 100;
+
+/// What an activation round did.
+#[derive(Debug, Default, Serialize)]
+pub struct Activated {
+    /// Milliseconds for the one request that activates the faces, conflict
+    /// check included (the default policy keeps existing fonts).
+    pub ms: f64,
+    /// Milliseconds to deactivate them again (not budgeted).
+    pub deactivate_ms: f64,
+    /// Faces in the request.
+    pub faces: usize,
+    /// Faces activated.
+    pub done: usize,
+    /// Faces left inactive because they clash with an installed font.
+    pub conflicts: usize,
+    /// Faces skipped or failed.
+    pub other: usize,
+}
+
+/// Activates [`ACTIVATION_FACES`] faces of the index in `home` in one
+/// session request through this OS's activator, as the Activate button does,
+/// then deactivates them. The fonts stay where they are (rule 2); only the
+/// app's own per-user registrations are written and removed.
+pub fn activate(home: &Path) -> BenchResult<Activated> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let faces = index.activatable_faces(ACTIVATION_FACES)?;
+    if faces.len() < ACTIVATION_FACES as usize {
+        return Err(format!(
+            "the index has {} activatable faces, {ACTIVATION_FACES} needed: run the scan first",
+            faces.len()
+        )
+        .into());
+    }
+    let activator = fm_platform::activator::system(&paths)?;
+    let service = ActivationManager::new(Arc::new(Mutex::new(index)), activator, |_| {});
+    let begin = Instant::now();
+    let outcomes = service.activate(ActivateRequest {
+        target: Target::Faces {
+            faces: faces.clone(),
+        },
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::KeepExisting,
+    })?;
+    let mut report = Activated {
+        ms: ms(begin.elapsed()),
+        faces: faces.len(),
+        ..Activated::default()
+    };
+    for o in &outcomes {
+        match o.outcome {
+            OutcomeStatus::Done => report.done += 1,
+            OutcomeStatus::Conflict { .. } => report.conflicts += 1,
+            _ => report.other += 1,
+        }
+    }
+    let begin = Instant::now();
+    service.deactivate(DeactivateRequest {
+        target: Some(Target::Faces { faces }),
+    })?;
+    report.deactivate_ms = ms(begin.elapsed());
+    Ok(report)
 }
 
 /// The thumbnail the preview-cache measurement caches per face: one word at

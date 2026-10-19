@@ -8,7 +8,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use super::activator::{Registrar, RegistrarError};
+use super::activator::{Registrar, RegistrarError, code, settle_registered, settle_unregistered};
 use crate::activator::Mode;
 
 type CFTypeRef = *const c_void;
@@ -49,12 +49,46 @@ unsafe extern "C" {
     fn CFStringGetLength(s: CFTypeRef) -> CFIndex;
     fn CFStringGetMaximumSizeForEncoding(length: CFIndex, encoding: u32) -> CFIndex;
     fn CFStringGetCString(s: CFTypeRef, buffer: *mut c_char, size: CFIndex, encoding: u32) -> u8;
+    static kCFTypeArrayCallBacks: CFArrayCallBacks;
+    fn CFArrayCreate(
+        allocator: CFTypeRef,
+        values: *const CFTypeRef,
+        count: CFIndex,
+        callbacks: *const CFArrayCallBacks,
+    ) -> CFTypeRef;
+    fn CFEqual(a: CFTypeRef, b: CFTypeRef) -> u8;
+    fn CFErrorCopyUserInfo(err: CFTypeRef) -> CFTypeRef;
+    fn CFDictionaryGetValue(dict: CFTypeRef, key: CFTypeRef) -> CFTypeRef;
+}
+
+/// `CFArrayCallBacks`; only its address is used (`kCFTypeArrayCallBacks`).
+#[repr(C)]
+struct CFArrayCallBacks {
+    version: CFIndex,
+    retain: *const c_void,
+    release: *const c_void,
+    copy_description: *const c_void,
+    equal: *const c_void,
 }
 
 #[link(name = "CoreText", kind = "framework")]
 unsafe extern "C" {
     static kCTFontNameAttribute: CFTypeRef;
     static kCTFontURLAttribute: CFTypeRef;
+    static kCTFontManagerErrorFontURLsKey: CFTypeRef;
+    // Deprecated since macOS 10.15 in favour of the block-based
+    // `CTFontManagerRegisterFontURLs`, but still exported and synchronous,
+    // with a per-URL error list: one call for a whole request.
+    fn CTFontManagerRegisterFontsForURLs(
+        urls: CFTypeRef,
+        scope: CTFontManagerScope,
+        errors: *mut CFTypeRef,
+    ) -> bool;
+    fn CTFontManagerUnregisterFontsForURLs(
+        urls: CFTypeRef,
+        scope: CTFontManagerScope,
+        errors: *mut CFTypeRef,
+    ) -> bool;
     fn CTFontManagerRegisterFontsForURL(
         url: CFTypeRef,
         scope: CTFontManagerScope,
@@ -65,6 +99,7 @@ unsafe extern "C" {
         scope: CTFontManagerScope,
         error: *mut CFTypeRef,
     ) -> bool;
+    fn CTFontManagerCopyAvailablePostScriptNames() -> CFTypeRef;
     fn CTFontCollectionCreateFromAvailableFonts(options: CFTypeRef) -> CFTypeRef;
     fn CTFontCollectionCreateMatchingFontDescriptors(collection: CFTypeRef) -> CFTypeRef;
     fn CTFontDescriptorCopyAttribute(descriptor: CFTypeRef, attribute: CFTypeRef) -> CFTypeRef;
@@ -187,6 +222,153 @@ fn manager_call(
     }
 }
 
+/// Whether any font the OS offers has one of `names` as its PostScript
+/// name. `true` when the list cannot be read, so the caller looks closer.
+fn any_available(names: &HashSet<&str>) -> bool {
+    // SAFETY: the Copy result is owned by `Cf`; its items are borrowed for
+    // the loop and type-checked before they are read.
+    unsafe {
+        let Some(all) = Cf::owned(CTFontManagerCopyAvailablePostScriptNames()) else {
+            return true;
+        };
+        (0..CFArrayGetCount(all.0)).any(|i| {
+            let name = CFArrayGetValueAtIndex(all.0, i);
+            CFGetTypeID(name) == CFStringGetTypeID()
+                && string(name).is_some_and(|n| names.contains(n.as_str()))
+        })
+    }
+}
+
+type BatchCall = unsafe extern "C" fn(CFTypeRef, CTFontManagerScope, *mut CFTypeRef) -> bool;
+
+/// One CoreText call for every file of `paths`; one result per path. Each
+/// error CoreText reports names the URLs it is about
+/// (`kCTFontManagerErrorFontURLsKey`); an error that names none is given to
+/// every path not yet failed as `code::UNSETTLED`, so a failure is never
+/// reported as a success and the caller asks again per file
+/// (`settle_registered`, `settle_unregistered`).
+fn batch_call(
+    call: BatchCall,
+    what: &str,
+    paths: &[&Path],
+    mode: Mode,
+) -> Vec<Result<(), RegistrarError>> {
+    let mut results: Vec<Result<(), RegistrarError>> = Vec::with_capacity(paths.len());
+    let mut urls: Vec<(usize, Cf)> = Vec::with_capacity(paths.len());
+    for (i, path) in paths.iter().enumerate() {
+        match file_url(path) {
+            Some(url) => {
+                urls.push((i, url));
+                results.push(Ok(()));
+            }
+            None => results.push(Err(RegistrarError {
+                code: super::activator::code::INVALID_FILE_PATH,
+                detail: format!("{what}: not a file URL"),
+            })),
+        }
+    }
+    if urls.is_empty() {
+        return results;
+    }
+    let values: Vec<CFTypeRef> = urls.iter().map(|(_, u)| u.0).collect();
+    let Ok(count) = CFIndex::try_from(values.len()) else {
+        return results;
+    };
+    // SAFETY: `values` holds live CFURLs for the call; the array retains
+    // them with the standard callbacks and is owned by `Cf`. `errors` is a
+    // local out pointer that receives an owned CFArray of CFErrors or stays
+    // NULL; its items and their user-info values are borrowed while it lives.
+    unsafe {
+        let Some(array) = Cf::owned(CFArrayCreate(
+            ptr::null(),
+            values.as_ptr(),
+            count,
+            &raw const kCFTypeArrayCallBacks,
+        )) else {
+            return results;
+        };
+        let mut errors: CFTypeRef = ptr::null();
+        let ok = call(array.0, scope(mode), &mut errors);
+        let errors = Cf::owned(errors);
+        let Some(errors) = errors else {
+            if !ok {
+                for (i, _) in &urls {
+                    results[*i] = Err(RegistrarError {
+                        code: code::UNSETTLED,
+                        detail: format!("{what} failed without an error"),
+                    });
+                }
+            }
+            return results;
+        };
+        for e in 0..CFArrayGetCount(errors.0) {
+            let err = CFArrayGetValueAtIndex(errors.0, e);
+            let code = CFErrorGetCode(err);
+            let description = Cf::owned(CFErrorCopyDescription(err)).and_then(|d| string(d.0));
+            let failure = RegistrarError {
+                code,
+                detail: format!("{what}: {}", description.unwrap_or_default()),
+            };
+            let info = Cf::owned(CFErrorCopyUserInfo(err));
+            let named = info
+                .as_ref()
+                .map(|d| CFDictionaryGetValue(d.0, kCTFontManagerErrorFontURLsKey))
+                .filter(|v| !v.is_null());
+            let mut hit = false;
+            if let Some(named) = named {
+                for n in 0..CFArrayGetCount(named) {
+                    let url = CFArrayGetValueAtIndex(named, n);
+                    for (i, ours) in &urls {
+                        if CFEqual(url, ours.0) != 0 {
+                            results[*i] = Err(failure.clone());
+                            hit = true;
+                        }
+                    }
+                }
+            }
+            if !hit {
+                let unsettled = RegistrarError {
+                    code: code::UNSETTLED,
+                    detail: format!("{} (CoreText error {code} names no file)", failure.detail),
+                };
+                for (i, _) in &urls {
+                    if results[*i].is_ok() {
+                        results[*i] = Err(unsettled.clone());
+                    }
+                }
+            }
+        }
+    }
+    results
+}
+
+fn register_urls(paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+    batch_call(
+        CTFontManagerRegisterFontsForURLs,
+        "CTFontManagerRegisterFontsForURLs",
+        paths,
+        mode,
+    )
+}
+
+/// Files per parallel registration call: at most [`MAX_WORKERS`] calls and at
+/// least [`MIN_PER_CALL`] files each, so a small request stays one call.
+fn chunk_sizes(files: usize, workers: usize) -> Vec<usize> {
+    let calls = workers
+        .clamp(1, MAX_WORKERS)
+        .min(files / MIN_PER_CALL)
+        .max(1);
+    let (base, extra) = (files / calls, files % calls);
+    (0..calls)
+        .map(|i| base + usize::from(i < extra))
+        .filter(|&n| n > 0)
+        .collect()
+}
+
+/// More parallel calls than this gained nothing on the timing spike.
+const MAX_WORKERS: usize = 8;
+const MIN_PER_CALL: usize = 8;
+
 /// The CoreText registrar the app uses.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CoreText;
@@ -210,8 +392,64 @@ impl Registrar for CoreText {
         )
     }
 
+    fn register_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+        // fontd reads every file it registers, one after another within a
+        // call: 100 files took 0.7–1.9 s in one call on a 3-core CI Mac and
+        // about half that in parallel calls (E6.6 timing spike).
+        let workers = std::thread::available_parallelism().map_or(1, usize::from);
+        let parts = chunk_sizes(paths.len(), workers);
+        if parts.len() < 2 {
+            return settle_registered(self, paths, mode, register_urls(paths, mode));
+        }
+        let mut slices = Vec::with_capacity(parts.len());
+        let mut rest = paths;
+        for size in parts {
+            let (part, tail) = rest.split_at(size);
+            slices.push(part);
+            rest = tail;
+        }
+        let results = std::thread::scope(|s| {
+            let handles: Vec<_> = slices
+                .iter()
+                .map(|part| (part.len(), s.spawn(move || register_urls(part, mode))))
+                .collect();
+            handles
+                .into_iter()
+                .flat_map(|(len, handle)| {
+                    handle.join().unwrap_or_else(|_| {
+                        vec![
+                            Err(RegistrarError {
+                                code: code::UNSETTLED,
+                                detail: "CTFontManagerRegisterFontsForURLs: worker panicked"
+                                    .to_owned(),
+                            });
+                            len
+                        ]
+                    })
+                })
+                .collect()
+        });
+        settle_registered(self, paths, mode, results)
+    }
+
+    fn unregister_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+        let results = batch_call(
+            CTFontManagerUnregisterFontsForURLs,
+            "CTFontManagerUnregisterFontsForURLs",
+            paths,
+            mode,
+        );
+        settle_unregistered(self, paths, mode, results)
+    }
+
     fn fonts_named(&self, names: &HashSet<&str>) -> Result<Vec<(String, PathBuf)>, String> {
         let mut found = Vec::new();
+        // Most activations clash with nothing: the list of names alone says
+        // so without a descriptor per installed font, which took most of the
+        // 100-face activation budget.
+        if !any_available(names) {
+            return Ok(found);
+        }
         // SAFETY: Create/Copy results are owned by `Cf`; array items and the
         // attribute keys are borrowed for the duration of the loop; every
         // attribute value is type-checked before it is read.
@@ -272,6 +510,31 @@ mod tests {
     fn each_mode_registers_in_its_own_coretext_scope() {
         assert_eq!(scope(Mode::Session), 3);
         assert_eq!(scope(Mode::Permanent), 2);
+    }
+
+    #[test]
+    fn a_request_splits_into_ordered_parallel_calls_of_at_least_eight_files() {
+        assert_eq!(chunk_sizes(0, 4), Vec::<usize>::new());
+        assert_eq!(chunk_sizes(5, 4), vec![5]);
+        assert_eq!(chunk_sizes(20, 4), vec![10, 10]);
+        assert_eq!(chunk_sizes(100, 3), vec![34, 33, 33]);
+        assert_eq!(chunk_sizes(100, 64).len(), MAX_WORKERS);
+        assert_eq!(chunk_sizes(100, 0), vec![100]);
+        for (files, workers) in [(99, 3), (100, 8), (17, 2), (1000, 16)] {
+            assert_eq!(chunk_sizes(files, workers).iter().sum::<usize>(), files);
+        }
+    }
+
+    /// Parallel calls keep one result per path, in order.
+    #[test]
+    fn register_all_answers_every_path_in_order() {
+        let paths: Vec<PathBuf> = (0..20)
+            .map(|i| PathBuf::from(format!("/nonexistent/fm-{i}.ttf")))
+            .collect();
+        let refs: Vec<&Path> = paths.iter().map(PathBuf::as_path).collect();
+        let results = CoreText.register_all(&refs, Mode::Session);
+        assert_eq!(results.len(), paths.len());
+        assert!(results.iter().all(Result::is_err), "{results:?}");
     }
 
     #[test]

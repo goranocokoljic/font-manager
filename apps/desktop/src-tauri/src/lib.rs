@@ -5,7 +5,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use fm_api::activation::{ActivateRequest, ActivationOutcome, DeactivateRequest};
+use fm_api::activation::{ActivateRequest, ActivationOutcome, ActiveFace, DeactivateRequest};
 use fm_api::common::Paged;
 use fm_api::library::{
     AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, ScanRequest,
@@ -223,6 +223,12 @@ async fn deactivate(
     call(&state, move |api| api.deactivate(req)).await
 }
 
+/// Every face the app has active (the status bar count).
+#[tauri::command]
+async fn list_active(state: State<'_, AppState>) -> ApiResult<Vec<ActiveFace>> {
+    call(&state, |api| api.list_active()).await
+}
+
 /// Searches the library: free text and filters, grouped by family, with filter counts.
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -428,6 +434,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             render_preview,
             activate,
             deactivate,
+            list_active,
             list_sources,
             add_source,
             remove_source,

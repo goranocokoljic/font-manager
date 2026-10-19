@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use fm_api::activation::{ActivationOutcome, OutcomeStatus};
+use fm_api::activation::{ActivationOutcome, ActiveFace, OutcomeStatus};
 use fm_api::common::{Paged, Slant};
 use fm_api::library::{
     AppInfo, FaceDetail, Family, FamilySummary, LibraryService, ListFamiliesRequest, Source,
@@ -17,8 +17,8 @@ use fm_api::preview::{PreviewImage, PreviewService, SampleText, SampleTextReques
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
-    API_VERSION, ApiResult, Event, FaceId, FamilyId, JobId, SearchService, SettingsService,
-    SourceId,
+    API_VERSION, ActivationService, ApiResult, Event, FaceId, FamilyId, JobId, SearchService,
+    SettingsService, SourceId,
 };
 use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
@@ -397,6 +397,16 @@ fn activate_and_deactivate_report_one_outcome_per_face() {
     .deserialize()
     .unwrap();
     assert!(matches!(off[0].outcome, OutcomeStatus::Skipped { .. }));
+}
+
+#[test]
+fn list_active_reports_the_faces_the_app_activated() {
+    let none: Vec<ActiveFace> = invoke_with("list_active", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(none, MockApi::new().list_active().unwrap());
 }
 
 #[test]

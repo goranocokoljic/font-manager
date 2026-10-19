@@ -89,6 +89,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E9.4 #92] crates/fm-core/src/crash.rs:205 — pruning to 10 crash logs counts unreported ones too, so more than 10 crashes before a start drop the oldest unread logs (app-owned files only).
 - [E9.5 #93] apps/desktop/src/views/HomeView.vue:78 — the view-mode actions are registered as `view.list`/`view.table` while KEYMAP binds the digits to `view.mode1..5`, so the `1`–`5` shortcuts of the spec's keyboard model do nothing.
 - [E9.5 #93] apps/desktop/src/stores/commands.ts:57 — `void action.run()` drops rejected promises, so a failed palette action is an unhandled rejection the user never sees.
+- [E6.6 #79] crates/fm-platform/src/windows/activator.rs:169 — `live.iter().find(|r| r.path == face.path)` compares paths case-sensitively, so the same file through different casing gets a second registry value instead of `AlreadyActive`.
+- [E6.6 #79] crates/fm-platform/src/linux/activator.rs:56 — `fonts_dir(paths.data)` derives the link folder from the app data folder, so `fm-bench activate` with a throwaway home writes links fontconfig never scans, while the Windows and macOS benches register real fonts.
+- [E6.6 #79] crates/fm-platform/src/macos/coretext.rs:273 — `batch_call` returns every path `Ok` when `CFIndex::try_from` or `CFArrayCreate` fails, without calling CoreText, so those faces are reported Activated without being registered.
 - [E5.3 #66] apps/desktop/src-tauri/src/lib.rs:43 — the shell serves `MockApi`, whose `render_preview` returns a 1×1 PNG, so grid thumbnails in the real app stay empty until fm-core implements `Api`.
 - [E5.3 #66] apps/desktop/src/components/FontList.vue:229 — the list's "Styles not available" branch (a family whose faces fail to load) has no test.
 - [E5.3 #66] apps/desktop/src/components/FontList.vue:763 — the list's row height changes with the preview size without re-anchoring, so another family moves to the top.

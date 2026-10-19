@@ -434,7 +434,7 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, row: &FileRow<'_>) -> FmRe
 
 /// A path as SQL: TEXT when it is UTF-8, else its native bytes as a BLOB, so
 /// every path the scanner finds is stored exactly.
-fn path_to_sql(path: &Path) -> Value {
+pub(super) fn path_to_sql(path: &Path) -> Value {
     match path.to_str() {
         Some(s) => Value::Text(s.to_owned()),
         None => Value::Blob(fm_platform::fs::path_to_bytes(path)),

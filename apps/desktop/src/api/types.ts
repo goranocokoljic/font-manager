@@ -1183,6 +1183,11 @@ export type Settings = {
 	activationMode?: ActivationMode,
 	/**  What activation does when a face clashes with another font. */
 	onConflict?: ConflictPolicy,
+	/**
+	 *  Activate again, at start, the faces that were session-active when the
+	 *  app last ran (off by default: a session activation ends with the app).
+	 */
+	reactivateOnLaunch?: boolean,
 	/**  Light, dark or the OS appearance. */
 	theme?: Theme,
 	/**  Comfortable or compact lists. */
@@ -1202,6 +1207,8 @@ export type SettingsUpdate = {
 	activationMode?: ActivationMode | null,
 	/**  What activation does when a face clashes with another font. */
 	onConflict?: ConflictPolicy | null,
+	/**  Activate the last session's faces again at start. */
+	reactivateOnLaunch?: boolean | null,
 	/**  Light, dark or the OS appearance. */
 	theme?: Theme | null,
 	/**  Comfortable or compact lists. */

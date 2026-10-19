@@ -20,6 +20,7 @@
 //!
 //! [`Index::problems`] lists what is wrong with the library (E9.4).
 
+mod activation;
 mod collections;
 mod duplicates;
 mod files;
@@ -44,6 +45,7 @@ use rusqlite::Connection;
 
 use crate::error::{FmError, FmResult};
 
+pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
 pub use files::{BATCH_SIZE, Persisted};
 pub use schema::SCHEMA_VERSION;
 pub use sidecars::SidecarSync;
@@ -132,6 +134,12 @@ impl Index {
                 })
             }
         }
+    }
+
+    /// The database connection, for tests outside this module that seed rows.
+    #[cfg(test)]
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.conn
     }
 
     /// A fresh index in memory, for tests and one-off tools.

@@ -1,0 +1,18 @@
+{
+  "id": "a-batch-os-call-s-error-that-names-no-item-must-not-decide-t",
+  "title": "A batch OS call's error that names no item must not decide the outcome of every item",
+  "category": "unsafe-ffi",
+  "rule": "When one OS call registers or unregisters many items (CTFontManagerRegisterFontsForURLs, a batched registry write) and returns an error that does not name the items it is about, do not mark every item failed and drop its ownership record: the call may have done the work for some. Mark those items unsettled, ask again one item at a time, and keep the app's record (ledger entry, activation row) of any item that may be registered, so cleanup and deactivate can still remove it (rule 3). Test it with a fake whose batch call fails without naming an item it did register, and one it did not.",
+  "rationale": "E6.6 (#79): the macOS batch registration gave an unattributed CFError to every path; the activator then removed the ledger entries of fonts CoreText had registered, leaving registrations the app could no longer see or remove.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    79
+  ],
+  "file_globs": [
+    "crates/fm-platform/src/**"
+  ],
+  "first_seen": "2026-10-19T18:10:21.031Z",
+  "last_seen": "2026-10-19T18:10:21.031Z"
+}

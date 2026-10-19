@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, blocking, failures, firstScan, gate, median, merge, metric, target,
+  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, gate, median, merge, metric, target,
   nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
@@ -68,6 +68,27 @@ describe('metric', () => {
   test('an unknown metric is an error', () => {
     assert.throws(() => metric('fps', 1), /unknown metric/);
     assert.throws(() => target('fps'), /unknown metric/);
+  });
+});
+
+describe('100-face activation', () => {
+  test('times a request whose faces all activated or clashed', () => {
+    const m = activation100({ ms: 270.4, faces: 100, done: 99, conflicts: 1 }, 'windows');
+    assert.equal(m.value, 270.4);
+    assert.equal(m.pass, true);
+    assert.equal(m.note, undefined);
+  });
+
+  test('fails a fast request whose registrations failed', () => {
+    const m = activation100({ ms: 12, faces: 100, done: 0, conflicts: 0 }, 'macos');
+    assert.equal(m.value, 12);
+    assert.equal(m.pass, false);
+    assert.equal(m.note, '100 of 100 faces were not activated');
+  });
+
+  test('keeps the per-OS budget', () => {
+    assert.equal(activation100({ ms: 800, faces: 100, done: 100, conflicts: 0 }, 'macos').pass, true);
+    assert.equal(activation100({ ms: 800, faces: 100, done: 100, conflicts: 0 }, 'linux').pass, false);
   });
 });
 
@@ -375,10 +396,12 @@ describe('bench.sh end to end', () => {
       assert.equal(rep.os, osName());
       assert.ok(rep.library.files >= 150, JSON.stringify(rep.library));
       assert.deepEqual(Object.keys(rep.metrics).sort(), Object.keys(BUDGETS).sort());
-      for (const name of ['cold_start', 'first_scan', 'incremental_update', 'search', 'idle_memory']) {
+      for (const name of ['cold_start', 'first_scan', 'incremental_update', 'search', 'activation_100', 'idle_memory']) {
         assert.ok(rep.metrics[name].value > 0, `${name}: ${JSON.stringify(rep.metrics[name])}`);
       }
-      assert.equal(rep.metrics.activation_100.value, null);
+      assert.equal(rep.detail.activation.faces, 100, JSON.stringify(rep.detail.activation));
+      assert.equal(rep.detail.activation.done + rep.detail.activation.conflicts, 100,
+        `every face activated or clashed: ${JSON.stringify(rep.detail.activation)}`);
       assert.equal(rep.metrics.first_scan.files, rep.library.files, 'the scaled time names its file count');
       assert.equal(rep.metrics.first_scan.measured_ms, Math.round(rep.detail.scan.ms * 10) / 10);
       assert.equal(rep.detail.cold_start_runs.length, 2);

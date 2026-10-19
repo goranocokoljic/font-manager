@@ -226,6 +226,15 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
               Activate this font anyway
             </label>
           </fieldset>
+          <label class="choice">
+            <input
+              type="checkbox"
+              name="reactivate-on-launch"
+              :checked="s.reactivateOnLaunch"
+              @change="choose({ reactivateOnLaunch: ($event.target as HTMLInputElement).checked })"
+            />
+            Reactivate on launch: activate the last session's fonts again when the app starts
+          </label>
         </template>
 
         <template v-else-if="current === 'appearance' && s">

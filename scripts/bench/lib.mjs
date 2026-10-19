@@ -45,6 +45,17 @@ export function firstScan(ms, files) {
   return { ...m, files, measured_ms: Math.round(ms * 10) / 10 };
 }
 
+/**
+ * The 100-face activation metric (E6.6): the time of the one request, failed
+ * when a face neither activated nor clashed with an installed font, since a
+ * request whose registrations failed is fast and proves nothing.
+ */
+export function activation100(a, os = osName()) {
+  const other = a.faces - a.done - a.conflicts;
+  if (other <= 0) return metric('activation_100', a.ms, undefined, os);
+  return { ...metric('activation_100', a.ms, `${other} of ${a.faces} faces were not activated`, os), pass: false };
+}
+
 /** The target of metric `name` on `os`. */
 export function target(name, os = osName()) {
   const budget = BUDGETS[name];

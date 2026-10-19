@@ -21,9 +21,7 @@ use std::path::{Component, Path, PathBuf, Prefix};
 use std::sync::{Mutex, PoisonError};
 
 use windows::Win32::Foundation::{LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{
-    HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_FONTCHANGE,
-};
+use windows::Win32::UI::WindowsAndMessaging::{HWND_BROADCAST, SendNotifyMessageW, WM_FONTCHANGE};
 
 use super::dwrite;
 use super::registry::Key;
@@ -43,8 +41,6 @@ const NAME_TAG: &str = "Font Manager";
 /// More same-named values than this for one PostScript name is a bug, not a
 /// font library.
 const MAX_SUFFIX: u32 = 1000;
-/// How long one window may take to answer `WM_FONTCHANGE`.
-const BROADCAST_TIMEOUT_MS: u32 = 1000;
 
 /// Activates fonts for the current user through the registry. See the module docs.
 #[derive(Debug)]
@@ -96,19 +92,13 @@ impl WindowsActivator {
         if !self.broadcast {
             return;
         }
-        // SAFETY: a broadcast with no pointers in it; the timeout and
-        // SMTO_ABORTIFHUNG keep a hung window from blocking the caller.
-        // A failed broadcast only delays when running apps notice.
+        // SAFETY: a broadcast with no pointers in it. `SendNotifyMessageW`
+        // returns at once for windows of other threads instead of waiting for
+        // each to answer, which took most of a second with a desktop full of
+        // windows and broke the 100-face activation budget. A failed
+        // broadcast only delays when running apps notice.
         unsafe {
-            let _ = SendMessageTimeoutW(
-                HWND_BROADCAST,
-                WM_FONTCHANGE,
-                WPARAM(0),
-                LPARAM(0),
-                SMTO_ABORTIFHUNG,
-                BROADCAST_TIMEOUT_MS,
-                None,
-            );
+            let _ = SendNotifyMessageW(HWND_BROADCAST, WM_FONTCHANGE, WPARAM(0), LPARAM(0));
         }
     }
 }

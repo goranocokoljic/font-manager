@@ -18,8 +18,41 @@ mod mock;
 use std::ffi::OsString;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub use mock::MockActivator;
+
+use crate::AppPaths;
+
+/// The activator of this OS (ADR 0008), for the app folders `paths`: the
+/// per-user registry on Windows, CoreText on macOS, symbolic links on Linux.
+/// Any other OS is [`ActivationErrorKind::Unsupported`].
+#[cfg_attr(
+    not(any(windows, target_os = "macos", target_os = "linux")),
+    allow(unused_variables)
+)]
+pub fn system(paths: &AppPaths) -> Result<Arc<dyn FontActivator>, ActivationError> {
+    #[cfg(windows)]
+    {
+        let _ = paths;
+        Ok(Arc::new(crate::WindowsActivator::new()))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        Ok(Arc::new(crate::MacosActivator::new(paths)))
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Ok(Arc::new(crate::LinuxActivator::new(paths)))
+    }
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+    {
+        Err(ActivationError::new(
+            ActivationErrorKind::Unsupported,
+            "font activation is implemented for Windows, macOS and Linux only",
+        ))
+    }
+}
 
 /// How long an activation lasts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -1,0 +1,19 @@
+{
+  "id": "a-timing-metric-must-fail-when-the-timed-operation-did-not-s",
+  "title": "A timing metric must fail when the timed operation did not succeed",
+  "category": "testing",
+  "rule": "When a bench or test times an operation against a budget (activation, scan, import), check its outcome too: the metric fails when the operation's items did not succeed (for activation: every face activated or clashed with an installed font), and the end-to-end test asserts the outcome counts, not only that a time was recorded. A regression that makes every item fail fast must turn the budget red, not green.",
+  "rationale": "E6.6 (#79): `fm-bench activate` returned a time whatever the outcomes, and the bench end-to-end test checked only value > 0 and faces == 100, so an activator that failed all 100 faces quickly passed activation_100.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    79
+  ],
+  "file_globs": [
+    "scripts/bench/**",
+    "crates/fm-bench/**"
+  ],
+  "first_seen": "2026-10-19T18:10:21.031Z",
+  "last_seen": "2026-10-19T18:10:21.031Z"
+}
