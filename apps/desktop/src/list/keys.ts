@@ -3,6 +3,8 @@
 // Enter toggles a family or opens a style; Shift extends the selection,
 // Ctrl/Cmd moves without selecting, Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A
 // selects all. Plain Space is the app's quick-look key, so it is left alone.
+// The grid view lays rows out in `columns` per line: Up/Down then move by a
+// line of cards and Left/Right by one card (Enter still expands a family).
 import type { FaceId } from '../api/types';
 import type { useFontListStore } from '../stores/fontList';
 import type { SelectMode } from './selection';
@@ -23,17 +25,18 @@ export function modeOf(e: KeyboardEvent | MouseEvent): SelectMode {
 export function handleListKey(
   e: KeyboardEvent,
   list: FontListStore,
-  opts: { page: number; count: number; open: (face: FaceId) => void },
+  opts: { page: number; count: number; open: (face: FaceId) => void; columns?: number },
 ): boolean {
   if (e.altKey) return false;
   const mod = e.ctrlKey || e.metaKey;
   const row = list.cursorRow;
+  const columns = Math.max(1, opts.columns ?? 1);
   switch (e.key) {
     case 'ArrowDown':
-      list.moveBy(1, modeOf(e));
+      list.moveBy(columns, modeOf(e));
       return true;
     case 'ArrowUp':
-      list.moveBy(-1, modeOf(e));
+      list.moveBy(-columns, modeOf(e));
       return true;
     case 'PageDown':
       list.moveBy(opts.page, modeOf(e));
@@ -48,10 +51,18 @@ export function handleListKey(
       list.moveCursor(opts.count - 1, modeOf(e));
       return true;
     case 'ArrowRight':
+      if (columns > 1) {
+        list.moveBy(1, modeOf(e));
+        return true;
+      }
       if (mod || e.shiftKey) return false;
       list.expandOrEnter();
       return true;
     case 'ArrowLeft':
+      if (columns > 1) {
+        list.moveBy(-1, modeOf(e));
+        return true;
+      }
       if (mod || e.shiftKey) return false;
       list.collapseOrLeave();
       return true;

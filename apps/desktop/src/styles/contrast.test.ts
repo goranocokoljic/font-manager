@@ -2,7 +2,6 @@
 // and focus rings 3:1. Reads the palettes from the style sheets, so a color
 // change that breaks contrast fails here.
 import { describe, expect, it } from 'vitest';
-import fontList from '../components/FontList.vue?raw';
 import theme from './theme.css?raw';
 
 type Palette = Record<string, string>;
@@ -95,6 +94,6 @@ describe('palettes stay in step', () => {
     ['.surface-light', light],
     ['.surface-dark', dark],
   ])('the list surface %s uses the theme colors', (selector, p) => {
-    for (const [k, v] of Object.entries(palette(fontList, selector))) expect(v, k).toBe(p[k]);
+    for (const [k, v] of Object.entries(palette(theme, selector))) expect(v, k).toBe(p[k]);
   });
 });

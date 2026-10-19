@@ -394,13 +394,16 @@ mod tests {
 
         let found = discover(&root).unwrap();
         let paths = relative(&found, &root);
-        // The linked font once, through whichever link the walk met first.
+        // The linked font once, through whichever link the walk met first. The
+        // walk order is the OS's directory order (hash order on ext4), and the
+        // list is sorted by path, so the linked font sorts before or after `own.ttf`.
         assert_eq!(found.count(), 2, "{paths:?}");
+        let linked: Vec<_> = paths.iter().filter(|p| *p != "own.ttf").collect();
+        assert!(paths.iter().any(|p| p == "own.ttf"), "{paths:?}");
         assert!(
-            paths[0] == "again/linked.otf" || paths[0] == "to-outside/linked.otf",
+            linked == ["again/linked.otf"] || linked == ["to-outside/linked.otf"],
             "{paths:?}"
         );
-        assert_eq!(paths[1], "own.ttf");
         assert_eq!(found.total_size, 30);
         assert!(found.unreadable.is_empty(), "{:?}", found.unreadable);
     }

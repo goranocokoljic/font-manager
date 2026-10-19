@@ -16,15 +16,15 @@ import { clampSetting, SIZE } from './preview';
 /** The localStorage key of the saved view modes and table setups (a view preference). */
 export const VIEWS_STORAGE_KEY = 'fm.views.v1';
 
-/** How a view shows its fonts: preview rows, or the detail list (table). */
-export type ViewMode = 'list' | 'table';
+/** How a view shows its fonts: preview rows, the detail list (table), cards, or a waterfall. */
+export type ViewMode = 'list' | 'table' | 'grid' | 'waterfall';
 
 export interface ViewState {
   mode: ViewMode;
   table: TableConfig;
 }
 
-const MODES: readonly ViewMode[] = ['list', 'table'];
+const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall'];
 
 export function normalizeView(raw: unknown): ViewState {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<
@@ -58,7 +58,7 @@ function browserStorage(): Storage | undefined {
 }
 
 /**
- * Per view: the view mode (list or table) and the table's setup — column order,
+ * Per view: the view mode (list, table, grid or waterfall) and the table's setup — column order,
  * hidden columns, sort column and preview strip size. Saved per view as a view
  * preference, like the preview settings.
  */

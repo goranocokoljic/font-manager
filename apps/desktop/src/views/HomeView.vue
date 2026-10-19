@@ -4,8 +4,10 @@ import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import FilterChips from '../components/FilterChips.vue';
+import FontGrid from '../components/FontGrid.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
+import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
@@ -50,6 +52,8 @@ const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
 const MODES: { value: ViewMode; label: string }[] = [
   { value: 'list', label: 'List' },
   { value: 'table', label: 'Table' },
+  { value: 'grid', label: 'Grid' },
+  { value: 'waterfall', label: 'Waterfall' },
 ];
 
 onMounted(() => {
@@ -74,8 +78,9 @@ useActions([
     enabled: () => selection.canActivate,
     run: () => selection.toggleActivation('permanent'),
   },
-  ...MODES.map((m) => ({
-    id: `view.${m.value}`,
+  // Keys 1–4 switch the view mode, in the order of the toolbar buttons.
+  ...MODES.map((m, i) => ({
+    id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4),
     title: `Show fonts as a ${m.label.toLowerCase()}`,
     group: 'View',
     run: () => views.setMode(ALL_FONTS_VIEW, m.value),
@@ -162,6 +167,18 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online
         <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
         <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
       </template>
+      <FontGrid
+        v-else-if="fontList.families.length && mode === 'grid'"
+        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+        @cursor-face="showFace"
+        @open="openFace"
+      />
+      <FontWaterfall
+        v-else-if="fontList.families.length && mode === 'waterfall'"
+        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+        @cursor-face="showFace"
+        @open="openFace"
+      />
       <FontList
         v-else-if="fontList.families.length"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"

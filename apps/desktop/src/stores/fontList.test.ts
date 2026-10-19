@@ -104,4 +104,25 @@ describe('font list store', () => {
     expect(list.selectedCount).toBe(0);
     expect(list.cursor).toBeNull();
   });
+
+  it('the scroll anchor is a family: kept while in the first line, else the top row', async () => {
+    const list = await setup();
+    expect(list.anchorIndex).toBe(-1);
+    list.setAnchor(3, 4);
+    expect(list.anchor).toBe(A);
+    expect(list.anchorIndex).toBe(3);
+    // A grid line of rows 2–4 still holds A: the anchor does not drift to row 2.
+    list.setAnchor(2, 5);
+    expect(list.anchor).toBe(A);
+    list.setAnchor(4, 5);
+    expect(list.anchor).toBe(B);
+    // Expanding a family above moves the anchor's row, not its family.
+    list.expand(A);
+    await flushPromises();
+    expect(list.anchor).toBe(B);
+    expect(list.anchorIndex).toBe(8);
+    // A style row anchors its family.
+    list.setAnchor(5, 6);
+    expect(list.anchor).toBe(A);
+  });
 });

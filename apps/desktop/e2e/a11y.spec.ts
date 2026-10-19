@@ -67,6 +67,24 @@ test('every interactive element on the main window has a name', async ({ page })
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+for (const [mode, role, item] of [
+  ['Grid', 'listbox', 'option'],
+  ['Waterfall', 'tree', 'treeitem'],
+] as const) {
+  test(`every interactive element in the ${mode.toLowerCase()} view has a name`, async ({
+    page,
+  }) => {
+    await open(page);
+    await page
+      .getByRole('group', { name: 'View mode' })
+      .getByRole('button', { name: mode })
+      .click();
+    const view = page.getByRole(role, { name: `Font ${mode.toLowerCase()}` });
+    await expect(view.getByRole(item).first()).toBeVisible();
+    expect(await unnamedControls(page)).toEqual([]);
+  });
+}
+
 test('every interactive element in the command palette has a name', async ({ page }) => {
   await open(page);
   await page.getByRole('tree', { name: 'Font list' }).focus();
