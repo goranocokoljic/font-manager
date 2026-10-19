@@ -97,7 +97,7 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   --workspace`, `pnpm test`, `pnpm gen:types` + diff check); `verify_change`;
   draft PR `E3.2 <title>` with `Closes #n`. UI stories capture screenshots at
   1,280×800 and 1,000×700.
-- **CI** — the harness waits (no tokens). All three OS must be `success`. Red →
+- **CI** — the harness waits (no tokens). All three OS must be `success`. Red → the failed jobs re-run once per commit (a flaky test or runner hiccup); still red →
   `ci-fix` with the job log excerpt and the platform hint. 3 red rounds →
   `harness:blocked`. The PR conflicts with `main` (GitHub runs no CI on it) →
   `sync`. GitHub did not run the jobs at all (billing, spending limit) → the lane

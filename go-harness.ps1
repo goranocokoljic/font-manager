@@ -913,6 +913,20 @@ function Invoke-Story {
                         $s.stage = $s.after_ci
                     }
                     'red' {
+                        # A flaky test or runner hiccup: re-run the failed jobs once per
+                        # commit before an agent is paid to "fix" code that is fine.
+                        $sha = "$($v.sha)"
+                        if ($sha -and $s.rerun_sha -ne $sha) {
+                            $s.rerun_sha = $sha
+                            $ids = @(gh run list --commit $sha --json 'databaseId,conclusion' 2>$null | ConvertFrom-Json |
+                                Where-Object { $_.conclusion -in 'failure', 'timed_out', 'cancelled' } | ForEach-Object { $_.databaseId })
+                            if ($ids.Count) {
+                                Write-Log "    CI red at $($sha.Substring(0, 7)): re-running the failed jobs once (flaky?)" 'Yellow'
+                                $ids | ForEach-Object { gh run rerun $_ --failed 2>&1 | Out-Null }
+                                Start-Sleep -Seconds 20   # let the re-run register before ci-wait looks again
+                                continue
+                            }
+                        }
                         $s.ci_attempts++
                         $failedOs = @($v.failed | ForEach-Object { $_.os }) + $(if ($v.bench -and $v.bench.status -eq 'red') { @('bench') } else { @() })
                         $s.ci_failed_platforms += $failedOs
