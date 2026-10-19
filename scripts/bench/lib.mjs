@@ -15,13 +15,15 @@ export const SCHEMA = 1;
 /**
  * The budgets of CLAUDE.md rule 8, plus story budgets (preview_cache_hit: E4.3,
  * "a cache hit returns in under 2 ms"). target null = reported, not budgeted.
+ * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
 export const BUDGETS = {
   cold_start: { unit: 'ms', target: 1000 },
   first_scan: { unit: 'ms', target: 10000 },
   incremental_update: { unit: 'ms', target: null },
   search: { unit: 'ms', target: 50 },
-  activation_100: { unit: 'ms', target: 500 },
+  // macOS: one CoreText session registration per file (ADR 0008, Budget on macOS).
+  activation_100: { unit: 'ms', target: 500, byOs: { macos: 1000 } },
   idle_memory: { unit: 'MB', target: 350 },
   preview_cache_hit: { unit: 'ms', target: 2 },
 };
@@ -43,16 +45,27 @@ export function firstScan(ms, files) {
   return { ...m, files, measured_ms: Math.round(ms * 10) / 10 };
 }
 
-/** One metric against its budget. `value` null = not measured; give a `note`. */
-export function metric(name, value, note) {
+/** The target of metric `name` on `os`. */
+export function target(name, os = osName()) {
   const budget = BUDGETS[name];
   if (!budget) throw new Error(`unknown metric: ${name}`);
+  return budget.byOs?.[os] ?? budget.target;
+}
+
+/**
+ * One metric against its budget on `os` (default: this machine; bench.sh runs
+ * on each OS). `value` null = not measured; give a `note`.
+ */
+export function metric(name, value, note, os = osName()) {
+  const budget = BUDGETS[name];
+  if (!budget) throw new Error(`unknown metric: ${name}`);
+  const goal = target(name, os);
   const v = value == null ? null : Math.round(value * 10) / 10;
   const m = {
     value: v,
     unit: budget.unit,
-    target: budget.target,
-    pass: v == null || budget.target == null ? null : v <= budget.target,
+    target: goal,
+    pass: v == null || goal == null ? null : v <= goal,
   };
   if (note) m.note = note;
   return m;

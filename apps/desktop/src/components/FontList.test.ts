@@ -102,7 +102,9 @@ describe('FontList virtualization', () => {
     list.unmount();
   });
 
-  it('does not leak font faces while 1,000 families scroll past', async () => {
+  // 200 scroll steps over 1,000 families: about 4 s on a fast machine, more
+  // than the 5 s default on the CI Mac. A leak fails the checks, not the clock.
+  it('does not leak font faces while 1,000 families scroll past', { timeout: 30_000 }, async () => {
     const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
     let most = 0;
     const seen = new Set<string>();
