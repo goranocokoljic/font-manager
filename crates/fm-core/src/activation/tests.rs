@@ -4,7 +4,7 @@ use std::time::Instant;
 use fm_api::activation::OutcomeStatus as Status;
 use fm_api::common::Health;
 use fm_api::library::SourceKind;
-use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest};
+use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest};
 use fm_api::{CollectionId, FamilyId, SetId};
 use fm_platform::{ConflictKind, MockActivator, Mode};
 
@@ -348,20 +348,20 @@ fn a_collection_target_activates_its_members() {
 }
 
 #[test]
-fn a_set_target_activates_its_faces() {
+fn a_set_target_activates_and_deactivates_its_faces_in_one_call() {
     let fx = Fixture::new();
     let (bold, inter) = (fx.bold(), fx.inter());
-    fx.index
+    let set = fx
+        .index
         .lock()
         .expect("index")
-        .conn()
-        .execute_batch(&format!(
-            "INSERT INTO project_set (id, name) VALUES (3, 'Client');
-             INSERT INTO set_face VALUES (3, {}), (3, {});",
-            bold.0, inter.0
-        ))
-        .expect("set");
-    let target = Target::Set { set: SetId(3) };
+        .create_set(&CreateSetRequest {
+            name: "Client".into(),
+            faces: vec![bold, inter],
+        })
+        .expect("set")
+        .id;
+    let target = Target::Set { set };
     let out = fx
         .service
         .activate(ActivateRequest {
@@ -370,7 +370,11 @@ fn a_set_target_activates_its_faces() {
             on_conflict: ConflictPolicy::KeepExisting,
         })
         .expect("activate");
-    assert_eq!(out.len(), 2);
+    let mut faces: Vec<FaceId> = out.iter().map(|o| o.face).collect();
+    faces.sort();
+    let mut want = vec![bold, inter];
+    want.sort();
+    assert_eq!(faces, want);
     assert!(out.iter().all(|o| o.outcome == Status::Done));
     assert_eq!(fx.active().len(), 2);
     let out = fx
