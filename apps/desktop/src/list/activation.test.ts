@@ -85,6 +85,24 @@ describe('planToggle', () => {
     expect(planToggle([faceRow(2, 1, 'permanent')], 'permanent')?.deactivate).toBe(true);
   });
 
+  it('A on a mixed selection activates only the inactive faces, never demoting a permanent one', () => {
+    // A permanent style and an inactive one: only the inactive one is sent.
+    const mixed = planToggle([faceRow(1, 1, 'permanent'), faceRow(2, 1)], 'session');
+    expect(mixed).toEqual({ deactivate: false, targets: [{ kind: 'faces', faces: [2] }] });
+    // A partly active family sends its inactive faces, not the family.
+    const known = new Map([[3, [faceRow(30, 3, 'permanent').face, faceRow(31, 3).face]]]);
+    const partial = planToggle([familyRow(3, 'partial'), faceRow(2, 1)], 'session', known);
+    expect(partial?.targets).toEqual([{ kind: 'faces', faces: [31, 2] }]);
+    // Its faces unknown: it is left out rather than switched to session.
+    expect(planToggle([familyRow(3, 'partial'), faceRow(2, 1)], 'session')?.targets).toEqual([
+      { kind: 'faces', faces: [2] },
+    ]);
+    // An inactive family still goes as one family request.
+    expect(planToggle([familyRow(4), faceRow(1, 1, 'permanent')], 'session')?.targets).toEqual([
+      { kind: 'family', family: 4 },
+    ]);
+  });
+
   it('reads the modes of a family row from its faces for Shift+A', () => {
     const rows = [familyRow(1, 'active')];
     const faces = (a: ActivationMode, b: ActivationMode) =>

@@ -82,7 +82,6 @@ describe('activation store', () => {
       familyRow(first),
       { kind: 'face', key: faceKey(face.id), face, family: second, position: 1, count: 3 },
     ];
-    await client.activate({ target: { kind: 'faces', faces: [face.id] }, mode: 'permanent' });
 
     await store.toggleRows(rows, 'session');
     const firstIds = (await client.getFamily(first.id)).faces.map((f) => f.id);
@@ -95,8 +94,26 @@ describe('activation store', () => {
 
     toasts.act();
     await vi.waitFor(() => expect(toasts.toast?.message).toBe('Undone.'));
-    // The family is off again; the style is back to permanent, as before.
-    expect(await activeModes()).toEqual({ [face.id]: 'permanent' });
+    expect(await activeModes()).toEqual({});
+  });
+
+  it('A on a partly permanent family activates the rest and keeps the permanent style', async () => {
+    client = createMockClient({ extraFaces: 1, stylesPerFamily: 3 });
+    setClient(client);
+    const store = useActivationStore();
+    const toasts = useToastStore();
+    const fam = (await client.listFamilies({})).items.find((f) => f.styleCount === 3)!;
+    const [kept, ...rest] = (await client.getFamily(fam.id)).faces;
+    await client.activate({ target: { kind: 'faces', faces: [kept!.id] }, mode: 'permanent' });
+    const partial = (await client.getFamily(fam.id)).summary;
+    expect(partial.activation).toBe('partial');
+
+    await store.toggleRows([familyRow(partial)], 'session');
+    expect(await activeModes()).toEqual({
+      [kept!.id]: 'permanent',
+      ...Object.fromEntries(rest.map((f) => [f.id, 'session'])),
+    });
+    expect(toasts.toast?.message).toBe('Activated 2 fonts for this session.');
   });
 
   it('deactivates all and undoes it in the old modes', async () => {

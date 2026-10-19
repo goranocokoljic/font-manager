@@ -31,7 +31,10 @@ export interface TogglePlan {
  * all, so a mixed selection ends up active. A family row acts on the whole
  * family; a style row whose family row is also selected is covered by it. For
  * Shift+A a family row is permanent when every face in `familyFaces` is (the
- * summary does not tell the modes apart). Null when nothing is selected.
+ * summary does not tell the modes apart). A session activation (A) leaves
+ * active faces alone, so it never turns a permanent font into a session one: a
+ * partly active family sends only its inactive faces from `familyFaces`, and is
+ * left out when they are not known. Null when nothing is selected.
  */
 export function planToggle(
   rows: readonly ListRow[],
@@ -39,14 +42,6 @@ export function planToggle(
   familyFaces: ReadonlyMap<FamilyId, readonly FaceSummary[]> = new Map(),
 ): TogglePlan | null {
   if (rows.length === 0) return null;
-  const families = new Set(rows.filter((r) => r.kind === 'family').map((r) => r.family.id));
-  const faces: FaceId[] = [];
-  const targets: Target[] = [];
-  for (const row of rows) {
-    if (row.kind === 'family') targets.push({ kind: 'family', family: row.family.id });
-    else if (!families.has(row.family.id)) faces.push(row.face.id);
-  }
-  if (faces.length) targets.unshift({ kind: 'faces', faces });
   const permanent = mode === 'permanent';
   const deactivate = rows.every((r) => {
     if (r.kind === 'face')
@@ -55,6 +50,24 @@ export function planToggle(
     if (permanent && known?.length) return known.every((f) => f.active === 'permanent');
     return r.family.activation === 'active';
   });
+  // Deactivating, or activating permanently (which may promote a session face):
+  // every selected face. Activating for the session: only the inactive ones.
+  const all = deactivate || permanent;
+  const families = new Set(rows.filter((r) => r.kind === 'family').map((r) => r.family.id));
+  const faces: FaceId[] = [];
+  const targets: Target[] = [];
+  for (const row of rows) {
+    if (row.kind === 'face') {
+      if (!families.has(row.family.id) && (all || row.face.active === null))
+        faces.push(row.face.id);
+    } else if (all || row.family.activation === 'inactive') {
+      targets.push({ kind: 'family', family: row.family.id });
+    } else {
+      const known = familyFaces.get(row.family.id) ?? [];
+      faces.push(...known.filter((f) => f.active === null).map((f) => f.id));
+    }
+  }
+  if (faces.length) targets.unshift({ kind: 'faces', faces });
   return { deactivate, targets };
 }
 

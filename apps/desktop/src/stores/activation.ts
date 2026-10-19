@@ -123,17 +123,17 @@ export const useActivationStore = defineStore('activation', () => {
   /** A / Shift+A on the selected rows (see `planToggle`). */
   async function toggleRows(rows: readonly ListRow[], mode?: ActivationMode): Promise<void> {
     if (busy.value) return;
-    // Shift+A needs the modes of a family's faces; read them fresh, not from a list
-    // that the last change may not have reloaded yet.
+    // Shift+A needs the modes of a family's faces, A the inactive faces of a partly
+    // active family; read them fresh, not from a list that the last change may not
+    // have reloaded yet.
     const familyFaces = new Map<FamilyId, FaceSummary[]>();
-    if (mode === 'permanent')
-      try {
-        for (const row of rows)
-          if (row.kind === 'family')
-            familyFaces.set(row.family.id, (await useClient().getFamily(row.family.id)).faces);
-      } catch {
-        // The family summaries decide then.
-      }
+    try {
+      for (const row of rows)
+        if (row.kind === 'family' && (mode === 'permanent' || row.family.activation !== 'inactive'))
+          familyFaces.set(row.family.id, (await useClient().getFamily(row.family.id)).faces);
+    } catch {
+      // The family summaries decide then; A leaves a partly active family out.
+    }
     const plan = planToggle(rows, mode, familyFaces);
     if (plan) await bulk(plan.deactivate, plan.targets, mode);
   }
