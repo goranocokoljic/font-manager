@@ -1,0 +1,20 @@
+{
+  "id": "a-scroll-position-kept-by-item-must-follow-the-item-when-the",
+  "title": "A scroll position kept by item must follow the item when the rows re-order",
+  "category": "correctness",
+  "rule": "When a view keeps its scroll position as an item (a family, a row key) rather than pixels, do not restore it only on mount. An async refetch that lands after the mount (a new sort order, a refresh) can move the item to another row without a scroll event. Watch the item's row index and scroll again when the same item moved, but not when a user scroll picked another item. Add a test that mounts the view, then changes the order through the store, and asserts the item is back at the top.",
+  "rationale": "E5.3 (#66): leaving a sorted table restored the anchor family at its sorted row; the default order arrived after the mount and a different family ended on top.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    66
+  ],
+  "file_globs": [
+    "apps/desktop/src/list/**",
+    "apps/desktop/src/components/**",
+    "apps/desktop/src/stores/**"
+  ],
+  "first_seen": "2026-10-19T17:38:13.641Z",
+  "last_seen": "2026-10-19T17:38:13.641Z"
+}
