@@ -10,8 +10,8 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::library::{
-    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, ScanRequest,
-    SetSourcePausedRequest, Source,
+    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, Problem,
+    ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -243,6 +243,13 @@ async fn list_conflicts(state: State<'_, AppState>) -> ApiResult<Vec<Clash>> {
     call(&state, |api| api.list_conflicts()).await
 }
 
+/// Everything wrong with the library: duplicates, broken and legacy files,
+/// sidecar and activation conflicts (the Problems view).
+#[tauri::command]
+async fn list_problems(state: State<'_, AppState>) -> ApiResult<Vec<Problem>> {
+    call(&state, |api| api.list_problems()).await
+}
+
 /// Searches the library: free text and filters, grouped by family, with filter counts.
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -451,6 +458,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_active,
             conflicts,
             list_conflicts,
+            list_problems,
             list_sources,
             add_source,
             remove_source,

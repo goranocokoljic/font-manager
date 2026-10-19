@@ -3,7 +3,7 @@ use std::time::Instant;
 
 use fm_api::activation::OutcomeStatus as Status;
 use fm_api::common::Health;
-use fm_api::library::SourceKind;
+use fm_api::library::{ProblemKind, SourceKind};
 use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest};
 use fm_api::{CollectionId, FamilyId, SetId};
 use fm_platform::{ConflictKind, MockActivator, Mode};
@@ -799,6 +799,47 @@ fn the_conflicts_view_lists_every_clash_with_its_winner() {
         fx.service.list_conflicts().expect("list"),
         vec![inter_clash]
     );
+}
+
+#[test]
+fn activation_conflicts_are_problems_entries_with_both_files() {
+    let fx = Fixture::new();
+    let (regular, inter) = (fx.regular(), fx.inter());
+    let copy = fx.face("Roboto-Regular", "/fonts/copy/Roboto-Regular.ttf");
+    assert_eq!(fx.service.problems().expect("none"), vec![]);
+    system_inter(&fx);
+    replace(&fx, vec![inter], ActivationMode::Session);
+    fx.activate(vec![regular], ActivationMode::Session);
+    replace(&fx, vec![copy], ActivationMode::Session);
+    let registered = fx.registered();
+
+    let shown = |p: &str| Path::new(p).display().to_string();
+    let rows: Vec<_> = fx
+        .service
+        .problems()
+        .expect("problems")
+        .into_iter()
+        .map(|p| (p.kind, p.face, p.path, p.other))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                ProblemKind::ActiveConflict,
+                Some(regular),
+                shown("/fonts/Roboto-Regular.ttf"),
+                Some(shown("/fonts/copy/Roboto-Regular.ttf")),
+            ),
+            (
+                ProblemKind::SystemConflict,
+                Some(inter),
+                shown("/fonts/Inter.otf"),
+                Some(shown("/System/Library/Fonts/Inter.otf")),
+            ),
+        ]
+    );
+    // Reading the entries changes nothing.
+    assert_eq!(fx.registered(), registered);
 }
 
 #[test]

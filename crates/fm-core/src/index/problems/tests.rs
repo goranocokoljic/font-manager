@@ -194,3 +194,23 @@ fn every_kind_of_problem_comes_together_in_order() {
         ]
     );
 }
+
+#[test]
+fn a_duplicate_copy_is_an_entry_pointing_at_the_keeper() {
+    let dir = TempDir::new("problems-duplicates");
+    let first = dir.path().join("first");
+    let second = dir.path().join("second");
+    let a = copy_fixture(&first, HEALTHY);
+    let b = copy_fixture(&second, HEALTHY);
+    let mut index = Index::open_in_memory().expect("open");
+    scan_source(&mut index, &first);
+    scan_source(&mut index, &second);
+    let problems = index.problems().expect("problems");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    let p = &problems[0];
+    assert_eq!(p.kind, ProblemKind::DuplicateFile);
+    // Equal versions, neither in the library folder: the keeper is the path A to Z.
+    assert_eq!(p.path, b.display().to_string());
+    assert_eq!(p.other.as_deref(), Some(a.display().to_string().as_str()));
+    assert!(p.face.is_some());
+}

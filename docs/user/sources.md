@@ -37,4 +37,21 @@ every few minutes. Set the interval to 0 to turn it off.
 When a file is damaged or is not a font that Font Manager can read, the font shows a
 health mark in the list. Font Manager does not delete or change the file.
 
+## Problems
+
+**Problems** in the sidebar shows how many problems your library has. The status bar
+shows the same number. Select it to open the **Problems** view. The view lists:
+
+| Group | What it means |
+|-------|---------------|
+| **Duplicates** | The same font is in two or more files. The list names the copy to keep. |
+| **Broken files** | The file is damaged or has no Unicode character map. |
+| **Legacy formats** | Font Manager can read the font but cannot activate it, for example a Type 1 font. |
+| **Sidecar conflicts** | Another computer changed the same tag, rating or note to a different value. |
+| **Activation conflicts** | An active font has the same PostScript name as an installed font or another active font. |
+| **Folders and index** | A source folder is missing, or the library index was damaged and replaced. |
+
+Select a group at the top of the view, or in the sidebar, to see only that group.
+Font Manager does not change any file when it lists a problem.
+
 Next: [Activation](activation.md).

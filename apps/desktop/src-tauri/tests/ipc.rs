@@ -433,6 +433,26 @@ fn conflicts_and_the_conflicts_view_answer_in_camel_case() {
 }
 
 #[test]
+fn the_problems_view_answers_in_camel_case() {
+    let json: serde_json::Value = invoke_with("list_problems", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    // The mock library: face 6 clashes with a system font, face 7 is Type 1.
+    let kinds: Vec<_> = json
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["kind"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(kinds, ["systemConflict", "unsupported"]);
+    assert_eq!(json[0]["face"], 6);
+    assert!(json[0]["other"].is_string());
+    assert!(json[1]["message"].is_string());
+}
+
+#[test]
 fn update_settings_returns_every_setting_in_camel_case() {
     let json: serde_json::Value = invoke_with(
         "update_settings",
