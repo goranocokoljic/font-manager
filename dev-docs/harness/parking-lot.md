@@ -97,3 +97,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.3 #66] apps/desktop/src/components/FontList.vue:763 — the list's row height changes with the preview size without re-anchoring, so another family moves to the top.
 - [E6.7 #80] crates/fm-platform/src/activator/mock.rs:132 — `MockActivator` cannot remove `installed` fonts, so a "never deregister a foreign font" test cannot observe the app deregistering one.
 - [E6.7 #80] crates/fm-core/src/activation.rs:600 — `clashes()` turns every non-app clash into `ConflictWith::System`, also for `ConflictKind::User`, so the prompt and the Conflicts view call a user-installed font a system font.
+- [E8.2 #87] crates/fm-api/src/mock.rs:968 — MockApi lists a SystemConflict problem for every face with a system clash, active or not, while fm-core's `ActivationManager::problems` lists only active faces.
+- [E8.2 #87] crates/fm-core/src/activation.rs:545 — `list_conflicts` fails the whole call (NotFound from `activation_faces`) when an active row's face is missing from the index; `ActivationManager::problems` inherits it.
