@@ -1,0 +1,250 @@
+// The grid and waterfall views, and switching between all four font views.
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Component } from 'vue';
+import { setClient, type FmClient } from '../api/client';
+import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
+import type { PreviewRequest } from '../api/types';
+import { CARD } from '../list/grid';
+import { familyKey } from '../list/rows';
+import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
+import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
+import { PANGRAMS } from '../preview/sampleText';
+import { clearFaceAxes } from '../preview/variations';
+import { useFontListStore } from '../stores/fontList';
+import { useLibraryStore } from '../stores/library';
+import { DEFAULT_PREVIEW } from '../stores/preview';
+import FontGrid from './FontGrid.vue';
+import FontList from './FontList.vue';
+import FontTable from './FontTable.vue';
+import FontWaterfall from './FontWaterfall.vue';
+
+class FakeFace {
+  constructor(
+    readonly family: string,
+    readonly source: string,
+  ) {}
+  load() {
+    return Promise.resolve(this);
+  }
+}
+
+class FakeSet implements FontFaceSetLike<FakeFace> {
+  add() {}
+  delete() {
+    return true;
+  }
+}
+
+let renders: PreviewRequest[];
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  clearFaceAxes();
+  renders = [];
+  vi.stubGlobal('devicePixelRatio', 1);
+  let n = 0;
+  URL.createObjectURL = vi.fn(() => `blob:thumb-${++n}`);
+  URL.revokeObjectURL = vi.fn();
+  setFaceLoader(
+    new FaceLoader<FakeFace>({
+      fonts: new FakeSet(),
+      create: (family, source) => new FakeFace(family, source),
+      url: (face) => `fmfont://localhost/${face}`,
+      maxIdle: 16,
+    }),
+  );
+});
+
+afterEach(() => {
+  setFaceLoader(undefined);
+  setClient(undefined);
+  vi.unstubAllGlobals();
+});
+
+async function load(options: MockOptions) {
+  const mock = createMockClient(options);
+  const client: FmClient = {
+    ...mock,
+    renderPreview: (req) => {
+      renders.push(structuredClone(req));
+      return mock.renderPreview(req);
+    },
+  };
+  setClient(client);
+  await useLibraryStore().load();
+}
+
+async function mountView(view: Component, props: Record<string, unknown> = {}) {
+  const w = mount(view, { props, attachTo: document.body });
+  await flushPromises();
+  return w;
+}
+
+async function scrollTo(w: VueWrapper, selector: string, top: number) {
+  const el = w.get(selector);
+  (el.element as HTMLElement).scrollTop = top;
+  await el.trigger('scroll');
+  await flushPromises();
+}
+
+const viewportOf = (w: VueWrapper, selector: string) => w.get(selector).element as HTMLElement;
+
+describe('FontGrid', () => {
+  it('renders only the lines on screen, as cards with thumbnails from render_preview', async () => {
+    await load({ extraFaces: 1997 });
+    const grid = await mountView(FontGrid, { overscan: 2 });
+    // 800 × 600 px fallback viewport: 4 cards per line, 5 + 1 + 2 × 2 lines.
+    expect(grid.get('[role="listbox"]').attributes('data-columns')).toBe('4');
+    const cards = grid.findAll('[role="option"]');
+    expect(cards).toHaveLength(40);
+    expect(grid.get('.spacer').attributes('style')).toContain(`height: ${500 * CARD.linePx}px`);
+    // One render per card on screen, at the thumbnail size, with the card's text.
+    await flushPromises();
+    expect(renders).toHaveLength(40);
+    const sample = PANGRAMS.en.text;
+    expect(renders[0]).toMatchObject({ sizePx: 36 });
+    expect(sample.startsWith(renders[0]!.text)).toBe(true);
+    const thumb = cards[0]!.get('[data-testid="thumbnail"]');
+    expect(thumb.attributes('data-state')).toBe('ready');
+    expect(thumb.attributes('style')).toContain('mask-image: url("blob:thumb-');
+  });
+
+  it('places cards in lines and moves the cursor a line with Up/Down', async () => {
+    await load({ extraFaces: 17 });
+    const grid = await mountView(FontGrid);
+    const list = useFontListStore();
+    const cards = grid.findAll('[role="option"]');
+    expect(cards[5]!.attributes('style')).toContain(`translate(100%, ${CARD.linePx}px)`);
+    await cards[0]!.trigger('click');
+    const box = grid.get('[role="listbox"]');
+    await box.trigger('keydown', { key: 'ArrowDown' });
+    expect(list.cursorIndex).toBe(4);
+    await box.trigger('keydown', { key: 'ArrowRight' });
+    expect(list.cursorIndex).toBe(5);
+    expect(box.attributes('aria-activedescendant')).toBe(
+      `fm-card-family-${list.rows[5]!.family.id}`,
+    );
+    // Enter on a family card expands it: its styles follow as cards.
+    await box.trigger('keydown', { key: 'Enter' });
+    await flushPromises();
+    expect(list.expanded.size).toBe(1);
+  });
+
+  it('a failed thumbnail says so', async () => {
+    await load({ extraFaces: 1 });
+    const failing = useClientWithFailingRenders();
+    setClient(failing);
+    const grid = await mountView(FontGrid);
+    await flushPromises();
+    const card = grid.findAll('[role="option"]')[0]!;
+    expect(card.get('[data-testid="thumbnail"]').attributes('data-state')).toBe('failed');
+    expect(card.text()).toContain('Preview not available');
+  });
+});
+
+function useClientWithFailingRenders(): FmClient {
+  return {
+    ...createMockClient({ extraFaces: 1 }),
+    renderPreview: () => Promise.reject({ code: 'internal', message: 'x', detail: null }),
+  };
+}
+
+describe('FontWaterfall', () => {
+  it('shows the sample text at six sizes per family', async () => {
+    await load({ extraFaces: 2 });
+    const fall = await mountView(FontWaterfall, { preview: { ...DEFAULT_PREVIEW } });
+    const blocks = fall.findAll('[role="treeitem"]');
+    expect(blocks).toHaveLength(5);
+    expect(blocks[0]!.attributes('style')).toContain(`height: ${waterfallRowPx(1.2)}px`);
+    for (const block of blocks) {
+      const lines = block.findAll('[data-testid="waterfall-line"]');
+      expect(lines.map((l) => Number(l.attributes('data-size')))).toEqual([...WATERFALL_SIZES]);
+      for (const [k, line] of lines.entries()) {
+        const sample = line.get('.sample');
+        expect(sample.text()).toBe(PANGRAMS.en.text);
+        expect(sample.attributes('style')).toContain(`font-size: ${WATERFALL_SIZES[k]}px`);
+        expect(line.text()).toContain(`${WATERFALL_SIZES[k]} px`);
+      }
+    }
+  });
+});
+
+describe('switching views', () => {
+  const views: [string, Component, string, (rowIndex: number) => number][] = [
+    ['list', FontList, '[role="tree"]', (i) => i * 56],
+    ['table', FontTable, '[role="treegrid"]', (i) => i * 32],
+    ['grid', FontGrid, '[role="listbox"]', (i) => Math.floor(i / 4) * CARD.linePx],
+    ['waterfall', FontWaterfall, '[role="tree"]', (i) => i * waterfallRowPx(1.2)],
+  ];
+
+  it('keeps the selection and the family at the top in every view', async () => {
+    await load({ extraFaces: 997 });
+    const list = useFontListStore();
+    // Scroll the list to row 200 and select two families there.
+    const first = await mountView(FontList, { rowHeight: 56, preview: { ...DEFAULT_PREVIEW } });
+    await scrollTo(first, '[role="tree"]', 200 * 56);
+    const top = list.rows[200]!.family.id;
+    expect(list.anchor).toBe(top);
+    list.click(familyKey(top));
+    list.click(familyKey(top + 1), 'toggle');
+    first.unmount();
+    for (const [name, view, selector, topOf] of views) {
+      const props = name === 'list' ? { rowHeight: 56 } : name === 'table' ? { view: 'all' } : {};
+      const w = await mountView(view, props);
+      expect(viewportOf(w, selector).scrollTop, name).toBe(topOf(200));
+      expect(list.anchor, name).toBe(top);
+      expect(list.selectedCount, name).toBe(2);
+      expect(w.get(`[data-key="${familyKey(top)}"]`).attributes('aria-selected'), name).toBe(
+        'true',
+      );
+      w.unmount();
+    }
+  });
+
+  it('keeps the family at the top when leaving a sorted table re-orders the rows', async () => {
+    await load({ extraFaces: 997 });
+    const list = useFontListStore();
+    const library = useLibraryStore();
+    await library.setOrder({ by: 'name', descending: true });
+    const table = await mountView(FontTable, { view: 'all' });
+    await scrollTo(table, '[role="treegrid"]', 200 * 32);
+    const top = list.anchor!;
+    expect(top).toBe(list.rows[200]!.family.id);
+    table.unmount();
+    // The grid mounts at the sorted row; then the default order comes back (HomeView
+    // sets the order after the mode changes), so the family is at another row.
+    const grid = await mountView(FontGrid);
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(50 * CARD.linePx);
+    await library.setOrder(null);
+    await flushPromises();
+    const moved = list.anchorIndex;
+    expect(moved).not.toBe(200);
+    expect(list.rows[moved]!.family.id).toBe(top);
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(
+      Math.floor(moved / 4) * CARD.linePx,
+    );
+    // Back to the sorted table: it mounts in the default order, then re-sorts.
+    grid.unmount();
+    const again = await mountView(FontTable, { view: 'all' });
+    await library.setOrder({ by: 'name', descending: true });
+    await flushPromises();
+    expect(list.anchor).toBe(top);
+    expect(viewportOf(again, '[role="treegrid"]').scrollTop).toBe(200 * 32);
+  });
+
+  it('the anchor follows a scroll in the grid by line, without drifting', async () => {
+    await load({ extraFaces: 997 });
+    const list = useFontListStore();
+    list.setAnchor(202, 203);
+    const grid = await mountView(FontGrid);
+    // Row 202 sits in line 50 (rows 200–203): the grid shows that line on top.
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(50 * CARD.linePx);
+    await scrollTo(grid, '[role="listbox"]', 50 * CARD.linePx + 10);
+    expect(list.anchor).toBe(list.rows[202]!.family.id);
+    await scrollTo(grid, '[role="listbox"]', 60 * CARD.linePx);
+    expect(list.anchor).toBe(list.rows[240]!.family.id);
+    expect(list.rows[0]!.family.id).toBeLessThan(EXTRA_ID_BASE);
+  });
+});

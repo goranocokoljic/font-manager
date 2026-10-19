@@ -25,6 +25,7 @@ import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
+import { useScrollAnchor } from '../list/anchor';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useViewsStore } from '../stores/views';
@@ -77,7 +78,11 @@ function measure(): void {
   if (el.clientHeight > 0) height.value = el.clientHeight;
 }
 
+const anchor = useScrollAnchor(viewport, () => ROW_PX);
+
 onMounted(() => {
+  measure();
+  anchor.restore();
   measure();
   if (typeof ResizeObserver !== 'undefined' && viewport.value) {
     observer = new ResizeObserver(measure);
@@ -85,6 +90,11 @@ onMounted(() => {
   }
 });
 onBeforeUnmount(() => observer?.disconnect());
+
+function onScroll(): void {
+  measure();
+  anchor.track(scrollTop.value);
+}
 
 /** The rows' part of the viewport: the sticky header covers the top. */
 const bodyHeight = computed(() => Math.max(ROW_PX, height.value - HEADER_PX));
@@ -285,7 +295,7 @@ const dotState = (row: ListRow): 'active' | 'partial' | 'inactive' =>
     :aria-rowcount="count + 1"
     :aria-colcount="columns.length"
     :aria-activedescendant="activeId"
-    @scroll="measure"
+    @scroll="onScroll"
     @keydown="onKeyDown"
   >
     <div class="grid" :style="{ minWidth: `${minWidth}px` }">

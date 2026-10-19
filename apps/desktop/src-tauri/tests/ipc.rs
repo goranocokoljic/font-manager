@@ -13,7 +13,7 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
-use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
+use fm_api::preview::{PreviewImage, PreviewService, SampleText, SampleTextRequest};
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
@@ -342,6 +342,27 @@ fn sample_texts_round_trip_through_fm_api() {
     .unwrap();
     assert_eq!(got, MockApi::new().sample_texts(req).unwrap());
     assert!(got[1].fallback.is_some(), "{got:?}");
+}
+
+#[test]
+fn render_preview_round_trips_through_fm_api() {
+    let got: PreviewImage = invoke_with(
+        "render_preview",
+        serde_json::json!({ "req": { "face": 1, "text": "Aa", "sizePx": 36 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert!(got.png.starts_with(&[0x89, b'P', b'N', b'G']), "{got:?}");
+    assert!(got.width > 0 && got.height > 0, "{got:?}");
+    let err = invoke_with(
+        "render_preview",
+        serde_json::json!({ "req": { "face": 1, "text": "Aa", "sizePx": 400 } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
 }
 
 #[test]

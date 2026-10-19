@@ -18,7 +18,9 @@ import { useSearchStore } from './search';
  * The font list's view state: which families are expanded, the cursor and the
  * selected rows. Not saved; a relaunch starts with everything collapsed. The
  * list shows the search results while a search or filter is on (an expanded
- * family shows its matching styles only), else the whole library.
+ * family shows its matching styles only), else the whole library. The views
+ * (list, table, grid, waterfall) all show these rows, so switching views keeps
+ * the selection; `anchor` keeps the scroll position, as the family at the top.
  */
 export const useFontListStore = defineStore('fontList', () => {
   const library = useLibraryStore();
@@ -61,6 +63,25 @@ export const useFontListStore = defineStore('fontList', () => {
   });
 
   const isSelected = (key: RowKey) => selection.value.selected.has(key);
+
+  /** The family at the top of the view; a view that mounts scrolls to it. */
+  const anchor = shallowRef<FamilyId | null>(null);
+  /** The row of the anchor family, or -1. */
+  const anchorIndex = computed(() =>
+    anchor.value === null ? -1 : (indexOf.value.get(familyKey(anchor.value)) ?? -1),
+  );
+
+  /**
+   * A view scrolled; rows `start` to `end` (exclusive) are its first visible line
+   * (one row, or one line of grid cards). The anchor stays while its family row is
+   * in that line, so a view that restored it does not move it; else it becomes
+   * the family of row `start`.
+   */
+  function setAnchor(start: number, end: number): void {
+    const i = anchorIndex.value;
+    if (i >= start && i < end) return;
+    anchor.value = rows.value[start]?.family.id ?? null;
+  }
 
   function expand(id: FamilyId): void {
     expanded.add(id);
@@ -136,6 +157,9 @@ export const useFontListStore = defineStore('fontList', () => {
     cursorFace,
     selectedCount,
     isSelected,
+    anchor,
+    anchorIndex,
+    setAnchor,
     expand,
     collapse,
     toggleExpanded,

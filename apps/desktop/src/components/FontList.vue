@@ -10,16 +10,16 @@
 // inspector; Shift extends the selection, Ctrl/Cmd moves without selecting,
 // Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A selects all. Plain Space is the
 // app's quick-look key, so the list leaves it alone.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
+import { useScrollAnchor } from '../list/anchor';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
+import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, type ListRow } from '../list/rows';
-import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
-import { useSamplesStore } from '../stores/samples';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -43,7 +43,6 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const library = useLibraryStore();
-const samples = useSamplesStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
 
@@ -69,7 +68,11 @@ function measure(): void {
   if (el.clientHeight > 0) height.value = el.clientHeight;
 }
 
+const anchor = useScrollAnchor(viewport, () => rowPx.value);
+
 onMounted(() => {
+  measure();
+  anchor.restore();
   measure();
   if (typeof ResizeObserver !== 'undefined' && viewport.value) {
     observer = new ResizeObserver(measure);
@@ -77,6 +80,11 @@ onMounted(() => {
   }
 });
 onBeforeUnmount(() => observer?.disconnect());
+
+function onScroll(): void {
+  measure();
+  anchor.track(scrollTop.value);
+}
 
 const count = computed(() => list.rows.length);
 const range = computed(() =>
@@ -86,44 +94,22 @@ const pool = computed(() => poolSize(height.value, rowPx.value, props.overscan))
 
 const rowId = (row: ListRow) => `fm-row-${row.key.replace(':', '-')}`;
 
-const visible = computed(() =>
-  list.rows.slice(range.value.start, range.value.end).map((row, i) => {
-    const index = range.value.start + i;
-    const face = row.kind === 'face' ? row.face : list.shownFaces(row.family.id)?.[0];
-    const sample = face ? sampleText(props.preview, face) : '';
-    // The API's answer: the sample, or a fallback when the face lacks some of it.
-    const got = face ? samples.get(face.id, sample) : undefined;
-    return {
-      row,
-      index,
-      slot: index % pool.value,
-      id: rowId(row),
-      face,
-      sample,
-      text: got?.text ?? sample,
-      fallback: got?.fallback ?? null,
-      missing: got?.missing ?? [],
-    };
-  }),
+const rendered = computed(() => list.rows.slice(range.value.start, range.value.end));
+// Family rows preview their first face: the faces of the rendered rows and of one
+// pool beyond each edge are fetched, so rows scrolled in already have them and their
+// preview row is patched in place, not swapped for a placeholder.
+const { previewOf } = useRowPreviews(
+  () => props.preview,
+  () => rendered.value,
+  () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
 );
 
-// Ask for the preview text of the faces on screen (one call per tick).
-watchEffect(() => {
-  for (const item of visible.value) if (item.face) samples.want(item.face.id, item.sample);
-});
-
-// Family rows preview their first face: fetch the faces of the rendered rows and
-// of one pool beyond each edge, so rows scrolled in already have them and their
-// preview row is patched in place, not swapped for a placeholder.
-watchEffect(() => {
-  const { start, end } = range.value;
-  const ahead = pool.value;
-  for (const row of list.rows.slice(Math.max(0, start - ahead), end + ahead)) {
-    const id = row.family.id;
-    if (row.kind === 'family' && !library.faces.has(id) && !library.failed.has(id))
-      void library.facesOf(id).catch(() => undefined);
-  }
-});
+const visible = computed(() =>
+  rendered.value.map((row, i) => {
+    const index = range.value.start + i;
+    return { row, index, slot: index % pool.value, id: rowId(row), ...previewOf(row) };
+  }),
+);
 
 const activeId = computed(() => {
   const row = list.cursorRow;
@@ -185,7 +171,7 @@ function onToggle(row: ListRow): void {
     aria-label="Font list"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
-    @scroll="measure"
+    @scroll="onScroll"
     @keydown="onKeyDown"
   >
     <div class="spacer" role="none" :style="{ height: `${count * rowPx}px` }">
@@ -256,25 +242,6 @@ function onToggle(row: ListRow): void {
   contain: strict;
   background: var(--fm-bg);
   color: var(--fm-fg);
-}
-/* A preview surface other than `auto` overrides the theme inside the list only. */
-.surface-light {
-  color-scheme: light;
-  --fm-bg: #ffffff;
-  --fm-fg: #1a1a1a;
-  --fm-muted: #595959;
-  --fm-border: #d4d4d4;
-  --fm-accent: #0a5fd6;
-  --fm-warning: #8a4b00;
-}
-.surface-dark {
-  color-scheme: dark;
-  --fm-bg: #1c1c1e;
-  --fm-fg: #ececec;
-  --fm-muted: #a6a6a6;
-  --fm-border: #3a3a3c;
-  --fm-accent: #6ea8ff;
-  --fm-warning: #ffb74d;
 }
 .viewport:focus-visible {
   outline: 2px solid var(--fm-accent);

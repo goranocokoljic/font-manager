@@ -16,7 +16,9 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
     RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
-use fm_api::preview::{PreviewService, SampleText, SampleTextRequest};
+use fm_api::preview::{
+    PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+};
 use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
@@ -178,6 +180,15 @@ async fn list_families(
     req: ListFamiliesRequest,
 ) -> ApiResult<Paged<FamilySummary>> {
     call(&state, move |api| api.list_families(req)).await
+}
+
+/// A grid thumbnail: text rasterized in one face (cached by the API).
+#[tauri::command]
+async fn render_preview(
+    state: State<'_, AppState>,
+    req: PreviewRequest,
+) -> ApiResult<PreviewImage> {
+    call(&state, move |api| api.render_preview(req)).await
 }
 
 /// One family with its faces.
@@ -420,6 +431,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             untag_faces,
             update_user_meta,
             sample_texts,
+            render_preview,
             activate,
             deactivate,
             list_active,
