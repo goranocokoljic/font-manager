@@ -31,7 +31,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::parallel::map_ordered;
+use crate::parallel::map_ordered_io;
 use crate::parser::{ParsedFile, parse};
 use crate::scanner::discovery::is_hidden;
 use crate::scanner::{Discovery, FoundFile, Unreadable, discover, is_font_file};
@@ -184,7 +184,8 @@ impl FileIndex {
         let mut done = 0;
 
         // Unchanged files first, on this thread; then every file to read,
-        // read, hashed and parsed on all cores, applied in discovery order.
+        // read, hashed and parsed on more threads than cores (reading waits
+        // for the disk), applied in discovery order.
         let mut to_read = Vec::new();
         for file in &discovery.files {
             found.insert(file.path.as_path());
@@ -195,7 +196,7 @@ impl FileIndex {
                 to_read.push(file);
             }
         }
-        let read = map_ordered(&to_read, |file| hash_and_parse(&file.path), &mut |n| {
+        let read = map_ordered_io(&to_read, |file| hash_and_parse(&file.path), &mut |n| {
             progress(done + n)
         });
         for (file, result) in to_read.into_iter().zip(read) {

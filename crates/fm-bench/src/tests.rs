@@ -77,6 +77,21 @@ fn the_first_scan_reads_every_file_and_the_rescan_reads_none() {
 }
 
 #[test]
+fn the_scan_counts_the_bytes_of_the_font_files_it_found() {
+    let library = TempDir::new("bytes-library");
+    let home = TempDir::new("bytes-home");
+    let font = fs::read(fixtures().join(FONT)).expect("fixture");
+    fs::write(library.path().join("a.ttf"), &font).expect("write");
+    fs::write(library.path().join("b.ttf"), &font[..font.len() / 2]).expect("write");
+    fs::write(library.path().join("notes.txt"), b"not a font").expect("write");
+    let size = |p: &str| fs::metadata(library.path().join(p)).unwrap().len();
+
+    let done = first_scan(library.path(), home.path()).expect("scan");
+    assert_eq!(done.files, 2, "{done:?}");
+    assert_eq!(done.bytes, size("a.ttf") + size("b.ttf"), "{done:?}");
+}
+
+#[test]
 fn a_second_first_scan_starts_from_a_fresh_index() {
     let home = TempDir::new("rescan-fresh");
     let one = first_scan(&fixtures(), home.path()).expect("scan");

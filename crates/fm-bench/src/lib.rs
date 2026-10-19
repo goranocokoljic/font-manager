@@ -109,6 +109,9 @@ pub struct Scanned {
     pub write_ms: f64,
     /// Font files found.
     pub files: usize,
+    /// The sum of the sizes of the font files found, in bytes: with
+    /// `read_ms` of a first scan, how fast the disk gave them.
+    pub bytes: u64,
     /// Faces written.
     pub faces: usize,
     /// Files read for the first time.
@@ -184,6 +187,7 @@ fn rescan(
         read_ms: ms(read - discovered),
         write_ms: ms(written - read),
         files: files.len(),
+        bytes: found.total_size,
         faces: persisted.faces,
         added: report.added.len(),
         changed: report.changed.len(),
