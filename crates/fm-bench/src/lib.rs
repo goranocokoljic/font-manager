@@ -8,16 +8,21 @@
 //!
 //! The library folder is only read. The bench home is the only place written.
 
+use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use fm_api::SourceId;
 use fm_api::common::Page;
+use fm_api::ids::FaceId;
 use fm_api::library::SourceKind;
+use fm_api::preview::PreviewRequest;
 use fm_api::search::SearchRequest;
 use fm_core::Index;
 use fm_core::index::INDEX_FILE;
+use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
+use fm_core::preview::render_preview_file;
 use fm_core::scanner::{FileIndex, discover};
 use fm_core::{logging, startup};
 use fm_platform::AppPaths;
@@ -239,6 +244,103 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
         max_ms: samples.last().copied().unwrap_or_default(),
         slowest: slowest.1,
         families,
+    })
+}
+
+/// The thumbnail the preview-cache measurement caches per face: one word at
+/// a grid-cell size.
+pub const THUMBNAIL_TEXT: &str = "Hamburgefonstiv";
+/// The thumbnail size, in pixels.
+pub const THUMBNAIL_PX: f32 = 32.0;
+/// The faces the preview-cache measurement caches: a screenful of grid cells
+/// and more.
+pub const CACHE_FACES: usize = 200;
+
+/// Preview-cache hit latency.
+#[derive(Debug, Serialize)]
+pub struct CacheHits {
+    /// Thumbnails cached.
+    pub entries: usize,
+    /// Their bytes on disk.
+    pub bytes: u64,
+    /// Files the rasterizer could not draw, skipped.
+    pub failed: usize,
+    /// Files with the same bytes as one already cached: the same face, so
+    /// the same entry (the cache keys by content, not by path).
+    pub duplicates: usize,
+    /// Timed hits.
+    pub samples: usize,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// Renders a thumbnail of the first face of up to [`CACHE_FACES`] files of
+/// the index in `home` into a fresh preview cache (`<home>/cache/previews`),
+/// then times `rounds` hits on every entry, as a grid scrolling back does.
+/// A copy of a file already cached shares its entry and is counted, not
+/// cached twice.
+pub fn preview_cache(home: &Path, rounds: usize) -> BenchResult<CacheHits> {
+    let paths = home_paths(home);
+    let files = startup::open_index(&paths)?.index.load_files()?;
+    let dir = cache_dir(&paths);
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir)?;
+    }
+    let cache = PreviewCache::open(&dir, DEFAULT_LIMIT_BYTES)?;
+    let req = PreviewRequest {
+        face: FaceId(0),
+        text: THUMBNAIL_TEXT.to_owned(),
+        size_px: THUMBNAIL_PX,
+        variations: Vec::new(),
+        features: Vec::new(),
+        foreground: None,
+        background: None,
+    };
+    let mut keys = Vec::with_capacity(CACHE_FACES);
+    let mut seen = HashSet::with_capacity(CACHE_FACES);
+    let (mut failed, mut duplicates) = (0, 0);
+    for file in files.files().filter(|f| !f.gone) {
+        if keys.len() == CACHE_FACES {
+            break;
+        }
+        let key = CacheKey::new(&file.hash, 0, &req);
+        if !seen.insert(key) {
+            duplicates += 1;
+            continue;
+        }
+        match cache.get_or_render(&key, || render_preview_file(&file.path, 0, &req)) {
+            Ok(_) => keys.push(key),
+            Err(_) => failed += 1,
+        }
+    }
+    if cache.len() != keys.len() {
+        return Err(format!("{} of {} thumbnails were cached", cache.len(), keys.len()).into());
+    }
+    let mut samples = Vec::with_capacity(keys.len() * rounds);
+    for _ in 0..rounds {
+        for key in &keys {
+            let begin = Instant::now();
+            let hit = cache.get(key);
+            samples.push(ms(begin.elapsed()));
+            if hit.is_none() {
+                return Err("a cached thumbnail was missed".into());
+            }
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(CacheHits {
+        entries: keys.len(),
+        bytes: cache.total_bytes(),
+        failed,
+        duplicates,
+        samples: samples.len(),
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
     })
 }
 

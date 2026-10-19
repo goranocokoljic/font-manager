@@ -13,7 +13,8 @@
 export const SCHEMA = 1;
 
 /**
- * The budgets of CLAUDE.md rule 8. target null = reported, not budgeted.
+ * The budgets of CLAUDE.md rule 8, plus story budgets (preview_cache_hit: E4.3,
+ * "a cache hit returns in under 2 ms"). target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
 export const BUDGETS = {
@@ -24,6 +25,7 @@ export const BUDGETS = {
   // macOS: one CoreText session registration per file (ADR 0008, Budget on macOS).
   activation_100: { unit: 'ms', target: 500, byOs: { macos: 1000 } },
   idle_memory: { unit: 'MB', target: 350 },
+  preview_cache_hit: { unit: 'ms', target: 2 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];

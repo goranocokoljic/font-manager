@@ -71,6 +71,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E2.8 #257] crates/fm-core/src/scanner/job.rs:113 — the `fm-scan` thread holds the `FileIndex` mutex for the whole scan, so a long first scan blocks every index reader.
 - [E2.8 #257] scripts/bench/lib.mjs:138 — the trend's Previous/Change columns compare the per-10,000-files `first_scan` with older raw-ms nightly values until those runs leave the history window.
 - [E9.2 #90] scripts/bench/bench.mjs:173 — before E9.2 the nightly trend table listed only successful nightly runs, so it had no history while the first scan is known red (fixed in E9.2 by `nightlyRunsArgs`; the E9.1 trend summaries already published lacked the comparison).
+- [E4.3 #61] crates/fm-api/src/settings.rs:68 — `Settings::default().cache_limit_mb` is 1,024 MB while E4.3 criterion 1 says the preview cache defaults to 500 MB; once the cache is wired via `limit_from_mb`, the user-facing default differs (an fm-api default change needs a human).
+- [E4.3 #61] crates/fm-core/src/config.rs:92 — four private temp-then-rename writers now exist (config.rs, index/sources.rs:218, index/sidecars.rs:1005, preview/cache.rs); a shared fs helper is a refactor for a human.
 
 ## 2026-10-19
 - [E6.3 #76] issue #76 / docs/adr/0008-font-activation.md — criterion 1's text ("AddFontResourceExW plus WM_FONTCHANGE") contradicts accepted ADR 0008 (HKCU value for both modes); the issue text could be updated.

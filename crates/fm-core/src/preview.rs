@@ -12,6 +12,7 @@
 //! The caller resolves the face to its file; this module never writes, moves
 //! or keeps the file. Malformed font data is an error, never a panic.
 
+pub mod cache;
 mod png;
 
 use std::borrow::Cow;
