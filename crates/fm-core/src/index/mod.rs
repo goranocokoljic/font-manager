@@ -29,6 +29,7 @@ mod problems;
 mod samples;
 mod schema;
 mod search;
+mod sets;
 mod sidecars;
 mod sources;
 mod tags;
