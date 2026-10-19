@@ -7,7 +7,8 @@
 //! Foundation is reached through the Objective-C runtime's C functions
 //! (`objc_getClass`, `sel_registerName`, `objc_msgSend`); `NSURL` and
 //! `NSError` are toll-free bridged with `CFURL` and `CFError`, so the
-//! CoreFoundation C API builds and reads them.
+//! CoreFoundation C API builds and reads them. Foundation itself is loaded
+//! with `dlopen` on the first move, never linked (see [`load_foundation`]).
 
 use std::ffi::{OsStr, c_char, c_void};
 use std::os::unix::ffi::OsStrExt;
@@ -40,9 +41,26 @@ unsafe extern "C" {
     fn objc_autoreleasePoolPop(pool: *mut c_void);
 }
 
-// NSFileManager lives in Foundation; linking it makes the class known.
-#[link(name = "Foundation", kind = "framework")]
-unsafe extern "C" {}
+/// Foundation, opened on the first move to the trash. It is not linked:
+/// every binary of the workspace links `fm-platform`, and a process with
+/// Foundation loaded makes CoreText's registration calls slower (the
+/// 100-face activation went over its 1 s budget, ADR 0008).
+const FOUNDATION: &std::ffi::CStr = c"/System/Library/Frameworks/Foundation.framework/Foundation";
+/// `RTLD_LAZY | RTLD_LOCAL` on macOS.
+const RTLD_LAZY_LOCAL: i32 = 0x1 | 0x4;
+
+// libSystem: always linked.
+unsafe extern "C" {
+    fn dlopen(path: *const c_char, mode: i32) -> *mut c_void;
+}
+
+/// Loads Foundation once, so `NSFileManager` is known to the runtime.
+fn load_foundation() -> bool {
+    static LOADED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    // SAFETY: a literal NUL-terminated path; the handle is kept for the
+    // life of the process (never `dlclose`d), as the classes it registers are.
+    *LOADED.get_or_init(|| !unsafe { dlopen(FOUNDATION.as_ptr(), RTLD_LAZY_LOCAL) }.is_null())
+}
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
@@ -108,6 +126,12 @@ fn trash_item(path: &Path) -> Result<PathBuf, TrashError> {
 fn send_trash(url: CFTypeRef, path: &Path) -> Result<PathBuf, TrashError> {
     type DefaultManager = unsafe extern "C" fn(Id, Sel) -> Id;
     type TrashItem = unsafe extern "C" fn(Id, Sel, CFTypeRef, *mut Id, *mut Id) -> i8;
+    if !load_foundation() {
+        return Err(TrashError::new(
+            TrashErrorKind::Unsupported,
+            "Foundation could not be loaded",
+        ));
+    }
     // SAFETY: literal NUL-terminated names; the runtime returns the class
     // and selectors (registering a selector never fails).
     let (class, default_manager, trash_item) = unsafe {

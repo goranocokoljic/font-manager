@@ -32,6 +32,11 @@ Restore is the same everywhere: rename the file back, then remove the OS record
   the user moves that file and retries. A trash the user emptied cannot be undone.
 - The Linux `DeletionDate` is written in UTC (no time-zone crate is in the library
   table); file managers only show it.
+- macOS: Foundation is opened with `dlopen` on the first move, never linked. Every
+  binary links `fm-platform`, and with Foundation loaded CoreText registration was
+  slower (100-face activation over its 1 s budget on CI).
+- Windows: the `$I` record holds the long path, so a path with 8.3 short names is
+  looked up by its long form, and the file comes back under its long name.
 - macOS: Finder's "Put Back" does not know a file the app moved back; it never needs to.
 - Each implementation has the same integration test (`crates/fm-platform/tests/trash.rs`)
   against the real trash on its CI runner.

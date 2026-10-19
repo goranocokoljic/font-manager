@@ -404,6 +404,9 @@ mod tests {
         fs::create_dir_all(&dir).expect("dir");
         let file = dir.join("A long file name.ttf");
         fs::write(&file, b"font").expect("write");
+        // The temp folder itself may be a short name (`RUNNER~1`): the file
+        // comes back at the long form of the whole path.
+        let long = long_path(&file).unwrap_or_else(|| file.clone());
         let wide = nul_terminated(file.as_os_str().encode_wide());
         let mut buf = vec![0u16; 1024];
         // SAFETY: `wide` is NUL-terminated; `buf` is writable for its length.
@@ -419,7 +422,7 @@ mod tests {
         let back = fs::read(&file);
         let _ = fs::remove_dir_all(&dir);
         let item = item.expect("moved to the bin by its short name");
-        assert_eq!(item.original, file, "it comes back under its long name");
+        assert_eq!(item.original, long, "it comes back under its long name");
         restored.expect("restore ran").expect("put back");
         assert_eq!(back.expect("back in place"), b"font");
     }
