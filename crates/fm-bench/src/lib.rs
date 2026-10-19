@@ -29,7 +29,7 @@ use fm_core::preview::render_preview_file;
 use fm_core::scanner::{FileIndex, discover};
 use fm_core::{ActivationManager, CoreApi, Index, SettingsStore};
 use fm_core::{logging, startup};
-use fm_platform::{AppPaths, MockActivator};
+use fm_platform::{AppPaths, FontActivator, MockActivator};
 use serde::Serialize;
 
 /// Errors end the run; the script reports the metric as failed.
@@ -76,18 +76,30 @@ pub struct Started {
 
 /// What the app does first ([`startup::init`] without the per-user
 /// folders): app folders and settings, logging, the index with its
-/// migrations, the real API over it ([`CoreApi`], with this OS's activator
-/// cleaning up the last session), then the first page of the family list,
-/// as the UI asks for it.
+/// migrations, the real API over it ([`CoreApi`], cleaning up the last
+/// session), then the first page of the family list, as the UI asks for it.
+///
+/// The session cleanup runs on a [`MockActivator`]: the OS activator keeps
+/// its records per user, not per home (the Windows ledger is one registry
+/// key), so cleaning up with it would deregister the session fonts of the
+/// user's running app.
 ///
 /// Keep the returned guard alive while the process runs: it flushes the log.
 pub fn start(home: &Path) -> BenchResult<(Started, logging::LogGuard)> {
+    start_with(home, Arc::new(MockActivator::new()))
+}
+
+/// [`start`], cleaning up the last session through `activator`.
+pub fn start_with(
+    home: &Path,
+    activator: Arc<dyn FontActivator>,
+) -> BenchResult<(Started, logging::LogGuard)> {
     let begin = Instant::now();
     let paths = home_paths(home);
     let config = startup::prepare(&paths)?;
     let log = logging::init(&paths.logs, config.log_level)?;
     let index = startup::open_index(&paths)?.index;
-    let api = CoreApi::open(&paths, index, fm_platform::activator::system(&paths)?);
+    let api = CoreApi::open(&paths, index, activator);
     api.start()?;
     let res = api.list_families(ListFamiliesRequest {
         page: Page {
