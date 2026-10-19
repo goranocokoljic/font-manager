@@ -8,6 +8,7 @@ import type { ApiError } from './api/types';
 import { formatApiVersion } from './api/version';
 import { createAppRouter } from './router';
 import { useAppStore } from './stores/app';
+import { useCommandsStore } from './stores/commands';
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke, isTauri: () => false }));
@@ -89,5 +90,38 @@ describe('router', () => {
     const router = createAppRouter();
     await router.push('/no/such/page');
     expect(router.currentRoute.value.name).toBe('home');
+  });
+});
+
+describe('help', () => {
+  it('lists one Help action per docs page in the palette, which opens that page', async () => {
+    const opened: string[] = [];
+    setClient({ ...mockClient, openHelp: async (page) => void opened.push(page) });
+    await mountApp();
+    const commands = useCommandsStore();
+    const help = commands.actions.filter((a) => a.group === 'Help');
+    expect(help.map((a) => a.title)).toEqual([
+      'Help: Getting started',
+      'Help: Sources',
+      'Help: Activation',
+      'Help: Keyboard shortcuts',
+    ]);
+    expect(commands.run('help.keyboard-shortcuts')).toBe(true);
+    expect(opened).toEqual(['keyboard-shortcuts']);
+  });
+
+  it('calls the open_help Tauri command with the page', async () => {
+    invoke.mockResolvedValue(null);
+    await tauriClient.openHelp('sources');
+    expect(invoke).toHaveBeenCalledWith('open_help', { page: 'sources' });
+  });
+
+  it('opens the built page in browser mode and refuses an unknown page', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    await mockClient.openHelp('activation');
+    expect(open).toHaveBeenCalledWith('/help/activation.html', '_blank');
+    await expect(mockClient.openHelp('../secrets')).rejects.toMatchObject({ code: 'notFound' });
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
   });
 });

@@ -1,7 +1,7 @@
 {
   "_comment": "go-harness settings. Every key is optional; missing keys use the defaults in scripts/harness/lib.mjs. See dev-docs/harness/go-harness.md.",
 
-  "_merge": "human = the harness never merges. auto = the harness merges a story when CI is green on a branch up to date with main, the review has no open must, the budget held and no existing fm-api type changed (outside contract_epics). Tracks in auto_merge.exclude_tracks always wait for a human; the lane goes on meanwhile.",
+  "_merge": "human = the harness never merges. auto = the harness merges a story when CI is green on a branch up to date with main, the review has no open must and no existing fm-api type changed (outside contract_epics). Tracks in auto_merge.exclude_tracks always wait for a human; the lane goes on meanwhile.",
   "merge": "auto",
 
   "_auto_merge": "exclude_tracks: tracks a human always merges (empty: platform stories auto-merge too, on green CI on all three OS; checked by hand at the end, decided 2026-10-18). max_branch_updates: how often the harness brings a PR up to date with main (then CI again) before it gives up. max_syncs: how often the sync stage may resolve conflicts with main for one story before it is blocked.",
@@ -15,7 +15,8 @@
 
   "base_branch": "main",
 
-  "_budget": "Per-story budget in USD = size factor x base. S = 1x, M = 2.5x, L = 5x. A story over budget stops with harness:blocked.",
+  "_budget": "Per-story budget in USD = size factor x base. S = 1x, M = 2.5x, L = 5x. Off by default (a Pro/Max plan pays no per-token cost): spend is shown and logged, nothing stops. budget_enforced: true (or the -Budget switch) stops a story that goes over with harness:blocked.",
+  "budget_enforced": false,
   "budget_base_usd": 20,
 
   "ci": {

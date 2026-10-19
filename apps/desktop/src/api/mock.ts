@@ -1,6 +1,7 @@
 // Sample answers for browser mode (Playwright) and unit tests, shaped like
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
+import { HELP_PAGES } from '../help';
 import type { FmClient, FullSettings } from './client';
 import {
   API_VERSION,
@@ -914,6 +915,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return { ...settings };
     },
     getAppFolders: async () => ({ ...mockFolders }),
+    // Browser mode: the dev server serves the built pages from public/help/.
+    openHelp: async (page) => {
+      if (!HELP_PAGES.some((p) => p.slug === page))
+        throw {
+          code: 'notFound' as const,
+          message: 'This help page does not exist.',
+          detail: null,
+        };
+      if (typeof window !== 'undefined') window.open(`/help/${page}.html`, '_blank');
+    },
   };
 }
 

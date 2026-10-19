@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, watchEffect } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
+import { useClient } from './api/client';
 import CommandPalette from './components/CommandPalette.vue';
+import { HELP_PAGES } from './help';
 import { ACTIONS } from './keyboard/keymap';
 import { useActions, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
@@ -17,6 +19,13 @@ useActions([
     group: 'App',
     run: () => router.push({ name: 'settings' }),
   },
+  // The same pages as the native Help menu.
+  ...HELP_PAGES.map((page) => ({
+    id: `help.${page.slug}`,
+    title: `Help: ${page.title}`,
+    group: 'Help',
+    run: () => useClient().openHelp(page.slug),
+  })),
 ]);
 
 onMounted(() => settings.load());

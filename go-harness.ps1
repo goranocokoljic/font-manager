@@ -21,11 +21,13 @@
 #     3 failures -> harness:blocked. Numeric criteria add the bench job.
 #   - THE MERGE GATE. `merge: human` leaves a green, reviewed, ready PR and
 #     never merges. `merge: auto` merges it when CI is green on a branch that
-#     is up to date with main, the review has no open must, the budget held
+#     is up to date with main, the review has no open must
 #     and no existing fm-api type changed; platform-track PRs and contract
 #     changes wait for a human while the lane goes on (merge-check.mjs).
 #     Stop conditions set harness:blocked with a comment.
 #   - BUDGETS by size (S 1x, M 2.5x, L 5x the base in go-harness.config.json).
+#     Off by default (spend is still shown and logged); -Budget or
+#     "budget_enforced": true stops a story that goes over.
 #   - TELEMETRY in .harness/ (git-ignored): per-stage runs, review cycles,
 #     one record per story, and fm-run-summary.md. Epics get a summary
 #     comment when a story closes (scripts/harness/epic-sync.mjs).
@@ -42,6 +44,7 @@
 #   ./go-harness.ps1 -Lane core -Issues 42         # only these issues (still Definition-of-Ready checked)
 #   ./go-harness.ps1 -Lane core -NoWorktree        # run in THIS checkout (to watch the first story)
 #   ./go-harness.ps1 -Lane core -Model fable       # default opus
+#   ./go-harness.ps1 -Lane core -Budget            # stop a story that goes over its size budget
 #   ./go-harness.ps1 -GraduateOnly                 # just the KB graduation review
 #   ./go-harness.ps1 -EpicSync                     # just post epic summaries / close finished epics
 #
@@ -74,6 +77,10 @@ param(
 
     # Run in this checkout instead of the lane's worktree.
     [switch]$NoWorktree,
+
+    # Enforce the per-story budget (off by default: a subscription plan pays
+    # no per-token cost). Also on with "budget_enforced": true in the config.
+    [switch]$Budget,
 
     [switch]$NoWaitForReset,
     [int]$MaxWaits = 12,
@@ -119,6 +126,7 @@ $Cfg = Get-Content (Join-Path $PSScriptRoot 'go-harness.config.json') -Raw | Con
 if ($ReviewCycles -eq 0) { $ReviewCycles = [int]($Cfg.review.max_cycles ?? 3) }
 $CiBudget  = [int]($Cfg.ci.retry_budget ?? 3)
 $BaseUsd   = [double]($Cfg.budget_base_usd ?? 15)
+$BudgetOn  = $Budget.IsPresent -or [bool]($Cfg.budget_enforced ?? $false)
 $SizeFactor = @{ S = 1.0; M = 2.5; L = 5.0 }
 $WaitForReset = -not $NoWaitForReset
 $maxAttempts  = $MaxResumes + 1
@@ -704,7 +712,7 @@ function New-StoryState {
     }
 }
 
-function Test-OverBudget { $script:Story.billed_usd -gt $script:Story.budget_usd }
+function Test-OverBudget { $BudgetOn -and $script:Story.billed_usd -gt $script:Story.budget_usd }
 function Get-BudgetReason { 'over budget: ${0:N2} spent of ${1:N0} ({2})' -f $script:Story.billed_usd, $script:Story.budget_usd, $script:Story.size }
 
 function Get-StoryPr {
@@ -913,6 +921,21 @@ function Invoke-Story {
                         $s.stage = $s.after_ci
                     }
                     'red' {
+                        # A flaky test or runner hiccup: re-run the failed jobs once per
+                        # commit before an agent is paid to "fix" code that is fine.
+                        $sha = "$($v.sha)"
+                        if ($sha -and $s.rerun_sha -ne $sha) {
+                            $s.rerun_sha = $sha
+                            $ids = @(gh run list --commit $sha --json 'databaseId,conclusion' 2>$null | ConvertFrom-Json |
+                                Where-Object { $_.conclusion -in 'failure', 'timed_out', 'cancelled' } | ForEach-Object { $_.databaseId })
+                            if ($ids.Count) {
+                                Write-Log "    CI red at $($sha.Substring(0, 7)): re-running the failed jobs once (flaky?)" 'Yellow'
+                                # The whole run, not --failed: the bench jobs need the library job's cache.
+                                $ids | ForEach-Object { gh run rerun $_ 2>&1 | Out-Null }
+                                Start-Sleep -Seconds 20   # let the re-run register before ci-wait looks again
+                                continue
+                            }
+                        }
                         $s.ci_attempts++
                         $failedOs = @($v.failed | ForEach-Object { $_.os }) + $(if ($v.bench -and $v.bench.status -eq 'red') { @('bench') } else { @() })
                         $s.ci_failed_platforms += $failedOs

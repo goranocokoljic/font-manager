@@ -116,3 +116,17 @@ same results.
   see `~/.local/share/fonts` but may not reach a symlink target outside it; Mac App
   Store apps), fonts on network or removable drives, and Windows 10 desktop editions
   older than build 20348 (no runner exists).
+
+## Budget on macOS (2026-10-19)
+
+Rule 8 sets 100-face activation under 500 ms. E6.6 (#79, PR #269) measured
+`activation_100` with the CoreText activator on the CI Mac: 471–923 ms, also with the
+calls made in parallel. One `CTFontManagerRegisterFontsForURL` session registration
+per file is most of that time; no other macOS call registers a font for every app
+(see Results). Decision, made by the maintainer:
+
+- The `activation_100` budget on **macOS is 1000 ms**. Windows and Linux keep 500 ms.
+- The override lives in `scripts/bench/lib.mjs` (`BUDGETS.activation_100.byOs`), and
+  the bench job measures each OS against its own target.
+- The mechanism above stays. A faster CoreText path (for example one call with many
+  URLs) may bring macOS back to 500 ms later; that change removes the override.
