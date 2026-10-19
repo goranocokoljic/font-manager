@@ -3,6 +3,8 @@
 //!
 //! - files whose health is not `Ok` (truncated, missing tables, a format the
 //!   app cannot activate), among the files the library shows;
+//! - duplicate copies (E8.2): every copy of a [`Index::duplicates`] group but
+//!   its keeper, pointing at the keeper;
 //! - source folders that are not there or cannot be opened;
 //! - an index file that was damaged and replaced when it was opened
 //!   ([`Index::open`]), for the session that replaced it;
@@ -14,7 +16,7 @@ use std::path::Path;
 
 use fm_api::FaceId;
 use fm_api::common::Health;
-use fm_api::library::{Problem, ProblemKind, Source};
+use fm_api::library::{DuplicateGroup, Problem, ProblemKind, Source};
 
 use super::files::path_from_sql;
 use super::{Index, db_error};
@@ -33,7 +35,9 @@ ORDER BY f.id";
 
 impl Index {
     /// Every Problems entry: a replaced index first, then missing source
-    /// folders, unhealthy files and sidecar conflicts. Only a database error
+    /// folders, unhealthy files, duplicate copies and sidecar conflicts.
+    /// Activation conflicts come from [`crate::ActivationManager::problems`],
+    /// which asks the OS. Only a database error
     /// fails; a damaged file or a folder that is gone is an entry.
     pub fn problems(&self) -> FmResult<Vec<Problem>> {
         let mut out = Vec::new();
@@ -55,6 +59,7 @@ impl Index {
         }
         out.extend(self.sources()?.iter().filter_map(missing_source));
         out.extend(self.unhealthy_files()?);
+        out.extend(self.duplicates()?.iter().flat_map(DuplicateGroup::problems));
         out.extend(self.sidecar_problems()?);
         Ok(out)
     }

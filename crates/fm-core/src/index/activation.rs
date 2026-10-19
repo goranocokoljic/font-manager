@@ -71,7 +71,7 @@ ORDER BY a.face_id";
 
 const UPSERT_ACTIVATION: &str = "
 INSERT INTO activation (face_id, mode, document, since)
-VALUES (?1, ?2, NULL, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+VALUES (?1, ?2, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 ON CONFLICT (face_id) DO UPDATE SET mode = excluded.mode, since = excluded.since";
 
 const UPSERT_REGISTRATION: &str = "

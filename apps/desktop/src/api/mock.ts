@@ -10,9 +10,11 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Clash,
   type Collection,
   type CollectionFacesRequest,
   type CollectionId,
+  type Conflict,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -30,6 +32,7 @@ import {
   type LanguagePreset,
   type PreviewImage,
   type PreviewRequest,
+  type Problem,
   type SearchResponse,
   type SampleText,
   type Source,
@@ -312,7 +315,38 @@ export interface MockOptions {
   stylesPerFamily?: number;
   /** User tags per face (the sample faces have none). */
   faceTags?: Partial<Record<FaceId, string[]>>;
+  /** Problems entries after the ones the sample faces have (files the mock has no face for). */
+  extraProblems?: Problem[];
 }
+
+/**
+ * Problems of files outside the sample faces, for browser mode: one of each kind the
+ * sample library lacks (a broken file, a duplicate copy, a sidecar conflict), so the
+ * Problems view shows every group.
+ */
+export const mockExtraProblems: Problem[] = [
+  {
+    kind: 'broken',
+    face: null,
+    path: '/Users/demo/Fonts/damaged/Quarto-Bold.otf',
+    other: null,
+    message: "The file is truncated: the 'glyf' table ends before its declared length.",
+  },
+  {
+    kind: 'duplicateFile',
+    face: null,
+    path: '/Users/demo/Downloads/Quarto-Regular.otf',
+    other: '/Users/demo/Fonts/Quarto-Regular.otf',
+    message: 'The same file is also at /Users/demo/Fonts/Quarto-Regular.otf.',
+  },
+  {
+    kind: 'sidecarConflict',
+    face: null,
+    path: '/Users/demo/Fonts/.fontlibrary/meta.json',
+    other: null,
+    message: 'Another computer set a different rating for Inter Regular.',
+  },
+];
 
 /** Id of the first extra face and family; above every sample id. */
 export const EXTRA_ID_BASE = 1000;
@@ -883,10 +917,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         const health = f.face.health;
         if (health.kind !== 'ok')
           return { face: id, outcome: { status: 'skipped', reason: health.reason } };
-        const mode = req.mode ?? 'session';
-        if (active.get(id) === mode) return { face: id, outcome: { status: 'unchanged' } };
         const clash = systemClash[id];
-        if (clash && req.onConflict !== 'replace')
+        const replace = req.onConflict === 'replace';
+        // "Replace" is for this session only.
+        const mode = clash && replace ? 'session' : (req.mode ?? 'session');
+        if (active.get(id) === mode) return { face: id, outcome: { status: 'unchanged' } };
+        if (clash && !replace)
           return {
             face: id,
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
@@ -916,6 +952,65 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       [...active]
         .sort(([a], [b]) => a - b)
         .map(([face, mode]) => ({ face, mode, since: MOCK_NOW, document: null })),
+    conflicts: async (target) =>
+      ids(target).flatMap((id): Conflict[] => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        const clash = systemClash[id];
+        return clash
+          ? [
+              {
+                face: id,
+                postscriptName: f.face.postscriptName,
+                with: { kind: 'system', path: clash },
+              },
+            ]
+          : [];
+      }),
+    listConflicts: async () =>
+      [...active.keys()]
+        .sort((a, b) => a - b)
+        .flatMap((id): Clash[] => {
+          const clash = systemClash[id];
+          const f = find(id);
+          return clash && f
+            ? [
+                {
+                  face: id,
+                  postscriptName: f.face.postscriptName,
+                  with: { kind: 'system', path: clash },
+                  winner: 'face',
+                },
+              ]
+            : [];
+        }),
+    // Like the Rust mock: per face its health and system clash, then the active pairs
+    // (none: no two sample faces share a PostScript name), then the extra entries.
+    listProblems: async () => [
+      ...faces.flatMap((f): Problem[] => {
+        const out: Problem[] = [];
+        const health = f.face.health;
+        if (health.kind !== 'ok')
+          out.push({
+            kind: health.kind,
+            face: f.face.id,
+            path: f.path,
+            other: null,
+            message: health.reason,
+          });
+        const clash = systemClash[f.face.id];
+        if (clash)
+          out.push({
+            kind: 'systemConflict',
+            face: f.face.id,
+            path: f.path,
+            other: clash,
+            message: `${f.face.postscriptName} has the same PostScript name as a system font.`,
+          });
+        return out;
+      }),
+      ...structuredClone(options.extraProblems ?? []),
+    ],
     listSources: async () => structuredClone(sources),
     addSource: async (req) => {
       if (!req.path.trim())
@@ -1006,6 +1101,7 @@ function countFromUrl(name: string, max: number): number {
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
+  extraProblems: mockExtraProblems,
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
 });

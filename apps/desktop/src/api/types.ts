@@ -132,6 +132,33 @@ export type Candidate = {
 	reasons: string[],
 };
 
+/**  Two active fonts with one PostScript name: one row of the Conflicts view. */
+export type Clash = {
+	/**  A face the app has active. */
+	face: FaceId,
+	/**  The shared PostScript name. */
+	postscriptName: string,
+	/**
+	 *  What it clashes with: a system or user font, or another face the app
+	 *  has active (then `face` is the lower face id of the two).
+	 */
+	with: ConflictWith,
+	/**
+	 *  The winner as the app decided it. The app's face wins over a system
+	 *  or user font: it is active over that font only because the user chose
+	 *  "replace for this session" (or it was active before that font came).
+	 *  Between two of the app's faces the later activation wins.
+	 */
+	winner: ClashWinner,
+};
+
+/**  Which of the two fonts of a [`Clash`] the app puts in front. */
+export type ClashWinner = 
+/**  The clash's `face`. */
+"face" | 
+/**  The font in the clash's `with`. */
+"with";
+
 /**  Broad design class, used by filters and smart collections. */
 export type Classification = 
 /**  Serif. */
@@ -196,7 +223,10 @@ export type Conflict = {
 export type ConflictPolicy = 
 /**  Leave the clashing face inactive and report the conflict. */
 "keepExisting" | 
-/**  Activate anyway for this session. */
+/**
+ *  Activate anyway, for this session only: a clashing face is activated
+ *  in session mode even when permanent was asked.
+ */
 "replace";
 
 /**  The other side of a conflict. */

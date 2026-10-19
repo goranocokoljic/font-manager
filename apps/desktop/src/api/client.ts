@@ -9,11 +9,13 @@ import type {
   ActivationOutcome,
   ActiveFace,
   AddSourceRequest,
+  Clash,
   AppFolders,
   AppInfo,
   Collection,
   CollectionFacesRequest,
   CollectionId,
+  Conflict,
   CreateCollectionRequest,
   DeactivateRequest,
   Event,
@@ -29,6 +31,7 @@ import type {
   Paged,
   PreviewImage,
   PreviewRequest,
+  Problem,
   RenameCollectionRequest,
   SampleText,
   SampleTextRequest,
@@ -42,6 +45,7 @@ import type {
   SourceId,
   Tag,
   TagFacesRequest,
+  Target,
   UntagFacesRequest,
   UserMetaUpdate,
 } from './types';
@@ -98,6 +102,12 @@ export interface FmClient {
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
   listActive(): Promise<ActiveFace[]>;
+  /** The clashes activating `target` would cause; activates nothing. */
+  conflicts(target: Target): Promise<Conflict[]>;
+  /** Every clash of an active face, with its winner (the Conflicts view). */
+  listConflicts(): Promise<Clash[]>;
+  /** Duplicates, broken and legacy files, sidecar and activation conflicts (the Problems view). */
+  listProblems(): Promise<Problem[]>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -139,6 +149,9 @@ export const tauriClient: FmClient = {
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),
+  conflicts: (target) => invoke<Conflict[]>('conflicts', { target }),
+  listConflicts: () => invoke<Clash[]>('list_conflicts'),
+  listProblems: () => invoke<Problem[]>('list_problems'),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),

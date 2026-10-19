@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::Timestamp;
+use crate::library::{Problem, ProblemKind};
 use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId};
 
 /// How long an activation lasts.
@@ -55,7 +56,8 @@ pub enum ConflictPolicy {
     /// Leave the clashing face inactive and report the conflict.
     #[default]
     KeepExisting,
-    /// Activate anyway for this session.
+    /// Activate anyway, for this session only: a clashing face is activated
+    /// in session mode even when permanent was asked.
     Replace,
 }
 
@@ -168,6 +170,64 @@ pub struct Conflict {
     pub with: ConflictWith,
 }
 
+/// Which of the two fonts of a [`Clash`] the app puts in front.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ClashWinner {
+    /// The clash's `face`.
+    Face,
+    /// The font in the clash's `with`.
+    With,
+}
+
+/// Two active fonts with one PostScript name: one row of the Conflicts view.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Clash {
+    /// A face the app has active.
+    pub face: FaceId,
+    /// The shared PostScript name.
+    pub postscript_name: String,
+    /// What it clashes with: a system or user font, or another face the app
+    /// has active (then `face` is the lower face id of the two).
+    pub with: ConflictWith,
+    /// The winner as the app decided it. The app's face wins over a system
+    /// or user font: it is active over that font only because the user chose
+    /// "replace for this session" (or it was active before that font came).
+    /// Between two of the app's faces the later activation wins.
+    pub winner: ClashWinner,
+}
+
+impl Clash {
+    /// The Problems entry of the clash: `path` is the file of `face`,
+    /// `other_path` the file of the other face of an `Active` clash (a
+    /// `System` clash carries its own). Every implementation of
+    /// [`LibraryService::list_problems`](crate::library::LibraryService::list_problems)
+    /// uses this, so the rule is one.
+    pub fn problem(&self, path: String, other_path: Option<String>) -> Problem {
+        let name = &self.postscript_name;
+        let (kind, other, message) = match &self.with {
+            ConflictWith::System { path: system } => (
+                ProblemKind::SystemConflict,
+                Some(system.clone()),
+                format!("{name} is active and has the same PostScript name as an installed font."),
+            ),
+            ConflictWith::Active { .. } => (
+                ProblemKind::ActiveConflict,
+                other_path,
+                format!("{name} is active twice, from two different files."),
+            ),
+        };
+        Problem {
+            kind,
+            face: Some(self.face),
+            path,
+            other,
+            message,
+        }
+    }
+}
+
 /// Activation and deactivation.
 pub trait ActivationService {
     /// Activate; one outcome per face.
@@ -178,4 +238,47 @@ pub trait ActivationService {
     fn list_active(&self) -> ApiResult<Vec<ActiveFace>>;
     /// Clashes the target would cause, without activating anything.
     fn conflicts(&self, target: Target) -> ApiResult<Vec<Conflict>>;
+    /// Every clash of a face the app has active, with its winner (the
+    /// Conflicts view). Changes nothing.
+    fn list_conflicts(&self) -> ApiResult<Vec<Clash>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_system_clash_is_a_system_conflict_with_the_installed_file() {
+        let clash = Clash {
+            face: FaceId(6),
+            postscript_name: "Helvetica".into(),
+            with: ConflictWith::System {
+                path: "/System/Library/Fonts/Helvetica.ttc".into(),
+            },
+            winner: ClashWinner::Face,
+        };
+        let p = clash.problem("/fonts/Helvetica.otf".into(), Some("ignored".into()));
+        assert_eq!(p.kind, ProblemKind::SystemConflict);
+        assert_eq!(p.face, Some(FaceId(6)));
+        assert_eq!(p.path, "/fonts/Helvetica.otf");
+        assert_eq!(
+            p.other.as_deref(),
+            Some("/System/Library/Fonts/Helvetica.ttc")
+        );
+        assert!(p.message.starts_with("Helvetica is active"));
+    }
+
+    #[test]
+    fn an_active_clash_is_an_active_conflict_with_the_other_file() {
+        let clash = Clash {
+            face: FaceId(2),
+            postscript_name: "Inter-Regular".into(),
+            with: ConflictWith::Active { face: FaceId(9) },
+            winner: ClashWinner::With,
+        };
+        let p = clash.problem("/a/Inter.ttf".into(), Some("/b/Inter.ttf".into()));
+        assert_eq!(p.kind, ProblemKind::ActiveConflict);
+        assert_eq!(p.path, "/a/Inter.ttf");
+        assert_eq!(p.other.as_deref(), Some("/b/Inter.ttf"));
+    }
 }

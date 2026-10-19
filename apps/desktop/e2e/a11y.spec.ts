@@ -103,6 +103,28 @@ test('every interactive element in Settings has a name', async ({ page }) => {
   }
 });
 
+test('every interactive element of the Conflicts view and the clash question has a name', async ({
+  page,
+}) => {
+  await open(page, '/?face=6');
+  await page
+    .getByRole('tabpanel', { name: 'Info' })
+    .getByRole('button', { name: 'Activate' })
+    .click();
+  await expect(page.getByRole('alertdialog')).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  await page.getByRole('button', { name: 'Replace for this session' }).click();
+  await open(page, '/conflicts');
+  await expect(page.getByRole('heading', { name: 'Font conflicts' })).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
+test('every interactive element of the Problems view has a name', async ({ page }) => {
+  await open(page, '/problems');
+  await expect(page.getByRole('table', { name: 'Problems' })).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) => {
   await open(page);
   await expect(page.getByRole('treeitem').first()).toBeVisible();

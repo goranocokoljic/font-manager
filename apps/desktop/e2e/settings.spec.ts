@@ -50,14 +50,22 @@ test('theme and density apply at once, without a reload', async ({ page }) => {
 
 test('the activation choice applies to the next activation', async ({ page }) => {
   await page.goto('/#/settings?section=activation');
-  await page.getByRole('radio', { name: 'Activate this font anyway' }).check();
+  await page
+    .getByRole('radio', { name: 'Replace the other font for this session without asking' })
+    .check();
   await page.getByRole('radio', { name: 'Permanently (also after a restart)' }).check();
   await page.getByRole('button', { name: 'Close' }).click();
 
-  // Face 6 clashes with a system font; with "anyway" it activates.
-  await page.goto('/#/?face=6');
+  // Face 1 has no clash: permanent.
+  await page.goto('/#/?face=1');
   await page.getByRole('button', { name: 'Activate' }).click();
   await expect(page.getByTestId('activation-state')).toHaveText('Active (permanent)');
+
+  // Face 6 clashes with a system font: replaced without a question, for this session only.
+  await page.goto('/#/?face=6');
+  await page.getByRole('button', { name: 'Activate' }).click();
+  await expect(page.getByTestId('activation-state')).toHaveText('Active for this session');
+  await expect(page.getByRole('alertdialog')).toHaveCount(0);
 });
 
 test('the status bar counts active fonts as activation changes', async ({ page }) => {

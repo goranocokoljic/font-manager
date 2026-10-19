@@ -5,8 +5,8 @@
 use std::sync::Arc;
 
 use fm_api::activation::{
-    ActivateRequest, ActivationMode, ConflictPolicy, ConflictWith, DeactivateRequest,
-    OutcomeStatus, Target,
+    ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
+    DeactivateRequest, OutcomeStatus, Target,
 };
 use fm_api::common::{FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
@@ -145,6 +145,49 @@ fn activation_reports_per_face() {
         api.get_face(FaceId(1)).unwrap().face.active,
         Some(ActivationMode::Session)
     );
+}
+
+#[test]
+fn replace_is_for_the_session_and_the_clash_is_listed_with_its_winner() {
+    let api = api();
+    assert_eq!(api.list_conflicts().unwrap(), []);
+    // 6 JetBrains Mono clashes with a system font: permanent is asked, the
+    // replace makes it a session activation; 1 Inter has no clash.
+    let out = api
+        .activate(acts(
+            &[1, 6],
+            ActivationMode::Permanent,
+            ConflictPolicy::Replace,
+        ))
+        .unwrap();
+    assert_eq!(out[0].outcome, OutcomeStatus::Done);
+    assert_eq!(out[1].outcome, OutcomeStatus::Done);
+    let modes: Vec<_> = api
+        .list_active()
+        .unwrap()
+        .iter()
+        .map(|a| (a.face, a.mode))
+        .collect();
+    assert_eq!(
+        modes,
+        [
+            (FaceId(1), ActivationMode::Permanent),
+            (FaceId(6), ActivationMode::Session)
+        ]
+    );
+    assert_eq!(
+        api.list_conflicts().unwrap(),
+        [Clash {
+            face: FaceId(6),
+            postscript_name: api.get_face(FaceId(6)).unwrap().face.postscript_name,
+            with: ConflictWith::System {
+                path: "/System/Library/Fonts/JetBrainsMono-Regular.ttf".into()
+            },
+            winner: ClashWinner::Face,
+        }]
+    );
+    api.deactivate(DeactivateRequest::default()).unwrap();
+    assert_eq!(api.list_conflicts().unwrap(), []);
 }
 
 #[test]

@@ -214,7 +214,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.onConflict === 'keepExisting'"
                 @change="choose({ onConflict: 'keepExisting' })"
               />
-              Keep the other font and tell me
+              Ask me: keep the other font, replace it for this session, or cancel
             </label>
             <label class="choice">
               <input
@@ -223,7 +223,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.onConflict === 'replace'"
                 @change="choose({ onConflict: 'replace' })"
               />
-              Activate this font anyway
+              Replace the other font for this session without asking
             </label>
           </fieldset>
           <label class="choice">

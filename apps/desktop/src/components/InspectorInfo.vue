@@ -2,8 +2,8 @@
 // The Info tab: every field fm-api reports for the selected face, its health
 // and the activation button. Names and paths copy on click. Tags, favorite
 // and rating are edited here; the API stores them.
-import { computed, ref } from 'vue';
-import type { Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
+import { computed, nextTick, ref, watch } from 'vue';
+import type { Conflict, Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
 import { useSelectionStore } from '../stores/selection';
 import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
@@ -84,6 +84,23 @@ function message(o: OutcomeStatus | null): string | null {
   }
 }
 const outcomeMessage = computed(() => message(selection.outcome));
+
+// The question takes the focus, so the keyboard answers it at once.
+const keepButton = ref<HTMLButtonElement | null>(null);
+watch(
+  () => selection.pending,
+  async (p) => {
+    if (!p) return;
+    await nextTick();
+    keepButton.value?.focus();
+  },
+);
+
+function clashText(c: Conflict): string {
+  return c.with.kind === 'system'
+    ? `A system font already uses the PostScript name ${c.postscriptName} (${c.with.path}).`
+    : `Another active font already uses the PostScript name ${c.postscriptName} (face ${c.with.face}).`;
+}
 </script>
 
 <template>
@@ -110,6 +127,36 @@ const outcomeMessage = computed(() => message(selection.outcome));
           <span class="state" data-testid="activation-state">{{ activationState }}</span>
         </div>
         <p v-if="outcomeMessage" role="alert" class="outcome">{{ outcomeMessage }}</p>
+        <div
+          v-if="selection.pending"
+          role="alertdialog"
+          aria-labelledby="fm-clash-title"
+          aria-describedby="fm-clash-text"
+          class="clash"
+        >
+          <p id="fm-clash-title" class="clash-title">Font name already in use</p>
+          <p id="fm-clash-text">
+            <template v-for="c in selection.pending.conflicts" :key="clashText(c)">
+              {{ clashText(c) }}
+            </template>
+          </p>
+          <div class="clash-actions">
+            <button
+              ref="keepButton"
+              type="button"
+              class="choice"
+              @click="selection.resolveConflict('keep')"
+            >
+              Keep existing
+            </button>
+            <button type="button" class="choice" @click="selection.resolveConflict('replace')">
+              Replace for this session
+            </button>
+            <button type="button" class="choice" @click="selection.resolveConflict('cancel')">
+              Cancel
+            </button>
+          </div>
+        </div>
       </header>
 
       <section aria-labelledby="fm-info-names">
@@ -322,6 +369,32 @@ const outcomeMessage = computed(() => message(selection.outcome));
 .outcome {
   margin: 0;
   color: var(--fm-danger);
+}
+.clash {
+  display: grid;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 8px;
+}
+.clash p {
+  margin: 0;
+}
+.clash-title {
+  font-weight: 600;
+}
+.clash-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.choice {
+  padding: 4px 10px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 .head {
   display: grid;

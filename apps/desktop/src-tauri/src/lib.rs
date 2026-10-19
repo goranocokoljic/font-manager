@@ -5,11 +5,13 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use fm_api::activation::{ActivateRequest, ActivationOutcome, ActiveFace, DeactivateRequest};
+use fm_api::activation::{
+    ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
+};
 use fm_api::common::Paged;
 use fm_api::library::{
-    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, ScanRequest,
-    SetSourcePausedRequest, Source,
+    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, Problem,
+    ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -229,6 +231,25 @@ async fn list_active(state: State<'_, AppState>) -> ApiResult<Vec<ActiveFace>> {
     call(&state, |api| api.list_active()).await
 }
 
+/// The clashes activating `target` would cause, without activating anything.
+#[tauri::command]
+async fn conflicts(state: State<'_, AppState>, target: Target) -> ApiResult<Vec<Conflict>> {
+    call(&state, move |api| api.conflicts(target)).await
+}
+
+/// Every clash of an active face, with its winner (the Conflicts view).
+#[tauri::command]
+async fn list_conflicts(state: State<'_, AppState>) -> ApiResult<Vec<Clash>> {
+    call(&state, |api| api.list_conflicts()).await
+}
+
+/// Everything wrong with the library: duplicates, broken and legacy files,
+/// sidecar and activation conflicts (the Problems view).
+#[tauri::command]
+async fn list_problems(state: State<'_, AppState>) -> ApiResult<Vec<Problem>> {
+    call(&state, |api| api.list_problems()).await
+}
+
 /// Searches the library: free text and filters, grouped by family, with filter counts.
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -435,6 +456,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             activate,
             deactivate,
             list_active,
+            conflicts,
+            list_conflicts,
+            list_problems,
             list_sources,
             add_source,
             remove_source,

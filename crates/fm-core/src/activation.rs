@@ -20,11 +20,12 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
-    ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace, Conflict,
-    ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
+    ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace, Clash,
+    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
 };
 use fm_api::common::FontFormat;
 use fm_api::event::Event;
+use fm_api::library::Problem;
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
 use fm_platform::{
     ActivationError, ActivationErrorKind, FaceFile, FontActivator, Outcome, OutcomeStatus as Os,
@@ -373,6 +374,115 @@ impl ActivationManager {
             .collect())
     }
 
+    /// "Replace for this session": a permanent request with `Replace`
+    /// activates its clashing faces in session mode and the others
+    /// permanently, so the replaced font is back after the session.
+    fn replace_for_session(
+        &self,
+        index: &mut Index,
+        req: &ActivateRequest,
+    ) -> FmResult<Vec<ActivationOutcome>> {
+        let ids = index.target_faces(&req.target)?;
+        let active = by_face(index.active_rows()?);
+        // A face already permanent stays as it is.
+        let open: Vec<FaceId> = ids
+            .iter()
+            .copied()
+            .filter(|f| active.get(f).is_none_or(|a| a.mode != req.mode))
+            .collect();
+        let (rows, clashes) = self.clashes_of(index, &open)?;
+        let clashing: HashSet<FaceId> = rows
+            .iter()
+            .filter(|r| clashes.contains_key(&(r.path.clone(), r.postscript_name.clone())))
+            .map(|r| r.id)
+            .collect();
+        if clashing.is_empty() {
+            return self.activate_locked(index, req);
+        }
+        let (session, permanent): (Vec<FaceId>, Vec<FaceId>) =
+            ids.iter().copied().partition(|f| clashing.contains(f));
+        let mut results: HashMap<FaceId, OutcomeStatus> = HashMap::new();
+        for (faces, mode) in [
+            (permanent, ActivationMode::Permanent),
+            (session, ActivationMode::Session),
+        ] {
+            if faces.is_empty() {
+                continue;
+            }
+            let part = ActivateRequest {
+                target: Target::Faces { faces },
+                mode,
+                on_conflict: ConflictPolicy::Replace,
+            };
+            for o in self.activate_locked(index, &part)? {
+                results.insert(o.face, o.outcome);
+            }
+        }
+        Ok(ids
+            .into_iter()
+            .map(|face| ActivationOutcome {
+                face,
+                outcome: results
+                    .get(&face)
+                    .cloned()
+                    .unwrap_or_else(|| skipped(NOT_OURS.to_owned())),
+            })
+            .collect())
+    }
+
+    /// The faces of `ids` that can be activated, with the first clash of
+    /// each (by file and PostScript name). Activates nothing.
+    fn clashes_of(&self, index: &Index, ids: &[FaceId]) -> FmResult<(Vec<FaceRow>, ClashMap)> {
+        let rows: Vec<FaceRow> = index
+            .activation_faces(ids)?
+            .into_iter()
+            .filter(|r| unusable(r).is_none())
+            .collect();
+        if rows.is_empty() {
+            return Ok((rows, HashMap::new()));
+        }
+        let active = by_face(index.active_rows()?);
+        let files: Vec<FaceFile> = rows.iter().map(face_file).collect();
+        let found = self.activator.conflicts(&files).map_err(platform_error)?;
+        Ok((rows, clash_map(&found, &active)))
+    }
+
+    /// The Problems entries of the activation conflicts (E8.2): one per row
+    /// of [`ActivationService::list_conflicts`], with the files of the faces
+    /// involved. Changes nothing.
+    pub fn problems(&self) -> ApiResult<Vec<Problem>> {
+        let clashes = self.list_conflicts()?;
+        if clashes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut ids: Vec<FaceId> = Vec::new();
+        for c in &clashes {
+            ids.push(c.face);
+            if let ConflictWith::Active { face } = c.with {
+                ids.push(face);
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        let paths: HashMap<FaceId, String> = self
+            .lock()
+            .activation_faces(&ids)?
+            .into_iter()
+            .map(|row| (row.id, row.path.display().to_string()))
+            .collect();
+        let path = |face: FaceId| paths.get(&face).cloned();
+        Ok(clashes
+            .iter()
+            .map(|c| {
+                let other = match c.with {
+                    ConflictWith::Active { face } => path(face),
+                    ConflictWith::System { .. } => None,
+                };
+                c.problem(path(c.face).unwrap_or_default(), other)
+            })
+            .collect())
+    }
+
     fn send(&self, activated: Vec<FaceId>, deactivated: Vec<FaceId>) {
         if !activated.is_empty() || !deactivated.is_empty() {
             (self.emit)(Event::ActivationChanged {
@@ -386,6 +496,9 @@ impl ActivationManager {
 impl ActivationService for ActivationManager {
     fn activate(&self, req: ActivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
         let mut index = self.lock();
+        if req.on_conflict == ConflictPolicy::Replace && req.mode == ActivationMode::Permanent {
+            return Ok(self.replace_for_session(&mut index, &req)?);
+        }
         Ok(self.activate_locked(&mut index, &req)?)
     }
 
@@ -415,18 +528,7 @@ impl ActivationService for ActivationManager {
     fn conflicts(&self, target: Target) -> ApiResult<Vec<Conflict>> {
         let index = self.lock();
         let ids = index.target_faces(&target)?;
-        let rows: Vec<FaceRow> = index
-            .activation_faces(&ids)?
-            .into_iter()
-            .filter(|r| unusable(r).is_none())
-            .collect();
-        if rows.is_empty() {
-            return Ok(Vec::new());
-        }
-        let active = by_face(index.active_rows()?);
-        let files: Vec<FaceFile> = rows.iter().map(face_file).collect();
-        let found = self.activator.conflicts(&files).map_err(platform_error)?;
-        let clashes = clash_map(&found, &active);
+        let (rows, clashes) = self.clashes_of(&index, &ids)?;
         Ok(rows
             .into_iter()
             .filter_map(|row| {
@@ -439,6 +541,51 @@ impl ActivationService for ActivationManager {
             })
             .collect())
     }
+
+    fn list_conflicts(&self) -> ApiResult<Vec<Clash>> {
+        let index = self.lock();
+        let active = by_face(index.active_rows()?);
+        let mut ids: Vec<FaceId> = active.keys().copied().collect();
+        ids.sort();
+        let rows = index.activation_faces(&ids)?;
+        if rows.is_empty() {
+            return Ok(Vec::new());
+        }
+        let files: Vec<FaceFile> = rows.iter().map(face_file).collect();
+        let found = self.activator.conflicts(&files).map_err(platform_error)?;
+        let all = clashes(&found, &active);
+        let mut out: Vec<Clash> = Vec::new();
+        for row in &rows {
+            let key = (row.path.clone(), row.postscript_name.clone());
+            for (_, with) in all.iter().filter(|(k, _)| *k == key) {
+                let winner = match with {
+                    // Each pair of the app's faces once, under the lower id.
+                    ConflictWith::Active { face: other } if *other < row.id => continue,
+                    ConflictWith::Active { face: other } if later(&active, *other, row.id) => {
+                        ClashWinner::With
+                    }
+                    ConflictWith::Active { .. } | ConflictWith::System { .. } => ClashWinner::Face,
+                };
+                let clash = Clash {
+                    face: row.id,
+                    postscript_name: row.postscript_name.clone(),
+                    with: with.clone(),
+                    winner,
+                };
+                if !out.contains(&clash) {
+                    out.push(clash);
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+/// `a` was activated after `b`: the later `since`, then the higher id
+/// (one request activates its faces in the same millisecond).
+fn later(active: &HashMap<FaceId, ActiveRow>, a: FaceId, b: FaceId) -> bool {
+    let since = |f: FaceId| active.get(&f).map(|r| r.since.clone());
+    (since(a), a) > (since(b), b)
 }
 
 /// Why a face cannot be activated, or `None` when it can.
@@ -472,27 +619,46 @@ fn by_face(rows: Vec<ActiveRow>) -> HashMap<FaceId, ActiveRow> {
     rows.into_iter().map(|r| (r.face, r)).collect()
 }
 
-/// The first clash of each (file, PostScript name): with one of the app's
-/// active faces when the other file is one the app registered, else with
-/// the system or user font it is.
-fn clash_map(
+/// Clashes by (file, PostScript name).
+type ClashMap = HashMap<(PathBuf, String), ConflictWith>;
+
+/// Every clash, keyed by (file, PostScript name), in the activator's order:
+/// with one of the app's active faces when the other file is one the app
+/// registered (by the file or by the OS record, such as a Linux link), else
+/// with the system or user font it is.
+fn clashes(
     found: &[fm_platform::Conflict],
     active: &HashMap<FaceId, ActiveRow>,
-) -> HashMap<(PathBuf, String), ConflictWith> {
-    let ours: HashMap<&PathBuf, FaceId> = active
-        .values()
-        .filter_map(|a| a.registration.as_ref().map(|r| (&r.path, a.face)))
-        .collect();
+) -> Vec<((PathBuf, String), ConflictWith)> {
+    // Lowest id first, so a file shared by several faces names the same one.
+    let mut faces: Vec<&ActiveRow> = active.values().collect();
+    faces.sort_by_key(|a| a.face);
+    let mut ours: HashMap<PathBuf, FaceId> = HashMap::new();
+    for a in faces {
+        if let Some(r) = &a.registration {
+            ours.entry(r.path.clone()).or_insert(a.face);
+            ours.entry(PathBuf::from(&r.handle)).or_insert(a.face);
+        }
+    }
+    found
+        .iter()
+        .map(|c| {
+            let with = match ours.get(&c.with) {
+                Some(&face) => ConflictWith::Active { face },
+                None => ConflictWith::System {
+                    path: c.with.display().to_string(),
+                },
+            };
+            ((c.path.clone(), c.postscript_name.clone()), with)
+        })
+        .collect()
+}
+
+/// The first clash of each (file, PostScript name); see [`clashes`].
+fn clash_map(found: &[fm_platform::Conflict], active: &HashMap<FaceId, ActiveRow>) -> ClashMap {
     let mut out = HashMap::new();
-    for c in found {
-        let with = match ours.get(&c.with) {
-            Some(&face) => ConflictWith::Active { face },
-            None => ConflictWith::System {
-                path: c.with.display().to_string(),
-            },
-        };
-        out.entry((c.path.clone(), c.postscript_name.clone()))
-            .or_insert(with);
+    for (key, with) in clashes(found, active) {
+        out.entry(key).or_insert(with);
     }
     out
 }

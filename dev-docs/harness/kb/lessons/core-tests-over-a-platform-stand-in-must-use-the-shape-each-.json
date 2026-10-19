@@ -1,0 +1,19 @@
+{
+  "id": "core-tests-over-a-platform-stand-in-must-use-the-shape-each-",
+  "title": "Core tests over a platform stand-in must use the shape each OS really reports",
+  "category": "platform-parity",
+  "rule": "When fm-core maps what a FontActivator (or another fm-platform trait) reports back to its own records, and one OS reports a different shape than the mock (Linux fontconfig lists the app's symlink, i.e. the registration handle, not the font file path), add a core test with a stand-in that reports that OS's shape. A core branch that only one OS reaches is untested when every core test uses the mock's shape, and a regression there breaks one platform with CI green.",
+  "rationale": "E6.7 (#80): clashes() mapped the app's own Linux link (handle) to its face, but every core test used MockActivator, which reports the file path; deleting the mapping broke the Conflicts view on Linux with all tests green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    80
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs",
+    "crates/fm-platform/src/activator/**"
+  ],
+  "first_seen": "2026-10-19T19:34:41.330Z",
+  "last_seen": "2026-10-19T19:34:41.330Z"
+}

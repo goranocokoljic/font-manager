@@ -3,8 +3,8 @@ use std::time::Instant;
 
 use fm_api::activation::OutcomeStatus as Status;
 use fm_api::common::Health;
-use fm_api::library::SourceKind;
-use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest};
+use fm_api::library::{ProblemKind, SourceKind};
+use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest};
 use fm_api::{CollectionId, FamilyId, SetId};
 use fm_platform::{ConflictKind, MockActivator, Mode};
 
@@ -348,20 +348,20 @@ fn a_collection_target_activates_its_members() {
 }
 
 #[test]
-fn a_set_target_activates_its_faces() {
+fn a_set_target_activates_and_deactivates_its_faces_in_one_call() {
     let fx = Fixture::new();
     let (bold, inter) = (fx.bold(), fx.inter());
-    fx.index
+    let set = fx
+        .index
         .lock()
         .expect("index")
-        .conn()
-        .execute_batch(&format!(
-            "INSERT INTO project_set (id, name) VALUES (3, 'Client');
-             INSERT INTO set_face VALUES (3, {}), (3, {});",
-            bold.0, inter.0
-        ))
-        .expect("set");
-    let target = Target::Set { set: SetId(3) };
+        .create_set(&CreateSetRequest {
+            name: "Client".into(),
+            faces: vec![bold, inter],
+        })
+        .expect("set")
+        .id;
+    let target = Target::Set { set };
     let out = fx
         .service
         .activate(ActivateRequest {
@@ -370,7 +370,11 @@ fn a_set_target_activates_its_faces() {
             on_conflict: ConflictPolicy::KeepExisting,
         })
         .expect("activate");
-    assert_eq!(out.len(), 2);
+    let mut faces: Vec<FaceId> = out.iter().map(|o| o.face).collect();
+    faces.sort();
+    let mut want = vec![bold, inter];
+    want.sort();
+    assert_eq!(faces, want);
     assert!(out.iter().all(|o| o.outcome == Status::Done));
     assert_eq!(fx.active().len(), 2);
     let out = fx
@@ -678,6 +682,278 @@ fn a_clash_with_a_face_the_app_activated_names_that_face() {
             with: ConflictWith::Active { face: regular }
         }]
     );
+}
+
+fn replace(fx: &Fixture, faces: Vec<FaceId>, mode: ActivationMode) -> Vec<ActivationOutcome> {
+    fx.service
+        .activate(ActivateRequest {
+            target: Target::Faces { faces },
+            mode,
+            on_conflict: ConflictPolicy::Replace,
+        })
+        .expect("replace")
+}
+
+fn set_since(fx: &Fixture, face: FaceId, since: &str) {
+    fx.index
+        .lock()
+        .expect("index")
+        .conn()
+        .execute(
+            "UPDATE activation SET since = ?1 WHERE face_id = ?2",
+            rusqlite::params![since, face.0],
+        )
+        .expect("since");
+}
+
+fn system_inter(fx: &Fixture) -> ConflictWith {
+    let path = "/System/Library/Fonts/Inter.otf";
+    fx.os.install("Inter-Regular", path, ConflictKind::System);
+    ConflictWith::System {
+        path: Path::new(path).display().to_string(),
+    }
+}
+
+#[test]
+fn replace_activates_a_clashing_face_for_the_session_only() {
+    let fx = Fixture::new();
+    let (bold, inter) = (fx.bold(), fx.inter());
+    system_inter(&fx);
+
+    // Permanent is asked; the clashing face replaces the system font for
+    // this session only, the other face is permanent.
+    let out = replace(&fx, vec![inter, bold], ActivationMode::Permanent);
+    assert_eq!(statuses(&out), vec![Status::Done, Status::Done]);
+    assert_eq!(out[0].face, inter);
+    assert_eq!(
+        fx.active(),
+        vec![
+            (bold, ActivationMode::Permanent),
+            (inter, ActivationMode::Session)
+        ]
+    );
+    assert_eq!(
+        fx.registered(),
+        vec![
+            (PathBuf::from("/fonts/Inter.otf"), Mode::Session),
+            (PathBuf::from("/fonts/Roboto-Bold.ttf"), Mode::Permanent),
+        ]
+    );
+    assert_eq!(
+        fx.events(),
+        vec![changed(vec![bold], vec![]), changed(vec![inter], vec![])]
+    );
+
+    // Asked again, nothing changes; after a restart the system font is back.
+    let again = replace(&fx, vec![inter, bold], ActivationMode::Permanent);
+    assert_eq!(statuses(&again), vec![Status::Unchanged, Status::Unchanged]);
+    fx.service.shutdown().expect("quit");
+    let next = fx.restart();
+    next.service
+        .start(false, ConflictPolicy::KeepExisting)
+        .expect("start");
+    assert_eq!(next.active(), vec![(bold, ActivationMode::Permanent)]);
+}
+
+#[test]
+fn the_conflicts_view_lists_every_clash_with_its_winner() {
+    let fx = Fixture::new();
+    let (regular, inter) = (fx.regular(), fx.inter());
+    let copy = fx.face("Roboto-Regular", "/fonts/copy/Roboto-Regular.ttf");
+    assert_eq!(fx.service.list_conflicts().expect("list"), vec![]);
+    let system = system_inter(&fx);
+
+    replace(&fx, vec![inter], ActivationMode::Session);
+    fx.activate(vec![regular], ActivationMode::Session);
+    replace(&fx, vec![copy], ActivationMode::Session);
+    // Replacing an app face does not deactivate it.
+    assert_eq!(fx.active().len(), 3);
+    set_since(&fx, regular, "2026-10-19T10:00:00.000Z");
+    set_since(&fx, copy, "2026-10-19T10:00:01.000Z");
+    let registered = fx.registered();
+
+    let pair = |winner| Clash {
+        face: regular,
+        postscript_name: "Roboto-Regular".into(),
+        with: ConflictWith::Active { face: copy },
+        winner,
+    };
+    let inter_clash = Clash {
+        face: inter,
+        postscript_name: "Inter-Regular".into(),
+        with: system,
+        winner: ClashWinner::Face,
+    };
+    // The pair once, under the lower id; the later activation wins.
+    assert_eq!(
+        fx.service.list_conflicts().expect("list"),
+        vec![pair(ClashWinner::With), inter_clash.clone()]
+    );
+    set_since(&fx, regular, "2026-10-19T10:00:02.000Z");
+    assert_eq!(
+        fx.service.list_conflicts().expect("list"),
+        vec![pair(ClashWinner::Face), inter_clash.clone()]
+    );
+    // Reading the view changes nothing.
+    assert_eq!(fx.registered(), registered);
+    assert_eq!(fx.events().len(), 3);
+
+    fx.deactivate(vec![copy]);
+    assert_eq!(
+        fx.service.list_conflicts().expect("list"),
+        vec![inter_clash]
+    );
+}
+
+#[test]
+fn activation_conflicts_are_problems_entries_with_both_files() {
+    let fx = Fixture::new();
+    let (regular, inter) = (fx.regular(), fx.inter());
+    let copy = fx.face("Roboto-Regular", "/fonts/copy/Roboto-Regular.ttf");
+    assert_eq!(fx.service.problems().expect("none"), vec![]);
+    system_inter(&fx);
+    replace(&fx, vec![inter], ActivationMode::Session);
+    fx.activate(vec![regular], ActivationMode::Session);
+    replace(&fx, vec![copy], ActivationMode::Session);
+    let registered = fx.registered();
+
+    let shown = |p: &str| Path::new(p).display().to_string();
+    let rows: Vec<_> = fx
+        .service
+        .problems()
+        .expect("problems")
+        .into_iter()
+        .map(|p| (p.kind, p.face, p.path, p.other))
+        .collect();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                ProblemKind::ActiveConflict,
+                Some(regular),
+                shown("/fonts/Roboto-Regular.ttf"),
+                Some(shown("/fonts/copy/Roboto-Regular.ttf")),
+            ),
+            (
+                ProblemKind::SystemConflict,
+                Some(inter),
+                shown("/fonts/Inter.otf"),
+                Some(shown("/System/Library/Fonts/Inter.otf")),
+            ),
+        ]
+    );
+    // Reading the entries changes nothing.
+    assert_eq!(fx.registered(), registered);
+}
+
+#[test]
+fn the_conflicts_view_is_an_error_when_the_activator_is_unavailable() {
+    let fx = Fixture::new();
+    fx.activate(vec![fx.regular()], ActivationMode::Session);
+    fx.os.set_unavailable(true);
+    let err = fx.service.list_conflicts().expect_err("unavailable");
+    assert_eq!(err.code, ErrorCode::Unsupported);
+}
+
+/// An activator that reports the app's own fonts by their OS record, as
+/// fontconfig does on Linux (it lists the link, not the file it points at).
+struct ByHandle(Arc<MockActivator>);
+
+impl FontActivator for ByHandle {
+    fn activate(&self, faces: &[FaceFile], mode: Mode) -> Result<Vec<Outcome>, ActivationError> {
+        self.0.activate(faces, mode)
+    }
+
+    fn deactivate(&self, regs: &[Registration]) -> Result<Vec<Outcome>, ActivationError> {
+        self.0.deactivate(regs)
+    }
+
+    fn list_active(&self) -> Result<Vec<Registration>, ActivationError> {
+        self.0.list_active()
+    }
+
+    fn conflicts(&self, faces: &[FaceFile]) -> Result<Vec<fm_platform::Conflict>, ActivationError> {
+        let active = self.0.list_active()?;
+        let mut found = self.0.conflicts(faces)?;
+        for c in &mut found {
+            if let Some(reg) = active.iter().find(|r| r.path == c.with) {
+                c.with = PathBuf::from(&reg.handle);
+            }
+        }
+        Ok(found)
+    }
+}
+
+#[test]
+fn an_app_font_the_os_reports_by_its_link_is_still_the_apps_face() {
+    let fx = Fixture::new();
+    let (regular, copy) = (
+        fx.regular(),
+        fx.face("Roboto-Regular", "/fonts/copy/Roboto-Regular.ttf"),
+    );
+    let activator: Arc<dyn FontActivator> = Arc::new(ByHandle(Arc::clone(&fx.os)));
+    let service = ActivationManager::new(Arc::clone(&fx.index), activator, |_| {});
+    let activate = |face, on_conflict| {
+        service
+            .activate(ActivateRequest {
+                target: Target::Faces { faces: vec![face] },
+                mode: ActivationMode::Session,
+                on_conflict,
+            })
+            .expect("activate")
+    };
+    activate(regular, ConflictPolicy::KeepExisting);
+    // The clash names the app's face, not a "system font" at the link.
+    assert_eq!(
+        statuses(&activate(copy, ConflictPolicy::KeepExisting)),
+        vec![Status::Conflict {
+            with: ConflictWith::Active { face: regular }
+        }]
+    );
+    activate(copy, ConflictPolicy::Replace);
+    set_since(&fx, regular, "2026-10-19T10:00:00.000Z");
+    set_since(&fx, copy, "2026-10-19T10:00:01.000Z");
+    // One row for the pair, with one winner.
+    assert_eq!(
+        service.list_conflicts().expect("list"),
+        vec![Clash {
+            face: regular,
+            postscript_name: "Roboto-Regular".into(),
+            with: ConflictWith::Active { face: copy },
+            winner: ClashWinner::With,
+        }]
+    );
+}
+
+#[test]
+fn replacing_a_font_never_deregisters_it() {
+    let fx = Fixture::new();
+    let inter = fx.inter();
+    // A font the user installed, not the app.
+    fx.os.install(
+        "Inter-Regular",
+        "/Users/ada/Library/Fonts/Inter.otf",
+        ConflictKind::User,
+    );
+    replace(&fx, vec![inter], ActivationMode::Permanent);
+    fx.service
+        .deactivate(DeactivateRequest::default())
+        .expect("all");
+    fx.service.shutdown().expect("quit");
+
+    // The user's font is still there: activating again still clashes with it.
+    let out = fx.activate(vec![inter], ActivationMode::Session);
+    assert_eq!(
+        statuses(&out),
+        vec![Status::Conflict {
+            with: ConflictWith::System {
+                path: Path::new("/Users/ada/Library/Fonts/Inter.otf")
+                    .display()
+                    .to_string()
+            }
+        }]
+    );
+    assert_eq!(fx.registered(), vec![]);
 }
 
 #[test]
