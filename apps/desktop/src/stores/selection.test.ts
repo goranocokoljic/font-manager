@@ -122,12 +122,74 @@ describe('selection store', () => {
     expect(store.canActivate).toBe(true);
   });
 
-  it('reports a conflict and leaves the face inactive', async () => {
+  it('asks before activating a face whose name clashes; keep leaves it inactive', async () => {
+    const activate = vi.spyOn(client, 'activate');
     const store = useSelectionStore();
     await store.select(6);
     await store.toggleActivation();
+    expect(activate).not.toHaveBeenCalled();
+    expect(store.pending).toMatchObject({
+      face: 6,
+      mode: 'session',
+      conflicts: [{ face: 6, with: { kind: 'system' } }],
+    });
+    expect(store.detail?.face.active).toBeNull();
+
+    await store.resolveConflict('keep');
+    expect(store.pending).toBeNull();
+    expect(activate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ onConflict: 'keepExisting' }),
+    );
     expect(store.outcome).toMatchObject({ status: 'conflict', with: { kind: 'system' } });
     expect(store.detail?.face.active).toBeNull();
+  });
+
+  it('replace activates a clashing face for this session only', async () => {
+    const store = useSelectionStore();
+    await store.select(6);
+    await store.toggleActivation('permanent');
+    expect(store.pending?.mode).toBe('permanent');
+    await store.resolveConflict('replace');
+    expect(store.outcome).toEqual({ status: 'done' });
+    expect(store.detail?.face.active).toBe('session');
+  });
+
+  it('cancel activates nothing', async () => {
+    const activate = vi.spyOn(client, 'activate');
+    const store = useSelectionStore();
+    await store.select(6);
+    await store.toggleActivation();
+    await store.resolveConflict('cancel');
+    expect(store.pending).toBeNull();
+    expect(activate).not.toHaveBeenCalled();
+    expect(store.detail?.face.active).toBeNull();
+  });
+
+  it('a face without a clash activates without asking', async () => {
+    const store = useSelectionStore();
+    await store.select(1);
+    await store.toggleActivation();
+    expect(store.pending).toBeNull();
+    expect(store.detail?.face.active).toBe('session');
+  });
+
+  it('a new selection drops the pending question', async () => {
+    const store = useSelectionStore();
+    await store.select(6);
+    await store.toggleActivation();
+    await store.select(1);
+    expect(store.pending).toBeNull();
+  });
+
+  it('a failed clash check is a failed outcome', async () => {
+    const failure: ApiError = { code: 'unsupported', message: 'No font service.', detail: null };
+    setClient({ ...client, conflicts: () => Promise.reject(failure) });
+    const store = useSelectionStore();
+    await store.select(6);
+    await store.toggleActivation();
+    expect(store.outcome).toEqual({ status: 'failed', error: failure });
+    expect(store.pending).toBeNull();
+    expect(store.busy).toBe(false);
   });
 
   it('the Activate button uses the activation mode chosen in Settings', async () => {
@@ -146,11 +208,12 @@ describe('selection store', () => {
     expect(store.detail?.face.active).toBe('session');
   });
 
-  it('activates over a name clash when Settings say so', async () => {
-    await useSettingsStore().update({ onConflict: 'replace' });
+  it('replaces without asking when Settings say so', async () => {
+    await useSettingsStore().update({ onConflict: 'replace', activationMode: 'permanent' });
     const store = useSelectionStore();
     await store.select(6);
     await store.toggleActivation();
+    expect(store.pending).toBeNull();
     expect(store.outcome).toEqual({ status: 'done' });
     expect(store.detail?.face.active).toBe('session');
   });
@@ -185,5 +248,13 @@ describe('API client', () => {
       ['activate', { req: { target } }],
       ['deactivate', { req: { target } }],
     ]);
+  });
+
+  it('calls the conflicts and list_conflicts Tauri commands', async () => {
+    invoke.mockResolvedValue([]);
+    const target: Target = { kind: 'faces', faces: [6] };
+    await tauriClient.conflicts(target);
+    await tauriClient.listConflicts();
+    expect(invoke.mock.calls).toEqual([['conflicts', { target }], ['list_conflicts']]);
   });
 });

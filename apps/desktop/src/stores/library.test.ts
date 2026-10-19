@@ -115,13 +115,13 @@ describe('library store', () => {
     const two = client.activate({
       target: { kind: 'faces', faces: [b.id] },
       mode: 'permanent',
-      onConflict: 'replace', // the mock gives this face a system clash
+      onConflict: 'replace', // the mock gives this face a system clash: session only
     });
     await Promise.all([one, two]);
     const activeOf = (family: number, face: number) =>
       store.faces.get(family)?.find((f) => f.id === face)?.active;
     await vi.waitFor(() => {
-      expect(activeOf(second!.id, b.id)).toBe('permanent');
+      expect(activeOf(second!.id, b.id)).toBe('session');
       expect(activeOf(first!.id, a.id)).toBe('session');
     });
     await store.stop();

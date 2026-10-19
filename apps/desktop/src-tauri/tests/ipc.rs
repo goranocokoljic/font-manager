@@ -410,6 +410,29 @@ fn list_active_reports_the_faces_the_app_activated() {
 }
 
 #[test]
+fn conflicts_and_the_conflicts_view_answer_in_camel_case() {
+    // Face 6 clashes with a system font in the mock library.
+    let json: serde_json::Value = invoke_with(
+        "conflicts",
+        serde_json::json!({ "target": { "kind": "faces", "faces": [6] } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(json[0]["face"], 6);
+    assert_eq!(json[0]["with"]["kind"], "system");
+    assert!(json[0]["postscriptName"].is_string());
+
+    let none: serde_json::Value = invoke_with("list_conflicts", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(none, serde_json::json!([]));
+}
+
+#[test]
 fn update_settings_returns_every_setting_in_camel_case() {
     let json: serde_json::Value = invoke_with(
         "update_settings",

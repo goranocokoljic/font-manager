@@ -11,8 +11,8 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, MutexGuard};
 
 use crate::activation::{
-    ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Conflict, ConflictPolicy,
-    ConflictWith, DeactivateRequest, OutcomeStatus, Target,
+    ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
+    ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
@@ -112,6 +112,10 @@ struct State {
     families: Vec<MockFamily>,
     faces: Vec<MockFace>,
     active: HashMap<FaceId, ActiveFace>,
+    /// How many activations happened, and the number of each face's last one
+    /// (the mock's clock is fixed, so `since` cannot order them).
+    activations: u64,
+    activation_order: HashMap<FaceId, u64>,
     collections: Vec<Collection>,
     members: HashMap<CollectionId, BTreeSet<FaceId>>,
     tags: Vec<Tag>,
@@ -433,6 +437,8 @@ impl State {
             families,
             faces,
             active: HashMap::new(),
+            activations: 0,
+            activation_order: HashMap::new(),
             collections: Vec::new(),
             members: HashMap::new(),
             tags: Vec::new(),
@@ -1388,25 +1394,36 @@ impl ActivationService for MockApi {
                 OutcomeStatus::Skipped {
                     reason: reason.clone(),
                 }
-            } else if st.active.get(&id).is_some_and(|a| a.mode == req.mode) {
-                OutcomeStatus::Unchanged
-            } else if let Some(with) = st
-                .conflict(f)
-                .filter(|_| req.on_conflict == ConflictPolicy::KeepExisting)
-            {
-                OutcomeStatus::Conflict { with }
             } else {
-                activated.push(id);
-                OutcomeStatus::Done
+                let clash = st.conflict(f);
+                // "Replace" is for this session only.
+                let mode = if clash.is_some() && req.on_conflict == ConflictPolicy::Replace {
+                    ActivationMode::Session
+                } else {
+                    req.mode
+                };
+                if st.active.get(&id).is_some_and(|a| a.mode == mode) {
+                    OutcomeStatus::Unchanged
+                } else if let Some(with) =
+                    clash.filter(|_| req.on_conflict == ConflictPolicy::KeepExisting)
+                {
+                    OutcomeStatus::Conflict { with }
+                } else {
+                    activated.push((id, mode));
+                    OutcomeStatus::Done
+                }
             };
             out.push(ActivationOutcome { face: id, outcome });
         }
-        for id in &activated {
+        for &(id, mode) in &activated {
+            st.activations += 1;
+            let order = st.activations;
+            st.activation_order.insert(id, order);
             st.active.insert(
-                *id,
+                id,
                 ActiveFace {
-                    face: *id,
-                    mode: req.mode,
+                    face: id,
+                    mode,
                     since: MOCK_NOW.into(),
                     document: None,
                 },
@@ -1414,7 +1431,7 @@ impl ActivationService for MockApi {
         }
         if !activated.is_empty() {
             st.emit(Event::ActivationChanged {
-                activated,
+                activated: activated.into_iter().map(|(id, _)| id).collect(),
                 deactivated: Vec::new(),
             });
         }
@@ -1470,6 +1487,44 @@ impl ActivationService for MockApi {
                     face: id,
                     postscript_name: f.detail.face.postscript_name.clone(),
                     with,
+                });
+            }
+        }
+        Ok(out)
+    }
+
+    fn list_conflicts(&self) -> ApiResult<Vec<Clash>> {
+        let st = self.state();
+        let mut ids: Vec<FaceId> = st.active.keys().copied().collect();
+        ids.sort();
+        let mut out = Vec::new();
+        for &id in &ids {
+            let f = st.face(id)?;
+            let postscript_name = f.detail.face.postscript_name.clone();
+            if let Some(path) = f.system_clash {
+                out.push(Clash {
+                    face: id,
+                    postscript_name: postscript_name.clone(),
+                    with: ConflictWith::System { path: path.into() },
+                    winner: ClashWinner::Face,
+                });
+            }
+            // Each pair of active faces once, under the lower id; the later
+            // activation wins.
+            for &other in ids.iter().filter(|&&o| o > id) {
+                if st.face(other)?.detail.face.postscript_name != postscript_name {
+                    continue;
+                }
+                let order = |face| st.activation_order.get(&face).copied().unwrap_or(0);
+                out.push(Clash {
+                    face: id,
+                    postscript_name: postscript_name.clone(),
+                    with: ConflictWith::Active { face: other },
+                    winner: if order(id) > order(other) {
+                        ClashWinner::Face
+                    } else {
+                        ClashWinner::With
+                    },
                 });
             }
         }

@@ -19,6 +19,12 @@ useActions([
     group: 'App',
     run: () => router.push({ name: 'settings' }),
   },
+  {
+    id: 'app.conflicts',
+    title: 'Show font conflicts',
+    group: 'App',
+    run: () => router.push({ name: 'conflicts' }),
+  },
   // The same pages as the native Help menu.
   ...HELP_PAGES.map((page) => ({
     id: `help.${page.slug}`,

@@ -67,7 +67,7 @@ describe('Settings window', () => {
   it('saves the activation choices', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
     await radio(wrapper, 'Permanently (also after a restart)').setValue(true);
-    await radio(wrapper, 'Activate this font anyway').setValue(true);
+    await radio(wrapper, 'Replace the other font for this session without asking').setValue(true);
     await flushPromises();
     expect(await client.getSettings()).toMatchObject({
       activationMode: 'permanent',

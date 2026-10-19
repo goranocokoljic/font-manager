@@ -25,12 +25,28 @@ settings, under **Activation**, you choose which kind the **Activate** button us
 
 ## When two fonts have the same name
 
-Sometimes a font has the same name as a system font or a font that is already active.
-In the settings, under **Activation**, you choose what happens:
+Sometimes a font has the same PostScript name as a system font or a font that is
+already active. Apps ask for fonts by this name, so they can show only one of the two.
+When you activate such a font, Font Manager asks you what to do:
 
-- **Keep the other font and tell me** — the font is not activated, and you see a
-  message.
-- **Activate this font anyway** — the new font is activated.
+- **Keep existing** — the other font stays. Your font is not activated.
+- **Replace for this session** — your font is activated until you quit Font Manager,
+  also when you asked for a permanent activation. After that, the other font is back.
+- **Cancel** — nothing changes.
+
+In the settings, under **Activation**, you can choose **Replace the other font for this
+session without asking**. Then Font Manager does not ask.
+
+Font Manager never deactivates the other font. If the other font is a system font or a
+font that another app installed, it stays installed.
+
+### The Conflicts view
+
+Open **Conflicts** in the status bar, or **Show font conflicts** in the command
+palette. The view lists every active font that has the same PostScript name as another
+font, the other font, and the winner. The winner is the font that Font Manager puts
+first: the font you activated with **Replace for this session**, or the font activated
+last when Font Manager activated both.
 
 ## How it works on each system
 

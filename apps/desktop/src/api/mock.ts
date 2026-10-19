@@ -10,9 +10,11 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Clash,
   type Collection,
   type CollectionFacesRequest,
   type CollectionId,
+  type Conflict,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -869,10 +871,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         const health = f.face.health;
         if (health.kind !== 'ok')
           return { face: id, outcome: { status: 'skipped', reason: health.reason } };
-        const mode = req.mode ?? 'session';
-        if (active.get(id) === mode) return { face: id, outcome: { status: 'unchanged' } };
         const clash = systemClash[id];
-        if (clash && req.onConflict !== 'replace')
+        const replace = req.onConflict === 'replace';
+        // "Replace" is for this session only.
+        const mode = clash && replace ? 'session' : (req.mode ?? 'session');
+        if (active.get(id) === mode) return { face: id, outcome: { status: 'unchanged' } };
+        if (clash && !replace)
           return {
             face: id,
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
@@ -902,6 +906,38 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       [...active]
         .sort(([a], [b]) => a - b)
         .map(([face, mode]) => ({ face, mode, since: MOCK_NOW, document: null })),
+    conflicts: async (target) =>
+      ids(target).flatMap((id): Conflict[] => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        const clash = systemClash[id];
+        return clash
+          ? [
+              {
+                face: id,
+                postscriptName: f.face.postscriptName,
+                with: { kind: 'system', path: clash },
+              },
+            ]
+          : [];
+      }),
+    listConflicts: async () =>
+      [...active.keys()]
+        .sort((a, b) => a - b)
+        .flatMap((id): Clash[] => {
+          const clash = systemClash[id];
+          const f = find(id);
+          return clash && f
+            ? [
+                {
+                  face: id,
+                  postscriptName: f.face.postscriptName,
+                  with: { kind: 'system', path: clash },
+                  winner: 'face',
+                },
+              ]
+            : [];
+        }),
     listSources: async () => structuredClone(sources),
     addSource: async (req) => {
       if (!req.path.trim())
