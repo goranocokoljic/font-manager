@@ -65,6 +65,7 @@ unsafe extern "C" {
         scope: CTFontManagerScope,
         error: *mut CFTypeRef,
     ) -> bool;
+    fn CTFontManagerCopyAvailablePostScriptNames() -> CFTypeRef;
     fn CTFontCollectionCreateFromAvailableFonts(options: CFTypeRef) -> CFTypeRef;
     fn CTFontCollectionCreateMatchingFontDescriptors(collection: CFTypeRef) -> CFTypeRef;
     fn CTFontDescriptorCopyAttribute(descriptor: CFTypeRef, attribute: CFTypeRef) -> CFTypeRef;
@@ -187,6 +188,23 @@ fn manager_call(
     }
 }
 
+/// Whether any font the OS offers has one of `names` as its PostScript
+/// name. `true` when the list cannot be read, so the caller looks closer.
+fn any_available(names: &HashSet<&str>) -> bool {
+    // SAFETY: the Copy result is owned by `Cf`; its items are borrowed for
+    // the loop and type-checked before they are read.
+    unsafe {
+        let Some(all) = Cf::owned(CTFontManagerCopyAvailablePostScriptNames()) else {
+            return true;
+        };
+        (0..CFArrayGetCount(all.0)).any(|i| {
+            let name = CFArrayGetValueAtIndex(all.0, i);
+            CFGetTypeID(name) == CFStringGetTypeID()
+                && string(name).is_some_and(|n| names.contains(n.as_str()))
+        })
+    }
+}
+
 /// The CoreText registrar the app uses.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CoreText;
@@ -212,6 +230,12 @@ impl Registrar for CoreText {
 
     fn fonts_named(&self, names: &HashSet<&str>) -> Result<Vec<(String, PathBuf)>, String> {
         let mut found = Vec::new();
+        // Most activations clash with nothing: the list of names alone says
+        // so without a descriptor per installed font, which took most of the
+        // 100-face activation budget.
+        if !any_available(names) {
+            return Ok(found);
+        }
         // SAFETY: Create/Copy results are owned by `Cf`; array items and the
         // attribute keys are borrowed for the duration of the loop; every
         // attribute value is type-checked before it is read.

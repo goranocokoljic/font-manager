@@ -119,62 +119,22 @@ impl MacosActivator {
         )
     }
 
-    fn activate_one(&self, face: &FaceFile, mode: Mode, ledger: &mut Ledger) -> OutcomeStatus {
-        if let Some(existing) = ledger.mode_of(&face.path) {
-            return OutcomeStatus::AlreadyActive(registration(&face.path, existing));
-        }
+    /// Why `face` cannot be registered, before anything is written.
+    fn check(face: &FaceFile) -> Option<OutcomeStatus> {
         if !face.path.is_absolute() {
-            return failed(
+            return Some(failed(
                 ActivationErrorKind::Unsupported,
                 format!("{}: activation needs a full path", face.path.display()),
-            );
+            ));
         }
         match face.path.metadata() {
-            Ok(meta) if meta.is_file() => {}
-            Ok(_) => {
-                return failed(
-                    ActivationErrorKind::FileNotFound,
-                    format!("{}: not a file", face.path.display()),
-                );
-            }
-            Err(e) => return OutcomeStatus::Failed(io_error(&e, &face.path)),
+            Ok(meta) if meta.is_file() => None,
+            Ok(_) => Some(failed(
+                ActivationErrorKind::FileNotFound,
+                format!("{}: not a file", face.path.display()),
+            )),
+            Err(e) => Some(OutcomeStatus::Failed(io_error(&e, &face.path))),
         }
-        // Ledger first: a crash between the two steps leaves an entry with no
-        // registration, which `deactivate` answers `NotActive`; never a
-        // registration the app made without a record of it.
-        ledger.insert(&face.path, mode);
-        if let Err(e) = self.save(ledger) {
-            ledger.remove(&face.path);
-            return OutcomeStatus::Failed(e);
-        }
-        if let Err(e) = self.registrar.register(&face.path, mode) {
-            ledger.remove(&face.path);
-            // The entry stays in the file only if this save fails too; then
-            // `deactivate` finds no registration and drops it.
-            let _ = self.save(ledger);
-            return OutcomeStatus::Failed(error_for(&e, &face.path));
-        }
-        OutcomeStatus::Activated(registration(&face.path, mode))
-    }
-
-    fn deactivate_one(&self, reg: &Registration, ledger: &mut Ledger) -> OutcomeStatus {
-        // `activate` sets the handle to the path; anything else it never issued.
-        if reg.handle != reg.path.as_os_str() || ledger.mode_of(&reg.path) != Some(reg.mode) {
-            return OutcomeStatus::NotOurs;
-        }
-        let status = match self.registrar.unregister(&reg.path, reg.mode) {
-            Ok(()) => OutcomeStatus::Deactivated,
-            // Gone already: the user logged out (session scope) or removed it.
-            Err(e) if e.code == code::NOT_REGISTERED => OutcomeStatus::NotActive,
-            Err(e) => return OutcomeStatus::Failed(error_for(&e, &reg.path)),
-        };
-        ledger.remove(&reg.path);
-        if let Err(e) = self.save(ledger) {
-            // The OS side is done; the stale entry answers `NotActive` next time.
-            ledger.insert(&reg.path, reg.mode);
-            return OutcomeStatus::Failed(e);
-        }
-        status
     }
 }
 
@@ -182,11 +142,72 @@ impl FontActivator for MacosActivator {
     fn activate(&self, faces: &[FaceFile], mode: Mode) -> Result<Vec<Outcome>, ActivationError> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut ledger = self.load()?;
+        let mut statuses: Vec<Option<OutcomeStatus>> = vec![None; faces.len()];
+        // The faces to register (one per file) and, for a later face of the
+        // same file, the face whose outcome it shares.
+        let mut first: Vec<usize> = Vec::new();
+        let mut same_file: Vec<(usize, usize)> = Vec::new();
+        for (i, face) in faces.iter().enumerate() {
+            if let Some(existing) = ledger.mode_of(&face.path) {
+                match first.iter().find(|&&j| faces[j].path == face.path) {
+                    Some(&j) => same_file.push((i, j)),
+                    None => {
+                        statuses[i] = Some(OutcomeStatus::AlreadyActive(registration(
+                            &face.path, existing,
+                        )));
+                    }
+                }
+                continue;
+            }
+            if let Some(status) = Self::check(face) {
+                statuses[i] = Some(status);
+                continue;
+            }
+            ledger.insert(&face.path, mode);
+            first.push(i);
+        }
+        // Ledger first, once for the whole request (each save is a full
+        // flush, slow on APFS): a crash before a registration leaves an entry
+        // with none, which `deactivate` answers `NotActive`; never a
+        // registration the app made without a record of it.
+        if !first.is_empty()
+            && let Err(e) = self.save(&ledger)
+        {
+            for &i in &first {
+                statuses[i] = Some(OutcomeStatus::Failed(e.clone()));
+            }
+            first.clear();
+        }
+        let mut dropped = false;
+        for &i in &first {
+            let path = &faces[i].path;
+            statuses[i] = Some(match self.registrar.register(path, mode) {
+                Ok(()) => OutcomeStatus::Activated(registration(path, mode)),
+                Err(e) => {
+                    ledger.remove(path);
+                    dropped = true;
+                    OutcomeStatus::Failed(error_for(&e, path))
+                }
+            });
+        }
+        if dropped {
+            // The entries stay in the file only if this save fails too; then
+            // `deactivate` finds no registration and drops them.
+            let _ = self.save(&ledger);
+        }
+        for (i, j) in same_file {
+            statuses[i] = statuses[j].clone().map(|status| match status {
+                OutcomeStatus::Activated(reg) => OutcomeStatus::AlreadyActive(reg),
+                other => other,
+            });
+        }
         Ok(faces
             .iter()
-            .map(|face| Outcome {
+            .zip(statuses)
+            .map(|(face, status)| Outcome {
                 path: face.path.clone(),
-                status: self.activate_one(face, mode, &mut ledger),
+                status: status
+                    .unwrap_or_else(|| failed(ActivationErrorKind::Os, "no outcome".to_owned())),
             })
             .collect())
     }
@@ -194,11 +215,41 @@ impl FontActivator for MacosActivator {
     fn deactivate(&self, registrations: &[Registration]) -> Result<Vec<Outcome>, ActivationError> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut ledger = self.load()?;
+        let mut statuses = Vec::with_capacity(registrations.len());
+        let mut removed: Vec<usize> = Vec::new();
+        for (i, reg) in registrations.iter().enumerate() {
+            // `activate` sets the handle to the path; anything else it never issued.
+            if reg.handle != reg.path.as_os_str() || ledger.mode_of(&reg.path) != Some(reg.mode) {
+                statuses.push(OutcomeStatus::NotOurs);
+                continue;
+            }
+            let status = match self.registrar.unregister(&reg.path, reg.mode) {
+                Ok(()) => OutcomeStatus::Deactivated,
+                // Gone already: the user logged out (session scope) or removed it.
+                Err(e) if e.code == code::NOT_REGISTERED => OutcomeStatus::NotActive,
+                Err(e) => OutcomeStatus::Failed(error_for(&e, &reg.path)),
+            };
+            if !matches!(status, OutcomeStatus::Failed(_)) {
+                ledger.remove(&reg.path);
+                removed.push(i);
+            }
+            statuses.push(status);
+        }
+        // One save for the whole request; the OS side is done either way, and
+        // a stale entry answers `NotActive` next time.
+        if !removed.is_empty()
+            && let Err(e) = self.save(&ledger)
+        {
+            for i in removed {
+                statuses[i] = OutcomeStatus::Failed(e.clone());
+            }
+        }
         Ok(registrations
             .iter()
-            .map(|reg| Outcome {
+            .zip(statuses)
+            .map(|(reg, status)| Outcome {
                 path: reg.path.clone(),
-                status: self.deactivate_one(reg, &mut ledger),
+                status,
             })
             .collect())
     }
@@ -605,6 +656,29 @@ mod tests {
         assert_eq!(out[0].status, OutcomeStatus::NotOurs);
         assert_eq!(out[1].status, OutcomeStatus::NotOurs);
         assert_eq!(s.fake.mode_of(&font), Some(Mode::Session));
+    }
+
+    #[test]
+    fn a_later_face_of_a_file_that_failed_fails_too_and_a_restart_sees_the_rest() {
+        let s = Scratch::new();
+        let a = s.activator();
+        let bad = s.font("Broken.ttc");
+        let good = s.font("Good.ttf");
+        s.fail_next(&bad, code::INVALID_FONT_DATA);
+        let out = a
+            .activate(
+                &[face(&bad, "B-1"), face(&good, "G"), face(&bad, "B-2")],
+                Mode::Session,
+            )
+            .expect("works");
+        assert_eq!(failed_kind(&out[0]), ActivationErrorKind::Unsupported);
+        let reg = activated(&out[1]);
+        assert_eq!(failed_kind(&out[2]), ActivationErrorKind::Unsupported);
+        // One ledger write for the request: a new activator reads it back.
+        assert_eq!(s.activator().list_active(), Ok(vec![reg.clone()]));
+        let off = s.activator().deactivate(&[reg]).expect("works");
+        assert_eq!(off[0].status, OutcomeStatus::Deactivated);
+        assert_eq!(s.activator().list_active(), Ok(vec![]));
     }
 
     #[test]
