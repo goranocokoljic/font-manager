@@ -445,10 +445,8 @@ pub fn run() {
     if let Some(startup) = &startup {
         state = state.with_settings(Arc::new(SettingsStore::new(&startup.paths)));
     }
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_dialog::init())
-        .menu(help::menu)
-        .on_menu_event(help::on_menu_event);
+    let builder =
+        help::with_help_menu(tauri::Builder::default().plugin(tauri_plugin_dialog::init()));
     if let Err(e) = setup_state(builder, state).run(tauri::generate_context!()) {
         tracing::error!(error = %e, "font manager failed to start");
         eprintln!("font manager failed to start: {e}");

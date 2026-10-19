@@ -118,6 +118,12 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     Ok(menu)
 }
 
+/// Sets the app menu with the Help pages on a builder and opens a page when its
+/// item is chosen.
+pub fn with_help_menu<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
+    builder.menu(menu).on_menu_event(on_menu_event)
+}
+
 /// Opens the page of a Help menu item; ignores every other menu event.
 pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
     if let Some(page) = page_for_menu_id(event.id().as_ref())

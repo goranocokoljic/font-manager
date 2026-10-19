@@ -596,3 +596,57 @@ fn open_help_of_an_unknown_page_is_an_api_error_and_opens_nothing() {
             .is_none()
     );
 }
+
+// muda builds menus only on the main thread on macOS, and test threads are not
+// it; the mock runtime builds them inline on Windows and Linux.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_help_menu_lists_every_docs_page_first_and_opens_it() {
+    use fm_app_lib::help::{self, HELP_PAGES, HELP_WINDOW};
+    use tauri::Manager;
+    use tauri::menu::{HELP_SUBMENU_ID, MenuEvent};
+
+    let (app, _webview) = app_on(help::with_help_menu(setup(
+        mock_builder(),
+        Arc::new(MockApi::new()),
+    )))
+    .unwrap();
+    let menu = app.menu().expect("the app has a menu");
+    let submenu = menu
+        .get(HELP_SUBMENU_ID)
+        .and_then(|i| i.as_submenu().cloned())
+        .expect("the menu has a Help submenu");
+    let items = submenu.items().unwrap();
+    for (item, page) in items.iter().zip(HELP_PAGES) {
+        let item = item.as_menuitem().expect("a page item");
+        assert_eq!(item.id().as_ref(), help::menu_id(page));
+        assert_eq!(item.text().unwrap(), page.title);
+    }
+    assert!(
+        items.len() > HELP_PAGES.len(),
+        "About stays in the Help menu"
+    );
+
+    // Choosing an item opens its page; other menu events are ignored.
+    help::on_menu_event(
+        app.handle(),
+        MenuEvent {
+            id: "__other__".into(),
+        },
+    );
+    assert!(app.get_webview_window(HELP_WINDOW).is_none());
+    help::on_menu_event(
+        app.handle(),
+        MenuEvent {
+            id: help::menu_id(&HELP_PAGES[3]).into(),
+        },
+    );
+    let window = app.get_webview_window(HELP_WINDOW).expect("help window");
+    assert!(
+        window
+            .url()
+            .unwrap()
+            .path()
+            .ends_with("/help/keyboard-shortcuts.html")
+    );
+}
