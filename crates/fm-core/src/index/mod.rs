@@ -17,11 +17,14 @@
 //!
 //! The user's metadata is mirrored to sidecar files in each source and
 //! merged back from them on every scan ([`Index::sync_sidecars`], E7.3).
+//!
+//! [`Index::problems`] lists what is wrong with the library (E9.4).
 
 mod collections;
 mod duplicates;
 mod files;
 mod languages;
+mod problems;
 mod samples;
 mod schema;
 mod search;
@@ -61,6 +64,9 @@ pub struct Index {
     path: Option<PathBuf>,
     /// What [`Index::search`] read last, until the database changes.
     search_cache: RefCell<search::SearchCache>,
+    /// The damaged index this one replaced when it was opened, listed by
+    /// [`Index::problems`] for the rest of the session.
+    rebuilt: Option<Rebuilt>,
 }
 
 impl fmt::Debug for Index {
@@ -114,13 +120,15 @@ impl Index {
                 let moved_to = move_aside(path);
                 let mut index = Self::open_checked(path).map_err(Damage::into_error)?;
                 let sources = index.restore_sources()?;
+                let rebuilt = Rebuilt {
+                    reason,
+                    moved_to,
+                    sources,
+                };
+                index.rebuilt = Some(rebuilt.clone());
                 Ok(Opened {
                     index,
-                    rebuilt: Some(Rebuilt {
-                        reason,
-                        moved_to,
-                        sources,
-                    }),
+                    rebuilt: Some(rebuilt),
                 })
             }
         }
@@ -133,6 +141,7 @@ impl Index {
             conn,
             path: None,
             search_cache: RefCell::default(),
+            rebuilt: None,
         };
         index.configure().map_err(Damage::into_error)?;
         index.migrate().map_err(Damage::into_error)?;
@@ -166,6 +175,7 @@ impl Index {
             conn,
             path: Some(path.to_path_buf()),
             search_cache: RefCell::default(),
+            rebuilt: None,
         };
         index.configure()?;
         index.check_integrity()?;
