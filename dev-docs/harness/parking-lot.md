@@ -99,3 +99,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E6.7 #80] crates/fm-core/src/activation.rs:600 — `clashes()` turns every non-app clash into `ConflictWith::System`, also for `ConflictKind::User`, so the prompt and the Conflicts view call a user-installed font a system font.
 - [E8.2 #87] crates/fm-api/src/mock.rs:968 — MockApi lists a SystemConflict problem for every face with a system clash, active or not, while fm-core's `ActivationManager::problems` lists only active faces.
 - [E8.2 #87] crates/fm-core/src/activation.rs:545 — `list_conflicts` fails the whole call (NotFound from `activation_faces`) when an active row's face is missing from the index; `ActivationManager::problems` inherits it.
+- [E7.4 #85] crates/fm-core/src/scanner/changes.rs:42 — `FileHash` formats hex but cannot parse it, so callers use `blake3::Hash::from_hex` directly and the hash format lives in two places.
