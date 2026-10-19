@@ -4,7 +4,9 @@
 //! its drive: `<drive>\$Recycle.Bin\<user SID>\$R<id>.<ext>`, next to a
 //! `$I<id>.<ext>` record of the old path and the time. The call does not say
 //! where the file went, so the record is found afterwards: the newest `$I`
-//! file in the user's folder that names the old path.
+//! file in the user's folder that names the old path. The record holds the
+//! long form of the path, so a path with 8.3 short names (`RUNNER~1`) is
+//! looked up by its long form too.
 //!
 //! Only fixed drives have a Recycle Bin. On any other drive Windows would
 //! delete the file for good, so such a file is refused before anything
@@ -20,7 +22,7 @@ use std::path::{Path, PathBuf};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, LocalFree};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
-use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetVolumePathNameW};
+use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetLongPathNameW, GetVolumePathNameW};
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 use windows::Win32::UI::Shell::{
     FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING,
@@ -56,6 +58,8 @@ impl Trash for RecycleBin {
         let bin = root
             .join("$Recycle.Bin")
             .join(user_sid().map_err(|e| TrashError::io(&e, &path))?);
+        // Read before the move: the long form exists only while the file does.
+        let long = long_path(&path);
         recycle(&path)?;
         if fs::symlink_metadata(&path).is_ok() {
             return Err(TrashError::new(
@@ -63,7 +67,10 @@ impl Trash for RecycleBin {
                 format!("{} is still there after the move", path.display()),
             ));
         }
-        let (location, info) = find_record(&bin, &path).ok_or_else(|| {
+        let names: Vec<&Path> = std::iter::once(path.as_path())
+            .chain(long.as_deref())
+            .collect();
+        let (location, info) = find_record(&bin, &names).ok_or_else(|| {
             TrashError::new(
                 TrashErrorKind::Failed,
                 format!(
@@ -74,7 +81,9 @@ impl Trash for RecycleBin {
             )
         })?;
         Ok(Trashed {
-            original: path,
+            // The file's own short name goes with it, so it comes back
+            // under its long name.
+            original: long.unwrap_or(path),
             location,
             info: Some(info),
         })
@@ -97,6 +106,26 @@ fn plain(path: &Path) -> PathBuf {
         units
     };
     PathBuf::from(OsString::from_wide(&out))
+}
+
+/// The long form of `path` (every 8.3 short name such as `RUNNER~1`
+/// expanded), when the file is there and the form differs. The Recycle Bin
+/// record holds the long form.
+fn long_path(path: &Path) -> Option<PathBuf> {
+    let wide = nul_terminated(path.as_os_str().encode_wide());
+    // SAFETY: a size query: `wide` is NUL-terminated, no buffer is written.
+    let needed = unsafe { GetLongPathNameW(PCWSTR(wide.as_ptr()), None) };
+    if needed == 0 {
+        return None;
+    }
+    let mut buf = vec![0u16; needed as usize + 1];
+    // SAFETY: `buf` is writable and as long as the size query asked for.
+    let len = unsafe { GetLongPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+    if len == 0 || len >= buf.len() {
+        return None;
+    }
+    let long = PathBuf::from(OsString::from_wide(&buf[..len]));
+    (long != path).then_some(long)
 }
 
 /// `units` with a NUL appended.
@@ -195,9 +224,13 @@ fn token_sid(token: HANDLE) -> io::Result<String> {
     out
 }
 
-/// The `$R` file and `$I` record in `bin` of the newest move of `original`.
-fn find_record(bin: &Path, original: &Path) -> Option<(PathBuf, PathBuf)> {
-    let wanted = fold(original.as_os_str().encode_wide());
+/// The `$R` file and `$I` record in `bin` of the newest move of the file
+/// known by any of `names` (the path as given, its long form).
+fn find_record(bin: &Path, names: &[&Path]) -> Option<(PathBuf, PathBuf)> {
+    let wanted: Vec<Vec<u16>> = names
+        .iter()
+        .map(|n| fold(n.as_os_str().encode_wide()))
+        .collect();
     let mut best: Option<(u64, PathBuf, PathBuf)> = None;
     for entry in fs::read_dir(bin).ok()?.flatten() {
         let name = entry.file_name();
@@ -212,7 +245,7 @@ fn find_record(bin: &Path, original: &Path) -> Option<(PathBuf, PathBuf)> {
         let Some((deleted, path)) = parse_record(&bytes) else {
             continue;
         };
-        if fold(path.into_iter()) != wanted {
+        if !wanted.contains(&fold(path.into_iter())) {
             continue;
         }
         let mut r = vec![u16::from(b'$'), u16::from(b'R')];
@@ -339,7 +372,12 @@ mod tests {
             fs::write(bin.join(format!("$I{id}")), v2(path, time)).expect("record");
             fs::write(bin.join(format!("$R{id}")), b"font").expect("file");
         }
-        let found = find_record(&bin, Path::new(r"C:\Fonts\A.ttf"));
+        let found = find_record(&bin, &[Path::new(r"C:\Fonts\A.ttf")]);
+        // A short name that matches no record, then the long form that does.
+        let by_long = find_record(
+            &bin,
+            &[Path::new(r"C:\FONTS~1\B.ttf"), Path::new(r"C:\Fonts\B.ttf")],
+        );
         let _ = fs::remove_dir_all(&bin);
         let (location, info) = found.expect("found");
         assert_eq!(
@@ -347,5 +385,42 @@ mod tests {
             Some("$RDEF.ttf")
         );
         assert_eq!(info.file_name().and_then(|n| n.to_str()), Some("$IDEF.ttf"));
+        let (long, _) = by_long.expect("found by the long form");
+        assert_eq!(long.file_name().and_then(|n| n.to_str()), Some("$RGHI.ttf"));
+    }
+
+    /// The CI runner's temp folder has an 8.3 short name (`RUNNER~1`): a file
+    /// reached by a short name is found in the bin by its long name, and
+    /// comes back under its long name (its own short name is gone with it).
+    #[test]
+    fn a_file_reached_by_its_short_name_goes_to_the_bin_and_back() {
+        use windows::Win32::Storage::FileSystem::GetShortPathNameW;
+
+        let dir = std::env::temp_dir().join(format!(
+            "fm-platform-a-long-folder-name-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("A long file name.ttf");
+        fs::write(&file, b"font").expect("write");
+        let wide = nul_terminated(file.as_os_str().encode_wide());
+        let mut buf = vec![0u16; 1024];
+        // SAFETY: `wide` is NUL-terminated; `buf` is writable for its length.
+        let len = unsafe { GetShortPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+        let short = PathBuf::from(OsString::from_wide(&buf[..len.min(buf.len())]));
+        if len == 0 || len >= buf.len() || short == file {
+            // 8.3 names are off on this volume: nothing to prove here.
+            let _ = fs::remove_dir_all(&dir);
+            return;
+        }
+        let item = RecycleBin.trash(&short);
+        let restored = item.as_ref().ok().map(|item| RecycleBin.restore(item));
+        let back = fs::read(&file);
+        let _ = fs::remove_dir_all(&dir);
+        let item = item.expect("moved to the bin by its short name");
+        assert_eq!(item.original, file, "it comes back under its long name");
+        restored.expect("restore ran").expect("put back");
+        assert_eq!(back.expect("back in place"), b"font");
     }
 }
