@@ -79,3 +79,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E6.3 #76] crates/fm-core/src/parser.rs:383 — name strings keep embedded control characters (NUL included), which flow into the index and the UI.
 - [E6.4 #77] crates/fm-platform/src/activator/mod.rs:183 — activate(Permanent) on a file already active in Session returns AlreadyActive(Session) on macOS too (as on Windows), so clear_session drops it at quit; E6.6 should decide the upgrade rule.
 - [E6.5 #78] crates/fm-platform/src/activator/mod.rs:183 — nothing in the app calls `clear_session` on quit or at start yet, on any OS; the activation-service story must wire it.
+- [E6.5 #78] apps/desktop/e2e/search.spec.ts:127 — the e2e search timing check failed again on the macOS runner (201.6 ms, 168.3 ms vs < 164 ms) on a commit that changed only this file; the CI run before it was green on all three OS.
