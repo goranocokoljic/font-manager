@@ -125,6 +125,46 @@ test('"Deactivate all" in the palette deactivates every face and the toast undoe
   await expect(toast(page)).toContainText('Deactivated 4 fonts.');
 });
 
+test('"Deactivate everything not in the current set" keeps the set picked in the sidebar', async ({
+  page,
+}) => {
+  const tree = await open(page);
+  // Inter is in the sample set "Client brand"; Sample 1 is not.
+  await tree.getByRole('treeitem', { name: /^Inter,/ }).click();
+  await page.keyboard.press('a');
+  await tree.getByRole('treeitem', { name: /^Sample 1,/ }).click();
+  await page.keyboard.press('a');
+  await expect(activeCount(page)).toHaveText('5 fonts active');
+
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  const action = palette.getByRole('option', {
+    name: /Deactivate everything not in the current set/,
+  });
+  // No current set yet: listed but dimmed.
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('not in the current set');
+  await expect(action).toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Escape');
+
+  const sets = page.getByRole('region', { name: 'Project sets' });
+  const set = sets.getByRole('button', { name: /Client brand/ });
+  await set.click();
+  await expect(set).toHaveAttribute('aria-pressed', 'true');
+
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('not in the current set');
+  await expect(action).not.toHaveAttribute('aria-disabled', 'true');
+  await page.keyboard.press('Enter');
+  await expect(toast(page)).toContainText('Deactivated 4 fonts.');
+  await expect(activeCount(page)).toHaveText('1 font active');
+  await expect(dot(page, 'Inter')).toHaveAttribute('data-activation', 'active');
+  await expect(dot(page, 'Sample 1')).toHaveAttribute('data-activation', 'inactive');
+
+  await toast(page).getByRole('button', { name: 'Undo' }).click();
+  await expect(activeCount(page)).toHaveText('5 fonts active');
+  await expect(dot(page, 'Sample 1')).toHaveAttribute('data-activation', 'active');
+});
+
 test('the toast is announced and stays while the pointer is on it', async ({ page }) => {
   await page.clock.install();
   const tree = await open(page);

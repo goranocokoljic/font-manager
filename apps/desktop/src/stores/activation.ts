@@ -8,6 +8,7 @@ import type {
   Event,
   FaceSummary,
   FamilyId,
+  SetId,
   Target,
 } from '../api/types';
 import { bulkMessage, planToggle, undoSteps, type UndoStep } from '../list/activation';
@@ -75,10 +76,16 @@ export const useActivationStore = defineStore('activation', () => {
 
   /**
    * Activates or deactivates `targets` (`undefined`: everything the app
-   * activated), then shows a toast with the outcome and, when something
-   * changed, an Undo button that puts every face back.
+   * activated; a deactivation leaves the faces of `except` active), then shows
+   * a toast with the outcome and, when something changed, an Undo button that
+   * puts every face back.
    */
-  function bulk(deactivate: boolean, targets: (Target | undefined)[], mode?: ActivationMode) {
+  function bulk(
+    deactivate: boolean,
+    targets: (Target | undefined)[],
+    mode?: ActivationMode,
+    except?: Target,
+  ) {
     return exclusive(async () => {
       const client = useClient();
       const settings = useSettingsStore();
@@ -87,7 +94,7 @@ export const useActivationStore = defineStore('activation', () => {
       const outcomes: ActivationOutcome[] = [];
       const request = { mode: how, onConflict: settings.onConflict };
       for (const target of targets) {
-        if (deactivate) outcomes.push(...(await client.deactivate({ target })));
+        if (deactivate) outcomes.push(...(await client.deactivate({ target, except })));
         else if (target) outcomes.push(...(await client.activate({ target, ...request })));
       }
       const steps = undoSteps(before, outcomes);
@@ -136,5 +143,10 @@ export const useActivationStore = defineStore('activation', () => {
     return bulk(true, [undefined]);
   }
 
-  return { count, busy, load, stop, refresh, toggleRows, deactivateAll };
+  /** Deactivates every face the app activated except those of project set `set`. */
+  function deactivateAllExcept(set: SetId): Promise<void> {
+    return bulk(true, [undefined], undefined, { kind: 'set', set });
+  }
+
+  return { count, busy, load, stop, refresh, toggleRows, deactivateAll, deactivateAllExcept };
 });

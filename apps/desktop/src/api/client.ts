@@ -32,6 +32,7 @@ import type {
   PreviewImage,
   PreviewRequest,
   Problem,
+  ProjectSet,
   RenameCollectionRequest,
   SampleText,
   SampleTextRequest,
@@ -108,6 +109,8 @@ export interface FmClient {
   listConflicts(): Promise<Clash[]>;
   /** Duplicates, broken and legacy files, sidecar and activation conflicts (the Problems view). */
   listProblems(): Promise<Problem[]>;
+  /** Every project set: named groups of faces activated together. */
+  listSets(): Promise<ProjectSet[]>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -152,6 +155,7 @@ export const tauriClient: FmClient = {
   conflicts: (target) => invoke<Conflict[]>('conflicts', { target }),
   listConflicts: () => invoke<Clash[]>('list_conflicts'),
   listProblems: () => invoke<Problem[]>('list_problems'),
+  listSets: () => invoke<ProjectSet[]>('list_sets'),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),

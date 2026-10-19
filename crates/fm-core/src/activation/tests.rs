@@ -178,6 +178,7 @@ impl Fixture {
         self.service
             .deactivate(DeactivateRequest {
                 target: Some(Target::Faces { faces }),
+                except: None,
             })
             .expect("deactivate")
     }
@@ -292,6 +293,7 @@ fn a_family_target_activates_every_face_of_the_family() {
         .service
         .deactivate(DeactivateRequest {
             target: Some(Target::Family { family }),
+            except: None,
         })
         .expect("deactivate");
     assert_eq!(statuses(&out), vec![Status::Done, Status::Done]);
@@ -341,6 +343,7 @@ fn a_collection_target_activates_its_members() {
         .service
         .deactivate(DeactivateRequest {
             target: Some(target),
+            except: None,
         })
         .expect("deactivate");
     assert!(out.iter().all(|o| o.outcome == Status::Done));
@@ -381,10 +384,52 @@ fn a_set_target_activates_and_deactivates_its_faces_in_one_call() {
         .service
         .deactivate(DeactivateRequest {
             target: Some(target),
+            except: None,
         })
         .expect("deactivate");
     assert!(out.iter().all(|o| o.outcome == Status::Done));
     assert_eq!(fx.active(), vec![]);
+}
+
+#[test]
+fn deactivate_except_a_set_keeps_the_set_and_drops_the_rest() {
+    let fx = Fixture::new();
+    let (regular, bold, inter) = (fx.regular(), fx.bold(), fx.inter());
+    let set = fx
+        .index
+        .lock()
+        .expect("index")
+        .create_set(&CreateSetRequest {
+            name: "Client".into(),
+            faces: vec![bold],
+        })
+        .expect("set")
+        .id;
+    fx.activate(vec![regular, bold, inter], ActivationMode::Session);
+    let out = fx
+        .service
+        .deactivate(DeactivateRequest {
+            target: None,
+            except: Some(Target::Set { set }),
+        })
+        .expect("deactivate");
+    let mut gone: Vec<FaceId> = out.iter().map(|o| o.face).collect();
+    gone.sort();
+    let mut want = vec![regular, inter];
+    want.sort();
+    assert_eq!(gone, want);
+    assert!(out.iter().all(|o| o.outcome == Status::Done));
+    let active: Vec<FaceId> = fx.active().into_iter().map(|(face, _)| face).collect();
+    assert_eq!(active, vec![bold]);
+    let err = fx
+        .service
+        .deactivate(DeactivateRequest {
+            target: None,
+            except: Some(Target::Set { set: SetId(9_999) }),
+        })
+        .expect_err("unknown set");
+    assert_eq!(err.code, ErrorCode::NotFound);
+    assert_eq!(fx.active().len(), 1, "an unknown set changes nothing");
 }
 
 #[test]

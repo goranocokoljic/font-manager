@@ -15,7 +15,7 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest, ProjectSet,
     RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
 use fm_api::preview::{
@@ -277,6 +277,12 @@ async fn list_collections(state: State<'_, AppState>) -> ApiResult<Vec<Collectio
     call(&state, |api| api.list_collections()).await
 }
 
+/// Every project set.
+#[tauri::command]
+async fn list_sets(state: State<'_, AppState>) -> ApiResult<Vec<ProjectSet>> {
+    call(&state, |api| api.list_sets()).await
+}
+
 /// Renames a collection.
 #[tauri::command]
 async fn rename_collection(
@@ -451,6 +457,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             tag_faces,
             untag_faces,
             update_user_meta,
+            list_sets,
             sample_texts,
             render_preview,
             activate,

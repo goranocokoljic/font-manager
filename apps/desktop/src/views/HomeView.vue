@@ -13,6 +13,7 @@ import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
+import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
@@ -27,6 +28,7 @@ import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useSearchStore } from '../stores/search';
+import { useSetsStore } from '../stores/sets';
 import type { ActivationMode, FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useViewsStore, type ViewMode } from '../stores/views';
@@ -43,6 +45,7 @@ const fontList = useFontListStore();
 const views = useViewsStore();
 const search = useSearchStore();
 const collections = useCollectionsStore();
+const sets = useSetsStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -67,6 +70,7 @@ onMounted(() => {
   void activation.load();
   void problems.load();
   void search.loadLanguages();
+  void sets.load();
 });
 onBeforeUnmount(() => {
   void library.stop();
@@ -108,6 +112,14 @@ useActions([
     enabled: () => activation.count > 0 && !activation.busy,
     run: () => activation.deactivateAll(),
   },
+  {
+    id: 'activation.deactivateOutsideSet',
+    title: 'Deactivate everything not in the current set',
+    group: 'Activation',
+    // The current set is the one picked under Project sets in the sidebar.
+    enabled: () => sets.current != null && activation.count > 0 && !activation.busy,
+    run: () => (sets.current ? activation.deactivateAllExcept(sets.current.id) : undefined),
+  },
   // Keys 1–4 switch the view mode, in the order of the toolbar buttons.
   ...MODES.map((m, i) => ({
     id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4),
@@ -141,7 +153,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = ['Smart collections', 'Project sets', 'Tags', 'Online catalogs'];
+const groups = ['Smart collections', 'Tags', 'Online catalogs'];
 </script>
 
 <template>
@@ -150,6 +162,7 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Online catalogs'];
       <SourcesSidebar />
       <CollectionsSidebar />
       <ProblemsSidebar />
+      <ProjectSetsSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>

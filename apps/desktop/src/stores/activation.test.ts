@@ -116,6 +116,31 @@ describe('activation store', () => {
     expect(await activeModes()).toEqual({ 1: 'permanent', 6: 'session' });
   });
 
+  it('deactivates everything not in a set and undoes it', async () => {
+    client = createMockClient({ sets: [{ id: 1, name: 'Client', faces: [1] }] });
+    setClient(client);
+    const store = useActivationStore();
+    const toasts = useToastStore();
+    await client.activate({ target: { kind: 'faces', faces: [1, 6] }, onConflict: 'replace' });
+
+    await store.deactivateAllExcept(1);
+    expect(await activeModes()).toEqual({ 1: 'session' });
+    expect(toasts.toast?.message).toBe('Deactivated 1 font.');
+
+    toasts.act();
+    await vi.waitFor(() => expect(toasts.toast?.message).toBe('Undone.'));
+    expect(await activeModes()).toEqual({ 1: 'session', 6: 'session' });
+  });
+
+  it('keeps everything active when the set is gone', async () => {
+    const store = useActivationStore();
+    const toasts = useToastStore();
+    await client.activate({ target: { kind: 'faces', faces: [1] } });
+    await store.deactivateAllExcept(99);
+    expect(await activeModes()).toEqual({ 1: 'session' });
+    expect(toasts.toast?.message).toBe('Set 99 was not found.');
+  });
+
   it('offers no undo when nothing changed', async () => {
     const toasts = useToastStore();
     await useActivationStore().deactivateAll();

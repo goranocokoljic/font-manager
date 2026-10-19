@@ -33,10 +33,19 @@ The status bar shows how many fonts are active.
 Press `Ctrl+K` and choose **Deactivate all**. All fonts that Font Manager activated stop
 being active, for this session and permanent ones.
 
+## Keep only the current set
+
+A project set is a named group of fonts for one job. The sets are under **Project sets**
+in the sidebar. Click a set to make it the current set. Click it again to clear it.
+
+Press `Ctrl+K` and choose **Deactivate everything not in the current set**. All fonts that
+Font Manager activated stop being active, but the fonts of the current set stay active.
+The command is dimmed when no set is current.
+
 ## Undo
 
-When you activate or deactivate many fonts at once (several rows, a family, or
-**Deactivate all**), a message at the bottom of the window tells you what changed. Click **Undo** in the message to put every font back as it
+When you activate or deactivate many fonts at once (several rows, a family,
+**Deactivate all**, or **Deactivate everything not in the current set**), a message at the bottom of the window tells you what changed. Click **Undo** in the message to put every font back as it
 was, in the same kind of activation. The message goes away after 10 seconds. It stays
 while the pointer is on it.
 
