@@ -3,7 +3,9 @@ import { computed, ref } from 'vue';
 import { useClient } from '../api/client';
 import type {
   ActivationMode,
+  ActivationOutcome,
   ApiError,
+  Conflict,
   FaceDetail,
   FaceId,
   OutcomeStatus,
@@ -56,6 +58,7 @@ export const useSelectionStore = defineStore('selection', () => {
     if (id === faceId.value && (detail.value || loading.value)) return;
     faceId.value = id;
     outcome.value = null;
+    pending.value = null;
     if (id === null) {
       request++;
       detail.value = null;
@@ -72,11 +75,32 @@ export const useSelectionStore = defineStore('selection', () => {
   );
 
   /**
+   * An activation waiting for the user's answer: the selected face has the
+   * PostScript name of a system or already-active font.
+   */
+  const pending = ref<{ face: FaceId; mode: ActivationMode; conflicts: Conflict[] } | null>(null);
+
+  /** Runs one activation or deactivation of `face` and fetches its detail again. */
+  async function run(face: FaceId, work: () => Promise<ActivationOutcome[]>): Promise<void> {
+    busy.value = true;
+    try {
+      const results = await work();
+      outcome.value = results.find((r) => r.face === face)?.outcome ?? null;
+    } catch (e) {
+      outcome.value = { status: 'failed', error: e as ApiError };
+    } finally {
+      busy.value = false;
+    }
+    if (faceId.value === face) await load(face);
+  }
+
+  /**
    * No mode (the Activate button): deactivates the selected face when active, or
    * activates it in the mode chosen in Settings. Session: the same, always for the
    * session. Permanent: activates it permanently (a session activation becomes
-   * permanent), or deactivates it when it is already permanent. Name clashes follow
-   * the Settings choice.
+   * permanent), or deactivates it when it is already permanent. A name clash is
+   * not activated yet: it waits in `pending` for {@link resolveConflict}, unless
+   * Settings say to replace without asking.
    */
   async function toggleActivation(mode?: ActivationMode): Promise<void> {
     const face = detail.value?.face;
@@ -84,23 +108,48 @@ export const useSelectionStore = defineStore('selection', () => {
     const settings = useSettingsStore();
     const target: Target = { kind: 'faces', faces: [face.id] };
     const deactivate = mode === 'permanent' ? face.active === 'permanent' : face.active !== null;
+    const client = useClient();
+    pending.value = null;
+    if (deactivate) return run(face.id, () => client.deactivate({ target }));
+    const wanted = mode ?? settings.activationMode;
+    // Settings may answer every clash with "replace" without asking.
+    if (settings.onConflict === 'replace')
+      return run(face.id, () => client.activate({ target, mode: wanted, onConflict: 'replace' }));
     busy.value = true;
+    let conflicts: Conflict[];
     try {
-      const client = useClient();
-      const results = deactivate
-        ? await client.deactivate({ target })
-        : await client.activate({
-            target,
-            mode: mode ?? settings.activationMode,
-            onConflict: settings.onConflict,
-          });
-      outcome.value = results.find((r) => r.face === face.id)?.outcome ?? null;
+      conflicts = await client.conflicts(target);
     } catch (e) {
-      outcome.value = { status: 'failed', error: e as ApiError };
-    } finally {
       busy.value = false;
+      outcome.value = { status: 'failed', error: e as ApiError };
+      return;
     }
-    if (faceId.value === face.id) await load(face.id);
+    busy.value = false;
+    if (conflicts.length) {
+      outcome.value = null;
+      pending.value = { face: face.id, mode: wanted, conflicts };
+      return;
+    }
+    await run(face.id, () => client.activate({ target, mode: wanted, onConflict: 'keepExisting' }));
+  }
+
+  /**
+   * The user's answer to a pending clash. Keep: the other font stays and the
+   * face is not activated. Replace: the face is activated for this session only.
+   * Cancel: nothing happens.
+   */
+  async function resolveConflict(choice: 'keep' | 'replace' | 'cancel'): Promise<void> {
+    const p = pending.value;
+    if (!p || busy.value) return;
+    pending.value = null;
+    if (choice === 'cancel') return;
+    await run(p.face, () =>
+      useClient().activate({
+        target: { kind: 'faces', faces: [p.face] },
+        mode: p.mode,
+        onConflict: choice === 'replace' ? 'replace' : 'keepExisting',
+      }),
+    );
   }
 
   /** The last tag, favorite or rating edit the API refused; cleared by the next one. */
@@ -159,6 +208,8 @@ export const useSelectionStore = defineStore('selection', () => {
     canActivate,
     select,
     toggleActivation,
+    pending,
+    resolveConflict,
     addTag,
     removeTag,
     setFavorite,

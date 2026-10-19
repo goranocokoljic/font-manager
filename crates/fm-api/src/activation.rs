@@ -55,7 +55,8 @@ pub enum ConflictPolicy {
     /// Leave the clashing face inactive and report the conflict.
     #[default]
     KeepExisting,
-    /// Activate anyway for this session.
+    /// Activate anyway, for this session only: a clashing face is activated
+    /// in session mode even when permanent was asked.
     Replace,
 }
 
@@ -168,6 +169,34 @@ pub struct Conflict {
     pub with: ConflictWith,
 }
 
+/// Which of the two fonts of a [`Clash`] the app puts in front.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ClashWinner {
+    /// The clash's `face`.
+    Face,
+    /// The font in the clash's `with`.
+    With,
+}
+
+/// Two active fonts with one PostScript name: one row of the Conflicts view.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Clash {
+    /// A face the app has active.
+    pub face: FaceId,
+    /// The shared PostScript name.
+    pub postscript_name: String,
+    /// What it clashes with: a system or user font, or another face the app
+    /// has active (then `face` is the lower face id of the two).
+    pub with: ConflictWith,
+    /// The winner as the app decided it. The app's face wins over a system
+    /// or user font: it is active over that font only because the user chose
+    /// "replace for this session" (or it was active before that font came).
+    /// Between two of the app's faces the later activation wins.
+    pub winner: ClashWinner,
+}
+
 /// Activation and deactivation.
 pub trait ActivationService {
     /// Activate; one outcome per face.
@@ -178,4 +207,7 @@ pub trait ActivationService {
     fn list_active(&self) -> ApiResult<Vec<ActiveFace>>;
     /// Clashes the target would cause, without activating anything.
     fn conflicts(&self, target: Target) -> ApiResult<Vec<Conflict>>;
+    /// Every clash of a face the app has active, with its winner (the
+    /// Conflicts view). Changes nothing.
+    fn list_conflicts(&self) -> ApiResult<Vec<Clash>>;
 }

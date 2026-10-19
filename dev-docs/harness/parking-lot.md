@@ -95,3 +95,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.3 #66] apps/desktop/src-tauri/src/lib.rs:43 — the shell serves `MockApi`, whose `render_preview` returns a 1×1 PNG, so grid thumbnails in the real app stay empty until fm-core implements `Api`.
 - [E5.3 #66] apps/desktop/src/components/FontList.vue:229 — the list's "Styles not available" branch (a family whose faces fail to load) has no test.
 - [E5.3 #66] apps/desktop/src/components/FontList.vue:763 — the list's row height changes with the preview size without re-anchoring, so another family moves to the top.
+- [E6.7 #80] crates/fm-platform/src/activator/mock.rs:132 — `MockActivator` cannot remove `installed` fonts, so a "never deregister a foreign font" test cannot observe the app deregistering one.
+- [E6.7 #80] crates/fm-core/src/activation.rs:600 — `clashes()` turns every non-app clash into `ConflictWith::System`, also for `ConflictKind::User`, so the prompt and the Conflicts view call a user-installed font a system font.

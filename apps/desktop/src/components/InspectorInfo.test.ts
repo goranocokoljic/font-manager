@@ -203,10 +203,17 @@ describe('inspector info tab', () => {
     expect(button().text()).toBe('Activate');
   });
 
-  it('shows why a clashing face was not activated', async () => {
+  it('asks about a clashing face, then shows why it was not activated', async () => {
     const wrapper = await mountWith(6);
     await wrapper.get('button.activate').trigger('click');
     await flushPromises();
+    const question = wrapper.get('[role="alertdialog"]');
+    expect(question.text()).toContain('/System/Library/Fonts/JetBrainsMono-Regular.ttf');
+    const choices = question.findAll('button').map((b) => b.text());
+    expect(choices).toEqual(['Keep existing', 'Replace for this session', 'Cancel']);
+    await question.findAll('button')[0]!.trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[role="alertdialog"]').exists()).toBe(false);
     expect(wrapper.get('[role="alert"]').text()).toContain(
       '/System/Library/Fonts/JetBrainsMono-Regular.ttf',
     );

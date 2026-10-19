@@ -218,6 +218,7 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online
       >
         Settings <kbd>{{ formatChord(settingsChord) }}</kbd>
       </RouterLink>
+      <RouterLink :to="{ name: 'conflicts' }" class="hint">Conflicts</RouterLink>
       <p class="active-count" data-testid="active-count" role="status">
         {{ activation.count === 1 ? '1 font active' : `${activation.count} fonts active` }}
       </p>
