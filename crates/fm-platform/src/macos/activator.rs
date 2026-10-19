@@ -63,6 +63,16 @@ pub(crate) trait Registrar: Send + Sync + fmt::Debug {
     fn register(&self, path: &Path, mode: Mode) -> Result<(), RegistrarError>;
     /// Unregisters the file at `path` from the scope for `mode`.
     fn unregister(&self, path: &Path, mode: Mode) -> Result<(), RegistrarError>;
+    /// Registers every file of `paths`; one result per path, in order. One
+    /// CoreText call per file took most of the 100-face activation budget,
+    /// so CoreText overrides this with a single call.
+    fn register_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+        paths.iter().map(|p| self.register(p, mode)).collect()
+    }
+    /// Unregisters every file of `paths`; one result per path, in order.
+    fn unregister_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+        paths.iter().map(|p| self.unregister(p, mode)).collect()
+    }
     /// Every font the OS offers whose PostScript name is in `names`, with its file.
     fn fonts_named(&self, names: &HashSet<&str>) -> Result<Vec<(String, PathBuf)>, String>;
 }
@@ -179,9 +189,11 @@ impl FontActivator for MacosActivator {
             first.clear();
         }
         let mut dropped = false;
-        for &i in &first {
+        let paths: Vec<&Path> = first.iter().map(|&i| faces[i].path.as_path()).collect();
+        let results = self.registrar.register_all(&paths, mode);
+        for (&i, result) in first.iter().zip(results) {
             let path = &faces[i].path;
-            statuses[i] = Some(match self.registrar.register(path, mode) {
+            statuses[i] = Some(match result {
                 Ok(()) => OutcomeStatus::Activated(registration(path, mode)),
                 Err(e) => {
                     ledger.remove(path);
@@ -215,25 +227,48 @@ impl FontActivator for MacosActivator {
     fn deactivate(&self, registrations: &[Registration]) -> Result<Vec<Outcome>, ActivationError> {
         let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
         let mut ledger = self.load()?;
-        let mut statuses = Vec::with_capacity(registrations.len());
-        let mut removed: Vec<usize> = Vec::new();
+        let mut statuses: Vec<Option<OutcomeStatus>> = vec![None; registrations.len()];
+        // Ours, grouped by mode: CoreText unregisters per scope.
+        let mut ours: Vec<usize> = Vec::new();
         for (i, reg) in registrations.iter().enumerate() {
             // `activate` sets the handle to the path; anything else it never issued.
             if reg.handle != reg.path.as_os_str() || ledger.mode_of(&reg.path) != Some(reg.mode) {
-                statuses.push(OutcomeStatus::NotOurs);
+                statuses[i] = Some(OutcomeStatus::NotOurs);
+            } else {
+                ours.push(i);
+            }
+        }
+        let mut removed: Vec<usize> = Vec::new();
+        for mode in [Mode::Session, Mode::Permanent] {
+            let batch: Vec<usize> = ours
+                .iter()
+                .copied()
+                .filter(|&i| registrations[i].mode == mode)
+                .collect();
+            if batch.is_empty() {
                 continue;
             }
-            let status = match self.registrar.unregister(&reg.path, reg.mode) {
-                Ok(()) => OutcomeStatus::Deactivated,
-                // Gone already: the user logged out (session scope) or removed it.
-                Err(e) if e.code == code::NOT_REGISTERED => OutcomeStatus::NotActive,
-                Err(e) => OutcomeStatus::Failed(error_for(&e, &reg.path)),
-            };
-            if !matches!(status, OutcomeStatus::Failed(_)) {
-                ledger.remove(&reg.path);
-                removed.push(i);
+            let paths: Vec<&Path> = batch
+                .iter()
+                .map(|&i| registrations[i].path.as_path())
+                .collect();
+            for (&i, result) in batch
+                .iter()
+                .zip(self.registrar.unregister_all(&paths, mode))
+            {
+                let reg = &registrations[i];
+                let status = match result {
+                    Ok(()) => OutcomeStatus::Deactivated,
+                    // Gone already: the user logged out (session scope) or removed it.
+                    Err(e) if e.code == code::NOT_REGISTERED => OutcomeStatus::NotActive,
+                    Err(e) => OutcomeStatus::Failed(error_for(&e, &reg.path)),
+                };
+                if !matches!(status, OutcomeStatus::Failed(_)) {
+                    ledger.remove(&reg.path);
+                    removed.push(i);
+                }
+                statuses[i] = Some(status);
             }
-            statuses.push(status);
         }
         // One save for the whole request; the OS side is done either way, and
         // a stale entry answers `NotActive` next time.
@@ -241,7 +276,7 @@ impl FontActivator for MacosActivator {
             && let Err(e) = self.save(&ledger)
         {
             for i in removed {
-                statuses[i] = OutcomeStatus::Failed(e.clone());
+                statuses[i] = Some(OutcomeStatus::Failed(e.clone()));
             }
         }
         Ok(registrations
@@ -249,7 +284,8 @@ impl FontActivator for MacosActivator {
             .zip(statuses)
             .map(|(reg, status)| Outcome {
                 path: reg.path.clone(),
-                status,
+                status: status
+                    .unwrap_or_else(|| failed(ActivationErrorKind::Os, "no outcome".to_owned())),
             })
             .collect())
     }

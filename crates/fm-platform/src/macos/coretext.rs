@@ -49,12 +49,46 @@ unsafe extern "C" {
     fn CFStringGetLength(s: CFTypeRef) -> CFIndex;
     fn CFStringGetMaximumSizeForEncoding(length: CFIndex, encoding: u32) -> CFIndex;
     fn CFStringGetCString(s: CFTypeRef, buffer: *mut c_char, size: CFIndex, encoding: u32) -> u8;
+    static kCFTypeArrayCallBacks: CFArrayCallBacks;
+    fn CFArrayCreate(
+        allocator: CFTypeRef,
+        values: *const CFTypeRef,
+        count: CFIndex,
+        callbacks: *const CFArrayCallBacks,
+    ) -> CFTypeRef;
+    fn CFEqual(a: CFTypeRef, b: CFTypeRef) -> u8;
+    fn CFErrorCopyUserInfo(err: CFTypeRef) -> CFTypeRef;
+    fn CFDictionaryGetValue(dict: CFTypeRef, key: CFTypeRef) -> CFTypeRef;
+}
+
+/// `CFArrayCallBacks`; only its address is used (`kCFTypeArrayCallBacks`).
+#[repr(C)]
+struct CFArrayCallBacks {
+    version: CFIndex,
+    retain: *const c_void,
+    release: *const c_void,
+    copy_description: *const c_void,
+    equal: *const c_void,
 }
 
 #[link(name = "CoreText", kind = "framework")]
 unsafe extern "C" {
     static kCTFontNameAttribute: CFTypeRef;
     static kCTFontURLAttribute: CFTypeRef;
+    static kCTFontManagerErrorFontURLsKey: CFTypeRef;
+    // Deprecated since macOS 10.15 in favour of the block-based
+    // `CTFontManagerRegisterFontURLs`, but still exported and synchronous,
+    // with a per-URL error list: one call for a whole request.
+    fn CTFontManagerRegisterFontsForURLs(
+        urls: CFTypeRef,
+        scope: CTFontManagerScope,
+        errors: *mut CFTypeRef,
+    ) -> bool;
+    fn CTFontManagerUnregisterFontsForURLs(
+        urls: CFTypeRef,
+        scope: CTFontManagerScope,
+        errors: *mut CFTypeRef,
+    ) -> bool;
     fn CTFontManagerRegisterFontsForURL(
         url: CFTypeRef,
         scope: CTFontManagerScope,
@@ -205,6 +239,103 @@ fn any_available(names: &HashSet<&str>) -> bool {
     }
 }
 
+type BatchCall = unsafe extern "C" fn(CFTypeRef, CTFontManagerScope, *mut CFTypeRef) -> bool;
+
+/// One CoreText call for every file of `paths`; one result per path. Each
+/// error CoreText reports names the URLs it is about
+/// (`kCTFontManagerErrorFontURLsKey`); an error that names none is given to
+/// every path not yet failed, so a failure is never reported as a success.
+fn batch_call(
+    call: BatchCall,
+    what: &str,
+    paths: &[&Path],
+    mode: Mode,
+) -> Vec<Result<(), RegistrarError>> {
+    let mut results: Vec<Result<(), RegistrarError>> = Vec::with_capacity(paths.len());
+    let mut urls: Vec<(usize, Cf)> = Vec::with_capacity(paths.len());
+    for (i, path) in paths.iter().enumerate() {
+        match file_url(path) {
+            Some(url) => {
+                urls.push((i, url));
+                results.push(Ok(()));
+            }
+            None => results.push(Err(RegistrarError {
+                code: super::activator::code::INVALID_FILE_PATH,
+                detail: format!("{what}: not a file URL"),
+            })),
+        }
+    }
+    if urls.is_empty() {
+        return results;
+    }
+    let values: Vec<CFTypeRef> = urls.iter().map(|(_, u)| u.0).collect();
+    let Ok(count) = CFIndex::try_from(values.len()) else {
+        return results;
+    };
+    // SAFETY: `values` holds live CFURLs for the call; the array retains
+    // them with the standard callbacks and is owned by `Cf`. `errors` is a
+    // local out pointer that receives an owned CFArray of CFErrors or stays
+    // NULL; its items and their user-info values are borrowed while it lives.
+    unsafe {
+        let Some(array) = Cf::owned(CFArrayCreate(
+            ptr::null(),
+            values.as_ptr(),
+            count,
+            &raw const kCFTypeArrayCallBacks,
+        )) else {
+            return results;
+        };
+        let mut errors: CFTypeRef = ptr::null();
+        let ok = call(array.0, scope(mode), &mut errors);
+        let errors = Cf::owned(errors);
+        let Some(errors) = errors else {
+            if !ok {
+                for (i, _) in &urls {
+                    results[*i] = Err(RegistrarError {
+                        code: 0,
+                        detail: format!("{what} failed without an error"),
+                    });
+                }
+            }
+            return results;
+        };
+        for e in 0..CFArrayGetCount(errors.0) {
+            let err = CFArrayGetValueAtIndex(errors.0, e);
+            let code = CFErrorGetCode(err);
+            let description = Cf::owned(CFErrorCopyDescription(err)).and_then(|d| string(d.0));
+            let failure = RegistrarError {
+                code,
+                detail: format!("{what}: {}", description.unwrap_or_default()),
+            };
+            let info = Cf::owned(CFErrorCopyUserInfo(err));
+            let named = info
+                .as_ref()
+                .map(|d| CFDictionaryGetValue(d.0, kCTFontManagerErrorFontURLsKey))
+                .filter(|v| !v.is_null());
+            let mut hit = false;
+            if let Some(named) = named {
+                for n in 0..CFArrayGetCount(named) {
+                    let url = CFArrayGetValueAtIndex(named, n);
+                    for (i, ours) in &urls {
+                        if CFEqual(url, ours.0) != 0 {
+                            results[*i] = Err(failure.clone());
+                            hit = true;
+                        }
+                    }
+                }
+            }
+            if !hit {
+                for (i, _) in &urls {
+                    if results[*i].is_ok() {
+                        results[*i] = Err(failure.clone());
+                    }
+                }
+            }
+        }
+    }
+    results
+}
+
 /// The CoreText registrar the app uses.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CoreText;
@@ -224,6 +355,24 @@ impl Registrar for CoreText {
             CTFontManagerUnregisterFontsForURL,
             "CTFontManagerUnregisterFontsForURL",
             path,
+            mode,
+        )
+    }
+
+    fn register_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+        batch_call(
+            CTFontManagerRegisterFontsForURLs,
+            "CTFontManagerRegisterFontsForURLs",
+            paths,
+            mode,
+        )
+    }
+
+    fn unregister_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+        batch_call(
+            CTFontManagerUnregisterFontsForURLs,
+            "CTFontManagerUnregisterFontsForURLs",
+            paths,
             mode,
         )
     }
