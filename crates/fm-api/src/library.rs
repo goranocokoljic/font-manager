@@ -580,6 +580,12 @@ pub enum ProblemKind {
     /// another machine set a field to a different value, or the sidecar file
     /// cannot be read. Nothing is overwritten until the user decides.
     SidecarConflict,
+    /// A source folder that is not there (removed, renamed, an unplugged
+    /// drive). Its faces stay in the index until the user removes the source.
+    MissingSource,
+    /// The library index file was damaged and a fresh one replaced it; the
+    /// damaged file was kept aside and the sources are scanned again.
+    IndexRebuilt,
 }
 
 /// One entry of the Problems view.

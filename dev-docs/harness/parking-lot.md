@@ -71,6 +71,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E2.8 #257] crates/fm-core/src/scanner/job.rs:113 — the `fm-scan` thread holds the `FileIndex` mutex for the whole scan, so a long first scan blocks every index reader.
 - [E2.8 #257] scripts/bench/lib.mjs:138 — the trend's Previous/Change columns compare the per-10,000-files `first_scan` with older raw-ms nightly values until those runs leave the history window.
 - [E9.2 #90] scripts/bench/bench.mjs:173 — before E9.2 the nightly trend table listed only successful nightly runs, so it had no history while the first scan is known red (fixed in E9.2 by `nightlyRunsArgs`; the E9.1 trend summaries already published lacked the comparison).
+- [E4.3 #61] crates/fm-api/src/settings.rs:68 — `Settings::default().cache_limit_mb` is 1,024 MB while E4.3 criterion 1 says the preview cache defaults to 500 MB; once the cache is wired via `limit_from_mb`, the user-facing default differs (an fm-api default change needs a human).
+- [E4.3 #61] crates/fm-core/src/config.rs:92 — four private temp-then-rename writers now exist (config.rs, index/sources.rs:218, index/sidecars.rs:1005, preview/cache.rs); a shared fs helper is a refactor for a human.
 
 ## 2026-10-19
 - [E6.3 #76] issue #76 / docs/adr/0008-font-activation.md — criterion 1's text ("AddFontResourceExW plus WM_FONTCHANGE") contradicts accepted ADR 0008 (HKCU value for both modes); the issue text could be updated.
@@ -80,5 +82,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E6.4 #77] crates/fm-platform/src/activator/mod.rs:183 — activate(Permanent) on a file already active in Session returns AlreadyActive(Session) on macOS too (as on Windows), so clear_session drops it at quit; E6.6 should decide the upgrade rule.
 - [E6.5 #78] crates/fm-platform/src/activator/mod.rs:183 — nothing in the app calls `clear_session` on quit or at start yet, on any OS; the activation-service story must wire it.
 - [E6.5 #78] apps/desktop/e2e/search.spec.ts:127 — the e2e search timing check failed again on the macOS runner (201.6 ms, 168.3 ms vs < 164 ms) on a commit that changed only this file; the CI run before it was green on all three OS.
+- [E9.4 #92] apps/desktop/src-tauri/src/lib.rs:434 — the app still serves `MockApi`; no fm-core `LibraryService::list_problems` calls `Index::problems` yet, so the new entries are not visible in the app's Problems view.
+- [E9.4 #92] crates/fm-cli/src/main.rs:5 — `fm` does not call `startup::init`, so the crash log hook covers the app but not the CLI.
+- [E9.4 #92] crates/fm-core/src/index/sidecars.rs:294 — sidecar sync skips system, paused and missing sources while `missing_source` lists paused ones too; the two filters may drift.
+- [E9.4 #92] crates/fm-platform/src/activator/mod.rs:183 — nothing calls `clear_session` at start, so ADR 0008's "the next start removes session links after a crash" is not wired (activation-service story).
+- [E9.4 #92] crates/fm-core/src/crash.rs:205 — pruning to 10 crash logs counts unreported ones too, so more than 10 crashes before a start drop the oldest unread logs (app-owned files only).
 - [E9.5 #93] apps/desktop/src/views/HomeView.vue:78 — the view-mode actions are registered as `view.list`/`view.table` while KEYMAP binds the digits to `view.mode1..5`, so the `1`–`5` shortcuts of the spec's keyboard model do nothing.
 - [E9.5 #93] apps/desktop/src/stores/commands.ts:57 — `void action.run()` drops rejected promises, so a failed palette action is an unhandled rejection the user never sees.

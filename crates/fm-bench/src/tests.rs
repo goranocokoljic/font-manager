@@ -77,6 +77,21 @@ fn the_first_scan_reads_every_file_and_the_rescan_reads_none() {
 }
 
 #[test]
+fn the_scan_counts_the_bytes_of_the_font_files_it_found() {
+    let library = TempDir::new("bytes-library");
+    let home = TempDir::new("bytes-home");
+    let font = fs::read(fixtures().join(FONT)).expect("fixture");
+    fs::write(library.path().join("a.ttf"), &font).expect("write");
+    fs::write(library.path().join("b.ttf"), &font[..font.len() / 2]).expect("write");
+    fs::write(library.path().join("notes.txt"), b"not a font").expect("write");
+    let size = |p: &str| fs::metadata(library.path().join(p)).unwrap().len();
+
+    let done = first_scan(library.path(), home.path()).expect("scan");
+    assert_eq!(done.files, 2, "{done:?}");
+    assert_eq!(done.bytes, size("a.ttf") + size("b.ttf"), "{done:?}");
+}
+
+#[test]
 fn a_second_first_scan_starts_from_a_fresh_index() {
     let home = TempDir::new("rescan-fresh");
     let one = first_scan(&fixtures(), home.path()).expect("scan");
@@ -155,6 +170,68 @@ fn search_times_every_query_for_every_round() {
         "{res:?}"
     );
     assert!(QUERIES.contains(&res.slowest.as_str()), "{res:?}");
+}
+
+#[test]
+fn preview_cache_times_a_hit_on_every_cached_thumbnail() {
+    let home = TempDir::new("preview-cache");
+    let before = listing(&fixtures());
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = preview_cache(home.path(), 2).expect("preview cache");
+    // The fixtures hold about 200 files, a few of them broken on purpose.
+    assert!(res.entries > CACHE_FACES * 3 / 4, "{res:?}");
+    assert!(res.entries <= CACHE_FACES, "{res:?}");
+    assert_eq!(res.samples, res.entries * 2);
+    assert!(res.bytes > 0, "{res:?}");
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+    let dir = home_paths(home.path()).cache.join("previews");
+    assert_eq!(fs::read_dir(&dir).expect("cache dir").count(), res.entries);
+    // A second run starts from an empty cache, not from the first one's.
+    let again = preview_cache(home.path(), 1).expect("again");
+    assert_eq!(again.entries, res.entries);
+    assert_eq!(fs::read_dir(&dir).expect("cache dir").count(), res.entries);
+    assert_eq!(listing(&fixtures()), before, "the library is only read");
+}
+
+#[test]
+fn preview_cache_on_an_empty_library_caches_nothing() {
+    let home = TempDir::new("preview-cache-empty");
+    let library = TempDir::new("preview-cache-empty-lib");
+    first_scan(library.path(), home.path()).expect("scan");
+    let res = preview_cache(home.path(), 3).expect("preview cache");
+    assert_eq!((res.entries, res.samples, res.failed), (0, 0, 0));
+    assert_eq!(res.p95_ms, 0.0);
+}
+
+#[test]
+fn preview_cache_counts_a_copy_of_a_cached_file_once() {
+    let home = TempDir::new("preview-cache-dup");
+    let library = TempDir::new("preview-cache-dup-lib");
+    fs::copy(fixtures().join(FONT), library.path().join("a.ttf")).expect("copy");
+    fs::copy(fixtures().join(FONT), library.path().join("b.ttf")).expect("copy");
+    first_scan(library.path(), home.path()).expect("scan");
+    let res = preview_cache(home.path(), 3).expect("a duplicate does not fail the run");
+    assert_eq!(
+        (res.entries, res.duplicates, res.failed),
+        (1, 1, 0),
+        "{res:?}"
+    );
+    assert_eq!(res.samples, 3);
+}
+
+#[test]
+fn preview_cache_skips_a_file_it_cannot_draw() {
+    let home = TempDir::new("preview-cache-broken");
+    let library = TempDir::new("preview-cache-broken-lib");
+    fs::copy(fixtures().join(FONT), library.path().join("good.ttf")).expect("copy");
+    first_scan(library.path(), home.path()).expect("scan");
+    // The file changes behind the index: still listed, no longer a font.
+    fs::write(library.path().join("good.ttf"), b"not a font any more").expect("junk");
+    let res = preview_cache(home.path(), 1).expect("preview cache");
+    assert_eq!((res.entries, res.failed), (0, 1), "{res:?}");
 }
 
 /// The only test that calls [`start`]: it installs the process-wide logger.

@@ -7,6 +7,7 @@
 //! fm-bench incremental --library DIR --home DIR
 //! fm-bench search --home DIR [--rounds N]
 //! fm-bench activate --home DIR                 # 100 faces of the scanned index, one request
+//! fm-bench preview-cache --home DIR [--rounds N]
 //! ```
 //!
 //! Every command prints one JSON line on stdout; errors go to stderr with
@@ -16,10 +17,10 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use fm_bench::{BenchResult, activate, first_scan, incremental, search, start};
+use fm_bench::{BenchResult, activate, first_scan, incremental, preview_cache, search, start};
 use serde::Serialize;
 
-const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|activate> --home DIR [--library DIR] [--rounds N]";
+const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|preview-cache|activate> --home DIR [--library DIR] [--rounds N]";
 
 #[derive(Debug, Default)]
 struct Args {
@@ -77,6 +78,7 @@ fn run(args: Args) -> BenchResult<()> {
         "scan" => print(&first_scan(&library()?, &home)?),
         "incremental" => print(&incremental(&library()?, &home)?),
         "search" => print(&search(&home, args.rounds.unwrap_or(20))?),
+        "preview-cache" => print(&preview_cache(&home, args.rounds.unwrap_or(20))?),
         "activate" => print(&activate(&home)?),
         other => Err(format!("unknown command: {other}\n{USAGE}").into()),
     }

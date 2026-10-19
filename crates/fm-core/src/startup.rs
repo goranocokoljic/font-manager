@@ -1,13 +1,15 @@
 //! What every entry point (the app, the CLI) does first: find the app
-//! folders, read the settings, start logging and open the index (which runs
-//! its migrations).
+//! folders, install the crash log, read the settings, start logging and open
+//! the index (which runs its migrations).
 
 use std::fs;
+use std::path::PathBuf;
 
 use fm_api::{ApiError, ErrorCode};
 use fm_platform::AppPaths;
 
 use crate::config::Config;
+use crate::crash;
 use crate::index::{INDEX_FILE, Index, Opened};
 use crate::logging::{self, LogGuard};
 
@@ -26,15 +28,19 @@ pub struct Startup {
     /// app, a locked file) is an error here, not a failed start: the paths,
     /// the settings and the log stay usable without it.
     pub index: Result<Opened, ApiError>,
+    /// The crash log of a previous run that crashed, when this is the first
+    /// start since (see [`crash::take_unreported`]).
+    pub previous_crash: Option<PathBuf>,
 }
 
-/// Resolves the folders for the current user, reads the settings and makes
-/// the rotating log file the process-wide logger.
+/// Resolves the folders for the current user, installs the crash log hook,
+/// reads the settings and makes the rotating log file the process-wide logger.
 pub fn init() -> Result<Startup, ApiError> {
     let paths = AppPaths::current().map_err(|e| {
         ApiError::new(ErrorCode::Io, "The app folders could not be found.")
             .with_detail(e.to_string())
     })?;
+    crash::install(&paths.logs);
     let config = prepare(&paths)?;
     let log = logging::init(&paths.logs, config.log_level)?;
     tracing::info!(
@@ -45,6 +51,10 @@ pub fn init() -> Result<Startup, ApiError> {
         logs = %paths.logs.display(),
         "font manager starting"
     );
+    let previous_crash = crash::take_unreported(&paths.logs);
+    if let Some(log) = &previous_crash {
+        tracing::warn!(crash_log = %log.display(), "the previous run crashed");
+    }
     let index = open_index(&paths);
     match &index {
         Ok(Opened {
@@ -62,6 +72,7 @@ pub fn init() -> Result<Startup, ApiError> {
         config,
         log,
         index,
+        previous_crash,
     })
 }
 

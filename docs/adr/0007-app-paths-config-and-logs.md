@@ -31,6 +31,10 @@ tested on every host; only `AppPaths::current()` picks the host's rules.
   malformed file reported and never overwritten. Telemetry defaults to off.
 - Logs use `tracing` with `tracing-appender`: one file per day, `fm.YYYY-MM-DD.log`,
   the newest 7 kept, written from a background thread.
+- A panic writes a crash log next to them, synchronously from the panic hook:
+  `crash-<unix ms>-<pid>.log`, the newest 10 kept (E9.4). The next start reports it once
+  and renames it to `*.reported.log`. It is a local file only; sending a crash report
+  is the separate, off-by-default telemetry flag.
 - The library folder is only a suggestion. It is never created by the app, and it is
   never an OS font folder (`%LOCALAPPDATA%\Microsoft\Windows\Fonts`, `~/Library/Fonts`,
   `~/.local/share/fonts`), because a file placed there would be activated by the OS
