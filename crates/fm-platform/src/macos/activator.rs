@@ -48,6 +48,10 @@ pub(crate) mod code {
     pub(crate) const CANCELLED_BY_USER: isize = 304;
     pub(crate) const INVALID_FILE_PATH: isize = 306;
     pub(crate) const UNSUPPORTED_SCOPE: isize = 307;
+    /// The app's own code, not CoreText's: a batch call failed without naming
+    /// this file, and asking again one file at a time found it registered, by
+    /// the batch or by someone else. The ledger keeps the entry.
+    pub(crate) const UNSETTLED: isize = -1;
 }
 
 /// A failed CoreText call: the `CFError` code and its description.
@@ -55,6 +59,48 @@ pub(crate) mod code {
 pub(crate) struct RegistrarError {
     pub(crate) code: isize,
     pub(crate) detail: String,
+}
+
+/// Asks again, one file at a time, about each path a batch registration
+/// failed without naming (`code::UNSETTLED`): the batch may have registered
+/// some of them. Registered now gives `Ok`; registered already stays
+/// `UNSETTLED`, so the activator keeps the ledger entry rather than forget a
+/// registration it may have made (rule 3).
+pub(crate) fn settle_registered<R: Registrar + ?Sized>(
+    registrar: &R,
+    paths: &[&Path],
+    mode: Mode,
+    results: Vec<Result<(), RegistrarError>>,
+) -> Vec<Result<(), RegistrarError>> {
+    paths
+        .iter()
+        .zip(results)
+        .map(|(path, result)| match result {
+            Err(e) if e.code == code::UNSETTLED => match registrar.register(path, mode) {
+                Err(again) if again.code == code::ALREADY_REGISTERED => Err(e),
+                other => other,
+            },
+            other => other,
+        })
+        .collect()
+}
+
+/// Asks again, one file at a time, about each path a batch unregistration
+/// failed without naming: `Ok` or `NOT_REGISTERED` both mean it is gone now.
+pub(crate) fn settle_unregistered<R: Registrar + ?Sized>(
+    registrar: &R,
+    paths: &[&Path],
+    mode: Mode,
+    results: Vec<Result<(), RegistrarError>>,
+) -> Vec<Result<(), RegistrarError>> {
+    paths
+        .iter()
+        .zip(results)
+        .map(|(path, result)| match result {
+            Err(e) if e.code == code::UNSETTLED => registrar.unregister(path, mode),
+            other => other,
+        })
+        .collect()
 }
 
 /// The OS font registration the activator drives: CoreText on macOS, a fake in tests.
@@ -195,6 +241,9 @@ impl FontActivator for MacosActivator {
             let path = &faces[i].path;
             statuses[i] = Some(match result {
                 Ok(()) => OutcomeStatus::Activated(registration(path, mode)),
+                // Maybe registered by this request: keep the entry, so
+                // `clear_session` and `deactivate` can still remove it.
+                Err(e) if e.code == code::UNSETTLED => OutcomeStatus::Failed(error_for(&e, path)),
                 Err(e) => {
                     ledger.remove(path);
                     dropped = true;
@@ -380,6 +429,7 @@ pub(crate) fn error_for(e: &RegistrarError, path: &Path) -> ActivationError {
         code::IN_USE | code::SYSTEM_REQUIRED => " (in use by the system)",
         code::EXCEEDED_RESOURCE_LIMIT => " (too many fonts registered)",
         code::REGISTRATION_FAILED => " (registration failed)",
+        code::UNSETTLED => " (it may be registered; the app keeps track of it)",
         _ => "",
     };
     ActivationError::new(
@@ -417,12 +467,14 @@ mod tests {
     use super::*;
     use crate::macos::ledger::LEDGER_FILE;
 
-    /// A CoreText stand-in: what is registered in which mode, and the error
-    /// the next register or unregister of a file returns.
+    /// A CoreText stand-in: what is registered in which mode, the error
+    /// the next register or unregister of a file returns, and the files the
+    /// next batch call fails without naming (and whether it did the work).
     #[derive(Debug, Default)]
     struct Fake {
         registered: Mutex<HashMap<PathBuf, Mode>>,
         fail: Mutex<HashMap<PathBuf, isize>>,
+        unnamed: Mutex<HashMap<PathBuf, bool>>,
         fonts: Vec<(String, PathBuf)>,
     }
 
@@ -437,6 +489,17 @@ mod tests {
 
         fn mode_of(&self, path: &Path) -> Option<Mode> {
             self.registered.lock().ok()?.get(path).copied()
+        }
+
+        fn take_unnamed(&self, path: &Path) -> Option<bool> {
+            self.unnamed.lock().ok()?.remove(path)
+        }
+    }
+
+    fn unnamed_error() -> RegistrarError {
+        RegistrarError {
+            code: code::UNSETTLED,
+            detail: "fake batch".to_owned(),
         }
     }
 
@@ -475,6 +538,40 @@ mod tests {
             }
             registered.remove(path);
             Ok(())
+        }
+
+        /// One batch call, as CoreText's: a file it fails without naming is
+        /// `UNSETTLED`, then settled one file at a time.
+        fn register_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+            let results = paths
+                .iter()
+                .map(|p| match self.take_unnamed(p) {
+                    Some(did) => {
+                        if did {
+                            let _ = self.register(p, mode);
+                        }
+                        Err(unnamed_error())
+                    }
+                    None => self.register(p, mode),
+                })
+                .collect();
+            settle_registered(self, paths, mode, results)
+        }
+
+        fn unregister_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
+            let results = paths
+                .iter()
+                .map(|p| match self.take_unnamed(p) {
+                    Some(did) => {
+                        if did {
+                            let _ = self.unregister(p, mode);
+                        }
+                        Err(unnamed_error())
+                    }
+                    None => self.unregister(p, mode),
+                })
+                .collect();
+            settle_unregistered(self, paths, mode, results)
         }
 
         fn fonts_named(&self, names: &HashSet<&str>) -> Result<Vec<(String, PathBuf)>, String> {
@@ -520,6 +617,14 @@ mod tests {
             let path = self.dir.join(file);
             let _ = fs::write(&path, b"not parsed by the activator");
             path
+        }
+
+        fn unnamed_next(&self, path: &Path, did_the_work: bool) {
+            self.fake
+                .unnamed
+                .lock()
+                .expect("fake lock")
+                .insert(path.to_owned(), did_the_work);
         }
 
         fn fail_next(&self, path: &Path, code: isize) {
@@ -714,6 +819,70 @@ mod tests {
         assert_eq!(s.activator().list_active(), Ok(vec![reg.clone()]));
         let off = s.activator().deactivate(&[reg]).expect("works");
         assert_eq!(off[0].status, OutcomeStatus::Deactivated);
+        assert_eq!(s.activator().list_active(), Ok(vec![]));
+    }
+
+    /// A batch error that names no file must not make the app forget a file
+    /// the batch registered (rule 3): the ledger keeps it and a restart
+    /// clears it; a file the batch did not register is registered alone.
+    #[test]
+    fn a_batch_error_naming_no_file_keeps_track_of_what_the_batch_registered() {
+        let s = Scratch::new();
+        let a = s.activator();
+        let done = s.font("Registered.ttf");
+        let not_done = s.font("NotRegistered.ttf");
+        let plain = s.font("Plain.ttf");
+        s.unnamed_next(&done, true);
+        s.unnamed_next(&not_done, false);
+        let out = a
+            .activate(
+                &[face(&done, "D"), face(&not_done, "N"), face(&plain, "P")],
+                Mode::Session,
+            )
+            .expect("works");
+        assert_eq!(failed_kind(&out[0]), ActivationErrorKind::Os);
+        assert_eq!(s.fake.mode_of(&done), Some(Mode::Session));
+        activated(&out[1]);
+        activated(&out[2]);
+        let mut active: Vec<PathBuf> = s
+            .activator()
+            .list_active()
+            .expect("works")
+            .into_iter()
+            .map(|r| r.path)
+            .collect();
+        active.sort();
+        let mut want = vec![done.clone(), not_done, plain];
+        want.sort();
+        assert_eq!(active, want);
+
+        let cleared = s.activator().clear_session().expect("works");
+        assert!(
+            cleared
+                .iter()
+                .all(|o| o.status == OutcomeStatus::Deactivated),
+            "{cleared:?}"
+        );
+        assert!(s.fake.registered.lock().expect("fake lock").is_empty());
+        assert_eq!(s.activator().list_active(), Ok(vec![]));
+    }
+
+    #[test]
+    fn a_batch_unregistration_naming_no_file_is_settled_per_file() {
+        let s = Scratch::new();
+        let a = s.activator();
+        let done = s.font("Done.ttf");
+        let not_done = s.font("NotDone.ttf");
+        let out = a
+            .activate(&[face(&done, "D"), face(&not_done, "N")], Mode::Permanent)
+            .expect("works");
+        let regs = vec![activated(&out[0]), activated(&out[1])];
+        s.unnamed_next(&done, true);
+        s.unnamed_next(&not_done, false);
+        let off = a.deactivate(&regs).expect("works");
+        assert_eq!(off[0].status, OutcomeStatus::NotActive);
+        assert_eq!(off[1].status, OutcomeStatus::Deactivated);
+        assert!(s.fake.registered.lock().expect("fake lock").is_empty());
         assert_eq!(s.activator().list_active(), Ok(vec![]));
     }
 

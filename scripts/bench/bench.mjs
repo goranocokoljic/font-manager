@@ -33,7 +33,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  COMMENT_MARKER, SCHEMA, blocking, failures, firstScan, gate, median, merge, metric, nightlyRunsArgs, osName,
+  COMMENT_MARKER, SCHEMA, activation100, blocking, failures, firstScan, gate, median, merge, metric, nightlyRunsArgs, osName,
   parseCli, parseRss, reason, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 
@@ -143,7 +143,7 @@ async function run(opts) {
         first_scan: firstScan(scan.ms, scan.files),
         incremental_update: metric('incremental_update', inc.ms),
         search: metric('search', search.p95_ms),
-        activation_100: metric('activation_100', activation.ms),
+        activation_100: activation100(activation),
         idle_memory: metric('idle_memory', idle),
         preview_cache_hit: previewCache.samples
           ? metric('preview_cache_hit', previewCache.p95_ms)

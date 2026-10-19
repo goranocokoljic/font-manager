@@ -8,7 +8,7 @@ use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use super::activator::{Registrar, RegistrarError};
+use super::activator::{Registrar, RegistrarError, code, settle_registered, settle_unregistered};
 use crate::activator::Mode;
 
 type CFTypeRef = *const c_void;
@@ -244,7 +244,9 @@ type BatchCall = unsafe extern "C" fn(CFTypeRef, CTFontManagerScope, *mut CFType
 /// One CoreText call for every file of `paths`; one result per path. Each
 /// error CoreText reports names the URLs it is about
 /// (`kCTFontManagerErrorFontURLsKey`); an error that names none is given to
-/// every path not yet failed, so a failure is never reported as a success.
+/// every path not yet failed as `code::UNSETTLED`, so a failure is never
+/// reported as a success and the caller asks again per file
+/// (`settle_registered`, `settle_unregistered`).
 fn batch_call(
     call: BatchCall,
     what: &str,
@@ -292,7 +294,7 @@ fn batch_call(
             if !ok {
                 for (i, _) in &urls {
                     results[*i] = Err(RegistrarError {
-                        code: 0,
+                        code: code::UNSETTLED,
                         detail: format!("{what} failed without an error"),
                     });
                 }
@@ -325,9 +327,13 @@ fn batch_call(
                 }
             }
             if !hit {
+                let unsettled = RegistrarError {
+                    code: code::UNSETTLED,
+                    detail: format!("{} (CoreText error {code} names no file)", failure.detail),
+                };
                 for (i, _) in &urls {
                     if results[*i].is_ok() {
-                        results[*i] = Err(failure.clone());
+                        results[*i] = Err(unsettled.clone());
                     }
                 }
             }
@@ -393,7 +399,7 @@ impl Registrar for CoreText {
         let workers = std::thread::available_parallelism().map_or(1, usize::from);
         let parts = chunk_sizes(paths.len(), workers);
         if parts.len() < 2 {
-            return register_urls(paths, mode);
+            return settle_registered(self, paths, mode, register_urls(paths, mode));
         }
         let mut slices = Vec::with_capacity(parts.len());
         let mut rest = paths;
@@ -402,7 +408,7 @@ impl Registrar for CoreText {
             slices.push(part);
             rest = tail;
         }
-        std::thread::scope(|s| {
+        let results = std::thread::scope(|s| {
             let handles: Vec<_> = slices
                 .iter()
                 .map(|part| (part.len(), s.spawn(move || register_urls(part, mode))))
@@ -413,7 +419,7 @@ impl Registrar for CoreText {
                     handle.join().unwrap_or_else(|_| {
                         vec![
                             Err(RegistrarError {
-                                code: 0,
+                                code: code::UNSETTLED,
                                 detail: "CTFontManagerRegisterFontsForURLs: worker panicked"
                                     .to_owned(),
                             });
@@ -422,16 +428,18 @@ impl Registrar for CoreText {
                     })
                 })
                 .collect()
-        })
+        });
+        settle_registered(self, paths, mode, results)
     }
 
     fn unregister_all(&self, paths: &[&Path], mode: Mode) -> Vec<Result<(), RegistrarError>> {
-        batch_call(
+        let results = batch_call(
             CTFontManagerUnregisterFontsForURLs,
             "CTFontManagerUnregisterFontsForURLs",
             paths,
             mode,
-        )
+        );
+        settle_unregistered(self, paths, mode, results)
     }
 
     fn fonts_named(&self, names: &HashSet<&str>) -> Result<Vec<(String, PathBuf)>, String> {
