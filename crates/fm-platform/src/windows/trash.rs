@@ -1,17 +1,17 @@
 //! The Recycle Bin.
 //!
-//! `SHFileOperationW` with the undo flag moves a file to the Recycle Bin of
+//! `IFileOperation` ([`super::file_op`]) moves a file to the Recycle Bin of
 //! its drive: `<drive>\$Recycle.Bin\<user SID>\$R<id>.<ext>`, next to a
-//! `$I<id>.<ext>` record of the old path and the time. The call does not say
-//! where the file went, so the record is found afterwards: the newest `$I`
-//! file in the user's folder that names the old path. The record holds the
-//! long form of the path, so a path with 8.3 short names (`RUNNER~1`) is
-//! looked up by its long form too.
+//! `$I<id>.<ext>` record of the old path and the time. The shell says where
+//! the `$R` file went; when it does not, the record is found afterwards: the
+//! newest `$I` file in the user's folder that names the old path. The record
+//! holds the long form of the path, so a path with 8.3 short names
+//! (`RUNNER~1`) is looked up by its long form too.
 //!
-//! Only fixed drives have a Recycle Bin. On any other drive Windows would
-//! delete the file for good, so such a file is refused before anything
-//! moves. On a fixed drive a file larger than the bin would be deleted for
-//! good too; `FOF_WANTNUKEWARNING` makes Windows ask the user first.
+//! Never a permanent delete: only fixed drives have a Recycle Bin, so a file
+//! on any other drive is refused before anything moves ([`require_fixed`]);
+//! on a fixed drive whose bin cannot take the file (turned off, too small),
+//! the delete is aborted before it happens ([`super::file_op::may_delete`]).
 
 use std::ffi::OsString;
 use std::fs;
@@ -24,12 +24,9 @@ use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
 use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetLongPathNameW, GetVolumePathNameW};
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-use windows::Win32::UI::Shell::{
-    FO_DELETE, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FOF_WANTNUKEWARNING,
-    SHFILEOPSTRUCTW, SHFileOperationW,
-};
 use windows::core::{PCWSTR, PWSTR};
 
+use super::file_op;
 use crate::trash::{Trash, TrashError, TrashErrorKind, Trashed};
 
 /// `DRIVE_FIXED` from `GetDriveTypeW`: a hard disk or SSD.
@@ -49,18 +46,13 @@ impl Trash for RecycleBin {
         let root_wide = nul_terminated(root.as_os_str().encode_wide());
         // SAFETY: `root_wide` is NUL-terminated and outlives the call.
         let drive = unsafe { GetDriveTypeW(PCWSTR(root_wide.as_ptr())) };
-        if drive != DRIVE_FIXED {
-            return Err(TrashError::new(
-                TrashErrorKind::NoTrash,
-                format!("{} is not a fixed drive (type {drive})", root.display()),
-            ));
-        }
+        require_fixed(drive, &root)?;
         let bin = root
             .join("$Recycle.Bin")
             .join(user_sid().map_err(|e| TrashError::io(&e, &path))?);
         // Read before the move: the long form exists only while the file does.
         let long = long_path(&path);
-        recycle(&path)?;
+        let recycled = file_op::recycle(&path)?;
         if fs::symlink_metadata(&path).is_ok() {
             return Err(TrashError::new(
                 TrashErrorKind::Failed,
@@ -70,7 +62,10 @@ impl Trash for RecycleBin {
         let names: Vec<&Path> = std::iter::once(path.as_path())
             .chain(long.as_deref())
             .collect();
-        let (location, info) = find_record(&bin, &names).ok_or_else(|| {
+        let found = recycled
+            .and_then(|r| record_of(&r).map(|i| (r, i)))
+            .or_else(|| find_record(&bin, &names));
+        let (location, info) = found.ok_or_else(|| {
             TrashError::new(
                 TrashErrorKind::Failed,
                 format!(
@@ -144,39 +139,30 @@ fn volume_root(path: &Path) -> io::Result<PathBuf> {
     Ok(PathBuf::from(OsString::from_wide(&buf[..len])))
 }
 
-/// Moves `path` to the Recycle Bin, without any dialog but the warning that
-/// a file is too large for the bin.
-fn recycle(path: &Path) -> Result<(), TrashError> {
-    // `pFrom` is a list of NUL-terminated paths ended by another NUL.
-    let from = nul_terminated(nul_terminated(path.as_os_str().encode_wide()).into_iter());
-    let flags =
-        FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI | FOF_WANTNUKEWARNING;
-    let mut op = SHFILEOPSTRUCTW {
-        wFunc: FO_DELETE,
-        pFrom: PCWSTR(from.as_ptr()),
-        // The flags are documented as a 16-bit field; every one used fits.
-        fFlags: u16::try_from(flags.0).unwrap_or(u16::MAX),
-        ..Default::default()
-    };
-    // SAFETY: `op` is fully initialized; `from` is double-NUL-terminated and
-    // outlives the call; no window, no name mappings are requested.
-    let code = unsafe { SHFileOperationW(&mut op) };
-    if code != 0 {
-        return Err(TrashError::new(
-            TrashErrorKind::Failed,
+/// Refuses a drive that is not fixed: removable, network, optical and RAM
+/// drives have no Recycle Bin, and Windows deletes there for good.
+fn require_fixed(drive_type: u32, root: &Path) -> Result<(), TrashError> {
+    if drive_type == DRIVE_FIXED {
+        Ok(())
+    } else {
+        Err(TrashError::new(
+            TrashErrorKind::NoTrash,
             format!(
-                "SHFileOperationW failed with {code:#x} for {}",
-                path.display()
+                "{} is not a fixed drive (type {drive_type})",
+                root.display()
             ),
-        ));
+        ))
     }
-    if op.fAnyOperationsAborted.as_bool() {
-        return Err(TrashError::new(
-            TrashErrorKind::Denied,
-            format!("the move of {} was cancelled", path.display()),
-        ));
-    }
-    Ok(())
+}
+
+/// The `$I` record next to a `$R` file in the bin, when it is there.
+fn record_of(recycled: &Path) -> Option<PathBuf> {
+    let name: Vec<u16> = recycled.file_name()?.encode_wide().collect();
+    let rest = name.strip_prefix(&[u16::from(b'$'), u16::from(b'R')])?;
+    let mut info = vec![u16::from(b'$'), u16::from(b'I')];
+    info.extend_from_slice(rest);
+    let info = recycled.with_file_name(OsString::from_wide(&info));
+    info.exists().then_some(info)
 }
 
 /// The string SID of the user running the app (`S-1-5-21-…`), the name of
@@ -312,6 +298,32 @@ mod tests {
             out.extend_from_slice(&u.to_le_bytes());
         }
         out
+    }
+
+    #[test]
+    fn only_fixed_drives_are_used() {
+        let root = Path::new(r"E:\");
+        assert_eq!(require_fixed(DRIVE_FIXED, root), Ok(()));
+        // Unknown, no root, removable, network, CD-ROM, RAM disk.
+        for drive in [0, 1, 2, 4, 5, 6] {
+            let err = require_fixed(drive, root).expect_err("no Recycle Bin");
+            assert_eq!(err.kind, TrashErrorKind::NoTrash, "drive type {drive}");
+        }
+    }
+
+    #[test]
+    fn the_record_of_a_recycled_file_is_its_dollar_i_twin() {
+        let bin = std::env::temp_dir().join(format!("fm-platform-twin-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&bin);
+        fs::create_dir_all(&bin).expect("bin");
+        fs::write(bin.join("$IABC.ttf"), b"record").expect("record");
+        let found = record_of(&bin.join("$RABC.ttf"));
+        let missing = record_of(&bin.join("$RXYZ.ttf"));
+        let not_recycled = record_of(&bin.join("ABC.ttf"));
+        let _ = fs::remove_dir_all(&bin);
+        assert_eq!(found, Some(bin.join("$IABC.ttf")));
+        assert_eq!(missing, None);
+        assert_eq!(not_recycled, None);
     }
 
     #[test]

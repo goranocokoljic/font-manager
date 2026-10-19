@@ -129,9 +129,10 @@ impl DuplicateResolver {
             if m.row.status != TrashMoveStatus::Planned {
                 continue;
             }
+            // Nothing in this loop returns early: a copy that moved must
+            // reach the log below, or be put back.
             match self.trash.trash(&m.path) {
                 Ok(item) => {
-                    index.set_file_gone(&m.path, true)?;
                     if let Some(file) = files.get(&m.row.path) {
                         removed.extend(&file.faces);
                     }
@@ -155,8 +156,15 @@ impl DuplicateResolver {
             .iter()
             .any(|m| m.row.status == TrashMoveStatus::Trashed);
         let (id, at) = if moved {
-            let (id, at) = index.insert_resolution(&req.keep, &moves)?;
-            (Some(id), at)
+            match index.insert_resolution(&req.keep, &moves) {
+                Ok((id, at)) => (Some(id), at),
+                Err(e) => {
+                    // Without the log there is no undo: put every moved
+                    // copy back before the error is reported.
+                    self.put_back(&moves);
+                    return Err(e.into());
+                }
+            }
         } else {
             (None, index.now()?)
         };
@@ -177,6 +185,30 @@ impl DuplicateResolver {
             undone: false,
             moves: moves.into_iter().map(|m| m.row).collect(),
         })
+    }
+
+    /// Moves every `Trashed` copy of `moves` back from the trash, after the
+    /// log of their move could not be written. A copy that cannot come back
+    /// is logged with where it is, so it can be found by hand.
+    fn put_back(&self, moves: &[StoredMove]) {
+        for m in moves {
+            let Some((location, info)) = m.trashed.clone() else {
+                continue;
+            };
+            let item = Trashed {
+                original: m.path.clone(),
+                location,
+                info,
+            };
+            if let Err(e) = self.trash.restore(&item) {
+                tracing::error!(
+                    path = %m.path.display(),
+                    location = %item.location.display(),
+                    error = %e,
+                    "a copy moved to the trash could not be logged or put back"
+                );
+            }
+        }
     }
 
     /// [`fm_api::LibraryService::list_resolutions`].
@@ -207,11 +239,6 @@ impl DuplicateResolver {
             };
             match self.trash.restore(&item) {
                 Ok(()) => {
-                    index.set_file_gone(&m.path, false)?;
-                    let shown = m.row.path.as_str();
-                    if let Some(file) = index.copy_files(&[shown])?.get(shown) {
-                        added.extend(&file.faces);
-                    }
                     m.row.status = TrashMoveStatus::Restored;
                     m.row.message = None;
                 }
@@ -226,6 +253,17 @@ impl DuplicateResolver {
             .iter()
             .any(|m| m.trashed.is_some() && m.row.status != TrashMoveStatus::Restored);
         index.update_resolution(id, &moves, undone)?;
+        // The restored files are in the library again: their faces are
+        // sent as added. Only the event depends on this read.
+        let back: Vec<&str> = moves
+            .iter()
+            .filter(|m| m.row.status == TrashMoveStatus::Restored && m.trashed.is_some())
+            .map(|m| m.row.path.as_str())
+            .collect();
+        match index.copy_files(&back) {
+            Ok(files) => added.extend(files.values().flat_map(|f| f.faces.iter().copied())),
+            Err(e) => tracing::warn!(error = %e, "reading the restored faces failed"),
+        }
         drop(index);
         if !added.is_empty() {
             (self.emit)(Event::LibraryChanged {

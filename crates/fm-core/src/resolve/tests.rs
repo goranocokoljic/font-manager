@@ -468,3 +468,49 @@ fn a_copy_with_a_non_utf8_name_moves_and_comes_back() {
         .expect("undo");
     assert_eq!(fs::read(&odd).expect("back by its exact path"), CONTENT);
 }
+
+/// A trash that moves like [`MockTrash`] and then breaks the index's log
+/// table, as a full disk or a damaged file would: the log of the moves
+/// cannot be written after the files have moved.
+#[derive(Debug)]
+struct BreaksTheLog {
+    inner: Arc<MockTrash>,
+    db: PathBuf,
+}
+
+impl Trash for BreaksTheLog {
+    fn trash(&self, path: &Path) -> Result<fm_platform::Trashed, fm_platform::TrashError> {
+        let item = self.inner.trash(path)?;
+        let conn = rusqlite::Connection::open(&self.db).expect("open the index");
+        conn.execute_batch("DROP TABLE IF EXISTS resolution_move")
+            .expect("break the log");
+        Ok(item)
+    }
+}
+
+#[test]
+fn moved_copies_come_back_when_their_undo_record_cannot_be_written() {
+    let fx = Fixture::new("nolog");
+    let before = fx.groups();
+    let trash: Arc<dyn Trash> = Arc::new(BreaksTheLog {
+        inner: Arc::clone(&fx.trash),
+        db: fx.dir.path().join(INDEX_FILE),
+    });
+    let sink = Arc::clone(&fx.events);
+    let resolver = DuplicateResolver::new(Arc::clone(&fx.index), trash, move |e| {
+        sink.lock().expect("events").push(e);
+    });
+
+    let err = resolver
+        .keep_copy(fx.request("a.ttf", &["b.ttf", "c.ttf"], false))
+        .expect_err("the log cannot be written");
+
+    assert_eq!(err.code, ErrorCode::Io);
+    // Never a move without an undo: both copies are back in place.
+    assert_eq!(fs::read(fx.path("b.ttf")).expect("b back"), CONTENT);
+    assert_eq!(fs::read(fx.path("c.ttf")).expect("c back"), CONTENT);
+    assert_eq!(fx.in_trash(), 0);
+    // The index still shows them; nothing was announced as removed.
+    assert_eq!(fx.groups(), before);
+    assert!(fx.events().is_empty());
+}

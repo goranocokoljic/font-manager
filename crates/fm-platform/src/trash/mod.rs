@@ -6,7 +6,7 @@
 //!
 //! | OS | Trash | Where a file goes |
 //! |----|-------|-------------------|
-//! | Windows | Recycle Bin (`SHFileOperationW`, undo flag) | `<drive>\$Recycle.Bin\<SID>\$R…`, with its `$I…` record |
+//! | Windows | Recycle Bin (`IFileOperation`, recycle only) | `<drive>\$Recycle.Bin\<SID>\$R…`, with its `$I…` record |
 //! | macOS | `NSFileManager trashItemAtURL` | `~/.Trash` or the volume's `.Trashes/<uid>` |
 //! | Linux | freedesktop.org Trash specification | `$XDG_DATA_HOME/Trash/files` or the volume's `.Trash-<uid>/files`, with a `.trashinfo` |
 //!
@@ -15,8 +15,9 @@
 //! when a file is at the old path again (never overwritten) or when the
 //! file is no longer in the trash (the user emptied it).
 //!
-//! Windows deletes a file for good when its drive has no Recycle Bin; such
-//! drives (removable, network) are refused before anything moves.
+//! Windows deletes a file for good when the Recycle Bin cannot take it (no
+//! bin on the drive, the bin turned off or too small); such a file is
+//! refused before anything moves.
 
 mod mock;
 

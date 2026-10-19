@@ -91,18 +91,6 @@ impl Index {
         Ok(out)
     }
 
-    /// Sets or clears the gone flag of the file at `path`: a copy in the
-    /// trash is gone, its faces, tags and ids kept (ADR 0004).
-    pub(crate) fn set_file_gone(&self, path: &std::path::Path, gone: bool) -> FmResult<()> {
-        self.conn
-            .execute(
-                "UPDATE font_file SET gone = ?2 WHERE path = ?1",
-                params![path_to_sql(path), gone],
-            )
-            .map_err(|e| db_error(&e))?;
-        Ok(())
-    }
-
     /// Now, as an RFC 3339 UTC timestamp.
     pub(crate) fn now(&self) -> FmResult<String> {
         self.conn
@@ -112,7 +100,10 @@ impl Index {
             .map_err(|e| db_error(&e))
     }
 
-    /// Records an action and its copies; returns its id and time.
+    /// Records an action and its copies, and marks every `Trashed` copy's
+    /// file gone (its faces, tags and ids kept, ADR 0004), in one
+    /// transaction: either all of it is written or none. Returns its id and
+    /// time.
     pub(crate) fn insert_resolution(
         &mut self,
         kept: &str,
@@ -144,6 +135,9 @@ impl Index {
                 ],
             )
             .map_err(|e| db_error(&e))?;
+            if m.row.status == TrashMoveStatus::Trashed {
+                set_gone(&tx, &m.path, true)?;
+            }
         }
         tx.commit().map_err(|e| db_error(&e))?;
         let id = u32::try_from(id)
@@ -152,7 +146,8 @@ impl Index {
     }
 
     /// Writes the status and message of the copies of `id` after an undo,
-    /// and whether every moved copy is back.
+    /// whether every moved copy is back, and clears the gone flag of every
+    /// `Restored` copy, in one transaction.
     pub(crate) fn update_resolution(
         &mut self,
         id: ResolutionId,
@@ -172,6 +167,9 @@ impl Index {
                 ],
             )
             .map_err(|e| db_error(&e))?;
+            if m.row.status == TrashMoveStatus::Restored {
+                set_gone(&tx, &m.path, false)?;
+            }
         }
         tx.execute(
             "UPDATE resolution SET undone = ?2 WHERE id = ?1",
@@ -263,6 +261,16 @@ impl Index {
         }
         Ok(out)
     }
+}
+
+/// Sets or clears the gone flag of the file at `path`.
+fn set_gone(conn: &rusqlite::Connection, path: &std::path::Path, gone: bool) -> FmResult<()> {
+    conn.execute(
+        "UPDATE font_file SET gone = ?2 WHERE path = ?1",
+        params![path_to_sql(path), gone],
+    )
+    .map_err(|e| db_error(&e))?;
+    Ok(())
 }
 
 fn trashed_to_sql(trashed: Option<&(PathBuf, Option<PathBuf>)>) -> (Value, Value) {

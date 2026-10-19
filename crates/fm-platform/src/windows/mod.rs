@@ -7,6 +7,9 @@ mod activator;
 #[cfg(windows)]
 #[allow(unsafe_code)] // DirectWrite COM calls; every block has a SAFETY note.
 mod dwrite;
+#[cfg(windows)]
+#[allow(unsafe_code)] // IFileOperation and a hand-written COM sink; every block has a SAFETY note.
+mod file_op;
 pub(crate) mod paths;
 #[cfg(windows)]
 #[allow(unsafe_code)] // Win32 registry FFI; every block has a SAFETY note.

@@ -16,7 +16,7 @@ written in `fm-platform` with the crates it already has.
 
 | OS | Trash | How | Where the file goes |
 |----|-------|-----|---------------------|
-| Windows | Recycle Bin | `SHFileOperationW`, `FOF_ALLOWUNDO` (`windows` crate) | `<drive>\$Recycle.Bin\<SID>\$R…`; found by its `$I…` record |
+| Windows | Recycle Bin | `IFileOperation` with `FOFX_RECYCLEONDELETE` and a progress sink (`windows` crate) | `<drive>\$Recycle.Bin\<SID>\$R…`, as the sink reports it, with its `$I…` record |
 | macOS | Finder trash | `NSFileManager trashItemAtURL:resultingItemURL:error:` (Objective-C runtime FFI) | the URL the call returns |
 | Linux | freedesktop.org Trash spec 1.0 | rename + `.trashinfo` (std only) | `$XDG_DATA_HOME/Trash/files`, or `$topdir/.Trash/$uid` / `$topdir/.Trash-$uid` on another volume |
 
@@ -25,9 +25,16 @@ Restore is the same everywhere: rename the file back, then remove the OS record
 
 ## Consequences
 
-- Never a permanent delete. Windows deletes for good on a drive without a Recycle Bin,
-  so only fixed drives are used; a file elsewhere is refused (`NoTrash`) and stays.
-  A file too large for the bin makes Windows ask the user (`FOF_WANTNUKEWARNING`).
+- Never a permanent delete. Windows deletes for good when the bin cannot take a file
+  (no bin on the drive, the bin turned off, the file larger than the bin, a `subst`
+  drive). Only fixed drives are used, and the progress sink's `PreDeleteItem` aborts
+  every delete that is not `TSF_DELETE_RECYCLE_IF_POSSIBLE`. Either way the file is
+  refused (`NoTrash`), stays where it is, and no prompt is shown. The sink is a COM
+  object written by hand: the `#[implement]` macro needs `windows-core` as a direct
+  dependency, which the library table does not list.
+- The core writes the undo log in one transaction after the moves; when that write
+  fails, the moved files are put back before the error is reported, so no file is
+  ever in the trash without an undo.
 - Restore never overwrites: a file at the old path again makes it fail (`Occupied`);
   the user moves that file and retries. A trash the user emptied cannot be undone.
 - The Linux `DeletionDate` is written in UTC (no time-zone crate is in the library
