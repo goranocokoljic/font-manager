@@ -25,7 +25,9 @@ use fm_api::{
 };
 use fm_core::SettingsStore;
 use tauri::http::{Response, StatusCode, header};
-use tauri::{Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+
+pub mod help;
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
@@ -354,6 +356,12 @@ async fn get_app_folders(state: State<'_, AppState>) -> ApiResult<AppFolders> {
     call_settings(&state, |s| s.app_folders()).await
 }
 
+/// Opens a page of the user docs in the help window (the palette's Help actions).
+#[tauri::command]
+async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()> {
+    help::open(&app, &page)
+}
+
 /// Registers the shared state and every command on a builder.
 pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri::Builder<R> {
     setup_state(builder, AppState::new(api))
@@ -415,7 +423,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             scan,
             get_settings,
             update_settings,
-            get_app_folders
+            get_app_folders,
+            open_help
         ])
 }
 
@@ -436,7 +445,10 @@ pub fn run() {
     if let Some(startup) = &startup {
         state = state.with_settings(Arc::new(SettingsStore::new(&startup.paths)));
     }
-    let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .menu(help::menu)
+        .on_menu_event(help::on_menu_event);
     if let Err(e) = setup_state(builder, state).run(tauri::generate_context!()) {
         tracing::error!(error = %e, "font manager failed to start");
         eprintln!("font manager failed to start: {e}");

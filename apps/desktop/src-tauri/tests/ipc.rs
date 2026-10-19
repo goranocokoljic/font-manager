@@ -539,3 +539,60 @@ fn scan_progress_is_forwarded_to_the_webview() {
     assert!(matches!(next(), Event::ScanProgress { job: j, .. } if j == job));
     assert!(matches!(next(), Event::ScanFinished { job: j, .. } if j == job));
 }
+
+#[test]
+fn open_help_opens_the_page_in_the_help_window() {
+    use tauri::Manager;
+    let (app, webview) = app().unwrap();
+    send(
+        &webview,
+        "open_help",
+        serde_json::json!({ "page": "sources" }),
+    )
+    .unwrap()
+    .unwrap();
+    let help = app
+        .get_webview_window(fm_app_lib::help::HELP_WINDOW)
+        .expect("the help window is open");
+    assert!(
+        help.url().unwrap().path().ends_with("/help/sources.html"),
+        "{}",
+        help.url().unwrap()
+    );
+
+    // A second page reuses the window instead of opening another one.
+    send(
+        &webview,
+        "open_help",
+        serde_json::json!({ "page": "activation" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(app.webview_windows().len(), 2);
+    assert!(
+        help.url()
+            .unwrap()
+            .path()
+            .ends_with("/help/activation.html"),
+        "{}",
+        help.url().unwrap()
+    );
+}
+
+#[test]
+fn open_help_of_an_unknown_page_is_an_api_error_and_opens_nothing() {
+    use tauri::Manager;
+    let (app, webview) = app().unwrap();
+    let err = send(
+        &webview,
+        "open_help",
+        serde_json::json!({ "page": "../secrets" }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "notFound", "{err}");
+    assert!(
+        app.get_webview_window(fm_app_lib::help::HELP_WINDOW)
+            .is_none()
+    );
+}
