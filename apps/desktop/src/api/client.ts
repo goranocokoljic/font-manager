@@ -103,6 +103,8 @@ export interface FmClient {
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
   /** The native folder picker; `null` when the user cancels. */
   pickFolder(title: string): Promise<string | null>;
+  /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
+  openHelp(page: string): Promise<void>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
@@ -141,6 +143,7 @@ export const tauriClient: FmClient = {
     const path = await open({ directory: true, multiple: false, title });
     return typeof path === 'string' ? path : null;
   },
+  openHelp: (page) => invoke<void>('open_help', { page }),
 };
 
 let current: FmClient | undefined;

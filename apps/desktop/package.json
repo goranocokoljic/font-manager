@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "dev": "pnpm docs:build && vite",
+    "docs:build": "node ../../scripts/docs/build-site.mjs",
+    "build": "pnpm docs:build && vue-tsc --noEmit && vite build",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",

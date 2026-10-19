@@ -1,0 +1,18 @@
+{
+  "id": "when-a-fake-stands-in-for-the-os-layer-test-the-mode-to-os-p",
+  "title": "When a fake stands in for the OS layer, test the mode-to-OS-parameter mapping on its own",
+  "category": "testing",
+  "rule": "If an activator or service is unit-tested through a fake of the OS layer (a Registrar, a FontActivator mock), the code that turns the app's own enum into the OS value (Mode -> CoreText scope, Mode -> registry key, flag -> API constant) sits below the fake and no fake-based test sees it. Give that mapping its own test against the literal OS values, and make the integration test prove the OS state of each mode (for example: unregister from the other scope and expect 'not registered'), not only that a second process sees the font, which every mode passes.",
+  "rationale": "E6.4 (#77): swapping kCTFontManagerScopeUser and kCTFontManagerScopeSession left every test green — the fake recorded Mode, never called scope(), and the integration tests registered and unregistered through the same scope(mode).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    77
+  ],
+  "file_globs": [
+    "crates/fm-platform/**"
+  ],
+  "first_seen": "2026-10-18T23:28:17.821Z",
+  "last_seen": "2026-10-18T23:28:17.821Z"
+}

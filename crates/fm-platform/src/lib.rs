@@ -17,4 +17,10 @@ pub use activator::{
     ActivationError, ActivationErrorKind, Conflict, ConflictKind, FaceFile, FontActivator,
     MockActivator, Mode, Outcome, OutcomeStatus, Registration,
 };
+#[cfg(target_os = "linux")]
+pub use linux::LinuxActivator;
+#[cfg(target_os = "macos")]
+pub use macos::{LEDGER_FILE, MacosActivator};
 pub use paths::{AppPaths, Os, PathError};
+#[cfg(windows)]
+pub use windows::{FONTS_KEY, LEDGER_KEY, WindowsActivator};
