@@ -58,6 +58,7 @@ Tests: `node --test "scripts/harness/**/*.test.mjs"` (part of `pnpm test`).
 | `-Issues` | all | restrict the lane to these issue numbers |
 | `-MaxStories` | 0 | stop after N stories (0 = until nothing is ready) |
 | `-Model` | opus | `sonnet`, `opus`, `fable` |
+| `-Budget` | off | stop a story that goes over its size budget (also `"budget_enforced": true`); off, the spend is only shown and logged |
 | `-ReviewCycles` | config (3) | cycle 1 full review, cycles 2+ verify the fix |
 | `-MaxResumes` | 2 | resumes of one stage after a crash / missing sentinel |
 | `-NoWorktree` | off | run in this checkout instead of the lane worktree |
@@ -164,8 +165,8 @@ story instead.
 CI red 3 times; a `must` finding open after 2 fix rounds; a change to an existing
 `fm-api` type outside E1/E25; a dependency not in the spec's library table or
 rejected by cargo-deny; contradictory or unverifiable criteria; a conflict with
-an ADR; the story over budget (S = 1×, M = 2.5×, L = 5× `budget_base_usd`) before an
-agent stage (waiting for CI and the merge gate go on).
+an ADR; with `-Budget` only: the story over budget (S = 1×, M = 2.5×, L = 5×
+`budget_base_usd`) before an agent stage (waiting for CI and the merge gate go on).
 To retry: fix the cause, remove `harness:blocked`, run the lane again.
 
 ## The review — why it is different from tr-harness
