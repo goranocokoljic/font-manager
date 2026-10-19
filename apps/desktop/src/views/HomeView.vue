@@ -12,6 +12,7 @@ import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
+import ProblemsSidebar from '../components/ProblemsSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
@@ -24,6 +25,7 @@ import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import { useProblemsStore } from '../stores/problems';
 import { useSearchStore } from '../stores/search';
 import type { FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
@@ -35,6 +37,7 @@ const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
 const activation = useActivationStore();
+const problems = useProblemsStore();
 const preview = usePreviewStore();
 const fontList = useFontListStore();
 const views = useViewsStore();
@@ -62,11 +65,13 @@ onMounted(() => {
   void app.load();
   void library.load();
   void activation.load();
+  void problems.load();
   void search.loadLanguages();
 });
 onBeforeUnmount(() => {
   void library.stop();
   void activation.stop();
+  void problems.stop();
 });
 
 useActions([
@@ -117,7 +122,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online catalogs'];
+const groups = ['Smart collections', 'Project sets', 'Tags', 'Online catalogs'];
 </script>
 
 <template>
@@ -125,6 +130,7 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online
     <template #sidebar>
       <SourcesSidebar />
       <CollectionsSidebar />
+      <ProblemsSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>
@@ -219,6 +225,9 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online
         Settings <kbd>{{ formatChord(settingsChord) }}</kbd>
       </RouterLink>
       <RouterLink :to="{ name: 'conflicts' }" class="hint">Conflicts</RouterLink>
+      <RouterLink :to="{ name: 'problems' }" class="hint" data-testid="problem-count">
+        {{ problems.total === 1 ? '1 problem' : `${problems.total} problems` }}
+      </RouterLink>
       <p class="active-count" data-testid="active-count" role="status">
         {{ activation.count === 1 ? '1 font active' : `${activation.count} fonts active` }}
       </p>

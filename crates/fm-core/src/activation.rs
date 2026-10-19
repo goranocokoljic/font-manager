@@ -25,6 +25,7 @@ use fm_api::activation::{
 };
 use fm_api::common::FontFormat;
 use fm_api::event::Event;
+use fm_api::library::Problem;
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
 use fm_platform::{
     ActivationError, ActivationErrorKind, FaceFile, FontActivator, Outcome, OutcomeStatus as Os,
@@ -444,6 +445,42 @@ impl ActivationManager {
         let files: Vec<FaceFile> = rows.iter().map(face_file).collect();
         let found = self.activator.conflicts(&files).map_err(platform_error)?;
         Ok((rows, clash_map(&found, &active)))
+    }
+
+    /// The Problems entries of the activation conflicts (E8.2): one per row
+    /// of [`ActivationService::list_conflicts`], with the files of the faces
+    /// involved. Changes nothing.
+    pub fn problems(&self) -> ApiResult<Vec<Problem>> {
+        let clashes = self.list_conflicts()?;
+        if clashes.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut ids: Vec<FaceId> = Vec::new();
+        for c in &clashes {
+            ids.push(c.face);
+            if let ConflictWith::Active { face } = c.with {
+                ids.push(face);
+            }
+        }
+        ids.sort();
+        ids.dedup();
+        let paths: HashMap<FaceId, String> = self
+            .lock()
+            .activation_faces(&ids)?
+            .into_iter()
+            .map(|row| (row.id, row.path.display().to_string()))
+            .collect();
+        let path = |face: FaceId| paths.get(&face).cloned();
+        Ok(clashes
+            .iter()
+            .map(|c| {
+                let other = match c.with {
+                    ConflictWith::Active { face } => path(face),
+                    ConflictWith::System { .. } => None,
+                };
+                c.problem(path(c.face).unwrap_or_default(), other)
+            })
+            .collect())
     }
 
     fn send(&self, activated: Vec<FaceId>, deactivated: Vec<FaceId>) {

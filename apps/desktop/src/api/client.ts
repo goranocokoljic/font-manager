@@ -31,6 +31,7 @@ import type {
   Paged,
   PreviewImage,
   PreviewRequest,
+  Problem,
   RenameCollectionRequest,
   SampleText,
   SampleTextRequest,
@@ -105,6 +106,8 @@ export interface FmClient {
   conflicts(target: Target): Promise<Conflict[]>;
   /** Every clash of an active face, with its winner (the Conflicts view). */
   listConflicts(): Promise<Clash[]>;
+  /** Duplicates, broken and legacy files, sidecar and activation conflicts (the Problems view). */
+  listProblems(): Promise<Problem[]>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -148,6 +151,7 @@ export const tauriClient: FmClient = {
   listActive: () => invoke<ActiveFace[]>('list_active'),
   conflicts: (target) => invoke<Conflict[]>('conflicts', { target }),
   listConflicts: () => invoke<Clash[]>('list_conflicts'),
+  listProblems: () => invoke<Problem[]>('list_problems'),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),

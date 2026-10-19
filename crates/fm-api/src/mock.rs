@@ -946,6 +946,9 @@ impl LibraryService for MockApi {
     }
 
     fn list_problems(&self) -> ApiResult<Vec<Problem>> {
+        // Both take the state lock, so they run before this method takes it.
+        let duplicates = self.list_duplicates()?;
+        let clashes = self.list_conflicts()?;
         let st = self.state();
         let mut out = Vec::new();
         for f in &st.faces {
@@ -973,6 +976,15 @@ impl LibraryService for MockApi {
                         f.detail.face.postscript_name
                     ),
                 });
+            }
+        }
+        out.extend(duplicates.iter().flat_map(DuplicateGroup::problems));
+        // System clashes are listed above for every face, active or not.
+        for clash in &clashes {
+            if let ConflictWith::Active { face: other } = clash.with {
+                let path = st.face(clash.face)?.detail.path.clone();
+                let other = st.face(other)?.detail.path.clone();
+                out.push(clash.problem(path, Some(other)));
             }
         }
         Ok(out)

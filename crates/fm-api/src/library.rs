@@ -674,6 +674,54 @@ impl DuplicateGroup {
             copy.keep = i == 0;
         }
     }
+
+    /// The Problems entries of the group: one per copy that is not the
+    /// keeper, with the keeper as `other`. Exact groups are `DuplicateFile`,
+    /// near groups `DuplicateFace`. Every implementation of
+    /// [`LibraryService::list_problems`] uses this, so the rule is one.
+    pub fn problems(&self) -> Vec<Problem> {
+        let Some(keeper) = self
+            .copies
+            .iter()
+            .find(|c| c.keep)
+            .or_else(|| self.copies.first())
+        else {
+            return Vec::new();
+        };
+        self.copies
+            .iter()
+            .filter(|c| !std::ptr::eq(*c, keeper))
+            .map(|copy| {
+                let (kind, message) = match self.kind {
+                    DuplicateKind::Exact => (
+                        ProblemKind::DuplicateFile,
+                        format!("The same file is also at {}.", keeper.path),
+                    ),
+                    DuplicateKind::Near => {
+                        let name = self.postscript_name.as_deref().unwrap_or("This font");
+                        let version = copy
+                            .version
+                            .as_deref()
+                            .map(str::trim)
+                            .filter(|v| !v.is_empty())
+                            .map(|v| format!(" ({v})"))
+                            .unwrap_or_default();
+                        (
+                            ProblemKind::DuplicateFace,
+                            format!("{name}{version} is also in {}.", keeper.path),
+                        )
+                    }
+                };
+                Problem {
+                    kind,
+                    face: copy.face,
+                    path: copy.path.clone(),
+                    other: Some(keeper.path.clone()),
+                    message,
+                }
+            })
+            .collect()
+    }
 }
 
 /// Sources, scans, families, faces and problems.
@@ -848,5 +896,64 @@ mod tests {
         b.tags = vec!["Alpha".into(), "beta".into()];
         let c = row(3, "c", None);
         assert_eq!(sorted(FamilySortKey::Tags, false, vec![c, a, b]), [2, 1, 3]);
+    }
+
+    #[test]
+    fn every_copy_but_the_keeper_is_a_duplicate_problem_pointing_at_the_keeper() {
+        let mut exact = DuplicateGroup {
+            kind: DuplicateKind::Exact,
+            postscript_name: Some("Inter-Regular".into()),
+            copies: vec![
+                copy("/z.ttf", Some("1.0"), false),
+                copy("/lib/a.ttf", Some("1.0"), true),
+                copy("/b.ttf", Some("1.0"), false),
+            ],
+        };
+        exact.choose_keeper();
+        let problems = exact.problems();
+        let rows: Vec<_> = problems
+            .iter()
+            .map(|p| (p.kind, p.path.as_str(), p.other.as_deref()))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                (ProblemKind::DuplicateFile, "/b.ttf", Some("/lib/a.ttf")),
+                (ProblemKind::DuplicateFile, "/z.ttf", Some("/lib/a.ttf")),
+            ]
+        );
+        assert_eq!(problems[0].message, "The same file is also at /lib/a.ttf.");
+    }
+
+    #[test]
+    fn a_near_group_lists_duplicate_faces_with_name_and_version() {
+        let mut near = DuplicateGroup {
+            kind: DuplicateKind::Near,
+            postscript_name: Some("Inter-Regular".into()),
+            copies: vec![
+                copy("/old.ttf", Some("2.0"), false),
+                copy("/new.ttf", Some("2.0 "), false),
+            ],
+        };
+        near.copies[0].face = Some(FaceId(7));
+        near.choose_keeper();
+        let problems = near.problems();
+        assert_eq!(problems.len(), 1);
+        let p = &problems[0];
+        assert_eq!(p.kind, ProblemKind::DuplicateFace);
+        assert_eq!(p.path, "/old.ttf");
+        assert_eq!(p.face, Some(FaceId(7)));
+        assert_eq!(p.other.as_deref(), Some("/new.ttf"));
+        assert_eq!(p.message, "Inter-Regular (2.0) is also in /new.ttf.");
+    }
+
+    #[test]
+    fn a_group_without_copies_has_no_problems() {
+        let empty = DuplicateGroup {
+            kind: DuplicateKind::Exact,
+            postscript_name: None,
+            copies: Vec::new(),
+        };
+        assert_eq!(empty.problems(), []);
     }
 }

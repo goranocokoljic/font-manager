@@ -119,6 +119,12 @@ test('every interactive element of the Conflicts view and the clash question has
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+test('every interactive element of the Problems view has a name', async ({ page }) => {
+  await open(page, '/problems');
+  await expect(page.getByRole('table', { name: 'Problems' })).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) => {
   await open(page);
   await expect(page.getByRole('treeitem').first()).toBeVisible();

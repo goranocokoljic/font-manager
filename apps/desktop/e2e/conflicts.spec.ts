@@ -40,7 +40,7 @@ test('the Conflicts view lists every clash and its winner', async ({ page }) => 
   await question(page).getByRole('button', { name: 'Replace for this session' }).click();
   await expect(info(page).getByTestId('activation-state')).toHaveText('Active for this session');
 
-  await page.getByRole('link', { name: 'Conflicts' }).click();
+  await page.getByRole('link', { name: 'Conflicts', exact: true }).click();
   const table = page.getByRole('table', { name: 'Font conflicts' });
   const row = table.getByRole('row').nth(1);
   await expect(row.getByRole('cell')).toHaveText([
