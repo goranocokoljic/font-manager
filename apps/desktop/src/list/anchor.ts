@@ -1,7 +1,10 @@
 // Keeps the scroll position across view switches, by family: every view tells
 // the font list store which rows its first visible line holds (`setAnchor`),
-// and a view that mounts scrolls the anchor family's line to the top.
-import type { Ref } from 'vue';
+// and a view that mounts scrolls the anchor family's line to the top. When the
+// rows change under the view (the families come back in another order, a family
+// above is expanded) and the anchor family moves to another row, the view
+// scrolls it back to the top.
+import { watch, type Ref } from 'vue';
 import { useFontListStore } from '../stores/fontList';
 
 export interface ScrollAnchor {
@@ -44,6 +47,16 @@ export function useScrollAnchor(
     const start = Math.floor(scrollTop / linePx()) * n;
     list.setAnchor(start, start + n);
   }
+
+  // The anchor family moved to another row while it stayed the anchor: the rows
+  // changed, not the scroll. (A scroll that picks another anchor is the user's.)
+  watch(
+    () => [list.anchor, list.anchorIndex] as const,
+    ([family, index], [before]) => {
+      if (family !== null && family === before && index >= 0) restore();
+    },
+    { flush: 'post' },
+  );
 
   return { restore, track };
 }

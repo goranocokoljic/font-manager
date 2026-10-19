@@ -203,6 +203,37 @@ describe('switching views', () => {
     }
   });
 
+  it('keeps the family at the top when leaving a sorted table re-orders the rows', async () => {
+    await load({ extraFaces: 997 });
+    const list = useFontListStore();
+    const library = useLibraryStore();
+    await library.setOrder({ by: 'name', descending: true });
+    const table = await mountView(FontTable, { view: 'all' });
+    await scrollTo(table, '[role="treegrid"]', 200 * 32);
+    const top = list.anchor!;
+    expect(top).toBe(list.rows[200]!.family.id);
+    table.unmount();
+    // The grid mounts at the sorted row; then the default order comes back (HomeView
+    // sets the order after the mode changes), so the family is at another row.
+    const grid = await mountView(FontGrid);
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(50 * CARD.linePx);
+    await library.setOrder(null);
+    await flushPromises();
+    const moved = list.anchorIndex;
+    expect(moved).not.toBe(200);
+    expect(list.rows[moved]!.family.id).toBe(top);
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(
+      Math.floor(moved / 4) * CARD.linePx,
+    );
+    // Back to the sorted table: it mounts in the default order, then re-sorts.
+    grid.unmount();
+    const again = await mountView(FontTable, { view: 'all' });
+    await library.setOrder({ by: 'name', descending: true });
+    await flushPromises();
+    expect(list.anchor).toBe(top);
+    expect(viewportOf(again, '[role="treegrid"]').scrollTop).toBe(200 * 32);
+  });
+
   it('the anchor follows a scroll in the grid by line, without drifting', async () => {
     await load({ extraFaces: 997 });
     const list = useFontListStore();
