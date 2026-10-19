@@ -184,3 +184,14 @@ fn percentiles_use_the_nearest_rank() {
     assert_eq!(percentile(&[7.0], 95), 7.0);
     assert_eq!(percentile(&[], 95), 0.0);
 }
+
+#[test]
+fn activation_needs_a_scanned_index_with_enough_faces() {
+    let library = TempDir::new("activate-library");
+    fs::copy(fixtures().join(FONT), library.path().join("One.ttf")).expect("copy");
+    let home = TempDir::new("activate");
+    first_scan(library.path(), home.path()).expect("scan");
+    // Refused before any OS call: one face is not a 100-face round.
+    let err = activate(home.path()).expect_err("too few faces");
+    assert!(err.to_string().contains("1 activatable faces"), "{err}");
+}

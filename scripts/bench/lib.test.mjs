@@ -362,10 +362,10 @@ describe('bench.sh end to end', () => {
       assert.equal(rep.os, osName());
       assert.ok(rep.library.files >= 150, JSON.stringify(rep.library));
       assert.deepEqual(Object.keys(rep.metrics).sort(), Object.keys(BUDGETS).sort());
-      for (const name of ['cold_start', 'first_scan', 'incremental_update', 'search', 'idle_memory']) {
+      for (const name of ['cold_start', 'first_scan', 'incremental_update', 'search', 'activation_100', 'idle_memory']) {
         assert.ok(rep.metrics[name].value > 0, `${name}: ${JSON.stringify(rep.metrics[name])}`);
       }
-      assert.equal(rep.metrics.activation_100.value, null);
+      assert.equal(rep.detail.activation.faces, 100, JSON.stringify(rep.detail.activation));
       assert.equal(rep.metrics.first_scan.files, rep.library.files, 'the scaled time names its file count');
       assert.equal(rep.metrics.first_scan.measured_ms, Math.round(rep.detail.scan.ms * 10) / 10);
       assert.equal(rep.detail.cold_start_runs.length, 2);

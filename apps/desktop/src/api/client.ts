@@ -7,6 +7,7 @@ import { mockClient } from './mock';
 import type {
   ActivateRequest,
   ActivationOutcome,
+  ActiveFace,
   AddSourceRequest,
   AppFolders,
   AppInfo,
@@ -91,6 +92,8 @@ export interface FmClient {
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
+  /** Every face the app has active. */
+  listActive(): Promise<ActiveFace[]>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -128,6 +131,7 @@ export const tauriClient: FmClient = {
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
+  listActive: () => invoke<ActiveFace[]>('list_active'),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),

@@ -76,6 +76,19 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('saves "reactivate on launch"', async () => {
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const box = wrapper.get('input[name="reactivate-on-launch"]');
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    await box.setValue(true);
+    await flushPromises();
+    expect((await client.getSettings()).reactivateOnLaunch).toBe(true);
+    await box.setValue(false);
+    await flushPromises();
+    expect((await client.getSettings()).reactivateOnLaunch).toBe(false);
+    wrapper.unmount();
+  });
+
   it('saves a valid number, and puts the saved value back after a bad one', async () => {
     const { wrapper } = await mountAt('/settings?section=advanced');
     const [cache, rescan] = wrapper.findAll('input[type="number"]');

@@ -191,6 +191,9 @@ export const mockSources: Source[] = [
   { id: 2, path: '/System/Library/Fonts', kind: 'system', paused: false, faceCount: 0 },
 ];
 
+/** `MOCK_NOW` of the Rust mock: when its activations started. */
+export const MOCK_NOW = '2026-10-16T09:00:00Z';
+
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
   activationMode: 'session',
@@ -199,6 +202,7 @@ export const defaultSettings: FullSettings = {
   density: 'comfortable',
   cacheLimitMb: 1024,
   rescanIntervalMinutes: 60,
+  reactivateOnLaunch: false,
 };
 
 /** The app folders of the Rust mock. */
@@ -850,6 +854,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (deactivated.length) emit({ type: 'activationChanged', activated: [], deactivated });
       return out;
     },
+    listActive: async () =>
+      [...active]
+        .sort(([a], [b]) => a - b)
+        .map(([face, mode]) => ({ face, mode, since: MOCK_NOW, document: null })),
     listSources: async () => structuredClone(sources),
     addSource: async (req) => {
       if (!req.path.trim())

@@ -337,8 +337,32 @@ CREATE TRIGGER sidecar_dirty_collection_delete AFTER DELETE ON collection_face B
 END;
 ";
 
+/// The activation service (E6.6, `activation.rs`).
+///
+/// - `activation_registration`: what the OS holds for an active face, as
+///   `FontActivator::activate` returned it: the file it points at and the
+///   activator's handle (registry value name, link, URL), both stored like
+///   `font_file.path` (TEXT when UTF-8, else the native bytes as a BLOB).
+///   Faces of one collection file share a handle. A row without one (none
+///   are written before this version) has nothing to deregister.
+/// - `last_session`: the faces that were session-active when the app last
+///   quit or crashed, for "reactivate on launch". Written at quit, and at
+///   the next start after a crash; a face that leaves the index leaves it.
+const V8: &str = r"
+CREATE TABLE activation_registration (
+    face_id  INTEGER PRIMARY KEY REFERENCES activation (face_id) ON DELETE CASCADE,
+    path     NOT NULL,
+    handle   NOT NULL
+);
+CREATE INDEX activation_registration_handle ON activation_registration (handle);
+
+CREATE TABLE last_session (
+    face_id  INTEGER PRIMARY KEY REFERENCES face (id) ON DELETE CASCADE
+) WITHOUT ROWID;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -347,6 +371,7 @@ pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 #[cfg(test)]
 pub(crate) const TABLES: &[&str] = &[
     "activation",
+    "activation_registration",
     "collection",
     "collection_face",
     "face",
@@ -358,6 +383,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_tag",
     "font_file",
     "index_meta",
+    "last_session",
     "project_set",
     "set_face",
     "sidecar_base",

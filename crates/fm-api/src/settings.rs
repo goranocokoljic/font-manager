@@ -47,6 +47,9 @@ pub struct Settings {
     pub activation_mode: ActivationMode,
     /// What activation does when a face clashes with another font.
     pub on_conflict: ConflictPolicy,
+    /// Activate again, at start, the faces that were session-active when the
+    /// app last ran (off by default: a session activation ends with the app).
+    pub reactivate_on_launch: bool,
     /// Light, dark or the OS appearance.
     pub theme: Theme,
     /// Comfortable or compact lists.
@@ -63,6 +66,7 @@ impl Default for Settings {
         Self {
             activation_mode: ActivationMode::Session,
             on_conflict: ConflictPolicy::KeepExisting,
+            reactivate_on_launch: false,
             theme: Theme::System,
             density: Density::Comfortable,
             cache_limit_mb: 1_024,
@@ -81,6 +85,9 @@ pub struct SettingsUpdate {
     /// What activation does when a face clashes with another font.
     #[serde(default)]
     pub on_conflict: Option<ConflictPolicy>,
+    /// Activate the last session's faces again at start.
+    #[serde(default)]
+    pub reactivate_on_launch: Option<bool>,
     /// Light, dark or the OS appearance.
     #[serde(default)]
     pub theme: Option<Theme>,
@@ -117,6 +124,9 @@ impl Settings {
         Ok(Self {
             activation_mode: update.activation_mode.unwrap_or(self.activation_mode),
             on_conflict: update.on_conflict.unwrap_or(self.on_conflict),
+            reactivate_on_launch: update
+                .reactivate_on_launch
+                .unwrap_or(self.reactivate_on_launch),
             theme: update.theme.unwrap_or(self.theme),
             density: update.density.unwrap_or(self.density),
             cache_limit_mb: update.cache_limit_mb.unwrap_or(self.cache_limit_mb),
@@ -161,6 +171,7 @@ mod tests {
         let s = Settings::default();
         assert_eq!(s.activation_mode, ActivationMode::Session);
         assert_eq!(s.on_conflict, ConflictPolicy::KeepExisting);
+        assert!(!s.reactivate_on_launch);
         assert_eq!(s.theme, Theme::System);
         assert_eq!(s.density, Density::Comfortable);
         assert_eq!(s.cache_limit_mb, 1_024);
@@ -212,6 +223,7 @@ mod tests {
         let json = serde_json::to_value(Settings::default()).expect("json");
         assert_eq!(json["activationMode"], "session");
         assert_eq!(json["onConflict"], "keepExisting");
+        assert_eq!(json["reactivateOnLaunch"], false);
         assert_eq!(json["cacheLimitMb"], 1_024);
         assert_eq!(json["rescanIntervalMinutes"], 60);
         let partial: Settings = serde_json::from_str(r#"{"density":"compact"}"#).expect("partial");
@@ -220,5 +232,10 @@ mod tests {
         let update: SettingsUpdate = serde_json::from_str(r#"{"theme":"light"}"#).expect("update");
         assert_eq!(update.theme, Some(Theme::Light));
         assert_eq!(update.density, None);
+        let on: SettingsUpdate =
+            serde_json::from_str(r#"{"reactivateOnLaunch":true}"#).expect("update");
+        let next = Settings::default().apply(&on).expect("valid");
+        assert!(next.reactivate_on_launch);
+        assert_eq!(next.theme, Theme::System);
     }
 }

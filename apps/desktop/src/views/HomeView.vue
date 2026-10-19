@@ -14,6 +14,7 @@ import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
+import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
 import { useCollectionsStore } from '../stores/collections';
 import { useActions, useCommandsStore } from '../stores/commands';
@@ -31,6 +32,7 @@ const layout = useLayoutStore();
 const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
+const activation = useActivationStore();
 const preview = usePreviewStore();
 const fontList = useFontListStore();
 const views = useViewsStore();
@@ -55,9 +57,13 @@ const MODES: { value: ViewMode; label: string }[] = [
 onMounted(() => {
   void app.load();
   void library.load();
+  void activation.load();
   void search.loadLanguages();
 });
-onBeforeUnmount(() => void library.stop());
+onBeforeUnmount(() => {
+  void library.stop();
+  void activation.stop();
+});
 
 useActions([
   {
@@ -195,6 +201,9 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online
       >
         Settings <kbd>{{ formatChord(settingsChord) }}</kbd>
       </RouterLink>
+      <p class="active-count" data-testid="active-count" role="status">
+        {{ activation.count === 1 ? '1 font active' : `${activation.count} fonts active` }}
+      </p>
       <p v-if="app.error" role="alert" class="error">{{ app.error.message }}</p>
       <dl v-else-if="app.info" class="info" data-testid="app-info">
         <dt>App</dt>
@@ -271,6 +280,9 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Problems', 'Online
 }
 .hint kbd {
   font: inherit;
+}
+.active-count {
+  margin: 0;
 }
 .info {
   display: flex;

@@ -60,6 +60,26 @@ test('the activation choice applies to the next activation', async ({ page }) =>
   await expect(page.getByTestId('activation-state')).toHaveText('Active (permanent)');
 });
 
+test('the status bar counts active fonts as activation changes', async ({ page }) => {
+  await page.goto('/#/?face=1');
+  const count = page.getByTestId('active-count');
+  await expect(count).toHaveText('0 fonts active');
+  await page.getByRole('button', { name: 'Activate' }).click();
+  await expect(count).toHaveText('1 font active');
+  await page.getByRole('button', { name: 'Deactivate' }).click();
+  await expect(count).toHaveText('0 fonts active');
+});
+
+test('"reactivate on launch" is saved', async ({ page }) => {
+  await page.goto('/#/settings?section=activation');
+  const box = page.getByRole('checkbox', { name: /Reactivate on launch/ });
+  await expect(box).not.toBeChecked();
+  await box.check();
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.goto('/#/settings?section=activation');
+  await expect(page.getByRole('checkbox', { name: /Reactivate on launch/ })).toBeChecked();
+});
+
 test('a folder can be added, paused and removed; the system source stays', async ({ page }) => {
   await page.goto('/#/settings');
   // The mock folder picker answers `/Users/demo/Added 1` on its first call.
