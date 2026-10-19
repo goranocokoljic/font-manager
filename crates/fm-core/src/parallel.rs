@@ -57,8 +57,7 @@ where
 }
 
 /// [`map_ordered`] for work that mostly waits for the disk, such as reading
-/// a file: on [`io_threads`] threads, more than there are cores. On one core
-/// it stays a plain loop.
+/// a file: on [`io_threads`] threads, more than there are cores.
 pub(crate) fn map_ordered_io<T, R, F>(
     items: &[T],
     work: F,
@@ -69,11 +68,7 @@ where
     R: Send,
     F: Fn(&T) -> R + Sync,
 {
-    let threads = match cpu_threads() {
-        1 => 1,
-        cores => io_threads(cores),
-    };
-    map_on(threads, items, work, progress)
+    map_on(io_threads(cpu_threads()), items, work, progress)
 }
 
 /// [`map_ordered`] on up to `threads` threads.
@@ -240,10 +235,6 @@ mod tests {
     #[test]
     fn disk_work_overlaps_more_items_than_there_are_cores() {
         let cores = cpu_threads();
-        if cores < 2 {
-            eprintln!("skipped: one core");
-            return;
-        }
         let threads = io_threads(cores);
         let peak = peak_at_once(threads * 4, |i, w, p| map_ordered_io(i, w, p));
         assert!(peak > cores, "{peak} at once on {cores} cores");
