@@ -100,3 +100,11 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E8.2 #87] crates/fm-api/src/mock.rs:968 — MockApi lists a SystemConflict problem for every face with a system clash, active or not, while fm-core's `ActivationManager::problems` lists only active faces.
 - [E8.2 #87] crates/fm-core/src/activation.rs:545 — `list_conflicts` fails the whole call (NotFound from `activation_faces`) when an active row's face is missing from the index; `ActivationManager::problems` inherits it.
 - [E7.4 #85] crates/fm-core/src/scanner/changes.rs:42 — `FileHash` formats hex but cannot parse it, so callers use `blake3::Hash::from_hex` directly and the hash format lives in two places.
+
+## 2026-10-20
+
+- [E5.11 #285] crates/fm-core/src/index/search.rs:93 — the real API leaves `FamilySummary.classification` empty (the scan stores `ClassGuess` in `face.parsed` but search does not read it), so the Class column and the classification filter counts are empty where the MockApi-based checks showed serif/sans.
+- [E5.11 #285] crates/fm-core/src/index/faces.rs:150 — `FaceDetail.scripts` is always empty (the `face.scripts` column is never written by the scan), so the Info tab's Scripts row shows "—" on real data while the mock lists `latn`, `cyrl`.
+- [E5.11 #285] crates/fm-core/src/index/faces.rs:140 — `FeatureInfo.name` is always `None` (no feature-name table in fm-core), so the Info tab lists bare tags where the mock shows "liga (Standard ligatures)".
+- [E5.11 #285] crates/fm-core/src/api.rs:330 — `find_similar`, `export_web`, `license_inventory`, `pick_fonts_for_brief` and `prepare_for_web` answer `Unsupported` on the real API; the MockApi answers them, and no phase-1 UI calls them yet.
+- [E5.11 #285] crates/fm-core/src/api.rs:120 — scans write the whole rescan while holding the index lock, so UI reads wait for the write of a large first scan (seconds on 10k fonts).

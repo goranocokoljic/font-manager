@@ -10,8 +10,8 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::library::{
-    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, ListFamiliesRequest, Problem,
-    ScanRequest, SetSourcePausedRequest, Source,
+    AddSourceRequest, AppInfo, FaceDetail, Family, FamilySummary, LibraryService,
+    ListFamiliesRequest, Problem, ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -27,9 +27,11 @@ use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, SettingsService,
     SourceId,
 };
-use fm_core::SettingsStore;
+use fm_core::index::Opened;
+use fm_core::{CoreApi, SettingsStore};
+use fm_platform::{AppPaths, FontActivator, MockActivator};
 use tauri::http::{Response, StatusCode, header};
-use tauri::{AppHandle, Emitter, Manager, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State};
 
 pub mod help;
 
@@ -42,12 +44,24 @@ pub const EVENT_CHANNEL: &str = "fm://event";
 /// system scope over the user's folders.
 pub const FONT_SCHEME: &str = "fmfont";
 
-/// The API every command talks to. `fm-core` does not implement [`Api`] yet,
-/// so the shell serves [`MockApi`] until it does; the settings already come
-/// from `fm-core`'s [`SettingsStore`] when the app folders were found.
+/// Which implementation of [`Api`] the commands talk to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Backend {
+    /// `fm-core`'s [`CoreApi`]: the real library.
+    Core,
+    /// Any other implementation: [`MockApi`] when the app folders or the
+    /// index could not be opened, and in tests.
+    Other,
+}
+
+/// The API every command talks to: `fm-core`'s [`CoreApi`] when startup
+/// found the app folders and opened the index ([`serve`]), else [`MockApi`]
+/// with the settings from `fm-core`'s [`SettingsStore`] when the folders were
+/// found.
 pub struct AppState {
     api: Arc<dyn Api>,
     settings: Option<Arc<dyn SettingsService + Send + Sync>>,
+    backend: Backend,
 }
 
 impl AppState {
@@ -56,7 +70,22 @@ impl AppState {
         Self {
             api,
             settings: None,
+            backend: Backend::Other,
         }
+    }
+
+    /// Serves the real library.
+    pub fn core(api: Arc<CoreApi>) -> Self {
+        Self {
+            api,
+            settings: None,
+            backend: Backend::Core,
+        }
+    }
+
+    /// Which implementation the commands talk to.
+    pub fn backend(&self) -> Backend {
+        self.backend
     }
 
     /// Serves the settings from `settings` instead of the API.
@@ -471,29 +500,92 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
         ])
 }
 
+/// The state the app serves from the app folders `paths` and the index
+/// startup opened: [`CoreApi`] over the index, activating through
+/// `activator`, when the index opened; it has cleaned up the last session
+/// (ADR 0008) and, when the index was rebuilt, started a scan of every source.
+/// When the index could not be opened, [`MockApi`] with the real settings.
+/// The [`CoreApi`] is returned too, for [`CoreApi::shutdown`] at exit.
+pub fn serve(
+    paths: &AppPaths,
+    index: Result<Opened, ApiError>,
+    activator: Arc<dyn FontActivator>,
+) -> (AppState, Option<Arc<CoreApi>>) {
+    match index {
+        Ok(opened) => {
+            let core = Arc::new(CoreApi::open(paths, opened.index, activator));
+            if let Err(e) = core.start() {
+                tracing::warn!(error = %e, "activation start-up failed");
+            }
+            if opened.rebuilt.is_some()
+                && let Err(e) = core.scan(ScanRequest::default())
+            {
+                tracing::warn!(error = %e, "the rebuilt index could not be scanned");
+            }
+            (AppState::core(Arc::clone(&core)), Some(core))
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "serving sample data: the library index is not available");
+            let state = AppState::new(Arc::new(MockApi::new()))
+                .with_settings(Arc::new(SettingsStore::new(paths)));
+            (state, None)
+        }
+    }
+}
+
 /// Starts the desktop app.
 pub fn run() {
     // App folders, settings and the rotating log file. The guard lives until
     // `run` returns so buffered log lines are flushed on exit. A failure here
     // is reported but does not stop the app: it runs on default settings.
-    let startup = match fm_core::startup::init() {
+    let mut startup = match fm_core::startup::init() {
         Ok(startup) => Some(startup),
         Err(e) => {
             eprintln!("font manager: {e}");
             None
         }
     };
-    let api: Arc<dyn Api> = Arc::new(MockApi::new());
-    let mut state = AppState::new(api);
-    if let Some(startup) = &startup {
-        state = state.with_settings(Arc::new(SettingsStore::new(&startup.paths)));
-    }
+    let (state, core) = match startup.as_mut() {
+        Some(startup) => {
+            let index = std::mem::replace(
+                &mut startup.index,
+                Err(ApiError::new(ErrorCode::Internal, "The index is served.")),
+            );
+            match fm_platform::activator::system(&startup.paths) {
+                Ok(activator) => serve(&startup.paths, index, activator),
+                Err(e) => {
+                    let e = ApiError::new(
+                        ErrorCode::Unsupported,
+                        "Font activation is not available on this system.",
+                    )
+                    .with_detail(e.to_string());
+                    serve(&startup.paths, Err(e), Arc::new(MockActivator::new()))
+                }
+            }
+        }
+        None => (AppState::new(Arc::new(MockApi::new())), None),
+    };
     let builder =
         help::with_help_menu(tauri::Builder::default().plugin(tauri_plugin_dialog::init()));
-    if let Err(e) = setup_state(builder, state).run(tauri::generate_context!()) {
-        tracing::error!(error = %e, "font manager failed to start");
-        eprintln!("font manager failed to start: {e}");
-        drop(startup); // flush the log before exit skips destructors
-        std::process::exit(1);
-    }
+    let app = match setup_state(builder, state).build(tauri::generate_context!()) {
+        Ok(app) => app,
+        Err(e) => {
+            tracing::error!(error = %e, "font manager failed to start");
+            eprintln!("font manager failed to start: {e}");
+            drop(startup); // flush the log before exit skips destructors
+            std::process::exit(1);
+        }
+    };
+    app.run(move |_, event| {
+        if let RunEvent::Exit = event {
+            // Session fonts end with the app (ADR 0008).
+            if let Some(core) = &core
+                && let Err(e) = core.shutdown()
+            {
+                tracing::warn!(error = %e, "session fonts not deactivated at exit");
+            }
+            // `run` may exit the process without returning: flush the log now.
+            drop(startup.take());
+        }
+    });
 }

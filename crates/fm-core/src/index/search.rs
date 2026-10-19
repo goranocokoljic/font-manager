@@ -26,12 +26,19 @@
 use std::collections::{HashMap, HashSet};
 
 use fm_api::activation::ActivationMode;
+use fm_api::common::Paged;
 use fm_api::common::{Axis, FontFormat, Slant};
-use fm_api::library::{FamilyActivation, FamilySummary, LicenseType};
-use fm_api::search::{FamilyHit, Filters, Missing, SearchRequest, SearchResponse, Supports};
+use fm_api::library::{
+    FamilyActivation, FamilySort, FamilySummary, LicenseType, ListFamiliesRequest, OpenLicense,
+    StyleMark,
+};
+use fm_api::search::{
+    FamilyHit, Filters, Missing, SearchRequest, SearchResponse, Supports, WeightRange,
+};
 use fm_api::{CollectionId, FaceId, FamilyId, SourceId, TagId};
 use rusqlite::OptionalExtension;
 
+use super::faces::open_license;
 use super::files::format_from_sql;
 use super::{Index, db_error};
 use crate::coverage::{CodePointSet, Fit, Need};
@@ -51,7 +58,11 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
        coalesce(user_meta.favorite, 0), user_meta.rating,
        face.is_color, face.healthy, face.cmap,
        CASE WHEN json_valid(face.parsed)
-            THEN json_extract(face.parsed, '$.loclLanguages') END
+            THEN json_extract(face.parsed, '$.loclLanguages') END,
+       CASE WHEN typeof(font_file.path) = 'text' THEN font_file.path END,
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.version') END,
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.license') END,
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.licenseUrl') END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -68,6 +79,8 @@ pub(super) struct SearchCache {
     rows: Vec<Row>,
     /// The filter values the rows can be counted under.
     slots: Slots,
+    /// Tag names by id, for the family summaries.
+    tag_names: HashMap<TagId, String>,
 }
 
 /// One searchable face.
@@ -90,6 +103,12 @@ struct Row {
     cmap: Option<CodePointSet>,
     /// Its `locl` language systems (`cyrl/SRB`).
     locl: Vec<String>,
+    /// The folder of its file; `None` for a path that is not UTF-8.
+    location: Option<String>,
+    /// Its version string (name ID 5).
+    version: Option<String>,
+    /// The open license its name table states.
+    open_license: Option<OpenLicense>,
 }
 
 impl Index {
@@ -148,7 +167,7 @@ impl Index {
             if faces.is_empty() {
                 continue;
             }
-            let Some(family) = members.get(key).map(|m| summary(m)) else {
+            let Some(family) = members.get(key).map(|m| summary(m, &cache.tag_names)) else {
                 continue;
             };
             faces.sort_by(|(a, sa, fa), (b, sb, fb)| {
@@ -251,6 +270,89 @@ impl Index {
         Ok((faces.first() == Some(&FaceId(family.0))).then_some(faces))
     }
 
+    /// One page of families: every visible family, or those with a face in
+    /// `req.source`, sorted by `req.order` when set, else by `req.sort`
+    /// (name A to Z, newest first, most styles first); ties go by id.
+    pub fn list_families(&self, req: &ListFamiliesRequest) -> FmResult<Paged<FamilySummary>> {
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let mut order: Vec<&str> = Vec::new();
+        let mut members: HashMap<&str, Vec<&Row>> = HashMap::new();
+        for row in &cache.rows {
+            members
+                .entry(&row.family_key)
+                .or_insert_with(|| {
+                    order.push(&row.family_key);
+                    Vec::new()
+                })
+                .push(row);
+        }
+        let mut rows: Vec<FamilySummary> = order
+            .iter()
+            .filter_map(|key| members.get(key))
+            .filter(|faces| {
+                req.source
+                    .is_none_or(|s| faces.iter().any(|f| f.facts.source == s))
+            })
+            .map(|faces| summary(faces, &cache.tag_names))
+            .collect();
+        match (req.order, req.sort) {
+            (Some(order), _) => order.sort(&mut rows),
+            (None, FamilySort::Name) => {
+                rows.sort_by_cached_key(|r| (r.name.to_lowercase(), r.id));
+            }
+            (None, FamilySort::DateAdded) => {
+                rows.sort_by(|a, b| b.added.cmp(&a.added).then(a.id.cmp(&b.id)));
+            }
+            (None, FamilySort::StyleCount) => {
+                rows.sort_by(|a, b| b.style_count.cmp(&a.style_count).then(a.id.cmp(&b.id)));
+            }
+        }
+        let total = u32::try_from(rows.len()).unwrap_or(u32::MAX);
+        let items = rows
+            .into_iter()
+            .skip(req.page.offset as usize)
+            .take(req.page.limit as usize)
+            .collect();
+        Ok(Paged { items, total })
+    }
+
+    /// The summary of the family `family`; `None` when no visible family has
+    /// that id.
+    pub(super) fn family_summary(&self, family: FamilyId) -> FmResult<Option<FamilySummary>> {
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let Some(first) = cache.rows.iter().find(|r| r.id == family.0) else {
+            return Ok(None);
+        };
+        let faces: Vec<&Row> = cache
+            .rows
+            .iter()
+            .filter(|r| r.family_key == first.family_key)
+            .collect();
+        // A family's id is the id of its first face; another face's id is not one.
+        if faces.first().map(|r| r.id) != Some(family.0) {
+            return Ok(None);
+        }
+        Ok(Some(summary(&faces, &cache.tag_names)))
+    }
+
+    /// The family a visible face belongs to, by id and name, as search
+    /// groups it; `None` for a face that is not visible (its file is gone,
+    /// its source paused).
+    pub(super) fn family_of(&self, face: FaceId) -> FmResult<Option<(FamilyId, String)>> {
+        self.refresh_search_cache()?;
+        let cache = self.search_cache.borrow();
+        let Some(row) = cache.rows.iter().find(|r| r.id == face.0) else {
+            return Ok(None);
+        };
+        Ok(cache
+            .rows
+            .iter()
+            .find(|r| r.family_key == row.family_key)
+            .map(|first| (FamilyId(first.id), first.family.clone())))
+    }
+
     /// Reads the searchable rows again when the database changed since.
     fn refresh_search_cache(&self) -> FmResult<()> {
         let data_version: i64 = self
@@ -263,7 +365,13 @@ impl Index {
         }
         let mut slots = Slots::default();
         let rows = self.visible_faces(&mut slots)?;
-        *self.search_cache.borrow_mut() = SearchCache { stamp, rows, slots };
+        let tag_names = self.tag_names()?;
+        *self.search_cache.borrow_mut() = SearchCache {
+            stamp,
+            rows,
+            slots,
+            tag_names,
+        };
         Ok(())
     }
 
@@ -354,9 +462,28 @@ impl Index {
                 locl: text(25)?
                     .and_then(|json| serde_json::from_str(json).ok())
                     .unwrap_or_default(),
+                location: text(26)?
+                    .and_then(|path| std::path::Path::new(path).parent())
+                    .map(|dir| dir.display().to_string()),
+                version: text(27)?.map(str::to_owned),
+                open_license: open_license(text(28)?, text(29)?),
             });
         }
         Ok(out)
+    }
+
+    /// Every tag's name by id.
+    fn tag_names(&self) -> FmResult<HashMap<TagId, String>> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT id, name FROM tag")
+            .map_err(|e| db_error(&e))?;
+        let names = stmt
+            .query_map([], |row| Ok((TagId(row.get(0)?), row.get(1)?)))
+            .map_err(|e| db_error(&e))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| db_error(&e))?;
+        Ok(names)
     }
 
     /// `(face, id)` pairs from `sql`, by face.
@@ -417,7 +544,8 @@ fn score<'a>(
 }
 
 /// The family row of `faces`, every visible face of one family in id order.
-fn summary(faces: &[&Row]) -> FamilySummary {
+/// `tag_names` names the tags of [`FamilySummary::tags`].
+fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary {
     let first = faces.first();
     let mut formats: Vec<FontFormat> = Vec::new();
     for format in faces.iter().filter_map(|f| f.facts.format) {
@@ -426,6 +554,36 @@ fn summary(faces: &[&Row]) -> FamilySummary {
         }
     }
     let active = faces.iter().filter(|f| f.active.is_some()).count();
+    let mut styles: Vec<StyleMark> = faces
+        .iter()
+        .map(|f| StyleMark {
+            weight: f.text.weight,
+            italic: f.text.slant != Slant::Upright,
+        })
+        .collect();
+    styles.sort_by_key(|s| (s.weight, s.italic));
+    styles.dedup();
+    let weight_range = faces.iter().map(|f| f.text.weight).fold(None, |range, w| {
+        Some(
+            range.map_or(WeightRange { min: w, max: w }, |r: WeightRange| {
+                WeightRange {
+                    min: r.min.min(w),
+                    max: r.max.max(w),
+                }
+            }),
+        )
+    });
+    let mut tags: Vec<String> = Vec::new();
+    for name in faces
+        .iter()
+        .flat_map(|f| &f.facts.tags)
+        .filter_map(|id| tag_names.get(id))
+    {
+        if !tags.contains(name) {
+            tags.push(name.clone());
+        }
+    }
+    tags.sort_by_key(|t| t.to_lowercase());
     FamilySummary {
         id: FamilyId(first.map_or(0, |f| f.id)),
         name: first.map(|f| f.family.clone()).unwrap_or_default(),
@@ -444,16 +602,14 @@ fn summary(faces: &[&Row]) -> FamilySummary {
             .filter_map(|f| f.added.clone())
             .min()
             .unwrap_or_default(),
-        // The search rows do not carry these yet; the detail list reads
-        // `list_families`, which fills them.
-        styles: Vec::new(),
-        weight_range: None,
-        is_color: false,
-        version: None,
-        location: None,
-        open_license: None,
-        declared_license: None,
-        tags: Vec::new(),
+        styles,
+        weight_range,
+        is_color: faces.iter().any(|f| f.facts.color),
+        version: faces.iter().find_map(|f| f.version.clone()),
+        location: first.and_then(|f| f.location.clone()),
+        open_license: faces.iter().find_map(|f| f.open_license),
+        declared_license: faces.iter().find_map(|f| f.facts.license),
+        tags,
     }
 }
 

@@ -19,17 +19,17 @@ use fm_api::activation::{
 };
 use fm_api::common::Page;
 use fm_api::ids::FaceId;
-use fm_api::library::SourceKind;
+use fm_api::library::{LibraryService, ListFamiliesRequest, SourceKind};
 use fm_api::preview::PreviewRequest;
 use fm_api::search::SearchRequest;
-use fm_api::{ActivationService, SourceId};
+use fm_api::{ActivationService, SearchService, SourceId};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
 use fm_core::preview::render_preview_file;
 use fm_core::scanner::{FileIndex, discover};
-use fm_core::{ActivationManager, Index};
+use fm_core::{ActivationManager, CoreApi, Index, SettingsStore};
 use fm_core::{logging, startup};
-use fm_platform::AppPaths;
+use fm_platform::{AppPaths, MockActivator};
 use serde::Serialize;
 
 /// Errors end the run; the script reports the metric as failed.
@@ -74,9 +74,11 @@ pub struct Started {
     pub page: usize,
 }
 
-/// What every entry point does first ([`startup::init`] without the per-user
+/// What the app does first ([`startup::init`] without the per-user
 /// folders): app folders and settings, logging, the index with its
-/// migrations, then the first page of the family list.
+/// migrations, the real API over it ([`CoreApi`], with this OS's activator
+/// cleaning up the last session), then the first page of the family list,
+/// as the UI asks for it.
 ///
 /// Keep the returned guard alive while the process runs: it flushes the log.
 pub fn start(home: &Path) -> BenchResult<(Started, logging::LogGuard)> {
@@ -85,17 +87,19 @@ pub fn start(home: &Path) -> BenchResult<(Started, logging::LogGuard)> {
     let config = startup::prepare(&paths)?;
     let log = logging::init(&paths.logs, config.log_level)?;
     let index = startup::open_index(&paths)?.index;
-    let res = index.search(&SearchRequest {
+    let api = CoreApi::open(&paths, index, fm_platform::activator::system(&paths)?);
+    api.start()?;
+    let res = api.list_families(ListFamiliesRequest {
         page: Page {
             offset: 0,
             limit: FIRST_PAGE,
         },
-        ..SearchRequest::default()
+        ..ListFamiliesRequest::default()
     })?;
     let started = Started {
         ms: ms(begin.elapsed()),
         families: res.total,
-        page: res.families.len(),
+        page: res.items.len(),
     };
     Ok((started, log))
 }
@@ -221,7 +225,16 @@ pub struct Searched {
 /// Times every query of [`QUERIES`] `rounds` times on the index in `home`,
 /// after one untimed run each to warm the caches, as a running app has them.
 pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
-    let index = startup::open_index(&home_paths(home))?.index;
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    // Through the real API, as the app serves it; the mock activator keeps
+    // the OS out of a search measurement.
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
     let mut samples = Vec::with_capacity(QUERIES.len() * rounds);
     let mut families = 0;
     let mut slowest = (0.0, String::new());
@@ -230,13 +243,13 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
             query: query.to_owned(),
             ..SearchRequest::default()
         };
-        let res = index.search(&req)?;
+        let res = api.search(req.clone())?;
         if query.is_empty() {
             families = res.total;
         }
         for _ in 0..rounds {
             let begin = Instant::now();
-            index.search(&req)?;
+            api.search(req.clone())?;
             let took = ms(begin.elapsed());
             if took > slowest.0 {
                 slowest = (took, query.to_owned());
