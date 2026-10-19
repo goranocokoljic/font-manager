@@ -810,6 +810,76 @@ fn the_conflicts_view_is_an_error_when_the_activator_is_unavailable() {
     assert_eq!(err.code, ErrorCode::Unsupported);
 }
 
+/// An activator that reports the app's own fonts by their OS record, as
+/// fontconfig does on Linux (it lists the link, not the file it points at).
+struct ByHandle(Arc<MockActivator>);
+
+impl FontActivator for ByHandle {
+    fn activate(&self, faces: &[FaceFile], mode: Mode) -> Result<Vec<Outcome>, ActivationError> {
+        self.0.activate(faces, mode)
+    }
+
+    fn deactivate(&self, regs: &[Registration]) -> Result<Vec<Outcome>, ActivationError> {
+        self.0.deactivate(regs)
+    }
+
+    fn list_active(&self) -> Result<Vec<Registration>, ActivationError> {
+        self.0.list_active()
+    }
+
+    fn conflicts(&self, faces: &[FaceFile]) -> Result<Vec<fm_platform::Conflict>, ActivationError> {
+        let active = self.0.list_active()?;
+        let mut found = self.0.conflicts(faces)?;
+        for c in &mut found {
+            if let Some(reg) = active.iter().find(|r| r.path == c.with) {
+                c.with = PathBuf::from(&reg.handle);
+            }
+        }
+        Ok(found)
+    }
+}
+
+#[test]
+fn an_app_font_the_os_reports_by_its_link_is_still_the_apps_face() {
+    let fx = Fixture::new();
+    let (regular, copy) = (
+        fx.regular(),
+        fx.face("Roboto-Regular", "/fonts/copy/Roboto-Regular.ttf"),
+    );
+    let activator: Arc<dyn FontActivator> = Arc::new(ByHandle(Arc::clone(&fx.os)));
+    let service = ActivationManager::new(Arc::clone(&fx.index), activator, |_| {});
+    let activate = |face, on_conflict| {
+        service
+            .activate(ActivateRequest {
+                target: Target::Faces { faces: vec![face] },
+                mode: ActivationMode::Session,
+                on_conflict,
+            })
+            .expect("activate")
+    };
+    activate(regular, ConflictPolicy::KeepExisting);
+    // The clash names the app's face, not a "system font" at the link.
+    assert_eq!(
+        statuses(&activate(copy, ConflictPolicy::KeepExisting)),
+        vec![Status::Conflict {
+            with: ConflictWith::Active { face: regular }
+        }]
+    );
+    activate(copy, ConflictPolicy::Replace);
+    set_since(&fx, regular, "2026-10-19T10:00:00.000Z");
+    set_since(&fx, copy, "2026-10-19T10:00:01.000Z");
+    // One row for the pair, with one winner.
+    assert_eq!(
+        service.list_conflicts().expect("list"),
+        vec![Clash {
+            face: regular,
+            postscript_name: "Roboto-Regular".into(),
+            with: ConflictWith::Active { face: copy },
+            winner: ClashWinner::With,
+        }]
+    );
+}
+
 #[test]
 fn replacing_a_font_never_deregisters_it() {
     let fx = Fixture::new();
