@@ -1,0 +1,21 @@
+{
+  "id": "a-bench-or-test-must-not-run-activation-cleanup-on-the-os-ac",
+  "title": "A bench or test must not run activation cleanup on the OS activator",
+  "category": "user-files",
+  "rule": "When a bench, tool or test builds the app's services over a scratch home (CoreApi, ActivationManager) and runs session start or shutdown (clear_session, start, shutdown), give it a MockActivator or a scratch-keyed activator, never fm_platform::activator::system. The OS activator keeps its records per user, not per home (the Windows ledger is one HKCU key), so a cleanup there deregisters the session fonts of the user's running app. Test it by seeding a session registration in the activator the code is given and asserting the cleanup reached that one.",
+  "rationale": "E5.11 (#285): fm-bench start ran CoreApi::start on the system activator; on Windows that cleared the real per-user session ledger, including fonts a running Font Manager had activated.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    285
+  ],
+  "file_globs": [
+    "crates/fm-bench/**",
+    "crates/fm-cli/**",
+    "crates/fm-core/src/**/tests.rs",
+    "apps/desktop/src-tauri/tests/**"
+  ],
+  "first_seen": "2026-10-19T23:48:55.144Z",
+  "last_seen": "2026-10-19T23:48:55.144Z"
+}

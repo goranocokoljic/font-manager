@@ -234,13 +234,36 @@ fn preview_cache_skips_a_file_it_cannot_draw() {
     assert_eq!((res.entries, res.failed), (0, 1), "{res:?}");
 }
 
-/// The only test that calls [`start`]: it installs the process-wide logger.
+/// The only test that calls [`start_with`] (and so [`start`]): it installs
+/// the process-wide logger.
 #[test]
 fn start_prepares_the_app_folders_and_serves_the_first_page() {
     let home = TempDir::new("start");
     first_scan(&fixtures(), home.path()).expect("scan");
     let families = search(home.path(), 1).expect("search").families;
-    let (started, _log) = start(home.path()).expect("start");
+    // A session font of "another run": the cleanup must reach the activator
+    // it is given, never the OS one shared with the user's running app.
+    let activator = Arc::new(MockActivator::new());
+    let font = fixtures().join("google-repo/bebasneue/BebasNeue-Regular.ttf");
+    activator
+        .activate(
+            &[fm_platform::FaceFile {
+                path: font,
+                postscript_name: "BebasNeue-Regular".into(),
+            }],
+            fm_platform::Mode::Session,
+        )
+        .expect("seed a session font");
+    assert_eq!(activator.list_active().expect("listed").len(), 1);
+    let (started, _log) = start_with(
+        home.path(),
+        Arc::clone(&activator) as Arc<dyn FontActivator>,
+    )
+    .expect("start");
+    assert!(
+        activator.list_active().expect("listed").is_empty(),
+        "start cleans up the session of the activator it was given"
+    );
     assert_eq!(started.families, families);
     assert_eq!(started.page, (families as usize).min(FIRST_PAGE as usize));
     let paths = home_paths(home.path());
