@@ -102,4 +102,22 @@ describe('virtual styles in the font list', () => {
     expect(pinned.styles).toEqual([]);
     expect(list.rows.some((r) => r.key.startsWith('virtual:'))).toBe(false);
   });
+
+  it('removes a pinned style through the API and drops its row', async () => {
+    const { brand, list, pinned } = await setup();
+    const style = await useClient().pinInstance({
+      face: INTER.id,
+      name: 'Wide',
+      collection: brand.id,
+    });
+    useCollectionsStore().show(brand.id);
+    await flushPromises();
+    list.expand(INTER.family);
+    await flushPromises();
+    expect(list.rows.map((r) => r.key)).toContain(virtualKey(style.id));
+    await pinned.remove(style.id);
+    await flushPromises();
+    expect(await useClient().listVirtualStyles({ collection: brand.id })).toEqual([]);
+    expect(list.rows.map((r) => r.key)).not.toContain(virtualKey(style.id));
+  });
 });
