@@ -899,6 +899,42 @@ pub struct GlyphPage {
     pub unicode_version: String,
 }
 
+/// One character of a face, for its glyph detail (E11.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphRequest {
+    /// The face.
+    pub face: FaceId,
+    /// The Unicode code point of the character.
+    pub code_point: u32,
+}
+
+/// The detail of one mapped character of a face.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphDetail {
+    /// The Unicode code point.
+    pub code_point: u32,
+    /// The glyph `cmap` maps it to.
+    pub glyph_id: u32,
+    /// The glyph name from `post` or the CFF charset; absent when the font
+    /// has none.
+    pub name: Option<String>,
+    /// The advance width in font units, at the default location of a
+    /// variable face; absent when the font has no horizontal metrics.
+    pub advance_width: Option<u32>,
+    /// GSUB features that produce this glyph from other glyphs (`liga` for
+    /// `ﬁ`), by tag.
+    pub produced_by: Vec<FeatureInfo>,
+    /// GSUB features that replace this glyph with another (`smcp`, `ss01`),
+    /// by tag.
+    pub replaced_by: Vec<FeatureInfo>,
+    /// `Broken` with a reason when the font's tables are malformed; the
+    /// glyph id is 0 and the rest is empty then. Malformed GSUB lookups only
+    /// empty the feature lists.
+    pub health: Health,
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -948,6 +984,11 @@ pub trait LibraryService {
     /// names. `NotFound` for an unknown face; a malformed font is a page with
     /// `Broken` health, never an error.
     fn list_glyphs(&self, req: GlyphsRequest) -> ApiResult<GlyphPage>;
+    /// One character of a face in detail (E11.2): glyph id and name, advance
+    /// width and the GSUB features that produce or replace its glyph.
+    /// `NotFound` for an unknown face or a character the face does not map;
+    /// a malformed font is a detail with `Broken` health, never an error.
+    fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail>;
 }
 
 #[cfg(test)]

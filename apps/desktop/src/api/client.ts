@@ -25,7 +25,9 @@ import type {
   Family,
   FamilyId,
   FamilySummary,
+  GlyphDetail,
   GlyphPage,
+  GlyphRequest,
   GlyphsRequest,
   JobId,
   KeepCopyRequest,
@@ -75,6 +77,8 @@ export interface FmClient {
   getFace(face: FaceId): Promise<FaceDetail>;
   /** One page of a face's glyph map: its characters by Unicode block, or the ones a search finds. */
   listGlyphs(req: GlyphsRequest): Promise<GlyphPage>;
+  /** One character in detail: glyph id and name, advance width, the GSUB features that produce or replace it. */
+  getGlyph(req: GlyphRequest): Promise<GlyphDetail>;
   listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
   getFamily(family: FamilyId): Promise<Family>;
   /** Free text and filters, grouped by family, with the count of every filter value. */
@@ -148,6 +152,7 @@ export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
   listGlyphs: (req) => invoke<GlyphPage>('list_glyphs', { req }),
+  getGlyph: (req) => invoke<GlyphDetail>('get_glyph', { req }),
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
   search: (req) => invoke<SearchResponse>('search', { req }),

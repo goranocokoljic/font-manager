@@ -8,8 +8,8 @@ use std::time::Duration;
 use fm_api::activation::{ActivationOutcome, ActiveFace, OutcomeStatus};
 use fm_api::common::{Paged, Slant};
 use fm_api::library::{
-    AppInfo, FaceDetail, Family, FamilySummary, GlyphPage, GlyphsRequest, LibraryService,
-    ListFamiliesRequest, Source, SourceKind,
+    AppInfo, FaceDetail, Family, FamilySummary, GlyphDetail, GlyphPage, GlyphRequest,
+    GlyphsRequest, LibraryService, ListFamiliesRequest, Source, SourceKind,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
@@ -137,6 +137,26 @@ fn list_glyphs_returns_a_page_of_the_glyph_map() {
         .unwrap();
     assert_eq!(page, expected);
     assert_eq!(page.items[0].code_point, 0x41);
+}
+
+#[test]
+fn get_glyph_returns_the_glyph_detail() {
+    let detail: GlyphDetail = invoke_with(
+        "get_glyph",
+        serde_json::json!({ "req": { "face": 1, "codePoint": 0x61 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    let expected = MockApi::new()
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 0x61,
+        })
+        .unwrap();
+    assert_eq!(detail, expected);
+    assert_eq!(detail.code_point, 0x61);
 }
 
 #[test]

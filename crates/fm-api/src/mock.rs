@@ -23,10 +23,10 @@ use crate::export::{
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
-    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphInfo,
-    GlyphPage, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicenseType,
-    ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution, ScanRequest,
-    SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphDetail,
+    GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo,
+    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
+    ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -839,6 +839,22 @@ fn mock_glyph_name(c: char) -> String {
     }
 }
 
+/// A GSUB feature as fm-core names it, for the mock's glyph detail.
+fn mock_feature(tag: &str) -> FeatureInfo {
+    let name = match tag {
+        "liga" => "Standard ligatures",
+        "smcp" => "Small capitals",
+        "onum" => "Oldstyle figures",
+        _ => "Stylistic set 1",
+    };
+    FeatureInfo {
+        tag: tag.into(),
+        name: Some(name.into()),
+        automatic: false,
+        default_on: tag == "liga",
+    }
+}
+
 fn mock_glyph_matches(g: &GlyphInfo, query: &str) -> bool {
     let mut chars = query.chars();
     if let (Some(c), None) = (chars.next(), chars.next()) {
@@ -1244,6 +1260,43 @@ impl LibraryService for MockApi {
             blocks,
             health: Health::Ok,
             unicode_version: "17.0.0".into(),
+        })
+    }
+
+    /// The glyph as `list_glyphs` lists it. Lower-case letters are replaced
+    /// by `smcp` and `ss01`, figures by `onum`, the `fi`/`fl` ligatures are
+    /// produced by `liga`; CJK is 1,000 units wide, the rest 500 to 700.
+    fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail> {
+        let st = self.state();
+        let face = st.face(req.face)?;
+        let (c, glyph_id) = face
+            .chars
+            .iter()
+            .copied()
+            .zip(1u32..)
+            .find(|(c, _)| *c as u32 == req.code_point)
+            .ok_or_else(|| ApiError::not_found(format!("Character U+{:04X}", req.code_point)))?;
+        let cp = c as u32;
+        let features = |tags: &[&str]| tags.iter().map(|t| mock_feature(t)).collect();
+        Ok(GlyphDetail {
+            code_point: cp,
+            glyph_id,
+            name: Some(mock_glyph_name(c)),
+            advance_width: Some(if cp >= 0x2E80 {
+                1000
+            } else {
+                500 + cp % 5 * 50
+            }),
+            produced_by: match c {
+                '\u{FB01}' | '\u{FB02}' => features(&["liga"]),
+                _ => Vec::new(),
+            },
+            replaced_by: match c {
+                'a'..='z' => features(&["smcp", "ss01"]),
+                '0'..='9' => features(&["onum"]),
+                _ => Vec::new(),
+            },
+            health: Health::Ok,
         })
     }
 

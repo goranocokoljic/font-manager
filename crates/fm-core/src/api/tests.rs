@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{Embedding, FontFormat, Health, Page};
 use fm_api::library::{
-    FamilyActivation, FamilySort, GlyphsRequest, OpenLicense, ProblemKind, TrashMoveStatus,
+    FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, OpenLicense, ProblemKind,
+    TrashMoveStatus,
 };
 use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
@@ -976,6 +977,40 @@ fn the_glyph_map_reads_the_face_file_by_block_and_search() {
         block: None,
         query: None,
         page: Page::default(),
+    });
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}
+
+#[test]
+fn the_glyph_detail_reads_the_face_file() {
+    let (lib, _, _) = Lib::scanned("api-glyph-detail");
+    let archivo = lib.family("Archivo");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let fi = lib
+        .api
+        .get_glyph(GlyphRequest {
+            face,
+            code_point: 0xFB01,
+        })
+        .expect("ﬁ");
+    assert_eq!(fi.health, Health::Ok);
+    assert_eq!(fi.name.as_deref(), Some("fi"));
+    assert!(fi.advance_width.is_some_and(|w| w > 0));
+    assert_eq!(
+        fi.produced_by
+            .iter()
+            .map(|f| f.tag.as_str())
+            .collect::<Vec<_>>(),
+        ["liga"]
+    );
+    let unmapped = lib.api.get_glyph(GlyphRequest {
+        face,
+        code_point: 0x10_FFFD,
+    });
+    assert_eq!(unmapped.expect_err("unmapped").code, ErrorCode::NotFound);
+    let unknown = lib.api.get_glyph(GlyphRequest {
+        face: FaceId(9999),
+        code_point: 0x41,
     });
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
 }

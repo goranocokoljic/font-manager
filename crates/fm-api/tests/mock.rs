@@ -11,8 +11,8 @@ use fm_api::activation::{
 use fm_api::common::{FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
-    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphsRequest,
-    ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
+    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
+    GlyphsRequest, ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
     SetSourcePausedRequest, TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
@@ -1064,6 +1064,39 @@ fn the_glyph_map_lists_a_face_by_block_and_searches_it() {
         .list_glyphs(GlyphsRequest {
             face: FaceId(999),
             ..req(None, None)
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn the_glyph_detail_matches_the_glyph_map_and_names_features() {
+    let api = api();
+    let listed = api
+        .list_glyphs(GlyphsRequest {
+            face: FaceId(1),
+            block: None,
+            query: Some("a".into()),
+            page: Page::default(),
+        })
+        .unwrap()
+        .items[0]
+        .clone();
+    let a = api
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 'a' as u32,
+        })
+        .unwrap();
+    assert_eq!((a.glyph_id, a.name.clone()), (listed.glyph_id, listed.name));
+    assert!(a.advance_width.is_some());
+    let tags: Vec<_> = a.replaced_by.iter().map(|f| f.tag.as_str()).collect();
+    assert_eq!(tags, ["smcp", "ss01"]);
+    assert!(a.replaced_by.iter().all(|f| f.name.is_some()));
+    let err = api
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 0x10_FFFD,
         })
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);

@@ -29,8 +29,10 @@ import {
   type FamilySummary,
   type FilterCount,
   type GlyphBlock,
+  type GlyphDetail,
   type GlyphInfo,
   type GlyphPage,
+  type GlyphRequest,
   type GlyphsRequest,
   type FilterCounts,
   type Filters,
@@ -317,6 +319,49 @@ export function mockGlyphPage(f: FaceDetail, req: GlyphsRequest, cjk: boolean): 
     blocks,
     health: { kind: 'ok' },
     unicodeVersion: '17.0.0',
+  };
+}
+
+/** A GSUB feature as fm-core names it, for the mock's glyph detail. */
+function mockFeature(tag: string): FeatureInfo {
+  const names: Record<string, string> = {
+    liga: 'Standard ligatures',
+    smcp: 'Small capitals',
+    onum: 'Oldstyle figures',
+    ss01: 'Stylistic set 1',
+  };
+  return { tag, name: names[tag] ?? null, automatic: false, defaultOn: tag === 'liga' };
+}
+
+/**
+ * The detail of one character, as the Rust MockApi gives it: the glyph as the glyph
+ * map lists it; lower-case letters are replaced by `smcp` and `ss01`, figures by
+ * `onum`, `fi`/`fl` ligatures produced by `liga`; CJK is 1,000 units wide.
+ */
+export function mockGlyphDetail(f: FaceDetail, req: GlyphRequest, cjk: boolean): GlyphDetail {
+  // Glyph ids as mockGlyphPage numbers them.
+  const all = [...mockChars(f)].join('') + (cjk ? CJK : '');
+  const index = [...all].findIndex((c) => c.codePointAt(0) === req.codePoint);
+  if (index < 0)
+    throw {
+      code: 'notFound' as const,
+      message: `Character U+${req.codePoint.toString(16).toUpperCase().padStart(4, '0')} was not found.`,
+      detail: null,
+    };
+  const c = String.fromCodePoint(req.codePoint);
+  const cp = req.codePoint;
+  return {
+    codePoint: cp,
+    glyphId: index + 1,
+    name: mockGlyphName(c),
+    advanceWidth: cp >= 0x2e80 ? 1000 : 500 + (cp % 5) * 50,
+    producedBy: c === 'ﬁ' || c === 'ﬂ' ? [mockFeature('liga')] : [],
+    replacedBy: /[a-z]/.test(c)
+      ? [mockFeature('smcp'), mockFeature('ss01')]
+      : /[0-9]/.test(c)
+        ? [mockFeature('onum')]
+        : [],
+    health: { kind: 'ok' },
   };
 }
 
@@ -911,6 +956,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
       return mockGlyphPage(f, req, options.cjkFaces?.includes(req.face) ?? false);
+    },
+    getGlyph: async (req) => {
+      const f = find(req.face);
+      if (!f) throw notFound(req.face);
+      return mockGlyphDetail(f, req, options.cjkFaces?.includes(req.face) ?? false);
     },
     getFace: async (id) => {
       const f = find(id);
