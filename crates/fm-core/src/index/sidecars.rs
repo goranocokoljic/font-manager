@@ -606,15 +606,19 @@ impl Index {
             (disk, disk_stamp)
         };
         let (content, mut stamp) = new_base;
-        // A file with entries of faces not indexed here is read again on
-        // every scan, so they are merged as soon as their fonts arrive.
-        if content.faces.iter().any(|e| faces.get(&e.key()).is_none()) {
+        // A file with entries of faces not indexed here, or with the notes
+        // of a family not indexed here, is read again on every scan, so they
+        // are merged as soon as their fonts arrive.
+        let family_here = !family.is_empty();
+        if content.faces.iter().any(|e| faces.get(&e.key()).is_none())
+            || (!family_here && content.family_meta.is_some())
+        {
             stamp = None;
         }
         self.store_base(
             src.id,
             name,
-            &indexed_only(content, faces),
+            &indexed_only(content, faces, family_here),
             stamp.as_deref(),
         )?;
         Ok(out)
@@ -1086,9 +1090,14 @@ fn insert_conflict(
 
 /// The sidecar restricted to the faces the source has indexed: the base of
 /// the next merge. Entries of faces not indexed stay out of it, so when such
-/// a face is indexed later its entry is new to the merge and is taken.
-fn indexed_only(mut sidecar: Sidecar, faces: &SourceFaces) -> Sidecar {
+/// a face is indexed later its entry is new to the merge and is taken. The
+/// family's notes stay out of it the same way while no face of the family is
+/// indexed (`family_here`): the index has not taken them in.
+fn indexed_only(mut sidecar: Sidecar, faces: &SourceFaces, family_here: bool) -> Sidecar {
     sidecar.faces.retain(|e| faces.get(&e.key()).is_some());
+    if !family_here {
+        sidecar.family_meta = None;
+    }
     sidecar
 }
 

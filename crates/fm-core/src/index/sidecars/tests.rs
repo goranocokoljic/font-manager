@@ -1359,3 +1359,56 @@ fn family_notes_changed_on_both_machines_keep_this_one_and_report_the_other() {
     assert!(m.index.sidecar_problems().expect("problems").is_empty());
     assert_eq!(m.sidecar("Inter").family_notes(), Some("decided"));
 }
+
+#[test]
+fn family_notes_that_arrive_before_their_fonts_are_taken_when_the_fonts_do() {
+    // With and without face entries of the family in the file.
+    for tag_too in [false, true] {
+        let tmp = TempDir::new("sidecar-family-first");
+        // Another machine wrote Inter's sidecar into the synced folder.
+        let mut other = Machine::new(tmp.path());
+        other.family_notes("Inter-Bold", "from the laptop");
+        if tag_too {
+            other.tag("Inter-Bold", &["display"]);
+        }
+        drop(other);
+
+        // This machine sees the sidecar before it has the Inter fonts.
+        let mut index = Index::open_in_memory().expect("open");
+        let source = index
+            .add_source(&tmp.path().to_string_lossy(), SourceKind::Watched)
+            .expect("source")
+            .id;
+        let lora: Vec<IndexedFile> = files(tmp.path())
+            .into_iter()
+            .filter(|f| f.path.ends_with("Lora-Regular.ttf"))
+            .collect();
+        index.persist_files(source, &lora).expect("lora");
+        let mut m = Machine {
+            index,
+            source,
+            root: tmp.path().to_path_buf(),
+        };
+        assert_eq!(m.local_family_notes("Inter"), None, "tag_too={tag_too}");
+
+        // The fonts arrive: the note is taken, not taken for a removal.
+        m.scan();
+        assert_eq!(
+            m.local_family_notes("Inter").as_deref(),
+            Some("from the laptop"),
+            "tag_too={tag_too}"
+        );
+        assert_eq!(
+            m.sidecar("Inter").family_notes(),
+            Some("from the laptop"),
+            "tag_too={tag_too}"
+        );
+        // An edit here later keeps it in the file.
+        m.tag("Inter-Regular", &["body"]);
+        assert_eq!(
+            m.sidecar("Inter").family_notes(),
+            Some("from the laptop"),
+            "tag_too={tag_too}"
+        );
+    }
+}
