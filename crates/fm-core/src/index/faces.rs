@@ -135,7 +135,12 @@ impl Index {
                 .map(|p| {
                     p.features
                         .iter()
-                        .map(|tag| features::feature_info(tag))
+                        .map(|tag| {
+                            features::feature_info_named(
+                                tag,
+                                p.feature_names.get(tag).map(String::as_str),
+                            )
+                        })
                         .collect()
                 })
                 .unwrap_or_default(),

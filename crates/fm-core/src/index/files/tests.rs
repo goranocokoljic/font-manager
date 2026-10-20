@@ -468,6 +468,32 @@ fn rows_that_cannot_be_trusted_are_read_again() {
     assert_eq!(loaded.get(&files[2].path), Some(&files[2]));
 }
 
+/// E10.4 criterion 2: a face stored before the font's feature names were
+/// stored does not load back, so the next scan reads its file again; the
+/// names round-trip with the face.
+#[test]
+fn a_face_stored_without_feature_names_is_read_again() {
+    let (mut index, source) = memory_db();
+    let mut files = copies(2, VARIABLE);
+    files[0].parsed.faces[0]
+        .feature_names
+        .insert("ss02".into(), "Round dots".into());
+    index.persist_files(source, &files).expect("persist");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET parsed = json_remove(parsed, '$.featureNames')
+             WHERE file_id = (SELECT id FROM font_file WHERE path = ?1)",
+            [path_to_sql(&files[1].path)],
+        )
+        .expect("an index from before E10.4");
+
+    let loaded = index.load_files().expect("load");
+    assert_eq!(loaded.get(&files[0].path), Some(&files[0]), "names kept");
+    let old = loaded.get(&files[1].path).expect("old file");
+    assert_eq!(old.modified, None, "not trusted, so read again");
+}
+
 #[test]
 fn a_version_1_index_migrates_and_its_files_are_read_again() {
     let dir = TempDir::new("files-migrate");
