@@ -9,6 +9,7 @@
 // with aria-activedescendant; arrow keys move by cell and row, Home/End to the
 // ends, Enter or a click selects the glyph and opens its detail below the grid
 // (Tab reaches it); Escape or its Close button closes it and returns to the grid.
+// Its "Compare with…" button opens the compare overlay (GlyphCompare) on the glyph.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FeatureInfo, GlyphInfo } from '../api/types';
 import {
@@ -22,6 +23,8 @@ import {
 import { scrollToShow, windowRange } from '../list/virtual';
 import { useFaceLoader } from '../preview/faceLoader';
 import CopyValue from './CopyValue.vue';
+import GlyphCompare from './GlyphCompare.vue';
+import { useGlyphCompareStore } from '../stores/glyphCompare';
 import { useGlyphsStore } from '../stores/glyphs';
 import { useSelectionStore } from '../stores/selection';
 
@@ -39,6 +42,7 @@ const FALLBACK_WIDTH = 288;
 
 const selection = useSelectionStore();
 const glyphs = useGlyphsStore();
+const compare = useGlyphCompareStore();
 const loader = useFaceLoader();
 
 const faceId = computed(() => selection.detail?.face.id ?? null);
@@ -156,6 +160,12 @@ function choose(index: number): void {
   cursor.value = index;
   const g = glyphs.item(index);
   if (g) void glyphs.select(g);
+}
+
+/** Opens the compare overlay on the selected character. */
+function openCompare(): void {
+  const g = glyphs.selected;
+  if (g && faceId.value !== null) void compare.start(faceId.value, g.codePoint);
 }
 
 /** Closes the glyph detail and puts focus back on the grid. */
@@ -378,6 +388,17 @@ const noResults = computed(
             ×
           </button>
         </div>
+        <div class="detail-actions">
+          <button
+            type="button"
+            class="action"
+            aria-haspopup="dialog"
+            title="Overlay this character with the same one in another font"
+            @click="openCompare"
+          >
+            Compare with…
+          </button>
+        </div>
         <p v-if="glyphs.detailError" class="muted" role="alert">
           {{ glyphs.detailError.message }}
         </p>
@@ -397,6 +418,7 @@ const noResults = computed(
           </div>
         </template>
       </section>
+      <GlyphCompare v-if="compare.open" />
       <p v-if="glyphs.unicodeVersion" class="muted note">
         Blocks from Unicode {{ glyphs.unicodeVersion }}.
       </p>
@@ -501,6 +523,23 @@ select.field {
 }
 .detail-head dl {
   flex: 1;
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
+.action {
+  padding: 2px 8px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 6px;
+  background: var(--fm-bg);
+  color: var(--fm-fg);
+  font: inherit;
+  white-space: nowrap;
+}
+.action:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
 }
 .close {
   align-self: flex-start;
