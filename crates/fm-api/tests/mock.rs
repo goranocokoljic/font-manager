@@ -11,9 +11,9 @@ use fm_api::activation::{
 use fm_api::common::{FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
-    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, ImportMode,
-    KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest,
-    TrashMoveStatus,
+    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphsRequest,
+    ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
+    SetSourcePausedRequest, TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -1035,4 +1035,36 @@ fn keep_this_one_skips_an_active_copy_and_refuses_a_stranger() {
         api.undo_resolution(ResolutionId(999)).unwrap_err().code,
         ErrorCode::NotFound
     );
+}
+
+#[test]
+fn the_glyph_map_lists_a_face_by_block_and_searches_it() {
+    let api = api();
+    let req = |block: Option<&str>, query: Option<&str>| GlyphsRequest {
+        face: FaceId(1),
+        block: block.map(Into::into),
+        query: query.map(Into::into),
+        page: Page::default(),
+    };
+    let all = api.list_glyphs(req(None, None)).unwrap();
+    assert!(all.total > 0);
+    assert_eq!(all.blocks.iter().map(|b| b.count).sum::<u32>(), all.total);
+    assert!(
+        all.items
+            .windows(2)
+            .all(|w| w[0].code_point < w[1].code_point)
+    );
+    let latin = api.list_glyphs(req(Some("Basic Latin"), None)).unwrap();
+    assert!(latin.items.iter().all(|g| g.block == "Basic Latin"));
+    for q in ["A", "U+0041", "0041"] {
+        let found = api.list_glyphs(req(None, Some(q))).unwrap();
+        assert_eq!(found.items[0].code_point, 0x41, "{q}");
+    }
+    let err = api
+        .list_glyphs(GlyphsRequest {
+            face: FaceId(999),
+            ..req(None, None)
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
 }

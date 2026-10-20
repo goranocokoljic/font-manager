@@ -46,7 +46,9 @@ The **Help** commands in the palette open these pages, like the **Help** menu do
 ## Moving between the parts of the window
 
 Press `Tab` to go from the sidebar to the font list and then to the inspector.
-In the inspector, `Left` and `Right` move between the **Info** and **Features** tabs.
-On a feature switch, `Space` turns the feature on or off.
+In the inspector, `Left` and `Right` move between the **Info**, **Features** and
+**Glyphs** tabs. On a feature switch, `Space` turns the feature on or off.
+In the glyph grid, the arrow keys move from character to character, `Home` and `End`
+go to the first and the last character, and `Enter` selects the character.
 Letter and number keys also work on keyboards for other alphabets, for example
 Cyrillic or Greek.

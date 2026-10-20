@@ -10,9 +10,9 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, KeepCopyRequest,
-    LibraryService, ListFamiliesRequest, Problem, Resolution, ScanRequest, SetSourcePausedRequest,
-    Source,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphPage,
+    GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest, Problem, Resolution,
+    ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -203,6 +203,12 @@ async fn get_app_info(state: State<'_, AppState>) -> ApiResult<AppInfo> {
 #[tauri::command]
 async fn get_face(state: State<'_, AppState>, face: FaceId) -> ApiResult<FaceDetail> {
     call(&state, move |api| api.get_face(face)).await
+}
+
+/// One page of a face's glyph map, for the inspector's Glyphs tab.
+#[tauri::command]
+async fn list_glyphs(state: State<'_, AppState>, req: GlyphsRequest) -> ApiResult<GlyphPage> {
+    call(&state, move |api| api.list_glyphs(req)).await
 }
 
 /// One page of families.
@@ -500,6 +506,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_face,
+            list_glyphs,
             list_families,
             get_family,
             search,

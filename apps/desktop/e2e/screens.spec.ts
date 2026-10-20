@@ -19,6 +19,8 @@ const routes = (process.env.FM_SCREENS_ROUTES ?? '/')
   .split(',')
   .map((r) => r.trim())
   .filter(Boolean);
+// FM_SCREENS_TAB=Glyphs opens that inspector tab before the shot.
+const tab = process.env.FM_SCREENS_TAB;
 // FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
 const viewports = [
@@ -46,6 +48,14 @@ test.describe('@screens', () => {
           await page.goto(`/#${path}`);
           await expect(page.locator('#app')).not.toBeEmpty();
           if (press) await page.keyboard.press(press);
+          if (tab) {
+            // Narrow windows hide the inspector until asked.
+            const target = page.getByRole('tab', { name: tab });
+            if (!(await target.isVisible()))
+              await page.getByRole('button', { name: 'Inspector' }).click();
+            await target.click();
+            await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible();
+          }
           await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });
         });
       }

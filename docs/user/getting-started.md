@@ -34,6 +34,11 @@ Read [Sources](sources.md) to learn more about folders.
   the preview of that font changes. **Reset** sets the features back to the default.
   Features that the text engine applies by itself show "applied automatically". The
   app keeps your choices for each font until you quit it.
+- Open the **Glyphs** tab to see every character of the font, in groups by Unicode
+  block (for example Basic Latin or Cyrillic). Choose a block in the list to see only
+  that block. Type in the search field to find a character: type the character itself
+  (`Ж`), its code point (`U+0416` or `0416`) or its glyph name (`uni0416`). Click a
+  character to see its code point, glyph name and glyph id.
 
 ## Use a font in other apps
 

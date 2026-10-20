@@ -801,6 +801,75 @@ export type FontSource = {
 	hash: string,
 };
 
+/**  A Unicode block and how many of the listed characters it holds. */
+export type GlyphBlock = {
+	/**  The block name from the Unicode block table (`Cyrillic`). */
+	name: string,
+	/**  Its first code point. */
+	first: number,
+	/**  Its last code point. */
+	last: number,
+	/**  Characters of the whole list (all pages) in this block. */
+	count: number,
+};
+
+/**  One mapped character of a face. */
+export type GlyphInfo = {
+	/**  The Unicode code point. */
+	codePoint: number,
+	/**  The glyph `cmap` maps it to. */
+	glyphId: number,
+	/**
+	 *  The glyph name from `post` or the CFF charset; absent when the font
+	 *  has none.
+	 */
+	name: string | null,
+	/**
+	 *  The Unicode block it is in ([`GlyphBlock::name`]); "No block" for a
+	 *  code point outside every block.
+	 */
+	block: string,
+};
+
+/**  One page of a glyph map. */
+export type GlyphPage = {
+	/**  The characters in this page, by code point. */
+	items: GlyphInfo[],
+	/**  Characters in the whole list. */
+	total: number,
+	/**
+	 *  The blocks of the whole list, in code-point order, each with its
+	 *  count: the list is these blocks one after another.
+	 */
+	blocks: GlyphBlock[],
+	/**
+	 *  `Broken` with a reason when the font's tables are malformed; the
+	 *  list is empty then.
+	 */
+	health: Health,
+	/**  The Unicode version of the block table (`17.0.0`). */
+	unicodeVersion: string,
+};
+
+/**
+ *  One page of a face's glyph map (E11.1): its mapped characters by Unicode
+ *  block, optionally one block only or the ones a search finds.
+ */
+export type GlyphsRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  Only this block (its name, as [`GlyphBlock::name`]); all when absent. */
+	block?: string | null,
+	/**
+	 *  Search: the character itself (`Ж`), a code point (`U+0416`, `0416`)
+	 *  or a glyph name (`uni0416`, `Zhe-cy`). All characters when absent or
+	 *  blank.
+	 */
+	query?: string | null,
+	/**  The window into the list; `limit` is capped at 500. */
+	page?: Page,
+};
+
 /**
  *  Whether a face can be used. Malformed font data is never a panic; it is
  *  `Broken` with a reason.
@@ -1510,4 +1579,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 7, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 8, patch: 0 };

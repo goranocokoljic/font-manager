@@ -34,9 +34,9 @@ use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, ImportMode,
-    KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem, Resolution,
-    ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphPage,
+    GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform,
+    Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -67,7 +67,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, preview};
+use crate::{charsets, glyphs, preview};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -503,6 +503,16 @@ impl LibraryService for CoreApi {
         let resolution = self.resolver()?.undo_resolution(resolution)?;
         self.forget_files();
         Ok(resolution)
+    }
+
+    /// Reads the face's file outside the index lock: a CJK font is large.
+    fn list_glyphs(&self, req: GlyphsRequest) -> ApiResult<GlyphPage> {
+        let file = self.lock().face_file(req.face)?;
+        Ok(glyphs::glyph_page_file(
+            &file.path,
+            file.collection_index,
+            &req,
+        )?)
     }
 }
 

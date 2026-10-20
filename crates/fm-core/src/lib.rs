@@ -7,6 +7,7 @@
 
 pub mod activation;
 pub mod api;
+pub mod blocks;
 pub mod charsets;
 pub mod classify;
 pub mod config;
@@ -16,6 +17,7 @@ pub mod error;
 pub mod features;
 mod filter;
 pub mod font_file;
+pub mod glyphs;
 pub mod grouping;
 pub mod index;
 pub mod logging;

@@ -28,6 +28,10 @@ import {
   type FamilyHit,
   type FamilySummary,
   type FilterCount,
+  type GlyphBlock,
+  type GlyphInfo,
+  type GlyphPage,
+  type GlyphsRequest,
   type FilterCounts,
   type Filters,
   type JobId,
@@ -254,6 +258,68 @@ function mockChars(f: FaceDetail): Set<string> {
   return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
 }
 
+/** The blocks the mock's characters fall in, like the Rust mock's: name, first, last. */
+const MOCK_BLOCKS: [string, number, number][] = [
+  ['Basic Latin', 0x0000, 0x007f],
+  ['Latin-1 Supplement', 0x0080, 0x00ff],
+  ['Latin Extended-A', 0x0100, 0x017f],
+  ['Cyrillic', 0x0400, 0x04ff],
+  ['CJK Unified Ideographs', 0x4e00, 0x9fff],
+  ['Hangul Syllables', 0xac00, 0xd7af],
+];
+
+/** CJK ideographs and Hangul syllables: 32,164 characters, for a face given `cjk`. */
+const CJK = range(0x4e00, 0xa000) + range(0xac00, 0xd7a4);
+
+const mockBlock = (cp: number): [string, number, number] =>
+  MOCK_BLOCKS.find(([, first, last]) => cp >= first && cp <= last) ?? ['No block', cp, cp];
+
+/** `A` for letters, `uni0416` for the rest, like the Rust mock's names. */
+const mockGlyphName = (c: string) =>
+  /^[A-Za-z]$/.test(c) ? c : `uni${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
+
+/** A simple stand-in for fm-core's search: one character, `U+` or bare hex, a name part. */
+function mockGlyphMatches(g: GlyphInfo, query: string): boolean {
+  if ([...query].length === 1) return g.codePoint === query.codePointAt(0);
+  const hex = query.replace(/^u\+/i, '');
+  if (/^[0-9a-f]{1,6}$/i.test(hex) && parseInt(hex, 16) === g.codePoint) return true;
+  return !!g.name && g.name.toLowerCase().includes(query.toLowerCase());
+}
+
+/** One page of a mock face's glyph map: its characters, plus CJK when `cjk`. */
+export function mockGlyphPage(f: FaceDetail, req: GlyphsRequest, cjk: boolean): GlyphPage {
+  const query = req.query?.trim() ?? '';
+  const chars = [...mockChars(f)].join('') + (cjk ? CJK : '');
+  const all: GlyphInfo[] = [...chars]
+    .map((c, i) => ({
+      codePoint: c.codePointAt(0)!,
+      glyphId: i + 1,
+      name: mockGlyphName(c),
+      block: mockBlock(c.codePointAt(0)!)[0],
+    }))
+    .sort((a, b) => a.codePoint - b.codePoint)
+    .filter((g) => req.block == null || g.block === req.block)
+    .filter((g) => !query || mockGlyphMatches(g, query));
+  const blocks: GlyphBlock[] = [];
+  for (const g of all) {
+    const last = blocks[blocks.length - 1];
+    if (last?.name === g.block) last.count += 1;
+    else {
+      const [name, first, end] = mockBlock(g.codePoint);
+      blocks.push({ name, first, last: end, count: 1 });
+    }
+  }
+  const offset = req.page?.offset ?? 0;
+  const limit = Math.min(req.page?.limit ?? 100, 500);
+  return {
+    items: all.slice(offset, offset + limit),
+    total: all.length,
+    blocks,
+    health: { kind: 'ok' },
+    unicodeVersion: '17.0.0',
+  };
+}
+
 /**
  * The rule of `fm_core::sample` on the mock's languages: the sample when the face maps
  * it; else letters of the complete language whose script the face maps most; else
@@ -336,6 +402,8 @@ export interface MockOptions {
   duplicates?: DuplicateGroup[];
   /** Project sets (none by default). */
   sets?: ProjectSet[];
+  /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
+  cjkFaces?: FaceId[];
 }
 
 /** A sample project set, like the Rust mock's: Inter and JetBrains Mono. */
@@ -839,6 +907,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         if (!f) throw notFound(id);
         return mockSampleText(f, req.text);
       }),
+    listGlyphs: async (req) => {
+      const f = find(req.face);
+      if (!f) throw notFound(req.face);
+      return mockGlyphPage(f, req, options.cjkFaces?.includes(req.face) ?? false);
+    },
     getFace: async (id) => {
       const f = find(id);
       if (!f) throw notFound(id);
@@ -1228,4 +1301,6 @@ export const mockClient: FmClient = createMockClient({
   sets: mockSets,
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
+  // `?mockCjk=1` gives face 1 a CJK-sized glyph map.
+  cjkFaces: countFromUrl('mockCjk', 1) ? [1] : [],
 });

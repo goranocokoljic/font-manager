@@ -831,6 +831,74 @@ pub struct Resolution {
     pub moves: Vec<TrashMove>,
 }
 
+/// One page of a face's glyph map (E11.1): its mapped characters by Unicode
+/// block, optionally one block only or the ones a search finds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphsRequest {
+    /// The face.
+    pub face: FaceId,
+    /// Only this block (its name, as [`GlyphBlock::name`]); all when absent.
+    #[serde(default)]
+    pub block: Option<String>,
+    /// Search: the character itself (`Ж`), a code point (`U+0416`, `0416`)
+    /// or a glyph name (`uni0416`, `Zhe-cy`). All characters when absent or
+    /// blank.
+    #[serde(default)]
+    pub query: Option<String>,
+    /// The window into the list; `limit` is capped at 500.
+    #[serde(default)]
+    pub page: Page,
+}
+
+/// One mapped character of a face.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphInfo {
+    /// The Unicode code point.
+    pub code_point: u32,
+    /// The glyph `cmap` maps it to.
+    pub glyph_id: u32,
+    /// The glyph name from `post` or the CFF charset; absent when the font
+    /// has none.
+    pub name: Option<String>,
+    /// The Unicode block it is in ([`GlyphBlock::name`]); "No block" for a
+    /// code point outside every block.
+    pub block: String,
+}
+
+/// A Unicode block and how many of the listed characters it holds.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphBlock {
+    /// The block name from the Unicode block table (`Cyrillic`).
+    pub name: String,
+    /// Its first code point.
+    pub first: u32,
+    /// Its last code point.
+    pub last: u32,
+    /// Characters of the whole list (all pages) in this block.
+    pub count: u32,
+}
+
+/// One page of a glyph map.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphPage {
+    /// The characters in this page, by code point.
+    pub items: Vec<GlyphInfo>,
+    /// Characters in the whole list.
+    pub total: u32,
+    /// The blocks of the whole list, in code-point order, each with its
+    /// count: the list is these blocks one after another.
+    pub blocks: Vec<GlyphBlock>,
+    /// `Broken` with a reason when the font's tables are malformed; the
+    /// list is empty then.
+    pub health: Health,
+    /// The Unicode version of the block table (`17.0.0`).
+    pub unicode_version: String,
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -875,6 +943,11 @@ pub trait LibraryService {
     /// cannot come back (another file is at its path, the trash was emptied)
     /// is `Failed` and the others still come back; calling again retries it.
     fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution>;
+    /// One page of a face's glyph map (E11.1): the characters its `cmap`
+    /// maps, by code point and grouped by Unicode block, with glyph ids and
+    /// names. `NotFound` for an unknown face; a malformed font is a page with
+    /// `Broken` health, never an error.
+    fn list_glyphs(&self, req: GlyphsRequest) -> ApiResult<GlyphPage>;
 }
 
 #[cfg(test)]
