@@ -6,6 +6,7 @@ import { createMockClient, mockFaces } from '../api/mock';
 import type { FaceSummary } from '../api/types';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { clearFaceAxes } from '../preview/variations';
+import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -97,6 +98,26 @@ describe('FontPreviewRow', () => {
     useFeaturesStore().reset(inter.id);
     await flushPromises();
     expect(style(row).fontFeatureSettings).toBe('');
+  });
+
+  it('follows the axes set for its face, live, without loading the font again', async () => {
+    const row = mount(FontPreviewRow, { props: { face: inter } });
+    await flushPromises();
+    const sample = () => row.get('.sample').attributes('style');
+    const wght = mockFaces[0]!.axes[0]!;
+    const loads = fonts.faces.size;
+    useAxesStore().set(inter.id, wght, 650);
+    await flushPromises();
+    expect(sample()).toContain('font-variation-settings: "wght" 650');
+    expect(fonts.faces.size).toBe(loads);
+    expect(row.attributes('data-state')).toBe('ready');
+    // A virtual style's own coordinates win over the axes tab's.
+    await row.setProps({ variations: [{ tag: 'wght', value: 300 }] });
+    expect(sample()).toContain('font-variation-settings: "wght" 300');
+    await row.setProps({ variations: [] });
+    useAxesStore().reset(inter.id);
+    await flushPromises();
+    expect(sample()).toContain('font-variation-settings: "wght" 400');
   });
 
   it('says so when the face cannot load', async () => {

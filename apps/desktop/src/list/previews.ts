@@ -1,8 +1,9 @@
 // What each rendered row previews, shared by the list, grid and waterfall views:
 // a style row its face, a family row its first shown face; the text is the API's
-// answer for the view's sample (the sample, or a fallback the face covers).
+// answer for the view's sample (the sample, or a fallback the face covers). A
+// virtual style's row previews its face at the style's coordinates.
 import { watchEffect } from 'vue';
-import type { FaceSummary, SampleFallback } from '../api/types';
+import type { AxisValue, FaceSummary, SampleFallback } from '../api/types';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -19,6 +20,8 @@ export interface RowPreview {
   text: string;
   fallback: SampleFallback | null;
   missing: string[];
+  /** A virtual style's coordinates; absent for every other row. */
+  variations?: AxisValue[];
 }
 
 /**
@@ -36,7 +39,7 @@ export function useRowPreviews(
   const samples = useSamplesStore();
 
   const faceOf = (row: ListRow) =>
-    row.kind === 'face' ? row.face : list.shownFaces(row.family.id)?.[0];
+    row.kind === 'face' ? row.face : list.previewFace(row.family.id);
 
   function previewOf(row: ListRow): RowPreview {
     const face = faceOf(row);
@@ -48,6 +51,7 @@ export function useRowPreviews(
       text: got?.text ?? sample,
       fallback: got?.fallback ?? null,
       missing: got?.missing ?? [],
+      ...(row.kind === 'face' && row.virtual ? { variations: row.virtual.coordinates } : {}),
     };
   }
 

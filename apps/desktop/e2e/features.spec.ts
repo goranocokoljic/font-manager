@@ -111,11 +111,15 @@ test('arrow keys move between the inspector tabs', async ({ page }) => {
   await page.goto('/#/?face=1');
   const info = page.getByRole('tab', { name: 'Info' });
   await info.focus();
+  // Info, Axes, Features, Glyphs.
+  await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: 'Axes' })).toBeFocused();
   await page.keyboard.press('ArrowRight');
   const features = page.getByRole('tab', { name: 'Features' });
   await expect(features).toBeFocused();
   await expect(features).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tabpanel', { name: 'Features' })).toBeVisible();
+  await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
   await expect(info).toHaveAttribute('aria-selected', 'true');
 });

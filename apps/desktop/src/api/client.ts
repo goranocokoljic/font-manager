@@ -35,6 +35,7 @@ import type {
   ListFamiliesRequest,
   MoveCollectionRequest,
   Paged,
+  PinInstanceRequest,
   PreviewImage,
   PreviewRequest,
   Problem,
@@ -57,6 +58,9 @@ import type {
   Target,
   UntagFacesRequest,
   UserMetaUpdate,
+  VirtualStyle,
+  VirtualStyleId,
+  VirtualStylesRequest,
 } from './types';
 
 /** Settings as a response carries them: every field present. */
@@ -131,6 +135,12 @@ export interface FmClient {
   undoResolution(resolution: ResolutionId): Promise<Resolution>;
   /** Every project set: named groups of faces activated together. */
   listSets(): Promise<ProjectSet[]>;
+  /** Pins an instance of a variable face as a virtual style of a manual collection or a set. */
+  pinInstance(req: PinInstanceRequest): Promise<VirtualStyle>;
+  /** The virtual styles of one manual collection or one set, A to Z. */
+  listVirtualStyles(req: VirtualStylesRequest): Promise<VirtualStyle[]>;
+  /** Deletes a virtual style; its face stays. */
+  deleteVirtualStyle(style: VirtualStyleId): Promise<void>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -182,6 +192,9 @@ export const tauriClient: FmClient = {
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),
+  pinInstance: (req) => invoke<VirtualStyle>('pin_instance', { req }),
+  listVirtualStyles: (req) => invoke<VirtualStyle[]>('list_virtual_styles', { req }),
+  deleteVirtualStyle: (style) => invoke<void>('delete_virtual_style', { style }),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),
