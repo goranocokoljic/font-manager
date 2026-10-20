@@ -5,7 +5,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
-use fm_api::common::{Embedding, FontFormat, Health, Page};
+use fm_api::common::{AxisValue, Embedding, FontFormat, Health, Page};
 use fm_api::library::{
     FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, OpenLicense, ProblemKind,
     TrashMoveStatus,
@@ -536,6 +536,139 @@ fn rebuilding_the_index_scans_again_and_keeps_ids() {
     // The write follows the finish; wait for the index lock to be free.
     let _ = rx.recv_timeout(Duration::from_secs(5));
     assert_eq!(lib.family("Barlow").id, before.id);
+}
+
+/// Rebuilds the index and waits until the rebuild's scan has finished.
+fn rebuild(lib: &Lib) {
+    let rx = lib.api.subscribe();
+    let job = lib.api.rebuild_index().expect("rebuild");
+    let deadline = Instant::now() + WAIT;
+    loop {
+        match rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+            Ok(Event::ScanFinished { job: j, .. }) if j == job => break,
+            Ok(Event::JobFailed { error, .. }) => panic!("{error:?}"),
+            Ok(_) => {}
+            Err(e) => panic!("{e:?}"),
+        }
+    }
+    let _ = rx.recv_timeout(Duration::from_secs(5));
+}
+
+#[test]
+fn pinned_styles_survive_a_rebuild_and_reach_the_sidecar() {
+    let (lib, _, _) = Lib::scanned("api-virtual-styles");
+    let face = FaceId(lib.family("Asap Sharp").id.0);
+    let font = lib.root.join("asapsharp").join("AsapSharp[wdth,wght].ttf");
+    let bytes = std::fs::read(&font).expect("font");
+    let brand = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+        })
+        .expect("collection")
+        .id;
+    let client = lib
+        .api
+        .create_set(CreateSetRequest {
+            name: "Client".into(),
+            faces: Vec::new(),
+        })
+        .expect("set")
+        .id;
+    let semibold = lib
+        .api
+        .pin_instance(PinInstanceRequest {
+            face,
+            name: "Condensed Semibold".into(),
+            coordinates: vec![AxisValue {
+                tag: "wght".into(),
+                value: 600.0,
+            }],
+            collection: Some(brand),
+            set: None,
+        })
+        .expect("pin");
+    // The real font's axes, the left-out width at its default.
+    let axes = lib.api.get_face(face).expect("face").axes;
+    assert_eq!(semibold.coordinates.len(), axes.len());
+    for (c, a) in semibold.coordinates.iter().zip(&axes) {
+        assert_eq!(c.tag, a.tag);
+        let want = if a.tag == "wght" { 600.0 } else { a.default };
+        assert!((c.value - want).abs() < f32::EPSILON, "{c:?} vs {a:?}");
+    }
+    let heavy = lib
+        .api
+        .pin_instance(PinInstanceRequest {
+            face,
+            name: "Heavy".into(),
+            coordinates: Vec::new(),
+            collection: None,
+            set: Some(client),
+        })
+        .expect("pin");
+    let bebas = FaceId(lib.family("Bebas Neue").id.0);
+    let err = lib
+        .api
+        .pin_instance(PinInstanceRequest {
+            face: bebas,
+            name: "Wide".into(),
+            coordinates: Vec::new(),
+            collection: Some(brand),
+            set: None,
+        })
+        .expect_err("a static face");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert!(err.message.contains("not a variable font"), "{err:?}");
+
+    let in_brand = VirtualStylesRequest {
+        collection: Some(brand),
+        set: None,
+    };
+    let in_client = VirtualStylesRequest {
+        collection: None,
+        set: Some(client),
+    };
+    rebuild(&lib);
+    assert_eq!(
+        lib.api.list_virtual_styles(in_brand.clone()).expect("list"),
+        vec![semibold.clone()]
+    );
+    assert_eq!(
+        lib.api
+            .list_virtual_styles(in_client.clone())
+            .expect("list"),
+        vec![heavy.clone()]
+    );
+
+    // Mirrored to the family's sidecar.
+    let sidecars: Vec<PathBuf> = std::fs::read_dir(lib.root.join(crate::sidecar::SIDECAR_DIR))
+        .expect("sidecar folder")
+        .map(|e| e.expect("entry").path())
+        .collect();
+    let text: String = sidecars
+        .iter()
+        .map(|p| std::fs::read_to_string(p).expect("sidecar"))
+        .collect();
+    assert!(
+        text.contains("Condensed Semibold") && text.contains("Heavy"),
+        "{text}"
+    );
+
+    lib.api.delete_virtual_style(heavy.id).expect("delete");
+    assert_eq!(
+        lib.api.list_virtual_styles(in_client).expect("list"),
+        vec![]
+    );
+    lib.api.delete_collection(brand).expect("delete");
+    let err = lib
+        .api
+        .list_virtual_styles(in_brand)
+        .expect_err("collection gone");
+    assert_eq!(err.code, ErrorCode::NotFound);
+    // Rule 2: the font file is never written.
+    assert_eq!(std::fs::read(&font).expect("font"), bytes);
 }
 
 // --- search --------------------------------------------------------------

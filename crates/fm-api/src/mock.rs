@@ -30,8 +30,9 @@ use crate::library::{
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, MoveCollectionRequest, ProjectSet, RenameCollectionRequest, SetEntry,
-    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    ImportSetResponse, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
+    RenameCollectionRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
+    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
@@ -49,7 +50,7 @@ use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
     EventSource, ExportService, FaceId, FamilyId, JobId, LibraryService, OrganizationService,
     PreviewService, ResolutionId, SearchService, SetId, SettingsService, SourceId, TagId,
-    WorkflowService,
+    VirtualStyleId, WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
@@ -123,6 +124,8 @@ struct State {
     tags: Vec<Tag>,
     face_tags: HashMap<FaceId, BTreeSet<TagId>>,
     sets: Vec<ProjectSet>,
+    /// Pinned instances, each held by one collection or one set.
+    virtual_styles: Vec<VirtualStyle>,
     settings: Settings,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
@@ -487,6 +490,7 @@ impl State {
                 name: "Client brand".into(),
                 faces: vec![FaceId(1), FaceId(6)],
             }],
+            virtual_styles: Vec::new(),
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
@@ -668,6 +672,31 @@ impl State {
         }
     }
 
+    /// Exactly one holder of a virtual style, and it exists: a manual
+    /// collection or a set.
+    fn check_holder(&self, collection: Option<CollectionId>, set: Option<SetId>) -> ApiResult<()> {
+        match (collection, set) {
+            (Some(c), None) => {
+                if self.collection(c)?.rules.is_some() {
+                    return Err(ApiError::invalid(
+                        "A virtual style goes in a manual collection or a set, not a smart collection.",
+                    ));
+                }
+                Ok(())
+            }
+            (None, Some(s)) => {
+                if self.sets.iter().any(|x| x.id == s) {
+                    Ok(())
+                } else {
+                    Err(ApiError::not_found(format!("Set {s}")))
+                }
+            }
+            _ => Err(ApiError::invalid(
+                "Choose one collection or one set for the virtual style.",
+            )),
+        }
+    }
+
     fn collection(&self, id: CollectionId) -> ApiResult<&Collection> {
         self.collections
             .iter()
@@ -770,20 +799,39 @@ impl State {
                 if !self.collections.iter().any(|c| c.id == *collection) {
                     return Err(ApiError::not_found(format!("Collection {collection}")));
                 }
-                Ok(self
+                let members = self
                     .faces
                     .iter()
                     .filter(|f| self.in_collection(f, *collection, 0))
                     .map(|f| f.detail.face.id)
-                    .collect())
+                    .collect();
+                Ok(self.with_pinned(members, |v| v.collection == Some(*collection)))
             }
-            Target::Set { set } => self
-                .sets
-                .iter()
-                .find(|s| s.id == *set)
-                .map(|s| s.faces.clone())
-                .ok_or_else(|| ApiError::not_found(format!("Set {set}"))),
+            Target::Set { set } => {
+                let members = self
+                    .sets
+                    .iter()
+                    .find(|s| s.id == *set)
+                    .map(|s| s.faces.clone())
+                    .ok_or_else(|| ApiError::not_found(format!("Set {set}")))?;
+                Ok(self.with_pinned(members, |v| v.set == Some(*set)))
+            }
         }
+    }
+
+    /// `members` plus the face of each virtual style `held` picks, each face
+    /// once: the OS registers files, not instances.
+    fn with_pinned(
+        &self,
+        mut members: Vec<FaceId>,
+        held: impl Fn(&VirtualStyle) -> bool,
+    ) -> Vec<FaceId> {
+        for v in self.virtual_styles.iter().filter(|v| held(v)) {
+            if !members.contains(&v.face) {
+                members.push(v.face);
+            }
+        }
+        members
     }
 
     fn conflict(&self, f: &MockFace) -> Option<ConflictWith> {
@@ -1930,6 +1978,8 @@ impl OrganizationService for MockApi {
             i += 1;
         }
         st.collections.retain(|c| !doomed.contains(&c.id));
+        st.virtual_styles
+            .retain(|v| v.collection.is_none_or(|c| !doomed.contains(&c)));
         for id in doomed {
             st.members.remove(&id);
         }
@@ -2080,6 +2130,7 @@ impl OrganizationService for MockApi {
         if st.sets.len() == before {
             return Err(ApiError::not_found(format!("Set {set}")));
         }
+        st.virtual_styles.retain(|v| v.set != Some(set));
         Ok(())
     }
 
@@ -2124,6 +2175,92 @@ impl OrganizationService for MockApi {
         };
         st.sets.push(set.clone());
         Ok(ImportSetResponse { set, missing })
+    }
+
+    fn pin_instance(&self, req: PinInstanceRequest) -> ApiResult<VirtualStyle> {
+        let name = req.name.trim();
+        if name.is_empty() {
+            return Err(ApiError::invalid("Give the style a name."));
+        }
+        let mut st = self.state();
+        st.check_holder(req.collection, req.set)?;
+        let face = st.face(req.face)?;
+        let label = format!(
+            "{} {}",
+            face.detail.face.family_name, face.detail.face.style
+        );
+        let axes = face.detail.axes.clone();
+        if axes.is_empty() {
+            return Err(ApiError::invalid(format!(
+                "“{label}” is not a variable font, so it has no instances to pin."
+            )));
+        }
+        for c in &req.coordinates {
+            let axis = axes
+                .iter()
+                .find(|a| a.tag == c.tag)
+                .ok_or_else(|| ApiError::invalid(format!("“{label}” has no axis “{}”.", c.tag)))?;
+            if !(axis.min..=axis.max).contains(&c.value) {
+                return Err(ApiError::invalid(format!(
+                    "{} ({}) goes from {} to {}; {} is outside it.",
+                    axis.name, axis.tag, axis.min, axis.max, c.value
+                )));
+            }
+        }
+        let coordinates = axes
+            .iter()
+            .map(|a| AxisValue {
+                tag: a.tag.clone(),
+                value: req
+                    .coordinates
+                    .iter()
+                    .find(|c| c.tag == a.tag)
+                    .map_or(a.default, |c| c.value),
+            })
+            .collect();
+        if st.virtual_styles.iter().any(|v| {
+            v.face == req.face
+                && (v.collection, v.set) == (req.collection, req.set)
+                && v.name.eq_ignore_ascii_case(name)
+        }) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("“{label}” already has a style named “{name}” here."),
+            ));
+        }
+        let style = VirtualStyle {
+            id: VirtualStyleId(st.next()),
+            face: req.face,
+            name: name.into(),
+            coordinates,
+            collection: req.collection,
+            set: req.set,
+        };
+        st.virtual_styles.push(style.clone());
+        Ok(style)
+    }
+
+    fn list_virtual_styles(&self, req: VirtualStylesRequest) -> ApiResult<Vec<VirtualStyle>> {
+        let st = self.state();
+        st.check_holder(req.collection, req.set)?;
+        let mut out: Vec<VirtualStyle> = st
+            .virtual_styles
+            .iter()
+            .filter(|v| (v.collection, v.set) == (req.collection, req.set))
+            .cloned()
+            .collect();
+        out.sort_by_key(|v| (v.name.to_lowercase(), v.id));
+        Ok(out)
+    }
+
+    fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()> {
+        let mut st = self.state();
+        let before = st.virtual_styles.len();
+        st.virtual_styles.retain(|v| v.id != style);
+        if st.virtual_styles.len() == before {
+            return Err(ApiError::not_found(format!("Virtual style {style}")));
+        }
+        Ok(())
     }
 }
 

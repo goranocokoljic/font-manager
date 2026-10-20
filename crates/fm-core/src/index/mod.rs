@@ -36,6 +36,7 @@ mod sets;
 mod sidecars;
 mod sources;
 mod tags;
+mod virtual_styles;
 
 use std::cell::RefCell;
 use std::fmt;

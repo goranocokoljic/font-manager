@@ -41,8 +41,9 @@ use fm_api::library::{
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, MoveCollectionRequest, OrganizationService, ProjectSet,
+    ImportSetResponse, MoveCollectionRequest, OrganizationService, PinInstanceRequest, ProjectSet,
     RenameCollectionRequest, SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     FontSource, PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
@@ -57,7 +58,7 @@ use fm_api::workflows::{
 };
 use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
-    FamilyId, JobId, ResolutionId, SetId, SourceId,
+    FamilyId, JobId, ResolutionId, SetId, SourceId, VirtualStyleId,
 };
 use fm_platform::{AppPaths, FontActivator, Os, Trash};
 
@@ -664,6 +665,18 @@ impl OrganizationService for CoreApi {
 
     fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse> {
         Ok(self.lock().import_set(&export)?)
+    }
+
+    fn pin_instance(&self, req: PinInstanceRequest) -> ApiResult<VirtualStyle> {
+        Ok(self.lock().pin_instance(&req)?)
+    }
+
+    fn list_virtual_styles(&self, req: VirtualStylesRequest) -> ApiResult<Vec<VirtualStyle>> {
+        Ok(self.lock().virtual_styles(&req)?)
+    }
+
+    fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()> {
+        Ok(self.lock().delete_virtual_style(style)?)
     }
 }
 

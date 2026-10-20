@@ -97,8 +97,11 @@ impl Index {
         self.set(id)
     }
 
-    /// Deletes a set; its faces stay in the library. Unknown is `NotFound`.
+    /// Deletes a set and its virtual styles; its faces stay in the library.
+    /// Unknown is `NotFound`.
     pub fn delete_set(&mut self, id: SetId) -> FmResult<()> {
+        // `ON DELETE CASCADE` removes the memberships and the virtual styles;
+        // the styles' triggers mark their faces for the sidecar mirror.
         let deleted = self
             .conn
             .execute("DELETE FROM project_set WHERE id = ?1", [id.0])
@@ -106,6 +109,7 @@ impl Index {
         if deleted == 0 {
             return Err(FmError::not_found(format!("Set {id}")));
         }
+        self.mirror_sidecars();
         Ok(())
     }
 
@@ -236,7 +240,7 @@ fn ensure_faces(tx: &Transaction<'_>, faces: &[FaceId]) -> FmResult<()> {
     Ok(())
 }
 
-fn insert_set(tx: &Transaction<'_>, name: &str, faces: &[FaceId]) -> FmResult<SetId> {
+pub(super) fn insert_set(tx: &Transaction<'_>, name: &str, faces: &[FaceId]) -> FmResult<SetId> {
     tx.execute("INSERT INTO project_set (name) VALUES (?1)", [name])
         .map_err(|e| db_error(&e))?;
     let id = u32::try_from(tx.last_insert_rowid())

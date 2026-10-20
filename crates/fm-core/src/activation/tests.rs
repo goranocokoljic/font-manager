@@ -1160,3 +1160,84 @@ fn a_hundred_faces_activate_within_the_budget() {
     );
     assert_eq!(fx.events().len(), 1, "one event for the whole request");
 }
+
+#[test]
+fn a_virtual_style_activates_its_face_once_with_the_collection_or_set() {
+    let fx = Fixture::new();
+    let (regular, bold) = (fx.regular(), fx.bold());
+    let (collection, set) = {
+        let mut index = fx.index.lock().expect("index");
+        let collection = index
+            .create_collection(&CreateCollectionRequest {
+                name: "Brand".into(),
+                parent: None,
+                rules: None,
+            })
+            .expect("collection")
+            .id;
+        index
+            .add_to_collection(&CollectionFacesRequest {
+                collection,
+                faces: vec![regular],
+                families: vec![],
+            })
+            .expect("add");
+        let set = index
+            .create_set(&CreateSetRequest {
+                name: "Client".into(),
+                faces: vec![],
+            })
+            .expect("set")
+            .id;
+        // Two instances of the member face and one of a face that is not a
+        // member, in the collection; two instances of one face in the set.
+        // The service reads the rows; how a pin is checked is tested in
+        // `index/virtual_styles`.
+        let conn = index.conn();
+        for (face, name, collection, set) in [
+            (regular, "Wide", Some(collection.0), None),
+            (regular, "Narrow", Some(collection.0), None),
+            (bold, "Heavy", Some(collection.0), None),
+            (bold, "Heavy", None, Some(set.0)),
+            (bold, "Light", None, Some(set.0)),
+        ] {
+            conn.execute(
+                "INSERT INTO virtual_style (face_id, name, coordinates, collection_id, set_id)
+                 VALUES (?1, ?2, '[]', ?3, ?4)",
+                rusqlite::params![face.0, name, collection, set],
+            )
+            .expect("style");
+        }
+        (collection, set)
+    };
+
+    for (target, want) in [
+        (Target::Collection { collection }, vec![regular, bold]),
+        (Target::Set { set }, vec![bold]),
+    ] {
+        let out = fx
+            .service
+            .activate(ActivateRequest {
+                target: target.clone(),
+                mode: ActivationMode::Session,
+                on_conflict: ConflictPolicy::KeepExisting,
+            })
+            .expect("activate");
+        let mut faces: Vec<FaceId> = out.iter().map(|o| o.face).collect();
+        faces.sort();
+        let mut want = want;
+        want.sort();
+        assert_eq!(faces, want, "each face once");
+        assert!(out.iter().all(|o| o.outcome == Status::Done), "{out:?}");
+        // The OS holds the file once per face, not once per instance.
+        assert_eq!(fx.registered().len(), want.len());
+        fx.service
+            .deactivate(DeactivateRequest {
+                target: Some(target),
+                except: None,
+            })
+            .expect("deactivate");
+        assert_eq!(fx.active(), vec![]);
+        assert_eq!(fx.registered(), vec![]);
+    }
+}

@@ -27,6 +27,10 @@
 //!   changed to different values, this machine's value stays and the other
 //!   one is returned as a [`Conflict`], so it is never silently lost.
 //!
+//! - Virtual styles (E10.2, `pins`) merge as sets too, each known by its
+//!   holder and name; when both sides changed one's coordinates, this
+//!   machine's stay.
+//!
 //! Without a last-known sidecar (a new machine, a rebuilt index) the base is
 //! empty: whatever either side has set is kept, and two different values are
 //! a conflict.
@@ -40,9 +44,18 @@ use crate::grouping::family_key;
 /// The folder in a source that holds its sidecars.
 pub const SIDECAR_DIR: &str = ".fontlibrary";
 
-/// The format version this build writes. A sidecar with a higher version
-/// was written by a newer Font Manager and is only read, never rewritten.
-pub const SIDECAR_VERSION: u32 = 1;
+/// The highest format version this build reads and writes. A sidecar with
+/// a higher version was written by a newer Font Manager and is only read,
+/// never rewritten.
+///
+/// Version 2 adds `pins` (virtual styles, E10.2). A file with pins is
+/// written as version 2, so an older build, which ignores fields it does not
+/// know, leaves it alone instead of rewriting it without them; a file
+/// without pins stays [`PLAIN_VERSION`], so older builds still merge it.
+pub const SIDECAR_VERSION: u32 = 2;
+
+/// The format version of a sidecar without pins.
+pub const PLAIN_VERSION: u32 = 1;
 
 /// How many hex digits of the blake3 hash name a family's sidecar, and
 /// make one version id of an entry.
@@ -80,7 +93,7 @@ impl Sidecar {
     /// An empty sidecar for `family`.
     pub fn new(family: impl Into<String>) -> Self {
         Self {
-            version: SIDECAR_VERSION,
+            version: PLAIN_VERSION,
             family: family.into(),
             faces: Vec::new(),
             history: Vec::new(),
@@ -97,13 +110,19 @@ impl Sidecar {
         self.faces.iter().map(|f| (f.key(), f)).collect()
     }
 
-    /// Sorts the entries by face, so equal content is equal JSON.
+    /// Sorts the entries by face, so equal content is equal JSON, and sets
+    /// the version the content needs ([`SIDECAR_VERSION`]).
     pub fn normalize(&mut self) {
         for face in &mut self.faces {
             face.meta.normalize();
         }
         self.faces.sort_by_key(FaceEntry::key);
         self.faces.dedup_by_key(|f| f.key());
+        self.version = if self.faces.iter().any(|f| !f.meta.pins.is_empty()) {
+            SIDECAR_VERSION
+        } else {
+            PLAIN_VERSION
+        };
     }
 
     /// The file's text: pretty JSON with a final newline.
@@ -203,6 +222,65 @@ pub struct Meta {
     /// Manual collections, each as the names from the top level down.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub collections: Vec<Vec<String>>,
+    /// Virtual styles of this face (E10.2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pins: Vec<Pin>,
+}
+
+/// A virtual style (E10.2): an instance of the face under a name of its
+/// own, held by a manual collection (its names from the top level down) or
+/// a project set (its name).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Pin {
+    /// Style name.
+    pub name: String,
+    /// The collection that holds it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection: Option<Vec<String>>,
+    /// The set that holds it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set: Option<String>,
+    /// The coordinate on every axis, by tag.
+    #[serde(default)]
+    pub coordinates: BTreeMap<String, f32>,
+}
+
+// Equality is total: JSON has no NaN, and `Meta::normalize` drops pins with
+// a coordinate that is not a finite number.
+impl Eq for Pin {}
+
+/// What a merge knows a pin by: its holder and its name, the set's name and
+/// the style name in any case (as the index compares them).
+pub type PinKey = (Option<Vec<String>>, Option<String>, String);
+
+impl Pin {
+    /// Its key in a merge.
+    pub fn key(&self) -> PinKey {
+        (
+            self.collection.clone(),
+            self.set.as_deref().map(tag_key),
+            tag_key(&self.name),
+        )
+    }
+
+    /// Trimmed; `false` when it cannot be a pin (no name, no holder or two,
+    /// an empty name on the way, a coordinate that is not a number).
+    fn normalize(&mut self) -> bool {
+        self.name = self.name.trim().to_owned();
+        self.set = self.set.take().map(|s| s.trim().to_owned());
+        if let Some(path) = &mut self.collection {
+            for name in path.iter_mut() {
+                *name = name.trim().to_owned();
+            }
+        }
+        let holder_ok = match (&self.collection, &self.set) {
+            (Some(path), None) => !path.is_empty() && path.iter().all(|n| !n.is_empty()),
+            (None, Some(set)) => !set.is_empty(),
+            _ => false,
+        };
+        holder_ok && !self.name.is_empty() && self.coordinates.values().all(|v| v.is_finite())
+    }
 }
 
 impl Meta {
@@ -233,6 +311,9 @@ impl Meta {
             .retain(|p| !p.is_empty() && p.iter().all(|n| !n.is_empty()));
         self.collections.sort();
         self.collections.dedup();
+        self.pins.retain_mut(Pin::normalize);
+        self.pins.sort_by_key(Pin::key);
+        self.pins.dedup_by_key(|p| p.key());
     }
 }
 
@@ -418,6 +499,7 @@ pub fn merge(base: &Meta, local: &Meta, disk: &Meta) -> Merged {
             &disk.collections,
             |p| p.clone(),
         ),
+        pins: pins(&base.pins, &local.pins, &disk.pins),
     };
     Merged {
         meta: norm(&meta),
@@ -446,6 +528,23 @@ fn scalar<T: PartialEq + Serialize>(
         });
         local
     }
+}
+
+/// [`set`] for pins, by [`Pin::key`]; a pin on both sides is the one that
+/// changed, this machine's when both did.
+fn pins(base: &[Pin], local: &[Pin], disk: &[Pin]) -> Vec<Pin> {
+    let find = |items: &[Pin], k: &PinKey| items.iter().find(|p| p.key() == *k).cloned();
+    set(base, local, disk, Pin::key)
+        .into_iter()
+        .map(|kept| {
+            let k = kept.key();
+            match (find(local, &k), find(disk, &k)) {
+                (Some(l), Some(d)) if find(base, &k).as_ref() == Some(&l) => d,
+                (Some(l), _) => l,
+                (None, _) => kept,
+            }
+        })
+        .collect()
 }
 
 /// Items both sides have, plus those one side added; an item of `base` one

@@ -2,8 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::common::AxisValue;
 use crate::search::Filters;
-use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId};
+use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId, VirtualStyleId};
 
 /// A manual collection, or a smart one when `rules` is set. Siblings are
 /// ordered by the user; `list_collections` returns them in that order.
@@ -178,6 +179,61 @@ pub struct ImportSetResponse {
     pub missing: Vec<SetEntry>,
 }
 
+/// Pin an instance of a variable face as a virtual style of a manual
+/// collection or a project set: exactly one of `collection` and `set`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PinInstanceRequest {
+    /// The variable face.
+    pub face: FaceId,
+    /// Style name ("Condensed Semibold"); unique per face in its collection
+    /// or set.
+    pub name: String,
+    /// Axis coordinates; an axis left out is at its default.
+    #[serde(default)]
+    pub coordinates: Vec<AxisValue>,
+    /// The manual collection that holds it.
+    #[serde(default)]
+    pub collection: Option<CollectionId>,
+    /// The project set that holds it.
+    #[serde(default)]
+    pub set: Option<SetId>,
+}
+
+/// An instance of a variable face, pinned as a style of its own. The font
+/// file is not changed: activating it activates the face.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualStyle {
+    /// Id.
+    pub id: VirtualStyleId,
+    /// The variable face it is an instance of.
+    pub face: FaceId,
+    /// Style name.
+    pub name: String,
+    /// A coordinate for every axis of the face, in the font's axis order.
+    pub coordinates: Vec<AxisValue>,
+    /// The manual collection that holds it, if a collection does.
+    #[serde(default)]
+    pub collection: Option<CollectionId>,
+    /// The project set that holds it, if a set does.
+    #[serde(default)]
+    pub set: Option<SetId>,
+}
+
+/// The virtual styles of one manual collection or one project set: exactly
+/// one of `collection` and `set`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct VirtualStylesRequest {
+    /// The collection.
+    #[serde(default)]
+    pub collection: Option<CollectionId>,
+    /// The set.
+    #[serde(default)]
+    pub set: Option<SetId>,
+}
+
 /// Collections, tags, user metadata and project sets.
 pub trait OrganizationService {
     /// Every collection, parents before children.
@@ -212,4 +268,12 @@ pub trait OrganizationService {
     fn export_set(&self, set: SetId) -> ApiResult<SetExport>;
     /// Create a set from portable JSON, matching fonts by hash.
     fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse>;
+    /// Pin an instance of a variable face as a virtual style of a manual
+    /// collection or a set. A static face, an unknown axis or a coordinate
+    /// outside its axis is `InvalidRequest`.
+    fn pin_instance(&self, req: PinInstanceRequest) -> ApiResult<VirtualStyle>;
+    /// The virtual styles of a collection or a set, A to Z.
+    fn list_virtual_styles(&self, req: VirtualStylesRequest) -> ApiResult<Vec<VirtualStyle>>;
+    /// Delete a virtual style. The face is not touched.
+    fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()>;
 }
