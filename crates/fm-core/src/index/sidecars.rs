@@ -3,7 +3,7 @@
 //! wrote there. The file format and the merge rule are in [`crate::sidecar`].
 //!
 //! - **Mirror.** Triggers mark every face whose tags, favorite, rating,
-//!   notes or collections change (`sidecar_dirty`). After each such write
+//!   notes, collections or virtual styles change (`sidecar_dirty`). After each such write
 //!   [`Index::write_sidecars`] rewrites the sidecar of every dirty family. A
 //!   sidecar that cannot be written (folder offline, read-only) leaves its
 //!   faces dirty; the next write or scan tries again. The user's edit never
@@ -37,14 +37,19 @@ use fm_api::{FaceId, SourceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
 use super::files::path_from_sql;
+use super::virtual_styles::{self, Holder};
 use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
-use crate::sidecar::{self, FaceEntry, FaceKey, Field, Meta, Parsed, SIDECAR_DIR, Sidecar};
+use crate::sidecar::{
+    self, FaceEntry, FaceKey, Field, Meta, Parsed, Pin, PinKey, SIDECAR_DIR, Sidecar,
+};
 
 /// The `sidecar_conflict.field` of a sidecar that cannot be read.
 const FILE_FIELD: &str = "file";
 /// The `sidecar_conflict.field` of a collection that could not be joined.
 const COLLECTION_FIELD: &str = "collection";
+/// The `sidecar_conflict.field` of a virtual style that could not be joined.
+const PIN_FIELD: &str = "pin";
 /// Deeper than any collection tree a person makes; stops a damaged parent
 /// loop.
 const MAX_DEPTH: usize = 64;
@@ -445,8 +450,10 @@ impl Index {
             };
             let held = local_meta(&tx, face.id, &collections)?;
             let carried = carried_paths(&tx, face.id)?;
+            let carried_pins = carried_pins(&tx, face.id)?;
             let mut local = held.clone();
             local.collections.extend(carried.iter().cloned());
+            local.pins.extend(carried_pins.iter().cloned());
             local.normalize();
             let base_entry = base_entries.get(key).copied();
             let disk_entry = disk_entries.get(key).copied();
@@ -461,6 +468,12 @@ impl Index {
                 .filter(|p| !merged.meta.collections.contains(p))
             {
                 drop_carried(&tx, face.id, path)?;
+            }
+            for pin in carried_pins
+                .iter()
+                .filter(|p| !merged.meta.pins.iter().any(|m| m.key() == p.key()))
+            {
+                drop_carried_pin(&tx, face.id, pin)?;
             }
             if merged.meta != held {
                 let applied = apply(
@@ -497,6 +510,7 @@ impl Index {
             for face in &family {
                 let mut meta = local_meta(&tx, face.id, &collections)?;
                 meta.collections.extend(carried_paths(&tx, face.id)?);
+                meta.pins.extend(carried_pins(&tx, face.id)?);
                 meta.normalize();
                 if !meta.is_empty() {
                     // The entry replaces the one on disk, which the merge
@@ -638,8 +652,9 @@ impl Index {
     }
 }
 
-/// Marks every face of a collection and of its children dirty: their
-/// collection paths change when it is renamed, moved or deleted.
+/// Marks every face of a collection and of its children dirty, members and
+/// faces of virtual styles alike: their collection paths change when it is
+/// renamed, moved or deleted.
 pub(super) fn mark_collection_dirty(tx: &Transaction<'_>, collection: u32) -> FmResult<()> {
     tx.execute(
         "INSERT OR IGNORE INTO sidecar_dirty (face_id)
@@ -647,7 +662,8 @@ pub(super) fn mark_collection_dirty(tx: &Transaction<'_>, collection: u32) -> Fm
              SELECT ?1
              UNION SELECT collection.id FROM collection JOIN sub ON collection.parent_id = sub.id
          )
-         SELECT face_id FROM collection_face WHERE collection_id IN (SELECT id FROM sub)",
+         SELECT face_id FROM collection_face WHERE collection_id IN (SELECT id FROM sub)
+         UNION SELECT face_id FROM virtual_style WHERE collection_id IN (SELECT id FROM sub)",
         [collection],
     )
     .map_err(|e| db_error(&e))?;
@@ -765,21 +781,23 @@ fn local_meta(tx: &Transaction<'_>, face: u32, collections: &Collections) -> FmR
         .into_iter()
         .filter_map(|id| collections.path(id))
         .collect();
+    meta.pins = virtual_styles::face_pins(tx, face, |id| collections.path(id))?;
     meta.normalize();
     Ok(meta)
 }
 
 /// What [`apply`] did to one face.
 struct Applied {
-    /// New conflicts (collections that cannot be joined here).
+    /// New conflicts (collections and virtual styles that cannot be joined
+    /// here).
     conflicts: usize,
     /// Whether the index changed.
     changed: bool,
 }
 
 /// Writes `merged` over `local`, what the index holds, for one face. A
-/// collection that cannot be joined here is carried; one that can is joined
-/// and no longer carried.
+/// collection or virtual style that cannot be joined here is carried; one
+/// that can is joined and no longer carried.
 fn apply(
     tx: &Transaction<'_>,
     source: SourceId,
@@ -893,6 +911,50 @@ fn apply(
                 > 0;
         }
     }
+
+    let had: HashMap<PinKey, &Pin> = local.pins.iter().map(|p| (p.key(), p)).collect();
+    let want: HashMap<PinKey, &Pin> = merged.pins.iter().map(|p| (p.key(), p)).collect();
+    for (key, pin) in &want {
+        if had.get(key) == Some(pin) {
+            continue;
+        }
+        let holder = match (&pin.collection, &pin.set) {
+            (Some(path), _) => match collections.resolve(tx, path, true)? {
+                Ok(Some(id)) => Holder::Collection(id),
+                Ok(None) => continue,
+                Err(()) => {
+                    let disk = serde_json::to_string(pin).unwrap_or_default();
+                    conflicts +=
+                        insert_conflict(tx, source, file, Some(face), PIN_FIELD, None, &disk)?;
+                    continue;
+                }
+            },
+            (None, Some(set)) => match virtual_styles::set_by_name(tx, set, true)? {
+                Some(id) => Holder::Set(id),
+                None => continue,
+            },
+            (None, None) => continue,
+        };
+        changed |= virtual_styles::put_pin(tx, face, pin, holder)?;
+        drop_carried_pin(tx, face, pin)?;
+    }
+    for (key, pin) in &had {
+        if want.contains_key(key) {
+            continue;
+        }
+        let holder = match (&pin.collection, &pin.set) {
+            (Some(path), _) => match collections.resolve(tx, path, false)? {
+                Ok(Some(id)) => Holder::Collection(id),
+                _ => continue,
+            },
+            (None, Some(set)) => match virtual_styles::set_by_name(tx, set, false)? {
+                Some(id) => Holder::Set(id),
+                None => continue,
+            },
+            (None, None) => continue,
+        };
+        changed |= virtual_styles::remove_pin(tx, face, &pin.name, holder)?;
+    }
     Ok(Applied { conflicts, changed })
 }
 
@@ -922,6 +984,41 @@ fn drop_carried(tx: &Transaction<'_>, face: u32, path: &[String]) -> FmResult<()
     )
     .and_then(|mut s| s.execute(params![face, COLLECTION_FIELD, disk]))
     .map_err(|e| db_error(&e))?;
+    Ok(())
+}
+
+/// The virtual styles carried for `face`: on another machine it has them,
+/// here their collection cannot be joined.
+fn carried_pins(tx: &Transaction<'_>, face: u32) -> FmResult<Vec<Pin>> {
+    let rows: Vec<String> = tx
+        .prepare_cached(
+            "SELECT DISTINCT disk FROM sidecar_conflict WHERE face_id = ?1 AND field = ?2",
+        )
+        .and_then(|mut s| {
+            s.query_map(params![face, PIN_FIELD], |row| row.get(0))?
+                .collect()
+        })
+        .map_err(|e| db_error(&e))?;
+    Ok(rows
+        .iter()
+        .filter_map(|json| serde_json::from_str(json).ok())
+        .collect())
+}
+
+/// Stops carrying the virtual style `pin` (any coordinates) for `face`: it
+/// was joined, or no machine has it.
+fn drop_carried_pin(tx: &Transaction<'_>, face: u32, pin: &Pin) -> FmResult<()> {
+    for carried in carried_pins(tx, face)?
+        .into_iter()
+        .filter(|c| c.key() == pin.key())
+    {
+        let disk = serde_json::to_string(&carried).unwrap_or_default();
+        tx.prepare_cached(
+            "DELETE FROM sidecar_conflict WHERE face_id = ?1 AND field = ?2 AND disk = ?3",
+        )
+        .and_then(|mut s| s.execute(params![face, PIN_FIELD, disk]))
+        .map_err(|e| db_error(&e))?;
+    }
     Ok(())
 }
 
@@ -1025,6 +1122,15 @@ fn stamp(meta: &fs::Metadata) -> String {
 
 /// One sentence for a value that lost a conflict.
 fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
+    if field == PIN_FIELD {
+        let pin: Option<Pin> = serde_json::from_str(disk).ok();
+        let (name, path) = pin.map_or_else(Default::default, |p| {
+            (p.name, p.collection.unwrap_or_default().join(" / "))
+        });
+        return format!(
+            "Another machine pinned the style \"{name}\" of this font in the collection \"{path}\", which is a smart collection here, so it was not added here. The other machines keep it."
+        );
+    }
     if field == COLLECTION_FIELD {
         let path: Vec<String> = serde_json::from_str(disk).unwrap_or_default();
         return format!(

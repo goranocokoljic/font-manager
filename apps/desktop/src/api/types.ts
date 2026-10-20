@@ -1089,6 +1089,26 @@ export type Paged<T> = {
 	total: number,
 };
 
+/**
+ *  Pin an instance of a variable face as a virtual style of a manual
+ *  collection or a project set: exactly one of `collection` and `set`.
+ */
+export type PinInstanceRequest = {
+	/**  The variable face. */
+	face: FaceId,
+	/**
+	 *  Style name ("Condensed Semibold"); unique per face in its collection
+	 *  or set.
+	 */
+	name: string,
+	/**  Axis coordinates; an axis left out is at its default. */
+	coordinates?: AxisValue[],
+	/**  The manual collection that holds it. */
+	collection?: CollectionId | null,
+	/**  The project set that holds it. */
+	set?: SetId | null,
+};
+
 /**  The operating system the app runs on. */
 export type Platform = 
 /**  Windows 10 or 11. */
@@ -1556,6 +1576,39 @@ export type UserMetaUpdate = {
 	notes?: string | null,
 };
 
+/**
+ *  An instance of a variable face, pinned as a style of its own. The font
+ *  file is not changed: activating it activates the face.
+ */
+export type VirtualStyle = {
+	/**  Id. */
+	id: VirtualStyleId,
+	/**  The variable face it is an instance of. */
+	face: FaceId,
+	/**  Style name. */
+	name: string,
+	/**  A coordinate for every axis of the face, in the font's axis order. */
+	coordinates: AxisValue[],
+	/**  The manual collection that holds it, if a collection does. */
+	collection?: CollectionId | null,
+	/**  The project set that holds it, if a set does. */
+	set?: SetId | null,
+};
+
+/**  An instance of a variable font pinned as a virtual style. */
+export type VirtualStyleId = number;
+
+/**
+ *  The virtual styles of one manual collection or one project set: exactly
+ *  one of `collection` and `set`.
+ */
+export type VirtualStylesRequest = {
+	/**  The collection. */
+	collection?: CollectionId | null,
+	/**  The set. */
+	set?: SetId | null,
+};
+
 /**  A web font format. */
 export type WebFormat = 
 /**  WOFF 2. */
@@ -1579,4 +1632,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 8, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 9, patch: 0 };

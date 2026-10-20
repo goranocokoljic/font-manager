@@ -391,8 +391,44 @@ CREATE TABLE resolution_move (
 ) WITHOUT ROWID;
 ";
 
+/// Virtual styles (E10.2, `index/virtual_styles.rs`): an instance of a
+/// variable face pinned in one manual collection or one project set.
+///
+/// - Exactly one of `collection_id` and `set_id` is set; deleting either
+///   deletes the style, deleting the face too. The font file is never
+///   touched.
+/// - `coordinates`: every axis of the face as `fm-api` `AxisValue` JSON, in
+///   the font's axis order.
+/// - A name is unique per face and holder, in any case.
+/// - The triggers mark the face dirty, so the sidecar mirror (V7) carries
+///   the style; a cascade from a deleted holder fires them too.
+const V10: &str = r"
+CREATE TABLE virtual_style (
+    id             INTEGER PRIMARY KEY,
+    face_id        INTEGER NOT NULL REFERENCES face (id) ON DELETE CASCADE,
+    name           TEXT    NOT NULL,
+    coordinates    TEXT    NOT NULL,
+    collection_id  INTEGER REFERENCES collection (id) ON DELETE CASCADE,
+    set_id         INTEGER REFERENCES project_set (id) ON DELETE CASCADE,
+    CHECK ((collection_id IS NULL) <> (set_id IS NULL))
+);
+CREATE UNIQUE INDEX virtual_style_name
+    ON virtual_style (face_id, coalesce(collection_id, 0), coalesce(set_id, 0), name COLLATE NOCASE);
+CREATE INDEX virtual_style_collection ON virtual_style (collection_id);
+CREATE INDEX virtual_style_set ON virtual_style (set_id);
+
+CREATE TRIGGER sidecar_dirty_virtual_style_insert AFTER INSERT ON virtual_style BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT new.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = new.face_id);
+END;
+CREATE TRIGGER sidecar_dirty_virtual_style_delete AFTER DELETE ON virtual_style BEGIN
+    INSERT INTO sidecar_dirty (face_id) SELECT old.face_id
+    WHERE NOT EXISTS (SELECT 1 FROM sidecar_dirty WHERE face_id = old.face_id);
+END;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -424,4 +460,5 @@ pub(crate) const TABLES: &[&str] = &[
     "source",
     "tag",
     "user_meta",
+    "virtual_style",
 ];
