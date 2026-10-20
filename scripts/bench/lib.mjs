@@ -15,7 +15,8 @@ export const SCHEMA = 1;
 /**
  * The budgets of CLAUDE.md rule 8, plus story budgets (preview_cache_hit: E4.3,
  * "a cache hit returns in under 2 ms"; smart_collections: E14.2, a search by a
- * smart collection and list_collections with 20 of them, each under 50 ms). target null = reported, not budgeted.
+ * smart collection and list_collections with 20 of them, each under 50 ms).
+ * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
 export const BUDGETS = {
