@@ -86,6 +86,10 @@ pub struct DeactivateRequest {
     /// What to deactivate; everything the app activated when absent.
     #[serde(default)]
     pub target: Option<Target>,
+    /// Faces to leave active, e.g. a project set for "Deactivate everything
+    /// not in the current set". Nothing is kept when absent.
+    #[serde(default)]
+    pub except: Option<Target>,
 }
 
 /// The other side of a conflict.
