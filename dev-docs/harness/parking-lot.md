@@ -122,3 +122,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E10.3 #96] crates/fm-core/src/parser.rs:557 — feature tags with non-printable bytes are stored as the display form `{0xNN}`, not the raw tag, so later CSS or MCP output from them cannot round-trip.
 - [E10.3 #96] apps/desktop/src/views/HomeView.vue:203 — at 1,000×700 the toolbar "Inspector" toggle is clipped to "Insp…".
+- [E10.2 #95] crates/fm-core/src/index/mod.rs:179 — `Index::rebuild` keeps every user table, so `rebuild_index` never exercises restoring user metadata from the sidecars.
+- [E10.2 #95] crates/fm-api/src/mock.rs:806 — the mock's collection target counts members of child collections; the core target reads only direct `collection_face` rows.
