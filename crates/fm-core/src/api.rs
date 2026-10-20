@@ -47,7 +47,8 @@ use fm_api::organization::{
     UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
-    FontSource, PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
+    SampleText, SampleTextRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse, SearchService,
@@ -70,7 +71,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, glyph_svg, glyphs, preview};
+use crate::{charsets, css, glyph_svg, glyphs, preview};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -572,6 +573,17 @@ impl PreviewService for CoreApi {
 
     fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
         Ok(self.lock().sample_texts(&req)?)
+    }
+
+    /// From the face's axes and features as the inspector shows them.
+    fn css_values(&self, req: CssValuesRequest) -> ApiResult<CssValues> {
+        let detail = self.lock().face_detail(req.face)?;
+        Ok(css::css_values(
+            &detail.axes,
+            &detail.features,
+            &req.variations,
+            &req.features,
+        ))
     }
 }
 

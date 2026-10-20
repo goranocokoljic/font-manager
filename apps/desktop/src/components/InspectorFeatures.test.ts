@@ -1,12 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setClient } from '../api/client';
+import { setClient, useClient } from '../api/client';
 import { createMockClient } from '../api/mock';
 import { useFeaturesStore } from '../stores/features';
 import { useSelectionStore } from '../stores/selection';
 import InspectorFeatures from './InspectorFeatures.vue';
 
+const copyText = vi.hoisted(() => vi.fn());
+vi.mock('../api/clipboard', () => ({ copyText }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
 async function mountWith(face: number | null) {
@@ -83,5 +85,39 @@ describe('inspector features tab', () => {
     await useSelectionStore().select(1);
     await flushPromises();
     expect(switchFor(w, 'smcp').attributes('aria-checked')).toBe('true');
+  });
+
+  it('copies font-feature-settings from fm-core for the changed features, normal when none', async () => {
+    copyText.mockReset().mockResolvedValue(undefined);
+    const w = await mountWith(1);
+    const copy = w.get('button[aria-label="Copy CSS for the features"]');
+    await copy.trigger('click');
+    await flushPromises();
+    expect(copyText).toHaveBeenLastCalledWith('font-feature-settings: normal;');
+    expect(w.get('[role="status"]').text()).toBe('Copied');
+    const cssValues = vi.spyOn(useClient(), 'cssValues');
+    await switchFor(w, 'smcp').trigger('click');
+    await switchFor(w, 'liga').trigger('click');
+    await copy.trigger('click');
+    await flushPromises();
+    expect(cssValues).toHaveBeenLastCalledWith({
+      face: 1,
+      variations: [],
+      features: [
+        { tag: 'smcp', on: true },
+        { tag: 'liga', on: false },
+      ],
+    });
+    // The same order and numbers as the preview's font-feature-settings.
+    expect(copyText).toHaveBeenLastCalledWith('font-feature-settings: "liga" 0, "smcp" 1;');
+    expect(useFeaturesStore().settings(1)).toBe('"liga" 0, "smcp" 1');
+  });
+
+  it('says "Could not copy" when the clipboard refuses', async () => {
+    copyText.mockReset().mockRejectedValue(new Error('refused'));
+    const w = await mountWith(1);
+    await w.get('button[aria-label="Copy CSS for the features"]').trigger('click');
+    await flushPromises();
+    expect(w.get('[role="status"]').text()).toBe('Could not copy');
   });
 });

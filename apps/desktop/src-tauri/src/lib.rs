@@ -21,7 +21,8 @@ use fm_api::organization::{
     TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
-    PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+    CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
+    SampleTextRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse,
@@ -245,6 +246,12 @@ async fn sample_texts(
     req: SampleTextRequest,
 ) -> ApiResult<Vec<SampleText>> {
     call(&state, move |api| api.sample_texts(req)).await
+}
+
+/// The CSS for a face's moved axes and switched features ("Copy CSS").
+#[tauri::command]
+async fn css_values(state: State<'_, AppState>, req: CssValuesRequest) -> ApiResult<CssValues> {
+    call(&state, move |api| api.css_values(req)).await
 }
 
 #[tauri::command]
@@ -579,6 +586,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_virtual_styles,
             delete_virtual_style,
             sample_texts,
+            css_values,
             render_preview,
             activate,
             deactivate,

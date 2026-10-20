@@ -10,6 +10,8 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type CssValues,
+  type CssValuesRequest,
   type Clash,
   type Collection,
   type CollectionFacesRequest,
@@ -376,6 +378,42 @@ export function mockGlyphDetail(f: FaceDetail, req: GlyphRequest, cjk: boolean):
         ? [mockFeature('onum')]
         : [],
     health: { kind: 'ok' },
+  };
+}
+
+/**
+ * The rule of `fm_core::css`: axes moved from their default in the font's axis
+ * order, switchable features away from their default sorted by tag, `normal`
+ * for none. Tags that are not four printable ASCII characters are left out.
+ */
+export function mockCssValues(f: FaceDetail, req: CssValuesRequest): CssValues {
+  const num = (v: number) => {
+    const s = v.toFixed(3).replace(/\.?0+$/, '');
+    return s === '-0' ? '0' : s;
+  };
+  const tag = (t: string) =>
+    /^[\x20-\x7e]{4}$/.test(t) ? `"${t.replace(/["\\]/g, '\\$&')}"` : null;
+  const decl = (p: string, parts: string[]) =>
+    `${p}: ${parts.length ? parts.join(', ') : 'normal'};`;
+  const axes = f.axes.flatMap((a) => {
+    const given = req.variations?.find((v) => v.tag === a.tag)?.value;
+    if (given == null || !Number.isFinite(given)) return [];
+    const v = num(Math.min(a.max ?? Infinity, Math.max(a.min ?? -Infinity, given)));
+    const t = tag(a.tag);
+    return (a.default != null && v === num(a.default)) || !t ? [] : [`${t} ${v}`];
+  });
+  const features = f.features
+    .filter((x) => !x.automatic)
+    .flatMap((x) => {
+      const on = req.features?.find((s) => s.tag === x.tag)?.on;
+      const t = tag(x.tag);
+      return on == null || on === x.defaultOn || !t ? [] : [[x.tag, `${t} ${on ? 1 : 0}`]];
+    })
+    .sort((a, b) => (a[0]! < b[0]! ? -1 : a[0]! > b[0]! ? 1 : 0))
+    .map((x) => x[1]!);
+  return {
+    variationSettings: decl('font-variation-settings', axes),
+    featureSettings: decl('font-feature-settings', features),
   };
 }
 
@@ -1024,6 +1062,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
 
   return {
     getAppInfo: async () => mockAppInfo,
+    cssValues: async (req) => {
+      const f = find(req.face);
+      if (!f) throw notFound(req.face);
+      return mockCssValues(f, req);
+    },
     sampleTexts: async (req) =>
       req.faces.map((id) => {
         const f = find(id);

@@ -9,6 +9,8 @@ import { useSelectionStore } from '../stores/selection';
 import { useVirtualStylesStore } from '../stores/virtualStyles';
 import InspectorAxes from './InspectorAxes.vue';
 
+const copyText = vi.hoisted(() => vi.fn());
+vi.mock('../api/clipboard', () => ({ copyText }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
 async function mountWith(face: number | null) {
@@ -140,5 +142,33 @@ describe('inspector axes tab', () => {
     const w = await mountWith(1);
     expect(w.text()).toContain('Make a manual collection or a project set');
     expect(w.find('button.pin-button').exists()).toBe(false);
+  });
+
+  it('copies font-variation-settings from fm-core for the moved axes, normal when none', async () => {
+    copyText.mockReset().mockResolvedValue(undefined);
+    const cssValues = vi.spyOn(useClient(), 'cssValues');
+    const w = await mountWith(1);
+    const copy = w.get('button[aria-label="Copy CSS for the axes"]');
+    await copy.trigger('click');
+    await flushPromises();
+    expect(copyText).toHaveBeenLastCalledWith('font-variation-settings: normal;');
+    expect(w.get('[role="status"]').text()).toBe('Copied');
+    await slider(w).setValue('650');
+    await copy.trigger('click');
+    await flushPromises();
+    expect(cssValues).toHaveBeenLastCalledWith({
+      face: 1,
+      variations: [{ tag: 'wght', value: 650 }],
+      features: [],
+    });
+    expect(copyText).toHaveBeenLastCalledWith('font-variation-settings: "wght" 650;');
+  });
+
+  it('says "Could not copy" when the clipboard refuses', async () => {
+    copyText.mockReset().mockRejectedValue(new Error('refused'));
+    const w = await mountWith(1);
+    await w.get('button[aria-label="Copy CSS for the axes"]').trigger('click');
+    await flushPromises();
+    expect(w.get('[role="status"]').text()).toBe('Could not copy');
   });
 });

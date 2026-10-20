@@ -36,7 +36,8 @@ use crate::organization::{
     UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
-    FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
+    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
+    SampleText, SampleTextRequest,
 };
 use crate::search::{
     CoverageReport, CoverageRequest, FamilyHit, FilterCount, FilterCounts, Filters,
@@ -1829,6 +1830,63 @@ impl PreviewService for MockApi {
                 })
             })
             .collect()
+    }
+
+    /// The core's rule (`fm_core::css`): axes away from their default in
+    /// axis order, switchable features away from their default by tag,
+    /// `normal` for none.
+    fn css_values(&self, req: CssValuesRequest) -> ApiResult<CssValues> {
+        let st = self.state();
+        let d = &st.face(req.face)?.detail;
+        let num = |v: f32| {
+            let s = format!("{:.3}", f64::from(v));
+            let s = s.trim_end_matches('0').trim_end_matches('.');
+            if s == "-0" {
+                "0".to_owned()
+            } else {
+                s.to_owned()
+            }
+        };
+        let tag = |t: &str| {
+            (t.len() == 4 && t.bytes().all(|b| (0x20..=0x7e).contains(&b)))
+                .then(|| format!("\"{}\"", t.replace('\\', "\\\\").replace('"', "\\\"")))
+        };
+        let decl = |p: &str, parts: Vec<String>| {
+            if parts.is_empty() {
+                format!("{p}: normal;")
+            } else {
+                format!("{p}: {};", parts.join(", "))
+            }
+        };
+        let axes = d
+            .axes
+            .iter()
+            .filter_map(|a| {
+                let v = req.variations.iter().find(|v| v.tag == a.tag)?.value;
+                let (lo, hi) = (a.min.min(a.max), a.min.max(a.max));
+                let v = v.is_finite().then(|| num(v.max(lo).min(hi)))?;
+                (v != num(a.default)).then_some(())?;
+                Some(format!("{} {v}", tag(&a.tag)?))
+            })
+            .collect();
+        let mut feats: Vec<(&str, bool)> = d
+            .features
+            .iter()
+            .filter(|f| !f.automatic)
+            .filter_map(|f| {
+                let on = req.features.iter().find(|s| s.tag == f.tag)?.on;
+                (on != f.default_on).then_some((f.tag.as_str(), on))
+            })
+            .collect();
+        feats.sort_unstable();
+        let feats = feats
+            .into_iter()
+            .filter_map(|(t, on)| Some(format!("{} {}", tag(t)?, u8::from(on))))
+            .collect();
+        Ok(CssValues {
+            variation_settings: decl("font-variation-settings", axes),
+            feature_settings: decl("font-feature-settings", feats),
+        })
     }
 }
 

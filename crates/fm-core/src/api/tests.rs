@@ -5,7 +5,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
-use fm_api::common::{AxisValue, Embedding, FontFormat, Health, Page};
+use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::library::{
     FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, OpenLicense, ProblemKind,
     TrashMoveStatus,
@@ -325,6 +325,55 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
 /// E10.4 criteria 1 and 2: `get_face` names stylistic sets and character
 /// variants with the font's own names, read from the index: the file is gone
 /// when `get_face` runs, so it cannot have been opened again.
+#[test]
+fn css_values_come_from_the_faces_own_axes_and_features() {
+    let (lib, _, _) = Lib::scanned("api-css-values");
+    let face = FaceId(lib.family("Asap Sharp").id.0);
+    let detail = lib.api.get_face(face).expect("face");
+    let wdth = detail.axes.iter().find(|a| a.tag == "wdth").expect("wdth");
+    let css = lib
+        .api
+        .css_values(CssValuesRequest {
+            face,
+            variations: vec![
+                AxisValue {
+                    tag: "wght".into(),
+                    value: 650.0001,
+                },
+                AxisValue {
+                    tag: "wdth".into(),
+                    value: wdth.default,
+                },
+            ],
+            features: vec![
+                FeatureSetting {
+                    tag: "liga".into(),
+                    on: false,
+                },
+                FeatureSetting {
+                    tag: "kern".into(),
+                    on: true,
+                },
+            ],
+        })
+        .expect("css");
+    // wdth sits at its default and kern is on by default: neither is written.
+    assert_eq!(
+        css.variation_settings,
+        r#"font-variation-settings: "wght" 650;"#
+    );
+    assert_eq!(css.feature_settings, r#"font-feature-settings: "liga" 0;"#);
+    let err = lib
+        .api
+        .css_values(CssValuesRequest {
+            face: FaceId(u32::MAX),
+            variations: Vec::new(),
+            features: Vec::new(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
 #[test]
 fn get_face_names_stylistic_sets_from_the_index() {
     let (lib, source, _) = Lib::scanned("api-feature-names");
