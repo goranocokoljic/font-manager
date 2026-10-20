@@ -120,6 +120,62 @@ test('choosing a named instance sets the slider to its coordinates', async ({ pa
   );
 });
 
+test('"Copy CSS" copies font-variation-settings for the moved axes, as the preview applies them', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const panel = await openAxes(page);
+  const sample = page.locator('[data-face="1"] .sample').first();
+  const copy = panel.getByRole('button', { name: 'Copy CSS for the axes' });
+  const status = panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ });
+  const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+
+  // Nothing moved yet: `normal`.
+  await copy.click();
+  await expect(status).toHaveText('Copied');
+  expect(await clipboard()).toBe('font-variation-settings: normal;');
+
+  await wghtField(panel).fill('650');
+  await wghtField(panel).press('Enter');
+  await expect(sample).toHaveCSS('font-variation-settings', '"wght" 650');
+  await copy.click();
+  await expect.poll(clipboard).toBe('font-variation-settings: "wght" 650;');
+  // The copied value, as the browser reads it, is what the row applies.
+  const copied = (await clipboard()).replace(/^font-variation-settings: (.*);$/, '$1');
+  const [applied, parsed] = await sample.evaluate((el, value) => {
+    const probe = document.createElement('span');
+    probe.style.fontVariationSettings = value;
+    return [(el as HTMLElement).style.fontVariationSettings, probe.style.fontVariationSettings];
+  }, copied);
+  expect(parsed).toBe(applied);
+});
+
+test('"Copy CSS" says so when the clipboard refuses', async ({ page }) => {
+  const panel = await openAxes(page);
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = () => Promise.reject(new Error('refused'));
+  });
+  await panel.getByRole('button', { name: 'Copy CSS for the axes' }).click();
+  await expect(panel.getByRole('status').filter({ hasText: 'Could not copy' })).toBeVisible();
+});
+
+test('"Copy CSS" is keyboard-reachable before the Reset button', async ({ page }) => {
+  const panel = await openAxes(page);
+  const copy = panel.getByRole('button', { name: 'Copy CSS for the axes' });
+  await copy.focus();
+  await expect(copy).toBeFocused();
+  await page.keyboard.press('Tab');
+  // Reset is disabled while nothing moved, so focus goes on to the slider.
+  await expect(wghtSlider(panel)).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(copy).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(
+    panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ }),
+  ).toBeVisible();
+});
+
 test('sliders, fields, presets and the pin button are keyboard-reachable with labels', async ({
   page,
 }) => {

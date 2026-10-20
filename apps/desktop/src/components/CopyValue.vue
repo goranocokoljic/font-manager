@@ -1,25 +1,11 @@
 <script setup lang="ts">
 // A value that copies itself to the clipboard on click (names and paths).
-import { onBeforeUnmount, ref } from 'vue';
-import { copyText } from '../api/clipboard';
+import { useCopy } from './useCopy';
 
 const props = defineProps<{ value: string; label: string }>();
 
-const status = ref<'copied' | 'failed' | null>(null);
-let timer: ReturnType<typeof setTimeout> | undefined;
-
-async function copy(): Promise<void> {
-  try {
-    await copyText(props.value);
-    status.value = 'copied';
-  } catch {
-    status.value = 'failed';
-  }
-  clearTimeout(timer);
-  timer = setTimeout(() => (status.value = null), 1500);
-}
-
-onBeforeUnmount(() => clearTimeout(timer));
+const { status, copy: copyValue } = useCopy();
+const copy = () => copyValue(props.value);
 </script>
 
 <template>

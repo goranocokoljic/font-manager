@@ -8,7 +8,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
     DeactivateRequest, OutcomeStatus, Target,
 };
-use fm_api::common::{AxisValue, FontFormat, Page, Slant};
+use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
@@ -21,7 +21,7 @@ use fm_api::organization::{
     MoveCollectionRequest, PinInstanceRequest, RenameCollectionRequest, TagFacesRequest,
     UserMetaUpdate, VirtualStylesRequest,
 };
-use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
+use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
 use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, ResolutionId, SourceId};
@@ -1270,4 +1270,54 @@ fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
         .code,
         ErrorCode::NotFound
     );
+}
+
+#[test]
+fn css_values_write_only_what_differs_from_the_defaults() {
+    let api = api();
+    let css = |face: u32, variations: Vec<AxisValue>, features: Vec<FeatureSetting>| {
+        api.css_values(CssValuesRequest {
+            face: FaceId(face),
+            variations,
+            features,
+        })
+        .expect("css")
+    };
+    let at = |tag: &str, value: f32| AxisValue {
+        tag: tag.into(),
+        value,
+    };
+    let switch = |tag: &str, on: bool| FeatureSetting {
+        tag: tag.into(),
+        on,
+    };
+    // Inter (face 1) is variable: wght 100–900, default 400; kern and liga on.
+    let got = css(
+        1,
+        vec![at("wght", 650.0001)],
+        vec![
+            switch("smcp", true),
+            switch("liga", false),
+            switch("kern", true),
+        ],
+    );
+    assert_eq!(
+        got.variation_settings,
+        r#"font-variation-settings: "wght" 650;"#
+    );
+    assert_eq!(
+        got.feature_settings,
+        r#"font-feature-settings: "liga" 0, "smcp" 1;"#
+    );
+    let got = css(1, vec![at("wght", 400.0)], vec![switch("liga", true)]);
+    assert_eq!(got.variation_settings, "font-variation-settings: normal;");
+    assert_eq!(got.feature_settings, "font-feature-settings: normal;");
+    let err = api
+        .css_values(CssValuesRequest {
+            face: FaceId(999),
+            variations: Vec::new(),
+            features: Vec::new(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
