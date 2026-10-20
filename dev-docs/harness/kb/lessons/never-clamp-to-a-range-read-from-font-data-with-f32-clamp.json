@@ -1,0 +1,19 @@
+{
+  "id": "never-clamp-to-a-range-read-from-font-data-with-f32-clamp",
+  "title": "Never clamp to a range read from font data with f32::clamp",
+  "category": "correctness",
+  "rule": "When a range comes from font data (fvar axis min/max, OS/2 or head bounds), do not call `f32::clamp`/`Ord::clamp` with it: they panic when min > max, and a malformed font can store an inverted range. Order the bounds first (`lo = min.min(max)`, `hi = min.max(max)`) and clamp with `v.max(lo).min(hi)`, and add a unit test with an inverted range.",
+  "rationale": "E10.5 (#98): css_values clamped a requested coordinate with `given.clamp(axis.min, axis.max)` on raw fvar values, so a font with min > max panicked on Copy CSS.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    98
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs",
+    "crates/fm-api/src/mock.rs"
+  ],
+  "first_seen": "2026-10-20T22:03:10.648Z",
+  "last_seen": "2026-10-20T22:03:10.648Z"
+}

@@ -118,6 +118,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-21
 
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.
+- [E10.5 #98] apps/desktop/src/stores/features.ts:43 — `settings()` writes feature tags into font-feature-settings without the 4-printable-ASCII check or escaping that `preview/variations.ts` and `fm_core::css` apply.
+- [E10.5 #98] apps/desktop/src/preview/variations.ts:12 — the preview writes every axis at its default when unmoved, unclamped and unrounded, so its text differs from fm-core's `css_values` for the same state.
 
 ## 2026-10-20
 
