@@ -11,7 +11,7 @@ use fm_api::organization::{
 use super::*;
 use crate::parser::{ParsedFace, ParsedFile};
 use crate::scanner::{FileHash, FileIndex, IndexedFile, Rescan, discover};
-use crate::sidecar::{FaceKey, Meta, SIDECAR_VERSION, Sidecar, file_name};
+use crate::sidecar::{FaceKey, Meta, PLAIN_VERSION, Sidecar, file_name};
 use crate::test_support::TempDir;
 
 /// (file relative to the source, family, style).
@@ -257,7 +257,10 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
     );
 
     let inter = m.sidecar("Inter");
-    assert_eq!(inter.version, SIDECAR_VERSION);
+    assert_eq!(
+        inter.version, PLAIN_VERSION,
+        "no pins: readable by older builds"
+    );
     assert_eq!(inter.family, "Inter");
     // Only the face with metadata, named by its path with `/` separators.
     assert_eq!(inter.faces.len(), 1);
@@ -272,6 +275,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
             notes: Some("Licensed for the 2026 rebrand".into()),
             tags: names(&["client", "Display"]),
             collections: vec![names(&["Work", "Client"])],
+            pins: Vec::new(),
         }
     );
     assert_eq!(
@@ -1008,4 +1012,231 @@ fn a_real_scan_of_fixture_fonts_round_trips_through_a_second_machine() {
     let tags = second.tags().expect("tags");
     assert_eq!(tags.len(), 1);
     assert_eq!((tags[0].name.as_str(), tags[0].face_count), ("brand", 2));
+}
+
+// --- virtual styles (E10.2) ------------------------------------------------
+
+fn pin_request(
+    face: FaceId,
+    name: &str,
+    wght: Option<f32>,
+    collection: Option<fm_api::CollectionId>,
+    set: Option<fm_api::SetId>,
+) -> fm_api::organization::PinInstanceRequest {
+    fm_api::organization::PinInstanceRequest {
+        face,
+        name: name.into(),
+        coordinates: wght
+            .map(|value| fm_api::common::AxisValue {
+                tag: "wght".into(),
+                value,
+            })
+            .into_iter()
+            .collect(),
+        collection,
+        set,
+    }
+}
+
+fn styles(
+    index: &Index,
+    collection: Option<fm_api::CollectionId>,
+    set: Option<fm_api::SetId>,
+) -> Vec<(String, Vec<(String, f32)>)> {
+    index
+        .virtual_styles(&fm_api::organization::VirtualStylesRequest { collection, set })
+        .expect("styles")
+        .into_iter()
+        .map(|v| {
+            (
+                v.name,
+                v.coordinates
+                    .into_iter()
+                    .map(|c| (c.tag, c.value))
+                    .collect(),
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn pinned_styles_of_a_real_variable_font_round_trip_through_a_second_machine() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../fixtures/fonts/google-repo/asapsharp/AsapSharp[wdth,wght].ttf");
+    let tmp = TempDir::new("sidecar-pins");
+    let root = tmp.path().join("synced");
+    std::fs::create_dir_all(&root).expect("mkdir");
+    let font = root.join("AsapSharp[wdth,wght].ttf");
+    std::fs::copy(&fixture, &font).expect("copy");
+    let bytes = std::fs::read(&font).expect("font");
+    let scan = |index: &mut Index| {
+        let source = index
+            .add_source(&root.to_string_lossy(), SourceKind::Watched)
+            .expect("source")
+            .id;
+        let mut scanned = FileIndex::new();
+        let report = scanned.rescan(&root, &discover(&root).expect("discover"));
+        index.apply_rescan(source, &scanned, &report).expect("scan");
+    };
+    let face_of = |index: &Index| -> FaceId {
+        index
+            .conn
+            .query_row("SELECT id FROM face", [], |r| r.get(0))
+            .map(FaceId)
+            .expect("face")
+    };
+
+    let mut first = Index::open_in_memory().expect("open");
+    scan(&mut first);
+    let face = face_of(&first);
+    let brand = first
+        .create_collection(&CreateCollectionRequest {
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+        })
+        .expect("collection")
+        .id;
+    let client = first
+        .create_set(&fm_api::organization::CreateSetRequest {
+            name: "Client".into(),
+            faces: Vec::new(),
+        })
+        .expect("set")
+        .id;
+    first
+        .pin_instance(&pin_request(
+            face,
+            "Semibold",
+            Some(600.0),
+            Some(brand),
+            None,
+        ))
+        .expect("pin");
+    first
+        .pin_instance(&pin_request(face, "Heavy", Some(800.0), None, Some(client)))
+        .expect("pin");
+    let in_brand = styles(&first, Some(brand), None);
+    let in_client = styles(&first, None, Some(client));
+    assert_eq!(in_brand.len(), 1);
+
+    // The family's sidecar carries both, as format 2.
+    let dir = root.join(SIDECAR_DIR);
+    let names_on_disk = list_sidecars(&dir);
+    assert_eq!(names_on_disk.len(), 1);
+    let on_disk = read_sidecar(&dir.join(&names_on_disk[0]));
+    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    assert_eq!(on_disk.faces[0].meta.pins.len(), 2);
+
+    // A second index over the folder (another machine, or this one after
+    // the index was rebuilt from scratch) gets the same styles back.
+    let mut second = Index::open_in_memory().expect("open");
+    scan(&mut second);
+    let brand2 = second.collections().expect("collections")[0].id;
+    let client2 = second.sets().expect("sets")[0].id;
+    assert_eq!(second.sets().expect("sets")[0].name, "Client");
+    assert_eq!(styles(&second, Some(brand2), None), in_brand);
+    assert_eq!(styles(&second, None, Some(client2)), in_client);
+
+    // Deleting the set on the second machine removes its style everywhere.
+    second.delete_set(client2).expect("delete");
+    assert_eq!(
+        read_sidecar(&dir.join(&names_on_disk[0])).faces[0]
+            .meta
+            .pins
+            .len(),
+        1
+    );
+    scan_again(&mut first, &root);
+    assert_eq!(styles(&first, None, Some(client)), vec![]);
+    assert_eq!(styles(&first, Some(brand), None), in_brand);
+
+    // The font file was never written.
+    assert_eq!(std::fs::read(&font).expect("font"), bytes);
+}
+
+/// A rescan of an index that already has the source at `root`.
+fn scan_again(index: &mut Index, root: &Path) {
+    let source = index.sources().expect("sources")[0].id;
+    let mut scanned = FileIndex::new();
+    let report = scanned.rescan(root, &discover(root).expect("discover"));
+    index.apply_rescan(source, &scanned, &report).expect("scan");
+}
+
+#[test]
+fn a_pin_in_a_collection_that_is_smart_here_is_a_problem_and_is_kept() {
+    let tmp = TempDir::new("sidecar-pin-smart");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Lora-Regular", &["a"]);
+    m.index
+        .create_collection(&CreateCollectionRequest {
+            name: "Serifs".into(),
+            parent: None,
+            rules: Some(fm_api::search::Filters::default()),
+        })
+        .expect("smart");
+    let pin = crate::sidecar::Pin {
+        name: "Wide".into(),
+        collection: Some(names(&["Serifs"])),
+        set: None,
+        coordinates: [("wdth".to_owned(), 110.0)].into_iter().collect(),
+    };
+    m.write_as_other_machine("Lora", |s| {
+        entry_mut(s, "Lora-Regular.ttf").pins = vec![pin.clone()];
+    });
+    m.scan();
+    let problems = m.index.sidecar_problems().expect("problems");
+    assert_eq!(problems.len(), 1);
+    assert!(
+        problems[0].message.contains("\"Wide\"") && problems[0].message.contains("Serifs"),
+        "{}",
+        problems[0].message
+    );
+    // Kept in the sidecar through this machine's later edits.
+    m.tag("Lora-Regular", &["b"]);
+    m.scan();
+    let entry = m.entry("Lora", "Lora-Regular.ttf").expect("entry");
+    assert_eq!(entry.pins, [pin]);
+    assert_eq!(entry.tags, ["a", "b"]);
+}
+
+#[test]
+fn renaming_a_collection_renames_it_in_its_pins() {
+    let tmp = TempDir::new("sidecar-pin-rename");
+    let mut m = Machine::new(tmp.path());
+    let work = m
+        .index
+        .create_collection(&CreateCollectionRequest {
+            name: "Work".into(),
+            parent: None,
+            rules: None,
+        })
+        .expect("work")
+        .id;
+    // A face without axes cannot be pinned through the API; write the row
+    // as a merge would, to test the mirror alone.
+    let face = m.face("Lora-Regular").0;
+    {
+        let tx = m.index.conn.transaction().expect("tx");
+        virtual_styles::insert_style(&tx, face, "Wide", &[], Holder::Collection(work.0))
+            .expect("insert");
+        tx.commit().expect("commit");
+    }
+    m.index.write_sidecars().expect("write");
+    let names_of = |m: &Machine| -> Vec<Option<Vec<String>>> {
+        m.entry("Lora", "Lora-Regular.ttf")
+            .expect("entry")
+            .pins
+            .into_iter()
+            .map(|p| p.collection)
+            .collect()
+    };
+    assert_eq!(names_of(&m), [Some(names(&["Work"]))]);
+    m.index
+        .rename_collection(&RenameCollectionRequest {
+            collection: work,
+            name: "Clients".into(),
+        })
+        .expect("rename");
+    assert_eq!(names_of(&m), [Some(names(&["Clients"]))]);
 }

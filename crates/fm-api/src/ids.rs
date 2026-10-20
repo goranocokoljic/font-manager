@@ -38,4 +38,6 @@ id!(
     JobId,
     /// A "Keep this one" action of the Problems view, for undo.
     ResolutionId,
+    /// An instance of a variable font pinned as a virtual style.
+    VirtualStyleId,
 );

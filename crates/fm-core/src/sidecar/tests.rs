@@ -7,6 +7,7 @@ fn meta(favorite: bool, rating: Option<u8>, notes: Option<&str>, tags: &[&str]) 
         notes: notes.map(Into::into),
         tags: tags.iter().map(|t| (*t).to_owned()).collect(),
         collections: Vec::new(),
+        pins: Vec::new(),
     }
 }
 
@@ -125,12 +126,83 @@ fn normalize_drops_what_the_index_would_not_store() {
         notes: Some(String::new()),
         tags: vec![" x ".into(), "X".into(), " ".into()],
         collections: vec![vec![], path(&["A", " "]), path(&["B"]), path(&["B"])],
+        pins: vec![
+            pin(" Wide ", Some(&["B"]), None, &[("wdth", 110.0)]),
+            pin("WIDE", Some(&["B"]), None, &[("wdth", 120.0)]),
+            pin(" ", Some(&["B"]), None, &[]),
+            pin("No holder", None, None, &[]),
+            pin("Two holders", Some(&["B"]), Some("S"), &[]),
+            pin("Empty step", Some(&["B", " "]), None, &[]),
+            pin("Blank set", None, Some(" "), &[]),
+            pin("Not a number", None, Some("S"), &[("wght", f32::NAN)]),
+        ],
     };
     m.normalize();
     assert_eq!(m.rating, None);
     assert_eq!(m.notes, None);
     assert_eq!(m.tags, ["X"]);
     assert_eq!(m.collections, [path(&["B"])]);
+    // Trimmed, one per holder and name in any case, the first kept.
+    assert_eq!(
+        m.pins,
+        [pin("Wide", Some(&["B"]), None, &[("wdth", 110.0)])]
+    );
+}
+
+fn pin(name: &str, collection: Option<&[&str]>, set: Option<&str>, at: &[(&str, f32)]) -> Pin {
+    Pin {
+        name: name.into(),
+        collection: collection.map(path),
+        set: set.map(Into::into),
+        coordinates: at.iter().map(|(t, v)| ((*t).to_owned(), *v)).collect(),
+    }
+}
+
+#[test]
+fn pins_merge_as_a_set_and_take_the_side_that_changed() {
+    let wide = pin("Wide", Some(&["Brand"]), None, &[("wdth", 110.0)]);
+    let wider = pin("Wide", Some(&["Brand"]), None, &[("wdth", 125.0)]);
+    let black = pin("Black", None, Some("Client"), &[("wght", 900.0)]);
+    let light = pin("Light", None, Some("client"), &[("wght", 300.0)]);
+    let with = |pins: &[&Pin]| Meta {
+        pins: pins.iter().map(|p| (*p).clone()).collect(),
+        ..Meta::default()
+    };
+    let base = with(&[&wide, &black]);
+    // The other machine added Light and removed Black; this one left both.
+    let merged = merge(&base, &base, &with(&[&wide, &light]));
+    assert_eq!(merged.meta.pins, [light.clone(), wide.clone()]);
+    assert!(merged.conflicts.is_empty());
+    // The other machine changed Wide: its coordinates are taken.
+    let merged = merge(&base, &base, &with(&[&wider, &black]));
+    assert_eq!(merged.meta.pins, [black.clone(), wider.clone()]);
+    // Both changed it: this machine's stay.
+    let narrow = pin("Wide", Some(&["Brand"]), None, &[("wdth", 80.0)]);
+    let merged = merge(&base, &with(&[&narrow, &black]), &with(&[&wider, &black]));
+    assert_eq!(merged.meta.pins, [black, narrow]);
+    // No base (a new machine): both sides' pins are kept.
+    let merged = merge(&Meta::default(), &with(&[&wide]), &with(&[&light]));
+    assert_eq!(merged.meta.pins, [light, wide]);
+}
+
+#[test]
+fn a_sidecar_with_pins_is_version_2_and_one_without_stays_version_1() {
+    let mut sidecar = Sidecar::new("Asap");
+    sidecar.faces.push(FaceEntry {
+        file: "Asap.ttf".into(),
+        index: 0,
+        postscript_name: None,
+        meta: meta(true, None, None, &[]),
+        history: Vec::new(),
+    });
+    sidecar.normalize();
+    assert_eq!(sidecar.version, PLAIN_VERSION);
+    sidecar.faces[0].meta.pins = vec![pin("Wide", Some(&["Brand"]), None, &[("wdth", 110.0)])];
+    sidecar.normalize();
+    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    // It reads back the same, coordinates exactly.
+    assert_eq!(parse(&sidecar.to_json()), Parsed::Sidecar(sidecar.clone()));
+    assert!(sidecar.to_json().contains(r#""pins""#));
 }
 
 #[test]
@@ -156,8 +228,8 @@ fn malformed_and_newer_sidecars_are_not_parsed_as_sidecars() {
         Parsed::Unreadable(_)
     ));
     assert_eq!(
-        parse(r#"{"version": 2, "faces": "anything"}"#),
-        Parsed::Newer(2)
+        parse(r#"{"version": 3, "faces": "anything"}"#),
+        Parsed::Newer(3)
     );
 }
 

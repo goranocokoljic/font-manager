@@ -116,8 +116,11 @@ impl Index {
                     Some(true) => Err(FmError::unsupported(
                         "Activating a smart collection is not available yet.",
                     )),
+                    // The faces of its virtual styles too, each once: the
+                    // OS registers files, not instances (E10.2).
                     Some(false) => self.face_ids(
                         "SELECT face_id FROM collection_face WHERE collection_id = ?1
+                         UNION SELECT face_id FROM virtual_style WHERE collection_id = ?1
                          ORDER BY face_id",
                         collection.0,
                     ),
@@ -127,12 +130,15 @@ impl Index {
         }
     }
 
+    /// A set's faces and the faces of its virtual styles, each once.
     fn set_faces(&self, set: SetId) -> FmResult<Vec<FaceId>> {
         if !self.exists("SELECT 1 FROM project_set WHERE id = ?1", set.0)? {
             return Err(FmError::not_found(format!("Set {set}")));
         }
         self.face_ids(
-            "SELECT face_id FROM set_face WHERE set_id = ?1 ORDER BY face_id",
+            "SELECT face_id FROM set_face WHERE set_id = ?1
+             UNION SELECT face_id FROM virtual_style WHERE set_id = ?1
+             ORDER BY face_id",
             set.0,
         )
     }

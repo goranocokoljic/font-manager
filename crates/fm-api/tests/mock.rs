@@ -8,7 +8,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
     DeactivateRequest, OutcomeStatus, Target,
 };
-use fm_api::common::{FontFormat, Page, Slant};
+use fm_api::common::{AxisValue, FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, WebFormat};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphsRequest,
@@ -18,7 +18,8 @@ use fm_api::library::{
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, MoveCollectionRequest,
-    RenameCollectionRequest, TagFacesRequest, UserMetaUpdate,
+    PinInstanceRequest, RenameCollectionRequest, TagFacesRequest, UserMetaUpdate,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -1067,4 +1068,84 @@ fn the_glyph_map_lists_a_face_by_block_and_searches_it() {
         })
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
+    let api = api();
+    let brand = api
+        .create_collection(CreateCollectionRequest {
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+        })
+        .unwrap()
+        .id;
+    let pin = |name: &str, face: u32, wght: Option<f32>| PinInstanceRequest {
+        face: FaceId(face),
+        name: name.into(),
+        coordinates: wght
+            .map(|value| AxisValue {
+                tag: "wght".into(),
+                value,
+            })
+            .into_iter()
+            .collect(),
+        collection: Some(brand),
+        set: None,
+    };
+    // Inter (face 1) is variable: wght 100–900, default 400.
+    let semibold = api.pin_instance(pin("Semibold", 1, Some(600.0))).unwrap();
+    assert_eq!(semibold.coordinates[0].value, 600.0);
+    let book = api.pin_instance(pin("Book", 1, None)).unwrap();
+    assert_eq!(book.coordinates[0].value, 400.0, "left out: the default");
+    let listed = api
+        .list_virtual_styles(VirtualStylesRequest {
+            collection: Some(brand),
+            set: None,
+        })
+        .unwrap();
+    assert_eq!(listed, vec![book.clone(), semibold.clone()]);
+
+    for (req, code) in [
+        (pin("Light", 3, None), ErrorCode::InvalidRequest), // static
+        (pin("Too heavy", 1, Some(1000.0)), ErrorCode::InvalidRequest),
+        (pin("semibold", 1, None), ErrorCode::Conflict),
+        (
+            PinInstanceRequest {
+                collection: None,
+                ..pin("Nowhere", 1, None)
+            },
+            ErrorCode::InvalidRequest,
+        ),
+    ] {
+        assert_eq!(api.pin_instance(req).unwrap_err().code, code);
+    }
+
+    // Two instances of one face: activated once.
+    let out = api
+        .activate(ActivateRequest {
+            target: Target::Collection { collection: brand },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::KeepExisting,
+        })
+        .unwrap();
+    let faces: Vec<FaceId> = out.iter().map(|o| o.face).collect();
+    assert_eq!(faces, vec![FaceId(1)]);
+
+    api.delete_virtual_style(book.id).unwrap();
+    assert_eq!(
+        api.delete_virtual_style(book.id).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    api.delete_collection(brand).unwrap();
+    assert_eq!(
+        api.list_virtual_styles(VirtualStylesRequest {
+            collection: Some(brand),
+            set: None,
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::NotFound
+    );
 }
