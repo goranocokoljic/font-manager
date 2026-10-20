@@ -112,6 +112,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.11 #285] crates/fm-core/src/api.rs:330 — `find_similar`, `export_web`, `license_inventory`, `pick_fonts_for_brief` and `prepare_for_web` answer `Unsupported` on the real API; the MockApi answers them, and no phase-1 UI calls them yet.
 - [E5.11 #285] crates/fm-core/src/api.rs:120 — scans write the whole rescan while holding the index lock, so UI reads wait for the write of a large first scan (seconds on 10k fonts).
 - [E5.11 #285] crates/fm-core/src/api.rs:151 — if the settings file becomes unreadable between `startup::init` and `CoreApi::start`, `start` returns early at `get_settings()?` and skips the crash-session cleanup for that run.
+- [E8.3 #88] crates/fm-core/src/api.rs:404 — `forget_files()` after other index changes (also :461) does not stop a scan already running from writing what it walked before the change.
 
 ## 2026-10-21
 
