@@ -13,11 +13,13 @@ const fixture = readFileSync(
 
 // MockApi face 1 (Inter Regular): ccmp (automatic), kern and liga (on by
 // default), onum, smcp, ss01.
-async function openFeatures(page: Page, path = '/#/?face=1') {
+async function openFeatures(page: Page, { showInspector = false } = {}) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto(path);
+  await page.goto('/#/?face=1');
+  // Narrow windows hide the inspector until asked.
+  if (showInspector) await page.getByRole('button', { name: 'Inspector' }).click();
   await page.getByRole('tab', { name: 'Features' }).click();
   const panel = page.getByRole('tabpanel', { name: 'Features' });
   await expect(panel.getByRole('switch').first()).toBeVisible();
@@ -162,3 +164,31 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(await on.evaluate(ratio)).toBeGreaterThanOrEqual(3);
   });
 }
+
+// Screenshots of the Features tab for UI reviews: FM_SCREENS_DIR=<dir> pnpm test:e2e --grep @screens
+test.describe('@screens features tab', () => {
+  const dir = process.env.FM_SCREENS_DIR;
+  test.skip(!dir, 'FM_SCREENS_DIR is not set');
+  for (const scheme of ['light', 'dark'] as const) {
+    for (const vp of [
+      { width: 1280, height: 800 },
+      { width: 1000, height: 700 },
+    ]) {
+      test(`features-${scheme}-${vp.width}x${vp.height}`, async ({ page }) => {
+        await page.setViewportSize(vp);
+        await page.emulateMedia({ colorScheme: scheme });
+        const panel = await openFeatures(page, { showInspector: vp.width < 1280 });
+        await panel.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
+        await expect(page.locator('[data-face="1"]').first()).toHaveAttribute(
+          'data-state',
+          'ready',
+        );
+        await page.screenshot({
+          path: `${dir}/features-${scheme}-${vp.width}x${vp.height}.png`,
+          fullPage: true,
+          animations: 'disabled',
+        });
+      });
+    }
+  }
+});
