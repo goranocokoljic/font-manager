@@ -656,6 +656,13 @@ export type FeatureInfo = {
 	tag: string,
 	/**  Friendly name ("Small capitals"), or the font's own ssXX name. */
 	name: string | null,
+	/**
+	 *  The shaper applies it by itself (`ccmp`, `mark`, `init`); a user
+	 *  cannot switch it on or off.
+	 */
+	automatic?: boolean,
+	/**  On in default text rendering (`kern`, `liga`, `calt`). */
+	defaultOn?: boolean,
 };
 
 /**  A feature switched on or off for a preview or CSS output. */

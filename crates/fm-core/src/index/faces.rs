@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Embedding, FeatureInfo, Health, Metrics, Slant};
+use fm_api::common::{Embedding, Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest};
@@ -22,6 +22,7 @@ use super::files::{format_from_sql, path_from_sql};
 use super::{Index, db_error};
 use crate::coverage;
 use crate::error::{FmError, FmResult};
+use crate::features;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
 
@@ -134,10 +135,7 @@ impl Index {
                 .map(|p| {
                     p.features
                         .iter()
-                        .map(|tag| FeatureInfo {
-                            tag: tag.clone(),
-                            name: None,
-                        })
+                        .map(|tag| features::feature_info(tag))
                         .collect()
                 })
                 .unwrap_or_default(),

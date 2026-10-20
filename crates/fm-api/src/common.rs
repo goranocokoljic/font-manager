@@ -144,6 +144,13 @@ pub struct FeatureInfo {
     pub tag: String,
     /// Friendly name ("Small capitals"), or the font's own ssXX name.
     pub name: Option<String>,
+    /// The shaper applies it by itself (`ccmp`, `mark`, `init`); a user
+    /// cannot switch it on or off.
+    #[serde(default)]
+    pub automatic: bool,
+    /// On in default text rendering (`kern`, `liga`, `calt`).
+    #[serde(default)]
+    pub default_on: bool,
 }
 
 /// A feature switched on or off for a preview or CSS output.

@@ -3,12 +3,15 @@
 // face itself, rendered by the webview from the face's file (an `@font-face`
 // registered by the shared face loader). Variable faces render at their
 // default coordinates, or at `variations`, through `font-variation-settings`.
+// Features switched in the inspector's Features tab apply through
+// `font-feature-settings`.
 // The list passes the view's preview settings (size, spacing, alignment, color).
 // When the face lacks characters of the sample, the list passes the fallback text
 // the API chose and `fallback`; the row then shows a small "Fallback" hint.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { Axis, AxisValue, FaceId, FaceSummary, SampleFallback } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
+import { useFeaturesStore } from '../stores/features';
 import { faceAxes, variationSettings } from '../preview/variations';
 
 const props = withDefaults(
@@ -47,6 +50,7 @@ const props = withDefaults(
 type LoadState = 'loading' | 'ready' | 'failed';
 
 const loader = useFaceLoader();
+const features = useFeaturesStore();
 const state = ref<LoadState>('loading');
 const axes = ref<Axis[]>([]);
 let held: FaceId | null = null;
@@ -100,6 +104,7 @@ const sampleStyle = computed(() => ({
   textAlign: props.align,
   color: props.color ?? undefined,
   fontVariationSettings: variationSettings(axes.value, props.variations),
+  fontFeatureSettings: features.settings(props.face.id),
 }));
 
 const fallbackTitle = computed(() => {

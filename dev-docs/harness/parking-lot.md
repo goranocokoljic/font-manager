@@ -117,3 +117,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-21
 
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.
+
+## 2026-10-20
+
+- [E10.3 #96] crates/fm-core/src/parser.rs:557 — feature tags with non-printable bytes are stored as the display form `{0xNN}`, not the raw tag, so later CSS or MCP output from them cannot round-trip.
+- [E10.3 #96] apps/desktop/src/views/HomeView.vue:203 — at 1,000×700 the toolbar "Inspector" toggle is clipped to "Insp…".

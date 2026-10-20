@@ -29,6 +29,11 @@ Read [Sources](sources.md) to learn more about folders.
   the list stays at the same font.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.
+- Open the **Features** tab of the inspector to see the OpenType features of the
+  font, for example small capitals or oldstyle figures. Turn a feature on or off and
+  the preview of that font changes. **Reset** sets the features back to the default.
+  Features that the text engine applies by itself show "applied automatically". The
+  app keeps your choices for each font until you quit it.
 
 ## Use a font in other apps
 

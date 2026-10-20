@@ -13,6 +13,7 @@ pub mod config;
 pub mod coverage;
 pub mod crash;
 pub mod error;
+pub mod features;
 mod filter;
 pub mod font_file;
 pub mod grouping;

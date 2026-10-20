@@ -283,14 +283,23 @@ fn face(
             },
             axes,
             instances,
-            features: ["kern", "liga", "smcp", "onum", "ss01"]
-                .iter()
-                .take(if variable { 5 } else { 2 })
-                .map(|t| FeatureInfo {
-                    tag: (*t).into(),
-                    name: None,
-                })
-                .collect(),
+            // Named as fm-core names them; kern and liga are on by default.
+            features: [
+                ("kern", "Kerning"),
+                ("liga", "Standard ligatures"),
+                ("smcp", "Small capitals"),
+                ("onum", "Oldstyle figures"),
+                ("ss01", "Stylistic set 1"),
+            ]
+            .iter()
+            .take(if variable { 5 } else { 2 })
+            .map(|(t, name)| FeatureInfo {
+                tag: (*t).into(),
+                name: Some((*name).into()),
+                automatic: false,
+                default_on: matches!(*t, "kern" | "liga"),
+            })
+            .collect(),
             scripts: if chars.contains(&CYRILLIC) {
                 vec!["latn".into(), "cyrl".into()]
             } else {

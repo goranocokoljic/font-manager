@@ -63,7 +63,7 @@ describe('inspector info tab', () => {
       '720',
       '187',
       'latn, cyrl',
-      'kern, liga, smcp, onum, ss01',
+      'kern (Kerning), liga (Standard ligatures), onum (Oldstyle figures), smcp (Small capitals), ss01 (Stylistic set 1)',
       d.license.description!,
       d.license.url!,
       'SIL Open Font License',
