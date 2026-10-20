@@ -23,6 +23,8 @@ const routes = (process.env.FM_SCREENS_ROUTES ?? '/')
 const tab = process.env.FM_SCREENS_TAB;
 // FM_SCREENS_GLYPH=U+0061 then searches the Glyphs tab for it, opening its detail.
 const glyph = process.env.FM_SCREENS_GLYPH;
+// FM_SCREENS_COMPARE=JetBrains then opens "Compare with…" on that glyph and picks the first font found.
+const compareWith = process.env.FM_SCREENS_COMPARE;
 // FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
 const viewports = [
@@ -60,6 +62,16 @@ test.describe('@screens', () => {
             if (glyph) {
               await page.getByRole('searchbox', { name: 'Search glyphs' }).fill(glyph);
               await expect(page.getByRole('region', { name: 'Selected glyph' })).toBeVisible();
+              if (compareWith) {
+                await page.getByRole('button', { name: 'Compare with…' }).click();
+                const dialog = page.getByRole('dialog');
+                await dialog.getByRole('combobox', { name: 'Compare with font' }).fill(compareWith);
+                await expect(dialog.getByRole('option').first()).toContainText(compareWith);
+                await page.keyboard.press('Enter');
+                await expect(dialog.getByRole('list', { name: 'Legend' })).toContainText(
+                  compareWith,
+                );
+              }
             }
           }
           await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });

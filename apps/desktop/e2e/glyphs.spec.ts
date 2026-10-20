@@ -98,9 +98,11 @@ test('a glyph selected by keyboard opens its detail with code point, advance and
   await expect(detail.getByLabel('Advance width', { exact: true })).toHaveText(/^\d[\d,]* units$/);
   await expect(detail.getByLabel('Glyph name', { exact: true })).toHaveText('a');
   await expect(detail.getByRole('list', { name: 'Replaced by' })).toContainText('Small capitals');
-  // Tab reaches the detail: the feature tags, then Close.
+  // Tab reaches the detail: Close, Compare with…, then the feature tags.
   await page.keyboard.press('Tab');
   await expect(detail.getByRole('button', { name: 'Close glyph detail' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(detail.getByRole('button', { name: 'Compare with…' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(detail.getByRole('button', { name: 'Copy feature tag: smcp' })).toBeFocused();
   // Escape closes it and returns to the grid.

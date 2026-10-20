@@ -16,6 +16,8 @@ import type {
   CollectionFacesRequest,
   CollectionId,
   Conflict,
+  CoverageReport,
+  CoverageRequest,
   CreateCollectionRequest,
   DeactivateRequest,
   DuplicateGroup,
@@ -87,6 +89,8 @@ export interface FmClient {
   getFamily(family: FamilyId): Promise<Family>;
   /** Free text and filters, grouped by family, with the count of every filter value. */
   search(req: SearchRequest): Promise<SearchResponse>;
+  /** How well one face covers some languages or text: what it lacks. */
+  checkCoverage(req: CoverageRequest): Promise<CoverageReport>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
   /** Every collection, parents before children, siblings in the user's order. */
@@ -166,6 +170,7 @@ export const tauriClient: FmClient = {
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
   search: (req) => invoke<SearchResponse>('search', { req }),
+  checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),

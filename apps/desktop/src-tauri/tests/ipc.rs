@@ -14,7 +14,9 @@ use fm_api::library::{
 use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
 use fm_api::preview::{PreviewImage, PreviewService, SampleText, SampleTextRequest};
-use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
+use fm_api::search::{
+    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse, Supports,
+};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
     API_VERSION, ActivationService, ApiResult, Event, FaceId, FamilyId, JobId, SearchService,
@@ -206,6 +208,39 @@ fn search_returns_hits_and_filter_counts() {
         .deserialize()
         .unwrap();
     assert_eq!(langs, api.list_languages().unwrap());
+}
+
+#[test]
+fn check_coverage_reports_the_characters_a_face_lacks() {
+    let api = MockApi::new();
+    // Face 7 of the mock has no Cyrillic; face 1 has it.
+    for (face, text) in [(7, "Ж"), (1, "Ж")] {
+        let report: CoverageReport = invoke_with(
+            "check_coverage",
+            serde_json::json!({ "req": { "face": face, "target": { "kind": "text", "text": text } } }),
+        )
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+        let expected = api
+            .check_coverage(CoverageRequest {
+                face: FaceId(face),
+                target: Supports::Text { text: text.into() },
+            })
+            .unwrap();
+        assert_eq!(report, expected);
+    }
+    let lacks: CoverageReport = invoke_with(
+        "check_coverage",
+        serde_json::json!({ "req": { "face": 7, "target": { "kind": "text", "text": "Ж" } } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert!(!lacks.complete);
+    assert_eq!(lacks.missing, vec!["Ж".to_string()]);
 }
 
 #[test]
