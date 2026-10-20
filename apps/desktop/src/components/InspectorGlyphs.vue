@@ -380,21 +380,23 @@ const noResults = computed(
           </dl>
           <button
             type="button"
-            class="action"
-            aria-haspopup="dialog"
-            title="Overlay this character with the same one in another font"
-            @click="openCompare"
-          >
-            Compare with…
-          </button>
-          <button
-            type="button"
             class="close"
             aria-label="Close glyph detail"
             title="Close (Esc)"
             @click="closeDetail"
           >
             ×
+          </button>
+        </div>
+        <div class="detail-actions">
+          <button
+            type="button"
+            class="action"
+            aria-haspopup="dialog"
+            title="Overlay this character with the same one in another font"
+            @click="openCompare"
+          >
+            Compare with…
           </button>
         </div>
         <p v-if="glyphs.detailError" class="muted" role="alert">
@@ -522,8 +524,11 @@ select.field {
 .detail-head dl {
   flex: 1;
 }
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
 .action {
-  align-self: flex-start;
   padding: 2px 8px;
   border: 1px solid var(--fm-control-border);
   border-radius: 6px;
