@@ -6,6 +6,7 @@
 //! consumer reaches it through `fm-api`.
 
 pub mod activation;
+pub mod api;
 pub mod charsets;
 pub mod classify;
 pub mod config;
@@ -32,6 +33,7 @@ pub mod telemetry;
 mod test_support;
 
 pub use activation::ActivationManager;
+pub use api::CoreApi;
 pub use config::{Config, LogLevel};
 pub use error::{FmError, FmResult};
 pub use index::Index;

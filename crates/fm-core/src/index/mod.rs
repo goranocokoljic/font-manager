@@ -24,6 +24,7 @@
 mod activation;
 mod collections;
 mod duplicates;
+mod faces;
 mod files;
 mod languages;
 mod problems;
@@ -49,6 +50,7 @@ use rusqlite::Connection;
 use crate::error::{FmError, FmResult};
 
 pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
+pub use faces::FaceLocation;
 pub use files::{BATCH_SIZE, Persisted};
 pub(crate) use resolutions::StoredMove;
 pub use schema::SCHEMA_VERSION;

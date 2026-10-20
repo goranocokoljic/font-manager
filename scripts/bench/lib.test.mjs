@@ -260,7 +260,8 @@ describe('regression gate (E9.2)', () => {
   test('a red nightly on main is still the baseline (review E9.2: the known-red scan made every nightly red)', () => {
     const args = nightlyRunsArgs(14);
     assert.equal(args[args.indexOf('--status') + 1], 'completed', 'every conclusion, not only success');
-    assert.deepEqual(args.slice(0, 9), ['run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status']);
+    assert.deepEqual(args.slice(0, 7), ['run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--status']);
+    assert.ok(!args.includes('--event'), 'runs started by hand on main count too');
     const dir = tmp();
     try {
       // What `history` leaves on disk for a red nightly: its run.json and its bench-report.

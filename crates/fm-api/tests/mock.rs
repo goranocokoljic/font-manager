@@ -205,6 +205,7 @@ fn deactivate_never_touches_fonts_the_app_did_not_register() {
             target: Some(Target::Family {
                 family: FamilyId(2),
             }),
+            except: None,
         })
         .unwrap();
     let by_face: Vec<_> = out
@@ -213,6 +214,34 @@ fn deactivate_never_touches_fonts_the_app_did_not_register() {
         .collect();
     assert_eq!(by_face, [(3, true), (4, false), (5, false)]);
     assert!(api.list_active().unwrap().is_empty());
+}
+
+#[test]
+fn deactivate_except_the_sample_set_keeps_only_its_faces() {
+    let api = api();
+    let set = api.list_sets().unwrap()[0].clone();
+    assert_eq!(set.faces, [FaceId(1), FaceId(6)]);
+    api.activate(acts(
+        &[1, 2, 6],
+        ActivationMode::Session,
+        ConflictPolicy::Replace,
+    ))
+    .unwrap();
+    let out = api
+        .deactivate(DeactivateRequest {
+            target: None,
+            except: Some(Target::Set { set: set.id }),
+        })
+        .unwrap();
+    let gone: Vec<u32> = out.iter().map(|o| o.face.0).collect();
+    assert_eq!(gone, [2]);
+    let left: Vec<u32> = api
+        .list_active()
+        .unwrap()
+        .iter()
+        .map(|a| a.face.0)
+        .collect();
+    assert_eq!(left, [1, 6]);
 }
 
 #[test]

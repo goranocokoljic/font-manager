@@ -16,11 +16,13 @@ import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
+import { rowActivation } from '../list/activation';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
+import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
 const props = withDefaults(
@@ -219,12 +221,17 @@ function onToggle(row: ListRow): void {
           :fallback="item.fallback"
           :missing="item.missing"
         >
+          <template #lead>
+            <ActivationDot :state="rowActivation(item.row)" />
+          </template>
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
           </template>
         </FontPreviewRow>
         <div v-else class="preview placeholder">
-          <span class="label">{{ item.row.family.name }}</span>
+          <span class="label"
+            ><ActivationDot :state="rowActivation(item.row)" />{{ item.row.family.name }}</span
+          >
           <span v-if="library.failed.has(item.row.family.id)" class="note">
             Styles not available
           </span>
@@ -310,6 +317,11 @@ function onToggle(row: ListRow): void {
   padding-right: 16px;
   color: var(--fm-muted);
   font-size: 11.5px;
+}
+.placeholder .label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .count {
   color: var(--fm-muted);

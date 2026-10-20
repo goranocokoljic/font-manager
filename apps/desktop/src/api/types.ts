@@ -282,6 +282,11 @@ export type CreateSetRequest = {
 export type DeactivateRequest = {
 	/**  What to deactivate; everything the app activated when absent. */
 	target?: Target | null,
+	/**
+	 *  Faces to leave active, e.g. a project set for "Deactivate everything
+	 *  not in the current set". Nothing is kept when absent.
+	 */
+	except?: Target | null,
 };
 
 /**  How much space the lists use. */

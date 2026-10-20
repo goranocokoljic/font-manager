@@ -11,6 +11,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
+import { rowActivation } from '../list/activation';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { CARD, cardText, gridColumns, gridRange, lineCount } from '../list/grid';
 import { handleListKey, modeOf } from '../list/keys';
@@ -21,6 +22,7 @@ import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
+import ActivationDot from './ActivationDot.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -282,6 +284,7 @@ function onToggle(row: ListRow): void {
               @click.stop="onToggle(item.row)"
               >{{ item.row.expanded ? '▾' : '▸' }}</span
             >
+            <ActivationDot :state="rowActivation(item.row)" />
             <span class="name">{{ item.name }}</span>
             <span v-if="item.row.kind === 'family'" class="detail">{{
               styleCount(item.row.family.styleCount)

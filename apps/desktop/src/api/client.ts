@@ -34,6 +34,7 @@ import type {
   PreviewImage,
   PreviewRequest,
   Problem,
+  ProjectSet,
   RenameCollectionRequest,
   Resolution,
   ResolutionId,
@@ -120,6 +121,8 @@ export interface FmClient {
   listResolutions(): Promise<Resolution[]>;
   /** Puts the copies of an action back from the trash. */
   undoResolution(resolution: ResolutionId): Promise<Resolution>;
+  /** Every project set: named groups of faces activated together. */
+  listSets(): Promise<ProjectSet[]>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -168,6 +171,7 @@ export const tauriClient: FmClient = {
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
+  listSets: () => invoke<ProjectSet[]>('list_sets'),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),

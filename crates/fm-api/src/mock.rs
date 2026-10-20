@@ -472,7 +472,12 @@ impl State {
             members: HashMap::new(),
             tags: Vec::new(),
             face_tags: HashMap::new(),
-            sets: Vec::new(),
+            // A sample set (Inter and JetBrains Mono), so the app has a set to pick.
+            sets: vec![ProjectSet {
+                id: SetId(1),
+                name: "Client brand".into(),
+                faces: vec![FaceId(1), FaceId(6)],
+            }],
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
@@ -1576,7 +1581,7 @@ impl ActivationService for MockApi {
 
     fn deactivate(&self, req: DeactivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
         let mut st = self.state();
-        let ids = match &req.target {
+        let mut ids = match &req.target {
             Some(t) => st.target_faces(t)?,
             None => {
                 let mut all: Vec<FaceId> = st.active.keys().copied().collect();
@@ -1584,6 +1589,10 @@ impl ActivationService for MockApi {
                 all
             }
         };
+        if let Some(except) = &req.except {
+            let keep: BTreeSet<FaceId> = st.target_faces(except)?.into_iter().collect();
+            ids.retain(|id| !keep.contains(id));
+        }
         let mut out = Vec::new();
         let mut deactivated = Vec::new();
         for id in ids {

@@ -1,0 +1,695 @@
+//! The real library behind `fm-api` (E5.11): [`CoreApi`] implements every
+//! service trait, so an adapter holds `Arc<dyn Api>` and serves it instead of
+//! the mock.
+//!
+//! - **One index.** The index sits behind one mutex, shared with the
+//!   [`ActivationManager`]; every method locks it for one read or one write.
+//! - **Scans.** [`LibraryService::scan`] returns a [`JobId`] at once and
+//!   scans on a thread named `fm-scan` (ADR 0006): the [`ScanJob`] events,
+//!   then the write, then one [`Event::LibraryChanged`] naming the faces it
+//!   added, removed and read again. Scans run one after another; the files
+//!   read so far are loaded from the index on the first scan and kept.
+//! - **Events.** Every subscriber of [`EventSource::subscribe`] gets every
+//!   event sent after it subscribed: scans, activation changes and tag or
+//!   metadata changes. The UI listens; it never polls.
+//! - **Trash.** "Keep this one" moves copies through a [`DuplicateResolver`]
+//!   over the OS trash ([`CoreApi::open`]) or the one a test passes
+//!   ([`CoreApi::with_trash`]); without a trash it answers `Unsupported`
+//!   and moves nothing.
+//! - **Not built yet.** Export, workflows and similar-font search answer an
+//!   `Unsupported` error with a message for the user, never a panic.
+
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+
+use fm_api::activation::{
+    ActivateRequest, ActivationOutcome, ActivationService, ActiveFace, Clash, Conflict,
+    DeactivateRequest, Target,
+};
+use fm_api::common::Paged;
+use fm_api::export::{
+    ExportService, ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest,
+};
+use fm_api::library::{
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, ImportMode,
+    KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem, Resolution,
+    ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+};
+use fm_api::organization::{
+    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
+    ImportSetResponse, MoveCollectionRequest, OrganizationService, ProjectSet,
+    RenameCollectionRequest, SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+};
+use fm_api::preview::{
+    FontSource, PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+};
+use fm_api::search::{
+    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse, SearchService,
+    SimilarFace, SimilarRequest,
+};
+use fm_api::settings::{AppFolders, Settings, SettingsService, SettingsUpdate};
+use fm_api::workflows::{
+    BriefRequest, PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
+};
+use fm_api::{
+    API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
+    FamilyId, JobId, ResolutionId, SetId, SourceId,
+};
+use fm_platform::{AppPaths, FontActivator, Os, Trash};
+
+use crate::activation::ActivationManager;
+use crate::error::{FmError, FmResult};
+use crate::index::Index;
+use crate::preview::cache::{self, CacheKey, PreviewCache};
+use crate::resolve::DuplicateResolver;
+use crate::scanner::{FileIndex, Rescan, ScanJob};
+use crate::settings::SettingsStore;
+use crate::{charsets, preview};
+
+/// Every subscriber of the event stream.
+#[derive(Debug, Default)]
+struct Broadcast {
+    subscribers: Mutex<Vec<Sender<Event>>>,
+}
+
+impl Broadcast {
+    fn subscribe(&self) -> Receiver<Event> {
+        let (tx, rx) = mpsc::channel();
+        lock(&self.subscribers).push(tx);
+        rx
+    }
+
+    /// Sends `event` to every subscriber; one that dropped its receiver is
+    /// forgotten.
+    fn send(&self, event: &Event) {
+        lock(&self.subscribers).retain(|tx| tx.send(event.clone()).is_ok());
+    }
+}
+
+/// The library, search, previews, activation, organization and settings of
+/// one app-data folder, behind `fm-api`.
+pub struct CoreApi {
+    index: Arc<Mutex<Index>>,
+    activation: ActivationManager,
+    settings: SettingsStore,
+    previews: Option<PreviewCache>,
+    /// "Keep this one"; `None` when there is no trash to move copies to.
+    resolver: Option<DuplicateResolver>,
+    events: Arc<Broadcast>,
+    /// The files read so far; loaded from the index by the first scan.
+    files: Arc<Mutex<Option<FileIndex>>>,
+    next_job: AtomicU32,
+}
+
+impl std::fmt::Debug for CoreApi {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CoreApi").finish_non_exhaustive()
+    }
+}
+
+impl CoreApi {
+    /// The API over `index` in the app folders `paths`: activation through
+    /// `activator` (the app passes [`fm_platform::activator::system`]), the
+    /// settings in the config file and the preview cache in the cache
+    /// folder, duplicates moved to the OS trash. A preview cache that cannot
+    /// be opened is logged and left out; previews are then rendered every
+    /// time. A trash that cannot be found is logged too; "Keep this one" then
+    /// answers `Unsupported`.
+    pub fn open(paths: &AppPaths, index: Index, activator: Arc<dyn FontActivator>) -> Self {
+        let settings = SettingsStore::new(paths);
+        let limit = settings
+            .get_settings()
+            .map(|s| cache::limit_from_mb(s.cache_limit_mb))
+            .unwrap_or_else(|_| cache::limit_from_mb(Settings::default().cache_limit_mb));
+        let previews = PreviewCache::open(&cache::cache_dir(paths), limit)
+            .inspect_err(|e| tracing::warn!(error = %e, "preview cache not opened"))
+            .ok();
+        let api = Self::new(index, activator, settings, previews);
+        match fm_platform::trash::system() {
+            Ok(trash) => api.with_trash(trash),
+            Err(e) => {
+                tracing::warn!(error = %e, "no OS trash: duplicates cannot be moved");
+                api
+            }
+        }
+    }
+
+    /// The API over these parts, with no trash; tests pass a mock activator
+    /// and scratch folders.
+    pub fn new(
+        index: Index,
+        activator: Arc<dyn FontActivator>,
+        settings: SettingsStore,
+        previews: Option<PreviewCache>,
+    ) -> Self {
+        let index = Arc::new(Mutex::new(index));
+        let events = Arc::new(Broadcast::default());
+        let sink = Arc::clone(&events);
+        let activation =
+            ActivationManager::new(Arc::clone(&index), activator, move |e| sink.send(&e));
+        Self {
+            index,
+            activation,
+            settings,
+            previews,
+            resolver: None,
+            events,
+            files: Arc::new(Mutex::new(None)),
+            next_job: AtomicU32::new(1),
+        }
+    }
+
+    /// The same API, moving "Keep this one" copies through `trash`.
+    #[must_use]
+    pub fn with_trash(mut self, trash: Arc<dyn Trash>) -> Self {
+        let sink = Arc::clone(&self.events);
+        self.resolver = Some(DuplicateResolver::new(
+            Arc::clone(&self.index),
+            trash,
+            move |e| sink.send(&e),
+        ));
+        self
+    }
+
+    /// The resolver, or the answer when there is no trash.
+    fn resolver(&self) -> ApiResult<&DuplicateResolver> {
+        self.resolver
+            .as_ref()
+            .ok_or_else(|| not_available("Moving files to the trash"))
+    }
+
+    /// What the app does at start (ADR 0008): cleans up what a crashed run
+    /// left registered and, with "reactivate on launch" on, activates the
+    /// last session's fonts again.
+    pub fn start(&self) -> FmResult<Vec<ActivationOutcome>> {
+        let settings = self.settings.get_settings()?;
+        self.activation
+            .start(settings.reactivate_on_launch, settings.on_conflict)
+    }
+
+    /// What the app does at quit: deregisters the session fonts and
+    /// remembers them for "reactivate on launch".
+    pub fn shutdown(&self) -> FmResult<Vec<ActivationOutcome>> {
+        self.activation.shutdown()
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Index> {
+        lock(&self.index)
+    }
+
+    fn send(&self, event: Event) {
+        self.events.send(&event);
+    }
+
+    /// Faces whose tags or metadata changed.
+    fn updated(&self, faces: &[FaceId]) {
+        if !faces.is_empty() {
+            self.send(Event::LibraryChanged {
+                source: None,
+                added: Vec::new(),
+                removed: Vec::new(),
+                updated: faces.to_vec(),
+            });
+        }
+    }
+
+    /// Scans `sources` on the scan thread, one job each, and returns the
+    /// first job (a job with no source when there is nothing to scan).
+    fn start_scan(&self, sources: Vec<Source>) -> ApiResult<JobId> {
+        let jobs: Vec<JobId> = sources
+            .iter()
+            .map(|_| JobId(self.next_job.fetch_add(1, Ordering::Relaxed)))
+            .collect();
+        let Some(&first) = jobs.first() else {
+            let job = JobId(self.next_job.fetch_add(1, Ordering::Relaxed));
+            self.send(Event::ScanStarted { job, source: None });
+            self.send(Event::ScanFinished {
+                job,
+                added: 0,
+                changed: 0,
+                removed: 0,
+                problems: 0,
+            });
+            return Ok(job);
+        };
+        let scan = Scan {
+            index: Arc::clone(&self.index),
+            files: Arc::clone(&self.files),
+            events: Arc::clone(&self.events),
+        };
+        std::thread::Builder::new()
+            .name("fm-scan".into())
+            .spawn(move || {
+                for (job, source) in jobs.into_iter().zip(sources) {
+                    scan.run(job, &source);
+                }
+            })
+            .map_err(|e| {
+                ApiError::new(ErrorCode::Internal, "The scan could not be started.")
+                    .with_detail(e.to_string())
+            })?;
+        Ok(first)
+    }
+
+    /// Forgets the files read so far; the next scan loads them again.
+    fn forget_files(&self) {
+        *lock(&self.files) = None;
+    }
+}
+
+/// What the scan thread needs.
+struct Scan {
+    index: Arc<Mutex<Index>>,
+    files: Arc<Mutex<Option<FileIndex>>>,
+    events: Arc<Broadcast>,
+}
+
+impl Scan {
+    /// Scans one source as `job`: walks and reads it, writes what changed,
+    /// then sends what the library gained and lost. Every failure is a
+    /// [`Event::JobFailed`].
+    fn run(&self, job: JobId, source: &Source) {
+        if let Err(e) = self.try_run(job, source) {
+            tracing::warn!(%job, source = %source.path, error = %e, "scan failed");
+        }
+    }
+
+    fn try_run(&self, job: JobId, source: &Source) -> FmResult<()> {
+        let fail = |e: FmError| {
+            self.events.send(&Event::JobFailed {
+                job,
+                error: e.clone().into(),
+            });
+            e
+        };
+        let mut files = lock(&self.files);
+        if files.is_none() {
+            *files = Some(lock(&self.index).load_files().map_err(fail)?);
+        }
+        let Some(files) = files.as_mut() else {
+            return Err(fail(FmError::internal("the file index is not loaded")));
+        };
+        let before = lock(&self.index).faces_of_source(source.id).map_err(fail)?;
+        // `run` reports its own failure as `JobFailed`.
+        let rescan = ScanJob::new(job, Some(source.id), &source.path)
+            .run(files, &mut |e| self.events.send(&e))?;
+        let after = {
+            let mut index = lock(&self.index);
+            index
+                .apply_rescan(source.id, files, &rescan)
+                .map_err(fail)?;
+            index.faces_of_source(source.id).map_err(fail)?
+        };
+        if let Some(event) = changes(source.id, &before, &after, &rescan) {
+            self.events.send(&event);
+        }
+        Ok(())
+    }
+}
+
+/// What a scan of `source` changed, from its faces before and after and the
+/// files it read again or no longer found; `None` when nothing changed.
+fn changes(
+    source: SourceId,
+    before: &HashMap<FaceId, std::path::PathBuf>,
+    after: &HashMap<FaceId, std::path::PathBuf>,
+    rescan: &Rescan,
+) -> Option<Event> {
+    let changed: HashSet<&Path> = rescan.changed.iter().map(|p| p.as_path()).collect();
+    let gone: HashSet<&Path> = rescan.gone.iter().map(|p| p.as_path()).collect();
+    let mut added: Vec<FaceId> = after
+        .keys()
+        .filter(|f| !before.contains_key(f))
+        .copied()
+        .collect();
+    let mut removed: Vec<FaceId> = before
+        .iter()
+        .filter(|(f, path)| !after.contains_key(f) || gone.contains(path.as_path()))
+        .map(|(f, _)| *f)
+        .collect();
+    let mut updated: Vec<FaceId> = after
+        .iter()
+        .filter(|(f, path)| before.contains_key(f) && changed.contains(path.as_path()))
+        .map(|(f, _)| *f)
+        .collect();
+    if added.is_empty() && removed.is_empty() && updated.is_empty() {
+        return None;
+    }
+    added.sort();
+    removed.sort();
+    updated.sort();
+    Some(Event::LibraryChanged {
+        source: Some(source),
+        added,
+        removed,
+        updated,
+    })
+}
+
+/// A poisoned lock still guards consistent data: every write is a
+/// transaction, so a panic elsewhere must not make the library unusable.
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// The answer of a service that is not built yet.
+fn not_available(what: &str) -> ApiError {
+    ApiError::new(
+        ErrorCode::Unsupported,
+        format!("{what} is not available in this version yet."),
+    )
+}
+
+impl LibraryService for CoreApi {
+    fn app_info(&self) -> ApiResult<AppInfo> {
+        Ok(AppInfo {
+            name: "Font Manager".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            api_version: API_VERSION,
+            platform: match Os::current() {
+                Os::Windows => Platform::Windows,
+                Os::MacOs => Platform::Macos,
+                Os::Linux => Platform::Linux,
+            },
+        })
+    }
+
+    fn list_sources(&self) -> ApiResult<Vec<Source>> {
+        Ok(self.lock().sources()?)
+    }
+
+    /// Adds a folder the user chose, indexed in place (ADR 0004); it is
+    /// scanned when the caller asks. Copying into a folder is not built.
+    fn add_source(&self, req: AddSourceRequest) -> ApiResult<Source> {
+        if let ImportMode::CopyTo { .. } = req.mode {
+            return Err(not_available("Copying fonts into a folder"));
+        }
+        let path = Path::new(&req.path);
+        if !req.path.trim().is_empty() && !path.is_dir() {
+            return Err(FmError::not_found(format!("The folder {}", req.path)).into());
+        }
+        Ok(self.lock().add_source(&req.path, SourceKind::Watched)?)
+    }
+
+    fn remove_source(&self, source: SourceId) -> ApiResult<()> {
+        let removed = {
+            let mut index = self.lock();
+            let faces = index.faces_of_source(source)?;
+            index.remove_source(source)?;
+            faces
+        };
+        self.forget_files();
+        let mut removed: Vec<FaceId> = removed.into_keys().collect();
+        removed.sort();
+        if !removed.is_empty() {
+            self.send(Event::LibraryChanged {
+                source: Some(source),
+                added: Vec::new(),
+                removed,
+                updated: Vec::new(),
+            });
+        }
+        Ok(())
+    }
+
+    fn set_source_paused(&self, req: SetSourcePausedRequest) -> ApiResult<Source> {
+        let (source, faces) = {
+            let mut index = self.lock();
+            let source = index.set_source_paused(req.source, req.paused)?;
+            (source, index.faces_of_source(req.source)?)
+        };
+        // A paused source's faces leave the library view; resumed, they come back.
+        let mut faces: Vec<FaceId> = faces.into_keys().collect();
+        faces.sort();
+        if !faces.is_empty() {
+            let (added, removed) = if req.paused {
+                (Vec::new(), faces)
+            } else {
+                (faces, Vec::new())
+            };
+            self.send(Event::LibraryChanged {
+                source: Some(req.source),
+                added,
+                removed,
+                updated: Vec::new(),
+            });
+        }
+        Ok(source)
+    }
+
+    /// Scans one source (paused or not, the user asked), or every source
+    /// that is not paused.
+    fn scan(&self, req: ScanRequest) -> ApiResult<JobId> {
+        let sources = self.lock().sources()?;
+        let sources = match req.source {
+            Some(id) => vec![
+                sources
+                    .into_iter()
+                    .find(|s| s.id == id)
+                    .ok_or_else(|| ApiError::not_found(format!("Source {id}")))?,
+            ],
+            None => sources.into_iter().filter(|s| !s.paused).collect(),
+        };
+        self.start_scan(sources)
+    }
+
+    fn rebuild_index(&self) -> ApiResult<JobId> {
+        let sources = self.lock().rebuild()?;
+        self.forget_files();
+        self.start_scan(sources.into_iter().filter(|s| !s.paused).collect())
+    }
+
+    fn list_families(&self, req: ListFamiliesRequest) -> ApiResult<Paged<FamilySummary>> {
+        Ok(self.lock().list_families(&req)?)
+    }
+
+    fn get_family(&self, family: FamilyId) -> ApiResult<Family> {
+        Ok(self.lock().family(family)?)
+    }
+
+    fn get_face(&self, face: FaceId) -> ApiResult<FaceDetail> {
+        Ok(self.lock().face_detail(face)?)
+    }
+
+    /// The index's problems, then the activation conflicts the OS reports.
+    fn list_problems(&self) -> ApiResult<Vec<Problem>> {
+        let mut problems = self.lock().problems()?;
+        problems.extend(self.activation.problems()?);
+        Ok(problems)
+    }
+
+    fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
+        Ok(self.lock().duplicates()?)
+    }
+
+    fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {
+        let dry_run = req.dry_run;
+        let resolution = self.resolver()?.keep_copy(req)?;
+        if !dry_run {
+            // The next scan reads the moved files' state from the index again.
+            self.forget_files();
+        }
+        Ok(resolution)
+    }
+
+    fn list_resolutions(&self) -> ApiResult<Vec<Resolution>> {
+        Ok(self.lock().resolutions()?)
+    }
+
+    fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution> {
+        let resolution = self.resolver()?.undo_resolution(resolution)?;
+        self.forget_files();
+        Ok(resolution)
+    }
+}
+
+impl SearchService for CoreApi {
+    fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse> {
+        Ok(self.lock().search(&req)?)
+    }
+
+    fn check_coverage(&self, req: CoverageRequest) -> ApiResult<CoverageReport> {
+        Ok(self.lock().check_coverage(&req)?)
+    }
+
+    fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
+        Ok(charsets::load()?
+            .iter()
+            .map(charsets::Charset::preset)
+            .collect())
+    }
+
+    fn find_similar(&self, _req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
+        Err(not_available("Finding similar fonts"))
+    }
+}
+
+impl PreviewService for CoreApi {
+    /// Renders from the face's file, through the preview cache when the
+    /// file has been hashed.
+    fn render_preview(&self, req: PreviewRequest) -> ApiResult<PreviewImage> {
+        let file = self.lock().face_file(req.face)?;
+        let render = || preview::render_preview_file(&file.path, file.collection_index, &req);
+        let image = match (&self.previews, &file.hash) {
+            (Some(previews), Some(hash)) => {
+                let key = CacheKey::new(hash, file.collection_index, &req);
+                previews.get_or_render(&key, render)?
+            }
+            _ => render()?,
+        };
+        Ok(image)
+    }
+
+    fn font_source(&self, face: FaceId) -> ApiResult<FontSource> {
+        Ok(self.lock().font_source(face)?)
+    }
+
+    fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
+        Ok(self.lock().sample_texts(&req)?)
+    }
+}
+
+impl ActivationService for CoreApi {
+    fn activate(&self, req: ActivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
+        self.activation.activate(req)
+    }
+
+    fn deactivate(&self, req: DeactivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
+        self.activation.deactivate(req)
+    }
+
+    fn list_active(&self) -> ApiResult<Vec<ActiveFace>> {
+        self.activation.list_active()
+    }
+
+    fn conflicts(&self, target: Target) -> ApiResult<Vec<Conflict>> {
+        self.activation.conflicts(target)
+    }
+
+    fn list_conflicts(&self) -> ApiResult<Vec<Clash>> {
+        self.activation.list_conflicts()
+    }
+}
+
+impl OrganizationService for CoreApi {
+    fn list_collections(&self) -> ApiResult<Vec<Collection>> {
+        Ok(self.lock().collections()?)
+    }
+
+    fn create_collection(&self, req: CreateCollectionRequest) -> ApiResult<Collection> {
+        Ok(self.lock().create_collection(&req)?)
+    }
+
+    fn rename_collection(&self, req: RenameCollectionRequest) -> ApiResult<Collection> {
+        Ok(self.lock().rename_collection(&req)?)
+    }
+
+    fn move_collection(&self, req: MoveCollectionRequest) -> ApiResult<Collection> {
+        Ok(self.lock().move_collection(&req)?)
+    }
+
+    fn delete_collection(&self, collection: CollectionId) -> ApiResult<()> {
+        Ok(self.lock().delete_collection(collection)?)
+    }
+
+    fn add_to_collection(&self, req: CollectionFacesRequest) -> ApiResult<Collection> {
+        Ok(self.lock().add_to_collection(&req)?)
+    }
+
+    fn remove_from_collection(&self, req: CollectionFacesRequest) -> ApiResult<Collection> {
+        Ok(self.lock().remove_from_collection(&req)?)
+    }
+
+    fn list_tags(&self) -> ApiResult<Vec<Tag>> {
+        Ok(self.lock().tags()?)
+    }
+
+    fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
+        let tags = self.lock().tag_faces(&req)?;
+        self.updated(&req.faces);
+        Ok(tags)
+    }
+
+    fn untag_faces(&self, req: UntagFacesRequest) -> ApiResult<()> {
+        self.lock().untag_faces(&req)?;
+        self.updated(&req.faces);
+        Ok(())
+    }
+
+    fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {
+        self.lock().update_user_meta(&req)?;
+        self.updated(&req.faces);
+        Ok(())
+    }
+
+    fn list_sets(&self) -> ApiResult<Vec<ProjectSet>> {
+        Ok(self.lock().sets()?)
+    }
+
+    fn create_set(&self, req: CreateSetRequest) -> ApiResult<ProjectSet> {
+        Ok(self.lock().create_set(&req)?)
+    }
+
+    fn delete_set(&self, set: SetId) -> ApiResult<()> {
+        Ok(self.lock().delete_set(set)?)
+    }
+
+    fn export_set(&self, set: SetId) -> ApiResult<SetExport> {
+        Ok(self.lock().export_set(set)?)
+    }
+
+    fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse> {
+        Ok(self.lock().import_set(&export)?)
+    }
+}
+
+impl ExportService for CoreApi {
+    fn export_web(&self, _req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
+        Err(not_available("Exporting web fonts"))
+    }
+
+    fn license_inventory(&self, _req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {
+        Err(not_available("The license inventory"))
+    }
+}
+
+impl WorkflowService for CoreApi {
+    fn pick_fonts_for_brief(&self, _req: BriefRequest) -> ApiResult<Shortlist> {
+        Err(not_available("Picking fonts for a brief"))
+    }
+
+    fn prepare_for_web(&self, _req: PrepareForWebRequest) -> ApiResult<PrepareForWebResponse> {
+        Err(not_available("Preparing fonts for the web"))
+    }
+}
+
+impl SettingsService for CoreApi {
+    fn get_settings(&self) -> ApiResult<Settings> {
+        self.settings.get_settings()
+    }
+
+    /// Saves the settings; a new cache limit applies to the preview cache at once.
+    fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
+        let settings = self.settings.update_settings(req)?;
+        if let Some(previews) = &self.previews {
+            previews.set_limit(cache::limit_from_mb(settings.cache_limit_mb));
+        }
+        Ok(settings)
+    }
+
+    fn app_folders(&self) -> ApiResult<AppFolders> {
+        self.settings.app_folders()
+    }
+}
+
+impl EventSource for CoreApi {
+    fn subscribe(&self) -> Receiver<Event> {
+        self.events.subscribe()
+    }
+}
+
+#[cfg(test)]
+mod tests;

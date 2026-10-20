@@ -18,6 +18,9 @@
 
 use std::sync::LazyLock;
 
+use fm_api::FaceId;
+use fm_api::search::{CoverageReport, LanguageCoverage, Supports};
+
 use crate::charsets::{self, Charset};
 use crate::error::{FmError, FmResult};
 
@@ -398,9 +401,128 @@ pub(crate) fn is_ignorable(c: char) -> bool {
         )
 }
 
+/// The coverage check of one face (`check_coverage`): which characters of
+/// `target` the face, mapping `set` with `locl` forms for `locl`, lacks, and
+/// per chosen language how much of it the face covers. Unlike a [`Need`], it
+/// lists every missing character. An unknown preset is `InvalidRequest`.
+pub fn report(
+    face: FaceId,
+    set: &CodePointSet,
+    locl: &[String],
+    target: &Supports,
+) -> FmResult<CoverageReport> {
+    report_of(&PRESETS, face, set, locl, target)
+}
+
+fn report_of(
+    all: &[Preset],
+    face: FaceId,
+    set: &CodePointSet,
+    locl: &[String],
+    target: &Supports,
+) -> FmResult<CoverageReport> {
+    let mut missing: Vec<String> = Vec::new();
+    let add = |c: char, missing: &mut Vec<String>| {
+        let c = c.to_string();
+        if !missing.contains(&c) {
+            missing.push(c);
+        }
+    };
+    let mut languages = Vec::new();
+    match target {
+        Supports::Text { text } => {
+            for c in text.chars().filter(|&c| !is_ignorable(c)) {
+                if !set.contains(u32::from(c)) {
+                    add(c, &mut missing);
+                }
+            }
+        }
+        Supports::Languages { codes } => {
+            for code in codes {
+                let preset = all.iter().find(|p| p.code == *code).ok_or_else(|| {
+                    FmError::invalid(format!("Unknown language preset \"{code}\"."))
+                })?;
+                let lacks: Vec<char> = preset
+                    .base
+                    .iter()
+                    .filter(|&cp| !set.contains(cp))
+                    .filter_map(char::from_u32)
+                    .collect();
+                for &c in &lacks {
+                    add(c, &mut missing);
+                }
+                languages.push(LanguageCoverage {
+                    code: preset.code.clone(),
+                    covered: preset
+                        .total
+                        .saturating_sub(u32::try_from(lacks.len()).unwrap_or(u32::MAX)),
+                    total: preset.total,
+                    missing: lacks.iter().map(char::to_string).collect(),
+                    has_locl: preset.has_locl(locl),
+                });
+            }
+        }
+    }
+    Ok(CoverageReport {
+        face,
+        complete: missing.is_empty(),
+        missing,
+        languages,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_report_lists_every_missing_character_per_language() {
+        let presets = [
+            preset("de", "Latn", Some("DEU"), "aäbß"),
+            preset("sr-Cyrl", "Cyrl", Some("SRB"), "бгд"),
+        ];
+        let target = Supports::Languages {
+            codes: vec!["de".into(), "sr-Cyrl".into()],
+        };
+        let got = report_of(
+            &presets,
+            FaceId(4),
+            &set("abб"),
+            &["cyrl/SRB".into()],
+            &target,
+        )
+        .expect("report");
+        assert_eq!(got.face, FaceId(4));
+        assert!(!got.complete);
+        assert_eq!(got.missing, ["ß", "ä", "г", "д"], "code point order");
+        assert_eq!(got.languages.len(), 2);
+        assert_eq!((got.languages[0].covered, got.languages[0].total), (2, 4));
+        assert_eq!(got.languages[0].missing, ["ß", "ä"]);
+        assert!(!got.languages[0].has_locl);
+        assert_eq!(got.languages[1].covered, 1);
+        assert!(got.languages[1].has_locl);
+    }
+
+    #[test]
+    fn a_text_report_ignores_spaces_and_repeats() {
+        let target = Supports::Text {
+            text: "ab ab\u{200B}c".into(),
+        };
+        let got = report_of(&[], FaceId(1), &set("ab"), &[], &target).expect("report");
+        assert_eq!(got.missing, ["c"]);
+        assert!(got.languages.is_empty());
+        let full = report_of(&[], FaceId(1), &set("abc"), &[], &target).expect("report");
+        assert!(full.complete);
+    }
+
+    #[test]
+    fn a_report_on_an_unknown_preset_is_invalid() {
+        let target = Supports::Languages {
+            codes: vec!["xx".into()],
+        };
+        let err = report_of(&[], FaceId(1), &set("a"), &[], &target).expect_err("unknown");
+        assert_eq!(err.code(), fm_api::ErrorCode::InvalidRequest);
+    }
 
     fn set(text: &str) -> CodePointSet {
         CodePointSet::from_code_points(text.chars().map(u32::from))

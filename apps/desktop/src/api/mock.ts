@@ -35,6 +35,7 @@ import {
   type PreviewRequest,
   type Problem,
   type Resolution,
+  type ProjectSet,
   type SearchResponse,
   type SampleText,
   type Source,
@@ -321,7 +322,12 @@ export interface MockOptions {
   extraProblems?: Problem[];
   /** Duplicate groups (files the mock has no face for), keeper first. */
   duplicates?: DuplicateGroup[];
+  /** Project sets (none by default). */
+  sets?: ProjectSet[];
 }
+
+/** A sample project set, like the Rust mock's: Inter and JetBrains Mono. */
+export const mockSets: ProjectSet[] = [{ id: 1, name: 'Client brand', faces: [1, 6] }];
 
 /**
  * Problems of files outside the sample faces, for browser mode: one of each kind the
@@ -590,6 +596,7 @@ export const mockPickedFolders: (string | null)[] = [];
 export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
   const sources = structuredClone(mockSources);
+  const sets = structuredClone(options.sets ?? []);
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
   let picks = 0;
@@ -785,8 +792,32 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     }
     return viewOf(c);
   };
-  const ids = (target: Target | null | undefined): FaceId[] =>
-    target?.kind === 'faces' ? target.faces : [...active.keys()];
+  // Like the Rust mock: faces, families and sets; no target means every active face.
+  const ids = (target: Target | null | undefined): FaceId[] => {
+    if (!target) return [...active.keys()];
+    if (target.kind === 'faces') return target.faces;
+    if (target.kind === 'family') {
+      const list = byFamily.get(target.family);
+      if (!list)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${target.family} was not found.`,
+          detail: null,
+        };
+      return list.map((d) => d.face.id);
+    }
+    if (target.kind === 'set') {
+      const set = sets.find((s) => s.id === target.set);
+      if (!set)
+        throw {
+          code: 'notFound' as const,
+          message: `Set ${target.set} was not found.`,
+          detail: null,
+        };
+      return [...set.faces];
+    }
+    throw invalid(`The mock cannot act on a ${target.kind}.`);
+  };
 
   return {
     getAppInfo: async () => mockAppInfo,
@@ -966,15 +997,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     deactivate: async (req) => {
       const deactivated: FaceId[] = [];
-      const out = ids(req.target).map((id): ActivationOutcome => {
-        if (!active.delete(id))
-          return {
-            face: id,
-            outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
-          };
-        deactivated.push(id);
-        return { face: id, outcome: { status: 'done' } };
-      });
+      const keep = new Set(req.except ? ids(req.except) : []);
+      const out = ids(req.target)
+        .filter((id) => !keep.has(id))
+        .map((id): ActivationOutcome => {
+          if (!active.delete(id))
+            return {
+              face: id,
+              outcome: { status: 'skipped', reason: 'The app did not activate this font.' },
+            };
+          deactivated.push(id);
+          return { face: id, outcome: { status: 'done' } };
+        });
       if (deactivated.length) emit({ type: 'activationChanged', activated: [], deactivated });
       return out;
     },
@@ -1016,6 +1050,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         }),
     // Like the Rust mock: per face its health and system clash, then the active pairs
     // (none: no two sample faces share a PostScript name), then the extra entries.
+    listSets: async () => structuredClone(sets),
     listProblems: async () => [
       ...faces.flatMap((f): Problem[] => {
         const out: Problem[] = [];
@@ -1178,6 +1213,7 @@ export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
   extraProblems: mockExtraProblems,
   duplicates: mockDuplicates,
+  sets: mockSets,
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
 });

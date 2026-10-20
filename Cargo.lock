@@ -871,6 +871,8 @@ version = "0.1.0"
 dependencies = [
  "fm-api",
  "fm-core",
+ "fm-platform",
+ "serde",
  "serde_json",
  "tauri",
  "tauri-build",
