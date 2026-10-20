@@ -18,6 +18,7 @@ pub mod features;
 mod filter;
 pub mod font_file;
 pub mod glyph_features;
+pub mod glyph_svg;
 pub mod glyphs;
 pub mod grouping;
 pub mod index;

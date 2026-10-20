@@ -19,7 +19,8 @@ use crate::common::{
     NamedInstance, Page, Paged, Slant,
 };
 use crate::export::{
-    ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest, WebFormat,
+    ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
+    LicenseInventoryRequest, WebFormat,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
@@ -2382,6 +2383,51 @@ impl ExportService for MockApi {
             rows += 1;
         }
         Ok(LicenseInventory { csv, rows })
+    }
+
+    /// A box the width of the mock advance, from the baseline to the cap
+    /// height (700), with a stem as thick as `wght` / 5 (80 at the default
+    /// 400). A space has no outline: an empty path.
+    fn export_glyph_svg(&self, req: GlyphSvgRequest) -> ApiResult<String> {
+        if req.variations.iter().any(|v| !v.value.is_finite()) {
+            return Err(ApiError::invalid("An axis value must be a number."));
+        }
+        let st = self.state();
+        let face = st.face(req.face)?;
+        let c = face
+            .chars
+            .iter()
+            .copied()
+            .find(|c| *c as u32 == req.code_point)
+            .ok_or_else(|| ApiError::not_found(format!("Character U+{:04X}", req.code_point)))?;
+        let cp = c as u32;
+        let advance = if cp >= 0x2E80 {
+            1000
+        } else {
+            500 + cp % 5 * 50
+        };
+        let wght = req
+            .variations
+            .iter()
+            .find(|v| v.tag == "wght")
+            .map_or(400.0, |v| v.value);
+        let stem = (wght / 5.0).round().clamp(1.0, 200.0) as u32;
+        // Ascender 800, descender -200: y' = 800 - y.
+        let path = if c.is_whitespace() {
+            String::new()
+        } else {
+            let (l, r) = (50, advance - 50);
+            format!(
+                "M{l} 800L{r} 800L{r} 100L{l} 100ZM{} 800L{} 100L{} 100L{} 800Z",
+                l + stem,
+                l + stem,
+                r - stem,
+                r - stem
+            )
+        };
+        Ok(format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {advance} 1000\">             <path d=\"{path}\"/></svg>"
+        ))
     }
 }
 

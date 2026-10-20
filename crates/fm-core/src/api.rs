@@ -31,7 +31,8 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::export::{
-    ExportService, ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest,
+    ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
+    LicenseInventoryRequest,
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
@@ -69,7 +70,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, glyphs, preview};
+use crate::{charsets, glyph_svg, glyphs, preview};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -687,6 +688,17 @@ impl ExportService for CoreApi {
 
     fn license_inventory(&self, _req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {
         Err(not_available("The license inventory"))
+    }
+
+    /// Reads the face's file outside the index lock, as `list_glyphs`; the
+    /// SVG is returned, nothing is written.
+    fn export_glyph_svg(&self, req: GlyphSvgRequest) -> ApiResult<String> {
+        let file = self.lock().face_file(req.face)?;
+        Ok(glyph_svg::glyph_svg_file(
+            &file.path,
+            file.collection_index,
+            &req,
+        )?)
     }
 }
 

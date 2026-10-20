@@ -181,7 +181,7 @@ fn glyphs_of(data: &[u8], index: u32) -> Result<Vec<(u32, u32, Option<String>)>,
 
 /// Face `index` of the TrueType or OpenType data `sfnt`, with the tables
 /// the glyph map reads checked. `Err` is the reason the face is broken.
-fn face(sfnt: &[u8], index: u32) -> Result<FontRef<'_>, String> {
+pub(crate) fn face(sfnt: &[u8], index: u32) -> Result<FontRef<'_>, String> {
     let font = match FileRef::new(sfnt) {
         Ok(FileRef::Font(font)) if index == 0 => font,
         Ok(FileRef::Font(_)) => return Err(format!("The file has no face {index}.")),
@@ -194,7 +194,7 @@ fn face(sfnt: &[u8], index: u32) -> Result<FontRef<'_>, String> {
     Ok(font)
 }
 
-fn num_glyphs(font: &FontRef<'_>) -> Result<u32, String> {
+pub(crate) fn num_glyphs(font: &FontRef<'_>) -> Result<u32, String> {
     Ok(u32::from(
         font.maxp()
             .map_err(|e| table_error("maxp", &e))?
@@ -204,7 +204,7 @@ fn num_glyphs(font: &FontRef<'_>) -> Result<u32, String> {
 
 /// A mapping to `.notdef` or past the glyph count is not a glyph the face
 /// draws.
-fn draws(gid: GlyphId, num_glyphs: u32) -> bool {
+pub(crate) fn draws(gid: GlyphId, num_glyphs: u32) -> bool {
     gid != GlyphId::NOTDEF && gid.to_u32() < num_glyphs
 }
 
@@ -255,7 +255,7 @@ fn table_error(name: &str, e: &ReadError) -> String {
 
 /// The TrueType or OpenType data of a font file; WOFF and WOFF2 are
 /// decompressed.
-fn sfnt(data: &[u8]) -> Result<Cow<'_, [u8]>, String> {
+pub(crate) fn sfnt(data: &[u8]) -> Result<Cow<'_, [u8]>, String> {
     let (format, name) = match data.get(..4) {
         Some(b"wOFF") => (FontFormat::Woff, "WOFF"),
         Some(b"wOF2") => (FontFormat::Woff2, "WOFF2"),
