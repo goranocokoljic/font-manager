@@ -605,7 +605,10 @@ fn activation_goes_through_the_activator_and_is_announced() {
         .expect("conflicts of a target");
 
     lib.api
-        .deactivate(DeactivateRequest { target: None })
+        .deactivate(DeactivateRequest {
+            target: None,
+            except: None,
+        })
         .expect("deactivate");
     assert!(matches!(
         rx.recv_timeout(WAIT),

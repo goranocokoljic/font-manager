@@ -341,6 +341,7 @@ pub fn activate(home: &Path) -> BenchResult<Activated> {
     let begin = Instant::now();
     service.deactivate(DeactivateRequest {
         target: Some(Target::Faces { faces }),
+        except: None,
     })?;
     report.deactivate_ms = ms(begin.elapsed());
     Ok(report)

@@ -69,6 +69,11 @@ export const useSelectionStore = defineStore('selection', () => {
     await load(id);
   }
 
+  /** Fetches the selected face's detail again, e.g. after a bulk activation changed it. */
+  async function reload(): Promise<void> {
+    if (faceId.value !== null) await load(faceId.value);
+  }
+
   /** The selected face can be activated: it is loaded, healthy and no request is in flight. */
   const canActivate = computed(
     () => detail.value?.face.health.kind === 'ok' && !busy.value && !loading.value,
@@ -207,6 +212,7 @@ export const useSelectionStore = defineStore('selection', () => {
     editError,
     canActivate,
     select,
+    reload,
     toggleActivation,
     pending,
     resolveConflict,

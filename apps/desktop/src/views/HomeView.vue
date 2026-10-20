@@ -13,6 +13,7 @@ import MainLayout from '../components/MainLayout.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
+import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
@@ -27,7 +28,8 @@ import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useSearchStore } from '../stores/search';
-import type { FaceId } from '../api/types';
+import { useSetsStore } from '../stores/sets';
+import type { ActivationMode, FaceId } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useViewsStore, type ViewMode } from '../stores/views';
 
@@ -43,6 +45,7 @@ const fontList = useFontListStore();
 const views = useViewsStore();
 const search = useSearchStore();
 const collections = useCollectionsStore();
+const sets = useSetsStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -67,6 +70,7 @@ onMounted(() => {
   void activation.load();
   void problems.load();
   void search.loadLanguages();
+  void sets.load();
 });
 onBeforeUnmount(() => {
   void library.stop();
@@ -74,20 +78,47 @@ onBeforeUnmount(() => {
   void problems.stop();
 });
 
+// One style (or nothing) selected: A acts on the inspector's face, which shows the
+// outcome. Several rows or a family: on all of them, with a toast that can undo it.
+const bulkSelection = computed(() => {
+  const rows = fontList.selectedRows;
+  return rows.length > 1 || rows[0]?.kind === 'family';
+});
+const canToggle = () => (bulkSelection.value ? !activation.busy : selection.canActivate);
+const toggle = (mode: ActivationMode) =>
+  bulkSelection.value
+    ? activation.toggleRows(fontList.selectedRows, mode)
+    : selection.toggleActivation(mode);
+
 useActions([
   {
     id: ACTIONS.activateSession,
     title: 'Activate or deactivate for this session',
     group: 'Activation',
-    enabled: () => selection.canActivate,
-    run: () => selection.toggleActivation('session'),
+    enabled: canToggle,
+    run: () => toggle('session'),
   },
   {
     id: ACTIONS.activatePermanent,
     title: 'Activate or deactivate permanently',
     group: 'Activation',
-    enabled: () => selection.canActivate,
-    run: () => selection.toggleActivation('permanent'),
+    enabled: canToggle,
+    run: () => toggle('permanent'),
+  },
+  {
+    id: 'activation.deactivateAll',
+    title: 'Deactivate all',
+    group: 'Activation',
+    enabled: () => activation.count > 0 && !activation.busy,
+    run: () => activation.deactivateAll(),
+  },
+  {
+    id: 'activation.deactivateOutsideSet',
+    title: 'Deactivate everything not in the current set',
+    group: 'Activation',
+    // The current set is the one picked under Project sets in the sidebar.
+    enabled: () => sets.current != null && activation.count > 0 && !activation.busy,
+    run: () => (sets.current ? activation.deactivateAllExcept(sets.current.id) : undefined),
   },
   // Keys 1–4 switch the view mode, in the order of the toolbar buttons.
   ...MODES.map((m, i) => ({
@@ -122,7 +153,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = ['Smart collections', 'Project sets', 'Tags', 'Online catalogs'];
+const groups = ['Smart collections', 'Tags', 'Online catalogs'];
 </script>
 
 <template>
@@ -131,6 +162,7 @@ const groups = ['Smart collections', 'Project sets', 'Tags', 'Online catalogs'];
       <SourcesSidebar />
       <CollectionsSidebar />
       <ProblemsSidebar />
+      <ProjectSetsSidebar />
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
       </ul>

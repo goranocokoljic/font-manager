@@ -7,6 +7,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
+import { rowActivation } from '../list/activation';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
@@ -16,6 +17,7 @@ import { WATERFALL_SIZES, waterfallLinePx, waterfallRowPx } from '../list/waterf
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
 const props = withDefaults(
@@ -201,6 +203,7 @@ function onToggle(row: ListRow): void {
             @click.stop="onToggle(item.row)"
             >{{ item.row.expanded ? '▾' : '▸' }}</span
           >
+          <ActivationDot :state="rowActivation(item.row)" />
           <span class="name">{{
             item.row.kind === 'face'
               ? `${item.row.family.name} ${item.row.face.style}`

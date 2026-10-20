@@ -504,10 +504,14 @@ impl ActivationService for ActivationManager {
 
     fn deactivate(&self, req: DeactivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
         let mut index = self.lock();
-        let ids = match &req.target {
+        let mut ids = match &req.target {
             Some(target) => index.target_faces(target)?,
             None => index.active_rows()?.into_iter().map(|r| r.face).collect(),
         };
+        if let Some(except) = &req.except {
+            let keep: HashSet<FaceId> = index.target_faces(except)?.into_iter().collect();
+            ids.retain(|id| !keep.contains(id));
+        }
         Ok(self.deactivate_locked(&mut index, ids)?)
     }
 

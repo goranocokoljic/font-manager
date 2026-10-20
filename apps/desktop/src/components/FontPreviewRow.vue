@@ -117,6 +117,7 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
 <template>
   <div class="row" :data-face="face.id" :data-state="state">
     <span class="label">
+      <slot name="lead" />
       {{ name }}
       <slot name="detail" />
       <span v-if="face.isVariable" class="badge">Variable</span>
@@ -150,6 +151,7 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
 }
 .label {
   display: flex;
+  align-items: center;
   gap: 8px;
   color: var(--fm-muted);
   font-size: 11.5px;
