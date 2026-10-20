@@ -1229,8 +1229,12 @@ try {
         if ($plan.action -notin 'start', 'resume') {
             Write-Log "=== lane $Lane $($plan.action.ToUpper()) - nothing to start ===" 'Yellow'
             foreach ($x in $plan.reasons) { Write-Log "    $(if ($x.id) { "#$($x.number) $($x.id): " })$($x.why)" 'DarkGray' }
+            # Human-only stories are parked on purpose; show them as a quiet note so
+            # the real reason for the wait (printed last, in yellow) stands out.
             $hw = @($plan.waiting_on_human | Where-Object { $_.blocks.Count -gt 0 })
-            if ($hw) { Write-Log '    waiting on a human:' 'Yellow'; foreach ($h in $hw) { Write-Log "      #$($h.number) $($h.title) -> blocks $($h.blocks -join ', ')" 'Yellow' } }
+            if ($hw) { Write-Log '    parked for a human (a note, not why this lane waits):' 'DarkGray'; foreach ($h in $hw) { Write-Log "      #$($h.number) $($h.id) -> blocks $($h.blocks -join ', ')" 'DarkGray' } }
+            $prs = @($plan.reasons | ForEach-Object { [regex]::Matches([string]$_.why, 'PR #\d+, E[\d.]+') | ForEach-Object Value } | Select-Object -Unique)
+            if ($prs) { Write-Log "    -> waiting for the other lane to merge: $($prs -join '; ')" 'Yellow' }
             # The other lane still works: its merge can free a dependency or an
             # overlapping area. Wait and ask again instead of ending the run.
             $maxIdle = [double]($Cfg.idle.max_hours ?? 8)
