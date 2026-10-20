@@ -18,7 +18,8 @@
 //! The user's metadata is mirrored to sidecar files in each source and
 //! merged back from them on every scan ([`Index::sync_sidecars`], E7.3).
 //!
-//! [`Index::problems`] lists what is wrong with the library (E9.4).
+//! [`Index::problems`] lists what is wrong with the library (E9.4), and
+//! the resolution log keeps the "Keep this one" actions for undo (E8.3).
 
 mod activation;
 mod collections;
@@ -27,6 +28,7 @@ mod faces;
 mod files;
 mod languages;
 mod problems;
+mod resolutions;
 mod samples;
 mod schema;
 mod search;
@@ -50,6 +52,7 @@ use crate::error::{FmError, FmResult};
 pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
 pub use faces::FaceLocation;
 pub use files::{BATCH_SIZE, Persisted};
+pub(crate) use resolutions::StoredMove;
 pub use schema::SCHEMA_VERSION;
 pub use sidecars::SidecarSync;
 

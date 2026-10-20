@@ -1,0 +1,441 @@
+//! The Recycle Bin.
+//!
+//! `IFileOperation` ([`super::file_op`]) moves a file to the Recycle Bin of
+//! its drive: `<drive>\$Recycle.Bin\<user SID>\$R<id>.<ext>`, next to a
+//! `$I<id>.<ext>` record of the old path and the time. The shell says where
+//! the `$R` file went; when it does not, the record is found afterwards: the
+//! newest `$I` file in the user's folder that names the old path. The record
+//! holds the long form of the path, so a path with 8.3 short names
+//! (`RUNNER~1`) is looked up by its long form too.
+//!
+//! Never a permanent delete: only fixed drives have a Recycle Bin, so a file
+//! on any other drive is refused before anything moves ([`require_fixed`]);
+//! on a fixed drive whose bin cannot take the file (turned off, too small),
+//! the delete is aborted before it happens ([`super::file_op::may_delete`]).
+
+use std::ffi::OsString;
+use std::fs;
+use std::io;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
+use std::path::{Path, PathBuf};
+
+use windows::Win32::Foundation::{CloseHandle, HANDLE, HLOCAL, LocalFree};
+use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
+use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
+use windows::Win32::Storage::FileSystem::{GetDriveTypeW, GetLongPathNameW, GetVolumePathNameW};
+use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows::core::{PCWSTR, PWSTR};
+
+use super::file_op;
+use crate::trash::{Trash, TrashError, TrashErrorKind, Trashed};
+
+/// `DRIVE_FIXED` from `GetDriveTypeW`: a hard disk or SSD.
+const DRIVE_FIXED: u32 = 3;
+/// `MAX_PATH`, the fixed path field of a version 1 `$I` record.
+const MAX_PATH: usize = 260;
+
+/// The Recycle Bin of the user running the app.
+#[derive(Debug, Default)]
+pub struct RecycleBin;
+
+impl Trash for RecycleBin {
+    fn trash(&self, path: &Path) -> Result<Trashed, TrashError> {
+        let path = plain(&std::path::absolute(path).map_err(|e| TrashError::io(&e, path))?);
+        fs::symlink_metadata(&path).map_err(|e| TrashError::io(&e, &path))?;
+        let root = volume_root(&path).map_err(|e| TrashError::io(&e, &path))?;
+        let root_wide = nul_terminated(root.as_os_str().encode_wide());
+        // SAFETY: `root_wide` is NUL-terminated and outlives the call.
+        let drive = unsafe { GetDriveTypeW(PCWSTR(root_wide.as_ptr())) };
+        require_fixed(drive, &root)?;
+        let bin = root
+            .join("$Recycle.Bin")
+            .join(user_sid().map_err(|e| TrashError::io(&e, &path))?);
+        // Read before the move: the long form exists only while the file does.
+        let long = long_path(&path);
+        let recycled = file_op::recycle(&path)?;
+        if fs::symlink_metadata(&path).is_ok() {
+            return Err(TrashError::new(
+                TrashErrorKind::Failed,
+                format!("{} is still there after the move", path.display()),
+            ));
+        }
+        let names: Vec<&Path> = std::iter::once(path.as_path())
+            .chain(long.as_deref())
+            .collect();
+        let found = recycled
+            .and_then(|r| record_of(&r).map(|i| (r, i)))
+            .or_else(|| find_record(&bin, &names));
+        let (location, info) = found.ok_or_else(|| {
+            TrashError::new(
+                TrashErrorKind::Failed,
+                format!(
+                    "no Recycle Bin record of {} in {}",
+                    path.display(),
+                    bin.display()
+                ),
+            )
+        })?;
+        Ok(Trashed {
+            // The file's own short name goes with it, so it comes back
+            // under its long name.
+            original: long.unwrap_or(path),
+            location,
+            info: Some(info),
+        })
+    }
+}
+
+/// `path` without a `\\?\` prefix, which the shell does not take:
+/// `\\?\C:\x` is `C:\x`, `\\?\UNC\server\share` is `\\server\share`.
+fn plain(path: &Path) -> PathBuf {
+    let units: Vec<u16> = path.as_os_str().encode_wide().collect();
+    let verbatim: Vec<u16> = r"\\?\".encode_utf16().collect();
+    let unc: Vec<u16> = r"\\?\UNC\".encode_utf16().collect();
+    let out = if let Some(rest) = units.strip_prefix(unc.as_slice()) {
+        let mut out: Vec<u16> = r"\\".encode_utf16().collect();
+        out.extend_from_slice(rest);
+        out
+    } else if let Some(rest) = units.strip_prefix(verbatim.as_slice()) {
+        rest.to_vec()
+    } else {
+        units
+    };
+    PathBuf::from(OsString::from_wide(&out))
+}
+
+/// The long form of `path` (every 8.3 short name such as `RUNNER~1`
+/// expanded), when the file is there and the form differs. The Recycle Bin
+/// record holds the long form.
+fn long_path(path: &Path) -> Option<PathBuf> {
+    let wide = nul_terminated(path.as_os_str().encode_wide());
+    // SAFETY: a size query: `wide` is NUL-terminated, no buffer is written.
+    let needed = unsafe { GetLongPathNameW(PCWSTR(wide.as_ptr()), None) };
+    if needed == 0 {
+        return None;
+    }
+    let mut buf = vec![0u16; needed as usize + 1];
+    // SAFETY: `buf` is writable and as long as the size query asked for.
+    let len = unsafe { GetLongPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+    if len == 0 || len >= buf.len() {
+        return None;
+    }
+    let long = PathBuf::from(OsString::from_wide(&buf[..len]));
+    (long != path).then_some(long)
+}
+
+/// `units` with a NUL appended.
+fn nul_terminated(units: impl Iterator<Item = u16>) -> Vec<u16> {
+    units.chain(std::iter::once(0)).collect()
+}
+
+/// The root of the volume `path` is on (`C:\`, a mounted folder, a share).
+fn volume_root(path: &Path) -> io::Result<PathBuf> {
+    let wide = nul_terminated(path.as_os_str().encode_wide());
+    let mut buf = vec![0u16; wide.len().max(MAX_PATH) + 1];
+    // SAFETY: `wide` is NUL-terminated; `buf` is a writable slice the call
+    // fills with a NUL-terminated path no longer than the input.
+    unsafe { GetVolumePathNameW(PCWSTR(wide.as_ptr()), &mut buf) }.map_err(io::Error::other)?;
+    let len = buf.iter().position(|&u| u == 0).unwrap_or(buf.len());
+    Ok(PathBuf::from(OsString::from_wide(&buf[..len])))
+}
+
+/// Refuses a drive that is not fixed: removable, network, optical and RAM
+/// drives have no Recycle Bin, and Windows deletes there for good.
+fn require_fixed(drive_type: u32, root: &Path) -> Result<(), TrashError> {
+    if drive_type == DRIVE_FIXED {
+        Ok(())
+    } else {
+        Err(TrashError::new(
+            TrashErrorKind::NoTrash,
+            format!(
+                "{} is not a fixed drive (type {drive_type})",
+                root.display()
+            ),
+        ))
+    }
+}
+
+/// The `$I` record next to a `$R` file in the bin, when it is there.
+fn record_of(recycled: &Path) -> Option<PathBuf> {
+    let name: Vec<u16> = recycled.file_name()?.encode_wide().collect();
+    let rest = name.strip_prefix(&[u16::from(b'$'), u16::from(b'R')])?;
+    let mut info = vec![u16::from(b'$'), u16::from(b'I')];
+    info.extend_from_slice(rest);
+    let info = recycled.with_file_name(OsString::from_wide(&info));
+    info.exists().then_some(info)
+}
+
+/// The string SID of the user running the app (`S-1-5-21-…`), the name of
+/// their folder in each `$Recycle.Bin`.
+fn user_sid() -> io::Result<String> {
+    let mut token = HANDLE::default();
+    // SAFETY: the pseudo handle of this process needs no closing; `token`
+    // is a valid out pointer, closed below.
+    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token) }
+        .map_err(io::Error::other)?;
+    let result = token_sid(token);
+    // SAFETY: `token` was opened above and is closed once.
+    let _ = unsafe { CloseHandle(token) };
+    result
+}
+
+fn token_sid(token: HANDLE) -> io::Result<String> {
+    let mut len = 0u32;
+    // SAFETY: a size query: no buffer, `len` receives the size. It fails
+    // with ERROR_INSUFFICIENT_BUFFER by design.
+    let _ = unsafe { GetTokenInformation(token, TokenUser, None, 0, &mut len) };
+    // u64 words keep the buffer aligned for TOKEN_USER.
+    let mut buf = vec![0u64; (len as usize).div_ceil(8).max(1)];
+    // SAFETY: `buf` is writable, aligned and at least `len` bytes long.
+    unsafe {
+        GetTokenInformation(
+            token,
+            TokenUser,
+            Some(buf.as_mut_ptr().cast()),
+            len,
+            &mut len,
+        )
+    }
+    .map_err(io::Error::other)?;
+    // SAFETY: the call above wrote a TOKEN_USER at the start of `buf`; its
+    // SID points into `buf`, which lives until the end of this function.
+    let sid = unsafe { (*buf.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+    let mut text = PWSTR::null();
+    // SAFETY: `sid` is valid (above); `text` receives a LocalAlloc'd string.
+    unsafe { ConvertSidToStringSidW(sid, &mut text) }.map_err(io::Error::other)?;
+    // SAFETY: `text` is a NUL-terminated string from the call above.
+    let out = unsafe { text.to_string() }.map_err(io::Error::other);
+    // SAFETY: `text` was allocated by ConvertSidToStringSidW and is freed once.
+    let _ = unsafe { LocalFree(Some(HLOCAL(text.0.cast()))) };
+    out
+}
+
+/// The `$R` file and `$I` record in `bin` of the newest move of the file
+/// known by any of `names` (the path as given, its long form).
+fn find_record(bin: &Path, names: &[&Path]) -> Option<(PathBuf, PathBuf)> {
+    let wanted: Vec<Vec<u16>> = names
+        .iter()
+        .map(|n| fold(n.as_os_str().encode_wide()))
+        .collect();
+    let mut best: Option<(u64, PathBuf, PathBuf)> = None;
+    for entry in fs::read_dir(bin).ok()?.flatten() {
+        let name = entry.file_name();
+        let units: Vec<u16> = name.encode_wide().collect();
+        // `$I` + the id and extension the `$R` file shares.
+        let Some(rest) = units.strip_prefix(&[u16::from(b'$'), u16::from(b'I')]) else {
+            continue;
+        };
+        let Ok(bytes) = fs::read(entry.path()) else {
+            continue;
+        };
+        let Some((deleted, path)) = parse_record(&bytes) else {
+            continue;
+        };
+        if !wanted.contains(&fold(path.into_iter())) {
+            continue;
+        }
+        let mut r = vec![u16::from(b'$'), u16::from(b'R')];
+        r.extend_from_slice(rest);
+        let location = bin.join(OsString::from_wide(&r));
+        if best.as_ref().is_none_or(|(t, _, _)| deleted >= *t) && location.exists() {
+            best = Some((deleted, location, entry.path()));
+        }
+    }
+    best.map(|(_, location, info)| (location, info))
+}
+
+/// Paths compare case-insensitively on Windows (ASCII folding is enough to
+/// tell the copies of one group apart; exact case comes back from the record).
+fn fold(units: impl Iterator<Item = u16>) -> Vec<u16> {
+    units
+        .map(|u| match u8::try_from(u) {
+            Ok(b) if b.is_ascii_uppercase() => u16::from(b.to_ascii_lowercase()),
+            _ => u,
+        })
+        .collect()
+}
+
+/// The deletion time (FILETIME) and old path of a `$I` record: version 1
+/// (Vista to 8.1) has a fixed `MAX_PATH` field at offset 24, version 2
+/// (Windows 10 and later) a length at 24 and the path from 28.
+fn parse_record(bytes: &[u8]) -> Option<(u64, Vec<u16>)> {
+    let u64_at = |at: usize| -> Option<u64> {
+        Some(u64::from_le_bytes(bytes.get(at..at + 8)?.try_into().ok()?))
+    };
+    let version = u64_at(0)?;
+    let deleted = u64_at(16)?;
+    let (start, chars) = match version {
+        1 => (24, MAX_PATH),
+        2 => {
+            let len = u32::from_le_bytes(bytes.get(24..28)?.try_into().ok()?);
+            (28, usize::try_from(len).ok()?)
+        }
+        _ => return None,
+    };
+    let raw = bytes.get(start..start + chars.checked_mul(2)?)?;
+    let units: Vec<u16> = raw
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .take_while(|&u| u != 0)
+        .collect();
+    Some((deleted, units))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v2(path: &str, deleted: u64) -> Vec<u8> {
+        let units: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+        let mut out = Vec::new();
+        out.extend_from_slice(&2u64.to_le_bytes());
+        out.extend_from_slice(&1234u64.to_le_bytes());
+        out.extend_from_slice(&deleted.to_le_bytes());
+        out.extend_from_slice(&u32::try_from(units.len()).expect("len").to_le_bytes());
+        for u in units {
+            out.extend_from_slice(&u.to_le_bytes());
+        }
+        out
+    }
+
+    #[test]
+    fn only_fixed_drives_are_used() {
+        let root = Path::new(r"E:\");
+        assert_eq!(require_fixed(DRIVE_FIXED, root), Ok(()));
+        // Unknown, no root, removable, network, CD-ROM, RAM disk.
+        for drive in [0, 1, 2, 4, 5, 6] {
+            let err = require_fixed(drive, root).expect_err("no Recycle Bin");
+            assert_eq!(err.kind, TrashErrorKind::NoTrash, "drive type {drive}");
+        }
+    }
+
+    #[test]
+    fn the_record_of_a_recycled_file_is_its_dollar_i_twin() {
+        let bin = std::env::temp_dir().join(format!("fm-platform-twin-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&bin);
+        fs::create_dir_all(&bin).expect("bin");
+        fs::write(bin.join("$IABC.ttf"), b"record").expect("record");
+        let found = record_of(&bin.join("$RABC.ttf"));
+        let missing = record_of(&bin.join("$RXYZ.ttf"));
+        let not_recycled = record_of(&bin.join("ABC.ttf"));
+        let _ = fs::remove_dir_all(&bin);
+        assert_eq!(found, Some(bin.join("$IABC.ttf")));
+        assert_eq!(missing, None);
+        assert_eq!(not_recycled, None);
+    }
+
+    #[test]
+    fn verbatim_prefixes_are_dropped() {
+        assert_eq!(
+            plain(Path::new(r"\\?\C:\F\a.ttf")),
+            Path::new(r"C:\F\a.ttf")
+        );
+        assert_eq!(
+            plain(Path::new(r"\\?\UNC\s\x\a.ttf")),
+            Path::new(r"\\s\x\a.ttf")
+        );
+        assert_eq!(plain(Path::new(r"C:\a.ttf")), Path::new(r"C:\a.ttf"));
+    }
+
+    #[test]
+    fn a_version_2_record_gives_the_path_and_time() {
+        let (deleted, path) = parse_record(&v2(r"C:\Fonts\A.ttf", 99)).expect("parses");
+        assert_eq!(deleted, 99);
+        assert_eq!(String::from_utf16_lossy(&path), r"C:\Fonts\A.ttf");
+    }
+
+    #[test]
+    fn a_version_1_record_gives_the_path() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&1u64.to_le_bytes());
+        bytes.extend_from_slice(&5u64.to_le_bytes());
+        bytes.extend_from_slice(&7u64.to_le_bytes());
+        let mut field = vec![0u8; MAX_PATH * 2];
+        for (i, u) in r"D:\x.otf".encode_utf16().enumerate() {
+            field[i * 2..i * 2 + 2].copy_from_slice(&u.to_le_bytes());
+        }
+        bytes.extend_from_slice(&field);
+        let (deleted, path) = parse_record(&bytes).expect("parses");
+        assert_eq!(deleted, 7);
+        assert_eq!(String::from_utf16_lossy(&path), r"D:\x.otf");
+    }
+
+    #[test]
+    fn short_or_unknown_records_are_skipped() {
+        assert_eq!(parse_record(&[]), None);
+        assert_eq!(parse_record(&v2("C:\\a", 1)[..30]), None);
+        let mut v9 = v2("C:\\a", 1);
+        v9[0] = 9;
+        assert_eq!(parse_record(&v9), None);
+    }
+
+    #[test]
+    fn the_newest_record_of_the_path_wins() {
+        let bin = std::env::temp_dir().join(format!("fm-platform-bin-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&bin);
+        fs::create_dir_all(&bin).expect("bin");
+        for (id, path, time) in [
+            ("ABC.ttf", r"C:\Fonts\A.ttf", 10),
+            ("DEF.ttf", r"c:\fonts\a.TTF", 20),
+            ("GHI.ttf", r"C:\Fonts\B.ttf", 30),
+        ] {
+            fs::write(bin.join(format!("$I{id}")), v2(path, time)).expect("record");
+            fs::write(bin.join(format!("$R{id}")), b"font").expect("file");
+        }
+        let found = find_record(&bin, &[Path::new(r"C:\Fonts\A.ttf")]);
+        // A short name that matches no record, then the long form that does.
+        let by_long = find_record(
+            &bin,
+            &[Path::new(r"C:\FONTS~1\B.ttf"), Path::new(r"C:\Fonts\B.ttf")],
+        );
+        let _ = fs::remove_dir_all(&bin);
+        let (location, info) = found.expect("found");
+        assert_eq!(
+            location.file_name().and_then(|n| n.to_str()),
+            Some("$RDEF.ttf")
+        );
+        assert_eq!(info.file_name().and_then(|n| n.to_str()), Some("$IDEF.ttf"));
+        let (long, _) = by_long.expect("found by the long form");
+        assert_eq!(long.file_name().and_then(|n| n.to_str()), Some("$RGHI.ttf"));
+    }
+
+    /// The CI runner's temp folder has an 8.3 short name (`RUNNER~1`): a file
+    /// reached by a short name is found in the bin by its long name, and
+    /// comes back under its long name (its own short name is gone with it).
+    #[test]
+    fn a_file_reached_by_its_short_name_goes_to_the_bin_and_back() {
+        use windows::Win32::Storage::FileSystem::GetShortPathNameW;
+
+        let dir = std::env::temp_dir().join(format!(
+            "fm-platform-a-long-folder-name-{}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("A long file name.ttf");
+        fs::write(&file, b"font").expect("write");
+        // The temp folder itself may be a short name (`RUNNER~1`): the file
+        // comes back at the long form of the whole path.
+        let long = long_path(&file).unwrap_or_else(|| file.clone());
+        let wide = nul_terminated(file.as_os_str().encode_wide());
+        let mut buf = vec![0u16; 1024];
+        // SAFETY: `wide` is NUL-terminated; `buf` is writable for its length.
+        let len = unsafe { GetShortPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+        let short = PathBuf::from(OsString::from_wide(&buf[..len.min(buf.len())]));
+        if len == 0 || len >= buf.len() || short == file {
+            // 8.3 names are off on this volume: nothing to prove here.
+            let _ = fs::remove_dir_all(&dir);
+            return;
+        }
+        let item = RecycleBin.trash(&short);
+        let restored = item.as_ref().ok().map(|item| RecycleBin.restore(item));
+        let back = fs::read(&file);
+        let _ = fs::remove_dir_all(&dir);
+        let item = item.expect("moved to the bin by its short name");
+        assert_eq!(item.original, long, "it comes back under its long name");
+        restored.expect("restore ran").expect("put back");
+        assert_eq!(back.expect("back in place"), b"font");
+    }
+}

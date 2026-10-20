@@ -36,4 +36,6 @@ id!(
     SetId,
     /// A long-running job (a scan); its progress arrives as events.
     JobId,
+    /// A "Keep this one" action of the Problems view, for undo.
+    ResolutionId,
 );

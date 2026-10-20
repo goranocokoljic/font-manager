@@ -1,9 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockExtraProblems } from '../api/mock';
+import { createMockClient, mockDuplicates, mockExtraProblems } from '../api/mock';
 import type { ApiError, Problem, ProblemKind } from '../api/types';
 import { PROBLEM_GROUPS, groupOf, problemGroup, useProblemsStore } from './problems';
+import { TOAST_MS, useToastStore } from './toast';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
@@ -13,11 +14,12 @@ let client: FmClient;
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  client = createMockClient({ extraProblems: mockExtraProblems });
+  client = createMockClient({ extraProblems: mockExtraProblems, duplicates: mockDuplicates });
   setClient(client);
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   await useProblemsStore().stop();
   setClient(undefined);
 });
@@ -117,5 +119,128 @@ describe('problems store', () => {
     await store.refresh();
     expect(store.error).toEqual(failure);
     expect(store.total).toBe(5);
+  });
+});
+
+describe('keep this one', () => {
+  const KEEP = '/Users/demo/Fonts/Quarto-Regular.otf';
+  const COPY = '/Users/demo/Downloads/Quarto-Regular.otf';
+
+  async function planned() {
+    const store = useProblemsStore();
+    await store.load();
+    expect(store.duplicates).toHaveLength(1);
+    await store.planKeep(store.duplicates[0]!, KEEP);
+    return store;
+  }
+
+  it('shows the dry run of what will move and moves nothing', async () => {
+    const store = await planned();
+    expect(store.plan?.dryRun).toBe(true);
+    expect(store.plan?.kept).toBe(KEEP);
+    expect(store.plan?.moves).toEqual([{ path: COPY, status: 'planned', message: null }]);
+    expect(await client.listDuplicates()).toHaveLength(1);
+    expect(store.history).toEqual([]);
+    store.cancelPlan();
+    expect(store.plan).toBeNull();
+    expect(await client.listDuplicates()).toHaveLength(1);
+  });
+
+  it('moves the other copy on confirm and offers undo in the app toast for 10 s', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await store.confirmPlan();
+    expect(store.plan).toBeNull();
+    expect(toasts.toast?.message).toBe('Moved 1 copy to the trash.');
+    expect(toasts.toast?.action?.label).toBe('Undo');
+    expect(store.duplicates).toEqual([]);
+    expect(store.counts.duplicates).toBe(0);
+    expect(store.history).toHaveLength(1);
+
+    vi.advanceTimersByTime(TOAST_MS - 1);
+    expect(toasts.toast).not.toBeNull();
+    vi.advanceTimersByTime(1);
+    expect(toasts.toast).toBeNull();
+  });
+
+  it('undoes from the toast', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    toasts.act();
+    await vi.waitFor(() => expect(store.history[0]?.undone).toBe(true));
+    expect(toasts.toast).toBeNull();
+    expect(store.duplicates).toHaveLength(1);
+    expect(store.counts.duplicates).toBe(1);
+  });
+
+  it('keeps the undo toast when the Problems view closes', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    await store.stop();
+    expect(toasts.toast?.action?.label).toBe('Undo');
+  });
+
+  it('takes the toast down when the same action is undone from the history', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    await store.undo(store.history[0]!.id!);
+    expect(toasts.toast).toBeNull();
+  });
+
+  it('leaves another toast up when an action is undone from the history', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    toasts.show('Activated 2 faces.');
+    await store.undo(store.history[0]!.id!);
+    expect(toasts.toast?.message).toBe('Activated 2 faces.');
+  });
+
+  it('undoes from the history after the toast is gone', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await store.confirmPlan();
+    vi.advanceTimersByTime(TOAST_MS);
+    expect(toasts.toast).toBeNull();
+    await store.undo(store.history[0]!.id!);
+    expect(store.duplicates).toHaveLength(1);
+    expect(store.history[0]?.moves[0]?.status).toBe('restored');
+  });
+
+  it('shows why a copy could not come back', async () => {
+    const store = await planned();
+    await store.confirmPlan();
+    setClient({
+      ...client,
+      undoResolution: async (id) => ({
+        ...(await client.undoResolution(id)),
+        undone: false,
+        moves: [
+          {
+            path: COPY,
+            status: 'failed',
+            message: 'Another file is at this path now, so the copy was left in the trash.',
+          },
+        ],
+      }),
+    });
+    await store.undo(store.history[0]!.id!);
+    expect(store.actionError?.message).toMatch(/left in the trash/);
+  });
+
+  it('shows the API error of a refused keep', async () => {
+    const store = useProblemsStore();
+    await store.load();
+    await store.planKeep(
+      { kind: 'exact', postscriptName: null, copies: [] },
+      '/Users/demo/notes.txt',
+    );
+    expect(store.plan).toBeNull();
+    expect(store.actionError?.code).toBe('invalidRequest');
   });
 });

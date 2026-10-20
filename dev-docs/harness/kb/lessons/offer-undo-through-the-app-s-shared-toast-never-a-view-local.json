@@ -1,0 +1,20 @@
+{
+  "id": "offer-undo-through-the-app-s-shared-toast-never-a-view-local",
+  "title": "Offer undo through the app's shared toast, never a view-local one",
+  "category": "architecture",
+  "rule": "When a UI action offers Undo in a toast, call useToastStore().show(message, { label: 'Undo', run }) (apps/desktop/src/stores/toast.ts, rendered once by ToastMessage in App.vue). Do not add a toast, timer or toast markup to a view or its store: the shared one holds while the pointer or focus is on it, survives a route change and is the only live region at the bottom. Test the window with TOAST_MS and data-testid=\"toast\", and add a check that the toast stays after leaving the view.",
+  "rationale": "E8.3 (#88): the Problems store kept its own undo toast with a 10 s timer; it closed under the pointer, was removed when the view unmounted (store.stop()), and overlapped the activation toast that useToastStore draws.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    88
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**/*.ts",
+    "apps/desktop/src/views/**/*.vue",
+    "apps/desktop/src/components/**/*.vue"
+  ],
+  "first_seen": "2026-10-20T14:53:44.373Z",
+  "last_seen": "2026-10-20T14:53:44.373Z"
+}

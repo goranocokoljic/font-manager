@@ -2,8 +2,8 @@
 //!
 //! The one place with OS-specific code: the `FontActivator` trait with one
 //! implementation per OS under `src/{windows,macos,linux}/`, the app-paths
-//! helpers, the file-system calls that differ per OS (symbolic links), the
-//! tray and the IPC transport. Platform differences are
+//! helpers, the file-system calls that differ per OS (symbolic links, the
+//! trash), the tray and the IPC transport. Platform differences are
 //! documented in an ADR, never hidden in `cfg` branches elsewhere.
 
 pub mod activator;
@@ -11,6 +11,7 @@ pub mod fs;
 mod linux;
 mod macos;
 pub mod paths;
+pub mod trash;
 mod windows;
 
 pub use activator::{
@@ -22,5 +23,6 @@ pub use linux::LinuxActivator;
 #[cfg(target_os = "macos")]
 pub use macos::{LEDGER_FILE, MacosActivator};
 pub use paths::{AppPaths, Os, PathError};
+pub use trash::{MockTrash, Trash, TrashError, TrashErrorKind, Trashed};
 #[cfg(windows)]
 pub use windows::{FONTS_KEY, LEDGER_KEY, WindowsActivator};

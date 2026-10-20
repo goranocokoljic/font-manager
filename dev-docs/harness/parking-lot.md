@@ -103,12 +103,16 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-20
 
+- [E8.3 #88] apps/desktop/src-tauri/src/lib.rs:518 — the app still serves MockApi; nothing outside tests builds DuplicateResolver with fm_platform::trash::system(), so the shipped app does not reach the real trash yet (same as ActivationManager).
+- [E8.3 #88] crates/fm-platform/src/linux/trash.rs:44 — XDG_DATA_HOME/HOME are resolved by hand instead of paths::Env::dir (crates/fm-platform/src/paths.rs:90): a second copy of the rule that ignores relative XDG values.
+- [E8.3 #88] crates/fm-core/src/resolve.rs:31 — the ACTIVE_COPY message is written twice (also crates/fm-api/src/mock.rs), so the core and mock wording can drift.
 - [E5.11 #285] crates/fm-core/src/index/search.rs:93 — the real API leaves `FamilySummary.classification` empty (the scan stores `ClassGuess` in `face.parsed` but search does not read it), so the Class column and the classification filter counts are empty where the MockApi-based checks showed serif/sans.
 - [E5.11 #285] crates/fm-core/src/index/faces.rs:150 — `FaceDetail.scripts` is always empty (the `face.scripts` column is never written by the scan), so the Info tab's Scripts row shows "—" on real data while the mock lists `latn`, `cyrl`.
 - [E5.11 #285] crates/fm-core/src/index/faces.rs:140 — `FeatureInfo.name` is always `None` (no feature-name table in fm-core), so the Info tab lists bare tags where the mock shows "liga (Standard ligatures)".
 - [E5.11 #285] crates/fm-core/src/api.rs:330 — `find_similar`, `export_web`, `license_inventory`, `pick_fonts_for_brief` and `prepare_for_web` answer `Unsupported` on the real API; the MockApi answers them, and no phase-1 UI calls them yet.
 - [E5.11 #285] crates/fm-core/src/api.rs:120 — scans write the whole rescan while holding the index lock, so UI reads wait for the write of a large first scan (seconds on 10k fonts).
 - [E5.11 #285] crates/fm-core/src/api.rs:151 — if the settings file becomes unreadable between `startup::init` and `CoreApi::start`, `start` returns early at `get_settings()?` and skips the crash-session cleanup for that run.
+- [E8.3 #88] crates/fm-core/src/api.rs:404 — `forget_files()` after other index changes (also :461) does not stop a scan already running from writing what it walked before the change.
 
 ## 2026-10-21
 

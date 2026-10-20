@@ -6,9 +6,9 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{Embedding, FontFormat, Health, Page};
-use fm_api::library::{FamilyActivation, FamilySort, OpenLicense, ProblemKind};
+use fm_api::library::{FamilyActivation, FamilySort, OpenLicense, ProblemKind, TrashMoveStatus};
 use fm_api::search::{Filters, Supports};
-use fm_platform::MockActivator;
+use fm_platform::{MockActivator, MockTrash};
 
 use super::*;
 use crate::index::INDEX_FILE;
@@ -322,6 +322,93 @@ fn problems_list_the_truncated_file_and_duplicates_answer() {
         "{problems:?}"
     );
     lib.api.list_duplicates().expect("duplicates");
+}
+
+#[test]
+fn keep_this_one_moves_the_other_copy_to_the_trash_and_undo_brings_it_back() {
+    let lib = Lib::new("api-keep-copy");
+    let original = lib.root.join("bebasneue").join("BebasNeue-Regular.ttf");
+    let copy = lib.root.join("copy").join("BebasNeue-Regular.ttf");
+    std::fs::create_dir_all(copy.parent().expect("folder")).expect("folder");
+    std::fs::copy(&original, &copy).expect("copy");
+    let trash = lib.dir.path().join("trash");
+    let lib = Lib {
+        api: lib.api.with_trash(Arc::new(MockTrash::new(&trash))),
+        ..lib
+    };
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let group = lib
+        .api
+        .list_duplicates()
+        .expect("duplicates")
+        .into_iter()
+        .find(|g| g.copies.iter().any(|c| Path::new(&c.path) == copy))
+        .expect("the copy is a duplicate");
+    let keep = group
+        .copies
+        .iter()
+        .find(|c| Path::new(&c.path) == original)
+        .expect("the original is in the group")
+        .path
+        .clone();
+    let req = |dry_run| KeepCopyRequest {
+        keep: keep.clone(),
+        trash: vec![copy.display().to_string()],
+        dry_run,
+    };
+
+    let plan = lib.api.keep_copy(req(true)).expect("dry run");
+    assert_eq!(plan.moves.len(), 1, "{plan:?}");
+    assert_eq!(plan.moves[0].status, TrashMoveStatus::Planned);
+    assert!(copy.is_file(), "a dry run moves nothing");
+    assert!(lib.api.list_resolutions().expect("history").is_empty());
+
+    let rx = lib.api.subscribe();
+    let done = lib.api.keep_copy(req(false)).expect("keep");
+    assert_eq!(done.moves[0].status, TrashMoveStatus::Trashed, "{done:?}");
+    assert!(!copy.exists() && original.is_file());
+    assert!(trash.read_dir().expect("trash").next().is_some());
+    assert!(matches!(
+        rx.recv_timeout(WAIT),
+        Ok(Event::LibraryChanged { ref removed, .. }) if removed.len() == 1
+    ));
+    let history = lib.api.list_resolutions().expect("history");
+    assert_eq!(history.len(), 1);
+    let id = history[0].id.expect("logged");
+
+    let undone = lib.api.undo_resolution(id).expect("undo");
+    assert!(undone.undone, "{undone:?}");
+    assert!(copy.is_file(), "the copy is back");
+    // A scan after the undo finds the copy where it was, not a new file.
+    lib.scan(Some(source.id), false);
+    assert!(
+        lib.api
+            .list_duplicates()
+            .expect("duplicates")
+            .iter()
+            .any(|g| g.copies.iter().any(|c| Path::new(&c.path) == copy))
+    );
+}
+
+#[test]
+fn keep_this_one_without_a_trash_answers_unsupported_and_moves_nothing() {
+    let lib = Lib::new("api-no-trash");
+    let file = lib.root.join("bebasneue").join("BebasNeue-Regular.ttf");
+    is_unsupported(lib.api.keep_copy(KeepCopyRequest {
+        keep: file.display().to_string(),
+        trash: vec![file.display().to_string()],
+        dry_run: false,
+    }));
+    is_unsupported(lib.api.undo_resolution(ResolutionId(1)));
+    assert!(file.is_file());
+    assert!(lib.api.list_resolutions().expect("history").is_empty());
 }
 
 #[test]

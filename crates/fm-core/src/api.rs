@@ -12,6 +12,10 @@
 //! - **Events.** Every subscriber of [`EventSource::subscribe`] gets every
 //!   event sent after it subscribed: scans, activation changes and tag or
 //!   metadata changes. The UI listens; it never polls.
+//! - **Trash.** "Keep this one" moves copies through a [`DuplicateResolver`]
+//!   over the OS trash ([`CoreApi::open`]) or the one a test passes
+//!   ([`CoreApi::with_trash`]); without a trash it answers `Unsupported`
+//!   and moves nothing.
 //! - **Not built yet.** Export, workflows and similar-font search answer an
 //!   `Unsupported` error with a message for the user, never a panic.
 
@@ -31,8 +35,8 @@ use fm_api::export::{
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, ImportMode,
-    LibraryService, ListFamiliesRequest, Platform, Problem, ScanRequest, SetSourcePausedRequest,
-    Source, SourceKind,
+    KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem, Resolution,
+    ScanRequest, SetSourcePausedRequest, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -52,14 +56,15 @@ use fm_api::workflows::{
 };
 use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
-    FamilyId, JobId, SetId, SourceId,
+    FamilyId, JobId, ResolutionId, SetId, SourceId,
 };
-use fm_platform::{AppPaths, FontActivator, Os};
+use fm_platform::{AppPaths, FontActivator, Os, Trash};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
 use crate::index::Index;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
+use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
 use crate::{charsets, preview};
@@ -91,6 +96,8 @@ pub struct CoreApi {
     activation: ActivationManager,
     settings: SettingsStore,
     previews: Option<PreviewCache>,
+    /// "Keep this one"; `None` when there is no trash to move copies to.
+    resolver: Option<DuplicateResolver>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -107,8 +114,10 @@ impl CoreApi {
     /// The API over `index` in the app folders `paths`: activation through
     /// `activator` (the app passes [`fm_platform::activator::system`]), the
     /// settings in the config file and the preview cache in the cache
-    /// folder. A preview cache that cannot be opened is logged and left out;
-    /// previews are then rendered every time.
+    /// folder, duplicates moved to the OS trash. A preview cache that cannot
+    /// be opened is logged and left out; previews are then rendered every
+    /// time. A trash that cannot be found is logged too; "Keep this one" then
+    /// answers `Unsupported`.
     pub fn open(paths: &AppPaths, index: Index, activator: Arc<dyn FontActivator>) -> Self {
         let settings = SettingsStore::new(paths);
         let limit = settings
@@ -118,11 +127,18 @@ impl CoreApi {
         let previews = PreviewCache::open(&cache::cache_dir(paths), limit)
             .inspect_err(|e| tracing::warn!(error = %e, "preview cache not opened"))
             .ok();
-        Self::new(index, activator, settings, previews)
+        let api = Self::new(index, activator, settings, previews);
+        match fm_platform::trash::system() {
+            Ok(trash) => api.with_trash(trash),
+            Err(e) => {
+                tracing::warn!(error = %e, "no OS trash: duplicates cannot be moved");
+                api
+            }
+        }
     }
 
-    /// The API over these parts; tests pass a mock activator and scratch
-    /// folders.
+    /// The API over these parts, with no trash; tests pass a mock activator
+    /// and scratch folders.
     pub fn new(
         index: Index,
         activator: Arc<dyn FontActivator>,
@@ -139,10 +155,30 @@ impl CoreApi {
             activation,
             settings,
             previews,
+            resolver: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
         }
+    }
+
+    /// The same API, moving "Keep this one" copies through `trash`.
+    #[must_use]
+    pub fn with_trash(mut self, trash: Arc<dyn Trash>) -> Self {
+        let sink = Arc::clone(&self.events);
+        self.resolver = Some(DuplicateResolver::new(
+            Arc::clone(&self.index),
+            trash,
+            move |e| sink.send(&e),
+        ));
+        self
+    }
+
+    /// The resolver, or the answer when there is no trash.
+    fn resolver(&self) -> ApiResult<&DuplicateResolver> {
+        self.resolver
+            .as_ref()
+            .ok_or_else(|| not_available("Moving files to the trash"))
     }
 
     /// What the app does at start (ADR 0008): cleans up what a crashed run
@@ -447,6 +483,26 @@ impl LibraryService for CoreApi {
 
     fn list_duplicates(&self) -> ApiResult<Vec<DuplicateGroup>> {
         Ok(self.lock().duplicates()?)
+    }
+
+    fn keep_copy(&self, req: KeepCopyRequest) -> ApiResult<Resolution> {
+        let dry_run = req.dry_run;
+        let resolution = self.resolver()?.keep_copy(req)?;
+        if !dry_run {
+            // The next scan reads the moved files' state from the index again.
+            self.forget_files();
+        }
+        Ok(resolution)
+    }
+
+    fn list_resolutions(&self) -> ApiResult<Vec<Resolution>> {
+        Ok(self.lock().resolutions()?)
+    }
+
+    fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution> {
+        let resolution = self.resolver()?.undo_resolution(resolution)?;
+        self.forget_files();
+        Ok(resolution)
     }
 }
 

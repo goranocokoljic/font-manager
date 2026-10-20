@@ -36,7 +36,7 @@ pub use activation::ActivationService;
 pub use error::{ApiError, ApiResult, ErrorCode};
 pub use event::{Event, EventSource};
 pub use export::ExportService;
-pub use ids::{CollectionId, FaceId, FamilyId, JobId, SetId, SourceId, TagId};
+pub use ids::{CollectionId, FaceId, FamilyId, JobId, ResolutionId, SetId, SourceId, TagId};
 pub use library::LibraryService;
 pub use organization::OrganizationService;
 pub use preview::PreviewService;
@@ -50,7 +50,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 6,
+    minor: 7,
     patch: 0,
 };
 
@@ -130,6 +130,8 @@ pub fn types() -> specta::Types {
         library::FaceDetail,
         library::Problem,
         library::DuplicateGroup,
+        library::KeepCopyRequest,
+        library::Resolution,
         // search
         search::SearchRequest,
         search::SearchResponse,
@@ -188,13 +190,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.6.0");
+        assert_eq!(API_VERSION.to_string(), "0.7.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":6,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":7,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }
