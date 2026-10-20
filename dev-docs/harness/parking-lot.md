@@ -122,3 +122,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E10.3 #96] crates/fm-core/src/parser.rs:557 — feature tags with non-printable bytes are stored as the display form `{0xNN}`, not the raw tag, so later CSS or MCP output from them cannot round-trip.
 - [E10.3 #96] apps/desktop/src/views/HomeView.vue:203 — at 1,000×700 the toolbar "Inspector" toggle is clipped to "Insp…".
+- [E11.2 #100] crates/fm-core/src/glyphs.rs:91 — `glyph_detail_file` and the `list_glyphs` file reader have no test for a face file removed after the scan (the I/O error path).
