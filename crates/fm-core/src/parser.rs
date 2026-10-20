@@ -2,8 +2,9 @@
 //!
 //! [`parse`] reads one font file from memory and returns every face in it with
 //! the metadata the index needs: names, OS/2 classes, the italic angle,
-//! variation axes and named instances, layout feature tags, cmap code points
-//! and the design class.
+//! variation axes and named instances, layout feature tags and the font's own
+//! names of its stylistic sets and character variants, cmap code points and
+//! the design class.
 //!
 //! Malformed data is never a panic. A file whose header cannot be read is
 //! [`Health::Broken`] with no faces; a face whose tables are malformed or cut
@@ -21,11 +22,14 @@
 //! recognized by their magic bytes and returned as [`Health::Unsupported`]
 //! without faces.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use fm_api::common::{Axis, AxisValue, FontFormat, Health, NamedInstance};
+use read_fonts::tables::gsub::Gsub;
+use read_fonts::tables::layout::FeatureParams;
 use read_fonts::types::Tag;
 use read_fonts::{CollectionRef, FontRef, ReadError, TableProvider};
 use serde::{Deserialize, Serialize};
@@ -33,6 +37,7 @@ use skrifa::MetadataProvider;
 use skrifa::string::StringId;
 
 use crate::classify::{self, ClassGuess};
+use crate::features;
 use crate::{FmError, FmResult};
 
 /// What [`parse`] found in one font file.
@@ -104,6 +109,12 @@ pub struct ParsedFace {
     pub named_instances: Vec<NamedInstance>,
     /// Feature tags from `GSUB` and `GPOS`, sorted, without duplicates.
     pub features: Vec<String>,
+    /// The font's own names of its stylistic sets (`ss01`–`ss20`) and
+    /// character variants (`cv01`–`cv99`) from their `GSUB` FeatureParams,
+    /// by tag; a feature without a name is absent. No serde default: a
+    /// `face.parsed` written before this field fails to load, so the next
+    /// scan reads the file again and fills it.
+    pub feature_names: BTreeMap<String, String>,
     /// The `GSUB` language systems whose features include `locl`: the
     /// languages the face draws local forms for, as `script/LANG` OpenType
     /// tags trimmed of their padding (`cyrl/SRB`, `latn/ROM`), sorted,
@@ -149,6 +160,7 @@ impl ParsedFace {
             axes: Vec::new(),
             named_instances: Vec::new(),
             features: Vec::new(),
+            feature_names: BTreeMap::new(),
             locl_languages: Vec::new(),
             color: false,
             classification: None,
@@ -420,6 +432,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
     if let Some(gsub) = present(font.gsub(), "GSUB", &mut problems) {
         collect_features(gsub.feature_list(), "GSUB", &mut features, &mut problems);
         face.locl_languages = locl_languages(&gsub, &mut problems);
+        face.feature_names = feature_names(font, &gsub);
     }
     if let Some(gpos) = present(font.gpos(), "GPOS", &mut problems) {
         collect_features(gpos.feature_list(), "GPOS", &mut features, &mut problems);
@@ -561,6 +574,54 @@ fn collect_features(
         Err(ReadError::NullOffset) => {}
         Err(e) => problems.push(format!("The {table} feature list is malformed: {e}.")),
     }
+}
+
+/// The font's own names of the stylistic sets and character variants of
+/// `gsub` ([`features::named_by_font`]), by tag.
+///
+/// The name ID comes from the feature's FeatureParams (UINameID for `ssNN`,
+/// FeatureUINameID for `cvNN`) and must be in the font-specific range
+/// 256–32767 the OpenType spec gives it; the string is the English one, else
+/// the first, and a string that only repeats the tag is no name. A missing,
+/// null or malformed FeatureParams, an ID outside that range or a name the
+/// `name` table lacks gives no name and is not a problem: the feature still
+/// works, it just keeps its generic name. When a tag has several feature
+/// records, the first that yields a name wins.
+fn feature_names(font: &FontRef<'_>, gsub: &Gsub<'_>) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    let Ok(list) = gsub.feature_list() else {
+        return out; // no features, or reported by collect_features
+    };
+    for record in list.feature_records() {
+        let tag = record.feature_tag().to_string();
+        if out.contains_key(&tag) || !features::named_by_font(&tag) {
+            continue;
+        }
+        let params = record
+            .feature(list.offset_data())
+            .ok()
+            .and_then(|feature| feature.feature_params())
+            .and_then(Result::ok);
+        let id = match params {
+            Some(FeatureParams::StylisticSet(p)) => p.ui_name_id(),
+            Some(FeatureParams::CharacterVariant(p)) => p.feat_ui_label_name_id(),
+            _ => continue,
+        };
+        if !(256..=32767).contains(&id.to_u16()) {
+            continue;
+        }
+        let name = font
+            .localized_strings(id)
+            .english_or_first()
+            .map(|s| s.to_string().trim().to_owned())
+            // Some fonts "name" a set by its tag (Asap: ss01 is "ss01"); the
+            // generic "Stylistic set 1" says more.
+            .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case(&tag));
+        if let Some(name) = name {
+            out.insert(tag, name);
+        }
+    }
+    out
 }
 
 /// The language systems of `gsub` that list a `locl` feature, sorted.
@@ -925,6 +986,170 @@ mod tests {
     fn table_offset(data: &[u8], record: usize) -> usize {
         let bytes: [u8; 4] = data[record + 8..record + 12].try_into().expect("offset");
         u32::from_be_bytes(bytes) as usize
+    }
+
+    const CAL_SANS: &str = "google-repo/calsans/CalSans-Regular.ttf";
+
+    fn be16(data: &[u8], at: usize) -> usize {
+        usize::from(u16::from_be_bytes([data[at], data[at + 1]]))
+    }
+
+    /// The offset in `data` of the first `GSUB` Feature table of `tag`.
+    fn gsub_feature(data: &[u8], tag: &[u8; 4]) -> usize {
+        let gsub = table_offset(data, table_record(data, b"GSUB"));
+        let list = gsub + be16(data, gsub + 6);
+        (0..be16(data, list))
+            .map(|i| list + 2 + 6 * i)
+            .find(|&record| &data[record..record + 4] == tag)
+            .map(|record| list + be16(data, record + 4))
+            .expect("feature")
+    }
+
+    /// The offset in `data` of the FeatureParams of the first `GSUB` Feature
+    /// table of `tag`.
+    fn gsub_feature_params(data: &[u8], tag: &[u8; 4]) -> usize {
+        let feature = gsub_feature(data, tag);
+        let params = be16(data, feature);
+        assert_ne!(params, 0, "{tag:?} has FeatureParams");
+        feature + params
+    }
+
+    /// E10.4 criteria 1 and 4: stylistic sets and character variants take
+    /// their names from the font's own FeatureParams; a set the font does
+    /// not name, or "names" by its tag, has no name.
+    #[test]
+    fn stylistic_set_and_character_variant_names_come_from_the_font() {
+        let cal = single(CAL_SANS);
+        let name = |face: &ParsedFace, tag: &str| face.feature_names.get(tag).cloned();
+        assert_eq!(name(&cal, "ss01").as_deref(), Some("Futura Alternates"));
+        assert_eq!(
+            name(&cal, "ss02").as_deref(),
+            Some("Futura Alts and Ligatures")
+        );
+        assert_eq!(name(&cal, "cv01").as_deref(), Some("Futura-style C"));
+        assert_eq!(name(&cal, "cv05").as_deref(), Some("Futura-style zero"));
+        assert!(
+            cal.feature_names.keys().all(|t| features::named_by_font(t)),
+            "{:?}",
+            cal.feature_names
+        );
+        assert!(
+            cal.feature_names
+                .keys()
+                .all(|t| cal.features.binary_search(t).is_ok()),
+            "only features the face has are named"
+        );
+
+        let mona = single("google-static/monasans/MonaSans-BlackItalic.ttf");
+        assert_eq!(name(&mona, "ss05").as_deref(), Some("Double-storey a"));
+        assert_eq!(mona.feature_names.len(), 8, "{:?}", mona.feature_names);
+
+        // Asap Sharp's ss01 UINameID string is "ss01": no name.
+        let asap = single("google-repo/asapsharp/AsapSharp[wdth,wght].ttf");
+        assert!(asap.features.iter().any(|f| f == "ss01"));
+        assert_eq!(asap.feature_names, BTreeMap::new());
+
+        // A face without stylistic sets names nothing.
+        let bebas = single("google-repo/bebasneue/BebasNeue-Regular.ttf");
+        assert!(bebas.feature_names.is_empty(), "{:?}", bebas.feature_names);
+    }
+
+    /// E10.4 criterion 3: a null FeatureParams offset gives no name and
+    /// leaves the face and the other names alone.
+    #[test]
+    fn a_null_feature_params_gives_no_name() {
+        let mut data = read(CAL_SANS);
+        let feature = gsub_feature(&data, b"ss01");
+        data[feature..feature + 2].copy_from_slice(&0u16.to_be_bytes());
+        let face = single_from(&data);
+        assert_eq!(face.health, Health::Ok);
+        assert!(face.features.iter().any(|f| f == "ss01"));
+        assert_eq!(face.feature_names.get("ss01"), None);
+        assert_eq!(
+            face.feature_names.get("cv01").map(String::as_str),
+            Some("Futura-style C")
+        );
+    }
+
+    /// E10.4 criterion 3: FeatureParams that point outside the table, are
+    /// cut off, or carry a name ID that is out of range or not in the name
+    /// table give no name; the face stays healthy and nothing panics.
+    #[test]
+    fn malformed_feature_params_give_no_name_and_never_break_the_face() {
+        let clean = read(CAL_SANS);
+        let gsub_record = table_record(&clean, b"GSUB");
+        let gsub = table_offset(&clean, gsub_record);
+        let gsub_len = u32::from_be_bytes(
+            clean[gsub_record + 12..gsub_record + 16]
+                .try_into()
+                .expect("length"),
+        ) as usize;
+        let feature = gsub_feature(&clean, b"cv01");
+        let params = gsub_feature_params(&clean, b"cv01");
+        type Damage = Box<dyn Fn(&mut Vec<u8>)>;
+        let damage: [(&str, Damage); 6] = [
+            (
+                "offset past the table",
+                Box::new(move |d| d[feature..feature + 2].copy_from_slice(&u16::MAX.to_be_bytes())),
+            ),
+            (
+                "cut off at the table end",
+                Box::new(move |d| {
+                    let last = u16::try_from(gsub + gsub_len - 1 - feature).expect("in range");
+                    d[feature..feature + 2].copy_from_slice(&last.to_be_bytes());
+                }),
+            ),
+            (
+                "a predefined name ID",
+                Box::new(move |d| d[params + 2..params + 4].copy_from_slice(&1u16.to_be_bytes())),
+            ),
+            (
+                "name ID zero",
+                Box::new(move |d| d[params + 2..params + 4].copy_from_slice(&0u16.to_be_bytes())),
+            ),
+            (
+                "a name ID past the font-specific range",
+                Box::new(move |d| {
+                    d[params + 2..params + 4].copy_from_slice(&0x8000u16.to_be_bytes())
+                }),
+            ),
+            (
+                "a name ID the name table lacks",
+                Box::new(move |d| {
+                    d[params + 2..params + 4].copy_from_slice(&30_000u16.to_be_bytes())
+                }),
+            ),
+        ];
+        for (what, damage) in damage {
+            let mut data = clean.clone();
+            damage(&mut data);
+            let face = single_from(&data);
+            assert_eq!(face.health, Health::Ok, "{what}");
+            assert!(face.features.iter().any(|f| f == "cv01"), "{what}");
+            assert_eq!(face.feature_names.get("cv01"), None, "{what}");
+            assert_eq!(
+                face.feature_names.get("ss01").map(String::as_str),
+                Some("Futura Alternates"),
+                "{what}"
+            );
+        }
+    }
+
+    /// E10.4 criterion 3: no single damaged byte of a stylistic set's
+    /// Feature table or FeatureParams panics the parser.
+    #[test]
+    fn every_byte_of_the_feature_params_can_be_damaged() {
+        let clean = read(CAL_SANS);
+        let feature = gsub_feature(&clean, b"ss01");
+        let params = gsub_feature_params(&clean, b"ss01");
+        for at in (feature..feature + 4).chain(params..params + 4) {
+            for value in [0x00, 0x01, 0x7F, 0x80, 0xFF] {
+                let mut data = clean.clone();
+                data[at] = value;
+                let file = parse(&data);
+                assert_eq!(file.faces.len(), 1, "byte {at} = {value:#x}");
+            }
+        }
     }
 
     fn broken_reason(face: &ParsedFace) -> &str {

@@ -322,6 +322,55 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+/// E10.4 criteria 1 and 2: `get_face` names stylistic sets and character
+/// variants with the font's own names, read from the index: the file is gone
+/// when `get_face` runs, so it cannot have been opened again.
+#[test]
+fn get_face_names_stylistic_sets_from_the_index() {
+    let (lib, source, _) = Lib::scanned("api-feature-names");
+    let file = lib.root.join("calsans").join("CalSans-Regular.ttf");
+    std::fs::create_dir_all(file.parent().expect("folder")).expect("folder");
+    std::fs::copy(
+        fixtures().join("google-repo/calsans/CalSans-Regular.ttf"),
+        &file,
+    )
+    .expect("copy");
+    lib.scan(Some(source.id), true);
+    let family = lib
+        .api
+        .get_family(lib.family("Cal Sans").id)
+        .expect("family");
+    std::fs::remove_file(&file).expect("remove the file");
+
+    let detail = lib.api.get_face(family.faces[0].id).expect("detail");
+    let feature = |tag: &str| {
+        detail
+            .features
+            .iter()
+            .find(|f| f.tag == tag)
+            .unwrap_or_else(|| panic!("no {tag}: {:?}", detail.features))
+    };
+    assert_eq!(feature("ss01").name.as_deref(), Some("Futura Alternates"));
+    assert_eq!(feature("cv01").name.as_deref(), Some("Futura-style C"));
+    assert_eq!(feature("cv05").name.as_deref(), Some("Futura-style zero"));
+    let ss01 = feature("ss01");
+    assert!(!ss01.automatic && !ss01.default_on);
+    // Registered features keep their registry names.
+    assert_eq!(feature("kern").name.as_deref(), Some("Kerning"));
+
+    // A face whose ss01 the font does not name keeps the generic name.
+    let asap = lib
+        .api
+        .get_face(FaceId(lib.family("Asap Sharp").id.0))
+        .expect("asap");
+    let ss01 = asap
+        .features
+        .iter()
+        .find(|f| f.tag == "ss01")
+        .expect("ss01");
+    assert_eq!(ss01.name.as_deref(), Some("Stylistic set 1"));
+}
+
 #[test]
 fn problems_list_the_truncated_file_and_duplicates_answer() {
     let (lib, _, _) = Lib::scanned("api-problems");
