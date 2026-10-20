@@ -1412,3 +1412,54 @@ fn family_notes_that_arrive_before_their_fonts_are_taken_when_the_fonts_do() {
         );
     }
 }
+
+#[test]
+fn family_notes_cleared_elsewhere_while_the_fonts_are_away_stay_cleared() {
+    // Cleared there, or changed there: the other machine's value wins.
+    for theirs in [None, Some("changed on the laptop")] {
+        let tmp = TempDir::new("sidecar-family-away");
+        let mut m = Machine::new(tmp.path());
+        m.family_notes("Inter-Bold", "first");
+        let synced = m.sidecar("Inter");
+
+        // Inter's fonts leave this index for a while (a sync client is
+        // replacing them); the family's notes stay in the index.
+        let lora: Vec<IndexedFile> = files(tmp.path())
+            .into_iter()
+            .filter(|f| f.path.ends_with("Lora-Regular.ttf"))
+            .collect();
+        m.index.persist_files(m.source, &lora).expect("away");
+        m.index
+            .conn
+            .execute("DELETE FROM face WHERE family = 'Inter'", [])
+            .expect("faces gone");
+        assert_eq!(m.local_family_notes("Inter").as_deref(), Some("first"));
+
+        // Meanwhile the other machine changes the notes, and this one reads
+        // the file while the family is not here.
+        let edited = other_machine_edit(synced, |s| {
+            s.family_meta = theirs.map(family_entry);
+        });
+        write_changed(&m.sidecar_path("Inter"), &edited.to_json());
+        m.index
+            .persist_files(m.source, &lora)
+            .expect("scan while away");
+
+        // The fonts come back: the other machine's value is taken.
+        m.scan();
+        assert_eq!(
+            m.local_family_notes("Inter").as_deref(),
+            theirs,
+            "theirs={theirs:?}"
+        );
+        assert_eq!(
+            m.sidecar("Inter").family_notes(),
+            theirs,
+            "theirs={theirs:?}"
+        );
+        assert!(
+            m.index.sidecar_problems().expect("problems").is_empty(),
+            "no conflict: theirs={theirs:?}"
+        );
+    }
+}
