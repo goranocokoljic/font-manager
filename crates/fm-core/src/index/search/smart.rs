@@ -11,8 +11,7 @@
 //! started from is `InvalidRequest`; one that names a collection that no
 //! longer exists holds nothing.
 
-use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::collections::HashMap;
 
 use fm_api::CollectionId;
 use fm_api::organization::{Rule, RuleGroup, RuleOp};
@@ -22,8 +21,14 @@ use rusqlite::Connection;
 use super::{Index, Row};
 use crate::coverage::Need;
 use crate::error::{FmError, FmResult};
-use crate::filter::{failed_added, failed_supports, passes};
+use crate::filter::{failed_added, passes};
 use crate::index::db_error;
+use crate::parallel::map_ordered;
+
+/// Rows per piece of work when the smart collections are counted on every
+/// core: small enough that a 10,000-face library makes enough pieces to
+/// spread ([`map_ordered`] runs a handful of pieces on one thread).
+const COUNT_CHUNK: usize = 256;
 
 /// Every collection by id, with its rule; `None` for a manual one.
 pub(in crate::index) type Rules = HashMap<CollectionId, (String, Option<RuleGroup>)>;
@@ -76,8 +81,9 @@ pub(in crate::index) enum Member {
     Smart(Group),
     /// Nobody: the collection does not exist (any more).
     Nothing,
-    /// The faces (by id) a smart collection was already found to hold.
-    Known(Rc<HashSet<u32>>),
+    /// A smart collection whose rule already ran on this row: its result is
+    /// at this position of the `done` results [`Member::holds`] is given.
+    Known(usize),
 }
 
 impl Member {
@@ -91,12 +97,13 @@ impl Member {
         Self::compile_with(conn, rules, &HashMap::new(), id)
     }
 
-    /// [`Member::compile`], taking the members of the smart collections in
-    /// `known` as they are instead of running their rules again.
+    /// [`Member::compile`], taking the result of each smart collection in
+    /// `known` from its position in `done` (see [`Member::holds`]) instead
+    /// of running its rule again.
     fn compile_with(
         conn: &Connection,
         rules: &Rules,
-        known: &HashMap<CollectionId, Rc<HashSet<u32>>>,
+        known: &HashMap<CollectionId, usize>,
         id: CollectionId,
     ) -> FmResult<Self> {
         Compiler {
@@ -108,12 +115,15 @@ impl Member {
         .member(id)
     }
 
-    pub(super) fn holds(&self, row: &Row) -> bool {
+    /// Whether `row` is in the collection. `done` holds the results, for
+    /// this row, of the collections compiled as [`Member::Known`]; empty for
+    /// a member compiled with [`Member::compile`].
+    pub(super) fn holds(&self, row: &Row, done: &[bool]) -> bool {
         match self {
             Self::Manual(id) => row.facts.collections.contains(id),
-            Self::Smart(group) => group.passes(row),
+            Self::Smart(group) => group.passes(row, done),
             Self::Nothing => false,
-            Self::Known(faces) => faces.contains(&row.id),
+            Self::Known(at) => done.get(*at).copied().unwrap_or(false),
         }
     }
 }
@@ -125,11 +135,11 @@ pub(in crate::index) struct Group {
 }
 
 impl Group {
-    fn passes(&self, row: &Row) -> bool {
+    fn passes(&self, row: &Row, done: &[bool]) -> bool {
         match self.op {
-            RuleOp::And => self.rules.iter().all(|r| r.passes(row)),
+            RuleOp::And => self.rules.iter().all(|r| r.passes(row, done)),
             // An empty group passes every face, whatever its operator.
-            RuleOp::Or => self.rules.is_empty() || self.rules.iter().any(|r| r.passes(row)),
+            RuleOp::Or => self.rules.is_empty() || self.rules.iter().any(|r| r.passes(row, done)),
         }
     }
 }
@@ -140,10 +150,10 @@ enum Compiled {
 }
 
 impl Compiled {
-    fn passes(&self, row: &Row) -> bool {
+    fn passes(&self, row: &Row, done: &[bool]) -> bool {
         match self {
-            Self::Leaf(leaf) => leaf.passes(row),
-            Self::Group(group) => group.passes(row),
+            Self::Leaf(leaf) => leaf.passes(row, done),
+            Self::Group(group) => group.passes(row, done),
         }
     }
 }
@@ -159,21 +169,23 @@ struct Leaf {
 }
 
 impl Leaf {
-    fn passes(&self, row: &Row) -> bool {
+    fn passes(&self, row: &Row, done: &[bool]) -> bool {
         passes(&self.filters, &row.text, &row.facts)
             && failed_added(self.cutoff.as_deref(), row.added.as_deref()) == 0
-            && self.need.as_ref().is_none_or(|need| {
-                let fit = row.cmap.as_ref().map(|set| need.check(set, &row.locl));
-                failed_supports(fit.as_ref()) == 0
-            })
-            && self.member.as_ref().is_none_or(|m| m.holds(row))
+            // As search's `supports` filter: complete or a near miss passes,
+            // unknown coverage fails.
+            && self
+                .need
+                .as_ref()
+                .is_none_or(|need| row.cmap.as_ref().is_some_and(|set| need.passes(set)))
+            && self.member.as_ref().is_none_or(|m| m.holds(row, done))
     }
 }
 
 struct Compiler<'a> {
     conn: &'a Connection,
     rules: &'a Rules,
-    known: &'a HashMap<CollectionId, Rc<HashSet<u32>>>,
+    known: &'a HashMap<CollectionId, usize>,
     /// The smart collections whose rules led here.
     path: Vec<CollectionId>,
 }
@@ -189,9 +201,9 @@ impl Compiler<'_> {
         // Reached from another rule (never the collection asked for, whose
         // own rule is what is being worked out).
         if !self.path.is_empty()
-            && let Some(faces) = self.known.get(&id)
+            && let Some(at) = self.known.get(&id)
         {
-            return Ok(Member::Known(Rc::clone(faces)));
+            return Ok(Member::Known(*at));
         }
         if self.path.contains(&id) {
             return Err(FmError::invalid(format!(
@@ -270,28 +282,59 @@ impl Index {
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
         // In id order: a rule names collections that existed before it, so
-        // their members are usually known by then.
+        // their results are usually known by then. A rule that failed to
+        // compile is never known: a rule naming it compiles it again and
+        // fails the same way, as a search by it does.
         let mut smart: Vec<CollectionId> = rules
             .iter()
             .filter(|(_, (_, rule))| rule.is_some())
             .map(|(id, _)| *id)
             .collect();
         smart.sort_unstable();
-        let mut known: HashMap<CollectionId, Rc<HashSet<u32>>> = HashMap::new();
-        let mut out = HashMap::new();
-        for id in smart {
-            let faces: HashSet<u32> = match Member::compile_with(&self.conn, &rules, &known, id) {
-                Ok(member) => cache
-                    .rows
-                    .iter()
-                    .filter(|row| member.holds(row))
-                    .map(|row| row.id)
-                    .collect(),
-                Err(e) if e.code() == fm_api::ErrorCode::InvalidRequest => HashSet::new(),
+        let mut known: HashMap<CollectionId, usize> = HashMap::new();
+        let mut members: Vec<Option<Member>> = Vec::with_capacity(smart.len());
+        for (at, id) in smart.iter().enumerate() {
+            match Member::compile_with(&self.conn, &rules, &known, *id) {
+                Ok(member) => {
+                    known.insert(*id, at);
+                    members.push(Some(member));
+                }
+                Err(e) if e.code() == fm_api::ErrorCode::InvalidRequest => members.push(None),
                 Err(e) => return Err(e),
-            };
-            out.insert(id, u32::try_from(faces.len()).unwrap_or(u32::MAX));
-            known.insert(id, Rc::new(faces));
+            }
+        }
+        // Every rule runs on each row in turn, so a rule naming an earlier
+        // collection reads that collection's result for the row; the rows
+        // are shared out over the cores.
+        let rows = cache.rows.as_slice();
+        let chunks: Vec<std::ops::Range<usize>> = (0..rows.len())
+            .step_by(COUNT_CHUNK)
+            .map(|start| start..rows.len().min(start + COUNT_CHUNK))
+            .collect();
+        let counted = map_ordered(
+            &chunks,
+            |range| {
+                let mut counts = vec![0_u32; members.len()];
+                let mut done: Vec<bool> = Vec::with_capacity(members.len());
+                for row in &rows[range.clone()] {
+                    done.clear();
+                    for (count, member) in counts.iter_mut().zip(&members) {
+                        let inside = member.as_ref().is_some_and(|m| m.holds(row, &done));
+                        *count += u32::from(inside);
+                        done.push(inside);
+                    }
+                }
+                counts
+            },
+            &mut |_| {},
+        );
+        let mut out: HashMap<CollectionId, u32> = smart.iter().map(|id| (*id, 0)).collect();
+        for counts in counted {
+            for (id, count) in smart.iter().zip(counts) {
+                if let Some(total) = out.get_mut(id) {
+                    *total = total.saturating_add(count);
+                }
+            }
         }
         Ok(out)
     }

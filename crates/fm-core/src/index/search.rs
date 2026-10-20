@@ -161,7 +161,7 @@ impl Index {
                     let mut failed = failed(&req.filters, &row.text, &row.facts)
                         | failed_added(cutoff.as_deref(), row.added.as_deref());
                     if let Some(member) = &member {
-                        failed = with_collection(failed, member.holds(row));
+                        failed = with_collection(failed, member.holds(row, &[]));
                     }
                     let fit = need.as_ref().and_then(|need| {
                         let fit = row.cmap.as_ref().map(|set| need.check(set, &row.locl));
