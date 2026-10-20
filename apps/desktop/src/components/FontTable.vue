@@ -24,7 +24,7 @@ import {
 import { rowActivation } from '../list/activation';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
-import { rowLabel, type ListRow } from '../list/rows';
+import { rowLabel, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { useFontListStore } from '../stores/fontList';
@@ -228,7 +228,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
       case 'activation':
         return { text: f.active ? 'Active' : 'Inactive' };
       case 'name':
-        return { text: f.style };
+        return { text: styleName(row) };
       case 'weightLine':
         return {
           text: String(f.weight),

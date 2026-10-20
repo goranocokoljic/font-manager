@@ -50,6 +50,7 @@ import {
   type Tag,
   type TagId,
   type Target,
+  type VirtualStyle,
 } from './types';
 
 export const mockAppInfo: AppInfo = {
@@ -894,6 +895,23 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   });
   const walk = (parent: CollectionId | null): Collection[] =>
     collections.filter((c) => c.parent === parent).flatMap((c) => [viewOf(c), ...walk(c.id)]);
+  // Virtual styles (E10.2), like the Rust mock: in a manual collection or a set.
+  const virtualStyles: VirtualStyle[] = [];
+  const checkHolder = (collection?: CollectionId | null, set?: number | null) => {
+    if (collection != null && set == null) {
+      if (findCollection(collection).rules)
+        throw invalid(
+          'A virtual style goes in a manual collection or a set, not a smart collection.',
+        );
+      return;
+    }
+    if (collection == null && set != null) {
+      if (!sets.some((s) => s.id === set))
+        throw { code: 'notFound' as const, message: `Set ${set} was not found.`, detail: null };
+      return;
+    }
+    throw invalid('Choose one collection or one set for the virtual style.');
+  };
   const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
     const c = findCollection(req.collection);
     if (c.rules) throw invalid('A smart collection fills itself from its rules.');
@@ -1051,6 +1069,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       for (let i = collections.length - 1; i >= 0; i--)
         if (doomed.has(collections[i]!.id)) collections.splice(i, 1);
       for (const d of doomed) members.delete(d);
+      for (let i = virtualStyles.length - 1; i >= 0; i--) {
+        const c = virtualStyles[i]!.collection;
+        if (c != null && doomed.has(c)) virtualStyles.splice(i, 1);
+      }
     },
     addToCollection: async (req) => editMembers(req, true),
     removeFromCollection: async (req) => editMembers(req, false),
@@ -1186,6 +1208,73 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // Like the Rust mock: per face its health and system clash, then the active pairs
     // (none: no two sample faces share a PostScript name), then the extra entries.
     listSets: async () => structuredClone(sets),
+    pinInstance: async (req) => {
+      const name = req.name.trim();
+      if (!name) throw invalid('Give the style a name.');
+      checkHolder(req.collection, req.set);
+      const f = find(req.face);
+      if (!f) throw notFound(req.face);
+      const label = `${f.face.familyName} ${f.face.style}`;
+      if (!f.axes.length)
+        throw invalid(`“${label}” is not a variable font, so it has no instances to pin.`);
+      const given = req.coordinates ?? [];
+      for (const c of given) {
+        const axis = f.axes.find((a) => a.tag === c.tag);
+        if (!axis) throw invalid(`“${label}” has no axis “${c.tag}”.`);
+        if (c.value == null || c.value < axis.min! || c.value > axis.max!)
+          throw invalid(
+            `${axis.name} (${axis.tag}) goes from ${axis.min} to ${axis.max}; ${c.value} is outside it.`,
+          );
+      }
+      const collection = req.collection ?? null;
+      const set = req.set ?? null;
+      if (
+        virtualStyles.some(
+          (v) =>
+            v.face === req.face &&
+            (v.collection ?? null) === collection &&
+            (v.set ?? null) === set &&
+            v.name.toLowerCase() === name.toLowerCase(),
+        )
+      )
+        throw {
+          code: 'conflict' as const,
+          message: `“${label}” already has a style named “${name}” here.`,
+          detail: null,
+        };
+      const style: VirtualStyle = {
+        id: ++nextId,
+        face: req.face,
+        name,
+        coordinates: f.axes.map((a) => ({
+          tag: a.tag,
+          value: given.find((c) => c.tag === a.tag)?.value ?? a.default,
+        })),
+        collection,
+        set,
+      };
+      virtualStyles.push(style);
+      return structuredClone(style);
+    },
+    listVirtualStyles: async (req) => {
+      checkHolder(req.collection, req.set);
+      const collection = req.collection ?? null;
+      const set = req.set ?? null;
+      return virtualStyles
+        .filter((v) => (v.collection ?? null) === collection && (v.set ?? null) === set)
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id - b.id)
+        .map((v) => structuredClone(v));
+    },
+    deleteVirtualStyle: async (id) => {
+      const i = virtualStyles.findIndex((v) => v.id === id);
+      if (i < 0)
+        throw {
+          code: 'notFound' as const,
+          message: `Virtual style ${id} was not found.`,
+          detail: null,
+        };
+      virtualStyles.splice(i, 1);
+    },
     listProblems: async () => [
       ...faces.flatMap((f): Problem[] => {
         const out: Problem[] = [];

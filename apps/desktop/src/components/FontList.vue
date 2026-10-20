@@ -18,7 +18,7 @@ import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowActivation } from '../list/activation';
 import { useRowPreviews } from '../list/previews';
-import { rowLabel, styleCount, type ListRow } from '../list/rows';
+import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
@@ -211,7 +211,7 @@ function onToggle(row: ListRow): void {
           v-if="item.face"
           class="preview"
           :face="item.face"
-          :label="item.row.kind === 'face' ? item.row.face.style : item.row.family.name"
+          :label="item.row.kind === 'face' ? styleName(item.row) : item.row.family.name"
           :text="item.text"
           :size-px="preview.sizePx"
           :line-height="preview.lineHeight"
@@ -220,12 +220,16 @@ function onToggle(row: ListRow): void {
           :color="preview.textColor"
           :fallback="item.fallback"
           :missing="item.missing"
+          :variations="item.variations"
         >
           <template #lead>
             <ActivationDot :state="rowActivation(item.row)" />
           </template>
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+          </template>
+          <template v-else-if="item.row.virtual" #detail>
+            <span class="count">Pinned</span>
           </template>
         </FontPreviewRow>
         <div v-else class="preview placeholder">

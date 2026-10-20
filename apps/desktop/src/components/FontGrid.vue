@@ -16,7 +16,7 @@ import { dragKeys, startFontDrag } from '../list/drag';
 import { CARD, cardText, gridColumns, gridRange, lineCount } from '../list/grid';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
-import { rowLabel, styleCount, type ListRow } from '../list/rows';
+import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -132,7 +132,7 @@ const visible = computed(() =>
       fallback: p.fallback,
       thumb: face ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
       failed: face ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
-      name: row.kind === 'face' ? row.face.style : row.family.name,
+      name: row.kind === 'face' ? styleName(row) : row.family.name,
     };
   }),
 );
