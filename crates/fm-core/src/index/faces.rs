@@ -104,6 +104,7 @@ impl Index {
             }
         });
         let tags = self.face_tag_names(face)?;
+        let family_notes = self.family_notes(&row.summary.family_name)?;
         let code_point_count = u32::try_from(self.face_cmap(face)?.len()).ok();
         let parsed = row.parsed.as_ref();
         let text = |f: fn(&ParsedFace) -> &Option<String>| parsed.and_then(|p| f(p).clone());
@@ -156,6 +157,7 @@ impl Index {
             foundry: row.foundry,
             italic_angle: parsed.and_then(|p| p.italic_angle),
             code_point_count,
+            family_notes,
             face: row.summary,
         })
     }

@@ -42,9 +42,9 @@ use fm_api::library::{
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, MoveCollectionRequest, OrganizationService, PinInstanceRequest, ProjectSet,
-    RenameCollectionRequest, SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
-    VirtualStyle, VirtualStylesRequest,
+    FamilyNotesUpdate, ImportSetResponse, MoveCollectionRequest, OrganizationService,
+    PinInstanceRequest, ProjectSet, RenameCollectionRequest, SetExport, Tag, TagFacesRequest,
+    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     FontSource, PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
@@ -678,6 +678,13 @@ impl OrganizationService for CoreApi {
 
     fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()> {
         Ok(self.lock().delete_virtual_style(style)?)
+    }
+
+    /// The list shows the family again through `LibraryChanged`.
+    fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()> {
+        let faces = self.lock().update_family_notes(&req)?;
+        self.updated(&faces);
+        Ok(())
     }
 }
 

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // The Info tab: every field fm-api reports for the selected face, its health
-// and the activation button. Names and paths copy on click. Tags, favorite
-// and rating are edited here; the API stores them.
+// and the activation button. Names and paths copy on click. Tags, favorite,
+// rating and the notes of the face and of its family are edited here; the API
+// stores them.
 import { computed, nextTick, ref, watch } from 'vue';
 import type { Conflict, Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
 import { useSelectionStore } from '../stores/selection';
@@ -22,6 +23,28 @@ const newTag = ref('');
 async function addTag(): Promise<void> {
   if (!newTag.value.trim()) return;
   if (await selection.addTag(newTag.value)) newTag.value = '';
+}
+// The notes being typed; each saves when its field loses the focus, and follows
+// the stored value when another face is shown or the save comes back.
+const faceNotes = ref('');
+const familyNotes = ref('');
+watch(
+  () => [d.value?.face.id, d.value?.notes] as const,
+  () => (faceNotes.value = d.value?.notes ?? ''),
+  { immediate: true },
+);
+watch(
+  () => [d.value?.face.id, d.value?.familyNotes] as const,
+  () => (familyNotes.value = d.value?.familyNotes ?? ''),
+  { immediate: true },
+);
+function saveFaceNotes(): void {
+  if (d.value && faceNotes.value !== (d.value.notes ?? ''))
+    void selection.setNotes(faceNotes.value);
+}
+function saveFamilyNotes(): void {
+  if (d.value && familyNotes.value !== (d.value.familyNotes ?? ''))
+    void selection.setFamilyNotes(familyNotes.value);
 }
 const STARS = [1, 2, 3, 4, 5] as const;
 const starLabel = (n: number) => `${n} ${n === 1 ? 'star' : 'stars'}`;
@@ -349,8 +372,28 @@ function clashText(c: Conflict): string {
               }}</span>
             </div>
           </dd>
-          <dt>Notes</dt>
-          <dd>{{ show(d.notes) }}</dd>
+          <dt><label for="fm-info-notes">Notes</label></dt>
+          <dd>
+            <textarea
+              id="fm-info-notes"
+              v-model="faceNotes"
+              class="notes"
+              rows="3"
+              placeholder="Notes on this style…"
+              @blur="saveFaceNotes"
+            ></textarea>
+          </dd>
+          <dt><label for="fm-info-family-notes">Family notes</label></dt>
+          <dd>
+            <textarea
+              id="fm-info-family-notes"
+              v-model="familyNotes"
+              class="notes"
+              rows="3"
+              :placeholder="`Notes on ${d.face.familyName}…`"
+              @blur="saveFamilyNotes"
+            ></textarea>
+          </dd>
         </dl>
       </section>
     </template>
@@ -503,6 +546,18 @@ dd {
   background: transparent;
   color: inherit;
   font: inherit;
+}
+.notes {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
 }
 .favorite {
   padding: 0;

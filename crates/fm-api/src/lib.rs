@@ -171,6 +171,7 @@ pub fn types() -> specta::Types {
         organization::TagFacesRequest,
         organization::UntagFacesRequest,
         organization::UserMetaUpdate,
+        organization::FamilyNotesUpdate,
         organization::ProjectSet,
         organization::CreateSetRequest,
         organization::SetExport,

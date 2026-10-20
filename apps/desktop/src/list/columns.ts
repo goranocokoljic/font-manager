@@ -27,14 +27,15 @@ export type ColumnId =
   | 'location'
   | 'license'
   | 'added'
-  | 'tags';
+  | 'tags'
+  | 'notes';
 
 export interface Column {
   id: ColumnId;
   /** Header text, and the accessible name of the column. */
   label: string;
-  /** The API order a click on the header asks for. */
-  sortKey: FamilySortKey;
+  /** The API order a click on the header asks for; `null`: the column does not sort. */
+  sortKey: FamilySortKey | null;
   /** Width in CSS px (the name column grows from it). */
   width: number;
   /** The name column always shows. */
@@ -61,6 +62,8 @@ export const COLUMNS: readonly Column[] = [
   { id: 'license', label: 'License', sortKey: 'license', width: 96, hideable: true },
   { id: 'added', label: 'Date added', sortKey: 'dateAdded', width: 112, hideable: true },
   { id: 'tags', label: 'Tags', sortKey: 'tags', width: 160, hideable: true },
+  // The family's own notes; the API has no order by notes.
+  { id: 'notes', label: 'Notes', sortKey: null, width: 200, hideable: true },
 ];
 
 const BY_ID = new Map(COLUMNS.map((c) => [c.id, c]));
@@ -114,7 +117,7 @@ export function normalizeTable(raw: unknown): TableConfig {
   );
   const s = r.sort as Partial<TableSort> | null | undefined;
   const sort =
-    s && typeof s === 'object' && isColumnId(s.column)
+    s && typeof s === 'object' && isColumnId(s.column) && columnById(s.column).sortKey
       ? { column: s.column, descending: s.descending === true }
       : null;
   const stripSizePx =
@@ -145,8 +148,12 @@ export function toggleColumn(config: TableConfig, id: ColumnId): TableConfig {
   return { ...config, hidden };
 }
 
-/** A header click: ascending, then descending, then back to the default order. */
+/**
+ * A header click: ascending, then descending, then back to the default order. A
+ * column that does not sort leaves the order as it is.
+ */
 export function cycleSort(config: TableConfig, id: ColumnId): TableConfig {
+  if (!columnById(id).sortKey) return config;
   const s = config.sort;
   const sort: TableSort | null =
     s?.column !== id
@@ -159,8 +166,8 @@ export function cycleSort(config: TableConfig, id: ColumnId): TableConfig {
 
 /** The API order of a configuration. */
 export function orderOf(config: TableConfig): FamilyOrder | null {
-  const s = config.sort;
-  return s ? { by: columnById(s.column).sortKey, descending: s.descending } : null;
+  const by = config.sort && columnById(config.sort.column).sortKey;
+  return config.sort && by ? { by, descending: config.sort.descending } : null;
 }
 
 /** `aria-sort` of a column header. */

@@ -124,6 +124,17 @@ pub struct UserMetaUpdate {
     pub notes: Option<String>,
 }
 
+/// Set the notes of a family. They belong to the family, not to one of its
+/// faces: they stay when its faces are indexed again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyNotesUpdate {
+    /// The family.
+    pub family: FamilyId,
+    /// Notes; an empty string clears them.
+    pub notes: String,
+}
+
 /// A project set: fonts activated together.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -276,4 +287,6 @@ pub trait OrganizationService {
     fn list_virtual_styles(&self, req: VirtualStylesRequest) -> ApiResult<Vec<VirtualStyle>>;
     /// Delete a virtual style. The face is not touched.
     fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()>;
+    /// Set the notes of a family (E13.5); an empty string clears them.
+    fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()>;
 }

@@ -500,6 +500,8 @@ export type FaceDetail = {
 	italicAngle?: number | null,
 	/**  Code points the Unicode `cmap` maps. */
 	codePointCount?: number | null,
+	/**  The user's notes on the face's family (E13.5); `notes` are the face's. */
+	familyNotes?: string | null,
 };
 
 /**  One face (style) inside a font file; a collection file has several. */
@@ -566,6 +568,17 @@ export type FamilyHit = {
 
 /**  A family: faces grouped by typographic family name. */
 export type FamilyId = number;
+
+/**
+ *  Set the notes of a family. They belong to the family, not to one of its
+ *  faces: they stay when its faces are indexed again.
+ */
+export type FamilyNotesUpdate = {
+	/**  The family. */
+	family: FamilyId,
+	/**  Notes; an empty string clears them. */
+	notes: string,
+};
 
 /**
  *  An order for the family list: a key and a direction. Families without a
@@ -648,6 +661,8 @@ export type FamilySummary = {
 	declaredLicense?: LicenseType | null,
 	/**  User tags on any of its faces, by name, A to Z. */
 	tags?: string[],
+	/**  The user's notes on the family (E13.5), not those of its faces. */
+	notes?: string | null,
 };
 
 /**  An OpenType layout feature the face provides. */

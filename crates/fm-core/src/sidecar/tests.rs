@@ -199,7 +199,7 @@ fn a_sidecar_with_pins_is_version_2_and_one_without_stays_version_1() {
     assert_eq!(sidecar.version, PLAIN_VERSION);
     sidecar.faces[0].meta.pins = vec![pin("Wide", Some(&["Brand"]), None, &[("wdth", 110.0)])];
     sidecar.normalize();
-    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    assert_eq!(sidecar.version, PINS_VERSION);
     // It reads back the same, coordinates exactly.
     assert_eq!(parse(&sidecar.to_json()), Parsed::Sidecar(sidecar.clone()));
     assert!(sidecar.to_json().contains(r#""pins""#));
@@ -228,8 +228,8 @@ fn malformed_and_newer_sidecars_are_not_parsed_as_sidecars() {
         Parsed::Unreadable(_)
     ));
     assert_eq!(
-        parse(r#"{"version": 3, "faces": "anything"}"#),
-        Parsed::Newer(3)
+        parse(r#"{"version": 4, "faces": "anything"}"#),
+        Parsed::Newer(4)
     );
 }
 
@@ -348,4 +348,99 @@ fn history_grows_only_with_a_change_and_stays_bounded() {
     let a = entry(meta(false, Some(2), None, &[]), None);
     let b = entry(meta(false, Some(3), None, &[]), None);
     assert_ne!(a.history, b.history);
+}
+
+fn family(notes: Option<&str>, prior: Option<&FamilyEntry>) -> FamilyEntry {
+    FamilyEntry {
+        notes: notes.map(Into::into),
+        history: next_family_history(notes, prior),
+    }
+}
+
+#[test]
+fn family_notes_merge_like_face_notes() {
+    // The side that changed wins.
+    let kept = merge_family(Some("old"), Some("old"), Some("theirs"));
+    assert_eq!(kept.notes.as_deref(), Some("theirs"));
+    assert_eq!(kept.conflict, None);
+    let kept = merge_family(Some("old"), Some("mine"), Some("old"));
+    assert_eq!(kept.notes.as_deref(), Some("mine"));
+    // A side that cleared them wins over one that left them alone.
+    assert_eq!(merge_family(Some("old"), Some("old"), None).notes, None);
+    assert_eq!(merge_family(Some("old"), Some(""), Some("old")).notes, None);
+    // Two different changes keep this machine's notes and report the other.
+    let both = merge_family(Some("old"), Some("mine"), Some("theirs"));
+    assert_eq!(both.notes.as_deref(), Some("mine"));
+    let conflict = both.conflict.expect("conflict");
+    assert_eq!(conflict.field, Field::FamilyNotes);
+    assert_eq!(conflict.disk, r#""theirs""#);
+    // Without a base, two different values conflict too.
+    assert!(
+        merge_family(None, Some("mine"), Some("theirs"))
+            .conflict
+            .is_some()
+    );
+    assert_eq!(
+        Field::from_name(Field::FamilyNotes.as_str()),
+        Some(Field::FamilyNotes)
+    );
+}
+
+#[test]
+fn the_family_ancestor_follows_the_entry_history() {
+    let ours = family(Some("mine"), None);
+    // The other machine changed our version: ours is the ancestor.
+    let theirs = family(Some("theirs"), Some(&ours));
+    assert_eq!(
+        family_ancestor(Some(&ours), Some(&theirs), false).as_deref(),
+        Some("mine")
+    );
+    // An unrelated change has nothing in common with ours.
+    let unrelated = family(Some("theirs"), None);
+    assert_eq!(family_ancestor(Some(&ours), Some(&unrelated), true), None);
+    // Gone from a file that descends from ours: removed there.
+    assert_eq!(
+        family_ancestor(Some(&ours), None, true).as_deref(),
+        Some("mine")
+    );
+    assert_eq!(family_ancestor(Some(&ours), None, false), None);
+    assert_eq!(family_ancestor(None, Some(&theirs), true), None);
+    // The history grows only with a change.
+    assert_eq!(next_family_history(Some("mine"), Some(&ours)), ours.history);
+    assert_eq!(theirs.history.len(), 2);
+}
+
+#[test]
+fn a_sidecar_with_family_notes_is_version_3_and_reads_back() {
+    let mut sidecar = Sidecar::new("Asap");
+    sidecar.family_meta = Some(family(Some(""), None));
+    sidecar.normalize();
+    // Empty notes are none, and no family entry is written for them.
+    assert_eq!(sidecar.family_meta, None);
+    assert_eq!(sidecar.version, PLAIN_VERSION);
+    assert!(!sidecar.to_json().contains("familyMeta"));
+    sidecar.family_meta = Some(family(Some("Licensed for the rebrand"), None));
+    sidecar.normalize();
+    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    assert_eq!(sidecar.family_notes(), Some("Licensed for the rebrand"));
+    assert!(sidecar.to_json().contains(r#""familyMeta""#));
+    assert_eq!(parse(&sidecar.to_json()), Parsed::Sidecar(sidecar.clone()));
+}
+
+#[test]
+fn a_change_of_the_family_notes_is_a_new_file_version() {
+    let mut ours = Sidecar::new("A");
+    ours.faces.push(entry(meta(true, None, None, &[]), None));
+    ours.history = next_file_history(&ours, None);
+    let before = ours.history.clone();
+    let mut theirs = ours.clone();
+    theirs.family_meta = Some(family(Some("theirs"), None));
+    // Not the same entries: a new version, which descends from ours.
+    theirs.history = next_file_history(&theirs, Some(&ours));
+    assert_ne!(theirs.history, before);
+    assert!(descends(&ours, &theirs));
+    // A file without family notes keeps the version ids it had before E13.5.
+    let mut plain = Sidecar::new("A");
+    plain.faces = ours.faces.clone();
+    assert_eq!(next_file_history(&plain, None), before);
 }

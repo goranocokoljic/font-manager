@@ -26,6 +26,7 @@ import type {
   FaceId,
   Family,
   FamilyId,
+  FamilyNotesUpdate,
   FamilySummary,
   GlyphDetail,
   GlyphPage,
@@ -113,6 +114,8 @@ export interface FmClient {
   untagFaces(req: UntagFacesRequest): Promise<void>;
   /** Favorite, rating (0 clears it) and notes; fields left out stay. */
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
+  /** A family's own notes; an empty string clears them. */
+  updateFamilyNotes(req: FamilyNotesUpdate): Promise<void>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
   /** A thumbnail: text rasterized in one face, cached by face hash and settings (PNG). */
@@ -183,6 +186,7 @@ export const tauriClient: FmClient = {
   tagFaces: (req) => invoke<Tag[]>('tag_faces', { req }),
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
+  updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),

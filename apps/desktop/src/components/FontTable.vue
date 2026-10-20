@@ -279,6 +279,8 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
       return { text: dateText(fam.added) };
     case 'tags':
       return { text: (fam.tags ?? []).join(', ') };
+    case 'notes':
+      return { text: fam.notes ?? '' };
   }
 }
 </script>
@@ -315,7 +317,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           }"
           role="columnheader"
           :aria-colindex="c + 1"
-          :aria-sort="ariaSort(config, col.id)"
+          :aria-sort="col.sortKey ? ariaSort(config, col.id) : undefined"
           :data-column="col.id"
           draggable="true"
           @dragstart="onDragStart(col, $event)"
@@ -324,7 +326,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           @drop="onDrop(col, $event)"
           @dragend="onDragEnd"
         >
+          <span v-if="!col.sortKey" class="sort">{{ col.label }}</span>
           <button
+            v-else
             type="button"
             class="sort"
             :title="`Sort by ${col.label}`"
@@ -480,6 +484,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
 .sort:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
+}
+span.sort {
+  cursor: default;
 }
 .th[aria-sort='ascending'] .sort,
 .th[aria-sort='descending'] .sort {

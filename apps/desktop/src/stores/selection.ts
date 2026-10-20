@@ -157,7 +157,7 @@ export const useSelectionStore = defineStore('selection', () => {
     );
   }
 
-  /** The last tag, favorite or rating edit the API refused; cleared by the next one. */
+  /** The last tag, favorite, rating or notes edit the API refused; cleared by the next one. */
   const editError = ref<ApiError | null>(null);
 
   /**
@@ -202,6 +202,18 @@ export const useSelectionStore = defineStore('selection', () => {
     return edit((face) => useClient().updateUserMeta({ faces: [face], rating }));
   }
 
+  /** Sets the selected face's notes; an empty string clears them. */
+  function setNotes(notes: string): Promise<boolean> {
+    return edit((face) => useClient().updateUserMeta({ faces: [face], notes }));
+  }
+
+  /** Sets the notes of the selected face's family; an empty string clears them. */
+  function setFamilyNotes(notes: string): Promise<boolean> {
+    const family = detail.value?.face.family;
+    if (family === undefined) return Promise.resolve(false);
+    return edit(() => useClient().updateFamilyNotes({ family, notes }));
+  }
+
   return {
     faceId,
     detail,
@@ -220,5 +232,7 @@ export const useSelectionStore = defineStore('selection', () => {
     removeTag,
     setFavorite,
     setRating,
+    setNotes,
+    setFamilyNotes,
   };
 });
