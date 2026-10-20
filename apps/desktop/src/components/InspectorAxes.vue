@@ -3,11 +3,12 @@
 // selected face (the font's axis name and tag, min to max, the default marked),
 // its named instances as presets, and "Pin this instance", which saves the
 // current coordinates as a virtual style of a manual collection or a set
-// (E10.2). Moving an axis changes the face's preview rows live through
+// (E10.2), and "Copy CSS" for the moved axes (E10.5). Moving an axis changes the face's preview rows live through
 // font-variation-settings (the axes store); the font is not reloaded.
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { ApiError, Axis, NamedInstance } from '../api/types';
 import { axisStep, useAxesStore } from '../stores/axes';
+import CopyCss from './CopyCss.vue';
 import { useCollectionsStore } from '../stores/collections';
 import { useSelectionStore } from '../stores/selection';
 import { useSetsStore } from '../stores/sets';
@@ -155,14 +156,17 @@ onMounted(() => {
     <template v-else>
       <div class="head">
         <p class="hint">Axes change this face's previews.</p>
-        <button
-          type="button"
-          class="reset"
-          :disabled="faceId === null || !axesSet.isChanged(faceId)"
-          @click="reset"
-        >
-          Reset
-        </button>
+        <div class="actions">
+          <CopyCss v-if="faceId !== null" label="axes" :css="() => axesSet.css(faceId!)" />
+          <button
+            type="button"
+            class="reset"
+            :disabled="faceId === null || !axesSet.isChanged(faceId)"
+            @click="reset"
+          >
+            Reset
+          </button>
+        </div>
       </div>
       <ul class="plain list" aria-label="Variation axes">
         <li v-for="a in axes" :key="a.tag" class="axis" :data-tag="a.tag">
@@ -261,6 +265,12 @@ onMounted(() => {
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 8px;
+}
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
 }
 .reset,
 .preset,

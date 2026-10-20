@@ -278,6 +278,30 @@ export type CreateSetRequest = {
 	faces: FaceId[],
 };
 
+/**  CSS declarations for the axes and features changed from their defaults. */
+export type CssValues = {
+	/**
+	 *  `font-variation-settings: "wght" 650, "wdth" 87.5;`, or
+	 *  `font-variation-settings: normal;` when no axis moved.
+	 */
+	variationSettings: string,
+	/**
+	 *  `font-feature-settings: "liga" 0, "smcp" 1;`, or
+	 *  `font-feature-settings: normal;` when no feature changed.
+	 */
+	featureSettings: string,
+};
+
+/**  The CSS for a face's axis coordinates and feature switches. */
+export type CssValuesRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  Axis coordinates; axes left out are at their default. */
+	variations?: AxisValue[],
+	/**  Feature switches; features left out are at their default. */
+	features?: FeatureSetting[],
+};
+
 /**  Deactivate faces the app registered. */
 export type DeactivateRequest = {
 	/**  What to deactivate; everything the app activated when absent. */

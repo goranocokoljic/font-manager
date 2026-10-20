@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { reactive } from 'vue';
+import { useClient } from '../api/client';
 import type { Axis, AxisValue, FaceId, NamedInstance } from '../api/types';
 
 /** A typed coordinate: a plain decimal number ("400", "-12.5", ".5"); no hex, no "Infinity". */
@@ -97,5 +98,11 @@ export const useAxesStore = defineStore('axes', () => {
     return axes.map((axis) => ({ tag: axis.tag, value: value(face, axis) }));
   }
 
-  return { value, set, setTyped, applyInstance, isAt, reset, isChanged, values, coordinates };
+  /** "Copy CSS": `font-variation-settings` for the axes of `face` moved from their default (fm-core). */
+  async function css(face: FaceId): Promise<string> {
+    const r = await useClient().cssValues({ face, variations: values(face) ?? [], features: [] });
+    return r.variationSettings;
+  }
+
+  return { value, set, setTyped, applyInstance, isAt, reset, isChanged, values, coordinates, css };
 });

@@ -97,6 +97,32 @@ pub struct SampleText {
     pub missing: Vec<String>,
 }
 
+/// The CSS for a face's axis coordinates and feature switches.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CssValuesRequest {
+    /// The face.
+    pub face: FaceId,
+    /// Axis coordinates; axes left out are at their default.
+    #[serde(default)]
+    pub variations: Vec<AxisValue>,
+    /// Feature switches; features left out are at their default.
+    #[serde(default)]
+    pub features: Vec<FeatureSetting>,
+}
+
+/// CSS declarations for the axes and features changed from their defaults.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CssValues {
+    /// `font-variation-settings: "wght" 650, "wdth" 87.5;`, or
+    /// `font-variation-settings: normal;` when no axis moved.
+    pub variation_settings: String,
+    /// `font-feature-settings: "liga" 0, "smcp" 1;`, or
+    /// `font-feature-settings: normal;` when no feature changed.
+    pub feature_settings: String,
+}
+
 /// Thumbnails and font files for the webview.
 pub trait PreviewService {
     /// Rasterize text in a face (cached by face hash and settings).
@@ -106,4 +132,7 @@ pub trait PreviewService {
     /// The text each face previews: the sample when the face covers it, else
     /// text from the face's own coverage (one answer per face, in order).
     fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>>;
+    /// The CSS declarations for the axes moved and the features switched away
+    /// from the face's defaults, ready to paste into a stylesheet.
+    fn css_values(&self, req: CssValuesRequest) -> ApiResult<CssValues>;
 }

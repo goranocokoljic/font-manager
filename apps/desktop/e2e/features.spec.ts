@@ -76,6 +76,55 @@ test("toggling smcp changes the row's computed font-feature-settings; Reset rest
   await expect(sample).toHaveCSS('font-feature-settings', 'normal');
 });
 
+test('"Copy CSS" copies font-feature-settings for the changed features, as the preview applies them', async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const panel = await openFeatures(page);
+  const sample = page.locator('[data-face="1"] .sample').first();
+  const copy = panel.getByRole('button', { name: 'Copy CSS for the features' });
+  const status = panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ });
+  const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
+
+  await copy.click();
+  await expect(status).toHaveText('Copied');
+  expect(await clipboard()).toBe('font-feature-settings: normal;');
+
+  // smcp is off by default, liga on: both written; onum switched twice is not.
+  await panel.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
+  await panel.getByRole('switch', { name: 'Standard ligatures (liga)' }).click();
+  await panel.getByRole('switch', { name: 'Oldstyle figures (onum)' }).click();
+  await panel.getByRole('switch', { name: 'Oldstyle figures (onum)' }).click();
+  await expect(sample).toHaveCSS('font-feature-settings', /"smcp"/);
+  await copy.click();
+  await expect.poll(clipboard).toBe('font-feature-settings: "liga" 0, "smcp" 1;');
+  // The copied value, as the browser reads it, is what the row applies.
+  const copied = (await clipboard()).replace(/^font-feature-settings: (.*);$/, '$1');
+  const [applied, parsed] = await sample.evaluate((el, value) => {
+    const probe = document.createElement('span');
+    probe.style.fontFeatureSettings = value;
+    return [(el as HTMLElement).style.fontFeatureSettings, probe.style.fontFeatureSettings];
+  }, copied);
+  expect(parsed).toBe(applied);
+});
+
+test('"Copy CSS" for features is keyboard-reachable and says when the clipboard refuses', async ({
+  page,
+}) => {
+  const panel = await openFeatures(page);
+  await page.evaluate(() => {
+    navigator.clipboard.writeText = () => Promise.reject(new Error('refused'));
+  });
+  const copy = panel.getByRole('button', { name: 'Copy CSS for the features' });
+  await panel.getByRole('switch').first().focus();
+  await page.keyboard.press('Shift+Tab');
+  // Reset is disabled while nothing changed, so Copy CSS is just before the switches.
+  await expect(copy).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('status').filter({ hasText: 'Could not copy' })).toBeVisible();
+});
+
 test('the preview strip follows the switches of its face', async ({ page }) => {
   const panel = await openFeatures(page);
   await page

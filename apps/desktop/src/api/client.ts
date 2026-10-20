@@ -19,6 +19,8 @@ import type {
   CoverageReport,
   CoverageRequest,
   CreateCollectionRequest,
+  CssValues,
+  CssValuesRequest,
   DeactivateRequest,
   DuplicateGroup,
   Event,
@@ -122,6 +124,8 @@ export interface FmClient {
   renderPreview(req: PreviewRequest): Promise<PreviewImage>;
   /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
+  /** The CSS declarations for a face's moved axes and switched features ("Copy CSS"). */
+  cssValues(req: CssValuesRequest): Promise<CssValues>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -190,6 +194,7 @@ export const tauriClient: FmClient = {
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
+  cssValues: (req) => invoke<CssValues>('css_values', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { reactive } from 'vue';
+import { useClient } from '../api/client';
 import type { FaceId, FeatureInfo } from '../api/types';
 
 /**
@@ -48,5 +49,13 @@ export const useFeaturesStore = defineStore('features', () => {
       .join(', ');
   }
 
-  return { isOn, set, reset, isChanged, settings };
+  /** "Copy CSS": `font-feature-settings` for the features of `face` switched from their default (fm-core). */
+  async function css(face: FaceId): Promise<string> {
+    const own = changed.get(face) ?? {};
+    const features = Object.keys(own).map((tag) => ({ tag, on: own[tag]! }));
+    const r = await useClient().cssValues({ face, variations: [], features });
+    return r.featureSettings;
+  }
+
+  return { isOn, set, reset, isChanged, settings, css };
 });
