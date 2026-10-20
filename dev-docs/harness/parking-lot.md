@@ -125,3 +125,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E11.2 #100] crates/fm-core/src/glyphs.rs:91 — `glyph_detail_file` and the `list_glyphs` file reader have no test for a face file removed after the scan (the I/O error path).
 - [E10.2 #95] crates/fm-core/src/index/mod.rs:179 — `Index::rebuild` keeps every user table, so `rebuild_index` never exercises restoring user metadata from the sidecars.
 - [E10.2 #95] crates/fm-api/src/mock.rs:806 — the mock's collection target counts members of child collections; the core target reads only direct `collection_face` rows.
+- [E10.4 #97] crates/fm-core/src/glyph_features.rs:83 — glyph detail still uses the generic `feature_info`, so it shows "Stylistic set N" while the Features tab shows the font's own set name.
+- [E10.4 #97] crates/fm-core/src/api/tests.rs:305 — tests look up a face with `FaceId(lib.family(..).id.0)`, relying on family and face ids having the same number.
+- [E10.4 #97] crates/fm-core/src/index/faces.rs:255 — a `face.parsed` that fails to deserialize becomes `parsed = None`, so a face indexed before a new non-default `ParsedFace` field shows an empty inspector until the next scan.
