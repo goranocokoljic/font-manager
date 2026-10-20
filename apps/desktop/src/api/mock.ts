@@ -15,6 +15,7 @@ import {
   type CollectionFacesRequest,
   type CollectionId,
   type Conflict,
+  type CoverageReport,
   type DuplicateGroup,
   type Event,
   type FaceDetail,
@@ -152,7 +153,8 @@ export const mockFaces: FaceDetail[] = [
     designer: 'Philipp Nurullin',
     vendorId: null,
     license: ofl,
-    metrics,
+    // Its own metrics, so the glyph compare overlay tells the two fonts' lines apart.
+    metrics: { unitsPerEm: 1000, ascender: 1020, descender: -300, xHeight: 550, capHeight: 730 },
     axes: [],
     instances: [],
     features: features('kern', 'liga'),
@@ -194,7 +196,8 @@ export const mockFaces: FaceDetail[] = [
       embedding: 'restricted',
       declared: null,
     },
-    metrics,
+    // A 2048-unit em and no declared x-height.
+    metrics: { unitsPerEm: 2048, ascender: 1900, descender: -500, xHeight: null, capHeight: 1434 },
     axes: [],
     instances: [],
     features: features('kern', 'liga'),
@@ -287,6 +290,15 @@ function mockGlyphMatches(g: GlyphInfo, query: string): boolean {
   const hex = query.replace(/^u\+/i, '');
   if (/^[0-9a-f]{1,6}$/i.test(hex) && parseInt(hex, 16) === g.codePoint) return true;
   return !!g.name && g.name.toLowerCase().includes(query.toLowerCase());
+}
+
+/** The characters of `text` a mock face lacks, like the Rust mock's `check_coverage`. */
+export function mockCoverage(f: FaceDetail, text: string, cjk: boolean): CoverageReport {
+  const has = mockChars(f);
+  const missing = [...new Set([...text])].filter(
+    (c) => !/\s/.test(c) && !has.has(c) && !(cjk && CJK.includes(c)),
+  );
+  return { face: f.face.id, complete: missing.length === 0, missing, languages: [] };
 }
 
 /** One page of a mock face's glyph map: its characters, plus CJK when `cjk`. */
@@ -1018,6 +1030,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         total: all.length,
         counts: counts(query, filters),
       } satisfies SearchResponse;
+    },
+    checkCoverage: async (req) => {
+      const f = find(req.face);
+      if (!f) throw notFound(req.face);
+      if (req.target.kind !== 'text') throw invalid('The mock checks the coverage of text only.');
+      return mockCoverage(f, req.target.text, options.cjkFaces?.includes(req.face) ?? false);
     },
     listLanguages: async () => structuredClone(mockLanguages),
     createCollection: async (req) => {

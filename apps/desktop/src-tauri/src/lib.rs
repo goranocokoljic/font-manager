@@ -23,7 +23,9 @@ use fm_api::organization::{
 use fm_api::preview::{
     PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
 };
-use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
+use fm_api::search::{
+    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse,
+};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
@@ -327,6 +329,15 @@ async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<Sea
     call(&state, move |api| api.search(req)).await
 }
 
+/// How well one face covers some languages or text, for the glyph compare overlay.
+#[tauri::command]
+async fn check_coverage(
+    state: State<'_, AppState>,
+    req: CoverageRequest,
+) -> ApiResult<CoverageReport> {
+    call(&state, move |api| api.check_coverage(req)).await
+}
+
 /// The language presets a `supports` filter can name.
 #[tauri::command]
 async fn list_languages(state: State<'_, AppState>) -> ApiResult<Vec<LanguagePreset>> {
@@ -543,6 +554,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_families,
             get_family,
             search,
+            check_coverage,
             list_languages,
             list_collections,
             create_collection,
