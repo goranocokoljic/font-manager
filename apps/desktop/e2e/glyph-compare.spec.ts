@@ -120,3 +120,71 @@ for (const scheme of ['light', 'dark'] as const) {
       expect(await borderContrast(dialog, name)).toBeGreaterThanOrEqual(3);
   });
 }
+
+/**
+ * The strongest WCAG contrast any rendered pixel of each guide line reaches against
+ * the page background: the drawing's lines are rasterized at the page's pixel ratio
+ * with their computed colors, so anti-aliasing is measured, not assumed.
+ */
+const guideContrast = (dialog: Locator) =>
+  dialog.locator('svg.drawing').evaluate(async (svg) => {
+    const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+    const lum = ([r, g, b]: number[]) => {
+      const f = (v: number) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * f(r!) + 0.7152 * f(g!) + 0.0722 * f(b!);
+    };
+    const ratio = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    const bg = getComputedStyle(document.body).backgroundColor;
+    const w = Number(svg.getAttribute('width'));
+    const h = Number(svg.getAttribute('height'));
+    const dpr = window.devicePixelRatio;
+    const out: Record<string, number> = {};
+    for (const line of svg.querySelectorAll<SVGLineElement>('line.guide')) {
+      const cs = getComputedStyle(line);
+      const copy = `<line x1="0" x2="${w}" y1="${line.getAttribute('y1')}" y2="${line.getAttribute('y2')}" stroke="${cs.stroke}" stroke-width="${cs.strokeWidth}" stroke-dasharray="${cs.strokeDasharray === 'none' ? '' : cs.strokeDasharray}"/>`;
+      const src = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">${copy}</svg>`;
+      const img = new Image();
+      img.src = `data:image/svg+xml,${encodeURIComponent(src)}`;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+      const back = lum(rgb(bg));
+      let best = 1;
+      for (let i = 0; i < data.length; i += 4)
+        best = Math.max(best, ratio(lum([data[i]!, data[i + 1]!, data[i + 2]!]), back));
+      out[line.dataset.line ?? '?'] = best;
+    }
+    return out;
+  });
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the metric guide lines of both fonts reach 3:1 against the background (${scheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await (await openDetail(page)).click();
+    const dialog = page.getByRole('dialog', { name: 'Compare U+0416' });
+    await dialog.getByRole('combobox', { name: 'Compare with font' }).fill('JetBrains');
+    await expect(dialog.getByRole('option').first()).toContainText('JetBrains Mono');
+    await page.keyboard.press('Enter');
+    await expect(dialog.locator('text.glyph')).toHaveCount(2);
+    const contrast = await guideContrast(dialog);
+    expect(Object.keys(contrast).sort()).toEqual([
+      'capHeight-0',
+      'capHeight-1',
+      'xHeight-0',
+      'xHeight-1',
+    ]);
+    for (const [line, value] of Object.entries(contrast))
+      expect(value, `${line} contrast`).toBeGreaterThanOrEqual(3);
+  });
+}

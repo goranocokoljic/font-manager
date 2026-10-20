@@ -481,7 +481,9 @@ input[type='range']:focus-visible {
   stroke-width: 1;
 }
 .guide {
-  stroke-width: 1;
+  /* Two pixels: a 1 px line on a whole-pixel y is smeared over two device rows at
+     half strength (about 2:1); two full rows keep the line at its 3:1+ color. */
+  stroke-width: 2;
 }
 .guide.font-0 {
   stroke: var(--fm-compare-0);
