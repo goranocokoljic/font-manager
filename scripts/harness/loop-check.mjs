@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // loop-check.mjs — convergence guard, run by go-harness after every finished story.
 //
-// Usage: node scripts/harness/loop-check.mjs [--dir .harness]
+// Usage: node scripts/harness/loop-check.mjs [--dir .harness] [--budget]
 // Exit: 0 ok, 1 warn (log and continue), 2 stop (halt the lane).
 // Last stdout line: LOOPCHECK: <ok|warn|stop> | <reasons or ->
 //
 // Reads .harness/stories.jsonl (one record per finished story). Signals:
-//   S1 budget burn   — stories finishing over their size budget
+//   S1 budget burn   — stories finishing over their size budget; a signal only with
+//                      --budget (the lane runs with -Budget / budget_enforced), else info
 //   S2 no convergence — confirmed must-findings per story not going down
 //   S3 blocked streak — consecutive stories that ended harness:blocked
 //   S4 PureContext   — stories that ran with zero PureContext calls (the index is
@@ -36,8 +37,11 @@ const warns = []; const stops = []; const info = [];
 if (last.length) {
   const over = last.filter((r) => r.budget_usd && r.billed_usd > r.budget_usd);
   info.push(`over budget: ${over.length}/${last.length} recent stories`);
-  if (over.length >= 3) stops.push(`${over.length} of the last ${last.length} stories went over budget`);
-  else if (over.length >= 2) warns.push(`${over.length} of the last ${last.length} stories went over budget`);
+  // Budgets are opt-in (#275): without --budget, spend is shown, never a stop.
+  if (args.budget) {
+    if (over.length >= 3) stops.push(`${over.length} of the last ${last.length} stories went over budget`);
+    else if (over.length >= 2) warns.push(`${over.length} of the last ${last.length} stories went over budget`);
+  }
 }
 
 // S2 must-findings not converging

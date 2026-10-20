@@ -1285,7 +1285,8 @@ try {
         } else { $script:ConsecFails = 0 }
 
         if (-not $NoLoopGuard) {
-            $lc = Invoke-Node 'loop-check.mjs' @('--dir', $HarnessDir)
+            $lcArgs = @('--dir', $HarnessDir); if ($BudgetOn) { $lcArgs += '--budget' }
+            $lc = Invoke-Node 'loop-check.mjs' $lcArgs
             if ($lc.Code -ge 1) { foreach ($l in ($lc.Out -split "`r?`n")) { if ($l.Trim()) { Write-Log "    $l" $(if ($lc.Code -ge 2) { 'Red' } else { 'Yellow' }) } } }
             if ($lc.Code -ge 2) { $script:RunState = 'stopped'; Write-Log '=== LOOP GUARD tripped - stopping the lane. Triage, then run again (or -NoLoopGuard). ===' 'Red'; break }
         }
