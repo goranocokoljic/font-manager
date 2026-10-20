@@ -173,6 +173,25 @@ fn search_times_every_query_for_every_round() {
 }
 
 #[test]
+fn smart_collections_are_made_once_and_timed() {
+    let home = TempDir::new("smart");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = smart_collections(home.path(), 2).expect("smart");
+    assert_eq!(res.collections, SMART_COLLECTIONS, "{res:?}");
+    assert!(
+        res.p95_ms >= res.search_p95_ms && res.p95_ms >= res.list_p95_ms,
+        "{res:?}"
+    );
+    // A second run finds them: still twenty.
+    let again = smart_collections(home.path(), 1).expect("again");
+    assert_eq!(again.collections, SMART_COLLECTIONS);
+    let index = fm_core::startup::open_index(&home_paths(home.path()))
+        .expect("open")
+        .index;
+    assert_eq!(index.collections().expect("list").len(), SMART_COLLECTIONS);
+}
+
+#[test]
 fn preview_cache_times_a_hit_on_every_cached_thumbnail() {
     let home = TempDir::new("preview-cache");
     let before = listing(&fixtures());

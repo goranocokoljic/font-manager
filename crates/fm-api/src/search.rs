@@ -44,8 +44,8 @@ pub enum Supports {
     },
 }
 
-/// Filters; every field is optional and they combine with AND. The same
-/// value is the rule of a smart collection.
+/// Filters; every field is optional and they combine with AND. A smart
+/// collection's rule is made of them (`organization::RuleGroup`).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Filters {
@@ -75,7 +75,7 @@ pub struct Filters {
     pub sources: Vec<SourceId>,
     /// Every one of these tags.
     pub tags: Vec<TagId>,
-    /// Inside this collection.
+    /// Inside this collection; a smart collection applies its rule.
     pub collection: Option<CollectionId>,
     /// Active (true) or inactive (false) only.
     pub active: Option<bool>,
@@ -85,6 +85,8 @@ pub struct Filters {
     pub min_rating: Option<u8>,
     /// Health: faces with problems (true) or healthy faces (false) only.
     pub problems: Option<bool>,
+    /// Added to the library within the last this many days (each 24 hours).
+    pub added_within_days: Option<u32>,
 }
 
 /// A search. An empty query with filters lists everything that passes them.

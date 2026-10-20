@@ -533,3 +533,23 @@ fn a_weight_class_counts_the_weights_that_round_to_it() {
     assert_eq!(count(&counts.weight, &400), 1);
     assert_eq!(count(&counts.weight, &300), 0);
 }
+
+#[test]
+fn added_within_keeps_faces_added_at_the_cutoff_or_later() {
+    let cutoff = Some("2026-10-13T09:00:00Z");
+    assert_eq!(failed_added(cutoff, Some("2026-10-13T09:00:00Z")), 0);
+    assert_eq!(failed_added(cutoff, Some("2026-10-20T00:00:00Z")), 0);
+    assert_eq!(
+        failed_added(cutoff, Some("2026-10-13T08:59:59Z")),
+        Dim::Added.bit()
+    );
+    assert_eq!(failed_added(cutoff, None), Dim::Added.bit());
+    assert_eq!(failed_added(None, None), 0);
+}
+
+#[test]
+fn the_collection_bit_follows_what_the_rule_decided() {
+    let mask = Dim::Tags.bit() | Dim::Collection.bit();
+    assert_eq!(with_collection(mask, true), Dim::Tags.bit());
+    assert_eq!(with_collection(Dim::Tags.bit(), false), mask);
+}

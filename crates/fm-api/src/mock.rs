@@ -32,8 +32,8 @@ use crate::library::{
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
-    RenameCollectionRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    RenameCollectionRequest, Rule, RuleGroup, RuleOp, SetEntry, SetExport, Tag, TagFacesRequest,
+    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
@@ -56,6 +56,35 @@ use crate::{
 
 /// The mock's clock: every timestamp it makes.
 pub const MOCK_NOW: &str = "2026-10-16T09:00:00Z";
+
+/// Whether `added` (RFC 3339, UTC) is within `days` days before [`MOCK_NOW`].
+fn added_within(added: &str, days: u32) -> bool {
+    match (unix_seconds(added), unix_seconds(MOCK_NOW)) {
+        (Some(added), Some(now)) => added >= now - i64::from(days) * 86_400,
+        _ => false,
+    }
+}
+
+/// Seconds since 1970 of an RFC 3339 UTC time (`2026-10-16T09:00:00Z`).
+fn unix_seconds(t: &str) -> Option<i64> {
+    let n = |at: usize, len: usize| t.get(at..at + len)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0, 4)?, n(5, 2)?, n(8, 2)?);
+    // Days from the civil date (H. Hinnant's algorithm).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    Some(days * 86_400 + n(11, 2)? * 3_600 + n(14, 2)? * 60 + n(17, 2)?)
+}
+
+/// The refusal of a smart collection whose rule leads back to itself.
+fn self_reference(c: &Collection) -> ApiError {
+    ApiError::invalid(format!(
+        "The rules of \"{}\" include the collection itself.",
+        c.name
+    ))
+}
 
 /// Near-misses within this many characters still show in a coverage search.
 const NEAR_MISS: usize = 5;
@@ -739,21 +768,91 @@ impl State {
         }
     }
 
-    fn in_collection(&self, f: &MockFace, id: CollectionId, depth: u8) -> bool {
+    /// Whether `f` is in the collection `id`: a member of a manual one, or
+    /// passing a smart one's rule. `path` holds the smart collections whose
+    /// rules led here; reaching one of them again is `InvalidRequest`. An
+    /// unknown collection holds nothing.
+    fn in_collection(
+        &self,
+        f: &MockFace,
+        id: CollectionId,
+        path: &[CollectionId],
+    ) -> ApiResult<bool> {
         let Some(c) = self.collections.iter().find(|c| c.id == id) else {
-            return false;
+            return Ok(false);
         };
-        match &c.rules {
-            Some(rules) if depth < 4 => self.matches(f, rules, depth + 1).unwrap_or(false),
-            Some(_) => false,
-            None => self
+        let Some(group) = &c.rule_group else {
+            return Ok(self
                 .members
                 .get(&id)
-                .is_some_and(|m| m.contains(&f.detail.face.id)),
+                .is_some_and(|m| m.contains(&f.detail.face.id)));
+        };
+        if path.contains(&id) {
+            return Err(self_reference(c));
         }
+        let mut path = path.to_vec();
+        path.push(id);
+        self.passes_group(f, group, &path)
     }
 
-    fn matches(&self, f: &MockFace, q: &Filters, depth: u8) -> ApiResult<bool> {
+    /// Whether `f` passes a smart collection's rule group.
+    fn passes_group(
+        &self,
+        f: &MockFace,
+        group: &RuleGroup,
+        path: &[CollectionId],
+    ) -> ApiResult<bool> {
+        let mut passed = Vec::with_capacity(group.rules.len());
+        for rule in &group.rules {
+            passed.push(match rule {
+                Rule::Filters { filters } => {
+                    self.matches(f, filters, path)?
+                        && match &filters.supports {
+                            Some(target) => self.coverage(f, target)?.0.len() <= NEAR_MISS,
+                            None => true,
+                        }
+                }
+                Rule::Group { group } => self.passes_group(f, group, path)?,
+            });
+        }
+        Ok(match group.op {
+            RuleOp::And => passed.iter().all(|p| *p),
+            RuleOp::Or => passed.is_empty() || passed.iter().any(|p| *p),
+        })
+    }
+
+    /// Refuses a rule for the collection `id` that names an unknown
+    /// collection or leads back to `id` through smart collections.
+    fn check_rule(&self, id: CollectionId, group: &RuleGroup) -> ApiResult<()> {
+        for c in group.collections() {
+            if c != id && !self.collections.iter().any(|x| x.id == c) {
+                return Err(ApiError::not_found(format!("Collection {c}")));
+            }
+        }
+        let mut todo = group.collections();
+        let mut seen = BTreeSet::new();
+        while let Some(c) = todo.pop() {
+            if c == id {
+                return Err(ApiError::invalid(
+                    "A smart collection's rules cannot include the collection itself.",
+                ));
+            }
+            if !seen.insert(c) {
+                continue;
+            }
+            if let Some(group) = self
+                .collections
+                .iter()
+                .find(|x| x.id == c)
+                .and_then(|x| x.rule_group.as_ref())
+            {
+                todo.extend(group.collections());
+            }
+        }
+        Ok(())
+    }
+
+    fn matches(&self, f: &MockFace, q: &Filters, path: &[CollectionId]) -> ApiResult<bool> {
         let s = &f.detail.face;
         let fam = self.family(s.family)?;
         let tags = self.face_tags.get(&s.id);
@@ -769,12 +868,16 @@ impl State {
             && q.foundry.as_deref().is_none_or(|x| x == fam.foundry)
             && (q.sources.is_empty() || q.sources.contains(&f.source))
             && q.tags.iter().all(|t| tags.is_some_and(|set| set.contains(t)))
-            && q.collection.is_none_or(|c| self.in_collection(f, c, depth))
+            && q.added_within_days.is_none_or(|days| added_within(fam.added, days))
             && q.active.is_none_or(|a| a == self.active.contains_key(&s.id))
             && q.favorite.is_none_or(|v| v == f.detail.favorite)
             && q.min_rating.is_none_or(|r| f.detail.rating.is_some_and(|x| x >= r))
             && q.problems.is_none_or(|p| p == (s.health != Health::Ok));
-        Ok(ok)
+        Ok(ok
+            && match q.collection {
+                Some(c) => self.in_collection(f, c, path)?,
+                None => true,
+            })
     }
 
     fn collection_view(&self, c: &Collection) -> Collection {
@@ -782,7 +885,8 @@ impl State {
         c.face_count = self
             .faces
             .iter()
-            .filter(|f| self.in_collection(f, c.id, 0))
+            // A rule that leads back to itself holds nothing.
+            .filter(|f| self.in_collection(f, c.id, &[]).unwrap_or(false))
             .count() as u32;
         c
     }
@@ -809,7 +913,7 @@ impl State {
                 let members = self
                     .faces
                     .iter()
-                    .filter(|f| self.in_collection(f, *collection, 0))
+                    .filter(|f| self.in_collection(f, *collection, &[]).unwrap_or(false))
                     .map(|f| f.detail.face.id)
                     .collect();
                 Ok(self.with_pinned(members, |v| v.collection == Some(*collection)))
@@ -1404,7 +1508,7 @@ impl State {
                     s.family_name, s.style, s.postscript_name, fam.foundry, fam.designer
                 )
                 .to_lowercase();
-                if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, 0)? {
+                if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, &[])? {
                     continue;
                 }
                 if let Some(target) = &filters.supports {
@@ -1904,11 +2008,26 @@ impl OrganizationService for MockApi {
             return Err(ApiError::not_found(format!("Collection {p}")));
         }
         st.check_sibling_name(req.parent, name, None)?;
+        let group = match (req.rules, req.rule_group) {
+            (Some(_), Some(_)) => {
+                return Err(ApiError::invalid(
+                    "Give a smart collection rules or a rule group, not both.",
+                ));
+            }
+            (rules, group) => group.or_else(|| rules.map(RuleGroup::from)),
+        };
+        let id = CollectionId(st.next());
+        if let Some(group) = &group {
+            st.check_rule(id, group)?;
+        }
         let c = Collection {
-            id: CollectionId(st.next()),
+            id,
             parent: req.parent,
             name: name.into(),
-            rules: req.rules,
+            rules: group
+                .as_ref()
+                .map(|g| g.plain_filters().cloned().unwrap_or_default()),
+            rule_group: group,
             face_count: 0,
         };
         st.collections.push(c.clone());
@@ -2394,7 +2513,10 @@ impl ExportService for MockApi {
         for fam in &st.families {
             let faces: Vec<_> = st
                 .family_faces(fam.id)
-                .filter(|f| req.collection.is_none_or(|c| st.in_collection(f, c, 0)))
+                .filter(|f| {
+                    req.collection
+                        .is_none_or(|c| st.in_collection(f, c, &[]).unwrap_or(false))
+                })
                 .collect();
             let Some(first) = faces.first() else { continue };
             let lic = &first.detail.license;

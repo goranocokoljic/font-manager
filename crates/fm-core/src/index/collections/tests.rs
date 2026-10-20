@@ -1,8 +1,10 @@
 use std::path::PathBuf;
 
 use fm_api::common::{FontFormat, Health};
+use fm_api::library::LicenseType;
 use fm_api::library::SourceKind;
-use fm_api::search::SearchRequest;
+use fm_api::organization::{Rule, RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate};
+use fm_api::search::{Filters, SearchRequest};
 use fm_api::{FamilyId, SourceId};
 
 use super::*;
@@ -65,6 +67,7 @@ fn face(index: &Index, postscript: &str) -> FaceId {
 fn create(index: &mut Index, name: &str, parent: Option<CollectionId>) -> Collection {
     index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: name.into(),
             parent,
             rules: None,
@@ -171,6 +174,7 @@ fn names_are_required_and_unique_among_siblings() {
     let b = create(&mut index, "B", None);
     let empty = index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "   ".into(),
             parent: None,
             rules: None,
@@ -179,6 +183,7 @@ fn names_are_required_and_unique_among_siblings() {
     assert_eq!(empty.code(), ErrorCode::InvalidRequest);
     let twice = index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: " A ".into(),
             parent: None,
             rules: None,
@@ -207,6 +212,7 @@ fn names_are_required_and_unique_among_siblings() {
 
     let orphan = index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "C".into(),
             parent: Some(CollectionId(999)),
             rules: None,
@@ -320,6 +326,7 @@ fn unknown_faces_families_and_smart_collections_are_refused() {
 
     let smart = index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Variable".into(),
             parent: None,
             rules: Some(Filters {
@@ -379,4 +386,435 @@ fn a_version_5_index_keeps_its_collections() {
     assert_eq!(tree(&index), ["First", "Third", "Third/Child"]);
     create(&mut index, "New", None);
     assert_eq!(tree(&index), ["First", "Third", "Third/Child", "New"]);
+}
+
+fn smart(index: &mut Index, name: &str, op: RuleOp, rules: Vec<Rule>) -> FmResult<Collection> {
+    index.create_collection(&CreateCollectionRequest {
+        name: name.into(),
+        parent: None,
+        rules: None,
+        rule_group: Some(RuleGroup { op, rules }),
+    })
+}
+
+fn leaf(filters: Filters) -> Rule {
+    Rule::Filters { filters }
+}
+
+/// The faces a search filtered by the collection `c` finds, by PostScript name.
+fn searched(index: &Index, c: CollectionId) -> FmResult<Vec<String>> {
+    let res = index.search(&SearchRequest {
+        filters: Filters {
+            collection: Some(c),
+            ..Filters::default()
+        },
+        ..SearchRequest::default()
+    })?;
+    let mut names: Vec<String> = res
+        .families
+        .iter()
+        .flat_map(|h| &h.faces)
+        .map(|f| {
+            index
+                .conn
+                .query_row(
+                    "SELECT postscript_name FROM face WHERE id = ?1",
+                    [f.0],
+                    |r| r.get(0),
+                )
+                .expect("name")
+        })
+        .collect();
+    names.sort_unstable();
+    Ok(names)
+}
+
+/// What `list_collections` counts for `c`, and what a search by it finds.
+fn live(index: &Index, c: CollectionId) -> (u32, Vec<String>) {
+    let count = index
+        .collections()
+        .expect("list")
+        .into_iter()
+        .find(|x| x.id == c)
+        .expect("listed")
+        .face_count;
+    (count, searched(index, c).expect("search"))
+}
+
+fn names(list: &[&str]) -> Vec<String> {
+    list.iter().map(|s| (*s).to_owned()).collect()
+}
+
+/// E14.2 criterion 1: a rule phase 1 stored as plain filters reads as one
+/// AND group of them, and keeps its `rules`.
+#[test]
+fn a_phase_1_rule_reads_as_one_and_group() {
+    let (index, _) = library();
+    index
+        .conn
+        .execute(
+            r#"INSERT INTO collection (id, name, is_smart, rules, position)
+               VALUES (7, 'Old smart', 1, '{"formats":["ttf"],"variable":false}', 0)"#,
+            [],
+        )
+        .expect("phase-1 row");
+    let old = Filters {
+        formats: vec![FontFormat::Ttf],
+        variable: Some(false),
+        ..Filters::default()
+    };
+    let c = index.collection(CollectionId(7)).expect("listed");
+    assert_eq!(c.rules, Some(old.clone()));
+    assert_eq!(c.rule_group, Some(RuleGroup::from(old)));
+    assert_eq!(c.face_count, LIBRARY.len() as u32);
+}
+
+/// Criteria 1, 2 and 4: AND/OR groups, nested groups and a rule that names
+/// another smart collection; search and the list agree.
+#[test]
+fn smart_rules_combine_with_and_or_and_through_other_collections() {
+    let (mut index, _) = library();
+    let inter = face(&index, "Inter-Regular");
+    let bold = face(&index, "Roboto-Bold");
+    let tagged = index
+        .tag_faces(&TagFacesRequest {
+            faces: vec![inter],
+            tags: vec!["pick".into()],
+        })
+        .expect("tag");
+    let pick = tagged.iter().find(|t| t.name == "pick").expect("tag").id;
+    index
+        .update_user_meta(&UserMetaUpdate {
+            faces: vec![bold],
+            rating: Some(5),
+            ..UserMetaUpdate::default()
+        })
+        .expect("rate");
+    let manual = create(&mut index, "Manual", None);
+    let serif = face(&index, "SourceSerif-Regular");
+    add(&mut index, manual.id, vec![serif], vec![]).expect("add");
+
+    let either = smart(
+        &mut index,
+        "Picks or stars",
+        RuleOp::Or,
+        vec![
+            leaf(Filters {
+                tags: vec![pick],
+                ..Filters::default()
+            }),
+            leaf(Filters {
+                min_rating: Some(4),
+                ..Filters::default()
+            }),
+        ],
+    )
+    .expect("or");
+    assert_eq!(
+        live(&index, either.id),
+        (2, names(&["Inter-Regular", "Roboto-Bold"]))
+    );
+    // Phase-1 clients still see a smart collection by its `rules`.
+    assert_eq!(either.rules, Some(Filters::default()));
+
+    // Through another smart collection and a manual one, in a nested group.
+    let nested = smart(
+        &mut index,
+        "Nested",
+        RuleOp::Or,
+        vec![
+            Rule::Group {
+                group: RuleGroup {
+                    op: RuleOp::And,
+                    rules: vec![
+                        leaf(Filters {
+                            collection: Some(either.id),
+                            ..Filters::default()
+                        }),
+                        leaf(Filters {
+                            min_rating: Some(1),
+                            ..Filters::default()
+                        }),
+                    ],
+                },
+            },
+            leaf(Filters {
+                collection: Some(manual.id),
+                ..Filters::default()
+            }),
+        ],
+    )
+    .expect("nested");
+    assert_eq!(
+        live(&index, nested.id),
+        (2, names(&["Roboto-Bold", "SourceSerif-Regular"]))
+    );
+
+    // An empty group holds every face.
+    let all = smart(&mut index, "All", RuleOp::Or, vec![]).expect("all");
+    assert_eq!(live(&index, all.id).0, LIBRARY.len() as u32);
+}
+
+/// Criterion 3: membership follows the index with no restart.
+#[test]
+fn smart_collections_follow_index_changes() {
+    let (mut index, source) = library();
+    let inter = face(&index, "Inter-Regular");
+    let tag = index
+        .tag_faces(&TagFacesRequest {
+            faces: vec![inter],
+            tags: vec!["later".into()],
+        })
+        .expect("tag")[0]
+        .id;
+    index
+        .untag_faces(&UntagFacesRequest {
+            faces: vec![inter],
+            tags: vec![tag],
+        })
+        .expect("untag");
+    let only = |index: &mut Index, name: &str, filters: Filters| {
+        smart(index, name, RuleOp::And, vec![leaf(filters)])
+            .expect("smart")
+            .id
+    };
+    let every = only(&mut index, "Every", Filters::default());
+    let tagged = only(
+        &mut index,
+        "Tagged",
+        Filters {
+            tags: vec![tag],
+            ..Filters::default()
+        },
+    );
+    let rated = only(
+        &mut index,
+        "Rated",
+        Filters {
+            min_rating: Some(3),
+            ..Filters::default()
+        },
+    );
+    let web = only(
+        &mut index,
+        "Web",
+        Filters {
+            license: Some(LicenseType::Web),
+            ..Filters::default()
+        },
+    );
+    let active = only(
+        &mut index,
+        "Active",
+        Filters {
+            active: Some(true),
+            ..Filters::default()
+        },
+    );
+    for c in [tagged, rated, web, active] {
+        assert_eq!(live(&index, c), (0, vec![]));
+    }
+    assert_eq!(live(&index, every).0, 5);
+
+    // A scan adds a face, then its file is gone.
+    let mut added = file("Lora", "Regular");
+    index
+        .persist_files(source, std::slice::from_ref(&added))
+        .expect("scan adds");
+    assert_eq!(live(&index, every).0, 6);
+    added.gone = true;
+    index
+        .persist_files(source, std::slice::from_ref(&added))
+        .expect("scan removes");
+    assert_eq!(live(&index, every).0, 5);
+
+    let one = (1, names(&["Inter-Regular"]));
+    index
+        .tag_faces(&TagFacesRequest {
+            faces: vec![inter],
+            tags: vec!["later".into()],
+        })
+        .expect("tag");
+    assert_eq!(live(&index, tagged), one);
+    index
+        .update_user_meta(&UserMetaUpdate {
+            faces: vec![inter],
+            rating: Some(4),
+            ..UserMetaUpdate::default()
+        })
+        .expect("rate");
+    assert_eq!(live(&index, rated), one);
+    // The declared license type, as the license panel writes it.
+    index
+        .conn
+        .execute(
+            "UPDATE user_meta SET license_type = 'web' WHERE face_id = ?1",
+            [inter.0],
+        )
+        .expect("license");
+    assert_eq!(live(&index, web), one);
+    index
+        .conn
+        .execute(
+            "INSERT INTO activation VALUES (?1, 'session', NULL, '2026-10-20T10:00:00Z')",
+            [inter.0],
+        )
+        .expect("activate");
+    assert_eq!(live(&index, active), one);
+    index
+        .conn
+        .execute("DELETE FROM activation", [])
+        .expect("deactivate");
+    assert_eq!(live(&index, active), (0, vec![]));
+}
+
+/// Criterion 1: the date-added dimension, in a rule and as a search filter.
+#[test]
+fn added_within_days_keeps_recent_faces() {
+    let (mut index, _) = library();
+    index
+        .conn
+        .execute(
+            "UPDATE face SET added = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-30 days')
+             WHERE postscript_name LIKE 'Roboto-%'",
+            [],
+        )
+        .expect("old faces");
+    let week = Filters {
+        added_within_days: Some(7),
+        ..Filters::default()
+    };
+    let recent =
+        smart(&mut index, "Recent", RuleOp::And, vec![leaf(week.clone())]).expect("recent");
+    assert_eq!(
+        live(&index, recent.id),
+        (2, names(&["Inter-Regular", "SourceSerif-Regular"]))
+    );
+    let total = |filters: Filters| {
+        index
+            .search(&SearchRequest {
+                filters,
+                ..SearchRequest::default()
+            })
+            .expect("search")
+            .total
+    };
+    assert_eq!(total(week), 2);
+    assert_eq!(
+        total(Filters {
+            added_within_days: Some(60),
+            ..Filters::default()
+        }),
+        3
+    );
+}
+
+/// Criterion 4: a rule that leads back to its own collection is refused.
+#[test]
+fn a_rule_that_refers_to_itself_is_refused() {
+    let (mut index, _) = library();
+    let manual = create(&mut index, "Manual", None);
+    // Directly: the id the new collection gets.
+    let next = CollectionId(manual.id.0 + 1);
+    let err = smart(
+        &mut index,
+        "Itself",
+        RuleOp::And,
+        vec![leaf(Filters {
+            collection: Some(next),
+            ..Filters::default()
+        })],
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    assert_eq!(index.collections().expect("list").len(), 1);
+
+    // Through another smart collection: stored rules that loop (no request
+    // makes them today; an edited rule could).
+    let a = smart(&mut index, "A", RuleOp::And, vec![]).expect("a");
+    let b = smart(
+        &mut index,
+        "B",
+        RuleOp::And,
+        vec![leaf(Filters {
+            collection: Some(a.id),
+            ..Filters::default()
+        })],
+    )
+    .expect("b");
+    let loop_to_b = serde_json::to_string(&RuleGroup::from(Filters {
+        collection: Some(b.id),
+        ..Filters::default()
+    }))
+    .expect("json");
+    index
+        .conn
+        .execute(
+            "UPDATE collection SET rules = ?2 WHERE id = ?1",
+            params![a.id.0, loop_to_b],
+        )
+        .expect("loop");
+    for c in [a.id, b.id] {
+        assert_eq!(
+            searched(&index, c).unwrap_err().code(),
+            ErrorCode::InvalidRequest
+        );
+    }
+    // The list still answers: a looping rule holds nothing.
+    let list = index.collections().expect("list");
+    assert!(
+        list.iter()
+            .filter(|c| c.id == a.id || c.id == b.id)
+            .all(|c| c.face_count == 0)
+    );
+    let err = smart(
+        &mut index,
+        "Via the loop",
+        RuleOp::And,
+        vec![leaf(Filters {
+            collection: Some(a.id),
+            ..Filters::default()
+        })],
+    )
+    .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+}
+
+#[test]
+fn bad_rules_are_refused_and_nothing_is_kept() {
+    let (mut index, _) = library();
+    let unknown = smart(
+        &mut index,
+        "Unknown",
+        RuleOp::And,
+        vec![leaf(Filters {
+            collection: Some(CollectionId(99)),
+            ..Filters::default()
+        })],
+    )
+    .unwrap_err();
+    assert_eq!(unknown.code(), ErrorCode::NotFound);
+    let language = smart(
+        &mut index,
+        "Klingon",
+        RuleOp::And,
+        vec![leaf(Filters {
+            supports: Some(fm_api::search::Supports::Languages {
+                codes: vec!["tlh".into()],
+            }),
+            ..Filters::default()
+        })],
+    )
+    .unwrap_err();
+    assert_eq!(language.code(), ErrorCode::InvalidRequest);
+    let both = index
+        .create_collection(&CreateCollectionRequest {
+            name: "Both".into(),
+            parent: None,
+            rules: Some(Filters::default()),
+            rule_group: Some(RuleGroup::from(Filters::default())),
+        })
+        .unwrap_err();
+    assert_eq!(both.code(), ErrorCode::InvalidRequest);
+    assert!(index.collections().expect("list").is_empty());
 }

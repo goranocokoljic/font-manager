@@ -43,6 +43,7 @@ import {
   type PreviewRequest,
   type Problem,
   type Resolution,
+  type RuleGroup,
   type ProjectSet,
   type SearchResponse,
   type SampleText,
@@ -598,7 +599,7 @@ function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySumma
     classification: null,
     isVariable: faces.some((f) => f.isVariable),
     activation: active === 0 ? 'inactive' : active === faces.length ? 'active' : 'partial',
-    added: '2026-10-01T00:00:00Z',
+    added: MOCK_ADDED,
     styles,
     weightRange: weights.length ? { min: Math.min(...weights), max: Math.max(...weights) } : null,
     isColor: false,
@@ -692,6 +693,9 @@ function sortFamilies(rows: FamilySummary[], order: FamilyOrder): FamilySummary[
   return keyed.map((k) => k.row);
 }
 
+/** When every mock face was added (`FamilySummary.added`). */
+const MOCK_ADDED = '2026-10-01T00:00:00Z';
+
 /** Language presets of the mock: a face covers one when it has the preset's script. */
 export const mockLanguages: LanguagePreset[] = [
   { code: 'en', name: 'English', script: 'Latn' },
@@ -724,6 +728,8 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
     (q.tags ?? []).every((t) => tags.includes(t)) &&
     (q.favorite == null || q.favorite === d.favorite) &&
     (q.minRating == null || (d.rating ?? 0) >= q.minRating) &&
+    (q.addedWithinDays == null ||
+      Date.parse(MOCK_ADDED) >= Date.parse(MOCK_NOW) - q.addedWithinDays * 86_400_000) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -827,11 +833,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const matching = details.filter((d) => {
         const hay =
           `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
-        return (
-          words.every((w) => hay.includes(w)) &&
-          passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
-          (q.collection == null || !!members.get(q.collection)?.has(d.face.id))
-        );
+        return words.every((w) => hay.includes(w)) && matches(d, q, []);
       });
       if (!matching.length) continue;
       const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
@@ -901,11 +903,56 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   };
   const nameTaken = (parent: CollectionId | null, name: string, except?: CollectionId) =>
     collections.some((c) => c.parent === parent && c.name === name && c.id !== except);
-  // Smart collections are not evaluated (like fm-core until E14.2): their count is 0.
-  const viewOf = (c: Collection): Collection => ({
-    ...structuredClone(c),
-    faceCount: c.rules ? 0 : (members.get(c.id)?.size ?? 0),
-  });
+  // Smart collections (E14.2), like fm-core: the rule runs on every ask, never stored;
+  // a rule that leads back to its own collection is `invalidRequest`.
+  const ruleOf = (c: Collection): RuleGroup | null =>
+    c.ruleGroup ?? (c.rules ? { op: 'and', rules: [{ kind: 'filters', filters: c.rules }] } : null);
+  const refsOf = (g: RuleGroup): CollectionId[] =>
+    (g.rules ?? []).flatMap((r) =>
+      r.kind === 'group'
+        ? refsOf(r.group)
+        : r.filters.collection != null
+          ? [r.filters.collection]
+          : [],
+    );
+  const loop = (c: Collection) =>
+    invalid(`The rules of "${c.name}" include the collection itself.`);
+  const inCollection = (d: FaceDetail, id: CollectionId, path: CollectionId[]): boolean => {
+    const c = collections.find((x) => x.id === id);
+    if (!c) return false;
+    const rule = ruleOf(c);
+    if (!rule) return !!members.get(id)?.has(d.face.id);
+    if (path.includes(id)) throw loop(c);
+    return passesGroup(d, rule, [...path, id]);
+  };
+  const passesGroup = (d: FaceDetail, g: RuleGroup, path: CollectionId[]): boolean => {
+    const results = (g.rules ?? []).map((r) =>
+      r.kind === 'group' ? passesGroup(d, r.group, path) : matches(d, r.filters, path),
+    );
+    return g.op === 'and' ? results.every(Boolean) : !results.length || results.some(Boolean);
+  };
+  const matches = (d: FaceDetail, q: Filters, path: CollectionId[]): boolean =>
+    passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
+    (q.collection == null || inCollection(d, q.collection, path));
+  // Refuses a stored rule of `id` that reaches a collection twice on one path.
+  const checkLoops = (id: CollectionId, path: CollectionId[]) => {
+    const c = collections.find((x) => x.id === id);
+    const rule = c && ruleOf(c);
+    if (!c || !rule) return;
+    if (path.includes(id)) throw loop(c);
+    for (const ref of refsOf(rule)) checkLoops(ref, [...path, id]);
+  };
+  const viewOf = (c: Collection): Collection => {
+    let faceCount = members.get(c.id)?.size ?? 0;
+    if (ruleOf(c)) {
+      try {
+        faceCount = [...byFamily.values()].flat().filter((d) => inCollection(d, c.id, [])).length;
+      } catch {
+        faceCount = 0; // a rule that loops holds nothing
+      }
+    }
+    return { ...structuredClone(c), faceCount };
+  };
   const walk = (parent: CollectionId | null): Collection[] =>
     collections.filter((c) => c.parent === parent).flatMap((c) => [viewOf(c), ...walk(c.id)]);
   // Virtual styles (E10.2), like the Rust mock: in a manual collection or a set.
@@ -1044,14 +1091,29 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!name) throw invalid('Give the collection a name.');
       if (req.parent != null) findCollection(req.parent);
       if (nameTaken(req.parent ?? null, name)) throw conflict(name);
+      if (req.rules && req.ruleGroup)
+        throw invalid('Give a smart collection rules or a rule group, not both.');
+      const group: RuleGroup | null =
+        req.ruleGroup ??
+        (req.rules ? { op: 'and', rules: [{ kind: 'filters', filters: req.rules }] } : null);
+      const id = ++nextId;
+      for (const ref of group ? refsOf(group) : []) if (ref !== id) findCollection(ref);
+      const only = group?.op === 'and' && group.rules?.length === 1 ? group.rules[0] : null;
       const c: Collection = {
-        id: ++nextId,
+        id,
         parent: req.parent ?? null,
         name,
-        rules: req.rules ?? null,
+        rules: group ? (only?.kind === 'filters' ? only.filters : {}) : null,
+        ruleGroup: group,
         faceCount: 0,
       };
       collections.push(c);
+      try {
+        checkLoops(id, []);
+      } catch (e) {
+        collections.pop();
+        throw e;
+      }
       return viewOf(c);
     },
     listCollections: async () => walk(null),

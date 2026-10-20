@@ -17,14 +17,16 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, FamilyNotesUpdate,
-    MoveCollectionRequest, PinInstanceRequest, RenameCollectionRequest, TagFacesRequest,
-    UserMetaUpdate, VirtualStylesRequest,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
+    FamilyNotesUpdate, MoveCollectionRequest, PinInstanceRequest, RenameCollectionRequest, Rule,
+    RuleGroup, RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
 };
 use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
-use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, ResolutionId, SourceId};
+use fm_api::{
+    API_VERSION, Api, CollectionId, ErrorCode, Event, FaceId, FamilyId, ResolutionId, SourceId,
+};
 
 fn api() -> Arc<dyn Api> {
     Arc::new(MockApi::new())
@@ -441,6 +443,7 @@ fn collections_nest_reorder_and_take_families() {
     let api = api();
     let make = |name: &str, parent| {
         api.create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: name.into(),
             parent,
             rules: None,
@@ -519,6 +522,7 @@ fn collections_tags_meta_and_sets() {
     let api = api();
     let manual = api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Clients".into(),
             parent: None,
             rules: None,
@@ -535,6 +539,7 @@ fn collections_tags_meta_and_sets() {
 
     let smart = api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Variable".into(),
             parent: Some(manual.id),
             rules: Some(Filters {
@@ -1197,6 +1202,7 @@ fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
     let api = api();
     let brand = api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Brand".into(),
             parent: None,
             rules: None,
@@ -1270,4 +1276,202 @@ fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
         .code,
         ErrorCode::NotFound
     );
+}
+
+/// The faces a search with `filters` finds, sorted.
+fn faces_of(api: &Arc<dyn Api>, filters: Filters) -> fm_api::ApiResult<Vec<FaceId>> {
+    let res = api.search(SearchRequest {
+        filters,
+        page: Page {
+            offset: 0,
+            limit: 1000,
+        },
+        ..SearchRequest::default()
+    })?;
+    let mut faces: Vec<FaceId> = res.families.into_iter().flat_map(|h| h.faces).collect();
+    faces.sort_unstable();
+    Ok(faces)
+}
+
+fn smart(
+    api: &Arc<dyn Api>,
+    name: &str,
+    op: RuleOp,
+    rules: Vec<Rule>,
+) -> fm_api::ApiResult<Collection> {
+    api.create_collection(CreateCollectionRequest {
+        name: name.into(),
+        parent: None,
+        rules: None,
+        rule_group: Some(RuleGroup { op, rules }),
+    })
+}
+
+fn by(c: CollectionId) -> Filters {
+    Filters {
+        collection: Some(c),
+        ..Filters::default()
+    }
+}
+
+/// E14.2: the mock evaluates smart collections like the core: AND/OR,
+/// nested groups, rules through other collections, live counts, the date
+/// added, and loops refused.
+#[test]
+fn smart_collections_follow_the_rules() {
+    let api = api();
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let italic = faces_of(
+        &api,
+        Filters {
+            slant: Some(Slant::Italic),
+            ..Filters::default()
+        },
+    )
+    .unwrap();
+    let variable = faces_of(
+        &api,
+        Filters {
+            variable: Some(true),
+            ..Filters::default()
+        },
+    )
+    .unwrap();
+    let either = smart(
+        &api,
+        "Italic or variable",
+        RuleOp::Or,
+        vec![
+            leaf(Filters {
+                slant: Some(Slant::Italic),
+                ..Filters::default()
+            }),
+            leaf(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+        ],
+    )
+    .unwrap();
+    assert_eq!(either.rules, Some(Filters::default()));
+    let mut union: Vec<FaceId> = italic.iter().chain(&variable).copied().collect();
+    union.sort_unstable();
+    union.dedup();
+    assert_eq!(either.face_count as usize, union.len());
+    assert_eq!(faces_of(&api, by(either.id)).unwrap(), union);
+
+    let nested = smart(
+        &api,
+        "Nested",
+        RuleOp::And,
+        vec![
+            leaf(by(either.id)),
+            Rule::Group {
+                group: RuleGroup {
+                    op: RuleOp::Or,
+                    rules: vec![leaf(Filters {
+                        variable: Some(false),
+                        ..Filters::default()
+                    })],
+                },
+            },
+        ],
+    )
+    .unwrap();
+    let static_italic: Vec<FaceId> = union
+        .iter()
+        .copied()
+        .filter(|f| !variable.contains(f))
+        .collect();
+    assert_eq!(faces_of(&api, by(nested.id)).unwrap(), static_italic);
+
+    // A phase-1 rule reads as one AND group.
+    let old = api
+        .create_collection(CreateCollectionRequest {
+            name: "Old".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            rule_group: None,
+        })
+        .unwrap();
+    assert_eq!(
+        old.rule_group,
+        Some(RuleGroup::from(Filters {
+            variable: Some(true),
+            ..Filters::default()
+        }))
+    );
+
+    // Live: a tag shows at once.
+    let first = faces_of(&api, Filters::default()).unwrap()[0];
+    let tag = api
+        .tag_faces(TagFacesRequest {
+            faces: vec![first],
+            tags: vec!["later".into()],
+        })
+        .unwrap()
+        .into_iter()
+        .find(|t| t.name == "later")
+        .unwrap()
+        .id;
+    let tagged = smart(
+        &api,
+        "Tagged",
+        RuleOp::And,
+        vec![leaf(Filters {
+            tags: vec![tag],
+            ..Filters::default()
+        })],
+    )
+    .unwrap();
+    assert_eq!(tagged.face_count, 1);
+    api.untag_faces(UntagFacesRequest {
+        faces: vec![first],
+        tags: vec![tag],
+    })
+    .unwrap();
+    let listed = api.list_collections().unwrap();
+    let count = listed
+        .iter()
+        .find(|c| c.id == tagged.id)
+        .unwrap()
+        .face_count;
+    assert_eq!(count, 0);
+
+    // Date added: the sample families were added 9 to 15 days before MOCK_NOW.
+    let every = faces_of(&api, Filters::default()).unwrap();
+    let within = |days| {
+        faces_of(
+            &api,
+            Filters {
+                added_within_days: Some(days),
+                ..Filters::default()
+            },
+        )
+        .unwrap()
+    };
+    assert_eq!(within(60), every);
+    assert!(within(1).is_empty());
+
+    // Loops and unknown collections.
+    let next = CollectionId(tagged.id.0 + 1);
+    let itself = smart(&api, "Itself", RuleOp::And, vec![leaf(by(next))]).unwrap_err();
+    assert_eq!(itself.code, ErrorCode::InvalidRequest);
+    let unknown = smart(
+        &api,
+        "Unknown",
+        RuleOp::And,
+        vec![leaf(by(CollectionId(999)))],
+    );
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+    let both = api.create_collection(CreateCollectionRequest {
+        name: "Both".into(),
+        parent: None,
+        rules: Some(Filters::default()),
+        rule_group: Some(RuleGroup::from(Filters::default())),
+    });
+    assert_eq!(both.unwrap_err().code, ErrorCode::InvalidRequest);
 }

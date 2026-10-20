@@ -179,6 +179,10 @@ export type Classification =
 /**
  *  A manual collection, or a smart one when `rules` is set. Siblings are
  *  ordered by the user; `list_collections` returns them in that order.
+ * 
+ *  A smart collection's members are worked out from the index each time
+ *  they are asked for, never stored: a scan, a tag, a rating or an
+ *  activation shows in the next `search` and `list_collections`.
  */
 export type Collection = {
 	/**  Id. */
@@ -187,8 +191,18 @@ export type Collection = {
 	parent: CollectionId | null,
 	/**  Name. */
 	name: string,
-	/**  Smart collection rules; absent for a manual collection. */
+	/**
+	 *  Smart collection rules; absent for a manual collection. Set for
+	 *  every smart collection: the filters of a rule that is one AND group
+	 *  of one filter set (as phase 1 stored them), else empty filters. The
+	 *  full rule is `rule_group`.
+	 */
 	rules: Filters | null,
+	/**
+	 *  The full rule of a smart collection; absent for a manual one. A rule
+	 *  stored as plain filters reads as one AND group of them.
+	 */
+	ruleGroup?: RuleGroup | null,
 	/**  Faces in it now. */
 	faceCount: number,
 };
@@ -268,6 +282,11 @@ export type CreateCollectionRequest = {
 	parent?: CollectionId | null,
 	/**  Rules, to make it smart. */
 	rules?: Filters | null,
+	/**
+	 *  A full rule, to make it smart with AND/OR groups. Setting both this
+	 *  and `rules` is `InvalidRequest`.
+	 */
+	ruleGroup?: RuleGroup | null,
 };
 
 /**  Create a project set. */
@@ -741,8 +760,8 @@ export type FilterCounts = {
 };
 
 /**
- *  Filters; every field is optional and they combine with AND. The same
- *  value is the rule of a smart collection.
+ *  Filters; every field is optional and they combine with AND. A smart
+ *  collection's rule is made of them (`organization::RuleGroup`).
  */
 export type Filters = {
 	/**  Any of these classes. */
@@ -771,7 +790,7 @@ export type Filters = {
 	sources?: SourceId[],
 	/**  Every one of these tags. */
 	tags?: TagId[],
-	/**  Inside this collection. */
+	/**  Inside this collection; a smart collection applies its rule. */
 	collection?: CollectionId | null,
 	/**  Active (true) or inactive (false) only. */
 	active?: boolean | null,
@@ -781,6 +800,8 @@ export type Filters = {
 	minRating?: number | null,
 	/**  Health: faces with problems (true) or healthy faces (false) only. */
 	problems?: boolean | null,
+	/**  Added to the library within the last this many days (each 24 hours). */
+	addedWithinDays?: number | null,
 };
 
 /**  The file format of a font. */
@@ -1323,6 +1344,39 @@ export type Resolution = {
 
 /**  A "Keep this one" action of the Problems view, for undo. */
 export type ResolutionId = number;
+
+/**  One rule of a [`RuleGroup`]. */
+export type Rule = 
+/**
+ *  A face passes when it passes these filters, as search applies them.
+ *  `collection` may name another smart collection: its rule applies
+ *  (a rule that reaches its own collection is `InvalidRequest`).
+ */
+{ kind: "filters"; 
+/**  The filters. */
+filters: Filters } | 
+/**  A nested group. */
+{ kind: "group"; 
+/**  The group. */
+group: RuleGroup };
+
+/**
+ *  A smart collection's rule: a group of rules combined with AND or OR. A
+ *  group with no rules passes every face.
+ */
+export type RuleGroup = {
+	/**  AND or OR. */
+	op: RuleOp,
+	/**  The rules. */
+	rules?: Rule[],
+};
+
+/**  How a [`RuleGroup`] combines its rules. */
+export type RuleOp = 
+/**  A face must pass every rule. */
+"and" | 
+/**  A face must pass at least one rule. */
+"or";
 
 /**  Why a face previews other text than the sample. */
 export type SampleFallback = 
