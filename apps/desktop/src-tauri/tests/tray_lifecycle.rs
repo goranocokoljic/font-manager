@@ -300,15 +300,18 @@ fn index_family(core: &CoreApi, rel: &str, name: &str) -> FamilyId {
             mode: ImportMode::IndexInPlace,
         })
         .expect("source added");
-    let job = core
-        .scan(ScanRequest {
-            source: Some(source.id),
-        })
-        .expect("scan starts");
+    core.scan(ScanRequest {
+        source: Some(source.id),
+    })
+    .expect("scan starts");
+    // `ScanFinished` comes before the index is written; the source's
+    // `LibraryChanged` comes after, so the family can be listed from then on.
     let deadline = Instant::now() + SCAN_WAIT;
     loop {
         match events.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(Event::ScanFinished { job: j, .. }) if j == job => break,
+            Ok(Event::LibraryChanged {
+                source: Some(s), ..
+            }) if s == source.id => break,
             Ok(Event::JobFailed { error, .. }) => panic!("scan failed: {error:?}"),
             Ok(_) => {}
             Err(e) => panic!("no scan result: {e}"),
