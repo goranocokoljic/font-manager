@@ -40,7 +40,9 @@ fn variation_parts(axes: &[Axis], variations: &[AxisValue]) -> Vec<String> {
             if !given.is_finite() {
                 return None;
             }
-            let value = number(given.clamp(axis.min, axis.max));
+            // `f32::clamp` panics on an inverted range; a malformed fvar can have one.
+            let (lo, hi) = (axis.min.min(axis.max), axis.min.max(axis.max));
+            let value = number(given.max(lo).min(hi));
             (value != number(axis.default)).then_some(())?;
             Some(format!("{} {value}", tag(&axis.tag)?))
         })
@@ -217,6 +219,21 @@ mod tests {
         assert_eq!(
             css.variation_settings,
             r#"font-variation-settings: "wght" 900;"#
+        );
+    }
+
+    #[test]
+    fn an_inverted_axis_range_from_a_malformed_font_does_not_panic() {
+        let inverted = [axis("wght", 900.0, 400.0, 100.0)];
+        let css = css_values(&inverted, &[], &[at("wght", 2000.0)], &[]);
+        assert_eq!(
+            css.variation_settings,
+            r#"font-variation-settings: "wght" 900;"#
+        );
+        let css = css_values(&inverted, &[], &[at("wght", 650.0)], &[]);
+        assert_eq!(
+            css.variation_settings,
+            r#"font-variation-settings: "wght" 650;"#
         );
     }
 

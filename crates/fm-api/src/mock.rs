@@ -1759,7 +1759,8 @@ impl PreviewService for MockApi {
             .iter()
             .filter_map(|a| {
                 let v = req.variations.iter().find(|v| v.tag == a.tag)?.value;
-                let v = v.is_finite().then(|| num(v.clamp(a.min, a.max)))?;
+                let (lo, hi) = (a.min.min(a.max), a.min.max(a.max));
+                let v = v.is_finite().then(|| num(v.max(lo).min(hi)))?;
                 (v != num(a.default)).then_some(())?;
                 Some(format!("{} {v}", tag(&a.tag)?))
             })
