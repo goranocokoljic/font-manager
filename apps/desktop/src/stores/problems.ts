@@ -9,10 +9,25 @@ import type {
   ProblemKind,
   Resolution,
   ResolutionId,
+  TrashMoveStatus,
 } from '../api/types';
+import { useToastStore, type ToastAction } from './toast';
 
-/** How long the undo toast stays after "Keep this one" (E8.3: undoable from a toast for 10 s). */
-export const UNDO_WINDOW_MS = 10_000;
+/** "1 copy", "2 copies". */
+export function copies(n: number): string {
+  return n === 1 ? '1 copy' : `${n} copies`;
+}
+
+/** One line about a "Keep this one" action: what moved, what stayed. */
+export function resolutionSummary(r: Resolution): string {
+  const count = (s: TrashMoveStatus) => r.moves.filter((m) => m.status === s).length;
+  const moved = count('trashed') + count('restored');
+  const parts = [r.undone ? `Put back ${copies(moved)}.` : `Moved ${copies(moved)} to the trash.`];
+  const stayed = count('skipped') + count('failed');
+  if (stayed)
+    parts.push(`${copies(stayed)} stayed where ${stayed === 1 ? 'it was' : 'they were'}.`);
+  return parts.join(' ');
+}
 
 /** A filter of the Problems view: a group of `ProblemKind`s under one label. */
 export type ProblemGroupId =
@@ -52,7 +67,8 @@ export function groupOf(kind: ProblemKind): ProblemGroup | undefined {
  * reports it. Read again on every library, scan and activation event; the UI never polls.
  *
  * "Keep this one" (E8.3): the duplicate groups, the dry-run `plan` the user confirms,
- * the undo `toast` (gone after `UNDO_WINDOW_MS`), and the `history` of actions, each
+ * the undo in the app toast (`useToastStore`, gone after `TOAST_MS` unless the pointer
+ * or focus is on it, and kept across routes), and the `history` of actions, each
  * undoable from there for as long as it is listed.
  */
 export const useProblemsStore = defineStore('problems', () => {
@@ -63,11 +79,10 @@ export const useProblemsStore = defineStore('problems', () => {
   const history = ref<Resolution[]>([]);
   /** The dry run of a "Keep this one", waiting for the user to confirm. */
   const plan = ref<Resolution | null>(null);
-  /** The last action, offered for undo until the timer ends. */
-  const toast = ref<Resolution | null>(null);
   /** The error of the last keep or undo. */
   const actionError = ref<ApiError | null>(null);
-  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  /** The Undo of the toast this store showed last, and the action it undoes. */
+  let toastUndo: { action: ToastAction; id: ResolutionId } | undefined;
   let unsubscribe: Promise<Unsubscribe> | undefined;
   /** Bumped by every read; an answer to an older read is dropped. */
   let round = 0;
@@ -122,16 +137,24 @@ export const useProblemsStore = defineStore('problems', () => {
       void refresh();
   }
 
-  function dismissToast(): void {
-    clearTimeout(toastTimer);
-    toastTimer = undefined;
-    toast.value = null;
+  /** Offers the undo of `resolution` in the app toast. */
+  function showToast(resolution: Resolution): void {
+    const id = resolution.id;
+    const toasts = useToastStore();
+    if (id === null) {
+      toasts.show(resolutionSummary(resolution));
+      return;
+    }
+    const action: ToastAction = { label: 'Undo', run: () => undo(id) };
+    toastUndo = { action, id };
+    toasts.show(resolutionSummary(resolution), action);
   }
 
-  function showToast(resolution: Resolution): void {
-    dismissToast();
-    toast.value = resolution;
-    toastTimer = setTimeout(dismissToast, UNDO_WINDOW_MS);
+  /** Takes down the toast that offers the undo of `id`, if it is still up. */
+  function dismissToastOf(id: ResolutionId): void {
+    const toasts = useToastStore();
+    if (toastUndo?.id === id && toasts.toast?.action === toastUndo.action) toasts.dismiss();
+    if (toastUndo?.id === id) toastUndo = undefined;
   }
 
   /** Asks fm-api what keeping `keep` would move (a dry run) and holds it as the `plan`. */
@@ -170,7 +193,7 @@ export const useProblemsStore = defineStore('problems', () => {
   /** Puts the copies of an action back (from the toast or the history). */
   async function undo(id: ResolutionId): Promise<Resolution | undefined> {
     actionError.value = null;
-    if (toast.value?.id === id) dismissToast();
+    dismissToastOf(id);
     try {
       const r = await useClient().undoResolution(id);
       if (!r.undone) {
@@ -197,9 +220,8 @@ export const useProblemsStore = defineStore('problems', () => {
     await refresh();
   }
 
-  /** Stops listening to events. */
+  /** Stops listening to events. The undo toast stays: it belongs to the app, not the view. */
   async function stop(): Promise<void> {
-    dismissToast();
     const pending = unsubscribe;
     unsubscribe = undefined;
     (await pending?.catch(() => undefined))?.();
@@ -218,12 +240,10 @@ export const useProblemsStore = defineStore('problems', () => {
     duplicates,
     history,
     plan,
-    toast,
     actionError,
     planKeep,
     cancelPlan,
     confirmPlan,
     undo,
-    dismissToast,
   };
 });

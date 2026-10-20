@@ -3,19 +3,20 @@
 // activation conflicts in one list, filtered by group. The filter is in the URL
 // (`#/problems?kind=duplicates`), so the sidebar links open it filtered.
 // Duplicates are resolved here (E8.3): "Keep this one" shows the dry run, asks
-// once, moves the other copies to the trash and offers undo in a toast; the
+// once, moves the other copies to the trash and offers undo in the app toast; the
 // history below the list undoes any earlier action.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useCommandsStore } from '../stores/commands';
 import {
   PROBLEM_GROUPS,
+  copies,
   groupOf,
   problemGroup,
+  resolutionSummary as summary,
   useProblemsStore,
   type ProblemGroupId,
 } from '../stores/problems';
-import type { Resolution, TrashMoveStatus } from '../api/types';
 
 const store = useProblemsStore();
 const commands = useCommandsStore();
@@ -30,21 +31,6 @@ const showDuplicates = computed(
 );
 const planned = computed(() => store.plan?.moves.filter((m) => m.status === 'planned') ?? []);
 const notMoving = computed(() => store.plan?.moves.filter((m) => m.status !== 'planned') ?? []);
-
-function copies(n: number): string {
-  return n === 1 ? '1 copy' : `${n} copies`;
-}
-
-/** One line about an action: what moved, what stayed. */
-function summary(r: Resolution): string {
-  const count = (s: TrashMoveStatus) => r.moves.filter((m) => m.status === s).length;
-  const moved = count('trashed') + count('restored');
-  const parts = [r.undone ? `Put back ${copies(moved)}.` : `Moved ${copies(moved)} to the trash.`];
-  const stayed = count('skipped') + count('failed');
-  if (stayed)
-    parts.push(`${copies(stayed)} stayed where ${stayed === 1 ? 'it was' : 'they were'}.`);
-  return parts.join(' ');
-}
 
 // The confirm dialog takes the focus, so Enter confirms and Escape cancels.
 const confirmButton = ref<HTMLButtonElement | null>(null);
@@ -234,23 +220,6 @@ onBeforeUnmount(() => store.stop());
         </button>
       </div>
     </div>
-
-    <div class="toast-region" role="status" aria-live="polite">
-      <div v-if="store.toast" class="toast" data-testid="undo-toast">
-        <span>{{ summary(store.toast) }}</span>
-        <button
-          v-if="store.toast.id !== null"
-          type="button"
-          class="button"
-          @click="store.toast.id !== null && store.undo(store.toast.id)"
-        >
-          Undo
-        </button>
-        <button type="button" class="button" aria-label="Dismiss" @click="store.dismissToast()">
-          ×
-        </button>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -390,25 +359,6 @@ onBeforeUnmount(() => store.stop());
 }
 .button:disabled {
   opacity: 0.5;
-}
-.toast-region {
-  position: fixed;
-  inset-block-end: 16px;
-  inset-inline: 0;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-.toast {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
-  box-shadow: 0 4px 12px rgb(0 0 0 / 20%);
-  pointer-events: auto;
 }
 .sr-only {
   position: absolute;

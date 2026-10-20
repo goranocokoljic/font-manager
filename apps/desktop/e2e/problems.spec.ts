@@ -83,7 +83,7 @@ const KEPT = '/Users/demo/Fonts/Quarto-Regular.otf';
 const COPY = '/Users/demo/Downloads/Quarto-Regular.otf';
 const resolve = (page: Page) => page.getByRole('region', { name: 'Resolve duplicates' });
 const dialog = (page: Page) => page.getByRole('dialog', { name: /to the trash\?/ });
-const toast = (page: Page) => page.getByTestId('undo-toast');
+const toast = (page: Page) => page.getByTestId('toast');
 
 test('keep this one shows what will move, asks once, and undoes from the toast', async ({
   page,
@@ -137,5 +137,28 @@ test('the undo toast goes after 10 s and the history still undoes', async ({ pag
   await history.getByRole('button', { name: /^Undo/ }).click();
   await expect(history.locator('tbody tr td').nth(2)).toHaveText('Put back 1 copy.');
   await expect(history.getByRole('button', { name: /^Undo/ })).toHaveCount(0);
+  await expect(filter(page, /^Duplicates/)).toHaveText(/Duplicates\s*1/);
+});
+
+test('the undo toast stays after leaving the Problems view and while the pointer is on it', async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.goto('/#/problems?kind=duplicates');
+  await resolve(page)
+    .getByRole('button', { name: `Keep this one: ${KEPT}` })
+    .click();
+  await dialog(page).getByRole('button', { name: 'Move to trash' }).click();
+  await expect(toast(page)).toContainText('Moved 1 copy to the trash.');
+
+  await page.goto('/#/');
+  await expect(toast(page)).toBeVisible();
+  await toast(page).hover();
+  await page.clock.runFor(12_000);
+  await expect(toast(page)).toBeVisible();
+
+  await toast(page).getByRole('button', { name: 'Undo' }).click();
+  await expect(toast(page)).toBeHidden();
+  await page.goto('/#/problems?kind=duplicates');
   await expect(filter(page, /^Duplicates/)).toHaveText(/Duplicates\s*1/);
 });

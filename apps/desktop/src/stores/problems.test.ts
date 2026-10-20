@@ -3,13 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient, mockDuplicates, mockExtraProblems } from '../api/mock';
 import type { ApiError, Problem, ProblemKind } from '../api/types';
-import {
-  PROBLEM_GROUPS,
-  UNDO_WINDOW_MS,
-  groupOf,
-  problemGroup,
-  useProblemsStore,
-} from './problems';
+import { PROBLEM_GROUPS, groupOf, problemGroup, useProblemsStore } from './problems';
+import { TOAST_MS, useToastStore } from './toast';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn() }));
@@ -151,40 +146,67 @@ describe('keep this one', () => {
     expect(await client.listDuplicates()).toHaveLength(1);
   });
 
-  it('moves the other copy on confirm and offers undo in a toast for 10 s', async () => {
+  it('moves the other copy on confirm and offers undo in the app toast for 10 s', async () => {
     const store = await planned();
+    const toasts = useToastStore();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await store.confirmPlan();
     expect(store.plan).toBeNull();
-    expect(store.toast?.moves).toEqual([{ path: COPY, status: 'trashed', message: null }]);
+    expect(toasts.toast?.message).toBe('Moved 1 copy to the trash.');
+    expect(toasts.toast?.action?.label).toBe('Undo');
     expect(store.duplicates).toEqual([]);
     expect(store.counts.duplicates).toBe(0);
     expect(store.history).toHaveLength(1);
 
-    vi.advanceTimersByTime(UNDO_WINDOW_MS - 1);
-    expect(store.toast).not.toBeNull();
+    vi.advanceTimersByTime(TOAST_MS - 1);
+    expect(toasts.toast).not.toBeNull();
     vi.advanceTimersByTime(1);
-    expect(store.toast).toBeNull();
+    expect(toasts.toast).toBeNull();
   });
 
   it('undoes from the toast', async () => {
     const store = await planned();
+    const toasts = useToastStore();
     await store.confirmPlan();
-    const id = store.toast!.id!;
-    const r = await store.undo(id);
-    expect(r?.undone).toBe(true);
-    expect(store.toast).toBeNull();
+    toasts.act();
+    await vi.waitFor(() => expect(store.history[0]?.undone).toBe(true));
+    expect(toasts.toast).toBeNull();
     expect(store.duplicates).toHaveLength(1);
     expect(store.counts.duplicates).toBe(1);
-    expect(store.history[0]?.undone).toBe(true);
+  });
+
+  it('keeps the undo toast when the Problems view closes', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    await store.stop();
+    expect(toasts.toast?.action?.label).toBe('Undo');
+  });
+
+  it('takes the toast down when the same action is undone from the history', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    await store.undo(store.history[0]!.id!);
+    expect(toasts.toast).toBeNull();
+  });
+
+  it('leaves another toast up when an action is undone from the history', async () => {
+    const store = await planned();
+    const toasts = useToastStore();
+    await store.confirmPlan();
+    toasts.show('Activated 2 faces.');
+    await store.undo(store.history[0]!.id!);
+    expect(toasts.toast?.message).toBe('Activated 2 faces.');
   });
 
   it('undoes from the history after the toast is gone', async () => {
     const store = await planned();
+    const toasts = useToastStore();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await store.confirmPlan();
-    vi.advanceTimersByTime(UNDO_WINDOW_MS);
-    expect(store.toast).toBeNull();
+    vi.advanceTimersByTime(TOAST_MS);
+    expect(toasts.toast).toBeNull();
     await store.undo(store.history[0]!.id!);
     expect(store.duplicates).toHaveLength(1);
     expect(store.history[0]?.moves[0]?.status).toBe('restored');
