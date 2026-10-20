@@ -78,6 +78,39 @@ test('filter chips under the title show counts and filter the list', async ({ pa
   await expect(serbian).toBeHidden();
 });
 
+test('open-license and embedding chips filter the list; open fonts show a green badge', async ({
+  page,
+}) => {
+  const tree = await open(page);
+  const chips = page.getByRole('region', { name: 'Filters' });
+  const openGroup = chips.getByRole('group', { name: 'Open license' });
+  await expect(openGroup.getByRole('button', { name: /^Open license/ })).toHaveAccessibleName(
+    'Open license, 2 families',
+  );
+  await expect(
+    chips.getByRole('group', { name: 'Embedding' }).getByRole('button', { name: /^Restricted/ }),
+  ).toHaveAccessibleName('Restricted, 1 family');
+
+  // The badge on an open-licensed family is in the good (success) color.
+  const badge = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('open-license');
+  await expect(badge).toHaveText('Open license');
+  const [color, success] = await badge.evaluate((el) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--fm-success)';
+    document.body.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).color, want];
+  });
+  expect(color).toBe(success);
+  await expect(
+    tree.getByRole('treeitem', { name: /^Legacy Grotesk,/ }).getByTestId('open-license'),
+  ).toHaveCount(0);
+
+  await openGroup.getByRole('button', { name: /^Not open/ }).click();
+  await expect.poll(() => names(page)).toEqual(['Legacy Grotesk']);
+});
+
 test('a chip set is saved as a smart collection', async ({ page }) => {
   await open(page);
   const chips = page.getByRole('region', { name: 'Filters' });

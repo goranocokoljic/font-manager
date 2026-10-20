@@ -239,6 +239,9 @@ impl Index {
             let version = i as u32 + 1;
             let tx = self.conn.transaction()?;
             tx.execute_batch(sql)?;
+            if version == schema::OPEN_LICENSE_VERSION {
+                faces::fill_open_licenses(&tx)?;
+            }
             tx.pragma_update(None, "user_version", version)?;
             tx.commit()?;
             tracing::info!(version, "library index migrated");

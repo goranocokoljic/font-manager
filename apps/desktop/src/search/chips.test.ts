@@ -139,6 +139,39 @@ describe('filter chips', () => {
     expect(languageName(presets, 'xx')).toBe('xx');
   });
 
+  it('shows the open-license and embedding chips and toggles them', () => {
+    const licensed: FilterCounts = {
+      license: [{ value: 'web', count: 1 }],
+      openLicense: [
+        { value: true, count: 7 },
+        { value: false, count: 2 },
+      ],
+      embedding: [
+        { value: 'installable', count: 6 },
+        { value: 'previewAndPrint', count: 2 },
+        { value: 'restricted', count: 1 },
+      ],
+    };
+    const groups = chipGroups({ openLicense: true }, licensed);
+    expect(groups.map((g) => g.label)).toEqual(['License', 'Open license', 'Embedding']);
+    expect(groups[1]!.chips.map((c) => [c.label, c.count, c.selected])).toEqual([
+      ['Open license', 7, true],
+      ['Not open', 2, false],
+    ]);
+    expect(groups[2]!.chips.map((c) => [c.label, c.count, c.selected])).toEqual([
+      ['Installable', 6, false],
+      ['Preview & print', 2, false],
+      ['Restricted', 1, false],
+    ]);
+    // Each takes one value; choosing it again lets it go.
+    expect(toggleChip({}, 'embedding', 'restricted')).toEqual({ embedding: 'restricted' });
+    expect(toggleChip({ embedding: 'restricted' }, 'embedding', 'editable')).toEqual({
+      embedding: 'editable',
+    });
+    expect(toggleChip({ openLicense: true }, 'openLicense', true)).toEqual({});
+    expect(toggleChip({}, 'openLicense', false)).toEqual({ openLicense: false });
+  });
+
   it('no filter is no filter', () => {
     expect(hasFilters({})).toBe(false);
     expect(hasFilters({ formats: [], slant: null })).toBe(false);

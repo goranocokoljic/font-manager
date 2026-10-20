@@ -17,6 +17,7 @@ import { useScrollAnchor } from '../list/anchor';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowActivation } from '../list/activation';
+import { OPEN_LICENSE_BADGE, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
@@ -227,6 +228,13 @@ function onToggle(row: ListRow): void {
           </template>
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+            <span
+              v-if="item.row.family.openLicense"
+              class="open-license"
+              data-testid="open-license"
+              :title="openLicenseName(item.row.family.openLicense)"
+              >{{ OPEN_LICENSE_BADGE }}</span
+            >
           </template>
           <template v-else-if="item.row.virtual" #detail>
             <span class="count">Pinned</span>
@@ -329,6 +337,14 @@ function onToggle(row: ListRow): void {
 }
 .count {
   color: var(--fm-muted);
+}
+.open-license {
+  padding: 0 4px;
+  border: 1px solid var(--fm-success);
+  border-radius: 3px;
+  color: var(--fm-success);
+  font-size: 10.5px;
+  line-height: 14px;
 }
 .note {
   color: var(--fm-warning);

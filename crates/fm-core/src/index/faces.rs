@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Embedding, Health, Metrics, Slant};
+use fm_api::common::{Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest};
@@ -23,6 +23,7 @@ use super::{Index, db_error};
 use crate::coverage;
 use crate::error::{FmError, FmResult};
 use crate::features;
+use crate::license;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
 
@@ -32,7 +33,7 @@ SELECT face.id, face.family, face.subfamily, face.postscript_name, face.weight, 
        face.slant, face.is_variable, font_file.format, activation.mode, face.parsed,
        face.healthy, font_file.path, face.collection_index, font_file.size, font_file.hash,
        face.fstype, face.foundry, face.designer, coalesce(user_meta.favorite, 0),
-       user_meta.rating, user_meta.notes, user_meta.license_type
+       user_meta.rating, user_meta.notes, user_meta.license_type, face.open_license
 FROM face
 JOIN font_file ON font_file.id = face.file_id
 LEFT JOIN activation ON activation.face_id = face.id
@@ -63,6 +64,8 @@ struct FaceRow {
     rating: Option<u8>,
     notes: Option<String>,
     license_type: Option<LicenseType>,
+    /// The open license recognized when the face was scanned.
+    open_license: Option<OpenLicense>,
 }
 
 impl Index {
@@ -121,10 +124,10 @@ impl Index {
             designer: row.designer,
             vendor_id: text(|p| &p.vendor_id),
             license: LicenseInfo {
-                open_license: open_license(license_description.as_deref(), license_url.as_deref()),
+                open_license: row.open_license,
                 description: license_description,
                 url: license_url,
-                embedding: embedding(row.fs_type),
+                embedding: license::embedding(row.fs_type),
                 declared: row.license_type,
             },
             metrics,
@@ -272,6 +275,8 @@ fn read_row(row: &Row<'_>) -> FmResult<FaceRow> {
     let hash: Option<Vec<u8>> = row.get(15).map_err(e)?;
     let license_type: Option<LicenseType> =
         name(row.get(22).map_err(e)?).and_then(|v| serde_json::from_value(v).ok());
+    let open_license: Option<OpenLicense> =
+        name(row.get(23).map_err(e)?).and_then(|v| serde_json::from_value(v).ok());
     Ok(FaceRow {
         summary: FaceSummary {
             id,
@@ -303,6 +308,7 @@ fn read_row(row: &Row<'_>) -> FmResult<FaceRow> {
         rating: row.get(20).map_err(e)?,
         notes: row.get(21).map_err(e)?,
         license_type,
+        open_license,
     })
 }
 
@@ -312,74 +318,30 @@ fn read_metrics(file: &FaceLocation) -> FmResult<Metrics> {
     crate::preview::face_metrics(&data, file.collection_index)
 }
 
-/// The embedding permission `OS/2.fsType` grants: the least restrictive bit
-/// set wins, as the OpenType spec says; no bit is installable.
-fn embedding(fs_type: u16) -> Embedding {
-    if fs_type & 0x0008 != 0 {
-        Embedding::Editable
-    } else if fs_type & 0x0004 != 0 {
-        Embedding::PreviewAndPrint
-    } else if fs_type & 0x0002 != 0 {
-        Embedding::Restricted
-    } else {
-        Embedding::Installable
-    }
+/// An open license as `face.open_license` stores it: its `fm-api` serde name.
+pub(super) fn open_license_to_sql(license: Option<OpenLicense>) -> Option<String> {
+    license
+        .and_then(|l| serde_json::to_value(l).ok())
+        .and_then(|v| v.as_str().map(str::to_owned))
 }
 
-/// The open license a font's license description (name ID 13) or URL
-/// (name ID 14) names, when it names one.
-pub(super) fn open_license(description: Option<&str>, url: Option<&str>) -> Option<OpenLicense> {
-    let text = format!(
-        "{} {}",
-        description.unwrap_or_default(),
-        url.unwrap_or_default()
-    )
-    .to_lowercase();
-    if text.contains("open font license") || text.contains("/ofl") || text.contains("ofl.") {
-        Some(OpenLicense::Ofl)
-    } else if text.contains("apache license") || text.contains("apache.org/licenses") {
-        Some(OpenLicense::Apache)
-    } else if text.contains("ubuntu font licen") {
-        Some(OpenLicense::Ufl)
-    } else if text.contains("mit license") || text.contains("opensource.org/licenses/mit") {
-        Some(OpenLicense::Mit)
-    } else {
-        None
+/// Fills `face.open_license` of the faces indexed before it existed, from
+/// the license text their `face.parsed` holds (the V12 migration).
+pub(super) fn fill_open_licenses(tx: &rusqlite::Transaction<'_>) -> rusqlite::Result<()> {
+    let mut read = tx.prepare(
+        "SELECT id, json_extract(parsed, '$.license'), json_extract(parsed, '$.licenseUrl')
+         FROM face WHERE json_valid(parsed)",
+    )?;
+    let mut write = tx.prepare("UPDATE face SET open_license = ?2 WHERE id = ?1")?;
+    let mut rows = read.query([])?;
+    while let Some(row) = rows.next()? {
+        let id: i64 = row.get(0)?;
+        let description: Option<String> = row.get(1)?;
+        let url: Option<String> = row.get(2)?;
+        let found = license::open_license(description.as_deref(), url.as_deref());
+        if let Some(name) = open_license_to_sql(found) {
+            write.execute(rusqlite::params![id, name])?;
+        }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn embedding_takes_the_least_restrictive_bit() {
-        assert_eq!(embedding(0), Embedding::Installable);
-        assert_eq!(embedding(0x0002), Embedding::Restricted);
-        assert_eq!(embedding(0x0004), Embedding::PreviewAndPrint);
-        assert_eq!(embedding(0x0008 | 0x0002), Embedding::Editable);
-    }
-
-    #[test]
-    fn open_licenses_are_read_from_the_name_table_text() {
-        assert_eq!(
-            open_license(
-                Some(
-                    "This Font Software is licensed under the SIL Open Font License, Version 1.1."
-                ),
-                None
-            ),
-            Some(OpenLicense::Ofl)
-        );
-        assert_eq!(
-            open_license(None, Some("https://openfontlicense.org")),
-            None,
-            "a bare site name is not a license statement"
-        );
-        assert_eq!(
-            open_license(None, Some("http://www.apache.org/licenses/LICENSE-2.0")),
-            Some(OpenLicense::Apache)
-        );
-        assert_eq!(open_license(Some("All rights reserved."), None), None);
-    }
+    Ok(())
 }

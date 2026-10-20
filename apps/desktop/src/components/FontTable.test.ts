@@ -117,12 +117,17 @@ describe('FontTable', () => {
     expect(cell(inter, 'version').text()).toBe('Version 1.000');
     expect(cell(inter, 'manufacturer').text()).toBe('rsms');
     expect(cell(inter, 'location').text()).toBe('/Users/demo/Fonts');
-    expect(cell(inter, 'license').text()).toBe('OFL');
+    // The name table states the OFL: the "Open license" badge, in the good color.
+    expect(cell(inter, 'license').text()).toBe('Open license');
+    const open = cell(inter, 'license').get('.badge');
+    expect(open.classes()).toContain('good');
+    expect(open.attributes('title')).toBe('SIL Open Font License');
     expect(cell(inter, 'added').text()).toMatch(/2026/);
     // Legacy Grotesk: Type 1, no open license.
     const legacy = rows(t)[2]!;
     expect(cell(legacy, 'format').text()).toBe('T1');
     expect(cell(legacy, 'license').text()).toBe('');
+    expect(cell(legacy, 'license').find('.badge.good').exists()).toBe(false);
   });
 
   it('shows the tags of a family, A to Z, in its own Tags cell', async () => {

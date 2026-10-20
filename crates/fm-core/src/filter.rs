@@ -16,7 +16,7 @@
 use std::collections::HashMap;
 
 use fm_api::SourceId;
-use fm_api::common::{Classification, FontFormat, Slant};
+use fm_api::common::{Classification, Embedding, FontFormat, Slant};
 use fm_api::library::LicenseType;
 use fm_api::search::{FilterCount, FilterCounts, Filters};
 use fm_api::{CollectionId, TagId};
@@ -54,6 +54,10 @@ pub(crate) struct FaceFacts {
     pub rating: Option<u8>,
     /// Health is not `Ok`.
     pub problems: bool,
+    /// The embedding permission of `OS/2.fsType`.
+    pub embedding: Embedding,
+    /// The name table states an open license.
+    pub open_license: bool,
 }
 
 impl FaceFacts {
@@ -75,6 +79,8 @@ impl FaceFacts {
             favorite: false,
             rating: None,
             problems: false,
+            embedding: Embedding::Installable,
+            open_license: false,
         }
     }
 }
@@ -99,6 +105,8 @@ pub(crate) enum Dim {
     Favorite,
     Rating,
     Problems,
+    Embedding,
+    OpenLicense,
     /// Language or character coverage: checked against a [`Need`](crate::coverage::Need) built
     /// once per search, so [`failed`] leaves it to [`failed_supports`].
     Supports,
@@ -179,6 +187,14 @@ pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u
             Dim::Problems,
             f.problems.is_none_or(|p| p == facts.problems),
         ),
+        (
+            Dim::Embedding,
+            f.embedding.is_none_or(|e| e == facts.embedding),
+        ),
+        (
+            Dim::OpenLicense,
+            f.open_license.is_none_or(|o| o == facts.open_license),
+        ),
     ];
     checks
         .iter()
@@ -220,6 +236,9 @@ pub(crate) enum Value {
     Favorite(bool),
     /// A `min_rating` the face's rating reaches (1–5).
     Rating(u8),
+    /// An [`EMBEDDINGS`] position.
+    Embedding(u8),
+    OpenLicense(bool),
 }
 
 impl Value {
@@ -240,11 +259,14 @@ impl Value {
             Self::Tag(_) => Dim::Tags,
             Self::Favorite(_) => Dim::Favorite,
             Self::Rating(_) => Dim::Rating,
+            Self::Embedding(_) => Dim::Embedding,
+            Self::OpenLicense(_) => Dim::OpenLicense,
         }
     }
 }
 
-/// Every class, format, slant and license type, in the order counts list them.
+/// Every class, format, slant, license type and embedding permission, in
+/// the order counts list them.
 const CLASSES: [Classification; 7] = [
     Classification::Serif,
     Classification::Sans,
@@ -274,6 +296,12 @@ const LICENSES: [LicenseType; 6] = [
     LicenseType::PersonalOnly,
     LicenseType::Unknown,
 ];
+const EMBEDDINGS: [Embedding; 4] = [
+    Embedding::Installable,
+    Embedding::Editable,
+    Embedding::PreviewAndPrint,
+    Embedding::Restricted,
+];
 
 /// The `min_rating` values counted.
 const RATINGS: [u8; 5] = [1, 2, 3, 4, 5];
@@ -292,7 +320,7 @@ fn weight_span(class: u16) -> (u16, u16) {
 
 /// Every value `face` can be counted under.
 pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
-    let mut out = Vec::with_capacity(24 + facts.features.len() + facts.tags.len());
+    let mut out = Vec::with_capacity(26 + facts.features.len() + facts.tags.len());
     out.extend(facts.classification.map(Value::Classification));
     for class in WEIGHTS {
         let (lo, hi) = weight_span(class);
@@ -333,6 +361,14 @@ pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
             .filter(|r| *r <= rating)
             .map(Value::Rating),
     );
+    out.extend(
+        EMBEDDINGS
+            .iter()
+            .position(|e| *e == facts.embedding)
+            .and_then(|i| u8::try_from(i).ok())
+            .map(Value::Embedding),
+    );
+    out.push(Value::OpenLicense(facts.open_license));
     out
 }
 
@@ -463,12 +499,24 @@ impl<'a> Tally<'a> {
             tags: list(tags, Value::Tag, &count),
             favorite: list(bools, Value::Favorite, &count),
             min_rating: list(RATINGS, Value::Rating, &count),
+            embedding: list(0..EMBEDDINGS.len(), embedding_value, &count)
+                .into_iter()
+                .map(|c| FilterCount {
+                    value: EMBEDDINGS[c.value],
+                    count: c.count,
+                })
+                .collect(),
+            open_license: list(bools, Value::OpenLicense, &count),
         }
     }
 }
 
 fn license_value(i: usize) -> Value {
     Value::License(u8::try_from(i).unwrap_or(u8::MAX))
+}
+
+fn embedding_value(i: usize) -> Value {
+    Value::Embedding(u8::try_from(i).unwrap_or(u8::MAX))
 }
 
 #[cfg(test)]

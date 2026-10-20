@@ -39,6 +39,8 @@ fn rich() -> FaceFacts {
         favorite: true,
         rating: Some(4),
         problems: true,
+        embedding: Embedding::PreviewAndPrint,
+        open_license: true,
     }
 }
 
@@ -136,6 +138,16 @@ fn each_filter() -> Vec<(Filters, Filters, Dim)> {
             pass(|f| f.problems = Some(false)),
             Dim::Problems,
         ),
+        (
+            pass(|f| f.embedding = Some(Embedding::PreviewAndPrint)),
+            pass(|f| f.embedding = Some(Embedding::Installable)),
+            Dim::Embedding,
+        ),
+        (
+            pass(|f| f.open_license = Some(true)),
+            pass(|f| f.open_license = Some(false)),
+            Dim::OpenLicense,
+        ),
     ]
 }
 
@@ -209,6 +221,8 @@ fn merge(into: &mut Filters, from: &Filters) {
     into.favorite = from.favorite.or(into.favorite);
     into.min_rating = from.min_rating.or(into.min_rating);
     into.problems = from.problems.or(into.problems);
+    into.embedding = from.embedding.or(into.embedding);
+    into.open_license = from.open_license.or(into.open_license);
 }
 
 #[test]
@@ -532,4 +546,60 @@ fn a_weight_class_counts_the_weights_that_round_to_it() {
     );
     assert_eq!(count(&counts.weight, &400), 1);
     assert_eq!(count(&counts.weight, &300), 0);
+}
+
+#[test]
+fn every_embedding_permission_is_counted() {
+    for embedding in EMBEDDINGS {
+        let facts = FaceFacts {
+            embedding,
+            ..FaceFacts::new(SourceId(1))
+        };
+        let counts = tally(&Filters::default(), &[vec![(upright(400), facts)]]);
+        assert_eq!(count(&counts.embedding, &embedding), 1, "{embedding:?}");
+    }
+}
+
+#[test]
+fn embedding_and_open_license_counts_leave_out_their_own_filter() {
+    // Family 1: an open-licensed installable face and a restricted one;
+    // family 2: one restricted face with no open license.
+    let face = |embedding, open_license| FaceFacts {
+        embedding,
+        open_license,
+        ..FaceFacts::new(SourceId(1))
+    };
+    let families = vec![
+        vec![
+            (upright(400), face(Embedding::Installable, true)),
+            (upright(700), face(Embedding::Restricted, false)),
+        ],
+        vec![(upright(400), face(Embedding::Restricted, false))],
+    ];
+    let counts = tally(&Filters::default(), &families);
+    assert_eq!(count(&counts.open_license, &true), 1);
+    assert_eq!(count(&counts.open_license, &false), 2);
+    assert_eq!(count(&counts.embedding, &Embedding::Restricted), 2);
+    assert_eq!(count(&counts.embedding, &Embedding::Installable), 1);
+    assert_eq!(count(&counts.embedding, &Embedding::Editable), 0);
+
+    // Open license chosen: embedding counts inside it, open license still
+    // counts both values.
+    let open = Filters {
+        open_license: Some(true),
+        ..Filters::default()
+    };
+    let counts = tally(&open, &families);
+    assert_eq!(count(&counts.embedding, &Embedding::Installable), 1);
+    assert_eq!(count(&counts.embedding, &Embedding::Restricted), 0);
+    assert_eq!(count(&counts.open_license, &false), 2);
+
+    // Restricted chosen: only family 1's restricted face has no open license.
+    let restricted = Filters {
+        embedding: Some(Embedding::Restricted),
+        ..Filters::default()
+    };
+    let counts = tally(&restricted, &families);
+    assert_eq!(count(&counts.open_license, &true), 0);
+    assert_eq!(count(&counts.open_license, &false), 2);
 }

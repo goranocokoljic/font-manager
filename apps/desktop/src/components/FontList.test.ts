@@ -128,6 +128,18 @@ describe('FontList virtualization', () => {
 });
 
 describe('FontList families and styles', () => {
+  it('a family whose font states an open license shows the "Open license" badge', async () => {
+    const list = await listOf({});
+    const row = (name: string) =>
+      items(list).find((r) => r.attributes('aria-label')?.startsWith(`${name},`))!;
+    const badge = row('Inter').get('[data-testid="open-license"]');
+    expect(badge.text()).toBe('Open license');
+    expect(badge.classes()).toContain('open-license');
+    expect(badge.attributes('title')).toBe('SIL Open Font License');
+    expect(row('Legacy Grotesk').find('[data-testid="open-license"]').exists()).toBe(false);
+    list.unmount();
+  });
+
   it('a family row previews its first style and says how many it has', async () => {
     const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
     const row = list.get(`[data-key="family:${EXTRA_ID_BASE}"]`);

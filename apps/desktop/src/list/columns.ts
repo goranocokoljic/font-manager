@@ -212,13 +212,27 @@ const DECLARED: Record<LicenseType, string> = {
   unknown: 'Unknown',
 };
 
-const OPEN: Record<OpenLicense, string> = { ofl: 'OFL', apache: 'Apache', ufl: 'UFL', mit: 'MIT' };
+/** The badge of a family whose name table states an open license; shown in the good color. */
+export const OPEN_LICENSE_BADGE = 'Open license';
 
-/** The license badge: what the user declared, else the recognized open license. */
-export function licenseBadge(f: Pick<FamilySummary, 'declaredLicense' | 'openLicense'>): string {
-  if (f.declaredLicense) return DECLARED[f.declaredLicense];
-  if (f.openLicense) return OPEN[f.openLicense];
-  return '';
+const OPEN: Record<OpenLicense, string> = {
+  ofl: 'SIL Open Font License',
+  apache: 'Apache License 2.0',
+  ufl: 'Ubuntu Font Licence',
+  mit: 'MIT License',
+};
+
+/** The full name of an open license, for the badge's tooltip; '' for none. */
+export function openLicenseName(l: OpenLicense | null | undefined): string {
+  return l ? OPEN[l] : '';
+}
+
+/** The license badges: what the user declared, then "Open license" when the font states one. */
+export function licenseBadges(f: Pick<FamilySummary, 'declaredLicense' | 'openLicense'>): string[] {
+  const badges: string[] = [];
+  if (f.declaredLicense) badges.push(DECLARED[f.declaredLicense]);
+  if (f.openLicense) badges.push(OPEN_LICENSE_BADGE);
+  return badges;
 }
 
 export function weightRangeText(r: WeightRange | null | undefined): string {

@@ -38,13 +38,13 @@ use fm_api::search::{
 use fm_api::{CollectionId, FaceId, FamilyId, SourceId, TagId};
 use rusqlite::OptionalExtension;
 
-use super::faces::open_license;
 use super::files::format_from_sql;
 use super::{Index, db_error};
 use crate::coverage::{CodePointSet, Fit, Need};
 use crate::error::{FmError, FmResult};
 use crate::filter::{FaceFacts, Slots, Tag, Tally, failed, failed_supports, tag, values};
 use crate::grouping::{family_key, slant_rank};
+use crate::license;
 use crate::search::{FAMILY, FIELD_COUNT, FOUNDRY, FaceText, Query};
 
 /// Every searchable face with what its family summary needs.
@@ -61,8 +61,7 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
             THEN json_extract(face.parsed, '$.loclLanguages') END,
        CASE WHEN typeof(font_file.path) = 'text' THEN font_file.path END,
        CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.version') END,
-       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.license') END,
-       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.licenseUrl') END
+       face.open_license, face.fstype
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -409,6 +408,7 @@ impl Index {
         let mut modes = Names::new(name_of::<ActivationMode>);
         let mut formats = Names::new(|f| format_from_sql(f).ok().flatten());
         let mut licenses = Names::new(name_of::<LicenseType>);
+        let mut open_licenses = Names::new(name_of::<OpenLicense>);
         while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
             let text = |i: usize| {
                 row.get_ref(i)
@@ -436,6 +436,7 @@ impl Index {
             let active = text(14)?.and_then(|m| modes.get(m));
             let mut features: Vec<Tag> = text(18)?.map(feature_tags).unwrap_or_default();
             features.sort_unstable();
+            let open_license = text(28)?.and_then(|l| open_licenses.get(l));
             let facts = FaceFacts {
                 classification: None,
                 is_variable,
@@ -451,6 +452,8 @@ impl Index {
                 favorite: row.get(20).map_err(|e| db_error(&e))?,
                 rating: row.get(21).map_err(|e| db_error(&e))?,
                 problems: !row.get::<_, bool>(23).map_err(|e| db_error(&e))?,
+                embedding: license::embedding(row.get(29).map_err(|e| db_error(&e))?),
+                open_license: open_license.is_some(),
             };
             let face_text = FaceText::new(
                 fields,
@@ -484,7 +487,7 @@ impl Index {
                     .and_then(|path| std::path::Path::new(path).parent())
                     .map(|dir| dir.display().to_string()),
                 version: text(27)?.map(str::to_owned),
-                open_license: open_license(text(28)?, text(29)?),
+                open_license,
             });
         }
         Ok(out)

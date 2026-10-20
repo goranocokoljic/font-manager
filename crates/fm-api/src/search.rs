@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::{Classification, FontFormat, Page, Slant};
+use crate::common::{Classification, Embedding, FontFormat, Page, Slant};
 use crate::library::{FaceSummary, FamilySummary, LicenseType};
 use crate::{ApiResult, CollectionId, FaceId, SourceId, TagId};
 
@@ -85,6 +85,12 @@ pub struct Filters {
     pub min_rating: Option<u8>,
     /// Health: faces with problems (true) or healthy faces (false) only.
     pub problems: Option<bool>,
+    /// Embedding permission (`OS/2.fsType`), exact.
+    #[serde(default)]
+    pub embedding: Option<Embedding>,
+    /// Faces whose name table states an open license (true) or none (false) only.
+    #[serde(default)]
+    pub open_license: Option<bool>,
 }
 
 /// A search. An empty query with filters lists everything that passes them.
@@ -190,6 +196,12 @@ pub struct FilterCounts {
     pub favorite: Vec<FilterCount<bool>>,
     /// Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4.
     pub min_rating: Vec<FilterCount<u8>>,
+    /// Per embedding permission.
+    #[serde(default)]
+    pub embedding: Vec<FilterCount<Embedding>>,
+    /// With an open license (true) and without (false).
+    #[serde(default)]
+    pub open_license: Vec<FilterCount<bool>>,
 }
 
 /// How well one face covers some languages or text.
