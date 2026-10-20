@@ -59,7 +59,7 @@ use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
     FamilyId, JobId, ResolutionId, SetId, SourceId, VirtualStyleId,
 };
-use fm_platform::{AppPaths, FontActivator, Os, Trash};
+use fm_platform::{AppPaths, FontActivator, Os, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
@@ -103,6 +103,9 @@ pub struct CoreApi {
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
     next_job: AtomicU32,
+    /// What the shell found when it made the tray item; `None` before (and
+    /// without a shell). Feeds the platform notes of [`AppInfo`].
+    tray: Mutex<Option<TraySupport>>,
 }
 
 impl std::fmt::Debug for CoreApi {
@@ -160,7 +163,14 @@ impl CoreApi {
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
+            tray: Mutex::new(None),
         }
+    }
+
+    /// Records whether the shell could make a tray item, for the platform
+    /// notes (Settings → About).
+    pub fn set_tray_support(&self, support: TraySupport) {
+        *lock(&self.tray) = Some(support);
     }
 
     /// The same API, moving "Keep this one" copies through `trash`.
@@ -375,6 +385,10 @@ impl LibraryService for CoreApi {
                 Os::MacOs => Platform::Macos,
                 Os::Linux => Platform::Linux,
             },
+            platform_notes: crate::lifecycle::platform_notes(
+                Os::current(),
+                lock(&self.tray).as_ref(),
+            ),
         })
     }
 

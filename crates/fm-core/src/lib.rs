@@ -20,6 +20,7 @@ pub mod font_file;
 pub mod glyphs;
 pub mod grouping;
 pub mod index;
+pub mod lifecycle;
 pub mod logging;
 mod parallel;
 pub mod parser;

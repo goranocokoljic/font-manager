@@ -30,11 +30,12 @@ use fm_api::{
 };
 use fm_core::index::Opened;
 use fm_core::{CoreApi, SettingsStore};
-use fm_platform::{AppPaths, FontActivator, MockActivator};
+use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
 
 pub mod help;
+pub mod tray;
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
@@ -63,6 +64,8 @@ pub struct AppState {
     api: Arc<dyn Api>,
     settings: Option<Arc<dyn SettingsService + Send + Sync>>,
     backend: Backend,
+    core: Option<Arc<CoreApi>>,
+    tray: Option<Arc<dyn Tray>>,
 }
 
 impl AppState {
@@ -72,16 +75,41 @@ impl AppState {
             api,
             settings: None,
             backend: Backend::Other,
+            core: None,
+            tray: None,
         }
     }
 
     /// Serves the real library.
     pub fn core(api: Arc<CoreApi>) -> Self {
         Self {
-            api,
+            api: Arc::clone(&api) as Arc<dyn Api>,
             settings: None,
             backend: Backend::Core,
+            core: Some(api),
+            tray: None,
         }
+    }
+
+    /// Shows a tray item from `tray` when the app starts ([`tray::install`]).
+    /// Without one (tests), closing the window quits.
+    #[must_use]
+    pub fn with_tray(mut self, tray: Arc<dyn Tray>) -> Self {
+        self.tray = Some(tray);
+        self
+    }
+
+    /// The settings now, read synchronously (the close handler); the
+    /// defaults when they cannot be read.
+    pub fn current_settings(&self) -> Settings {
+        let read = match &self.settings {
+            Some(store) => store.get_settings(),
+            None => self.api.get_settings(),
+        };
+        read.unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "settings not read; using the defaults");
+            Settings::default()
+        })
     }
 
     /// Which implementation the commands talk to.
@@ -480,8 +508,21 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     // Subscribe before the first command can run, so no event is missed; a
     // thread forwards the stream to the webview until the API drops it.
     let events = state.api.subscribe();
+    let tray_api = Arc::clone(&state.api);
+    let tray = state.tray.clone();
+    let core = state.core.clone();
     builder
         .manage(state)
+        .manage(tray::TrayState::new(TraySupport::Unavailable(
+            "no tray item yet".into(),
+        )))
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event
+                && tray::on_close_requested(window) == fm_core::lifecycle::CloseAction::HideToTray
+            {
+                api.prevent_close();
+            }
+        })
         .register_asynchronous_uri_scheme_protocol(FONT_SCHEME, |ctx, request, responder| {
             let api = Arc::clone(&ctx.app_handle().state::<AppState>().api);
             let path = request.uri().path().to_owned();
@@ -491,6 +532,14 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             });
         })
         .setup(move |app| {
+            // The tray is made once the event loop runs (macOS needs that).
+            if let Some(tray) = tray {
+                let support = tray::install(app.handle(), tray.as_ref(), tray_api);
+                if let Some(core) = &core {
+                    core.set_tray_support(support.clone());
+                }
+                app.state::<tray::TrayState>().set(support);
+            }
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("fm-events".into())
@@ -614,6 +663,7 @@ pub fn run() {
     };
     let builder =
         help::with_help_menu(tauri::Builder::default().plugin(tauri_plugin_dialog::init()));
+    let state = state.with_tray(fm_platform::tray::system());
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(e) => {
@@ -623,16 +673,23 @@ pub fn run() {
             std::process::exit(1);
         }
     };
+    // Every quit ends here: the tray's Quit, the app menu's Quit, closing the
+    // window without a tray item.
     app.run(move |_, event| {
         if let RunEvent::Exit = event {
-            // Session fonts end with the app (ADR 0008).
-            if let Some(core) = &core
-                && let Err(e) = core.shutdown()
-            {
-                tracing::warn!(error = %e, "session fonts not deactivated at exit");
-            }
+            on_exit(core.as_deref());
             // `run` may exit the process without returning: flush the log now.
             drop(startup.take());
         }
     });
+}
+
+/// What the app does as it quits: session fonts end with the app (ADR 0008);
+/// permanent ones stay.
+pub fn on_exit(core: Option<&CoreApi>) {
+    if let Some(core) = core
+        && let Err(e) = core.shutdown()
+    {
+        tracing::warn!(error = %e, "session fonts not deactivated at exit");
+    }
 }

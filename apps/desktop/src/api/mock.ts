@@ -55,6 +55,11 @@ export const mockAppInfo: AppInfo = {
   version: '0.1.0',
   apiVersion: API_VERSION,
   platform: 'linux',
+  // What fm-core says on a Linux desktop without a StatusNotifier host (lifecycle.rs).
+  platformNotes: [
+    'This desktop shows no tray items (no StatusNotifier host), so closing the window quits Font Manager and ends session activations. KDE Plasma and GNOME with the AppIndicator extension show the tray item.',
+    'Apps that are already running can take up to 30 seconds to see a font you activate; some see it only after a restart.',
+  ],
 };
 
 const ofl = {
@@ -228,6 +233,7 @@ export const defaultSettings: FullSettings = {
   cacheLimitMb: 1024,
   rescanIntervalMinutes: 60,
   reactivateOnLaunch: false,
+  keepInTray: true,
 };
 
 /** The app folders of the Rust mock. */

@@ -917,6 +917,7 @@ impl LibraryService for MockApi {
             } else {
                 Platform::Linux
             },
+            platform_notes: Vec::new(),
         })
     }
 
