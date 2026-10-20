@@ -25,6 +25,8 @@ import type {
   Family,
   FamilyId,
   FamilySummary,
+  GlyphPage,
+  GlyphsRequest,
   JobId,
   KeepCopyRequest,
   LanguagePreset,
@@ -71,6 +73,8 @@ export type Unsubscribe = () => void;
 export interface FmClient {
   getAppInfo(): Promise<AppInfo>;
   getFace(face: FaceId): Promise<FaceDetail>;
+  /** One page of a face's glyph map: its characters by Unicode block, or the ones a search finds. */
+  listGlyphs(req: GlyphsRequest): Promise<GlyphPage>;
   listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
   getFamily(family: FamilyId): Promise<Family>;
   /** Free text and filters, grouped by family, with the count of every filter value. */
@@ -143,6 +147,7 @@ export interface FmClient {
 export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
+  listGlyphs: (req) => invoke<GlyphPage>('list_glyphs', { req }),
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
   search: (req) => invoke<SearchResponse>('search', { req }),

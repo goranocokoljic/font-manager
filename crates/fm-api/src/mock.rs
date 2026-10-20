@@ -16,17 +16,17 @@ use crate::activation::{
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
-    NamedInstance, Paged, Slant,
+    NamedInstance, Page, Paged, Slant,
 };
 use crate::export::{
     ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest, WebFormat,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
-    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, ImportMode, KeepCopyRequest,
-    LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind,
-    Resolution, ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove,
-    TrashMoveStatus,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphInfo,
+    GlyphPage, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicenseType,
+    ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution, ScanRequest,
+    SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -815,6 +815,47 @@ impl State {
     }
 }
 
+/// The blocks the mock's sample characters fall in: name, first, last.
+fn mock_block(cp: u32) -> (&'static str, u32, u32) {
+    const BLOCKS: &[(&str, u32, u32)] = &[
+        ("Basic Latin", 0x0000, 0x007F),
+        ("Latin-1 Supplement", 0x0080, 0x00FF),
+        ("Latin Extended-A", 0x0100, 0x017F),
+        ("Cyrillic", 0x0400, 0x04FF),
+        ("General Punctuation", 0x2000, 0x206F),
+        ("CJK Unified Ideographs", 0x4E00, 0x9FFF),
+    ];
+    BLOCKS
+        .iter()
+        .copied()
+        .find(|(_, first, last)| (*first..=*last).contains(&cp))
+        .unwrap_or(("No block", cp, cp))
+}
+
+fn mock_glyph_name(c: char) -> String {
+    match c {
+        'a'..='z' | 'A'..='Z' => c.to_string(),
+        _ => format!("uni{:04X}", c as u32),
+    }
+}
+
+fn mock_glyph_matches(g: &GlyphInfo, query: &str) -> bool {
+    let mut chars = query.chars();
+    if let (Some(c), None) = (chars.next(), chars.next()) {
+        return g.code_point == c as u32;
+    }
+    let hex = query
+        .strip_prefix("U+")
+        .or_else(|| query.strip_prefix("u+"))
+        .unwrap_or(query);
+    if u32::from_str_radix(hex, 16).is_ok_and(|cp| cp == g.code_point) {
+        return true;
+    }
+    g.name
+        .as_deref()
+        .is_some_and(|n| n.to_lowercase().contains(&query.to_lowercase()))
+}
+
 impl LibraryService for MockApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
         Ok(AppInfo {
@@ -1155,6 +1196,55 @@ impl LibraryService for MockApi {
 
     fn list_resolutions(&self) -> ApiResult<Vec<Resolution>> {
         Ok(self.state().resolutions.iter().rev().cloned().collect())
+    }
+
+    /// The face's sample characters in the few blocks the mock knows; names
+    /// follow the `uniXXXX` convention. The search is a simple stand-in for
+    /// fm-core's: one character, `U+` or bare hex, or a name substring.
+    fn list_glyphs(&self, req: GlyphsRequest) -> ApiResult<GlyphPage> {
+        let st = self.state();
+        let face = st.face(req.face)?;
+        let query = req.query.as_deref().map(str::trim).unwrap_or_default();
+        let all: Vec<GlyphInfo> = face
+            .chars
+            .iter()
+            .zip(1u32..)
+            .map(|(&c, glyph_id)| GlyphInfo {
+                code_point: c as u32,
+                glyph_id,
+                name: Some(mock_glyph_name(c)),
+                block: mock_block(c as u32).0.into(),
+            })
+            .filter(|g| req.block.as_ref().is_none_or(|b| *b == g.block))
+            .filter(|g| query.is_empty() || mock_glyph_matches(g, query))
+            .collect();
+        let mut blocks: Vec<GlyphBlock> = Vec::new();
+        for g in &all {
+            match blocks.last_mut() {
+                Some(b) if b.name == g.block => b.count += 1,
+                _ => {
+                    let (name, first, last) = mock_block(g.code_point);
+                    blocks.push(GlyphBlock {
+                        name: name.into(),
+                        first,
+                        last,
+                        count: 1,
+                    });
+                }
+            }
+        }
+        let Page { offset, limit } = req.page;
+        Ok(GlyphPage {
+            total: all.len() as u32,
+            items: all
+                .into_iter()
+                .skip(offset as usize)
+                .take(limit.min(500) as usize)
+                .collect(),
+            blocks,
+            health: Health::Ok,
+            unicode_version: "17.0.0".into(),
+        })
     }
 
     fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution> {

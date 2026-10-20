@@ -6,7 +6,9 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{Embedding, FontFormat, Health, Page};
-use fm_api::library::{FamilyActivation, FamilySort, OpenLicense, ProblemKind, TrashMoveStatus};
+use fm_api::library::{
+    FamilyActivation, FamilySort, GlyphsRequest, OpenLicense, ProblemKind, TrashMoveStatus,
+};
 use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
 
@@ -937,4 +939,43 @@ fn health_of_a_broken_face_reaches_the_family() {
             detail.face.health
         );
     }
+}
+
+#[test]
+fn the_glyph_map_reads_the_face_file_by_block_and_search() {
+    let (lib, _, _) = Lib::scanned("api-glyphs");
+    let archivo = lib.family("Archivo");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let all = lib
+        .api
+        .list_glyphs(GlyphsRequest {
+            face,
+            block: None,
+            query: None,
+            page: Page::default(),
+        })
+        .expect("glyphs");
+    assert_eq!(all.health, Health::Ok);
+    assert_eq!(all.items.len(), 100, "the default page");
+    assert!(all.total > 100);
+    assert_eq!(all.blocks.iter().map(|b| b.count).sum::<u32>(), all.total);
+    let found = lib
+        .api
+        .list_glyphs(GlyphsRequest {
+            face,
+            block: Some("Basic Latin".into()),
+            query: Some("U+0041".into()),
+            page: Page::default(),
+        })
+        .expect("search");
+    assert_eq!(found.total, 1);
+    assert_eq!(found.items[0].code_point, 0x41);
+    assert_eq!(found.items[0].name.as_deref(), Some("A"));
+    let unknown = lib.api.list_glyphs(GlyphsRequest {
+        face: FaceId(9999),
+        block: None,
+        query: None,
+        page: Page::default(),
+    });
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
 }

@@ -1,0 +1,440 @@
+<script setup lang="ts">
+// The Glyphs tab: every character the selected face maps, drawn by the webview
+// from the face's own file (the font asset protocol), under Unicode block
+// headings. fm-core lists the characters and runs the search; this tab only lays
+// them out. The grid is virtualized: only the rows on screen exist, so a CJK face
+// with 30k+ characters scrolls like a Latin one, and pages load as rows appear.
+//
+// Keyboard (WAI-ARIA grid): the grid holds focus and points at the cursor cell
+// with aria-activedescendant; arrow keys move by cell and row, Home/End to the
+// ends, Enter or a click selects the glyph.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
+import type { GlyphInfo } from '../api/types';
+import {
+  GLYPH_CELL,
+  codePointLabel,
+  glyphColumns,
+  glyphLayout,
+  moveCursor,
+  rowOf,
+} from '../glyphs/layout';
+import { scrollToShow, windowRange } from '../list/virtual';
+import { useFaceLoader } from '../preview/faceLoader';
+import { useGlyphsStore } from '../stores/glyphs';
+import { useSelectionStore } from '../stores/selection';
+
+const props = withDefaults(
+  defineProps<{
+    /** Rows rendered beyond each edge of the viewport. */
+    overscan?: number;
+  }>(),
+  { overscan: 3 },
+);
+
+/** Viewport size before the first measurement (and where there is no layout). */
+const FALLBACK_HEIGHT = 384;
+const FALLBACK_WIDTH = 288;
+
+const selection = useSelectionStore();
+const glyphs = useGlyphsStore();
+const loader = useFaceLoader();
+
+const faceId = computed(() => selection.detail?.face.id ?? null);
+
+// The face's font, registered with the webview while the tab shows it.
+const family = ref<string | null>(null);
+let held: number | null = null;
+function hold(id: number | null): void {
+  if (held !== null) loader.release(held);
+  held = id;
+  family.value = null;
+  if (id === null) return;
+  loader.acquire(id).then(
+    (name) => {
+      if (held === id) family.value = name;
+    },
+    () => undefined,
+  );
+}
+watch(
+  faceId,
+  (id) => {
+    hold(id);
+    if (id !== null) void glyphs.open(id);
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => hold(null));
+
+const viewport = ref<HTMLElement | null>(null);
+const scrollTop = ref(0);
+const height = ref(FALLBACK_HEIGHT);
+const width = ref(FALLBACK_WIDTH);
+let observer: ResizeObserver | undefined;
+
+function measure(): void {
+  const el = viewport.value;
+  if (!el) return;
+  scrollTop.value = el.scrollTop;
+  if (el.clientHeight > 0) height.value = el.clientHeight;
+  if (el.clientWidth > 0) width.value = el.clientWidth;
+}
+onMounted(() => {
+  measure();
+  if (typeof ResizeObserver !== 'undefined' && viewport.value) {
+    observer = new ResizeObserver(measure);
+    observer.observe(viewport.value);
+  }
+});
+onBeforeUnmount(() => observer?.disconnect());
+
+const columns = computed(() => glyphColumns(width.value));
+const layout = computed(() => glyphLayout(glyphs.blocks, columns.value));
+const range = computed(() =>
+  windowRange(scrollTop.value, height.value, GLYPH_CELL, props.overscan, layout.value.rows.length),
+);
+
+/** The cursor: a list index, or -1 before the user moves into the grid. */
+const cursor = ref(-1);
+const cellId = (i: number) => `fm-glyph-${i}`;
+
+const visible = computed(() =>
+  layout.value.rows.slice(range.value.start, range.value.end).map((row, k) => {
+    const r = range.value.start + k;
+    const cells =
+      row.kind === 'cells'
+        ? Array.from({ length: row.count }, (_, c) => {
+            const index = row.start + c;
+            return { index, glyph: glyphs.item(index) };
+          })
+        : [];
+    return { r, row, cells };
+  }),
+);
+
+// Load the pages of the rows on screen.
+watchEffect(() => {
+  const rows = layout.value.rows.slice(range.value.start, range.value.end);
+  const first = rows[0];
+  const last = rows[rows.length - 1];
+  if (!first || !last) return;
+  const end = last.kind === 'cells' ? last.start + last.count : last.start + 1;
+  void glyphs.ensure(first.start, end);
+});
+
+/** "U+0416 uni0416": code point and name, for screen readers and tooltips. */
+function cellLabel(g: GlyphInfo | undefined, index: number): string {
+  if (!g) return `Character ${index + 1}, loading`;
+  return `${codePointLabel(g.codePoint)} ${g.name ?? '(no glyph name)'}`;
+}
+const charOf = (g: GlyphInfo) => String.fromCodePoint(g.codePoint);
+
+const activeId = computed(() => {
+  const i = cursor.value;
+  if (i < 0) return undefined;
+  const r = rowOf(layout.value, i);
+  return r >= range.value.start && r < range.value.end ? cellId(i) : undefined;
+});
+
+/** Scrolls so list index `i` is on screen, and so rendered for aria-activedescendant. */
+async function reveal(i: number): Promise<void> {
+  const el = viewport.value;
+  const r = rowOf(layout.value, i);
+  if (!el || r < 0) return;
+  // Show a block's first row with its heading.
+  const row = layout.value.rows[r - 1]?.kind === 'heading' ? r - 1 : r;
+  const top = scrollToShow(row, GLYPH_CELL, el.scrollTop, height.value);
+  const bottom = scrollToShow(r, GLYPH_CELL, top, height.value);
+  if (bottom !== el.scrollTop) el.scrollTop = bottom;
+  measure();
+  await nextTick();
+}
+
+function choose(index: number): void {
+  cursor.value = index;
+  const g = glyphs.item(index);
+  if (g) glyphs.select(g);
+}
+
+async function onKeyDown(e: KeyboardEvent): Promise<void> {
+  if (e.key === 'Enter' || e.key === ' ') {
+    if (cursor.value >= 0) {
+      e.preventDefault();
+      choose(cursor.value);
+    }
+    return;
+  }
+  const next = moveCursor(layout.value, Math.max(cursor.value, 0), e.key);
+  if (next === null) return;
+  e.preventDefault();
+  cursor.value = cursor.value < 0 && e.key !== 'Home' && e.key !== 'End' ? 0 : next;
+  await reveal(cursor.value);
+}
+
+async function onClick(index: number): Promise<void> {
+  choose(index);
+  viewport.value?.focus();
+}
+
+// A new list (a search, a block, a face): back to the top, or to the glyph a
+// search selected.
+watch(
+  () => glyphs.generation,
+  async () => {
+    cursor.value = -1;
+    const el = viewport.value;
+    if (el) el.scrollTop = 0;
+    measure();
+    await nextTick();
+    const i = glyphs.query.trim() ? glyphs.selectedIndex : -1;
+    if (i >= 0) {
+      cursor.value = i;
+      await reveal(i);
+    }
+  },
+);
+
+const searchText = ref('');
+watch(
+  () => glyphs.query,
+  (q) => {
+    if (q !== searchText.value) searchText.value = q;
+  },
+);
+function onSearch(): void {
+  void glyphs.search(searchText.value);
+}
+function onBlock(e: Event): void {
+  const value = (e.target as HTMLSelectElement).value;
+  void glyphs.chooseBlock(value || null);
+}
+
+const sel = computed(() => glyphs.selected);
+const fontStyle = computed(() => ({
+  fontFamily: family.value ? `"${family.value}", sans-serif` : undefined,
+}));
+const broken = computed(() => (glyphs.health.kind === 'broken' ? glyphs.health.reason : null));
+const noResults = computed(
+  () => !glyphs.loading && !broken.value && glyphs.total === 0 && glyphs.face !== null,
+);
+</script>
+
+<template>
+  <div class="glyphs">
+    <p v-if="!selection.detail" class="placeholder">Select a face to see its glyphs.</p>
+    <template v-else>
+      <div class="controls">
+        <input
+          v-model="searchText"
+          class="field search"
+          type="search"
+          aria-label="Search glyphs"
+          placeholder="Ж, U+0416, name"
+          @input="onSearch"
+        />
+        <select class="field" aria-label="Block" :value="glyphs.block ?? ''" @change="onBlock">
+          <option value="">All blocks</option>
+          <option v-for="b in glyphs.faceBlocks" :key="b.name" :value="b.name">
+            {{ b.name }} ({{ b.count }})
+          </option>
+        </select>
+      </div>
+      <p v-if="broken" class="placeholder" role="status">
+        The glyphs of this face cannot be read: {{ broken }}
+      </p>
+      <p v-else-if="glyphs.error" class="placeholder" role="alert">
+        {{ glyphs.error.message }}
+      </p>
+      <p v-else-if="noResults" class="placeholder" role="status">
+        {{ glyphs.query.trim() ? 'No glyph matches the search.' : 'This face maps no characters.' }}
+      </p>
+      <p class="count" aria-live="polite">
+        {{ glyphs.total.toLocaleString('en-US') }}
+        {{ glyphs.total === 1 ? 'character' : 'characters' }}
+      </p>
+      <div
+        ref="viewport"
+        class="viewport"
+        role="grid"
+        aria-label="Glyphs"
+        :aria-rowcount="layout.rows.length"
+        :aria-colcount="columns"
+        :aria-activedescendant="activeId"
+        tabindex="0"
+        @scroll="measure"
+        @keydown="onKeyDown"
+      >
+        <div class="sizer" :style="{ height: `${layout.rows.length * GLYPH_CELL}px` }">
+          <div
+            v-for="v in visible"
+            :key="v.r"
+            role="row"
+            class="row"
+            :aria-rowindex="v.r + 1"
+            :style="{ transform: `translateY(${v.r * GLYPH_CELL}px)`, height: `${GLYPH_CELL}px` }"
+          >
+            <div
+              v-if="v.row.kind === 'heading'"
+              role="rowheader"
+              class="heading"
+              :aria-colspan="columns"
+            >
+              {{ v.row.block.name }}
+              <span class="muted">{{ v.row.block.count }}</span>
+            </div>
+            <div
+              v-for="c in v.cells"
+              v-else
+              :id="cellId(c.index)"
+              :key="c.index"
+              role="gridcell"
+              class="cell"
+              :class="{ cursor: c.index === cursor }"
+              :aria-label="cellLabel(c.glyph, c.index)"
+              :aria-selected="!!c.glyph && sel?.codePoint === c.glyph.codePoint"
+              :title="cellLabel(c.glyph, c.index)"
+              :data-code-point="c.glyph?.codePoint"
+              :style="{ width: `${100 / columns}%` }"
+              @click="onClick(c.index)"
+            >
+              <span v-if="c.glyph" class="char" :style="fontStyle" aria-hidden="true">{{
+                charOf(c.glyph)
+              }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <section v-if="sel" class="detail" aria-label="Selected glyph">
+        <span class="big" :style="fontStyle" aria-hidden="true">{{ charOf(sel) }}</span>
+        <dl>
+          <dt>Code point</dt>
+          <dd>{{ codePointLabel(sel.codePoint) }}</dd>
+          <dt>Glyph name</dt>
+          <dd>{{ sel.name ?? 'none' }}</dd>
+          <dt>Glyph id</dt>
+          <dd>{{ sel.glyphId }}</dd>
+          <dt>Block</dt>
+          <dd>{{ sel.block }}</dd>
+        </dl>
+      </section>
+      <p v-if="glyphs.unicodeVersion" class="muted note">
+        Blocks from Unicode {{ glyphs.unicodeVersion }}.
+      </p>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.glyphs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+}
+.placeholder,
+.muted,
+.count {
+  margin: 0;
+  color: var(--fm-muted);
+}
+.controls {
+  display: flex;
+  gap: 8px;
+}
+.field {
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 6px;
+  background: var(--fm-bg);
+  color: var(--fm-fg);
+  font: inherit;
+}
+.search {
+  flex: 1;
+}
+select.field {
+  flex: 0 1 45%;
+}
+.viewport {
+  position: relative;
+  height: 384px;
+  overflow-y: auto;
+  border: 1px solid var(--fm-border);
+  border-radius: 6px;
+}
+.viewport:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+.sizer {
+  position: relative;
+}
+.row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+}
+.heading {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+  padding: 0 8px 6px;
+  font-weight: 600;
+}
+.cell {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--fm-border);
+  border-bottom: 1px solid var(--fm-border);
+  font-size: 24px;
+  cursor: default;
+}
+.cell[aria-selected='true'] {
+  background: var(--fm-accent);
+  color: var(--fm-bg);
+}
+.viewport:focus-visible .cell.cursor {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: -3px;
+}
+.viewport:focus-visible .cell.cursor[aria-selected='true'] {
+  outline-color: var(--fm-bg);
+}
+.char {
+  line-height: 1;
+}
+.detail {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+.big {
+  flex: none;
+  min-width: 64px;
+  font-size: 56px;
+  line-height: 1;
+  text-align: center;
+}
+dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+}
+dt {
+  color: var(--fm-muted);
+}
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.note {
+  font-size: 11.5px;
+}
+</style>
