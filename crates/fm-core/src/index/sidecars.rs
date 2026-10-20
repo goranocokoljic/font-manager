@@ -3,10 +3,11 @@
 //! wrote there. The file format and the merge rule are in [`crate::sidecar`].
 //!
 //! - **Mirror.** Triggers mark every face whose tags, favorite, rating,
-//!   notes, collections or virtual styles change (`sidecar_dirty`). After each such write
-//!   [`Index::write_sidecars`] rewrites the sidecar of every dirty family. A
-//!   sidecar that cannot be written (folder offline, read-only) leaves its
-//!   faces dirty; the next write or scan tries again. The user's edit never
+//!   notes, collections or virtual styles change (`sidecar_dirty`); a change
+//!   of a family's notes marks its faces (`index/family_notes.rs`). After
+//!   each such write [`Index::write_sidecars`] rewrites the sidecar of every
+//!   dirty family. A sidecar that cannot be written (folder offline,
+//!   read-only) leaves its faces dirty; the next write or scan tries again. The user's edit never
 //!   fails because of it: the index is the source of truth (ADR 0003).
 //! - **Merge.** A scan ([`Index::persist_files`], [`Index::apply_rescan`])
 //!   ends with [`Index::sync_sidecars`]: every sidecar whose size or
@@ -36,10 +37,12 @@ use fm_api::library::{Problem, ProblemKind};
 use fm_api::{FaceId, SourceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
+use super::family_notes;
 use super::files::path_from_sql;
 use super::virtual_styles::{self, Holder};
 use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
+use crate::grouping::family_key;
 use crate::sidecar::{
     self, FaceEntry, FaceKey, Field, Meta, Parsed, Pin, PinKey, SIDECAR_DIR, Sidecar,
 };
@@ -61,6 +64,8 @@ pub struct SidecarSync {
     pub read: usize,
     /// Faces whose metadata a merge changed in the index.
     pub faces_changed: usize,
+    /// Families whose notes a merge changed in the index.
+    pub families_changed: usize,
     /// Sidecar files written.
     pub written: usize,
     /// Conflicts found that were not known yet.
@@ -73,6 +78,7 @@ impl SidecarSync {
     fn add(&mut self, other: Self) {
         self.read += other.read;
         self.faces_changed += other.faces_changed;
+        self.families_changed += other.families_changed;
         self.written += other.written;
         self.conflicts += other.conflicts;
         self.failed += other.failed;
@@ -503,10 +509,47 @@ impl Index {
             }
         }
 
+        // The family's own notes merge by the same rule, when the family is
+        // here; a conflict is kept on its first face, so it has a font to
+        // show in Problems.
+        let disk_family = disk
+            .as_ref()
+            .map_or(base.family_meta.as_ref(), |d| d.family_meta.as_ref());
+        if let Some(first) = family.first() {
+            let key = family_key(&first.family);
+            let local = family_notes::family_notes_by_key(&tx, &key)?;
+            let merged = sidecar::merge_family(
+                sidecar::family_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
+                    .as_deref(),
+                local.as_deref(),
+                disk_family.and_then(|f| f.notes.as_deref()),
+            );
+            if merged.notes != local {
+                family_notes::set_family_notes(&tx, &key, merged.notes.as_deref())?;
+                out.families_changed += 1;
+            }
+            if let Some(c) = &merged.conflict {
+                out.conflicts += insert_conflict(
+                    &tx,
+                    src.id,
+                    name,
+                    Some(first.id),
+                    c.field.as_str(),
+                    Some(&c.local),
+                    &c.disk,
+                )?;
+            }
+        }
+
         // The sidecar of a family here is written with what the index holds
         // now, plus the entries of faces this machine has not indexed.
         let new_base = if let Some(first) = family.first() {
             let mut next = Sidecar::new(first.family.clone());
+            let notes = family_notes::family_notes_by_key(&tx, &family_key(&first.family))?;
+            next.family_meta = notes.map(|notes| sidecar::FamilyEntry {
+                history: sidecar::next_family_history(Some(&notes), disk_family),
+                notes: Some(notes),
+            });
             for face in &family {
                 let mut meta = local_meta(&tx, face.id, &collections)?;
                 meta.collections.extend(carried_paths(&tx, face.id)?);
@@ -538,7 +581,8 @@ impl Index {
             next.history = sidecar::next_file_history(&next, Some(disk.as_ref().unwrap_or(&base)));
             tx.commit().map_err(|e| db_error(&e))?;
             let mut stamp = disk_stamp;
-            if disk.as_ref() != Some(&next) && !(disk.is_none() && next.faces.is_empty()) {
+            let nothing = next.faces.is_empty() && next.family_meta.is_none();
+            if disk.as_ref() != Some(&next) && !(disk.is_none() && nothing) {
                 match write_file(src, name, &next) {
                     Ok(written) => stamp = Some(written),
                     Err(e) => {
@@ -1154,6 +1198,7 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
     let what = match Field::from_name(field) {
         Some(Field::Favorite) => "marked this font",
         Some(Field::Rating) => "rated this font",
+        Some(Field::FamilyNotes) => "set the notes of this font's family to",
         _ => "set the notes of this font to",
     };
     format!(

@@ -17,9 +17,9 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, MoveCollectionRequest,
-    PinInstanceRequest, RenameCollectionRequest, TagFacesRequest, UserMetaUpdate,
-    VirtualStylesRequest,
+    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, FamilyNotesUpdate,
+    MoveCollectionRequest, PinInstanceRequest, RenameCollectionRequest, TagFacesRequest,
+    UserMetaUpdate, VirtualStylesRequest,
 };
 use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -590,6 +590,49 @@ fn collections_tags_meta_and_sets() {
     let imported = api.import_set(exported).unwrap();
     assert_eq!(imported.set.faces, [FaceId(1)]);
     assert_eq!(imported.missing.len(), 1);
+}
+
+#[test]
+fn family_notes_are_the_familys_and_announced_as_a_library_change() {
+    let api = api();
+    let family = api.get_face(FaceId(1)).unwrap().face.family;
+    let rx = api.subscribe();
+    api.update_family_notes(FamilyNotesUpdate {
+        family,
+        notes: "Licensed for the rebrand".into(),
+    })
+    .unwrap();
+    let faces: Vec<FaceId> = api
+        .get_family(family)
+        .unwrap()
+        .faces
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(Event::LibraryChanged { updated, .. }) if updated == faces
+    ));
+    let summary = api.get_family(family).unwrap().summary;
+    assert_eq!(summary.notes.as_deref(), Some("Licensed for the rebrand"));
+    let detail = api.get_face(FaceId(1)).unwrap();
+    assert_eq!(
+        detail.family_notes.as_deref(),
+        Some("Licensed for the rebrand")
+    );
+    assert_eq!(detail.notes, None, "the face's own notes are separate");
+
+    api.update_family_notes(FamilyNotesUpdate {
+        family,
+        notes: String::new(),
+    })
+    .unwrap();
+    assert_eq!(api.get_family(family).unwrap().summary.notes, None);
+    let unknown = api.update_family_notes(FamilyNotesUpdate {
+        family: FamilyId(999),
+        notes: "x".into(),
+    });
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
 }
 
 #[test]

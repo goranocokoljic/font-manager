@@ -39,6 +39,10 @@ Read [Sources](sources.md) to learn more about folders.
   that block. Type in the search field to find a character: type the character itself
   (`Ж`), its code point (`U+0416` or `0416`) or its glyph name (`uni0416`). Click a
   character to see its code point, glyph name and glyph id.
+- Write notes in the **Info** tab. **Notes** are for the style that you selected.
+  **Family notes** are for all styles of the family. Font Manager saves a note when
+  you leave its field. To delete a note, clear its field. The **Notes** column of the
+  table shows the family notes. Notes stay when Font Manager reads the folder again.
 
 ## Use a font in other apps
 

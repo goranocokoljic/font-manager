@@ -30,6 +30,8 @@
 //! - Virtual styles (E10.2, `pins`) merge as sets too, each known by its
 //!   holder and name; when both sides changed one's coordinates, this
 //!   machine's stay.
+//! - The family's own notes (E13.5, `familyMeta`) are one more entry with a
+//!   history of its own, and merge like a face's notes ([`merge_family`]).
 //!
 //! Without a last-known sidecar (a new machine, a rebuilt index) the base is
 //! empty: whatever either side has set is kept, and two different values are
@@ -48,13 +50,18 @@ pub const SIDECAR_DIR: &str = ".fontlibrary";
 /// a higher version was written by a newer Font Manager and is only read,
 /// never rewritten.
 ///
-/// Version 2 adds `pins` (virtual styles, E10.2). A file with pins is
-/// written as version 2, so an older build, which ignores fields it does not
-/// know, leaves it alone instead of rewriting it without them; a file
-/// without pins stays [`PLAIN_VERSION`], so older builds still merge it.
-pub const SIDECAR_VERSION: u32 = 2;
+/// Version 2 adds `pins` (virtual styles, E10.2), version 3 the family's
+/// notes (`familyMeta`, E13.5). A file is written with the lowest version
+/// its content needs, so an older build, which ignores fields it does not
+/// know, leaves a file it cannot hold alone instead of rewriting it without
+/// them; a file with neither stays [`PLAIN_VERSION`], so older builds still
+/// merge it.
+pub const SIDECAR_VERSION: u32 = 3;
 
-/// The format version of a sidecar without pins.
+/// The format version of a sidecar with pins and no family notes.
+pub const PINS_VERSION: u32 = 2;
+
+/// The format version of a sidecar without pins or family notes.
 pub const PLAIN_VERSION: u32 = 1;
 
 /// How many hex digits of the blake3 hash name a family's sidecar, and
@@ -84,6 +91,9 @@ pub struct Sidecar {
     /// The faces with metadata, by file and index.
     #[serde(default)]
     pub faces: Vec<FaceEntry>,
+    /// The family's own metadata (E13.5); absent when none is set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family_meta: Option<FamilyEntry>,
     /// Ids of the file's last versions, newest first ([`next_file_history`]).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<String>,
@@ -96,6 +106,7 @@ impl Sidecar {
             version: PLAIN_VERSION,
             family: family.into(),
             faces: Vec::new(),
+            family_meta: None,
             history: Vec::new(),
         }
     }
@@ -118,11 +129,22 @@ impl Sidecar {
         }
         self.faces.sort_by_key(FaceEntry::key);
         self.faces.dedup_by_key(|f| f.key());
-        self.version = if self.faces.iter().any(|f| !f.meta.pins.is_empty()) {
+        if let Some(family) = &mut self.family_meta {
+            family.notes = family.notes.take().filter(|n| !n.is_empty());
+        }
+        self.family_meta = self.family_meta.take().filter(|f| f.notes.is_some());
+        self.version = if self.family_meta.is_some() {
             SIDECAR_VERSION
+        } else if self.faces.iter().any(|f| !f.meta.pins.is_empty()) {
+            PINS_VERSION
         } else {
             PLAIN_VERSION
         };
+    }
+
+    /// The family's notes, when set.
+    pub fn family_notes(&self) -> Option<&str> {
+        self.family_meta.as_ref().and_then(|f| f.notes.as_deref())
     }
 
     /// The file's text: pretty JSON with a final newline.
@@ -201,6 +223,19 @@ impl FaceEntry {
             index: self.index,
         }
     }
+}
+
+/// The family's own metadata in a sidecar (E13.5): its notes, with a
+/// history like a face entry's ([`next_family_history`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FamilyEntry {
+    /// Notes on the family.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    /// Ids of this entry's last versions, newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<String>,
 }
 
 /// The user's metadata on one face.
@@ -331,6 +366,8 @@ pub enum Field {
     Rating,
     /// Notes.
     Notes,
+    /// The family's notes (E13.5).
+    FamilyNotes,
 }
 
 impl Field {
@@ -340,6 +377,7 @@ impl Field {
             Self::Favorite => "favorite",
             Self::Rating => "rating",
             Self::Notes => "notes",
+            Self::FamilyNotes => "familyNotes",
         }
     }
 
@@ -349,6 +387,7 @@ impl Field {
             "favorite" => Some(Self::Favorite),
             "rating" => Some(Self::Rating),
             "notes" => Some(Self::Notes),
+            "familyNotes" => Some(Self::FamilyNotes),
             _ => None,
         }
     }
@@ -392,20 +431,43 @@ pub fn ancestor(base: Option<&FaceEntry>, disk: Option<&FaceEntry>, file_descend
     let Some(base) = base else {
         return Meta::default();
     };
-    let descends = match disk {
-        None => file_descends,
-        Some(disk) => {
-            disk.meta == base.meta
-                || base
-                    .history
-                    .first()
-                    .is_some_and(|rev| disk.history.contains(rev))
-        }
-    };
-    if descends {
+    let disk = disk.map(|d| (&d.meta, d.history.as_slice()));
+    if entry_descends((&base.meta, &base.history), disk, file_descends) {
         base.meta.clone()
     } else {
         Meta::default()
+    }
+}
+
+/// [`ancestor`] for the family's notes: the common ancestor of this
+/// machine's family notes and those of the file on disk.
+pub fn family_ancestor(
+    base: Option<&FamilyEntry>,
+    disk: Option<&FamilyEntry>,
+    file_descends: bool,
+) -> Option<String> {
+    let base = base?;
+    let disk = disk.map(|d| (&d.notes, d.history.as_slice()));
+    if entry_descends((&base.notes, &base.history), disk, file_descends) {
+        base.notes.clone()
+    } else {
+        None
+    }
+}
+
+/// Whether the entry on disk descends from the base entry, each as its
+/// content and history: equal content, or a history that holds the base's
+/// version. No entry on disk descends when the file does.
+fn entry_descends<T: PartialEq>(
+    base: (&T, &[String]),
+    disk: Option<(&T, &[String])>,
+    file_descends: bool,
+) -> bool {
+    match disk {
+        None => file_descends,
+        Some((content, history)) => {
+            content == base.0 || base.1.first().is_some_and(|rev| history.contains(rev))
+        }
     }
 }
 
@@ -421,25 +483,45 @@ pub fn next_history(meta: &Meta, prior: Option<&FaceEntry>) -> Vec<String> {
     )
 }
 
-/// The history of the file `next` written over `prior`, the file it
-/// replaces: unchanged when its entries are, else a new version id first.
-pub fn next_file_history(next: &Sidecar, prior: Option<&Sidecar>) -> Vec<String> {
-    if let Some(prior) = prior.filter(|p| p.faces == next.faces && !p.history.is_empty()) {
+/// The history of the family entry with `notes` written over `prior`, the
+/// entry it replaces: unchanged when the notes are, else a new version id
+/// first.
+pub fn next_family_history(notes: Option<&str>, prior: Option<&FamilyEntry>) -> Vec<String> {
+    if let Some(prior) = prior.filter(|p| p.notes.as_deref() == notes && !p.history.is_empty()) {
         return prior.history.clone();
     }
     extend(
-        &next.faces,
+        &notes,
         prior.map(|p| p.history.as_slice()).unwrap_or_default(),
     )
 }
 
+/// The history of the file `next` written over `prior`, the file it
+/// replaces: unchanged when its entries are, else a new version id first.
+pub fn next_file_history(next: &Sidecar, prior: Option<&Sidecar>) -> Vec<String> {
+    if let Some(prior) = prior.filter(|p| same_entries(p, next) && !p.history.is_empty()) {
+        return prior.history.clone();
+    }
+    let history = prior.map(|p| p.history.as_slice()).unwrap_or_default();
+    // A file without family notes hashes as it did before E13.5.
+    match &next.family_meta {
+        None => extend(&next.faces, history),
+        Some(family) => extend(&(&next.faces, family), history),
+    }
+}
+
 /// Whether the file `disk` is `base` or descends from it.
 pub fn descends(base: &Sidecar, disk: &Sidecar) -> bool {
-    disk.faces == base.faces
+    same_entries(base, disk)
         || base
             .history
             .first()
             .is_some_and(|rev| disk.history.contains(rev))
+}
+
+/// Whether two files hold the same entries, the family's included.
+fn same_entries(a: &Sidecar, b: &Sidecar) -> bool {
+    a.faces == b.faces && a.family_meta == b.family_meta
 }
 
 /// `history` with the id of a new version holding `content` first.
@@ -504,6 +586,35 @@ pub fn merge(base: &Meta, local: &Meta, disk: &Meta) -> Merged {
     Merged {
         meta: norm(&meta),
         conflicts,
+    }
+}
+
+/// What [`merge_family`] keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergedFamily {
+    /// The family's notes to keep.
+    pub notes: Option<String>,
+    /// Set when both sides changed the notes to different values; `notes`
+    /// holds the local value.
+    pub conflict: Option<Conflict>,
+}
+
+/// Merges this machine's family notes (`local`) with the sidecar's (`disk`),
+/// both changed from `base` ([`family_ancestor`]), by the rule of a face's
+/// notes. Empty notes are none.
+pub fn merge_family(base: Option<&str>, local: Option<&str>, disk: Option<&str>) -> MergedFamily {
+    let norm = |n: Option<&str>| n.filter(|n| !n.is_empty()).map(str::to_owned);
+    let mut conflicts = Vec::new();
+    let notes = scalar(
+        Field::FamilyNotes,
+        norm(base),
+        norm(local),
+        norm(disk),
+        &mut conflicts,
+    );
+    MergedFamily {
+        notes,
+        conflict: conflicts.pop(),
     }
 }
 

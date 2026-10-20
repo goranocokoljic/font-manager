@@ -117,6 +117,50 @@ describe('inspector info tab', () => {
     expect(wrapper.get('[data-testid="rating"]').text()).toBe('Not rated');
   });
 
+  it('saves the face notes and the family notes when their field loses the focus', async () => {
+    const client = createMockClient();
+    const meta = vi.spyOn(client, 'updateUserMeta');
+    const family = vi.spyOn(client, 'updateFamilyNotes');
+    setClient(client);
+    const wrapper = await mountWith(1);
+    // Each is a labelled multi-line field.
+    const faceField = wrapper.get('#fm-info-notes');
+    const familyField = wrapper.get('#fm-info-family-notes');
+    expect(faceField.element.tagName).toBe('TEXTAREA');
+    expect(familyField.element.tagName).toBe('TEXTAREA');
+    expect(wrapper.get('label[for="fm-info-notes"]').text()).toBe('Notes');
+    expect(wrapper.get('label[for="fm-info-family-notes"]').text()).toBe('Family notes');
+
+    // Typing alone saves nothing; leaving the field does.
+    await faceField.setValue('Headlines only');
+    expect(meta).not.toHaveBeenCalled();
+    await faceField.trigger('blur');
+    await flushPromises();
+    expect(meta).toHaveBeenCalledWith({ faces: [1], notes: 'Headlines only' });
+    expect(useSelectionStore().detail!.notes).toBe('Headlines only');
+    // Leaving it again unchanged does not save again.
+    await faceField.trigger('blur');
+    await flushPromises();
+    expect(meta).toHaveBeenCalledTimes(1);
+
+    await familyField.setValue('Licensed for the rebrand');
+    await familyField.trigger('blur');
+    await flushPromises();
+    const familyId = useSelectionStore().detail!.face.family;
+    expect(family).toHaveBeenCalledWith({ family: familyId, notes: 'Licensed for the rebrand' });
+    expect(useSelectionStore().detail!.familyNotes).toBe('Licensed for the rebrand');
+    // The face's notes are a different value from the family's.
+    expect((faceField.element as HTMLTextAreaElement).value).toBe('Headlines only');
+    expect((familyField.element as HTMLTextAreaElement).value).toBe('Licensed for the rebrand');
+
+    // An empty field clears the notes.
+    await faceField.setValue('');
+    await faceField.trigger('blur');
+    await flushPromises();
+    expect(meta).toHaveBeenLastCalledWith({ faces: [1], notes: '' });
+    expect(useSelectionStore().detail!.notes).toBeNull();
+  });
+
   it('shows why a tag was refused', async () => {
     const wrapper = await mountWith(1);
     await wrapper.get('input[aria-label="Add a tag"]').setValue('x');

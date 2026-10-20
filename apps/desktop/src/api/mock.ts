@@ -595,6 +595,7 @@ function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySumma
     openLicense: details.find((d) => d.license.openLicense)?.license.openLicense ?? null,
     declaredLicense: details.find((d) => d.license.declared)?.license.declared ?? null,
     tags,
+    notes: detail?.familyNotes ?? null,
   };
 }
 
@@ -1117,6 +1118,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         if (req.notes != null) d.notes = req.notes || null;
       }
       changed(req.faces);
+    },
+    // The family's notes live on each of its faces' details here.
+    updateFamilyNotes: async (req) => {
+      const details = byFamily.get(req.family);
+      if (!details)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${req.family} was not found.`,
+          detail: null,
+        };
+      for (const d of details) d.familyNotes = req.notes || null;
+      changed(details.map((d) => d.face.id));
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,

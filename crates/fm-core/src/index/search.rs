@@ -81,6 +81,8 @@ pub(super) struct SearchCache {
     slots: Slots,
     /// Tag names by id, for the family summaries.
     tag_names: HashMap<TagId, String>,
+    /// Family notes by grouping key, for the family summaries.
+    family_notes: HashMap<String, String>,
 }
 
 /// One searchable face.
@@ -214,7 +216,7 @@ impl Index {
             .skip(req.page.offset as usize)
             .take(req.page.limit as usize)
             .map(|hit| FamilyHit {
-                family: summary(hit.members, &cache.tag_names),
+                family: summary(hit.members, &cache),
                 faces: hit.faces,
                 score: hit.score,
                 missing: hit.missing,
@@ -308,7 +310,7 @@ impl Index {
                 req.source
                     .is_none_or(|s| faces.iter().any(|f| f.facts.source == s))
             })
-            .map(|faces| summary(faces, &cache.tag_names))
+            .map(|faces| summary(faces, &cache))
             .collect();
         match (req.order, req.sort) {
             (Some(order), _) => order.sort(&mut rows),
@@ -348,7 +350,7 @@ impl Index {
         if faces.first().map(|r| r.id) != Some(family.0) {
             return Ok(None);
         }
-        Ok(Some(summary(&faces, &cache.tag_names)))
+        Ok(Some(summary(&faces, &cache)))
     }
 
     /// The family a visible face belongs to, by id and name, as search
@@ -380,11 +382,13 @@ impl Index {
         let mut slots = Slots::default();
         let rows = self.visible_faces(&mut slots)?;
         let tag_names = self.tag_names()?;
+        let family_notes = self.all_family_notes()?;
         *self.search_cache.borrow_mut() = SearchCache {
             stamp,
             rows,
             slots,
             tag_names,
+            family_notes,
         };
         Ok(())
     }
@@ -572,8 +576,8 @@ fn score<'a>(
 }
 
 /// The family row of `faces`, every visible face of one family in id order.
-/// `tag_names` names the tags of [`FamilySummary::tags`].
-fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary {
+/// `cache` names the tags of [`FamilySummary::tags`] and holds the notes.
+fn summary(faces: &[&Row], cache: &SearchCache) -> FamilySummary {
     let first = faces.first();
     let mut formats: Vec<FontFormat> = Vec::new();
     for format in faces.iter().filter_map(|f| f.facts.format) {
@@ -605,7 +609,7 @@ fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary 
     for name in faces
         .iter()
         .flat_map(|f| &f.facts.tags)
-        .filter_map(|id| tag_names.get(id))
+        .filter_map(|id| cache.tag_names.get(id))
     {
         if !tags.contains(name) {
             tags.push(name.clone());
@@ -638,6 +642,7 @@ fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary 
         open_license: faces.iter().find_map(|f| f.open_license),
         declared_license: faces.iter().find_map(|f| f.facts.license),
         tags,
+        notes: first.and_then(|f| cache.family_notes.get(&f.family_key).cloned()),
     }
 }
 

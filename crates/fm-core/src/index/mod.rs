@@ -25,6 +25,7 @@ mod activation;
 mod collections;
 mod duplicates;
 mod faces;
+mod family_notes;
 mod files;
 mod languages;
 mod problems;

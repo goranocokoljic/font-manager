@@ -31,7 +31,7 @@ use crate::library::{
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
+    FamilyNotesUpdate, ImportSetResponse, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
     RenameCollectionRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
     UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
@@ -127,6 +127,8 @@ struct State {
     sets: Vec<ProjectSet>,
     /// Pinned instances, each held by one collection or one set.
     virtual_styles: Vec<VirtualStyle>,
+    /// Notes on families, by family.
+    family_notes: HashMap<FamilyId, String>,
     settings: Settings,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
@@ -318,6 +320,7 @@ fn face(
             foundry: None,
             italic_angle: Some(if slant == Slant::Upright { 0.0 } else { -10.0 }),
             code_point_count: Some(char_set.len() as u32),
+            family_notes: None,
         },
         source: SourceId(1),
         chars: char_set,
@@ -492,6 +495,7 @@ impl State {
                 faces: vec![FaceId(1), FaceId(6)],
             }],
             virtual_styles: Vec::new(),
+            family_notes: HashMap::new(),
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
@@ -539,6 +543,7 @@ impl State {
         let family = self.family(d.face.family).ok();
         d.designer = family.map(|fam| fam.designer.into());
         d.foundry = family.map(|fam| fam.foundry.into());
+        d.family_notes = self.family_notes.get(&d.face.family).cloned();
         d.tags = self
             .face_tags
             .get(&d.face.id)
@@ -626,6 +631,7 @@ impl State {
             open_license: faces.iter().find_map(|f| f.detail.license.open_license),
             declared_license: faces.iter().find_map(|f| f.detail.license.declared),
             tags,
+            notes: self.family_notes.get(&fam.id).cloned(),
         }
     }
 
@@ -2261,6 +2267,27 @@ impl OrganizationService for MockApi {
         if st.virtual_styles.len() == before {
             return Err(ApiError::not_found(format!("Virtual style {style}")));
         }
+        Ok(())
+    }
+
+    fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()> {
+        let mut st = self.state();
+        st.family(req.family)?;
+        if req.notes.is_empty() {
+            st.family_notes.remove(&req.family);
+        } else {
+            st.family_notes.insert(req.family, req.notes);
+        }
+        let updated = st
+            .family_faces(req.family)
+            .map(|f| f.detail.face.id)
+            .collect();
+        st.emit(Event::LibraryChanged {
+            source: None,
+            added: Vec::new(),
+            removed: Vec::new(),
+            updated,
+        });
         Ok(())
     }
 }

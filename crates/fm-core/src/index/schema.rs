@@ -427,8 +427,20 @@ CREATE TRIGGER sidecar_dirty_virtual_style_delete AFTER DELETE ON virtual_style 
 END;
 ";
 
+/// Family notes (E13.5, `index/family_notes.rs`): the user's notes on a
+/// family, by its grouping key (`grouping::family_key`, the key the sidecar
+/// file is named by), not by a face id, so they outlive a rescan that
+/// indexes the family's faces again. A family no face has any more keeps
+/// its row; the note is back when the fonts are.
+const V11: &str = r"
+CREATE TABLE family_meta (
+    family_key  TEXT PRIMARY KEY,
+    notes       TEXT
+) WITHOUT ROWID;
+";
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -447,6 +459,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_fts_data",
     "face_fts_idx",
     "face_tag",
+    "family_meta",
     "font_file",
     "index_meta",
     "last_session",

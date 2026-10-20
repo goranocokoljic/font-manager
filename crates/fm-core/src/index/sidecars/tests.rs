@@ -4,8 +4,8 @@ use fm_api::FaceId;
 use fm_api::common::{FontFormat, Health};
 use fm_api::library::{ProblemKind, SourceKind};
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, RenameCollectionRequest, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate,
+    CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate, RenameCollectionRequest,
+    TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
 
 use super::*;
@@ -114,6 +114,27 @@ impl Machine {
             .expect("meta");
     }
 
+    /// Sets the notes of the family of the face `postscript`.
+    fn family_notes(&mut self, postscript: &str, notes: &str) {
+        let face = self.face(postscript);
+        let (family, _) = self
+            .index
+            .family_of(face)
+            .expect("family")
+            .expect("visible");
+        self.index
+            .update_family_notes(&FamilyNotesUpdate {
+                family,
+                notes: notes.into(),
+            })
+            .expect("family notes");
+    }
+
+    /// The notes the index holds for `family`.
+    fn local_family_notes(&self, family: &str) -> Option<String> {
+        self.index.family_notes(family).expect("family notes")
+    }
+
     /// What the index holds for a face, as a sidecar would write it.
     fn local(&self, postscript: &str) -> Meta {
         let face = self.face(postscript).0;
@@ -179,6 +200,10 @@ fn other_machine_edit(mut sidecar: Sidecar, edit: impl FnOnce(&mut Sidecar)) -> 
     edit(&mut sidecar);
     for face in &mut sidecar.faces {
         face.history = sidecar::next_history(&face.meta, before.get(&face.key()));
+    }
+    if let Some(family) = &mut sidecar.family_meta {
+        family.history =
+            sidecar::next_family_history(family.notes.as_deref(), file_before.family_meta.as_ref());
     }
     sidecar.normalize();
     sidecar.history = sidecar::next_file_history(&sidecar, Some(&file_before));
@@ -1125,7 +1150,7 @@ fn pinned_styles_of_a_real_variable_font_round_trip_through_a_second_machine() {
     let names_on_disk = list_sidecars(&dir);
     assert_eq!(names_on_disk.len(), 1);
     let on_disk = read_sidecar(&dir.join(&names_on_disk[0]));
-    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    assert_eq!(on_disk.version, crate::sidecar::PINS_VERSION);
     assert_eq!(on_disk.faces[0].meta.pins.len(), 2);
 
     // A second index over the folder (another machine, or this one after
@@ -1239,4 +1264,98 @@ fn renaming_a_collection_renames_it_in_its_pins() {
         })
         .expect("rename");
     assert_eq!(names_of(&m), [Some(names(&["Clients"]))]);
+}
+
+fn family_entry(notes: &str) -> crate::sidecar::FamilyEntry {
+    crate::sidecar::FamilyEntry {
+        notes: Some(notes.into()),
+        history: Vec::new(),
+    }
+}
+
+#[test]
+fn family_notes_are_mirrored_to_the_sidecar_and_cleared_from_it() {
+    let tmp = TempDir::new("sidecar-family-notes");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "Licensed for the 2026 rebrand");
+    let on_disk = m.sidecar("Inter");
+    assert_eq!(
+        on_disk.family_notes(),
+        Some("Licensed for the 2026 rebrand")
+    );
+    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    // A family with notes and no face metadata still has a sidecar; the
+    // other family's sidecar is not written.
+    assert!(on_disk.faces.is_empty());
+    assert!(!m.sidecar_path("Lora").exists());
+
+    // A second index over the folder (another machine, or this one after the
+    // index was made from scratch) reads them back.
+    let second = Machine::new(tmp.path());
+    assert_eq!(
+        second.local_family_notes("Inter").as_deref(),
+        Some("Licensed for the 2026 rebrand")
+    );
+
+    // An empty string clears them, in the index and in the file.
+    m.family_notes("Inter-Regular", "");
+    assert_eq!(m.local_family_notes("Inter"), None);
+    let cleared = m.sidecar("Inter");
+    assert_eq!(cleared.family_meta, None);
+    assert_eq!(cleared.version, PLAIN_VERSION);
+}
+
+#[test]
+fn family_notes_changed_on_another_machine_merge_on_scan() {
+    let tmp = TempDir::new("sidecar-family-merge");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "first");
+    m.write_as_other_machine("Inter", |s| {
+        s.family_meta = Some(family_entry("from the laptop"));
+    });
+    m.scan();
+    assert_eq!(
+        m.local_family_notes("Inter").as_deref(),
+        Some("from the laptop")
+    );
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+    // The face notes are not touched by the family's.
+    assert_eq!(m.local("Inter-Bold").notes, None);
+
+    // The other machine clears them: cleared here too.
+    m.write_as_other_machine("Inter", |s| s.family_meta = None);
+    m.scan();
+    assert_eq!(m.local_family_notes("Inter"), None);
+}
+
+#[test]
+fn family_notes_changed_on_both_machines_keep_this_one_and_report_the_other() {
+    let tmp = TempDir::new("sidecar-family-conflict");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "base");
+    // The other machine changes the version it read...
+    let theirs = other_machine_edit(m.sidecar("Inter"), |s| {
+        s.family_meta = Some(family_entry("theirs"));
+    });
+    // ...while this one changes it too, before they sync.
+    m.family_notes("Inter-Bold", "mine");
+    write_changed(&m.sidecar_path("Inter"), &theirs.to_json());
+    m.scan();
+
+    assert_eq!(m.local_family_notes("Inter").as_deref(), Some("mine"));
+    assert_eq!(m.sidecar("Inter").family_notes(), Some("mine"));
+    let problems = m.index.sidecar_problems().expect("problems");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert_eq!(problems[0].kind, ProblemKind::SidecarConflict);
+    assert!(problems[0].face.is_some(), "shown on a font of the family");
+    assert!(
+        problems[0].message.contains("family") && problems[0].message.contains("\"theirs\""),
+        "{}",
+        problems[0].message
+    );
+
+    // Setting the notes again dismisses the conflict.
+    m.family_notes("Inter-Regular", "decided");
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+    assert_eq!(m.sidecar("Inter").family_notes(), Some("decided"));
 }

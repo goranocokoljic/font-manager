@@ -1246,3 +1246,83 @@ fn a_glyph_exports_as_svg_text_without_writing_a_file() {
     });
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
 }
+
+#[test]
+fn face_and_family_notes_survive_a_rescan_and_a_rebuild() {
+    let (lib, _, _) = Lib::scanned("api-notes");
+    let barlow = lib.family("Barlow");
+    let face = FaceId(barlow.id.0);
+    let rx = lib.api.subscribe();
+    lib.api
+        .update_family_notes(FamilyNotesUpdate {
+            family: barlow.id,
+            notes: "Licensed for the 2026 rebrand".into(),
+        })
+        .expect("family notes");
+    // The list hears of it: every face of the family is updated.
+    let family_faces = lib.api.get_family(barlow.id).expect("family").faces;
+    assert!(matches!(
+        rx.recv_timeout(WAIT),
+        Ok(Event::LibraryChanged { updated, .. }) if updated.len() == family_faces.len()
+            && updated.contains(&face)
+    ));
+    lib.api
+        .update_user_meta(UserMetaUpdate {
+            faces: vec![face],
+            notes: Some("Use for headlines only".into()),
+            ..UserMetaUpdate::default()
+        })
+        .expect("face notes");
+
+    let check = |when: &str| {
+        assert_eq!(
+            lib.family("Barlow").notes.as_deref(),
+            Some("Licensed for the 2026 rebrand"),
+            "{when}"
+        );
+        assert_eq!(lib.family("Bebas Neue").notes, None, "{when}");
+        let detail = lib.api.get_face(face).expect("detail");
+        assert_eq!(
+            detail.notes.as_deref(),
+            Some("Use for headlines only"),
+            "{when}"
+        );
+        assert_eq!(
+            detail.family_notes.as_deref(),
+            Some("Licensed for the 2026 rebrand"),
+            "{when}"
+        );
+    };
+    check("set");
+    lib.scan(None, false);
+    check("after a rescan");
+    rebuild(&lib);
+    check("after a rebuild");
+
+    // Empty strings clear both.
+    lib.api
+        .update_family_notes(FamilyNotesUpdate {
+            family: barlow.id,
+            notes: String::new(),
+        })
+        .expect("cleared");
+    lib.api
+        .update_user_meta(UserMetaUpdate {
+            faces: vec![face],
+            notes: Some(String::new()),
+            ..UserMetaUpdate::default()
+        })
+        .expect("cleared");
+    assert_eq!(lib.family("Barlow").notes, None);
+    let detail = lib.api.get_face(face).expect("detail");
+    assert_eq!((detail.notes, detail.family_notes), (None, None));
+    assert_eq!(
+        lib.api
+            .update_family_notes(FamilyNotesUpdate {
+                family: FamilyId(9999),
+                notes: "x".into(),
+            })
+            .map_err(|e| e.code),
+        Err(ErrorCode::NotFound)
+    );
+}

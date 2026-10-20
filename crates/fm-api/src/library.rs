@@ -398,6 +398,9 @@ pub struct FamilySummary {
     /// User tags on any of its faces, by name, A to Z.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// The user's notes on the family (E13.5), not those of its faces.
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 /// One style on a family's weight line.
@@ -558,6 +561,9 @@ pub struct FaceDetail {
     /// Code points the Unicode `cmap` maps.
     #[serde(default)]
     pub code_point_count: Option<u32>,
+    /// The user's notes on the face's family (E13.5); `notes` are the face's.
+    #[serde(default)]
+    pub family_notes: Option<String>,
 }
 
 /// What kind of health problem.
@@ -1014,6 +1020,7 @@ mod tests {
             open_license: None,
             declared_license: None,
             tags: Vec::new(),
+            notes: None,
         }
     }
 
