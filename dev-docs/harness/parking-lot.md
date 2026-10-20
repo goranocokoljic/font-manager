@@ -103,6 +103,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-20
 
+- [E11.4 #102] crates/fm-api/src/mock.rs:285 — the Rust MockApi gives every face the same metrics, while the TS mock now gives faces 6 and 7 their own, so the two mocks differ on `FaceDetail.metrics`.
 - [E8.3 #88] apps/desktop/src-tauri/src/lib.rs:518 — the app still serves MockApi; nothing outside tests builds DuplicateResolver with fm_platform::trash::system(), so the shipped app does not reach the real trash yet (same as ActivationManager).
 - [E8.3 #88] crates/fm-platform/src/linux/trash.rs:44 — XDG_DATA_HOME/HOME are resolved by hand instead of paths::Env::dir (crates/fm-platform/src/paths.rs:90): a second copy of the rule that ignores relative XDG values.
 - [E8.3 #88] crates/fm-core/src/resolve.rs:31 — the ACTIVE_COPY message is written twice (also crates/fm-api/src/mock.rs), so the core and mock wording can drift.
