@@ -44,8 +44,14 @@ const SESSION_FAMILY: &str = "Nosifer";
 const PERMANENT_FAMILY: &str = "Cagliostro";
 
 fn fixtures() -> PathBuf {
-    std::path::absolute(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../fixtures/fonts"))
-        .expect("fixture path")
+    // The repository root without `..`: `absolute` removes it on Windows only,
+    // and a source path with `..` in it indexes nothing on Linux.
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(3)
+        .expect("repository root")
+        .join("fixtures")
+        .join("fonts")
 }
 
 #[cfg(windows)]
@@ -308,12 +314,18 @@ fn index_family(core: &CoreApi, rel: &str, name: &str) -> FamilyId {
             Err(e) => panic!("no scan result: {e}"),
         }
     }
-    core.list_families(ListFamiliesRequest::default())
+    let families = core
+        .list_families(ListFamiliesRequest {
+            source: Some(source.id),
+            ..ListFamiliesRequest::default()
+        })
         .expect("families")
-        .items
+        .items;
+    let names: Vec<String> = families.iter().map(|f| f.name.clone()).collect();
+    families
         .into_iter()
         .find(|f| f.name == name)
-        .unwrap_or_else(|| panic!("{name} not indexed"))
+        .unwrap_or_else(|| panic!("{name} not indexed from {}: {names:?}", source.path))
         .id
 }
 
