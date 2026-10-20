@@ -34,9 +34,10 @@ use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphPage,
-    GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform,
-    Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
+    GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
+    ListFamiliesRequest, Platform, Problem, Resolution, ScanRequest, SetSourcePausedRequest,
+    Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -513,6 +514,16 @@ impl LibraryService for CoreApi {
             &file.path,
             file.collection_index,
             &req,
+        )?)
+    }
+
+    /// Reads the face's file outside the index lock, as `list_glyphs`.
+    fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail> {
+        let file = self.lock().face_file(req.face)?;
+        Ok(glyphs::glyph_detail_file(
+            &file.path,
+            file.collection_index,
+            req.code_point,
         )?)
     }
 }

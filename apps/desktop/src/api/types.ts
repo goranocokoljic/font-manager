@@ -813,6 +813,40 @@ export type GlyphBlock = {
 	count: number,
 };
 
+/**  The detail of one mapped character of a face. */
+export type GlyphDetail = {
+	/**  The Unicode code point. */
+	codePoint: number,
+	/**  The glyph `cmap` maps it to. */
+	glyphId: number,
+	/**
+	 *  The glyph name from `post` or the CFF charset; absent when the font
+	 *  has none.
+	 */
+	name: string | null,
+	/**
+	 *  The advance width in font units, at the default location of a
+	 *  variable face; absent when the font has no horizontal metrics.
+	 */
+	advanceWidth: number | null,
+	/**
+	 *  GSUB features that produce this glyph from other glyphs (`liga` for
+	 *  `ﬁ`), by tag.
+	 */
+	producedBy: FeatureInfo[],
+	/**
+	 *  GSUB features that replace this glyph with another (`smcp`, `ss01`),
+	 *  by tag.
+	 */
+	replacedBy: FeatureInfo[],
+	/**
+	 *  `Broken` with a reason when the font's tables are malformed; the
+	 *  glyph id is 0 and the rest is empty then. Malformed GSUB lookups only
+	 *  empty the feature lists.
+	 */
+	health: Health,
+};
+
 /**  One mapped character of a face. */
 export type GlyphInfo = {
 	/**  The Unicode code point. */
@@ -849,6 +883,14 @@ export type GlyphPage = {
 	health: Health,
 	/**  The Unicode version of the block table (`17.0.0`). */
 	unicodeVersion: string,
+};
+
+/**  One character of a face, for its glyph detail (E11.2). */
+export type GlyphRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  The Unicode code point of the character. */
+	codePoint: number,
 };
 
 /**
@@ -1632,4 +1674,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 9, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 10, patch: 0 };
