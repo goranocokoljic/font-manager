@@ -1,7 +1,9 @@
-//! Export service: web fonts with CSS, and the license inventory.
+//! Export service: web fonts with CSS, the license inventory, and one glyph's
+//! outline as SVG.
 
 use serde::{Deserialize, Serialize};
 
+use crate::common::AxisValue;
 use crate::{ApiResult, CollectionId, FaceId};
 
 /// A web font format.
@@ -86,10 +88,29 @@ pub struct LicenseInventory {
     pub rows: u32,
 }
 
-/// Web export and license reports.
+/// One glyph's outline as SVG (E11.5). The SVG text is returned, never
+/// written: saving it goes to a path the user picks.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphSvgRequest {
+    /// The face.
+    pub face: FaceId,
+    /// The character, as a Unicode code point.
+    pub code_point: u32,
+    /// Variation coordinates; defaults for unlisted axes.
+    #[serde(default)]
+    pub variations: Vec<AxisValue>,
+}
+
+/// Web export, license reports and glyph outlines.
 pub trait ExportService {
     /// Write web fonts (and CSS) to a folder.
     fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse>;
     /// The license inventory.
     fn license_inventory(&self, req: LicenseInventoryRequest) -> ApiResult<LicenseInventory>;
+    /// The outline of one character as SVG text, upright, in font units: the
+    /// viewBox is the advance width by ascender to descender. A character
+    /// with no outline (a space) is an SVG with an empty path; a character
+    /// the face does not map is `NotFound`.
+    fn export_glyph_svg(&self, req: GlyphSvgRequest) -> ApiResult<String>;
 }

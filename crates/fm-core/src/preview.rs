@@ -183,7 +183,7 @@ impl<'a> Style<'a> {
 }
 
 /// A four-character OpenType tag (`wght`, `liga`).
-fn tag(s: &str) -> FmResult<[u8; 4]> {
+pub(crate) fn tag(s: &str) -> FmResult<[u8; 4]> {
     <[u8; 4]>::try_from(s.as_bytes())
         .ok()
         .filter(|b| b.iter().all(|c| (0x20..=0x7E).contains(c)))

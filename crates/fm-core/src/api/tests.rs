@@ -1196,3 +1196,53 @@ fn the_glyph_detail_reads_the_face_file() {
     });
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
 }
+
+/// Every file under `dir`, relative, sorted.
+fn files_under(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).expect("read dir") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                out.push(path.strip_prefix(dir).expect("under dir").to_path_buf());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn a_glyph_exports_as_svg_text_without_writing_a_file() {
+    let (lib, _, _) = Lib::scanned("api-glyph-svg");
+    let archivo = lib.family("Archivo");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let before = files_under(&lib.root);
+    let svg = lib
+        .api
+        .export_glyph_svg(GlyphSvgRequest {
+            face,
+            code_point: 'A' as u32,
+            variations: Vec::new(),
+        })
+        .expect("A");
+    assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 "));
+    assert!(svg.contains("<path d=\"M"), "{svg}");
+    assert_eq!(files_under(&lib.root), before);
+
+    let unmapped = lib.api.export_glyph_svg(GlyphSvgRequest {
+        face,
+        code_point: 0x10_FFFD,
+        variations: Vec::new(),
+    });
+    assert_eq!(unmapped.expect_err("unmapped").code, ErrorCode::NotFound);
+    let unknown = lib.api.export_glyph_svg(GlyphSvgRequest {
+        face: FaceId(9999),
+        code_point: 0x41,
+        variations: Vec::new(),
+    });
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}

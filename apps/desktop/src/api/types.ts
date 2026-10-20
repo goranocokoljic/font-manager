@@ -894,6 +894,19 @@ export type GlyphRequest = {
 };
 
 /**
+ *  One glyph's outline as SVG (E11.5). The SVG text is returned, never
+ *  written: saving it goes to a path the user picks.
+ */
+export type GlyphSvgRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  The character, as a Unicode code point. */
+	codePoint: number,
+	/**  Variation coordinates; defaults for unlisted axes. */
+	variations?: AxisValue[],
+};
+
+/**
  *  One page of a face's glyph map (E11.1): its mapped characters by Unicode
  *  block, optionally one block only or the ones a search finds.
  */
