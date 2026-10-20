@@ -191,7 +191,7 @@ mod os {
             .output()
             .expect("fc-list runs (install the fontconfig package)");
         assert!(out.status.success(), "fc-list failed: {out:?}");
-        out.stdout.iter().any(|b| *b == b'\n')
+        out.stdout.contains(&b'\n')
     }
 
     /// The links go to `$XDG_DATA_HOME/fonts/font-manager`, with
