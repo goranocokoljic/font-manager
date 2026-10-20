@@ -1,10 +1,12 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient, mockFaces } from '../api/mock';
 import type { FaceSummary } from '../api/types';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { clearFaceAxes } from '../preview/variations';
+import { useFeaturesStore } from '../stores/features';
 import FontPreviewRow from './FontPreviewRow.vue';
 
 class FakeFace {
@@ -32,6 +34,7 @@ let fonts: FakeSet;
 let loader: FaceLoader<FakeFace>;
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   clearFaceAxes();
   setClient(createMockClient());
   fonts = new FakeSet();
@@ -78,6 +81,22 @@ describe('FontPreviewRow', () => {
     await flushPromises();
     expect(row.get('.sample').attributes('style')).toContain('font-variation-settings: normal');
     expect(row.text()).not.toContain('Variable');
+  });
+
+  it('applies the features switched for its face, live', async () => {
+    const row = mount(FontPreviewRow, { props: { face: inter } });
+    const other = mount(FontPreviewRow, { props: { face: mono } });
+    await flushPromises();
+    const style = (r: typeof row) => (r.get('.sample').element as HTMLElement).style;
+    expect(style(row).fontFeatureSettings).toBe('');
+    const smcp = { tag: 'smcp', name: 'Small capitals', automatic: false, defaultOn: false };
+    useFeaturesStore().set(inter.id, smcp, true);
+    await flushPromises();
+    expect(style(row).fontFeatureSettings).toBe('"smcp" 1');
+    expect(style(other).fontFeatureSettings).toBe('');
+    useFeaturesStore().reset(inter.id);
+    await flushPromises();
+    expect(style(row).fontFeatureSettings).toBe('');
   });
 
   it('says so when the face cannot load', async () => {

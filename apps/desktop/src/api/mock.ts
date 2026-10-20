@@ -20,6 +20,7 @@ import {
   type FaceDetail,
   type FaceId,
   type FaceSummary,
+  type FeatureInfo,
   type Family,
   type FamilyId,
   type FamilyOrder,
@@ -60,6 +61,17 @@ const ofl = {
   declared: null,
 } as const;
 
+// Features as fm-core names them (crates/fm-core/src/features.rs).
+const FEATURES: Record<string, Omit<FeatureInfo, 'tag'>> = {
+  ccmp: { name: 'Glyph composition and decomposition', automatic: true, defaultOn: false },
+  kern: { name: 'Kerning', automatic: false, defaultOn: true },
+  liga: { name: 'Standard ligatures', automatic: false, defaultOn: true },
+  onum: { name: 'Oldstyle figures', automatic: false, defaultOn: false },
+  smcp: { name: 'Small capitals', automatic: false, defaultOn: false },
+  ss01: { name: 'Stylistic set 1', automatic: false, defaultOn: false },
+};
+const features = (...tags: string[]): FeatureInfo[] =>
+  tags.map((tag) => ({ tag, ...(FEATURES[tag] ?? { name: null }) }));
 const metrics = { unitsPerEm: 1000, ascender: 900, descender: -250, xHeight: 520, capHeight: 720 };
 
 const user = { tags: [], favorite: false, rating: null, notes: null };
@@ -100,7 +112,7 @@ export const mockFaces: FaceDetail[] = [
         ['Black', 900],
       ] as const
     ).map(([name, value]) => ({ name, coordinates: [{ tag: 'wght', value }] })),
-    features: ['kern', 'liga', 'smcp', 'onum', 'ss01'].map((tag) => ({ tag, name: null })),
+    features: features('ccmp', 'kern', 'liga', 'onum', 'smcp', 'ss01'),
     scripts: ['latn', 'cyrl'],
     ...user,
     legacyFamily: 'Inter',
@@ -136,7 +148,7 @@ export const mockFaces: FaceDetail[] = [
     metrics,
     axes: [],
     instances: [],
-    features: ['kern', 'liga'].map((tag) => ({ tag, name: null })),
+    features: features('kern', 'liga'),
     scripts: ['latn', 'cyrl'],
     ...user,
     legacyFamily: 'JetBrains Mono',
@@ -178,7 +190,7 @@ export const mockFaces: FaceDetail[] = [
     metrics,
     axes: [],
     instances: [],
-    features: ['kern', 'liga'].map((tag) => ({ tag, name: null })),
+    features: features('kern', 'liga'),
     scripts: ['latn'],
     ...user,
     legacyFamily: 'Legacy Grotesk',

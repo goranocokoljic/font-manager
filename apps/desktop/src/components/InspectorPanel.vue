@@ -1,24 +1,68 @@
 <script setup lang="ts">
-// The inspector's tabs. Info is the first; later stories add more tabs here.
+// The inspector's tabs: Info, then Features. Arrow keys move between tabs
+// (WAI-ARIA tabs pattern); only the selected tab is in the Tab order.
+import { nextTick, ref } from 'vue';
+import InspectorFeatures from './InspectorFeatures.vue';
 import InspectorInfo from './InspectorInfo.vue';
+
+const TABS = [
+  { id: 'info', title: 'Info' },
+  { id: 'features', title: 'Features' },
+] as const;
+type TabId = (typeof TABS)[number]['id'];
+
+const current = ref<TabId>('info');
+
+async function onKey(e: KeyboardEvent): Promise<void> {
+  const i = TABS.findIndex((t) => t.id === current.value);
+  let next: number;
+  if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+  else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+  else if (e.key === 'Home') next = 0;
+  else if (e.key === 'End') next = TABS.length - 1;
+  else return;
+  e.preventDefault();
+  current.value = TABS[next]!.id;
+  await nextTick();
+  document.getElementById(`fm-tab-${current.value}`)?.focus();
+}
 </script>
 
 <template>
   <div class="panel">
-    <div class="tabs" role="tablist" aria-label="Inspector tabs">
+    <div class="tabs" role="tablist" aria-label="Inspector tabs" @keydown="onKey">
       <button
-        id="fm-tab-info"
+        v-for="t in TABS"
+        :id="`fm-tab-${t.id}`"
+        :key="t.id"
         type="button"
         role="tab"
         class="tab"
-        aria-selected="true"
-        aria-controls="fm-tabpanel-info"
+        :aria-selected="current === t.id"
+        :aria-controls="`fm-tabpanel-${t.id}`"
+        :tabindex="current === t.id ? 0 : -1"
+        @click="current = t.id"
       >
-        Info
+        {{ t.title }}
       </button>
     </div>
-    <div id="fm-tabpanel-info" role="tabpanel" aria-labelledby="fm-tab-info" tabindex="0">
+    <div
+      v-show="current === 'info'"
+      id="fm-tabpanel-info"
+      role="tabpanel"
+      aria-labelledby="fm-tab-info"
+      tabindex="0"
+    >
       <InspectorInfo />
+    </div>
+    <div
+      v-show="current === 'features'"
+      id="fm-tabpanel-features"
+      role="tabpanel"
+      aria-labelledby="fm-tab-features"
+      tabindex="0"
+    >
+      <InspectorFeatures />
     </div>
   </div>
 </template>
@@ -26,7 +70,7 @@ import InspectorInfo from './InspectorInfo.vue';
 <style scoped>
 .tabs {
   display: flex;
-  gap: 8px;
+  gap: 16px;
   height: 48px;
   align-items: flex-end;
   padding: 0 16px;

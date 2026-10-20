@@ -288,6 +288,14 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     assert_ne!(detail.license.embedding, Embedding::Restricted);
     assert!(detail.code_point_count.is_some_and(|n| n > 0));
     assert!(!detail.features.is_empty());
+    // get_face names registered features and flags shaper and default ones (E10.3).
+    let feature = |tag: &str| detail.features.iter().find(|f| f.tag == tag);
+    let kern = feature("kern").expect("kern");
+    assert_eq!(kern.name.as_deref(), Some("Kerning"));
+    assert!(kern.default_on && !kern.automatic);
+    for f in &detail.features {
+        assert_eq!(f, &crate::features::feature_info(&f.tag), "{}", f.tag);
+    }
 
     let asap = lib
         .api
