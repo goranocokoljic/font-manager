@@ -128,14 +128,17 @@ export const NOISE_FLOOR = 0.02;
 export const COMMENT_MARKER = '<!-- fm-bench -->';
 
 /**
- * `gh run list` arguments for the nightly runs on main whose reports are the
- * gate's baseline. Every conclusion counts: a nightly with a metric over budget
- * (the known-red first scan) is red, and it is still the measurement of main.
- * Its bench-report artifact is uploaded on a red run too; a run without one is skipped.
+ * `gh run list` arguments for the runs on main whose reports are the gate's
+ * baseline: the nightly ones and the ones started by hand on main (every event:
+ * a PR run carries its own branch, never main). One nightly alone is too noisy
+ * a baseline, so a fresh main can be measured on demand. Every conclusion counts:
+ * a run with a metric over budget (the known-red first scan) is red, and it is
+ * still the measurement of main. Its bench-report artifact is uploaded on a red
+ * run too; a run without one is skipped.
  */
 export function nightlyRunsArgs(limit) {
   return [
-    'run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--event', 'schedule', '--status', 'completed',
+    'run', 'list', '--workflow', 'bench.yml', '--branch', 'main', '--status', 'completed',
     '--limit', String(limit), '--json', 'databaseId,headSha,createdAt,url',
   ];
 }
