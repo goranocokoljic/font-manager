@@ -148,7 +148,9 @@ impl Index {
             }
         }
         let mut tally = Tally::new(&cache.slots);
-        let mut families: Vec<FamilyHit> = Vec::with_capacity(hits.len());
+        // Families are ranked on what the hits carry; the summary, the
+        // costly part, is built for the requested page only.
+        let mut ranked: Vec<Ranked<'_>> = Vec::with_capacity(hits.len());
         for (number, (key, faces)) in hits.into_iter().enumerate() {
             let number = u32::try_from(number).unwrap_or(u32::MAX);
             let mut faces: Vec<(&Row, f32, Option<Fit>)> = faces
@@ -167,7 +169,10 @@ impl Index {
             if faces.is_empty() {
                 continue;
             }
-            let Some(family) = members.get(key).map(|m| summary(m, &cache.tag_names)) else {
+            let Some(members) = members.get(key) else {
+                continue;
+            };
+            let Some(first) = members.first() else {
                 continue;
             };
             faces.sort_by(|(a, sa, fa), (b, sb, fb)| {
@@ -179,8 +184,10 @@ impl Index {
                     .then(slant_rank(a.text.slant).cmp(&slant_rank(b.text.slant)))
                     .then(a.id.cmp(&b.id))
             });
-            families.push(FamilyHit {
-                family,
+            ranked.push(Ranked {
+                key,
+                id: first.id,
+                members,
                 score: faces.first().map_or(0.0, |(_, s, _)| *s),
                 missing: faces
                     .first()
@@ -192,19 +199,26 @@ impl Index {
                 faces: faces.iter().map(|(row, _, _)| FaceId(row.id)).collect(),
             });
         }
-        families.sort_by(|a, b| {
-            let lacks = |hit: &FamilyHit| hit.missing.as_ref().map_or(0, |m| m.chars.len());
+        // `key` is the family key of the family's name: the first member's.
+        ranked.sort_by(|a, b| {
+            let lacks = |hit: &Ranked<'_>| hit.missing.as_ref().map_or(0, |m| m.chars.len());
             lacks(a)
                 .cmp(&lacks(b))
                 .then(b.score.total_cmp(&a.score))
-                .then_with(|| family_key(&a.family.name).cmp(&family_key(&b.family.name)))
-                .then(a.family.id.cmp(&b.family.id))
+                .then_with(|| a.key.cmp(b.key))
+                .then(a.id.cmp(&b.id))
         });
-        let total = u32::try_from(families.len()).unwrap_or(u32::MAX);
-        let families = families
+        let total = u32::try_from(ranked.len()).unwrap_or(u32::MAX);
+        let families = ranked
             .into_iter()
             .skip(req.page.offset as usize)
             .take(req.page.limit as usize)
+            .map(|hit| FamilyHit {
+                family: summary(hit.members, &cache.tag_names),
+                faces: hit.faces,
+                score: hit.score,
+                missing: hit.missing,
+            })
             .collect();
         Ok(SearchResponse {
             families,
@@ -499,6 +513,20 @@ impl Index {
         }
         Ok(out)
     }
+}
+
+/// A family that passed the search, before its summary is built.
+struct Ranked<'a> {
+    /// Its grouping key.
+    key: &'a str,
+    /// Its id: the id of its first visible face.
+    id: u32,
+    /// Every visible face of the family, in id order.
+    members: &'a [&'a Row],
+    score: f32,
+    missing: Option<Missing>,
+    /// The faces that matched, best first.
+    faces: Vec<FaceId>,
 }
 
 /// The four-letter tags of a `face.features` JSON array.
