@@ -11,7 +11,7 @@ import { rowActivation } from '../list/activation';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
-import { rowLabel, styleCount, type ListRow } from '../list/rows';
+import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { WATERFALL_SIZES, waterfallLinePx, waterfallRowPx } from '../list/waterfall';
 import { useFontListStore } from '../stores/fontList';
@@ -206,7 +206,7 @@ function onToggle(row: ListRow): void {
           <ActivationDot :state="rowActivation(item.row)" />
           <span class="name">{{
             item.row.kind === 'face'
-              ? `${item.row.family.name} ${item.row.face.style}`
+              ? `${item.row.family.name} ${styleName(item.row)}`
               : item.row.family.name
           }}</span>
           <span v-if="item.row.kind === 'family'" class="count">{{
@@ -231,6 +231,7 @@ function onToggle(row: ListRow): void {
             :color="preview.textColor"
             :fallback="k === 0 ? item.fallback : null"
             :missing="item.missing"
+            :variations="item.variations"
           />
         </template>
         <p v-else class="placeholder">

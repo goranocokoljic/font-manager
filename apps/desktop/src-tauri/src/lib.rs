@@ -16,8 +16,9 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest, ProjectSet,
-    RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
+    PinInstanceRequest, ProjectSet, RenameCollectionRequest, Tag, TagFacesRequest,
+    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
@@ -26,7 +27,7 @@ use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
-    SettingsService, SourceId,
+    SettingsService, SourceId, VirtualStyleId,
 };
 use fm_core::index::Opened;
 use fm_core::{CoreApi, SettingsStore};
@@ -353,6 +354,31 @@ async fn list_sets(state: State<'_, AppState>) -> ApiResult<Vec<ProjectSet>> {
     call(&state, |api| api.list_sets()).await
 }
 
+/// Pins an instance of a variable face as a virtual style of a manual
+/// collection or a project set.
+#[tauri::command]
+async fn pin_instance(
+    state: State<'_, AppState>,
+    req: PinInstanceRequest,
+) -> ApiResult<VirtualStyle> {
+    call(&state, move |api| api.pin_instance(req)).await
+}
+
+/// The virtual styles of one manual collection or one project set.
+#[tauri::command]
+async fn list_virtual_styles(
+    state: State<'_, AppState>,
+    req: VirtualStylesRequest,
+) -> ApiResult<Vec<VirtualStyle>> {
+    call(&state, move |api| api.list_virtual_styles(req)).await
+}
+
+/// Deletes a virtual style; its face stays.
+#[tauri::command]
+async fn delete_virtual_style(state: State<'_, AppState>, style: VirtualStyleId) -> ApiResult<()> {
+    call(&state, move |api| api.delete_virtual_style(style)).await
+}
+
 /// Renames a collection.
 #[tauri::command]
 async fn rename_collection(
@@ -530,6 +556,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             untag_faces,
             update_user_meta,
             list_sets,
+            pin_instance,
+            list_virtual_styles,
+            delete_virtual_style,
             sample_texts,
             render_preview,
             activate,

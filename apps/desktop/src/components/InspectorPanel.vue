@@ -1,13 +1,15 @@
 <script setup lang="ts">
-// The inspector's tabs: Info, Features, then Glyphs. Arrow keys move between tabs
+// The inspector's tabs: Info, Axes, Features, then Glyphs. Arrow keys move between tabs
 // (WAI-ARIA tabs pattern); only the selected tab is in the Tab order.
 import { nextTick, ref } from 'vue';
+import InspectorAxes from './InspectorAxes.vue';
 import InspectorFeatures from './InspectorFeatures.vue';
 import InspectorGlyphs from './InspectorGlyphs.vue';
 import InspectorInfo from './InspectorInfo.vue';
 
 const TABS = [
   { id: 'info', title: 'Info' },
+  { id: 'axes', title: 'Axes' },
   { id: 'features', title: 'Features' },
   { id: 'glyphs', title: 'Glyphs' },
 ] as const;
@@ -56,6 +58,14 @@ async function onKey(e: KeyboardEvent): Promise<void> {
       tabindex="0"
     >
       <InspectorInfo />
+    </div>
+    <div
+      v-show="current === 'axes'"
+      id="fm-tabpanel-axes"
+      role="tabpanel"
+      aria-labelledby="fm-tab-axes"
+    >
+      <InspectorAxes />
     </div>
     <div
       v-show="current === 'features'"
