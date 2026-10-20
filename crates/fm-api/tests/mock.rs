@@ -9,7 +9,7 @@ use fm_api::activation::{
     DeactivateRequest, OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, FontFormat, Page, Slant};
-use fm_api::export::{ExportWebRequest, WebFormat};
+use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
     GlyphsRequest, ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
@@ -1101,6 +1101,52 @@ fn the_glyph_detail_matches_the_glyph_map_and_names_features() {
         })
         .unwrap_err();
     assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+fn svg(api: &Arc<dyn Api>, c: char, wght: Option<f32>) -> Result<String, fm_api::ApiError> {
+    api.export_glyph_svg(GlyphSvgRequest {
+        face: FaceId(1),
+        code_point: c as u32,
+        variations: wght
+            .map(|value| AxisValue {
+                tag: "wght".into(),
+                value,
+            })
+            .into_iter()
+            .collect(),
+    })
+}
+
+#[test]
+fn a_glyph_exports_as_svg_text_and_follows_the_weight() {
+    let api = api();
+    let a = svg(&api, 'a', None).unwrap();
+    assert!(
+        a.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\""),
+        "{a}"
+    );
+    assert!(a.contains("<path d=\"M"), "{a}");
+    let width = api
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 'a' as u32,
+        })
+        .unwrap()
+        .advance_width
+        .unwrap();
+    assert!(a.contains(&format!("viewBox=\"0 0 {width} 1000\"")), "{a}");
+    assert_ne!(
+        svg(&api, 'a', Some(100.0)).unwrap(),
+        svg(&api, 'a', Some(900.0)).unwrap()
+    );
+
+    let space = svg(&api, ' ', None).unwrap();
+    assert!(space.contains("<path d=\"\"/>"), "{space}");
+
+    let err = svg(&api, '\u{10FFFD}', None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    let err = svg(&api, 'a', Some(f32::NAN)).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
 }
 
 #[test]

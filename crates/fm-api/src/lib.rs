@@ -183,6 +183,7 @@ pub fn types() -> specta::Types {
         export::ExportWebResponse,
         export::LicenseInventoryRequest,
         export::LicenseInventory,
+        export::GlyphSvgRequest,
         // workflows
         workflows::BriefRequest,
         workflows::Shortlist,
