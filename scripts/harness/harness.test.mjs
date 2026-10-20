@@ -406,3 +406,32 @@ test('epic summary line names cost, CI and review', () => {
   const line = summaryLine({ id: 'E1.6', issue: 42, pr: 57, billed_usd: 12.4, budget_usd: 15, ci_attempts: 2, ci_failed_platforms: ['macos'], review_rounds: 2, must_fixed: 1, should_total: 2, claim_to_green_sec: 4320 });
   assert.equal(line, '**E1.6 #42** closed — PR #57 · $12.40 of $15 budget · CI attempts 2 (failed: macos) · review rounds 2, must fixed 1, advisory 2 · claim→green 1h12m');
 });
+
+describe('loop-check budget signal (opt-in, #275)', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { writeFileSync } = await import('node:fs');
+  const script = join(import.meta.dirname, 'loop-check.mjs');
+  const run = (extra) => {
+    const dir = mkdtempSync(join(tmpdir(), 'loopcheck-'));
+    try {
+      const rec = (i, billed) => JSON.stringify({ ts: `2026-10-20T0${i}:00:00Z`, outcome: 'merged', budget_usd: 20, billed_usd: billed, must_total: 0, purecontext_calls: 5 });
+      writeFileSync(join(dir, 'stories.jsonl'), [rec(1, 30), rec(2, 30), rec(3, 30), rec(4, 10), rec(5, 10)].join('\n') + '\n');
+      return spawnSync(process.execPath, [script, '--dir', dir, ...extra], { encoding: 'utf8' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  test('3 of 5 over budget is info only without --budget', () => {
+    const r = run([]);
+    assert.equal(r.status, 0, r.stdout);
+    assert.match(r.stdout, /over budget: 3\/5 recent stories/);
+    assert.match(r.stdout, /LOOPCHECK: ok/);
+  });
+
+  test('3 of 5 over budget stops the lane with --budget', () => {
+    const r = run(['--budget']);
+    assert.equal(r.status, 2, r.stdout);
+    assert.match(r.stdout, /LOOPCHECK: stop \| 3 of the last 5 stories went over budget/);
+  });
+});
