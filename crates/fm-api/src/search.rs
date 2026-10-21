@@ -96,6 +96,10 @@ pub struct Filters {
     /// Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3).
     #[serde(default)]
     pub web_ok: Option<bool>,
+    /// Activated within the last this many days (each 24 hours), active now
+    /// or not (E14.3).
+    #[serde(default)]
+    pub activated_within_days: Option<u32>,
 }
 
 /// A search. An empty query with filters lists everything that passes them.

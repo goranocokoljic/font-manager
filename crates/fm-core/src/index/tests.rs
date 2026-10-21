@@ -111,6 +111,7 @@ fn fresh_database_has_every_table_of_the_data_model() {
                 "cmap",
                 "languages",
                 "open_license",
+                "last_activated",
             ][..],
         ),
         (

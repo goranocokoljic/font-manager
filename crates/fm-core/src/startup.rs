@@ -77,9 +77,13 @@ pub fn init() -> Result<Startup, ApiError> {
 }
 
 /// Opens the index in the app-data folder and runs its migrations. A damaged
-/// file is replaced, not reported (see [`Index::open`]).
+/// file is replaced, not reported (see [`Index::open`]). A library that
+/// never had them gets the default smart collections
+/// ([`Index::create_default_collections`]).
 pub fn open_index(paths: &AppPaths) -> Result<Opened, ApiError> {
-    Ok(Index::open(&paths.data.join(INDEX_FILE))?)
+    let mut opened = Index::open(&paths.data.join(INDEX_FILE))?;
+    opened.index.create_default_collections()?;
+    Ok(opened)
 }
 
 /// Creates the app-owned folders (never the library folder, which the user

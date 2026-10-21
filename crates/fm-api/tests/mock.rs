@@ -1863,3 +1863,28 @@ fn the_web_filter_follows_declarations_and_explains_each_face() {
         Some("Declared web license".to_owned())
     );
 }
+
+/// E14.3: "activated within" keeps a face activated once, active now or not.
+#[test]
+fn activated_within_days_keeps_deactivated_faces() {
+    let api = api();
+    let recent = Filters {
+        activated_within_days: Some(30),
+        ..Filters::default()
+    };
+    assert_eq!(faces_of(&api, recent.clone()).unwrap(), []);
+    api.activate(acts(
+        &[3, 4],
+        ActivationMode::Session,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    api.deactivate(DeactivateRequest {
+        target: Some(Target::Faces {
+            faces: vec![FaceId(3)],
+        }),
+        except: None,
+    })
+    .unwrap();
+    assert_eq!(faces_of(&api, recent).unwrap(), [FaceId(3), FaceId(4)]);
+}

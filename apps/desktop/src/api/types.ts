@@ -939,6 +939,11 @@ export type Filters = {
 	openLicense?: boolean | null,
 	/**  Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3). */
 	webOk?: boolean | null,
+	/**
+	 *  Activated within the last this many days (each 24 hours), active now
+	 *  or not (E14.3).
+	 */
+	activatedWithinDays?: number | null,
 };
 
 /**  The file format of a font. */

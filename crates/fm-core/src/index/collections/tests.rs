@@ -818,3 +818,261 @@ fn bad_rules_are_refused_and_nothing_is_kept() {
     assert_eq!(both.code(), ErrorCode::InvalidRequest);
     assert!(index.collections().expect("list").is_empty());
 }
+
+/// The default smart collections in sidebar order.
+const DEFAULTS: [&str; 6] = [
+    "Recently added",
+    "Recently activated",
+    "Variable",
+    "Monospace",
+    "Web-licensed",
+    "Problems",
+];
+
+#[test]
+fn a_new_library_gets_the_six_defaults_as_plain_rules() {
+    let (mut index, _) = library();
+    assert!(index.create_default_collections().expect("defaults"));
+    let all = index.collections().expect("list");
+    assert_eq!(tree(&index), DEFAULTS);
+    let rule = |name: &str| {
+        all.iter()
+            .find(|c| c.name == name)
+            .and_then(|c| c.rule_group.as_ref())
+            .and_then(|g| g.plain_filters().cloned())
+            .unwrap_or_else(|| panic!("{name} is not one plain rule"))
+    };
+    let want = |set: fn(&mut Filters)| {
+        let mut f = Filters::default();
+        set(&mut f);
+        f
+    };
+    assert_eq!(
+        rule("Recently added"),
+        want(|f| f.added_within_days = Some(30))
+    );
+    assert_eq!(
+        rule("Recently activated"),
+        want(|f| f.activated_within_days = Some(30))
+    );
+    assert_eq!(rule("Variable"), want(|f| f.variable = Some(true)));
+    assert_eq!(
+        rule("Monospace"),
+        want(|f| f.classification = vec![Classification::Mono])
+    );
+    assert_eq!(rule("Web-licensed"), want(|f| f.web_ok = Some(true)));
+    assert_eq!(rule("Problems"), want(|f| f.problems = Some(true)));
+}
+
+#[test]
+fn defaults_are_made_once_and_a_renamed_or_deleted_one_stays_so() {
+    let dir = crate::test_support::TempDir::new("collections-defaults-once");
+    let path = dir.path().join(crate::index::INDEX_FILE);
+    {
+        let mut index = Index::open(&path).expect("open").index;
+        assert!(index.create_default_collections().expect("defaults"));
+        let all = index.collections().expect("list");
+        let id = |name: &str| all.iter().find(|c| c.name == name).expect(name).id;
+        index
+            .rename_collection(&RenameCollectionRequest {
+                collection: id("Variable"),
+                name: "Variable fonts".into(),
+            })
+            .expect("rename");
+        index.delete_collection(id("Problems")).expect("delete");
+    }
+    let want = [
+        "Recently added",
+        "Recently activated",
+        "Variable fonts",
+        "Monospace",
+        "Web-licensed",
+    ];
+    // The next start.
+    let mut index = Index::open(&path).expect("reopen").index;
+    assert!(!index.create_default_collections().expect("defaults"));
+    assert_eq!(tree(&index), want);
+    // An index rebuild.
+    index.rebuild().expect("rebuild");
+    assert!(!index.create_default_collections().expect("defaults"));
+    assert_eq!(tree(&index), want);
+}
+
+#[test]
+fn a_default_whose_name_is_taken_is_skipped() {
+    let (mut index, _) = library();
+    create(&mut index, "Variable", None);
+    assert!(index.create_default_collections().expect("defaults"));
+    let all = index.collections().expect("list");
+    assert_eq!(all.len(), 6);
+    let variable: Vec<_> = all.iter().filter(|c| c.name == "Variable").collect();
+    assert_eq!(variable.len(), 1);
+    assert!(
+        variable[0].rule_group.is_none(),
+        "the user's own collection stays"
+    );
+    assert_eq!(all[0].name, "Variable");
+}
+
+/// Criterion 4 (E14.3): on `fixtures/fonts`, each default holds exactly the
+/// faces worked out here from the parsed data and the times set below.
+#[test]
+fn on_the_fixtures_each_default_holds_exactly_its_faces() {
+    use std::collections::{BTreeSet, HashMap};
+
+    use fm_api::activation::ActivationMode;
+    use fm_platform::{Mode, Registration};
+
+    use crate::license;
+    use crate::scanner::{discover, hash_and_parse};
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts");
+    let found = discover(&root).expect("discover");
+    let files: Vec<IndexedFile> = found
+        .files
+        .iter()
+        .map(|f| {
+            let (hash, parsed) = hash_and_parse(&f.path).expect("read fixture");
+            IndexedFile {
+                path: f.path.clone(),
+                size: f.size,
+                modified: f.modified,
+                hash,
+                parsed,
+                gone: false,
+            }
+        })
+        .collect();
+    assert!(files.len() >= 150, "the fixture corpus: {}", files.len());
+
+    let mut index = Index::open_in_memory().expect("open");
+    let source = index
+        .add_source(&root.to_string_lossy(), SourceKind::Watched)
+        .expect("source")
+        .id;
+    index.persist_files(source, &files).expect("persist");
+    let mut parsed: HashMap<(String, u32), &ParsedFace> = HashMap::new();
+    for file in &files {
+        for face in &file.parsed.faces {
+            parsed.insert((file.path.to_string_lossy().into_owned(), face.index), face);
+        }
+    }
+    let faces: Vec<(FaceId, &ParsedFace)> = {
+        let mut stmt = index
+            .conn
+            .prepare(
+                "SELECT face.id, font_file.path, face.collection_index
+                 FROM face JOIN font_file ON font_file.id = face.file_id ORDER BY face.id",
+            )
+            .expect("prepare");
+        stmt.query_map([], |r| {
+            Ok((
+                FaceId(r.get(0)?),
+                r.get::<_, String>(1)?,
+                r.get::<_, u32>(2)?,
+            ))
+        })
+        .expect("query")
+        .map(|row| {
+            let (id, path, at) = row.expect("row");
+            (id, *parsed.get(&(path, at)).expect("parsed face"))
+        })
+        .collect()
+    };
+    assert_eq!(faces.len(), parsed.len());
+
+    // Times: every fourth face was added 40 days ago; faces 0 and 1 are
+    // activated now and face 1 is deactivated again; face 2 was last
+    // activated 40 days ago.
+    let ids: Vec<FaceId> = faces.iter().map(|(id, _)| *id).collect();
+    for id in ids.iter().step_by(4) {
+        index
+            .conn
+            .execute(
+                "UPDATE face SET added = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-40 days')
+                 WHERE id = ?1",
+                [id.0],
+            )
+            .expect("old face");
+    }
+    let reg = |i: usize| Registration {
+        path: files[0].path.clone(),
+        mode: Mode::Session,
+        handle: format!("h{i}").into(),
+    };
+    index
+        .record_activations(&[
+            (ids[0], ActivationMode::Session, reg(0)),
+            (ids[1], ActivationMode::Session, reg(1)),
+        ])
+        .expect("activate");
+    index.remove_activations(&[ids[1]]).expect("deactivate");
+    index
+        .conn
+        .execute(
+            "UPDATE face SET last_activated = strftime('%Y-%m-%dT%H:%M:%SZ', 'now', '-40 days')
+             WHERE id = ?1",
+            [ids[2].0],
+        )
+        .expect("long ago");
+
+    let expect = |keep: &dyn Fn(usize, &ParsedFace) -> bool| -> BTreeSet<FaceId> {
+        faces
+            .iter()
+            .enumerate()
+            .filter(|(i, (_, face))| keep(*i, face))
+            .map(|(_, (id, _))| *id)
+            .collect()
+    };
+    let want: Vec<(&str, BTreeSet<FaceId>)> = vec![
+        ("Recently added", expect(&|i, _| i % 4 != 0)),
+        ("Recently activated", expect(&|i, _| i < 2)),
+        ("Variable", expect(&|_, f| !f.axes.is_empty())),
+        (
+            "Monospace",
+            expect(&|_, f| {
+                f.classification
+                    .is_some_and(|c| c.class == Classification::Mono)
+            }),
+        ),
+        (
+            "Web-licensed",
+            expect(&|_, f| {
+                license::web_use(
+                    license::embedding(f.fs_type.unwrap_or(0)),
+                    license::open_license(f.license.as_deref(), f.license_url.as_deref()),
+                    None,
+                )
+                .ok()
+            }),
+        ),
+        ("Problems", expect(&|_, f| f.health != Health::Ok)),
+    ];
+
+    assert!(index.create_default_collections().expect("defaults"));
+    let all = index.collections().expect("list");
+    for (name, want) in want {
+        assert!(!want.is_empty(), "{name}: the fixtures hold no such face");
+        let c = all.iter().find(|c| c.name == name).expect(name);
+        let res = index
+            .search(&SearchRequest {
+                filters: Filters {
+                    collection: Some(c.id),
+                    ..Filters::default()
+                },
+                page: fm_api::common::Page {
+                    offset: 0,
+                    limit: 10_000,
+                },
+                ..SearchRequest::default()
+            })
+            .expect("search");
+        let got: BTreeSet<FaceId> = res
+            .families
+            .iter()
+            .flat_map(|f| f.faces.iter().copied())
+            .collect();
+        assert_eq!(got, want, "{name}");
+        assert_eq!(c.face_count as usize, want.len(), "{name} count");
+    }
+}

@@ -30,7 +30,7 @@ use std::collections::{HashMap, HashSet};
 
 use fm_api::activation::ActivationMode;
 use fm_api::common::Paged;
-use fm_api::common::{Axis, FontFormat, Slant};
+use fm_api::common::{Axis, Classification, FontFormat, Slant};
 use fm_api::library::{
     FamilyActivation, FamilySort, FamilySummary, LicenseType, ListFamiliesRequest, OpenLicense,
     StyleMark,
@@ -43,8 +43,8 @@ use super::{Index, db_error};
 use crate::coverage::{CodePointSet, Fit};
 use crate::error::{FmError, FmResult};
 use crate::filter::{
-    FaceFacts, Slots, Tag, Tally, failed, failed_added, failed_supports, tag, values,
-    with_collection,
+    FaceFacts, Slots, Tag, Tally, failed, failed_activated, failed_added, failed_supports, tag,
+    values, with_collection,
 };
 use crate::grouping::{family_key, slant_rank};
 use crate::license;
@@ -65,7 +65,9 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
             THEN json_extract(face.parsed, '$.loclLanguages') END,
        CASE WHEN typeof(font_file.path) = 'text' THEN font_file.path END,
        CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.version') END,
-       face.open_license, face.fstype
+       face.open_license, face.fstype, face.last_activated,
+       CASE WHEN json_valid(face.parsed)
+            THEN json_extract(face.parsed, '$.classification.class') END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -101,6 +103,8 @@ struct Row {
     slots: Vec<u32>,
     active: Option<ActivationMode>,
     added: Option<String>,
+    /// When it was last activated, active now or not (E14.3).
+    last_activated: Option<String>,
     /// Styles it lists under its family: its named instances, or itself.
     styles: u32,
     /// The code points it maps; `None` when not stored (indexed before E3.7)
@@ -129,6 +133,7 @@ impl Index {
         let member = self.collection_member(req.filters.collection)?;
         let need = smart::need(&req.filters)?;
         let cutoff = smart::cutoff(&self.conn, req.filters.added_within_days)?;
+        let activated_cutoff = smart::cutoff(&self.conn, req.filters.activated_within_days)?;
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
@@ -158,7 +163,11 @@ impl Index {
                 .into_iter()
                 .filter_map(|(row, score)| {
                     let mut failed = failed(&req.filters, &row.text, &row.facts)
-                        | failed_added(cutoff.as_deref(), row.added.as_deref());
+                        | failed_added(cutoff.as_deref(), row.added.as_deref())
+                        | failed_activated(
+                            activated_cutoff.as_deref(),
+                            row.last_activated.as_deref(),
+                        );
                     if let Some(member) = &member {
                         failed = with_collection(failed, member.holds(row, &[]));
                     }
@@ -401,6 +410,7 @@ impl Index {
         let mut formats = Names::new(|f| format_from_sql(f).ok().flatten());
         let mut licenses = Names::new(name_of::<LicenseType>);
         let mut open_licenses = Names::new(name_of::<OpenLicense>);
+        let mut classes = Names::new(name_of::<Classification>);
         // A family's declared license (E15.2) is every one of its faces'.
         let declared = self.all_declared_types()?;
         while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
@@ -433,7 +443,7 @@ impl Index {
             features.sort_unstable();
             let open_license = text(28)?.and_then(|l| open_licenses.get(l));
             let facts = FaceFacts {
-                classification: None,
+                classification: text(31)?.and_then(|c| classes.get(c)),
                 is_variable,
                 color: row.get(22).map_err(|e| db_error(&e))?,
                 format: text(13)?.and_then(|f| formats.get(f)),
@@ -469,6 +479,7 @@ impl Index {
                 facts,
                 active,
                 added: text(15)?.map(str::to_owned),
+                last_activated: text(30)?.map(str::to_owned),
                 styles: instances
                     .and_then(|n| u32::try_from(n).ok())
                     .unwrap_or(0)
