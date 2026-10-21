@@ -106,4 +106,27 @@ describe('views store', () => {
     );
     expect(freshStore().presetFor(ALL_FONTS_VIEW)).toBe('book');
   });
+
+  it('saves the layout file a view shows; a preset pick sets it, a bad id is ignored', async () => {
+    const store = freshStore();
+    expect(store.layoutFor(ALL_FONTS_VIEW)).toBe('book');
+    store.setPreset(ALL_FONTS_VIEW, 'quote');
+    expect(store.layoutFor(ALL_FONTS_VIEW)).toBe('quote');
+    store.setLayout(ALL_FONTS_VIEW, 'quote-copy');
+    store.setLayout(ALL_FONTS_VIEW, '../evil');
+    await nextTick();
+    const again = freshStore();
+    expect(again.layoutFor(ALL_FONTS_VIEW)).toBe('quote-copy');
+    expect(again.presetFor(ALL_FONTS_VIEW)).toBe('quote');
+    again.setLayout(ALL_FONTS_VIEW, 'waterfall');
+    expect(again.presetFor(ALL_FONTS_VIEW)).toBe('waterfall');
+
+    localStorage.setItem(
+      VIEWS_STORAGE_KEY,
+      JSON.stringify({
+        [ALL_FONTS_VIEW]: { mode: 'layout', preset: 'columns', layout: '.hidden' },
+      }),
+    );
+    expect(freshStore().layoutFor(ALL_FONTS_VIEW)).toBe('columns');
+  });
 });

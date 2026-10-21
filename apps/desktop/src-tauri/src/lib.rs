@@ -9,7 +9,10 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
-use fm_api::layout::Layout;
+use fm_api::layout::{
+    DuplicateLayoutRequest, Layout, LayoutEntry, LayoutRef, LayoutVersion, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+};
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
@@ -266,6 +269,60 @@ async fn layout_presets(state: State<'_, AppState>) -> ApiResult<Vec<Layout>> {
 #[tauri::command]
 async fn clamp_layout(state: State<'_, AppState>, req: Layout) -> ApiResult<Layout> {
     call(&state, move |api| api.clamp_layout(req)).await
+}
+
+/// Every layout template file in the layouts folder, broken ones with the reason.
+#[tauri::command]
+async fn list_layouts(state: State<'_, AppState>) -> ApiResult<Vec<LayoutEntry>> {
+    call(&state, move |api| api.list_layouts()).await
+}
+
+/// One saved layout.
+#[tauri::command]
+async fn get_layout(state: State<'_, AppState>, req: LayoutRef) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.get_layout(req)).await
+}
+
+/// Saves a layout; the content it replaces becomes a version.
+#[tauri::command]
+async fn save_layout(state: State<'_, AppState>, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.save_layout(req)).await
+}
+
+/// Copies a layout into a new template file.
+#[tauri::command]
+async fn duplicate_layout(
+    state: State<'_, AppState>,
+    req: DuplicateLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.duplicate_layout(req)).await
+}
+
+/// The saved file again, or a preset's shipped original.
+#[tauri::command]
+async fn revert_layout(
+    state: State<'_, AppState>,
+    req: RevertLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.revert_layout(req)).await
+}
+
+/// The kept versions of a layout, newest first.
+#[tauri::command]
+async fn layout_history(
+    state: State<'_, AppState>,
+    req: LayoutRef,
+) -> ApiResult<Vec<LayoutVersion>> {
+    call(&state, move |api| api.layout_history(req)).await
+}
+
+/// Makes a kept version current.
+#[tauri::command]
+async fn restore_layout(
+    state: State<'_, AppState>,
+    req: RestoreLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.restore_layout(req)).await
 }
 
 #[tauri::command]
@@ -617,6 +674,13 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             css_values,
             layout_presets,
             clamp_layout,
+            list_layouts,
+            get_layout,
+            save_layout,
+            duplicate_layout,
+            revert_layout,
+            layout_history,
+            restore_layout,
             render_preview,
             activate,
             deactivate,

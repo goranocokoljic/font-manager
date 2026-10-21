@@ -157,6 +157,40 @@ describe('FontLayout', () => {
     expect(style(w, 0).fontFamily).toContain(`fm-face-${mono.id}`);
   });
 
+  it('an editable block opens its text in the same face and hands back the edit', async () => {
+    const w = mount(FontLayout, {
+      props: { layout: preset('quote'), face: inter, editable: true },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    const second = blocks(w)[1]!;
+    expect(second.attributes('aria-label')).toBe('Block 2');
+    await second.trigger('dblclick');
+    const box = w.find('[data-testid="layout-block-editor"]');
+    expect(box.attributes('aria-label')).toBe('Block 2 text');
+    expect((box.element as HTMLElement).style.fontFamily).toContain(`fm-face-${inter.id}`);
+    expect(document.activeElement).toBe(box.element);
+    await box.setValue('Someone else');
+    await box.trigger('blur');
+    expect(w.emitted('edit-text')).toEqual([[1, 'Someone else']]);
+
+    // Escape drops the edit; an unchanged text emits nothing.
+    await blocks(w)[0]!.trigger('keydown', { key: 'Enter' });
+    const again = w.find('[data-testid="layout-block-editor"]');
+    await again.setValue('Not kept');
+    await again.trigger('keydown', { key: 'Escape' });
+    expect(w.find('[data-testid="layout-block-editor"]').exists()).toBe(false);
+    expect(w.emitted('edit-text')).toHaveLength(1);
+    w.unmount();
+  });
+
+  it('a block that is not editable never opens a text box', async () => {
+    const w = await show('book');
+    await blocks(w)[0]!.trigger('dblclick');
+    expect(w.find('[data-testid="layout-block-editor"]').exists()).toBe(false);
+    expect(blocks(w)[0]!.attributes('tabindex')).toBeUndefined();
+  });
+
   it('asks for a font when nothing is selected', async () => {
     const w = mount(FontLayout, { props: { layout: preset('book'), face: null } });
     expect(w.text()).toContain('Select a font');

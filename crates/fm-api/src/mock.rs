@@ -22,7 +22,11 @@ use crate::export::{
     ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest, WebFormat,
 };
-use crate::layout::{BlockAlign, BlockOverflow, Layout, LayoutPreset, TextBlock};
+use crate::layout::{
+    BlockAlign, BlockOverflow, DuplicateLayoutRequest, Layout, LayoutEntry, LayoutPreset,
+    LayoutRef, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    SavedLayout, TextBlock,
+};
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphDetail,
@@ -167,8 +171,19 @@ struct State {
     trashed: BTreeSet<String>,
     /// "Keep this one" actions, oldest first.
     resolutions: Vec<Resolution>,
+    /// The layout template files, in the order they were made.
+    layouts: Vec<MockLayoutFile>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
+}
+
+/// A layout template file of the mock: its content (or why it is broken) and
+/// its kept versions, oldest first.
+#[derive(Debug, Clone)]
+struct MockLayoutFile {
+    id: String,
+    content: Result<Layout, String>,
+    versions: Vec<(u32, Result<Layout, String>)>,
 }
 
 /// Every service on in-memory sample data. Cheap to create; each instance has
@@ -534,6 +549,7 @@ impl State {
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
+            layouts: mock_layout_files(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -3018,6 +3034,270 @@ impl LayoutService for MockApi {
             .collect();
         Ok(Layout { blocks, ..layout })
     }
+
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {
+        let st = self.state();
+        let mut entries: Vec<LayoutEntry> = st.layouts.iter().map(mock_layout_entry).collect();
+        let rank = |e: &LayoutEntry| {
+            MOCK_PRESET_IDS
+                .iter()
+                .position(|id| *id == e.id)
+                .unwrap_or(MOCK_PRESET_IDS.len())
+        };
+        entries.sort_by(|a, b| {
+            rank(a)
+                .cmp(&rank(b))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(entries)
+    }
+
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout> {
+        let st = self.state();
+        let layout = mock_layout_content(mock_layout_file(&st.layouts, &req.id)?)?;
+        Ok(SavedLayout { id: req.id, layout })
+    }
+
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+        let layout = self.clamp_layout(req.layout)?;
+        mock_save_layout(&mut self.state().layouts, &req.id, layout)
+    }
+
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let source = mock_layout_content(mock_layout_file(&st.layouts, &req.id)?)?;
+        let taken: Vec<String> = st
+            .layouts
+            .iter()
+            .map(|f| mock_layout_entry(f).name.to_lowercase())
+            .collect();
+        let name = match req.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+            Some(n) if taken.contains(&n.to_lowercase()) => {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("There is already a layout named \u{201c}{n}\u{201d}."),
+                ));
+            }
+            Some(n) => n.to_owned(),
+            None => (1..)
+                .map(|i| match i {
+                    1 => format!("{} copy", source.name),
+                    _ => format!("{} copy {i}", source.name),
+                })
+                .find(|n| !taken.contains(&n.to_lowercase()))
+                .unwrap_or_else(|| format!("{} copy", source.name)),
+        };
+        let base = mock_slug(&name);
+        let id = (1..)
+            .map(|i| match i {
+                1 => base.clone(),
+                _ => format!("{base}-{i}"),
+            })
+            .find(|c| st.layouts.iter().all(|f| &f.id != c))
+            .unwrap_or(base);
+        mock_save_layout(&mut st.layouts, &id, Layout { name, ..source })
+    }
+
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let file = mock_layout_file(&st.layouts, &req.id)?;
+        if !req.to_original {
+            let layout = mock_layout_content(file)?;
+            return Ok(SavedLayout { id: req.id, layout });
+        }
+        let (preset, name) = match &file.content {
+            Ok(l) => (l.preset, Some(l.name.clone())),
+            Err(_) => (mock_preset_of_id(&req.id), None),
+        };
+        let Some(preset) = preset else {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                "Only a layout that started from a preset can be reset to its original.",
+            ));
+        };
+        let original = mock_preset(preset);
+        let name = name.unwrap_or_else(|| original.name.clone());
+        mock_save_layout(&mut st.layouts, &req.id, Layout { name, ..original })
+    }
+
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>> {
+        let st = self.state();
+        let file = mock_layout_file(&st.layouts, &req.id)?;
+        Ok(file
+            .versions
+            .iter()
+            .rev()
+            .map(|(number, content)| LayoutVersion {
+                number: *number,
+                saved_at: MOCK_NOW.to_owned(),
+                name: content.as_ref().ok().map(|l| l.name.clone()),
+                broken: content.as_ref().err().cloned(),
+            })
+            .collect())
+    }
+
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let content = mock_layout_file(&st.layouts, &req.id)?
+            .versions
+            .iter()
+            .find(|(n, _)| *n == req.number)
+            .map(|(_, c)| c.clone())
+            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "That version is no longer kept."))?;
+        let layout = content.map_err(|reason| {
+            ApiError::new(
+                ErrorCode::InvalidRequest,
+                "This version cannot be restored: it is not a valid layout.",
+            )
+            .with_detail(reason)
+        })?;
+        mock_save_layout(&mut st.layouts, &req.id, layout)
+    }
+}
+
+/// The ids of the preset files, in picker order (`fm_core::layout::store`).
+const MOCK_PRESET_IDS: [&str; 6] = [
+    "book",
+    "columns",
+    "magazine",
+    "quote",
+    "characters",
+    "waterfall",
+];
+
+/// How many earlier versions of one template the mock keeps (as the core).
+pub const MOCK_MAX_LAYOUT_VERSIONS: usize = 20;
+
+fn mock_preset_of_id(id: &str) -> Option<LayoutPreset> {
+    const PRESETS: [LayoutPreset; 6] = [
+        LayoutPreset::Book,
+        LayoutPreset::Columns,
+        LayoutPreset::Magazine,
+        LayoutPreset::Quote,
+        LayoutPreset::Characters,
+        LayoutPreset::Waterfall,
+    ];
+    MOCK_PRESET_IDS
+        .iter()
+        .position(|p| *p == id)
+        .map(|i| PRESETS[i])
+}
+
+/// The six preset files and one hand-edited file that is not valid JSON.
+fn mock_layout_files() -> Vec<MockLayoutFile> {
+    let mut files: Vec<MockLayoutFile> = MOCK_PRESET_IDS
+        .iter()
+        .filter_map(|id| {
+            Some(MockLayoutFile {
+                id: (*id).to_owned(),
+                content: Ok(mock_preset(mock_preset_of_id(id)?)),
+                versions: Vec::new(),
+            })
+        })
+        .collect();
+    files.push(MockLayoutFile {
+        id: "draft".to_owned(),
+        content: Err("Not valid JSON: EOF while parsing an object at line 3 column 0".to_owned()),
+        versions: Vec::new(),
+    });
+    files
+}
+
+fn mock_layout_entry(file: &MockLayoutFile) -> LayoutEntry {
+    match &file.content {
+        Ok(l) => LayoutEntry {
+            id: file.id.clone(),
+            name: l.name.clone(),
+            preset: l.preset,
+            broken: None,
+        },
+        Err(reason) => LayoutEntry {
+            id: file.id.clone(),
+            name: file.id.clone(),
+            preset: mock_preset_of_id(&file.id),
+            broken: Some(reason.clone()),
+        },
+    }
+}
+
+fn mock_layout_file<'a>(files: &'a [MockLayoutFile], id: &str) -> ApiResult<&'a MockLayoutFile> {
+    files
+        .iter()
+        .find(|f| f.id == id)
+        .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "That layout no longer exists."))
+}
+
+fn mock_layout_content(file: &MockLayoutFile) -> ApiResult<Layout> {
+    file.content.clone().map_err(|reason| {
+        ApiError::new(
+            ErrorCode::InvalidRequest,
+            "This layout file cannot be read. Fix it by hand or save over it.",
+        )
+        .with_detail(reason)
+    })
+}
+
+/// A file-name id for `name`, as the core makes it.
+fn mock_slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().flat_map(char::to_lowercase) {
+        if c.is_alphanumeric() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "layout".to_owned()
+    } else {
+        out
+    }
+}
+
+/// Writes `layout` to `id` (a new file when there is none); the content it
+/// replaces becomes the newest version, the oldest past the cap dropped.
+fn mock_save_layout(
+    files: &mut Vec<MockLayoutFile>,
+    id: &str,
+    layout: Layout,
+) -> ApiResult<SavedLayout> {
+    if id.is_empty() || id.starts_with('.') || id.contains(['/', '\\', ':']) {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "That is not a layout name the app can use.",
+        ));
+    }
+    if layout.name.trim().is_empty() {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "A layout needs a name.",
+        ));
+    }
+    let saved = SavedLayout {
+        id: id.to_owned(),
+        layout: layout.clone(),
+    };
+    let Some(file) = files.iter_mut().find(|f| f.id == id) else {
+        files.push(MockLayoutFile {
+            id: id.to_owned(),
+            content: Ok(layout),
+            versions: Vec::new(),
+        });
+        return Ok(saved);
+    };
+    if file.content.as_ref() == Ok(&layout) {
+        return Ok(saved);
+    }
+    let number = file.versions.last().map_or(1, |(n, _)| n + 1);
+    let old = std::mem::replace(&mut file.content, Ok(layout));
+    file.versions.push((number, old));
+    let excess = file.versions.len().saturating_sub(MOCK_MAX_LAYOUT_VERSIONS);
+    file.versions.drain(..excess);
+    Ok(saved)
 }
 
 impl EventSource for MockApi {

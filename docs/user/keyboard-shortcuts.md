@@ -36,6 +36,14 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
 
+## In the layout
+
+| Key | What it does |
+|-----|--------------|
+| `Enter` | Edit the text of the block that has the focus |
+| `Ctrl+Enter` | Keep the edit and close the text box |
+| `Esc` | Drop the edit and close the text box |
+
 ## The command palette
 
 Press `Ctrl+K` and type a few letters of a command, for example "act" for the

@@ -43,6 +43,9 @@ import {
   type JobId,
   type LanguagePreset,
   type Layout,
+  type LayoutEntry,
+  type LayoutVersion,
+  type SavedLayout,
   type PreviewImage,
   type PreviewRequest,
   type Problem,
@@ -953,6 +956,158 @@ export function mockClampLayout(layout: Layout): Layout {
   };
 }
 
+/** How many earlier versions of one template the mock keeps (as the core). */
+export const MOCK_MAX_LAYOUT_VERSIONS = 20;
+const MOCK_PRESET_IDS: string[] = MOCK_LAYOUT_PRESETS.map((l) => l.preset ?? '');
+
+type MockLayoutContent = { layout: Layout } | { broken: string };
+type MockLayoutFile = {
+  id: string;
+  content: MockLayoutContent;
+  versions: { number: number; content: MockLayoutContent }[];
+};
+
+/** A file-name id for `name`, as the core makes it. */
+function mockSlug(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'layout';
+}
+
+/**
+ * The layout template files of the mock (`fm_core::layout::store`): the six presets and one
+ * hand-edited file that is not valid JSON. A save that changes the file keeps what it replaces
+ * as a version, the newest 20 kept.
+ */
+function createMockLayouts(): Pick<
+  FmClient,
+  | 'listLayouts'
+  | 'getLayout'
+  | 'saveLayout'
+  | 'duplicateLayout'
+  | 'revertLayout'
+  | 'layoutHistory'
+  | 'restoreLayout'
+> {
+  const files: MockLayoutFile[] = [
+    ...MOCK_LAYOUT_PRESETS.map((l) => ({
+      id: l.preset ?? '',
+      content: { layout: structuredClone(l) },
+      versions: [],
+    })),
+    {
+      id: 'draft',
+      content: { broken: 'Not valid JSON: EOF while parsing an object at line 3 column 0' },
+      versions: [],
+    },
+  ];
+  const err = (
+    code: 'notFound' | 'invalidRequest' | 'conflict',
+    message: string,
+    detail: string | null = null,
+  ) => ({ code, message, detail });
+  const file = (id: string) => {
+    const f = files.find((x) => x.id === id);
+    if (!f) throw err('notFound', 'That layout no longer exists.');
+    return f;
+  };
+  const content = (f: MockLayoutFile): Layout => {
+    if ('broken' in f.content)
+      throw err(
+        'invalidRequest',
+        'This layout file cannot be read. Fix it by hand or save over it.',
+        f.content.broken,
+      );
+    return structuredClone(f.content.layout);
+  };
+  const presetOfId = (id: string): Layout['preset'] =>
+    MOCK_LAYOUT_PRESETS.find((l) => l.preset === id)?.preset ?? null;
+  const entry = (f: MockLayoutFile): LayoutEntry =>
+    'broken' in f.content
+      ? { id: f.id, name: f.id, preset: presetOfId(f.id), broken: f.content.broken }
+      : { id: f.id, name: f.content.layout.name, preset: f.content.layout.preset, broken: null };
+  const save = (id: string, raw: Layout): SavedLayout => {
+    if (!id || id.startsWith('.') || /[/\\:]/.test(id))
+      throw err('invalidRequest', 'That is not a layout name the app can use.');
+    if (!raw.name.trim()) throw err('invalidRequest', 'A layout needs a name.');
+    const layout = mockClampLayout(raw);
+    const f = files.find((x) => x.id === id);
+    if (!f) {
+      files.push({ id, content: { layout }, versions: [] });
+    } else if (
+      !('layout' in f.content) ||
+      JSON.stringify(f.content.layout) !== JSON.stringify(layout)
+    ) {
+      const number = (f.versions.at(-1)?.number ?? 0) + 1;
+      f.versions.push({ number, content: f.content });
+      f.content = { layout };
+      f.versions.splice(0, Math.max(0, f.versions.length - MOCK_MAX_LAYOUT_VERSIONS));
+    }
+    return { id, layout: structuredClone(layout) };
+  };
+  const rank = (e: LayoutEntry) => {
+    const i = MOCK_PRESET_IDS.indexOf(e.id);
+    return i < 0 ? MOCK_PRESET_IDS.length : i;
+  };
+  return {
+    listLayouts: async () =>
+      files
+        .map(entry)
+        .sort(
+          (a, b) =>
+            rank(a) - rank(b) ||
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase()) ||
+            a.id.localeCompare(b.id),
+        ),
+    getLayout: async ({ id }) => ({ id, layout: content(file(id)) }),
+    saveLayout: async ({ id, layout }) => save(id, layout),
+    duplicateLayout: async ({ id, name }) => {
+      const source = content(file(id));
+      const taken = files.map((f) => entry(f).name.toLowerCase());
+      let copyName = name?.trim() ?? '';
+      if (copyName && taken.includes(copyName.toLowerCase()))
+        throw err('conflict', `There is already a layout named “${copyName}”.`);
+      for (let i = 1; !copyName; i++) {
+        const n = i === 1 ? `${source.name} copy` : `${source.name} copy ${i}`;
+        if (!taken.includes(n.toLowerCase())) copyName = n;
+      }
+      const base = mockSlug(copyName);
+      let newId = base;
+      for (let i = 2; files.some((f) => f.id === newId); i++) newId = `${base}-${i}`;
+      return save(newId, { ...source, name: copyName });
+    },
+    revertLayout: async ({ id, toOriginal }) => {
+      const f = file(id);
+      if (!toOriginal) return { id, layout: content(f) };
+      const preset = 'layout' in f.content ? f.content.layout.preset : presetOfId(id);
+      const original = MOCK_LAYOUT_PRESETS.find((l) => l.preset === preset);
+      if (!preset || !original)
+        throw err(
+          'invalidRequest',
+          'Only a layout that started from a preset can be reset to its original.',
+        );
+      const name = 'layout' in f.content ? f.content.layout.name : original.name;
+      return save(id, { ...structuredClone(original), name });
+    },
+    layoutHistory: async ({ id }): Promise<LayoutVersion[]> =>
+      [...file(id).versions].reverse().map((v) => ({
+        number: v.number,
+        savedAt: '2026-10-16T09:00:00Z',
+        name: 'layout' in v.content ? v.content.layout.name : null,
+        broken: 'broken' in v.content ? v.content.broken : null,
+      })),
+    restoreLayout: async ({ id, number }) => {
+      const v = file(id).versions.find((x) => x.number === number);
+      if (!v) throw err('notFound', 'That version is no longer kept.');
+      if ('broken' in v.content)
+        throw err('invalidRequest', 'This version cannot be restored: it is not a valid layout.');
+      return save(id, structuredClone(v.content.layout));
+    },
+  };
+}
+
 export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
   const sources = structuredClone(mockSources);
@@ -1248,6 +1403,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     getAppInfo: async () => mockAppInfo,
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
+    ...createMockLayouts(),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);

@@ -1,8 +1,11 @@
 //! Body-text layouts (E12.1): the six presets and the ranges every block
-//! value is clamped into. The UI renders a layout as live text in the webview;
-//! this module only decides what the blocks are.
+//! value is clamped into; [`store`] keeps layouts as template files (E12.5).
+//! The UI renders a layout as live text in the webview; this module only
+//! decides what the blocks are.
 
 use fm_api::layout::{BlockAlign, BlockOverflow, Layout, LayoutPreset, TextBlock};
+
+pub mod store;
 
 /// The range of a block value and what a value that is not a number becomes.
 #[derive(Debug, Clone, Copy, PartialEq)]
