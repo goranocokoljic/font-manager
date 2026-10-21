@@ -518,14 +518,19 @@ pub fn ancestor(base: Option<&FaceEntry>, disk: Option<&FaceEntry>, file_descend
 }
 
 /// [`ancestor`] for the family's notes: the common ancestor of this
-/// machine's family notes and those of the file on disk.
+/// machine's family notes and those of the file on disk. A family entry on
+/// disk without notes (one that only holds a license, E15.2) is no notes
+/// entry: notes missing from it were removed there only when the file
+/// descends from this machine's version, as before the license existed.
 pub fn family_ancestor(
     base: Option<&FamilyEntry>,
     disk: Option<&FamilyEntry>,
     file_descends: bool,
 ) -> Option<String> {
     let base = base?;
-    let disk = disk.map(|d| (&d.notes, d.history.as_slice()));
+    let disk = disk
+        .filter(|d| d.notes.is_some())
+        .map(|d| (&d.notes, d.history.as_slice()));
     if entry_descends((&base.notes, &base.history), disk, file_descends) {
         base.notes.clone()
     } else {

@@ -411,6 +411,21 @@ fn the_family_ancestor_follows_the_entry_history() {
     // The history grows only with a change.
     assert_eq!(next_family_history(Some("mine"), Some(&ours)), ours.history);
     assert_eq!(theirs.history.len(), 2);
+    // A family entry that only holds a license (E15.2) is no notes entry:
+    // notes cleared there were removed when the file descends from ours.
+    let license_only = FamilyEntry {
+        notes: None,
+        history: Vec::new(),
+        license: Some(LicenseEntry::default()),
+    };
+    assert_eq!(
+        family_ancestor(Some(&ours), Some(&license_only), true).as_deref(),
+        Some("mine")
+    );
+    assert_eq!(
+        family_ancestor(Some(&ours), Some(&license_only), false),
+        None
+    );
 }
 
 #[test]

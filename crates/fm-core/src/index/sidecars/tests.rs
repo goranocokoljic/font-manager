@@ -1586,6 +1586,31 @@ fn a_license_and_notes_share_the_family_entry_and_keep_their_own_history() {
 }
 
 #[test]
+fn notes_cleared_on_another_machine_stay_cleared_while_a_license_is_declared() {
+    let tmp = TempDir::new("sidecar-license-notes-clear");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "for the rebrand");
+    m.declare("Inter-Bold", &desktop_license(tmp.path()));
+    // A second machine over the same folder takes both in, then clears the
+    // notes: its file keeps the family entry for the license only.
+    let mut other = Machine::new(tmp.path());
+    assert_eq!(
+        other.local_family_notes("Inter").as_deref(),
+        Some("for the rebrand")
+    );
+    other.family_notes("Inter-Regular", "");
+    let written = m.sidecar("Inter");
+    assert_eq!(written.family_notes(), None);
+    assert!(written.family_license().is_some());
+
+    m.scan();
+    assert_eq!(m.local_family_notes("Inter"), None);
+    assert_eq!(m.local_license("Inter"), Some(desktop_license(tmp.path())));
+    assert_eq!(m.sidecar("Inter").family_notes(), None);
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+}
+
+#[test]
 fn a_license_changed_on_another_machine_merges_on_scan() {
     let tmp = TempDir::new("sidecar-license-merge");
     let mut m = Machine::new(tmp.path());
