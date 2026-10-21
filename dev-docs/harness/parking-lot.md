@@ -117,6 +117,11 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-21
 
+- [E14.2 #115] crates/fm-api/src/mock.rs:909 — the Rust mock activates a smart collection's members, while fm-core refuses a smart `Target::Collection` with Unsupported (crates/fm-core/src/index/activation.rs:108).
+- [E14.2 #115] crates/fm-api/src/mock.rs:1508 — a mock search by an unknown collection id returns nothing (also apps/desktop/src/api/mock.ts:922), while fm-core returns NotFound.
+- [E14.2 #115] .github/workflows/ci.yml:77 — PR CI runs nextest in debug only, so the 50 ms timing tests never time in CI; budgets rely on the bench job (nightly or label `bench`).
+- [E14.2 #115] apps/desktop/e2e/preview.spec.ts:71 — "1,000 rows scrolled do not leak font faces" takes ~21 s of its 30 s timeout locally and timed out once on the macOS runner.
+- [E14.2 #115] apps/desktop/src/api/mock.ts:842 — the TS mock's `passes` ignores `supports: { kind: 'text' }`, so a text-coverage filter (and a smart-rule leaf built from one) matches every face there, while fm-core and the Rust mock apply it.
 - [E11.3 #101] apps/desktop/src/stores/glyphs.ts:90 — `open` returns early for the same face id, so a face whose first load failed is never retried on revisit (the pattern is copied into stores/coverage.ts).
 - [E11.3 #101] apps/desktop/src/api/mock.ts:803 — the TS `mockLanguages` (en, pl, sr-Cyrl, el) has drifted from the Rust mock `LANGUAGES` (en, pl, sr-Latn, sr-Cyrl).
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.

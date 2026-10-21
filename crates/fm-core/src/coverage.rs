@@ -446,6 +446,12 @@ impl<'a> Need<'a> {
         self.len == 0
     }
 
+    /// Whether a face that maps `set` meets the need, as [`Fit::passes`]
+    /// says of [`Need::check`], without listing what it lacks.
+    pub fn passes(&self, set: &CodePointSet) -> bool {
+        self.len - self.chars.intersection_len(set) <= NEAR_MISS
+    }
+
     /// How a face that maps `set` and has `locl` forms for `locl`
     /// (`script/LANG` entries) meets the need.
     pub fn check(&self, set: &CodePointSet, locl: &[String]) -> Fit {
@@ -927,5 +933,16 @@ mod tests {
         let need = Need::languages(&codes(&["sr-Cyrl", "sr-Latn"])).expect("known");
         assert!(!need.is_empty());
         assert!(Need::languages(&codes(&["xx-Nope"])).is_err());
+    }
+
+    #[test]
+    fn passes_agrees_with_check_at_the_near_miss_edge() {
+        let need = Need::text("abcdefghij");
+        // Lacking 0, NEAR_MISS (5) and NEAR_MISS + 1 of the ten characters.
+        for (face, expected) in [("abcdefghij", true), ("abcde", true), ("abcd", false)] {
+            let set = set(face);
+            assert_eq!(need.passes(&set), expected, "{face}");
+            assert_eq!(need.check(&set, &[]).passes(), expected, "{face}");
+        }
     }
 }

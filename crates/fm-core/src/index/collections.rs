@@ -5,9 +5,10 @@
 //! (`collection.position`). A face can be in any number of collections, and
 //! deleting a collection (with its children) never touches a face.
 //!
-//! A smart collection keeps its rules here too; it fills itself, so faces
-//! cannot be added to it. Its rules are not evaluated yet (E14.2), so its
-//! count is 0.
+//! A smart collection keeps its rule here too (a [`RuleGroup`] as JSON; a
+//! phase-1 rule is plain filters); it fills itself, so faces cannot be
+//! added to it. Its count is evaluated now, never stored (E14.2,
+//! `index/search/smart.rs`).
 //!
 //! Every change to what a face is in, or to the names on the way to it, is
 //! mirrored to the sidecars of the faces' families (`index/sidecars.rs`).
@@ -17,12 +18,12 @@ use std::collections::HashMap;
 use fm_api::CollectionId;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
-    RenameCollectionRequest,
+    RenameCollectionRequest, RuleGroup,
 };
-use fm_api::search::Filters;
 use fm_api::{ErrorCode, FaceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
+use super::search::smart::{Member, load_rules, stored_rule};
 use super::{Index, db_error, sidecars};
 use crate::error::{FmError, FmResult};
 
@@ -55,25 +56,36 @@ impl Index {
                 ))
             })
             .map_err(|e| db_error(&e))?;
+        let rows = rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| db_error(&e))?;
+        drop(stmt);
+        let smart_counts = self.smart_face_counts()?;
         let mut children: HashMap<Option<CollectionId>, Vec<Collection>> = HashMap::new();
-        for row in rows {
-            let (id, parent, name, rules, count) = row.map_err(|e| db_error(&e))?;
-            let rules = rules
+        for (id, parent, name, rules, count) in rows {
+            let rule_group = rules
                 .map(|json| {
-                    serde_json::from_str::<Filters>(&json).map_err(|e| {
+                    stored_rule(&json).map_err(|e| {
                         FmError::internal(format!("collection {id} has unreadable rules: {e}"))
                     })
                 })
                 .transpose()?;
+            let id = CollectionId(id);
             children
                 .entry(parent.map(CollectionId))
                 .or_default()
                 .push(Collection {
-                    id: CollectionId(id),
+                    id,
                     parent: parent.map(CollectionId),
                     name,
-                    face_count: if rules.is_some() { 0 } else { count },
-                    rules,
+                    face_count: match rule_group {
+                        Some(_) => smart_counts.get(&id).copied().unwrap_or(0),
+                        None => count,
+                    },
+                    rules: rule_group
+                        .as_ref()
+                        .map(|g| g.plain_filters().cloned().unwrap_or_default()),
+                    rule_group,
                 });
         }
         let mut out = Vec::new();
@@ -92,10 +104,22 @@ impl Index {
     /// Creates a collection, last among its siblings. The name is trimmed;
     /// an empty one is `InvalidRequest`, one a sibling already has is
     /// `Conflict`, an unknown parent is `NotFound`.
+    ///
+    /// With `rules` or `rule_group` (not both: `InvalidRequest`) it is smart.
+    /// A rule naming an unknown collection is `NotFound`; one that leads
+    /// back to the new collection, or names an unknown language preset, is
+    /// `InvalidRequest`.
     pub fn create_collection(&mut self, req: &CreateCollectionRequest) -> FmResult<Collection> {
         let name = collection_name(&req.name)?;
-        let rules = req
-            .rules
+        let group = match (&req.rules, &req.rule_group) {
+            (Some(_), Some(_)) => {
+                return Err(FmError::invalid(
+                    "Give a smart collection rules or a rule group, not both.",
+                ));
+            }
+            (rules, group) => group.clone().or_else(|| rules.clone().map(RuleGroup::from)),
+        };
+        let rules = group
             .as_ref()
             .map(serde_json::to_string)
             .transpose()
@@ -111,6 +135,15 @@ impl Index {
             name,
             rules.as_deref(),
         )?);
+        if let Some(group) = &group {
+            // Checked with the new row in place, so a rule naming the new
+            // collection itself is a loop, not an unknown collection. An
+            // error drops the transaction: nothing is kept.
+            for named in group.collections() {
+                ensure_exists(&tx, named)?;
+            }
+            Member::compile(&tx, &load_rules(&tx)?, id)?;
+        }
         tx.commit().map_err(|e| db_error(&e))?;
         self.collection(id)
     }

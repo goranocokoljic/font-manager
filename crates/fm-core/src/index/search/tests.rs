@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use fm_api::common::{Classification, Embedding, Health, Page};
 use fm_api::library::SourceKind;
-use fm_api::search::{FilterCount, FilterCounts, Supports, WeightRange, WidthRange};
+use fm_api::search::{FilterCount, FilterCounts, Filters, Supports, WeightRange, WidthRange};
 use fm_api::{ErrorCode, SourceId};
 use rusqlite::Connection;
 
@@ -659,8 +659,65 @@ fn tags_collections_foundry_favorites_and_rating_filter_too() {
 }
 
 #[test]
-fn filters_search_cannot_apply_are_refused() {
-    let (index, _, _) = filter_library();
+fn a_smart_collection_applies_and_an_unknown_one_is_refused() {
+    let (mut index, _, _) = filter_library();
+    // Collection 2 is smart with an empty rule (phase-1 filters `{}`): every
+    // face, where it used to be `Unsupported` (E14.2 criterion 2).
+    let every = filtered(&index, "", Filters::default()).total;
+    let smart = |id: u32| Filters {
+        collection: Some(CollectionId(id)),
+        ..Filters::default()
+    };
+    assert_eq!(filtered(&index, "", smart(2)).total, every);
+    let web = index
+        .create_collection(&fm_api::organization::CreateCollectionRequest {
+            name: "Web or kern".into(),
+            parent: None,
+            rules: None,
+            rule_group: Some(fm_api::organization::RuleGroup {
+                op: fm_api::organization::RuleOp::Or,
+                rules: vec![
+                    fm_api::organization::Rule::Filters {
+                        filters: Filters {
+                            license: Some(LicenseType::Web),
+                            ..Filters::default()
+                        },
+                    },
+                    fm_api::organization::Rule::Filters {
+                        filters: Filters {
+                            features: vec!["kern".into()],
+                            ..Filters::default()
+                        },
+                    },
+                ],
+            }),
+        })
+        .expect("smart");
+    let res = filtered(&index, "", smart(web.id.0));
+    assert_eq!(
+        found(&index, &res),
+        vec![
+            ("Helvetica Neue".to_owned(), vec!["Bold".to_owned()]),
+            (
+                "Roboto".to_owned(),
+                vec!["Regular".to_owned(), "Bold".to_owned()]
+            ),
+        ]
+    );
+    // With text and the other filters, as any collection.
+    let res = filtered(
+        &index,
+        "roboto",
+        Filters {
+            collection: Some(web.id),
+            weight: Some(WeightRange { min: 600, max: 900 }),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(found(&index, &res), one("Roboto", &["Bold"]));
+    // The counts of the other filters keep the collection.
+    let counts = res.counts.expect("counts");
+    assert!(counts.weight.iter().all(|c| c.count <= 1), "{counts:?}");
     let refused = |filters: Filters| {
         index
             .search(&SearchRequest {
@@ -670,13 +727,6 @@ fn filters_search_cannot_apply_are_refused() {
             .expect_err("refused")
             .code()
     };
-    assert_eq!(
-        refused(Filters {
-            collection: Some(CollectionId(2)),
-            ..Filters::default()
-        }),
-        ErrorCode::Unsupported
-    );
     assert_eq!(
         refused(Filters {
             collection: Some(CollectionId(99)),
@@ -1104,6 +1154,152 @@ fn time_queries(index: &Index, label: &str) {
     }
 }
 
+/// Twenty smart collections over every rule shape: AND/OR, nested groups,
+/// each filter dimension, a rule through another smart collection.
+fn twenty_smart_collections(index: &mut Index) -> Vec<CollectionId> {
+    use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let shapes: Vec<RuleGroup> = vec![
+        RuleGroup::from(Filters {
+            slant: Some(Slant::Italic),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            weight: Some(WeightRange { min: 600, max: 900 }),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            added_within_days: Some(30),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            features: vec!["smcp".into(), "onum".into()],
+            ..Filters::default()
+        }),
+        RuleGroup::from(languages(&["pl"])),
+        RuleGroup::from(languages(&["sr-Latn", "sr-Cyrl", "de"])),
+        RuleGroup::from(text("Ђорђе Đorđe ŁĄ")),
+        RuleGroup::from(Filters {
+            foundry: Some("Type Co".into()),
+            variable: Some(false),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            active: Some(false),
+            problems: Some(false),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            formats: vec![FontFormat::Ttf, FontFormat::Otf],
+            ..Filters::default()
+        }),
+        RuleGroup {
+            op: RuleOp::Or,
+            rules: vec![
+                leaf(Filters {
+                    slant: Some(Slant::Italic),
+                    ..Filters::default()
+                }),
+                leaf(languages(&["ru"])),
+            ],
+        },
+        RuleGroup {
+            op: RuleOp::And,
+            rules: vec![
+                leaf(Filters {
+                    weight: Some(WeightRange { min: 100, max: 400 }),
+                    ..Filters::default()
+                }),
+                Rule::Group {
+                    group: RuleGroup {
+                        op: RuleOp::Or,
+                        rules: vec![
+                            leaf(Filters {
+                                features: vec!["liga".into()],
+                                ..Filters::default()
+                            }),
+                            leaf(Filters {
+                                foundry: Some("Foundry A".into()),
+                                ..Filters::default()
+                            }),
+                        ],
+                    },
+                },
+            ],
+        },
+    ];
+    let mut ids: Vec<CollectionId> = Vec::new();
+    for i in 0..20 {
+        let rule_group = match shapes.get(i) {
+            Some(shape) => shape.clone(),
+            // The rest go through earlier smart collections.
+            None => RuleGroup {
+                op: if i.is_multiple_of(2) {
+                    RuleOp::And
+                } else {
+                    RuleOp::Or
+                },
+                rules: vec![
+                    leaf(Filters {
+                        collection: Some(ids[i - 8]),
+                        ..Filters::default()
+                    }),
+                    leaf(Filters {
+                        collection: Some(ids[i - 5]),
+                        ..Filters::default()
+                    }),
+                ],
+            },
+        };
+        let c = index
+            .create_collection(&CreateCollectionRequest {
+                name: format!("Smart {i}"),
+                parent: None,
+                rules: None,
+                rule_group: Some(rule_group),
+            })
+            .expect("smart collection");
+        ids.push(c.id);
+    }
+    ids
+}
+
+/// E14.2 criterion 5: a search filtered by each smart collection, and the
+/// collection list with twenty of them, each in the budget.
+fn time_smart_collections(index: &mut Index, label: &str) {
+    let ids = twenty_smart_collections(index);
+    index.collections().expect("warm");
+    let start = Instant::now();
+    let list = index.collections().expect("list");
+    let elapsed = start.elapsed();
+    eprintln!(
+        "{label}: list_collections with {} smart in {elapsed:?}",
+        list.len()
+    );
+    assert!(
+        elapsed < BUDGET,
+        "{label}: list_collections took {elapsed:?}"
+    );
+    for (query, id) in ids.iter().flat_map(|id| [("", *id), ("sans", *id)]) {
+        let filters = Filters {
+            collection: Some(id),
+            ..Filters::default()
+        };
+        filtered(index, query, filters.clone());
+        let start = Instant::now();
+        let res = filtered(index, query, filters);
+        let elapsed = start.elapsed();
+        eprintln!(
+            "{label}: {query:?} in smart {id} → {} families in {elapsed:?}",
+            res.total
+        );
+        assert!(
+            elapsed < BUDGET,
+            "{label}: {query:?} in smart {id} took {elapsed:?}"
+        );
+    }
+}
+
 /// Criterion 1 without the reference library: 10,000 faces in 2,000
 /// families. Timed in release builds only; a debug build runs the queries
 /// for correctness.
@@ -1111,14 +1307,18 @@ fn time_queries(index: &Index, label: &str) {
 fn ten_thousand_fonts_search_in_under_50_ms() {
     let files = synthetic(2_000);
     assert_eq!(files.len(), 10_000);
-    let (index, _) = indexed(&files);
+    let (mut index, _) = indexed(&files);
     let res = search(&index, "kamiten sans");
     assert!(res.total >= 1);
     if cfg!(debug_assertions) {
+        // The twenty rules still compile and count.
+        twenty_smart_collections(&mut index);
+        assert_eq!(index.collections().expect("list").len(), 20);
         eprintln!("debug build: timing skipped");
         return;
     }
     time_queries(&index, "synthetic 10k");
+    time_smart_collections(&mut index, "synthetic 10k");
 }
 
 /// Criterion 1 on the reference library (10k fonts): skipped without it.
@@ -1143,6 +1343,7 @@ fn the_reference_library_searches_in_under_50_ms() {
         .apply_rescan(source, &scanned, &report)
         .expect("persist");
     time_queries(&index, "reference library");
+    time_smart_collections(&mut index, "reference library");
 }
 
 /// The base characters of the embedded preset `code`.

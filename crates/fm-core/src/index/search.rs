@@ -18,6 +18,9 @@
 //!
 //! Faces of files that are gone or of paused sources are not searched.
 //!
+//! A `collection` filter naming a smart collection (E14.2) applies its rule
+//! ([`smart`]), compiled once per search.
+//!
 //! The searchable rows are read once and kept in memory until the database
 //! changes ([`SearchCache`]): this connection's writes move
 //! `total_changes`, another process's commits move `PRAGMA data_version`.
@@ -32,20 +35,21 @@ use fm_api::library::{
     FamilyActivation, FamilySort, FamilySummary, LicenseType, ListFamiliesRequest, OpenLicense,
     StyleMark,
 };
-use fm_api::search::{
-    FamilyHit, Filters, Missing, SearchRequest, SearchResponse, Supports, WeightRange,
-};
+use fm_api::search::{FamilyHit, Missing, SearchRequest, SearchResponse, WeightRange};
 use fm_api::{CollectionId, FaceId, FamilyId, SourceId, TagId};
-use rusqlite::OptionalExtension;
 
 use super::files::format_from_sql;
 use super::{Index, db_error};
-use crate::coverage::{CodePointSet, Fit, Need};
+use crate::coverage::{CodePointSet, Fit};
 use crate::error::{FmError, FmResult};
-use crate::filter::{FaceFacts, Slots, Tag, Tally, failed, failed_supports, tag, values};
+use crate::filter::{
+    FaceFacts, Slots, Tag, Tally, failed, failed_added, failed_supports, tag, values,
+    with_collection,
+};
 use crate::grouping::{family_key, slant_rank};
 use crate::license;
 use crate::search::{FAMILY, FIELD_COUNT, FOUNDRY, FaceText, Query};
+use smart::Member;
 
 /// Every searchable face with what its family summary needs.
 const VISIBLE_FACES: &str = "
@@ -118,17 +122,13 @@ impl Index {
     ///
     /// With a `supports` filter every hit says what its best face misses
     /// ([`FamilyHit::missing`]); an unknown language preset is
-    /// `InvalidRequest`. A smart collection is not applied yet: it is an
-    /// [`fm_api::ErrorCode::Unsupported`] error rather than results that
-    /// ignore it. An unknown collection is `NotFound`.
+    /// `InvalidRequest`. A smart collection applies its rule; one whose
+    /// rule leads back to itself is `InvalidRequest`. An unknown collection
+    /// is `NotFound`.
     pub fn search(&self, req: &SearchRequest) -> FmResult<SearchResponse> {
-        self.check_filters(&req.filters)?;
-        let need = match &req.filters.supports {
-            None => None,
-            Some(Supports::Languages { codes }) => Some(Need::languages(codes)?),
-            Some(Supports::Text { text }) => Some(Need::text(text)),
-        }
-        .filter(|need| !need.is_empty());
+        let member = self.collection_member(req.filters.collection)?;
+        let need = smart::need(&req.filters)?;
+        let cutoff = smart::cutoff(&self.conn, req.filters.added_within_days)?;
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
@@ -157,7 +157,11 @@ impl Index {
             let mut faces: Vec<(&Row, f32, Option<Fit>)> = faces
                 .into_iter()
                 .filter_map(|(row, score)| {
-                    let mut failed = failed(&req.filters, &row.text, &row.facts);
+                    let mut failed = failed(&req.filters, &row.text, &row.facts)
+                        | failed_added(cutoff.as_deref(), row.added.as_deref());
+                    if let Some(member) = &member {
+                        failed = with_collection(failed, member.holds(row, &[]));
+                    }
                     let fit = need.as_ref().and_then(|need| {
                         let fit = row.cmap.as_ref().map(|set| need.check(set, &row.locl));
                         failed |= failed_supports(fit.as_ref());
@@ -228,29 +232,17 @@ impl Index {
         })
     }
 
-    /// Refuses the filters search cannot apply yet, and unknown collections.
-    fn check_filters(&self, filters: &Filters) -> FmResult<()> {
-        if let Some(id) = filters.collection {
-            let smart: Option<bool> = self
-                .conn
-                .query_row(
-                    "SELECT is_smart FROM collection WHERE id = ?1",
-                    [id.0],
-                    |row| row.get(0),
-                )
-                .optional()
-                .map_err(|e| db_error(&e))?;
-            match smart {
-                None => return Err(FmError::not_found(format!("Collection {id}"))),
-                Some(true) => {
-                    return Err(FmError::unsupported(
-                        "Filtering by a smart collection is not available yet.",
-                    ));
-                }
-                Some(false) => {}
-            }
+    /// The test for the collection a search is filtered by; `NotFound` for
+    /// an unknown one, `InvalidRequest` for a rule that leads back to itself.
+    fn collection_member(&self, id: Option<CollectionId>) -> FmResult<Option<Member>> {
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let rules = smart::load_rules(&self.conn)?;
+        if !rules.contains_key(&id) {
+            return Err(FmError::not_found(format!("Collection {id}")));
         }
-        Ok(())
+        Member::compile(&self.conn, &rules, id).map(Some)
     }
 
     /// The ids of the faces that share a trigram with the query.
@@ -678,6 +670,8 @@ impl<T: Copy> Names<T> {
 fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(serde_json::Value::String(name.to_owned())).ok()
 }
+
+pub(super) mod smart;
 
 #[cfg(test)]
 mod tests;

@@ -20,9 +20,10 @@ use fm_api::activation::{
 use fm_api::common::Page;
 use fm_api::ids::FaceId;
 use fm_api::library::{LibraryService, ListFamiliesRequest, SourceKind};
+use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
-use fm_api::search::SearchRequest;
-use fm_api::{ActivationService, SearchService, SourceId};
+use fm_api::search::{Filters, SearchRequest, Supports};
+use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
 use fm_core::preview::render_preview_file;
@@ -277,6 +278,186 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
         max_ms: samples.last().copied().unwrap_or_default(),
         slowest: slowest.1,
         families,
+    })
+}
+
+/// Smart collections the smart-collection measurement keeps in the index
+/// (E14.2: "list_collections with 20 smart collections").
+pub const SMART_COLLECTIONS: usize = 20;
+
+/// Smart-collection latency: a search filtered by each smart collection,
+/// and the collection list that counts them all.
+#[derive(Debug, Serialize)]
+pub struct SmartTimed {
+    /// Smart collections in the index.
+    pub collections: usize,
+    /// 95th percentile of the searches, in milliseconds.
+    pub search_p95_ms: f64,
+    /// 95th percentile of `list_collections`, in milliseconds.
+    pub list_p95_ms: f64,
+    /// The slower of the two: the budgeted number.
+    pub p95_ms: f64,
+}
+
+/// The rule of the `i`th bench smart collection: every filter dimension,
+/// AND/OR and nested groups, and from the 13th on, rules through earlier
+/// smart collections (`made`).
+fn smart_rule(i: usize, made: &[CollectionId]) -> RuleGroup {
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let languages = |codes: &[&str]| Filters {
+        supports: Some(Supports::Languages {
+            codes: codes.iter().map(|c| (*c).to_owned()).collect(),
+        }),
+        ..Filters::default()
+    };
+    let plain = |set: fn(&mut Filters)| {
+        let mut f = Filters::default();
+        set(&mut f);
+        RuleGroup::from(f)
+    };
+    match i {
+        0 => plain(|f| f.slant = Some(fm_api::common::Slant::Italic)),
+        1 => plain(|f| f.weight = Some(fm_api::search::WeightRange { min: 600, max: 900 })),
+        2 => plain(|f| f.added_within_days = Some(30)),
+        3 => plain(|f| f.features = vec!["smcp".into(), "onum".into()]),
+        4 => RuleGroup::from(languages(&["pl"])),
+        5 => RuleGroup::from(languages(&["sr-Latn", "sr-Cyrl", "de"])),
+        6 => plain(|f| {
+            f.supports = Some(Supports::Text {
+                text: "Ђорђе Đorđe ŁĄ".into(),
+            });
+        }),
+        7 => plain(|f| f.variable = Some(true)),
+        8 => plain(|f| {
+            f.active = Some(false);
+            f.problems = Some(false);
+        }),
+        9 => plain(|f| {
+            f.formats = vec![
+                fm_api::common::FontFormat::Ttf,
+                fm_api::common::FontFormat::Otf,
+            ];
+        }),
+        10 => RuleGroup {
+            op: RuleOp::Or,
+            rules: vec![
+                leaf(Filters {
+                    slant: Some(fm_api::common::Slant::Italic),
+                    ..Filters::default()
+                }),
+                leaf(languages(&["ru"])),
+            ],
+        },
+        11 => RuleGroup {
+            op: RuleOp::And,
+            rules: vec![
+                leaf(Filters {
+                    weight: Some(fm_api::search::WeightRange { min: 100, max: 400 }),
+                    ..Filters::default()
+                }),
+                Rule::Group {
+                    group: RuleGroup {
+                        op: RuleOp::Or,
+                        rules: vec![
+                            leaf(Filters {
+                                features: vec!["liga".into()],
+                                ..Filters::default()
+                            }),
+                            leaf(Filters {
+                                color: Some(true),
+                                ..Filters::default()
+                            }),
+                        ],
+                    },
+                },
+            ],
+        },
+        _ => RuleGroup {
+            op: if i.is_multiple_of(2) {
+                RuleOp::And
+            } else {
+                RuleOp::Or
+            },
+            rules: [i - 8, i - 5]
+                .iter()
+                .filter_map(|&j| made.get(j))
+                .map(|id| {
+                    leaf(Filters {
+                        collection: Some(*id),
+                        ..Filters::default()
+                    })
+                })
+                .collect(),
+        },
+    }
+}
+
+/// Makes the [`SMART_COLLECTIONS`] bench smart collections in the index in
+/// `home` (once: a second run finds them by name), then times a search
+/// filtered by each and `list_collections`, each `rounds` times after one
+/// untimed run.
+pub fn smart_collections(home: &Path, rounds: usize) -> BenchResult<SmartTimed> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let existing = api.list_collections()?;
+    let mut made: Vec<CollectionId> = Vec::with_capacity(SMART_COLLECTIONS);
+    for i in 0..SMART_COLLECTIONS {
+        let name = format!("Bench smart {i:02}");
+        let id = match existing
+            .iter()
+            .find(|c| c.parent.is_none() && c.name == name)
+        {
+            Some(c) => c.id,
+            None => {
+                api.create_collection(CreateCollectionRequest {
+                    name,
+                    parent: None,
+                    rules: None,
+                    rule_group: Some(smart_rule(i, &made)),
+                })?
+                .id
+            }
+        };
+        made.push(id);
+    }
+    let mut searches = Vec::with_capacity(SMART_COLLECTIONS * rounds);
+    for id in &made {
+        let req = SearchRequest {
+            filters: Filters {
+                collection: Some(*id),
+                ..Filters::default()
+            },
+            ..SearchRequest::default()
+        };
+        api.search(req.clone())?;
+        for _ in 0..rounds {
+            let begin = Instant::now();
+            api.search(req.clone())?;
+            searches.push(ms(begin.elapsed()));
+        }
+    }
+    let mut lists = Vec::with_capacity(rounds);
+    api.list_collections()?;
+    for _ in 0..rounds {
+        let begin = Instant::now();
+        api.list_collections()?;
+        lists.push(ms(begin.elapsed()));
+    }
+    searches.sort_by(f64::total_cmp);
+    lists.sort_by(f64::total_cmp);
+    let search_p95_ms = percentile(&searches, 95);
+    let list_p95_ms = percentile(&lists, 95);
+    Ok(SmartTimed {
+        collections: made.len(),
+        search_p95_ms,
+        list_p95_ms,
+        p95_ms: search_p95_ms.max(list_p95_ms),
     })
 }
 

@@ -110,6 +110,9 @@ pub(crate) enum Dim {
     /// Language or character coverage: checked against a [`Need`](crate::coverage::Need) built
     /// once per search, so [`failed`] leaves it to [`failed_supports`].
     Supports,
+    /// Added within some days: checked against a cutoff time taken once per
+    /// search, so [`failed`] leaves it to [`failed_added`].
+    Added,
 }
 
 impl Dim {
@@ -118,88 +121,83 @@ impl Dim {
     }
 }
 
-/// The filters `face` fails, one [`Dim::bit`] each; 0 when it passes all.
-/// `supports` is not looked at here: see [`failed_supports`].
-pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u32 {
-    let f = filters;
-    let checks = [
-        (
-            Dim::Classification,
+/// The filters [`failed`] and [`passes`] check, in [`Dim`] order.
+const CHECKED: [Dim; 19] = [
+    Dim::Classification,
+    Dim::Weight,
+    Dim::Width,
+    Dim::Slant,
+    Dim::Variable,
+    Dim::Color,
+    Dim::Format,
+    Dim::Features,
+    Dim::License,
+    Dim::Foundry,
+    Dim::Sources,
+    Dim::Tags,
+    Dim::Collection,
+    Dim::Active,
+    Dim::Favorite,
+    Dim::Rating,
+    Dim::Problems,
+    Dim::Embedding,
+    Dim::OpenLicense,
+];
+
+/// Whether `face` passes the filter `dim` of `filters` (an unset filter
+/// passes). `supports` and `added` pass here: see [`failed_supports`] and
+/// [`failed_added`].
+fn check(dim: Dim, f: &Filters, text: &FaceText, facts: &FaceFacts) -> bool {
+    match dim {
+        Dim::Classification => {
             f.classification.is_empty()
                 || facts
                     .classification
-                    .is_some_and(|c| f.classification.contains(&c)),
-        ),
-        (
-            Dim::Weight,
-            f.weight.is_none_or(|w| reaches_weight(text, w.min, w.max)),
-        ),
-        (
-            Dim::Width,
-            f.width.is_none_or(|w| reaches_width(text, w.min, w.max)),
-        ),
-        (Dim::Slant, f.slant.is_none_or(|s| reaches_slant(text, s))),
-        (
-            Dim::Variable,
-            f.variable.is_none_or(|v| v == facts.is_variable),
-        ),
-        (Dim::Color, f.color.is_none_or(|c| c == facts.color)),
-        (
-            Dim::Format,
-            f.formats.is_empty() || facts.format.is_some_and(|x| f.formats.contains(&x)),
-        ),
-        (
-            Dim::Features,
-            f.features
-                .iter()
-                .all(|t| tag(t).is_some_and(|t| facts.features.binary_search(&t).is_ok())),
-        ),
-        (
-            Dim::License,
-            f.license.is_none_or(|l| facts.license == Some(l)),
-        ),
-        (
-            Dim::Foundry,
-            f.foundry
-                .as_deref()
-                .is_none_or(|x| facts.foundry.as_deref() == Some(x)),
-        ),
-        (
-            Dim::Sources,
-            f.sources.is_empty() || f.sources.contains(&facts.source),
-        ),
-        (Dim::Tags, f.tags.iter().all(|t| facts.tags.contains(t))),
-        (
-            Dim::Collection,
-            f.collection.is_none_or(|c| facts.collections.contains(&c)),
-        ),
-        (Dim::Active, f.active.is_none_or(|a| a == facts.active)),
-        (
-            Dim::Favorite,
-            f.favorite.is_none_or(|v| v == facts.favorite),
-        ),
-        (
-            Dim::Rating,
-            f.min_rating
-                .is_none_or(|r| facts.rating.is_some_and(|x| x >= r)),
-        ),
-        (
-            Dim::Problems,
-            f.problems.is_none_or(|p| p == facts.problems),
-        ),
-        (
-            Dim::Embedding,
-            f.embedding.is_none_or(|e| e == facts.embedding),
-        ),
-        (
-            Dim::OpenLicense,
-            f.open_license.is_none_or(|o| o == facts.open_license),
-        ),
-    ];
-    checks
+                    .is_some_and(|c| f.classification.contains(&c))
+        }
+        Dim::Weight => f.weight.is_none_or(|w| reaches_weight(text, w.min, w.max)),
+        Dim::Width => f.width.is_none_or(|w| reaches_width(text, w.min, w.max)),
+        Dim::Slant => f.slant.is_none_or(|s| reaches_slant(text, s)),
+        Dim::Variable => f.variable.is_none_or(|v| v == facts.is_variable),
+        Dim::Color => f.color.is_none_or(|c| c == facts.color),
+        Dim::Format => f.formats.is_empty() || facts.format.is_some_and(|x| f.formats.contains(&x)),
+        Dim::Features => f
+            .features
+            .iter()
+            .all(|t| tag(t).is_some_and(|t| facts.features.binary_search(&t).is_ok())),
+        Dim::License => f.license.is_none_or(|l| facts.license == Some(l)),
+        Dim::Foundry => f
+            .foundry
+            .as_deref()
+            .is_none_or(|x| facts.foundry.as_deref() == Some(x)),
+        Dim::Sources => f.sources.is_empty() || f.sources.contains(&facts.source),
+        Dim::Tags => f.tags.iter().all(|t| facts.tags.contains(t)),
+        Dim::Collection => f.collection.is_none_or(|c| facts.collections.contains(&c)),
+        Dim::Active => f.active.is_none_or(|a| a == facts.active),
+        Dim::Favorite => f.favorite.is_none_or(|v| v == facts.favorite),
+        Dim::Rating => f
+            .min_rating
+            .is_none_or(|r| facts.rating.is_some_and(|x| x >= r)),
+        Dim::Problems => f.problems.is_none_or(|p| p == facts.problems),
+        Dim::Embedding => f.embedding.is_none_or(|e| e == facts.embedding),
+        Dim::OpenLicense => f.open_license.is_none_or(|o| o == facts.open_license),
+        Dim::Supports | Dim::Added => true,
+    }
+}
+
+/// The filters `face` fails, one [`Dim::bit`] each; 0 when it passes all.
+/// `supports` is not looked at here: see [`failed_supports`].
+pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u32 {
+    CHECKED
         .iter()
-        .filter(|(_, pass)| !pass)
-        .fold(0, |mask, (dim, _)| mask | dim.bit())
+        .filter(|dim| !check(**dim, filters, text, facts))
+        .fold(0, |mask, dim| mask | dim.bit())
+}
+
+/// Whether `face` passes every filter [`failed`] checks; stops at the first
+/// it fails (a smart collection's rule tests every face of the library).
+pub(crate) fn passes(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> bool {
+    CHECKED.iter().all(|dim| check(*dim, filters, text, facts))
 }
 
 /// The [`Dim::Supports`] bit for a face that meets the search's [`Need`](crate::coverage::Need)
@@ -210,6 +208,27 @@ pub(crate) fn failed_supports(fit: Option<&Fit>) -> u32 {
         0
     } else {
         Dim::Supports.bit()
+    }
+}
+
+/// The [`Dim::Added`] bit for a face added at `added` (RFC 3339, UTC) when
+/// the search keeps faces added at `cutoff` or later; 0 without a cutoff. A
+/// face whose time is not known fails.
+pub(crate) fn failed_added(cutoff: Option<&str>, added: Option<&str>) -> u32 {
+    match cutoff {
+        Some(cutoff) if added.is_none_or(|added| added < cutoff) => Dim::Added.bit(),
+        _ => 0,
+    }
+}
+
+/// `mask` with its [`Dim::Collection`] bit decided by `inside`: whether the
+/// face is in the collection the filters name, which for a smart collection
+/// only its rule can tell.
+pub(crate) fn with_collection(mask: u32, inside: bool) -> u32 {
+    if inside {
+        mask & !Dim::Collection.bit()
+    } else {
+        mask | Dim::Collection.bit()
     }
 }
 

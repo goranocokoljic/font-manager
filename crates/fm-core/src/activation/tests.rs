@@ -309,6 +309,7 @@ fn a_collection_target_activates_its_members() {
         let mut index = fx.index.lock().expect("index");
         let c = index
             .create_collection(&CreateCollectionRequest {
+                rule_group: None,
                 name: "Brand".into(),
                 parent: None,
                 rules: None,
@@ -439,6 +440,7 @@ fn unknown_targets_and_smart_collections_are_refused_without_changes() {
         let mut index = fx.index.lock().expect("index");
         index
             .create_collection(&CreateCollectionRequest {
+                rule_group: None,
                 name: "Smart".into(),
                 parent: None,
                 rules: Some(fm_api::search::Filters::default()),
@@ -1169,6 +1171,7 @@ fn a_virtual_style_activates_its_face_once_with_the_collection_or_set() {
         let mut index = fx.index.lock().expect("index");
         let collection = index
             .create_collection(&CreateCollectionRequest {
+                rule_group: None,
                 name: "Brand".into(),
                 parent: None,
                 rules: None,

@@ -8,6 +8,10 @@ use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId, VirtualStyl
 
 /// A manual collection, or a smart one when `rules` is set. Siblings are
 /// ordered by the user; `list_collections` returns them in that order.
+///
+/// A smart collection's members are worked out from the index each time
+/// they are asked for, never stored: a scan, a tag, a rating or an
+/// activation shows in the next `search` and `list_collections`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct Collection {
@@ -17,10 +21,94 @@ pub struct Collection {
     pub parent: Option<CollectionId>,
     /// Name.
     pub name: String,
-    /// Smart collection rules; absent for a manual collection.
+    /// Smart collection rules; absent for a manual collection. Set for
+    /// every smart collection: the filters of a rule that is one AND group
+    /// of one filter set (as phase 1 stored them), else empty filters. The
+    /// full rule is `rule_group`.
     pub rules: Option<Filters>,
+    /// The full rule of a smart collection; absent for a manual one. A rule
+    /// stored as plain filters reads as one AND group of them.
+    #[serde(default)]
+    pub rule_group: Option<RuleGroup>,
     /// Faces in it now.
     pub face_count: u32,
+}
+
+/// How a [`RuleGroup`] combines its rules.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum RuleOp {
+    /// A face must pass every rule.
+    And,
+    /// A face must pass at least one rule.
+    Or,
+}
+
+/// A smart collection's rule: a group of rules combined with AND or OR. A
+/// group with no rules passes every face.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RuleGroup {
+    /// AND or OR.
+    pub op: RuleOp,
+    /// The rules.
+    #[serde(default)]
+    pub rules: Vec<Rule>,
+}
+
+/// One rule of a [`RuleGroup`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum Rule {
+    /// A face passes when it passes these filters, as search applies them.
+    /// `collection` may name another smart collection: its rule applies
+    /// (a rule that reaches its own collection is `InvalidRequest`).
+    #[serde(rename_all = "camelCase")]
+    Filters {
+        /// The filters.
+        filters: Filters,
+    },
+    /// A nested group.
+    #[serde(rename_all = "camelCase")]
+    Group {
+        /// The group.
+        group: RuleGroup,
+    },
+}
+
+impl RuleGroup {
+    /// The filters of a group that is one AND rule of plain filters (a rule
+    /// as phase 1 stored it); `None` for any other group.
+    #[must_use]
+    pub fn plain_filters(&self) -> Option<&Filters> {
+        match (self.op, self.rules.as_slice()) {
+            (RuleOp::And, [Rule::Filters { filters }]) => Some(filters),
+            _ => None,
+        }
+    }
+
+    /// Every collection its filters name, nested groups included.
+    #[must_use]
+    pub fn collections(&self) -> Vec<CollectionId> {
+        let mut out = Vec::new();
+        for rule in &self.rules {
+            match rule {
+                Rule::Filters { filters } => out.extend(filters.collection),
+                Rule::Group { group } => out.extend(group.collections()),
+            }
+        }
+        out
+    }
+}
+
+impl From<Filters> for RuleGroup {
+    /// Plain filters (a phase-1 rule) as one AND group of them.
+    fn from(filters: Filters) -> Self {
+        Self {
+            op: RuleOp::And,
+            rules: vec![Rule::Filters { filters }],
+        }
+    }
 }
 
 /// Create a collection.
@@ -35,6 +123,10 @@ pub struct CreateCollectionRequest {
     /// Rules, to make it smart.
     #[serde(default)]
     pub rules: Option<Filters>,
+    /// A full rule, to make it smart with AND/OR groups. Setting both this
+    /// and `rules` is `InvalidRequest`.
+    #[serde(default)]
+    pub rule_group: Option<RuleGroup>,
 }
 
 /// Rename a collection.
@@ -289,4 +381,65 @@ pub trait OrganizationService {
     fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()>;
     /// Set the notes of a family (E13.5); an empty string clears them.
     fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::common::FontFormat;
+
+    /// A collection as phase 1 stored and sent it: plain filters, no group.
+    const PHASE_1: &str = r#"{"id":4,"parent":null,"name":"Variable TTF",
+        "rules":{"variable":true,"formats":["ttf"]},"faceCount":0}"#;
+
+    #[test]
+    fn a_phase_1_rule_reads_as_one_and_group() {
+        let c: Collection = serde_json::from_str(PHASE_1).expect("phase-1 collection");
+        assert_eq!(c.rule_group, None);
+        let rules = c.rules.expect("rules");
+        let group = RuleGroup::from(rules.clone());
+        assert_eq!(group.op, RuleOp::And);
+        assert_eq!(group.rules, vec![Rule::Filters { filters: rules }]);
+        let req: CreateCollectionRequest =
+            serde_json::from_str(r#"{"name":"Old","rules":{"variable":true}}"#).expect("request");
+        assert_eq!(req.rule_group, None);
+        assert_eq!(req.rules.and_then(|r| r.variable), Some(true));
+    }
+
+    #[test]
+    fn a_rule_group_round_trips_with_nested_groups() {
+        let group = RuleGroup {
+            op: RuleOp::Or,
+            rules: vec![
+                Rule::Filters {
+                    filters: Filters {
+                        added_within_days: Some(7),
+                        ..Filters::default()
+                    },
+                },
+                Rule::Group {
+                    group: RuleGroup {
+                        op: RuleOp::And,
+                        rules: vec![Rule::Filters {
+                            filters: Filters {
+                                formats: vec![FontFormat::Otf],
+                                collection: Some(CollectionId(3)),
+                                ..Filters::default()
+                            },
+                        }],
+                    },
+                },
+            ],
+        };
+        let json = serde_json::to_value(&group).expect("json");
+        assert_eq!(json["op"], "or");
+        assert_eq!(json["rules"][0]["kind"], "filters");
+        assert_eq!(json["rules"][0]["filters"]["addedWithinDays"], 7);
+        assert_eq!(json["rules"][1]["kind"], "group");
+        assert_eq!(json["rules"][1]["group"]["op"], "and");
+        let back: RuleGroup = serde_json::from_value(json).expect("back");
+        assert_eq!(back, group);
+        let empty: RuleGroup = serde_json::from_str(r#"{"op":"and"}"#).expect("empty");
+        assert!(empty.rules.is_empty());
+    }
 }

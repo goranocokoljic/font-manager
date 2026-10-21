@@ -253,6 +253,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
     let work = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Work".into(),
             parent: None,
             rules: None,
@@ -261,6 +262,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
     let client = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Client".into(),
             parent: Some(work.id),
             rules: None,
@@ -319,6 +321,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
     let parent = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Old".into(),
             parent: None,
             rules: None,
@@ -327,6 +330,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
     let child = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Child".into(),
             parent: Some(parent.id),
             rules: None,
@@ -481,6 +485,7 @@ fn a_new_machine_takes_the_metadata_from_the_sidecars() {
     let work = first
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Work".into(),
             parent: None,
             rules: None,
@@ -719,6 +724,7 @@ fn smart_collection_on_the_way_is_a_problem_not_a_lost_membership() {
     m.tag("Lora-Regular", &["a"]);
     m.index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -753,6 +759,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
     let serifs = b
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: None,
@@ -768,6 +775,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
 
     let mut a = Index::open_in_memory().expect("open");
     a.create_collection(&CreateCollectionRequest {
+        rule_group: None,
         name: "Serifs".into(),
         parent: None,
         rules: Some(fm_api::search::Filters::default()),
@@ -818,6 +826,7 @@ fn a_carried_membership_is_joined_once_the_smart_collection_is_gone() {
     let smart = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -854,6 +863,7 @@ fn a_carried_membership_the_other_machine_dropped_is_let_go() {
     m.tag("Lora-Regular", &["a"]);
     m.index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -1116,6 +1126,7 @@ fn pinned_styles_of_a_real_variable_font_round_trip_through_a_second_machine() {
     let face = face_of(&first);
     let brand = first
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Brand".into(),
             parent: None,
             rules: None,
@@ -1195,6 +1206,7 @@ fn a_pin_in_a_collection_that_is_smart_here_is_a_problem_and_is_kept() {
     m.tag("Lora-Regular", &["a"]);
     m.index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -1232,6 +1244,7 @@ fn renaming_a_collection_renames_it_in_its_pins() {
     let work = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Work".into(),
             parent: None,
             rules: None,

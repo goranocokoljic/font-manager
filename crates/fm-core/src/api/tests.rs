@@ -661,6 +661,7 @@ fn pinned_styles_survive_a_rebuild_and_reach_the_sidecar() {
     let brand = lib
         .api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Brand".into(),
             parent: None,
             rules: None,
@@ -956,6 +957,7 @@ fn collections_tags_metadata_and_sets_use_the_index() {
     let collection = lib
         .api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Headlines".into(),
             parent: None,
             rules: None,
