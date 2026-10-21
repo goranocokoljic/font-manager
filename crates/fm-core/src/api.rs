@@ -144,7 +144,7 @@ impl CoreApi {
     /// time. A trash that cannot be found is logged too; "Keep this one" then
     /// answers `Unsupported`.
     pub fn open(paths: &AppPaths, index: Index, activator: Arc<dyn FontActivator>) -> Self {
-        let settings = SettingsStore::new(paths);
+        let settings = SettingsStore::new(paths).with_system_autostart();
         let limit = settings
             .get_settings()
             .map(|s| cache::limit_from_mb(s.cache_limit_mb))

@@ -154,3 +154,47 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
     'no StatusNotifier host), so closing the window quits Font Manager',
   );
 });
+
+test('"Start at login" stays hidden while fm-api does not offer it', async ({ page }) => {
+  await page.goto('/#/settings?section=activation');
+  await expect(
+    page.getByRole('checkbox', { name: 'Keep running in the tray when the window is closed' }),
+  ).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Start at login' })).toHaveCount(0);
+});
+
+test('"Start at login" is a labelled switch the keyboard reaches and turns on', async ({
+  page,
+}) => {
+  await page.goto('/?mockStartAtLogin=1#/settings?section=activation');
+  const tray = page.getByRole('checkbox', {
+    name: 'Keep running in the tray when the window is closed',
+  });
+  const login = page.getByRole('checkbox', { name: 'Start at login' });
+  await expect(login).not.toBeChecked();
+  await expect(login).toHaveAccessibleDescription(/starts in the tray when you log in/);
+  await tray.focus();
+  await page.keyboard.press('Tab');
+  await expect(login).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(login).toBeChecked();
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+  // The saved state comes back from fm-api after a reopen.
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.keyboard.press('ControlOrMeta+,');
+  await tab(page, 'Activation').click();
+  await expect(login).toBeChecked();
+});
+
+test('"Start at login" shows an error toast when the system refuses the entry', async ({
+  page,
+}) => {
+  await page.goto('/?mockStartAtLogin=2#/settings?section=activation');
+  const login = page.getByRole('checkbox', { name: 'Start at login' });
+  await login.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('toast')).toContainText(
+    'Start at login could not be turned on: the system refused the login entry.',
+  );
+  await expect(login).not.toBeChecked();
+});

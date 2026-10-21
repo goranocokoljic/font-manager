@@ -1959,6 +1959,13 @@ export type Settings = {
 	 *  quits. On by default.
 	 */
 	keepInTray?: boolean,
+	/**
+	 *  Whether the app starts, in the tray, when the user logs in. Read from
+	 *  the OS's login entry on every request, never stored in `config.json`;
+	 *  `None` when this system does not offer the option (then the switch
+	 *  is hidden). Off until the user turns it on.
+	 */
+	startAtLogin?: boolean | null,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -1979,6 +1986,11 @@ export type SettingsUpdate = {
 	rescanIntervalMinutes?: number | null,
 	/**  Keep running in the tray when the main window is closed. */
 	keepInTray?: boolean | null,
+	/**
+	 *  Register (true) or remove (false) the login entry that starts the app
+	 *  in the tray. Refused where the settings report `start_at_login: None`.
+	 */
+	startAtLogin?: boolean | null,
 };
 
 /**  The shortlist for a brief. */

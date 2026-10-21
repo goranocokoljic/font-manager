@@ -258,6 +258,8 @@ export const defaultSettings: FullSettings = {
   rescanIntervalMinutes: 60,
   reactivateOnLaunch: false,
   keepInTray: true,
+  // Not offered until E17.3 adds Linux (ADR 0011): the switch is hidden.
+  startAtLogin: null,
 };
 
 /** The app folders of the Rust mock. */
@@ -592,6 +594,11 @@ export interface MockOptions {
   cjkFaces?: FaceId[];
   /** Saved comparisons (none by default); a face the mock lacks reopens as missing. */
   comparisons?: MockComparison[];
+  /**
+   * "Start at login" as a system that offers it: `off` accepts changes, `refuse`
+   * refuses them as an OS policy would (not offered by default, as in the app).
+   */
+  startAtLogin?: 'off' | 'refuse';
 }
 
 /** A saved comparison as the mock keeps it: each face with its name when saved. */
@@ -1267,7 +1274,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
   let picks = 0;
-  let settings = { ...defaultSettings };
+  let settings: FullSettings = {
+    ...defaultSettings,
+    startAtLogin: options.startAtLogin ? false : null,
+  };
   const emit = (event: Event) => handlers.forEach((h) => h(event));
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
@@ -2202,6 +2212,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const min = req.rescanIntervalMinutes;
       if (min != null && min > 1440)
         throw invalid('The rescan interval must be between 0 (off) and 1440 minutes.');
+      // The same rule as `Settings::apply` and the login entry in fm-core.
+      if (req.startAtLogin != null && settings.startAtLogin == null)
+        throw {
+          code: 'unsupported' as const,
+          message: 'Start at login is not available on this system.',
+          detail: null,
+        };
+      if (
+        req.startAtLogin != null &&
+        req.startAtLogin !== settings.startAtLogin &&
+        options.startAtLogin === 'refuse'
+      )
+        throw {
+          code: 'permissionDenied' as const,
+          message: req.startAtLogin
+            ? 'Start at login could not be turned on: the system refused the login entry.'
+            : 'Start at login could not be turned off: the system refused to remove the login entry.',
+          detail: 'blocked by policy',
+        };
       const next = { ...settings };
       for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
       settings = next;
@@ -2243,4 +2272,6 @@ export const mockClient: FmClient = createMockClient({
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
   // `?mockCjk=1` gives face 1 a CJK-sized glyph map.
   cjkFaces: countFromUrl('mockCjk', 1) ? [1] : [],
+  // `?mockStartAtLogin=1` offers "Start at login"; `=2` offers it and refuses changes.
+  startAtLogin: (['off', 'refuse'] as const)[countFromUrl('mockStartAtLogin', 2) - 1],
 });

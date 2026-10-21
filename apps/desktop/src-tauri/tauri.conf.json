@@ -10,7 +10,14 @@
   },
   "app": {
     "windows": [
-      { "title": "Font Manager", "width": 1280, "height": 800, "minWidth": 1000, "minHeight": 700 }
+      {
+        "title": "Font Manager",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "visible": false
+      }
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: data:; font-src 'self' asset: fmfont: http://fmfont.localhost; style-src 'self' 'unsafe-inline'"

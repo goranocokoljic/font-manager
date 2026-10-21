@@ -11,7 +11,7 @@ use fm_api::activation::{
 };
 use fm_api::settings::Settings;
 use fm_api::{ApiResult, FaceId};
-use fm_platform::{Os, TraySupport};
+use fm_platform::{AUTOSTART_ARG, Os, TraySupport};
 
 /// The tray menu item that shows the main window.
 pub const MENU_OPEN: &str = "Open Font Manager";
@@ -38,6 +38,32 @@ pub fn close_action(settings: &Settings, tray: &TraySupport) -> CloseAction {
         CloseAction::HideToTray
     } else {
         CloseAction::Quit
+    }
+}
+
+/// What the main window does as the app starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchWindow {
+    /// Show the window, as any launch by the user.
+    Show,
+    /// Keep the window hidden; the app waits in the tray (a start at login).
+    StayInTray,
+}
+
+/// A launch with [`AUTOSTART_ARG`] (the login entry, ADR 0011) stays in the
+/// tray; any other launch shows the window, and so does a start at login
+/// when the desktop has no tray item, so the app is never running unseen.
+/// `args` are the program's arguments without the program itself.
+pub fn launch_window<I, S>(args: I, tray: &TraySupport) -> LaunchWindow
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let autostart = args.into_iter().any(|a| a.as_ref() == AUTOSTART_ARG);
+    if autostart && tray.is_available() {
+        LaunchWindow::StayInTray
+    } else {
+        LaunchWindow::Show
     }
 }
 
@@ -133,6 +159,44 @@ mod tests {
             close_action(&Settings::default(), &TraySupport::Available),
             CloseAction::HideToTray
         );
+    }
+
+    #[test]
+    fn a_start_at_login_stays_in_the_tray_and_every_other_launch_shows_the_window() {
+        let tray = TraySupport::Available;
+        let none: [&str; 0] = [];
+        assert_eq!(launch_window(none, &tray), LaunchWindow::Show);
+        assert_eq!(
+            launch_window(["--autostart"], &tray),
+            LaunchWindow::StayInTray
+        );
+        assert_eq!(
+            launch_window(["--verbose", "--autostart"], &tray),
+            LaunchWindow::StayInTray
+        );
+        // Only the exact argument: a file or another flag opens the window.
+        for other in ["--autostart=1", "--AUTOSTART", "autostart", "-autostart"] {
+            assert_eq!(launch_window([other], &tray), LaunchWindow::Show, "{other}");
+        }
+        // No tray item: the app must not run unseen.
+        let no_tray = TraySupport::Unavailable("no StatusNotifier host".into());
+        assert_eq!(launch_window(["--autostart"], &no_tray), LaunchWindow::Show);
+    }
+
+    #[test]
+    fn the_launch_argument_is_the_one_the_login_entry_writes() {
+        assert_eq!(AUTOSTART_ARG, "--autostart");
+        // Arguments that are not UTF-8 (possible on Linux) are compared as they are.
+        #[cfg(unix)]
+        {
+            use std::ffi::OsStr;
+            use std::os::unix::ffi::OsStrExt;
+            let odd = OsStr::from_bytes(b"\xff--autostart");
+            assert_eq!(
+                launch_window([odd], &TraySupport::Available),
+                LaunchWindow::Show
+            );
+        }
     }
 
     #[test]

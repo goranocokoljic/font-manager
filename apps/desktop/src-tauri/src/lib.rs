@@ -42,6 +42,7 @@ use fm_api::{
     SettingsService, SourceId, VirtualStyleId,
 };
 use fm_core::index::Opened;
+use fm_core::lifecycle::{self, LaunchWindow};
 use fm_core::{CoreApi, SettingsStore};
 use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
@@ -809,12 +810,22 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
         })
         .setup(move |app| {
             // The tray is made once the event loop runs (macOS needs that).
-            if let Some(tray) = tray {
-                let support = tray::install(app.handle(), tray.as_ref(), tray_api);
-                if let Some(core) = &core {
-                    core.set_tray_support(support.clone());
+            let support = match tray {
+                Some(tray) => {
+                    let support = tray::install(app.handle(), tray.as_ref(), tray_api);
+                    if let Some(core) = &core {
+                        core.set_tray_support(support.clone());
+                    }
+                    app.state::<tray::TrayState>().set(support.clone());
+                    support
                 }
-                app.state::<tray::TrayState>().set(support);
+                None => TraySupport::Unavailable("no tray item".into()),
+            };
+            // The window starts hidden (tauri.conf.json); a start at login
+            // (ADR 0011) leaves it so, every other launch shows it.
+            if lifecycle::launch_window(std::env::args_os().skip(1), &support) == LaunchWindow::Show
+            {
+                tray::show_main(app.handle());
             }
             let handle = app.handle().clone();
             std::thread::Builder::new()
@@ -930,7 +941,7 @@ pub fn serve(
         Err(e) => {
             tracing::error!(error = %e, "serving sample data: the library index is not available");
             let state = AppState::new(Arc::new(MockApi::new()))
-                .with_settings(Arc::new(SettingsStore::new(paths)));
+                .with_settings(Arc::new(SettingsStore::new(paths).with_system_autostart()));
             (state, None)
         }
     }
