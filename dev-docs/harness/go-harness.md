@@ -109,8 +109,8 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   E9.1) runs `scripts/bench.sh` on all three OS and merges the results into
   `bench-report.json` (`"<os>.<metric>"` entries); a metric not measured yet
   has `pass: null` and a note. On a PR the job gates the report against main
-  (E9.2): a budgeted metric more than 10% worse than the median of the last 5
-  nightly runs, or newly over budget, gets `regressed: true` and makes the check
+  (E9.2): a budgeted metric more than 10% worse than the slowest of the last 5
+  runs on main (CI timings swing with GitHub's load), or newly over budget, gets `regressed: true` and makes the check
   red; a metric over budget on main too blocks only when it gets slower still.
   The job annotates each regression and keeps one sticky bench comment on the
   PR. ci-wait counts the same entries as red (`blocking()` in
