@@ -6,7 +6,8 @@
 // inside it). Drop fonts from the list on a collection to add them; the
 // palette has an "Add selected fonts to …" command per collection, and
 // "Export license inventory…" for the open one (a row button too). The row
-// buttons show on the open collection and under keyboard focus.
+// buttons show on the open collection and under keyboard focus. "New smart" and a
+// smart collection's "Edit rules" open the rule editor (E14.1).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CollectionId } from '../api/types';
 import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
@@ -14,6 +15,7 @@ import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useRuleEditorStore } from '../stores/ruleEditor';
 
 /** The `DataTransfer` type a collection drag carries its id in. */
 const COLLECTION_MIME = 'application/x-fm-collection';
@@ -25,6 +27,7 @@ const store = useCollectionsStore();
 const quick = useQuickCollectionStore();
 const fontList = useFontListStore();
 const commands = useCommandsStore();
+const ruleEditor = useRuleEditorStore();
 onMounted(() => void store.refresh());
 
 /** A name being typed: for a new collection (under `parent`) or a rename (`id`). */
@@ -153,6 +156,12 @@ function registerCommands(): void {
       group: 'Collections',
       run: () => startEdit(null, null),
     }),
+    commands.register({
+      id: 'collections.newSmart',
+      title: 'New smart collection',
+      group: 'Collections',
+      run: () => ruleEditor.openNew(),
+    }),
     // The open collection's families, or the whole library under "All fonts".
     commands.register({
       id: 'collections.exportLicenseInventory',
@@ -185,9 +194,20 @@ function countLabel(n: number): string {
   <section class="collections" aria-labelledby="fm-collections-heading">
     <header class="head">
       <h2 id="fm-collections-heading" class="heading">Collections</h2>
-      <button type="button" class="add" title="Make a collection" @click="startEdit(null, null)">
-        New
-      </button>
+      <span class="head-actions">
+        <button type="button" class="add" title="Make a collection" @click="startEdit(null, null)">
+          New
+        </button>
+        <button
+          type="button"
+          class="add"
+          aria-label="New smart collection"
+          title="Make a collection that fills itself from rules"
+          @click="ruleEditor.openNew()"
+        >
+          New smart
+        </button>
+      </span>
     </header>
     <p v-if="store.error" role="alert" class="error">{{ store.error.message }}</p>
     <ul class="list" aria-labelledby="fm-collections-heading">
@@ -264,6 +284,14 @@ function countLabel(n: number): string {
               @click="startEdit(null, row.collection.id)"
             >
               New inside
+            </button>
+            <button
+              v-if="row.collection.rules"
+              type="button"
+              :aria-label="`Edit rules of ${row.collection.name}`"
+              @click="ruleEditor.openEdit(row.collection.id)"
+            >
+              Edit rules
             </button>
             <button
               type="button"
@@ -351,6 +379,10 @@ function countLabel(n: number): string {
   align-items: center;
   justify-content: space-between;
   padding: 0 8px;
+}
+.head-actions {
+  display: flex;
+  gap: 4px;
 }
 .heading {
   margin: 0;

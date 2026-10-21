@@ -155,6 +155,17 @@ pub struct MoveCollectionRequest {
     pub position: u32,
 }
 
+/// Replace the rule of a smart collection (E14.1). The rule is checked as
+/// `create_collection` checks it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCollectionRulesRequest {
+    /// The smart collection; a manual one is `InvalidRequest`.
+    pub collection: CollectionId,
+    /// The new rule.
+    pub rule_group: RuleGroup,
+}
+
 /// Add faces to, or remove them from, a manual collection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -464,6 +475,11 @@ pub trait OrganizationService {
     fn rename_collection(&self, req: RenameCollectionRequest) -> ApiResult<Collection>;
     /// Nest a collection under another one, or reorder it among its siblings.
     fn move_collection(&self, req: MoveCollectionRequest) -> ApiResult<Collection>;
+    /// Replace the rule of a smart collection (E14.1). A manual collection,
+    /// a group with no rules or a weight or width range whose minimum is
+    /// above its maximum is `InvalidRequest`, as is a rule that leads back
+    /// to the collection; nothing is saved then.
+    fn update_collection_rules(&self, req: UpdateCollectionRulesRequest) -> ApiResult<Collection>;
     /// Delete a collection and its children. Faces are not touched.
     fn delete_collection(&self, collection: CollectionId) -> ApiResult<()>;
     /// Add faces or families to a manual collection; a face can be in many.

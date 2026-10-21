@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FmClient } from './client';
 import { createMockClient } from './mock';
-import type { CollectionId, FaceId, Filters, Rule } from './types';
+import type { CollectionId, FaceId, Filters, Rule, RuleGroup } from './types';
 
 /** The faces a search with `filters` finds, sorted. */
 async function facesOf(client: FmClient, filters: Filters): Promise<FaceId[]> {
@@ -57,8 +57,12 @@ describe('MockApi smart collections (E14.2)', () => {
       faces: staticItalic,
     });
 
-    const all = await client.createCollection({ name: 'All', ruleGroup: { op: 'or', rules: [] } });
-    expect((await live(client, all.id)).count).toBe((await facesOf(client, {})).length);
+    // E14.1: an empty group is refused on save; as a draft it passes every face.
+    await expect(
+      client.createCollection({ name: 'All', ruleGroup: { op: 'or', rules: [] } }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+    const all = await client.search({ query: '', filters: {}, rule: { op: 'or', rules: [] } });
+    expect(all.total).toBe((await client.search({ query: '', filters: {} })).total);
   });
 
   it('follows tag and rating changes with no refresh', async () => {
@@ -159,5 +163,66 @@ describe('MockApi layouts (E12.1)', () => {
     const api = createMockClient();
     (await api.layoutPresets())[0]!.blocks[0]!.sizePt = 99;
     expect((await api.layoutPresets())[0]!.blocks[0]!.sizePt).toBe(24);
+  });
+});
+
+describe('MockApi rule editor calls (E14.1)', () => {
+  const leaf = (filters: Filters): Rule => ({ kind: 'filters', filters });
+  const sansCyrillicOrGreek: RuleGroup = {
+    op: 'and',
+    rules: [
+      leaf({ classification: ['sans'] }),
+      {
+        kind: 'group',
+        group: {
+          op: 'or',
+          rules: [
+            leaf({ supports: { kind: 'languages', codes: ['sr-Cyrl'] } }),
+            leaf({ supports: { kind: 'languages', codes: ['el'] } }),
+          ],
+        },
+      },
+    ],
+  };
+
+  it('applies a draft rule to search like fm-core, counts inside it', async () => {
+    const client = createMockClient();
+    const res = await client.search({ query: '', filters: {}, rule: sansCyrillicOrGreek });
+    expect(res.families.map((h) => h.family.name)).toEqual(['Inter']);
+    expect(res.counts?.classification).toEqual([{ value: 'sans', count: 1 }]);
+  });
+
+  it('lists classes, weights and foundries from the counts', async () => {
+    const counts = (await createMockClient().search({ query: '', filters: {} })).counts!;
+    expect(counts.classification?.map((c) => c.value).sort()).toEqual(['mono', 'sans']);
+    expect(counts.foundry?.map((c) => c.value)).toEqual(['JetBrains', 'Old Foundry', 'rsms']);
+    expect(counts.weight?.length).toBe(9);
+  });
+
+  it('updates a smart rule and refuses what fm-core refuses', async () => {
+    const client = createMockClient();
+    const c = await client.createCollection({ name: 'Sans', ruleGroup: sansCyrillicOrGreek });
+    expect(c.faceCount).toBe(1);
+    const mono = await client.updateCollectionRules({
+      collection: c.id,
+      ruleGroup: { op: 'and', rules: [leaf({ classification: ['mono'] })] },
+    });
+    expect(mono.rules).toEqual({ classification: ['mono'] });
+    expect(mono.faceCount).toBe(1);
+    for (const ruleGroup of [
+      { op: 'and', rules: [] },
+      { op: 'or', rules: [leaf({ weight: { min: 700, max: 300 } })] },
+      { op: 'and', rules: [leaf({ collection: c.id })] },
+    ] as RuleGroup[]) {
+      await expect(
+        client.updateCollectionRules({ collection: c.id, ruleGroup }),
+      ).rejects.toMatchObject({ code: 'invalidRequest' });
+      const [kept] = await client.listCollections();
+      expect(kept!.ruleGroup).toEqual(mono.ruleGroup);
+    }
+    const manual = await client.createCollection({ name: 'Manual' });
+    await expect(
+      client.updateCollectionRules({ collection: manual.id, ruleGroup: sansCyrillicOrGreek }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
   });
 });

@@ -44,7 +44,7 @@ use crate::coverage::{CodePointSet, Fit};
 use crate::error::{FmError, FmResult};
 use crate::filter::{
     FaceFacts, Slots, Tag, Tally, failed, failed_activated, failed_added, failed_supports, tag,
-    values, with_collection,
+    with_collection,
 };
 use crate::grouping::{family_key, slant_rank};
 use crate::license;
@@ -128,9 +128,15 @@ impl Index {
     /// ([`FamilyHit::missing`]); an unknown language preset is
     /// `InvalidRequest`. A smart collection applies its rule; one whose
     /// rule leads back to itself is `InvalidRequest`. An unknown collection
-    /// is `NotFound`.
+    /// is `NotFound`. A draft `rule` (E14.1) applies like a smart
+    /// collection's: a face outside it is no result and counts nowhere.
     pub fn search(&self, req: &SearchRequest) -> FmResult<SearchResponse> {
         let member = self.collection_member(req.filters.collection)?;
+        let draft = req
+            .rule
+            .as_ref()
+            .map(|group| Member::compile_rule(&self.conn, &smart::load_rules(&self.conn)?, group))
+            .transpose()?;
         let need = smart::need(&req.filters)?;
         let cutoff = smart::cutoff(&self.conn, req.filters.added_within_days)?;
         let activated_cutoff = smart::cutoff(&self.conn, req.filters.activated_within_days)?;
@@ -162,6 +168,10 @@ impl Index {
             let mut faces: Vec<(&Row, f32, Option<Fit>)> = faces
                 .into_iter()
                 .filter_map(|(row, score)| {
+                    // A face outside the draft rule counts under no value.
+                    if draft.as_ref().is_some_and(|d| !d.holds(row, &[])) {
+                        return None;
+                    }
                     let mut failed = failed(&req.filters, &row.text, &row.facts)
                         | failed_added(cutoff.as_deref(), row.added.as_deref())
                         | failed_activated(
@@ -474,7 +484,7 @@ impl Index {
                 id,
                 family_key: key,
                 family,
-                slots: slots.intern(&values(&face_text, &facts)),
+                slots: slots.intern_face(&face_text, &facts),
                 text: face_text,
                 facts,
                 active,

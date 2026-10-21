@@ -43,6 +43,7 @@ impl Index {
                 offset: 0,
                 limit: u32::MAX,
             },
+            rule: None,
         })?;
         let mut rows = Vec::with_capacity(found.families.len());
         for hit in found.families {

@@ -2140,6 +2140,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
                 offset: 0,
                 limit: 1000,
             },
+            rule: None,
         })
         .expect("search")
         .families

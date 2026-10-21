@@ -937,6 +937,8 @@ export type FilterCounts = {
 	openLicense?: FilterCount<boolean>[],
 	/**  OK for web (true) and not (false). */
 	webOk?: FilterCount<boolean>[],
+	/**  Per foundry, A to Z (E14.1). */
+	foundry?: FilterCount<string>[],
 };
 
 /**
@@ -1848,6 +1850,12 @@ export type SearchRequest = {
 	query?: string,
 	/**  Filters. */
 	filters?: Filters,
+	/**
+	 *  A smart-collection rule a face must pass as well, as a smart
+	 *  collection applies it (E14.1: the rule editor's live count of a rule
+	 *  not saved yet).
+	 */
+	rule?: RuleGroup | null,
 	/**  Window over the family groups. */
 	page?: Page,
 };
@@ -2188,6 +2196,17 @@ export type UntagFacesRequest = {
 	faces: FaceId[],
 	/**  The tags. */
 	tags: TagId[],
+};
+
+/**
+ *  Replace the rule of a smart collection (E14.1). The rule is checked as
+ *  `create_collection` checks it.
+ */
+export type UpdateCollectionRulesRequest = {
+	/**  The smart collection; a manual one is `InvalidRequest`. */
+	collection: CollectionId,
+	/**  The new rule. */
+	ruleGroup: RuleGroup,
 };
 
 /**  Change user metadata on faces; absent fields are left as they are. */

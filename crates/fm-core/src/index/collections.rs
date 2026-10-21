@@ -19,13 +19,13 @@ use fm_api::CollectionId;
 use fm_api::common::Classification;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
-    RenameCollectionRequest, RuleGroup,
+    RenameCollectionRequest, RuleGroup, UpdateCollectionRulesRequest,
 };
 use fm_api::search::Filters;
 use fm_api::{ErrorCode, FaceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
-use super::search::smart::{Member, load_rules, stored_rule};
+use super::search::smart::{Member, check_rule, load_rules, stored_rule};
 use super::{Index, db_error, sidecars};
 use crate::error::{FmError, FmResult};
 
@@ -110,7 +110,8 @@ impl Index {
     /// With `rules` or `rule_group` (not both: `InvalidRequest`) it is smart.
     /// A rule naming an unknown collection is `NotFound`; one that leads
     /// back to the new collection, or names an unknown language preset, is
-    /// `InvalidRequest`.
+    /// `InvalidRequest`, as is a rule [`check_rule`] refuses (an empty group,
+    /// a range whose minimum is above its maximum).
     pub fn create_collection(&mut self, req: &CreateCollectionRequest) -> FmResult<Collection> {
         let name = collection_name(&req.name)?;
         let group = match (&req.rules, &req.rule_group) {
@@ -121,6 +122,9 @@ impl Index {
             }
             (rules, group) => group.clone().or_else(|| rules.clone().map(RuleGroup::from)),
         };
+        if let Some(group) = &group {
+            check_rule(group)?;
+        }
         let rules = group
             .as_ref()
             .map(serde_json::to_string)
@@ -148,6 +152,50 @@ impl Index {
         }
         tx.commit().map_err(|e| db_error(&e))?;
         self.collection(id)
+    }
+
+    /// Replaces the rule of a smart collection (E14.1), checked as
+    /// [`Index::create_collection`] checks it. A manual collection is
+    /// `InvalidRequest`, an unknown one `NotFound`; on any error the old
+    /// rule stays.
+    pub fn update_collection_rules(
+        &mut self,
+        req: &UpdateCollectionRulesRequest,
+    ) -> FmResult<Collection> {
+        check_rule(&req.rule_group)?;
+        let rules = serde_json::to_string(&req.rule_group)
+            .map_err(|e| FmError::internal(format!("collection rules: {e}")))?;
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        let smart: Option<bool> = tx
+            .query_row(
+                "SELECT rules IS NOT NULL FROM collection WHERE id = ?1",
+                [req.collection.0],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| db_error(&e))?;
+        match smart {
+            None => return Err(FmError::not_found(format!("Collection {}", req.collection))),
+            Some(false) => {
+                return Err(FmError::invalid(
+                    "A manual collection has no rules; make a smart collection instead.",
+                ));
+            }
+            Some(true) => {}
+        }
+        tx.execute(
+            "UPDATE collection SET rules = ?2 WHERE id = ?1",
+            params![req.collection.0, rules],
+        )
+        .map_err(|e| db_error(&e))?;
+        // As on create: checked with the new rule in place, so a loop back
+        // to this collection is refused and the transaction dropped.
+        for named in req.rule_group.collections() {
+            ensure_exists(&tx, named)?;
+        }
+        Member::compile(&tx, &load_rules(&tx)?, req.collection)?;
+        tx.commit().map_err(|e| db_error(&e))?;
+        self.collection(req.collection)
     }
 
     /// Renames a collection; the same rules as [`Index::create_collection`].
