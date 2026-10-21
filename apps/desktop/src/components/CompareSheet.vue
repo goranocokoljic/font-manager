@@ -66,10 +66,14 @@ onMounted(async () => {
     was instanceof HTMLElement && was !== document.body && !was.closest('[role="dialog"]')
       ? was
       : document.querySelector('main');
+  window.addEventListener('keydown', onOutsideKey, true);
+  document.addEventListener('focusin', onFocusIn);
   await nextTick();
   dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
 });
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onOutsideKey, true);
+  document.removeEventListener('focusin', onFocusIn);
   for (const id of held) loader.release(id);
   held.clear();
   if (returnFocus?.isConnected) returnFocus.focus();
@@ -128,13 +132,41 @@ function onKeyDown(e: KeyboardEvent): void {
   const first = stops[0];
   const last = stops[stops.length - 1];
   if (!first || !last) return;
-  if (e.shiftKey && document.activeElement === first) {
+  // On the sheet itself (after a click on its text): Tab goes to the first control.
+  if (document.activeElement === dialog.value) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  } else if (e.shiftKey && document.activeElement === first) {
     e.preventDefault();
     last.focus();
   } else if (!e.shiftKey && document.activeElement === last) {
     e.preventDefault();
     first.focus();
   }
+}
+
+/**
+ * A key whose target is outside the sheet (the focus fell to the page, e.g. after a
+ * click in some browsers) is handled as if it were in the sheet: the list's shortcuts
+ * behind the modal never see it.
+ */
+function onOutsideKey(e: KeyboardEvent): void {
+  if (!dialog.value || (e.target instanceof Node && dialog.value.contains(e.target))) return;
+  // The command palette (Ctrl/Cmd+K) may open over the sheet; it owns its keys.
+  if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    dialog.value.focus();
+  }
+  onKeyDown(e);
+}
+
+/** Focus that moves to the page behind the sheet is taken back to the sheet. */
+function onFocusIn(e: FocusEvent): void {
+  const t = e.target;
+  if (!dialog.value || !(t instanceof Element) || dialog.value.contains(t)) return;
+  if (t.closest('[role="dialog"]')) return;
+  dialog.value.focus();
 }
 </script>
 
@@ -146,6 +178,7 @@ function onKeyDown(e: KeyboardEvent): void {
       role="dialog"
       aria-modal="true"
       aria-labelledby="fm-compare-sheet-title"
+      tabindex="-1"
       @keydown="onKeyDown"
     >
       <header class="head">
@@ -300,6 +333,9 @@ function onKeyDown(e: KeyboardEvent): void {
   color: var(--fm-fg);
   box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
   overflow: auto;
+}
+.sheet:focus {
+  outline: none;
 }
 .head {
   display: flex;

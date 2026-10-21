@@ -124,6 +124,33 @@ describe('compare sheet', () => {
     expect(s.pins).toHaveLength(2);
   });
 
+  it('keeps keys away from the page behind when the focus fell out of the sheet', async () => {
+    const { wrapper, s } = await mountWith(2, 'sideBySide');
+    const behind = vi.fn();
+    window.addEventListener('keydown', behind);
+    try {
+      // The focus is on the page (e.g. after a click on the sample text).
+      (document.activeElement as HTMLElement).blur();
+      expect(document.activeElement).toBe(document.body);
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+      expect(behind).not.toHaveBeenCalled();
+      // Tab goes back into the sheet, to its first control.
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+      expect(document.activeElement).toBe(wrapper.get('input[type="radio"]:checked').element);
+      // Focus that moves to the page behind is taken back to the sheet.
+      const outside = document.createElement('button');
+      document.body.append(outside);
+      outside.focus();
+      expect(wrapper.get('[role="dialog"]').element.contains(document.activeElement)).toBe(true);
+      // Escape closes it from anywhere.
+      (document.activeElement as HTMLElement).blur();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(s.open).toBe(false);
+    } finally {
+      window.removeEventListener('keydown', behind);
+    }
+  });
+
   it('asks for a second pin when only one is pinned', async () => {
     const { wrapper } = await mountWith(1, 'sideBySide');
     expect(wrapper.get('[role="status"]').text()).toContain('Pin at least two fonts');

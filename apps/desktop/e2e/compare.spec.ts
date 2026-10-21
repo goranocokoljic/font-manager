@@ -161,6 +161,17 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
   await page.keyboard.press('c');
   await expect(compareButton(page)).toHaveText('Compare 2/4');
 
+  // A click on the sample text keeps the focus in the sheet: Tab stays inside, and
+  // A does not activate the list's face behind the modal.
+  await dialog.locator('.sample').first().click();
+  expect(await dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('a');
+  await page.keyboard.press('Tab');
+  expect(await dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press('Shift+Tab');
+  expect(await dialog.evaluate((d) => d.contains(document.activeElement))).toBe(true);
+  await dialog.locator('.sample').first().click();
+
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   // Back in the list (opened from the palette, the focus goes to the list column).
@@ -169,6 +180,7 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
   );
   await expect(selected).toHaveAttribute('data-key', before!);
   expect(page.url()).toBe(url);
+  await expect(page.getByTestId('activation-state')).toHaveText('Not active');
 
   // The pins stay for the session: reopening shows them again.
   await compareButton(page).click();
