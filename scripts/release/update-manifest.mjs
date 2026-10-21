@@ -31,13 +31,12 @@ export const MANIFEST = 'latest.json';
  * next to each, and the installer kind Tauri's updater names it by. The first one is
  * also the default for its `<os>-<arch>` key. Windows and Linux update from the
  * installers themselves; macOS from the app bundle as `.app.tar.gz` (the .dmg is for
- * a first install only).
+ * a first install only). The .msi is not here: it installs per machine, so updating
+ * it would run msiexec with admin rights (rule 4); an .msi copy shows a platform note
+ * instead (ADR 0012).
  */
 export const UPDATER_ARTIFACTS = {
-  windows: [
-    { dir: 'nsis', ext: '-setup.exe', as: '.exe', installer: 'nsis' },
-    { dir: 'msi', ext: '.msi', installer: 'msi' },
-  ],
+  windows: [{ dir: 'nsis', ext: '-setup.exe', as: '.exe', installer: 'nsis' }],
   macos: [{ dir: 'macos', ext: '.app.tar.gz', installer: 'app' }],
   linux: [{ dir: 'appimage', ext: '.AppImage', installer: 'appimage' }],
 };

@@ -38,19 +38,28 @@ it. Flatpak and package managers already install updates for their copies.
   quit path every quit uses (`AppState::run_quit_path`: session fonts are
   deregistered and remembered for "reactivate on launch"). It runs once: the
   exit that follows the install does not record an empty session over the
-  real one. When the install fails the app keeps running and quits normally
-  later.
+  real one. When the install fails the app goes on running as before: the
+  session fonts the quit path ended are activated again and the quit path
+  runs again at the next quit, so "reactivate on launch" keeps the real
+  session.
 - **Where the app updates itself** (`fm_platform::updater::distribution`):
 
 | | Windows | macOS | Linux |
 |-|---------|-------|-------|
-| Updates itself | the .exe (NSIS) and .msi installers | the app (from the .dmg) | the AppImage (`APPIMAGE` set) |
-| Update artifact | the installer, run in passive mode | `.app.tar.gz` | the AppImage |
-| Hidden, with a platform note | a build with `FM_PACKAGED_BY` | a build with `FM_PACKAGED_BY` | Flatpak; a system package (.deb, .rpm); a build with `FM_PACKAGED_BY` |
+| Updates itself | the .exe (NSIS) installer, per user | the app (from the .dmg) | the AppImage (`APPIMAGE` set) |
+| Update artifact | the .exe, run in passive mode | `.app.tar.gz` | the AppImage |
+| Folder that must be writable | the program's folder | the folder holding `Font Manager.app` | the AppImage's folder |
+| Hidden, with a platform note | the .msi (per machine, Program Files); any copy in a folder the user cannot write; a build with `FM_PACKAGED_BY` | the app where the account cannot change its folder (a standard account and `/Applications`); a build with `FM_PACKAGED_BY` | an AppImage in a read-only folder; Flatpak; a system package (.deb, .rpm); a build with `FM_PACKAGED_BY` |
 
-  A package manager that builds the app sets `FM_PACKAGED_BY=<its name>` at
-  build time. A system package is not updated in place: that would need admin
-  rights (rule 4).
+  **Never admin rights (rule 4).** Tauri's updater would elevate in two
+  places: `msiexec` for the per-machine .msi, and an AppleScript
+  "with administrator privileges" prompt when the app bundle cannot be
+  swapped. So the app offers updates only when this user can create a file in
+  the folder the update writes into (`fm_platform::updater::writable_dir`, a
+  probe file created and removed), and asks again before every install. The
+  .msi has no entry in `latest.json`. A package manager that builds the app
+  sets `FM_PACKAGED_BY=<its name>` at build time. A system package is not
+  updated in place either.
 - **The manifest.** The release workflow (`.github/workflows/release.yml`,
   on a `v*` tag) builds with `scripts/release/build.mjs installer --updater`
   (adds `tauri.updater.conf.json`: `createUpdaterArtifacts`), gathers the

@@ -328,30 +328,53 @@ fn the_quit_at_restart_after_an_install_keeps_the_last_session() {
 }
 
 #[test]
-fn a_failed_install_keeps_the_app_running_and_quit_still_ends_new_session_fonts() {
+fn a_failed_install_brings_the_session_fonts_back_and_keeps_the_last_session() {
+    // Session fonts active and "reactivate on launch" on; the install fails
+    // (an installer that does not start, a folder that cannot be written).
     let home = Home::new("install-fails");
     let (state, core) = home.serve();
-    session_font(&core);
+    core.update_settings(SettingsUpdate {
+        reactivate_on_launch: Some(true),
+        ..SettingsUpdate::default()
+    })
+    .expect("settings");
+    let mut faces = session_font(&core);
+    faces.sort_by_key(|f| f.0);
+    let sorted = |core: &CoreApi| {
+        let mut v: Vec<FaceId> = core
+            .list_active()
+            .expect("active")
+            .into_iter()
+            .map(|a| a.face)
+            .collect();
+        v.sort_by_key(|f| f.0);
+        v
+    };
+    let mut active_at_install = None;
     let failed = install_after_quit(&state, || {
+        active_at_install = Some(core.list_active().expect("active"));
         Err(ApiError::new(
             ErrorCode::Io,
             "The update could not be installed.",
         ))
     });
     assert_eq!(failed.expect_err("failed").code, ErrorCode::Io);
-    // The user activates again, then quits: the quit path runs again.
-    let family = core
-        .list_families(Default::default())
-        .expect("families")
-        .items[0]
-        .id;
-    core.activate(ActivateRequest {
-        target: Target::Family { family },
-        mode: ActivationMode::Session,
-        on_conflict: ConflictPolicy::KeepExisting,
-    })
-    .expect("activates");
-    assert!(!core.list_active().expect("active").is_empty());
+    assert_eq!(
+        active_at_install,
+        Some(Vec::new()),
+        "the quit path did not run first"
+    );
+    // The app goes on running with the session it had.
+    assert_eq!(sorted(&core), faces, "the session fonts did not come back");
+
+    // A later Quit ends them and records them for the next launch.
     state.run_quit_path();
     assert!(core.list_active().expect("active").is_empty());
+    drop((state, core));
+    let (_state, next) = home.serve();
+    assert_eq!(
+        sorted(&next),
+        faces,
+        "the next launch did not reactivate the session"
+    );
 }

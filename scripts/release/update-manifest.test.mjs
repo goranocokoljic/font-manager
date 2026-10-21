@@ -49,7 +49,6 @@ function bundle(files) {
 
 const ALL_ASSETS = [
   `font-manager_${V}_windows_x64.exe`,
-  `font-manager_${V}_windows_x64.msi`,
   `font-manager_${V}_macos_arm64.app.tar.gz`,
   `font-manager_${V}_linux_x64.AppImage`,
 ].map((name) => ({ name, signature: SIG }));
@@ -75,12 +74,11 @@ describe('buildManifest', () => {
       'linux-x86_64',
       'linux-x86_64-appimage',
       'windows-x86_64',
-      'windows-x86_64-msi',
       'windows-x86_64-nsis',
     ]);
-    // Windows defaults to the .exe (NSIS) installer, the first kind.
+    // Windows updates from the per-user .exe (NSIS) installer.
     assert.deepEqual(m.platforms['windows-x86_64'], m.platforms['windows-x86_64-nsis']);
-    assert.equal(m.platforms['windows-x86_64-msi'].url, `${BASE}/font-manager_${V}_windows_x64.msi`);
+    assert.equal(m.platforms['windows-x86_64'].url, `${BASE}/font-manager_${V}_windows_x64.exe`);
     assert.equal(
       m.platforms['darwin-aarch64'].url,
       `${BASE}/font-manager_${V}_macos_arm64.app.tar.gz`,
@@ -91,6 +89,8 @@ describe('buildManifest', () => {
   test('refuses a file that is not an updater artifact of this version', () => {
     for (const name of [
       `font-manager_${V}_macos_arm64.dmg`,
+      // The per-machine .msi never updates in place (rule 4).
+      `font-manager_${V}_windows_x64.msi`,
       `font-manager_0.1.0_linux_x64.AppImage`,
       'latest.json',
     ]) {
@@ -114,11 +114,11 @@ describe('checkManifest', () => {
     'no platforms': (m) => (m.platforms = {}),
     'an unknown platform key': (m) => (m.platforms['beos-x86_64'] = m.platforms['linux-x86_64']),
     'an http URL': (m) => (m.platforms['linux-x86_64'].url = 'http://example.com/a.AppImage'),
-    'a missing signature': (m) => delete m.platforms['windows-x86_64-msi'].signature,
+    'a missing signature': (m) => delete m.platforms['windows-x86_64-nsis'].signature,
     'a signature that is not minisign': (m) =>
-      (m.platforms['windows-x86_64-msi'].signature = Buffer.from('hello').toString('base64')),
+      (m.platforms['windows-x86_64-nsis'].signature = Buffer.from('hello').toString('base64')),
     'a signature not bound to a version': (m) =>
-      (m.platforms['windows-x86_64-msi'].signature = Buffer.from(
+      (m.platforms['windows-x86_64-nsis'].signature = Buffer.from(
         'untrusted comment: x\nRUQ\ntrusted comment: timestamp:1\tfile:a\nabc',
       ).toString('base64')),
     'an installer key without its default': (m) => delete m.platforms['darwin-aarch64'],
@@ -140,7 +140,7 @@ describe('artifactOf', () => {
       installer: 'nsis',
       isDefault: true,
     });
-    assert.equal(artifactOf(`font-manager_${V}_windows_x64.msi`, V).isDefault, false);
+    assert.equal(artifactOf(`font-manager_${V}_windows_x64.msi`, V), null);
     assert.equal(artifactOf(`font-manager_${V}_linux_arm64.AppImage`, V).arch, 'arm64');
     assert.equal(artifactOf(`font-manager_${V}_macos_arm64.dmg`, V), null);
   });
@@ -152,7 +152,6 @@ describe('findReleaseFiles', () => {
       'nsis/Font Manager_0.2.0_x64-setup.exe',
       'nsis/Font Manager_0.2.0_x64-setup.exe.sig',
       'msi/Font Manager_0.2.0_x64_en-US.msi',
-      'msi/Font Manager_0.2.0_x64_en-US.msi.sig',
       'dmg/Font Manager_0.2.0_aarch64.dmg',
       'macos/Font Manager.app.tar.gz',
       'macos/Font Manager.app.tar.gz.sig',
@@ -164,7 +163,6 @@ describe('findReleaseFiles', () => {
       `font-manager_${V}_windows_x64.exe`,
       `font-manager_${V}_windows_x64.exe.sig`,
       `font-manager_${V}_windows_x64.msi`,
-      `font-manager_${V}_windows_x64.msi.sig`,
     ]);
     assert.deepEqual(names('macos', 'arm64'), [
       `font-manager_${V}_macos_arm64.app.tar.gz`,

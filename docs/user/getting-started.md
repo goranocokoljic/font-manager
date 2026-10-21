@@ -133,6 +133,9 @@ It is off until you turn it on.
 
 Font Manager installs only updates signed with its release key. If you installed it with
 Flatpak or a package manager, that tool installs the updates, and Settings → About says
-so under Platform notes.
+so under Platform notes. Font Manager never asks for administrator rights, so a copy
+installed for all users (the .msi on Windows, or an app in a folder your account cannot
+change) does not update itself: install the new version from the releases page. The
+per-user .exe installer on Windows updates itself.
 
 > Font Manager makes no network calls unless you ask it to, and it has no accounts.

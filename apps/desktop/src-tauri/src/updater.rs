@@ -120,16 +120,18 @@ fn not_offered(support: &UpdateSupport) -> ApiError {
 }
 
 /// Runs the normal quit path (session fonts are deregistered, ADR 0008),
-/// then `install`. When the install fails the app keeps running, and the
-/// quit path runs again when it quits.
+/// then `install`. When the install fails the app keeps running as it was:
+/// the session fonts are activated again, and the quit path runs again when
+/// the app quits.
 pub fn install_after_quit(
     state: &AppState,
     install: impl FnOnce() -> ApiResult<()>,
 ) -> ApiResult<()> {
+    let session = state.session_faces();
     state.run_quit_path();
     let installed = install();
     if installed.is_err() {
-        state.rearm_quit_path();
+        state.resume_after_quit(session);
     }
     installed
 }
@@ -179,6 +181,12 @@ pub async fn install_update<R: Runtime>(
         ));
     };
     req.check(&shown)?;
+    // Asked again now: a copy moved since the check to a folder this user
+    // cannot write would make the installer ask for admin rights (rule 4).
+    let support = support();
+    if !support.offered {
+        return Err(not_offered(&support));
+    }
     let bytes = update
         .download(|_, _| {}, || {})
         .await

@@ -148,9 +148,41 @@ impl AppState {
         }
     }
 
-    /// Lets the quit path run again: an update that ran it failed to
-    /// install, so the app keeps running and quits normally later.
-    pub fn rearm_quit_path(&self) {
+    /// The faces active for this session now: the ones the quit path ends.
+    /// Empty without the real library.
+    pub fn session_faces(&self) -> Vec<FaceId> {
+        let Some(core) = &self.core else {
+            return Vec::new();
+        };
+        match fm_api::ActivationService::list_active(core.as_ref()) {
+            Ok(active) => lifecycle::session_faces(&active),
+            Err(e) => {
+                tracing::warn!(error = %e, "session fonts not read");
+                Vec::new()
+            }
+        }
+    }
+
+    /// Undoes the quit path when the app goes on running after all (an
+    /// update that did not install): `faces`, the session fonts it ended,
+    /// are activated again, and the quit path runs again when the app quits,
+    /// so the last session it records is the real one.
+    pub fn resume_after_quit(&self, faces: Vec<FaceId>) {
+        if let Some(core) = &self.core {
+            let on_conflict = self.current_settings().on_conflict;
+            match lifecycle::restore_session(core.as_ref(), faces, on_conflict) {
+                Ok(outcomes) => {
+                    let missed = outcomes
+                        .iter()
+                        .filter(|o| o.outcome != fm_api::activation::OutcomeStatus::Done)
+                        .count();
+                    if missed > 0 {
+                        tracing::warn!(missed, "some session fonts were not activated again");
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "session fonts not activated again"),
+            }
+        }
         self.quit_ran.store(false, Ordering::SeqCst);
     }
 

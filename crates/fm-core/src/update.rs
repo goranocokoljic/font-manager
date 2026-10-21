@@ -23,6 +23,13 @@ pub fn support(distribution: &Distribution) -> UpdateSupport {
         Distribution::PackageManager(tool) => Some(format!(
             "{tool} installs the updates of this copy, so Check for updates is not shown."
         )),
+        Distribution::NeedsAdmin => Some(
+            "This copy is in a folder your account cannot change (installed for all users), \
+             and Font Manager never asks for administrator rights, so Check for updates is \
+             not shown. Install new versions from the releases page; the per-user installer \
+             (.exe on Windows) updates itself."
+                .to_owned(),
+        ),
     };
     UpdateSupport {
         offered: reason.is_none(),
@@ -63,6 +70,14 @@ mod tests {
             deb.reason
                 .as_deref()
                 .is_some_and(|r| r.contains("package manager"))
+        );
+        let admin = support(&Distribution::NeedsAdmin);
+        assert!(!admin.offered);
+        assert!(
+            admin
+                .reason
+                .as_deref()
+                .is_some_and(|r| r.contains("never asks for administrator rights"))
         );
         let brew = support(&Distribution::PackageManager("Homebrew".into()));
         assert!(!brew.offered);
