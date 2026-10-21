@@ -144,6 +144,58 @@ mod tests {
         );
     }
 
+    /// E14.3: a new library gets the six default smart collections when the
+    /// app opens it, and only once.
+    #[test]
+    fn open_index_gives_a_new_library_the_defaults_once() {
+        let dir = TempDir::new("startup-index-defaults");
+        let paths = paths_in(&dir);
+        prepare(&paths).expect("prepared");
+        let names = |index: &Index| -> Vec<String> {
+            index
+                .collections()
+                .expect("list")
+                .into_iter()
+                .map(|c| c.name)
+                .collect()
+        };
+        let mut index = open_index(&paths).expect("opened").index;
+        assert_eq!(
+            names(&index),
+            [
+                "Recently added",
+                "Recently activated",
+                "Variable",
+                "Monospace",
+                "Web-licensed",
+                "Problems",
+            ]
+        );
+        assert!(
+            index
+                .collections()
+                .expect("list")
+                .iter()
+                .all(|c| c.rule_group.is_some()),
+            "every default is smart"
+        );
+        let problems = index.collections().expect("list")[5].id;
+        index.delete_collection(problems).expect("delete");
+        drop(index);
+        // The next start does not make them again.
+        let index = open_index(&paths).expect("reopened").index;
+        assert_eq!(
+            names(&index),
+            [
+                "Recently added",
+                "Recently activated",
+                "Variable",
+                "Monospace",
+                "Web-licensed",
+            ]
+        );
+    }
+
     #[test]
     fn open_index_rebuilds_a_damaged_file_instead_of_failing() {
         let dir = TempDir::new("startup-index-damaged");
