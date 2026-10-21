@@ -12,6 +12,7 @@ mod linux;
 mod macos;
 pub mod paths;
 pub mod trash;
+pub mod tray;
 mod windows;
 
 pub use activator::{
@@ -24,5 +25,6 @@ pub use linux::LinuxActivator;
 pub use macos::{LEDGER_FILE, MacosActivator};
 pub use paths::{AppPaths, Os, PathError};
 pub use trash::{MockTrash, Trash, TrashError, TrashErrorKind, Trashed};
+pub use tray::{MockTray, Tray, TrayKind, TraySupport};
 #[cfg(windows)]
 pub use windows::{FONTS_KEY, LEDGER_KEY, WindowsActivator};

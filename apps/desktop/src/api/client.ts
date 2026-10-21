@@ -39,9 +39,17 @@ import type {
   JobId,
   KeepCopyRequest,
   LanguagePreset,
+  DuplicateLayoutRequest,
   Layout,
   LayoutBounds,
+  LayoutEntry,
+  LayoutRef,
+  LayoutVersion,
   ListFamiliesRequest,
+  RestoreLayoutRequest,
+  RevertLayoutRequest,
+  SavedLayout,
+  SaveLayoutRequest,
   MoveCollectionRequest,
   Paged,
   PinInstanceRequest,
@@ -138,8 +146,24 @@ export interface FmClient {
   layoutPresets(): Promise<Layout[]>;
   /** A layout with every block value clamped into its range. */
   clampLayout(req: Layout): Promise<Layout>;
-  /** The ranges and gesture steps of a block's size and line height. */
+  /** The ranges `clampLayout` clamps block values into, with their steps (the properties editor). */
   layoutBounds(): Promise<LayoutBounds>;
+  /** Every layout template file (presets first); a broken file is listed with the reason. */
+  listLayouts(): Promise<LayoutEntry[]>;
+  /** One saved layout. */
+  getLayout(req: LayoutRef): Promise<SavedLayout>;
+  /** Saves a layout to its template file; the content it replaces becomes a version. */
+  saveLayout(req: SaveLayoutRequest): Promise<SavedLayout>;
+  /** Copies a layout into a new, independent template file with a new name. */
+  duplicateLayout(req: DuplicateLayoutRequest): Promise<SavedLayout>;
+  /** The saved file again, or (`toOriginal`) a preset's shipped original. */
+  revertLayout(req: RevertLayoutRequest): Promise<SavedLayout>;
+  /** The kept versions of a layout, newest first. */
+  layoutHistory(req: LayoutRef): Promise<LayoutVersion[]>;
+  /** Makes a kept version current; what it replaces is kept as a version. */
+  restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
+  /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
+  layoutWidth(req: Layout): Promise<number | null>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -216,6 +240,14 @@ export const tauriClient: FmClient = {
   layoutPresets: () => invoke<Layout[]>('layout_presets'),
   clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),
   layoutBounds: () => invoke<LayoutBounds>('layout_bounds'),
+  listLayouts: () => invoke<LayoutEntry[]>('list_layouts'),
+  getLayout: (req) => invoke<SavedLayout>('get_layout', { req }),
+  saveLayout: (req) => invoke<SavedLayout>('save_layout', { req }),
+  duplicateLayout: (req) => invoke<SavedLayout>('duplicate_layout', { req }),
+  revertLayout: (req) => invoke<SavedLayout>('revert_layout', { req }),
+  layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
+  restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
+  layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),

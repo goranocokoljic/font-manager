@@ -36,7 +36,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
 
-## Layouts
+## In the layout
 
 In the layout view, press `Tab` to go to a block of text.
 
@@ -44,9 +44,9 @@ In the layout view, press `Tab` to go to a block of text.
 |-----|--------------|
 | `Right` and `Left` | Make the text of the block larger or smaller (with `Shift`: in bigger steps) |
 | `Up` and `Down` | Add or remove space between the lines of the block (with `Shift`: in bigger steps) |
-| `Enter` | Type your own text in the block |
-| `Ctrl+Enter` | Keep the text you typed (`Cmd+Enter` on a Mac). A click outside the block also keeps it |
-| `Esc` | Cancel the text you typed, or go back to the size before a drag |
+| `Enter` | Edit the text of the block that has the focus |
+| `Ctrl+Enter` | Keep the edit and close the text box (`Cmd+Enter` on a Mac). A click outside the block also keeps it |
+| `Esc` | Drop the edit and close the text box, or go back to the size before a drag |
 
 ## The command palette
 

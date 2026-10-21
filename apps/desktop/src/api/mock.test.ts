@@ -84,6 +84,14 @@ describe('MockApi smart collections (E14.2)', () => {
     expect(await facesOf(client, { addedWithinDays: 7 })).toEqual([]);
   });
 
+  it('filters by last activation, active now or not (E14.3)', async () => {
+    const client = createMockClient();
+    expect(await facesOf(client, { activatedWithinDays: 30 })).toEqual([]);
+    await client.activate({ target: { kind: 'faces', faces: [1, 6] }, onConflict: 'replace' });
+    await client.deactivate({ target: { kind: 'faces', faces: [1] } });
+    expect(await facesOf(client, { activatedWithinDays: 30 })).toEqual([1, 6]);
+  });
+
   it('refuses a rule that refers to itself, an unknown collection, or both rule kinds', async () => {
     const client = createMockClient();
     const manual = await client.createCollection({ name: 'Manual' });

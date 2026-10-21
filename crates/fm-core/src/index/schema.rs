@@ -462,12 +462,35 @@ ALTER TABLE family_meta ADD COLUMN purchase_date TEXT;
 ALTER TABLE family_meta ADD COLUMN receipt BLOB;
 ";
 
+/// "Recently activated" (E14.3): `face.last_activated` is when the face was
+/// last activated (RFC 3339, UTC, whole seconds, as `face.added`). The
+/// triggers copy it from every write to `activation`, so no write path can
+/// forget it; deactivation deletes the `activation` row and leaves the time.
+/// Faces active when the migration runs take their `since`.
+const V14: &str = r"
+ALTER TABLE face ADD COLUMN last_activated TEXT;
+UPDATE face SET last_activated = (
+    SELECT strftime('%Y-%m-%dT%H:%M:%SZ', activation.since)
+    FROM activation WHERE activation.face_id = face.id
+);
+
+CREATE TRIGGER face_last_activated_insert AFTER INSERT ON activation BEGIN
+    UPDATE face SET last_activated = strftime('%Y-%m-%dT%H:%M:%SZ', new.since)
+    WHERE id = new.face_id;
+END;
+CREATE TRIGGER face_last_activated_update AFTER UPDATE OF since ON activation BEGIN
+    UPDATE face SET last_activated = strftime('%Y-%m-%dT%H:%M:%SZ', new.since)
+    WHERE id = new.face_id;
+END;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
+pub(crate) const MIGRATIONS: &[&str] =
+    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

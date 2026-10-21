@@ -9,7 +9,10 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
-use fm_api::layout::{Layout, LayoutBounds};
+use fm_api::layout::{
+    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
+    RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+};
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
@@ -36,11 +39,12 @@ use fm_api::{
 };
 use fm_core::index::Opened;
 use fm_core::{CoreApi, SettingsStore};
-use fm_platform::{AppPaths, FontActivator, MockActivator};
+use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
 
 pub mod help;
+pub mod tray;
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
@@ -69,6 +73,8 @@ pub struct AppState {
     api: Arc<dyn Api>,
     settings: Option<Arc<dyn SettingsService + Send + Sync>>,
     backend: Backend,
+    core: Option<Arc<CoreApi>>,
+    tray: Option<Arc<dyn Tray>>,
 }
 
 impl AppState {
@@ -78,16 +84,41 @@ impl AppState {
             api,
             settings: None,
             backend: Backend::Other,
+            core: None,
+            tray: None,
         }
     }
 
     /// Serves the real library.
     pub fn core(api: Arc<CoreApi>) -> Self {
         Self {
-            api,
+            api: Arc::clone(&api) as Arc<dyn Api>,
             settings: None,
             backend: Backend::Core,
+            core: Some(api),
+            tray: None,
         }
+    }
+
+    /// Shows a tray item from `tray` when the app starts ([`tray::install`]).
+    /// Without one (tests), closing the window quits.
+    #[must_use]
+    pub fn with_tray(mut self, tray: Arc<dyn Tray>) -> Self {
+        self.tray = Some(tray);
+        self
+    }
+
+    /// The settings now, read synchronously (the close handler); the
+    /// defaults when they cannot be read.
+    pub fn current_settings(&self) -> Settings {
+        let read = match &self.settings {
+            Some(store) => store.get_settings(),
+            None => self.api.get_settings(),
+        };
+        read.unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "settings not read; using the defaults");
+            Settings::default()
+        })
     }
 
     /// Which implementation the commands talk to.
@@ -268,10 +299,70 @@ async fn clamp_layout(state: State<'_, AppState>, req: Layout) -> ApiResult<Layo
     call(&state, move |api| api.clamp_layout(req)).await
 }
 
-/// The ranges and gesture steps of a block's size and line height.
+/// The ranges block values are clamped into, with their steps.
 #[tauri::command]
 async fn layout_bounds(state: State<'_, AppState>) -> ApiResult<LayoutBounds> {
     call(&state, move |api| api.layout_bounds()).await
+}
+
+/// Every layout template file in the layouts folder, broken ones with the reason.
+#[tauri::command]
+async fn list_layouts(state: State<'_, AppState>) -> ApiResult<Vec<LayoutEntry>> {
+    call(&state, move |api| api.list_layouts()).await
+}
+
+/// One saved layout.
+#[tauri::command]
+async fn get_layout(state: State<'_, AppState>, req: LayoutRef) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.get_layout(req)).await
+}
+
+/// Saves a layout; the content it replaces becomes a version.
+#[tauri::command]
+async fn save_layout(state: State<'_, AppState>, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.save_layout(req)).await
+}
+
+/// Copies a layout into a new template file.
+#[tauri::command]
+async fn duplicate_layout(
+    state: State<'_, AppState>,
+    req: DuplicateLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.duplicate_layout(req)).await
+}
+
+/// The saved file again, or a preset's shipped original.
+#[tauri::command]
+async fn revert_layout(
+    state: State<'_, AppState>,
+    req: RevertLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.revert_layout(req)).await
+}
+
+/// The kept versions of a layout, newest first.
+#[tauri::command]
+async fn layout_history(
+    state: State<'_, AppState>,
+    req: LayoutRef,
+) -> ApiResult<Vec<LayoutVersion>> {
+    call(&state, move |api| api.layout_history(req)).await
+}
+
+/// Makes a kept version current.
+#[tauri::command]
+async fn restore_layout(
+    state: State<'_, AppState>,
+    req: RestoreLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.restore_layout(req)).await
+}
+
+/// The width the layout's text is set at; none when it follows the window.
+#[tauri::command]
+async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Option<f32>> {
+    call(&state, move |api| api.layout_width(req)).await
 }
 
 #[tauri::command]
@@ -568,8 +659,19 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     // Subscribe before the first command can run, so no event is missed; a
     // thread forwards the stream to the webview until the API drops it.
     let events = state.api.subscribe();
+    let tray_api = Arc::clone(&state.api);
+    let tray = state.tray.clone();
+    let core = state.core.clone();
     builder
         .manage(state)
+        .manage(tray::TrayState::new(TraySupport::Unavailable(
+            "no tray item yet".into(),
+        )))
+        .on_window_event(|window, event| {
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                tray::on_close_requested(window, || api.prevent_close());
+            }
+        })
         .register_asynchronous_uri_scheme_protocol(FONT_SCHEME, |ctx, request, responder| {
             let api = Arc::clone(&ctx.app_handle().state::<AppState>().api);
             let path = request.uri().path().to_owned();
@@ -579,6 +681,14 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             });
         })
         .setup(move |app| {
+            // The tray is made once the event loop runs (macOS needs that).
+            if let Some(tray) = tray {
+                let support = tray::install(app.handle(), tray.as_ref(), tray_api);
+                if let Some(core) = &core {
+                    core.set_tray_support(support.clone());
+                }
+                app.state::<tray::TrayState>().set(support);
+            }
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("fm-events".into())
@@ -624,6 +734,14 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             layout_presets,
             clamp_layout,
             layout_bounds,
+            list_layouts,
+            get_layout,
+            save_layout,
+            duplicate_layout,
+            revert_layout,
+            layout_history,
+            restore_layout,
+            layout_width,
             render_preview,
             activate,
             deactivate,
@@ -714,6 +832,7 @@ pub fn run() {
     };
     let builder =
         help::with_help_menu(tauri::Builder::default().plugin(tauri_plugin_dialog::init()));
+    let state = state.with_tray(fm_platform::tray::system());
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(e) => {
@@ -723,16 +842,23 @@ pub fn run() {
             std::process::exit(1);
         }
     };
+    // Every quit ends here: the tray's Quit, the app menu's Quit, closing the
+    // window without a tray item.
     app.run(move |_, event| {
         if let RunEvent::Exit = event {
-            // Session fonts end with the app (ADR 0008).
-            if let Some(core) = &core
-                && let Err(e) = core.shutdown()
-            {
-                tracing::warn!(error = %e, "session fonts not deactivated at exit");
-            }
+            on_exit(core.as_deref());
             // `run` may exit the process without returning: flush the log now.
             drop(startup.take());
         }
     });
+}
+
+/// What the app does as it quits: session fonts end with the app (ADR 0008);
+/// permanent ones stay.
+pub fn on_exit(core: Option<&CoreApi>) {
+    if let Some(core) = core
+        && let Err(e) = core.shutdown()
+    {
+        tracing::warn!(error = %e, "session fonts not deactivated at exit");
+    }
 }

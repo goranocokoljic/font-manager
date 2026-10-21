@@ -1,0 +1,21 @@
+{
+  "id": "test-a-behavior-through-the-entry-point-that-wires-it-in-not",
+  "title": "Test a behavior through the entry point that wires it in, not only the core function",
+  "category": "testing",
+  "rule": "When a criterion is delivered by calling a core function from an entry path (startup::open_index, an api.rs service method, a Tauri command, a migration hook), add at least one test that goes through that entry path and asserts the user-visible result. Tests that call the core function directly prove the function, not that the app runs it: deleting the call from the entry path must make a test fail. When you narrow an existing entry-path test (for example to ignore the new items), add the entry-path assertion elsewhere.",
+  "rationale": "E14.3 (#116): the six default smart collections were tested only through Index::create_default_collections; removing its call from startup::open_index failed no test, and the only open_index test that counted collections had been narrowed in the same diff.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    116
+  ],
+  "file_globs": [
+    "crates/fm-core/src/startup.rs",
+    "crates/fm-core/src/api.rs",
+    "crates/fm-core/src/index/**",
+    "apps/desktop/src-tauri/src/**"
+  ],
+  "first_seen": "2026-10-21T08:12:06.810Z",
+  "last_seen": "2026-10-21T08:12:06.810Z"
+}

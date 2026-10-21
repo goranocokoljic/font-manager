@@ -117,6 +117,9 @@ impl Index {
         let license_description = text(|p| &p.license);
         let license_url = text(|p| &p.license_url);
         let typographic = parsed.is_some_and(|p| p.typographic_family.is_some());
+        let embedding = license::embedding(row.fs_type);
+        // The family's declaration (E15.2) wins over a face's own.
+        let declared_type = declared.license_type.or(row.license_type);
         Ok(FaceDetail {
             path: row.file.path.display().to_string(),
             collection_index: row.file.collection_index,
@@ -130,12 +133,14 @@ impl Index {
                 open_license: row.open_license,
                 description: license_description,
                 url: license_url,
-                embedding: license::embedding(row.fs_type),
-                // The family's declaration (E15.2) wins over a face's own.
-                declared: declared.license_type.or(row.license_type),
+                embedding,
+                declared: declared_type,
                 seats: declared.seats,
                 purchase_date: declared.purchase_date,
                 receipt: declared.receipt.map(|r| r.display().to_string()),
+                web_use: Some(
+                    license::web_use(embedding, row.open_license, declared_type).to_api(),
+                ),
             },
             metrics,
             axes: parsed.map(|p| p.axes.clone()).unwrap_or_default(),

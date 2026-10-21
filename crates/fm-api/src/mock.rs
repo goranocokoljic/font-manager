@@ -23,7 +23,9 @@ use crate::export::{
     LicenseInventoryRequest, WebFormat,
 };
 use crate::layout::{
-    BlockAlign, BlockOverflow, BlockRange, Layout, LayoutBounds, LayoutPreset, TextBlock,
+    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
+    LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef, LayoutVersion, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest, SavedLayout, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
@@ -31,6 +33,7 @@ use crate::library::{
     GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo,
     LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
     ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
+    WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -84,6 +87,40 @@ fn unix_seconds(t: &str) -> Option<i64> {
 }
 
 /// The refusal of a smart collection whose rule leads back to itself.
+/// The sample's copy of `fm_core::license::web_use` (fm-api cannot depend
+/// on fm-core): declared Web allows; declared Desktop, Trial or
+/// Personal-only, then restricted or preview-and-print embedding, do not;
+/// an open license allows; nothing else does.
+fn mock_web_use(l: &LicenseInfo) -> WebUse {
+    let (ok, reason) = match (l.declared, l.embedding, l.open_license) {
+        (Some(LicenseType::Web), ..) => (true, "Declared web license".to_owned()),
+        (Some(LicenseType::Desktop), ..) => (false, "Declared desktop license".to_owned()),
+        (Some(LicenseType::Trial), ..) => (false, "Declared trial license".to_owned()),
+        (Some(LicenseType::PersonalOnly), ..) => {
+            (false, "Declared for personal use only".to_owned())
+        }
+        (_, Embedding::Restricted, _) => (
+            false,
+            "Embedding restricted, no web license declared".to_owned(),
+        ),
+        (_, Embedding::PreviewAndPrint, _) => (
+            false,
+            "Embedding preview & print only, no web license declared".to_owned(),
+        ),
+        (_, _, Some(o)) => {
+            let name = match o {
+                OpenLicense::Ofl => "OFL",
+                OpenLicense::Apache => "Apache 2.0",
+                OpenLicense::Ufl => "UFL",
+                OpenLicense::Mit => "MIT",
+            };
+            (true, format!("Open license ({name})"))
+        }
+        (_, _, None) => (false, "No web license declared".to_owned()),
+    };
+    WebUse { ok, reason }
+}
+
 fn self_reference(c: &Collection) -> ApiError {
     ApiError::invalid(format!(
         "The rules of \"{}\" include the collection itself.",
@@ -169,8 +206,19 @@ struct State {
     trashed: BTreeSet<String>,
     /// "Keep this one" actions, oldest first.
     resolutions: Vec<Resolution>,
+    /// The layout template files, in the order they were made.
+    layouts: Vec<MockLayoutFile>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
+}
+
+/// A layout template file of the mock: its content (or why it is broken) and
+/// its kept versions, oldest first.
+#[derive(Debug, Clone)]
+struct MockLayoutFile {
+    id: String,
+    content: Result<Layout, String>,
+    versions: Vec<(u32, Result<Layout, String>)>,
 }
 
 /// Every service on in-memory sample data. Cheap to create; each instance has
@@ -283,6 +331,18 @@ fn face(
     };
     let open_license = (embedding == Embedding::Installable).then_some(OpenLicense::Ofl);
     let char_set: BTreeSet<char> = chars.iter().flat_map(|s| s.chars()).collect();
+    let mut license = LicenseInfo {
+        description: open_license.map(|_| "SIL Open Font License 1.1".into()),
+        url: open_license.map(|_| "https://openfontlicense.org".into()),
+        open_license,
+        embedding,
+        declared: None,
+        seats: None,
+        purchase_date: None,
+        receipt: None,
+        web_use: None,
+    };
+    license.web_use = Some(mock_web_use(&license));
     MockFace {
         detail: FaceDetail {
             face: FaceSummary {
@@ -307,16 +367,7 @@ fn face(
             copyright: Some(format!("Copyright {} Authors", family.1)),
             designer: None,
             vendor_id: None,
-            license: LicenseInfo {
-                description: open_license.map(|_| "SIL Open Font License 1.1".into()),
-                url: open_license.map(|_| "https://openfontlicense.org".into()),
-                open_license,
-                embedding,
-                declared: None,
-                seats: None,
-                purchase_date: None,
-                receipt: None,
-            },
+            license,
             metrics: Metrics {
                 units_per_em: 1000,
                 ascender: 900,
@@ -536,6 +587,7 @@ impl State {
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
+            layouts: mock_layout_files(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -878,11 +930,15 @@ impl State {
             && q.tags.iter().all(|t| tags.is_some_and(|set| set.contains(t)))
             && q.added_within_days.is_none_or(|days| added_within(fam.added, days))
             && q.active.is_none_or(|a| a == self.active.contains_key(&s.id))
+            // Every activation happens at the mock's fixed clock, so a face
+            // activated once is within any window, active now or not.
+            && q.activated_within_days.is_none_or(|_| self.activation_order.contains_key(&s.id))
             && q.favorite.is_none_or(|v| v == f.detail.favorite)
             && q.min_rating.is_none_or(|r| f.detail.rating.is_some_and(|x| x >= r))
             && q.problems.is_none_or(|p| p == (s.health != Health::Ok))
             && q.embedding.is_none_or(|e| e == f.detail.license.embedding)
-            && q.open_license.is_none_or(|o| o == f.detail.license.open_license.is_some());
+            && q.open_license.is_none_or(|o| o == f.detail.license.open_license.is_some())
+            && q.web_ok.is_none_or(|w| Some(w) == f.detail.license.web_use.as_ref().map(|u| u.ok));
         Ok(ok
             && match q.collection {
                 Some(c) => self.in_collection(f, c, path)?,
@@ -1058,6 +1114,7 @@ impl LibraryService for MockApi {
             } else {
                 Platform::Linux
             },
+            platform_notes: Vec::new(),
         })
     }
 
@@ -1665,6 +1722,7 @@ impl State {
                 |f, v| f.embedding = Some(*v),
             )?,
             open_license: self.count_each(words, q, both(), |f, v| f.open_license = Some(*v))?,
+            web_ok: self.count_each(words, q, both(), |f, v| f.web_ok = Some(*v))?,
         })
     }
 }
@@ -2581,6 +2639,7 @@ impl OrganizationService for MockApi {
             if let Some(receipt) = &receipt {
                 license.receipt.clone_from(receipt);
             }
+            license.web_use = Some(mock_web_use(license));
             updated.push(face.detail.face.id);
         }
         st.emit(Event::LibraryChanged {
@@ -2978,8 +3037,61 @@ fn mock_preset(preset: LayoutPreset) -> Layout {
         preset: Some(preset),
         name: name.to_owned(),
         blocks,
+        width_locked: true,
+        width_px: None,
     }
 }
+
+/// A locked width's range in CSS pixels (`fm_core::layout::WIDTH_PX`).
+const MOCK_WIDTH_PX: (f32, f32) = (160.0, 20_000.0);
+
+/// The core's locked width (`fm_core::layout::clamp_layout`): inside
+/// [`MOCK_WIDTH_PX`]; one that is not a number is dropped.
+fn mock_width_px(width: Option<f32>) -> Option<f32> {
+    width
+        .filter(|w| w.is_finite())
+        .map(|w| w.max(MOCK_WIDTH_PX.0).min(MOCK_WIDTH_PX.1))
+}
+
+/// The core's block ranges and steps (`fm_core::layout::bounds`).
+const MOCK_LAYOUT_BOUNDS: LayoutBounds = LayoutBounds {
+    size_pt: BlockRange {
+        min: 8.0,
+        max: 600.0,
+        default: 12.0,
+        step: 1.0,
+        per_px: 0.5,
+    },
+    line_height: BlockRange {
+        min: 0.1,
+        max: 3.0,
+        default: 1.3,
+        step: 0.05,
+        per_px: 0.01,
+    },
+    tracking: BlockRange {
+        min: -200.0,
+        max: 1000.0,
+        default: 0.0,
+        step: 10.0,
+        per_px: 2.0,
+    },
+    paragraph_spacing_pt: BlockRange {
+        min: 0.0,
+        max: 600.0,
+        default: 0.0,
+        step: 1.0,
+        per_px: 0.5,
+    },
+    first_line_indent_em: BlockRange {
+        min: 0.0,
+        max: 20.0,
+        default: 0.0,
+        step: 0.5,
+        per_px: 0.05,
+    },
+    columns: ColumnRange { min: 1, max: 3 },
+};
 
 impl LayoutService for MockApi {
     fn layout_presets(&self) -> ApiResult<Vec<Layout>> {
@@ -2998,48 +3110,329 @@ impl LayoutService for MockApi {
 
     /// The core's ranges (`fm_core::layout`); NaN and infinities take the default.
     fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout> {
-        let fit = |v: f32, lo: f32, hi: f32, default: f32| {
+        let r = MOCK_LAYOUT_BOUNDS;
+        let fit = |v: f32, b: BlockRange| {
             if v.is_finite() {
-                v.max(lo).min(hi)
+                v.max(b.min).min(b.max)
             } else {
-                default
+                b.default
             }
         };
         let blocks = layout
             .blocks
             .into_iter()
             .map(|b| TextBlock {
-                size_pt: fit(b.size_pt, 8.0, 600.0, 12.0),
-                line_height: fit(b.line_height, 0.1, 3.0, 1.3),
-                tracking: fit(b.tracking, -200.0, 1000.0, 0.0),
-                paragraph_spacing_pt: fit(b.paragraph_spacing_pt, 0.0, 600.0, 0.0),
-                first_line_indent_em: fit(b.first_line_indent_em, 0.0, 20.0, 0.0),
-                columns: b.columns.clamp(1, 3),
+                size_pt: fit(b.size_pt, r.size_pt),
+                line_height: fit(b.line_height, r.line_height),
+                tracking: fit(b.tracking, r.tracking),
+                paragraph_spacing_pt: fit(b.paragraph_spacing_pt, r.paragraph_spacing_pt),
+                first_line_indent_em: fit(b.first_line_indent_em, r.first_line_indent_em),
+                columns: b.columns.max(r.columns.min).min(r.columns.max),
                 ..b
             })
             .collect();
-        Ok(Layout { blocks, ..layout })
-    }
-
-    /// The core's ranges and gesture steps (`fm_core::layout::bounds`).
-    fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
-        Ok(LayoutBounds {
-            size_pt: BlockRange {
-                min: 8.0,
-                max: 600.0,
-                default: 12.0,
-                step: 1.0,
-                per_px: 0.5,
-            },
-            line_height: BlockRange {
-                min: 0.1,
-                max: 3.0,
-                default: 1.3,
-                step: 0.05,
-                per_px: 0.01,
-            },
+        Ok(Layout {
+            blocks,
+            width_px: mock_width_px(layout.width_px),
+            ..layout
         })
     }
+
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
+        Ok(MOCK_LAYOUT_BOUNDS)
+    }
+
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {
+        let st = self.state();
+        let mut entries: Vec<LayoutEntry> = st.layouts.iter().map(mock_layout_entry).collect();
+        let rank = |e: &LayoutEntry| {
+            MOCK_PRESET_IDS
+                .iter()
+                .position(|id| *id == e.id)
+                .unwrap_or(MOCK_PRESET_IDS.len())
+        };
+        entries.sort_by(|a, b| {
+            rank(a)
+                .cmp(&rank(b))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(entries)
+    }
+
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout> {
+        let st = self.state();
+        let layout = mock_layout_content(mock_layout_file(&st.layouts, &req.id)?)?;
+        Ok(SavedLayout { id: req.id, layout })
+    }
+
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+        let layout = self.clamp_layout(req.layout)?;
+        mock_save_layout(&mut self.state().layouts, &req.id, layout)
+    }
+
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let source = mock_layout_content(mock_layout_file(&st.layouts, &req.id)?)?;
+        let taken: Vec<String> = st
+            .layouts
+            .iter()
+            .map(|f| mock_layout_entry(f).name.to_lowercase())
+            .collect();
+        let name = match req.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+            Some(n) if taken.contains(&n.to_lowercase()) => {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("There is already a layout named \u{201c}{n}\u{201d}."),
+                ));
+            }
+            Some(n) => n.to_owned(),
+            None => (1..)
+                .map(|i| match i {
+                    1 => format!("{} copy", source.name),
+                    _ => format!("{} copy {i}", source.name),
+                })
+                .find(|n| !taken.contains(&n.to_lowercase()))
+                .unwrap_or_else(|| format!("{} copy", source.name)),
+        };
+        let base = mock_slug(&name);
+        let id = (1..)
+            .map(|i| match i {
+                1 => base.clone(),
+                _ => format!("{base}-{i}"),
+            })
+            .find(|c| st.layouts.iter().all(|f| &f.id != c))
+            .unwrap_or(base);
+        mock_save_layout(&mut st.layouts, &id, Layout { name, ..source })
+    }
+
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let file = mock_layout_file(&st.layouts, &req.id)?;
+        if !req.to_original {
+            let layout = mock_layout_content(file)?;
+            return Ok(SavedLayout { id: req.id, layout });
+        }
+        let (preset, name) = match &file.content {
+            Ok(l) => (l.preset, Some(l.name.clone())),
+            Err(_) => (mock_preset_of_id(&req.id), None),
+        };
+        let Some(preset) = preset else {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                "Only a layout that started from a preset can be reset to its original.",
+            ));
+        };
+        let original = mock_preset(preset);
+        let name = name.unwrap_or_else(|| original.name.clone());
+        mock_save_layout(&mut st.layouts, &req.id, Layout { name, ..original })
+    }
+
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>> {
+        let st = self.state();
+        let file = mock_layout_file(&st.layouts, &req.id)?;
+        Ok(file
+            .versions
+            .iter()
+            .rev()
+            .map(|(number, content)| LayoutVersion {
+                number: *number,
+                saved_at: MOCK_NOW.to_owned(),
+                name: content.as_ref().ok().map(|l| l.name.clone()),
+                broken: content.as_ref().err().cloned(),
+            })
+            .collect())
+    }
+
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let content = mock_layout_file(&st.layouts, &req.id)?
+            .versions
+            .iter()
+            .find(|(n, _)| *n == req.number)
+            .map(|(_, c)| c.clone())
+            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "That version is no longer kept."))?;
+        let layout = content.map_err(|reason| {
+            ApiError::new(
+                ErrorCode::InvalidRequest,
+                "This version cannot be restored: it is not a valid layout.",
+            )
+            .with_detail(reason)
+        })?;
+        mock_save_layout(&mut st.layouts, &req.id, layout)
+    }
+
+    /// `fm_core::layout::layout_width`: 33 em at the body block's size (the
+    /// block with the most text, the first on a tie), 4/3 px per point.
+    fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
+        if !layout.width_locked {
+            return Ok(None);
+        }
+        if let Some(w) = mock_width_px(layout.width_px) {
+            return Ok(Some(w));
+        }
+        let size = layout
+            .blocks
+            .iter()
+            .fold(None, |best: Option<&TextBlock>, b| match best {
+                Some(x) if x.text.chars().count() >= b.text.chars().count() => Some(x),
+                _ => Some(b),
+            })
+            .map_or(12.0, |b| b.size_pt);
+        let size = if size.is_finite() {
+            size.clamp(
+                MOCK_LAYOUT_BOUNDS.size_pt.min,
+                MOCK_LAYOUT_BOUNDS.size_pt.max,
+            )
+        } else {
+            MOCK_LAYOUT_BOUNDS.size_pt.default
+        };
+        Ok(mock_width_px(Some(size * 96.0 / 72.0 * 33.0)))
+    }
+}
+
+/// The ids of the preset files, in picker order (`fm_core::layout::store`).
+const MOCK_PRESET_IDS: [&str; 6] = [
+    "book",
+    "columns",
+    "magazine",
+    "quote",
+    "characters",
+    "waterfall",
+];
+
+/// How many earlier versions of one template the mock keeps (as the core).
+pub const MOCK_MAX_LAYOUT_VERSIONS: usize = 20;
+
+fn mock_preset_of_id(id: &str) -> Option<LayoutPreset> {
+    const PRESETS: [LayoutPreset; 6] = [
+        LayoutPreset::Book,
+        LayoutPreset::Columns,
+        LayoutPreset::Magazine,
+        LayoutPreset::Quote,
+        LayoutPreset::Characters,
+        LayoutPreset::Waterfall,
+    ];
+    MOCK_PRESET_IDS
+        .iter()
+        .position(|p| *p == id)
+        .map(|i| PRESETS[i])
+}
+
+/// The six preset files and one hand-edited file that is not valid JSON.
+fn mock_layout_files() -> Vec<MockLayoutFile> {
+    let mut files: Vec<MockLayoutFile> = MOCK_PRESET_IDS
+        .iter()
+        .filter_map(|id| {
+            Some(MockLayoutFile {
+                id: (*id).to_owned(),
+                content: Ok(mock_preset(mock_preset_of_id(id)?)),
+                versions: Vec::new(),
+            })
+        })
+        .collect();
+    files.push(MockLayoutFile {
+        id: "draft".to_owned(),
+        content: Err("Not valid JSON: EOF while parsing an object at line 3 column 0".to_owned()),
+        versions: Vec::new(),
+    });
+    files
+}
+
+fn mock_layout_entry(file: &MockLayoutFile) -> LayoutEntry {
+    match &file.content {
+        Ok(l) => LayoutEntry {
+            id: file.id.clone(),
+            name: l.name.clone(),
+            preset: l.preset,
+            broken: None,
+        },
+        Err(reason) => LayoutEntry {
+            id: file.id.clone(),
+            name: file.id.clone(),
+            preset: mock_preset_of_id(&file.id),
+            broken: Some(reason.clone()),
+        },
+    }
+}
+
+fn mock_layout_file<'a>(files: &'a [MockLayoutFile], id: &str) -> ApiResult<&'a MockLayoutFile> {
+    files
+        .iter()
+        .find(|f| f.id == id)
+        .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "That layout no longer exists."))
+}
+
+fn mock_layout_content(file: &MockLayoutFile) -> ApiResult<Layout> {
+    file.content.clone().map_err(|reason| {
+        ApiError::new(
+            ErrorCode::InvalidRequest,
+            "This layout file cannot be read. Fix it by hand or save over it.",
+        )
+        .with_detail(reason)
+    })
+}
+
+/// A file-name id for `name`, as the core makes it.
+fn mock_slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().flat_map(char::to_lowercase) {
+        if c.is_alphanumeric() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "layout".to_owned()
+    } else {
+        out
+    }
+}
+
+/// Writes `layout` to `id` (a new file when there is none); the content it
+/// replaces becomes the newest version, the oldest past the cap dropped.
+fn mock_save_layout(
+    files: &mut Vec<MockLayoutFile>,
+    id: &str,
+    layout: Layout,
+) -> ApiResult<SavedLayout> {
+    if id.is_empty() || id.starts_with('.') || id.contains(['/', '\\', ':']) {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "That is not a layout name the app can use.",
+        ));
+    }
+    if layout.name.trim().is_empty() {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "A layout needs a name.",
+        ));
+    }
+    let saved = SavedLayout {
+        id: id.to_owned(),
+        layout: layout.clone(),
+    };
+    let Some(file) = files.iter_mut().find(|f| f.id == id) else {
+        files.push(MockLayoutFile {
+            id: id.to_owned(),
+            content: Ok(layout),
+            versions: Vec::new(),
+        });
+        return Ok(saved);
+    };
+    if file.content.as_ref() == Ok(&layout) {
+        return Ok(saved);
+    }
+    let number = file.versions.last().map_or(1, |(n, _)| n + 1);
+    let old = std::mem::replace(&mut file.content, Ok(layout));
+    file.versions.push((number, old));
+    let excess = file.versions.len().saturating_sub(MOCK_MAX_LAYOUT_VERSIONS);
+    file.versions.drain(..excess);
+    Ok(saved)
 }
 
 impl EventSource for MockApi {

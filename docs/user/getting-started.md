@@ -27,11 +27,32 @@ Read [Sources](sources.md) to learn more about folders.
   how the fonts show. The grid shows a card for each font. The waterfall shows the
   preview text at six sizes. The layout shows the selected font as a page of text. Pick
   the page in the **Preset** box: Book, Columns, Magazine, Quote, Characters or
-  Waterfall. To change a block of text in the layout, drag it: drag to the right or left
-  to make the text larger or smaller, and drag up or down to add or remove space between
-  the lines. On a trackpad, pinch the block to change its size. Press `Esc` during a drag
-  to go back. Double-click a block to type your own text. When you change the view, the selected fonts stay selected and
-  the list stays at the same font.
+  Waterfall. When you change the view, the selected fonts stay selected and the list
+  stays at the same font.
+- To resize a block of text in the layout, drag it: drag to the right or left to make
+  the text larger or smaller, and drag up or down to add or remove space between the
+  lines. Hold `Ctrl` and turn the mouse wheel over a block to change its size. On a
+  trackpad on Windows or a Mac, pinch the block to change its size. Press `Esc` during a
+  drag to go back.
+- In the layout, double-click a block of text (or press `Enter` on it) to change the
+  text. Click **Save** to keep the change, or **Revert** to drop it. **Duplicate** makes
+  a copy of the layout with a new name. **Reset to original** puts back the preset as
+  the app ships it. **History** shows the earlier versions; **Restore** makes one current
+  again, and the app keeps the version it replaces.
+- The badge beside each block shows its size (for example "24 pt"). Click it (or press
+  `Enter` on it) to open the properties of that block: size, line height, tracking,
+  paragraph spacing, first-line indent, columns (1–3), alignment, and wrap or clip. The
+  block changes at once; the other blocks stay as they are. A value out of range goes to
+  the nearest limit. Press `Escape` to close the properties.
+- The text of a layout has a width that is easy to read: about 65–75 characters on a
+  line of the body text. The text is in the center of the window, and a wider window
+  does not make it wider. Click **Lock width** to turn this off: the text then follows
+  the width of the window. Click it again to keep the width that the text has at that
+  moment. The command palette has this command too ("Lock or unlock the layout width").
+  Click **Save** to keep the width with the layout.
+- Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
+  You can edit a file by hand: the app reads it the next time you open the layout view.
+  A file the app cannot read shows as "cannot be read" in the **Preset** box.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.
 - Open the **Features** tab of the inspector to see the OpenType features of the

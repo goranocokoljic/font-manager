@@ -10,7 +10,10 @@ use fm_api::activation::{
 };
 use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
-use fm_api::layout::{BlockOverflow, LayoutPreset};
+use fm_api::layout::{
+    BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest,
+};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
     GlyphsRequest, ImportMode, KeepCopyRequest, LicenseType, ListFamiliesRequest, OpenLicense,
@@ -1704,9 +1707,209 @@ fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
     assert_eq!(got.blocks[0].size_pt, 8.0);
     assert_eq!(got.blocks[0].line_height, 1.3);
     assert_eq!(got.blocks[0].columns, 3);
-    // The gesture ranges are the clamp ranges.
-    let b = api.layout_bounds().expect("bounds");
-    assert_eq!((b.size_pt.min, b.size_pt.max), (8.0, 600.0));
-    assert_eq!((b.line_height.min, b.line_height.max), (0.1, 3.0));
-    assert!(b.size_pt.step > 0.0 && b.line_height.per_px > 0.0);
+    let bounds = api.layout_bounds().expect("bounds");
+    assert_eq!(got.blocks[0].size_pt, bounds.size_pt.min);
+    assert_eq!(got.blocks[0].line_height, bounds.line_height.default);
+    assert_eq!(got.blocks[0].columns, bounds.columns.max);
+}
+
+#[test]
+fn layout_presets_start_locked_at_a_readable_width_that_follows_the_body_block() {
+    let api = api();
+    for p in api.layout_presets().expect("presets") {
+        assert!(p.width_locked, "{}", p.name);
+        assert_eq!(p.width_px, None, "{}", p.name);
+        assert!(api.layout_width(p).expect("width").is_some());
+    }
+    let book = api.layout_presets().expect("presets").remove(0);
+    // Book's body is 11 pt: 33 em at 4/3 px per point.
+    let w = api
+        .layout_width(book.clone())
+        .expect("width")
+        .expect("locked");
+    assert!((w - 11.0 * 96.0 / 72.0 * 33.0).abs() < 0.01, "{w}");
+    let mut chosen = book.clone();
+    chosen.width_px = Some(900.0);
+    assert_eq!(
+        api.layout_width(chosen.clone()).expect("width"),
+        Some(900.0)
+    );
+    chosen.width_locked = false;
+    assert_eq!(api.layout_width(chosen).expect("width"), None);
+}
+
+#[test]
+fn layout_files_save_duplicate_revert_and_restore_like_the_core() {
+    let api = api();
+    let r = |id: &str| LayoutRef { id: id.into() };
+    let entries = api.list_layouts().expect("list");
+    let ids: Vec<_> = entries.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "book",
+            "columns",
+            "magazine",
+            "quote",
+            "characters",
+            "waterfall",
+            "draft"
+        ]
+    );
+    assert!(entries[6].broken.is_some(), "the mock has one broken file");
+    assert_eq!(
+        api.get_layout(r("draft")).expect_err("broken").code,
+        ErrorCode::InvalidRequest
+    );
+
+    let book = api.get_layout(r("book")).expect("book").layout;
+    let mut big = book.clone();
+    big.blocks[0].size_pt = 5_000.0;
+    let saved = api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: big.clone(),
+        })
+        .expect("save");
+    assert_eq!(saved.layout.blocks[0].size_pt, 600.0);
+    api.save_layout(SaveLayoutRequest {
+        id: "book".into(),
+        layout: big,
+    })
+    .expect("same again");
+    let history = api.layout_history(r("book")).expect("history");
+    assert_eq!(history.len(), 1, "an unchanged save keeps no version");
+    assert_eq!(history[0].name.as_deref(), Some("Book"));
+
+    let copy = api
+        .duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: None,
+        })
+        .expect("copy");
+    assert_eq!(
+        (copy.id.as_str(), copy.layout.name.as_str()),
+        ("book-copy", "Book copy")
+    );
+    assert_eq!(
+        api.duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: Some("BOOK".into())
+        })
+        .expect_err("taken")
+        .code,
+        ErrorCode::Conflict
+    );
+
+    assert_eq!(
+        api.revert_layout(RevertLayoutRequest {
+            id: "book".into(),
+            to_original: false
+        })
+        .expect("revert")
+        .layout,
+        saved.layout
+    );
+    let reset = api
+        .revert_layout(RevertLayoutRequest {
+            id: "book".into(),
+            to_original: true,
+        })
+        .expect("reset");
+    assert_eq!(reset.layout, book);
+    let restored = api
+        .restore_layout(RestoreLayoutRequest {
+            id: "book".into(),
+            number: 2,
+        })
+        .expect("restore the reset-over version");
+    assert_eq!(restored.layout, saved.layout);
+    let numbers: Vec<_> = api
+        .layout_history(r("book"))
+        .expect("history")
+        .into_iter()
+        .map(|v| v.number)
+        .collect();
+    assert_eq!(numbers, [3, 2, 1]);
+    // A broken file that is no preset has no original to reset to.
+    let no_original = api
+        .revert_layout(RevertLayoutRequest {
+            id: "draft".into(),
+            to_original: true,
+        })
+        .expect_err("draft is no preset");
+    assert_eq!(no_original.code, ErrorCode::InvalidRequest);
+}
+
+#[test]
+fn the_web_filter_follows_declarations_and_explains_each_face() {
+    let api = api();
+    let web = |ok: bool| {
+        let res = api
+            .search(SearchRequest {
+                filters: Filters {
+                    web_ok: Some(ok),
+                    ..Filters::default()
+                },
+                ..SearchRequest::default()
+            })
+            .unwrap();
+        res.families
+            .into_iter()
+            .map(|h| h.family.name)
+            .collect::<Vec<_>>()
+    };
+    assert!(web(false).contains(&"Legacy Grotesk".to_owned()));
+    assert!(web(true).contains(&"Inter".to_owned()));
+    let legacy = api.get_face(FaceId(7)).unwrap();
+    assert_eq!(legacy.face.family_name, "Legacy Grotesk");
+    assert_eq!(
+        legacy.license.web_use.map(|w| (w.ok, w.reason)),
+        Some((
+            false,
+            "Embedding restricted, no web license declared".to_owned()
+        ))
+    );
+    api.declare_license(LicenseDeclaration {
+        family: legacy.face.family,
+        license_type: Some(LicenseType::Web),
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    assert!(web(true).contains(&"Legacy Grotesk".to_owned()));
+    assert_eq!(
+        api.get_face(FaceId(7))
+            .unwrap()
+            .license
+            .web_use
+            .map(|w| w.reason),
+        Some("Declared web license".to_owned())
+    );
+}
+
+/// E14.3: "activated within" keeps a face activated once, active now or not.
+#[test]
+fn activated_within_days_keeps_deactivated_faces() {
+    let api = api();
+    let recent = Filters {
+        activated_within_days: Some(30),
+        ..Filters::default()
+    };
+    assert_eq!(faces_of(&api, recent.clone()).unwrap(), []);
+    api.activate(acts(
+        &[3, 4],
+        ActivationMode::Session,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    api.deactivate(DeactivateRequest {
+        target: Some(Target::Faces {
+            faces: vec![FaceId(3)],
+        }),
+        except: None,
+    })
+    .unwrap();
+    assert_eq!(faces_of(&api, recent).unwrap(), [FaceId(3), FaceId(4)]);
 }

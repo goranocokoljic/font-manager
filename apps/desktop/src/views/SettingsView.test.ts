@@ -3,7 +3,7 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockFolders } from '../api/mock';
+import { createMockClient, mockAppInfo, mockFolders } from '../api/mock';
 import { createAppRouter } from '../router';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -38,13 +38,14 @@ const radio = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label: s
     .get('input');
 
 describe('Settings window', () => {
-  it('has the four sections as tabs and opens Sources first', async () => {
+  it('has the five sections as tabs and opens Sources first', async () => {
     const { wrapper } = await mountAt('/settings');
     expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
       'Sources',
       'Activation',
       'Appearance',
       'Advanced',
+      'About',
     ]);
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Sources');
     expect(wrapper.text()).toContain('/Users/demo/Fonts');
@@ -89,6 +90,39 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('saves "keep running in the tray", on by default', async () => {
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const box = wrapper.get('input[name="keep-in-tray"]');
+    expect(box.element.closest('label')!.textContent).toContain(
+      'Keep running in the tray when the window is closed',
+    );
+    expect((box.element as HTMLInputElement).checked).toBe(true);
+    await box.setValue(false);
+    await flushPromises();
+    expect((await client.getSettings()).keepInTray).toBe(false);
+    await box.setValue(true);
+    await flushPromises();
+    expect((await client.getSettings()).keepInTray).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('lists the platform notes under About', async () => {
+    const { wrapper } = await mountAt('/settings?section=about');
+    const notes = wrapper.get('ul[aria-labelledby="platform-notes-title"]');
+    expect(wrapper.get('#platform-notes-title').text()).toBe('Platform notes');
+    expect(notes.findAll('li').map((li) => li.text())).toEqual(mockAppInfo.platformNotes);
+    expect(notes.text()).toContain('closing the window quits Font Manager');
+    wrapper.unmount();
+  });
+
+  it('says so when the platform has no notes', async () => {
+    setClient({ ...client, getAppInfo: async () => ({ ...mockAppInfo, platformNotes: [] }) });
+    const { wrapper } = await mountAt('/settings?section=about');
+    expect(wrapper.find('ul[aria-labelledby="platform-notes-title"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('Everything works the same on this system.');
+    wrapper.unmount();
+  });
+
   it('saves a valid number, and puts the saved value back after a bad one', async () => {
     const { wrapper } = await mountAt('/settings?section=advanced');
     const [cache, rescan] = wrapper.findAll('input[type="number"]');
@@ -122,7 +156,7 @@ describe('Settings window', () => {
     expect(document.activeElement?.id).toBe('tab-activation');
     await tablist.trigger('keydown', { key: 'End' });
     await flushPromises();
-    expect(router.currentRoute.value.query.section).toBe('advanced');
+    expect(router.currentRoute.value.query.section).toBe('about');
     await tablist.trigger('keydown', { key: 'ArrowDown' });
     await flushPromises();
     expect(router.currentRoute.value.query.section).toBe('sources');

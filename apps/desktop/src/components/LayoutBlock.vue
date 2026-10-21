@@ -6,17 +6,18 @@
 // paragraphs into lines; a clip block keeps one line per paragraph and hides
 // what does not fit. The values arrive clamped by the core.
 //
-// Direct manipulation (E12.2): a horizontal drag changes the size, a vertical
-// drag the line height, a trackpad pinch (Ctrl+wheel in WebView2, gesture
-// events in WebKit) scales the size, and the arrow keys do both from the
-// keyboard. While a gesture runs, only this block's style changes, once per
-// animation frame; the font-family stays the same, so the face is not loaded
-// again. The result is emitted once, when the gesture ends; Escape during a
-// drag puts the starting values back. Double-click (or Enter) edits the text
-// in place: Escape cancels, Ctrl/Cmd+Enter or a click outside keeps it.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+// Direct manipulation (E12.2), with `bounds`: a horizontal drag changes the size, a vertical
+// drag the line height, Ctrl+wheel (a trackpad pinch in WebView2) and WebKit gesture events
+// (a pinch in WKWebView) scale the size, and the arrow keys do both from the keyboard. While
+// a gesture runs, only this block's style changes, once per animation frame; the
+// font-family stays the same, so the face is not loaded again. The result is emitted once,
+// as `change`, when the gesture ends; Escape during a drag puts the starting values back.
+//
+// An editable block opens its text in a box set in the same face on a double click or
+// Enter; leaving the box (or Ctrl/Cmd+Enter) hands the text to the parent, Escape drops it.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { LayoutBounds, TextBlock } from '../api/types';
-import type { BlockEdit } from '../stores/textLayouts';
+import type { BlockProps } from '../stores/textLayouts';
 import {
   DRAG_THRESHOLD_PX,
   dragSize,
@@ -31,15 +32,17 @@ const props = defineProps<{
   block: TextBlock;
   /** The CSS `font-family` of the face the block is set in. */
   fontFamily: string;
-  /** The core's ranges and steps; null while they load (the block is then read-only). */
+  /** The block's text can be edited; the parent gets it through `edit`. */
+  editable?: boolean;
+  /** The accessible name of the block and its text box ("Block 1"). */
+  label?: string;
+  /** The core's ranges and steps; without them the block cannot be resized. */
   bounds?: LayoutBounds | null;
-  /** The block's position in the layout, for its accessible name. */
-  index?: number;
   /** Id of the element that explains the gestures and keys. */
   describedby?: string;
 }>();
 
-const emit = defineEmits<{ change: [edit: BlockEdit] }>();
+const emit = defineEmits<{ edit: [text: string]; change: [change: BlockProps] }>();
 
 /** How long a pinch rests before its size is committed. */
 const PINCH_COMMIT_MS = 200;
@@ -49,14 +52,28 @@ const field = ref<HTMLTextAreaElement | null>(null);
 
 /** The values while a gesture runs; null shows the block's own. */
 const live = ref<BlockSize | null>(null);
-const shown = computed<BlockSize>(
-  () =>
-    live.value ?? {
-      // The core sends clamped numbers; NaN (null) cannot reach a block.
-      sizePt: props.block.sizePt ?? Number.NaN,
-      lineHeight: props.block.lineHeight ?? Number.NaN,
-    },
+/** The values of the last committed gesture until the parent's block shows them. */
+const held = ref<BlockSize | null>(null);
+const own = computed<BlockSize>(() => ({
+  // The core sends clamped numbers; NaN (null) cannot reach a block.
+  sizePt: props.block.sizePt ?? Number.NaN,
+  lineHeight: props.block.lineHeight ?? Number.NaN,
+}));
+const shown = computed<BlockSize>(() => live.value ?? held.value ?? own.value);
+
+// The parent's answer (the core's clamped block) replaces the held values; another block
+// (a layout switched or reverted) drops them.
+watch(own, (b) => {
+  const h = held.value;
+  if (h && h.sizePt === b.sizePt && h.lineHeight === b.lineHeight) held.value = null;
+});
+watch(
+  () => props.block,
+  () => (held.value = null),
 );
+
+const resizable = computed(() => Boolean(props.bounds));
+const focusable = computed(() => resizable.value || Boolean(props.editable));
 
 const clip = computed(() => props.block.overflow === 'clip');
 
@@ -76,10 +93,11 @@ const paragraphStyle = computed(() => ({
 
 const paragraphs = computed(() => props.block.text.split('\n'));
 const badge = computed(() => sizeLabel(shown.value));
-const label = computed(
-  () =>
-    `Text block ${(props.index ?? 0) + 1}, ${shown.value.sizePt} points, line height ${shown.value.lineHeight.toFixed(2)}`,
-);
+const ariaLabel = computed(() => {
+  if (!resizable.value) return props.editable ? props.label : undefined;
+  const { sizePt, lineHeight } = shown.value;
+  return `${props.label ?? 'Block'}, ${sizePt} points, line height ${lineHeight.toFixed(2)}`;
+});
 
 // ---- frame-paced updates -------------------------------------------------
 
@@ -104,12 +122,15 @@ function stopFrame(): void {
 function commit(values: BlockSize | null): void {
   stopFrame();
   next = null;
+  const from = held.value ?? own.value;
   live.value = null;
   if (!values) return;
-  const edit: BlockEdit = {};
-  if (values.sizePt !== props.block.sizePt) edit.sizePt = values.sizePt;
-  if (values.lineHeight !== props.block.lineHeight) edit.lineHeight = values.lineHeight;
-  if (Object.keys(edit).length) emit('change', edit);
+  const change: BlockProps = {};
+  if (values.sizePt !== from.sizePt) change.sizePt = values.sizePt;
+  if (values.lineHeight !== from.lineHeight) change.lineHeight = values.lineHeight;
+  if (!Object.keys(change).length) return;
+  held.value = values;
+  emit('change', change);
 }
 
 // ---- drag ------------------------------------------------------------------
@@ -142,6 +163,7 @@ function onPointerMove(e: PointerEvent): void {
   schedule(drag.last);
 }
 
+/** Ends the drag; `keep` commits its last values, otherwise the starting ones come back. */
 function endDrag(keep: boolean): void {
   if (!drag) return;
   const d = drag;
@@ -182,7 +204,7 @@ function endPinch(): void {
   commit(last);
 }
 
-/** A trackpad pinch in Chromium (WebView2) arrives as a wheel event with Ctrl held. */
+/** Ctrl+wheel; a trackpad pinch in Chromium (WebView2) arrives as one too. */
 function onWheel(e: WheelEvent): void {
   if (!e.ctrlKey || !props.bounds || editing.value || drag) return;
   e.preventDefault();
@@ -233,8 +255,9 @@ onBeforeUnmount(() => {
 function onKeyDown(e: KeyboardEvent): void {
   if (editing.value || e.target !== root.value || e.altKey || e.ctrlKey || e.metaKey) return;
   if (e.key === 'Enter') {
+    if (!props.editable || e.shiftKey) return;
     e.preventDefault();
-    startEdit();
+    void startEdit();
     return;
   }
   if (!props.bounds) return;
@@ -247,22 +270,22 @@ function onKeyDown(e: KeyboardEvent): void {
 // ---- text editing ----------------------------------------------------------
 
 const editing = ref(false);
-const draft = ref('');
+const text = ref('');
 
 async function startEdit(): Promise<void> {
-  if (editing.value) return;
+  if (!props.editable || editing.value) return;
   endDrag(false);
-  draft.value = props.block.text;
+  text.value = props.block.text;
   editing.value = true;
   await nextTick();
   field.value?.focus();
   field.value?.select();
 }
 
-function finishEdit(keep: boolean): void {
+function finish(keep: boolean): void {
   if (!editing.value) return;
   editing.value = false;
-  if (keep && draft.value !== props.block.text) emit('change', { text: draft.value });
+  if (keep && text.value !== props.block.text) emit('edit', text.value);
   void nextTick(() => root.value?.focus({ preventScroll: true }));
 }
 
@@ -270,75 +293,86 @@ function onFieldKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
     e.preventDefault();
     e.stopPropagation();
-    finishEdit(false);
+    finish(false);
   } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
     e.stopPropagation();
-    finishEdit(true);
+    finish(true);
   }
 }
 </script>
 
 <template>
-  <div
-    ref="root"
-    class="block"
-    :class="{ clip, editing, live: live !== null }"
-    data-testid="layout-block"
-    role="group"
-    aria-roledescription="resizable text block"
-    tabindex="0"
-    :aria-label="label"
-    :aria-describedby="describedby"
-    :data-overflow="block.overflow"
-    :data-columns="block.columns"
-    :data-size="shown.sizePt"
-    :data-line-height="shown.lineHeight"
-    :style="blockStyle"
-    @pointerdown="onPointerDown"
-    @pointermove="onPointerMove"
-    @pointerup="onPointerUp"
-    @pointercancel="endDrag(false)"
-    @wheel="onWheel"
-    @dblclick="startEdit"
-    @keydown="onKeyDown"
-  >
-    <span class="badge" data-testid="size-badge" aria-hidden="true">{{ badge }}</span>
-    <textarea
-      v-if="editing"
-      ref="field"
-      v-model="draft"
-      class="field"
-      aria-label="Block text"
-      :rows="Math.max(1, draft.split('\n').length)"
-      @keydown="onFieldKey"
-      @blur="finishEdit(true)"
-    />
-    <template v-else>
-      <p v-for="(text, i) in paragraphs" :key="i" class="paragraph" :style="paragraphStyle">
-        {{ text }}
-      </p>
-    </template>
+  <div class="host">
+    <div
+      ref="root"
+      class="block"
+      :class="{ clip, editing, resizable, editable, live: live !== null }"
+      data-testid="layout-block"
+      :data-overflow="block.overflow"
+      :data-columns="block.columns"
+      :data-size="shown.sizePt"
+      :data-line-height="shown.lineHeight"
+      :style="blockStyle"
+      :tabindex="focusable ? 0 : undefined"
+      :role="focusable ? 'group' : undefined"
+      :aria-roledescription="resizable ? 'resizable text block' : undefined"
+      :aria-label="ariaLabel"
+      :aria-describedby="describedby"
+      :title="editable ? 'Double-click or press Enter to edit the text' : undefined"
+      @pointerdown="onPointerDown"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="endDrag(false)"
+      @wheel="onWheel"
+      @dblclick="startEdit"
+      @keydown="onKeyDown"
+    >
+      <textarea
+        v-if="editing"
+        ref="field"
+        v-model="text"
+        class="edit"
+        data-testid="layout-block-editor"
+        :aria-label="`${label ?? 'Block'} text`"
+        :rows="Math.max(2, text.split('\n').length)"
+        :style="{ fontFamily, fontSize: `${shown.sizePt}pt`, lineHeight: String(shown.lineHeight) }"
+        @keydown="onFieldKey"
+        @blur="finish(true)"
+      />
+      <template v-else>
+        <p v-for="(line, i) in paragraphs" :key="i" class="paragraph" :style="paragraphStyle">
+          {{ line }}
+        </p>
+      </template>
+    </div>
+    <span v-if="resizable" class="badge" data-testid="size-badge" aria-hidden="true">
+      {{ badge }}
+    </span>
   </div>
 </template>
 
 <style scoped>
-.block {
+.host {
   position: relative;
+}
+.block {
   column-gap: 2em;
   column-fill: balance;
   overflow-wrap: break-word;
+  border-radius: 2px;
+}
+.block.resizable {
   cursor: move;
   touch-action: none;
   user-select: none;
-  border-radius: 2px;
+}
+.block.editing {
+  cursor: auto;
 }
 .block:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: 2px;
-}
-.block.editing {
-  cursor: auto;
 }
 .paragraph {
   margin-top: 0;
@@ -364,32 +398,28 @@ function onFieldKey(e: KeyboardEvent): void {
   font:
     11px/1.4 system-ui,
     sans-serif;
-  letter-spacing: normal;
-  text-indent: 0;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
 }
-.block:hover .badge,
-.block:focus-visible .badge,
-.block.live .badge {
+.host:hover .badge,
+.block:focus-visible + .badge,
+.block.live + .badge {
   opacity: 1;
 }
-.field {
+.edit {
   display: block;
   column-span: all;
   box-sizing: border-box;
   width: 100%;
-  margin: 0;
-  padding: 0;
+  margin: 0 0 8px;
+  padding: 4px;
   border: 1px solid var(--fm-control-border);
   background: var(--fm-bg);
-  color: inherit;
-  font: inherit;
+  color: var(--fm-fg);
   letter-spacing: inherit;
-  line-height: inherit;
   text-align: inherit;
-  resize: none;
+  resize: vertical;
   user-select: text;
 }
 </style>

@@ -141,3 +141,16 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E10.4 #97] crates/fm-core/src/glyph_features.rs:83 — glyph detail still uses the generic `feature_info`, so it shows "Stylistic set N" while the Features tab shows the font's own set name.
 - [E10.4 #97] crates/fm-core/src/api/tests.rs:305 — tests look up a face with `FaceId(lib.family(..).id.0)`, relying on family and face ids having the same number.
 - [E10.4 #97] crates/fm-core/src/index/faces.rs:255 — a `face.parsed` that fails to deserialize becomes `parsed = None`, so a face indexed before a new non-default `ParsedFace` field shows an empty inspector until the next scan.
+
+## 2026-10-21
+
+- [E12.5 #108] apps/desktop/src/views/HomeView.vue:402 — the existing mode and inspector `.toggle` buttons are outlined in `--fm-border` (≈1.5:1 light and dark), the same as the new layout toolbar buttons.
+- [E17.1 #126] apps/desktop/src/views/HomeView.vue:354 — the window builds its active-count text in the frontend ("0 fonts active") while fm_core::lifecycle::active_label says "No fonts active", so window and tray word zero differently.
+- [E17.1 #126] apps/desktop/src-tauri/src/lib.rs:833 — not confirmed whether a Windows logoff or shutdown with the window hidden reaches RunEvent::Exit; session rows then wait for the next-start repair.
+- [E12.3 #106] apps/desktop/src/stores/textLayouts.ts:57 — the shared `busy` flag in `run` lets a property clamp re-enable Save/Revert while a save is in flight and clear an earlier save error.
+- [E12.3 #106] crates/fm-api/src/layout.rs:112 (origin/E12.2-drag-resize-blocks) — open PR #307 defines a narrower `LayoutBounds`; whichever merges second must keep the wider struct from #310.
+- [E12.3 #106] apps/desktop/src/api/mock.ts — the block ranges are copied in the TS mock, the Rust mock and fm-core; only the Rust mock is checked against the core.
+- [E14.3 #116] crates/fm-core/src/index/search/smart.rs:270 — a huge `addedWithinDays` / `activatedWithinDays` makes `strftime` return NULL, so `cutoff` gives an Io error instead of InvalidRequest.
+- [E14.3 #116] crates/fm-core/src/index/search.rs:637 — `FamilySummary.classification` is still hard-coded `None`, although search rows now read the face class from `face.parsed`.
+- [E14.3 #116] crates/fm-bench/src/lib.rs:302 — `smart_rule` says it covers every filter dimension, but no bench smart collection uses `activated_within_days`.
+- [E12.4 #107] apps/desktop/src/views/HomeView.vue — at 1280×800 with the inspector open, the toolbar's "Inspector" button is clipped ("Inspect…").

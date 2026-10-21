@@ -6,6 +6,7 @@ import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
 import FontLayout from '../components/FontLayout.vue';
+import LayoutActions from '../components/LayoutActions.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
@@ -69,9 +70,15 @@ const MODES: { value: ViewMode; label: string }[] = [
 ];
 
 // The layout mode sets the selected face (else the list cursor's, else the first
-// family's) in the picked preset.
-const preset = computed(() => views.presetFor(ALL_FONTS_VIEW));
-const shownLayout = computed(() => textLayouts.byPreset(preset.value));
+// family's) in the picked layout file, with the editor's unsaved changes.
+const layoutId = computed(() => views.layoutFor(ALL_FONTS_VIEW));
+const shownLayout = computed(() => textLayouts.draft);
+// Before the list arrives the picker offers the presets, so the pick shows at once.
+const layoutOptions = computed(() =>
+  textLayouts.entries.length
+    ? textLayouts.entries
+    : LAYOUT_PRESETS.map((p) => ({ id: p, name: PRESET_LABELS[p], preset: p, broken: null })),
+);
 const layoutFace = computed(() => {
   const first = fontList.families[0];
   return (
@@ -89,8 +96,26 @@ watch(
   [mode, layoutFamily],
   ([m, family]) => {
     if (m !== 'layout') return;
-    void textLayouts.load();
     if (family !== null) void library.facesOf(family).catch(() => undefined);
+  },
+  { immediate: true },
+);
+// Entering the layout mode reads the layouts folder again (a file edited by hand shows
+// its new name); picking a layout opens its file.
+watch(
+  mode,
+  (m) => {
+    if (m === 'layout') {
+      void textLayouts.loadList();
+      void textLayouts.loadBounds();
+    }
+  },
+  { immediate: true },
+);
+watch(
+  [mode, layoutId],
+  ([m, id]) => {
+    if (m === 'layout' && textLayouts.saved?.id !== id) void textLayouts.open(id);
   },
   { immediate: true },
 );
@@ -238,11 +263,17 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         <label v-if="mode === 'layout'" class="preset">
           Preset
           <select
-            :value="preset"
-            @change="showPreset(($event.target as HTMLSelectElement).value as LayoutPreset)"
+            :value="layoutId"
+            @change="views.setLayout(ALL_FONTS_VIEW, ($event.target as HTMLSelectElement).value)"
           >
-            <option v-for="p in LAYOUT_PRESETS" :key="p" :value="p">
-              {{ PRESET_LABELS[p] }}
+            <option
+              v-for="e in layoutOptions"
+              :key="e.id"
+              :value="e.id"
+              :disabled="e.broken !== null"
+              :title="e.broken ?? undefined"
+            >
+              {{ e.broken === null ? e.name : `${e.name} (cannot be read)` }}
             </option>
           </select>
         </label>
@@ -264,13 +295,19 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
         <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
       </template>
-      <FontLayout
-        v-else-if="fontList.families.length && mode === 'layout'"
-        :layout="shownLayout"
-        :face="layoutFace"
-        :bounds="textLayouts.bounds"
-        @change="(i, edit) => textLayouts.editBlock(preset, i, edit)"
-      />
+      <template v-else-if="fontList.families.length && mode === 'layout'">
+        <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
+        <FontLayout
+          :layout="shownLayout"
+          :face="layoutFace"
+          editable
+          :bounds="textLayouts.bounds"
+          :set-props="textLayouts.setBlockProps"
+          :width="textLayouts.width"
+          :set-width-lock="textLayouts.setWidthLock"
+          @edit-text="textLayouts.setBlockText"
+        />
+      </template>
       <FontGrid
         v-else-if="fontList.families.length && mode === 'grid'"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"

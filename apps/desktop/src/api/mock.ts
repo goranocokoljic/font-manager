@@ -42,8 +42,13 @@ import {
   type Filters,
   type JobId,
   type LanguagePreset,
+  type LicenseInfo,
   type Layout,
   type LayoutBounds,
+  type LayoutEntry,
+  type LayoutVersion,
+  type SavedLayout,
+  type OpenLicense,
   type PreviewImage,
   type PreviewRequest,
   type Problem,
@@ -59,6 +64,7 @@ import {
   type Target,
   type TextBlock,
   type VirtualStyle,
+  type WebUse,
 } from './types';
 
 export const mockAppInfo: AppInfo = {
@@ -66,6 +72,11 @@ export const mockAppInfo: AppInfo = {
   version: '0.1.0',
   apiVersion: API_VERSION,
   platform: 'linux',
+  // What fm-core says on a Linux desktop without a StatusNotifier host (lifecycle.rs).
+  platformNotes: [
+    'This desktop shows no tray items (no StatusNotifier host), so closing the window quits Font Manager and ends session activations. KDE Plasma and GNOME with the AppIndicator extension show the tray item.',
+    'Apps that are already running can take up to 30 seconds to see a font you activate; some see it only after a restart.',
+  ],
 };
 
 const ofl = {
@@ -241,6 +252,7 @@ export const defaultSettings: FullSettings = {
   cacheLimitMb: 1024,
   rescanIntervalMinutes: 60,
   reactivateOnLaunch: false,
+  keepInTray: true,
 };
 
 /** The app folders of the Rust mock. */
@@ -814,11 +826,51 @@ export const mockLanguages: LanguagePreset[] = [
   { code: 'el', name: 'Greek', script: 'Grek' },
 ];
 
+const OPEN_LICENSE_LABELS: Record<OpenLicense, string> = {
+  ofl: 'OFL',
+  apache: 'Apache 2.0',
+  ufl: 'UFL',
+  mit: 'MIT',
+};
+
+/**
+ * The mock's copy of `fm_core::license::web_use`, like the Rust mock: declared
+ * Web allows; declared Desktop, Trial or Personal-only, then restricted or
+ * preview-and-print embedding, do not; an open license allows; nothing else does.
+ */
+export function mockWebUse(l: LicenseInfo): WebUse {
+  const no = (reason: string): WebUse => ({ ok: false, reason });
+  switch (l.declared) {
+    case 'web':
+      return { ok: true, reason: 'Declared web license' };
+    case 'desktop':
+      return no('Declared desktop license');
+    case 'trial':
+      return no('Declared trial license');
+    case 'personalOnly':
+      return no('Declared for personal use only');
+  }
+  if (l.embedding === 'restricted') return no('Embedding restricted, no web license declared');
+  if (l.embedding === 'previewAndPrint') {
+    return no('Embedding preview & print only, no web license declared');
+  }
+  if (l.openLicense)
+    return { ok: true, reason: `Open license (${OPEN_LICENSE_LABELS[l.openLicense]})` };
+  return no('No web license declared');
+}
+
 /**
  * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
- * `tags` are the ids of its tags.
+ * `tags` are the ids of its tags; `activated`: it was ever activated (the mock's clock
+ * is fixed, so that is within any `activatedWithinDays` window).
  */
-function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): boolean {
+function passes(
+  d: FaceDetail,
+  active: boolean,
+  activated: boolean,
+  tags: TagId[],
+  q: Filters,
+): boolean {
   const f = d.face;
   const covers = (code: string) => {
     const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
@@ -834,6 +886,7 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
     (q.license == null || d.license.declared === q.license) &&
     (!q.sources?.length || q.sources.includes(1)) &&
     (q.active == null || q.active === active) &&
+    (q.activatedWithinDays == null || activated) &&
     (q.problems == null || q.problems === (f.health.kind !== 'ok')) &&
     (q.tags ?? []).every((t) => tags.includes(t)) &&
     (q.favorite == null || q.favorite === d.favorite) &&
@@ -842,6 +895,7 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
       Date.parse(MOCK_ADDED) >= Date.parse(MOCK_NOW) - q.addedWithinDays * 86_400_000) &&
     (q.embedding == null || q.embedding === d.license.embedding) &&
     (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
+    (q.webOk == null || q.webOk === mockWebUse(d.license).ok) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -880,88 +934,290 @@ const MOCK_BODY =
 export const MOCK_WATERFALL_SIZES_PT = [72, 48, 36, 24, 18, 14, 12, 9];
 
 /** The mock's copy of the core presets (`fm_core::layout`): the same six in the same shape. */
-export const MOCK_LAYOUT_PRESETS: readonly Layout[] = [
-  {
-    preset: 'book',
-    name: 'Book',
-    blocks: [
-      layoutBlock('Chapter One', 24, 1.2, { align: 'center', paragraphSpacingPt: 18 }),
-      layoutBlock(MOCK_BODY, 11, 1.5, { firstLineIndentEm: 1.5, align: 'justify' }),
-    ],
-  },
-  {
-    preset: 'columns',
-    name: 'Columns',
-    blocks: [
-      layoutBlock('Chapter One', 18, 1.2, { paragraphSpacingPt: 12 }),
-      layoutBlock(MOCK_BODY, 10, 1.4, { paragraphSpacingPt: 6, columns: 3, align: 'justify' }),
-    ],
-  },
-  {
-    preset: 'magazine',
-    name: 'Magazine',
-    blocks: [
-      layoutBlock('The Quiet Return of the Printed Page', 48, 1.05, {
-        tracking: -20,
-        paragraphSpacingPt: 12,
-      }),
-      layoutBlock('Readers are going back to paper.', 16, 1.35, { paragraphSpacingPt: 18 }),
-      layoutBlock(MOCK_BODY, 10, 1.45, { firstLineIndentEm: 1, columns: 2, align: 'justify' }),
-    ],
-  },
-  {
-    preset: 'quote',
-    name: 'Quote',
-    blocks: [
-      layoutBlock('“Type is a beautiful group of letters.”', 36, 1.15, {
-        align: 'center',
-        paragraphSpacingPt: 18,
-      }),
-      layoutBlock('Matthew Carter', 12, 1.3, { tracking: 100, align: 'center' }),
-    ],
-  },
-  {
-    preset: 'characters',
-    name: 'Characters',
-    blocks: ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz', '0123456789 &@#%?!'].map(
-      (t) => layoutBlock(t, 36, 1.2, { tracking: 50, paragraphSpacingPt: 12 }),
-    ),
-  },
-  {
-    preset: 'waterfall',
-    name: 'Waterfall',
-    blocks: MOCK_WATERFALL_SIZES_PT.map((size) =>
-      layoutBlock('The quick brown fox jumps over the lazy dog', size, 1.2, { overflow: 'clip' }),
-    ),
-  },
-];
+export const MOCK_LAYOUT_PRESETS: readonly Layout[] = (
+  [
+    {
+      preset: 'book',
+      name: 'Book',
+      blocks: [
+        layoutBlock('Chapter One', 24, 1.2, { align: 'center', paragraphSpacingPt: 18 }),
+        layoutBlock(MOCK_BODY, 11, 1.5, { firstLineIndentEm: 1.5, align: 'justify' }),
+      ],
+    },
+    {
+      preset: 'columns',
+      name: 'Columns',
+      blocks: [
+        layoutBlock('Chapter One', 18, 1.2, { paragraphSpacingPt: 12 }),
+        layoutBlock(MOCK_BODY, 10, 1.4, { paragraphSpacingPt: 6, columns: 3, align: 'justify' }),
+      ],
+    },
+    {
+      preset: 'magazine',
+      name: 'Magazine',
+      blocks: [
+        layoutBlock('The Quiet Return of the Printed Page', 48, 1.05, {
+          tracking: -20,
+          paragraphSpacingPt: 12,
+        }),
+        layoutBlock('Readers are going back to paper.', 16, 1.35, { paragraphSpacingPt: 18 }),
+        layoutBlock(MOCK_BODY, 10, 1.45, { firstLineIndentEm: 1, columns: 2, align: 'justify' }),
+      ],
+    },
+    {
+      preset: 'quote',
+      name: 'Quote',
+      blocks: [
+        layoutBlock('“Type is a beautiful group of letters.”', 36, 1.15, {
+          align: 'center',
+          paragraphSpacingPt: 18,
+        }),
+        layoutBlock('Matthew Carter', 12, 1.3, { tracking: 100, align: 'center' }),
+      ],
+    },
+    {
+      preset: 'characters',
+      name: 'Characters',
+      blocks: ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz', '0123456789 &@#%?!'].map(
+        (t) => layoutBlock(t, 36, 1.2, { tracking: 50, paragraphSpacingPt: 12 }),
+      ),
+    },
+    {
+      preset: 'waterfall',
+      name: 'Waterfall',
+      blocks: MOCK_WATERFALL_SIZES_PT.map((size) =>
+        layoutBlock('The quick brown fox jumps over the lazy dog', size, 1.2, { overflow: 'clip' }),
+      ),
+    },
+  ] as Layout[]
+).map((l) => ({ ...l, widthLocked: true, widthPx: null }));
 
-/** The ranges and gesture steps of `fm_core::layout::bounds`. */
+/** The ranges and steps of `fm_core::layout::bounds` (the fm-api mock has the same). */
 export const MOCK_LAYOUT_BOUNDS: LayoutBounds = {
   sizePt: { min: 8, max: 600, default: 12, step: 1, perPx: 0.5 },
   lineHeight: { min: 0.1, max: 3, default: 1.3, step: 0.05, perPx: 0.01 },
+  tracking: { min: -200, max: 1000, default: 0, step: 10, perPx: 2 },
+  paragraphSpacingPt: { min: 0, max: 600, default: 0, step: 1, perPx: 0.5 },
+  firstLineIndentEm: { min: 0, max: 20, default: 0, step: 0.5, perPx: 0.05 },
+  columns: { min: 1, max: 3 },
 };
 
-/** The ranges of `fm_core::layout`; a value that is not a finite number takes the default. */
-export function mockClampLayout(layout: Layout): Layout {
-  const fit = (v: number | null, lo: number, hi: number, d: number) =>
-    v !== null && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+/** Clamps like `fm_core::layout`; a value that is not a finite number takes the default. */
+export function mockClampLayout(layout: Layout, bounds: LayoutBounds = MOCK_LAYOUT_BOUNDS): Layout {
+  const fit = (
+    v: number | null,
+    r: { min: number | null; max: number | null; default: number | null },
+  ) =>
+    v !== null && Number.isFinite(v)
+      ? Math.min(r.max ?? v, Math.max(r.min ?? v, v))
+      : (r.default ?? 0);
+  const b = bounds;
   return {
     ...layout,
-    blocks: layout.blocks.map((b) => ({
-      ...b,
-      sizePt: fit(b.sizePt, 8, 600, 12),
-      lineHeight: fit(b.lineHeight, 0.1, 3, 1.3),
-      tracking: fit(b.tracking, -200, 1000, 0),
-      paragraphSpacingPt: fit(b.paragraphSpacingPt, 0, 600, 0),
-      firstLineIndentEm: fit(b.firstLineIndentEm, 0, 20, 0),
-      columns: Math.round(fit(b.columns, 1, 3, 1)),
+    widthPx: mockWidthPx(layout.widthPx),
+    blocks: layout.blocks.map((x) => ({
+      ...x,
+      sizePt: fit(x.sizePt, b.sizePt),
+      lineHeight: fit(x.lineHeight, b.lineHeight),
+      tracking: fit(x.tracking, b.tracking),
+      paragraphSpacingPt: fit(x.paragraphSpacingPt, b.paragraphSpacingPt),
+      firstLineIndentEm: fit(x.firstLineIndentEm, b.firstLineIndentEm),
+      columns: Math.round(fit(x.columns, { ...b.columns, default: b.columns.min })),
     })),
+  };
+}
+
+/** A locked width's range in CSS pixels (`fm_core::layout::WIDTH_PX`). */
+export const MOCK_WIDTH_PX = { min: 160, max: 20_000 };
+
+/** A locked width inside its range; one that is not a finite number is dropped (as the core). */
+function mockWidthPx(width: number | null | undefined): number | null {
+  if (width === null || width === undefined || !Number.isFinite(width)) return null;
+  return Math.min(MOCK_WIDTH_PX.max, Math.max(MOCK_WIDTH_PX.min, width));
+}
+
+/**
+ * `fm_core::layout::layout_width`: the locked width, else 33 em at the body block's size (the
+ * block with the most text, the first on a tie; 4/3 px per point); null when unlocked.
+ */
+export function mockLayoutWidth(layout: Layout): number | null {
+  if (layout.widthLocked === false) return null;
+  const chosen = mockWidthPx(layout.widthPx);
+  if (chosen !== null) return chosen;
+  const body = layout.blocks.reduce<TextBlock | null>(
+    (best, b) => (best && [...best.text].length >= [...b.text].length ? best : b),
+    null,
+  );
+  const {
+    min = 8,
+    max = 600,
+    default: fallback = 12,
+  } = MOCK_LAYOUT_BOUNDS.sizePt as {
+    min: number;
+    max: number;
+    default: number;
+  };
+  const size = body?.sizePt ?? fallback;
+  const fitted = Number.isFinite(size) ? Math.min(max, Math.max(min, size)) : fallback;
+  return mockWidthPx(((fitted * 96) / 72) * 33);
+}
+
+/** How many earlier versions of one template the mock keeps (as the core). */
+export const MOCK_MAX_LAYOUT_VERSIONS = 20;
+const MOCK_PRESET_IDS: string[] = MOCK_LAYOUT_PRESETS.map((l) => l.preset ?? '');
+
+type MockLayoutContent = { layout: Layout } | { broken: string };
+type MockLayoutFile = {
+  id: string;
+  content: MockLayoutContent;
+  versions: { number: number; content: MockLayoutContent }[];
+};
+
+/** A file-name id for `name`, as the core makes it. */
+function mockSlug(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug || 'layout';
+}
+
+/**
+ * The layout template files of the mock (`fm_core::layout::store`): the six presets and one
+ * hand-edited file that is not valid JSON. A save that changes the file keeps what it replaces
+ * as a version, the newest 20 kept.
+ */
+function createMockLayouts(): Pick<
+  FmClient,
+  | 'listLayouts'
+  | 'getLayout'
+  | 'saveLayout'
+  | 'duplicateLayout'
+  | 'revertLayout'
+  | 'layoutHistory'
+  | 'restoreLayout'
+> {
+  const files: MockLayoutFile[] = [
+    ...MOCK_LAYOUT_PRESETS.map((l) => ({
+      id: l.preset ?? '',
+      content: { layout: structuredClone(l) },
+      versions: [],
+    })),
+    {
+      id: 'draft',
+      content: { broken: 'Not valid JSON: EOF while parsing an object at line 3 column 0' },
+      versions: [],
+    },
+  ];
+  const err = (
+    code: 'notFound' | 'invalidRequest' | 'conflict',
+    message: string,
+    detail: string | null = null,
+  ) => ({ code, message, detail });
+  const file = (id: string) => {
+    const f = files.find((x) => x.id === id);
+    if (!f) throw err('notFound', 'That layout no longer exists.');
+    return f;
+  };
+  const content = (f: MockLayoutFile): Layout => {
+    if ('broken' in f.content)
+      throw err(
+        'invalidRequest',
+        'This layout file cannot be read. Fix it by hand or save over it.',
+        f.content.broken,
+      );
+    return structuredClone(f.content.layout);
+  };
+  const presetOfId = (id: string): Layout['preset'] =>
+    MOCK_LAYOUT_PRESETS.find((l) => l.preset === id)?.preset ?? null;
+  const entry = (f: MockLayoutFile): LayoutEntry =>
+    'broken' in f.content
+      ? { id: f.id, name: f.id, preset: presetOfId(f.id), broken: f.content.broken }
+      : { id: f.id, name: f.content.layout.name, preset: f.content.layout.preset, broken: null };
+  const save = (id: string, raw: Layout): SavedLayout => {
+    if (!id || id.startsWith('.') || /[/\\:]/.test(id))
+      throw err('invalidRequest', 'That is not a layout name the app can use.');
+    if (!raw.name.trim()) throw err('invalidRequest', 'A layout needs a name.');
+    const layout = mockClampLayout(raw);
+    const f = files.find((x) => x.id === id);
+    if (!f) {
+      files.push({ id, content: { layout }, versions: [] });
+    } else if (
+      !('layout' in f.content) ||
+      JSON.stringify(f.content.layout) !== JSON.stringify(layout)
+    ) {
+      const number = (f.versions.at(-1)?.number ?? 0) + 1;
+      f.versions.push({ number, content: f.content });
+      f.content = { layout };
+      f.versions.splice(0, Math.max(0, f.versions.length - MOCK_MAX_LAYOUT_VERSIONS));
+    }
+    return { id, layout: structuredClone(layout) };
+  };
+  const rank = (e: LayoutEntry) => {
+    const i = MOCK_PRESET_IDS.indexOf(e.id);
+    return i < 0 ? MOCK_PRESET_IDS.length : i;
+  };
+  return {
+    listLayouts: async () =>
+      files
+        .map(entry)
+        .sort(
+          (a, b) =>
+            rank(a) - rank(b) ||
+            a.name.toLowerCase().localeCompare(b.name.toLowerCase()) ||
+            a.id.localeCompare(b.id),
+        ),
+    getLayout: async ({ id }) => ({ id, layout: content(file(id)) }),
+    saveLayout: async ({ id, layout }) => save(id, layout),
+    duplicateLayout: async ({ id, name }) => {
+      const source = content(file(id));
+      const taken = files.map((f) => entry(f).name.toLowerCase());
+      let copyName = name?.trim() ?? '';
+      if (copyName && taken.includes(copyName.toLowerCase()))
+        throw err('conflict', `There is already a layout named “${copyName}”.`);
+      for (let i = 1; !copyName; i++) {
+        const n = i === 1 ? `${source.name} copy` : `${source.name} copy ${i}`;
+        if (!taken.includes(n.toLowerCase())) copyName = n;
+      }
+      const base = mockSlug(copyName);
+      let newId = base;
+      for (let i = 2; files.some((f) => f.id === newId); i++) newId = `${base}-${i}`;
+      return save(newId, { ...source, name: copyName });
+    },
+    revertLayout: async ({ id, toOriginal }) => {
+      const f = file(id);
+      if (!toOriginal) return { id, layout: content(f) };
+      const preset = 'layout' in f.content ? f.content.layout.preset : presetOfId(id);
+      const original = MOCK_LAYOUT_PRESETS.find((l) => l.preset === preset);
+      if (!preset || !original)
+        throw err(
+          'invalidRequest',
+          'Only a layout that started from a preset can be reset to its original.',
+        );
+      const name = 'layout' in f.content ? f.content.layout.name : original.name;
+      return save(id, { ...structuredClone(original), name });
+    },
+    layoutHistory: async ({ id }): Promise<LayoutVersion[]> =>
+      [...file(id).versions].reverse().map((v) => ({
+        number: v.number,
+        savedAt: '2026-10-16T09:00:00Z',
+        name: 'layout' in v.content ? v.content.layout.name : null,
+        broken: 'broken' in v.content ? v.content.broken : null,
+      })),
+    restoreLayout: async ({ id, number }) => {
+      const v = file(id).versions.find((x) => x.number === number);
+      if (!v) throw err('notFound', 'That version is no longer kept.');
+      if ('broken' in v.content)
+        throw err('invalidRequest', 'This version cannot be restored: it is not a valid layout.');
+      return save(id, structuredClone(v.content.layout));
+    },
   };
 }
 
 export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
+  /** Faces ever activated, active now or not. */
+  const everActivated = new Set<FaceId>();
   const sources = structuredClone(mockSources);
   const sets = structuredClone(options.sets ?? []);
   const handlers = new Set<(event: Event) => void>();
@@ -1115,6 +1371,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       (f, embedding) => ({ ...f, embedding }),
     ),
     openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense })),
+    webOk: countEach(query, q, both, (f, webOk) => ({ ...f, webOk })),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
@@ -1161,7 +1418,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     return g.op === 'and' ? results.every(Boolean) : !results.length || results.some(Boolean);
   };
   const matches = (d: FaceDetail, q: Filters, path: CollectionId[]): boolean =>
-    passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
+    passes(d, active.has(d.face.id), everActivated.has(d.face.id), tagIdsOf(d), q) &&
     (q.collection == null || inCollection(d, q.collection, path));
   // Refuses a stored rule of `id` that reaches a collection twice on one path.
   const checkLoops = (id: CollectionId, path: CollectionId[]) => {
@@ -1256,6 +1513,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
+    layoutWidth: async (req) => mockLayoutWidth(req),
+    ...createMockLayouts(),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
@@ -1282,6 +1541,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!f) throw notFound(id);
       const detail = structuredClone(f);
       detail.face.active = active.get(id) ?? null;
+      detail.license.webUse = mockWebUse(detail.license);
       return detail;
     },
     // Families in id order (the sample ones first), or in `order`; `sort` is not mocked.
@@ -1513,6 +1773,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
           };
         active.set(id, mode);
+        everActivated.add(id);
         activated.push(id);
         return { face: id, outcome: { status: 'done' } };
       });

@@ -25,6 +25,7 @@ pub mod grouping;
 pub mod index;
 pub mod layout;
 pub mod license;
+pub mod lifecycle;
 pub mod logging;
 mod parallel;
 pub mod parser;

@@ -76,21 +76,8 @@ pub struct TextBlock {
     pub overflow: BlockOverflow,
 }
 
-/// A layout: a list of text blocks, top to bottom.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
-#[serde(rename_all = "camelCase")]
-pub struct Layout {
-    /// The preset this layout is, or started from; none for a layout of the user's own.
-    #[serde(default)]
-    pub preset: Option<LayoutPreset>,
-    /// Display name ("Book").
-    pub name: String,
-    /// The blocks, top to bottom.
-    pub blocks: Vec<TextBlock>,
-}
-
 /// The range of one block value: what the core clamps it into and how far the
-/// direct-manipulation gestures move it.
+/// editor and the direct-manipulation gestures move it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockRange {
@@ -106,7 +93,18 @@ pub struct BlockRange {
     pub per_px: f32,
 }
 
-/// The ranges of the block values the UI changes by drag, pinch and keys.
+/// The range of [`TextBlock::columns`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnRange {
+    /// Fewest columns.
+    pub min: u8,
+    /// Most columns.
+    pub max: u8,
+}
+
+/// The ranges [`LayoutService::clamp_layout`] clamps every block value into,
+/// so the properties editor (E12.3) offers exactly those.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct LayoutBounds {
@@ -114,6 +112,133 @@ pub struct LayoutBounds {
     pub size_pt: BlockRange,
     /// Line height as a multiple of the size.
     pub line_height: BlockRange,
+    /// Letter spacing in thousandths of an em.
+    pub tracking: BlockRange,
+    /// Space after each paragraph in points.
+    pub paragraph_spacing_pt: BlockRange,
+    /// Indent of each paragraph's first line in em.
+    pub first_line_indent_em: BlockRange,
+    /// Columns a block flows into.
+    pub columns: ColumnRange,
+}
+
+/// A layout: a list of text blocks, top to bottom.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Layout {
+    /// The preset this layout is, or started from; none for a layout of the user's own.
+    #[serde(default)]
+    pub preset: Option<LayoutPreset>,
+    /// Display name ("Book").
+    pub name: String,
+    /// The blocks, top to bottom.
+    pub blocks: Vec<TextBlock>,
+    /// The text keeps a fixed width, centered, however wide the window is
+    /// (E12.4); false makes it follow the window. A layout saved without it is locked.
+    #[serde(default = "width_locked_default")]
+    pub width_locked: bool,
+    /// The width the text is locked at, in CSS pixels; none is a readable line
+    /// length at the body block's size. Kept while the width is unlocked.
+    #[serde(default)]
+    pub width_px: Option<f32>,
+}
+
+/// A layout's width is locked unless it says otherwise.
+fn width_locked_default() -> bool {
+    true
+}
+
+/// A layout template file in the layouts folder, as the list shows it (E12.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutEntry {
+    /// The file name without `.json` ("book"); stable while the file keeps its name.
+    pub id: String,
+    /// The layout's name, or the file name when the file cannot be read.
+    pub name: String,
+    /// The preset the layout is or started from.
+    #[serde(default)]
+    pub preset: Option<LayoutPreset>,
+    /// Why the file cannot be used (not valid JSON, not a layout); none when it can.
+    #[serde(default)]
+    pub broken: Option<String>,
+}
+
+/// A layout as it is saved in its template file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedLayout {
+    /// The template file's id.
+    pub id: String,
+    /// The saved layout, clamped into the block ranges.
+    pub layout: Layout,
+}
+
+/// Names one layout template file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutRef {
+    /// The template file's id.
+    pub id: String,
+}
+
+/// Writes a layout to its template file; the previous content is kept as a version.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveLayoutRequest {
+    /// The template file's id; a new id makes a new file.
+    pub id: String,
+    /// The layout; its values are clamped before they are written.
+    pub layout: Layout,
+}
+
+/// Copies a layout into a new, independent template file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateLayoutRequest {
+    /// The layout to copy.
+    pub id: String,
+    /// The copy's name; none gives "<name> copy" (then "<name> copy 2", …).
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// Goes back to the saved file, or a preset back to its shipped original.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RevertLayoutRequest {
+    /// The template file's id.
+    pub id: String,
+    /// Writes the shipped original of the layout's preset (the content it
+    /// replaces is kept as a version); false only reads the saved file.
+    #[serde(default)]
+    pub to_original: bool,
+}
+
+/// An earlier content of a template file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutVersion {
+    /// The version's number; a later save has a higher number.
+    pub number: u32,
+    /// When the content was replaced, UTC (`2026-10-21T09:30:00Z`).
+    pub saved_at: String,
+    /// The layout's name in that version, or none when that content was broken.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Why that content cannot be used; none when it can.
+    #[serde(default)]
+    pub broken: Option<String>,
+}
+
+/// Makes an earlier version current again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreLayoutRequest {
+    /// The template file's id.
+    pub id: String,
+    /// The [`LayoutVersion::number`] to restore.
+    pub number: u32,
 }
 
 /// Body-text layouts.
@@ -123,8 +248,29 @@ pub trait LayoutService {
     /// The layout with every block value clamped into its range (a value that
     /// is not a number takes the default).
     fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout>;
-    /// The ranges and gesture steps of the block values the UI resizes
-    /// directly (size and line height), so a drag can stay inside them every
-    /// frame without a round trip.
+    /// The ranges `clamp_layout` clamps every block value into, with the
+    /// steps an editor moves them by (E12.3).
     fn layout_bounds(&self) -> ApiResult<LayoutBounds>;
+    /// Every template file in the layouts folder, read again on each call:
+    /// the presets first in picker order, then the others by name. The six
+    /// presets are written there on first use and never overwritten. A file
+    /// that cannot be read is listed with the reason.
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>>;
+    /// One template file; a broken one answers `InvalidRequest` with the reason.
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout>;
+    /// Writes a layout; the content it replaces becomes the newest version.
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout>;
+    /// Copies a layout into a new template file with a new name and id.
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout>;
+    /// The saved file again (drops the editor's unsaved changes), or with
+    /// `to_original` the shipped original of the layout's preset.
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout>;
+    /// The kept versions of a template file, newest first.
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>>;
+    /// Makes a version current; the content it replaces becomes a version too.
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout>;
+    /// The width in CSS pixels the layout's text is set at: its locked width,
+    /// or a readable line length at the body block's size when it has none;
+    /// none when the width is unlocked and follows the window (E12.4).
+    fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>>;
 }

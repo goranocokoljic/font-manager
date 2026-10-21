@@ -1,10 +1,14 @@
 //! Body-text layouts (E12.1): the six presets and the ranges every block
-//! value is clamped into. The UI renders a layout as live text in the webview;
-//! this module only decides what the blocks are.
+//! value is clamped into; [`store`] keeps layouts as template files (E12.5).
+//! The UI renders a layout as live text in the webview; this module only
+//! decides what the blocks are.
 
 use fm_api::layout::{
-    BlockAlign, BlockOverflow, BlockRange, Layout, LayoutBounds, LayoutPreset, TextBlock,
+    BlockAlign, BlockOverflow, BlockRange, ColumnRange, Layout, LayoutBounds, LayoutPreset,
+    TextBlock,
 };
+
+pub mod store;
 
 /// The range of a block value and what a value that is not a number becomes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -67,8 +71,32 @@ pub const SIZE_PT_PER_PX: f32 = 0.5;
 pub const LINE_HEIGHT_STEP: f32 = 0.05;
 /// One pixel of vertical drag on a block: 0.01 of line height.
 pub const LINE_HEIGHT_PER_PX: f32 = 0.01;
+/// One arrow-key press on tracking: 10 thousandths of an em.
+pub const TRACKING_STEP: f32 = 10.0;
+/// One pixel of drag on tracking.
+pub const TRACKING_PER_PX: f32 = 2.0;
+/// One arrow-key press on paragraph spacing: 1 pt.
+pub const PARAGRAPH_SPACING_PT_STEP: f32 = 1.0;
+/// One pixel of drag on paragraph spacing.
+pub const PARAGRAPH_SPACING_PT_PER_PX: f32 = 0.5;
+/// One arrow-key press on the first-line indent: half an em.
+pub const FIRST_LINE_INDENT_EM_STEP: f32 = 0.5;
+/// One pixel of drag on the first-line indent.
+pub const FIRST_LINE_INDENT_EM_PER_PX: f32 = 0.05;
 /// Columns a block flows into.
 pub const COLUMNS: std::ops::RangeInclusive<u8> = 1..=3;
+/// A readable line length in em of the body block's size: 66–75 characters of
+/// running text, whose average character is 0.44–0.5 em wide in most text faces.
+pub const MEASURE_EM: f32 = 33.0;
+/// CSS pixels per point (96 px per inch, 72 pt per inch).
+pub const PX_PER_PT: f32 = 96.0 / 72.0;
+/// A locked layout width in CSS pixels; a width that is not a number means the
+/// readable measure instead.
+pub const WIDTH_PX: Bounds = Bounds {
+    min: 160.0,
+    max: 20_000.0,
+    default: 160.0,
+};
 
 /// Every preset, in the order the UI offers them.
 pub const PRESETS: [LayoutPreset; 6] = [
@@ -204,27 +232,14 @@ pub fn preset(preset: LayoutPreset) -> Layout {
         preset: Some(preset),
         name: preset_name(preset).to_owned(),
         blocks,
+        width_locked: true,
+        width_px: None,
     }
 }
 
 /// The six presets, in [`PRESETS`] order.
 pub fn presets() -> Vec<Layout> {
     PRESETS.into_iter().map(preset).collect()
-}
-
-/// The ranges and gesture steps of the values the UI resizes directly.
-pub fn bounds() -> LayoutBounds {
-    let range = |b: Bounds, step: f32, per_px: f32| BlockRange {
-        min: b.min,
-        max: b.max,
-        default: b.default,
-        step,
-        per_px,
-    };
-    LayoutBounds {
-        size_pt: range(SIZE_PT, SIZE_PT_STEP, SIZE_PT_PER_PX),
-        line_height: range(LINE_HEIGHT, LINE_HEIGHT_STEP, LINE_HEIGHT_PER_PX),
-    }
 }
 
 /// A block with every value inside its range.
@@ -240,12 +255,80 @@ pub fn clamp_block(block: TextBlock) -> TextBlock {
     }
 }
 
-/// A layout with every block clamped.
+/// The ranges [`clamp_block`] clamps into, with the steps the properties
+/// editor (E12.3) and the gestures move each value by.
+pub fn bounds() -> LayoutBounds {
+    let range = |b: Bounds, step: f32, per_px: f32| BlockRange {
+        min: b.min,
+        max: b.max,
+        default: b.default,
+        step,
+        per_px,
+    };
+    LayoutBounds {
+        size_pt: range(SIZE_PT, SIZE_PT_STEP, SIZE_PT_PER_PX),
+        line_height: range(LINE_HEIGHT, LINE_HEIGHT_STEP, LINE_HEIGHT_PER_PX),
+        tracking: range(TRACKING, TRACKING_STEP, TRACKING_PER_PX),
+        paragraph_spacing_pt: range(
+            PARAGRAPH_SPACING_PT,
+            PARAGRAPH_SPACING_PT_STEP,
+            PARAGRAPH_SPACING_PT_PER_PX,
+        ),
+        first_line_indent_em: range(
+            FIRST_LINE_INDENT_EM,
+            FIRST_LINE_INDENT_EM_STEP,
+            FIRST_LINE_INDENT_EM_PER_PX,
+        ),
+        columns: ColumnRange {
+            min: *COLUMNS.start(),
+            max: *COLUMNS.end(),
+        },
+    }
+}
+
+/// A layout with every block clamped, and its locked width inside
+/// [`WIDTH_PX`] (a width that is not a number is dropped).
 pub fn clamp_layout(layout: Layout) -> Layout {
     Layout {
         blocks: layout.blocks.into_iter().map(clamp_block).collect(),
+        width_px: layout
+            .width_px
+            .filter(|w| w.is_finite())
+            .map(|w| WIDTH_PX.clamp(w)),
         ..layout
     }
+}
+
+/// The body block: the one with the most text; the first of those on a tie.
+pub fn body_block(layout: &Layout) -> Option<&TextBlock> {
+    layout
+        .blocks
+        .iter()
+        .fold(None, |best: Option<&TextBlock>, b| match best {
+            Some(x) if x.text.chars().count() >= b.text.chars().count() => Some(x),
+            _ => Some(b),
+        })
+}
+
+/// A readable line length in CSS pixels: [`MEASURE_EM`] at the body block's
+/// size (clamped), or at the default size for a layout with no blocks.
+pub fn readable_width_px(layout: &Layout) -> f32 {
+    let size = SIZE_PT.clamp(body_block(layout).map_or(SIZE_PT.default, |b| b.size_pt));
+    WIDTH_PX.clamp(size * PX_PER_PT * MEASURE_EM)
+}
+
+/// The width the layout's text is set at in CSS pixels: the locked width, or
+/// the readable one when none was chosen; none when unlocked (it follows the window).
+pub fn layout_width(layout: &Layout) -> Option<f32> {
+    if !layout.width_locked {
+        return None;
+    }
+    Some(
+        layout
+            .width_px
+            .filter(|w| w.is_finite())
+            .map_or_else(|| readable_width_px(layout), |w| WIDTH_PX.clamp(w)),
+    )
 }
 
 #[cfg(test)]
@@ -370,6 +453,56 @@ mod tests {
     }
 
     #[test]
+    fn bounds_are_the_ranges_clamping_uses_with_steps_inside_them() {
+        let r = bounds();
+        let wild = |v: f32, columns: u8| TextBlock {
+            size_pt: v,
+            line_height: v,
+            tracking: v,
+            paragraph_spacing_pt: v,
+            first_line_indent_em: v,
+            columns,
+            ..block("x", 12.0, 1.2)
+        };
+        let high = clamp_block(wild(1.0e6, u8::MAX));
+        assert_eq!(high.size_pt, r.size_pt.max);
+        assert_eq!(high.line_height, r.line_height.max);
+        assert_eq!(high.tracking, r.tracking.max);
+        assert_eq!(high.paragraph_spacing_pt, r.paragraph_spacing_pt.max);
+        assert_eq!(high.first_line_indent_em, r.first_line_indent_em.max);
+        assert_eq!(high.columns, r.columns.max);
+        let low = clamp_block(wild(-1.0e6, 0));
+        assert_eq!(low.size_pt, r.size_pt.min);
+        assert_eq!(low.line_height, r.line_height.min);
+        assert_eq!(low.tracking, r.tracking.min);
+        assert_eq!(low.paragraph_spacing_pt, r.paragraph_spacing_pt.min);
+        assert_eq!(low.first_line_indent_em, r.first_line_indent_em.min);
+        assert_eq!(low.columns, r.columns.min);
+        let nan = clamp_block(wild(f32::NAN, 2));
+        assert_eq!(nan.size_pt, r.size_pt.default);
+        assert_eq!(nan.line_height, r.line_height.default);
+        assert_eq!(nan.tracking, r.tracking.default);
+        // Every edge is itself in range: clamping it changes nothing.
+        let edge = wild(r.size_pt.min, r.columns.max);
+        assert_eq!(clamp_block(edge.clone()).size_pt, edge.size_pt);
+        assert_eq!((r.columns.min, r.columns.max), (1, 3));
+        for b in [
+            r.size_pt,
+            r.line_height,
+            r.tracking,
+            r.paragraph_spacing_pt,
+            r.first_line_indent_em,
+        ] {
+            assert!(
+                b.min < b.max && b.min <= b.default && b.default <= b.max,
+                "{b:?}"
+            );
+            assert!(b.step > 0.0 && b.step * 20.0 <= b.max - b.min, "{b:?}");
+            assert!(b.per_px > 0.0 && b.per_px * 20.0 <= b.max - b.min, "{b:?}");
+        }
+    }
+
+    #[test]
     fn values_that_are_not_numbers_take_the_default() {
         let b = clamp_block(TextBlock {
             size_pt: f32::NAN,
@@ -387,24 +520,6 @@ mod tests {
     }
 
     #[test]
-    fn bounds_are_the_clamp_ranges_with_steps_that_move_the_value() {
-        let b = bounds();
-        assert_eq!((b.size_pt.min, b.size_pt.max), (8.0, 600.0));
-        assert_eq!((b.line_height.min, b.line_height.max), (0.1, 3.0));
-        assert_eq!(b.size_pt.default, SIZE_PT.default);
-        assert_eq!(b.line_height.default, LINE_HEIGHT.default);
-        for (r, clamp) in [(b.size_pt, SIZE_PT), (b.line_height, LINE_HEIGHT)] {
-            assert!(r.step > 0.0 && r.per_px > 0.0, "{r:?}");
-            // A step and a short drag stay small against the range.
-            assert!(r.step * 20.0 <= r.max - r.min, "{r:?}");
-            assert!(r.per_px * 20.0 <= r.max - r.min, "{r:?}");
-            // The edges are what clamping gives.
-            assert_eq!(clamp.clamp(r.max + r.step), r.max);
-            assert_eq!(clamp.clamp(r.min - r.step), r.min);
-        }
-    }
-
-    #[test]
     fn clamping_keeps_text_alignment_overflow_name_and_preset() {
         let l = Layout {
             preset: None,
@@ -415,13 +530,121 @@ mod tests {
                 size_pt: 2.0,
                 ..block("Hello\nworld", 12.0, 1.0)
             }],
+            width_locked: false,
+            width_px: Some(640.0),
         };
         let c = clamp_layout(l);
+        assert!(!c.width_locked);
+        assert_eq!(c.width_px, Some(640.0));
         assert_eq!(c.name, "Mine");
         assert_eq!(c.preset, None);
         assert_eq!(c.blocks[0].text, "Hello\nworld");
         assert_eq!(c.blocks[0].align, BlockAlign::End);
         assert_eq!(c.blocks[0].overflow, BlockOverflow::Clip);
         assert_eq!(c.blocks[0].size_pt, 8.0);
+    }
+
+    fn mine(blocks: Vec<TextBlock>) -> Layout {
+        Layout {
+            preset: None,
+            name: "Mine".into(),
+            blocks,
+            width_locked: true,
+            width_px: None,
+        }
+    }
+
+    #[test]
+    fn presets_start_locked_at_the_readable_width() {
+        for l in presets() {
+            assert!(l.width_locked, "{}", l.name);
+            assert_eq!(l.width_px, None, "{}", l.name);
+            assert_eq!(layout_width(&l), Some(readable_width_px(&l)), "{}", l.name);
+        }
+    }
+
+    #[test]
+    fn the_readable_width_is_65_to_75_average_characters_of_the_body_block() {
+        // Book: an 11 pt body under a 24 pt heading; the body sets the width.
+        let book = preset(LayoutPreset::Book);
+        let body = body_block(&book).expect("body");
+        assert_eq!(body.size_pt, 11.0);
+        let em_px = body.size_pt * PX_PER_PT;
+        let width = readable_width_px(&book);
+        // Running text averages about half an em per character.
+        let chars = width / (em_px * 0.5);
+        assert!((65.0..=75.0).contains(&chars), "{chars}");
+        assert!((width - 11.0 * 96.0 / 72.0 * MEASURE_EM).abs() < 0.01);
+        // A larger body gives a wider measure; the heading's size does not matter.
+        let mut big = book.clone();
+        big.blocks[1].size_pt = 22.0;
+        assert!((readable_width_px(&big) - 2.0 * width).abs() < 0.01);
+        big.blocks[0].size_pt = 300.0;
+        assert!((readable_width_px(&big) - 2.0 * width).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_body_block_is_the_one_with_the_most_text_the_first_on_a_tie() {
+        let l = mine(vec![
+            block("short", 30.0, 1.0),
+            block("the longest text", 10.0, 1.0),
+            block("short", 8.0, 1.0),
+        ]);
+        assert_eq!(body_block(&l).map(|b| b.size_pt), Some(10.0));
+        let tie = preset(LayoutPreset::Waterfall);
+        assert_eq!(body_block(&tie).map(|b| b.size_pt), Some(72.0));
+        assert_eq!(body_block(&mine(vec![])), None);
+        // A layout with no blocks still has a width: the default size's measure.
+        assert!(
+            (readable_width_px(&mine(vec![])) - SIZE_PT.default * PX_PER_PT * MEASURE_EM).abs()
+                < 0.01
+        );
+    }
+
+    #[test]
+    fn a_locked_width_is_kept_and_an_unlocked_one_follows_the_window() {
+        let mut l = preset(LayoutPreset::Book);
+        l.width_px = Some(900.0);
+        assert_eq!(layout_width(&l), Some(900.0));
+        l.width_locked = false;
+        assert_eq!(layout_width(&l), None);
+        // Unlocked, the chosen width is kept for when it is locked again.
+        assert_eq!(clamp_layout(l.clone()).width_px, Some(900.0));
+        l.width_locked = true;
+        assert_eq!(layout_width(&l), Some(900.0));
+    }
+
+    #[test]
+    fn a_locked_width_out_of_range_is_clamped_and_one_that_is_not_a_number_dropped() {
+        let mut l = preset(LayoutPreset::Book);
+        l.width_px = Some(5.0);
+        assert_eq!(clamp_layout(l.clone()).width_px, Some(WIDTH_PX.min));
+        assert_eq!(layout_width(&l), Some(WIDTH_PX.min));
+        l.width_px = Some(1.0e9);
+        assert_eq!(clamp_layout(l.clone()).width_px, Some(WIDTH_PX.max));
+        l.width_px = Some(f32::NAN);
+        assert_eq!(clamp_layout(l.clone()).width_px, None);
+        assert_eq!(layout_width(&l), Some(readable_width_px(&l)));
+        l.width_px = Some(f32::INFINITY);
+        assert_eq!(clamp_layout(l).width_px, None);
+    }
+
+    #[test]
+    fn a_layout_saved_before_the_width_lock_reads_as_locked_at_the_readable_width() {
+        let json = r#"{"preset":null,"name":"Old","blocks":[]}"#;
+        let l: Layout = serde_json::from_str(json).expect("old layout");
+        assert!(l.width_locked);
+        assert_eq!(l.width_px, None);
+        let back: Layout = serde_json::from_str(
+            &serde_json::to_string(&Layout {
+                width_locked: false,
+                width_px: Some(700.0),
+                ..l
+            })
+            .expect("json"),
+        )
+        .expect("round trip");
+        assert!(!back.width_locked);
+        assert_eq!(back.width_px, Some(700.0));
     }
 }

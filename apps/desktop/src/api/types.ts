@@ -88,6 +88,11 @@ export type AppInfo = {
 	apiVersion: ApiVersion,
 	/**  The operating system. */
 	platform: Platform,
+	/**
+	 *  What works differently on this system, one sentence each (Settings →
+	 *  About → Platform notes). Empty when nothing does.
+	 */
+	platformNotes?: string[],
 };
 
 /**  A variation axis of a variable font. */
@@ -149,7 +154,7 @@ export type BlockOverflow =
 
 /**
  *  The range of one block value: what the core clamps it into and how far the
- *  direct-manipulation gestures move it.
+ *  editor and the direct-manipulation gestures move it.
  */
 export type BlockRange = {
 	/**  Smallest value. */
@@ -271,6 +276,14 @@ export type CollectionFacesRequest = {
 
 /**  A manual or smart collection. */
 export type CollectionId = number;
+
+/**  The range of [`TextBlock::columns`]. */
+export type ColumnRange = {
+	/**  Fewest columns. */
+	min: number,
+	/**  Most columns. */
+	max: number,
+};
 
 /**  A clash found before activating. */
 export type Conflict = {
@@ -433,6 +446,14 @@ export type DuplicateKind =
 "exact" | 
 /**  The same PostScript name and version in files that differ. */
 "near";
+
+/**  Copies a layout into a new, independent template file. */
+export type DuplicateLayoutRequest = {
+	/**  The layout to copy. */
+	id: string,
+	/**  The copy's name; none gives "<name> copy" (then "<name> copy 2", …). */
+	name?: string | null,
+};
 
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
@@ -865,6 +886,8 @@ export type FilterCounts = {
 	embedding?: FilterCount<Embedding>[],
 	/**  With an open license (true) and without (false). */
 	openLicense?: FilterCount<boolean>[],
+	/**  OK for web (true) and not (false). */
+	webOk?: FilterCount<boolean>[],
 };
 
 /**
@@ -914,6 +937,13 @@ export type Filters = {
 	embedding?: Embedding | null,
 	/**  Faces whose name table states an open license (true) or none (false) only. */
 	openLicense?: boolean | null,
+	/**  Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3). */
+	webOk?: boolean | null,
+	/**
+	 *  Activated within the last this many days (each 24 hours), active now
+	 *  or not (E14.3).
+	 */
+	activatedWithinDays?: number | null,
 };
 
 /**  The file format of a font. */
@@ -1153,14 +1183,47 @@ export type Layout = {
 	name: string,
 	/**  The blocks, top to bottom. */
 	blocks: TextBlock[],
+	/**
+	 *  The text keeps a fixed width, centered, however wide the window is
+	 *  (E12.4); false makes it follow the window. A layout saved without it is locked.
+	 */
+	widthLocked?: boolean,
+	/**
+	 *  The width the text is locked at, in CSS pixels; none is a readable line
+	 *  length at the body block's size. Kept while the width is unlocked.
+	 */
+	widthPx?: number | null,
 };
 
-/**  The ranges of the block values the UI changes by drag, pinch and keys. */
+/**
+ *  The ranges [`LayoutService::clamp_layout`] clamps every block value into,
+ *  so the properties editor (E12.3) offers exactly those.
+ */
 export type LayoutBounds = {
 	/**  Font size in points. */
 	sizePt: BlockRange,
 	/**  Line height as a multiple of the size. */
 	lineHeight: BlockRange,
+	/**  Letter spacing in thousandths of an em. */
+	tracking: BlockRange,
+	/**  Space after each paragraph in points. */
+	paragraphSpacingPt: BlockRange,
+	/**  Indent of each paragraph's first line in em. */
+	firstLineIndentEm: BlockRange,
+	/**  Columns a block flows into. */
+	columns: ColumnRange,
+};
+
+/**  A layout template file in the layouts folder, as the list shows it (E12.5). */
+export type LayoutEntry = {
+	/**  The file name without `.json` ("book"); stable while the file keeps its name. */
+	id: string,
+	/**  The layout's name, or the file name when the file cannot be read. */
+	name: string,
+	/**  The preset the layout is or started from. */
+	preset?: LayoutPreset | null,
+	/**  Why the file cannot be used (not valid JSON, not a layout); none when it can. */
+	broken?: string | null,
 };
 
 /**  A built-in layout. */
@@ -1177,6 +1240,24 @@ export type LayoutPreset =
 "characters" | 
 /**  The same text at falling sizes. */
 "waterfall";
+
+/**  Names one layout template file. */
+export type LayoutRef = {
+	/**  The template file's id. */
+	id: string,
+};
+
+/**  An earlier content of a template file. */
+export type LayoutVersion = {
+	/**  The version's number; a later save has a higher number. */
+	number: number,
+	/**  When the content was replaced, UTC (`2026-10-21T09:30:00Z`). */
+	savedAt: string,
+	/**  The layout's name in that version, or none when that content was broken. */
+	name?: string | null,
+	/**  Why that content cannot be used; none when it can. */
+	broken?: string | null,
+};
 
 /**
  *  Declare the license of a family (E15.2). It applies to every face of the
@@ -1220,6 +1301,8 @@ export type LicenseInfo = {
 	purchaseDate?: string | null,
 	/**  Absolute path of the receipt copy the app keeps (E15.2). */
 	receipt?: string | null,
+	/**  Whether the face may be used on the web, and why (E15.3). */
+	webUse?: WebUse | null,
 };
 
 /**  A license inventory as CSV text. */
@@ -1548,6 +1631,25 @@ export type Resolution = {
 /**  A "Keep this one" action of the Problems view, for undo. */
 export type ResolutionId = number;
 
+/**  Makes an earlier version current again. */
+export type RestoreLayoutRequest = {
+	/**  The template file's id. */
+	id: string,
+	/**  The [`LayoutVersion::number`] to restore. */
+	number: number,
+};
+
+/**  Goes back to the saved file, or a preset back to its shipped original. */
+export type RevertLayoutRequest = {
+	/**  The template file's id. */
+	id: string,
+	/**
+	 *  Writes the shipped original of the layout's preset (the content it
+	 *  replaces is kept as a version); false only reads the saved file.
+	 */
+	toOriginal?: boolean,
+};
+
 /**  One rule of a [`RuleGroup`]. */
 export type Rule = 
 /**
@@ -1608,6 +1710,22 @@ export type SampleTextRequest = {
 	faces: FaceId[],
 	/**  The sample text the user chose. */
 	text: string,
+};
+
+/**  Writes a layout to its template file; the previous content is kept as a version. */
+export type SaveLayoutRequest = {
+	/**  The template file's id; a new id makes a new file. */
+	id: string,
+	/**  The layout; its values are clamped before they are written. */
+	layout: Layout,
+};
+
+/**  A layout as it is saved in its template file. */
+export type SavedLayout = {
+	/**  The template file's id. */
+	id: string,
+	/**  The saved layout, clamped into the block ranges. */
+	layout: Layout,
 };
 
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
@@ -1698,6 +1816,12 @@ export type Settings = {
 	 *  (at most 1440, one day).
 	 */
 	rescanIntervalMinutes?: number,
+	/**
+	 *  Closing the main window keeps the app running in the tray (the menu
+	 *  bar on macOS), so session fonts stay active; off, closing the window
+	 *  quits. On by default.
+	 */
+	keepInTray?: boolean,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -1716,6 +1840,8 @@ export type SettingsUpdate = {
 	cacheLimitMb?: number | null,
 	/**  Minutes between automatic rescans; 0 turns them off. */
 	rescanIntervalMinutes?: number | null,
+	/**  Keep running in the tray when the main window is closed. */
+	keepInTray?: boolean | null,
 };
 
 /**  The shortlist for a brief. */
@@ -1965,6 +2091,17 @@ export type WebFormat =
 /**  WOFF 1. */
 "woff";
 
+/**
+ *  Whether a face may be used on the web, decided from its embedding
+ *  permission, recognized open license and declared license type (E15.3).
+ */
+export type WebUse = {
+	/**  The face is OK for web. */
+	ok: boolean,
+	/**  Why, in plain words ("Open license (OFL)"). */
+	reason: string,
+};
+
 /**  An inclusive weight range (100–1000). */
 export type WeightRange = {
 	/**  Lowest weight. */
@@ -1981,4 +2118,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 12, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 14, patch: 0 };

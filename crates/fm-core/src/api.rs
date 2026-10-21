@@ -34,7 +34,10 @@ use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest,
 };
-use fm_api::layout::{Layout, LayoutBounds, LayoutService};
+use fm_api::layout::{
+    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
+    LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+};
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
@@ -64,11 +67,12 @@ use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
     FamilyId, JobId, ResolutionId, SetId, SourceId, VirtualStyleId,
 };
-use fm_platform::{AppPaths, FontActivator, Os, Trash};
+use fm_platform::{AppPaths, FontActivator, Os, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
 use crate::index::{DeclaredLicense, Index};
+use crate::layout::store::LayoutStore;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
@@ -109,10 +113,15 @@ pub struct CoreApi {
     /// Where receipts kept in the app's data folder go; `None` when the API
     /// has no data folder.
     receipts: Option<PathBuf>,
+    /// The layout template files (E12.5); `None` when the API has no config folder.
+    layouts: Option<LayoutStore>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
     next_job: AtomicU32,
+    /// What the shell found when it made the tray item; `None` before (and
+    /// without a shell). Feeds the platform notes of [`AppInfo`].
+    tray: Mutex<Option<TraySupport>>,
 }
 
 impl std::fmt::Debug for CoreApi {
@@ -139,7 +148,8 @@ impl CoreApi {
             .inspect_err(|e| tracing::warn!(error = %e, "preview cache not opened"))
             .ok();
         let api = Self::new(index, activator, settings, previews)
-            .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR));
+            .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
+            .with_layouts_in(paths.layouts_dir());
         match fm_platform::trash::system() {
             Ok(trash) => api.with_trash(trash),
             Err(e) => {
@@ -170,10 +180,18 @@ impl CoreApi {
             resolver: None,
             trash: None,
             receipts: None,
+            layouts: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
+            tray: Mutex::new(None),
         }
+    }
+
+    /// Records whether the shell could make a tray item, for the platform
+    /// notes (Settings → About).
+    pub fn set_tray_support(&self, support: TraySupport) {
+        *lock(&self.tray) = Some(support);
     }
 
     /// The same API, moving "Keep this one" copies through `trash`.
@@ -194,6 +212,20 @@ impl CoreApi {
     pub fn with_receipts_in(mut self, dir: PathBuf) -> Self {
         self.receipts = Some(dir);
         self
+    }
+
+    /// The same API, keeping layout template files in `dir`.
+    #[must_use]
+    pub fn with_layouts_in(mut self, dir: PathBuf) -> Self {
+        self.layouts = Some(LayoutStore::new(dir));
+        self
+    }
+
+    /// The layout files, or the answer when there is no layouts folder.
+    fn layouts(&self) -> ApiResult<&LayoutStore> {
+        self.layouts
+            .as_ref()
+            .ok_or_else(|| not_available("Saving layouts"))
     }
 
     /// Moves the receipt copy `old` to the trash, when it is one the app
@@ -420,6 +452,10 @@ impl LibraryService for CoreApi {
                 Os::MacOs => Platform::Macos,
                 Os::Linux => Platform::Linux,
             },
+            platform_notes: crate::lifecycle::platform_notes(
+                Os::current(),
+                lock(&self.tray).as_ref(),
+            ),
         })
     }
 
@@ -852,6 +888,38 @@ impl LayoutService for CoreApi {
 
     fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
         Ok(layout::bounds())
+    }
+
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {
+        self.layouts()?.list()
+    }
+
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout> {
+        self.layouts()?.get(&req.id)
+    }
+
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.save(&req.id, req.layout)
+    }
+
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.duplicate(&req.id, req.name.as_deref())
+    }
+
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.revert(&req.id, req.to_original)
+    }
+
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>> {
+        self.layouts()?.history(&req.id)
+    }
+
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.restore(&req.id, req.number)
+    }
+
+    fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
+        Ok(layout::layout_width(&layout))
     }
 }
 

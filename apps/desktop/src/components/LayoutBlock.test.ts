@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MOCK_LAYOUT_BOUNDS, MOCK_LAYOUT_PRESETS, mockFaces } from '../api/mock';
 import type { Layout, TextBlock } from '../api/types';
@@ -35,23 +36,34 @@ function show(b: TextBlock = block) {
       block: b,
       fontFamily: '"fm-face-1", sans-serif',
       bounds: MOCK_LAYOUT_BOUNDS,
-      index: 0,
+      editable: true,
+      label: 'Block 1',
     },
     attachTo: document.body,
   });
 }
 
 type W = ReturnType<typeof show>;
-const el = (w: W) => w.element as HTMLElement;
+const blk = (w: W) => w.get('[data-testid="layout-block"]');
+const el = (w: W) => blk(w).element as HTMLElement;
 const badge = (w: W) => w.find('[data-testid="size-badge"]').text();
-/** A pointer event (jsdom has no PointerEvent; a MouseEvent with a pointerId does). */
-function pointerAt(target: Element, type: string, x: number, y: number): void {
-  const e = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true });
+/**
+ * A pointer event (jsdom has no PointerEvent; a MouseEvent with a pointerId does). The
+ * primary button is held from pointerdown to pointerup unless `buttons` says otherwise.
+ */
+function pointerAt(
+  target: Element,
+  type: string,
+  x: number,
+  y: number,
+  buttons = type === 'pointerup' ? 0 : 1,
+): void {
+  const e = new MouseEvent(type, { clientX: x, clientY: y, button: 0, buttons, bubbles: true });
   Object.defineProperty(e, 'pointerId', { value: 1 });
   target.dispatchEvent(e);
 }
-const point = async (w: W, type: string, x: number, y: number) => {
-  pointerAt(w.element, type, x, y);
+const point = async (w: W, type: string, x: number, y: number, buttons?: number) => {
+  pointerAt(el(w), type, x, y, buttons);
   await w.vm.$nextTick();
 };
 
@@ -161,30 +173,31 @@ describe('LayoutBlock direct manipulation (E12.2)', () => {
 
   it('arrow keys resize a focused block; it has an accessible name with its values', async () => {
     const w = show();
-    expect(w.attributes('tabindex')).toBe('0');
-    expect(w.attributes('role')).toBe('group');
-    expect(w.attributes('aria-label')).toBe('Text block 1, 36 points, line height 1.20');
-    await w.trigger('keydown', { key: 'ArrowRight' });
-    await w.trigger('keydown', { key: 'ArrowUp', shiftKey: true });
+    expect(blk(w).attributes('tabindex')).toBe('0');
+    expect(blk(w).attributes('role')).toBe('group');
+    expect(blk(w).attributes('aria-label')).toBe('Block 1, 36 points, line height 1.20');
+    await blk(w).trigger('keydown', { key: 'ArrowRight' });
+    await blk(w).trigger('keydown', { key: 'ArrowUp', shiftKey: true });
     expect(w.emitted('change')).toEqual([[{ sizePt: 37 }], [{ lineHeight: 1.7 }]]);
     // Other keys (and modified arrows) are left to the app.
-    await w.trigger('keydown', { key: 'ArrowRight', ctrlKey: true });
-    await w.trigger('keydown', { key: 'x' });
+    await blk(w).trigger('keydown', { key: 'ArrowRight', ctrlKey: true });
+    await blk(w).trigger('keydown', { key: 'x' });
     expect(w.emitted('change')).toHaveLength(2);
   });
 
   it('without bounds the block is read-only', async () => {
     const w = mount(LayoutBlock, { props: { block, fontFamily: 'serif', bounds: null } });
+    expect(w.find('[data-testid="size-badge"]').exists()).toBe(false);
     await point(w, 'pointerdown', 0, 0);
     await point(w, 'pointermove', 200, 0);
     await point(w, 'pointerup', 200, 0);
-    await w.trigger('keydown', { key: 'ArrowRight' });
+    await blk(w).trigger('keydown', { key: 'ArrowRight' });
     expect(w.emitted('change')).toBeUndefined();
   });
 
   it('double-click edits the text in place: Escape cancels, Ctrl+Enter and blur keep it', async () => {
     const w = show();
-    await w.trigger('dblclick');
+    await blk(w).trigger('dblclick');
     await flushPromises();
     let field = w.find('textarea');
     expect(field.exists()).toBe(true);
@@ -194,23 +207,51 @@ describe('LayoutBlock direct manipulation (E12.2)', () => {
     await field.trigger('keydown', { key: 'Escape' });
     expect(w.find('textarea').exists()).toBe(false);
     expect(w.text()).toContain(block.text);
-    expect(w.emitted('change')).toBeUndefined();
+    expect(w.emitted('edit')).toBeUndefined();
 
-    await w.trigger('dblclick');
+    await blk(w).trigger('dblclick');
     await flushPromises();
     field = w.find('textarea');
     await field.setValue('Kept\nby the keyboard');
     await field.trigger('keydown', { key: 'Enter', ctrlKey: true });
-    expect(w.emitted('change')).toEqual([[{ text: 'Kept\nby the keyboard' }]]);
+    expect(w.emitted('edit')).toEqual([['Kept\nby the keyboard']]);
 
     // Enter on the focused block opens the editor too; leaving it keeps the edit.
-    await w.trigger('keydown', { key: 'Enter' });
+    await blk(w).trigger('keydown', { key: 'Enter' });
     await flushPromises();
     field = w.find('textarea');
     await field.setValue('Kept by a click outside');
     await field.trigger('blur');
-    expect(w.emitted('change')?.[1]).toEqual([{ text: 'Kept by a click outside' }]);
+    expect(w.emitted('edit')?.[1]).toEqual(['Kept by a click outside']);
     expect(w.find('textarea').exists()).toBe(false);
+    // Editing text is not resizing.
+    expect(w.emitted('change')).toBeUndefined();
+  });
+
+  it('a block that is not editable resizes but never opens a text box', async () => {
+    const w = mount(LayoutBlock, {
+      props: { block, fontFamily: 'serif', bounds: MOCK_LAYOUT_BOUNDS, label: 'Block 1' },
+    });
+    await blk(w).trigger('dblclick');
+    await blk(w).trigger('keydown', { key: 'Enter' });
+    await flushPromises();
+    expect(w.find('textarea').exists()).toBe(false);
+    await blk(w).trigger('keydown', { key: 'ArrowLeft' });
+    expect(w.emitted('change')).toEqual([[{ sizePt: 35 }]]);
+  });
+
+  it('keeps the committed values on screen until the parent block shows them', async () => {
+    const w = show();
+    await blk(w).trigger('keydown', { key: 'ArrowRight' });
+    expect(el(w).style.fontSize).toBe('37pt');
+    // A second press before the core answers goes on from there.
+    await blk(w).trigger('keydown', { key: 'ArrowRight' });
+    expect(w.emitted('change')).toEqual([[{ sizePt: 37 }], [{ sizePt: 38 }]]);
+    await w.setProps({ block: { ...block, sizePt: 38 } });
+    expect(el(w).style.fontSize).toBe('38pt');
+    // A different block (another layout) shows its own values.
+    await w.setProps({ block: { ...block, sizePt: 20 } });
+    expect(el(w).style.fontSize).toBe('20pt');
   });
 });
 
@@ -237,6 +278,7 @@ class FakeSet implements FontFaceSetLike<FakeFace> {
 
 describe('FontLayout with a 10-block layout (E12.2)', () => {
   it('a drag updates only the dragged block, every frame, without loading the face again', async () => {
+    setActivePinia(createPinia());
     const fonts = new FakeSet();
     const create = vi.fn((family: string, source: string) => new FakeFace(family, source));
     setFaceLoader(
@@ -252,8 +294,9 @@ describe('FontLayout with a 10-block layout (E12.2)', () => {
       name: 'Ten',
       blocks: Array.from({ length: 10 }, (_, i) => ({ ...block, text: `Block ${i}` })),
     };
+    const setProps = vi.fn(async () => null);
     const w = mount(FontLayout, {
-      props: { layout: ten, face: mockFaces[0]!.face, bounds: MOCK_LAYOUT_BOUNDS },
+      props: { layout: ten, face: mockFaces[0]!.face, bounds: MOCK_LAYOUT_BOUNDS, setProps },
       attachTo: document.body,
     });
     await flushPromises();
@@ -272,7 +315,8 @@ describe('FontLayout with a 10-block layout (E12.2)', () => {
     }
     pointerAt(target.element, 'pointerup', 120, 0);
 
-    expect(w.emitted('change')).toEqual([[4, { sizePt: 96 }]]);
+    // One change for the whole drag, handed to the store like a properties-editor change.
+    expect(setProps.mock.calls).toEqual([[4, { sizePt: 96 }]]);
     blocks().forEach((b, i) => {
       const s = (b.element as HTMLElement).style;
       if (i !== 4) expect(s.fontSize).toBe('36pt');

@@ -1,5 +1,6 @@
 //! What a font file says about its license (E15.1): the embedding permission
-//! of `OS/2.fsType`, and the open license its name table states.
+//! of `OS/2.fsType`, and the open license its name table states. And
+//! whether a face is OK for web from those and the declared type (E15.3).
 //!
 //! An open license is recognized only from a statement, never from a
 //! mention: the license description (name ID 13) must grant it ("licensed
@@ -9,7 +10,7 @@
 //! names a license ("unlike OFL fonts, this one is commercial") is not one.
 
 use fm_api::common::Embedding;
-use fm_api::library::OpenLicense;
+use fm_api::library::{LicenseType, OpenLicense, WebUse};
 
 /// The embedding permission `OS/2.fsType` grants.
 ///
@@ -169,6 +170,92 @@ fn license_at(url: &str) -> Option<OpenLicense> {
     ]
     .into_iter()
     .find_map(|(yes, license)| yes.then_some(license))
+}
+
+/// Why a face is, or is not, OK for web: the outcome of [`web_use`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WebReason {
+    /// The user declared a web license.
+    DeclaredWeb,
+    /// The name table states an open license.
+    Open(OpenLicense),
+    /// The user declared a type that does not cover the web.
+    Declared(LicenseType),
+    /// `OS/2.fsType` allows preview and print only, or no embedding.
+    Embedding(Embedding),
+    /// Nothing says the face may be used on the web.
+    NoWebLicense,
+}
+
+impl WebReason {
+    /// The face is OK for web.
+    pub fn ok(self) -> bool {
+        matches!(self, Self::DeclaredWeb | Self::Open(_))
+    }
+
+    /// The reason in plain words.
+    pub fn text(self) -> String {
+        match self {
+            Self::DeclaredWeb => "Declared web license".to_owned(),
+            Self::Open(l) => format!("Open license ({})", open_license_label(l)),
+            Self::Declared(LicenseType::Trial) => "Declared trial license".to_owned(),
+            Self::Declared(LicenseType::PersonalOnly) => {
+                "Declared for personal use only".to_owned()
+            }
+            Self::Declared(_) => "Declared desktop license".to_owned(),
+            Self::Embedding(Embedding::PreviewAndPrint) => {
+                "Embedding preview & print only, no web license declared".to_owned()
+            }
+            Self::Embedding(_) => "Embedding restricted, no web license declared".to_owned(),
+            Self::NoWebLicense => "No web license declared".to_owned(),
+        }
+    }
+
+    /// The answer `LicenseInfo::web_use` carries.
+    pub fn to_api(self) -> WebUse {
+        WebUse {
+            ok: self.ok(),
+            reason: self.text(),
+        }
+    }
+}
+
+fn open_license_label(l: OpenLicense) -> &'static str {
+    match l {
+        OpenLicense::Ofl => "OFL",
+        OpenLicense::Apache => "Apache 2.0",
+        OpenLicense::Ufl => "UFL",
+        OpenLicense::Mit => "MIT",
+    }
+}
+
+/// Whether a face is OK for web, and why. The rule, first match wins:
+///
+/// 1. A declared Web license allows it, whatever the file says.
+/// 2. A declared Desktop, Trial or Personal-only type does not.
+/// 3. Restricted or preview-and-print embedding (`OS/2.fsType`) does not.
+/// 4. A recognized open license allows it.
+/// 5. Nothing else counts as OK: an installable or editable face with no
+///    open license and no declaration, or declared App or Unknown, is not.
+///
+/// The declared type is the family's when it has one (E15.2).
+pub fn web_use(
+    embedding: Embedding,
+    open_license: Option<OpenLicense>,
+    declared: Option<LicenseType>,
+) -> WebReason {
+    match declared {
+        Some(LicenseType::Web) => return WebReason::DeclaredWeb,
+        Some(t @ (LicenseType::Desktop | LicenseType::Trial | LicenseType::PersonalOnly)) => {
+            return WebReason::Declared(t);
+        }
+        Some(LicenseType::App | LicenseType::Unknown) | None => {}
+    }
+    match (embedding, open_license) {
+        (Embedding::Restricted | Embedding::PreviewAndPrint, _) => WebReason::Embedding(embedding),
+        (_, Some(l)) => WebReason::Open(l),
+        (_, None) => WebReason::NoWebLicense,
+    }
 }
 
 #[cfg(test)]
