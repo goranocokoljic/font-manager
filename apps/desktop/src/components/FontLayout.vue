@@ -6,12 +6,13 @@
 // face stays loaded. With `editable`, each block's text can be edited in place;
 // the parent keeps the draft. With `bounds` and `setProps`, a size badge beside each block
 // opens its properties editor (E12.3) on click or Enter; Escape closes it and returns
-// focus to the badge.
+// focus to the badge. With the same two, each block is resized in place (E12.2) by drag,
+// pinch or the arrow keys; the result goes through `setProps` like an editor change.
 //
 // The text is set at `width` CSS px, centered, when the layout's width is locked (E12.4);
 // unlocked it follows the window. With `setWidthLock`, the Lock width button (and its
 // command palette entry) toggles the lock; locking keeps the width the text has on screen.
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
@@ -71,6 +72,12 @@ onBeforeUnmount(() => hold(null));
 const editing = ref<number | null>(null);
 const badges = ref<HTMLButtonElement[]>([]);
 const hasEditor = computed(() => Boolean(props.bounds && props.setProps));
+const hintId = `${useId()}-hint`;
+
+/** A block resized in place hands its new values to the core like an editor change. */
+function resize(i: number, change: BlockProps): void {
+  void props.setProps?.(i, change);
+}
 
 watch(
   () => props.layout,
@@ -198,11 +205,19 @@ const fontFamily = computed(() =>
               :font-family="fontFamily"
               :editable="editable"
               :label="`Block ${i + 1}`"
+              :bounds="hasEditor ? bounds : null"
+              :describedby="hasEditor ? hintId : undefined"
               @edit="(text) => emit('edit-text', i, text)"
+              @change="(change) => resize(i, change)"
             />
           </div>
         </div>
       </div>
+      <p v-if="hasEditor" :id="hintId" class="hint">
+        Drag a block sideways or press Left and Right to change its size; drag it up and down or
+        press Up and Down to change its line height (Shift for bigger steps).
+        <template v-if="editable">Double-click it or press Enter to edit its text.</template>
+      </p>
     </template>
     <p v-else-if="!face" class="empty">Select a font to see it in a layout.</p>
   </section>
@@ -299,6 +314,12 @@ const fontFamily = computed(() =>
 .badge:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: 1px;
+}
+.hint {
+  margin: 0;
+  padding: 0 32px 16px;
+  color: var(--fm-muted);
+  font-size: 12px;
 }
 .empty {
   display: grid;

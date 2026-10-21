@@ -38,11 +38,15 @@ in the search box.
 
 ## In the layout
 
+In the layout view, press `Tab` to go to a block of text.
+
 | Key | What it does |
 |-----|--------------|
+| `Right` and `Left` | Make the text of the block larger or smaller (with `Shift`: in bigger steps) |
+| `Up` and `Down` | Add or remove space between the lines of the block (with `Shift`: in bigger steps) |
 | `Enter` | Edit the text of the block that has the focus |
-| `Ctrl+Enter` | Keep the edit and close the text box |
-| `Esc` | Drop the edit and close the text box |
+| `Ctrl+Enter` | Keep the edit and close the text box (`Cmd+Enter` on a Mac). A click outside the block also keeps it |
+| `Esc` | Drop the edit and close the text box, or go back to the size before a drag |
 
 ## The command palette
 

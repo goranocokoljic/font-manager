@@ -27,8 +27,13 @@ Read [Sources](sources.md) to learn more about folders.
   how the fonts show. The grid shows a card for each font. The waterfall shows the
   preview text at six sizes. The layout shows the selected font as a page of text. Pick
   the page in the **Preset** box: Book, Columns, Magazine, Quote, Characters or
-  Waterfall. When you change the view, the selected fonts stay selected and
-  the list stays at the same font.
+  Waterfall. When you change the view, the selected fonts stay selected and the list
+  stays at the same font.
+- To resize a block of text in the layout, drag it: drag to the right or left to make
+  the text larger or smaller, and drag up or down to add or remove space between the
+  lines. Hold `Ctrl` and turn the mouse wheel over a block to change its size. On a
+  trackpad on Windows or a Mac, pinch the block to change its size. Press `Esc` during a
+  drag to go back.
 - In the layout, double-click a block of text (or press `Enter` on it) to change the
   text. Click **Save** to keep the change, or **Revert** to drop it. **Duplicate** makes
   a copy of the layout with a new name. **Reset to original** puts back the preset as
