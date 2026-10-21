@@ -29,8 +29,11 @@ installers and attaches them to a GitHub pre-release named `nightly-<version>-<h
 `.msi` and `.exe` for Windows, `.dmg` for macOS, `.AppImage` for Linux. The version is
 the `[workspace.package]` version of `Cargo.toml` plus the short commit hash, for example
 `font-manager_0.1.0-1a2b3c4_windows_x64.msi`. The installers are not signed: Windows
-SmartScreen and macOS Gatekeeper warn before they open. Build one locally with
-`pnpm tauri build --bundles msi,nsis` (or `dmg`, `appimage`).
+SmartScreen and macOS Gatekeeper warn before they open. Each nightly has a `SHA256SUMS`
+file. Build the installers locally with
+`node scripts/release/build.mjs installer --os windows` (or `macos`, `linux`).
+[docs/building.md](docs/building.md) lists the pinned toolchain and the exact commands,
+says what is reproducible, and tells you how to verify a download.
 
 ## Reference library
 

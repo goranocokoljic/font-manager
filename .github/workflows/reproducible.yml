@@ -1,0 +1,127 @@
+# Reproducible builds (E18.4). Runs the documented release build (docs/building.md) on
+# Windows, macOS and Linux from a clean checkout — no build cache — through the same
+# script the doc is generated from (scripts/release/build.mjs). Fails when:
+#   - docs/building.md and the script disagree (`check-doc`),
+#   - the documented commands no longer build the installers on one OS,
+#   - fm-cli built twice on Linux, from two different folders, gives two SHA256s.
+name: reproducible
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - .github/workflows/reproducible.yml
+      - scripts/release/**
+      - docs/building.md
+      - rust-toolchain.toml
+      - package.json
+      - pnpm-lock.yaml
+      - Cargo.lock
+      - apps/desktop/package.json
+      - apps/desktop/src-tauri/tauri.conf.json
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: reproducible-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  doc:
+    name: doc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: docs/building.md matches scripts/release/build.mjs
+        run: node scripts/release/build.mjs check-doc
+
+  installer:
+    name: installer-${{ matrix.name }}
+    needs: doc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-latest
+          - name: linux
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: System packages (docs/building.md)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $(node scripts/release/build.mjs packages --os linux)
+
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - name: Build the installers as docs/building.md says
+        run: node scripts/release/build.mjs installer --os ${{ matrix.name }}
+
+  fm-cli-linux:
+    name: fm-cli-linux
+    needs: doc
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      # Two checkouts in two folders: the second build must not see the first one's
+      # path in the binary (--remap-path-prefix).
+      - uses: actions/checkout@v7
+        with:
+          path: first
+
+      - uses: actions/checkout@v7
+        with:
+          path: second-checkout
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: System packages (docs/building.md)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $(node first/scripts/release/build.mjs packages --os linux)
+
+      - name: Rust toolchain (from rust-toolchain.toml)
+        working-directory: first
+        run: rustup show active-toolchain || rustup toolchain install
+
+      # `cli` prints only `<sha256>  <path>` on stdout and exits non-zero when the build
+      # fails; `same-hash` fails unless both lines carry the same SHA256.
+      - name: Build fm-cli twice and compare SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          a=$(node first/scripts/release/build.mjs cli)
+          b=$(node second-checkout/scripts/release/build.mjs cli)
+          echo "first:  $a"
+          echo "second: $b"
+          hash=$(node first/scripts/release/build.mjs same-hash --first "$a" --second "$b")
+          echo "### fm-cli is reproducible: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"
