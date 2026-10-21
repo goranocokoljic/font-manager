@@ -128,6 +128,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E10.5 #98] apps/desktop/src/stores/features.ts:43 — `settings()` writes feature tags into font-feature-settings without the 4-printable-ASCII check or escaping that `preview/variations.ts` and `fm_core::css` apply.
 - [E10.5 #98] apps/desktop/src/preview/variations.ts:12 — the preview writes every axis at its default when unmoved, unclamped and unrounded, so its text differs from fm-core's `css_values` for the same state.
 - [E15.1 #118] apps/desktop/src/styles/theme.css:100 — the `.surface-light`/`.surface-dark` preview surfaces do not set `--fm-danger`, so danger-colored text inside a surface-overridden font view keeps the app theme's value and can fall under AA contrast.
+- [E12.1 #104] apps/desktop/src/views/HomeView.vue:264 — the preview controls strip (sample, size, line height, tracking, colors) stays visible in Layout mode, where none of its controls affect the layout blocks.
+- [E12.1 #104] apps/desktop/src/components/FontPreviewRow.vue:62 — the face-loader hold/release routine is copied in FontPreviewRow, GlyphCompare, InspectorGlyphs and FontLayout; a shared composable would remove the copies.
 
 ## 2026-10-20
 
