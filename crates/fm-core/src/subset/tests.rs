@@ -460,6 +460,16 @@ fn the_mock_validates_subsets_the_same_way() {
 }
 
 #[test]
+fn a_damaged_font_is_an_error_not_a_panic() {
+    // `loca` without `glyf`: skera `expect`s the glyf table.
+    let mut no_glyf = source(MULISH);
+    no_glyf.tables.retain(|t| &t.tag != b"glyf");
+    let e = cut(&no_glyf, &presets_keep(&["latin"])).unwrap_err();
+    assert_eq!(e.code(), ErrorCode::Unsupported, "{e:?}");
+    assert!(e.message().contains("damaged"), "{e:?}");
+}
+
+#[test]
 fn a_face_whose_license_forbids_subsetting_is_refused() {
     let mut src = source(MULISH);
     let os2 = src

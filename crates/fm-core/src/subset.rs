@@ -21,6 +21,7 @@
 //!   `SVG `, `EBDT`, Graphite, ...).
 
 use std::collections::HashSet;
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::LazyLock;
 
 use fm_api::ErrorCode;
@@ -325,18 +326,25 @@ pub fn cut(sfnt: &Sfnt, keep: &Keep) -> FmResult<Sfnt> {
         | SubsetFlags::SUBSET_FLAGS_NO_BIDI_CLOSURE
         | SubsetFlags::SUBSET_FLAGS_NOTDEF_OUTLINE;
     let drop: IntSet<Tag> = DROP_TABLES.iter().map(|t| Tag::new(t)).collect();
-    let plan = Plan::new(
-        &IntSet::<GlyphId>::empty(),
-        &mapped,
-        &font,
-        flags,
-        &drop,
-        &everything::<Tag>(),
-        &everything::<Tag>(),
-        &everything::<NameId>(),
-        &everything::<u16>(),
-    );
-    let out = skera::subset_font(&font, &plan).map_err(|e| {
+    // skera returns errors for most bad data, but it `expect`s a `glyf`
+    // next to `loca` and unwraps glyph ids the cmap points past the end
+    // of the font: a panic is caught and treated as a damaged font.
+    let subset = panic::catch_unwind(AssertUnwindSafe(|| {
+        let plan = Plan::new(
+            &IntSet::<GlyphId>::empty(),
+            &mapped,
+            &font,
+            flags,
+            &drop,
+            &everything::<Tag>(),
+            &everything::<Tag>(),
+            &everything::<NameId>(),
+            &everything::<u16>(),
+        );
+        skera::subset_font(&font, &plan)
+    }))
+    .map_err(|_| FmError::unsupported("The font is damaged and cannot be subset."))?;
+    let out = subset.map_err(|e| {
         FmError::unsupported("The font could not be subset.").with_detail(e.to_string())
     })?;
     web_font::standalone(&out, 0)
