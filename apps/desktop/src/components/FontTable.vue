@@ -15,7 +15,7 @@ import {
   dateText,
   formatBadges,
   licenseBadges,
-  OPEN_LICENSE_BADGE,
+  openLicenseBadge,
   openLicenseName,
   visibleColumns,
   weightPosition,
@@ -34,6 +34,7 @@ import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 
 const props = withDefaults(
@@ -233,6 +234,9 @@ function onDragEnd(): void {
 
 const SORT_ARROW = { ascending: '▲', descending: '▼', none: '' } as const;
 
+/** The weight line column draws dots, not text. */
+const isWeightLine = (id: ColumnId) => id === 'weightLine';
+
 // ---- Cells. ----
 
 interface Cell {
@@ -252,7 +256,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
     const f = row.face;
     switch (id) {
       case 'activation':
-        return { text: f.active ? 'Active' : 'Inactive' };
+        return { text: ACTIVATION_LABEL[f.active ? 'active' : 'inactive'] };
       case 'name':
         return { text: styleName(row) };
       case 'weightLine':
@@ -319,7 +323,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
     class="viewport"
     role="treegrid"
     tabindex="0"
-    aria-label="Font table"
+    :aria-label="t('table.label')"
     aria-multiselectable="true"
     :aria-rowcount="count + 1"
     :aria-colcount="columns.length"
@@ -359,7 +363,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
             v-else
             type="button"
             class="sort"
-            :title="`Sort by ${col.label}`"
+            :title="t('table.sortBy', { column: col.label })"
             @click="views.sortBy(view, col.id)"
           >
             <span :class="{ 'visually-hidden': col.id === 'activation' }">{{ col.label }}</span>
@@ -423,7 +427,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 cellOf(item.row, col.id).text
               }}</span>
             </template>
-            <template v-else-if="col.id === 'weightLine'">
+            <template v-else-if="isWeightLine(col.id)">
               <span class="line" aria-hidden="true">
                 <span
                   v-if="cellOf(item.row, col.id).span"
@@ -448,8 +452,8 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 v-for="b in cellOf(item.row, col.id).badges"
                 :key="b"
                 class="badge"
-                :class="{ good: b === OPEN_LICENSE_BADGE }"
-                :title="b === OPEN_LICENSE_BADGE ? cellOf(item.row, col.id).openLicense : undefined"
+                :class="{ good: b === openLicenseBadge() }"
+                :title="b === openLicenseBadge() ? cellOf(item.row, col.id).openLicense : undefined"
                 >{{ b }}</span
               >
             </template>

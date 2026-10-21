@@ -13,6 +13,7 @@ import type {
   SourceId,
   TagId,
 } from '../api/types';
+import { t, type MessageKey } from '../i18n';
 
 /**
  * The filters shown as chips. Weight and width are ranges in `Filters` (the
@@ -76,20 +77,35 @@ const KIND: Record<ChipFacet, Kind> = {
   minRating: 'one',
 };
 
-export const CLASSES: Record<Classification, string> = {
-  serif: 'Serif',
-  sans: 'Sans serif',
-  slab: 'Slab serif',
-  script: 'Script',
-  display: 'Display',
-  mono: 'Monospace',
-  symbol: 'Symbol',
-};
-export const SLANTS: Record<Slant, string> = {
-  upright: 'Upright',
-  italic: 'Italic',
-  oblique: 'Oblique',
-};
+/**
+ * Labels of `keys` from the catalog under `prefix`: getters, so a label read later
+ * (a computed, the rule editor) is in the language chosen then.
+ */
+function labels<K extends string>(prefix: string, keys: readonly K[]): Record<K, string> {
+  const out = {} as Record<K, string>;
+  for (const key of keys)
+    Object.defineProperty(out, key, {
+      enumerable: true,
+      get: () => t(`${prefix}.${key}` as MessageKey),
+    });
+  return out;
+}
+
+export const CLASSES: Record<Classification, string> = labels('chips.classes', [
+  'serif',
+  'sans',
+  'slab',
+  'script',
+  'display',
+  'mono',
+  'symbol',
+]);
+export const SLANTS: Record<Slant, string> = labels('chips.slants', [
+  'upright',
+  'italic',
+  'oblique',
+]);
+// Format names are the same in every language.
 export const FORMATS: Record<FontFormat, string> = {
   ttf: 'TTF',
   otf: 'OTF',
@@ -101,52 +117,48 @@ export const FORMATS: Record<FontFormat, string> = {
   dfont: 'dfont',
   bitmap: 'Bitmap',
 };
-export const LICENSES: Record<LicenseType, string> = {
-  desktop: 'Desktop',
-  web: 'Web',
-  app: 'App',
-  trial: 'Trial',
-  personalOnly: 'Personal use',
-  unknown: 'Unknown license',
-};
-const EMBEDDINGS: Record<Embedding, string> = {
-  installable: 'Installable',
-  editable: 'Editable',
-  previewAndPrint: 'Preview & print',
-  restricted: 'Restricted',
-};
-const yesNo = (yes: string, no: string) => (v: ChipValue) => (v ? yes : no);
+export const LICENSES: Record<LicenseType, string> = labels('chips.licenses', [
+  'desktop',
+  'web',
+  'app',
+  'trial',
+  'personalOnly',
+  'unknown',
+]);
+const EMBEDDINGS: Record<Embedding, string> = labels('chips.embeddings', [
+  'installable',
+  'editable',
+  'previewAndPrint',
+  'restricted',
+]);
+/** A yes/no chip's name: the `chips.values` message for true or for false. */
+const yesNo = (yes: string, no: string) => (v: ChipValue) =>
+  t(`chips.values.${v ? yes : no}` as MessageKey);
 
-/** The groups in the order the bar shows them, with their chip labels. */
-const GROUPS: { facet: ChipFacet; label: string; name: (v: ChipValue) => string }[] = [
-  { facet: 'active', label: 'Activation', name: yesNo('Active', 'Inactive') },
-  {
-    facet: 'classification',
-    label: 'Class',
-    name: (v) => CLASSES[v as Classification] ?? String(v),
-  },
-  { facet: 'slant', label: 'Slant', name: (v) => SLANTS[v as Slant] ?? String(v) },
-  { facet: 'variable', label: 'Variable', name: yesNo('Variable', 'Static') },
-  { facet: 'color', label: 'Color', name: yesNo('Color', 'Not color') },
-  { facet: 'formats', label: 'Format', name: (v) => FORMATS[v as FontFormat] ?? String(v) },
-  { facet: 'features', label: 'Features', name: String },
-  { facet: 'license', label: 'License', name: (v) => LICENSES[v as LicenseType] ?? String(v) },
-  { facet: 'webOk', label: 'Usage', name: yesNo('OK for web', 'Not for web') },
-  { facet: 'openLicense', label: 'Open license', name: yesNo('Open license', 'Not open') },
-  {
-    facet: 'embedding',
-    label: 'Embedding',
-    name: (v) => EMBEDDINGS[v as Embedding] ?? String(v),
-  },
-  { facet: 'sources', label: 'Source', name: String },
-  { facet: 'problems', label: 'Health', name: yesNo('Has problems', 'Healthy') },
-  { facet: 'favorite', label: 'Favorite', name: yesNo('Favorites', 'Not favorites') },
+/** The groups in the order the bar shows them; the label is `chips.groups.<facet>`. */
+const GROUPS: { facet: ChipFacet; name: (v: ChipValue) => string }[] = [
+  { facet: 'active', name: yesNo('active', 'inactive') },
+  { facet: 'classification', name: (v) => CLASSES[v as Classification] ?? String(v) },
+  { facet: 'slant', name: (v) => SLANTS[v as Slant] ?? String(v) },
+  { facet: 'variable', name: yesNo('variable', 'static') },
+  { facet: 'color', name: yesNo('color', 'notColor') },
+  { facet: 'formats', name: (v) => FORMATS[v as FontFormat] ?? String(v) },
+  { facet: 'features', name: String },
+  { facet: 'license', name: (v) => LICENSES[v as LicenseType] ?? String(v) },
+  { facet: 'webOk', name: yesNo('webOk', 'notWeb') },
+  { facet: 'openLicense', name: yesNo('openLicense', 'notOpen') },
+  { facet: 'embedding', name: (v) => EMBEDDINGS[v as Embedding] ?? String(v) },
+  { facet: 'sources', name: String },
+  { facet: 'problems', name: yesNo('hasProblems', 'healthy') },
+  { facet: 'favorite', name: yesNo('favorites', 'notFavorites') },
   {
     facet: 'minRating',
-    label: 'Rating',
-    name: (v) => (v === 5 ? '5 stars' : `${String(v)}+ stars`),
+    name: (v) =>
+      v === 5
+        ? t('chips.values.stars', { count: 5 })
+        : t('chips.values.starsOrMore', { count: Number(v) }),
   },
-  { facet: 'tags', label: 'Tag', name: String },
+  { facet: 'tags', name: String },
 ];
 
 /** The values a filter has chosen: a list for any/every-of filters, else zero or one. */
@@ -201,8 +213,8 @@ export function hasChosenFilters(filters: Filters): boolean {
 export function chipGroups(
   filters: Filters,
   counts: FilterCounts,
-  sourceName: (id: SourceId) => string = (id) => `Source ${id}`,
-  tagName: (id: TagId) => string = (id) => `Tag ${id}`,
+  sourceName: (id: SourceId) => string = (id) => t('chips.source', { id: String(id) }),
+  tagName: (id: TagId) => string = (id) => t('chips.tag', { id: String(id) }),
 ): ChipGroup[] {
   const groups: ChipGroup[] = [];
   for (const g of GROUPS) {
@@ -222,7 +234,7 @@ export function chipGroups(
       count,
       selected: isChosen(filters, g.facet, value),
     }));
-    if (chips.length) groups.push({ facet: g.facet, label: g.label, chips });
+    if (chips.length) groups.push({ facet: g.facet, label: t(`chips.groups.${g.facet}`), chips });
   }
   return groups;
 }

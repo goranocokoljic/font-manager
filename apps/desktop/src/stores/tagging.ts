@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, shallowRef } from 'vue';
 import { useClient } from '../api/client';
 import type { ApiError, FaceId, SelectionTag, Tag, TagId } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { fuzzyMatch } from '../keyboard/fuzzy';
 import { pickOf } from '../list/drag';
 import type { FontPick } from './collections';
@@ -26,7 +27,8 @@ export interface TagRow {
 }
 
 const isEmpty = (p: FontPick) => !p.faces.length && !p.families.length;
-const fonts = (n: number) => (n === 1 ? '1 font' : `${n} fonts`);
+const fonts = (n: number) => t('tagging.fonts', { count: n });
+const tagCount = (n: number) => t('tagging.tagCount', { count: n });
 
 /**
  * Tagging many fonts at once (E13.4): the multi-tagging panel for the list's selection,
@@ -199,12 +201,17 @@ export const useTaggingStore = defineStore('tagging', () => {
       });
       if (!ok) return false;
       const n = faces.value.length;
-      const parts = [
-        attach.length ? `added ${attach.length === 1 ? '1 tag' : `${attach.length} tags`}` : '',
-        detach.length ? `removed ${detach.length === 1 ? '1 tag' : `${detach.length} tags`}` : '',
-      ].filter(Boolean);
-      const said = parts.join(' and ');
-      useToastStore().show(`${said[0]!.toUpperCase()}${said.slice(1)} on ${fonts(n)}.`);
+      const said =
+        attach.length && detach.length
+          ? t('tagging.addedRemoved', {
+              added: tagCount(attach.length),
+              removed: tagCount(detach.length),
+              fonts: fonts(n),
+            })
+          : attach.length
+            ? t('tagging.added', { tags: tagCount(attach.length), fonts: fonts(n) })
+            : t('tagging.removed', { tags: tagCount(detach.length), fonts: fonts(n) });
+      useToastStore().show(said);
       close();
       await tags.refresh();
       return true;
@@ -254,11 +261,13 @@ export const useTaggingStore = defineStore('tagging', () => {
       useClient().tagFaces({ faces: dropped.faces, families: dropped.families, tags: [name] }),
     );
     if (!made) {
-      if (error.value) useToastStore().show(error.value.message);
+      if (error.value) useToastStore().show(errorMessage(error.value));
       return false;
     }
     const tag = made[0];
-    useToastStore().show(`Tagged “${tag?.name ?? name}” (${fonts(tag?.faceCount ?? 0)}).`);
+    useToastStore().show(
+      t('tagging.dropped', { name: tag?.name ?? name, fonts: fonts(tag?.faceCount ?? 0) }),
+    );
     await tags.refresh();
     return true;
   }

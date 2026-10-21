@@ -4,6 +4,7 @@
 // wires the window width into it and offers the layout actions (inspector
 // toggle, go to a column). Each column is a tab stop, so Tab moves between columns.
 import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { t } from '../i18n';
 import { ACTIONS } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
 import { INSPECTOR, NARROW_WIDTH, SIDEBAR, useLayoutStore } from '../stores/layout';
@@ -23,21 +24,48 @@ async function goToInspector(): Promise<void> {
   inspector.value?.focus();
 }
 
+// Getters: the palette shows the titles in the language chosen now.
 useActions([
   {
     id: ACTIONS.inspector,
-    title: 'Show or hide the inspector',
-    group: 'View',
+    get title() {
+      return t('layout.actions.toggleInspector');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
     run: layout.toggleInspector,
   },
   {
     id: 'focus.sidebar',
-    title: 'Go to the sidebar',
-    group: 'Go',
+    get title() {
+      return t('layout.actions.goSidebar');
+    },
+    get group() {
+      return t('palette.groups.go');
+    },
     run: () => sidebar.value?.focus(),
   },
-  { id: 'focus.list', title: 'Go to the font list', group: 'Go', run: () => list.value?.focus() },
-  { id: 'focus.inspector', title: 'Go to the inspector', group: 'Go', run: goToInspector },
+  {
+    id: 'focus.list',
+    get title() {
+      return t('layout.actions.goList');
+    },
+    get group() {
+      return t('palette.groups.go');
+    },
+    run: () => list.value?.focus(),
+  },
+  {
+    id: 'focus.inspector',
+    get title() {
+      return t('layout.actions.goInspector');
+    },
+    get group() {
+      return t('palette.groups.go');
+    },
+    run: goToInspector,
+  },
 ]);
 
 onMounted(() => {
@@ -61,13 +89,13 @@ onBeforeUnmount(() => {
         ref="sidebar"
         class="sidebar column"
         tabindex="0"
-        aria-label="Library"
+        :aria-label="t('layout.library')"
         :style="{ width: `${layout.sidebarWidth}px` }"
       >
         <slot name="sidebar" />
       </nav>
       <PaneDivider
-        label="Resize sidebar"
+        :label="t('layout.resizeSidebar')"
         controls="fm-sidebar"
         :value="layout.sidebarWidth"
         :min="SIDEBAR.min"
@@ -75,12 +103,12 @@ onBeforeUnmount(() => {
         :direction="1"
         @resize="layout.setSidebarWidth"
       />
-      <main ref="list" class="list column" tabindex="0" aria-label="Fonts">
+      <main ref="list" class="list column" tabindex="0" :aria-label="t('layout.fonts')">
         <slot name="list" />
       </main>
       <template v-if="layout.inspectorVisible">
         <PaneDivider
-          label="Resize inspector"
+          :label="t('layout.resizeInspector')"
           controls="fm-inspector"
           :value="layout.inspectorWidth"
           :min="INSPECTOR.min"
@@ -93,7 +121,7 @@ onBeforeUnmount(() => {
           ref="inspector"
           class="inspector column"
           tabindex="0"
-          aria-label="Inspector"
+          :aria-label="t('layout.inspector')"
           :style="{ width: `${layout.inspectorWidth}px` }"
         >
           <slot name="inspector" />

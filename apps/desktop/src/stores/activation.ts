@@ -1,10 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
+import { errorMessage, t } from '../i18n';
 import type {
   ActivationMode,
   ActivationOutcome,
-  ApiError,
   Event,
   FaceSummary,
   FamilyId,
@@ -66,7 +66,7 @@ export const useActivationStore = defineStore('activation', () => {
     try {
       await work();
     } catch (e) {
-      useToastStore().show((e as ApiError).message ?? 'The activation failed.');
+      useToastStore().show(errorMessage(e) || t('activation.failed'));
     } finally {
       busy.value = false;
     }
@@ -100,7 +100,7 @@ export const useActivationStore = defineStore('activation', () => {
       const steps = undoSteps(before, outcomes);
       useToastStore().show(
         bulkMessage(deactivate, how, outcomes),
-        steps.length ? { label: 'Undo', run: () => undo(steps) } : undefined,
+        steps.length ? { label: t('common.undo'), run: () => undo(steps) } : undefined,
       );
     });
   }
@@ -116,7 +116,7 @@ export const useActivationStore = defineStore('activation', () => {
           await client.activate({ target, mode: step.mode, onConflict: 'replace' });
         else await client.deactivate({ target });
       }
-      useToastStore().show('Undone.');
+      useToastStore().show(t('activation.undone'));
     });
   }
 

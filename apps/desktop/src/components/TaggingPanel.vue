@@ -5,8 +5,9 @@
 // applies the staged toggles in one go, or makes a new tag when no tag has the typed
 // name. Escape closes without applying; focus returns to where it was.
 import { computed, nextTick, ref, watch } from 'vue';
+import { errorMessage, t } from '../i18n';
 import { highlight } from '../keyboard/fuzzy';
-import { useTaggingStore, type TagState } from '../stores/tagging';
+import { useTaggingStore, type TagRow } from '../stores/tagging';
 
 const tagging = useTaggingStore();
 const input = ref<HTMLInputElement | null>(null);
@@ -16,7 +17,7 @@ let returnFocus: HTMLElement | null = null;
 
 const rows = computed(() => tagging.rows);
 const optionId = (i: number) => `fm-tag-option-${i}`;
-const fonts = (n: number) => (n === 1 ? '1 font' : `${n} fonts`);
+const fonts = (n: number) => t('tagging.fonts', { count: n });
 
 watch(
   () => tagging.open,
@@ -103,15 +104,17 @@ function onKeyDown(e: KeyboardEvent): void {
   e.stopPropagation();
 }
 
-const STATE_LABEL: Record<TagState, string> = {
-  all: 'on all',
-  some: 'on some',
-  none: 'on none',
-};
+/** "on some (2 of 3), changed": where the tag is, and whether Space changed it. */
+function stateText(row: TagRow): string {
+  let text = t(`tagging.state.${row.state}`);
+  if (row.state === 'some')
+    text = t('tagging.someOf', { state: text, carried: row.carried, total: tagging.faces.length });
+  return row.staged ? t('tagging.changed', { state: text }) : text;
+}
 
 const summary = computed(() => {
   const n = tagging.faces.length;
-  return `Tags of ${fonts(n)}`;
+  return t('tagging.title', { fonts: fonts(n) });
 });
 </script>
 
@@ -120,7 +123,7 @@ const summary = computed(() => {
     <div class="panel" role="dialog" aria-modal="true" aria-labelledby="fm-tagging-title">
       <header class="head">
         <h2 id="fm-tagging-title" class="title">{{ summary }}</h2>
-        <p class="hint">Space toggles · Enter applies · Esc cancels</p>
+        <p class="hint">{{ t('tagging.hint') }}</p>
       </header>
       <input
         ref="input"
@@ -128,12 +131,12 @@ const summary = computed(() => {
         class="query"
         type="text"
         role="combobox"
-        aria-label="Filter tags or name a new one"
+        :aria-label="t('tagging.queryLabel')"
         aria-autocomplete="list"
         aria-expanded="true"
         aria-controls="fm-tag-options"
         :aria-activedescendant="rows.length ? optionId(active) : undefined"
-        placeholder="Filter tags, or type a new tag name"
+        :placeholder="t('tagging.queryPlaceholder')"
         autocomplete="off"
         spellcheck="false"
         @keydown="onKeyDown"
@@ -144,7 +147,7 @@ const summary = computed(() => {
         ref="listbox"
         class="list"
         role="listbox"
-        aria-label="Tags"
+        :aria-label="t('tagging.tags')"
         aria-multiselectable="true"
         @mousedown.prevent
       >
@@ -173,28 +176,31 @@ const summary = computed(() => {
               <template v-else>{{ part.text }}</template>
             </template>
           </span>
-          <span class="state">
-            {{ STATE_LABEL[row.state]
-            }}<template v-if="row.state === 'some'">
-              ({{ row.carried }} of {{ tagging.faces.length }})</template
-            ><template v-if="row.staged">, changed</template>
-          </span>
+          <span class="state">{{ stateText(row) }}</span>
         </li>
         <li v-if="tagging.newName" class="none" role="presentation">
-          Enter makes the tag “{{ tagging.newName }}” on {{ fonts(tagging.faces.length) }}
+          {{ t('tagging.makeNew', { name: tagging.newName, fonts: fonts(tagging.faces.length) }) }}
         </li>
-        <li v-else-if="!rows.length" class="none" role="presentation">No tags yet</li>
+        <li v-else-if="!rows.length" class="none" role="presentation">
+          {{ t('tagging.noTags') }}
+        </li>
       </ul>
-      <p v-if="tagging.error" role="alert" class="error">{{ tagging.error.message }}</p>
+      <p v-if="tagging.error" role="alert" class="error">{{ errorMessage(tagging.error) }}</p>
       <footer class="foot">
-        <button type="button" class="button" @click="tagging.close">Cancel</button>
+        <button type="button" class="button" @click="tagging.close">
+          {{ t('common.cancel') }}
+        </button>
         <button
           type="button"
           class="button primary"
           :disabled="tagging.busy"
           @click="tagging.apply"
         >
-          Apply{{ tagging.pending ? ` ${tagging.pending}` : '' }}
+          {{
+            tagging.pending
+              ? t('tagging.applyCount', { count: tagging.pending })
+              : t('tagging.apply')
+          }}
         </button>
       </footer>
     </div>

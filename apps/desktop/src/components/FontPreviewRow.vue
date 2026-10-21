@@ -19,6 +19,7 @@ import { useFeaturesStore } from '../stores/features';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW } from '../stores/preview';
 import { faceAxes, variationSettings } from '../preview/variations';
+import { t } from '../i18n';
 
 const props = withDefaults(
   defineProps<{
@@ -124,11 +125,13 @@ const sampleStyle = computed(() => ({
 
 const fallbackTitle = computed(() => {
   if (!props.fallback) return undefined;
-  const own = props.fallback.kind === 'script' ? 'letters' : 'characters';
-  const lacks = props.missing.length
-    ? `This font lacks ${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`
-    : 'This font lacks characters of the sample text';
-  return `${lacks}, so it shows its own ${own}.`;
+  const letters = props.fallback.kind === 'script';
+  if (!props.missing.length)
+    return t(letters ? 'list.fallbackTitle.letters' : 'list.fallbackTitle.characters');
+  const missing = `${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`;
+  return t(letters ? 'list.fallbackTitle.missingLetters' : 'list.fallbackTitle.missingCharacters', {
+    missing,
+  });
 });
 
 const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
@@ -140,16 +143,16 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
       <slot name="lead" />
       {{ name }}
       <slot name="detail" />
-      <span v-if="face.isVariable" class="badge">Variable</span>
+      <span v-if="face.isVariable" class="badge">{{ t('list.variable') }}</span>
       <span
         v-if="fallback"
         class="fallback"
         data-testid="fallback-hint"
         :title="fallbackTitle"
         :aria-label="fallbackTitle"
-        >Fallback</span
+        >{{ t('list.fallback') }}</span
       >
-      <span v-if="state === 'failed'" class="note">Preview not available</span>
+      <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
     </span>
     <span class="sample" dir="auto" :style="sampleStyle" :data-fallback="fallback?.kind">{{
       text

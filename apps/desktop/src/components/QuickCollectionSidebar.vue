@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The Quick Collection entry of the sidebar, with its count. Pressing it opens the
 // review in the center; the parent view loads the store.
+import { formatNumber, t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 
@@ -9,18 +10,18 @@ const chord = chordOf(ACTIONS.quickCollection)!;
 </script>
 
 <template>
-  <section class="quick" aria-label="Quick Collection">
+  <section class="quick" :aria-label="t('quickCollection.title')">
     <button
       type="button"
       class="entry"
       data-testid="quick-collection"
       :aria-current="store.open ? 'true' : undefined"
-      :title="`Review the Quick Collection; ${formatChord(chord)} adds or removes the selected fonts`"
+      :title="t('quickCollection.entryTitle', { chord: formatChord(chord) })"
       :aria-keyshortcuts="ariaShortcut(chord)"
       @click="store.show"
     >
-      <span class="name">Quick Collection</span>
-      <span class="count" data-testid="quick-count">{{ store.count }}</span>
+      <span class="name">{{ t('quickCollection.title') }}</span>
+      <span class="count" data-testid="quick-count">{{ formatNumber(store.count) }}</span>
     </button>
   </section>
 </template>

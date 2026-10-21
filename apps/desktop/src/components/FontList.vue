@@ -18,7 +18,7 @@ import { keepRowInView } from '../list/density';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowActivation } from '../list/activation';
-import { OPEN_LICENSE_BADGE, openLicenseName } from '../list/columns';
+import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
@@ -26,6 +26,7 @@ import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSettingsStore } from '../stores/settings';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -196,7 +197,7 @@ function onToggle(row: ListRow): void {
     :data-surface="preview.surface"
     role="tree"
     tabindex="0"
-    aria-label="Font list"
+    :aria-label="t('list.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -220,7 +221,9 @@ function onToggle(row: ListRow): void {
         :aria-selected="list.isSelected(item.row.key)"
         :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
         :aria-posinset="item.row.position"
-        :aria-label="rowLabel(item.row) + (quick.holds(item.row) ? ', in Quick Collection' : '')"
+        :aria-label="
+          rowLabel(item.row) + (quick.holds(item.row) ? t('list.inQuickCollection') : '')
+        "
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
         draggable="true"
         @click="onRowClick(item.row, $event)"
@@ -254,7 +257,7 @@ function onToggle(row: ListRow): void {
               v-if="quick.holds(item.row)"
               class="quick-mark"
               data-testid="quick-mark"
-              title="In the Quick Collection"
+              :title="t('list.inQuickCollectionTitle')"
               aria-hidden="true"
               >●</span
             >
@@ -266,11 +269,11 @@ function onToggle(row: ListRow): void {
               class="open-license"
               data-testid="open-license"
               :title="openLicenseName(item.row.family.openLicense)"
-              >{{ OPEN_LICENSE_BADGE }}</span
+              >{{ openLicenseBadge() }}</span
             >
           </template>
           <template v-else-if="item.row.virtual" #detail>
-            <span class="count">Pinned</span>
+            <span class="count">{{ t('list.pinned') }}</span>
           </template>
         </FontPreviewRow>
         <div v-else class="preview placeholder">
@@ -278,7 +281,7 @@ function onToggle(row: ListRow): void {
             ><ActivationDot :state="rowActivation(item.row)" />{{ item.row.family.name }}</span
           >
           <span v-if="library.failed.has(item.row.family.id)" class="note">
-            Styles not available
+            {{ t('list.stylesUnavailable') }}
           </span>
         </div>
       </div>

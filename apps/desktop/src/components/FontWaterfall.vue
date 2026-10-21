@@ -17,6 +17,7 @@ import { WATERFALL_SIZES, waterfallLinePx, waterfallRowPx } from '../list/waterf
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -165,7 +166,7 @@ function onToggle(row: ListRow): void {
     :data-surface="preview.surface"
     role="tree"
     tabindex="0"
-    aria-label="Font waterfall"
+    :aria-label="t('waterfall.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -222,7 +223,7 @@ function onToggle(row: ListRow): void {
             :data-size="line.size"
             :style="{ height: `${line.px}px` }"
             :face="item.face"
-            :label="`${line.size} px`"
+            :label="t('waterfall.size', { size: line.size })"
             :text="item.text"
             :size-px="line.size"
             :line-height="preview.lineHeight"
@@ -235,7 +236,7 @@ function onToggle(row: ListRow): void {
           />
         </template>
         <p v-else class="placeholder">
-          {{ library.failed.has(item.row.family.id) ? 'Styles not available' : '' }}
+          {{ library.failed.has(item.row.family.id) ? t('list.stylesUnavailable') : '' }}
         </p>
       </div>
     </div>

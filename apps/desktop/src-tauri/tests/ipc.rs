@@ -856,6 +856,74 @@ fn the_help_menu_lists_every_docs_page_first_and_opens_it() {
     );
 }
 
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
+    use fm_app_lib::help::{self, HELP_PAGES};
+    use tauri::menu::HELP_SUBMENU_ID;
+
+    let (app, webview) = app_on(help::with_help_menu(setup(
+        mock_builder(),
+        Arc::new(MockApi::new()),
+    )))
+    .unwrap();
+    let labels = || -> Vec<String> {
+        let submenu = app
+            .menu()
+            .and_then(|m| m.get(HELP_SUBMENU_ID))
+            .and_then(|i| i.as_submenu().cloned())
+            .expect("the menu has a Help submenu");
+        HELP_PAGES
+            .iter()
+            .map(|p| {
+                submenu
+                    .get(&help::menu_id(p))
+                    .and_then(|i| i.as_menuitem().cloned())
+                    .expect("a page item")
+                    .text()
+                    .unwrap()
+            })
+            .collect()
+    };
+    assert_eq!(labels()[0], "Getting started");
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "de" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        labels(),
+        ["Erste Schritte", "Quellen", "Aktivierung", "Tastenkürzel"]
+    );
+
+    let err = send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "xx" }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+    assert_eq!(
+        labels()[0],
+        "Erste Schritte",
+        "an unknown locale changes nothing"
+    );
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "en" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(labels()[3], "Keyboard shortcuts");
+}
+
 #[test]
 fn smart_rules_are_updated_and_refused_over_ipc() {
     let (_app, webview) = app().unwrap();

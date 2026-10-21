@@ -4,6 +4,7 @@
 // frame without a round trip; the committed block still goes through
 // `clampLayout`.
 import type { BlockRange, LayoutBounds } from '../api/types';
+import { formatNumber, t } from '../i18n';
 
 /** The two values a block gesture changes. */
 export interface BlockSize {
@@ -94,5 +95,11 @@ export function keySize(
 
 /** The badge text of a block: "36 pt · 1.15". */
 export function sizeLabel({ sizePt, lineHeight }: BlockSize): string {
-  return `${roundSize(sizePt)} pt · ${roundLineHeight(lineHeight).toFixed(2)}`;
+  return t('blocks.badge', {
+    size: roundSize(sizePt),
+    lineHeight: formatNumber(roundLineHeight(lineHeight), {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }),
+  });
 }

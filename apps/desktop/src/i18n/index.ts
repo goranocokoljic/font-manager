@@ -30,23 +30,13 @@ type Keys<T, P extends string = ''> = {
 }[keyof T & string];
 
 /** Every message in the English catalog, as a dotted path (`settings.title`). */
-// TEMP-PARTS: `| string` until the parts are merged into en.json.
-export type MessageKey = Keys<typeof en> | (string & {});
+export type MessageKey = Keys<typeof en>;
 
 /** The value a message's `{name}` placeholder takes; numbers are formatted. */
 export type MessageParams = Record<string, string | number>;
 
 /** The catalogs that ship, by locale tag. English is complete by definition. */
 export const CATALOGS: Readonly<Record<string, Catalog>> = { en, de };
-
-// TEMP-PARTS (removed before merge): parts/<group>.<locale>.json are merged in.
-for (const [path, part] of Object.entries(
-  import.meta.glob<Catalog>('../locales/parts/*.json', { eager: true, import: 'default' }),
-)) {
-  const tag = path.split('.').at(-2) ?? '';
-  const target = (CATALOGS as Record<string, Catalog>)[tag];
-  if (target) Object.assign(target, part);
-}
 
 /** The locale every missing message falls back to. */
 export const FALLBACK_LOCALE = 'en';
@@ -88,7 +78,9 @@ export function resolveLocale(
 }
 
 function isPlural(value: unknown): value is PluralForms {
-  return typeof value === 'object' && value !== null && typeof (value as PluralForms).other === 'string';
+  return (
+    typeof value === 'object' && value !== null && typeof (value as PluralForms).other === 'string'
+  );
 }
 
 function lookup(catalog: Catalog | undefined, key: string): string | PluralForms | undefined {

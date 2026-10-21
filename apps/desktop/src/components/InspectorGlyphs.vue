@@ -14,6 +14,7 @@
 // in the grid and puts focus on it.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FeatureInfo, GlyphInfo } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import {
   GLYPH_CELL,
   codePointLabel,
@@ -138,8 +139,8 @@ watchEffect(() => {
 
 /** "U+0416 uni0416": code point and name, for screen readers and tooltips. */
 function cellLabel(g: GlyphInfo | undefined, index: number): string {
-  if (!g) return `Character ${index + 1}, loading`;
-  return `${codePointLabel(g.codePoint)} ${g.name ?? '(no glyph name)'}`;
+  if (!g) return t('glyphs.cellLoading', { number: index + 1 });
+  return `${codePointLabel(g.codePoint)} ${g.name ?? t('glyphs.noGlyphName')}`;
 }
 const charOf = (g: GlyphInfo) => String.fromCodePoint(g.codePoint);
 
@@ -256,8 +257,8 @@ const detailBroken = computed(() =>
 );
 const advance = computed(() => {
   const d = detail.value;
-  if (!d) return glyphs.detailError ? 'unknown' : 'loading…';
-  return d.advanceWidth === null ? 'none' : `${d.advanceWidth.toLocaleString('en-US')} units`;
+  if (!d) return glyphs.detailError ? t('glyphs.advanceUnknown') : t('glyphs.advanceLoading');
+  return d.advanceWidth === null ? t('glyphs.none') : t('glyphs.units', { count: d.advanceWidth });
 });
 /** The feature lists of the detail, each with its heading and empty text. */
 const featureLists = computed(() => {
@@ -266,19 +267,19 @@ const featureLists = computed(() => {
   return [
     {
       id: 'fm-glyph-produced',
-      title: 'Produced by',
-      empty: 'No feature produces this glyph.',
+      title: t('glyphs.producedBy'),
+      empty: t('glyphs.producedByNone'),
       items: d.producedBy,
     },
     {
       id: 'fm-glyph-replaced',
-      title: 'Replaced by',
-      empty: 'No feature replaces this glyph.',
+      title: t('glyphs.replacedBy'),
+      empty: t('glyphs.replacedByNone'),
       items: d.replacedBy,
     },
   ];
 });
-const featureName = (f: FeatureInfo) => f.name ?? 'Unregistered feature';
+const featureName = (f: FeatureInfo) => f.name ?? t('glyphs.unregisteredFeature');
 const fontStyle = computed(() => ({
   fontFamily: family.value ? `"${family.value}", sans-serif` : undefined,
 }));
@@ -290,42 +291,46 @@ const noResults = computed(
 
 <template>
   <div class="glyphs">
-    <p v-if="!selection.detail" class="placeholder">Select a face to see its glyphs.</p>
+    <p v-if="!selection.detail" class="placeholder">{{ t('glyphs.noFace') }}</p>
     <template v-else>
       <div class="controls">
         <input
           v-model="searchText"
           class="field search"
           type="search"
-          aria-label="Search glyphs"
-          placeholder="Ж, U+0416, name"
+          :aria-label="t('glyphs.search')"
+          :placeholder="t('glyphs.searchPlaceholder')"
           @input="onSearch"
         />
-        <select class="field" aria-label="Block" :value="glyphs.block ?? ''" @change="onBlock">
-          <option value="">All blocks</option>
+        <select
+          class="field"
+          :aria-label="t('glyphs.block')"
+          :value="glyphs.block ?? ''"
+          @change="onBlock"
+        >
+          <option value="">{{ t('glyphs.allBlocks') }}</option>
           <option v-for="b in glyphs.faceBlocks" :key="b.name" :value="b.name">
             {{ b.name }} ({{ b.count }})
           </option>
         </select>
       </div>
       <p v-if="broken" class="placeholder" role="status">
-        The glyphs of this face cannot be read: {{ broken }}
+        {{ t('glyphs.broken', { reason: broken }) }}
       </p>
       <p v-else-if="glyphs.error" class="placeholder" role="alert">
-        {{ glyphs.error.message }}
+        {{ errorMessage(glyphs.error) }}
       </p>
       <p v-else-if="noResults" class="placeholder" role="status">
-        {{ glyphs.query.trim() ? 'No glyph matches the search.' : 'This face maps no characters.' }}
+        {{ glyphs.query.trim() ? t('glyphs.noMatch') : t('glyphs.empty') }}
       </p>
       <p class="count" aria-live="polite">
-        {{ glyphs.total.toLocaleString('en-US') }}
-        {{ glyphs.total === 1 ? 'character' : 'characters' }}
+        {{ t('glyphs.characters', { count: glyphs.total }) }}
       </p>
       <div
         ref="viewport"
         class="viewport"
         role="grid"
-        aria-label="Glyphs"
+        :aria-label="t('glyphs.grid')"
         :aria-rowcount="layout.rows.length"
         :aria-colcount="columns"
         :aria-activedescendant="activeId"
@@ -376,28 +381,28 @@ const noResults = computed(
       <section
         v-if="sel"
         class="detail"
-        aria-label="Selected glyph"
+        :aria-label="t('glyphs.selected')"
         @keydown.esc.stop.prevent="closeDetail"
       >
         <div class="detail-head">
           <span class="big" :style="fontStyle" aria-hidden="true">{{ charOf(sel) }}</span>
           <dl>
-            <dt id="fm-glyph-cp">Code point</dt>
+            <dt id="fm-glyph-cp">{{ t('glyphs.codePoint') }}</dt>
             <dd aria-labelledby="fm-glyph-cp">{{ codePointLabel(sel.codePoint) }}</dd>
-            <dt id="fm-glyph-name">Glyph name</dt>
-            <dd aria-labelledby="fm-glyph-name">{{ sel.name ?? 'none' }}</dd>
-            <dt id="fm-glyph-id">Glyph id</dt>
+            <dt id="fm-glyph-name">{{ t('glyphs.glyphName') }}</dt>
+            <dd aria-labelledby="fm-glyph-name">{{ sel.name ?? t('glyphs.none') }}</dd>
+            <dt id="fm-glyph-id">{{ t('glyphs.glyphId') }}</dt>
             <dd aria-labelledby="fm-glyph-id">{{ sel.glyphId }}</dd>
-            <dt id="fm-glyph-advance">Advance width</dt>
+            <dt id="fm-glyph-advance">{{ t('glyphs.advance') }}</dt>
             <dd aria-labelledby="fm-glyph-advance">{{ advance }}</dd>
-            <dt id="fm-glyph-block">Block</dt>
+            <dt id="fm-glyph-block">{{ t('glyphs.block') }}</dt>
             <dd aria-labelledby="fm-glyph-block">{{ sel.block }}</dd>
           </dl>
           <button
             type="button"
             class="close"
-            aria-label="Close glyph detail"
-            title="Close (Esc)"
+            :aria-label="t('glyphs.closeDetail')"
+            :title="t('glyphs.closeEsc')"
             @click="closeDetail"
           >
             ×
@@ -408,24 +413,24 @@ const noResults = computed(
             type="button"
             class="action"
             aria-haspopup="dialog"
-            title="Overlay this character with the same one in another font"
+            :title="t('glyphs.compareHint')"
             @click="openCompare"
           >
-            Compare with…
+            {{ t('glyphs.compareWith') }}
           </button>
         </div>
         <p v-if="glyphs.detailError" class="muted" role="alert">
-          {{ glyphs.detailError.message }}
+          {{ errorMessage(glyphs.detailError) }}
         </p>
         <p v-else-if="detailBroken" class="muted" role="status">
-          The detail of this glyph cannot be read: {{ detailBroken }}
+          {{ t('glyphs.detailBroken', { reason: detailBroken }) }}
         </p>
         <template v-else>
           <div v-for="list in featureLists" :key="list.id" class="features">
             <h3 :id="list.id">{{ list.title }}</h3>
             <ul v-if="list.items.length" :aria-labelledby="list.id">
               <li v-for="f in list.items" :key="f.tag">
-                <CopyValue :value="f.tag" label="feature tag" />
+                <CopyValue :value="f.tag" :label="t('glyphs.featureTag')" />
                 <span class="muted">{{ featureName(f) }}</span>
               </li>
             </ul>
@@ -436,7 +441,7 @@ const noResults = computed(
       <GlyphCompare v-if="compare.open" />
       <GlyphCoverage @block="showBlock" />
       <p v-if="glyphs.unicodeVersion" class="muted note">
-        Blocks from Unicode {{ glyphs.unicodeVersion }}.
+        {{ t('glyphs.unicodeVersion', { version: glyphs.unicodeVersion }) }}
       </p>
     </template>
   </div>

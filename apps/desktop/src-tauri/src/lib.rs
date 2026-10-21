@@ -52,6 +52,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
+pub mod shell_text;
 pub mod tray;
 pub mod updater;
 
@@ -840,6 +841,13 @@ async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()>
     help::open(&app, &page)
 }
 
+/// Shows the native shell's labels (Help menu, tray) in the UI's locale; the
+/// UI calls it at start and when the Language setting changes.
+#[tauri::command]
+async fn set_shell_locale<R: Runtime>(app: AppHandle<R>, locale: String) -> ApiResult<()> {
+    shell_text::apply(&app, &locale)
+}
+
 /// Registers the shared state and every command on a builder.
 pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri::Builder<R> {
     setup_state(builder, AppState::new(api))
@@ -853,7 +861,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let tray_api = Arc::clone(&state.api);
     let tray = state.tray.clone();
     let core = state.core.clone();
+    let locale = shell_text::initial_locale(state.current_settings().language);
     builder
+        .manage(shell_text::ShellLocale::new(locale))
         .manage(state)
         .manage(updater::PendingUpdate::default())
         .manage(tray::TrayState::new(TraySupport::Unavailable(
@@ -976,6 +986,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             update_settings,
             get_app_folders,
             open_help,
+            set_shell_locale,
             updater::update_support,
             updater::check_for_update,
             updater::install_update

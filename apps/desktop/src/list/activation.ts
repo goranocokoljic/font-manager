@@ -10,6 +10,7 @@ import type {
   FamilyId,
   Target,
 } from '../api/types';
+import { t } from '../i18n';
 import type { ListRow } from './rows';
 
 export type RowActivation = 'active' | 'partial' | 'inactive';
@@ -102,8 +103,6 @@ export function undoSteps(
   return steps;
 }
 
-const fonts = (n: number) => (n === 1 ? '1 font' : `${n} fonts`);
-
 /** The toast after a bulk change: how many faces changed, and how many did not. */
 export function bulkMessage(
   deactivate: boolean,
@@ -114,15 +113,19 @@ export function bulkMessage(
   const missed = new Set(
     outcomes.filter((o) => !['done', 'unchanged'].includes(o.outcome.status)).map((o) => o.face),
   );
-  const verb = deactivate ? 'Deactivated' : 'Activated';
-  const how = deactivate ? '' : mode === 'permanent' ? ' permanently' : ' for this session';
   const head =
     done.size === 0
       ? deactivate
-        ? 'No fonts were deactivated.'
-        : 'No fonts were activated.'
-      : `${verb} ${fonts(done.size)}${how}.`;
+        ? t('activation.noneDeactivated')
+        : t('activation.noneActivated')
+      : deactivate
+        ? t('activation.deactivated', { count: done.size })
+        : mode === 'permanent'
+          ? t('activation.activatedPermanent', { count: done.size })
+          : t('activation.activatedSession', { count: done.size });
   if (missed.size === 0) return head;
-  const not = deactivate ? 'not deactivated' : 'not activated';
-  return `${head} ${fonts(missed.size)} ${not}.`;
+  const not = deactivate
+    ? t('activation.notDeactivated', { count: missed.size })
+    : t('activation.notActivated', { count: missed.size });
+  return `${head} ${not}`;
 }

@@ -2,23 +2,20 @@
 // The inspector's tabs: Info, Axes, Features, then Glyphs. Arrow keys move between tabs
 // (WAI-ARIA tabs pattern); only the selected tab is in the Tab order.
 import { nextTick, ref } from 'vue';
+import { t } from '../i18n';
 import InspectorAxes from './InspectorAxes.vue';
 import InspectorFeatures from './InspectorFeatures.vue';
 import InspectorGlyphs from './InspectorGlyphs.vue';
 import InspectorInfo from './InspectorInfo.vue';
 
-const TABS = [
-  { id: 'info', title: 'Info' },
-  { id: 'axes', title: 'Axes' },
-  { id: 'features', title: 'Features' },
-  { id: 'glyphs', title: 'Glyphs' },
-] as const;
+// The title of each is `inspector.tabs.<id>`.
+const TABS = [{ id: 'info' }, { id: 'axes' }, { id: 'features' }, { id: 'glyphs' }] as const;
 type TabId = (typeof TABS)[number]['id'];
 
 const current = ref<TabId>('info');
 
 async function onKey(e: KeyboardEvent): Promise<void> {
-  const i = TABS.findIndex((t) => t.id === current.value);
+  const i = TABS.findIndex((tab) => tab.id === current.value);
   let next: number;
   if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
   else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
@@ -34,20 +31,20 @@ async function onKey(e: KeyboardEvent): Promise<void> {
 
 <template>
   <div class="panel">
-    <div class="tabs" role="tablist" aria-label="Inspector tabs" @keydown="onKey">
+    <div class="tabs" role="tablist" :aria-label="t('inspector.tabsLabel')" @keydown="onKey">
       <button
-        v-for="t in TABS"
-        :id="`fm-tab-${t.id}`"
-        :key="t.id"
+        v-for="tab in TABS"
+        :id="`fm-tab-${tab.id}`"
+        :key="tab.id"
         type="button"
         role="tab"
         class="tab"
-        :aria-selected="current === t.id"
-        :aria-controls="`fm-tabpanel-${t.id}`"
-        :tabindex="current === t.id ? 0 : -1"
-        @click="current = t.id"
+        :aria-selected="current === tab.id"
+        :aria-controls="`fm-tabpanel-${tab.id}`"
+        :tabindex="current === tab.id ? 0 : -1"
+        @click="current = tab.id"
       >
-        {{ t.title }}
+        {{ t(`inspector.tabs.${tab.id}`) }}
       </button>
     </div>
     <div

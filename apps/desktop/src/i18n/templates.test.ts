@@ -26,7 +26,8 @@ const TEXT_ATTRS = new Set([
 
 const LETTER = /\p{L}/u;
 /** A string literal in an expression that reads like words, not like an id or a class. */
-const SENTENCE = /\p{Lu}\p{Ll}|\p{L}\s+\p{L}/u;
+// A capital starts a word ('Close'), not the middle of an identifier ('keepExisting').
+const SENTENCE = /(?:^|[^\p{L}])\p{Lu}\p{Ll}|\p{L}\s+\p{L}/u;
 const QUOTED = /'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)"|`((?:[^`\\]|\\.)*)`/g;
 
 interface Node {
@@ -87,7 +88,9 @@ export function literalTexts(source: string, file = 'inline.vue'): string[] {
         if (prop.type === DIRECTIVE && prop.exp?.content) {
           // Bound text attributes and event handlers that show text (a toast) alike.
           for (const s of literalSentences(prop.exp.content)) {
-            out.push(`${pl}: ${prop.name}${prop.arg?.content ? `:${prop.arg.content}` : ''}="${s}"`);
+            out.push(
+              `${pl}: ${prop.name}${prop.arg?.content ? `:${prop.arg.content}` : ''}="${s}"`,
+            );
           }
         }
       }
@@ -105,7 +108,7 @@ describe('template literals', () => {
     <button aria-label="Close" title="Close it">×</button>
     <p>Hello</p>
     <span :title="busy ? 'Working…' : t('a.b')">{{ t('x.y') }} · {{ n }}</span>
-    <i class="kind-dark" :class="mode === 'session' ? 'on' : 'off'" />
+    <i class="kind-dark" :class="mode === 'session' ? 'on' : 'off'" @click="set('keepExisting')" />
   </div>
 </template>`);
     expect(found).toEqual([

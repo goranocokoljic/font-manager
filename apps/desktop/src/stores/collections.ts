@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useClient } from '../api/client';
 import type { ApiError, Collection, CollectionId, FaceId, FamilyId } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
 import { useToastStore } from './toast';
@@ -132,16 +133,17 @@ export const useCollectionsStore = defineStore('collections', () => {
     const toast = useToastStore();
     const name = collections.value.find((c) => c.id === collection)?.name;
     // The suggested file name; characters no file system allows become "-".
-    const fileName = `${name ? `${name} license inventory` : 'License inventory'}.csv`.replace(
-      /[\\/:*?"<>|]/g,
-      '-',
-    );
+    const fileName =
+      `${name ? t('collections.inventoryFile', { name }) : t('collections.inventoryFileAll')}.csv`.replace(
+        /[\\/:*?"<>|]/g,
+        '-',
+      );
     try {
       const rows = await useClient().saveLicenseInventory({ collection }, fileName);
       if (rows == null) return;
-      toast.show(`Saved the license inventory: ${rows} ${rows === 1 ? 'family' : 'families'}.`);
+      toast.show(t('collections.inventorySaved', { count: rows }));
     } catch (e) {
-      toast.show((e as ApiError).message);
+      toast.show(errorMessage(e));
     }
   }
 

@@ -2,13 +2,14 @@ import { defineStore } from 'pinia';
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useClient } from '../api/client';
 import type { ApiError, FaceId, FaceSummary } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import type { ListRow } from '../list/rows';
 import { useCollectionsStore } from './collections';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
 import { useToastStore } from './toast';
 
-const fonts = (n: number) => (n === 1 ? '1 font' : `${n} fonts`);
+const fonts = (n: number) => t('quickCollection.fonts', { count: n });
 
 /**
  * The Quick Collection (E13.3): fonts gathered with one key while browsing, then
@@ -34,7 +35,7 @@ export const useQuickCollectionStore = defineStore('quickCollection', () => {
       return result;
     } catch (e) {
       error.value = e as ApiError;
-      useToastStore().show(error.value.message);
+      useToastStore().show(errorMessage(error.value));
       return undefined;
     }
   }
@@ -76,7 +77,10 @@ export const useQuickCollectionStore = defineStore('quickCollection', () => {
     if (!got) return;
     faces.value = got.faces;
     useToastStore().show(
-      `${leaving ? 'Removed' : 'Added'} ${fonts(picked.length)} ${leaving ? 'from' : 'to'} Quick Collection (${fonts(got.faces.length)}).`,
+      t(leaving ? 'quickCollection.removed' : 'quickCollection.added', {
+        fonts: fonts(picked.length),
+        total: fonts(got.faces.length),
+      }),
     );
   }
 
@@ -108,7 +112,9 @@ export const useQuickCollectionStore = defineStore('quickCollection', () => {
     });
     if (!made) return false;
     await useCollectionsStore().refresh();
-    useToastStore().show(`Saved ${fonts(kept.length)} as the collection “${made.name}”.`);
+    useToastStore().show(
+      t('quickCollection.saved', { fonts: fonts(kept.length), name: made.name }),
+    );
     return true;
   }
 
@@ -118,7 +124,12 @@ export const useQuickCollectionStore = defineStore('quickCollection', () => {
     if (!kept.length) return false;
     const tagged = await attempt(() => useClient().tagFaces({ faces: kept, tags: [name.trim()] }));
     if (!tagged) return false;
-    useToastStore().show(`Tagged ${fonts(kept.length)} “${tagged[0]?.name ?? name.trim()}”.`);
+    useToastStore().show(
+      t('quickCollection.tagged', {
+        fonts: fonts(kept.length),
+        name: tagged[0]?.name ?? name.trim(),
+      }),
+    );
     return true;
   }
 

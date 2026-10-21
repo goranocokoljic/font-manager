@@ -2,7 +2,6 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient } from '../api/client';
 import type {
-  ApiError,
   CompareMode as ApiCompareMode,
   ComparisonEntry,
   ComparisonId,
@@ -10,6 +9,7 @@ import type {
   FaceSummary,
   MissingFace,
 } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { fontNameSample } from '../preview/sampleText';
 import { useToastStore } from './toast';
 
@@ -18,11 +18,15 @@ export const MAX_PINS = 4;
 
 export type CompareMode = ApiCompareMode;
 
-export const COMPARE_MODES: { value: CompareMode; label: string }[] = [
-  { value: 'sideBySide', label: 'Side by side' },
-  { value: 'stacked', label: 'Stacked' },
-  { value: 'overlay', label: 'Overlay' },
-];
+// Getters: the label is read in the language shown now.
+export const COMPARE_MODES: { value: CompareMode; label: string }[] = (
+  ['sideBySide', 'stacked', 'overlay'] as const
+).map((value) => ({
+  value,
+  get label() {
+    return t(`compare.modes.${value}`);
+  },
+}));
 
 /** What `pin` did. */
 export type PinResult = 'pinned' | 'already' | 'full';
@@ -67,15 +71,15 @@ export const useCompareStore = defineStore('compare', () => {
     const toast = useToastStore();
     const name = fontNameSample(face);
     if (isPinned(face.id)) {
-      toast.show(`${name} is already pinned to Compare.`);
+      toast.show(t('compare.toasts.already', { name }));
       return 'already';
     }
     if (pins.value.length >= MAX_PINS) {
-      toast.show(`Compare holds ${MAX_PINS} fonts. Remove one to pin ${name}.`);
+      toast.show(t('compare.toasts.full', { max: MAX_PINS, name }));
       return 'full';
     }
     pins.value = [...pins.value, face];
-    toast.show(`${name} pinned to Compare (${pins.value.length} of ${MAX_PINS}).`);
+    toast.show(t('compare.toasts.pinned', { name, count: pins.value.length, max: MAX_PINS }));
     return 'pinned';
   }
 
@@ -103,7 +107,7 @@ export const useCompareStore = defineStore('compare', () => {
     try {
       return await work();
     } catch (e) {
-      useToastStore().show((e as ApiError).message);
+      useToastStore().show(errorMessage(e));
       return undefined;
     }
   }
@@ -134,7 +138,7 @@ export const useCompareStore = defineStore('compare', () => {
     current.value = { id: got.id, name: got.name };
     text.value = sampleText;
     missing.value = [];
-    useToastStore().show(`Comparison “${got.name}” saved.`);
+    useToastStore().show(t('compare.toasts.saved', { name: got.name }));
     await loadSaved();
     return true;
   }
@@ -150,7 +154,7 @@ export const useCompareStore = defineStore('compare', () => {
     const toast = useToastStore();
     const names = got.missing.map((m) => m.name).join(', ');
     if (!got.faces.length) {
-      toast.show(`None of the fonts of “${got.name}” are in the library now: ${names}.`);
+      toast.show(t('compare.toasts.noneLeft', { name: got.name, names }));
       return;
     }
     pins.value = got.faces.slice(0, MAX_PINS);
@@ -162,8 +166,8 @@ export const useCompareStore = defineStore('compare', () => {
     open.value = true;
     toast.show(
       got.missing.length
-        ? `Opened “${got.name}”. Not in the library now: ${names}.`
-        : `Opened “${got.name}”.`,
+        ? t('compare.toasts.openedMissing', { name: got.name, names })
+        : t('compare.toasts.opened', { name: got.name }),
     );
   }
 
