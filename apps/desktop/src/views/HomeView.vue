@@ -363,15 +363,6 @@ const groups = ['Smart collections', 'Online catalogs'];
               {{ m.label }}
             </button>
           </div>
-          <button
-            type="button"
-            class="toggle"
-            :aria-pressed="settings.density === 'compact'"
-            :title="`Rows: ${densityLabel}. Compact rows show more fonts at a time.`"
-            @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
-          >
-            Compact rows
-          </button>
           <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
           <label v-if="mode === 'layout'" class="preset">
             Preset
@@ -390,6 +381,16 @@ const groups = ['Smart collections', 'Online catalogs'];
               </option>
             </select>
           </label>
+          <!-- After the controls of the view mode, so Tab from the modes reaches those first. -->
+          <button
+            type="button"
+            class="toggle"
+            :aria-pressed="settings.density === 'compact'"
+            :title="`Rows: ${densityLabel}. Compact rows show more fonts at a time.`"
+            @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
+          >
+            Compact rows
+          </button>
           <button
             type="button"
             class="toggle"
