@@ -65,6 +65,10 @@ Read [Sources](sources.md) to learn more about folders.
   that block. Type in the search field to find a character: type the character itself
   (`Ж`), its code point (`U+0416` or `0416`) or its glyph name (`uni0416`). Click a
   character to see its code point, glyph name and glyph id.
+- Some color fonts have more than one color palette. For such a font, the **Info**
+  tab shows **Color palette** with the colors and the name of each palette. Click a
+  palette, or use the arrow keys, to choose it. All styles of the family then show in
+  that palette, in every view mode. Font Manager keeps your choice for the view.
 - Write notes in the **Info** tab. **Notes** are for the style that you selected.
   **Family notes** are for all styles of the family. Font Manager saves a note when
   you leave its field. To delete a note, clear its field. The **Notes** column of the

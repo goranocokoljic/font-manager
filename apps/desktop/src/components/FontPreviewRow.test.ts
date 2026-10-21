@@ -8,6 +8,8 @@ import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/face
 import { clearFaceAxes } from '../preview/variations';
 import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
+import { usePalettesStore } from '../stores/palettes';
+import { ALL_FONTS_VIEW } from '../stores/preview';
 import FontPreviewRow from './FontPreviewRow.vue';
 
 class FakeFace {
@@ -35,6 +37,7 @@ let fonts: FakeSet;
 let loader: FaceLoader<FakeFace>;
 
 beforeEach(() => {
+  localStorage.clear();
   setActivePinia(createPinia());
   clearFaceAxes();
   setClient(createMockClient());
@@ -98,6 +101,25 @@ describe('FontPreviewRow', () => {
     useFeaturesStore().reset(inter.id);
     await flushPromises();
     expect(style(row).fontFeatureSettings).toBe('');
+  });
+
+  it('draws in the palette chosen for its family in its view, live', async () => {
+    const color = { ...mono, id: 8, family: 8, familyName: 'Color Play' };
+    const row = mount(FontPreviewRow, { props: { face: color } });
+    const elsewhere = mount(FontPreviewRow, { props: { face: color, view: 'collection-7' } });
+    const other = mount(FontPreviewRow, { props: { face: mono } });
+    await flushPromises();
+    const palette = (r: typeof row) =>
+      (r.get('.sample').element as HTMLElement).style.getPropertyValue('font-palette');
+    expect(palette(row)).toBe('');
+    usePalettesStore().choose(ALL_FONTS_VIEW, 'Color Play', 1);
+    await flushPromises();
+    expect(palette(row)).toBe('--fm-palette-8-1');
+    expect(palette(elsewhere)).toBe('');
+    expect(palette(other)).toBe('');
+    usePalettesStore().choose(ALL_FONTS_VIEW, 'Color Play', 0);
+    await flushPromises();
+    expect(palette(row)).toBe('');
   });
 
   it('follows the axes set for its face, live, without loading the font again', async () => {

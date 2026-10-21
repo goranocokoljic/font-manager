@@ -446,6 +446,7 @@ fn face(
             italic_angle: Some(if slant == Slant::Upright { 0.0 } else { -10.0 }),
             code_point_count: Some(char_set.len() as u32),
             family_notes: None,
+            palettes: Vec::new(), // the sample has no color fonts
         },
         source: SourceId(1),
         chars: char_set,

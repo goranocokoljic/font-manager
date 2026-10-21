@@ -69,6 +69,7 @@ function onInput(e: Event): void {
       v-if="face"
       class="sample"
       :face="face"
+      :view="view"
       :label="label"
       :text="answer?.text ?? sample"
       :fallback="answer?.fallback ?? null"

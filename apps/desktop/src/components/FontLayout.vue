@@ -12,12 +12,15 @@
 // The text is set at `width` CSS px, centered, when the layout's width is locked (E12.4);
 // unlocked it follows the window. With `setWidthLock`, the Lock width button (and its
 // command palette entry) toggles the lock; locking keeps the width the text has on screen.
+// A color palette chosen for the face's family (E16.3) applies through `font-palette`.
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useActions } from '../stores/commands';
+import { usePalettesStore } from '../stores/palettes';
+import { ALL_FONTS_VIEW } from '../stores/preview';
 import LayoutBlock from './LayoutBlock.vue';
 
 const props = defineProps<{
@@ -36,6 +39,7 @@ const props = defineProps<{
   /** Locks the width (at `widthPx`, the text's width on screen now) or unlocks it. */
   setWidthLock?: (locked: boolean, widthPx: number | null) => Promise<void>;
 }>();
+const palettes = usePalettesStore();
 
 const emit = defineEmits<{ 'edit-text': [index: number, text: string] }>();
 
@@ -126,6 +130,12 @@ const pageStyle = computed(() =>
   locked.value && props.width != null ? { '--fm-layout-width': `${props.width}px` } : undefined,
 );
 
+// A color palette chosen for the family applies to every block (`font-palette` inherits).
+const fontPaletteStyle = computed(() => {
+  const value = props.face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, props.face) : undefined;
+  return value ? { fontPalette: value } : undefined;
+});
+
 const fontFamily = computed(() =>
   props.face
     ? `"${faceFamily(props.face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`
@@ -169,7 +179,7 @@ const fontFamily = computed(() =>
         class="page"
         :class="{ locked: pageStyle !== undefined }"
         data-testid="layout-page"
-        :style="pageStyle"
+        :style="[pageStyle, fontPaletteStyle]"
       >
         <div
           v-for="(block, i) in layout.blocks"
