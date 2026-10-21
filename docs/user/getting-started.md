@@ -122,4 +122,17 @@ what you want to do and press `Enter`. All keys are on the
 Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. There you can choose the theme,
 the size of the rows, and how activation works.
 
+## Get updates
+
+Open Settings → About and click **Check for updates**. If a new version is out, Font
+Manager shows its number and release notes, and installs it only when you click
+**Install and restart**. A major version (for example 1.x to 2.0) asks you a second time.
+Installing quits Font Manager first, so session activations end, and then starts the new
+version. Turn on **Check automatically when Font Manager starts** to check at every start.
+It is off until you turn it on.
+
+Font Manager installs only updates signed with its release key. If you installed it with
+Flatpak or a package manager, that tool installs the updates, and Settings → About says
+so under Platform notes.
+
 > Font Manager makes no network calls unless you ask it to, and it has no accounts.

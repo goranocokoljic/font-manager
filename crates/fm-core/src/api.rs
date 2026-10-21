@@ -448,6 +448,12 @@ fn not_available(what: &str) -> ApiError {
 
 impl LibraryService for CoreApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
+        let mut platform_notes = crate::lifecycle::platform_notes(
+            Os::current(),
+            lock(&self.tray).as_ref(),
+            fm_platform::autostart::sandboxed(),
+        );
+        platform_notes.extend(crate::update::support(&fm_platform::updater::distribution()).reason);
         Ok(AppInfo {
             name: "Font Manager".into(),
             version: env!("CARGO_PKG_VERSION").into(),
@@ -457,11 +463,7 @@ impl LibraryService for CoreApi {
                 Os::MacOs => Platform::Macos,
                 Os::Linux => Platform::Linux,
             },
-            platform_notes: crate::lifecycle::platform_notes(
-                Os::current(),
-                lock(&self.tray).as_ref(),
-                fm_platform::autostart::sandboxed(),
-            ),
+            platform_notes,
         })
     }
 

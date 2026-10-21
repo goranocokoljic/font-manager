@@ -4,6 +4,7 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
@@ -52,6 +53,7 @@ use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
 pub mod tray;
+pub mod updater;
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
@@ -82,6 +84,8 @@ pub struct AppState {
     backend: Backend,
     core: Option<Arc<CoreApi>>,
     tray: Option<Arc<dyn Tray>>,
+    /// The quit path ran ([`AppState::run_quit_path`]).
+    quit_ran: AtomicBool,
 }
 
 impl AppState {
@@ -93,6 +97,7 @@ impl AppState {
             backend: Backend::Other,
             core: None,
             tray: None,
+            quit_ran: AtomicBool::new(false),
         }
     }
 
@@ -104,6 +109,7 @@ impl AppState {
             backend: Backend::Core,
             core: Some(api),
             tray: None,
+            quit_ran: AtomicBool::new(false),
         }
     }
 
@@ -131,6 +137,21 @@ impl AppState {
     /// Which implementation the commands talk to.
     pub fn backend(&self) -> Backend {
         self.backend
+    }
+
+    /// The normal quit path, [`on_exit`], once: every quit ends here, and so
+    /// does an update before it installs (E18.2). A second run would record
+    /// an empty last session over the real one.
+    pub fn run_quit_path(&self) {
+        if !self.quit_ran.swap(true, Ordering::SeqCst) {
+            on_exit(self.core.as_deref());
+        }
+    }
+
+    /// Lets the quit path run again: an update that ran it failed to
+    /// install, so the app keeps running and quits normally later.
+    pub fn rearm_quit_path(&self) {
+        self.quit_ran.store(false, Ordering::SeqCst);
     }
 
     /// Serves the settings from `settings` instead of the API.
@@ -802,6 +823,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let core = state.core.clone();
     builder
         .manage(state)
+        .manage(updater::PendingUpdate::default())
         .manage(tray::TrayState::new(TraySupport::Unavailable(
             "no tray item yet".into(),
         )))
@@ -921,7 +943,10 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_settings,
             update_settings,
             get_app_folders,
-            open_help
+            open_help,
+            updater::update_support,
+            updater::check_for_update,
+            updater::install_update
         ])
 }
 
@@ -970,28 +995,31 @@ pub fn run() {
             None
         }
     };
-    let (state, core) = match startup.as_mut() {
+    let state = match startup.as_mut() {
         Some(startup) => {
             let index = std::mem::replace(
                 &mut startup.index,
                 Err(ApiError::new(ErrorCode::Internal, "The index is served.")),
             );
             match fm_platform::activator::system(&startup.paths) {
-                Ok(activator) => serve(&startup.paths, index, activator),
+                Ok(activator) => serve(&startup.paths, index, activator).0,
                 Err(e) => {
                     let e = ApiError::new(
                         ErrorCode::Unsupported,
                         "Font activation is not available on this system.",
                     )
                     .with_detail(e.to_string());
-                    serve(&startup.paths, Err(e), Arc::new(MockActivator::new()))
+                    serve(&startup.paths, Err(e), Arc::new(MockActivator::new())).0
                 }
             }
         }
-        None => (AppState::new(Arc::new(MockApi::new())), None),
+        None => AppState::new(Arc::new(MockApi::new())),
     };
-    let builder =
-        help::with_help_menu(tauri::Builder::default().plugin(tauri_plugin_dialog::init()));
+    let builder = help::with_help_menu(
+        tauri::Builder::default()
+            .plugin(tauri_plugin_dialog::init())
+            .plugin(tauri_plugin_updater::Builder::new().build()),
+    );
     let state = state.with_tray(fm_platform::tray::system());
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
@@ -1003,10 +1031,10 @@ pub fn run() {
         }
     };
     // Every quit ends here: the tray's Quit, the app menu's Quit, closing the
-    // window without a tray item.
-    app.run(move |_, event| {
+    // window without a tray item, the restart after an update.
+    app.run(move |handle, event| {
         if let RunEvent::Exit = event {
-            on_exit(core.as_deref());
+            handle.state::<AppState>().run_quit_path();
             // `run` may exit the process without returning: flush the log now.
             drop(startup.take());
         }

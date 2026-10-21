@@ -4,12 +4,15 @@ import { RouterView, useRouter } from 'vue-router';
 import { useClient } from './api/client';
 import CommandPalette from './components/CommandPalette.vue';
 import ToastMessage from './components/ToastMessage.vue';
+import UpdateDialog from './components/UpdateDialog.vue';
 import { HELP_PAGES } from './help';
 import { ACTIONS } from './keyboard/keymap';
 import { useActions, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
+import { useUpdatesStore } from './stores/updates';
 
 const settings = useSettingsStore();
+const updates = useUpdatesStore();
 const router = useRouter();
 
 useShortcuts();
@@ -35,7 +38,11 @@ useActions([
   })),
 ]);
 
-onMounted(() => settings.load());
+// The one check without a click: only when the user turned "Check automatically" on.
+onMounted(async () => {
+  await settings.load();
+  await updates.checkAtStart(settings.settings);
+});
 
 // Theme and density apply the moment a setting changes: theme.css reads them
 // from the root element.
@@ -51,4 +58,5 @@ watchEffect(() => {
   <RouterView />
   <CommandPalette />
   <ToastMessage />
+  <UpdateDialog />
 </template>

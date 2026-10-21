@@ -40,7 +40,7 @@ fails instead of resolving a different version.
 - Debian 12 / Ubuntu 22.04 or newer (WebKitGTK 4.1)
 
 ```sh
-sudo apt-get install -y --no-install-recommends build-essential pkg-config file patchelf libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libfontconfig1-dev fontconfig
+sudo apt-get install -y --no-install-recommends build-essential pkg-config file patchelf libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libfontconfig1-dev fontconfig libssl-dev
 ```
 <!-- /build.mjs:packages -->
 
@@ -96,6 +96,13 @@ SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--
 
 The script passes `RUSTFLAGS` as `CARGO_ENCODED_RUSTFLAGS`, so a checkout path with
 spaces works.
+
+The release workflow (`.github/workflows/release.yml`) runs the same script with
+`--updater`. That also writes the updater artifacts and signs them with the updater key
+(the secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`; the
+public half is in `tauri.conf.json`). Your own build does not need the key. A copy you
+build yourself still checks for updates; a package manager that builds Font Manager sets
+`FM_PACKAGED_BY=<its name>` at build time to turn that off (ADR 0012).
 
 ## What is reproducible, and what is not
 

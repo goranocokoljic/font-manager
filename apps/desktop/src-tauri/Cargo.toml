@@ -16,8 +16,11 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 fm-api.workspace = true
 fm-core.workspace = true
 fm-platform.workspace = true
+# The plugin config `generate_context!` embeds (tauri.conf.json `plugins`).
+serde_json.workspace = true
 tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
+tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy"] }
 tracing = "0.1"
 
 [dev-dependencies]

@@ -95,6 +95,20 @@ export type AppInfo = {
 	platformNotes?: string[],
 };
 
+/**  An update the release server offers. */
+export type AvailableUpdate = {
+	/**  The version running now. */
+	currentVersion: string,
+	/**  The version offered. */
+	version: string,
+	/**  The release notes, as the release wrote them (Markdown). */
+	notes?: string | null,
+	/**  When the release was published (RFC 3339). */
+	date?: string | null,
+	/**  How far the update moves the app. */
+	kind: UpdateKind,
+};
+
 /**  A variation axis of a variable font. */
 export type Axis = {
 	/**  Four-letter axis tag (`wght`, `wdth`, `opsz`, or a custom one). */
@@ -1183,6 +1197,17 @@ export type ImportSetResponse = {
 	missing: SetEntry[],
 };
 
+/**
+ *  Install the update a check found. The app quits as it does on Quit
+ *  (session fonts are deregistered), installs and starts again.
+ */
+export type InstallUpdateRequest = {
+	/**  The version the user confirmed; must be the one the last check found. */
+	version: string,
+	/**  The user confirmed a second time that a major update may install. */
+	confirmMajor?: boolean,
+};
+
 /**  A long-running job (a scan); its progress arrives as events. */
 export type JobId = number;
 
@@ -1974,6 +1999,12 @@ export type Settings = {
 	 *  is hidden). Off until the user turns it on.
 	 */
 	startAtLogin?: boolean | null,
+	/**
+	 *  Check for a new version when the app starts. Off unless the user
+	 *  turns it on (rule 7: no network call without a user action); where
+	 *  the app does not update itself the switch is hidden.
+	 */
+	checkUpdatesAutomatically?: boolean,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -1999,6 +2030,8 @@ export type SettingsUpdate = {
 	 *  in the tray. Refused where the settings report `start_at_login: None`.
 	 */
 	startAtLogin?: boolean | null,
+	/**  Check for a new version when the app starts. */
+	checkUpdatesAutomatically?: boolean | null,
 };
 
 /**  The shortlist for a brief. */
@@ -2198,6 +2231,14 @@ export type UntagFacesRequest = {
 	tags: TagId[],
 };
 
+/**  What a check for updates found. */
+export type UpdateCheck = {
+	/**  The version running now. */
+	currentVersion: string,
+	/**  The newer release, or `None` when this is the latest. */
+	update?: AvailableUpdate | null,
+};
+
 /**
  *  Replace the rule of a smart collection (E14.1). The rule is checked as
  *  `create_collection` checks it.
@@ -2207,6 +2248,33 @@ export type UpdateCollectionRulesRequest = {
 	collection: CollectionId,
 	/**  The new rule. */
 	ruleGroup: RuleGroup,
+};
+
+/**  How far an update moves the app, by semantic version. */
+export type UpdateKind = 
+/**  Fixes only (1.2.3 → 1.2.4). */
+"patch" | 
+/**  New features, nothing removed (1.2.3 → 1.3.0). */
+"minor" | 
+/**
+ *  May change how the app works (1.2.3 → 2.0.0). Installed only after a
+ *  second confirmation. Before 1.0, a new minor version (0.3 → 0.4) is a
+ *  major step too: semver gives 0.x no compatibility promise.
+ */
+"major";
+
+/**  Whether this copy of the app updates itself. */
+export type UpdateSupport = {
+	/**
+	 *  The app offers "Check for updates"; false where something else
+	 *  installs its updates (Flatpak, a package manager).
+	 */
+	offered: boolean,
+	/**
+	 *  Why not, one sentence for Settings → About → Platform notes; `None`
+	 *  when offered.
+	 */
+	reason?: string | null,
 };
 
 /**  Change user metadata on faces; absent fields are left as they are. */
@@ -2288,4 +2356,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 15, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 16, patch: 0 };

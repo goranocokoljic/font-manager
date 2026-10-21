@@ -1,0 +1,143 @@
+# Releases from a tag (E18.2). Builds the installers with the documented release build
+# (scripts/release/build.mjs, docs/building.md) plus the signed updater artifacts, then
+# publishes one GitHub release with every installer, every updater artifact and its
+# .sig, SHA256SUMS, and the update manifest latest.json that the in-app updater reads
+# from https://github.com/<repo>/releases/latest/download/latest.json (ADR 0012).
+#
+# Secrets (repository settings → Secrets → Actions):
+#   TAURI_SIGNING_PRIVATE_KEY           the updater private key (`tauri signer generate`);
+#                                       its public half is plugins.updater.pubkey in
+#                                       apps/desktop/src-tauri/tauri.conf.json
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  its password
+# Without them the build fails: a release without a signed update is not published.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: The tag names the Cargo manifest version
+        id: v
+        run: node scripts/release/update-manifest.mjs version --tag "${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+
+  installer:
+    name: installer-${{ matrix.name }}
+    needs: plan
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-latest
+          - name: linux
+            os: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Linux system packages (from scripts/release/build.mjs)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $(node scripts/release/build.mjs packages --os linux)
+
+      - name: Rust toolchain (from rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      # The documented release build plus the updater artifacts and their signatures.
+      - name: Release build with signed updater artifacts
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: node scripts/release/build.mjs installer --os ${{ matrix.name }} --updater
+
+      - name: Gather the installers and updater artifacts under their release names
+        shell: bash
+        run: |
+          arch=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+          node scripts/release/update-manifest.mjs collect --os ${{ matrix.name }} --arch "$arch" \
+            --version "${{ needs.plan.outputs.version }}" --out release-assets
+          ls -l release-assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.name }}
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: release
+    needs: [plan, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      # The release notes are the tag's message (`git tag -a v0.2.0 -m "…"`).
+      - name: Update manifest (latest.json) with per-platform URLs and signatures
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          git fetch --force origin "refs/tags/${{ github.ref_name }}:refs/tags/${{ github.ref_name }}"
+          git tag -l --format='%(contents)' "${{ github.ref_name }}" > release-notes.md
+          node scripts/release/update-manifest.mjs manifest --dir release-assets --version "$VERSION" \
+            --repo "${{ github.repository }}" --notes-file release-notes.md
+          node scripts/release/update-manifest.mjs check --file release-assets/latest.json
+
+      - name: SHA256SUMS for every file (docs/building.md, "Verify a download")
+        run: node scripts/release/build.mjs sums --dir release-assets
+
+      - name: Publish the release with every installer and latest.json attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          ls -l release-assets
+          gh release create "$TAG" release-assets/* --verify-tag --latest \
+            --title "Font Manager ${{ needs.plan.outputs.version }}" --notes-file release-notes.md

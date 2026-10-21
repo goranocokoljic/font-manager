@@ -4,8 +4,9 @@
 // workflow (.github/workflows/reproducible.yml) runs them. When the two drift,
 // `check-doc` and build.test.mjs fail.
 //
-//   node scripts/release/build.mjs installer --os <windows|macos|linux>
-//       pnpm install --frozen-lockfile, then fm-cli and the installers with --locked
+//   node scripts/release/build.mjs installer --os <windows|macos|linux> [--updater]
+//       pnpm install --frozen-lockfile, then fm-cli and the installers with --locked;
+//       --updater (the release workflow) also writes the signed updater artifacts (E18.2)
 //   node scripts/release/build.mjs cli
 //       fm-cli only, with SOURCE_DATE_EPOCH and --remap-path-prefix; prints its SHA256
 //   node scripts/release/build.mjs same-hash --first <cli line> --second <cli line>
@@ -72,6 +73,8 @@ export const SYSTEM = {
       'librsvg2-dev',
       'libfontconfig1-dev',
       'fontconfig',
+      // OpenSSL for the updater's HTTPS client (native-tls, ADR 0012).
+      'libssl-dev',
     ],
     notes: ['Debian 12 / Ubuntu 22.04 or newer (WebKitGTK 4.1)'],
   },
@@ -95,11 +98,23 @@ export function reproEnv({ root, cargoHome, epoch }) {
   };
 }
 
-/** The steps of `installer --os <os>`, as `{ env, cmd }` (cmd is an argv list). */
-export function installerSteps(os, ctx) {
+/**
+ * The Tauri config the release workflow adds to write the updater artifacts and their
+ * `.sig` files (ADR 0012). It is not in tauri.conf.json: with it, every build needs
+ * TAURI_SIGNING_PRIVATE_KEY, and only the release workflow has that secret.
+ */
+export const UPDATER_CONFIG = 'src-tauri/tauri.updater.conf.json';
+
+/**
+ * The steps of `installer --os <os>`, as `{ env, cmd }` (cmd is an argv list).
+ * `updater`: also write the signed updater artifacts (the release workflow).
+ */
+export function installerSteps(os, ctx, { updater = false } = {}) {
   checkOs(os);
   const env = reproEnv(ctx);
-  const bundles = BUNDLES[os].map((b) => b.dir).join(',');
+  // macOS updates from the app bundle (.app.tar.gz), which a .dmg-only build leaves out.
+  const dirs = BUNDLES[os].map((b) => b.dir);
+  const bundles = (updater && os === 'macos' ? ['app', ...dirs] : dirs).join(',');
   // linuxdeploy is itself an AppImage: without FUSE it must extract itself, and its
   // strip breaks on the .relr.dyn sections of current toolchains.
   const bundleEnv = os === 'linux' ? { APPIMAGE_EXTRACT_AND_RUN: '1', NO_STRIP: 'true' } : {};
@@ -118,6 +133,7 @@ export function installerSteps(os, ctx) {
         '--ci',
         '--bundles',
         bundles,
+        ...(updater ? ['--config', UPDATER_CONFIG] : []),
         '--',
         '--locked',
       ],
@@ -296,11 +312,13 @@ function run(steps) {
   }
 }
 
-function args(argv) {
+/** `--name value` pairs; a `--flag` followed by another option or nothing is `true`. */
+export function args(argv) {
   const out = {};
   for (let i = 0; i < argv.length; i++) {
     if (!argv[i].startsWith('--')) throw new Error(`unexpected argument: ${argv[i]}`);
-    out[argv[i].slice(2)] = argv[++i];
+    const next = argv[i + 1];
+    out[argv[i].slice(2)] = next === undefined || next.startsWith('--') ? true : argv[++i];
   }
   return out;
 }
@@ -309,7 +327,7 @@ function main([cmd, ...rest]) {
   const a = args(rest);
   if (cmd === 'installer') {
     checkOs(a.os);
-    run(installerSteps(a.os, runCtx()));
+    run(installerSteps(a.os, runCtx(), { updater: a.updater === true }));
   } else if (cmd === 'cli') {
     run(cliSteps(runCtx()));
     const os = { win32: 'windows', darwin: 'macos' }[process.platform] ?? 'linux';

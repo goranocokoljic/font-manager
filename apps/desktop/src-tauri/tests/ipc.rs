@@ -892,3 +892,33 @@ fn smart_rules_are_updated_and_refused_over_ipc() {
     .unwrap_err();
     assert_eq!(err["code"], "invalidRequest", "{err}");
 }
+
+#[test]
+fn update_support_says_whether_this_copy_updates_itself() {
+    let (_app, webview) = app().unwrap();
+    let body = send(&webview, "update_support", serde_json::json!({}))
+        .unwrap()
+        .unwrap();
+    let support: fm_api::update::UpdateSupport = body.deserialize().unwrap();
+    assert_eq!(support, fm_app_lib::updater::support());
+    assert_eq!(support.offered, support.reason.is_none());
+}
+
+#[test]
+fn install_update_without_a_checked_update_installs_nothing() {
+    let (_app, webview) = app().unwrap();
+    let err = send(
+        &webview,
+        "install_update",
+        serde_json::json!({ "req": { "version": "9.0.0", "confirmMajor": true } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "notFound", "{err}");
+    assert!(
+        err["message"]
+            .as_str()
+            .unwrap()
+            .contains("Check for updates first")
+    );
+}
