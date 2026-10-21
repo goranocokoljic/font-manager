@@ -1,7 +1,8 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { setClient } from '../api/client';
 import type { FaceSummary } from '../api/types';
-import { mockFaces } from '../api/mock';
+import { createMockClient, mockComparisons, mockFaces } from '../api/mock';
 import { MAX_PINS, useCompareStore } from './compare';
 import { useToastStore } from './toast';
 
@@ -13,6 +14,7 @@ const faces: FaceSummary[] = Array.from({ length: 5 }, (_, i) => ({
 }));
 
 beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => setClient(undefined));
 
 describe('compare store', () => {
   it('pins up to four faces and refuses a fifth with a message', () => {
@@ -89,5 +91,76 @@ describe('compare store', () => {
     expect(s.overlayPair).toEqual([null, null]);
     s.pin(faces[0]!);
     expect(s.overlayPair.map((f) => f?.id ?? null)).toEqual([100, null]);
+  });
+
+  it('saves the pins, mode and text under a name; the same name saves over it', async () => {
+    const client = createMockClient();
+    setClient(client);
+    const s = useCompareStore();
+    const [inter, mono] = [mockFaces[0]!.face, mockFaces[1]!.face];
+    s.pin(inter);
+    s.pin(mono);
+    s.setMode('stacked');
+    expect(await s.save('  Body ', 'Sphinx of black quartz')).toBe(true);
+    expect(s.current?.name).toBe('Body');
+    expect(s.saved.map((c) => c.name)).toEqual(['Body']);
+    expect(useToastStore().toast?.message).toBe('Comparison “Body” saved.');
+    const first = s.current!.id;
+    const got = await client.getComparison({ id: first });
+    expect(got.faces.map((f) => f.id)).toEqual([inter.id, mono.id]);
+    expect([got.mode, got.sampleText]).toEqual(['stacked', 'Sphinx of black quartz']);
+
+    // The same name again overwrites; another name makes a new one.
+    s.unpin(mono.id);
+    s.pin(mockFaces[2]!.face);
+    await s.save('Body', '');
+    expect(s.current?.id).toBe(first);
+    await s.save('Other', '');
+    expect(s.saved.map((c) => c.name)).toEqual(['Body', 'Other']);
+  });
+
+  it('refuses a save with one pin and says why', async () => {
+    setClient(createMockClient());
+    const s = useCompareStore();
+    s.pin(mockFaces[0]!.face);
+    expect(await s.save('Solo', '')).toBe(false);
+    expect(useToastStore().toast?.message).toBe('A comparison holds 2 to 4 fonts, not 1.');
+    expect(s.current).toBeNull();
+  });
+
+  it('reopens a saved comparison with the faces left and names the missing ones', async () => {
+    setClient(createMockClient({ comparisons: mockComparisons }));
+    const s = useCompareStore();
+    await s.loadSaved();
+    expect(s.canOpen).toBe(true);
+    s.pin(faces[0]!);
+    await s.reopen(1);
+    expect(s.open).toBe(true);
+    expect(s.pins.map((p) => p.id)).toEqual([1, 6]);
+    expect(s.mode).toBe('stacked');
+    expect(s.text).toBe('Quarterly results');
+    expect(s.missing.map((m) => m.name)).toEqual(['Retired Sans Bold']);
+    expect(useToastStore().toast?.message).toBe(
+      'Opened “Headline shortlist”. Not in the library now: Retired Sans Bold.',
+    );
+    // Removing every pin forgets the saved comparison.
+    s.unpin(1);
+    s.unpin(6);
+    expect([s.current, s.text, s.missing]).toEqual([null, null, []]);
+  });
+
+  it('does not open a saved comparison none of whose fonts are left', async () => {
+    setClient(
+      createMockClient({
+        comparisons: [{ ...mockComparisons[0]!, faces: [{ id: 9001, name: 'Retired Sans Bold' }] }],
+      }),
+    );
+    const s = useCompareStore();
+    await s.reopen(1);
+    expect(s.open).toBe(false);
+    expect(s.pins).toEqual([]);
+    expect(useToastStore().toast?.message).toBe(
+      'None of the fonts of “Headline shortlist” are in the library now: Retired Sans Bold.',
+    );
   });
 });

@@ -16,6 +16,10 @@ import {
   type Collection,
   type CollectionFacesRequest,
   type CollectionId,
+  type Comparison,
+  type ComparisonEntry,
+  type ComparisonId,
+  type CompareMode,
   type Conflict,
   type CoverageReport,
   type FaceCoverage,
@@ -586,7 +590,36 @@ export interface MockOptions {
   sets?: ProjectSet[];
   /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
   cjkFaces?: FaceId[];
+  /** Saved comparisons (none by default); a face the mock lacks reopens as missing. */
+  comparisons?: MockComparison[];
 }
+
+/** A saved comparison as the mock keeps it: each face with its name when saved. */
+export interface MockComparison {
+  id: ComparisonId;
+  name: string;
+  mode: CompareMode;
+  sampleText: string;
+  faces: { id: FaceId; name: string }[];
+}
+
+/**
+ * A sample saved comparison for browser mode: Inter, JetBrains Mono and a face the
+ * library no longer has, so reopening it names one missing font.
+ */
+export const mockComparisons: MockComparison[] = [
+  {
+    id: 1,
+    name: 'Headline shortlist',
+    mode: 'stacked',
+    sampleText: 'Quarterly results',
+    faces: [
+      { id: 1, name: 'Inter Regular' },
+      { id: 9001, name: 'Retired Sans Bold' },
+      { id: 6, name: 'JetBrains Mono Regular' },
+    ],
+  },
+];
 
 /** A sample project set, like the Rust mock's: Inter and JetBrains Mono. */
 export const mockSets: ProjectSet[] = [{ id: 1, name: 'Client brand', faces: [1, 6] }];
@@ -1322,6 +1355,37 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return f && !trashed.has(f.path) ? [summary(f)] : [];
     }),
   });
+  // Named comparisons (E13.2), like the Rust mock: a face it lacks (or trashed) is missing.
+  let comparisons = structuredClone(options.comparisons ?? []);
+  const comparisonEntry = (c: MockComparison): ComparisonEntry => ({
+    id: c.id,
+    name: c.name,
+    mode: c.mode,
+    faceCount: c.faces.length,
+  });
+  const comparisonOrThrow = (id: ComparisonId) => {
+    const c = comparisons.find((x) => x.id === id);
+    if (!c) throw { code: 'notFound', message: `Comparison ${id} was not found.`, detail: null };
+    return c;
+  };
+  const comparisonView = (c: MockComparison): Comparison => {
+    const shown = c.faces.map((x) => ({ ...x, f: find(x.id) }));
+    return {
+      id: c.id,
+      name: c.name,
+      mode: c.mode,
+      sampleText: c.sampleText,
+      faces: shown.flatMap(({ f }) => (f && !trashed.has(f.path) ? [summary(f)] : [])),
+      missing: shown
+        .filter(({ f }) => !f || trashed.has(f.path))
+        .map(({ id, name }) => ({ id, name })),
+    };
+  };
+  const comparisonName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw invalid('A comparison needs a name.');
+    return trimmed;
+  };
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
   const hits = (query: string, q: Filters): FamilyHit[] => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1811,6 +1875,43 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     clearQuickCollection: async () => {
       quick = [];
     },
+    listComparisons: async () =>
+      comparisons
+        .map(comparisonEntry)
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id - b.id),
+    getComparison: async ({ id }) => comparisonView(comparisonOrThrow(id)),
+    saveComparison: async (req) => {
+      const name = comparisonName(req.name);
+      if (req.faces.length < 2 || req.faces.length > 4)
+        throw invalid(`A comparison holds 2 to 4 fonts, not ${req.faces.length}.`);
+      if (new Set(req.faces).size !== req.faces.length)
+        throw invalid('A comparison names each font once.');
+      const faces = req.faces.map((id) => {
+        const f = faceOrThrow(id);
+        return { id, name: `${f.face.familyName} ${f.face.style}` };
+      });
+      const saved: MockComparison = {
+        id: req.id ?? ++nextId,
+        name,
+        mode: req.mode ?? 'sideBySide',
+        sampleText: req.sampleText ?? '',
+        faces,
+      };
+      if (req.id != null) {
+        const at = comparisons.indexOf(comparisonOrThrow(req.id));
+        comparisons[at] = saved;
+      } else comparisons.push(saved);
+      return comparisonView(saved);
+    },
+    renameComparison: async ({ id, name }) => {
+      const c = comparisonOrThrow(id);
+      c.name = comparisonName(name);
+      return comparisonEntry(c);
+    },
+    deleteComparison: async ({ id }) => {
+      comparisonOrThrow(id);
+      comparisons = comparisons.filter((c) => c.id !== id);
+    },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
     renderPreview: async (req) => {
@@ -2136,6 +2237,8 @@ export const mockClient: FmClient = createMockClient({
   extraProblems: mockExtraProblems,
   duplicates: mockDuplicates,
   sets: mockSets,
+  // `?mockComparisons=1` starts with a saved comparison that names a missing font.
+  comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
   // `?mockCjk=1` gives face 1 a CJK-sized glyph map.
