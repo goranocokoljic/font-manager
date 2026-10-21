@@ -32,9 +32,17 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `5` | Show the selected font in a layout: a page of text, for example a book page |
 | `Space` | Quick look at the font (coming in a later version) |
 | `C` | Pin the selected font to Compare (up to 4 fonts) |
+| `B` | Add the selected fonts to the Quick Collection, or remove them if they are in it |
 
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
+
+## In the Quick Collection
+
+| Key | What it does |
+|-----|--------------|
+| `Up` and `Down` | Go to the previous or next font |
+| `Delete` or `Backspace` | Drop the font from the Quick Collection |
 
 ## In the layout
 

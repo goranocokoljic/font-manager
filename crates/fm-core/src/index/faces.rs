@@ -233,6 +233,12 @@ impl Index {
         Ok(out)
     }
 
+    /// The list row of the face `face`, grouped into its family as search
+    /// groups it. An unknown face is `NotFound`.
+    pub(super) fn face_summary(&self, face: FaceId) -> FmResult<FaceSummary> {
+        Ok(self.face_row(face)?.summary)
+    }
+
     fn face_row(&self, face: FaceId) -> FmResult<FaceRow> {
         let mut stmt = self.conn.prepare_cached(FACE).map_err(|e| db_error(&e))?;
         let row = stmt

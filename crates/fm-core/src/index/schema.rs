@@ -484,13 +484,24 @@ CREATE TRIGGER face_last_activated_update AFTER UPDATE OF since ON activation BE
 END;
 ";
 
+/// The Quick Collection (E13.3, `index/quick_collection.rs`): one ordered
+/// list of faces the user gathers while browsing. `position` orders it,
+/// first added first; a face that leaves the index leaves the list.
+const V15: &str = r"
+CREATE TABLE quick_face (
+    face_id   INTEGER PRIMARY KEY REFERENCES face (id) ON DELETE CASCADE,
+    position  INTEGER NOT NULL
+);
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] =
-    &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14];
+pub(crate) const MIGRATIONS: &[&str] = &[
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15,
+];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -514,6 +525,7 @@ pub(crate) const TABLES: &[&str] = &[
     "index_meta",
     "last_session",
     "project_set",
+    "quick_face",
     "resolution",
     "resolution_move",
     "set_face",

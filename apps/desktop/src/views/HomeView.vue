@@ -17,6 +17,8 @@ import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
 import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
+import QuickCollectionReview from '../components/QuickCollectionReview.vue';
+import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
@@ -31,6 +33,7 @@ import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
+import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
@@ -53,6 +56,7 @@ const collections = useCollectionsStore();
 const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
+const quick = useQuickCollectionStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -135,6 +139,7 @@ onMounted(() => {
   void problems.load();
   void search.loadLanguages();
   void sets.load();
+  void quick.load();
 });
 onBeforeUnmount(() => {
   void library.stop();
@@ -162,7 +167,27 @@ const pinTarget = computed(() => {
   return fontList.cursorFace ?? shown ?? null;
 });
 
+// B adds the selected rows (or the cursor row) to the Quick Collection, or removes them.
+const quickTargets = computed(() => {
+  if (fontList.selectedRows.length) return fontList.selectedRows;
+  return fontList.cursorRow ? [fontList.cursorRow] : [];
+});
+
 useActions([
+  {
+    id: ACTIONS.quickCollection,
+    title: 'Add the selected fonts to the Quick Collection, or remove them',
+    group: 'Quick Collection',
+    enabled: () => !quick.open && quickTargets.value.length > 0,
+    run: () => quick.toggleRows(quickTargets.value),
+  },
+  {
+    id: 'quickCollection.open',
+    title: 'Open the Quick Collection',
+    group: 'Quick Collection',
+    enabled: () => !quick.open,
+    run: () => quick.show(),
+  },
   {
     id: ACTIONS.compare,
     title: 'Pin the selected font to Compare',
@@ -253,6 +278,7 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
   <MainLayout>
     <template #sidebar>
       <SourcesSidebar />
+      <QuickCollectionSidebar />
       <CollectionsSidebar />
       <ProblemsSidebar />
       <ProjectSetsSidebar />
@@ -262,110 +288,113 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
     </template>
 
     <template #list>
-      <header class="toolbar">
-        <h1 class="title">{{ collections.open?.name ?? 'All fonts' }}</h1>
-        <SearchBox />
-        <p class="count" role="status">
-          <template v-if="fontList.selectedCount > 1"
-            >{{ fontList.selectedCount }} selected</template
-          >
-          <template v-else-if="search.hits"
-            >{{ search.total }} {{ search.total === 1 ? 'family' : 'families' }}</template
-          >
-        </p>
-        <div class="modes" role="group" aria-label="View mode">
+      <QuickCollectionReview v-if="quick.open" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+      <template v-else>
+        <header class="toolbar">
+          <h1 class="title">{{ collections.open?.name ?? 'All fonts' }}</h1>
+          <SearchBox />
+          <p class="count" role="status">
+            <template v-if="fontList.selectedCount > 1"
+              >{{ fontList.selectedCount }} selected</template
+            >
+            <template v-else-if="search.hits"
+              >{{ search.total }} {{ search.total === 1 ? 'family' : 'families' }}</template
+            >
+          </p>
+          <div class="modes" role="group" aria-label="View mode">
+            <button
+              v-for="m in MODES"
+              :key="m.value"
+              type="button"
+              class="toggle"
+              :aria-pressed="mode === m.value"
+              @click="views.setMode(ALL_FONTS_VIEW, m.value)"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+          <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
+          <label v-if="mode === 'layout'" class="preset">
+            Preset
+            <select
+              :value="layoutId"
+              @change="views.setLayout(ALL_FONTS_VIEW, ($event.target as HTMLSelectElement).value)"
+            >
+              <option
+                v-for="e in layoutOptions"
+                :key="e.id"
+                :value="e.id"
+                :disabled="e.broken !== null"
+                :title="e.broken ?? undefined"
+              >
+                {{ e.broken === null ? e.name : `${e.name} (cannot be read)` }}
+              </option>
+            </select>
+          </label>
           <button
-            v-for="m in MODES"
-            :key="m.value"
             type="button"
             class="toggle"
-            :aria-pressed="mode === m.value"
-            @click="views.setMode(ALL_FONTS_VIEW, m.value)"
+            :disabled="!compare.pins.length"
+            :title="`Compare the pinned fonts; ${formatChord(compareChord)} pins the selected font`"
+            @click="compare.openSheet"
           >
-            {{ m.label }}
+            Compare {{ compare.pins.length }}/{{ MAX_PINS }}
           </button>
-        </div>
-        <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
-        <label v-if="mode === 'layout'" class="preset">
-          Preset
-          <select
-            :value="layoutId"
-            @change="views.setLayout(ALL_FONTS_VIEW, ($event.target as HTMLSelectElement).value)"
+          <button
+            type="button"
+            class="toggle"
+            aria-controls="fm-inspector"
+            aria-keyshortcuts="Control+I Meta+I"
+            :aria-pressed="layout.inspectorVisible"
+            title="Show or hide the inspector (Ctrl+I / ⌘I)"
+            @click="layout.toggleInspector"
           >
-            <option
-              v-for="e in layoutOptions"
-              :key="e.id"
-              :value="e.id"
-              :disabled="e.broken !== null"
-              :title="e.broken ?? undefined"
-            >
-              {{ e.broken === null ? e.name : `${e.name} (cannot be read)` }}
-            </option>
-          </select>
-        </label>
-        <button
-          type="button"
-          class="toggle"
-          :disabled="!compare.pins.length"
-          :title="`Compare the pinned fonts; ${formatChord(compareChord)} pins the selected font`"
-          @click="compare.openSheet"
-        >
-          Compare {{ compare.pins.length }}/{{ MAX_PINS }}
-        </button>
-        <button
-          type="button"
-          class="toggle"
-          aria-controls="fm-inspector"
-          aria-keyshortcuts="Control+I Meta+I"
-          :aria-pressed="layout.inspectorVisible"
-          title="Show or hide the inspector (Ctrl+I / ⌘I)"
-          @click="layout.toggleInspector"
-        >
-          Inspector
-        </button>
-      </header>
-      <FilterChips />
-      <PreviewControls :view="ALL_FONTS_VIEW" />
-      <template v-if="fontList.families.length && mode === 'table'">
-        <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
-        <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
-      </template>
-      <template v-else-if="fontList.families.length && mode === 'layout'">
-        <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
-        <FontLayout
-          :layout="shownLayout"
-          :face="layoutFace"
-          editable
-          :bounds="textLayouts.bounds"
-          :set-props="textLayouts.setBlockProps"
-          :width="textLayouts.width"
-          :set-width-lock="textLayouts.setWidthLock"
-          @edit-text="textLayouts.setBlockText"
+            Inspector
+          </button>
+        </header>
+        <FilterChips />
+        <PreviewControls :view="ALL_FONTS_VIEW" />
+        <template v-if="fontList.families.length && mode === 'table'">
+          <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+          <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
+        </template>
+        <template v-else-if="fontList.families.length && mode === 'layout'">
+          <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
+          <FontLayout
+            :layout="shownLayout"
+            :face="layoutFace"
+            editable
+            :bounds="textLayouts.bounds"
+            :set-props="textLayouts.setBlockProps"
+            :width="textLayouts.width"
+            :set-width-lock="textLayouts.setWidthLock"
+            @edit-text="textLayouts.setBlockText"
+          />
+        </template>
+        <FontGrid
+          v-else-if="fontList.families.length && mode === 'grid'"
+          :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+          @cursor-face="showFace"
+          @open="openFace"
         />
+        <FontWaterfall
+          v-else-if="fontList.families.length && mode === 'waterfall'"
+          :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+          @cursor-face="showFace"
+          @open="openFace"
+        />
+        <FontList
+          v-else-if="fontList.families.length"
+          :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+          @cursor-face="showFace"
+          @open="openFace"
+        />
+        <section v-else class="empty" aria-label="Font list">
+          <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
+          <p v-else-if="search.hits">No fonts match the search and filters.</p>
+          <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
+        </section>
       </template>
-      <FontGrid
-        v-else-if="fontList.families.length && mode === 'grid'"
-        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-        @cursor-face="showFace"
-        @open="openFace"
-      />
-      <FontWaterfall
-        v-else-if="fontList.families.length && mode === 'waterfall'"
-        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-        @cursor-face="showFace"
-        @open="openFace"
-      />
-      <FontList
-        v-else-if="fontList.families.length"
-        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-        @cursor-face="showFace"
-        @open="openFace"
-      />
-      <section v-else class="empty" aria-label="Font list">
-        <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
-        <p v-else-if="search.hits">No fonts match the search and filters.</p>
-        <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
-      </section>
       <CompareSheet v-if="compare.open" />
     </template>
 

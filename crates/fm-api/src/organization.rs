@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::AxisValue;
-use crate::library::LicenseType;
+use crate::library::{FaceSummary, LicenseType};
 use crate::search::Filters;
 use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId, VirtualStyleId};
 
@@ -395,6 +395,27 @@ pub struct VirtualStylesRequest {
     pub set: Option<SetId>,
 }
 
+/// The Quick Collection (E13.3): one list of faces the user gathers while
+/// browsing, to review and then keep as a collection or a tag. It is kept in
+/// the index, so it outlives a restart.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickCollection {
+    /// Its faces in the order they were added, first added first. A face
+    /// the library does not show (its file is gone, its source paused) is
+    /// left out while it is hidden.
+    pub faces: Vec<FaceSummary>,
+}
+
+/// Add faces to, or remove them from, the Quick Collection.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickCollectionRequest {
+    /// The faces. Adding a face already in it keeps its place; removing a
+    /// face not in it does nothing.
+    pub faces: Vec<FaceId>,
+}
+
 /// Collections, tags, user metadata and project sets.
 pub trait OrganizationService {
     /// Every collection, parents before children.
@@ -443,6 +464,18 @@ pub trait OrganizationService {
     /// and receipt. An unknown family is `NotFound`; a bad date, seats below
     /// 0 or a receipt file that is not there is `InvalidRequest`.
     fn declare_license(&self, req: LicenseDeclaration) -> ApiResult<()>;
+    /// The Quick Collection (E13.3), first added first.
+    fn quick_collection(&self) -> ApiResult<QuickCollection>;
+    /// Add faces to the end of the Quick Collection; an unknown face is
+    /// `NotFound` and adds nothing. Returns the Quick Collection.
+    fn add_to_quick_collection(&self, req: QuickCollectionRequest) -> ApiResult<QuickCollection>;
+    /// Remove faces from the Quick Collection. Returns what is left.
+    fn remove_from_quick_collection(
+        &self,
+        req: QuickCollectionRequest,
+    ) -> ApiResult<QuickCollection>;
+    /// Empty the Quick Collection. The faces are not touched.
+    fn clear_quick_collection(&self) -> ApiResult<()>;
 }
 
 #[cfg(test)]

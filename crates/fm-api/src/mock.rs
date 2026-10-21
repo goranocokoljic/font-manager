@@ -38,9 +38,9 @@ use crate::library::{
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
-    PinInstanceRequest, ProjectSet, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule,
-    RuleGroup, RuleOp, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest, ReceiptChange,
+    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SetEntry, SetExport, Tag,
+    TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
@@ -200,6 +200,8 @@ struct State {
     virtual_styles: Vec<VirtualStyle>,
     /// Notes on families, by family.
     family_notes: HashMap<FamilyId, String>,
+    /// The Quick Collection, first added first.
+    quick: Vec<FaceId>,
     settings: Settings,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
@@ -584,6 +586,7 @@ impl State {
             }],
             virtual_styles: Vec::new(),
             family_notes: HashMap::new(),
+            quick: Vec::new(),
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
@@ -600,6 +603,20 @@ impl State {
 
     fn emit(&mut self, event: Event) {
         self.subscribers.retain(|s| s.send(event.clone()).is_ok());
+    }
+
+    /// The Quick Collection as the API returns it: faces in a trashed file
+    /// are left out, as the library no longer lists them.
+    fn quick_collection(&self) -> QuickCollection {
+        QuickCollection {
+            faces: self
+                .quick
+                .iter()
+                .filter_map(|id| self.face(*id).ok())
+                .filter(|f| !self.trashed.contains(&f.detail.path))
+                .map(|f| f.detail.face.clone())
+                .collect(),
+        }
     }
 
     fn face(&self, id: FaceId) -> ApiResult<&MockFace> {
@@ -2648,6 +2665,37 @@ impl OrganizationService for MockApi {
             removed: Vec::new(),
             updated,
         });
+        Ok(())
+    }
+
+    fn quick_collection(&self) -> ApiResult<QuickCollection> {
+        Ok(self.state().quick_collection())
+    }
+
+    fn add_to_quick_collection(&self, req: QuickCollectionRequest) -> ApiResult<QuickCollection> {
+        let mut st = self.state();
+        for id in &req.faces {
+            st.face(*id)?;
+        }
+        for id in req.faces {
+            if !st.quick.contains(&id) {
+                st.quick.push(id);
+            }
+        }
+        Ok(st.quick_collection())
+    }
+
+    fn remove_from_quick_collection(
+        &self,
+        req: QuickCollectionRequest,
+    ) -> ApiResult<QuickCollection> {
+        let mut st = self.state();
+        st.quick.retain(|id| !req.faces.contains(id));
+        Ok(st.quick_collection())
+    }
+
+    fn clear_quick_collection(&self) -> ApiResult<()> {
+        self.state().quick.clear();
         Ok(())
     }
 }

@@ -23,8 +23,8 @@ use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest,
-    ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
+    QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup,
+    RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
 };
 use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -600,6 +600,29 @@ fn collections_tags_meta_and_sets() {
     let imported = api.import_set(exported).unwrap();
     assert_eq!(imported.set.faces, [FaceId(1)]);
     assert_eq!(imported.missing.len(), 1);
+}
+
+#[test]
+fn the_quick_collection_keeps_faces_in_the_order_added() {
+    let api = api();
+    let ids = |q: fm_api::organization::QuickCollection| -> Vec<FaceId> {
+        q.faces.iter().map(|f| f.id).collect()
+    };
+    let req = |faces: &[u32]| QuickCollectionRequest {
+        faces: faces.iter().copied().map(FaceId).collect(),
+    };
+    assert!(api.quick_collection().unwrap().faces.is_empty());
+    let got = api.add_to_quick_collection(req(&[6, 1, 6])).unwrap();
+    assert_eq!(ids(got), [FaceId(6), FaceId(1)]);
+    let got = api.add_to_quick_collection(req(&[2, 1])).unwrap();
+    assert_eq!(ids(got), [FaceId(6), FaceId(1), FaceId(2)]);
+    let unknown = api.add_to_quick_collection(req(&[3, 999]));
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+    let got = api.remove_from_quick_collection(req(&[1])).unwrap();
+    assert_eq!(ids(got), [FaceId(6), FaceId(2)]);
+    assert_eq!(ids(api.quick_collection().unwrap()), [FaceId(6), FaceId(2)]);
+    api.clear_quick_collection().unwrap();
+    assert!(api.quick_collection().unwrap().faces.is_empty());
 }
 
 #[test]
