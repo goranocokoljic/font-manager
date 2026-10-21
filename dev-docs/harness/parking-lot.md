@@ -178,3 +178,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E19.4 #136] apps/desktop/src/stores/preview.ts:188 — changing an unsaved view before `list_languages` resolves saves `'en'` instead of the UI-language default (one IPC round-trip window).
 - [E19.4 #136] apps/desktop/src/api/mock.ts:939 — the TS `mockLanguages` and the Rust mock `LANGUAGES` (crates/fm-api/src/mock.rs:186) list different language sets.
 - [E19.4 #136] apps/desktop/src/components/FontPreviewRow.vue:154 — the `.sample` span has no `lang` attribute, so non-Latin samples reach screen readers untagged.
+- [E16.4 #125] apps/desktop/src/components/QuickCollectionReview.vue:48 — still calls `previewRowHeight(props.preview)` without a density, so the Quick Collection review list keeps comfortable row heights in compact mode.

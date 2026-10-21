@@ -14,6 +14,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
+import { keepRowInView } from '../list/density';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowActivation } from '../list/activation';
@@ -23,6 +24,7 @@ import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useSettingsStore } from '../stores/settings';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
@@ -30,7 +32,7 @@ import FontPreviewRow from './FontPreviewRow.vue';
 const props = withDefaults(
   defineProps<{
     preview?: PreviewSettings;
-    /** Fixed row height; derived from `preview` when absent. */
+    /** Fixed row height; derived from `preview` and the row density when absent. */
     rowHeight?: number;
     /** Rows rendered beyond each edge of the viewport. */
     overscan?: number;
@@ -48,8 +50,9 @@ const emit = defineEmits<{
 const list = useFontListStore();
 const library = useLibraryStore();
 const quick = useQuickCollectionStore();
+const settings = useSettingsStore();
 
-const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
+const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -139,6 +142,26 @@ async function revealCursor(): Promise<void> {
   measure();
   await nextTick();
 }
+
+// A new row height (the density, the preview size) keeps the cursor row on screen;
+// without a cursor, the first visible family stays at the top. After the render,
+// so the spacer already has its new height.
+watch(
+  rowPx,
+  (after, before) => {
+    const el = viewport.value;
+    if (!el) return;
+    const i = list.cursorIndex;
+    if (i < 0) {
+      anchor.restore();
+    } else {
+      const top = keepRowInView(i, before, after, el.scrollTop, height.value);
+      if (top !== el.scrollTop) el.scrollTop = top;
+    }
+    measure();
+  },
+  { flush: 'post' },
+);
 
 function onKeyDown(e: KeyboardEvent): void {
   const page = Math.max(1, Math.floor(height.value / rowPx.value));
@@ -323,8 +346,10 @@ function onToggle(row: ListRow): void {
   flex: 1;
   min-width: 0;
 }
-/* The slot draws the row line, full width; the preview row sits inside it. */
+/* The slot draws the row line, full width; the preview row sits inside it, padded
+   by the density (16px comfortable, 8px compact). */
 .slot .preview {
+  padding-inline: calc(2 * var(--fm-gap));
   border-bottom: 0;
 }
 .slot:not(.face) .preview {

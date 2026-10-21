@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
-import type { LanguagePreset } from '../api/types';
+import type { Density, LanguagePreset } from '../api/types';
+import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
 import {
   FALLBACK_LANGUAGE,
   isLanguageCode,
@@ -107,9 +108,15 @@ export function normalizePreview(raw: unknown): PreviewSettings {
   };
 }
 
-/** Height of one preview row: the sample line plus the name label and padding. */
-export function previewRowHeight(settings: Pick<PreviewSettings, 'sizePx' | 'lineHeight'>): number {
-  return Math.ceil(settings.sizePx * settings.lineHeight) + 30;
+/**
+ * Height of one preview row: the sample line at the size the user chose, plus the
+ * name label and padding of the row density.
+ */
+export function previewRowHeight(
+  settings: Pick<PreviewSettings, 'sizePx' | 'lineHeight'>,
+  density: Density = DEFAULT_DENSITY,
+): number {
+  return Math.ceil(settings.sizePx * settings.lineHeight) + DENSITY_ROWS[density].listChromePx;
 }
 
 function readSaved(storage: Storage | undefined): Record<string, PreviewSettings> {
