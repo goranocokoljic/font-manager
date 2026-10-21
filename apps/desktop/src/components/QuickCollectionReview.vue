@@ -46,6 +46,11 @@ onMounted(() => {
 onBeforeUnmount(() => observer?.disconnect());
 
 const rowPx = computed(() => previewRowHeight(props.preview));
+// The Surface setting, as the font list applies it: the rows sit on the surface the
+// text color was picked for, whatever the app theme.
+const surfaceClass = computed(() =>
+  props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
+);
 const count = computed(() => store.faces.length);
 const range = computed(() =>
   windowRange(scrollTop.value, height.value, rowPx.value, props.overscan, count.value),
@@ -154,6 +159,7 @@ async function tag(): Promise<void> {
       v-show="count"
       ref="viewport"
       class="viewport"
+      :class="surfaceClass"
       :style="{ backgroundColor: preview.backgroundColor ?? undefined }"
       @scroll="measure"
     >

@@ -76,6 +76,20 @@ test('the review lists the fonts with the preview settings; each drops by key or
   await expect(reviewRows(page)).toHaveCount(2);
   await expect(reviewRows(page).first().locator('.sample')).toHaveCSS('font-size', '40px');
 
+  // The Surface setting applies too: white text picked for a dark surface stays readable.
+  await review(page).getByRole('button', { name: 'Back to fonts' }).click();
+  const controls = page.getByRole('group', { name: 'Preview settings' });
+  await controls.getByLabel('Surface').selectOption('dark');
+  await controls.getByLabel('Text color').fill('#ffffff');
+  await page.getByTestId('quick-collection').click();
+  const surface = page.locator('.review .viewport');
+  await expect(surface).toHaveClass(/surface-dark/);
+  await expect(surface).toHaveCSS('background-color', 'rgb(28, 28, 30)');
+  await expect(reviewRows(page).first().locator('.sample')).toHaveCSS(
+    'color',
+    'rgb(255, 255, 255)',
+  );
+
   // The button drops one.
   await review(page)
     .getByRole('button', { name: /^Drop JetBrains Mono/ })
