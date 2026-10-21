@@ -214,7 +214,7 @@ function onToggle(row: ListRow): void {
           :face="item.face"
           :label="item.row.kind === 'face' ? styleName(item.row) : item.row.family.name"
           :text="item.text"
-          :size-px="preview.sizePx"
+          :size-px="preview.sizePx * item.sizeFactor"
           :line-height="preview.lineHeight"
           :tracking-em="preview.trackingEm"
           :align="preview.align"

@@ -68,3 +68,39 @@ test('the font-name and custom samples show per-face text', async ({ page }) => 
   await controls.getByLabel('Custom text').fill('Hamburgefonstiv');
   await expect(page.locator('[data-face="6"] .sample')).toHaveText('Hamburgefonstiv');
 });
+
+test('auto size scales each row by its x-height or cap height, by keyboard, and persists', async ({
+  page,
+}) => {
+  await open(page);
+  const controls = page.getByRole('group', { name: 'Preview settings' });
+  const autoSize = controls.getByLabel('Auto size');
+  const size = (face: number) =>
+    page
+      .locator(`[data-face="${face}"] .sample`)
+      .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+
+  await expect(autoSize).toHaveValue('off');
+  // Keyboard-reachable: Tab from the size field lands on it (line height comes after).
+  await controls.getByLabel('Size in pixels').focus();
+  await page.keyboard.press('Tab');
+  await expect(autoSize).toBeFocused();
+
+  await autoSize.selectOption('xHeight');
+  // Mock faces 1 and 6 have x-heights of 520 and 550 per 1000; face 7 declares none.
+  await expect.poll(() => size(1)).toBeCloseTo((28 * 0.5) / 0.52, 1);
+  await expect.poll(() => size(6)).toBeCloseTo((28 * 0.5) / 0.55, 1);
+  expect(await size(7)).toBe(28);
+  // Every scaled face has the same x-height in pixels.
+  expect(Math.abs((await size(1)) * 0.52 - (await size(6)) * 0.55)).toBeLessThan(1);
+
+  await autoSize.selectOption('capHeight');
+  await expect.poll(() => size(1)).toBeCloseTo((28 * 0.7) / 0.72, 1);
+
+  await page.reload();
+  await expect(controls.getByLabel('Auto size')).toHaveValue('capHeight');
+  await expect.poll(() => size(1)).toBeCloseTo((28 * 0.7) / 0.72, 1);
+
+  await controls.getByLabel('Auto size').selectOption('off');
+  await expect.poll(() => size(1)).toBe(28);
+});

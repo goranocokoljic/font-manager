@@ -434,3 +434,83 @@ describe('FontList dynamic previews', () => {
     list.unmount();
   });
 });
+
+describe('FontList auto size (E16.2)', () => {
+  const auto = (autoSize: PreviewSettings['autoSize']): PreviewSettings => ({
+    ...DEFAULT_PREVIEW,
+    autoSize,
+  });
+  const sizes = (list: VueWrapper) =>
+    list
+      .findAll('.sample')
+      .map((s) => Number(parseFloat((s.element as HTMLElement).style.fontSize).toFixed(3)));
+  const px = (n: number) => Number(n.toFixed(3));
+
+  function counting(options: MockOptions = {}) {
+    const mock = createMockClient(options);
+    const calls: { faces: number[]; basis: string }[] = [];
+    setClient({
+      ...mock,
+      sizeFactors: (req) => {
+        calls.push({ faces: [...req.faces], basis: req.basis });
+        return mock.sizeFactors(req);
+      },
+    });
+    return calls;
+  }
+
+  it('scales each row by its face factor; a face without the metric keeps the size', async () => {
+    const calls = counting();
+    await useLibraryStore().load();
+    const list = mount(FontList, { props: { preview: auto('xHeight') }, attachTo: document.body });
+    await flushPromises();
+    // Faces 1, 6, 7: x-height 520/1000, 550/1000, none. 28 px × 0.5 / em.
+    expect(sizes(list)).toEqual([px((28 * 0.5) / 0.52), px((28 * 0.5) / 0.55), 28]);
+    expect(calls).toEqual([{ faces: [1, 6, 7], basis: 'xHeight' }]);
+
+    await list.setProps({ preview: auto('capHeight') });
+    await flushPromises();
+    // Cap height 720/1000, 730/1000, 1434/2048. 28 px × 0.7 / em.
+    expect(sizes(list)).toEqual([
+      px((28 * 0.7) / 0.72),
+      px((28 * 0.7) / 0.73),
+      px((28 * 0.7) / (1434 / 2048)),
+    ]);
+    expect(calls).toHaveLength(2);
+
+    await list.setProps({ preview: auto('off') });
+    await flushPromises();
+    expect(sizes(list)).toEqual([28, 28, 28]);
+    expect(calls).toHaveLength(2);
+    list.unmount();
+  });
+
+  it('asks once for the page on screen, not per row, and not again on a size change', async () => {
+    const calls = counting({ extraFaces: 997 });
+    await useLibraryStore().load();
+    const list = mount(FontList, {
+      props: { preview: auto('xHeight'), rowHeight: 50, overscan: 2 },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(items(list)).toHaveLength(17);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.faces.length).toBeLessThanOrEqual(17);
+    await list.setProps({ preview: { ...auto('xHeight'), sizePx: 60 } });
+    await flushPromises();
+    expect(calls).toHaveLength(1);
+    await scrollTo(list, 50 * 400);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]!.faces.length).toBeLessThanOrEqual(17);
+    list.unmount();
+  });
+
+  it('asks nothing while auto size is off', async () => {
+    const calls = counting();
+    await useLibraryStore().load();
+    const list = mount(FontList, { props: { preview: auto('off') }, attachTo: document.body });
+    await flushPromises();
+    expect(calls).toEqual([]);
+    list.unmount();
+  });
+});

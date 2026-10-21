@@ -4,8 +4,9 @@
 //!
 //! A family is what search groups ([`Index::list_families`]): its id is the
 //! id of its first visible face. A face's stored `face.parsed` holds what
-//! the inspector shows; the vertical metrics are not stored, so
-//! [`Index::face_detail`] reads them from the file (one file, read only).
+//! the inspector shows, the vertical metrics with it (E16.2); a face stored
+//! without them (unreadable, or written before E16.2 and not scanned since)
+//! has [`Index::face_detail`] read them from the file (one file, read only).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -91,21 +92,29 @@ impl Index {
     }
 
     /// Everything the inspector shows about the face `face`. The metrics are
-    /// read from the file; a file that cannot be read gives zero metrics and
-    /// a warning in the log, not an error, so the rest still shows. An
-    /// unknown face is `NotFound`.
+    /// the ones the scan stored; without them they are read from the file,
+    /// and a file that cannot be read gives zero metrics and a warning in the
+    /// log, not an error, so the rest still shows. An unknown face is
+    /// `NotFound`.
     pub fn face_detail(&self, face: FaceId) -> FmResult<FaceDetail> {
         let row = self.face_row(face)?;
-        let metrics = read_metrics(&row.file).unwrap_or_else(|e| {
-            tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
-            Metrics {
-                units_per_em: 0,
-                ascender: 0,
-                descender: 0,
-                x_height: None,
-                cap_height: None,
-            }
-        });
+        let stored = row
+            .parsed
+            .as_ref()
+            .map(|p| p.metrics)
+            .filter(|m| m.units_per_em > 0);
+        let metrics = stored
+            .map_or_else(|| read_metrics(&row.file), Ok)
+            .unwrap_or_else(|e| {
+                tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
+                Metrics {
+                    units_per_em: 0,
+                    ascender: 0,
+                    descender: 0,
+                    x_height: None,
+                    cap_height: None,
+                }
+            });
         let tags = self.face_tag_names(face)?;
         let family_notes = self.family_notes(&row.summary.family_name)?;
         let declared = self

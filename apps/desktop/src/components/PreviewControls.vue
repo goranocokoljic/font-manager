@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The preview controls above a font list: sample text, size, line height,
-// tracking, alignment, colors and the preview surface. Every change goes to
+// The preview controls above a font list: sample text, size, auto size, line
+// height, tracking, alignment, colors and the preview surface. Every change goes to
 // the preview store for `view`, which every row of that list reads.
 import { computed, useId } from 'vue';
 import { PANGRAM_LANGUAGES, PANGRAMS, SAMPLE_KINDS } from '../preview/sampleText';
@@ -10,6 +10,7 @@ import {
   TRACKING,
   usePreviewStore,
   type Alignment,
+  type AutoSize,
   type PreviewSettings,
   type Surface,
 } from '../stores/preview';
@@ -46,6 +47,11 @@ const alignments: { value: Alignment; label: string }[] = [
   { value: 'start', label: 'Start' },
   { value: 'center', label: 'Center' },
   { value: 'end', label: 'End' },
+];
+const autoSizes: { value: AutoSize; label: string }[] = [
+  { value: 'off', label: 'Off' },
+  { value: 'xHeight', label: 'x-height' },
+  { value: 'capHeight', label: 'Cap height' },
 ];
 const surfaces: { value: Surface; label: string }[] = [
   { value: 'auto', label: 'Follow theme' },
@@ -134,6 +140,20 @@ function colorFrom(e: Event): string {
         @input="typed('sizePx', $event, false)"
         @change="typed('sizePx', $event, true)"
       />
+    </div>
+    <div class="field">
+      <label
+        :for="`${uid}-auto-size`"
+        title="Scale each row so every font's x-height or cap height matches at this size"
+        >Auto size</label
+      >
+      <select
+        :id="`${uid}-auto-size`"
+        :value="s.autoSize"
+        @change="set({ autoSize: ($event.target as HTMLSelectElement).value as AutoSize })"
+      >
+        <option v-for="o in autoSizes" :key="o.value" :value="o.value">{{ o.label }}</option>
+      </select>
     </div>
     <label class="field">
       <span>Line height</span>

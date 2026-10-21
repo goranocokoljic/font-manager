@@ -28,7 +28,7 @@ use fm_api::organization::{
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
-    SampleTextRequest,
+    SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
@@ -281,6 +281,15 @@ async fn sample_texts(
     req: SampleTextRequest,
 ) -> ApiResult<Vec<SampleText>> {
     call(&state, move |api| api.sample_texts(req)).await
+}
+
+/// The auto size factor of each face, for the faces on screen (E16.2).
+#[tauri::command]
+async fn size_factors(
+    state: State<'_, AppState>,
+    req: SizeFactorRequest,
+) -> ApiResult<Vec<SizeFactor>> {
+    call(&state, move |api| api.size_factors(req)).await
 }
 
 /// The CSS for a face's moved axes and switched features ("Copy CSS").
@@ -780,6 +789,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_virtual_styles,
             delete_virtual_style,
             sample_texts,
+            size_factors,
             css_values,
             layout_presets,
             clamp_layout,

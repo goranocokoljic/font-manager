@@ -27,7 +27,7 @@ use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
-use fm_api::common::{Axis, AxisValue, FontFormat, Health, NamedInstance};
+use fm_api::common::{Axis, AxisValue, FontFormat, Health, Metrics, NamedInstance};
 use read_fonts::tables::gsub::Gsub;
 use read_fonts::tables::layout::FeatureParams;
 use read_fonts::types::Tag;
@@ -130,6 +130,12 @@ pub struct ParsedFace {
     /// when neither says anything (see [`crate::classify`]).
     #[serde(default)]
     pub classification: Option<ClassGuess>,
+    /// Vertical metrics, x-height and cap height measured from the outlines
+    /// when `OS/2` lacks them (see [`crate::metrics::read`]); zero for a face
+    /// that could not be read. No serde default: a `face.parsed` written
+    /// before this field fails to load, so the next scan reads the file again
+    /// and fills it, and `face.metrics` with it.
+    pub metrics: Metrics,
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
@@ -164,6 +170,13 @@ impl ParsedFace {
             locl_languages: Vec::new(),
             color: false,
             classification: None,
+            metrics: Metrics {
+                units_per_em: 0,
+                ascender: 0,
+                descender: 0,
+                x_height: None,
+                cap_height: None,
+            },
             code_points: Vec::new(),
             health,
         }
@@ -471,6 +484,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         .as_deref()
         .or(face.family.as_deref());
     face.classification = classify::classify(font, family, &face.code_points);
+    face.metrics = crate::metrics::read(font);
 
     let bitmap_only = is_bitmap_only(font);
     if !bitmap_only && !has_glyph_images(font) {

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import type { SizeBasis } from '../api/types';
 import {
   isPangramLanguage,
   SAMPLE_KINDS,
@@ -23,6 +24,8 @@ export const CUSTOM_TEXT_MAX = 1000;
 
 export type Alignment = 'start' | 'center' | 'end';
 export type Surface = 'auto' | 'light' | 'dark';
+/** Auto size (E16.2): off, or the metric every row's size is matched on. */
+export type AutoSize = 'off' | SizeBasis;
 
 export interface PreviewSettings {
   sample: SampleKind;
@@ -38,6 +41,8 @@ export interface PreviewSettings {
   backgroundColor: string | null;
   /** `auto` follows the app theme. */
   surface: Surface;
+  /** Scales each row so every face's x-height (or cap height) matches at `sizePx`. */
+  autoSize: AutoSize;
 }
 
 export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
@@ -51,10 +56,12 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   textColor: null,
   backgroundColor: null,
   surface: 'auto',
+  autoSize: 'off',
 });
 
 const ALIGNMENTS: readonly Alignment[] = ['start', 'center', 'end'];
 const SURFACES: readonly Surface[] = ['auto', 'light', 'dark'];
+const AUTO_SIZES: readonly AutoSize[] = ['off', 'xHeight', 'capHeight'];
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Keeps `value` inside `bounds`, rounded to its step; anything not a finite number gives `fallback`. */
@@ -100,6 +107,7 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     textColor: color(r.textColor),
     backgroundColor: color(r.backgroundColor),
     surface: pick(r.surface, SURFACES, d.surface),
+    autoSize: pick(r.autoSize, AUTO_SIZES, d.autoSize),
   };
 }
 
@@ -130,7 +138,7 @@ function browserStorage(): Storage | undefined {
 }
 
 /**
- * Preview settings (sample text, size, spacing, colors, surface) for each view. Every row
+ * Preview settings (sample text, size, spacing, colors, surface, auto size) for each view. Every row
  * of a view's list reads them, so a change applies to all rows at once; they are saved per
  * view as a view preference.
  */

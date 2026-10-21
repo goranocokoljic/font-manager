@@ -70,4 +70,21 @@ describe('PreviewControls', () => {
     await wrapper.findAll('button').at(-1)!.trigger('click');
     expect(store.settingsFor('collection-3').sizePx).toBe(28);
   });
+
+  it('sets auto size from a labelled select (Off, x-height, Cap height)', async () => {
+    const { wrapper, store } = mountControls('collection-3');
+    const label = wrapper.findAll('label').find((l) => l.text() === 'Auto size')!;
+    const select = wrapper.get(`select#${label.attributes('for')}`);
+    expect(select.findAll('option').map((o) => o.text())).toEqual([
+      'Off',
+      'x-height',
+      'Cap height',
+    ]);
+    expect((select.element as HTMLSelectElement).value).toBe('off');
+    await select.setValue('xHeight');
+    expect(store.settingsFor('collection-3').autoSize).toBe('xHeight');
+    await select.setValue('capHeight');
+    expect(store.settingsFor('collection-3').autoSize).toBe('capHeight');
+    expect(store.settingsFor('all').autoSize).toBe('off');
+  });
 });

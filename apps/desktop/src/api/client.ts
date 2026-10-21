@@ -69,6 +69,8 @@ import type {
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
+  SizeFactor,
+  SizeFactorRequest,
   Source,
   SourceId,
   Tag,
@@ -147,6 +149,8 @@ export interface FmClient {
   renderPreview(req: PreviewRequest): Promise<PreviewImage>;
   /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
+  /** The auto size factor of each face for a basis (x-height or cap height), in order. */
+  sizeFactors(req: SizeFactorRequest): Promise<SizeFactor[]>;
   /** The CSS declarations for a face's moved axes and switched features ("Copy CSS"). */
   cssValues(req: CssValuesRequest): Promise<CssValues>;
   /** The six body-text layout presets (Book, Columns, Magazine, Quote, Characters, Waterfall). */
@@ -245,6 +249,7 @@ export const tauriClient: FmClient = {
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
+  sizeFactors: (req) => invoke<SizeFactor[]>('size_factors', { req }),
   cssValues: (req) => invoke<CssValues>('css_values', { req }),
   layoutPresets: () => invoke<Layout[]>('layout_presets'),
   clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),

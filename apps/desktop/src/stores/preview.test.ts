@@ -106,4 +106,17 @@ describe('preview store', () => {
     expect(previewRowHeight(DEFAULT_PREVIEW)).toBe(64);
     expect(previewRowHeight({ sizePx: 300, lineHeight: 1.5 })).toBe(480);
   });
+
+  it('keeps auto size per view and reads it back after a reload', async () => {
+    const store = freshStore();
+    expect(store.settingsFor('all').autoSize).toBe('off');
+    store.update('all', { autoSize: 'xHeight' });
+    store.update('collection-2', { autoSize: 'capHeight' });
+    await nextTick();
+    const again = freshStore();
+    expect(again.settingsFor('all').autoSize).toBe('xHeight');
+    expect(again.settingsFor('collection-2').autoSize).toBe('capHeight');
+    expect(again.settingsFor('collection-9').autoSize).toBe('off');
+    expect(normalizePreview({ autoSize: 'ascender' }).autoSize).toBe('off');
+  });
 });

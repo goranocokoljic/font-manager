@@ -57,6 +57,8 @@ import {
   type ProjectSet,
   type SearchResponse,
   type SampleText,
+  type SizeBasis,
+  type SizeFactor,
   type Source,
   type SourceId,
   type Tag,
@@ -506,6 +508,19 @@ export function mockCssValues(f: FaceDetail, req: CssValuesRequest): CssValues {
  * it; else letters of the complete language whose script the face maps most; else
  * its own characters.
  */
+/** The core's auto size targets and usable range in em (`fm_core::metrics`). */
+const MOCK_SIZE_TARGET_EM: Record<SizeBasis, number> = { xHeight: 0.5, capHeight: 0.7 };
+const MOCK_USABLE_EM = [0.2, 1.2] as const;
+
+/** `fm_core::metrics::size_factor`: the target over the face's value in em; 1 without a usable value. */
+export function mockSizeFactor(f: FaceDetail, basis: SizeBasis): SizeFactor {
+  const m = f.metrics;
+  const value = basis === 'xHeight' ? m.xHeight : m.capHeight;
+  const em = value !== null && m.unitsPerEm > 0 ? value / m.unitsPerEm : null;
+  const usable = em !== null && em >= MOCK_USABLE_EM[0] && em <= MOCK_USABLE_EM[1];
+  return { face: f.face.id, factor: usable ? MOCK_SIZE_TARGET_EM[basis] / em : 1 };
+}
+
 export function mockSampleText(f: FaceDetail, text: string): SampleText {
   const chars = mockChars(f);
   const face = f.face.id;
@@ -1535,6 +1550,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         const f = find(id);
         if (!f) throw notFound(id);
         return mockSampleText(f, req.text);
+      }),
+    sizeFactors: async (req) =>
+      req.faces.map((id) => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        return mockSizeFactor(f, req.basis);
       }),
     listGlyphs: async (req) => {
       const f = find(req.face);
