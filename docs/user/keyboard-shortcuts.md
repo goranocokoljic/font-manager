@@ -31,7 +31,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `4` | Show the fonts as a waterfall: the preview text at six sizes |
 | `5` | Show the selected font in a layout: a page of text, for example a book page |
 | `Space` | Quick look at the font (coming in a later version) |
-| `C` | Add the font to the compare view (coming in a later version) |
+| `C` | Pin the selected font to Compare (up to 4 fonts) |
 
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
@@ -43,6 +43,21 @@ in the search box.
 | `Enter` | Edit the text of the block that has the focus |
 | `Ctrl+Enter` | Keep the edit and close the text box |
 | `Esc` | Drop the edit and close the text box |
+
+## In Compare
+
+Pin two to four fonts with `C`, then click **Compare** in the toolbar (or run
+**Open Compare** in the command palette). Compare shows the pinned fonts in the
+preview text of the list, all at the same size. Choose a mode: **Side by side**,
+**Stacked** or **Overlay**. Overlay draws two fonts on one baseline in two colors;
+with three or four pinned, choose the two fonts. **Remove** takes a font out of
+Compare. The pins stay until you close the app.
+
+| Key | What it does |
+|-----|--------------|
+| `Left` and `Right` | Change the mode, when the focus is on the mode |
+| `Tab` | Go to the next control in Compare |
+| `Esc` | Close Compare and go back to the list |
 
 ## The command palette
 
