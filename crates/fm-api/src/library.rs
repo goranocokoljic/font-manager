@@ -501,6 +501,15 @@ pub struct LicenseInfo {
     pub embedding: Embedding,
     /// What the user declared, if anything.
     pub declared: Option<LicenseType>,
+    /// Seats the user declared for the family (E15.2).
+    #[serde(default)]
+    pub seats: Option<u32>,
+    /// Purchase date the user declared, `YYYY-MM-DD` (E15.2).
+    #[serde(default)]
+    pub purchase_date: Option<String>,
+    /// Absolute path of the receipt copy the app keeps (E15.2).
+    #[serde(default)]
+    pub receipt: Option<String>,
 }
 
 /// Everything the info panel shows about one face.

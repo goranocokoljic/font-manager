@@ -43,6 +43,13 @@ Read [Sources](sources.md) to learn more about folders.
   **Family notes** are for all styles of the family. Font Manager saves a note when
   you leave its field. To delete a note, clear its field. The **Notes** column of the
   table shows the family notes. Notes stay when Font Manager reads the folder again.
+- Record your license in the **License** section of the **Info** tab. Set the license
+  type, the number of seats and the purchase date, then click **Save license**. The
+  license is for all styles of the family. To attach a receipt, choose where Font
+  Manager keeps its copy and click **Attach receipt…**. **Next to the font** puts the
+  copy in the `.fontlibrary` folder of the font's folder, so a synced folder carries
+  it to your team. Font Manager copies the receipt; your file stays where it is. When
+  you remove or replace a receipt, Font Manager moves its copy to the trash.
 
 ## Use a font in other apps
 

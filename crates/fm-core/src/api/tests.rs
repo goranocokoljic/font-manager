@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::library::{
-    FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, OpenLicense, ProblemKind,
-    TrashMoveStatus,
+    FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
+    ProblemKind, TrashMoveStatus,
 };
 use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
@@ -1460,4 +1460,316 @@ fn the_coverage_list_counts_blocks_and_languages_of_a_face() {
     assert!(ro.has_locl && ro.covered == ro.total, "{ro:?}");
     let unknown = lib.api.face_coverage(FaceId(99_999));
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}
+
+/// A [`Lib`] scanned, with a trash and an app-data receipts folder.
+fn licensed(label: &str) -> (Lib, PathBuf, PathBuf) {
+    let (lib, _, _) = Lib::scanned(label);
+    let trash = lib.dir.path().join("trash");
+    let receipts = lib.paths.data.join(crate::receipt::RECEIPTS_DIR);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_trash(Arc::new(MockTrash::new(&trash)))
+            .with_receipts_in(receipts.clone()),
+        ..lib
+    };
+    (lib, trash, receipts)
+}
+
+/// A receipt the user picked, outside the library.
+fn picked(lib: &Lib, name: &str, text: &str) -> PathBuf {
+    let dir = lib.dir.path().join("Downloads");
+    std::fs::create_dir_all(&dir).expect("downloads");
+    let path = dir.join(name);
+    std::fs::write(&path, text).expect("receipt");
+    path
+}
+
+/// The contents of every file in the mock trash, sorted.
+fn trashed(trash: &Path) -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(trash)
+        .map(|dir| {
+            dir.filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_none_or(|x| x != "info"))
+                .map(|p| std::fs::read_to_string(p).expect("trashed"))
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort();
+    out
+}
+
+fn declaration(family: FamilyId) -> LicenseDeclaration {
+    LicenseDeclaration {
+        family,
+        license_type: Some(LicenseType::Desktop),
+        seats: Some(3),
+        purchase_date: Some("2026-03-01".into()),
+        receipt: ReceiptChange::Keep,
+    }
+}
+
+#[test]
+fn a_declared_license_survives_a_rescan_and_a_rebuild() {
+    let (lib, _, _) = licensed("api-license");
+    let barlow = lib.family("Barlow");
+    let rx = lib.api.subscribe();
+    lib.api
+        .declare_license(declaration(barlow.id))
+        .expect("declare");
+    let family_faces = lib.api.get_family(barlow.id).expect("family").faces;
+    assert!(matches!(
+        rx.recv_timeout(WAIT),
+        Ok(Event::LibraryChanged { updated, .. }) if updated.len() == family_faces.len()
+    ));
+    let check = |when: &str| {
+        let barlow = lib.family("Barlow");
+        assert_eq!(
+            barlow.declared_license,
+            Some(LicenseType::Desktop),
+            "{when}"
+        );
+        assert_eq!(lib.family("Bebas Neue").declared_license, None, "{when}");
+        for face in &lib.api.get_family(barlow.id).expect("family").faces {
+            let license = lib.api.get_face(face.id).expect("detail").license;
+            assert_eq!(license.declared, Some(LicenseType::Desktop), "{when}");
+            assert_eq!(license.seats, Some(3), "{when}");
+            assert_eq!(
+                license.purchase_date.as_deref(),
+                Some("2026-03-01"),
+                "{when}"
+            );
+        }
+    };
+    check("declared");
+    lib.scan(None, false);
+    check("after a rescan");
+    rebuild(&lib);
+    check("after a rebuild");
+
+    // Every field clears.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: lib.family("Barlow").id,
+            license_type: None,
+            seats: None,
+            purchase_date: Some(String::new()),
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("cleared");
+    let barlow = lib.family("Barlow");
+    assert_eq!(barlow.declared_license, None);
+    let license = lib
+        .api
+        .get_face(FaceId(barlow.id.0))
+        .expect("detail")
+        .license;
+    assert_eq!(
+        (
+            license.declared,
+            license.seats,
+            license.purchase_date,
+            license.receipt
+        ),
+        (None, None, None, None)
+    );
+    assert_eq!(
+        lib.api
+            .declare_license(declaration(FamilyId(9999)))
+            .map_err(|e| e.code),
+        Err(ErrorCode::NotFound)
+    );
+}
+
+#[test]
+fn a_receipt_is_copied_to_the_place_picked_and_a_replaced_copy_goes_to_the_trash() {
+    let (lib, trash, receipts) = licensed("api-receipt");
+    let barlow = lib.family("Barlow").id;
+    let invoice = picked(&lib, "invoice.pdf", "first invoice");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: invoice.display().to_string(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..declaration(barlow)
+        })
+        .expect("attach next to the font");
+    let next_to_font = lib
+        .root
+        .join(crate::sidecar::SIDECAR_DIR)
+        .join(crate::receipt::RECEIPTS_DIR)
+        .join("invoice.pdf");
+    let receipt = |lib: &Lib| {
+        lib.api
+            .get_face(FaceId(barlow.0))
+            .expect("detail")
+            .license
+            .receipt
+            .map(PathBuf::from)
+    };
+    assert_eq!(receipt(&lib), Some(next_to_font.clone()));
+    assert_eq!(
+        std::fs::read_to_string(&next_to_font).expect("copy"),
+        "first invoice"
+    );
+    // Copied, never moved.
+    assert_eq!(
+        std::fs::read_to_string(&invoice).expect("picked"),
+        "first invoice"
+    );
+    // The family's sidecar carries it, relative to its folder.
+    let sidecar = std::fs::read_to_string(
+        lib.root
+            .join(crate::sidecar::SIDECAR_DIR)
+            .join(crate::sidecar::file_name("Barlow")),
+    )
+    .expect("sidecar");
+    assert!(
+        sidecar.contains("\"receipt\": \"receipts/invoice.pdf\""),
+        "{sidecar}"
+    );
+
+    // Changing the rest keeps the receipt.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            license_type: Some(LicenseType::Web),
+            ..declaration(barlow)
+        })
+        .expect("keep");
+    assert_eq!(receipt(&lib), Some(next_to_font.clone()));
+    assert!(trashed(&trash).is_empty());
+
+    // A new receipt in the data folder replaces it: the old copy goes to
+    // the trash.
+    let second = picked(&lib, "invoice-2026.pdf", "second invoice");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: second.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        })
+        .expect("attach in app data");
+    let in_app_data = receipts.join("invoice-2026.pdf");
+    assert_eq!(receipt(&lib), Some(in_app_data.clone()));
+    assert!(!next_to_font.exists());
+    assert_eq!(trashed(&trash), ["first invoice"]);
+
+    // Clearing moves the copy to the trash too; the picked files stay.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Clear,
+            ..declaration(barlow)
+        })
+        .expect("clear");
+    assert_eq!(receipt(&lib), None);
+    assert!(!in_app_data.exists());
+    assert_eq!(trashed(&trash), ["first invoice", "second invoice"]);
+    assert!(invoice.exists() && second.exists());
+}
+
+#[test]
+fn a_bad_date_negative_seats_or_a_missing_receipt_is_an_invalid_request() {
+    let (lib, _, receipts) = licensed("api-license-invalid");
+    let barlow = lib.family("Barlow").id;
+    let missing = lib.dir.path().join("Downloads").join("nope.pdf");
+    let attempts = [
+        LicenseDeclaration {
+            purchase_date: Some("2026-02-30".into()),
+            ..declaration(barlow)
+        },
+        LicenseDeclaration {
+            purchase_date: Some("March 1st".into()),
+            ..declaration(barlow)
+        },
+        LicenseDeclaration {
+            seats: Some(-1),
+            ..declaration(barlow)
+        },
+        LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: missing.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        },
+    ];
+    for req in attempts {
+        let err = lib.api.declare_license(req.clone()).expect_err("invalid");
+        assert_eq!(err.code, ErrorCode::InvalidRequest, "{req:?}");
+        assert!(!err.message.is_empty());
+    }
+    // Nothing was stored or copied.
+    assert_eq!(lib.family("Barlow").declared_license, None);
+    assert!(!receipts.exists());
+}
+
+#[test]
+fn a_receipt_whose_old_copy_cannot_be_trashed_changes_nothing() {
+    let (lib, _, receipts) = licensed("api-receipt-refused");
+    let trash = Arc::new(MockTrash::new(lib.dir.path().join("trash")));
+    let lib = Lib {
+        api: lib.api.with_trash(Arc::clone(&trash) as Arc<dyn Trash>),
+        ..lib
+    };
+    let barlow = lib.family("Barlow").id;
+    let first = picked(&lib, "a.pdf", "a");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: first.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        })
+        .expect("attach");
+    let kept = receipts.join("a.pdf");
+    trash.refuse(&kept);
+    let second = picked(&lib, "b.pdf", "b");
+    let err = lib
+        .api
+        .declare_license(LicenseDeclaration {
+            license_type: Some(LicenseType::Trial),
+            receipt: ReceiptChange::Attach {
+                path: second.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        })
+        .expect_err("refused");
+    assert!(err.message.contains("trash"), "{err:?}");
+    let license = lib.api.get_face(FaceId(barlow.0)).expect("detail").license;
+    assert_eq!(license.declared, Some(LicenseType::Desktop));
+    assert_eq!(license.receipt.map(PathBuf::from), Some(kept.clone()));
+    assert!(kept.exists());
+    // The copy just made went to the trash, not left behind.
+    assert!(!receipts.join("b.pdf").exists());
+    assert!(second.exists());
+}
+
+#[test]
+fn a_receipt_cannot_be_kept_next_to_a_font_in_a_folder_that_is_not_there() {
+    let (lib, _, _) = licensed("api-receipt-offline");
+    let barlow = lib.family("Barlow").id;
+    let invoice = picked(&lib, "invoice.pdf", "x");
+    // The library folder goes offline (renamed away): the index keeps it.
+    let away = lib.dir.path().join("Library-offline");
+    std::fs::rename(&lib.root, &away).expect("offline");
+    let err = lib
+        .api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: invoice.display().to_string(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..declaration(barlow)
+        })
+        .expect_err("offline");
+    std::fs::rename(&away, &lib.root).expect("back");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert!(err.message.contains("data folder"), "{err:?}");
 }

@@ -401,6 +401,8 @@ impl Index {
         let mut formats = Names::new(|f| format_from_sql(f).ok().flatten());
         let mut licenses = Names::new(name_of::<LicenseType>);
         let mut open_licenses = Names::new(name_of::<OpenLicense>);
+        // A family's declared license (E15.2) is every one of its faces'.
+        let declared = self.all_declared_types()?;
         while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
             let text = |i: usize| {
                 row.get_ref(i)
@@ -422,6 +424,7 @@ impl Index {
             let instances: Option<i64> = row.get(16).map_err(|e| db_error(&e))?;
             let id: u32 = row.get(0).map_err(|e| db_error(&e))?;
             let family = fields[FAMILY].unwrap_or_default().to_owned();
+            let key = family_key(&family);
             let slant = text(10)?
                 .and_then(|s| slants.get(s))
                 .unwrap_or(Slant::Upright);
@@ -435,7 +438,10 @@ impl Index {
                 color: row.get(22).map_err(|e| db_error(&e))?,
                 format: text(13)?.and_then(|f| formats.get(f)),
                 features,
-                license: text(19)?.and_then(|l| licenses.get(l)),
+                license: declared
+                    .get(&key)
+                    .copied()
+                    .or(text(19)?.and_then(|l| licenses.get(l))),
                 foundry: fields[FOUNDRY].map(str::to_owned),
                 source: SourceId(row.get(17).map_err(|e| db_error(&e))?),
                 tags: tags.remove(&id).unwrap_or_default(),
@@ -456,7 +462,7 @@ impl Index {
             );
             out.push(Row {
                 id,
-                family_key: family_key(&family),
+                family_key: key,
                 family,
                 slots: slots.intern(&values(&face_text, &facts)),
                 text: face_text,

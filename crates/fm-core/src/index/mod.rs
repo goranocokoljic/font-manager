@@ -25,6 +25,7 @@ mod activation;
 mod collections;
 mod duplicates;
 mod faces;
+mod family_license;
 mod family_notes;
 mod files;
 mod languages;
@@ -53,6 +54,7 @@ use crate::error::{FmError, FmResult};
 
 pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
 pub use faces::FaceLocation;
+pub use family_license::{DeclaredLicense, LicenseTarget};
 pub use files::{BATCH_SIZE, Persisted};
 pub(crate) use resolutions::StoredMove;
 pub use schema::SCHEMA_VERSION;

@@ -17,8 +17,9 @@ use fm_api::library::{
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
-    MoveCollectionRequest, PinInstanceRequest, ProjectSet, RenameCollectionRequest, Tag,
-    TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
+    RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -475,6 +476,12 @@ async fn update_family_notes(state: State<'_, AppState>, req: FamilyNotesUpdate)
     call(&state, move |api| api.update_family_notes(req)).await
 }
 
+/// Declares the license of a family (E15.2).
+#[tauri::command]
+async fn declare_license(state: State<'_, AppState>, req: LicenseDeclaration) -> ApiResult<()> {
+    call(&state, move |api| api.declare_license(req)).await
+}
+
 /// Every source: watched folders, the library folder and the system fonts.
 #[tauri::command]
 async fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
@@ -588,6 +595,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             untag_faces,
             update_user_meta,
             update_family_notes,
+            declare_license,
             list_sets,
             pin_instance,
             list_virtual_styles,

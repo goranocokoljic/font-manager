@@ -258,3 +258,44 @@ describe('API client', () => {
     expect(invoke.mock.calls).toEqual([['conflicts', { target }], ['list_conflicts']]);
   });
 });
+
+describe('declared license', () => {
+  it('declares the family license and shows a refusal in the license form only', async () => {
+    const store = useSelectionStore();
+    await store.select(1);
+    expect(
+      await store.declareLicense({ licenseType: 'desktop', seats: 3, purchaseDate: '2026-03-01' }),
+    ).toBe(true);
+    expect(store.detail?.license.declared).toBe('desktop');
+    expect(store.detail?.license.seats).toBe(3);
+    expect(store.detail?.license.purchaseDate).toBe('2026-03-01');
+
+    expect(await store.declareLicense({ licenseType: 'desktop', seats: -1 })).toBe(false);
+    expect(store.licenseError?.code).toBe('invalidRequest');
+    expect(store.editError).toBeNull();
+    // The refused declaration changed nothing; the next good one clears the error.
+    expect(store.detail?.license.seats).toBe(3);
+    expect(await store.declareLicense({})).toBe(true);
+    expect(store.licenseError).toBeNull();
+    expect(store.detail?.license.declared).toBeNull();
+  });
+
+  it('attaches a picked receipt, and a cancelled pick changes nothing', async () => {
+    const store = useSelectionStore();
+    await store.select(1);
+    setClient({ ...client, pickFile: async () => null });
+    expect(await store.attachReceipt({ licenseType: 'web' }, 'appData')).toBe(false);
+    expect(store.detail?.license.receipt ?? null).toBeNull();
+    setClient({ ...client, pickFile: async () => String.raw`C:\Users\me\invoice.pdf` });
+    expect(await store.attachReceipt({ licenseType: 'web' }, 'nextToFont')).toBe(true);
+    expect(store.detail?.license.receipt).toBe('/fonts/.fontlibrary/receipts/invoice.pdf');
+    expect(store.detail?.license.declared).toBe('web');
+  });
+
+  it('calls the declare_license Tauri command', async () => {
+    invoke.mockResolvedValue(null);
+    const req = { family: 1, licenseType: 'app' as const, receipt: { kind: 'clear' as const } };
+    await tauriClient.declareLicense(req);
+    expect(invoke.mock.calls).toEqual([['declare_license', { req }]]);
+  });
+});

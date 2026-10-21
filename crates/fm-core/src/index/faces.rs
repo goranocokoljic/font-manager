@@ -108,6 +108,9 @@ impl Index {
         });
         let tags = self.face_tag_names(face)?;
         let family_notes = self.family_notes(&row.summary.family_name)?;
+        let declared = self
+            .declared_license(&row.summary.family_name)?
+            .unwrap_or_default();
         let code_point_count = u32::try_from(self.face_cmap(face)?.len()).ok();
         let parsed = row.parsed.as_ref();
         let text = |f: fn(&ParsedFace) -> &Option<String>| parsed.and_then(|p| f(p).clone());
@@ -128,7 +131,11 @@ impl Index {
                 description: license_description,
                 url: license_url,
                 embedding: license::embedding(row.fs_type),
-                declared: row.license_type,
+                // The family's declaration (E15.2) wins over a face's own.
+                declared: declared.license_type.or(row.license_type),
+                seats: declared.seats,
+                purchase_date: declared.purchase_date,
+                receipt: declared.receipt.map(|r| r.display().to_string()),
             },
             metrics,
             axes: parsed.map(|p| p.axes.clone()).unwrap_or_default(),
