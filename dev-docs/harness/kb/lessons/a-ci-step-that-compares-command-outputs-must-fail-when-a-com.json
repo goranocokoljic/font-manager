@@ -1,0 +1,19 @@
+{
+  "id": "a-ci-step-that-compares-command-outputs-must-fail-when-a-com",
+  "title": "A CI step that compares command outputs must fail when a command fails",
+  "category": "testing",
+  "rule": "When a workflow step captures a command's output to compare it (hashes, versions, counts), give the step `shell: bash` and `set -euo pipefail`, do not pipe the command through a filter (`| tail`, `| head`) inside `$(...)`, and validate the shape of each captured value (e.g. `^[0-9a-f]{64}`) before comparing. A plain `run:` is `bash -e` without pipefail, so a failed command behind a pipe leaves the step green and two equal error outputs compare as a match. Put the compare in a script function with unit tests for an empty line, a non-value line and a mismatch, and keep a test that checks the step's shell and the absence of the pipe.",
+  "rationale": "E18.4 (#132): the fm-cli reproducibility job read `$(node build.mjs cli | tail -n 1)`; when both builds failed, both values were the echoed `$ cargo build …` line, `${a%% *}` matched `${b%% *}`, and the job went green with hash `$`.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    132
+  ],
+  "file_globs": [
+    ".github/workflows/**",
+    "scripts/**/*.mjs"
+  ],
+  "first_seen": "2026-10-21T13:38:24.096Z",
+  "last_seen": "2026-10-21T13:38:24.096Z"
+}
