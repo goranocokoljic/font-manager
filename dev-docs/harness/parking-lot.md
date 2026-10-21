@@ -168,3 +168,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E14.4 #117] apps/desktop/src/views/HomeView.vue:309 — the "Smart collections" placeholder group from #218 stays empty; smart collections show only as badged rows in the Collections tree.
 - [E14.4 #117] apps/desktop/src/components/FilterChips.vue:169 — the chips bar is capped at max-height 96px, so at 1,000×700 the save button and its inline error sit below the fold of that scroller.
 - [E17.3 #128] scripts/bench/lib.test.mjs:396 — the debug-build bench test on the macOS runner measured activation_100 at 1008 ms (budget 1000 ms; the release bench on main measures 763 ms), so it fails on runner noise with no code change (CI run 39643524037).
+- [E16.3 #124] apps/desktop/src/stores/palettes.ts:32 — `browserStorage()` is now copied in four stores (layout, preview, views, palettes); same behavior, can drift.
+- [E16.3 #124] apps/desktop/playwright.config.ts:13 — Playwright runs Chromium only, so CSS `@font-palette-values` on FontFace-loaded faces is unproven on WKWebView and WebKitGTK (the code falls back to the default palette).
+- [E16.3 #124] apps/desktop/src/components/CardLiveText.vue:21 — the face-holding pattern (`held` + `loader.acquire`/`release`) is hand-written in FontPreviewRow, FontLayout, GlyphCompare, CompareSheet and now CardLiveText; no shared composable.
