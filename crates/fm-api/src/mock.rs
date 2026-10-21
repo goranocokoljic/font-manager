@@ -19,28 +19,37 @@ use crate::common::{
     NamedInstance, Page, Paged, Slant,
 };
 use crate::export::{
-    ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest, WebFormat,
+    ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
+    LicenseInventoryRequest, WebFormat,
+};
+use crate::layout::{
+    BlockAlign, BlockOverflow, DuplicateLayoutRequest, Layout, LayoutEntry, LayoutPreset,
+    LayoutRef, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    SavedLayout, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
-    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphInfo,
-    GlyphPage, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicenseType,
-    ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution, ScanRequest,
-    SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphDetail,
+    GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo,
+    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
+    ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
+    WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
-    RenameCollectionRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
+    PinInstanceRequest, ProjectSet, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule,
+    RuleGroup, RuleOp, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
     UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
-    FontSource, PreviewImage, PreviewRequest, SampleFallback, SampleText, SampleTextRequest,
+    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
+    SampleText, SampleTextRequest,
 };
 use crate::search::{
-    CoverageReport, CoverageRequest, FamilyHit, FilterCount, FilterCounts, Filters,
-    LanguageCoverage, LanguagePreset, Missing, SearchRequest, SearchResponse, SimilarFace,
-    SimilarRequest, Supports, WeightRange, WidthRange,
+    BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
+    FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, SearchRequest,
+    SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::settings::{AppFolders, Settings, SettingsUpdate};
 use crate::workflows::{
@@ -48,13 +57,76 @@ use crate::workflows::{
 };
 use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
-    EventSource, ExportService, FaceId, FamilyId, JobId, LibraryService, OrganizationService,
-    PreviewService, ResolutionId, SearchService, SetId, SettingsService, SourceId, TagId,
-    VirtualStyleId, WorkflowService,
+    EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
+    OrganizationService, PreviewService, ResolutionId, SearchService, SetId, SettingsService,
+    SourceId, TagId, VirtualStyleId, WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
 pub const MOCK_NOW: &str = "2026-10-16T09:00:00Z";
+
+/// Whether `added` (RFC 3339, UTC) is within `days` days before [`MOCK_NOW`].
+fn added_within(added: &str, days: u32) -> bool {
+    match (unix_seconds(added), unix_seconds(MOCK_NOW)) {
+        (Some(added), Some(now)) => added >= now - i64::from(days) * 86_400,
+        _ => false,
+    }
+}
+
+/// Seconds since 1970 of an RFC 3339 UTC time (`2026-10-16T09:00:00Z`).
+fn unix_seconds(t: &str) -> Option<i64> {
+    let n = |at: usize, len: usize| t.get(at..at + len)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0, 4)?, n(5, 2)?, n(8, 2)?);
+    // Days from the civil date (H. Hinnant's algorithm).
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
+    Some(days * 86_400 + n(11, 2)? * 3_600 + n(14, 2)? * 60 + n(17, 2)?)
+}
+
+/// The refusal of a smart collection whose rule leads back to itself.
+/// The sample's copy of `fm_core::license::web_use` (fm-api cannot depend
+/// on fm-core): declared Web allows; declared Desktop, Trial or
+/// Personal-only, then restricted or preview-and-print embedding, do not;
+/// an open license allows; nothing else does.
+fn mock_web_use(l: &LicenseInfo) -> WebUse {
+    let (ok, reason) = match (l.declared, l.embedding, l.open_license) {
+        (Some(LicenseType::Web), ..) => (true, "Declared web license".to_owned()),
+        (Some(LicenseType::Desktop), ..) => (false, "Declared desktop license".to_owned()),
+        (Some(LicenseType::Trial), ..) => (false, "Declared trial license".to_owned()),
+        (Some(LicenseType::PersonalOnly), ..) => {
+            (false, "Declared for personal use only".to_owned())
+        }
+        (_, Embedding::Restricted, _) => (
+            false,
+            "Embedding restricted, no web license declared".to_owned(),
+        ),
+        (_, Embedding::PreviewAndPrint, _) => (
+            false,
+            "Embedding preview & print only, no web license declared".to_owned(),
+        ),
+        (_, _, Some(o)) => {
+            let name = match o {
+                OpenLicense::Ofl => "OFL",
+                OpenLicense::Apache => "Apache 2.0",
+                OpenLicense::Ufl => "UFL",
+                OpenLicense::Mit => "MIT",
+            };
+            (true, format!("Open license ({name})"))
+        }
+        (_, _, None) => (false, "No web license declared".to_owned()),
+    };
+    WebUse { ok, reason }
+}
+
+fn self_reference(c: &Collection) -> ApiError {
+    ApiError::invalid(format!(
+        "The rules of \"{}\" include the collection itself.",
+        c.name
+    ))
+}
 
 /// Near-misses within this many characters still show in a coverage search.
 const NEAR_MISS: usize = 5;
@@ -126,14 +198,27 @@ struct State {
     sets: Vec<ProjectSet>,
     /// Pinned instances, each held by one collection or one set.
     virtual_styles: Vec<VirtualStyle>,
+    /// Notes on families, by family.
+    family_notes: HashMap<FamilyId, String>,
     settings: Settings,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
     trashed: BTreeSet<String>,
     /// "Keep this one" actions, oldest first.
     resolutions: Vec<Resolution>,
+    /// The layout template files, in the order they were made.
+    layouts: Vec<MockLayoutFile>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
+}
+
+/// A layout template file of the mock: its content (or why it is broken) and
+/// its kept versions, oldest first.
+#[derive(Debug, Clone)]
+struct MockLayoutFile {
+    id: String,
+    content: Result<Layout, String>,
+    versions: Vec<(u32, Result<Layout, String>)>,
 }
 
 /// Every service on in-memory sample data. Cheap to create; each instance has
@@ -246,6 +331,18 @@ fn face(
     };
     let open_license = (embedding == Embedding::Installable).then_some(OpenLicense::Ofl);
     let char_set: BTreeSet<char> = chars.iter().flat_map(|s| s.chars()).collect();
+    let mut license = LicenseInfo {
+        description: open_license.map(|_| "SIL Open Font License 1.1".into()),
+        url: open_license.map(|_| "https://openfontlicense.org".into()),
+        open_license,
+        embedding,
+        declared: None,
+        seats: None,
+        purchase_date: None,
+        receipt: None,
+        web_use: None,
+    };
+    license.web_use = Some(mock_web_use(&license));
     MockFace {
         detail: FaceDetail {
             face: FaceSummary {
@@ -270,13 +367,7 @@ fn face(
             copyright: Some(format!("Copyright {} Authors", family.1)),
             designer: None,
             vendor_id: None,
-            license: LicenseInfo {
-                description: open_license.map(|_| "SIL Open Font License 1.1".into()),
-                url: open_license.map(|_| "https://openfontlicense.org".into()),
-                open_license,
-                embedding,
-                declared: None,
-            },
+            license,
             metrics: Metrics {
                 units_per_em: 1000,
                 ascender: 900,
@@ -317,6 +408,7 @@ fn face(
             foundry: None,
             italic_angle: Some(if slant == Slant::Upright { 0.0 } else { -10.0 }),
             code_point_count: Some(char_set.len() as u32),
+            family_notes: None,
         },
         source: SourceId(1),
         chars: char_set,
@@ -491,9 +583,11 @@ impl State {
                 faces: vec![FaceId(1), FaceId(6)],
             }],
             virtual_styles: Vec::new(),
+            family_notes: HashMap::new(),
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
+            layouts: mock_layout_files(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -538,6 +632,7 @@ impl State {
         let family = self.family(d.face.family).ok();
         d.designer = family.map(|fam| fam.designer.into());
         d.foundry = family.map(|fam| fam.foundry.into());
+        d.family_notes = self.family_notes.get(&d.face.family).cloned();
         d.tags = self
             .face_tags
             .get(&d.face.id)
@@ -625,6 +720,7 @@ impl State {
             open_license: faces.iter().find_map(|f| f.detail.license.open_license),
             declared_license: faces.iter().find_map(|f| f.detail.license.declared),
             tags,
+            notes: self.family_notes.get(&fam.id).cloned(),
         }
     }
 
@@ -732,21 +828,91 @@ impl State {
         }
     }
 
-    fn in_collection(&self, f: &MockFace, id: CollectionId, depth: u8) -> bool {
+    /// Whether `f` is in the collection `id`: a member of a manual one, or
+    /// passing a smart one's rule. `path` holds the smart collections whose
+    /// rules led here; reaching one of them again is `InvalidRequest`. An
+    /// unknown collection holds nothing.
+    fn in_collection(
+        &self,
+        f: &MockFace,
+        id: CollectionId,
+        path: &[CollectionId],
+    ) -> ApiResult<bool> {
         let Some(c) = self.collections.iter().find(|c| c.id == id) else {
-            return false;
+            return Ok(false);
         };
-        match &c.rules {
-            Some(rules) if depth < 4 => self.matches(f, rules, depth + 1).unwrap_or(false),
-            Some(_) => false,
-            None => self
+        let Some(group) = &c.rule_group else {
+            return Ok(self
                 .members
                 .get(&id)
-                .is_some_and(|m| m.contains(&f.detail.face.id)),
+                .is_some_and(|m| m.contains(&f.detail.face.id)));
+        };
+        if path.contains(&id) {
+            return Err(self_reference(c));
         }
+        let mut path = path.to_vec();
+        path.push(id);
+        self.passes_group(f, group, &path)
     }
 
-    fn matches(&self, f: &MockFace, q: &Filters, depth: u8) -> ApiResult<bool> {
+    /// Whether `f` passes a smart collection's rule group.
+    fn passes_group(
+        &self,
+        f: &MockFace,
+        group: &RuleGroup,
+        path: &[CollectionId],
+    ) -> ApiResult<bool> {
+        let mut passed = Vec::with_capacity(group.rules.len());
+        for rule in &group.rules {
+            passed.push(match rule {
+                Rule::Filters { filters } => {
+                    self.matches(f, filters, path)?
+                        && match &filters.supports {
+                            Some(target) => self.coverage(f, target)?.0.len() <= NEAR_MISS,
+                            None => true,
+                        }
+                }
+                Rule::Group { group } => self.passes_group(f, group, path)?,
+            });
+        }
+        Ok(match group.op {
+            RuleOp::And => passed.iter().all(|p| *p),
+            RuleOp::Or => passed.is_empty() || passed.iter().any(|p| *p),
+        })
+    }
+
+    /// Refuses a rule for the collection `id` that names an unknown
+    /// collection or leads back to `id` through smart collections.
+    fn check_rule(&self, id: CollectionId, group: &RuleGroup) -> ApiResult<()> {
+        for c in group.collections() {
+            if c != id && !self.collections.iter().any(|x| x.id == c) {
+                return Err(ApiError::not_found(format!("Collection {c}")));
+            }
+        }
+        let mut todo = group.collections();
+        let mut seen = BTreeSet::new();
+        while let Some(c) = todo.pop() {
+            if c == id {
+                return Err(ApiError::invalid(
+                    "A smart collection's rules cannot include the collection itself.",
+                ));
+            }
+            if !seen.insert(c) {
+                continue;
+            }
+            if let Some(group) = self
+                .collections
+                .iter()
+                .find(|x| x.id == c)
+                .and_then(|x| x.rule_group.as_ref())
+            {
+                todo.extend(group.collections());
+            }
+        }
+        Ok(())
+    }
+
+    fn matches(&self, f: &MockFace, q: &Filters, path: &[CollectionId]) -> ApiResult<bool> {
         let s = &f.detail.face;
         let fam = self.family(s.family)?;
         let tags = self.face_tags.get(&s.id);
@@ -762,12 +928,19 @@ impl State {
             && q.foundry.as_deref().is_none_or(|x| x == fam.foundry)
             && (q.sources.is_empty() || q.sources.contains(&f.source))
             && q.tags.iter().all(|t| tags.is_some_and(|set| set.contains(t)))
-            && q.collection.is_none_or(|c| self.in_collection(f, c, depth))
+            && q.added_within_days.is_none_or(|days| added_within(fam.added, days))
             && q.active.is_none_or(|a| a == self.active.contains_key(&s.id))
             && q.favorite.is_none_or(|v| v == f.detail.favorite)
             && q.min_rating.is_none_or(|r| f.detail.rating.is_some_and(|x| x >= r))
-            && q.problems.is_none_or(|p| p == (s.health != Health::Ok));
-        Ok(ok)
+            && q.problems.is_none_or(|p| p == (s.health != Health::Ok))
+            && q.embedding.is_none_or(|e| e == f.detail.license.embedding)
+            && q.open_license.is_none_or(|o| o == f.detail.license.open_license.is_some())
+            && q.web_ok.is_none_or(|w| Some(w) == f.detail.license.web_use.as_ref().map(|u| u.ok));
+        Ok(ok
+            && match q.collection {
+                Some(c) => self.in_collection(f, c, path)?,
+                None => true,
+            })
     }
 
     fn collection_view(&self, c: &Collection) -> Collection {
@@ -775,7 +948,8 @@ impl State {
         c.face_count = self
             .faces
             .iter()
-            .filter(|f| self.in_collection(f, c.id, 0))
+            // A rule that leads back to itself holds nothing.
+            .filter(|f| self.in_collection(f, c.id, &[]).unwrap_or(false))
             .count() as u32;
         c
     }
@@ -802,7 +976,7 @@ impl State {
                 let members = self
                     .faces
                     .iter()
-                    .filter(|f| self.in_collection(f, *collection, 0))
+                    .filter(|f| self.in_collection(f, *collection, &[]).unwrap_or(false))
                     .map(|f| f.detail.face.id)
                     .collect();
                 Ok(self.with_pinned(members, |v| v.collection == Some(*collection)))
@@ -863,27 +1037,47 @@ impl State {
     }
 }
 
-/// The blocks the mock's sample characters fall in: name, first, last.
+/// The blocks the mock's sample characters fall in: name, first, last and
+/// assigned code points (Unicode 17.0).
+const MOCK_BLOCKS: &[(&str, u32, u32, u32)] = &[
+    ("Basic Latin", 0x0000, 0x007F, 128),
+    ("Latin-1 Supplement", 0x0080, 0x00FF, 128),
+    ("Latin Extended-A", 0x0100, 0x017F, 128),
+    ("Cyrillic", 0x0400, 0x04FF, 256),
+    ("General Punctuation", 0x2000, 0x206F, 111),
+    ("CJK Unified Ideographs", 0x4E00, 0x9FFF, 20992),
+];
+
+/// The mock block of `cp`: name, first, last.
 fn mock_block(cp: u32) -> (&'static str, u32, u32) {
-    const BLOCKS: &[(&str, u32, u32)] = &[
-        ("Basic Latin", 0x0000, 0x007F),
-        ("Latin-1 Supplement", 0x0080, 0x00FF),
-        ("Latin Extended-A", 0x0100, 0x017F),
-        ("Cyrillic", 0x0400, 0x04FF),
-        ("General Punctuation", 0x2000, 0x206F),
-        ("CJK Unified Ideographs", 0x4E00, 0x9FFF),
-    ];
-    BLOCKS
+    MOCK_BLOCKS
         .iter()
-        .copied()
-        .find(|(_, first, last)| (*first..=*last).contains(&cp))
-        .unwrap_or(("No block", cp, cp))
+        .find(|(_, first, last, _)| (*first..=*last).contains(&cp))
+        .map_or(("No block", cp, cp), |&(name, first, last, _)| {
+            (name, first, last)
+        })
 }
 
 fn mock_glyph_name(c: char) -> String {
     match c {
         'a'..='z' | 'A'..='Z' => c.to_string(),
         _ => format!("uni{:04X}", c as u32),
+    }
+}
+
+/// A GSUB feature as fm-core names it, for the mock's glyph detail.
+fn mock_feature(tag: &str) -> FeatureInfo {
+    let name = match tag {
+        "liga" => "Standard ligatures",
+        "smcp" => "Small capitals",
+        "onum" => "Oldstyle figures",
+        _ => "Stylistic set 1",
+    };
+    FeatureInfo {
+        tag: tag.into(),
+        name: Some(name.into()),
+        automatic: false,
+        default_on: tag == "liga",
     }
 }
 
@@ -1296,6 +1490,43 @@ impl LibraryService for MockApi {
         })
     }
 
+    /// The glyph as `list_glyphs` lists it. Lower-case letters are replaced
+    /// by `smcp` and `ss01`, figures by `onum`, the `fi`/`fl` ligatures are
+    /// produced by `liga`; CJK is 1,000 units wide, the rest 500 to 700.
+    fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail> {
+        let st = self.state();
+        let face = st.face(req.face)?;
+        let (c, glyph_id) = face
+            .chars
+            .iter()
+            .copied()
+            .zip(1u32..)
+            .find(|(c, _)| *c as u32 == req.code_point)
+            .ok_or_else(|| ApiError::not_found(format!("Character U+{:04X}", req.code_point)))?;
+        let cp = c as u32;
+        let features = |tags: &[&str]| tags.iter().map(|t| mock_feature(t)).collect();
+        Ok(GlyphDetail {
+            code_point: cp,
+            glyph_id,
+            name: Some(mock_glyph_name(c)),
+            advance_width: Some(if cp >= 0x2E80 {
+                1000
+            } else {
+                500 + cp % 5 * 50
+            }),
+            produced_by: match c {
+                '\u{FB01}' | '\u{FB02}' => features(&["liga"]),
+                _ => Vec::new(),
+            },
+            replaced_by: match c {
+                'a'..='z' => features(&["smcp", "ss01"]),
+                '0'..='9' => features(&["onum"]),
+                _ => Vec::new(),
+            },
+            health: Health::Ok,
+        })
+    }
+
     fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution> {
         let mut st = self.state();
         let i = st
@@ -1345,7 +1576,7 @@ impl State {
                     s.family_name, s.style, s.postscript_name, fam.foundry, fam.designer
                 )
                 .to_lowercase();
-                if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, 0)? {
+                if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, &[])? {
                     continue;
                 }
                 if let Some(target) = &filters.supports {
@@ -1481,6 +1712,14 @@ impl State {
             min_rating: self.count_each(words, q, (1..=5).collect(), |f, v| {
                 f.min_rating = Some(*v);
             })?,
+            embedding: self.count_each(
+                words,
+                q,
+                distinct(faces().map(|f| f.detail.license.embedding)),
+                |f, v| f.embedding = Some(*v),
+            )?,
+            open_license: self.count_each(words, q, both(), |f, v| f.open_license = Some(*v))?,
+            web_ok: self.count_each(words, q, both(), |f, v| f.web_ok = Some(*v))?,
         })
     }
 }
@@ -1511,6 +1750,56 @@ impl SearchService for MockApi {
             face: req.face,
             complete: missing.is_empty(),
             missing,
+            languages,
+        })
+    }
+
+    /// Per mock block, the face's characters in it; per mock language, its
+    /// characters the face has, complete languages first.
+    fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage> {
+        let st = self.state();
+        let f = st.face(face)?;
+        let blocks = MOCK_BLOCKS
+            .iter()
+            .filter_map(|&(name, first, last, assigned)| {
+                let covered = f
+                    .chars
+                    .iter()
+                    .filter(|&&c| (first..=last).contains(&(c as u32)))
+                    .count() as u32;
+                (covered > 0).then(|| BlockCoverage {
+                    name: name.into(),
+                    first,
+                    last,
+                    covered: covered.min(assigned),
+                    assigned,
+                })
+            })
+            .collect();
+        let mut languages: Vec<FaceLanguageCoverage> = LANGUAGES
+            .iter()
+            .filter_map(|&(code, name, _, chars)| {
+                let total = chars.chars().count() as u32;
+                let covered = chars.chars().filter(|c| f.chars.contains(c)).count() as u32;
+                (covered > 0).then(|| FaceLanguageCoverage {
+                    code: code.into(),
+                    name: name.into(),
+                    covered,
+                    total,
+                    has_locl: code == "sr-Cyrl" && f.chars.contains(&'б'),
+                })
+            })
+            .collect();
+        // As fm-core: complete first, then partial by the share covered.
+        languages.sort_by(|a, b| {
+            let share = |x: &FaceLanguageCoverage, y: &FaceLanguageCoverage| x.covered * y.total;
+            (a.covered != a.total)
+                .cmp(&(b.covered != b.total))
+                .then_with(|| share(b, a).cmp(&share(a, b)))
+        });
+        Ok(FaceCoverage {
+            face,
+            blocks,
             languages,
         })
     }
@@ -1666,6 +1955,63 @@ impl PreviewService for MockApi {
                 })
             })
             .collect()
+    }
+
+    /// The core's rule (`fm_core::css`): axes away from their default in
+    /// axis order, switchable features away from their default by tag,
+    /// `normal` for none.
+    fn css_values(&self, req: CssValuesRequest) -> ApiResult<CssValues> {
+        let st = self.state();
+        let d = &st.face(req.face)?.detail;
+        let num = |v: f32| {
+            let s = format!("{:.3}", f64::from(v));
+            let s = s.trim_end_matches('0').trim_end_matches('.');
+            if s == "-0" {
+                "0".to_owned()
+            } else {
+                s.to_owned()
+            }
+        };
+        let tag = |t: &str| {
+            (t.len() == 4 && t.bytes().all(|b| (0x20..=0x7e).contains(&b)))
+                .then(|| format!("\"{}\"", t.replace('\\', "\\\\").replace('"', "\\\"")))
+        };
+        let decl = |p: &str, parts: Vec<String>| {
+            if parts.is_empty() {
+                format!("{p}: normal;")
+            } else {
+                format!("{p}: {};", parts.join(", "))
+            }
+        };
+        let axes = d
+            .axes
+            .iter()
+            .filter_map(|a| {
+                let v = req.variations.iter().find(|v| v.tag == a.tag)?.value;
+                let (lo, hi) = (a.min.min(a.max), a.min.max(a.max));
+                let v = v.is_finite().then(|| num(v.max(lo).min(hi)))?;
+                (v != num(a.default)).then_some(())?;
+                Some(format!("{} {v}", tag(&a.tag)?))
+            })
+            .collect();
+        let mut feats: Vec<(&str, bool)> = d
+            .features
+            .iter()
+            .filter(|f| !f.automatic)
+            .filter_map(|f| {
+                let on = req.features.iter().find(|s| s.tag == f.tag)?.on;
+                (on != f.default_on).then_some((f.tag.as_str(), on))
+            })
+            .collect();
+        feats.sort_unstable();
+        let feats = feats
+            .into_iter()
+            .filter_map(|(t, on)| Some(format!("{} {}", tag(t)?, u8::from(on))))
+            .collect();
+        Ok(CssValues {
+            variation_settings: decl("font-variation-settings", axes),
+            feature_settings: decl("font-feature-settings", feats),
+        })
     }
 }
 
@@ -1845,11 +2191,26 @@ impl OrganizationService for MockApi {
             return Err(ApiError::not_found(format!("Collection {p}")));
         }
         st.check_sibling_name(req.parent, name, None)?;
+        let group = match (req.rules, req.rule_group) {
+            (Some(_), Some(_)) => {
+                return Err(ApiError::invalid(
+                    "Give a smart collection rules or a rule group, not both.",
+                ));
+            }
+            (rules, group) => group.or_else(|| rules.map(RuleGroup::from)),
+        };
+        let id = CollectionId(st.next());
+        if let Some(group) = &group {
+            st.check_rule(id, group)?;
+        }
         let c = Collection {
-            id: CollectionId(st.next()),
+            id,
             parent: req.parent,
             name: name.into(),
-            rules: req.rules,
+            rules: group
+                .as_ref()
+                .map(|g| g.plain_filters().cloned().unwrap_or_default()),
+            rule_group: group,
             face_count: 0,
         };
         st.collections.push(c.clone());
@@ -2210,6 +2571,98 @@ impl OrganizationService for MockApi {
         }
         Ok(())
     }
+
+    fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()> {
+        let mut st = self.state();
+        st.family(req.family)?;
+        if req.notes.is_empty() {
+            st.family_notes.remove(&req.family);
+        } else {
+            st.family_notes.insert(req.family, req.notes);
+        }
+        let updated = st
+            .family_faces(req.family)
+            .map(|f| f.detail.face.id)
+            .collect();
+        st.emit(Event::LibraryChanged {
+            source: None,
+            added: Vec::new(),
+            removed: Vec::new(),
+            updated,
+        });
+        Ok(())
+    }
+
+    /// Like the core, without a file system: an empty receipt path is a file
+    /// that is not there, and the copy is a made-up path in the chosen place.
+    fn declare_license(&self, req: LicenseDeclaration) -> ApiResult<()> {
+        let mut st = self.state();
+        st.family(req.family)?;
+        if req.seats.is_some_and(|s| s < 0) {
+            return Err(ApiError::invalid("The number of seats cannot be below 0."));
+        }
+        let date = req.purchase_date.filter(|d| !d.is_empty());
+        if let Some(d) = &date
+            && !mock_date(d)
+        {
+            return Err(ApiError::invalid(format!(
+                "\"{d}\" is not a date. Write the purchase date as YYYY-MM-DD."
+            )));
+        }
+        let receipt = match &req.receipt {
+            ReceiptChange::Attach { path, .. } if path.is_empty() => {
+                return Err(ApiError::invalid("The receipt file is not there."));
+            }
+            ReceiptChange::Attach { path, place } => {
+                let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+                Some(Some(match place {
+                    ReceiptPlace::NextToFont => format!("/fonts/.fontlibrary/receipts/{name}"),
+                    ReceiptPlace::AppData => format!("/app-data/receipts/{name}"),
+                }))
+            }
+            ReceiptChange::Clear => Some(None),
+            ReceiptChange::Keep => None,
+        };
+        let mut updated = Vec::new();
+        for face in st
+            .faces
+            .iter_mut()
+            .filter(|f| f.detail.face.family == req.family)
+        {
+            let license = &mut face.detail.license;
+            license.declared = req.license_type;
+            license.seats = req.seats.and_then(|s| u32::try_from(s).ok());
+            license.purchase_date.clone_from(&date);
+            if let Some(receipt) = &receipt {
+                license.receipt.clone_from(receipt);
+            }
+            license.web_use = Some(mock_web_use(license));
+            updated.push(face.detail.face.id);
+        }
+        st.emit(Event::LibraryChanged {
+            source: None,
+            added: Vec::new(),
+            removed: Vec::new(),
+            updated,
+        });
+        Ok(())
+    }
+}
+
+/// `YYYY-MM-DD` with a month 1–12 and a day 1–31: enough for the mock.
+fn mock_date(d: &str) -> bool {
+    let parts: Vec<&str> = d.split('-').collect();
+    let num = |s: &str, len: usize| {
+        (s.len() == len && s.bytes().all(|b| b.is_ascii_digit()))
+            .then(|| s.parse::<u32>().ok())
+            .flatten()
+    };
+    matches!(
+        parts.as_slice(),
+        [y, m, day] if num(y, 4).is_some()
+            && num(m, 2).is_some_and(|m| (1..=12).contains(&m))
+            && num(day, 2).is_some_and(|d| (1..=31).contains(&d))
+    )
 }
 
 fn edit_members(api: &MockApi, req: CollectionFacesRequest, add: bool) -> ApiResult<Collection> {
@@ -2314,7 +2767,10 @@ impl ExportService for MockApi {
         for fam in &st.families {
             let faces: Vec<_> = st
                 .family_faces(fam.id)
-                .filter(|f| req.collection.is_none_or(|c| st.in_collection(f, c, 0)))
+                .filter(|f| {
+                    req.collection
+                        .is_none_or(|c| st.in_collection(f, c, &[]).unwrap_or(false))
+                })
                 .collect();
             let Some(first) = faces.first() else { continue };
             let lic = &first.detail.license;
@@ -2330,6 +2786,51 @@ impl ExportService for MockApi {
             rows += 1;
         }
         Ok(LicenseInventory { csv, rows })
+    }
+
+    /// A box the width of the mock advance, from the baseline to the cap
+    /// height (700), with a stem as thick as `wght` / 5 (80 at the default
+    /// 400). A space has no outline: an empty path.
+    fn export_glyph_svg(&self, req: GlyphSvgRequest) -> ApiResult<String> {
+        if req.variations.iter().any(|v| !v.value.is_finite()) {
+            return Err(ApiError::invalid("An axis value must be a number."));
+        }
+        let st = self.state();
+        let face = st.face(req.face)?;
+        let c = face
+            .chars
+            .iter()
+            .copied()
+            .find(|c| *c as u32 == req.code_point)
+            .ok_or_else(|| ApiError::not_found(format!("Character U+{:04X}", req.code_point)))?;
+        let cp = c as u32;
+        let advance = if cp >= 0x2E80 {
+            1000
+        } else {
+            500 + cp % 5 * 50
+        };
+        let wght = req
+            .variations
+            .iter()
+            .find(|v| v.tag == "wght")
+            .map_or(400.0, |v| v.value);
+        let stem = (wght / 5.0).round().clamp(1.0, 200.0) as u32;
+        // Ascender 800, descender -200: y' = 800 - y.
+        let path = if c.is_whitespace() {
+            String::new()
+        } else {
+            let (l, r) = (50, advance - 50);
+            format!(
+                "M{l} 800L{r} 800L{r} 100L{l} 100ZM{} 800L{} 100L{} 100L{} 800Z",
+                l + stem,
+                l + stem,
+                r - stem,
+                r - stem
+            )
+        };
+        Ok(format!(
+            "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {advance} 1000\">             <path d=\"{path}\"/></svg>"
+        ))
     }
 }
 
@@ -2414,6 +2915,431 @@ impl SettingsService for MockApi {
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
     }
+}
+
+/// The mock's copy of the core presets (`fm_core::layout`): the same six in
+/// the same order and shape, with shorter text.
+fn mock_preset(preset: LayoutPreset) -> Layout {
+    let block = |text: &str, size_pt: f32, line_height: f32| TextBlock {
+        text: text.to_owned(),
+        size_pt,
+        line_height,
+        tracking: 0.0,
+        paragraph_spacing_pt: 0.0,
+        first_line_indent_em: 0.0,
+        columns: 1,
+        align: BlockAlign::Start,
+        overflow: BlockOverflow::Wrap,
+    };
+    let body = "Typography gives language a durable visual form.\n\
+                Good type does not call attention to itself.\n\
+                A body face holds up at small sizes and over long passages.";
+    let (name, blocks) = match preset {
+        LayoutPreset::Book => (
+            "Book",
+            vec![
+                TextBlock {
+                    align: BlockAlign::Center,
+                    paragraph_spacing_pt: 18.0,
+                    ..block("Chapter One", 24.0, 1.2)
+                },
+                TextBlock {
+                    first_line_indent_em: 1.5,
+                    align: BlockAlign::Justify,
+                    ..block(body, 11.0, 1.5)
+                },
+            ],
+        ),
+        LayoutPreset::Columns => (
+            "Columns",
+            vec![
+                TextBlock {
+                    paragraph_spacing_pt: 12.0,
+                    ..block("Chapter One", 18.0, 1.2)
+                },
+                TextBlock {
+                    paragraph_spacing_pt: 6.0,
+                    columns: 3,
+                    align: BlockAlign::Justify,
+                    ..block(body, 10.0, 1.4)
+                },
+            ],
+        ),
+        LayoutPreset::Magazine => (
+            "Magazine",
+            vec![
+                TextBlock {
+                    tracking: -20.0,
+                    paragraph_spacing_pt: 12.0,
+                    ..block("The Quiet Return of the Printed Page", 48.0, 1.05)
+                },
+                TextBlock {
+                    paragraph_spacing_pt: 18.0,
+                    ..block("Readers are going back to paper.", 16.0, 1.35)
+                },
+                TextBlock {
+                    first_line_indent_em: 1.0,
+                    columns: 2,
+                    align: BlockAlign::Justify,
+                    ..block(body, 10.0, 1.45)
+                },
+            ],
+        ),
+        LayoutPreset::Quote => (
+            "Quote",
+            vec![
+                TextBlock {
+                    align: BlockAlign::Center,
+                    paragraph_spacing_pt: 18.0,
+                    ..block(
+                        "\u{201c}Type is a beautiful group of letters.\u{201d}",
+                        36.0,
+                        1.15,
+                    )
+                },
+                TextBlock {
+                    tracking: 100.0,
+                    align: BlockAlign::Center,
+                    ..block("Matthew Carter", 12.0, 1.3)
+                },
+            ],
+        ),
+        LayoutPreset::Characters => (
+            "Characters",
+            [
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                "abcdefghijklmnopqrstuvwxyz",
+                "0123456789 &@#%?!",
+            ]
+            .into_iter()
+            .map(|t| TextBlock {
+                tracking: 50.0,
+                paragraph_spacing_pt: 12.0,
+                ..block(t, 36.0, 1.2)
+            })
+            .collect(),
+        ),
+        LayoutPreset::Waterfall => (
+            "Waterfall",
+            [72.0, 48.0, 36.0, 24.0, 18.0, 14.0, 12.0, 9.0]
+                .into_iter()
+                .map(|size| TextBlock {
+                    overflow: BlockOverflow::Clip,
+                    ..block("The quick brown fox jumps over the lazy dog", size, 1.2)
+                })
+                .collect(),
+        ),
+    };
+    Layout {
+        preset: Some(preset),
+        name: name.to_owned(),
+        blocks,
+    }
+}
+
+impl LayoutService for MockApi {
+    fn layout_presets(&self) -> ApiResult<Vec<Layout>> {
+        Ok([
+            LayoutPreset::Book,
+            LayoutPreset::Columns,
+            LayoutPreset::Magazine,
+            LayoutPreset::Quote,
+            LayoutPreset::Characters,
+            LayoutPreset::Waterfall,
+        ]
+        .into_iter()
+        .map(mock_preset)
+        .collect())
+    }
+
+    /// The core's ranges (`fm_core::layout`); NaN and infinities take the default.
+    fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout> {
+        let fit = |v: f32, lo: f32, hi: f32, default: f32| {
+            if v.is_finite() {
+                v.max(lo).min(hi)
+            } else {
+                default
+            }
+        };
+        let blocks = layout
+            .blocks
+            .into_iter()
+            .map(|b| TextBlock {
+                size_pt: fit(b.size_pt, 8.0, 600.0, 12.0),
+                line_height: fit(b.line_height, 0.1, 3.0, 1.3),
+                tracking: fit(b.tracking, -200.0, 1000.0, 0.0),
+                paragraph_spacing_pt: fit(b.paragraph_spacing_pt, 0.0, 600.0, 0.0),
+                first_line_indent_em: fit(b.first_line_indent_em, 0.0, 20.0, 0.0),
+                columns: b.columns.clamp(1, 3),
+                ..b
+            })
+            .collect();
+        Ok(Layout { blocks, ..layout })
+    }
+
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {
+        let st = self.state();
+        let mut entries: Vec<LayoutEntry> = st.layouts.iter().map(mock_layout_entry).collect();
+        let rank = |e: &LayoutEntry| {
+            MOCK_PRESET_IDS
+                .iter()
+                .position(|id| *id == e.id)
+                .unwrap_or(MOCK_PRESET_IDS.len())
+        };
+        entries.sort_by(|a, b| {
+            rank(a)
+                .cmp(&rank(b))
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                .then_with(|| a.id.cmp(&b.id))
+        });
+        Ok(entries)
+    }
+
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout> {
+        let st = self.state();
+        let layout = mock_layout_content(mock_layout_file(&st.layouts, &req.id)?)?;
+        Ok(SavedLayout { id: req.id, layout })
+    }
+
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+        let layout = self.clamp_layout(req.layout)?;
+        mock_save_layout(&mut self.state().layouts, &req.id, layout)
+    }
+
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let source = mock_layout_content(mock_layout_file(&st.layouts, &req.id)?)?;
+        let taken: Vec<String> = st
+            .layouts
+            .iter()
+            .map(|f| mock_layout_entry(f).name.to_lowercase())
+            .collect();
+        let name = match req.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
+            Some(n) if taken.contains(&n.to_lowercase()) => {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("There is already a layout named \u{201c}{n}\u{201d}."),
+                ));
+            }
+            Some(n) => n.to_owned(),
+            None => (1..)
+                .map(|i| match i {
+                    1 => format!("{} copy", source.name),
+                    _ => format!("{} copy {i}", source.name),
+                })
+                .find(|n| !taken.contains(&n.to_lowercase()))
+                .unwrap_or_else(|| format!("{} copy", source.name)),
+        };
+        let base = mock_slug(&name);
+        let id = (1..)
+            .map(|i| match i {
+                1 => base.clone(),
+                _ => format!("{base}-{i}"),
+            })
+            .find(|c| st.layouts.iter().all(|f| &f.id != c))
+            .unwrap_or(base);
+        mock_save_layout(&mut st.layouts, &id, Layout { name, ..source })
+    }
+
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let file = mock_layout_file(&st.layouts, &req.id)?;
+        if !req.to_original {
+            let layout = mock_layout_content(file)?;
+            return Ok(SavedLayout { id: req.id, layout });
+        }
+        let (preset, name) = match &file.content {
+            Ok(l) => (l.preset, Some(l.name.clone())),
+            Err(_) => (mock_preset_of_id(&req.id), None),
+        };
+        let Some(preset) = preset else {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                "Only a layout that started from a preset can be reset to its original.",
+            ));
+        };
+        let original = mock_preset(preset);
+        let name = name.unwrap_or_else(|| original.name.clone());
+        mock_save_layout(&mut st.layouts, &req.id, Layout { name, ..original })
+    }
+
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>> {
+        let st = self.state();
+        let file = mock_layout_file(&st.layouts, &req.id)?;
+        Ok(file
+            .versions
+            .iter()
+            .rev()
+            .map(|(number, content)| LayoutVersion {
+                number: *number,
+                saved_at: MOCK_NOW.to_owned(),
+                name: content.as_ref().ok().map(|l| l.name.clone()),
+                broken: content.as_ref().err().cloned(),
+            })
+            .collect())
+    }
+
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout> {
+        let mut st = self.state();
+        let content = mock_layout_file(&st.layouts, &req.id)?
+            .versions
+            .iter()
+            .find(|(n, _)| *n == req.number)
+            .map(|(_, c)| c.clone())
+            .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "That version is no longer kept."))?;
+        let layout = content.map_err(|reason| {
+            ApiError::new(
+                ErrorCode::InvalidRequest,
+                "This version cannot be restored: it is not a valid layout.",
+            )
+            .with_detail(reason)
+        })?;
+        mock_save_layout(&mut st.layouts, &req.id, layout)
+    }
+}
+
+/// The ids of the preset files, in picker order (`fm_core::layout::store`).
+const MOCK_PRESET_IDS: [&str; 6] = [
+    "book",
+    "columns",
+    "magazine",
+    "quote",
+    "characters",
+    "waterfall",
+];
+
+/// How many earlier versions of one template the mock keeps (as the core).
+pub const MOCK_MAX_LAYOUT_VERSIONS: usize = 20;
+
+fn mock_preset_of_id(id: &str) -> Option<LayoutPreset> {
+    const PRESETS: [LayoutPreset; 6] = [
+        LayoutPreset::Book,
+        LayoutPreset::Columns,
+        LayoutPreset::Magazine,
+        LayoutPreset::Quote,
+        LayoutPreset::Characters,
+        LayoutPreset::Waterfall,
+    ];
+    MOCK_PRESET_IDS
+        .iter()
+        .position(|p| *p == id)
+        .map(|i| PRESETS[i])
+}
+
+/// The six preset files and one hand-edited file that is not valid JSON.
+fn mock_layout_files() -> Vec<MockLayoutFile> {
+    let mut files: Vec<MockLayoutFile> = MOCK_PRESET_IDS
+        .iter()
+        .filter_map(|id| {
+            Some(MockLayoutFile {
+                id: (*id).to_owned(),
+                content: Ok(mock_preset(mock_preset_of_id(id)?)),
+                versions: Vec::new(),
+            })
+        })
+        .collect();
+    files.push(MockLayoutFile {
+        id: "draft".to_owned(),
+        content: Err("Not valid JSON: EOF while parsing an object at line 3 column 0".to_owned()),
+        versions: Vec::new(),
+    });
+    files
+}
+
+fn mock_layout_entry(file: &MockLayoutFile) -> LayoutEntry {
+    match &file.content {
+        Ok(l) => LayoutEntry {
+            id: file.id.clone(),
+            name: l.name.clone(),
+            preset: l.preset,
+            broken: None,
+        },
+        Err(reason) => LayoutEntry {
+            id: file.id.clone(),
+            name: file.id.clone(),
+            preset: mock_preset_of_id(&file.id),
+            broken: Some(reason.clone()),
+        },
+    }
+}
+
+fn mock_layout_file<'a>(files: &'a [MockLayoutFile], id: &str) -> ApiResult<&'a MockLayoutFile> {
+    files
+        .iter()
+        .find(|f| f.id == id)
+        .ok_or_else(|| ApiError::new(ErrorCode::NotFound, "That layout no longer exists."))
+}
+
+fn mock_layout_content(file: &MockLayoutFile) -> ApiResult<Layout> {
+    file.content.clone().map_err(|reason| {
+        ApiError::new(
+            ErrorCode::InvalidRequest,
+            "This layout file cannot be read. Fix it by hand or save over it.",
+        )
+        .with_detail(reason)
+    })
+}
+
+/// A file-name id for `name`, as the core makes it.
+fn mock_slug(name: &str) -> String {
+    let mut out = String::new();
+    for c in name.chars().flat_map(char::to_lowercase) {
+        if c.is_alphanumeric() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "layout".to_owned()
+    } else {
+        out
+    }
+}
+
+/// Writes `layout` to `id` (a new file when there is none); the content it
+/// replaces becomes the newest version, the oldest past the cap dropped.
+fn mock_save_layout(
+    files: &mut Vec<MockLayoutFile>,
+    id: &str,
+    layout: Layout,
+) -> ApiResult<SavedLayout> {
+    if id.is_empty() || id.starts_with('.') || id.contains(['/', '\\', ':']) {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "That is not a layout name the app can use.",
+        ));
+    }
+    if layout.name.trim().is_empty() {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            "A layout needs a name.",
+        ));
+    }
+    let saved = SavedLayout {
+        id: id.to_owned(),
+        layout: layout.clone(),
+    };
+    let Some(file) = files.iter_mut().find(|f| f.id == id) else {
+        files.push(MockLayoutFile {
+            id: id.to_owned(),
+            content: Ok(layout),
+            versions: Vec::new(),
+        });
+        return Ok(saved);
+    };
+    if file.content.as_ref() == Ok(&layout) {
+        return Ok(saved);
+    }
+    let number = file.versions.last().map_or(1, |(n, _)| n + 1);
+    let old = std::mem::replace(&mut file.content, Ok(layout));
+    file.versions.push((number, old));
+    let excess = file.versions.len().saturating_sub(MOCK_MAX_LAYOUT_VERSIONS);
+    file.versions.drain(..excess);
+    Ok(saved)
 }
 
 impl EventSource for MockApi {

@@ -29,11 +29,20 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `2` | Show the fonts as a table |
 | `3` | Show the fonts as a grid of cards |
 | `4` | Show the fonts as a waterfall: the preview text at six sizes |
+| `5` | Show the selected font in a layout: a page of text, for example a book page |
 | `Space` | Quick look at the font (coming in a later version) |
 | `C` | Add the font to the compare view (coming in a later version) |
 
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
+
+## In the layout
+
+| Key | What it does |
+|-----|--------------|
+| `Enter` | Edit the text of the block that has the focus |
+| `Ctrl+Enter` | Keep the edit and close the text box |
+| `Esc` | Drop the edit and close the text box |
 
 ## The command palette
 

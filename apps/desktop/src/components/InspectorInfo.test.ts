@@ -76,6 +76,15 @@ describe('inspector info tab', () => {
     }
   });
 
+  it('says in plain words why a face is or is not OK for web', async () => {
+    const webUse = async (face: number) => {
+      const dt = (await mountWith(face)).findAll('dt').find((d) => d.text() === 'Web use')!;
+      return (dt.element.nextElementSibling as HTMLElement).textContent?.trim();
+    };
+    expect(await webUse(1)).toBe('Open license (OFL)');
+    expect(await webUse(7)).toBe('Embedding restricted, no web license declared');
+  });
+
   it('edits tags with completion, the favorite toggle and the stars', async () => {
     setClient(createMockClient({ faceTags: { 6: ['Brand', 'Display'] } }));
     const wrapper = await mountWith(1);
@@ -115,6 +124,50 @@ describe('inspector info tab', () => {
     await wrapper.get('button[aria-label="4 stars"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('[data-testid="rating"]').text()).toBe('Not rated');
+  });
+
+  it('saves the face notes and the family notes when their field loses the focus', async () => {
+    const client = createMockClient();
+    const meta = vi.spyOn(client, 'updateUserMeta');
+    const family = vi.spyOn(client, 'updateFamilyNotes');
+    setClient(client);
+    const wrapper = await mountWith(1);
+    // Each is a labelled multi-line field.
+    const faceField = wrapper.get('#fm-info-notes');
+    const familyField = wrapper.get('#fm-info-family-notes');
+    expect(faceField.element.tagName).toBe('TEXTAREA');
+    expect(familyField.element.tagName).toBe('TEXTAREA');
+    expect(wrapper.get('label[for="fm-info-notes"]').text()).toBe('Notes');
+    expect(wrapper.get('label[for="fm-info-family-notes"]').text()).toBe('Family notes');
+
+    // Typing alone saves nothing; leaving the field does.
+    await faceField.setValue('Headlines only');
+    expect(meta).not.toHaveBeenCalled();
+    await faceField.trigger('blur');
+    await flushPromises();
+    expect(meta).toHaveBeenCalledWith({ faces: [1], notes: 'Headlines only' });
+    expect(useSelectionStore().detail!.notes).toBe('Headlines only');
+    // Leaving it again unchanged does not save again.
+    await faceField.trigger('blur');
+    await flushPromises();
+    expect(meta).toHaveBeenCalledTimes(1);
+
+    await familyField.setValue('Licensed for the rebrand');
+    await familyField.trigger('blur');
+    await flushPromises();
+    const familyId = useSelectionStore().detail!.face.family;
+    expect(family).toHaveBeenCalledWith({ family: familyId, notes: 'Licensed for the rebrand' });
+    expect(useSelectionStore().detail!.familyNotes).toBe('Licensed for the rebrand');
+    // The face's notes are a different value from the family's.
+    expect((faceField.element as HTMLTextAreaElement).value).toBe('Headlines only');
+    expect((familyField.element as HTMLTextAreaElement).value).toBe('Licensed for the rebrand');
+
+    // An empty field clears the notes.
+    await faceField.setValue('');
+    await faceField.trigger('blur');
+    await flushPromises();
+    expect(meta).toHaveBeenLastCalledWith({ faces: [1], notes: '' });
+    expect(useSelectionStore().detail!.notes).toBeNull();
   });
 
   it('shows why a tag was refused', async () => {

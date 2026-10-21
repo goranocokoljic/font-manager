@@ -8,23 +8,30 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
     DeactivateRequest, OutcomeStatus, Target,
 };
-use fm_api::common::{AxisValue, FontFormat, Page, Slant};
-use fm_api::export::{ExportWebRequest, WebFormat};
+use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
+use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
+use fm_api::layout::{
+    BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest,
+};
 use fm_api::library::{
-    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphsRequest,
-    ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
-    SetSourcePausedRequest, TrashMoveStatus,
+    AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
+    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseType, ListFamiliesRequest, OpenLicense,
+    ScanRequest, SetSourcePausedRequest, TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest, MoveCollectionRequest,
-    PinInstanceRequest, RenameCollectionRequest, TagFacesRequest, UserMetaUpdate,
-    VirtualStylesRequest,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
+    FamilyNotesUpdate, LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, TagFacesRequest,
+    UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
 };
-use fm_api::preview::{PreviewRequest, SampleFallback, SampleTextRequest};
+use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
-use fm_api::{API_VERSION, Api, ErrorCode, Event, FaceId, FamilyId, ResolutionId, SourceId};
+use fm_api::{
+    API_VERSION, Api, CollectionId, ErrorCode, Event, FaceId, FamilyId, ResolutionId, SourceId,
+};
 
 fn api() -> Arc<dyn Api> {
     Arc::new(MockApi::new())
@@ -441,6 +448,7 @@ fn collections_nest_reorder_and_take_families() {
     let api = api();
     let make = |name: &str, parent| {
         api.create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: name.into(),
             parent,
             rules: None,
@@ -519,6 +527,7 @@ fn collections_tags_meta_and_sets() {
     let api = api();
     let manual = api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Clients".into(),
             parent: None,
             rules: None,
@@ -535,6 +544,7 @@ fn collections_tags_meta_and_sets() {
 
     let smart = api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Variable".into(),
             parent: Some(manual.id),
             rules: Some(Filters {
@@ -590,6 +600,153 @@ fn collections_tags_meta_and_sets() {
     let imported = api.import_set(exported).unwrap();
     assert_eq!(imported.set.faces, [FaceId(1)]);
     assert_eq!(imported.missing.len(), 1);
+}
+
+#[test]
+fn family_notes_are_the_familys_and_announced_as_a_library_change() {
+    let api = api();
+    let family = api.get_face(FaceId(1)).unwrap().face.family;
+    let rx = api.subscribe();
+    api.update_family_notes(FamilyNotesUpdate {
+        family,
+        notes: "Licensed for the rebrand".into(),
+    })
+    .unwrap();
+    let faces: Vec<FaceId> = api
+        .get_family(family)
+        .unwrap()
+        .faces
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(Event::LibraryChanged { updated, .. }) if updated == faces
+    ));
+    let summary = api.get_family(family).unwrap().summary;
+    assert_eq!(summary.notes.as_deref(), Some("Licensed for the rebrand"));
+    let detail = api.get_face(FaceId(1)).unwrap();
+    assert_eq!(
+        detail.family_notes.as_deref(),
+        Some("Licensed for the rebrand")
+    );
+    assert_eq!(detail.notes, None, "the face's own notes are separate");
+
+    api.update_family_notes(FamilyNotesUpdate {
+        family,
+        notes: String::new(),
+    })
+    .unwrap();
+    assert_eq!(api.get_family(family).unwrap().summary.notes, None);
+    let unknown = api.update_family_notes(FamilyNotesUpdate {
+        family: FamilyId(999),
+        notes: "x".into(),
+    });
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+}
+
+#[test]
+fn a_declared_license_applies_to_every_face_and_clears_field_by_field() {
+    let api = api();
+    let family = api.get_face(FaceId(1)).unwrap().face.family;
+    let rx = api.subscribe();
+    api.declare_license(LicenseDeclaration {
+        family,
+        license_type: Some(LicenseType::Web),
+        seats: Some(5),
+        purchase_date: Some("2026-03-01".into()),
+        receipt: ReceiptChange::Attach {
+            path: r"C:\Users\me\Downloads\invoice.pdf".into(),
+            place: ReceiptPlace::AppData,
+        },
+    })
+    .unwrap();
+    let faces: Vec<FaceId> = api
+        .get_family(family)
+        .unwrap()
+        .faces
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(Event::LibraryChanged { updated, .. }) if updated == faces
+    ));
+    assert_eq!(
+        api.get_family(family).unwrap().summary.declared_license,
+        Some(LicenseType::Web)
+    );
+    for face in &faces {
+        let license = api.get_face(*face).unwrap().license;
+        assert_eq!(license.declared, Some(LicenseType::Web));
+        assert_eq!(license.seats, Some(5));
+        assert_eq!(license.purchase_date.as_deref(), Some("2026-03-01"));
+        assert_eq!(
+            license.receipt.as_deref(),
+            Some("/app-data/receipts/invoice.pdf")
+        );
+    }
+    // Absent fields clear; the receipt stays unless cleared.
+    api.declare_license(LicenseDeclaration {
+        family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    let license = api.get_face(FaceId(1)).unwrap().license;
+    assert_eq!((license.declared, license.seats), (None, None));
+    assert!(license.receipt.is_some());
+    api.declare_license(LicenseDeclaration {
+        family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Clear,
+    })
+    .unwrap();
+    assert_eq!(api.get_face(FaceId(1)).unwrap().license.receipt, None);
+
+    let bad = |req: LicenseDeclaration| api.declare_license(req).unwrap_err().code;
+    let base = LicenseDeclaration {
+        family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    };
+    assert_eq!(
+        bad(LicenseDeclaration {
+            seats: Some(-1),
+            ..base.clone()
+        }),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        bad(LicenseDeclaration {
+            purchase_date: Some("2026-13-01".into()),
+            ..base.clone()
+        }),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        bad(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: String::new(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..base.clone()
+        }),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        bad(LicenseDeclaration {
+            family: FamilyId(999),
+            ..base
+        }),
+        ErrorCode::NotFound
+    );
 }
 
 #[test]
@@ -1071,10 +1228,90 @@ fn the_glyph_map_lists_a_face_by_block_and_searches_it() {
 }
 
 #[test]
+fn the_glyph_detail_matches_the_glyph_map_and_names_features() {
+    let api = api();
+    let listed = api
+        .list_glyphs(GlyphsRequest {
+            face: FaceId(1),
+            block: None,
+            query: Some("a".into()),
+            page: Page::default(),
+        })
+        .unwrap()
+        .items[0]
+        .clone();
+    let a = api
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 'a' as u32,
+        })
+        .unwrap();
+    assert_eq!((a.glyph_id, a.name.clone()), (listed.glyph_id, listed.name));
+    assert!(a.advance_width.is_some());
+    let tags: Vec<_> = a.replaced_by.iter().map(|f| f.tag.as_str()).collect();
+    assert_eq!(tags, ["smcp", "ss01"]);
+    assert!(a.replaced_by.iter().all(|f| f.name.is_some()));
+    let err = api
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 0x10_FFFD,
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+fn svg(api: &Arc<dyn Api>, c: char, wght: Option<f32>) -> Result<String, fm_api::ApiError> {
+    api.export_glyph_svg(GlyphSvgRequest {
+        face: FaceId(1),
+        code_point: c as u32,
+        variations: wght
+            .map(|value| AxisValue {
+                tag: "wght".into(),
+                value,
+            })
+            .into_iter()
+            .collect(),
+    })
+}
+
+#[test]
+fn a_glyph_exports_as_svg_text_and_follows_the_weight() {
+    let api = api();
+    let a = svg(&api, 'a', None).unwrap();
+    assert!(
+        a.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\""),
+        "{a}"
+    );
+    assert!(a.contains("<path d=\"M"), "{a}");
+    let width = api
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 'a' as u32,
+        })
+        .unwrap()
+        .advance_width
+        .unwrap();
+    assert!(a.contains(&format!("viewBox=\"0 0 {width} 1000\"")), "{a}");
+    assert_ne!(
+        svg(&api, 'a', Some(100.0)).unwrap(),
+        svg(&api, 'a', Some(900.0)).unwrap()
+    );
+
+    let space = svg(&api, ' ', None).unwrap();
+    assert!(space.contains("<path d=\"\"/>"), "{space}");
+
+    let err = svg(&api, '\u{10FFFD}', None).unwrap_err();
+    assert_eq!(err.code, ErrorCode::NotFound);
+    let err = svg(&api, 'a', Some(f32::NAN)).unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+}
+
+#[test]
 fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
     let api = api();
     let brand = api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Brand".into(),
             parent: None,
             rules: None,
@@ -1147,5 +1384,478 @@ fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
         .unwrap_err()
         .code,
         ErrorCode::NotFound
+    );
+}
+
+/// The faces a search with `filters` finds, sorted.
+fn faces_of(api: &Arc<dyn Api>, filters: Filters) -> fm_api::ApiResult<Vec<FaceId>> {
+    let res = api.search(SearchRequest {
+        filters,
+        page: Page {
+            offset: 0,
+            limit: 1000,
+        },
+        ..SearchRequest::default()
+    })?;
+    let mut faces: Vec<FaceId> = res.families.into_iter().flat_map(|h| h.faces).collect();
+    faces.sort_unstable();
+    Ok(faces)
+}
+
+fn smart(
+    api: &Arc<dyn Api>,
+    name: &str,
+    op: RuleOp,
+    rules: Vec<Rule>,
+) -> fm_api::ApiResult<Collection> {
+    api.create_collection(CreateCollectionRequest {
+        name: name.into(),
+        parent: None,
+        rules: None,
+        rule_group: Some(RuleGroup { op, rules }),
+    })
+}
+
+fn by(c: CollectionId) -> Filters {
+    Filters {
+        collection: Some(c),
+        ..Filters::default()
+    }
+}
+
+/// E14.2: the mock evaluates smart collections like the core: AND/OR,
+/// nested groups, rules through other collections, live counts, the date
+/// added, and loops refused.
+#[test]
+fn smart_collections_follow_the_rules() {
+    let api = api();
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let italic = faces_of(
+        &api,
+        Filters {
+            slant: Some(Slant::Italic),
+            ..Filters::default()
+        },
+    )
+    .unwrap();
+    let variable = faces_of(
+        &api,
+        Filters {
+            variable: Some(true),
+            ..Filters::default()
+        },
+    )
+    .unwrap();
+    let either = smart(
+        &api,
+        "Italic or variable",
+        RuleOp::Or,
+        vec![
+            leaf(Filters {
+                slant: Some(Slant::Italic),
+                ..Filters::default()
+            }),
+            leaf(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+        ],
+    )
+    .unwrap();
+    assert_eq!(either.rules, Some(Filters::default()));
+    let mut union: Vec<FaceId> = italic.iter().chain(&variable).copied().collect();
+    union.sort_unstable();
+    union.dedup();
+    assert_eq!(either.face_count as usize, union.len());
+    assert_eq!(faces_of(&api, by(either.id)).unwrap(), union);
+
+    let nested = smart(
+        &api,
+        "Nested",
+        RuleOp::And,
+        vec![
+            leaf(by(either.id)),
+            Rule::Group {
+                group: RuleGroup {
+                    op: RuleOp::Or,
+                    rules: vec![leaf(Filters {
+                        variable: Some(false),
+                        ..Filters::default()
+                    })],
+                },
+            },
+        ],
+    )
+    .unwrap();
+    let static_italic: Vec<FaceId> = union
+        .iter()
+        .copied()
+        .filter(|f| !variable.contains(f))
+        .collect();
+    assert_eq!(faces_of(&api, by(nested.id)).unwrap(), static_italic);
+
+    // A phase-1 rule reads as one AND group.
+    let old = api
+        .create_collection(CreateCollectionRequest {
+            name: "Old".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            rule_group: None,
+        })
+        .unwrap();
+    assert_eq!(
+        old.rule_group,
+        Some(RuleGroup::from(Filters {
+            variable: Some(true),
+            ..Filters::default()
+        }))
+    );
+
+    // Live: a tag shows at once.
+    let first = faces_of(&api, Filters::default()).unwrap()[0];
+    let tag = api
+        .tag_faces(TagFacesRequest {
+            faces: vec![first],
+            tags: vec!["later".into()],
+        })
+        .unwrap()
+        .into_iter()
+        .find(|t| t.name == "later")
+        .unwrap()
+        .id;
+    let tagged = smart(
+        &api,
+        "Tagged",
+        RuleOp::And,
+        vec![leaf(Filters {
+            tags: vec![tag],
+            ..Filters::default()
+        })],
+    )
+    .unwrap();
+    assert_eq!(tagged.face_count, 1);
+    api.untag_faces(UntagFacesRequest {
+        faces: vec![first],
+        tags: vec![tag],
+    })
+    .unwrap();
+    let listed = api.list_collections().unwrap();
+    let count = listed
+        .iter()
+        .find(|c| c.id == tagged.id)
+        .unwrap()
+        .face_count;
+    assert_eq!(count, 0);
+
+    // Date added: the sample families were added 9 to 15 days before MOCK_NOW.
+    let every = faces_of(&api, Filters::default()).unwrap();
+    let within = |days| {
+        faces_of(
+            &api,
+            Filters {
+                added_within_days: Some(days),
+                ..Filters::default()
+            },
+        )
+        .unwrap()
+    };
+    assert_eq!(within(60), every);
+    assert!(within(1).is_empty());
+
+    // Loops and unknown collections.
+    let next = CollectionId(tagged.id.0 + 1);
+    let itself = smart(&api, "Itself", RuleOp::And, vec![leaf(by(next))]).unwrap_err();
+    assert_eq!(itself.code, ErrorCode::InvalidRequest);
+    let unknown = smart(
+        &api,
+        "Unknown",
+        RuleOp::And,
+        vec![leaf(by(CollectionId(999)))],
+    );
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+    let both = api.create_collection(CreateCollectionRequest {
+        name: "Both".into(),
+        parent: None,
+        rules: Some(Filters::default()),
+        rule_group: Some(RuleGroup::from(Filters::default())),
+    });
+    assert_eq!(both.unwrap_err().code, ErrorCode::InvalidRequest);
+}
+
+#[test]
+fn css_values_write_only_what_differs_from_the_defaults() {
+    let api = api();
+    let css = |face: u32, variations: Vec<AxisValue>, features: Vec<FeatureSetting>| {
+        api.css_values(CssValuesRequest {
+            face: FaceId(face),
+            variations,
+            features,
+        })
+        .expect("css")
+    };
+    let at = |tag: &str, value: f32| AxisValue {
+        tag: tag.into(),
+        value,
+    };
+    let switch = |tag: &str, on: bool| FeatureSetting {
+        tag: tag.into(),
+        on,
+    };
+    // Inter (face 1) is variable: wght 100–900, default 400; kern and liga on.
+    let got = css(
+        1,
+        vec![at("wght", 650.0001)],
+        vec![
+            switch("smcp", true),
+            switch("liga", false),
+            switch("kern", true),
+        ],
+    );
+    assert_eq!(
+        got.variation_settings,
+        r#"font-variation-settings: "wght" 650;"#
+    );
+    assert_eq!(
+        got.feature_settings,
+        r#"font-feature-settings: "liga" 0, "smcp" 1;"#
+    );
+    let got = css(1, vec![at("wght", 400.0)], vec![switch("liga", true)]);
+    assert_eq!(got.variation_settings, "font-variation-settings: normal;");
+    assert_eq!(got.feature_settings, "font-feature-settings: normal;");
+    let err = api
+        .css_values(CssValuesRequest {
+            face: FaceId(999),
+            variations: Vec::new(),
+            features: Vec::new(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn face_coverage_lists_blocks_in_order_and_complete_languages_first() {
+    let api = api();
+    // JetBrains Mono: Latin and Cyrillic, no Latin Extended-A.
+    let got = api.face_coverage(FaceId(6)).unwrap();
+    assert_eq!(got.face, FaceId(6));
+    let blocks: Vec<(&str, u32)> = got
+        .blocks
+        .iter()
+        .map(|b| (b.name.as_str(), b.assigned))
+        .collect();
+    assert_eq!(blocks, [("Basic Latin", 128), ("Cyrillic", 256)]);
+    assert!(got.blocks.iter().all(|b| b.covered > 0));
+    let languages: Vec<(&str, bool)> = got
+        .languages
+        .iter()
+        .map(|l| (l.code.as_str(), l.covered == l.total))
+        .collect();
+    assert_eq!(
+        languages,
+        [
+            ("en", true),
+            ("sr-Cyrl", true),
+            ("sr-Latn", false),
+            ("pl", false)
+        ],
+        "complete first, then partial by share"
+    );
+    assert!(got.languages[1].has_locl);
+    assert_eq!(got.languages[1].name, "Serbian (Cyrillic)");
+    assert_eq!(
+        api.face_coverage(FaceId(999)).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}
+
+#[test]
+fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
+    let api = api();
+    let presets = api.layout_presets().expect("presets");
+    let ids: Vec<_> = presets.iter().map(|l| l.preset).collect();
+    assert_eq!(
+        ids,
+        [
+            LayoutPreset::Book,
+            LayoutPreset::Columns,
+            LayoutPreset::Magazine,
+            LayoutPreset::Quote,
+            LayoutPreset::Characters,
+            LayoutPreset::Waterfall,
+        ]
+        .map(Some)
+    );
+    let waterfall = &presets[5];
+    assert!((6..=8).contains(&waterfall.blocks.len()));
+    assert!(
+        waterfall
+            .blocks
+            .iter()
+            .all(|b| b.overflow == BlockOverflow::Clip)
+    );
+    for layout in &presets {
+        assert_eq!(&api.clamp_layout(layout.clone()).expect("clamp"), layout);
+    }
+    let mut wild = presets[0].clone();
+    wild.blocks[0].size_pt = 1.0;
+    wild.blocks[0].line_height = f32::NAN;
+    wild.blocks[0].columns = 9;
+    let got = api.clamp_layout(wild).expect("clamp");
+    assert_eq!(got.blocks[0].size_pt, 8.0);
+    assert_eq!(got.blocks[0].line_height, 1.3);
+    assert_eq!(got.blocks[0].columns, 3);
+}
+
+#[test]
+fn layout_files_save_duplicate_revert_and_restore_like_the_core() {
+    let api = api();
+    let r = |id: &str| LayoutRef { id: id.into() };
+    let entries = api.list_layouts().expect("list");
+    let ids: Vec<_> = entries.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "book",
+            "columns",
+            "magazine",
+            "quote",
+            "characters",
+            "waterfall",
+            "draft"
+        ]
+    );
+    assert!(entries[6].broken.is_some(), "the mock has one broken file");
+    assert_eq!(
+        api.get_layout(r("draft")).expect_err("broken").code,
+        ErrorCode::InvalidRequest
+    );
+
+    let book = api.get_layout(r("book")).expect("book").layout;
+    let mut big = book.clone();
+    big.blocks[0].size_pt = 5_000.0;
+    let saved = api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: big.clone(),
+        })
+        .expect("save");
+    assert_eq!(saved.layout.blocks[0].size_pt, 600.0);
+    api.save_layout(SaveLayoutRequest {
+        id: "book".into(),
+        layout: big,
+    })
+    .expect("same again");
+    let history = api.layout_history(r("book")).expect("history");
+    assert_eq!(history.len(), 1, "an unchanged save keeps no version");
+    assert_eq!(history[0].name.as_deref(), Some("Book"));
+
+    let copy = api
+        .duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: None,
+        })
+        .expect("copy");
+    assert_eq!(
+        (copy.id.as_str(), copy.layout.name.as_str()),
+        ("book-copy", "Book copy")
+    );
+    assert_eq!(
+        api.duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: Some("BOOK".into())
+        })
+        .expect_err("taken")
+        .code,
+        ErrorCode::Conflict
+    );
+
+    assert_eq!(
+        api.revert_layout(RevertLayoutRequest {
+            id: "book".into(),
+            to_original: false
+        })
+        .expect("revert")
+        .layout,
+        saved.layout
+    );
+    let reset = api
+        .revert_layout(RevertLayoutRequest {
+            id: "book".into(),
+            to_original: true,
+        })
+        .expect("reset");
+    assert_eq!(reset.layout, book);
+    let restored = api
+        .restore_layout(RestoreLayoutRequest {
+            id: "book".into(),
+            number: 2,
+        })
+        .expect("restore the reset-over version");
+    assert_eq!(restored.layout, saved.layout);
+    let numbers: Vec<_> = api
+        .layout_history(r("book"))
+        .expect("history")
+        .into_iter()
+        .map(|v| v.number)
+        .collect();
+    assert_eq!(numbers, [3, 2, 1]);
+    // A broken file that is no preset has no original to reset to.
+    let no_original = api
+        .revert_layout(RevertLayoutRequest {
+            id: "draft".into(),
+            to_original: true,
+        })
+        .expect_err("draft is no preset");
+    assert_eq!(no_original.code, ErrorCode::InvalidRequest);
+}
+
+#[test]
+fn the_web_filter_follows_declarations_and_explains_each_face() {
+    let api = api();
+    let web = |ok: bool| {
+        let res = api
+            .search(SearchRequest {
+                filters: Filters {
+                    web_ok: Some(ok),
+                    ..Filters::default()
+                },
+                ..SearchRequest::default()
+            })
+            .unwrap();
+        res.families
+            .into_iter()
+            .map(|h| h.family.name)
+            .collect::<Vec<_>>()
+    };
+    assert!(web(false).contains(&"Legacy Grotesk".to_owned()));
+    assert!(web(true).contains(&"Inter".to_owned()));
+    let legacy = api.get_face(FaceId(7)).unwrap();
+    assert_eq!(legacy.face.family_name, "Legacy Grotesk");
+    assert_eq!(
+        legacy.license.web_use.map(|w| (w.ok, w.reason)),
+        Some((
+            false,
+            "Embedding restricted, no web license declared".to_owned()
+        ))
+    );
+    api.declare_license(LicenseDeclaration {
+        family: legacy.face.family,
+        license_type: Some(LicenseType::Web),
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    assert!(web(true).contains(&"Legacy Grotesk".to_owned()));
+    assert_eq!(
+        api.get_face(FaceId(7))
+            .unwrap()
+            .license
+            .web_use
+            .map(|w| w.reason),
+        Some("Declared web license".to_owned())
     );
 }

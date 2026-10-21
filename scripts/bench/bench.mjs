@@ -13,14 +13,16 @@
 // $FM_REFERENCE_LIBRARY): first scan into a fresh index (budgeted per 10,000
 // files; the report gives the file count and the measured time), incremental rescan,
 // cold start (median of --runs fresh processes, spawn to first page), search
-// latency (p95 over --rounds rounds of the query set), idle memory (resident
+// latency (p95 over --rounds rounds of the query set), smart-collection latency
+// (p95 of a search by each of 20 smart collections and of list_collections,
+// E14.2), idle memory (resident
 // set of a started process after --settle-ms), preview-cache hit latency (p95
 // over --rounds hits on up to 200 cached thumbnails, E4.3) and 100-face
 // activation (one session request through this OS's activator, then
 // deactivated). Writes the per-OS JSON report
 // (default target/bench/bench-<os>.json) and prints a table.
 // The library is only read; the index lives in a throwaway home folder.
-// gate: marks each budgeted metric against the median of the last nightly runs on
+// gate: marks each budgeted metric against the slowest of the last runs on
 // main (lib.mjs gate()); a PR fails at more than 10% worse, or newly over budget.
 // It writes the marked report (default: in place) and a GitHub annotation per regression.
 //
@@ -127,6 +129,7 @@ async function run(opts) {
     const starts = [];
     for (let i = 0; i < opts.runs; i++) starts.push((await startProcess(bin, ['start', '--home', home])).ms);
     const search = bench(bin, ['search', '--home', home, '--rounds', String(opts.rounds)]);
+    const smart = bench(bin, ['smart', '--home', home, '--rounds', String(opts.rounds)]);
     const previewCache = bench(bin, ['preview-cache', '--home', home, '--rounds', String(opts.rounds)]);
     const activation = bench(bin, ['activate', '--home', home]);
     console.log(`activation: ${activation.done}/${activation.faces} faces activated, ${activation.conflicts} clashes`);
@@ -143,13 +146,14 @@ async function run(opts) {
         first_scan: firstScan(scan.ms, scan.files),
         incremental_update: metric('incremental_update', inc.ms),
         search: metric('search', search.p95_ms),
+        smart_collections: metric('smart_collections', smart.p95_ms),
         activation_100: activation100(activation),
         idle_memory: metric('idle_memory', idle),
         preview_cache_hit: previewCache.samples
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, preview_cache: previewCache, activation },
+      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, preview_cache: previewCache, activation },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');

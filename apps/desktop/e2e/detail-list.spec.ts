@@ -46,13 +46,14 @@ test("table mode shows the spec's columns for every family", async ({ page }) =>
     /License/,
     /Date added/,
     /Tags/,
+    /Notes/,
   ]);
   const inter = grid.getByRole('row', { name: 'Inter, 1 style' });
   await expect(inter.locator('[data-column="weightRange"]')).toHaveText('100–900');
   await expect(inter.locator('[data-column="format"]')).toHaveText(/TT\s*Variable/);
   await expect(inter.locator('[data-column="manufacturer"]')).toHaveText('rsms');
   await expect(inter.locator('[data-column="location"]')).toHaveText('/Users/demo/Fonts');
-  await expect(inter.locator('[data-column="license"]')).toHaveText('OFL');
+  await expect(inter.locator('[data-column="license"]')).toHaveText('Open license');
   await expect(inter.locator('[data-column="weightLine"] .mark')).toHaveCount(1);
   await expect(inter.locator('[data-column="activation"]')).toHaveText('Inactive');
 });

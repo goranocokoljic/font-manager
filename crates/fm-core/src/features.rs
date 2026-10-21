@@ -3,8 +3,9 @@
 //! itself, and which are on in default text rendering.
 //!
 //! [`REGISTRY`] is the registered tags, sorted, except the numbered ones:
-//! `ss01`–`ss20` are "Stylistic set N" and `cv01`–`cv99` "Character variant N".
-//! A tag that is not registered has no name; the UI shows the tag.
+//! `ss01`–`ss20` are "Stylistic set N" and `cv01`–`cv99` "Character variant N",
+//! unless the font names them itself (E10.4, [`named_by_font`]). A tag that is
+//! not registered has no name; the UI shows the tag.
 //!
 //! "Automatic" and "default on" follow what browsers do (HarfBuzz): the
 //! automatic features are required for correct text in some script (they
@@ -156,30 +157,45 @@ pub const AUTOMATIC: &[&str] = &[
 /// Features a user can switch that are on in default text rendering, sorted.
 pub const DEFAULT_ON: &[&str] = &["calt", "clig", "kern", "liga"];
 
+/// The number `N` of a `{prefix}NN` tag, when it is in `1..=max`.
+fn numbered(tag: &str, prefix: &str, max: u8) -> Option<u8> {
+    let digits = tag.strip_prefix(prefix)?;
+    if digits.len() != 2 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    let n: u8 = digits.parse().ok()?;
+    (1..=max).contains(&n).then_some(n)
+}
+
+/// Whether the font can name `tag` itself: the stylistic sets `ss01`–`ss20`
+/// (FeatureParams UINameID) and the character variants `cv01`–`cv99`
+/// (FeatureUINameID).
+pub fn named_by_font(tag: &str) -> bool {
+    numbered(tag, "ss", 20).is_some() || numbered(tag, "cv", 99).is_some()
+}
+
 /// The friendly name of `tag`, or `None` when the tag is not registered.
 pub fn feature_name(tag: &str) -> Option<String> {
     if let Ok(i) = REGISTRY.binary_search_by(|(t, _)| (*t).cmp(tag)) {
         return Some(REGISTRY[i].1.to_owned());
     }
-    let numbered = |prefix: &str, max: u8| {
-        let digits = tag.strip_prefix(prefix)?;
-        if digits.len() != 2 || !digits.bytes().all(|b| b.is_ascii_digit()) {
-            return None;
-        }
-        let n: u8 = digits.parse().ok()?;
-        (1..=max).contains(&n).then_some(n)
-    };
-    if let Some(n) = numbered("ss", 20) {
+    if let Some(n) = numbered(tag, "ss", 20) {
         return Some(format!("Stylistic set {n}"));
     }
-    numbered("cv", 99).map(|n| format!("Character variant {n}"))
+    numbered(tag, "cv", 99).map(|n| format!("Character variant {n}"))
 }
 
 /// What the Features tab needs to know about `tag`.
 pub fn feature_info(tag: &str) -> FeatureInfo {
+    feature_info_named(tag, None)
+}
+
+/// [`feature_info`] with the font's own name for `tag` ([`named_by_font`]),
+/// which replaces the generic "Stylistic set N" when there is one.
+pub fn feature_info_named(tag: &str, font_name: Option<&str>) -> FeatureInfo {
     FeatureInfo {
         tag: tag.to_owned(),
-        name: feature_name(tag),
+        name: font_name.map(str::to_owned).or_else(|| feature_name(tag)),
         automatic: AUTOMATIC.binary_search(&tag).is_ok(),
         default_on: DEFAULT_ON.binary_search(&tag).is_ok(),
     }
@@ -230,6 +246,30 @@ mod tests {
                 Some(format!("Character variant {n}"))
             );
         }
+    }
+
+    #[test]
+    fn only_numbered_sets_and_variants_are_named_by_the_font() {
+        for tag in ["ss01", "ss20", "cv01", "cv99"] {
+            assert!(named_by_font(tag), "{tag}");
+        }
+        for tag in [
+            "ss00", "ss21", "ssty", "cv00", "cv100", "cv1", "smcp", "size", "",
+        ] {
+            assert!(!named_by_font(tag), "{tag:?}");
+        }
+    }
+
+    #[test]
+    fn the_font_name_replaces_the_generic_one() {
+        let named = feature_info_named("ss01", Some("Single-storey a"));
+        assert_eq!(named.name.as_deref(), Some("Single-storey a"));
+        assert!(!named.automatic && !named.default_on);
+        assert_eq!(feature_info_named("ss01", None), feature_info("ss01"));
+        assert_eq!(
+            feature_info("ss01").name.as_deref(),
+            Some("Stylistic set 1")
+        );
     }
 
     #[test]

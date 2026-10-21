@@ -81,6 +81,12 @@ impl AppPaths {
     pub fn config_file(&self) -> PathBuf {
         self.config.join("config.json")
     }
+
+    /// The per-user folder of body-text layout template files (E12.5),
+    /// inside [`AppPaths::config`] so it roams with the settings on Windows.
+    pub fn layouts_dir(&self) -> PathBuf {
+        self.config.join("layouts")
+    }
 }
 
 /// An environment lookup that keeps only usable values: set, non-empty and absolute.
@@ -168,6 +174,44 @@ mod tests {
         assert_ne!(paths.data, paths.cache);
         assert_ne!(paths.logs, paths.library);
         assert!(paths.config_file().starts_with(&paths.config));
+    }
+
+    #[test]
+    fn the_layouts_folder_is_in_the_config_folder_on_every_os() {
+        let cases = [
+            (
+                Os::Windows,
+                env(&[
+                    ("USERPROFILE", r"C:\Users\ana"),
+                    ("APPDATA", r"C:\Users\ana\AppData\Roaming"),
+                ]),
+                PathBuf::from(r"C:\Users\ana\AppData\Roaming")
+                    .join(APP_DIR)
+                    .join("layouts"),
+            ),
+            (
+                Os::MacOs,
+                env(&[("HOME", "/Users/ana")]),
+                PathBuf::from("/Users/ana/Library/Application Support")
+                    .join(BUNDLE_ID)
+                    .join("layouts"),
+            ),
+            (
+                Os::Linux,
+                env(&[
+                    ("HOME", "/home/ana"),
+                    ("XDG_CONFIG_HOME", "/home/ana/.config"),
+                ]),
+                PathBuf::from("/home/ana/.config")
+                    .join(XDG_DIR)
+                    .join("layouts"),
+            ),
+        ];
+        for (os, lookup, want) in cases {
+            let paths = AppPaths::resolve(os, lookup).expect("resolved");
+            assert_eq!(paths.layouts_dir(), want, "{os:?}");
+            assert!(paths.layouts_dir().starts_with(&paths.config));
+        }
     }
 
     #[test]

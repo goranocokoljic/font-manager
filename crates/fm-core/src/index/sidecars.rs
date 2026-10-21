@@ -3,10 +3,11 @@
 //! wrote there. The file format and the merge rule are in [`crate::sidecar`].
 //!
 //! - **Mirror.** Triggers mark every face whose tags, favorite, rating,
-//!   notes, collections or virtual styles change (`sidecar_dirty`). After each such write
-//!   [`Index::write_sidecars`] rewrites the sidecar of every dirty family. A
-//!   sidecar that cannot be written (folder offline, read-only) leaves its
-//!   faces dirty; the next write or scan tries again. The user's edit never
+//!   notes, collections or virtual styles change (`sidecar_dirty`); a change
+//!   of a family's notes marks its faces (`index/family_notes.rs`). After
+//!   each such write [`Index::write_sidecars`] rewrites the sidecar of every
+//!   dirty family. A sidecar that cannot be written (folder offline,
+//!   read-only) leaves its faces dirty; the next write or scan tries again. The user's edit never
 //!   fails because of it: the index is the source of truth (ADR 0003).
 //! - **Merge.** A scan ([`Index::persist_files`], [`Index::apply_rescan`])
 //!   ends with [`Index::sync_sidecars`]: every sidecar whose size or
@@ -36,10 +37,13 @@ use fm_api::library::{Problem, ProblemKind};
 use fm_api::{FaceId, SourceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
+use super::family_license::{self, DeclaredLicense};
+use super::family_notes;
 use super::files::path_from_sql;
 use super::virtual_styles::{self, Holder};
 use super::{Index, db_error};
 use crate::error::{FmError, FmResult};
+use crate::grouping::family_key;
 use crate::sidecar::{
     self, FaceEntry, FaceKey, Field, Meta, Parsed, Pin, PinKey, SIDECAR_DIR, Sidecar,
 };
@@ -61,6 +65,8 @@ pub struct SidecarSync {
     pub read: usize,
     /// Faces whose metadata a merge changed in the index.
     pub faces_changed: usize,
+    /// Families whose notes a merge changed in the index.
+    pub families_changed: usize,
     /// Sidecar files written.
     pub written: usize,
     /// Conflicts found that were not known yet.
@@ -73,6 +79,7 @@ impl SidecarSync {
     fn add(&mut self, other: Self) {
         self.read += other.read;
         self.faces_changed += other.faces_changed;
+        self.families_changed += other.families_changed;
         self.written += other.written;
         self.conflicts += other.conflicts;
         self.failed += other.failed;
@@ -278,6 +285,12 @@ impl Index {
             out.add(self.sync_source(source, true)?);
         }
         Ok(out)
+    }
+
+    /// The folder of the source, when its sidecars may be touched now
+    /// ([`Index::sidecar_source`]).
+    pub(super) fn sidecar_root(&self, source: SourceId) -> FmResult<Option<PathBuf>> {
+        Ok(self.sidecar_source(source)?.map(|src| src.root))
     }
 
     /// The source, when its sidecars may be touched now: not a system
@@ -503,10 +516,88 @@ impl Index {
             }
         }
 
+        // The family's own notes merge by the same rule, when the family is
+        // here; a conflict is kept on its first face, so it has a font to
+        // show in Problems.
+        let disk_family = disk
+            .as_ref()
+            .map_or(base.family_meta.as_ref(), |d| d.family_meta.as_ref());
+        if let Some(first) = family.first() {
+            let key = family_key(&first.family);
+            let local = family_notes::family_notes_by_key(&tx, &key)?;
+            let merged = sidecar::merge_family(
+                sidecar::family_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
+                    .as_deref(),
+                local.as_deref(),
+                disk_family.and_then(|f| f.notes.as_deref()),
+            );
+            let mut changed = false;
+            if merged.notes != local {
+                family_notes::set_family_notes(&tx, &key, merged.notes.as_deref())?;
+                changed = true;
+            }
+            // The declared license (E15.2) merges as one value, compared in
+            // the form this source's sidecar writes it.
+            let local_license = family_license::license_by_key(&tx, &key)?
+                .map(|l| l.to_sidecar(&src.root))
+                .filter(|l| !l.is_empty());
+            let merged_license = sidecar::merge_license(
+                sidecar::license_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
+                    .as_ref(),
+                local_license.as_ref(),
+                disk_family
+                    .and_then(|f| f.license.as_ref())
+                    .map(|l| &l.license),
+            );
+            if merged_license.license != local_license {
+                let license = merged_license
+                    .license
+                    .as_ref()
+                    .map(|l| DeclaredLicense::from_sidecar(l, &src.root));
+                family_license::set_license(&tx, &key, license.as_ref())?;
+                changed = true;
+            }
+            if changed {
+                out.families_changed += 1;
+            }
+            for c in merged.conflict.iter().chain(&merged_license.conflict) {
+                out.conflicts += insert_conflict(
+                    &tx,
+                    src.id,
+                    name,
+                    Some(first.id),
+                    c.field.as_str(),
+                    Some(&c.local),
+                    &c.disk,
+                )?;
+            }
+        }
+
         // The sidecar of a family here is written with what the index holds
         // now, plus the entries of faces this machine has not indexed.
         let new_base = if let Some(first) = family.first() {
             let mut next = Sidecar::new(first.family.clone());
+            let key = family_key(&first.family);
+            let notes = family_notes::family_notes_by_key(&tx, &key)?;
+            let license = family_license::license_by_key(&tx, &key)?
+                .map(|l| l.to_sidecar(&src.root))
+                .filter(|l| !l.is_empty())
+                .map(|license| sidecar::LicenseEntry {
+                    history: sidecar::next_license_history(
+                        &license,
+                        disk_family.and_then(|f| f.license.as_ref()),
+                    ),
+                    license,
+                });
+            next.family_meta =
+                (notes.is_some() || license.is_some()).then(|| sidecar::FamilyEntry {
+                    history: notes
+                        .as_deref()
+                        .map(|n| sidecar::next_family_history(Some(n), disk_family))
+                        .unwrap_or_default(),
+                    notes,
+                    license,
+                });
             for face in &family {
                 let mut meta = local_meta(&tx, face.id, &collections)?;
                 meta.collections.extend(carried_paths(&tx, face.id)?);
@@ -538,7 +629,8 @@ impl Index {
             next.history = sidecar::next_file_history(&next, Some(disk.as_ref().unwrap_or(&base)));
             tx.commit().map_err(|e| db_error(&e))?;
             let mut stamp = disk_stamp;
-            if disk.as_ref() != Some(&next) && !(disk.is_none() && next.faces.is_empty()) {
+            let nothing = next.faces.is_empty() && next.family_meta.is_none();
+            if disk.as_ref() != Some(&next) && !(disk.is_none() && nothing) {
                 match write_file(src, name, &next) {
                     Ok(written) => stamp = Some(written),
                     Err(e) => {
@@ -562,17 +654,23 @@ impl Index {
             (disk, disk_stamp)
         };
         let (content, mut stamp) = new_base;
-        // A file with entries of faces not indexed here is read again on
-        // every scan, so they are merged as soon as their fonts arrive.
-        if content.faces.iter().any(|e| faces.get(&e.key()).is_none()) {
+        // A file with entries of faces not indexed here, or with the notes
+        // of a family not indexed here, is read again on every scan, so they
+        // are merged as soon as their fonts arrive.
+        let family_here = !family.is_empty();
+        if content.faces.iter().any(|e| faces.get(&e.key()).is_none())
+            || (!family_here && (content.family_meta.is_some() || base.family_meta.is_some()))
+        {
             stamp = None;
         }
-        self.store_base(
-            src.id,
-            name,
-            &indexed_only(content, faces),
-            stamp.as_deref(),
-        )?;
+        let mut content = indexed_only(content, faces);
+        // The family's notes in the base stay what this machine last took in
+        // while no face of the family is indexed: notes it never took in are
+        // not taken for a removal, and notes it kept are not taken for new.
+        if !family_here {
+            content.family_meta = base.family_meta.clone();
+        }
+        self.store_base(src.id, name, &content, stamp.as_deref())?;
         Ok(out)
     }
 
@@ -1147,6 +1245,10 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
             (Some(Field::Favorite), _) => "not a favorite".into(),
             (Some(Field::Rating), serde_json::Value::Number(n)) => format!("{n} stars"),
             (Some(Field::Rating), _) => "no rating".into(),
+            (Some(Field::FamilyLicense), serde_json::Value::Object(_)) => json
+                .and_then(|j| serde_json::from_str::<sidecar::License>(j).ok())
+                .map_or_else(|| "a license".into(), |l| describe_license(&l)),
+            (Some(Field::FamilyLicense), _) => "no license".into(),
             (_, serde_json::Value::String(s)) => format!("\"{s}\""),
             _ => "empty".into(),
         }
@@ -1154,6 +1256,8 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
     let what = match Field::from_name(field) {
         Some(Field::Favorite) => "marked this font",
         Some(Field::Rating) => "rated this font",
+        Some(Field::FamilyNotes) => "set the notes of this font's family to",
+        Some(Field::FamilyLicense) => "declared for this font's family",
         _ => "set the notes of this font to",
     };
     format!(
@@ -1161,6 +1265,33 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
         show(Some(disk)),
         show(local)
     )
+}
+
+/// A declared license in a few words: "desktop, 5 seats, bought 2026-03-01,
+/// with a receipt".
+fn describe_license(license: &sidecar::License) -> String {
+    let mut parts = Vec::new();
+    if let Some(t) = license.license_type {
+        let name = serde_json::to_value(t)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        parts.push(format!("license type \"{name}\""));
+    }
+    if let Some(seats) = license.seats {
+        parts.push(format!("{seats} seats"));
+    }
+    if let Some(date) = &license.purchase_date {
+        parts.push(format!("bought {date}"));
+    }
+    if license.receipt.is_some() {
+        parts.push("with a receipt".into());
+    }
+    if parts.is_empty() {
+        "no license".into()
+    } else {
+        parts.join(", ")
+    }
 }
 
 #[cfg(test)]

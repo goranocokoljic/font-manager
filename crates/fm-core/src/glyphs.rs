@@ -10,6 +10,8 @@
 //!   code point (`U+0416`, `u+416`, `0x416`, `0416`), by an AGL name that
 //!   spells the code point (`uni0416`, `u1F600`) and by glyph name (`Zhe-cy`,
 //!   case-insensitive, a part of the name is enough).
+//! - **Detail** of one character ([`glyph_detail`], E11.2): its advance
+//!   width and the GSUB features that produce or replace its glyph.
 //! - **Malformed data** is never a panic and never an error: a face whose
 //!   header, `cmap`, `maxp` or `post` cannot be read is a page with
 //!   [`Health::Broken`] and no characters. A file that cannot be read at all
@@ -19,12 +21,14 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use fm_api::common::{FontFormat, Health, Page};
-use fm_api::library::{GlyphBlock, GlyphInfo, GlyphPage, GlyphsRequest};
+use fm_api::library::{GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphsRequest};
 use read_fonts::{FileRef, FontRef, ReadError, TableProvider};
-use skrifa::{GlyphId, MetadataProvider};
+use skrifa::instance::{LocationRef, Size};
+use skrifa::{GlyphId, GlyphNames, MetadataProvider};
 
 use crate::blocks::{self, BlockTable};
 use crate::error::{FmError, FmResult};
+use crate::glyph_features::{GlyphFeatures, glyph_features};
 use crate::parser::decompress_web;
 
 /// The most characters one page holds.
@@ -83,6 +87,68 @@ pub fn glyph_page(data: &[u8], collection_index: u32, req: &GlyphsRequest) -> Fm
     })
 }
 
+/// Reads the font file at `path` (face `collection_index` of a collection)
+/// and answers [`glyph_detail`] for it.
+pub fn glyph_detail_file(
+    path: &Path,
+    collection_index: u32,
+    code_point: u32,
+) -> FmResult<GlyphDetail> {
+    let data = std::fs::read(path)
+        .map_err(|e| FmError::io("The font file could not be read.", path, &e))?;
+    glyph_detail(&data, collection_index, code_point)
+}
+
+/// The detail of character `code_point` of face `collection_index` in the
+/// font file `data` (E11.2): glyph id and name, advance width at the default
+/// location and the GSUB features that produce or replace the glyph
+/// ([`glyph_features`]). `NotFound` when the face does not map the
+/// character; a malformed font is a detail with [`Health::Broken`].
+pub fn glyph_detail(data: &[u8], collection_index: u32, code_point: u32) -> FmResult<GlyphDetail> {
+    let broken = |reason: String| GlyphDetail {
+        code_point,
+        glyph_id: 0,
+        name: None,
+        advance_width: None,
+        produced_by: Vec::new(),
+        replaced_by: Vec::new(),
+        health: Health::Broken(reason),
+    };
+    let sfnt = match sfnt(data) {
+        Ok(sfnt) => sfnt,
+        Err(reason) => return Ok(broken(reason)),
+    };
+    let (font, num_glyphs) =
+        match face(&sfnt, collection_index).and_then(|font| num_glyphs(&font).map(|n| (font, n))) {
+            Ok(found) => found,
+            Err(reason) => return Ok(broken(reason)),
+        };
+    let gid = font
+        .charmap()
+        .map(code_point)
+        .filter(|&gid| draws(gid, num_glyphs))
+        .ok_or_else(|| FmError::not_found(format_args!("Character U+{code_point:04X}")))?;
+    // skrifa reads a missing hmtx as zero advances; that is no advance.
+    let advance_width = font.hmtx().ok().and_then(|_| {
+        font.glyph_metrics(Size::unscaled(), LocationRef::default())
+            .advance_width(gid)
+            .map(|w| w.max(0.0).round() as u32)
+    });
+    let GlyphFeatures {
+        produced_by,
+        replaced_by,
+    } = glyph_features(&font, gid);
+    Ok(GlyphDetail {
+        code_point,
+        glyph_id: gid.to_u32(),
+        name: glyph_name(&font.glyph_names(), gid),
+        advance_width,
+        produced_by,
+        replaced_by,
+        health: Health::Ok,
+    })
+}
+
 fn broken(table: &BlockTable, reason: String) -> GlyphPage {
     GlyphPage {
         items: Vec::new(),
@@ -99,7 +165,24 @@ fn broken(table: &BlockTable, reason: String) -> GlyphPage {
 /// is broken.
 fn glyphs_of(data: &[u8], index: u32) -> Result<Vec<(u32, u32, Option<String>)>, String> {
     let sfnt = sfnt(data)?;
-    let font = match FileRef::new(&sfnt) {
+    let font = face(&sfnt, index)?;
+    let num_glyphs = num_glyphs(&font)?;
+    let names = font.glyph_names();
+    let mut out: Vec<(u32, u32, Option<String>)> = font
+        .charmap()
+        .mappings()
+        .filter(|&(_, gid)| draws(gid, num_glyphs))
+        .map(|(cp, gid)| (cp, gid.to_u32(), glyph_name(&names, gid)))
+        .collect();
+    out.sort_unstable_by_key(|&(cp, _, _)| cp);
+    out.dedup_by_key(|&mut (cp, _, _)| cp);
+    Ok(out)
+}
+
+/// Face `index` of the TrueType or OpenType data `sfnt`, with the tables
+/// the glyph map reads checked. `Err` is the reason the face is broken.
+pub(crate) fn face(sfnt: &[u8], index: u32) -> Result<FontRef<'_>, String> {
+    let font = match FileRef::new(sfnt) {
         Ok(FileRef::Font(font)) if index == 0 => font,
         Ok(FileRef::Font(_)) => return Err(format!("The file has no face {index}.")),
         Ok(FileRef::Collection(c)) => c
@@ -108,28 +191,31 @@ fn glyphs_of(data: &[u8], index: u32) -> Result<Vec<(u32, u32, Option<String>)>,
         Err(e) => return Err(format!("The font header is malformed: {e}.")),
     };
     check(&font)?;
-    let num_glyphs = u32::from(
+    Ok(font)
+}
+
+pub(crate) fn num_glyphs(font: &FontRef<'_>) -> Result<u32, String> {
+    Ok(u32::from(
         font.maxp()
             .map_err(|e| table_error("maxp", &e))?
             .num_glyphs(),
-    );
-    let names = font.glyph_names();
-    let mut out: Vec<(u32, u32, Option<String>)> = font
-        .charmap()
-        .mappings()
-        .filter(|&(_, gid)| gid != GlyphId::NOTDEF && gid.to_u32() < num_glyphs)
-        .map(|(cp, gid)| {
-            let name = names
-                .get(gid)
-                .filter(|n| !n.is_synthesized())
-                .map(|n| n.as_str().to_owned())
-                .filter(|n| !n.is_empty());
-            (cp, gid.to_u32(), name)
-        })
-        .collect();
-    out.sort_unstable_by_key(|&(cp, _, _)| cp);
-    out.dedup_by_key(|&mut (cp, _, _)| cp);
-    Ok(out)
+    ))
+}
+
+/// A mapping to `.notdef` or past the glyph count is not a glyph the face
+/// draws.
+pub(crate) fn draws(gid: GlyphId, num_glyphs: u32) -> bool {
+    gid != GlyphId::NOTDEF && gid.to_u32() < num_glyphs
+}
+
+/// The glyph's name from `post` or the CFF charset; skrifa's synthesized
+/// `gidN` names are not names.
+fn glyph_name(names: &GlyphNames<'_>, gid: GlyphId) -> Option<String> {
+    names
+        .get(gid)
+        .filter(|n| !n.is_synthesized())
+        .map(|n| n.as_str().to_owned())
+        .filter(|n| !n.is_empty())
 }
 
 /// The tables the glyph map reads are present and readable. An absent
@@ -169,7 +255,7 @@ fn table_error(name: &str, e: &ReadError) -> String {
 
 /// The TrueType or OpenType data of a font file; WOFF and WOFF2 are
 /// decompressed.
-fn sfnt(data: &[u8]) -> Result<Cow<'_, [u8]>, String> {
+pub(crate) fn sfnt(data: &[u8]) -> Result<Cow<'_, [u8]>, String> {
     let (format, name) = match data.get(..4) {
         Some(b"wOFF") => (FontFormat::Woff, "WOFF"),
         Some(b"wOF2") => (FontFormat::Woff2, "WOFF2"),

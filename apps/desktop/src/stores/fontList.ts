@@ -13,12 +13,15 @@ import {
 } from '../list/selection';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
+import { useVirtualStylesStore } from './virtualStyles';
 
 /**
  * The font list's view state: which families are expanded, the cursor and the
  * selected rows. Not saved; a relaunch starts with everything collapsed. The
  * list shows the search results while a search or filter is on (an expanded
- * family shows its matching styles only), else the whole library. The views
+ * family shows its matching styles only), else the whole library. In an open
+ * collection, an expanded family also shows the collection's virtual styles of
+ * its faces; a family held only through them is listed too. The views
  * (list, table, grid, waterfall) all show these rows, so switching views keeps
  * the selection; `anchor` keeps the scroll position, as the family at the top.
  */
@@ -28,18 +31,32 @@ export const useFontListStore = defineStore('fontList', () => {
   const selection = shallowRef<ListSelection>(EMPTY_SELECTION);
 
   const search = useSearchStore();
+  const pinned = useVirtualStylesStore();
 
-  const families = computed<FamilySummary[]>(
-    () => search.hits?.map((h) => h.family) ?? library.families,
-  );
+  const families = computed<FamilySummary[]>(() => {
+    const hits = search.hits?.map((h) => h.family);
+    if (!hits) return library.families;
+    const listed = new Set(hits.map((f) => f.id));
+    const extra = library.families.filter((f) => !listed.has(f.id) && pinned.byFamily.has(f.id));
+    return extra.length ? [...hits, ...extra] : hits;
+  });
   /** The faces of a family the list shows: with search results, the matching ones. */
   function shownFaces(id: FamilyId): FaceSummary[] | undefined {
     const all = library.faces.get(id);
-    const only = search.hits ? search.matchingFaces.get(id) : undefined;
-    return all && only ? all.filter((f) => only.has(f.id)) : all;
+    if (!search.hits) return all;
+    const only = search.matchingFaces.get(id);
+    if (!all) return all;
+    // A family listed only for its virtual styles shows none of its own faces.
+    return only ? all.filter((f) => only.has(f.id)) : pinned.byFamily.has(id) ? [] : all;
+  }
+  /** The face a family row previews: its first shown face, else its first virtual style's. */
+  function previewFace(id: FamilyId): FaceSummary | undefined {
+    return shownFaces(id)?.[0] ?? pinned.byFamily.get(id)?.[0]?.face;
   }
 
-  const rows = computed<ListRow[]>(() => flattenRows(families.value, expanded, shownFaces));
+  const rows = computed<ListRow[]>(() =>
+    flattenRows(families.value, expanded, shownFaces, (id) => pinned.byFamily.get(id) ?? []),
+  );
   const keys = computed(() => rows.value.map((r) => r.key));
   const indexOf = computed(() => new Map(keys.value.map((k, i) => [k, i])));
 
@@ -63,7 +80,7 @@ export const useFontListStore = defineStore('fontList', () => {
   const cursorFace = computed<FaceSummary | undefined>(() => {
     const row = cursorRow.value;
     if (!row) return undefined;
-    return row.kind === 'face' ? row.face : shownFaces(row.family.id)?.[0];
+    return row.kind === 'face' ? row.face : previewFace(row.family.id);
   });
 
   const isSelected = (key: RowKey) => selection.value.selected.has(key);
@@ -152,6 +169,7 @@ export const useFontListStore = defineStore('fontList', () => {
   return {
     families,
     shownFaces,
+    previewFace,
     expanded,
     selection,
     rows,

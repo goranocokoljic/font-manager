@@ -17,8 +17,9 @@ import { useScrollAnchor } from '../list/anchor';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowActivation } from '../list/activation';
+import { OPEN_LICENSE_BADGE, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
-import { rowLabel, styleCount, type ListRow } from '../list/rows';
+import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
@@ -211,7 +212,7 @@ function onToggle(row: ListRow): void {
           v-if="item.face"
           class="preview"
           :face="item.face"
-          :label="item.row.kind === 'face' ? item.row.face.style : item.row.family.name"
+          :label="item.row.kind === 'face' ? styleName(item.row) : item.row.family.name"
           :text="item.text"
           :size-px="preview.sizePx"
           :line-height="preview.lineHeight"
@@ -220,12 +221,23 @@ function onToggle(row: ListRow): void {
           :color="preview.textColor"
           :fallback="item.fallback"
           :missing="item.missing"
+          :variations="item.variations"
         >
           <template #lead>
             <ActivationDot :state="rowActivation(item.row)" />
           </template>
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+            <span
+              v-if="item.row.family.openLicense"
+              class="open-license"
+              data-testid="open-license"
+              :title="openLicenseName(item.row.family.openLicense)"
+              >{{ OPEN_LICENSE_BADGE }}</span
+            >
+          </template>
+          <template v-else-if="item.row.virtual" #detail>
+            <span class="count">Pinned</span>
           </template>
         </FontPreviewRow>
         <div v-else class="preview placeholder">
@@ -325,6 +337,14 @@ function onToggle(row: ListRow): void {
 }
 .count {
   color: var(--fm-muted);
+}
+.open-license {
+  padding: 0 4px;
+  border: 1px solid var(--fm-success);
+  border-radius: 3px;
+  color: var(--fm-success);
+  font-size: 10.5px;
+  line-height: 14px;
 }
 .note {
   color: var(--fm-warning);

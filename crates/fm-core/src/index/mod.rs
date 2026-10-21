@@ -25,6 +25,8 @@ mod activation;
 mod collections;
 mod duplicates;
 mod faces;
+mod family_license;
+mod family_notes;
 mod files;
 mod languages;
 mod problems;
@@ -52,6 +54,7 @@ use crate::error::{FmError, FmResult};
 
 pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
 pub use faces::FaceLocation;
+pub use family_license::{DeclaredLicense, LicenseTarget};
 pub use files::{BATCH_SIZE, Persisted};
 pub(crate) use resolutions::StoredMove;
 pub use schema::SCHEMA_VERSION;
@@ -238,6 +241,9 @@ impl Index {
             let version = i as u32 + 1;
             let tx = self.conn.transaction()?;
             tx.execute_batch(sql)?;
+            if version == schema::OPEN_LICENSE_VERSION {
+                faces::fill_open_licenses(&tx)?;
+            }
             tx.pragma_update(None, "user_version", version)?;
             tx.commit()?;
             tracing::info!(version, "library index migrated");

@@ -9,24 +9,33 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::layout::{
+    DuplicateLayoutRequest, Layout, LayoutEntry, LayoutRef, LayoutVersion, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+};
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphPage,
-    GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest, Problem, Resolution,
-    ScanRequest, SetSourcePausedRequest, Source,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
+    GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
+    Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest, ProjectSet,
-    RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
+    LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
+    RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
-    PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+    CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
+    SampleTextRequest,
 };
-use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
+use fm_api::search::{
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
-    SettingsService, SourceId,
+    SettingsService, SourceId, VirtualStyleId,
 };
 use fm_core::index::Opened;
 use fm_core::{CoreApi, SettingsStore};
@@ -239,6 +248,12 @@ async fn list_glyphs(state: State<'_, AppState>, req: GlyphsRequest) -> ApiResul
     call(&state, move |api| api.list_glyphs(req)).await
 }
 
+/// One character of a face in detail, for the Glyphs tab's detail panel.
+#[tauri::command]
+async fn get_glyph(state: State<'_, AppState>, req: GlyphRequest) -> ApiResult<GlyphDetail> {
+    call(&state, move |api| api.get_glyph(req)).await
+}
+
 /// One page of families.
 #[tauri::command]
 async fn list_families(
@@ -264,6 +279,78 @@ async fn sample_texts(
     req: SampleTextRequest,
 ) -> ApiResult<Vec<SampleText>> {
     call(&state, move |api| api.sample_texts(req)).await
+}
+
+/// The CSS for a face's moved axes and switched features ("Copy CSS").
+#[tauri::command]
+async fn css_values(state: State<'_, AppState>, req: CssValuesRequest) -> ApiResult<CssValues> {
+    call(&state, move |api| api.css_values(req)).await
+}
+
+/// The six body-text layout presets.
+#[tauri::command]
+async fn layout_presets(state: State<'_, AppState>) -> ApiResult<Vec<Layout>> {
+    call(&state, move |api| api.layout_presets()).await
+}
+
+/// A layout with every block value clamped into its range.
+#[tauri::command]
+async fn clamp_layout(state: State<'_, AppState>, req: Layout) -> ApiResult<Layout> {
+    call(&state, move |api| api.clamp_layout(req)).await
+}
+
+/// Every layout template file in the layouts folder, broken ones with the reason.
+#[tauri::command]
+async fn list_layouts(state: State<'_, AppState>) -> ApiResult<Vec<LayoutEntry>> {
+    call(&state, move |api| api.list_layouts()).await
+}
+
+/// One saved layout.
+#[tauri::command]
+async fn get_layout(state: State<'_, AppState>, req: LayoutRef) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.get_layout(req)).await
+}
+
+/// Saves a layout; the content it replaces becomes a version.
+#[tauri::command]
+async fn save_layout(state: State<'_, AppState>, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.save_layout(req)).await
+}
+
+/// Copies a layout into a new template file.
+#[tauri::command]
+async fn duplicate_layout(
+    state: State<'_, AppState>,
+    req: DuplicateLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.duplicate_layout(req)).await
+}
+
+/// The saved file again, or a preset's shipped original.
+#[tauri::command]
+async fn revert_layout(
+    state: State<'_, AppState>,
+    req: RevertLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.revert_layout(req)).await
+}
+
+/// The kept versions of a layout, newest first.
+#[tauri::command]
+async fn layout_history(
+    state: State<'_, AppState>,
+    req: LayoutRef,
+) -> ApiResult<Vec<LayoutVersion>> {
+    call(&state, move |api| api.layout_history(req)).await
+}
+
+/// Makes a kept version current.
+#[tauri::command]
+async fn restore_layout(
+    state: State<'_, AppState>,
+    req: RestoreLayoutRequest,
+) -> ApiResult<SavedLayout> {
+    call(&state, move |api| api.restore_layout(req)).await
 }
 
 #[tauri::command]
@@ -348,6 +435,21 @@ async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<Sea
     call(&state, move |api| api.search(req)).await
 }
 
+/// How well one face covers some languages or text, for the glyph compare overlay.
+#[tauri::command]
+async fn check_coverage(
+    state: State<'_, AppState>,
+    req: CoverageRequest,
+) -> ApiResult<CoverageReport> {
+    call(&state, move |api| api.check_coverage(req)).await
+}
+
+/// One face's coverage per Unicode block and language, for the Glyphs tab.
+#[tauri::command]
+async fn face_coverage(state: State<'_, AppState>, face: FaceId) -> ApiResult<FaceCoverage> {
+    call(&state, move |api| api.face_coverage(face)).await
+}
+
 /// The language presets a `supports` filter can name.
 #[tauri::command]
 async fn list_languages(state: State<'_, AppState>) -> ApiResult<Vec<LanguagePreset>> {
@@ -373,6 +475,31 @@ async fn list_collections(state: State<'_, AppState>) -> ApiResult<Vec<Collectio
 #[tauri::command]
 async fn list_sets(state: State<'_, AppState>) -> ApiResult<Vec<ProjectSet>> {
     call(&state, |api| api.list_sets()).await
+}
+
+/// Pins an instance of a variable face as a virtual style of a manual
+/// collection or a project set.
+#[tauri::command]
+async fn pin_instance(
+    state: State<'_, AppState>,
+    req: PinInstanceRequest,
+) -> ApiResult<VirtualStyle> {
+    call(&state, move |api| api.pin_instance(req)).await
+}
+
+/// The virtual styles of one manual collection or one project set.
+#[tauri::command]
+async fn list_virtual_styles(
+    state: State<'_, AppState>,
+    req: VirtualStylesRequest,
+) -> ApiResult<Vec<VirtualStyle>> {
+    call(&state, move |api| api.list_virtual_styles(req)).await
+}
+
+/// Deletes a virtual style; its face stays.
+#[tauri::command]
+async fn delete_virtual_style(state: State<'_, AppState>, style: VirtualStyleId) -> ApiResult<()> {
+    call(&state, move |api| api.delete_virtual_style(style)).await
 }
 
 /// Renames a collection.
@@ -439,6 +566,18 @@ async fn untag_faces(state: State<'_, AppState>, req: UntagFacesRequest) -> ApiR
 #[tauri::command]
 async fn update_user_meta(state: State<'_, AppState>, req: UserMetaUpdate) -> ApiResult<()> {
     call(&state, move |api| api.update_user_meta(req)).await
+}
+
+/// Sets the notes of a family; an empty string clears them.
+#[tauri::command]
+async fn update_family_notes(state: State<'_, AppState>, req: FamilyNotesUpdate) -> ApiResult<()> {
+    call(&state, move |api| api.update_family_notes(req)).await
+}
+
+/// Declares the license of a family (E15.2).
+#[tauri::command]
+async fn declare_license(state: State<'_, AppState>, req: LicenseDeclaration) -> ApiResult<()> {
+    call(&state, move |api| api.declare_license(req)).await
 }
 
 /// Every source: watched folders, the library folder and the system fonts.
@@ -556,9 +695,12 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_app_info,
             get_face,
             list_glyphs,
+            get_glyph,
             list_families,
             get_family,
             search,
+            check_coverage,
+            face_coverage,
             list_languages,
             list_collections,
             create_collection,
@@ -571,8 +713,23 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             tag_faces,
             untag_faces,
             update_user_meta,
+            update_family_notes,
+            declare_license,
             list_sets,
+            pin_instance,
+            list_virtual_styles,
+            delete_virtual_style,
             sample_texts,
+            css_values,
+            layout_presets,
+            clamp_layout,
+            list_layouts,
+            get_layout,
+            save_layout,
+            duplicate_layout,
+            revert_layout,
+            layout_history,
+            restore_layout,
             render_preview,
             activate,
             deactivate,

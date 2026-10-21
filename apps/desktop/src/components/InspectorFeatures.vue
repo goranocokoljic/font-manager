@@ -3,11 +3,13 @@
 // friendly name and tag (fm-core names them). Each feature a user can switch
 // has a switch that starts at the browser's default; switching it changes the
 // face's preview rows through font-feature-settings (the features store).
-// Features the shaper applies by itself are listed without a switch.
+// Features the shaper applies by itself are listed without a switch. "Copy
+// CSS" copies font-feature-settings for the switched features (E10.5).
 import { computed } from 'vue';
 import type { FeatureInfo } from '../api/types';
 import { useFeaturesStore } from '../stores/features';
 import { useSelectionStore } from '../stores/selection';
+import CopyCss from './CopyCss.vue';
 
 const selection = useSelectionStore();
 const features = useFeaturesStore();
@@ -34,14 +36,17 @@ function reset(): void {
     <template v-else>
       <div class="head">
         <p class="hint">Switches change this face's previews.</p>
-        <button
-          type="button"
-          class="reset"
-          :disabled="faceId === null || !features.isChanged(faceId)"
-          @click="reset"
-        >
-          Reset
-        </button>
+        <div class="actions">
+          <CopyCss v-if="faceId !== null" label="features" :css="() => features.css(faceId!)" />
+          <button
+            type="button"
+            class="reset"
+            :disabled="faceId === null || !features.isChanged(faceId)"
+            @click="reset"
+          >
+            Reset
+          </button>
+        </div>
       </div>
       <ul v-if="switchable.length" class="plain list" aria-label="Features">
         <li v-for="f in switchable" :key="f.tag" class="row">
@@ -93,6 +98,12 @@ function reset(): void {
   justify-content: space-between;
   gap: 8px;
   padding-bottom: 8px;
+}
+.actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
 }
 .reset {
   padding: 2px 10px;

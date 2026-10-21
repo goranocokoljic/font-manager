@@ -1,9 +1,9 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use fm_api::common::{Classification, Health, Page};
+use fm_api::common::{Classification, Embedding, Health, Page};
 use fm_api::library::SourceKind;
-use fm_api::search::{FilterCount, FilterCounts, Supports, WeightRange, WidthRange};
+use fm_api::search::{FilterCount, FilterCounts, Filters, Supports, WeightRange, WidthRange};
 use fm_api::{ErrorCode, SourceId};
 use rusqlite::Connection;
 
@@ -659,8 +659,65 @@ fn tags_collections_foundry_favorites_and_rating_filter_too() {
 }
 
 #[test]
-fn filters_search_cannot_apply_are_refused() {
-    let (index, _, _) = filter_library();
+fn a_smart_collection_applies_and_an_unknown_one_is_refused() {
+    let (mut index, _, _) = filter_library();
+    // Collection 2 is smart with an empty rule (phase-1 filters `{}`): every
+    // face, where it used to be `Unsupported` (E14.2 criterion 2).
+    let every = filtered(&index, "", Filters::default()).total;
+    let smart = |id: u32| Filters {
+        collection: Some(CollectionId(id)),
+        ..Filters::default()
+    };
+    assert_eq!(filtered(&index, "", smart(2)).total, every);
+    let web = index
+        .create_collection(&fm_api::organization::CreateCollectionRequest {
+            name: "Web or kern".into(),
+            parent: None,
+            rules: None,
+            rule_group: Some(fm_api::organization::RuleGroup {
+                op: fm_api::organization::RuleOp::Or,
+                rules: vec![
+                    fm_api::organization::Rule::Filters {
+                        filters: Filters {
+                            license: Some(LicenseType::Web),
+                            ..Filters::default()
+                        },
+                    },
+                    fm_api::organization::Rule::Filters {
+                        filters: Filters {
+                            features: vec!["kern".into()],
+                            ..Filters::default()
+                        },
+                    },
+                ],
+            }),
+        })
+        .expect("smart");
+    let res = filtered(&index, "", smart(web.id.0));
+    assert_eq!(
+        found(&index, &res),
+        vec![
+            ("Helvetica Neue".to_owned(), vec!["Bold".to_owned()]),
+            (
+                "Roboto".to_owned(),
+                vec!["Regular".to_owned(), "Bold".to_owned()]
+            ),
+        ]
+    );
+    // With text and the other filters, as any collection.
+    let res = filtered(
+        &index,
+        "roboto",
+        Filters {
+            collection: Some(web.id),
+            weight: Some(WeightRange { min: 600, max: 900 }),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(found(&index, &res), one("Roboto", &["Bold"]));
+    // The counts of the other filters keep the collection.
+    let counts = res.counts.expect("counts");
+    assert!(counts.weight.iter().all(|c| c.count <= 1), "{counts:?}");
     let refused = |filters: Filters| {
         index
             .search(&SearchRequest {
@@ -670,13 +727,6 @@ fn filters_search_cannot_apply_are_refused() {
             .expect_err("refused")
             .code()
     };
-    assert_eq!(
-        refused(Filters {
-            collection: Some(CollectionId(2)),
-            ..Filters::default()
-        }),
-        ErrorCode::Unsupported
-    );
     assert_eq!(
         refused(Filters {
             collection: Some(CollectionId(99)),
@@ -1104,6 +1154,152 @@ fn time_queries(index: &Index, label: &str) {
     }
 }
 
+/// Twenty smart collections over every rule shape: AND/OR, nested groups,
+/// each filter dimension, a rule through another smart collection.
+fn twenty_smart_collections(index: &mut Index) -> Vec<CollectionId> {
+    use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let shapes: Vec<RuleGroup> = vec![
+        RuleGroup::from(Filters {
+            slant: Some(Slant::Italic),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            weight: Some(WeightRange { min: 600, max: 900 }),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            added_within_days: Some(30),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            features: vec!["smcp".into(), "onum".into()],
+            ..Filters::default()
+        }),
+        RuleGroup::from(languages(&["pl"])),
+        RuleGroup::from(languages(&["sr-Latn", "sr-Cyrl", "de"])),
+        RuleGroup::from(text("Ђорђе Đorđe ŁĄ")),
+        RuleGroup::from(Filters {
+            foundry: Some("Type Co".into()),
+            variable: Some(false),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            active: Some(false),
+            problems: Some(false),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            formats: vec![FontFormat::Ttf, FontFormat::Otf],
+            ..Filters::default()
+        }),
+        RuleGroup {
+            op: RuleOp::Or,
+            rules: vec![
+                leaf(Filters {
+                    slant: Some(Slant::Italic),
+                    ..Filters::default()
+                }),
+                leaf(languages(&["ru"])),
+            ],
+        },
+        RuleGroup {
+            op: RuleOp::And,
+            rules: vec![
+                leaf(Filters {
+                    weight: Some(WeightRange { min: 100, max: 400 }),
+                    ..Filters::default()
+                }),
+                Rule::Group {
+                    group: RuleGroup {
+                        op: RuleOp::Or,
+                        rules: vec![
+                            leaf(Filters {
+                                features: vec!["liga".into()],
+                                ..Filters::default()
+                            }),
+                            leaf(Filters {
+                                foundry: Some("Foundry A".into()),
+                                ..Filters::default()
+                            }),
+                        ],
+                    },
+                },
+            ],
+        },
+    ];
+    let mut ids: Vec<CollectionId> = Vec::new();
+    for i in 0..20 {
+        let rule_group = match shapes.get(i) {
+            Some(shape) => shape.clone(),
+            // The rest go through earlier smart collections.
+            None => RuleGroup {
+                op: if i.is_multiple_of(2) {
+                    RuleOp::And
+                } else {
+                    RuleOp::Or
+                },
+                rules: vec![
+                    leaf(Filters {
+                        collection: Some(ids[i - 8]),
+                        ..Filters::default()
+                    }),
+                    leaf(Filters {
+                        collection: Some(ids[i - 5]),
+                        ..Filters::default()
+                    }),
+                ],
+            },
+        };
+        let c = index
+            .create_collection(&CreateCollectionRequest {
+                name: format!("Smart {i}"),
+                parent: None,
+                rules: None,
+                rule_group: Some(rule_group),
+            })
+            .expect("smart collection");
+        ids.push(c.id);
+    }
+    ids
+}
+
+/// E14.2 criterion 5: a search filtered by each smart collection, and the
+/// collection list with twenty of them, each in the budget.
+fn time_smart_collections(index: &mut Index, label: &str) {
+    let ids = twenty_smart_collections(index);
+    index.collections().expect("warm");
+    let start = Instant::now();
+    let list = index.collections().expect("list");
+    let elapsed = start.elapsed();
+    eprintln!(
+        "{label}: list_collections with {} smart in {elapsed:?}",
+        list.len()
+    );
+    assert!(
+        elapsed < BUDGET,
+        "{label}: list_collections took {elapsed:?}"
+    );
+    for (query, id) in ids.iter().flat_map(|id| [("", *id), ("sans", *id)]) {
+        let filters = Filters {
+            collection: Some(id),
+            ..Filters::default()
+        };
+        filtered(index, query, filters.clone());
+        let start = Instant::now();
+        let res = filtered(index, query, filters);
+        let elapsed = start.elapsed();
+        eprintln!(
+            "{label}: {query:?} in smart {id} → {} families in {elapsed:?}",
+            res.total
+        );
+        assert!(
+            elapsed < BUDGET,
+            "{label}: {query:?} in smart {id} took {elapsed:?}"
+        );
+    }
+}
+
 /// Criterion 1 without the reference library: 10,000 faces in 2,000
 /// families. Timed in release builds only; a debug build runs the queries
 /// for correctness.
@@ -1111,14 +1307,18 @@ fn time_queries(index: &Index, label: &str) {
 fn ten_thousand_fonts_search_in_under_50_ms() {
     let files = synthetic(2_000);
     assert_eq!(files.len(), 10_000);
-    let (index, _) = indexed(&files);
+    let (mut index, _) = indexed(&files);
     let res = search(&index, "kamiten sans");
     assert!(res.total >= 1);
     if cfg!(debug_assertions) {
+        // The twenty rules still compile and count.
+        twenty_smart_collections(&mut index);
+        assert_eq!(index.collections().expect("list").len(), 20);
         eprintln!("debug build: timing skipped");
         return;
     }
     time_queries(&index, "synthetic 10k");
+    time_smart_collections(&mut index, "synthetic 10k");
 }
 
 /// Criterion 1 on the reference library (10k fonts): skipped without it.
@@ -1143,6 +1343,7 @@ fn the_reference_library_searches_in_under_50_ms() {
         .apply_rescan(source, &scanned, &report)
         .expect("persist");
     time_queries(&index, "reference library");
+    time_smart_collections(&mut index, "reference library");
 }
 
 /// The base characters of the embedded preset `code`.
@@ -1422,4 +1623,295 @@ fn counts_keep_the_supports_filter() {
         },
     );
     assert_eq!(names(&res), ["Full"]);
+}
+
+const OFL_TEXT: &str =
+    "This Font Software is licensed under the SIL Open Font License, Version 1.1.";
+
+/// Libre (OFL, installable), Apache Sans (Apache by its URL, editable),
+/// Mention (only names the OFL, restricted) and Plain (no license text,
+/// preview and print).
+fn license_library() -> Vec<IndexedFile> {
+    let face = |family: &str, license: Option<&str>, url: Option<&str>, fs_type: u16| {
+        let mut p = parsed(&f(family, "Regular", 400, 5, false), None, None);
+        p.license = license.map(str::to_owned);
+        p.license_url = url.map(str::to_owned);
+        p.fs_type = Some(fs_type);
+        let name = p.postscript_name.clone().unwrap_or_default();
+        file(&format!("/fonts/{name}.ttf"), vec![p])
+    };
+    vec![
+        face("Libre", Some(OFL_TEXT), None, 0x0000),
+        face(
+            "Apache Sans",
+            None,
+            Some("http://www.apache.org/licenses/LICENSE-2.0"),
+            0x0008,
+        ),
+        face(
+            "Mention",
+            Some("Unlike our SIL Open Font License fonts, this one is commercial."),
+            Some("https://example.com/eula"),
+            0x0002,
+        ),
+        face("Plain", None, None, 0x0004),
+    ]
+}
+
+fn stored_open_license(index: &Index, postscript: &str) -> Option<String> {
+    index
+        .conn
+        .query_row(
+            "SELECT open_license FROM face WHERE postscript_name = ?1",
+            [postscript],
+            |r| r.get(0),
+        )
+        .expect("open license")
+}
+
+#[test]
+fn open_licenses_are_stored_at_scan_and_shown_in_every_family_row() {
+    let (index, _) = indexed(&license_library());
+    assert_eq!(
+        stored_open_license(&index, "Libre-Regular").as_deref(),
+        Some("ofl")
+    );
+    assert_eq!(
+        stored_open_license(&index, "ApacheSans-Regular").as_deref(),
+        Some("apache")
+    );
+    assert_eq!(stored_open_license(&index, "Mention-Regular"), None);
+    assert_eq!(stored_open_license(&index, "Plain-Regular"), None);
+
+    let expected = vec![
+        ("Apache Sans".to_owned(), Some(OpenLicense::Apache)),
+        ("Libre".to_owned(), Some(OpenLicense::Ofl)),
+        ("Mention".to_owned(), None),
+        ("Plain".to_owned(), None),
+    ];
+    let res = search(&index, "");
+    let searched: Vec<_> = res
+        .families
+        .iter()
+        .map(|h| (h.family.name.clone(), h.family.open_license))
+        .collect();
+    assert_eq!(searched, expected, "search rows");
+    let listed: Vec<_> = index
+        .list_families(&ListFamiliesRequest::default())
+        .expect("list")
+        .items
+        .into_iter()
+        .map(|f| (f.name, f.open_license))
+        .collect();
+    assert_eq!(listed, expected, "list_families rows");
+}
+
+#[test]
+fn face_detail_fills_embedding_and_open_license() {
+    let (index, _) = indexed(&license_library());
+    let detail = |ps: &str| {
+        index
+            .face_detail(FaceId(u32::try_from(face_id(&index, ps)).expect("id")))
+            .expect("detail")
+            .license
+    };
+    let libre = detail("Libre-Regular");
+    assert_eq!(libre.open_license, Some(OpenLicense::Ofl));
+    assert_eq!(libre.embedding, Embedding::Installable);
+    assert_eq!(libre.description.as_deref(), Some(OFL_TEXT));
+    let apache = detail("ApacheSans-Regular");
+    assert_eq!(apache.open_license, Some(OpenLicense::Apache));
+    assert_eq!(apache.embedding, Embedding::Editable);
+    let mention = detail("Mention-Regular");
+    assert_eq!(mention.open_license, None);
+    assert_eq!(mention.embedding, Embedding::Restricted);
+    assert_eq!(
+        detail("Plain-Regular").embedding,
+        Embedding::PreviewAndPrint
+    );
+}
+
+#[test]
+fn embedding_and_open_license_filter_and_count() {
+    let (index, _) = indexed(&license_library());
+    let only = |filters: Filters| names(&filtered(&index, "", filters)).join(", ");
+    assert_eq!(
+        only(Filters {
+            open_license: Some(true),
+            ..Filters::default()
+        }),
+        "Apache Sans, Libre"
+    );
+    assert_eq!(
+        only(Filters {
+            open_license: Some(false),
+            ..Filters::default()
+        }),
+        "Mention, Plain"
+    );
+    assert_eq!(
+        only(Filters {
+            embedding: Some(Embedding::Restricted),
+            ..Filters::default()
+        }),
+        "Mention"
+    );
+    assert_eq!(
+        only(Filters {
+            embedding: Some(Embedding::Installable),
+            open_license: Some(true),
+            ..Filters::default()
+        }),
+        "Libre"
+    );
+
+    let counts = filtered(&index, "", Filters::default())
+        .counts
+        .expect("counts");
+    let open: Vec<_> = counts
+        .open_license
+        .iter()
+        .map(|c| (c.value, c.count))
+        .collect();
+    assert_eq!(open, [(true, 2), (false, 2)]);
+    let embedding: Vec<_> = counts
+        .embedding
+        .iter()
+        .map(|c| (c.value, c.count))
+        .collect();
+    assert_eq!(
+        embedding,
+        [
+            (Embedding::Installable, 1),
+            (Embedding::Editable, 1),
+            (Embedding::PreviewAndPrint, 1),
+            (Embedding::Restricted, 1),
+        ]
+    );
+}
+
+#[test]
+fn a_version_11_index_fills_open_licenses_from_the_stored_text() {
+    let dir = TempDir::new("search-migrate-v11");
+    let path = dir.path().join(INDEX_FILE);
+    {
+        let conn = Connection::open(&path).expect("open");
+        for sql in &crate::index::schema::MIGRATIONS[..11] {
+            conn.execute_batch(sql).expect("v1 to v11");
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 11;
+             INSERT INTO source (id, path, kind) VALUES (1, '/fonts', 'watched');
+             INSERT INTO font_file (id, source_id, path, hash, format, size, mtime, health)
+             VALUES (1, 1, '/fonts/old.ttc', randomblob(32), 'ttc', 10, 1700000000,
+                     '{\"kind\":\"ok\"}');
+             INSERT INTO face (file_id, collection_index, family, subfamily, postscript_name,
+                               weight, width, slant, fstype, parsed)
+             VALUES (1, 0, 'Old Libre', 'Regular', 'OldLibre-Regular', 400, 5, 'upright', 0,
+                     '{\"license\": \"Licensed under the SIL Open Font License, Version 1.1\"}'),
+                    (1, 1, 'Old Url', 'Regular', 'OldUrl-Regular', 400, 5, 'upright', 2,
+                     '{\"licenseUrl\": \"http://scripts.sil.org/OFL\"}'),
+                    (1, 2, 'Old Mention', 'Regular', 'OldMention-Regular', 400, 5, 'upright', 0,
+                     '{\"license\": \"See the OFL FAQ.\"}'),
+                    (1, 3, 'Bad Json', 'Regular', 'BadJson-Regular', 400, 5, 'upright', 0,
+                     'not json');",
+        )
+        .expect("old rows");
+    }
+    let index = Index::open(&path).expect("open").index;
+    assert_eq!(index.schema_version().expect("version"), SCHEMA_VERSION);
+    let res = search(&index, "");
+    let rows: Vec<_> = res
+        .families
+        .iter()
+        .map(|h| (h.family.name.as_str(), h.family.open_license))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("Bad Json", None),
+            ("Old Libre", Some(OpenLicense::Ofl)),
+            ("Old Mention", None),
+            ("Old Url", Some(OpenLicense::Ofl)),
+        ]
+    );
+    assert_eq!(
+        stored_open_license(&index, "OldLibre-Regular").as_deref(),
+        Some("ofl")
+    );
+}
+
+/// Declares `license_type` for the family of `postscript`.
+fn declare(index: &mut Index, postscript: &str, license_type: LicenseType) {
+    let face = FaceId(u32::try_from(face_id(index, postscript)).expect("id"));
+    let family = index.family_of(face).expect("family").expect("visible").0;
+    index
+        .declare_license(
+            family,
+            &crate::index::DeclaredLicense {
+                license_type: Some(license_type),
+                seats: None,
+                purchase_date: None,
+                receipt: None,
+            },
+        )
+        .expect("declare");
+}
+
+/// `license_library` with Mention (restricted) declared Web and Apache Sans
+/// (open, editable) declared Desktop: OK for web are Libre (OFL) and
+/// Mention (declared Web); Apache Sans (declared Desktop) and Plain
+/// (preview and print) are not.
+#[test]
+fn web_ok_filters_counts_and_explains_each_face() {
+    let (mut index, _) = indexed(&license_library());
+    declare(&mut index, "Mention-Regular", LicenseType::Web);
+    declare(&mut index, "ApacheSans-Regular", LicenseType::Desktop);
+    let only = |web_ok| {
+        names(&filtered(
+            &index,
+            "",
+            Filters {
+                web_ok: Some(web_ok),
+                ..Filters::default()
+            },
+        ))
+        .join(", ")
+    };
+    assert_eq!(only(true), "Libre, Mention");
+    assert_eq!(only(false), "Apache Sans, Plain");
+
+    let counts = filtered(&index, "", Filters::default())
+        .counts
+        .expect("counts");
+    let web: Vec<_> = counts.web_ok.iter().map(|c| (c.value, c.count)).collect();
+    assert_eq!(web, [(true, 2), (false, 2)]);
+
+    let why = |ps: &str| {
+        index
+            .face_detail(FaceId(u32::try_from(face_id(&index, ps)).expect("id")))
+            .expect("detail")
+            .license
+            .web_use
+            .map(|w| (w.ok, w.reason))
+    };
+    assert_eq!(
+        why("Libre-Regular"),
+        Some((true, "Open license (OFL)".into()))
+    );
+    assert_eq!(
+        why("Mention-Regular"),
+        Some((true, "Declared web license".into()))
+    );
+    assert_eq!(
+        why("ApacheSans-Regular"),
+        Some((false, "Declared desktop license".into()))
+    );
+    assert_eq!(
+        why("Plain-Regular"),
+        Some((
+            false,
+            "Embedding preview & print only, no web license declared".into()
+        ))
+    );
 }

@@ -4,14 +4,14 @@ use fm_api::FaceId;
 use fm_api::common::{FontFormat, Health};
 use fm_api::library::{ProblemKind, SourceKind};
 use fm_api::organization::{
-    CollectionFacesRequest, CreateCollectionRequest, RenameCollectionRequest, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate,
+    CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate, RenameCollectionRequest,
+    TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
 };
 
 use super::*;
 use crate::parser::{ParsedFace, ParsedFile};
 use crate::scanner::{FileHash, FileIndex, IndexedFile, Rescan, discover};
-use crate::sidecar::{FaceKey, Meta, PLAIN_VERSION, Sidecar, file_name};
+use crate::sidecar::{FaceKey, Meta, PLAIN_VERSION, SIDECAR_DIR, Sidecar, file_name};
 use crate::test_support::TempDir;
 
 /// (file relative to the source, family, style).
@@ -114,6 +114,45 @@ impl Machine {
             .expect("meta");
     }
 
+    /// Sets the notes of the family of the face `postscript`.
+    fn family_notes(&mut self, postscript: &str, notes: &str) {
+        let face = self.face(postscript);
+        let (family, _) = self
+            .index
+            .family_of(face)
+            .expect("family")
+            .expect("visible");
+        self.index
+            .update_family_notes(&FamilyNotesUpdate {
+                family,
+                notes: notes.into(),
+            })
+            .expect("family notes");
+    }
+
+    /// Declares the license of the family of the face `postscript`.
+    fn declare(&mut self, postscript: &str, license: &DeclaredLicense) {
+        let face = self.face(postscript);
+        let (family, _) = self
+            .index
+            .family_of(face)
+            .expect("family")
+            .expect("visible");
+        self.index
+            .declare_license(family, license)
+            .expect("declare");
+    }
+
+    /// The license the index holds for `family`.
+    fn local_license(&self, family: &str) -> Option<DeclaredLicense> {
+        self.index.declared_license(family).expect("license")
+    }
+
+    /// The notes the index holds for `family`.
+    fn local_family_notes(&self, family: &str) -> Option<String> {
+        self.index.family_notes(family).expect("family notes")
+    }
+
     /// What the index holds for a face, as a sidecar would write it.
     fn local(&self, postscript: &str) -> Meta {
         let face = self.face(postscript).0;
@@ -180,6 +219,19 @@ fn other_machine_edit(mut sidecar: Sidecar, edit: impl FnOnce(&mut Sidecar)) -> 
     for face in &mut sidecar.faces {
         face.history = sidecar::next_history(&face.meta, before.get(&face.key()));
     }
+    if let Some(family) = &mut sidecar.family_meta {
+        family.history =
+            sidecar::next_family_history(family.notes.as_deref(), file_before.family_meta.as_ref());
+        if let Some(license) = &mut family.license {
+            license.history = sidecar::next_license_history(
+                &license.license,
+                file_before
+                    .family_meta
+                    .as_ref()
+                    .and_then(|f| f.license.as_ref()),
+            );
+        }
+    }
     sidecar.normalize();
     sidecar.history = sidecar::next_file_history(&sidecar, Some(&file_before));
     sidecar
@@ -228,6 +280,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
     let work = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Work".into(),
             parent: None,
             rules: None,
@@ -236,6 +289,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
     let client = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Client".into(),
             parent: Some(work.id),
             rules: None,
@@ -294,6 +348,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
     let parent = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Old".into(),
             parent: None,
             rules: None,
@@ -302,6 +357,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
     let child = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Child".into(),
             parent: Some(parent.id),
             rules: None,
@@ -456,6 +512,7 @@ fn a_new_machine_takes_the_metadata_from_the_sidecars() {
     let work = first
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Work".into(),
             parent: None,
             rules: None,
@@ -694,6 +751,7 @@ fn smart_collection_on_the_way_is_a_problem_not_a_lost_membership() {
     m.tag("Lora-Regular", &["a"]);
     m.index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -728,6 +786,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
     let serifs = b
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: None,
@@ -743,6 +802,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
 
     let mut a = Index::open_in_memory().expect("open");
     a.create_collection(&CreateCollectionRequest {
+        rule_group: None,
         name: "Serifs".into(),
         parent: None,
         rules: Some(fm_api::search::Filters::default()),
@@ -793,6 +853,7 @@ fn a_carried_membership_is_joined_once_the_smart_collection_is_gone() {
     let smart = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -829,6 +890,7 @@ fn a_carried_membership_the_other_machine_dropped_is_let_go() {
     m.tag("Lora-Regular", &["a"]);
     m.index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -1091,6 +1153,7 @@ fn pinned_styles_of_a_real_variable_font_round_trip_through_a_second_machine() {
     let face = face_of(&first);
     let brand = first
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Brand".into(),
             parent: None,
             rules: None,
@@ -1125,7 +1188,7 @@ fn pinned_styles_of_a_real_variable_font_round_trip_through_a_second_machine() {
     let names_on_disk = list_sidecars(&dir);
     assert_eq!(names_on_disk.len(), 1);
     let on_disk = read_sidecar(&dir.join(&names_on_disk[0]));
-    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    assert_eq!(on_disk.version, crate::sidecar::PINS_VERSION);
     assert_eq!(on_disk.faces[0].meta.pins.len(), 2);
 
     // A second index over the folder (another machine, or this one after
@@ -1170,6 +1233,7 @@ fn a_pin_in_a_collection_that_is_smart_here_is_a_problem_and_is_kept() {
     m.tag("Lora-Regular", &["a"]);
     m.index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
@@ -1207,6 +1271,7 @@ fn renaming_a_collection_renames_it_in_its_pins() {
     let work = m
         .index
         .create_collection(&CreateCollectionRequest {
+            rule_group: None,
             name: "Work".into(),
             parent: None,
             rules: None,
@@ -1239,4 +1304,399 @@ fn renaming_a_collection_renames_it_in_its_pins() {
         })
         .expect("rename");
     assert_eq!(names_of(&m), [Some(names(&["Clients"]))]);
+}
+
+fn family_entry(notes: &str) -> crate::sidecar::FamilyEntry {
+    crate::sidecar::FamilyEntry {
+        notes: Some(notes.into()),
+        history: Vec::new(),
+        license: None,
+    }
+}
+
+#[test]
+fn family_notes_are_mirrored_to_the_sidecar_and_cleared_from_it() {
+    let tmp = TempDir::new("sidecar-family-notes");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "Licensed for the 2026 rebrand");
+    let on_disk = m.sidecar("Inter");
+    assert_eq!(
+        on_disk.family_notes(),
+        Some("Licensed for the 2026 rebrand")
+    );
+    assert_eq!(on_disk.version, crate::sidecar::FAMILY_NOTES_VERSION);
+    // A family with notes and no face metadata still has a sidecar; the
+    // other family's sidecar is not written.
+    assert!(on_disk.faces.is_empty());
+    assert!(!m.sidecar_path("Lora").exists());
+
+    // A second index over the folder (another machine, or this one after the
+    // index was made from scratch) reads them back.
+    let second = Machine::new(tmp.path());
+    assert_eq!(
+        second.local_family_notes("Inter").as_deref(),
+        Some("Licensed for the 2026 rebrand")
+    );
+
+    // An empty string clears them, in the index and in the file.
+    m.family_notes("Inter-Regular", "");
+    assert_eq!(m.local_family_notes("Inter"), None);
+    let cleared = m.sidecar("Inter");
+    assert_eq!(cleared.family_meta, None);
+    assert_eq!(cleared.version, PLAIN_VERSION);
+}
+
+#[test]
+fn family_notes_changed_on_another_machine_merge_on_scan() {
+    let tmp = TempDir::new("sidecar-family-merge");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "first");
+    m.write_as_other_machine("Inter", |s| {
+        s.family_meta = Some(family_entry("from the laptop"));
+    });
+    m.scan();
+    assert_eq!(
+        m.local_family_notes("Inter").as_deref(),
+        Some("from the laptop")
+    );
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+    // The face notes are not touched by the family's.
+    assert_eq!(m.local("Inter-Bold").notes, None);
+
+    // The other machine clears them: cleared here too.
+    m.write_as_other_machine("Inter", |s| s.family_meta = None);
+    m.scan();
+    assert_eq!(m.local_family_notes("Inter"), None);
+}
+
+#[test]
+fn family_notes_changed_on_both_machines_keep_this_one_and_report_the_other() {
+    let tmp = TempDir::new("sidecar-family-conflict");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "base");
+    // The other machine changes the version it read...
+    let theirs = other_machine_edit(m.sidecar("Inter"), |s| {
+        s.family_meta = Some(family_entry("theirs"));
+    });
+    // ...while this one changes it too, before they sync.
+    m.family_notes("Inter-Bold", "mine");
+    write_changed(&m.sidecar_path("Inter"), &theirs.to_json());
+    m.scan();
+
+    assert_eq!(m.local_family_notes("Inter").as_deref(), Some("mine"));
+    assert_eq!(m.sidecar("Inter").family_notes(), Some("mine"));
+    let problems = m.index.sidecar_problems().expect("problems");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert_eq!(problems[0].kind, ProblemKind::SidecarConflict);
+    assert!(problems[0].face.is_some(), "shown on a font of the family");
+    assert!(
+        problems[0].message.contains("family") && problems[0].message.contains("\"theirs\""),
+        "{}",
+        problems[0].message
+    );
+
+    // Setting the notes again dismisses the conflict.
+    m.family_notes("Inter-Regular", "decided");
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+    assert_eq!(m.sidecar("Inter").family_notes(), Some("decided"));
+}
+
+#[test]
+fn family_notes_that_arrive_before_their_fonts_are_taken_when_the_fonts_do() {
+    // With and without face entries of the family in the file.
+    for tag_too in [false, true] {
+        let tmp = TempDir::new("sidecar-family-first");
+        // Another machine wrote Inter's sidecar into the synced folder.
+        let mut other = Machine::new(tmp.path());
+        other.family_notes("Inter-Bold", "from the laptop");
+        if tag_too {
+            other.tag("Inter-Bold", &["display"]);
+        }
+        drop(other);
+
+        // This machine sees the sidecar before it has the Inter fonts.
+        let mut index = Index::open_in_memory().expect("open");
+        let source = index
+            .add_source(&tmp.path().to_string_lossy(), SourceKind::Watched)
+            .expect("source")
+            .id;
+        let lora: Vec<IndexedFile> = files(tmp.path())
+            .into_iter()
+            .filter(|f| f.path.ends_with("Lora-Regular.ttf"))
+            .collect();
+        index.persist_files(source, &lora).expect("lora");
+        let mut m = Machine {
+            index,
+            source,
+            root: tmp.path().to_path_buf(),
+        };
+        assert_eq!(m.local_family_notes("Inter"), None, "tag_too={tag_too}");
+
+        // The fonts arrive: the note is taken, not taken for a removal.
+        m.scan();
+        assert_eq!(
+            m.local_family_notes("Inter").as_deref(),
+            Some("from the laptop"),
+            "tag_too={tag_too}"
+        );
+        assert_eq!(
+            m.sidecar("Inter").family_notes(),
+            Some("from the laptop"),
+            "tag_too={tag_too}"
+        );
+        // An edit here later keeps it in the file.
+        m.tag("Inter-Regular", &["body"]);
+        assert_eq!(
+            m.sidecar("Inter").family_notes(),
+            Some("from the laptop"),
+            "tag_too={tag_too}"
+        );
+    }
+}
+
+#[test]
+fn family_notes_cleared_elsewhere_while_the_fonts_are_away_stay_cleared() {
+    // Cleared there, or changed there: the other machine's value wins.
+    for theirs in [None, Some("changed on the laptop")] {
+        let tmp = TempDir::new("sidecar-family-away");
+        let mut m = Machine::new(tmp.path());
+        m.family_notes("Inter-Bold", "first");
+        let synced = m.sidecar("Inter");
+
+        // Inter's fonts leave this index for a while (a sync client is
+        // replacing them); the family's notes stay in the index.
+        let lora: Vec<IndexedFile> = files(tmp.path())
+            .into_iter()
+            .filter(|f| f.path.ends_with("Lora-Regular.ttf"))
+            .collect();
+        m.index.persist_files(m.source, &lora).expect("away");
+        m.index
+            .conn
+            .execute("DELETE FROM face WHERE family = 'Inter'", [])
+            .expect("faces gone");
+        assert_eq!(m.local_family_notes("Inter").as_deref(), Some("first"));
+
+        // Meanwhile the other machine changes the notes, and this one reads
+        // the file while the family is not here.
+        let edited = other_machine_edit(synced, |s| {
+            s.family_meta = theirs.map(family_entry);
+        });
+        write_changed(&m.sidecar_path("Inter"), &edited.to_json());
+        m.index
+            .persist_files(m.source, &lora)
+            .expect("scan while away");
+
+        // The fonts come back: the other machine's value is taken.
+        m.scan();
+        assert_eq!(
+            m.local_family_notes("Inter").as_deref(),
+            theirs,
+            "theirs={theirs:?}"
+        );
+        assert_eq!(
+            m.sidecar("Inter").family_notes(),
+            theirs,
+            "theirs={theirs:?}"
+        );
+        assert!(
+            m.index.sidecar_problems().expect("problems").is_empty(),
+            "no conflict: theirs={theirs:?}"
+        );
+    }
+}
+
+fn license_entry(license: crate::sidecar::License) -> crate::sidecar::LicenseEntry {
+    crate::sidecar::LicenseEntry {
+        license,
+        history: Vec::new(),
+    }
+}
+
+fn desktop_license(root: &Path) -> DeclaredLicense {
+    DeclaredLicense {
+        license_type: Some(fm_api::library::LicenseType::Desktop),
+        seats: Some(4),
+        purchase_date: Some("2026-03-01".into()),
+        receipt: Some(root.join(SIDECAR_DIR).join("receipts").join("invoice.pdf")),
+    }
+}
+
+#[test]
+fn a_declared_license_is_mirrored_to_the_sidecar_and_read_back_by_a_teammate() {
+    let tmp = TempDir::new("sidecar-license");
+    let mut m = Machine::new(tmp.path());
+    m.declare("Inter-Bold", &desktop_license(tmp.path()));
+    let on_disk = m.sidecar("Inter");
+    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+    assert_eq!(
+        on_disk.family_license(),
+        Some(&crate::sidecar::License {
+            license_type: Some(fm_api::library::LicenseType::Desktop),
+            seats: Some(4),
+            purchase_date: Some("2026-03-01".into()),
+            receipt: Some("receipts/invoice.pdf".into()),
+        })
+    );
+    assert!(!m.sidecar_path("Lora").exists());
+
+    // A teammate syncs the folder to another place: the declaration comes
+    // with it, the receipt in their copy of the folder.
+    let synced = TempDir::new("sidecar-license-teammate");
+    std::fs::create_dir_all(synced.path().join(SIDECAR_DIR)).expect("folder");
+    std::fs::copy(
+        m.sidecar_path("Inter"),
+        synced.path().join(SIDECAR_DIR).join(file_name("Inter")),
+    )
+    .expect("sync");
+    let teammate = Machine::new(synced.path());
+    assert_eq!(
+        teammate.local_license("Inter"),
+        Some(desktop_license(synced.path()))
+    );
+    assert_eq!(teammate.local_license("Lora"), None);
+
+    // Clearing it clears the file too.
+    m.declare("Inter-Regular", &DeclaredLicense::default());
+    assert_eq!(m.local_license("Inter"), None);
+    let cleared = m.sidecar("Inter");
+    assert_eq!(cleared.family_meta, None);
+    assert_eq!(cleared.version, PLAIN_VERSION);
+}
+
+#[test]
+fn a_license_and_notes_share_the_family_entry_and_keep_their_own_history() {
+    let tmp = TempDir::new("sidecar-license-notes");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "for the rebrand");
+    let notes_history = m.sidecar("Inter").family_meta.expect("family").history;
+    m.declare("Inter-Bold", &desktop_license(tmp.path()));
+    let on_disk = m.sidecar("Inter");
+    assert_eq!(on_disk.family_notes(), Some("for the rebrand"));
+    assert!(on_disk.family_license().is_some());
+    let family = on_disk.family_meta.expect("family");
+    // Declaring a license is not a change of the notes.
+    assert_eq!(family.history, notes_history);
+    assert_eq!(family.license.expect("license").history.len(), 1);
+    // Clearing the notes keeps the license in the file (version 4).
+    m.family_notes("Inter-Bold", "");
+    let on_disk = m.sidecar("Inter");
+    assert_eq!(on_disk.family_notes(), None);
+    assert!(on_disk.family_license().is_some());
+    assert_eq!(on_disk.version, crate::sidecar::SIDECAR_VERSION);
+}
+
+#[test]
+fn notes_cleared_on_another_machine_stay_cleared_while_a_license_is_declared() {
+    let tmp = TempDir::new("sidecar-license-notes-clear");
+    let mut m = Machine::new(tmp.path());
+    m.family_notes("Inter-Bold", "for the rebrand");
+    m.declare("Inter-Bold", &desktop_license(tmp.path()));
+    // A second machine over the same folder takes both in, then clears the
+    // notes: its file keeps the family entry for the license only.
+    let mut other = Machine::new(tmp.path());
+    assert_eq!(
+        other.local_family_notes("Inter").as_deref(),
+        Some("for the rebrand")
+    );
+    other.family_notes("Inter-Regular", "");
+    let written = m.sidecar("Inter");
+    assert_eq!(written.family_notes(), None);
+    assert!(written.family_license().is_some());
+
+    m.scan();
+    assert_eq!(m.local_family_notes("Inter"), None);
+    assert_eq!(m.local_license("Inter"), Some(desktop_license(tmp.path())));
+    assert_eq!(m.sidecar("Inter").family_notes(), None);
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+}
+
+#[test]
+fn a_license_changed_on_another_machine_merges_on_scan() {
+    let tmp = TempDir::new("sidecar-license-merge");
+    let mut m = Machine::new(tmp.path());
+    m.declare("Inter-Bold", &desktop_license(tmp.path()));
+    let web = crate::sidecar::License {
+        license_type: Some(fm_api::library::LicenseType::Web),
+        seats: Some(10),
+        purchase_date: None,
+        receipt: Some("receipts/web.pdf".into()),
+    };
+    m.write_as_other_machine("Inter", |s| {
+        if let Some(family) = &mut s.family_meta {
+            family.license = Some(license_entry(web.clone()));
+        }
+    });
+    m.scan();
+    assert_eq!(
+        m.local_license("Inter"),
+        Some(DeclaredLicense {
+            license_type: Some(fm_api::library::LicenseType::Web),
+            seats: Some(10),
+            purchase_date: None,
+            receipt: Some(
+                tmp.path()
+                    .join(SIDECAR_DIR)
+                    .join("receipts")
+                    .join("web.pdf")
+            ),
+        })
+    );
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
+
+    // The other machine clears it, keeping its notes: cleared here too.
+    m.write_as_other_machine("Inter", |s| {
+        if let Some(family) = &mut s.family_meta {
+            family.license = None;
+            family.notes = Some("kept".into());
+        }
+    });
+    m.scan();
+    assert_eq!(m.local_license("Inter"), None);
+    assert_eq!(m.local_family_notes("Inter").as_deref(), Some("kept"));
+}
+
+#[test]
+fn a_license_changed_on_both_machines_keeps_this_one_and_reports_the_other() {
+    let tmp = TempDir::new("sidecar-license-conflict");
+    let mut m = Machine::new(tmp.path());
+    m.declare("Inter-Bold", &desktop_license(tmp.path()));
+    let theirs = other_machine_edit(m.sidecar("Inter"), |s| {
+        if let Some(family) = &mut s.family_meta {
+            family.license = Some(license_entry(crate::sidecar::License {
+                license_type: Some(fm_api::library::LicenseType::Trial),
+                ..crate::sidecar::License::default()
+            }));
+        }
+    });
+    let mine = DeclaredLicense {
+        license_type: Some(fm_api::library::LicenseType::App),
+        seats: Some(2),
+        ..DeclaredLicense::default()
+    };
+    m.declare("Inter-Bold", &mine);
+    write_changed(&m.sidecar_path("Inter"), &theirs.to_json());
+    m.scan();
+
+    assert_eq!(m.local_license("Inter"), Some(mine.clone()));
+    assert_eq!(
+        m.sidecar("Inter")
+            .family_license()
+            .and_then(|l| l.license_type),
+        Some(fm_api::library::LicenseType::App)
+    );
+    let problems = m.index.sidecar_problems().expect("problems");
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert_eq!(problems[0].kind, ProblemKind::SidecarConflict);
+    assert!(
+        problems[0].message.contains("license type \"trial\"")
+            && problems[0]
+                .message
+                .contains("license type \"app\", 2 seats"),
+        "{}",
+        problems[0].message
+    );
+
+    // Declaring again dismisses the conflict.
+    m.declare("Inter-Regular", &mine);
+    assert!(m.index.sidecar_problems().expect("problems").is_empty());
 }

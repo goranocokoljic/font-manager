@@ -117,6 +117,41 @@ export type AxisValue = {
 	value: number | null,
 };
 
+/**  How the lines of a block line up. */
+export type BlockAlign = 
+/**  Left in left-to-right text. */
+"start" | 
+/**  Centered. */
+"center" | 
+/**  Right in left-to-right text. */
+"end" | 
+/**  Both edges. */
+"justify";
+
+/**  How many characters of one Unicode block a face maps. */
+export type BlockCoverage = {
+	/**
+	 *  The block name from the Unicode block table (`Latin Extended-A`), as
+	 *  the glyph map's `GlyphBlock::name`.
+	 */
+	name: string,
+	/**  Its first code point. */
+	first: number,
+	/**  Its last code point. */
+	last: number,
+	/**  Characters of the block the face maps (at most `assigned`). */
+	covered: number,
+	/**  Assigned code points of the block. */
+	assigned: number,
+};
+
+/**  What a block does with text that does not fit its width. */
+export type BlockOverflow = 
+/**  Breaks the text into lines. */
+"wrap" | 
+/**  Keeps one line per paragraph and hides what overflows. */
+"clip";
+
 /**  Pick fonts for a design brief. */
 export type BriefRequest = {
 	/**  The brief, in plain words ("a calm bilingual brand"). */
@@ -184,6 +219,10 @@ export type Classification =
 /**
  *  A manual collection, or a smart one when `rules` is set. Siblings are
  *  ordered by the user; `list_collections` returns them in that order.
+ * 
+ *  A smart collection's members are worked out from the index each time
+ *  they are asked for, never stored: a scan, a tag, a rating or an
+ *  activation shows in the next `search` and `list_collections`.
  */
 export type Collection = {
 	/**  Id. */
@@ -192,8 +231,18 @@ export type Collection = {
 	parent: CollectionId | null,
 	/**  Name. */
 	name: string,
-	/**  Smart collection rules; absent for a manual collection. */
+	/**
+	 *  Smart collection rules; absent for a manual collection. Set for
+	 *  every smart collection: the filters of a rule that is one AND group
+	 *  of one filter set (as phase 1 stored them), else empty filters. The
+	 *  full rule is `rule_group`.
+	 */
 	rules: Filters | null,
+	/**
+	 *  The full rule of a smart collection; absent for a manual one. A rule
+	 *  stored as plain filters reads as one AND group of them.
+	 */
+	ruleGroup?: RuleGroup | null,
 	/**  Faces in it now. */
 	faceCount: number,
 };
@@ -273,6 +322,11 @@ export type CreateCollectionRequest = {
 	parent?: CollectionId | null,
 	/**  Rules, to make it smart. */
 	rules?: Filters | null,
+	/**
+	 *  A full rule, to make it smart with AND/OR groups. Setting both this
+	 *  and `rules` is `InvalidRequest`.
+	 */
+	ruleGroup?: RuleGroup | null,
 };
 
 /**  Create a project set. */
@@ -281,6 +335,30 @@ export type CreateSetRequest = {
 	name: string,
 	/**  The faces. */
 	faces: FaceId[],
+};
+
+/**  CSS declarations for the axes and features changed from their defaults. */
+export type CssValues = {
+	/**
+	 *  `font-variation-settings: "wght" 650, "wdth" 87.5;`, or
+	 *  `font-variation-settings: normal;` when no axis moved.
+	 */
+	variationSettings: string,
+	/**
+	 *  `font-feature-settings: "liga" 0, "smcp" 1;`, or
+	 *  `font-feature-settings: normal;` when no feature changed.
+	 */
+	featureSettings: string,
+};
+
+/**  The CSS for a face's axis coordinates and feature switches. */
+export type CssValuesRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  Axis coordinates; axes left out are at their default. */
+	variations?: AxisValue[],
+	/**  Feature switches; features left out are at their default. */
+	features?: FeatureSetting[],
 };
 
 /**  Deactivate faces the app registered. */
@@ -343,6 +421,14 @@ export type DuplicateKind =
 "exact" | 
 /**  The same PostScript name and version in files that differ. */
 "near";
+
+/**  Copies a layout into a new, independent template file. */
+export type DuplicateLayoutRequest = {
+	/**  The layout to copy. */
+	id: string,
+	/**  The copy's name; none gives "<name> copy" (then "<name> copy 2", …). */
+	name?: string | null,
+};
 
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
@@ -452,6 +538,20 @@ export type ExportWebResponse = {
 	css: string | null,
 };
 
+/**  The coverage of one face: per Unicode block and per language preset. */
+export type FaceCoverage = {
+	/**  The face. */
+	face: FaceId,
+	/**  The blocks with at least one covered character, in Unicode order. */
+	blocks: BlockCoverage[],
+	/**
+	 *  The presets the face covers anything of or has `locl` forms for:
+	 *  complete ones first (in preset order), then partial ones, most
+	 *  covered first. Missing characters come from `check_coverage`.
+	 */
+	languages: FaceLanguageCoverage[],
+};
+
 /**  Everything the info panel shows about one face. */
 export type FaceDetail = {
 	/**  The list row. */
@@ -505,10 +605,26 @@ export type FaceDetail = {
 	italicAngle?: number | null,
 	/**  Code points the Unicode `cmap` maps. */
 	codePointCount?: number | null,
+	/**  The user's notes on the face's family (E13.5); `notes` are the face's. */
+	familyNotes?: string | null,
 };
 
 /**  One face (style) inside a font file; a collection file has several. */
 export type FaceId = number;
+
+/**  How much of one language preset a face covers, for the coverage list. */
+export type FaceLanguageCoverage = {
+	/**  Preset code (`sr-Cyrl`). */
+	code: string,
+	/**  English name ("Serbian (Cyrillic)"). */
+	name: string,
+	/**  Base characters of the preset the face maps. */
+	covered: number,
+	/**  Base characters the preset needs. */
+	total: number,
+	/**  The face has `locl` forms for this language. */
+	hasLocl: boolean,
+};
 
 /**  One face, as listed under its family. */
 export type FaceSummary = {
@@ -571,6 +687,17 @@ export type FamilyHit = {
 
 /**  A family: faces grouped by typographic family name. */
 export type FamilyId = number;
+
+/**
+ *  Set the notes of a family. They belong to the family, not to one of its
+ *  faces: they stay when its faces are indexed again.
+ */
+export type FamilyNotesUpdate = {
+	/**  The family. */
+	family: FamilyId,
+	/**  Notes; an empty string clears them. */
+	notes: string,
+};
 
 /**
  *  An order for the family list: a key and a direction. Families without a
@@ -653,6 +780,8 @@ export type FamilySummary = {
 	declaredLicense?: LicenseType | null,
 	/**  User tags on any of its faces, by name, A to Z. */
 	tags?: string[],
+	/**  The user's notes on the family (E13.5), not those of its faces. */
+	notes?: string | null,
 };
 
 /**  An OpenType layout feature the face provides. */
@@ -728,11 +857,17 @@ export type FilterCounts = {
 	favorite?: FilterCount<boolean>[],
 	/**  Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4. */
 	minRating?: FilterCount<number>[],
+	/**  Per embedding permission. */
+	embedding?: FilterCount<Embedding>[],
+	/**  With an open license (true) and without (false). */
+	openLicense?: FilterCount<boolean>[],
+	/**  OK for web (true) and not (false). */
+	webOk?: FilterCount<boolean>[],
 };
 
 /**
- *  Filters; every field is optional and they combine with AND. The same
- *  value is the rule of a smart collection.
+ *  Filters; every field is optional and they combine with AND. A smart
+ *  collection's rule is made of them (`organization::RuleGroup`).
  */
 export type Filters = {
 	/**  Any of these classes. */
@@ -761,7 +896,7 @@ export type Filters = {
 	sources?: SourceId[],
 	/**  Every one of these tags. */
 	tags?: TagId[],
-	/**  Inside this collection. */
+	/**  Inside this collection; a smart collection applies its rule. */
 	collection?: CollectionId | null,
 	/**  Active (true) or inactive (false) only. */
 	active?: boolean | null,
@@ -771,6 +906,14 @@ export type Filters = {
 	minRating?: number | null,
 	/**  Health: faces with problems (true) or healthy faces (false) only. */
 	problems?: boolean | null,
+	/**  Added to the library within the last this many days (each 24 hours). */
+	addedWithinDays?: number | null,
+	/**  Embedding permission (`OS/2.fsType`), exact. */
+	embedding?: Embedding | null,
+	/**  Faces whose name table states an open license (true) or none (false) only. */
+	openLicense?: boolean | null,
+	/**  Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3). */
+	webOk?: boolean | null,
 };
 
 /**  The file format of a font. */
@@ -818,6 +961,40 @@ export type GlyphBlock = {
 	count: number,
 };
 
+/**  The detail of one mapped character of a face. */
+export type GlyphDetail = {
+	/**  The Unicode code point. */
+	codePoint: number,
+	/**  The glyph `cmap` maps it to. */
+	glyphId: number,
+	/**
+	 *  The glyph name from `post` or the CFF charset; absent when the font
+	 *  has none.
+	 */
+	name: string | null,
+	/**
+	 *  The advance width in font units, at the default location of a
+	 *  variable face; absent when the font has no horizontal metrics.
+	 */
+	advanceWidth: number | null,
+	/**
+	 *  GSUB features that produce this glyph from other glyphs (`liga` for
+	 *  `ﬁ`), by tag.
+	 */
+	producedBy: FeatureInfo[],
+	/**
+	 *  GSUB features that replace this glyph with another (`smcp`, `ss01`),
+	 *  by tag.
+	 */
+	replacedBy: FeatureInfo[],
+	/**
+	 *  `Broken` with a reason when the font's tables are malformed; the
+	 *  glyph id is 0 and the rest is empty then. Malformed GSUB lookups only
+	 *  empty the feature lists.
+	 */
+	health: Health,
+};
+
 /**  One mapped character of a face. */
 export type GlyphInfo = {
 	/**  The Unicode code point. */
@@ -854,6 +1031,27 @@ export type GlyphPage = {
 	health: Health,
 	/**  The Unicode version of the block table (`17.0.0`). */
 	unicodeVersion: string,
+};
+
+/**  One character of a face, for its glyph detail (E11.2). */
+export type GlyphRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  The Unicode code point of the character. */
+	codePoint: number,
+};
+
+/**
+ *  One glyph's outline as SVG (E11.5). The SVG text is returned, never
+ *  written: saving it goes to a path the user picks.
+ */
+export type GlyphSvgRequest = {
+	/**  The face. */
+	face: FaceId,
+	/**  The character, as a Unicode code point. */
+	codePoint: number,
+	/**  Variation coordinates; defaults for unlisted axes. */
+	variations?: AxisValue[],
 };
 
 /**
@@ -947,6 +1145,85 @@ export type LanguagePreset = {
 	script: string,
 };
 
+/**  A layout: a list of text blocks, top to bottom. */
+export type Layout = {
+	/**  The preset this layout is, or started from; none for a layout of the user's own. */
+	preset?: LayoutPreset | null,
+	/**  Display name ("Book"). */
+	name: string,
+	/**  The blocks, top to bottom. */
+	blocks: TextBlock[],
+};
+
+/**  A layout template file in the layouts folder, as the list shows it (E12.5). */
+export type LayoutEntry = {
+	/**  The file name without `.json` ("book"); stable while the file keeps its name. */
+	id: string,
+	/**  The layout's name, or the file name when the file cannot be read. */
+	name: string,
+	/**  The preset the layout is or started from. */
+	preset?: LayoutPreset | null,
+	/**  Why the file cannot be used (not valid JSON, not a layout); none when it can. */
+	broken?: string | null,
+};
+
+/**  A built-in layout. */
+export type LayoutPreset = 
+/**  A book page: a heading and indented paragraphs in one column. */
+"book" | 
+/**  Body text flowed into balanced columns. */
+"columns" | 
+/**  A headline, a standfirst and two-column body text. */
+"magazine" | 
+/**  A large pull quote and its attribution. */
+"quote" | 
+/**  The character set at a large size. */
+"characters" | 
+/**  The same text at falling sizes. */
+"waterfall";
+
+/**  Names one layout template file. */
+export type LayoutRef = {
+	/**  The template file's id. */
+	id: string,
+};
+
+/**  An earlier content of a template file. */
+export type LayoutVersion = {
+	/**  The version's number; a later save has a higher number. */
+	number: number,
+	/**  When the content was replaced, UTC (`2026-10-21T09:30:00Z`). */
+	savedAt: string,
+	/**  The layout's name in that version, or none when that content was broken. */
+	name?: string | null,
+	/**  Why that content cannot be used; none when it can. */
+	broken?: string | null,
+};
+
+/**
+ *  Declare the license of a family (E15.2). It applies to every face of the
+ *  family and replaces what was declared before: a field left absent is
+ *  cleared. The receipt is kept unless the request clears or replaces it.
+ */
+export type LicenseDeclaration = {
+	/**  The family. */
+	family: FamilyId,
+	/**  The license type; absent clears it. */
+	licenseType?: LicenseType | null,
+	/**
+	 *  How many seats the license covers; absent clears it, below 0 is
+	 *  `InvalidRequest`.
+	 */
+	seats?: number | null,
+	/**
+	 *  The purchase date as `YYYY-MM-DD`; absent or empty clears it, any
+	 *  other form is `InvalidRequest`.
+	 */
+	purchaseDate?: string | null,
+	/**  What happens to the attached receipt. */
+	receipt?: ReceiptChange,
+};
+
 /**  What the file says, and what the user declared, about where a font may be used. */
 export type LicenseInfo = {
 	/**  License description (name ID 13). */
@@ -959,6 +1236,14 @@ export type LicenseInfo = {
 	embedding: Embedding,
 	/**  What the user declared, if anything. */
 	declared: LicenseType | null,
+	/**  Seats the user declared for the family (E15.2). */
+	seats?: number | null,
+	/**  Purchase date the user declared, `YYYY-MM-DD` (E15.2). */
+	purchaseDate?: string | null,
+	/**  Absolute path of the receipt copy the app keeps (E15.2). */
+	receipt?: string | null,
+	/**  Whether the face may be used on the web, and why (E15.3). */
+	webUse?: WebUse | null,
 };
 
 /**  A license inventory as CSV text. */
@@ -1226,6 +1511,34 @@ export type ProjectSet = {
 	faces: FaceId[],
 };
 
+/**  What [`LicenseDeclaration`] does to a family's receipt. */
+export type ReceiptChange = 
+/**  Leave the receipt as it is. */
+{ kind: "keep" } | 
+/**  Remove the receipt: the copy the app made goes to the OS trash. */
+{ kind: "clear" } | 
+/**
+ *  Attach a copy of the file at `path`; the file itself is never moved.
+ *  A receipt attached before goes to the OS trash. A file that is not
+ *  there is `InvalidRequest`.
+ */
+{ kind: "attach"; 
+/**  The receipt file the user picked. */
+path: string; 
+/**  Where the copy goes. */
+place: ReceiptPlace };
+
+/**  Where the app keeps the copy of a receipt. */
+export type ReceiptPlace = 
+/**
+ *  Next to the font, in its source folder's `.fontlibrary/` folder, so a
+ *  synced folder carries it to teammates. A system font folder is
+ *  `InvalidRequest`.
+ */
+"nextToFont" | 
+/**  In the app's data folder, on this machine only. */
+"appData";
+
 /**  Rename a collection. */
 export type RenameCollectionRequest = {
 	/**  The collection. */
@@ -1259,6 +1572,58 @@ export type Resolution = {
 /**  A "Keep this one" action of the Problems view, for undo. */
 export type ResolutionId = number;
 
+/**  Makes an earlier version current again. */
+export type RestoreLayoutRequest = {
+	/**  The template file's id. */
+	id: string,
+	/**  The [`LayoutVersion::number`] to restore. */
+	number: number,
+};
+
+/**  Goes back to the saved file, or a preset back to its shipped original. */
+export type RevertLayoutRequest = {
+	/**  The template file's id. */
+	id: string,
+	/**
+	 *  Writes the shipped original of the layout's preset (the content it
+	 *  replaces is kept as a version); false only reads the saved file.
+	 */
+	toOriginal?: boolean,
+};
+
+/**  One rule of a [`RuleGroup`]. */
+export type Rule = 
+/**
+ *  A face passes when it passes these filters, as search applies them.
+ *  `collection` may name another smart collection: its rule applies
+ *  (a rule that reaches its own collection is `InvalidRequest`).
+ */
+{ kind: "filters"; 
+/**  The filters. */
+filters: Filters } | 
+/**  A nested group. */
+{ kind: "group"; 
+/**  The group. */
+group: RuleGroup };
+
+/**
+ *  A smart collection's rule: a group of rules combined with AND or OR. A
+ *  group with no rules passes every face.
+ */
+export type RuleGroup = {
+	/**  AND or OR. */
+	op: RuleOp,
+	/**  The rules. */
+	rules?: Rule[],
+};
+
+/**  How a [`RuleGroup`] combines its rules. */
+export type RuleOp = 
+/**  A face must pass every rule. */
+"and" | 
+/**  A face must pass at least one rule. */
+"or";
+
 /**  Why a face previews other text than the sample. */
 export type SampleFallback = 
 /**  Letters of a script the face covers. */
@@ -1286,6 +1651,22 @@ export type SampleTextRequest = {
 	faces: FaceId[],
 	/**  The sample text the user chose. */
 	text: string,
+};
+
+/**  Writes a layout to its template file; the previous content is kept as a version. */
+export type SaveLayoutRequest = {
+	/**  The template file's id; a new id makes a new file. */
+	id: string,
+	/**  The layout; its values are clamped before they are written. */
+	layout: Layout,
+};
+
+/**  A layout as it is saved in its template file. */
+export type SavedLayout = {
+	/**  The template file's id. */
+	id: string,
+	/**  The saved layout, clamped into the block ranges. */
+	layout: Layout,
 };
 
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
@@ -1537,6 +1918,28 @@ collection: CollectionId } |
 /**  Set id. */
 set: SetId };
 
+/**  One block of text in a layout. */
+export type TextBlock = {
+	/**  The text; paragraphs are separated by a line break. */
+	text: string,
+	/**  Font size in points, 8–600. */
+	sizePt: number | null,
+	/**  Line height as a multiple of the size, 0.1–3.0. */
+	lineHeight: number | null,
+	/**  Letter spacing in thousandths of an em, −200–1000. */
+	tracking: number | null,
+	/**  Space after each paragraph in points, 0–600. */
+	paragraphSpacingPt: number | null,
+	/**  Indent of each paragraph's first line in em, 0–20. */
+	firstLineIndentEm: number | null,
+	/**  Columns the text flows into, 1–3. */
+	columns: number,
+	/**  Alignment. */
+	align: BlockAlign,
+	/**  Wrap or clip. */
+	overflow: BlockOverflow,
+};
+
 /**  The colors of the app. */
 export type Theme = 
 /**  Follow the OS appearance. */
@@ -1629,6 +2032,17 @@ export type WebFormat =
 /**  WOFF 1. */
 "woff";
 
+/**
+ *  Whether a face may be used on the web, decided from its embedding
+ *  permission, recognized open license and declared license type (E15.3).
+ */
+export type WebUse = {
+	/**  The face is OK for web. */
+	ok: boolean,
+	/**  Why, in plain words ("Open license (OFL)"). */
+	reason: string,
+};
+
 /**  An inclusive weight range (100–1000). */
 export type WeightRange = {
 	/**  Lowest weight. */
@@ -1645,4 +2059,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 9, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 12, patch: 0 };

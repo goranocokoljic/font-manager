@@ -8,7 +8,9 @@ import type {
   Conflict,
   FaceDetail,
   FaceId,
+  LicenseDeclaration,
   OutcomeStatus,
+  ReceiptPlace,
   Target,
 } from '../api/types';
 import { useSettingsStore } from './settings';
@@ -157,8 +159,10 @@ export const useSelectionStore = defineStore('selection', () => {
     );
   }
 
-  /** The last tag, favorite or rating edit the API refused; cleared by the next one. */
+  /** The last tag, favorite, rating or notes edit the API refused; cleared by the next one. */
   const editError = ref<ApiError | null>(null);
+  /** The last license declaration the API refused; cleared by the next one. */
+  const licenseError = ref<ApiError | null>(null);
 
   /**
    * Runs one edit of the selected face's tags or user metadata, then fetches
@@ -202,6 +206,45 @@ export const useSelectionStore = defineStore('selection', () => {
     return edit((face) => useClient().updateUserMeta({ faces: [face], rating }));
   }
 
+  /** Sets the selected face's notes; an empty string clears them. */
+  function setNotes(notes: string): Promise<boolean> {
+    return edit((face) => useClient().updateUserMeta({ faces: [face], notes }));
+  }
+
+  /** Sets the notes of the selected face's family; an empty string clears them. */
+  function setFamilyNotes(notes: string): Promise<boolean> {
+    const family = detail.value?.face.family;
+    if (family === undefined) return Promise.resolve(false);
+    return edit(() => useClient().updateFamilyNotes({ family, notes }));
+  }
+
+  /**
+   * Declares the license of the selected face's family (E15.2); the request
+   * replaces what was declared, so a field left out is cleared.
+   */
+  async function declareLicense(req: Omit<LicenseDeclaration, 'family'>): Promise<boolean> {
+    const family = detail.value?.face.family;
+    if (family === undefined) return false;
+    const ok = await edit(() => useClient().declareLicense({ ...req, family }));
+    // The license form shows its own error, not the notes section.
+    licenseError.value = ok ? null : editError.value;
+    if (!ok) editError.value = null;
+    return ok;
+  }
+
+  /**
+   * Lets the user pick a receipt file and attaches a copy of it, kept in
+   * `place`, with the rest of the declaration in `req`; false on a cancel.
+   */
+  async function attachReceipt(
+    req: Omit<LicenseDeclaration, 'family' | 'receipt'>,
+    place: ReceiptPlace,
+  ): Promise<boolean> {
+    const path = await useClient().pickFile('Choose the receipt');
+    if (path === null) return false;
+    return declareLicense({ ...req, receipt: { kind: 'attach', path, place } });
+  }
+
   return {
     faceId,
     detail,
@@ -210,6 +253,7 @@ export const useSelectionStore = defineStore('selection', () => {
     busy,
     outcome,
     editError,
+    licenseError,
     canActivate,
     select,
     reload,
@@ -220,5 +264,9 @@ export const useSelectionStore = defineStore('selection', () => {
     removeTag,
     setFavorite,
     setRating,
+    setNotes,
+    setFamilyNotes,
+    declareLicense,
+    attachReceipt,
   };
 });

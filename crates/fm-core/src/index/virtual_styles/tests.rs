@@ -97,6 +97,7 @@ impl Lib {
         let (variable, fixed) = (face("Asap-Regular"), face("Asap-Bold"));
         let collection = index
             .create_collection(&CreateCollectionRequest {
+                rule_group: None,
                 name: "Brand".into(),
                 parent: None,
                 rules: None,
@@ -105,6 +106,7 @@ impl Lib {
             .id;
         let smart = index
             .create_collection(&CreateCollectionRequest {
+                rule_group: None,
                 name: "Variable".into(),
                 parent: None,
                 rules: Some(Filters {

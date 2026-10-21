@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::common::{Classification, FontFormat, Page, Slant};
+use crate::common::{Classification, Embedding, FontFormat, Page, Slant};
 use crate::library::{FaceSummary, FamilySummary, LicenseType};
 use crate::{ApiResult, CollectionId, FaceId, SourceId, TagId};
 
@@ -44,8 +44,8 @@ pub enum Supports {
     },
 }
 
-/// Filters; every field is optional and they combine with AND. The same
-/// value is the rule of a smart collection.
+/// Filters; every field is optional and they combine with AND. A smart
+/// collection's rule is made of them (`organization::RuleGroup`).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Filters {
@@ -75,7 +75,7 @@ pub struct Filters {
     pub sources: Vec<SourceId>,
     /// Every one of these tags.
     pub tags: Vec<TagId>,
-    /// Inside this collection.
+    /// Inside this collection; a smart collection applies its rule.
     pub collection: Option<CollectionId>,
     /// Active (true) or inactive (false) only.
     pub active: Option<bool>,
@@ -85,6 +85,17 @@ pub struct Filters {
     pub min_rating: Option<u8>,
     /// Health: faces with problems (true) or healthy faces (false) only.
     pub problems: Option<bool>,
+    /// Added to the library within the last this many days (each 24 hours).
+    pub added_within_days: Option<u32>,
+    /// Embedding permission (`OS/2.fsType`), exact.
+    #[serde(default)]
+    pub embedding: Option<Embedding>,
+    /// Faces whose name table states an open license (true) or none (false) only.
+    #[serde(default)]
+    pub open_license: Option<bool>,
+    /// Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3).
+    #[serde(default)]
+    pub web_ok: Option<bool>,
 }
 
 /// A search. An empty query with filters lists everything that passes them.
@@ -190,6 +201,15 @@ pub struct FilterCounts {
     pub favorite: Vec<FilterCount<bool>>,
     /// Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4.
     pub min_rating: Vec<FilterCount<u8>>,
+    /// Per embedding permission.
+    #[serde(default)]
+    pub embedding: Vec<FilterCount<Embedding>>,
+    /// With an open license (true) and without (false).
+    #[serde(default)]
+    pub open_license: Vec<FilterCount<bool>>,
+    /// OK for web (true) and not (false).
+    #[serde(default)]
+    pub web_ok: Vec<FilterCount<bool>>,
 }
 
 /// How well one face covers some languages or text.
@@ -244,6 +264,53 @@ pub struct LanguagePreset {
     pub script: String,
 }
 
+/// How many characters of one Unicode block a face maps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockCoverage {
+    /// The block name from the Unicode block table (`Latin Extended-A`), as
+    /// the glyph map's `GlyphBlock::name`.
+    pub name: String,
+    /// Its first code point.
+    pub first: u32,
+    /// Its last code point.
+    pub last: u32,
+    /// Characters of the block the face maps (at most `assigned`).
+    pub covered: u32,
+    /// Assigned code points of the block.
+    pub assigned: u32,
+}
+
+/// How much of one language preset a face covers, for the coverage list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FaceLanguageCoverage {
+    /// Preset code (`sr-Cyrl`).
+    pub code: String,
+    /// English name ("Serbian (Cyrillic)").
+    pub name: String,
+    /// Base characters of the preset the face maps.
+    pub covered: u32,
+    /// Base characters the preset needs.
+    pub total: u32,
+    /// The face has `locl` forms for this language.
+    pub has_locl: bool,
+}
+
+/// The coverage of one face: per Unicode block and per language preset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FaceCoverage {
+    /// The face.
+    pub face: FaceId,
+    /// The blocks with at least one covered character, in Unicode order.
+    pub blocks: Vec<BlockCoverage>,
+    /// The presets the face covers anything of or has `locl` forms for:
+    /// complete ones first (in preset order), then partial ones, most
+    /// covered first. Missing characters come from `check_coverage`.
+    pub languages: Vec<FaceLanguageCoverage>,
+}
+
 /// Faces that look like this one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -272,6 +339,9 @@ pub trait SearchService {
     fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse>;
     /// Coverage of one face.
     fn check_coverage(&self, req: CoverageRequest) -> ApiResult<CoverageReport>;
+    /// Coverage of one face per Unicode block and per language preset, from
+    /// the code points in the index.
+    fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage>;
     /// Every language preset.
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>>;
     /// Faces ranked by visual similarity.

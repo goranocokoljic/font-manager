@@ -6,7 +6,8 @@ import {
   dateText,
   defaultTable,
   formatBadges,
-  licenseBadge,
+  licenseBadges,
+  openLicenseName,
   moveColumn,
   normalizeTable,
   orderOf,
@@ -33,6 +34,7 @@ describe('detail list columns', () => {
       'License',
       'Date added',
       'Tags',
+      'Notes',
     ]);
     expect(ids(visibleColumns(defaultTable()))).toEqual(COLUMNS.map((c) => c.id));
   });
@@ -50,6 +52,15 @@ describe('detail list columns', () => {
     // Another column starts ascending again.
     t = cycleSort(cycleSort(t, 'tags'), 'added');
     expect(orderOf(t)).toEqual({ by: 'dateAdded', descending: false });
+  });
+
+  it('leaves the order alone for the Notes column, which does not sort', () => {
+    const sorted = cycleSort(defaultTable(), 'version');
+    expect(cycleSort(sorted, 'notes')).toEqual(sorted);
+    expect(cycleSort(defaultTable(), 'notes').sort).toBeNull();
+    // A saved sort by notes (hand-edited) is no sort.
+    expect(normalizeTable({ sort: { column: 'notes', descending: true } }).sort).toBeNull();
+    expect(orderOf({ ...defaultTable(), sort: { column: 'notes', descending: false } })).toBeNull();
   });
 
   it('marks only the clicked column as sorted when two share a sort key', () => {
@@ -105,9 +116,17 @@ describe('detail list columns', () => {
       'Color',
     ]);
     expect(formatBadges(['otf'], false)).toEqual(['OT']);
-    expect(licenseBadge({ declaredLicense: 'web', openLicense: 'ofl' })).toBe('Web');
-    expect(licenseBadge({ declaredLicense: null, openLicense: 'apache' })).toBe('Apache');
-    expect(licenseBadge({})).toBe('');
+    expect(licenseBadges({ declaredLicense: 'web', openLicense: 'ofl' })).toEqual([
+      'Web',
+      'Open license',
+    ]);
+    expect(licenseBadges({ declaredLicense: null, openLicense: 'apache' })).toEqual([
+      'Open license',
+    ]);
+    expect(licenseBadges({ declaredLicense: 'trial', openLicense: null })).toEqual(['Trial']);
+    expect(licenseBadges({})).toEqual([]);
+    expect(openLicenseName('ufl')).toBe('Ubuntu Font Licence');
+    expect(openLicenseName(null)).toBe('');
     expect(weightRangeText({ min: 100, max: 900 })).toBe('100–900');
     expect(weightRangeText({ min: 400, max: 400 })).toBe('400');
     expect(weightRangeText(null)).toBe('');

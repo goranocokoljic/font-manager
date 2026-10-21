@@ -48,7 +48,7 @@ describe('metric', () => {
   test('every budget of CLAUDE.md rule 8 is in the report', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
       'activation_100', 'cold_start', 'first_scan', 'idle_memory', 'incremental_update', 'preview_cache_hit',
-      'search',
+      'search', 'smart_collections',
     ]);
     assert.equal(BUDGETS.preview_cache_hit.target, 2);
     assert.equal(BUDGETS.first_scan.target, 10000);
@@ -244,11 +244,12 @@ describe('regression gate (E9.2)', () => {
     assert.deepEqual(blocking(gate(linux(worse), nightly(base))).sort(), budgeted.map((k) => `linux.${k}`).sort());
   });
 
-  test('the baseline is the median of the last nightly runs, so one noisy night does not move it', () => {
+  test('the baseline is the slowest of the last runs on main, so runner load does not fail a PR', () => {
     const history = nightly({ search: 30 }, { search: 10 }, { search: 10 }, { search: 11 }, { search: 10 }, { search: 99 });
-    const m = gate(linux({ search: 12 }), history)['linux.search'];
-    assert.equal(m.baseline, 10, 'median of the newest 5; the 6th run is not used');
-    assert.equal(m.regressed, true);
+    const m = gate(linux({ search: 33 }), history)['linux.search'];
+    assert.equal(m.baseline, 30, 'slowest of the newest 5; the 6th run is not used');
+    assert.equal(m.regressed, false, '10% over the slowest run at most');
+    assert.equal(gate(linux({ search: 34 }), history)['linux.search'].regressed, true);
   });
 
   test('a metric over budget on main too blocks only when it gets slower still', () => {

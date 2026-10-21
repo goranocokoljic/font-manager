@@ -23,10 +23,20 @@ Read [Sources](sources.md) to learn more about folders.
 - Type in the search box at the top. Press `/` to go to it from anywhere.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
-- Use the **List**, **Table**, **Grid** and **Waterfall** buttons to change how the
-  fonts show. The grid shows a card for each font. The waterfall shows the preview
-  text at six sizes. When you change the view, the selected fonts stay selected and
+- Use the **List**, **Table**, **Grid**, **Waterfall** and **Layout** buttons to change
+  how the fonts show. The grid shows a card for each font. The waterfall shows the
+  preview text at six sizes. The layout shows the selected font as a page of text. Pick
+  the page in the **Preset** box: Book, Columns, Magazine, Quote, Characters or
+  Waterfall. When you change the view, the selected fonts stay selected and
   the list stays at the same font.
+- In the layout, double-click a block of text (or press `Enter` on it) to change the
+  text. Click **Save** to keep the change, or **Revert** to drop it. **Duplicate** makes
+  a copy of the layout with a new name. **Reset to original** puts back the preset as
+  the app ships it. **History** shows the earlier versions; **Restore** makes one current
+  again, and the app keeps the version it replaces.
+- Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
+  You can edit a file by hand: the app reads it the next time you open the layout view.
+  A file the app cannot read shows as "cannot be read" in the **Preset** box.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.
 - Open the **Features** tab of the inspector to see the OpenType features of the
@@ -39,6 +49,17 @@ Read [Sources](sources.md) to learn more about folders.
   that block. Type in the search field to find a character: type the character itself
   (`Ж`), its code point (`U+0416` or `0416`) or its glyph name (`uni0416`). Click a
   character to see its code point, glyph name and glyph id.
+- Write notes in the **Info** tab. **Notes** are for the style that you selected.
+  **Family notes** are for all styles of the family. Font Manager saves a note when
+  you leave its field. To delete a note, clear its field. The **Notes** column of the
+  table shows the family notes. Notes stay when Font Manager reads the folder again.
+- Record your license in the **License** section of the **Info** tab. Set the license
+  type, the number of seats and the purchase date, then click **Save license**. The
+  license is for all styles of the family. To attach a receipt, choose where Font
+  Manager keeps its copy and click **Attach receipt…**. **Next to the font** puts the
+  copy in the `.fontlibrary` folder of the font's folder, so a synced folder carries
+  it to your team. Font Manager copies the receipt; your file stays where it is. When
+  you remove or replace a receipt, Font Manager moves its copy to the trash.
 
 ## Use a font in other apps
 

@@ -16,12 +16,13 @@
 use std::collections::HashMap;
 
 use fm_api::SourceId;
-use fm_api::common::{Classification, FontFormat, Slant};
-use fm_api::library::LicenseType;
+use fm_api::common::{Classification, Embedding, FontFormat, Slant};
+use fm_api::library::{LicenseType, OpenLicense};
 use fm_api::search::{FilterCount, FilterCounts, Filters};
 use fm_api::{CollectionId, TagId};
 
 use crate::coverage::Fit;
+use crate::license;
 use crate::search::{FaceText, reaches_slant, reaches_weight, reaches_width};
 
 /// A four-letter OpenType tag.
@@ -54,6 +55,17 @@ pub(crate) struct FaceFacts {
     pub rating: Option<u8>,
     /// Health is not `Ok`.
     pub problems: bool,
+    /// The embedding permission of `OS/2.fsType`.
+    pub embedding: Embedding,
+    /// The open license the name table states.
+    pub open_license: Option<OpenLicense>,
+}
+
+impl FaceFacts {
+    /// The face is OK for web ([`license::web_use`]).
+    pub(crate) fn web_ok(&self) -> bool {
+        license::web_use(self.embedding, self.open_license, self.license).ok()
+    }
 }
 
 impl FaceFacts {
@@ -75,6 +87,8 @@ impl FaceFacts {
             favorite: false,
             rating: None,
             problems: false,
+            embedding: Embedding::Installable,
+            open_license: None,
         }
     }
 }
@@ -99,9 +113,15 @@ pub(crate) enum Dim {
     Favorite,
     Rating,
     Problems,
+    Embedding,
+    OpenLicense,
+    WebOk,
     /// Language or character coverage: checked against a [`Need`](crate::coverage::Need) built
     /// once per search, so [`failed`] leaves it to [`failed_supports`].
     Supports,
+    /// Added within some days: checked against a cutoff time taken once per
+    /// search, so [`failed`] leaves it to [`failed_added`].
+    Added,
 }
 
 impl Dim {
@@ -110,80 +130,87 @@ impl Dim {
     }
 }
 
-/// The filters `face` fails, one [`Dim::bit`] each; 0 when it passes all.
-/// `supports` is not looked at here: see [`failed_supports`].
-pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u32 {
-    let f = filters;
-    let checks = [
-        (
-            Dim::Classification,
+/// The filters [`failed`] and [`passes`] check, in [`Dim`] order.
+const CHECKED: [Dim; 20] = [
+    Dim::Classification,
+    Dim::Weight,
+    Dim::Width,
+    Dim::Slant,
+    Dim::Variable,
+    Dim::Color,
+    Dim::Format,
+    Dim::Features,
+    Dim::License,
+    Dim::Foundry,
+    Dim::Sources,
+    Dim::Tags,
+    Dim::Collection,
+    Dim::Active,
+    Dim::Favorite,
+    Dim::Rating,
+    Dim::Problems,
+    Dim::Embedding,
+    Dim::OpenLicense,
+    Dim::WebOk,
+];
+
+/// Whether `face` passes the filter `dim` of `filters` (an unset filter
+/// passes). `supports` and `added` pass here: see [`failed_supports`] and
+/// [`failed_added`].
+fn check(dim: Dim, f: &Filters, text: &FaceText, facts: &FaceFacts) -> bool {
+    match dim {
+        Dim::Classification => {
             f.classification.is_empty()
                 || facts
                     .classification
-                    .is_some_and(|c| f.classification.contains(&c)),
-        ),
-        (
-            Dim::Weight,
-            f.weight.is_none_or(|w| reaches_weight(text, w.min, w.max)),
-        ),
-        (
-            Dim::Width,
-            f.width.is_none_or(|w| reaches_width(text, w.min, w.max)),
-        ),
-        (Dim::Slant, f.slant.is_none_or(|s| reaches_slant(text, s))),
-        (
-            Dim::Variable,
-            f.variable.is_none_or(|v| v == facts.is_variable),
-        ),
-        (Dim::Color, f.color.is_none_or(|c| c == facts.color)),
-        (
-            Dim::Format,
-            f.formats.is_empty() || facts.format.is_some_and(|x| f.formats.contains(&x)),
-        ),
-        (
-            Dim::Features,
-            f.features
-                .iter()
-                .all(|t| tag(t).is_some_and(|t| facts.features.binary_search(&t).is_ok())),
-        ),
-        (
-            Dim::License,
-            f.license.is_none_or(|l| facts.license == Some(l)),
-        ),
-        (
-            Dim::Foundry,
-            f.foundry
-                .as_deref()
-                .is_none_or(|x| facts.foundry.as_deref() == Some(x)),
-        ),
-        (
-            Dim::Sources,
-            f.sources.is_empty() || f.sources.contains(&facts.source),
-        ),
-        (Dim::Tags, f.tags.iter().all(|t| facts.tags.contains(t))),
-        (
-            Dim::Collection,
-            f.collection.is_none_or(|c| facts.collections.contains(&c)),
-        ),
-        (Dim::Active, f.active.is_none_or(|a| a == facts.active)),
-        (
-            Dim::Favorite,
-            f.favorite.is_none_or(|v| v == facts.favorite),
-        ),
-        (
-            Dim::Rating,
-            f.min_rating
-                .is_none_or(|r| facts.rating.is_some_and(|x| x >= r)),
-        ),
-        (
-            Dim::Problems,
-            f.problems.is_none_or(|p| p == facts.problems),
-        ),
-    ];
-    checks
+                    .is_some_and(|c| f.classification.contains(&c))
+        }
+        Dim::Weight => f.weight.is_none_or(|w| reaches_weight(text, w.min, w.max)),
+        Dim::Width => f.width.is_none_or(|w| reaches_width(text, w.min, w.max)),
+        Dim::Slant => f.slant.is_none_or(|s| reaches_slant(text, s)),
+        Dim::Variable => f.variable.is_none_or(|v| v == facts.is_variable),
+        Dim::Color => f.color.is_none_or(|c| c == facts.color),
+        Dim::Format => f.formats.is_empty() || facts.format.is_some_and(|x| f.formats.contains(&x)),
+        Dim::Features => f
+            .features
+            .iter()
+            .all(|t| tag(t).is_some_and(|t| facts.features.binary_search(&t).is_ok())),
+        Dim::License => f.license.is_none_or(|l| facts.license == Some(l)),
+        Dim::Foundry => f
+            .foundry
+            .as_deref()
+            .is_none_or(|x| facts.foundry.as_deref() == Some(x)),
+        Dim::Sources => f.sources.is_empty() || f.sources.contains(&facts.source),
+        Dim::Tags => f.tags.iter().all(|t| facts.tags.contains(t)),
+        Dim::Collection => f.collection.is_none_or(|c| facts.collections.contains(&c)),
+        Dim::Active => f.active.is_none_or(|a| a == facts.active),
+        Dim::Favorite => f.favorite.is_none_or(|v| v == facts.favorite),
+        Dim::Rating => f
+            .min_rating
+            .is_none_or(|r| facts.rating.is_some_and(|x| x >= r)),
+        Dim::Problems => f.problems.is_none_or(|p| p == facts.problems),
+        Dim::Embedding => f.embedding.is_none_or(|e| e == facts.embedding),
+        Dim::OpenLicense => f
+            .open_license
+            .is_none_or(|o| o == facts.open_license.is_some()),
+        Dim::WebOk => f.web_ok.is_none_or(|w| w == facts.web_ok()),
+        Dim::Supports | Dim::Added => true,
+    }
+}
+
+/// The filters `face` fails, one [`Dim::bit`] each; 0 when it passes all.
+/// `supports` is not looked at here: see [`failed_supports`].
+pub(crate) fn failed(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> u32 {
+    CHECKED
         .iter()
-        .filter(|(_, pass)| !pass)
-        .fold(0, |mask, (dim, _)| mask | dim.bit())
+        .filter(|dim| !check(**dim, filters, text, facts))
+        .fold(0, |mask, dim| mask | dim.bit())
+}
+
+/// Whether `face` passes every filter [`failed`] checks; stops at the first
+/// it fails (a smart collection's rule tests every face of the library).
+pub(crate) fn passes(filters: &Filters, text: &FaceText, facts: &FaceFacts) -> bool {
+    CHECKED.iter().all(|dim| check(*dim, filters, text, facts))
 }
 
 /// The [`Dim::Supports`] bit for a face that meets the search's [`Need`](crate::coverage::Need)
@@ -194,6 +221,27 @@ pub(crate) fn failed_supports(fit: Option<&Fit>) -> u32 {
         0
     } else {
         Dim::Supports.bit()
+    }
+}
+
+/// The [`Dim::Added`] bit for a face added at `added` (RFC 3339, UTC) when
+/// the search keeps faces added at `cutoff` or later; 0 without a cutoff. A
+/// face whose time is not known fails.
+pub(crate) fn failed_added(cutoff: Option<&str>, added: Option<&str>) -> u32 {
+    match cutoff {
+        Some(cutoff) if added.is_none_or(|added| added < cutoff) => Dim::Added.bit(),
+        _ => 0,
+    }
+}
+
+/// `mask` with its [`Dim::Collection`] bit decided by `inside`: whether the
+/// face is in the collection the filters name, which for a smart collection
+/// only its rule can tell.
+pub(crate) fn with_collection(mask: u32, inside: bool) -> u32 {
+    if inside {
+        mask & !Dim::Collection.bit()
+    } else {
+        mask | Dim::Collection.bit()
     }
 }
 
@@ -220,6 +268,10 @@ pub(crate) enum Value {
     Favorite(bool),
     /// A `min_rating` the face's rating reaches (1–5).
     Rating(u8),
+    /// An [`EMBEDDINGS`] position.
+    Embedding(u8),
+    OpenLicense(bool),
+    WebOk(bool),
 }
 
 impl Value {
@@ -240,11 +292,15 @@ impl Value {
             Self::Tag(_) => Dim::Tags,
             Self::Favorite(_) => Dim::Favorite,
             Self::Rating(_) => Dim::Rating,
+            Self::Embedding(_) => Dim::Embedding,
+            Self::OpenLicense(_) => Dim::OpenLicense,
+            Self::WebOk(_) => Dim::WebOk,
         }
     }
 }
 
-/// Every class, format, slant and license type, in the order counts list them.
+/// Every class, format, slant, license type and embedding permission, in
+/// the order counts list them.
 const CLASSES: [Classification; 7] = [
     Classification::Serif,
     Classification::Sans,
@@ -274,6 +330,12 @@ const LICENSES: [LicenseType; 6] = [
     LicenseType::PersonalOnly,
     LicenseType::Unknown,
 ];
+const EMBEDDINGS: [Embedding; 4] = [
+    Embedding::Installable,
+    Embedding::Editable,
+    Embedding::PreviewAndPrint,
+    Embedding::Restricted,
+];
 
 /// The `min_rating` values counted.
 const RATINGS: [u8; 5] = [1, 2, 3, 4, 5];
@@ -292,7 +354,7 @@ fn weight_span(class: u16) -> (u16, u16) {
 
 /// Every value `face` can be counted under.
 pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
-    let mut out = Vec::with_capacity(24 + facts.features.len() + facts.tags.len());
+    let mut out = Vec::with_capacity(27 + facts.features.len() + facts.tags.len());
     out.extend(facts.classification.map(Value::Classification));
     for class in WEIGHTS {
         let (lo, hi) = weight_span(class);
@@ -333,6 +395,15 @@ pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
             .filter(|r| *r <= rating)
             .map(Value::Rating),
     );
+    out.extend(
+        EMBEDDINGS
+            .iter()
+            .position(|e| *e == facts.embedding)
+            .and_then(|i| u8::try_from(i).ok())
+            .map(Value::Embedding),
+    );
+    out.push(Value::OpenLicense(facts.open_license.is_some()));
+    out.push(Value::WebOk(facts.web_ok()));
     out
 }
 
@@ -463,12 +534,25 @@ impl<'a> Tally<'a> {
             tags: list(tags, Value::Tag, &count),
             favorite: list(bools, Value::Favorite, &count),
             min_rating: list(RATINGS, Value::Rating, &count),
+            embedding: list(0..EMBEDDINGS.len(), embedding_value, &count)
+                .into_iter()
+                .map(|c| FilterCount {
+                    value: EMBEDDINGS[c.value],
+                    count: c.count,
+                })
+                .collect(),
+            open_license: list(bools, Value::OpenLicense, &count),
+            web_ok: list(bools, Value::WebOk, &count),
         }
     }
 }
 
 fn license_value(i: usize) -> Value {
     Value::License(u8::try_from(i).unwrap_or(u8::MAX))
+}
+
+fn embedding_value(i: usize) -> Value {
+    Value::Embedding(u8::try_from(i).unwrap_or(u8::MAX))
 }
 
 #[cfg(test)]

@@ -103,6 +103,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-20
 
+- [E11.4 #102] crates/fm-api/src/mock.rs:285 — the Rust MockApi gives every face the same metrics, while the TS mock now gives faces 6 and 7 their own, so the two mocks differ on `FaceDetail.metrics`.
 - [E8.3 #88] apps/desktop/src-tauri/src/lib.rs:518 — the app still serves MockApi; nothing outside tests builds DuplicateResolver with fm_platform::trash::system(), so the shipped app does not reach the real trash yet (same as ActivationManager).
 - [E8.3 #88] crates/fm-platform/src/linux/trash.rs:44 — XDG_DATA_HOME/HOME are resolved by hand instead of paths::Env::dir (crates/fm-platform/src/paths.rs:90): a second copy of the rule that ignores relative XDG values.
 - [E8.3 #88] crates/fm-core/src/resolve.rs:31 — the ACTIVE_COPY message is written twice (also crates/fm-api/src/mock.rs), so the core and mock wording can drift.
@@ -116,11 +117,31 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-21
 
+- [E14.2 #115] crates/fm-api/src/mock.rs:909 — the Rust mock activates a smart collection's members, while fm-core refuses a smart `Target::Collection` with Unsupported (crates/fm-core/src/index/activation.rs:108).
+- [E14.2 #115] crates/fm-api/src/mock.rs:1508 — a mock search by an unknown collection id returns nothing (also apps/desktop/src/api/mock.ts:922), while fm-core returns NotFound.
+- [E14.2 #115] .github/workflows/ci.yml:77 — PR CI runs nextest in debug only, so the 50 ms timing tests never time in CI; budgets rely on the bench job (nightly or label `bench`).
+- [E14.2 #115] apps/desktop/e2e/preview.spec.ts:71 — "1,000 rows scrolled do not leak font faces" takes ~21 s of its 30 s timeout locally and timed out once on the macOS runner.
+- [E14.2 #115] apps/desktop/src/api/mock.ts:842 — the TS mock's `passes` ignores `supports: { kind: 'text' }`, so a text-coverage filter (and a smart-rule leaf built from one) matches every face there, while fm-core and the Rust mock apply it.
+- [E11.3 #101] apps/desktop/src/stores/glyphs.ts:90 — `open` returns early for the same face id, so a face whose first load failed is never retried on revisit (the pattern is copied into stores/coverage.ts).
+- [E11.3 #101] apps/desktop/src/api/mock.ts:803 — the TS `mockLanguages` (en, pl, sr-Cyrl, el) has drifted from the Rust mock `LANGUAGES` (en, pl, sr-Latn, sr-Cyrl).
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.
+- [E10.5 #98] apps/desktop/src/stores/features.ts:43 — `settings()` writes feature tags into font-feature-settings without the 4-printable-ASCII check or escaping that `preview/variations.ts` and `fm_core::css` apply.
+- [E10.5 #98] apps/desktop/src/preview/variations.ts:12 — the preview writes every axis at its default when unmoved, unclamped and unrounded, so its text differs from fm-core's `css_values` for the same state.
+- [E15.1 #118] apps/desktop/src/styles/theme.css:100 — the `.surface-light`/`.surface-dark` preview surfaces do not set `--fm-danger`, so danger-colored text inside a surface-overridden font view keeps the app theme's value and can fall under AA contrast.
+- [E12.1 #104] apps/desktop/src/views/HomeView.vue:264 — the preview controls strip (sample, size, line height, tracking, colors) stays visible in Layout mode, where none of its controls affect the layout blocks.
+- [E12.1 #104] apps/desktop/src/components/FontPreviewRow.vue:62 — the face-loader hold/release routine is copied in FontPreviewRow, GlyphCompare, InspectorGlyphs and FontLayout; a shared composable would remove the copies.
 
 ## 2026-10-20
 
 - [E10.3 #96] crates/fm-core/src/parser.rs:557 — feature tags with non-printable bytes are stored as the display form `{0xNN}`, not the raw tag, so later CSS or MCP output from them cannot round-trip.
 - [E10.3 #96] apps/desktop/src/views/HomeView.vue:203 — at 1,000×700 the toolbar "Inspector" toggle is clipped to "Insp…".
+- [E11.2 #100] crates/fm-core/src/glyphs.rs:91 — `glyph_detail_file` and the `list_glyphs` file reader have no test for a face file removed after the scan (the I/O error path).
 - [E10.2 #95] crates/fm-core/src/index/mod.rs:179 — `Index::rebuild` keeps every user table, so `rebuild_index` never exercises restoring user metadata from the sidecars.
 - [E10.2 #95] crates/fm-api/src/mock.rs:806 — the mock's collection target counts members of child collections; the core target reads only direct `collection_face` rows.
+- [E10.4 #97] crates/fm-core/src/glyph_features.rs:83 — glyph detail still uses the generic `feature_info`, so it shows "Stylistic set N" while the Features tab shows the font's own set name.
+- [E10.4 #97] crates/fm-core/src/api/tests.rs:305 — tests look up a face with `FaceId(lib.family(..).id.0)`, relying on family and face ids having the same number.
+- [E10.4 #97] crates/fm-core/src/index/faces.rs:255 — a `face.parsed` that fails to deserialize becomes `parsed = None`, so a face indexed before a new non-default `ParsedFace` field shows an empty inspector until the next scan.
+
+## 2026-10-21
+
+- [E12.5 #108] apps/desktop/src/views/HomeView.vue:402 — the existing mode and inspector `.toggle` buttons are outlined in `--fm-border` (≈1.5:1 light and dark), the same as the new layout toolbar buttons.

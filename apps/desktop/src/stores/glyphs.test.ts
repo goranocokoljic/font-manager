@@ -67,6 +67,17 @@ describe('glyphs store', () => {
     expect(s.blocks.map((b) => b.name)).toEqual(['Cyrillic']);
   });
 
+  it('a block from the coverage list shows that block with the search cleared', async () => {
+    const s = useGlyphsStore();
+    await s.open(1);
+    await s.search('zzz');
+    await s.showBlock('Latin Extended-A');
+    expect(calls[calls.length - 1]).toMatchObject({ block: 'Latin Extended-A', query: null });
+    expect(s.query).toBe('');
+    expect(s.blocks.map((b) => b.name)).toEqual(['Latin Extended-A']);
+    expect(s.total).toBe(128);
+  });
+
   it('drops the answer to an older list', async () => {
     const s = useGlyphsStore();
     await s.open(1);
@@ -94,5 +105,50 @@ describe('glyphs store', () => {
     const s = useGlyphsStore();
     await s.open(9);
     expect(s.error?.message).toBe('Face 9 was not found.');
+  });
+
+  it('fetches the detail of the selected glyph and clears it with the selection', async () => {
+    const s = useGlyphsStore();
+    await s.open(1);
+    const a = s.item(s.blocks[0]!.count - 1) ?? s.item(0)!;
+    await s.select({ ...a, codePoint: 0x61, name: 'a' });
+    expect(s.detail?.codePoint).toBe(0x61);
+    expect(s.detail?.advanceWidth).toBeGreaterThan(0);
+    expect(s.detail?.replacedBy.map((f) => f.tag)).toEqual(['smcp', 'ss01']);
+    await s.select(null);
+    expect(s.detail).toBeNull();
+  });
+
+  it('drops the detail of a glyph selected before the last one', async () => {
+    let release!: () => void;
+    const slow = new Promise<void>((r) => (release = r));
+    setClient({
+      ...client,
+      getGlyph: async (req) => {
+        if (req.codePoint === 0x61) await slow;
+        return client.getGlyph(req);
+      },
+    });
+    const s = useGlyphsStore();
+    await s.open(1);
+    const a = s.item(0)!;
+    const first = s.select({ ...a, codePoint: 0x61 });
+    await s.select({ ...a, codePoint: 0x62 });
+    release();
+    await first;
+    expect(s.detail?.codePoint).toBe(0x62);
+  });
+
+  it('keeps the API error of a failed detail request', async () => {
+    setClient({
+      ...client,
+      getGlyph: () =>
+        Promise.reject({ code: 'notFound', message: 'Character U+0061 was not found.' }),
+    });
+    const s = useGlyphsStore();
+    await s.open(1);
+    await s.select({ ...s.item(0)!, codePoint: 0x61 });
+    expect(s.detail).toBeNull();
+    expect(s.detailError?.message).toBe('Character U+0061 was not found.');
   });
 });

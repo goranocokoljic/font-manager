@@ -78,6 +78,71 @@ test('filter chips under the title show counts and filter the list', async ({ pa
   await expect(serbian).toBeHidden();
 });
 
+test('open-license and embedding chips filter the list; open fonts show a green badge', async ({
+  page,
+}) => {
+  const tree = await open(page);
+  const chips = page.getByRole('region', { name: 'Filters' });
+  const openGroup = chips.getByRole('group', { name: 'Open license' });
+  await expect(openGroup.getByRole('button', { name: /^Open license/ })).toHaveAccessibleName(
+    'Open license, 2 families',
+  );
+  await expect(
+    chips.getByRole('group', { name: 'Embedding' }).getByRole('button', { name: /^Restricted/ }),
+  ).toHaveAccessibleName('Restricted, 1 family');
+
+  // The badge on an open-licensed family is in the good (success) color.
+  const badge = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('open-license');
+  await expect(badge).toHaveText('Open license');
+  const [color, success] = await badge.evaluate((el) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--fm-success)';
+    document.body.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).color, want];
+  });
+  expect(color).toBe(success);
+  await expect(
+    tree.getByRole('treeitem', { name: /^Legacy Grotesk,/ }).getByTestId('open-license'),
+  ).toHaveCount(0);
+
+  await openGroup.getByRole('button', { name: /^Not open/ }).click();
+  await expect.poll(() => names(page)).toEqual(['Legacy Grotesk']);
+});
+
+for (const [scheme, surface] of [
+  ['dark', 'light'],
+  ['light', 'dark'],
+] as const) {
+  test(`the open-license badge keeps AA contrast on a ${surface} surface in a ${scheme} app`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    const tree = await open(page);
+    await page
+      .getByRole('group', { name: 'Preview settings' })
+      .getByLabel('Surface')
+      .selectOption(surface);
+    await expect(tree).toHaveAttribute('data-surface', surface);
+    const badge = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('open-license');
+    const ratio = await badge.evaluate((el) => {
+      const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+      const lum = (c: string) => {
+        const [r, g, b] = rgb(c).map((v) => {
+          const x = v / 255;
+          return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+      };
+      const bg = getComputedStyle(el.closest('[data-surface]')!).backgroundColor;
+      const [hi, lo] = [lum(getComputedStyle(el).color), lum(bg)].sort((x, y) => y - x);
+      return (hi! + 0.05) / (lo! + 0.05);
+    });
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+  });
+}
+
 test('a chip set is saved as a smart collection', async ({ page }) => {
   await open(page);
   const chips = page.getByRole('region', { name: 'Filters' });

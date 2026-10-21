@@ -1,4 +1,7 @@
 //! Fuzzes `fm_core::parser::parse`: any bytes must give a result, never a panic.
+//! That covers every table the parser reads, the `GSUB` FeatureParams of the
+//! stylistic sets and character variants included (E10.4); the fixture corpus
+//! seeds fonts that have them (Cal Sans, Mona Sans, DM Sans).
 //!
 //! From `crates/fm-core`, seeded with the fixture corpus, for 10 minutes:
 //!

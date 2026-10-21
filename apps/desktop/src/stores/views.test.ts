@@ -86,4 +86,47 @@ describe('views store', () => {
       expect(store.orderFor(ALL_FONTS_VIEW)).toBeNull();
     }
   });
+
+  it('saves the layout mode and preset, and reads a damaged preset as Book', async () => {
+    const store = freshStore();
+    expect(store.presetFor(ALL_FONTS_VIEW)).toBe('book');
+    store.setMode(ALL_FONTS_VIEW, 'layout');
+    store.setPreset(ALL_FONTS_VIEW, 'waterfall');
+    await nextTick();
+    const again = freshStore();
+    expect(again.modeFor(ALL_FONTS_VIEW)).toBe('layout');
+    expect(again.presetFor(ALL_FONTS_VIEW)).toBe('waterfall');
+    // Switching the preset keeps the mode.
+    again.setPreset(ALL_FONTS_VIEW, 'quote');
+    expect(again.modeFor(ALL_FONTS_VIEW)).toBe('layout');
+
+    localStorage.setItem(
+      VIEWS_STORAGE_KEY,
+      JSON.stringify({ [ALL_FONTS_VIEW]: { mode: 'layout', preset: 'poster' } }),
+    );
+    expect(freshStore().presetFor(ALL_FONTS_VIEW)).toBe('book');
+  });
+
+  it('saves the layout file a view shows; a preset pick sets it, a bad id is ignored', async () => {
+    const store = freshStore();
+    expect(store.layoutFor(ALL_FONTS_VIEW)).toBe('book');
+    store.setPreset(ALL_FONTS_VIEW, 'quote');
+    expect(store.layoutFor(ALL_FONTS_VIEW)).toBe('quote');
+    store.setLayout(ALL_FONTS_VIEW, 'quote-copy');
+    store.setLayout(ALL_FONTS_VIEW, '../evil');
+    await nextTick();
+    const again = freshStore();
+    expect(again.layoutFor(ALL_FONTS_VIEW)).toBe('quote-copy');
+    expect(again.presetFor(ALL_FONTS_VIEW)).toBe('quote');
+    again.setLayout(ALL_FONTS_VIEW, 'waterfall');
+    expect(again.presetFor(ALL_FONTS_VIEW)).toBe('waterfall');
+
+    localStorage.setItem(
+      VIEWS_STORAGE_KEY,
+      JSON.stringify({
+        [ALL_FONTS_VIEW]: { mode: 'layout', preset: 'columns', layout: '.hidden' },
+      }),
+    );
+    expect(freshStore().layoutFor(ALL_FONTS_VIEW)).toBe('columns');
+  });
 });

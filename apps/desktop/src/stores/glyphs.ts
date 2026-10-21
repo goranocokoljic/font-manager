@@ -5,6 +5,7 @@ import type {
   ApiError,
   FaceId,
   GlyphBlock,
+  GlyphDetail,
   GlyphInfo,
   GlyphPage,
   GlyphsRequest,
@@ -18,7 +19,9 @@ export const GLYPH_PAGE = 500;
  * The inspector's glyph map of one face (the Glyphs tab), as fm-core lists it:
  * the blocks of the list with their counts, and the characters page by page as
  * the grid scrolls to them. A search or a block choice asks fm-core for a new
- * list; the first character a search finds is selected.
+ * list; the first character a search finds is selected. The selected character's
+ * detail (advance width, the features that produce or replace it) comes from fm-core
+ * when it is selected.
  */
 export const useGlyphsStore = defineStore('glyphs', () => {
   const face = ref<FaceId | null>(null);
@@ -35,6 +38,9 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   const error = ref<ApiError | null>(null);
   const loading = ref(false);
   const selected = ref<GlyphInfo | null>(null);
+  /** The selected character in detail, once fm-core answers. */
+  const detail = ref<GlyphDetail | null>(null);
+  const detailError = ref<ApiError | null>(null);
   /** Pages of the current list by page number. */
   const pages = shallowReactive(new Map<number, GlyphInfo[]>());
   /** Bumped when a new list arrives, so the grid can scroll to its selection. */
@@ -42,6 +48,7 @@ export const useGlyphsStore = defineStore('glyphs', () => {
 
   // Answers to an older list are dropped.
   let request = 0;
+  let detailRequest = 0;
   const pending = new Set<number>();
 
   const req = (page: number): GlyphsRequest => ({
@@ -76,7 +83,7 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     total.value = page.total;
     health.value = page.health;
     unicodeVersion.value = page.unicodeVersion;
-    if (query.value.trim()) selected.value = page.items[0] ?? null;
+    if (query.value.trim()) void select(page.items[0] ?? null);
     generation.value += 1;
   }
 
@@ -86,7 +93,7 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     face.value = id;
     query.value = '';
     block.value = null;
-    selected.value = null;
+    void select(null);
     faceBlocks.value = [];
     blocks.value = [];
     total.value = 0;
@@ -100,6 +107,13 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   }
 
   async function chooseBlock(name: string | null): Promise<void> {
+    block.value = name;
+    await load();
+  }
+
+  /** Jumps to the block `name` (from the coverage list): that block only, no search. */
+  async function showBlock(name: string): Promise<void> {
+    query.value = '';
     block.value = name;
     await load();
   }
@@ -131,8 +145,19 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     return pages.get(Math.floor(i / GLYPH_PAGE))?.[i % GLYPH_PAGE];
   }
 
-  function select(g: GlyphInfo | null): void {
+  /** Selects `g` (or nothing) and fetches its detail; an older answer is dropped. */
+  async function select(g: GlyphInfo | null): Promise<void> {
+    const mine = ++detailRequest;
     selected.value = g;
+    detailError.value = null;
+    if (detail.value?.codePoint !== g?.codePoint) detail.value = null;
+    if (!g || face.value === null) return;
+    try {
+      const d = await useClient().getGlyph({ face: face.value, codePoint: g.codePoint });
+      if (mine === detailRequest) detail.value = d;
+    } catch (e) {
+      if (mine === detailRequest) detailError.value = e as ApiError;
+    }
   }
 
   /** The list index of the selected character, when its page is loaded. */
@@ -158,11 +183,14 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     error,
     loading,
     selected,
+    detail,
+    detailError,
     selectedIndex,
     generation,
     open,
     search,
     chooseBlock,
+    showBlock,
     ensure,
     item,
     select,

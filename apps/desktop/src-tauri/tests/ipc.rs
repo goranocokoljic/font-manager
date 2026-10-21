@@ -8,13 +8,16 @@ use std::time::Duration;
 use fm_api::activation::{ActivationOutcome, ActiveFace, OutcomeStatus};
 use fm_api::common::{Paged, Slant};
 use fm_api::library::{
-    AppInfo, FaceDetail, Family, FamilySummary, GlyphPage, GlyphsRequest, LibraryService,
-    ListFamiliesRequest, Source, SourceKind,
+    AppInfo, FaceDetail, Family, FamilySummary, GlyphDetail, GlyphPage, GlyphRequest,
+    GlyphsRequest, LibraryService, ListFamiliesRequest, Source, SourceKind,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
 use fm_api::preview::{PreviewImage, PreviewService, SampleText, SampleTextRequest};
-use fm_api::search::{LanguagePreset, SearchRequest, SearchResponse};
+use fm_api::search::{
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+    Supports,
+};
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
     API_VERSION, ActivationService, ApiResult, Event, FaceId, FamilyId, JobId, SearchService,
@@ -140,6 +143,26 @@ fn list_glyphs_returns_a_page_of_the_glyph_map() {
 }
 
 #[test]
+fn get_glyph_returns_the_glyph_detail() {
+    let detail: GlyphDetail = invoke_with(
+        "get_glyph",
+        serde_json::json!({ "req": { "face": 1, "codePoint": 0x61 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    let expected = MockApi::new()
+        .get_glyph(GlyphRequest {
+            face: FaceId(1),
+            code_point: 0x61,
+        })
+        .unwrap();
+    assert_eq!(detail, expected);
+    assert_eq!(detail.code_point, 0x61);
+}
+
+#[test]
 fn families_round_trip_through_fm_api() {
     let api = MockApi::new();
     let page: Paged<FamilySummary> = invoke_with("list_families", serde_json::json!({ "req": {} }))
@@ -186,6 +209,55 @@ fn search_returns_hits_and_filter_counts() {
         .deserialize()
         .unwrap();
     assert_eq!(langs, api.list_languages().unwrap());
+}
+
+#[test]
+fn check_coverage_reports_the_characters_a_face_lacks() {
+    let api = MockApi::new();
+    // Face 7 of the mock has no Cyrillic; face 1 has it.
+    for (face, text) in [(7, "Ж"), (1, "Ж")] {
+        let report: CoverageReport = invoke_with(
+            "check_coverage",
+            serde_json::json!({ "req": { "face": face, "target": { "kind": "text", "text": text } } }),
+        )
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+        let expected = api
+            .check_coverage(CoverageRequest {
+                face: FaceId(face),
+                target: Supports::Text { text: text.into() },
+            })
+            .unwrap();
+        assert_eq!(report, expected);
+    }
+    let lacks: CoverageReport = invoke_with(
+        "check_coverage",
+        serde_json::json!({ "req": { "face": 7, "target": { "kind": "text", "text": "Ж" } } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert!(!lacks.complete);
+    assert_eq!(lacks.missing, vec!["Ж".to_string()]);
+}
+
+#[test]
+fn face_coverage_lists_a_faces_blocks_and_languages() {
+    let api = MockApi::new();
+    let got: FaceCoverage = invoke_with("face_coverage", serde_json::json!({ "face": 6 }))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(got, api.face_coverage(FaceId(6)).unwrap());
+    assert!(!got.blocks.is_empty());
+    let err = invoke_with("face_coverage", serde_json::json!({ "face": 999 }))
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(err["code"], "notFound", "{err}");
 }
 
 #[test]

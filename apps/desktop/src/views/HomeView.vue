@@ -5,6 +5,8 @@ import { formatApiVersion } from '../api/version';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
+import FontLayout from '../components/FontLayout.vue';
+import LayoutActions from '../components/LayoutActions.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
@@ -29,9 +31,10 @@ import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
-import type { ActivationMode, FaceId } from '../api/types';
+import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
-import { useViewsStore, type ViewMode } from '../stores/views';
+import { useTextLayoutsStore } from '../stores/textLayouts';
+import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore, type ViewMode } from '../stores/views';
 
 const app = useAppStore();
 const layout = useLayoutStore();
@@ -46,6 +49,7 @@ const views = useViewsStore();
 const search = useSearchStore();
 const collections = useCollectionsStore();
 const sets = useSetsStore();
+const textLayouts = useTextLayoutsStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -62,7 +66,61 @@ const MODES: { value: ViewMode; label: string }[] = [
   { value: 'table', label: 'Table' },
   { value: 'grid', label: 'Grid' },
   { value: 'waterfall', label: 'Waterfall' },
+  { value: 'layout', label: 'Layout' },
 ];
+
+// The layout mode sets the selected face (else the list cursor's, else the first
+// family's) in the picked layout file, with the editor's unsaved changes.
+const layoutId = computed(() => views.layoutFor(ALL_FONTS_VIEW));
+const shownLayout = computed(() => textLayouts.draft);
+// Before the list arrives the picker offers the presets, so the pick shows at once.
+const layoutOptions = computed(() =>
+  textLayouts.entries.length
+    ? textLayouts.entries
+    : LAYOUT_PRESETS.map((p) => ({ id: p, name: PRESET_LABELS[p], preset: p, broken: null })),
+);
+const layoutFace = computed(() => {
+  const first = fontList.families[0];
+  return (
+    selection.detail?.face ??
+    fontList.cursorFace ??
+    (first ? fontList.previewFace(first.id) : undefined) ??
+    null
+  );
+});
+// With no list on screen nothing else loads the styles of the fallback family.
+const layoutFamily = computed(
+  () => fontList.cursorRow?.family.id ?? fontList.families[0]?.id ?? null,
+);
+watch(
+  [mode, layoutFamily],
+  ([m, family]) => {
+    if (m !== 'layout') return;
+    if (family !== null) void library.facesOf(family).catch(() => undefined);
+  },
+  { immediate: true },
+);
+// Entering the layout mode reads the layouts folder again (a file edited by hand shows
+// its new name); picking a layout opens its file.
+watch(
+  mode,
+  (m) => {
+    if (m === 'layout') void textLayouts.loadList();
+  },
+  { immediate: true },
+);
+watch(
+  [mode, layoutId],
+  ([m, id]) => {
+    if (m === 'layout' && textLayouts.saved?.id !== id) void textLayouts.open(id);
+  },
+  { immediate: true },
+);
+
+function showPreset(p: LayoutPreset): void {
+  views.setPreset(ALL_FONTS_VIEW, p);
+  views.setMode(ALL_FONTS_VIEW, 'layout');
+}
 
 onMounted(() => {
   void app.load();
@@ -120,12 +178,18 @@ useActions([
     enabled: () => sets.current != null && activation.count > 0 && !activation.busy,
     run: () => (sets.current ? activation.deactivateAllExcept(sets.current.id) : undefined),
   },
-  // Keys 1–4 switch the view mode, in the order of the toolbar buttons.
+  // Keys 1–5 switch the view mode, in the order of the toolbar buttons.
   ...MODES.map((m, i) => ({
-    id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4),
+    id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4 | 5),
     title: `Show fonts as a ${m.label.toLowerCase()}`,
     group: 'View',
     run: () => views.setMode(ALL_FONTS_VIEW, m.value),
+  })),
+  ...LAYOUT_PRESETS.map((p) => ({
+    id: `view.layoutPreset.${p}`,
+    title: `Show the ${PRESET_LABELS[p]} layout`,
+    group: 'View',
+    run: () => showPreset(p),
   })),
 ]);
 
@@ -193,6 +257,23 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
           </button>
         </div>
         <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
+        <label v-if="mode === 'layout'" class="preset">
+          Preset
+          <select
+            :value="layoutId"
+            @change="views.setLayout(ALL_FONTS_VIEW, ($event.target as HTMLSelectElement).value)"
+          >
+            <option
+              v-for="e in layoutOptions"
+              :key="e.id"
+              :value="e.id"
+              :disabled="e.broken !== null"
+              :title="e.broken ?? undefined"
+            >
+              {{ e.broken === null ? e.name : `${e.name} (cannot be read)` }}
+            </option>
+          </select>
+        </label>
         <button
           type="button"
           class="toggle"
@@ -210,6 +291,15 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
       <template v-if="fontList.families.length && mode === 'table'">
         <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
         <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
+      </template>
+      <template v-else-if="fontList.families.length && mode === 'layout'">
+        <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
+        <FontLayout
+          :layout="shownLayout"
+          :face="layoutFace"
+          editable
+          @edit-text="textLayouts.setBlockText"
+        />
       </template>
       <FontGrid
         v-else-if="fontList.families.length && mode === 'grid'"
@@ -318,6 +408,19 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
 .modes {
   display: flex;
   gap: 4px;
+}
+.preset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.preset select {
+  padding: 2px 4px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 4px;
+  background: var(--fm-bg);
+  color: inherit;
+  font: inherit;
 }
 .toggle[aria-pressed='true'] {
   border-color: var(--fm-accent);

@@ -18,6 +18,9 @@
 //!
 //! Faces of files that are gone or of paused sources are not searched.
 //!
+//! A `collection` filter naming a smart collection (E14.2) applies its rule
+//! ([`smart`]), compiled once per search.
+//!
 //! The searchable rows are read once and kept in memory until the database
 //! changes ([`SearchCache`]): this connection's writes move
 //! `total_changes`, another process's commits move `PRAGMA data_version`.
@@ -32,20 +35,21 @@ use fm_api::library::{
     FamilyActivation, FamilySort, FamilySummary, LicenseType, ListFamiliesRequest, OpenLicense,
     StyleMark,
 };
-use fm_api::search::{
-    FamilyHit, Filters, Missing, SearchRequest, SearchResponse, Supports, WeightRange,
-};
+use fm_api::search::{FamilyHit, Missing, SearchRequest, SearchResponse, WeightRange};
 use fm_api::{CollectionId, FaceId, FamilyId, SourceId, TagId};
-use rusqlite::OptionalExtension;
 
-use super::faces::open_license;
 use super::files::format_from_sql;
 use super::{Index, db_error};
-use crate::coverage::{CodePointSet, Fit, Need};
+use crate::coverage::{CodePointSet, Fit};
 use crate::error::{FmError, FmResult};
-use crate::filter::{FaceFacts, Slots, Tag, Tally, failed, failed_supports, tag, values};
+use crate::filter::{
+    FaceFacts, Slots, Tag, Tally, failed, failed_added, failed_supports, tag, values,
+    with_collection,
+};
 use crate::grouping::{family_key, slant_rank};
+use crate::license;
 use crate::search::{FAMILY, FIELD_COUNT, FOUNDRY, FaceText, Query};
+use smart::Member;
 
 /// Every searchable face with what its family summary needs.
 const VISIBLE_FACES: &str = "
@@ -61,8 +65,7 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
             THEN json_extract(face.parsed, '$.loclLanguages') END,
        CASE WHEN typeof(font_file.path) = 'text' THEN font_file.path END,
        CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.version') END,
-       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.license') END,
-       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.licenseUrl') END
+       face.open_license, face.fstype
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -81,6 +84,8 @@ pub(super) struct SearchCache {
     slots: Slots,
     /// Tag names by id, for the family summaries.
     tag_names: HashMap<TagId, String>,
+    /// Family notes by grouping key, for the family summaries.
+    family_notes: HashMap<String, String>,
 }
 
 /// One searchable face.
@@ -117,17 +122,13 @@ impl Index {
     ///
     /// With a `supports` filter every hit says what its best face misses
     /// ([`FamilyHit::missing`]); an unknown language preset is
-    /// `InvalidRequest`. A smart collection is not applied yet: it is an
-    /// [`fm_api::ErrorCode::Unsupported`] error rather than results that
-    /// ignore it. An unknown collection is `NotFound`.
+    /// `InvalidRequest`. A smart collection applies its rule; one whose
+    /// rule leads back to itself is `InvalidRequest`. An unknown collection
+    /// is `NotFound`.
     pub fn search(&self, req: &SearchRequest) -> FmResult<SearchResponse> {
-        self.check_filters(&req.filters)?;
-        let need = match &req.filters.supports {
-            None => None,
-            Some(Supports::Languages { codes }) => Some(Need::languages(codes)?),
-            Some(Supports::Text { text }) => Some(Need::text(text)),
-        }
-        .filter(|need| !need.is_empty());
+        let member = self.collection_member(req.filters.collection)?;
+        let need = smart::need(&req.filters)?;
+        let cutoff = smart::cutoff(&self.conn, req.filters.added_within_days)?;
         let query = Query::parse(&req.query);
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
@@ -156,7 +157,11 @@ impl Index {
             let mut faces: Vec<(&Row, f32, Option<Fit>)> = faces
                 .into_iter()
                 .filter_map(|(row, score)| {
-                    let mut failed = failed(&req.filters, &row.text, &row.facts);
+                    let mut failed = failed(&req.filters, &row.text, &row.facts)
+                        | failed_added(cutoff.as_deref(), row.added.as_deref());
+                    if let Some(member) = &member {
+                        failed = with_collection(failed, member.holds(row, &[]));
+                    }
                     let fit = need.as_ref().and_then(|need| {
                         let fit = row.cmap.as_ref().map(|set| need.check(set, &row.locl));
                         failed |= failed_supports(fit.as_ref());
@@ -214,7 +219,7 @@ impl Index {
             .skip(req.page.offset as usize)
             .take(req.page.limit as usize)
             .map(|hit| FamilyHit {
-                family: summary(hit.members, &cache.tag_names),
+                family: summary(hit.members, &cache),
                 faces: hit.faces,
                 score: hit.score,
                 missing: hit.missing,
@@ -227,29 +232,17 @@ impl Index {
         })
     }
 
-    /// Refuses the filters search cannot apply yet, and unknown collections.
-    fn check_filters(&self, filters: &Filters) -> FmResult<()> {
-        if let Some(id) = filters.collection {
-            let smart: Option<bool> = self
-                .conn
-                .query_row(
-                    "SELECT is_smart FROM collection WHERE id = ?1",
-                    [id.0],
-                    |row| row.get(0),
-                )
-                .optional()
-                .map_err(|e| db_error(&e))?;
-            match smart {
-                None => return Err(FmError::not_found(format!("Collection {id}"))),
-                Some(true) => {
-                    return Err(FmError::unsupported(
-                        "Filtering by a smart collection is not available yet.",
-                    ));
-                }
-                Some(false) => {}
-            }
+    /// The test for the collection a search is filtered by; `NotFound` for
+    /// an unknown one, `InvalidRequest` for a rule that leads back to itself.
+    fn collection_member(&self, id: Option<CollectionId>) -> FmResult<Option<Member>> {
+        let Some(id) = id else {
+            return Ok(None);
+        };
+        let rules = smart::load_rules(&self.conn)?;
+        if !rules.contains_key(&id) {
+            return Err(FmError::not_found(format!("Collection {id}")));
         }
-        Ok(())
+        Member::compile(&self.conn, &rules, id).map(Some)
     }
 
     /// The ids of the faces that share a trigram with the query.
@@ -308,7 +301,7 @@ impl Index {
                 req.source
                     .is_none_or(|s| faces.iter().any(|f| f.facts.source == s))
             })
-            .map(|faces| summary(faces, &cache.tag_names))
+            .map(|faces| summary(faces, &cache))
             .collect();
         match (req.order, req.sort) {
             (Some(order), _) => order.sort(&mut rows),
@@ -348,7 +341,7 @@ impl Index {
         if faces.first().map(|r| r.id) != Some(family.0) {
             return Ok(None);
         }
-        Ok(Some(summary(&faces, &cache.tag_names)))
+        Ok(Some(summary(&faces, &cache)))
     }
 
     /// The family a visible face belongs to, by id and name, as search
@@ -380,11 +373,13 @@ impl Index {
         let mut slots = Slots::default();
         let rows = self.visible_faces(&mut slots)?;
         let tag_names = self.tag_names()?;
+        let family_notes = self.all_family_notes()?;
         *self.search_cache.borrow_mut() = SearchCache {
             stamp,
             rows,
             slots,
             tag_names,
+            family_notes,
         };
         Ok(())
     }
@@ -405,6 +400,9 @@ impl Index {
         let mut modes = Names::new(name_of::<ActivationMode>);
         let mut formats = Names::new(|f| format_from_sql(f).ok().flatten());
         let mut licenses = Names::new(name_of::<LicenseType>);
+        let mut open_licenses = Names::new(name_of::<OpenLicense>);
+        // A family's declared license (E15.2) is every one of its faces'.
+        let declared = self.all_declared_types()?;
         while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
             let text = |i: usize| {
                 row.get_ref(i)
@@ -426,19 +424,24 @@ impl Index {
             let instances: Option<i64> = row.get(16).map_err(|e| db_error(&e))?;
             let id: u32 = row.get(0).map_err(|e| db_error(&e))?;
             let family = fields[FAMILY].unwrap_or_default().to_owned();
+            let key = family_key(&family);
             let slant = text(10)?
                 .and_then(|s| slants.get(s))
                 .unwrap_or(Slant::Upright);
             let active = text(14)?.and_then(|m| modes.get(m));
             let mut features: Vec<Tag> = text(18)?.map(feature_tags).unwrap_or_default();
             features.sort_unstable();
+            let open_license = text(28)?.and_then(|l| open_licenses.get(l));
             let facts = FaceFacts {
                 classification: None,
                 is_variable,
                 color: row.get(22).map_err(|e| db_error(&e))?,
                 format: text(13)?.and_then(|f| formats.get(f)),
                 features,
-                license: text(19)?.and_then(|l| licenses.get(l)),
+                license: declared
+                    .get(&key)
+                    .copied()
+                    .or(text(19)?.and_then(|l| licenses.get(l))),
                 foundry: fields[FOUNDRY].map(str::to_owned),
                 source: SourceId(row.get(17).map_err(|e| db_error(&e))?),
                 tags: tags.remove(&id).unwrap_or_default(),
@@ -447,6 +450,8 @@ impl Index {
                 favorite: row.get(20).map_err(|e| db_error(&e))?,
                 rating: row.get(21).map_err(|e| db_error(&e))?,
                 problems: !row.get::<_, bool>(23).map_err(|e| db_error(&e))?,
+                embedding: license::embedding(row.get(29).map_err(|e| db_error(&e))?),
+                open_license,
             };
             let face_text = FaceText::new(
                 fields,
@@ -457,7 +462,7 @@ impl Index {
             );
             out.push(Row {
                 id,
-                family_key: family_key(&family),
+                family_key: key,
                 family,
                 slots: slots.intern(&values(&face_text, &facts)),
                 text: face_text,
@@ -480,7 +485,7 @@ impl Index {
                     .and_then(|path| std::path::Path::new(path).parent())
                     .map(|dir| dir.display().to_string()),
                 version: text(27)?.map(str::to_owned),
-                open_license: open_license(text(28)?, text(29)?),
+                open_license,
             });
         }
         Ok(out)
@@ -572,8 +577,8 @@ fn score<'a>(
 }
 
 /// The family row of `faces`, every visible face of one family in id order.
-/// `tag_names` names the tags of [`FamilySummary::tags`].
-fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary {
+/// `cache` names the tags of [`FamilySummary::tags`] and holds the notes.
+fn summary(faces: &[&Row], cache: &SearchCache) -> FamilySummary {
     let first = faces.first();
     let mut formats: Vec<FontFormat> = Vec::new();
     for format in faces.iter().filter_map(|f| f.facts.format) {
@@ -605,7 +610,7 @@ fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary 
     for name in faces
         .iter()
         .flat_map(|f| &f.facts.tags)
-        .filter_map(|id| tag_names.get(id))
+        .filter_map(|id| cache.tag_names.get(id))
     {
         if !tags.contains(name) {
             tags.push(name.clone());
@@ -638,6 +643,7 @@ fn summary(faces: &[&Row], tag_names: &HashMap<TagId, String>) -> FamilySummary 
         open_license: faces.iter().find_map(|f| f.open_license),
         declared_license: faces.iter().find_map(|f| f.facts.license),
         tags,
+        notes: first.and_then(|f| cache.family_notes.get(&f.family_key).cloned()),
     }
 }
 
@@ -670,6 +676,8 @@ impl<T: Copy> Names<T> {
 fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(serde_json::Value::String(name.to_owned())).ok()
 }
+
+pub(super) mod smart;
 
 #[cfg(test)]
 mod tests;

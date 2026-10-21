@@ -16,7 +16,12 @@ import type {
   CollectionFacesRequest,
   CollectionId,
   Conflict,
+  CoverageReport,
+  CoverageRequest,
+  FaceCoverage,
   CreateCollectionRequest,
+  CssValues,
+  CssValuesRequest,
   DeactivateRequest,
   DuplicateGroup,
   Event,
@@ -24,15 +29,29 @@ import type {
   FaceId,
   Family,
   FamilyId,
+  FamilyNotesUpdate,
+  LicenseDeclaration,
   FamilySummary,
+  GlyphDetail,
   GlyphPage,
+  GlyphRequest,
   GlyphsRequest,
   JobId,
   KeepCopyRequest,
   LanguagePreset,
+  DuplicateLayoutRequest,
+  Layout,
+  LayoutEntry,
+  LayoutRef,
+  LayoutVersion,
   ListFamiliesRequest,
+  RestoreLayoutRequest,
+  RevertLayoutRequest,
+  SavedLayout,
+  SaveLayoutRequest,
   MoveCollectionRequest,
   Paged,
+  PinInstanceRequest,
   PreviewImage,
   PreviewRequest,
   Problem,
@@ -55,6 +74,9 @@ import type {
   Target,
   UntagFacesRequest,
   UserMetaUpdate,
+  VirtualStyle,
+  VirtualStyleId,
+  VirtualStylesRequest,
 } from './types';
 
 /** Settings as a response carries them: every field present. */
@@ -75,10 +97,16 @@ export interface FmClient {
   getFace(face: FaceId): Promise<FaceDetail>;
   /** One page of a face's glyph map: its characters by Unicode block, or the ones a search finds. */
   listGlyphs(req: GlyphsRequest): Promise<GlyphPage>;
+  /** One character in detail: glyph id and name, advance width, the GSUB features that produce or replace it. */
+  getGlyph(req: GlyphRequest): Promise<GlyphDetail>;
   listFamilies(req: ListFamiliesRequest): Promise<Paged<FamilySummary>>;
   getFamily(family: FamilyId): Promise<Family>;
   /** Free text and filters, grouped by family, with the count of every filter value. */
   search(req: SearchRequest): Promise<SearchResponse>;
+  /** How well one face covers some languages or text: what it lacks. */
+  checkCoverage(req: CoverageRequest): Promise<CoverageReport>;
+  /** One face's coverage per Unicode block and per language preset, complete languages first. */
+  faceCoverage(face: FaceId): Promise<FaceCoverage>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
   /** Every collection, parents before children, siblings in the user's order. */
@@ -101,12 +129,36 @@ export interface FmClient {
   untagFaces(req: UntagFacesRequest): Promise<void>;
   /** Favorite, rating (0 clears it) and notes; fields left out stay. */
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
+  /** A family's own notes; an empty string clears them. */
+  updateFamilyNotes(req: FamilyNotesUpdate): Promise<void>;
+  /** A family's declared license: type, seats, purchase date, receipt (E15.2). */
+  declareLicense(req: LicenseDeclaration): Promise<void>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
   /** A thumbnail: text rasterized in one face, cached by face hash and settings (PNG). */
   renderPreview(req: PreviewRequest): Promise<PreviewImage>;
   /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
+  /** The CSS declarations for a face's moved axes and switched features ("Copy CSS"). */
+  cssValues(req: CssValuesRequest): Promise<CssValues>;
+  /** The six body-text layout presets (Book, Columns, Magazine, Quote, Characters, Waterfall). */
+  layoutPresets(): Promise<Layout[]>;
+  /** A layout with every block value clamped into its range. */
+  clampLayout(req: Layout): Promise<Layout>;
+  /** Every layout template file (presets first); a broken file is listed with the reason. */
+  listLayouts(): Promise<LayoutEntry[]>;
+  /** One saved layout. */
+  getLayout(req: LayoutRef): Promise<SavedLayout>;
+  /** Saves a layout to its template file; the content it replaces becomes a version. */
+  saveLayout(req: SaveLayoutRequest): Promise<SavedLayout>;
+  /** Copies a layout into a new, independent template file with a new name. */
+  duplicateLayout(req: DuplicateLayoutRequest): Promise<SavedLayout>;
+  /** The saved file again, or (`toOriginal`) a preset's shipped original. */
+  revertLayout(req: RevertLayoutRequest): Promise<SavedLayout>;
+  /** The kept versions of a layout, newest first. */
+  layoutHistory(req: LayoutRef): Promise<LayoutVersion[]>;
+  /** Makes a kept version current; what it replaces is kept as a version. */
+  restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -127,6 +179,12 @@ export interface FmClient {
   undoResolution(resolution: ResolutionId): Promise<Resolution>;
   /** Every project set: named groups of faces activated together. */
   listSets(): Promise<ProjectSet[]>;
+  /** Pins an instance of a variable face as a virtual style of a manual collection or a set. */
+  pinInstance(req: PinInstanceRequest): Promise<VirtualStyle>;
+  /** The virtual styles of one manual collection or one set, A to Z. */
+  listVirtualStyles(req: VirtualStylesRequest): Promise<VirtualStyle[]>;
+  /** Deletes a virtual style; its face stays. */
+  deleteVirtualStyle(style: VirtualStyleId): Promise<void>;
   listSources(): Promise<Source[]>;
   addSource(req: AddSourceRequest): Promise<Source>;
   removeSource(source: SourceId): Promise<void>;
@@ -139,6 +197,8 @@ export interface FmClient {
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
   /** The native folder picker; `null` when the user cancels. */
   pickFolder(title: string): Promise<string | null>;
+  /** The native file picker; `null` when the user cancels. */
+  pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
 }
@@ -148,9 +208,12 @@ export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
   listGlyphs: (req) => invoke<GlyphPage>('list_glyphs', { req }),
+  getGlyph: (req) => invoke<GlyphDetail>('get_glyph', { req }),
   listFamilies: (req) => invoke<Paged<FamilySummary>>('list_families', { req }),
   getFamily: (family) => invoke<Family>('get_family', { family }),
   search: (req) => invoke<SearchResponse>('search', { req }),
+  checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
+  faceCoverage: (face) => invoke<FaceCoverage>('face_coverage', { face }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
@@ -163,9 +226,21 @@ export const tauriClient: FmClient = {
   tagFaces: (req) => invoke<Tag[]>('tag_faces', { req }),
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
+  updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
+  declareLicense: (req) => invoke<void>('declare_license', { req }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
+  cssValues: (req) => invoke<CssValues>('css_values', { req }),
+  layoutPresets: () => invoke<Layout[]>('layout_presets'),
+  clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),
+  listLayouts: () => invoke<LayoutEntry[]>('list_layouts'),
+  getLayout: (req) => invoke<SavedLayout>('get_layout', { req }),
+  saveLayout: (req) => invoke<SavedLayout>('save_layout', { req }),
+  duplicateLayout: (req) => invoke<SavedLayout>('duplicate_layout', { req }),
+  revertLayout: (req) => invoke<SavedLayout>('revert_layout', { req }),
+  layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
+  restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),
@@ -177,6 +252,9 @@ export const tauriClient: FmClient = {
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),
+  pinInstance: (req) => invoke<VirtualStyle>('pin_instance', { req }),
+  listVirtualStyles: (req) => invoke<VirtualStyle[]>('list_virtual_styles', { req }),
+  deleteVirtualStyle: (style) => invoke<void>('delete_virtual_style', { style }),
   listSources: () => invoke<Source[]>('list_sources'),
   addSource: (req) => invoke<Source>('add_source', { req }),
   removeSource: (source) => invoke<void>('remove_source', { source }),
@@ -188,6 +266,10 @@ export const tauriClient: FmClient = {
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {
     const path = await open({ directory: true, multiple: false, title });
+    return typeof path === 'string' ? path : null;
+  },
+  pickFile: async (title) => {
+    const path = await open({ directory: false, multiple: false, title });
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),

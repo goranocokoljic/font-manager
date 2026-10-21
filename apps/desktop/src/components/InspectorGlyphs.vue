@@ -7,9 +7,13 @@
 //
 // Keyboard (WAI-ARIA grid): the grid holds focus and points at the cursor cell
 // with aria-activedescendant; arrow keys move by cell and row, Home/End to the
-// ends, Enter or a click selects the glyph.
+// ends, Enter or a click selects the glyph and opens its detail below the grid
+// (Tab reaches it); Escape or its Close button closes it and returns to the grid.
+// Its "Compare with…" button opens the compare overlay (GlyphCompare) on the glyph.
+// Below, the coverage list (GlyphCoverage): a block chosen there shows that block
+// in the grid and puts focus on it.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
-import type { GlyphInfo } from '../api/types';
+import type { FeatureInfo, GlyphInfo } from '../api/types';
 import {
   GLYPH_CELL,
   codePointLabel,
@@ -20,6 +24,11 @@ import {
 } from '../glyphs/layout';
 import { scrollToShow, windowRange } from '../list/virtual';
 import { useFaceLoader } from '../preview/faceLoader';
+import CopyValue from './CopyValue.vue';
+import GlyphCompare from './GlyphCompare.vue';
+import GlyphCoverage from './GlyphCoverage.vue';
+import { useCoverageStore } from '../stores/coverage';
+import { useGlyphCompareStore } from '../stores/glyphCompare';
 import { useGlyphsStore } from '../stores/glyphs';
 import { useSelectionStore } from '../stores/selection';
 
@@ -37,6 +46,8 @@ const FALLBACK_WIDTH = 288;
 
 const selection = useSelectionStore();
 const glyphs = useGlyphsStore();
+const compare = useGlyphCompareStore();
+const coverage = useCoverageStore();
 const loader = useFaceLoader();
 
 const faceId = computed(() => selection.detail?.face.id ?? null);
@@ -60,7 +71,10 @@ watch(
   faceId,
   (id) => {
     hold(id);
-    if (id !== null) void glyphs.open(id);
+    if (id !== null) {
+      void glyphs.open(id);
+      void coverage.open(id);
+    }
   },
   { immediate: true },
 );
@@ -153,10 +167,27 @@ async function reveal(i: number): Promise<void> {
 function choose(index: number): void {
   cursor.value = index;
   const g = glyphs.item(index);
-  if (g) glyphs.select(g);
+  if (g) void glyphs.select(g);
+}
+
+/** Opens the compare overlay on the selected character. */
+function openCompare(): void {
+  const g = glyphs.selected;
+  if (g && faceId.value !== null) void compare.start(faceId.value, g.codePoint);
+}
+
+/** Closes the glyph detail and puts focus back on the grid. */
+function closeDetail(): void {
+  void glyphs.select(null);
+  viewport.value?.focus();
 }
 
 async function onKeyDown(e: KeyboardEvent): Promise<void> {
+  if (e.key === 'Escape' && glyphs.selected) {
+    e.preventDefault();
+    closeDetail();
+    return;
+  }
   if (e.key === 'Enter' || e.key === ' ') {
     if (cursor.value >= 0) {
       e.preventDefault();
@@ -204,12 +235,50 @@ watch(
 function onSearch(): void {
   void glyphs.search(searchText.value);
 }
+/** A block chosen in the coverage list: that block in the grid, focus on the grid. */
+function showBlock(name: string): void {
+  void glyphs.showBlock(name);
+  const el = viewport.value;
+  el?.scrollIntoView?.({ block: 'nearest' });
+  el?.focus();
+}
 function onBlock(e: Event): void {
   const value = (e.target as HTMLSelectElement).value;
   void glyphs.chooseBlock(value || null);
 }
 
 const sel = computed(() => glyphs.selected);
+const detail = computed(() =>
+  glyphs.detail && glyphs.detail.codePoint === sel.value?.codePoint ? glyphs.detail : null,
+);
+const detailBroken = computed(() =>
+  detail.value?.health.kind === 'broken' ? detail.value.health.reason : null,
+);
+const advance = computed(() => {
+  const d = detail.value;
+  if (!d) return glyphs.detailError ? 'unknown' : 'loading…';
+  return d.advanceWidth === null ? 'none' : `${d.advanceWidth.toLocaleString('en-US')} units`;
+});
+/** The feature lists of the detail, each with its heading and empty text. */
+const featureLists = computed(() => {
+  const d = detail.value;
+  if (!d) return [];
+  return [
+    {
+      id: 'fm-glyph-produced',
+      title: 'Produced by',
+      empty: 'No feature produces this glyph.',
+      items: d.producedBy,
+    },
+    {
+      id: 'fm-glyph-replaced',
+      title: 'Replaced by',
+      empty: 'No feature replaces this glyph.',
+      items: d.replacedBy,
+    },
+  ];
+});
+const featureName = (f: FeatureInfo) => f.name ?? 'Unregistered feature';
 const fontStyle = computed(() => ({
   fontFamily: family.value ? `"${family.value}", sans-serif` : undefined,
 }));
@@ -304,19 +373,68 @@ const noResults = computed(
           </div>
         </div>
       </div>
-      <section v-if="sel" class="detail" aria-label="Selected glyph">
-        <span class="big" :style="fontStyle" aria-hidden="true">{{ charOf(sel) }}</span>
-        <dl>
-          <dt>Code point</dt>
-          <dd>{{ codePointLabel(sel.codePoint) }}</dd>
-          <dt>Glyph name</dt>
-          <dd>{{ sel.name ?? 'none' }}</dd>
-          <dt>Glyph id</dt>
-          <dd>{{ sel.glyphId }}</dd>
-          <dt>Block</dt>
-          <dd>{{ sel.block }}</dd>
-        </dl>
+      <section
+        v-if="sel"
+        class="detail"
+        aria-label="Selected glyph"
+        @keydown.esc.stop.prevent="closeDetail"
+      >
+        <div class="detail-head">
+          <span class="big" :style="fontStyle" aria-hidden="true">{{ charOf(sel) }}</span>
+          <dl>
+            <dt id="fm-glyph-cp">Code point</dt>
+            <dd aria-labelledby="fm-glyph-cp">{{ codePointLabel(sel.codePoint) }}</dd>
+            <dt id="fm-glyph-name">Glyph name</dt>
+            <dd aria-labelledby="fm-glyph-name">{{ sel.name ?? 'none' }}</dd>
+            <dt id="fm-glyph-id">Glyph id</dt>
+            <dd aria-labelledby="fm-glyph-id">{{ sel.glyphId }}</dd>
+            <dt id="fm-glyph-advance">Advance width</dt>
+            <dd aria-labelledby="fm-glyph-advance">{{ advance }}</dd>
+            <dt id="fm-glyph-block">Block</dt>
+            <dd aria-labelledby="fm-glyph-block">{{ sel.block }}</dd>
+          </dl>
+          <button
+            type="button"
+            class="close"
+            aria-label="Close glyph detail"
+            title="Close (Esc)"
+            @click="closeDetail"
+          >
+            ×
+          </button>
+        </div>
+        <div class="detail-actions">
+          <button
+            type="button"
+            class="action"
+            aria-haspopup="dialog"
+            title="Overlay this character with the same one in another font"
+            @click="openCompare"
+          >
+            Compare with…
+          </button>
+        </div>
+        <p v-if="glyphs.detailError" class="muted" role="alert">
+          {{ glyphs.detailError.message }}
+        </p>
+        <p v-else-if="detailBroken" class="muted" role="status">
+          The detail of this glyph cannot be read: {{ detailBroken }}
+        </p>
+        <template v-else>
+          <div v-for="list in featureLists" :key="list.id" class="features">
+            <h3 :id="list.id">{{ list.title }}</h3>
+            <ul v-if="list.items.length" :aria-labelledby="list.id">
+              <li v-for="f in list.items" :key="f.tag">
+                <CopyValue :value="f.tag" label="feature tag" />
+                <span class="muted">{{ featureName(f) }}</span>
+              </li>
+            </ul>
+            <p v-else class="muted">{{ list.empty }}</p>
+          </div>
+        </template>
       </section>
+      <GlyphCompare v-if="compare.open" />
+      <GlyphCoverage @block="showBlock" />
       <p v-if="glyphs.unicodeVersion" class="muted note">
         Blocks from Unicode {{ glyphs.unicodeVersion }}.
       </p>
@@ -411,8 +529,69 @@ select.field {
 }
 .detail {
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.detail-head {
+  display: flex;
   gap: 16px;
   align-items: center;
+}
+.detail-head dl {
+  flex: 1;
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+}
+.action {
+  padding: 2px 8px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 6px;
+  background: var(--fm-bg);
+  color: var(--fm-fg);
+  font: inherit;
+  white-space: nowrap;
+}
+.action:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+.close {
+  align-self: flex-start;
+  padding: 0 6px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 6px;
+  background: var(--fm-bg);
+  color: var(--fm-fg);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+}
+.close:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
+}
+.features h3 {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.features ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.features li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.features li :deep(.copy) {
+  font-family: ui-monospace, monospace;
 }
 .big {
   flex: none;

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 // One preview row: the face's name in the UI font, and the sample text in the
 // face itself, rendered by the webview from the face's file (an `@font-face`
-// registered by the shared face loader). Variable faces render at their
-// default coordinates, or at `variations`, through `font-variation-settings`.
+// registered by the shared face loader). Variable faces render at `variations`
+// (a virtual style's coordinates) when given, else at the coordinates set in the
+// inspector's Axes tab (the axes store), else at their defaults, through
+// `font-variation-settings`; moving an axis restyles the row, the font stays loaded.
 // Features switched in the inspector's Features tab apply through
 // `font-feature-settings`.
 // The list passes the view's preview settings (size, spacing, alignment, color).
@@ -11,6 +13,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { Axis, AxisValue, FaceId, FaceSummary, SampleFallback } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
+import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
 import { faceAxes, variationSettings } from '../preview/variations';
 
@@ -51,6 +54,7 @@ type LoadState = 'loading' | 'ready' | 'failed';
 
 const loader = useFaceLoader();
 const features = useFeaturesStore();
+const axesSet = useAxesStore();
 const state = ref<LoadState>('loading');
 const axes = ref<Axis[]>([]);
 let held: FaceId | null = null;
@@ -103,7 +107,10 @@ const sampleStyle = computed(() => ({
   letterSpacing: `${props.trackingEm}em`,
   textAlign: props.align,
   color: props.color ?? undefined,
-  fontVariationSettings: variationSettings(axes.value, props.variations),
+  fontVariationSettings: variationSettings(
+    axes.value,
+    props.variations.length ? props.variations : (axesSet.values(props.face.id) ?? []),
+  ),
   fontFeatureSettings: features.settings(props.face.id),
 }));
 

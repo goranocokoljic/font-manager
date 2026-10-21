@@ -14,7 +14,9 @@ import {
   ariaSort,
   dateText,
   formatBadges,
-  licenseBadge,
+  licenseBadges,
+  OPEN_LICENSE_BADGE,
+  openLicenseName,
   visibleColumns,
   weightPosition,
   weightRangeText,
@@ -24,7 +26,7 @@ import {
 import { rowActivation } from '../list/activation';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
-import { rowLabel, type ListRow } from '../list/rows';
+import { rowLabel, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { useFontListStore } from '../stores/fontList';
@@ -215,6 +217,8 @@ interface Cell {
   /** Plain text of the cell (also its accessible text). */
   text: string;
   badges?: string[];
+  /** Tooltip of the "Open license" badge: the license's full name. */
+  openLicense?: string;
   /** Weight line dots: position in percent, italic dots are hollow. */
   dots?: { left: number; italic: boolean }[];
   /** Weight line span of a variable family, in percent. */
@@ -228,7 +232,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
       case 'activation':
         return { text: f.active ? 'Active' : 'Inactive' };
       case 'name':
-        return { text: f.style };
+        return { text: styleName(row) };
       case 'weightLine':
         return {
           text: String(f.weight),
@@ -271,14 +275,18 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
       return { text: fam.foundry ?? '' };
     case 'location':
       return { text: fam.location ?? '' };
-    case 'license': {
-      const badge = licenseBadge(fam);
-      return { text: '', badges: badge ? [badge] : [] };
-    }
+    case 'license':
+      return {
+        text: '',
+        badges: licenseBadges(fam),
+        openLicense: openLicenseName(fam.openLicense),
+      };
     case 'added':
       return { text: dateText(fam.added) };
     case 'tags':
       return { text: (fam.tags ?? []).join(', ') };
+    case 'notes':
+      return { text: fam.notes ?? '' };
   }
 }
 </script>
@@ -315,7 +323,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           }"
           role="columnheader"
           :aria-colindex="c + 1"
-          :aria-sort="ariaSort(config, col.id)"
+          :aria-sort="col.sortKey ? ariaSort(config, col.id) : undefined"
           :data-column="col.id"
           draggable="true"
           @dragstart="onDragStart(col, $event)"
@@ -324,7 +332,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           @drop="onDrop(col, $event)"
           @dragend="onDragEnd"
         >
+          <span v-if="!col.sortKey" class="sort">{{ col.label }}</span>
           <button
+            v-else
             type="button"
             class="sort"
             :title="`Sort by ${col.label}`"
@@ -412,9 +422,14 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
               <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="cellOf(item.row, col.id).badges">
-              <span v-for="b in cellOf(item.row, col.id).badges" :key="b" class="badge">{{
-                b
-              }}</span>
+              <span
+                v-for="b in cellOf(item.row, col.id).badges"
+                :key="b"
+                class="badge"
+                :class="{ good: b === OPEN_LICENSE_BADGE }"
+                :title="b === OPEN_LICENSE_BADGE ? cellOf(item.row, col.id).openLicense : undefined"
+                >{{ b }}</span
+              >
             </template>
             <span v-else class="text" :title="cellOf(item.row, col.id).text">{{
               cellOf(item.row, col.id).text
@@ -480,6 +495,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
 .sort:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
+}
+span.sort {
+  cursor: default;
 }
 .th[aria-sort='ascending'] .sort,
 .th[aria-sort='descending'] .sort {
@@ -589,6 +607,10 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
   color: var(--fm-muted);
   font-size: 10.5px;
   font-weight: 600;
+}
+.badge.good {
+  border-color: var(--fm-success);
+  color: var(--fm-success);
 }
 .visually-hidden {
   position: absolute;

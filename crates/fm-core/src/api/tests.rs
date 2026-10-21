@@ -5,9 +5,10 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
-use fm_api::common::{AxisValue, Embedding, FontFormat, Health, Page};
+use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::library::{
-    FamilyActivation, FamilySort, GlyphsRequest, OpenLicense, ProblemKind, TrashMoveStatus,
+    FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
+    ProblemKind, TrashMoveStatus,
 };
 use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
@@ -78,7 +79,8 @@ impl Lib {
             Arc::clone(&activator) as Arc<dyn FontActivator>,
             SettingsStore::new(&paths),
             Some(previews),
-        );
+        )
+        .with_layouts_in(paths.layouts_dir());
         Self {
             dir,
             api,
@@ -319,6 +321,104 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     assert_eq!(err.code, ErrorCode::NotFound);
     let err = lib.api.get_face(FaceId(99_999)).expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+/// E10.4 criteria 1 and 2: `get_face` names stylistic sets and character
+/// variants with the font's own names, read from the index: the file is gone
+/// when `get_face` runs, so it cannot have been opened again.
+#[test]
+fn css_values_come_from_the_faces_own_axes_and_features() {
+    let (lib, _, _) = Lib::scanned("api-css-values");
+    let face = FaceId(lib.family("Asap Sharp").id.0);
+    let detail = lib.api.get_face(face).expect("face");
+    let wdth = detail.axes.iter().find(|a| a.tag == "wdth").expect("wdth");
+    let css = lib
+        .api
+        .css_values(CssValuesRequest {
+            face,
+            variations: vec![
+                AxisValue {
+                    tag: "wght".into(),
+                    value: 650.0001,
+                },
+                AxisValue {
+                    tag: "wdth".into(),
+                    value: wdth.default,
+                },
+            ],
+            features: vec![
+                FeatureSetting {
+                    tag: "liga".into(),
+                    on: false,
+                },
+                FeatureSetting {
+                    tag: "kern".into(),
+                    on: true,
+                },
+            ],
+        })
+        .expect("css");
+    // wdth sits at its default and kern is on by default: neither is written.
+    assert_eq!(
+        css.variation_settings,
+        r#"font-variation-settings: "wght" 650;"#
+    );
+    assert_eq!(css.feature_settings, r#"font-feature-settings: "liga" 0;"#);
+    let err = lib
+        .api
+        .css_values(CssValuesRequest {
+            face: FaceId(u32::MAX),
+            variations: Vec::new(),
+            features: Vec::new(),
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn get_face_names_stylistic_sets_from_the_index() {
+    let (lib, source, _) = Lib::scanned("api-feature-names");
+    let file = lib.root.join("calsans").join("CalSans-Regular.ttf");
+    std::fs::create_dir_all(file.parent().expect("folder")).expect("folder");
+    std::fs::copy(
+        fixtures().join("google-repo/calsans/CalSans-Regular.ttf"),
+        &file,
+    )
+    .expect("copy");
+    lib.scan(Some(source.id), true);
+    let family = lib
+        .api
+        .get_family(lib.family("Cal Sans").id)
+        .expect("family");
+    std::fs::remove_file(&file).expect("remove the file");
+
+    let detail = lib.api.get_face(family.faces[0].id).expect("detail");
+    let feature = |tag: &str| {
+        detail
+            .features
+            .iter()
+            .find(|f| f.tag == tag)
+            .unwrap_or_else(|| panic!("no {tag}: {:?}", detail.features))
+    };
+    assert_eq!(feature("ss01").name.as_deref(), Some("Futura Alternates"));
+    assert_eq!(feature("cv01").name.as_deref(), Some("Futura-style C"));
+    assert_eq!(feature("cv05").name.as_deref(), Some("Futura-style zero"));
+    let ss01 = feature("ss01");
+    assert!(!ss01.automatic && !ss01.default_on);
+    // Registered features keep their registry names.
+    assert_eq!(feature("kern").name.as_deref(), Some("Kerning"));
+
+    // A face whose ss01 the font does not name keeps the generic name.
+    let asap = lib
+        .api
+        .get_face(FaceId(lib.family("Asap Sharp").id.0))
+        .expect("asap");
+    let ss01 = asap
+        .features
+        .iter()
+        .find(|f| f.tag == "ss01")
+        .expect("ss01");
+    assert_eq!(ss01.name.as_deref(), Some("Stylistic set 1"));
 }
 
 #[test]
@@ -574,6 +674,7 @@ fn pinned_styles_survive_a_rebuild_and_reach_the_sidecar() {
     let brand = lib
         .api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Brand".into(),
             parent: None,
             rules: None,
@@ -869,6 +970,7 @@ fn collections_tags_metadata_and_sets_use_the_index() {
     let collection = lib
         .api
         .create_collection(CreateCollectionRequest {
+            rule_group: None,
             name: "Headlines".into(),
             parent: None,
             rules: None,
@@ -1123,4 +1225,648 @@ fn the_glyph_map_reads_the_face_file_by_block_and_search() {
         page: Page::default(),
     });
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}
+
+#[test]
+fn the_glyph_detail_reads_the_face_file() {
+    let (lib, _, _) = Lib::scanned("api-glyph-detail");
+    let archivo = lib.family("Archivo");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let fi = lib
+        .api
+        .get_glyph(GlyphRequest {
+            face,
+            code_point: 0xFB01,
+        })
+        .expect("ﬁ");
+    assert_eq!(fi.health, Health::Ok);
+    assert_eq!(fi.name.as_deref(), Some("fi"));
+    assert!(fi.advance_width.is_some_and(|w| w > 0));
+    assert_eq!(
+        fi.produced_by
+            .iter()
+            .map(|f| f.tag.as_str())
+            .collect::<Vec<_>>(),
+        ["liga"]
+    );
+    let unmapped = lib.api.get_glyph(GlyphRequest {
+        face,
+        code_point: 0x10_FFFD,
+    });
+    assert_eq!(unmapped.expect_err("unmapped").code, ErrorCode::NotFound);
+    let unknown = lib.api.get_glyph(GlyphRequest {
+        face: FaceId(9999),
+        code_point: 0x41,
+    });
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}
+
+/// Every file under `dir`, relative, sorted.
+fn files_under(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for entry in std::fs::read_dir(&d).expect("read dir") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                stack.push(path);
+            } else {
+                out.push(path.strip_prefix(dir).expect("under dir").to_path_buf());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn a_glyph_exports_as_svg_text_without_writing_a_file() {
+    let (lib, _, _) = Lib::scanned("api-glyph-svg");
+    let archivo = lib.family("Archivo");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let before = files_under(&lib.root);
+    let svg = lib
+        .api
+        .export_glyph_svg(GlyphSvgRequest {
+            face,
+            code_point: 'A' as u32,
+            variations: Vec::new(),
+        })
+        .expect("A");
+    assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 "));
+    assert!(svg.contains("<path d=\"M"), "{svg}");
+    assert_eq!(files_under(&lib.root), before);
+
+    let unmapped = lib.api.export_glyph_svg(GlyphSvgRequest {
+        face,
+        code_point: 0x10_FFFD,
+        variations: Vec::new(),
+    });
+    assert_eq!(unmapped.expect_err("unmapped").code, ErrorCode::NotFound);
+    let unknown = lib.api.export_glyph_svg(GlyphSvgRequest {
+        face: FaceId(9999),
+        code_point: 0x41,
+        variations: Vec::new(),
+    });
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}
+
+#[test]
+fn face_and_family_notes_survive_a_rescan_and_a_rebuild() {
+    let (lib, _, _) = Lib::scanned("api-notes");
+    let barlow = lib.family("Barlow");
+    let face = FaceId(barlow.id.0);
+    let rx = lib.api.subscribe();
+    lib.api
+        .update_family_notes(FamilyNotesUpdate {
+            family: barlow.id,
+            notes: "Licensed for the 2026 rebrand".into(),
+        })
+        .expect("family notes");
+    // The list hears of it: every face of the family is updated.
+    let family_faces = lib.api.get_family(barlow.id).expect("family").faces;
+    assert!(matches!(
+        rx.recv_timeout(WAIT),
+        Ok(Event::LibraryChanged { updated, .. }) if updated.len() == family_faces.len()
+            && updated.contains(&face)
+    ));
+    lib.api
+        .update_user_meta(UserMetaUpdate {
+            faces: vec![face],
+            notes: Some("Use for headlines only".into()),
+            ..UserMetaUpdate::default()
+        })
+        .expect("face notes");
+
+    let check = |when: &str| {
+        assert_eq!(
+            lib.family("Barlow").notes.as_deref(),
+            Some("Licensed for the 2026 rebrand"),
+            "{when}"
+        );
+        assert_eq!(lib.family("Bebas Neue").notes, None, "{when}");
+        let detail = lib.api.get_face(face).expect("detail");
+        assert_eq!(
+            detail.notes.as_deref(),
+            Some("Use for headlines only"),
+            "{when}"
+        );
+        assert_eq!(
+            detail.family_notes.as_deref(),
+            Some("Licensed for the 2026 rebrand"),
+            "{when}"
+        );
+    };
+    check("set");
+    lib.scan(None, false);
+    check("after a rescan");
+    rebuild(&lib);
+    check("after a rebuild");
+
+    // Empty strings clear both.
+    lib.api
+        .update_family_notes(FamilyNotesUpdate {
+            family: barlow.id,
+            notes: String::new(),
+        })
+        .expect("cleared");
+    lib.api
+        .update_user_meta(UserMetaUpdate {
+            faces: vec![face],
+            notes: Some(String::new()),
+            ..UserMetaUpdate::default()
+        })
+        .expect("cleared");
+    assert_eq!(lib.family("Barlow").notes, None);
+    let detail = lib.api.get_face(face).expect("detail");
+    assert_eq!((detail.notes, detail.family_notes), (None, None));
+    assert_eq!(
+        lib.api
+            .update_family_notes(FamilyNotesUpdate {
+                family: FamilyId(9999),
+                notes: "x".into(),
+            })
+            .map_err(|e| e.code),
+        Err(ErrorCode::NotFound)
+    );
+}
+
+/// E11.3: the coverage list comes from the stored `cmap`: its blocks agree
+/// with the glyph map read from the file, in Unicode order; languages are
+/// complete first, then partial by share, and carry `locl` from the scan.
+#[test]
+fn the_coverage_list_counts_blocks_and_languages_of_a_face() {
+    let (lib, _, _) = Lib::scanned("api-face-coverage");
+    let face_of = |name: &str| {
+        lib.api
+            .get_family(lib.family(name).id)
+            .expect("family")
+            .faces[0]
+            .id
+    };
+    for name in ["Archivo", "Asap Sharp", "Bebas Neue"] {
+        let face = face_of(name);
+        let got = lib.api.face_coverage(face).expect("coverage");
+        assert_eq!(got.face, face);
+        let glyphs = lib
+            .api
+            .list_glyphs(GlyphsRequest {
+                face,
+                block: None,
+                query: None,
+                page: Page::default(),
+            })
+            .expect("glyphs");
+        let from_file: Vec<(String, u32)> = glyphs
+            .blocks
+            .iter()
+            .filter(|b| b.name != crate::glyphs::NO_BLOCK)
+            .map(|b| (b.name.clone(), b.count))
+            .collect();
+        let listed: Vec<(String, u32)> = got
+            .blocks
+            .iter()
+            .map(|b| (b.name.clone(), b.covered))
+            .collect();
+        assert_eq!(listed, from_file, "{name}: the blocks of the glyph map");
+        assert!(
+            got.blocks.windows(2).all(|w| w[0].last < w[1].first),
+            "{name}: Unicode order"
+        );
+        assert!(
+            got.blocks
+                .iter()
+                .all(|b| b.covered > 0 && b.covered <= b.assigned),
+            "{name}"
+        );
+        assert_eq!(got.blocks[0].name, "Basic Latin");
+        assert_eq!(got.blocks[0].assigned, 128);
+        let complete = |l: &fm_api::search::FaceLanguageCoverage| l.covered == l.total;
+        let first_partial = got
+            .languages
+            .iter()
+            .position(|l| !complete(l))
+            .unwrap_or(got.languages.len());
+        assert!(first_partial > 0, "{name}: English is complete");
+        assert!(
+            got.languages[first_partial..].iter().all(|l| !complete(l)),
+            "{name}: complete first"
+        );
+        let shares: Vec<f64> = got.languages[first_partial..]
+            .iter()
+            .map(|l| f64::from(l.covered) / f64::from(l.total))
+            .collect();
+        assert!(
+            shares.windows(2).all(|w| w[0] >= w[1]),
+            "{name}: {shares:?}"
+        );
+    }
+    let bebas = lib.api.face_coverage(face_of("Bebas Neue")).expect("bebas");
+    let vi = bebas.languages.iter().find(|l| l.code == "vi").expect("vi");
+    assert!(
+        vi.covered > 0 && vi.covered < vi.total,
+        "Bebas Neue lacks Vietnamese tones: {vi:?}"
+    );
+    assert_eq!(vi.name, "Vietnamese");
+    let asap = lib.api.face_coverage(face_of("Asap Sharp")).expect("asap");
+    let ro = asap.languages.iter().find(|l| l.code == "ro").expect("ro");
+    assert!(ro.has_locl && ro.covered == ro.total, "{ro:?}");
+    let unknown = lib.api.face_coverage(FaceId(99_999));
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}
+
+/// A [`Lib`] scanned, with a trash and an app-data receipts folder.
+fn licensed(label: &str) -> (Lib, PathBuf, PathBuf) {
+    let (lib, _, _) = Lib::scanned(label);
+    let trash = lib.dir.path().join("trash");
+    let receipts = lib.paths.data.join(crate::receipt::RECEIPTS_DIR);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_trash(Arc::new(MockTrash::new(&trash)))
+            .with_receipts_in(receipts.clone()),
+        ..lib
+    };
+    (lib, trash, receipts)
+}
+
+/// A receipt the user picked, outside the library.
+fn picked(lib: &Lib, name: &str, text: &str) -> PathBuf {
+    let dir = lib.dir.path().join("Downloads");
+    std::fs::create_dir_all(&dir).expect("downloads");
+    let path = dir.join(name);
+    std::fs::write(&path, text).expect("receipt");
+    path
+}
+
+/// The contents of every file in the mock trash, sorted.
+fn trashed(trash: &Path) -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(trash)
+        .map(|dir| {
+            dir.filter_map(Result::ok)
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_none_or(|x| x != "info"))
+                .map(|p| std::fs::read_to_string(p).expect("trashed"))
+                .collect()
+        })
+        .unwrap_or_default();
+    out.sort();
+    out
+}
+
+fn declaration(family: FamilyId) -> LicenseDeclaration {
+    LicenseDeclaration {
+        family,
+        license_type: Some(LicenseType::Desktop),
+        seats: Some(3),
+        purchase_date: Some("2026-03-01".into()),
+        receipt: ReceiptChange::Keep,
+    }
+}
+
+#[test]
+fn a_declared_license_survives_a_rescan_and_a_rebuild() {
+    let (lib, _, _) = licensed("api-license");
+    let barlow = lib.family("Barlow");
+    let rx = lib.api.subscribe();
+    lib.api
+        .declare_license(declaration(barlow.id))
+        .expect("declare");
+    let family_faces = lib.api.get_family(barlow.id).expect("family").faces;
+    assert!(matches!(
+        rx.recv_timeout(WAIT),
+        Ok(Event::LibraryChanged { updated, .. }) if updated.len() == family_faces.len()
+    ));
+    let check = |when: &str| {
+        let barlow = lib.family("Barlow");
+        assert_eq!(
+            barlow.declared_license,
+            Some(LicenseType::Desktop),
+            "{when}"
+        );
+        assert_eq!(lib.family("Bebas Neue").declared_license, None, "{when}");
+        for face in &lib.api.get_family(barlow.id).expect("family").faces {
+            let license = lib.api.get_face(face.id).expect("detail").license;
+            assert_eq!(license.declared, Some(LicenseType::Desktop), "{when}");
+            assert_eq!(license.seats, Some(3), "{when}");
+            assert_eq!(
+                license.purchase_date.as_deref(),
+                Some("2026-03-01"),
+                "{when}"
+            );
+        }
+    };
+    check("declared");
+    lib.scan(None, false);
+    check("after a rescan");
+    rebuild(&lib);
+    check("after a rebuild");
+
+    // Every field clears.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: lib.family("Barlow").id,
+            license_type: None,
+            seats: None,
+            purchase_date: Some(String::new()),
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("cleared");
+    let barlow = lib.family("Barlow");
+    assert_eq!(barlow.declared_license, None);
+    let license = lib
+        .api
+        .get_face(FaceId(barlow.id.0))
+        .expect("detail")
+        .license;
+    assert_eq!(
+        (
+            license.declared,
+            license.seats,
+            license.purchase_date,
+            license.receipt
+        ),
+        (None, None, None, None)
+    );
+    assert_eq!(
+        lib.api
+            .declare_license(declaration(FamilyId(9999)))
+            .map_err(|e| e.code),
+        Err(ErrorCode::NotFound)
+    );
+}
+
+#[test]
+fn a_receipt_is_copied_to_the_place_picked_and_a_replaced_copy_goes_to_the_trash() {
+    let (lib, trash, receipts) = licensed("api-receipt");
+    let barlow = lib.family("Barlow").id;
+    let invoice = picked(&lib, "invoice.pdf", "first invoice");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: invoice.display().to_string(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..declaration(barlow)
+        })
+        .expect("attach next to the font");
+    let next_to_font = lib
+        .root
+        .join(crate::sidecar::SIDECAR_DIR)
+        .join(crate::receipt::RECEIPTS_DIR)
+        .join("invoice.pdf");
+    let receipt = |lib: &Lib| {
+        lib.api
+            .get_face(FaceId(barlow.0))
+            .expect("detail")
+            .license
+            .receipt
+            .map(PathBuf::from)
+    };
+    assert_eq!(receipt(&lib), Some(next_to_font.clone()));
+    assert_eq!(
+        std::fs::read_to_string(&next_to_font).expect("copy"),
+        "first invoice"
+    );
+    // Copied, never moved.
+    assert_eq!(
+        std::fs::read_to_string(&invoice).expect("picked"),
+        "first invoice"
+    );
+    // The family's sidecar carries it, relative to its folder.
+    let sidecar = std::fs::read_to_string(
+        lib.root
+            .join(crate::sidecar::SIDECAR_DIR)
+            .join(crate::sidecar::file_name("Barlow")),
+    )
+    .expect("sidecar");
+    assert!(
+        sidecar.contains("\"receipt\": \"receipts/invoice.pdf\""),
+        "{sidecar}"
+    );
+
+    // Changing the rest keeps the receipt.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            license_type: Some(LicenseType::Web),
+            ..declaration(barlow)
+        })
+        .expect("keep");
+    assert_eq!(receipt(&lib), Some(next_to_font.clone()));
+    assert!(trashed(&trash).is_empty());
+
+    // A new receipt in the data folder replaces it: the old copy goes to
+    // the trash.
+    let second = picked(&lib, "invoice-2026.pdf", "second invoice");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: second.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        })
+        .expect("attach in app data");
+    let in_app_data = receipts.join("invoice-2026.pdf");
+    assert_eq!(receipt(&lib), Some(in_app_data.clone()));
+    assert!(!next_to_font.exists());
+    assert_eq!(trashed(&trash), ["first invoice"]);
+
+    // Clearing moves the copy to the trash too; the picked files stay.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Clear,
+            ..declaration(barlow)
+        })
+        .expect("clear");
+    assert_eq!(receipt(&lib), None);
+    assert!(!in_app_data.exists());
+    assert_eq!(trashed(&trash), ["first invoice", "second invoice"]);
+    assert!(invoice.exists() && second.exists());
+}
+
+#[test]
+fn a_bad_date_negative_seats_or_a_missing_receipt_is_an_invalid_request() {
+    let (lib, _, receipts) = licensed("api-license-invalid");
+    let barlow = lib.family("Barlow").id;
+    let missing = lib.dir.path().join("Downloads").join("nope.pdf");
+    let attempts = [
+        LicenseDeclaration {
+            purchase_date: Some("2026-02-30".into()),
+            ..declaration(barlow)
+        },
+        LicenseDeclaration {
+            purchase_date: Some("March 1st".into()),
+            ..declaration(barlow)
+        },
+        LicenseDeclaration {
+            seats: Some(-1),
+            ..declaration(barlow)
+        },
+        LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: missing.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        },
+    ];
+    for req in attempts {
+        let err = lib.api.declare_license(req.clone()).expect_err("invalid");
+        assert_eq!(err.code, ErrorCode::InvalidRequest, "{req:?}");
+        assert!(!err.message.is_empty());
+    }
+    // Nothing was stored or copied.
+    assert_eq!(lib.family("Barlow").declared_license, None);
+    assert!(!receipts.exists());
+}
+
+#[test]
+fn a_receipt_whose_old_copy_cannot_be_trashed_changes_nothing() {
+    let (lib, _, receipts) = licensed("api-receipt-refused");
+    let trash = Arc::new(MockTrash::new(lib.dir.path().join("trash")));
+    let lib = Lib {
+        api: lib.api.with_trash(Arc::clone(&trash) as Arc<dyn Trash>),
+        ..lib
+    };
+    let barlow = lib.family("Barlow").id;
+    let first = picked(&lib, "a.pdf", "a");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: first.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        })
+        .expect("attach");
+    let kept = receipts.join("a.pdf");
+    trash.refuse(&kept);
+    let second = picked(&lib, "b.pdf", "b");
+    let err = lib
+        .api
+        .declare_license(LicenseDeclaration {
+            license_type: Some(LicenseType::Trial),
+            receipt: ReceiptChange::Attach {
+                path: second.display().to_string(),
+                place: ReceiptPlace::AppData,
+            },
+            ..declaration(barlow)
+        })
+        .expect_err("refused");
+    assert!(err.message.contains("trash"), "{err:?}");
+    let license = lib.api.get_face(FaceId(barlow.0)).expect("detail").license;
+    assert_eq!(license.declared, Some(LicenseType::Desktop));
+    assert_eq!(license.receipt.map(PathBuf::from), Some(kept.clone()));
+    assert!(kept.exists());
+    // The copy just made went to the trash, not left behind.
+    assert!(!receipts.join("b.pdf").exists());
+    assert!(second.exists());
+}
+
+#[test]
+fn a_receipt_cannot_be_kept_next_to_a_font_in_a_folder_that_is_not_there() {
+    let (lib, _, _) = licensed("api-receipt-offline");
+    let barlow = lib.family("Barlow").id;
+    let invoice = picked(&lib, "invoice.pdf", "x");
+    // The library folder goes offline (renamed away): the index keeps it.
+    let away = lib.dir.path().join("Library-offline");
+    std::fs::rename(&lib.root, &away).expect("offline");
+    let err = lib
+        .api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: invoice.display().to_string(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..declaration(barlow)
+        })
+        .expect_err("offline");
+    std::fs::rename(&away, &lib.root).expect("back");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert!(err.message.contains("data folder"), "{err:?}");
+}
+
+#[test]
+fn layouts_are_the_core_presets_and_come_back_clamped() {
+    let lib = Lib::new("api-layout");
+    assert_eq!(
+        lib.api.layout_presets().expect("presets"),
+        layout::presets()
+    );
+    let mut wild = layout::preset(fm_api::layout::LayoutPreset::Quote);
+    wild.blocks[0].size_pt = 2_000.0;
+    wild.blocks[1].tracking = f32::NAN;
+    let got = lib.api.clamp_layout(wild).expect("clamp");
+    assert_eq!(got.blocks[0].size_pt, 600.0);
+    assert_eq!(got.blocks[1].tracking, 0.0);
+}
+
+#[test]
+fn layout_files_live_in_the_app_layouts_folder_through_the_api() {
+    use fm_api::layout::{
+        DuplicateLayoutRequest, LayoutRef, RestoreLayoutRequest, RevertLayoutRequest,
+        SaveLayoutRequest,
+    };
+    let lib = Lib::new("api-layout-files");
+    let listed = lib.api.list_layouts().expect("list");
+    assert_eq!(listed.len(), 6);
+    assert!(lib.paths.layouts_dir().join("book.json").is_file());
+
+    let book = lib
+        .api
+        .get_layout(LayoutRef { id: "book".into() })
+        .expect("get")
+        .layout;
+    let mut bigger = book.clone();
+    bigger.blocks[0].size_pt = 9_000.0;
+    let saved = lib
+        .api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: bigger,
+        })
+        .expect("save");
+    assert_eq!(
+        saved.layout.blocks[0].size_pt, 600.0,
+        "clamped before writing"
+    );
+    let history = lib
+        .api
+        .layout_history(LayoutRef { id: "book".into() })
+        .expect("history");
+    assert_eq!(history.len(), 1);
+    let restored = lib
+        .api
+        .restore_layout(RestoreLayoutRequest {
+            id: "book".into(),
+            number: history[0].number,
+        })
+        .expect("restore");
+    assert_eq!(restored.layout, book);
+
+    let copy = lib
+        .api
+        .duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: None,
+        })
+        .expect("duplicate");
+    assert!(
+        lib.paths
+            .layouts_dir()
+            .join(format!("{}.json", copy.id))
+            .is_file()
+    );
+    let reset = lib
+        .api
+        .revert_layout(RevertLayoutRequest {
+            id: copy.id,
+            to_original: true,
+        })
+        .expect("reset");
+    assert_eq!(
+        reset.layout.blocks,
+        layout::preset(fm_api::layout::LayoutPreset::Book).blocks
+    );
 }

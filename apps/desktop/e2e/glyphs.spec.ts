@@ -85,9 +85,35 @@ test('arrow keys move between cells, Enter and a click select', async ({ page })
   await expect(excl).toHaveAttribute('aria-selected', 'false');
 });
 
+test('a glyph selected by keyboard opens its detail with code point, advance and features', async ({
+  page,
+}) => {
+  const panel = await openGlyphs(page, { cjk: false });
+  await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0061');
+  const grid = panel.getByRole('grid', { name: 'Glyphs' });
+  await grid.focus();
+  await page.keyboard.press('Enter');
+  const detail = panel.getByRole('region', { name: 'Selected glyph' });
+  await expect(detail.getByLabel('Code point', { exact: true })).toHaveText('U+0061');
+  await expect(detail.getByLabel('Advance width', { exact: true })).toHaveText(/^\d[\d,]* units$/);
+  await expect(detail.getByLabel('Glyph name', { exact: true })).toHaveText('a');
+  await expect(detail.getByRole('list', { name: 'Replaced by' })).toContainText('Small capitals');
+  // Tab reaches the detail: Close, Compare with…, then the feature tags.
+  await page.keyboard.press('Tab');
+  await expect(detail.getByRole('button', { name: 'Close glyph detail' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(detail.getByRole('button', { name: 'Compare with…' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(detail.getByRole('button', { name: 'Copy feature tag: smcp' })).toBeFocused();
+  // Escape closes it and returns to the grid.
+  await page.keyboard.press('Escape');
+  await expect(detail).toBeHidden();
+  await expect(grid).toBeFocused();
+});
+
 /** WCAG contrast ratio of the field's border against the page background. */
 const borderContrast = (page: Page, name: string) =>
-  page.getByLabel(name).evaluate((el) => {
+  page.getByLabel(name, { exact: true }).evaluate((el) => {
     const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
     const lum = (c: string) => {
       const [r, g, b] = rgb(c).map((v) => {

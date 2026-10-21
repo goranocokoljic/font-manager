@@ -1,0 +1,19 @@
+{
+  "id": "thin-lines-that-carry-meaning-must-reach-3-1-as-rendered-not",
+  "title": "Thin lines that carry meaning must reach 3:1 as rendered, not only by color",
+  "category": "accessibility",
+  "rule": "When a drawing uses thin lines to convey information (metric guides, baselines, chart rules, SVG strokes), the rendered pixels must reach 3:1 against the background in every theme, not only the nominal stroke color. A 1 px stroke centred on a whole-pixel coordinate is anti-aliased over two device rows at half strength at a device pixel ratio of 1 (about 2:1 for a color that is 4.8:1 at full strength). Use a 2 px stroke or put 1 px lines on half pixels, and add a Playwright check that rasterizes the lines at the page's pixel ratio and measures the strongest pixel's contrast under both color schemes.",
+  "rationale": "E11.4 (#102): the glyph compare overlay drew x-height and cap-height guides as 1 px SVG lines on integer y; the screenshots showed them at 2.06:1 light and 1.79:1 dark.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    102
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/**/*.css"
+  ],
+  "first_seen": "2026-10-20T20:11:57.623Z",
+  "last_seen": "2026-10-20T20:11:57.623Z"
+}

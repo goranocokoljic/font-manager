@@ -20,7 +20,7 @@
 //!   `Unsupported` error with a message for the user, never a panic.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -31,25 +31,33 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::export::{
-    ExportService, ExportWebRequest, ExportWebResponse, LicenseInventory, LicenseInventoryRequest,
+    ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
+    LicenseInventoryRequest,
+};
+use fm_api::layout::{
+    DuplicateLayoutRequest, Layout, LayoutEntry, LayoutRef, LayoutService, LayoutVersion,
+    RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphPage,
-    GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform,
-    Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
+    GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
+    ListFamiliesRequest, Platform, Problem, Resolution, ScanRequest, SetSourcePausedRequest,
+    Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    ImportSetResponse, MoveCollectionRequest, OrganizationService, PinInstanceRequest, ProjectSet,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
+    OrganizationService, PinInstanceRequest, ProjectSet, ReceiptChange, ReceiptPlace,
     RenameCollectionRequest, SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
     VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
-    FontSource, PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
+    SampleText, SampleTextRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse, SearchService,
-    SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+    SearchService, SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsService, SettingsUpdate};
 use fm_api::workflows::{
@@ -63,12 +71,13 @@ use fm_platform::{AppPaths, FontActivator, Os, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
-use crate::index::Index;
+use crate::index::{DeclaredLicense, Index};
+use crate::layout::store::LayoutStore;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, glyphs, preview};
+use crate::{charsets, css, glyph_svg, glyphs, layout, preview};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -99,6 +108,13 @@ pub struct CoreApi {
     previews: Option<PreviewCache>,
     /// "Keep this one"; `None` when there is no trash to move copies to.
     resolver: Option<DuplicateResolver>,
+    /// The OS trash, for replaced receipts (E15.2); `None` when there is none.
+    trash: Option<Arc<dyn Trash>>,
+    /// Where receipts kept in the app's data folder go; `None` when the API
+    /// has no data folder.
+    receipts: Option<PathBuf>,
+    /// The layout template files (E12.5); `None` when the API has no config folder.
+    layouts: Option<LayoutStore>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -131,7 +147,9 @@ impl CoreApi {
         let previews = PreviewCache::open(&cache::cache_dir(paths), limit)
             .inspect_err(|e| tracing::warn!(error = %e, "preview cache not opened"))
             .ok();
-        let api = Self::new(index, activator, settings, previews);
+        let api = Self::new(index, activator, settings, previews)
+            .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
+            .with_layouts_in(paths.layouts_dir());
         match fm_platform::trash::system() {
             Ok(trash) => api.with_trash(trash),
             Err(e) => {
@@ -160,6 +178,9 @@ impl CoreApi {
             settings,
             previews,
             resolver: None,
+            trash: None,
+            receipts: None,
+            layouts: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -179,10 +200,56 @@ impl CoreApi {
         let sink = Arc::clone(&self.events);
         self.resolver = Some(DuplicateResolver::new(
             Arc::clone(&self.index),
-            trash,
+            Arc::clone(&trash),
             move |e| sink.send(&e),
         ));
+        self.trash = Some(trash);
         self
+    }
+
+    /// The same API, keeping receipts "in the app's data folder" in `dir`.
+    #[must_use]
+    pub fn with_receipts_in(mut self, dir: PathBuf) -> Self {
+        self.receipts = Some(dir);
+        self
+    }
+
+    /// The same API, keeping layout template files in `dir`.
+    #[must_use]
+    pub fn with_layouts_in(mut self, dir: PathBuf) -> Self {
+        self.layouts = Some(LayoutStore::new(dir));
+        self
+    }
+
+    /// The layout files, or the answer when there is no layouts folder.
+    fn layouts(&self) -> ApiResult<&LayoutStore> {
+        self.layouts
+            .as_ref()
+            .ok_or_else(|| not_available("Saving layouts"))
+    }
+
+    /// Moves the receipt copy `old` to the trash, when it is one the app
+    /// made and it is there; a path that is not the app's is only forgotten.
+    fn trash_receipt(&self, old: &Path) -> ApiResult<()> {
+        if !crate::receipt::is_app_copy(old, self.receipts.as_deref()) || !old.is_file() {
+            return Ok(());
+        }
+        let trash = self
+            .trash
+            .as_ref()
+            .ok_or_else(|| not_available("Moving files to the trash"))?;
+        trash.trash(old).map(|_| ()).map_err(|e| {
+            ApiError::from(
+                FmError::new(
+                    ErrorCode::Io,
+                    format!(
+                        "The old receipt could not be moved to the trash: {}",
+                        e.message()
+                    ),
+                )
+                .with_detail(e.detail),
+            )
+        })
     }
 
     /// The resolver, or the answer when there is no trash.
@@ -529,6 +596,16 @@ impl LibraryService for CoreApi {
             &req,
         )?)
     }
+
+    /// Reads the face's file outside the index lock, as `list_glyphs`.
+    fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail> {
+        let file = self.lock().face_file(req.face)?;
+        Ok(glyphs::glyph_detail_file(
+            &file.path,
+            file.collection_index,
+            req.code_point,
+        )?)
+    }
 }
 
 impl SearchService for CoreApi {
@@ -538,6 +615,10 @@ impl SearchService for CoreApi {
 
     fn check_coverage(&self, req: CoverageRequest) -> ApiResult<CoverageReport> {
         Ok(self.lock().check_coverage(&req)?)
+    }
+
+    fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage> {
+        Ok(self.lock().face_coverage(face)?)
     }
 
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
@@ -574,6 +655,17 @@ impl PreviewService for CoreApi {
 
     fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
         Ok(self.lock().sample_texts(&req)?)
+    }
+
+    /// From the face's axes and features as the inspector shows them.
+    fn css_values(&self, req: CssValuesRequest) -> ApiResult<CssValues> {
+        let detail = self.lock().face_detail(req.face)?;
+        Ok(css::css_values(
+            &detail.axes,
+            &detail.features,
+            &req.variations,
+            &req.features,
+        ))
     }
 }
 
@@ -681,6 +773,77 @@ impl OrganizationService for CoreApi {
     fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()> {
         Ok(self.lock().delete_virtual_style(style)?)
     }
+
+    /// The list shows the family again through `LibraryChanged`.
+    fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()> {
+        let faces = self.lock().update_family_notes(&req)?;
+        self.updated(&faces);
+        Ok(())
+    }
+
+    /// The receipt is copied first; the copy it replaces goes to the trash
+    /// before the declaration is stored, so a failed move changes nothing
+    /// (the new copy goes to the trash too). The list shows the family again
+    /// through `LibraryChanged`.
+    fn declare_license(&self, req: LicenseDeclaration) -> ApiResult<()> {
+        let seats = req.seats.map(crate::receipt::check_seats).transpose()?;
+        let purchase_date = req
+            .purchase_date
+            .map(|d| d.trim().to_owned())
+            .filter(|d| !d.is_empty());
+        if let Some(date) = &purchase_date {
+            crate::receipt::check_date(date)?;
+        }
+        if let ReceiptChange::Attach { path, .. } = &req.receipt {
+            crate::receipt::check_receipt(Path::new(path))?;
+        }
+        let target = self.lock().license_target(req.family)?;
+        let old = target.current.and_then(|c| c.receipt);
+        let (receipt, attached) = match req.receipt {
+            ReceiptChange::Keep => (old.clone(), false),
+            ReceiptChange::Clear => (None, false),
+            ReceiptChange::Attach { path, place } => {
+                let dir = match place {
+                    ReceiptPlace::NextToFont => target
+                        .sidecar_dir
+                        .ok_or_else(|| {
+                            FmError::invalid(
+                                "The receipt cannot be kept next to this font: its folder is a system folder, paused or not there. Keep it in the app's data folder instead.",
+                            )
+                        })?
+                        .join(crate::receipt::RECEIPTS_DIR),
+                    ReceiptPlace::AppData => self
+                        .receipts
+                        .clone()
+                        .ok_or_else(|| not_available("Keeping receipts in the app's data folder"))?,
+                };
+                (
+                    Some(crate::receipt::copy_into(Path::new(&path), &dir)?),
+                    true,
+                )
+            }
+        };
+        if let Some(old) = old.as_deref().filter(|o| receipt.as_deref() != Some(*o))
+            && let Err(e) = self.trash_receipt(old)
+        {
+            if let Some(new) = receipt.as_deref().filter(|_| attached) {
+                // The copy just made is the app's: it goes to the trash too.
+                if let Err(undo) = self.trash_receipt(new) {
+                    tracing::warn!(error = %undo, "new receipt copy left in place");
+                }
+            }
+            return Err(e);
+        }
+        let license = DeclaredLicense {
+            license_type: req.license_type,
+            seats,
+            purchase_date,
+            receipt,
+        };
+        let faces = self.lock().declare_license(req.family, &license)?;
+        self.updated(&faces);
+        Ok(())
+    }
 }
 
 impl ExportService for CoreApi {
@@ -691,6 +854,17 @@ impl ExportService for CoreApi {
     fn license_inventory(&self, _req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {
         Err(not_available("The license inventory"))
     }
+
+    /// Reads the face's file outside the index lock, as `list_glyphs`; the
+    /// SVG is returned, nothing is written.
+    fn export_glyph_svg(&self, req: GlyphSvgRequest) -> ApiResult<String> {
+        let file = self.lock().face_file(req.face)?;
+        Ok(glyph_svg::glyph_svg_file(
+            &file.path,
+            file.collection_index,
+            &req,
+        )?)
+    }
 }
 
 impl WorkflowService for CoreApi {
@@ -700,6 +874,44 @@ impl WorkflowService for CoreApi {
 
     fn prepare_for_web(&self, _req: PrepareForWebRequest) -> ApiResult<PrepareForWebResponse> {
         Err(not_available("Preparing fonts for the web"))
+    }
+}
+
+impl LayoutService for CoreApi {
+    fn layout_presets(&self) -> ApiResult<Vec<Layout>> {
+        Ok(layout::presets())
+    }
+
+    fn clamp_layout(&self, req: Layout) -> ApiResult<Layout> {
+        Ok(layout::clamp_layout(req))
+    }
+
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {
+        self.layouts()?.list()
+    }
+
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout> {
+        self.layouts()?.get(&req.id)
+    }
+
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.save(&req.id, req.layout)
+    }
+
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.duplicate(&req.id, req.name.as_deref())
+    }
+
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.revert(&req.id, req.to_original)
+    }
+
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>> {
+        self.layouts()?.history(&req.id)
+    }
+
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout> {
+        self.layouts()?.restore(&req.id, req.number)
     }
 }
 

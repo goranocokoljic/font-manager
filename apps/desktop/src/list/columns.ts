@@ -27,14 +27,15 @@ export type ColumnId =
   | 'location'
   | 'license'
   | 'added'
-  | 'tags';
+  | 'tags'
+  | 'notes';
 
 export interface Column {
   id: ColumnId;
   /** Header text, and the accessible name of the column. */
   label: string;
-  /** The API order a click on the header asks for. */
-  sortKey: FamilySortKey;
+  /** The API order a click on the header asks for; `null`: the column does not sort. */
+  sortKey: FamilySortKey | null;
   /** Width in CSS px (the name column grows from it). */
   width: number;
   /** The name column always shows. */
@@ -61,6 +62,8 @@ export const COLUMNS: readonly Column[] = [
   { id: 'license', label: 'License', sortKey: 'license', width: 96, hideable: true },
   { id: 'added', label: 'Date added', sortKey: 'dateAdded', width: 112, hideable: true },
   { id: 'tags', label: 'Tags', sortKey: 'tags', width: 160, hideable: true },
+  // The family's own notes; the API has no order by notes.
+  { id: 'notes', label: 'Notes', sortKey: null, width: 200, hideable: true },
 ];
 
 const BY_ID = new Map(COLUMNS.map((c) => [c.id, c]));
@@ -114,7 +117,7 @@ export function normalizeTable(raw: unknown): TableConfig {
   );
   const s = r.sort as Partial<TableSort> | null | undefined;
   const sort =
-    s && typeof s === 'object' && isColumnId(s.column)
+    s && typeof s === 'object' && isColumnId(s.column) && columnById(s.column).sortKey
       ? { column: s.column, descending: s.descending === true }
       : null;
   const stripSizePx =
@@ -145,8 +148,12 @@ export function toggleColumn(config: TableConfig, id: ColumnId): TableConfig {
   return { ...config, hidden };
 }
 
-/** A header click: ascending, then descending, then back to the default order. */
+/**
+ * A header click: ascending, then descending, then back to the default order. A
+ * column that does not sort leaves the order as it is.
+ */
 export function cycleSort(config: TableConfig, id: ColumnId): TableConfig {
+  if (!columnById(id).sortKey) return config;
   const s = config.sort;
   const sort: TableSort | null =
     s?.column !== id
@@ -159,8 +166,8 @@ export function cycleSort(config: TableConfig, id: ColumnId): TableConfig {
 
 /** The API order of a configuration. */
 export function orderOf(config: TableConfig): FamilyOrder | null {
-  const s = config.sort;
-  return s ? { by: columnById(s.column).sortKey, descending: s.descending } : null;
+  const by = config.sort && columnById(config.sort.column).sortKey;
+  return config.sort && by ? { by, descending: config.sort.descending } : null;
 }
 
 /** `aria-sort` of a column header. */
@@ -205,13 +212,27 @@ const DECLARED: Record<LicenseType, string> = {
   unknown: 'Unknown',
 };
 
-const OPEN: Record<OpenLicense, string> = { ofl: 'OFL', apache: 'Apache', ufl: 'UFL', mit: 'MIT' };
+/** The badge of a family whose name table states an open license; shown in the good color. */
+export const OPEN_LICENSE_BADGE = 'Open license';
 
-/** The license badge: what the user declared, else the recognized open license. */
-export function licenseBadge(f: Pick<FamilySummary, 'declaredLicense' | 'openLicense'>): string {
-  if (f.declaredLicense) return DECLARED[f.declaredLicense];
-  if (f.openLicense) return OPEN[f.openLicense];
-  return '';
+const OPEN: Record<OpenLicense, string> = {
+  ofl: 'SIL Open Font License',
+  apache: 'Apache License 2.0',
+  ufl: 'Ubuntu Font Licence',
+  mit: 'MIT License',
+};
+
+/** The full name of an open license, for the badge's tooltip; '' for none. */
+export function openLicenseName(l: OpenLicense | null | undefined): string {
+  return l ? OPEN[l] : '';
+}
+
+/** The license badges: what the user declared, then "Open license" when the font states one. */
+export function licenseBadges(f: Pick<FamilySummary, 'declaredLicense' | 'openLicense'>): string[] {
+  const badges: string[] = [];
+  if (f.declaredLicense) badges.push(DECLARED[f.declaredLicense]);
+  if (f.openLicense) badges.push(OPEN_LICENSE_BADGE);
+  return badges;
 }
 
 export function weightRangeText(r: WeightRange | null | undefined): string {

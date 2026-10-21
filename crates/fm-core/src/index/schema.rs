@@ -427,8 +427,47 @@ CREATE TRIGGER sidecar_dirty_virtual_style_delete AFTER DELETE ON virtual_style 
 END;
 ";
 
+/// Family notes (E13.5, `index/family_notes.rs`): the user's notes on a
+/// family, by its grouping key (`grouping::family_key`, the key the sidecar
+/// file is named by), not by a face id, so they outlive a rescan that
+/// indexes the family's faces again. A family no face has any more keeps
+/// its row; the note is back when the fonts are.
+const V11: &str = r"
+CREATE TABLE family_meta (
+    family_key  TEXT PRIMARY KEY,
+    notes       TEXT
+) WITHOUT ROWID;
+";
+
+/// Open licenses at scan time (E15.1, `license.rs`): `face.open_license` is
+/// the open license the face's name table states, as its `fm-api` serde name
+/// (`ofl`, `apache`, `ufl`, `mit`), `NULL` for none. A scan writes it with
+/// the face, so search never reads `face.parsed` for it. Rows indexed before
+/// this version are filled once from their `face.parsed` license text when
+/// the migration runs ([`OPEN_LICENSE_VERSION`]).
+const V12: &str = r"
+ALTER TABLE face ADD COLUMN open_license TEXT;
+";
+
+/// Declared licenses (E15.2, `index/family_license.rs`): the license the user
+/// declared for a family is stored with its notes, by the family's grouping
+/// key, so it applies to every face and outlives a rescan. `license_type` is
+/// the `fm-api` serde name, `purchase_date` is `YYYY-MM-DD`, and `receipt`
+/// the path of the copy the app made (text, or the raw bytes of a path that
+/// is not UTF-8). A row with no notes and no declaration is deleted.
+const V13: &str = r"
+ALTER TABLE family_meta ADD COLUMN license_type TEXT;
+ALTER TABLE family_meta ADD COLUMN seats INTEGER;
+ALTER TABLE family_meta ADD COLUMN purchase_date TEXT;
+ALTER TABLE family_meta ADD COLUMN receipt BLOB;
+";
+
+/// The schema version that adds `face.open_license`; the migration to it
+/// also fills the column for the faces already indexed.
+pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
+
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
@@ -447,6 +486,7 @@ pub(crate) const TABLES: &[&str] = &[
     "face_fts_data",
     "face_fts_idx",
     "face_tag",
+    "family_meta",
     "font_file",
     "index_meta",
     "last_session",

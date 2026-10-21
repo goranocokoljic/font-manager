@@ -11,7 +11,8 @@
 //! Shape of the contract (ADR 0006):
 //! - one trait per service ([`LibraryService`], [`SearchService`],
 //!   [`PreviewService`], [`ActivationService`], [`OrganizationService`],
-//!   [`ExportService`], [`WorkflowService`], [`SettingsService`]); [`Api`] is all of them plus
+//!   [`ExportService`], [`WorkflowService`], [`SettingsService`],
+//!   [`LayoutService`]); [`Api`] is all of them plus
 //!   [`EventSource`];
 //! - every method takes one request value and returns [`ApiResult`];
 //! - methods are synchronous; long work (a scan) returns a [`JobId`] at once
@@ -24,6 +25,7 @@ pub mod error;
 pub mod event;
 pub mod export;
 pub mod ids;
+pub mod layout;
 pub mod library;
 pub mod mock;
 pub mod organization;
@@ -39,6 +41,7 @@ pub use export::ExportService;
 pub use ids::{
     CollectionId, FaceId, FamilyId, JobId, ResolutionId, SetId, SourceId, TagId, VirtualStyleId,
 };
+pub use layout::LayoutService;
 pub use library::LibraryService;
 pub use organization::OrganizationService;
 pub use preview::PreviewService;
@@ -52,7 +55,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 9,
+    minor: 12,
     patch: 0,
 };
 
@@ -86,6 +89,7 @@ pub trait Api:
     + ExportService
     + WorkflowService
     + SettingsService
+    + LayoutService
     + EventSource
     + Send
     + Sync
@@ -101,6 +105,7 @@ impl<T> Api for T where
         + ExportService
         + WorkflowService
         + SettingsService
+        + LayoutService
         + EventSource
         + Send
         + Sync
@@ -138,11 +143,16 @@ pub fn types() -> specta::Types {
         library::GlyphPage,
         library::GlyphInfo,
         library::GlyphBlock,
+        library::GlyphRequest,
+        library::GlyphDetail,
         // search
         search::SearchRequest,
         search::SearchResponse,
         search::CoverageRequest,
         search::CoverageReport,
+        search::BlockCoverage,
+        search::FaceLanguageCoverage,
+        search::FaceCoverage,
         search::LanguagePreset,
         search::SimilarRequest,
         search::SimilarFace,
@@ -152,6 +162,8 @@ pub fn types() -> specta::Types {
         preview::FontSource,
         preview::SampleTextRequest,
         preview::SampleText,
+        preview::CssValuesRequest,
+        preview::CssValues,
         // activation
         activation::ActivateRequest,
         activation::DeactivateRequest,
@@ -169,6 +181,10 @@ pub fn types() -> specta::Types {
         organization::TagFacesRequest,
         organization::UntagFacesRequest,
         organization::UserMetaUpdate,
+        organization::FamilyNotesUpdate,
+        organization::LicenseDeclaration,
+        organization::ReceiptChange,
+        organization::ReceiptPlace,
         organization::ProjectSet,
         organization::CreateSetRequest,
         organization::SetExport,
@@ -181,6 +197,7 @@ pub fn types() -> specta::Types {
         export::ExportWebResponse,
         export::LicenseInventoryRequest,
         export::LicenseInventory,
+        export::GlyphSvgRequest,
         // workflows
         workflows::BriefRequest,
         workflows::Shortlist,
@@ -190,6 +207,20 @@ pub fn types() -> specta::Types {
         settings::Settings,
         settings::SettingsUpdate,
         settings::AppFolders,
+        // layout
+        layout::Layout,
+        layout::TextBlock,
+        layout::LayoutPreset,
+        layout::BlockAlign,
+        layout::BlockOverflow,
+        layout::LayoutEntry,
+        layout::SavedLayout,
+        layout::LayoutRef,
+        layout::SaveLayoutRequest,
+        layout::DuplicateLayoutRequest,
+        layout::RevertLayoutRequest,
+        layout::LayoutVersion,
+        layout::RestoreLayoutRequest,
     )
 }
 
@@ -199,13 +230,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.9.0");
+        assert_eq!(API_VERSION.to_string(), "0.12.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":9,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":12,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

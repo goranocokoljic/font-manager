@@ -402,6 +402,9 @@ pub struct FamilySummary {
     /// User tags on any of its faces, by name, A to Z.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// The user's notes on the family (E13.5), not those of its faces.
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 /// One style on a family's weight line.
@@ -502,6 +505,29 @@ pub struct LicenseInfo {
     pub embedding: Embedding,
     /// What the user declared, if anything.
     pub declared: Option<LicenseType>,
+    /// Seats the user declared for the family (E15.2).
+    #[serde(default)]
+    pub seats: Option<u32>,
+    /// Purchase date the user declared, `YYYY-MM-DD` (E15.2).
+    #[serde(default)]
+    pub purchase_date: Option<String>,
+    /// Absolute path of the receipt copy the app keeps (E15.2).
+    #[serde(default)]
+    pub receipt: Option<String>,
+    /// Whether the face may be used on the web, and why (E15.3).
+    #[serde(default)]
+    pub web_use: Option<WebUse>,
+}
+
+/// Whether a face may be used on the web, decided from its embedding
+/// permission, recognized open license and declared license type (E15.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WebUse {
+    /// The face is OK for web.
+    pub ok: bool,
+    /// Why, in plain words ("Open license (OFL)").
+    pub reason: String,
 }
 
 /// Everything the info panel shows about one face.
@@ -562,6 +588,9 @@ pub struct FaceDetail {
     /// Code points the Unicode `cmap` maps.
     #[serde(default)]
     pub code_point_count: Option<u32>,
+    /// The user's notes on the face's family (E13.5); `notes` are the face's.
+    #[serde(default)]
+    pub family_notes: Option<String>,
 }
 
 /// What kind of health problem.
@@ -903,6 +932,42 @@ pub struct GlyphPage {
     pub unicode_version: String,
 }
 
+/// One character of a face, for its glyph detail (E11.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphRequest {
+    /// The face.
+    pub face: FaceId,
+    /// The Unicode code point of the character.
+    pub code_point: u32,
+}
+
+/// The detail of one mapped character of a face.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphDetail {
+    /// The Unicode code point.
+    pub code_point: u32,
+    /// The glyph `cmap` maps it to.
+    pub glyph_id: u32,
+    /// The glyph name from `post` or the CFF charset; absent when the font
+    /// has none.
+    pub name: Option<String>,
+    /// The advance width in font units, at the default location of a
+    /// variable face; absent when the font has no horizontal metrics.
+    pub advance_width: Option<u32>,
+    /// GSUB features that produce this glyph from other glyphs (`liga` for
+    /// `ﬁ`), by tag.
+    pub produced_by: Vec<FeatureInfo>,
+    /// GSUB features that replace this glyph with another (`smcp`, `ss01`),
+    /// by tag.
+    pub replaced_by: Vec<FeatureInfo>,
+    /// `Broken` with a reason when the font's tables are malformed; the
+    /// glyph id is 0 and the rest is empty then. Malformed GSUB lookups only
+    /// empty the feature lists.
+    pub health: Health,
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -952,6 +1017,11 @@ pub trait LibraryService {
     /// names. `NotFound` for an unknown face; a malformed font is a page with
     /// `Broken` health, never an error.
     fn list_glyphs(&self, req: GlyphsRequest) -> ApiResult<GlyphPage>;
+    /// One character of a face in detail (E11.2): glyph id and name, advance
+    /// width and the GSUB features that produce or replace its glyph.
+    /// `NotFound` for an unknown face or a character the face does not map;
+    /// a malformed font is a detail with `Broken` health, never an error.
+    fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail>;
 }
 
 #[cfg(test)]
@@ -977,6 +1047,7 @@ mod tests {
             open_license: None,
             declared_license: None,
             tags: Vec::new(),
+            notes: None,
         }
     }
 

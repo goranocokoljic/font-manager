@@ -8,6 +8,8 @@ import { useSelectionStore } from '../stores/selection';
 import InspectorGlyphs from './InspectorGlyphs.vue';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
+const copyText = vi.hoisted(() => vi.fn());
+vi.mock('../api/clipboard', () => ({ copyText }));
 
 async function mountWith(face: number | null) {
   const pinia = createPinia();
@@ -18,7 +20,11 @@ async function mountWith(face: number | null) {
   return wrapper;
 }
 
-beforeEach(() => setClient(createMockClient({ cjkFaces: [1] })));
+beforeEach(() => {
+  setClient(createMockClient({ cjkFaces: [1] }));
+  copyText.mockReset();
+  copyText.mockResolvedValue(undefined);
+});
 afterEach(() => {
   setClient(undefined);
   document.body.innerHTML = '';
@@ -108,5 +114,41 @@ describe('inspector glyphs tab', () => {
     });
     const w = await mountWith(1);
     expect(w.text()).toContain('The cmap table is malformed.');
+  });
+
+  it('the detail shows code point, name, advance width and features', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="97"]').trigger('click');
+    await flushPromises();
+    const detail = w.get('[aria-label="Selected glyph"]');
+    expect(detail.get('[aria-labelledby="fm-glyph-cp"]').text()).toBe('U+0061');
+    expect(detail.get('[aria-labelledby="fm-glyph-name"]').text()).toBe('a');
+    expect(detail.get('[aria-labelledby="fm-glyph-advance"]').text()).toMatch(/^\d[\d,]* units$/);
+    const replaced = detail.get('ul[aria-labelledby="fm-glyph-replaced"]');
+    expect(replaced.text()).toContain('smcp');
+    expect(replaced.text()).toContain('Small capitals');
+    expect(detail.text()).toContain('No feature produces this glyph.');
+  });
+
+  it('a feature in the detail is copied by its tag', async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="97"]').trigger('click');
+    await flushPromises();
+    await w.get('button[aria-label="Copy feature tag: ss01"]').trigger('click');
+    expect(copyText).toHaveBeenCalledWith('ss01');
+  });
+
+  it('Escape or the Close button closes the detail and returns to the grid', async () => {
+    const w = await mountWith(1);
+    const grid = w.get('[role="grid"]');
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    await grid.trigger('keydown', { key: 'Escape' });
+    expect(w.find('[aria-label="Selected glyph"]').exists()).toBe(false);
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    await w.get('button[aria-label="Close glyph detail"]').trigger('click');
+    expect(w.find('[aria-label="Selected glyph"]').exists()).toBe(false);
+    expect(document.activeElement).toBe(grid.element);
   });
 });

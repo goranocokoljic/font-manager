@@ -1,7 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { setClient } from '../api/client';
+import { setClient, type FmClient } from '../api/client';
 import { createMockClient, type MockOptions } from '../api/mock';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { useFontListStore } from '../stores/fontList';
@@ -50,9 +50,12 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+let client: FmClient | undefined;
+
 /** Loads a mock library (in the view's API order) and mounts the table on it. */
 async function tableOf(options: MockOptions = {}) {
-  setClient(createMockClient(options));
+  client = createMockClient(options);
+  setClient(client);
   const views = useViewsStore();
   views.setMode(ALL_FONTS_VIEW, 'table');
   const library = useLibraryStore();
@@ -95,6 +98,7 @@ describe('FontTable', () => {
       'License',
       'Date added',
       'Tags',
+      'Notes',
     ]);
     const inter = rows(t)[0]!;
     expect(inter.attributes('aria-label')).toBe('Inter, 1 style, not active');
@@ -113,12 +117,17 @@ describe('FontTable', () => {
     expect(cell(inter, 'version').text()).toBe('Version 1.000');
     expect(cell(inter, 'manufacturer').text()).toBe('rsms');
     expect(cell(inter, 'location').text()).toBe('/Users/demo/Fonts');
-    expect(cell(inter, 'license').text()).toBe('OFL');
+    // The name table states the OFL: the "Open license" badge, in the good color.
+    expect(cell(inter, 'license').text()).toBe('Open license');
+    const open = cell(inter, 'license').get('.badge');
+    expect(open.classes()).toContain('good');
+    expect(open.attributes('title')).toBe('SIL Open Font License');
     expect(cell(inter, 'added').text()).toMatch(/2026/);
     // Legacy Grotesk: Type 1, no open license.
     const legacy = rows(t)[2]!;
     expect(cell(legacy, 'format').text()).toBe('T1');
     expect(cell(legacy, 'license').text()).toBe('');
+    expect(cell(legacy, 'license').find('.badge.good').exists()).toBe(false);
   });
 
   it('shows the tags of a family, A to Z, in its own Tags cell', async () => {
@@ -134,6 +143,37 @@ describe('FontTable', () => {
     expect(
       mono.findAll('[role="gridcell"]').filter((c) => c.text().includes('zeta-tag')),
     ).toHaveLength(1);
+  });
+
+  it("shows a family's own notes in the Notes cell, updated by the library event", async () => {
+    const t = await tableOf();
+    const mono = () => rows(t).find((r) => nameOf(r) === 'JetBrains Mono')!;
+    expect(cell(mono(), 'notes').text()).toBe('');
+    // The list hears of the change through `libraryChanged`; nothing polls.
+    await client!.updateFamilyNotes({
+      family: useLibraryStore().families.find((f) => f.name === 'JetBrains Mono')!.id,
+      notes: 'Code samples in the handbook',
+    });
+    await flushPromises();
+    expect(cell(mono(), 'notes').text()).toBe('Code samples in the handbook');
+    expect(
+      mono()
+        .findAll('[role="gridcell"]')
+        .filter((c) => c.text().includes('Code samples')),
+    ).toHaveLength(1);
+    expect(
+      rows(t)
+        .filter((r) => nameOf(r) !== 'JetBrains Mono')
+        .map((r) => cell(r, 'notes').text()),
+    ).toEqual(['', '']);
+  });
+
+  it('does not sort by the Notes column', async () => {
+    const t = await tableOf();
+    const notes = header(t, 'notes');
+    expect(notes.find('button').exists()).toBe(false);
+    expect(notes.attributes('aria-sort')).toBeUndefined();
+    expect(notes.text()).toBe('Notes');
   });
 
   it('draws italic styles as hollow dots on the weight line', async () => {
@@ -233,7 +273,7 @@ describe('TableColumnsMenu', () => {
     await menu.get('button[aria-label="Move Tags up"]').trigger('click');
     await flushPromises();
     const order = useViewsStore().tableFor(ALL_FONTS_VIEW).order;
-    expect(order.indexOf('tags')).toBe(order.length - 2);
+    expect(order.indexOf('tags')).toBe(order.length - 3);
     expect(
       menu.get('button[aria-label="Move Activation up"]').attributes('disabled'),
     ).toBeDefined();
