@@ -106,6 +106,45 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('hides "Start at login" where fm-api does not offer it (every OS until E17.3)', async () => {
+    const { wrapper } = await mountAt('/settings?section=activation');
+    expect((await client.getSettings()).startAtLogin).toBeNull();
+    expect(wrapper.find('input[name="start-at-login"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Start at login');
+    wrapper.unmount();
+  });
+
+  it('turns "Start at login" on and off where offered, off by default', async () => {
+    client = createMockClient({ startAtLogin: 'off' });
+    setClient(client);
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const box = wrapper.get('input[name="start-at-login"]');
+    expect(box.element.closest('label')!.textContent!.trim()).toBe('Start at login');
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    await box.setValue(true);
+    await flushPromises();
+    expect((await client.getSettings()).startAtLogin).toBe(true);
+    await box.setValue(false);
+    await flushPromises();
+    expect((await client.getSettings()).startAtLogin).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('shows a toast and the real state when the system refuses the login entry', async () => {
+    client = createMockClient({ startAtLogin: 'refuse' });
+    setClient(client);
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const box = wrapper.get('input[name="start-at-login"]');
+    await box.setValue(true);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="toast"]').text()).toContain(
+      'Start at login could not be turned on',
+    );
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    expect((await client.getSettings()).startAtLogin).toBe(false);
+    wrapper.unmount();
+  });
+
   it('lists the platform notes under About', async () => {
     const { wrapper } = await mountAt('/settings?section=about');
     const notes = wrapper.get('ul[aria-labelledby="platform-notes-title"]');

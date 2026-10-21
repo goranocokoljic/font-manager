@@ -8,11 +8,13 @@ import { useAppStore } from '../stores/app';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSourcesStore } from '../stores/sources';
+import { useToastStore } from '../stores/toast';
 
 const store = useSettingsStore();
 const sources = useSourcesStore();
 const commands = useCommandsStore();
 const app = useAppStore();
+const toast = useToastStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -88,6 +90,17 @@ const error = computed(() => store.error ?? sources.error ?? app.error);
 /** Radio choices; each change is saved at once. */
 function choose(patch: SettingsUpdate): void {
   void store.update(patch);
+}
+
+/**
+ * "Start at login": the OS may refuse the login entry; then a toast says so and
+ * the switch shows the state fm-api reports again.
+ */
+async function saveStartAtLogin(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  if (await store.update({ startAtLogin: input.checked })) return;
+  toast.show(store.error?.message ?? 'Start at login could not be changed.');
+  input.checked = store.settings?.startAtLogin ?? false;
 }
 
 type NumberKey = keyof Pick<FullSettings, 'cacheLimitMb' | 'rescanIntervalMinutes'>;
@@ -253,6 +266,22 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
             Session fonts stay active while the app runs in the tray. Turned off, closing the window
             quits Font Manager and ends session activations.
           </p>
+          <!-- fm-api reports null where the system does not offer it (ADR 0011). -->
+          <template v-if="s.startAtLogin != null">
+            <label class="choice start-at-login">
+              <input
+                type="checkbox"
+                name="start-at-login"
+                aria-describedby="start-at-login-hint"
+                :checked="s.startAtLogin"
+                @change="saveStartAtLogin"
+              />
+              Start at login
+            </label>
+            <p id="start-at-login-hint" class="note hint">
+              Font Manager starts in the tray when you log in, without opening its window.
+            </p>
+          </template>
         </template>
 
         <template v-else-if="current === 'appearance' && s">
@@ -409,6 +438,9 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
 }
 .hint {
   margin: 4px 0 0 22px;
+}
+.start-at-login {
+  margin-top: 12px;
 }
 .subheading {
   margin: 16px 0 8px;

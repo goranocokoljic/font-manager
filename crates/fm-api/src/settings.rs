@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::activation::{ActivationMode, ConflictPolicy};
-use crate::{ApiError, ApiResult};
+use crate::{ApiError, ApiResult, ErrorCode};
 
 /// The smallest preview cache, in megabytes.
 pub const CACHE_LIMIT_MB_MIN: u32 = 64;
@@ -63,6 +63,12 @@ pub struct Settings {
     /// bar on macOS), so session fonts stay active; off, closing the window
     /// quits. On by default.
     pub keep_in_tray: bool,
+    /// Whether the app starts, in the tray, when the user logs in. Read from
+    /// the OS's login entry on every request, never stored in `config.json`;
+    /// `None` when this system does not offer the option (then the switch
+    /// is hidden). Off until the user turns it on.
+    #[serde(default)]
+    pub start_at_login: Option<bool>,
 }
 
 impl Default for Settings {
@@ -76,6 +82,7 @@ impl Default for Settings {
             cache_limit_mb: 1_024,
             rescan_interval_minutes: 60,
             keep_in_tray: true,
+            start_at_login: None,
         }
     }
 }
@@ -108,6 +115,10 @@ pub struct SettingsUpdate {
     /// Keep running in the tray when the main window is closed.
     #[serde(default)]
     pub keep_in_tray: Option<bool>,
+    /// Register (true) or remove (false) the login entry that starts the app
+    /// in the tray. Refused where the settings report `start_at_login: None`.
+    #[serde(default)]
+    pub start_at_login: Option<bool>,
 }
 
 impl Settings {
@@ -129,6 +140,12 @@ impl Settings {
                 "The rescan interval must be between 0 (off) and {RESCAN_INTERVAL_MAX_MINUTES} minutes."
             )));
         }
+        if update.start_at_login.is_some() && self.start_at_login.is_none() {
+            return Err(ApiError::new(
+                ErrorCode::Unsupported,
+                "Start at login is not available on this system.",
+            ));
+        }
         Ok(Self {
             activation_mode: update.activation_mode.unwrap_or(self.activation_mode),
             on_conflict: update.on_conflict.unwrap_or(self.on_conflict),
@@ -142,6 +159,7 @@ impl Settings {
                 .rescan_interval_minutes
                 .unwrap_or(self.rescan_interval_minutes),
             keep_in_tray: update.keep_in_tray.unwrap_or(self.keep_in_tray),
+            start_at_login: update.start_at_login.or(self.start_at_login),
         })
     }
 }
@@ -173,7 +191,6 @@ pub trait SettingsService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ErrorCode;
 
     #[test]
     fn defaults_are_session_keep_existing_system_comfortable() {
@@ -186,6 +203,33 @@ mod tests {
         assert_eq!(s.cache_limit_mb, 1_024);
         assert_eq!(s.rescan_interval_minutes, 60);
         assert!(s.keep_in_tray);
+        assert_eq!(s.start_at_login, None);
+    }
+
+    #[test]
+    fn start_at_login_is_never_written_and_refused_where_not_offered() {
+        // Not offered: null on the wire.
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["startAtLogin"], serde_json::Value::Null);
+        let on: SettingsUpdate = serde_json::from_str(r#"{"startAtLogin":true}"#).expect("update");
+        let e = Settings::default().apply(&on).expect_err("not offered");
+        assert_eq!(e.code, ErrorCode::Unsupported);
+
+        // Offered (the service filled it from the OS): the update applies.
+        let offered = Settings {
+            start_at_login: Some(false),
+            ..Settings::default()
+        };
+        assert_eq!(
+            serde_json::to_value(offered).expect("json")["startAtLogin"],
+            false
+        );
+        assert_eq!(
+            offered.apply(&on).expect("valid").start_at_login,
+            Some(true)
+        );
+        let unchanged = offered.apply(&SettingsUpdate::default()).expect("valid");
+        assert_eq!(unchanged.start_at_login, Some(false));
     }
 
     #[test]
