@@ -1,0 +1,20 @@
+{
+  "id": "a-new-color-token-used-in-a-font-view-must-be-set-by-every-p",
+  "title": "A new color token used in a font view must be set by every preview surface",
+  "category": "accessibility",
+  "rule": "The font views (list, grid, waterfall) can carry a `.surface-light` or `.surface-dark` class that replaces `--fm-bg` with the opposite theme's background. Any theme token you use for text or chrome inside those views (`--fm-success`, `--fm-danger`, a new one) must also be set in both surface classes in `styles/theme.css`, or it keeps the app theme's value on the swapped background. Add a Playwright check that sets a dark app with the Light surface and a light app with the Dark surface and computes the contrast ratio from the computed colors.",
+  "rationale": "E15.1 (#118): the green 'Open license' badge used --fm-success, which the surface classes did not override, so it fell to about 1.7:1 (dark app, Light surface) and 2.7:1 (light app, Dark surface).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    118
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/Font*.vue",
+    "apps/desktop/src/styles/theme.css",
+    "apps/desktop/src/components/*.vue"
+  ],
+  "first_seen": "2026-10-21T00:23:03.996Z",
+  "last_seen": "2026-10-21T00:23:03.996Z"
+}
