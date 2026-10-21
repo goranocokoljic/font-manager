@@ -1375,3 +1375,87 @@ fn face_and_family_notes_survive_a_rescan_and_a_rebuild() {
         Err(ErrorCode::NotFound)
     );
 }
+
+/// E11.3: the coverage list comes from the stored `cmap`: its blocks agree
+/// with the glyph map read from the file, in Unicode order; languages are
+/// complete first, then partial by share, and carry `locl` from the scan.
+#[test]
+fn the_coverage_list_counts_blocks_and_languages_of_a_face() {
+    let (lib, _, _) = Lib::scanned("api-face-coverage");
+    let face_of = |name: &str| {
+        lib.api
+            .get_family(lib.family(name).id)
+            .expect("family")
+            .faces[0]
+            .id
+    };
+    for name in ["Archivo", "Asap Sharp", "Bebas Neue"] {
+        let face = face_of(name);
+        let got = lib.api.face_coverage(face).expect("coverage");
+        assert_eq!(got.face, face);
+        let glyphs = lib
+            .api
+            .list_glyphs(GlyphsRequest {
+                face,
+                block: None,
+                query: None,
+                page: Page::default(),
+            })
+            .expect("glyphs");
+        let from_file: Vec<(String, u32)> = glyphs
+            .blocks
+            .iter()
+            .filter(|b| b.name != crate::glyphs::NO_BLOCK)
+            .map(|b| (b.name.clone(), b.count))
+            .collect();
+        let listed: Vec<(String, u32)> = got
+            .blocks
+            .iter()
+            .map(|b| (b.name.clone(), b.covered))
+            .collect();
+        assert_eq!(listed, from_file, "{name}: the blocks of the glyph map");
+        assert!(
+            got.blocks.windows(2).all(|w| w[0].last < w[1].first),
+            "{name}: Unicode order"
+        );
+        assert!(
+            got.blocks
+                .iter()
+                .all(|b| b.covered > 0 && b.covered <= b.assigned),
+            "{name}"
+        );
+        assert_eq!(got.blocks[0].name, "Basic Latin");
+        assert_eq!(got.blocks[0].assigned, 128);
+        let complete = |l: &fm_api::search::FaceLanguageCoverage| l.covered == l.total;
+        let first_partial = got
+            .languages
+            .iter()
+            .position(|l| !complete(l))
+            .unwrap_or(got.languages.len());
+        assert!(first_partial > 0, "{name}: English is complete");
+        assert!(
+            got.languages[first_partial..].iter().all(|l| !complete(l)),
+            "{name}: complete first"
+        );
+        let shares: Vec<f64> = got.languages[first_partial..]
+            .iter()
+            .map(|l| f64::from(l.covered) / f64::from(l.total))
+            .collect();
+        assert!(
+            shares.windows(2).all(|w| w[0] >= w[1]),
+            "{name}: {shares:?}"
+        );
+    }
+    let bebas = lib.api.face_coverage(face_of("Bebas Neue")).expect("bebas");
+    let vi = bebas.languages.iter().find(|l| l.code == "vi").expect("vi");
+    assert!(
+        vi.covered > 0 && vi.covered < vi.total,
+        "Bebas Neue lacks Vietnamese tones: {vi:?}"
+    );
+    assert_eq!(vi.name, "Vietnamese");
+    let asap = lib.api.face_coverage(face_of("Asap Sharp")).expect("asap");
+    let ro = asap.languages.iter().find(|l| l.code == "ro").expect("ro");
+    assert!(ro.has_locl && ro.covered == ro.total, "{ro:?}");
+    let unknown = lib.api.face_coverage(FaceId(99_999));
+    assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
+}

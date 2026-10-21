@@ -1321,3 +1321,39 @@ fn css_values_write_only_what_differs_from_the_defaults() {
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
 }
+
+#[test]
+fn face_coverage_lists_blocks_in_order_and_complete_languages_first() {
+    let api = api();
+    // JetBrains Mono: Latin and Cyrillic, no Latin Extended-A.
+    let got = api.face_coverage(FaceId(6)).unwrap();
+    assert_eq!(got.face, FaceId(6));
+    let blocks: Vec<(&str, u32)> = got
+        .blocks
+        .iter()
+        .map(|b| (b.name.as_str(), b.assigned))
+        .collect();
+    assert_eq!(blocks, [("Basic Latin", 128), ("Cyrillic", 256)]);
+    assert!(got.blocks.iter().all(|b| b.covered > 0));
+    let languages: Vec<(&str, bool)> = got
+        .languages
+        .iter()
+        .map(|l| (l.code.as_str(), l.covered == l.total))
+        .collect();
+    assert_eq!(
+        languages,
+        [
+            ("en", true),
+            ("sr-Cyrl", true),
+            ("sr-Latn", false),
+            ("pl", false)
+        ],
+        "complete first, then partial by share"
+    );
+    assert!(got.languages[1].has_locl);
+    assert_eq!(got.languages[1].name, "Serbian (Cyrillic)");
+    assert_eq!(
+        api.face_coverage(FaceId(999)).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}
