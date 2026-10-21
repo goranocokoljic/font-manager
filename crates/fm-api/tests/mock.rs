@@ -2171,3 +2171,29 @@ fn rule_editor_calls_behave_like_the_core() {
     sorted.sort_by(|a, b| a.value.cmp(&b.value));
     assert_eq!(foundries, sorted);
 }
+
+#[test]
+fn every_mock_language_carries_its_pangram() {
+    let languages = api().list_languages().expect("languages");
+    assert!(!languages.is_empty());
+    for l in &languages {
+        assert!(
+            l.pangram.as_deref().is_some_and(|p| !p.is_empty()),
+            "{}",
+            l.code
+        );
+    }
+    let sr = languages
+        .iter()
+        .find(|l| l.code == "sr-Cyrl")
+        .expect("sr-Cyrl");
+    assert!(sr.pangram.as_deref().is_some_and(|p| p.contains('џ')));
+}
+
+#[test]
+fn a_language_preset_without_pangram_still_deserializes() {
+    let p: fm_api::search::LanguagePreset =
+        serde_json::from_str(r#"{"code":"en","name":"English","script":"Latn"}"#)
+            .expect("old shape");
+    assert_eq!(p.pangram, None);
+}

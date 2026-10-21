@@ -30,7 +30,9 @@ const SLOTS = [0, 1] as const;
 const settings = computed(() => preview.settingsFor(ALL_FONTS_VIEW));
 /** The face's text: the reopened comparison's (empty: the face's name), else the list's. */
 const textOf = (face: FaceSummary) =>
-  compare.text === null ? sampleText(settings.value, face) : compare.text || fontNameSample(face);
+  compare.text === null
+    ? sampleText(settings.value, face, preview.pangramText)
+    : compare.text || fontNameSample(face);
 
 /** The sample text a save keeps: the one shown; empty when each face shows its own name. */
 const textToSave = computed(() => {
@@ -38,7 +40,7 @@ const textToSave = computed(() => {
   const s = settings.value;
   if (s.sample === 'fontName' || (s.sample === 'custom' && !s.customText.trim())) return '';
   const first = compare.pins[0];
-  return first ? sampleText(s, first) : '';
+  return first ? sampleText(s, first, preview.pangramText) : '';
 });
 
 const saveName = ref(compare.current?.name ?? '');

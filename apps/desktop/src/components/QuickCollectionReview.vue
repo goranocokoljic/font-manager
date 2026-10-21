@@ -10,7 +10,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { sampleText } from '../preview/sampleText';
-import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
+import {
+  DEFAULT_PREVIEW,
+  previewRowHeight,
+  usePreviewStore,
+  type PreviewSettings,
+} from '../stores/preview';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSamplesStore } from '../stores/samples';
 import FontPreviewRow from './FontPreviewRow.vue';
@@ -22,6 +27,7 @@ const props = withDefaults(defineProps<{ preview?: PreviewSettings; overscan?: n
 
 const store = useQuickCollectionStore();
 const samples = useSamplesStore();
+const previews = usePreviewStore();
 
 const FALLBACK_HEIGHT = 600;
 const viewport = ref<HTMLElement | null>(null);
@@ -60,7 +66,7 @@ const pool = computed(() => poolSize(height.value, rowPx.value, props.overscan))
 const visible = computed(() =>
   store.faces.slice(range.value.start, range.value.end).map((face, i) => {
     const index = range.value.start + i;
-    const sample = sampleText(props.preview, face);
+    const sample = sampleText(props.preview, face, previews.pangramText);
     const got = samples.get(face.id, sample);
     return {
       face,
@@ -76,7 +82,7 @@ const visible = computed(() =>
 
 watchEffect(() => {
   for (const item of visible.value)
-    samples.want(item.face.id, sampleText(props.preview, item.face));
+    samples.want(item.face.id, sampleText(props.preview, item.face, previews.pangramText));
 });
 
 /** Scrolls row `index` into view and focuses its Drop button. */

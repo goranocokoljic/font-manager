@@ -7,7 +7,7 @@ import type { AxisValue, FaceSummary, SampleFallback } from '../api/types';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
-import type { PreviewSettings } from '../stores/preview';
+import { usePreviewStore, type PreviewSettings } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
 import type { ListRow } from './rows';
 
@@ -37,13 +37,14 @@ export function useRowPreviews(
   const list = useFontListStore();
   const library = useLibraryStore();
   const samples = useSamplesStore();
+  const previews = usePreviewStore();
 
   const faceOf = (row: ListRow) =>
     row.kind === 'face' ? row.face : list.previewFace(row.family.id);
 
   function previewOf(row: ListRow): RowPreview {
     const face = faceOf(row);
-    const sample = face ? sampleText(preview(), face) : '';
+    const sample = face ? sampleText(preview(), face, previews.pangramText) : '';
     const got = face ? samples.get(face.id, sample) : undefined;
     return {
       face,
@@ -58,7 +59,7 @@ export function useRowPreviews(
   watchEffect(() => {
     for (const row of rendered()) {
       const face = faceOf(row);
-      if (face) samples.want(face.id, sampleText(preview(), face));
+      if (face) samples.want(face.id, sampleText(preview(), face, previews.pangramText));
     }
   });
 

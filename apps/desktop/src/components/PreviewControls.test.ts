@@ -1,6 +1,7 @@
-import { mount } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { mockLanguages } from '../api/mock';
 import { usePreviewStore } from '../stores/preview';
 import PreviewControls from './PreviewControls.vue';
 
@@ -17,9 +18,16 @@ describe('PreviewControls', () => {
   it('chooses the sample kind, the pangram language and custom text', async () => {
     const { wrapper, store } = mountControls();
     await wrapper.get('select').setValue('pangram');
+    await flushPromises();
     const language = wrapper.findAll('select')[1]!;
-    await language.setValue('he');
-    expect(store.settingsFor('all').language).toBe('he');
+    // The picker lists the API's languages that have a pangram, by name.
+    const withPangram = mockLanguages.filter((l) => l.pangram);
+    expect(language.findAll('option').map((o) => [o.attributes('value'), o.text()])).toEqual(
+      withPangram.map((l) => [l.code, l.name]),
+    );
+    expect(language.findAll('option').some((o) => o.text() === 'Maltese')).toBe(false);
+    await language.setValue('sr-Cyrl');
+    expect(store.settingsFor('all').language).toBe('sr-Cyrl');
     await wrapper.get('select').setValue('custom');
     await wrapper.get('input[type="text"]').setValue('Handgloves');
     expect(store.settingsFor('all')).toMatchObject({ sample: 'custom', customText: 'Handgloves' });

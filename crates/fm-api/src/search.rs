@@ -275,6 +275,10 @@ pub struct LanguagePreset {
     pub name: String,
     /// ISO 15924 script (`Cyrl`).
     pub script: String,
+    /// A pangram, or a sample sentence where the language has no true
+    /// pangram, from `data/pangrams`; `None` when there is none (E19.4).
+    #[serde(default)]
+    pub pangram: Option<String>,
 }
 
 /// How many characters of one Unicode block a face maps.

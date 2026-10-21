@@ -3,7 +3,7 @@
 // tracking, alignment, colors and the preview surface. Every change goes to
 // the preview store for `view`, which every row of that list reads.
 import { computed, useId } from 'vue';
-import { PANGRAM_LANGUAGES, PANGRAMS, SAMPLE_KINDS } from '../preview/sampleText';
+import { SAMPLE_KINDS } from '../preview/sampleText';
 import {
   LINE_HEIGHT,
   SIZE,
@@ -17,6 +17,7 @@ import {
 const props = defineProps<{ view: string }>();
 
 const store = usePreviewStore();
+void store.loadPangrams();
 // A select is labelled by `for`: wrapped in its label, its option texts would join the name.
 const uid = useId();
 const s = computed(() => store.settingsFor(props.view));
@@ -97,8 +98,8 @@ function colorFrom(e: Event): string {
           })
         "
       >
-        <option v-for="lang in PANGRAM_LANGUAGES" :key="lang" :value="lang">
-          {{ PANGRAMS[lang].label }}
+        <option v-for="lang in store.pangramLanguages" :key="lang.code" :value="lang.code">
+          {{ lang.name }}
         </option>
       </select>
     </div>

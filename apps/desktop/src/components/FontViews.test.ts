@@ -4,13 +4,13 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
+import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
 import type { PreviewRequest } from '../api/types';
 import { CARD } from '../list/grid';
 import { familyKey } from '../list/rows';
 import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
-import { PANGRAMS } from '../preview/sampleText';
+import { useSearchStore } from '../stores/search';
 import { clearFaceAxes } from '../preview/variations';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
@@ -38,6 +38,9 @@ class FakeSet implements FontFaceSetLike<FakeFace> {
 }
 
 let renders: PreviewRequest[];
+
+/** The mock API's pangram for `code`. */
+const pangramOf = (code: string) => mockLanguages.find((l) => l.code === code)!.pangram!;
 
 beforeEach(() => {
   setActivePinia(createPinia());
@@ -74,6 +77,7 @@ async function load(options: MockOptions) {
   };
   setClient(client);
   await useLibraryStore().load();
+  await useSearchStore().loadLanguages();
 }
 
 async function mountView(view: Component, props: Record<string, unknown> = {}) {
@@ -103,7 +107,7 @@ describe('FontGrid', () => {
     // One render per card on screen, at the thumbnail size, with the card's text.
     await flushPromises();
     expect(renders).toHaveLength(40);
-    const sample = PANGRAMS.en.text;
+    const sample = pangramOf('en');
     expect(renders[0]).toMatchObject({ sizePx: 36 });
     expect(sample.startsWith(renders[0]!.text)).toBe(true);
     const thumb = cards[0]!.get('[data-testid="thumbnail"]');
@@ -163,7 +167,7 @@ describe('FontWaterfall', () => {
       expect(lines.map((l) => Number(l.attributes('data-size')))).toEqual([...WATERFALL_SIZES]);
       for (const [k, line] of lines.entries()) {
         const sample = line.get('.sample');
-        expect(sample.text()).toBe(PANGRAMS.en.text);
+        expect(sample.text()).toBe(pangramOf('en'));
         expect(sample.attributes('style')).toContain(`font-size: ${WATERFALL_SIZES[k]}px`);
         expect(line.text()).toContain(`${WATERFALL_SIZES[k]} px`);
       }

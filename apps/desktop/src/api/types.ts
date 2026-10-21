@@ -1254,6 +1254,11 @@ export type LanguagePreset = {
 	name: string,
 	/**  ISO 15924 script (`Cyrl`). */
 	script: string,
+	/**
+	 *  A pangram, or a sample sentence where the language has no true
+	 *  pangram, from `data/pangrams`; `None` when there is none (E19.4).
+	 */
+	pangram?: string | null,
 };
 
 /**  A layout: a list of text blocks, top to bottom. */

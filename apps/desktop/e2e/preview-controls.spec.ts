@@ -68,3 +68,23 @@ test('the font-name and custom samples show per-face text', async ({ page }) => 
   await controls.getByLabel('Custom text').fill('Hamburgefonstiv');
   await expect(page.locator('[data-face="6"] .sample')).toHaveText('Hamburgefonstiv');
 });
+
+test('the pangram picker lists the API languages and shows Serbian (Cyrillic)', async ({
+  page,
+}) => {
+  await open(page);
+  const controls = page.getByRole('group', { name: 'Preview settings' });
+  await controls.getByLabel('Sample').selectOption('pangram');
+  const language = controls.getByLabel('Language');
+  await expect(language).toHaveValue('en');
+  await expect(language.locator('option', { hasText: 'Serbian (Cyrillic)' })).toHaveCount(1);
+  // A preset without a pangram is not offered.
+  await expect(language.locator('option', { hasText: 'Maltese' })).toHaveCount(0);
+  await language.selectOption({ label: 'Serbian (Cyrillic)' });
+  await expect(page.locator('[data-face="1"] .sample')).toHaveText(
+    'Љубазни фењерџија чађавог лица хоће да ми покаже штос',
+  );
+  await page.reload();
+  await expect(controls.getByLabel('Language')).toHaveValue('sr-Cyrl');
+  await expect(page.locator('[data-face="1"] .sample')).toHaveText(/фењерџија/);
+});
