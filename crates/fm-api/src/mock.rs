@@ -23,9 +23,9 @@ use crate::export::{
     LicenseInventoryRequest, WebFormat,
 };
 use crate::layout::{
-    BlockAlign, BlockOverflow, DuplicateLayoutRequest, Layout, LayoutEntry, LayoutPreset,
-    LayoutRef, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
-    SavedLayout, TextBlock,
+    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
+    LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef, LayoutVersion, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest, SavedLayout, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
@@ -2995,6 +2995,46 @@ fn mock_preset(preset: LayoutPreset) -> Layout {
     }
 }
 
+/// The core's block ranges and steps (`fm_core::layout::bounds`).
+const MOCK_LAYOUT_BOUNDS: LayoutBounds = LayoutBounds {
+    size_pt: BlockRange {
+        min: 8.0,
+        max: 600.0,
+        default: 12.0,
+        step: 1.0,
+        per_px: 0.5,
+    },
+    line_height: BlockRange {
+        min: 0.1,
+        max: 3.0,
+        default: 1.3,
+        step: 0.05,
+        per_px: 0.01,
+    },
+    tracking: BlockRange {
+        min: -200.0,
+        max: 1000.0,
+        default: 0.0,
+        step: 10.0,
+        per_px: 2.0,
+    },
+    paragraph_spacing_pt: BlockRange {
+        min: 0.0,
+        max: 600.0,
+        default: 0.0,
+        step: 1.0,
+        per_px: 0.5,
+    },
+    first_line_indent_em: BlockRange {
+        min: 0.0,
+        max: 20.0,
+        default: 0.0,
+        step: 0.5,
+        per_px: 0.05,
+    },
+    columns: ColumnRange { min: 1, max: 3 },
+};
+
 impl LayoutService for MockApi {
     fn layout_presets(&self) -> ApiResult<Vec<Layout>> {
         Ok([
@@ -3012,27 +3052,32 @@ impl LayoutService for MockApi {
 
     /// The core's ranges (`fm_core::layout`); NaN and infinities take the default.
     fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout> {
-        let fit = |v: f32, lo: f32, hi: f32, default: f32| {
+        let r = MOCK_LAYOUT_BOUNDS;
+        let fit = |v: f32, b: BlockRange| {
             if v.is_finite() {
-                v.max(lo).min(hi)
+                v.max(b.min).min(b.max)
             } else {
-                default
+                b.default
             }
         };
         let blocks = layout
             .blocks
             .into_iter()
             .map(|b| TextBlock {
-                size_pt: fit(b.size_pt, 8.0, 600.0, 12.0),
-                line_height: fit(b.line_height, 0.1, 3.0, 1.3),
-                tracking: fit(b.tracking, -200.0, 1000.0, 0.0),
-                paragraph_spacing_pt: fit(b.paragraph_spacing_pt, 0.0, 600.0, 0.0),
-                first_line_indent_em: fit(b.first_line_indent_em, 0.0, 20.0, 0.0),
-                columns: b.columns.clamp(1, 3),
+                size_pt: fit(b.size_pt, r.size_pt),
+                line_height: fit(b.line_height, r.line_height),
+                tracking: fit(b.tracking, r.tracking),
+                paragraph_spacing_pt: fit(b.paragraph_spacing_pt, r.paragraph_spacing_pt),
+                first_line_indent_em: fit(b.first_line_indent_em, r.first_line_indent_em),
+                columns: b.columns.max(r.columns.min).min(r.columns.max),
                 ..b
             })
             .collect();
         Ok(Layout { blocks, ..layout })
+    }
+
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
+        Ok(MOCK_LAYOUT_BOUNDS)
     }
 
     fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {

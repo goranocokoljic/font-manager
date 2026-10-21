@@ -29,6 +29,8 @@ const compareWith = process.env.FM_SCREENS_COMPARE;
 const coverageOf = process.env.FM_SCREENS_COVERAGE;
 // FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
+// FM_SCREENS_CLICK='Block 1 properties' clicks the first button whose name starts with it before the shot.
+const click = process.env.FM_SCREENS_CLICK;
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -82,6 +84,12 @@ test.describe('@screens', () => {
               await expect(row).toHaveAttribute('aria-expanded', 'true');
               await row.scrollIntoViewIfNeeded();
             }
+          }
+          if (click) {
+            await page
+              .getByRole('button', { name: new RegExp(`^${click}`) })
+              .first()
+              .click();
           }
           await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });
         });

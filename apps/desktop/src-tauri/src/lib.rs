@@ -10,8 +10,8 @@ use fm_api::activation::{
 };
 use fm_api::common::Paged;
 use fm_api::layout::{
-    DuplicateLayoutRequest, Layout, LayoutEntry, LayoutRef, LayoutVersion, RestoreLayoutRequest,
-    RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
+    RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
@@ -269,6 +269,12 @@ async fn layout_presets(state: State<'_, AppState>) -> ApiResult<Vec<Layout>> {
 #[tauri::command]
 async fn clamp_layout(state: State<'_, AppState>, req: Layout) -> ApiResult<Layout> {
     call(&state, move |api| api.clamp_layout(req)).await
+}
+
+/// The ranges block values are clamped into, with their steps.
+#[tauri::command]
+async fn layout_bounds(state: State<'_, AppState>) -> ApiResult<LayoutBounds> {
+    call(&state, move |api| api.layout_bounds()).await
 }
 
 /// Every layout template file in the layouts folder, broken ones with the reason.
@@ -674,6 +680,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             css_values,
             layout_presets,
             clamp_layout,
+            layout_bounds,
             list_layouts,
             get_layout,
             save_layout,

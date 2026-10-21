@@ -34,6 +34,11 @@ Read [Sources](sources.md) to learn more about folders.
   a copy of the layout with a new name. **Reset to original** puts back the preset as
   the app ships it. **History** shows the earlier versions; **Restore** makes one current
   again, and the app keeps the version it replaces.
+- The badge beside each block shows its size (for example "24 pt"). Click it (or press
+  `Enter` on it) to open the properties of that block: size, line height, tracking,
+  paragraph spacing, first-line indent, columns (1–3), alignment, and wrap or clip. The
+  block changes at once; the other blocks stay as they are. A value out of range goes to
+  the nearest limit. Press `Escape` to close the properties.
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.

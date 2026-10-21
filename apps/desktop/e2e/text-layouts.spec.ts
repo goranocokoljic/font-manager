@@ -283,3 +283,131 @@ for (const scheme of ['light', 'dark'] as const) {
     expect(await borderContrast(box)).toBeGreaterThanOrEqual(3);
   });
 }
+
+test('a size badge beside each block opens its properties editor; changes show at once', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first().click();
+  await modeButton(page, 'Layout').click();
+  await picker(page).selectOption('magazine');
+  const mag = layout(page, 'Magazine');
+  await expect(mag).toHaveAttribute('data-state', 'ready');
+  const badges = mag.getByTestId('block-size-badge');
+  await expect(badges).toHaveCount(await blocks(mag).count());
+  const others = await blocks(mag).evaluateAll((bs) => bs.map((b) => getComputedStyle(b).fontSize));
+
+  // Click opens the editor of that block.
+  const badge = mag.getByRole('button', { name: /^Block 2 properties, / });
+  await badge.click();
+  const editor = page.getByRole('dialog', { name: 'Block 2 properties' });
+  await expect(editor).toBeVisible();
+  await expect(badge).toHaveAttribute('aria-expanded', 'true');
+
+  const size = editor.getByLabel('Size');
+  await size.fill('30');
+  await size.press('Enter');
+  await expect(blocks(mag).nth(1)).toHaveCSS('font-size', '40px');
+  await expect(badge).toHaveText('30 pt');
+  // Out of range: clamped to the core's 600 pt.
+  await size.fill('9999');
+  await size.press('Enter');
+  await expect(size).toHaveValue('600');
+  await expect(blocks(mag).nth(1)).toHaveCSS('font-size', '800px');
+  await size.fill('30');
+  await size.press('Enter');
+
+  await editor.getByLabel('Columns').selectOption('3');
+  await expect(blocks(mag).nth(1)).toHaveCSS('column-count', '3');
+  await expect(blocks(mag).nth(1)).toHaveCSS('column-fill', 'balance');
+  await editor.getByLabel('Alignment').selectOption('end');
+  await expect(blocks(mag).nth(1)).toHaveCSS('text-align', 'end');
+  await editor.getByLabel('Overflow').selectOption('clip');
+  await expect(blocks(mag).nth(1)).toHaveAttribute('data-overflow', 'clip');
+  const lh = editor.getByLabel('Line height');
+  await lh.fill('2');
+  await lh.press('Enter');
+  await expect(blocks(mag).nth(1)).toHaveCSS('line-height', '80px');
+  const tr = editor.getByLabel('Tracking');
+  await tr.fill('100');
+  await tr.press('Enter');
+  await expect(blocks(mag).nth(1)).toHaveCSS('letter-spacing', '4px');
+  const ps = editor.getByLabel('Paragraph spacing');
+  await ps.fill('6');
+  await ps.press('Enter');
+  await expect(blocks(mag).nth(1).locator('p').first()).toHaveCSS('margin-bottom', '8px');
+  const ind = editor.getByLabel('First-line indent');
+  await ind.fill('1');
+  await ind.press('Enter');
+  await expect(blocks(mag).nth(1).locator('p').first()).toHaveCSS('text-indent', '40px');
+
+  // The other blocks keep their values.
+  const after = await blocks(mag).evaluateAll((bs) => bs.map((b) => getComputedStyle(b).fontSize));
+  expect(after.filter((_, i) => i !== 1)).toEqual(others.filter((_, i) => i !== 1));
+});
+
+test('the properties editor works from the keyboard; Escape returns focus to the badge', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first().click();
+  await modeButton(page, 'Layout').click();
+  const book = layout(page, 'Book');
+  await expect(book).toHaveAttribute('data-state', 'ready');
+  const badge = book.getByRole('button', { name: /^Block 1 properties, / });
+  await badge.focus();
+  await page.keyboard.press('Enter');
+  const editor = page.getByRole('dialog', { name: 'Block 1 properties' });
+  await expect(editor).toBeVisible();
+
+  // Every control has a label and Tab reaches each in turn.
+  const names = [
+    'Size',
+    'Line height',
+    'Tracking',
+    'Paragraph spacing',
+    'First-line indent',
+    'Columns',
+    'Alignment',
+    'Overflow',
+  ];
+  await expect(editor.getByLabel('Size')).toBeFocused();
+  for (const name of names.slice(1)) {
+    await page.keyboard.press('Tab');
+    await expect(editor.getByLabel(name, { exact: true })).toBeFocused();
+  }
+  await page.keyboard.press('Tab');
+  await expect(editor.getByRole('button', { name: 'Close' })).toBeFocused();
+
+  // The keyboard steps a value by the core's step.
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await expect(editor.getByLabel('Columns')).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(blocks(book).first()).toHaveCSS('column-count', '2');
+
+  await page.keyboard.press('Escape');
+  await expect(editor).toBeHidden();
+  await expect(badge).toBeFocused();
+  await expect(badge).toHaveAttribute('aria-expanded', 'false');
+});
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the size badge and the properties fields are outlined at 3:1 or more (${scheme})`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page);
+    await modeButton(page, 'Layout').click();
+    const badge = layout(page, 'Book').getByRole('button', { name: /^Block 1 properties, / });
+    expect(await borderContrast(badge)).toBeGreaterThanOrEqual(3);
+    await badge.click();
+    const editor = page.getByRole('dialog', { name: 'Block 1 properties' });
+    for (const name of ['Size', 'Columns', 'Alignment', 'Overflow']) {
+      expect(await borderContrast(editor.getByLabel(name, { exact: true }))).toBeGreaterThanOrEqual(
+        3,
+      );
+    }
+  });
+}
