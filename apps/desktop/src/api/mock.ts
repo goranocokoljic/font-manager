@@ -906,6 +906,16 @@ export const mockPickedFolders: (string | null)[] = [];
 /** Files the mock file picker returns, one per call; `null` is a cancel. */
 export const mockPickedFiles: (string | null)[] = [];
 
+/** Where the mock save dialog saves, one per call; `null` is a cancel. */
+export const mockPickedSaves: (string | null)[] = [];
+
+/** What the mock "Export license inventory…" saved, oldest first. */
+export const mockSavedInventories: {
+  path: string;
+  collection: CollectionId | null;
+  rows: number;
+}[] = [];
+
 /** A mock client with its own activation, source and settings state. */
 const layoutBlock = (
   text: string,
@@ -1712,6 +1722,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       for (const d of details) d.familyNotes = req.notes || null;
       changed(details.map((d) => d.face.id));
+    },
+    // No file system: the save is recorded in `mockSavedInventories`, one row per family
+    // the collection's search finds, as fm-core lists them.
+    saveLicenseInventory: async (req, fileName) => {
+      const collection = req.collection ?? null;
+      if (collection != null) findCollection(collection);
+      const path = mockPickedSaves.length
+        ? mockPickedSaves.shift()!
+        : `/Users/demo/Documents/${fileName}`;
+      if (path === null) return null;
+      const rows = hits('', { collection }).length;
+      mockSavedInventories.push({ path, collection, rows });
+      return rows;
     },
     // Like the Rust mock: no file system, an empty path is a missing file and
     // the copy is a made-up path in the chosen place.

@@ -851,8 +851,11 @@ impl ExportService for CoreApi {
         Err(not_available("Exporting web fonts"))
     }
 
-    fn license_inventory(&self, _req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {
-        Err(not_available("The license inventory"))
+    /// The CSV is returned, nothing is written: the shell saves it to a
+    /// file the user picks.
+    fn license_inventory(&self, req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {
+        let rows = self.lock().license_inventory(req.collection)?;
+        Ok(crate::inventory::to_csv(&rows))
     }
 
     /// Reads the face's file outside the index lock, as `list_glyphs`; the
