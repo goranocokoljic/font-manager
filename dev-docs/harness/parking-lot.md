@@ -168,3 +168,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E14.4 #117] apps/desktop/src/views/HomeView.vue:309 — the "Smart collections" placeholder group from #218 stays empty; smart collections show only as badged rows in the Collections tree.
 - [E14.4 #117] apps/desktop/src/components/FilterChips.vue:169 — the chips bar is capped at max-height 96px, so at 1,000×700 the save button and its inline error sit below the fold of that scroller.
 - [E17.3 #128] scripts/bench/lib.test.mjs:396 — the debug-build bench test on the macOS runner measured activation_100 at 1008 ms (budget 1000 ms; the release bench on main measures 763 ms), so it fails on runner noise with no code change (CI run 39643524037).
+- [E18.2 #130] scripts/release/dev-build.mjs:22 — macOS builds only on macos-latest (arm64), so releases have no darwin-x86_64 update target for Intel Macs.
+- [E18.2 #130] scripts/release/build.mjs:316 — args() now treats a bare --flag as true while dev-build.mjs:93 and update-manifest.mjs:169 do not; three parsers in one folder differ.
+- [E18.2 #130] apps/desktop/src-tauri/src/lib.rs — on Windows the updater's install() calls process::exit(0), so RunEvent::Exit (log flush, tray cleanup) never runs after an update; the quit path itself already ran.

@@ -1,0 +1,20 @@
+{
+  "id": "a-third-party-installer-or-updater-must-never-be-able-to-ask",
+  "title": "A third-party installer or updater must never be able to ask for admin rights",
+  "category": "platform-parity",
+  "rule": "When the app hands work to a library or OS tool that installs or replaces files (Tauri's updater, msiexec, an AppleScript helper), read which paths make that tool elevate (a per-machine MSI, a bundle swap that fails with PermissionDenied) and offer the action only where none can happen: check that this user can write every folder the tool writes into (the install folder, and on macOS the .app bundle itself), check again right before the action, and leave per-machine packages out of the update manifest. A copy that cannot be updated without elevation shows a platform note instead (rule 4). Test the decision as a pure function with a writability stand-in, including parent-writable-but-target-not.",
+  "rationale": "E18.2 (#130): the per-machine .msi updated through msiexec (UAC), and a macOS app whose folder or bundle the user could not write made the updater run 'with administrator privileges'.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    130
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/**",
+    "crates/fm-platform/**",
+    "scripts/release/**"
+  ],
+  "first_seen": "2026-10-21T19:08:06.062Z",
+  "last_seen": "2026-10-21T19:08:06.062Z"
+}
