@@ -9,6 +9,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::layout::Layout;
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
@@ -253,6 +254,18 @@ async fn sample_texts(
 #[tauri::command]
 async fn css_values(state: State<'_, AppState>, req: CssValuesRequest) -> ApiResult<CssValues> {
     call(&state, move |api| api.css_values(req)).await
+}
+
+/// The six body-text layout presets.
+#[tauri::command]
+async fn layout_presets(state: State<'_, AppState>) -> ApiResult<Vec<Layout>> {
+    call(&state, move |api| api.layout_presets()).await
+}
+
+/// A layout with every block value clamped into its range.
+#[tauri::command]
+async fn clamp_layout(state: State<'_, AppState>, req: Layout) -> ApiResult<Layout> {
+    call(&state, move |api| api.clamp_layout(req)).await
 }
 
 #[tauri::command]
@@ -602,6 +615,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             delete_virtual_style,
             sample_texts,
             css_values,
+            layout_presets,
+            clamp_layout,
             render_preview,
             activate,
             deactivate,

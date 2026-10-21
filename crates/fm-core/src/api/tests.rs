@@ -1773,3 +1773,18 @@ fn a_receipt_cannot_be_kept_next_to_a_font_in_a_folder_that_is_not_there() {
     assert_eq!(err.code, ErrorCode::InvalidRequest);
     assert!(err.message.contains("data folder"), "{err:?}");
 }
+
+#[test]
+fn layouts_are_the_core_presets_and_come_back_clamped() {
+    let lib = Lib::new("api-layout");
+    assert_eq!(
+        lib.api.layout_presets().expect("presets"),
+        layout::presets()
+    );
+    let mut wild = layout::preset(fm_api::layout::LayoutPreset::Quote);
+    wild.blocks[0].size_pt = 2_000.0;
+    wild.blocks[1].tracking = f32::NAN;
+    let got = lib.api.clamp_layout(wild).expect("clamp");
+    assert_eq!(got.blocks[0].size_pt, 600.0);
+    assert_eq!(got.blocks[1].tracking, 0.0);
+}

@@ -39,6 +39,7 @@ import type {
   JobId,
   KeepCopyRequest,
   LanguagePreset,
+  Layout,
   ListFamiliesRequest,
   MoveCollectionRequest,
   Paged,
@@ -132,6 +133,10 @@ export interface FmClient {
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
   /** The CSS declarations for a face's moved axes and switched features ("Copy CSS"). */
   cssValues(req: CssValuesRequest): Promise<CssValues>;
+  /** The six body-text layout presets (Book, Columns, Magazine, Quote, Characters, Waterfall). */
+  layoutPresets(): Promise<Layout[]>;
+  /** A layout with every block value clamped into its range. */
+  clampLayout(req: Layout): Promise<Layout>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -205,6 +210,8 @@ export const tauriClient: FmClient = {
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
   cssValues: (req) => invoke<CssValues>('css_values', { req }),
+  layoutPresets: () => invoke<Layout[]>('layout_presets'),
+  clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),

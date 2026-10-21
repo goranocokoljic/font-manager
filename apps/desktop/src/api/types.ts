@@ -112,6 +112,17 @@ export type AxisValue = {
 	value: number | null,
 };
 
+/**  How the lines of a block line up. */
+export type BlockAlign = 
+/**  Left in left-to-right text. */
+"start" | 
+/**  Centered. */
+"center" | 
+/**  Right in left-to-right text. */
+"end" | 
+/**  Both edges. */
+"justify";
+
 /**  How many characters of one Unicode block a face maps. */
 export type BlockCoverage = {
 	/**
@@ -128,6 +139,13 @@ export type BlockCoverage = {
 	/**  Assigned code points of the block. */
 	assigned: number,
 };
+
+/**  What a block does with text that does not fit its width. */
+export type BlockOverflow = 
+/**  Breaks the text into lines. */
+"wrap" | 
+/**  Keeps one line per paragraph and hides what overflows. */
+"clip";
 
 /**  Pick fonts for a design brief. */
 export type BriefRequest = {
@@ -1110,6 +1128,31 @@ export type LanguagePreset = {
 	script: string,
 };
 
+/**  A layout: a list of text blocks, top to bottom. */
+export type Layout = {
+	/**  The preset this layout is, or started from; none for a layout of the user's own. */
+	preset?: LayoutPreset | null,
+	/**  Display name ("Book"). */
+	name: string,
+	/**  The blocks, top to bottom. */
+	blocks: TextBlock[],
+};
+
+/**  A built-in layout. */
+export type LayoutPreset = 
+/**  A book page: a heading and indented paragraphs in one column. */
+"book" | 
+/**  Body text flowed into balanced columns. */
+"columns" | 
+/**  A headline, a standfirst and two-column body text. */
+"magazine" | 
+/**  A large pull quote and its attribution. */
+"quote" | 
+/**  The character set at a large size. */
+"characters" | 
+/**  The same text at falling sizes. */
+"waterfall";
+
 /**
  *  Declare the license of a family (E15.2). It applies to every face of the
  *  family and replaces what was declared before: a field left absent is
@@ -1783,6 +1826,28 @@ collection: CollectionId } |
 /**  Set id. */
 set: SetId };
 
+/**  One block of text in a layout. */
+export type TextBlock = {
+	/**  The text; paragraphs are separated by a line break. */
+	text: string,
+	/**  Font size in points, 8–600. */
+	sizePt: number | null,
+	/**  Line height as a multiple of the size, 0.1–3.0. */
+	lineHeight: number | null,
+	/**  Letter spacing in thousandths of an em, −200–1000. */
+	tracking: number | null,
+	/**  Space after each paragraph in points, 0–600. */
+	paragraphSpacingPt: number | null,
+	/**  Indent of each paragraph's first line in em, 0–20. */
+	firstLineIndentEm: number | null,
+	/**  Columns the text flows into, 1–3. */
+	columns: number,
+	/**  Alignment. */
+	align: BlockAlign,
+	/**  Wrap or clip. */
+	overflow: BlockOverflow,
+};
+
 /**  The colors of the app. */
 export type Theme = 
 /**  Follow the OS appearance. */
@@ -1891,4 +1956,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 10, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 11, patch: 0 };
