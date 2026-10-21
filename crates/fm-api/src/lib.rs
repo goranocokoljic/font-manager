@@ -33,6 +33,7 @@ pub mod organization;
 pub mod preview;
 pub mod search;
 pub mod settings;
+pub mod update;
 pub mod workflows;
 
 pub use activation::ActivationService;
@@ -58,7 +59,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 15,
+    minor: 16,
     patch: 0,
 };
 
@@ -218,6 +219,12 @@ pub fn types() -> specta::Types {
         settings::Settings,
         settings::SettingsUpdate,
         settings::AppFolders,
+        // updates
+        update::UpdateKind,
+        update::AvailableUpdate,
+        update::UpdateCheck,
+        update::UpdateSupport,
+        update::InstallUpdateRequest,
         // layout
         layout::Layout,
         layout::TextBlock,
@@ -252,13 +259,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.15.0");
+        assert_eq!(API_VERSION.to_string(), "0.16.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":15,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":16,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

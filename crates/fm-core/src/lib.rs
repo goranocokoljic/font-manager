@@ -43,6 +43,7 @@ pub mod startup;
 pub mod telemetry;
 #[cfg(test)]
 mod test_support;
+pub mod update;
 
 pub use activation::ActivationManager;
 pub use api::CoreApi;

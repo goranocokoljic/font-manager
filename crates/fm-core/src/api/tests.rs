@@ -648,6 +648,20 @@ fn bad_source_requests_are_errors_not_panics() {
 }
 
 #[test]
+fn app_info_notes_how_updates_arrive_where_the_app_does_not_update_itself() {
+    let lib = Lib::new("api-update-notes");
+    let notes = lib.api.app_info().expect("info").platform_notes;
+    let note = crate::update::support(&fm_platform::updater::distribution()).reason;
+    match note {
+        Some(note) => assert!(notes.contains(&note), "{notes:?}"),
+        None => assert!(
+            !notes.iter().any(|n| n.contains("Check for updates")),
+            "{notes:?}"
+        ),
+    }
+}
+
+#[test]
 fn app_info_says_when_closing_the_window_quits() {
     let lib = Lib::new("api-tray-notes");
     let quits = |notes: &[String]| notes.iter().any(|n| n.contains("closing the window quits"));
@@ -674,6 +688,13 @@ fn child_reports_start_at_login_inside_a_flatpak() {
     let notes = lib.api.app_info().expect("info").platform_notes;
     assert!(
         notes.iter().any(|n| n.contains("Flatpak sandbox")),
+        "{notes:?}"
+    );
+    // Flatpak installs the updates: the note says so (E18.2).
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains("Flatpak installs the updates")),
         "{notes:?}"
     );
     let store = SettingsStore::new(&lib.paths).with_system_autostart();

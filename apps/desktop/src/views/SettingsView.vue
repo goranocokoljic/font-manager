@@ -9,12 +9,14 @@ import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSourcesStore } from '../stores/sources';
 import { useToastStore } from '../stores/toast';
+import { useUpdatesStore } from '../stores/updates';
 
 const store = useSettingsStore();
 const sources = useSourcesStore();
 const commands = useCommandsStore();
 const app = useAppStore();
 const toast = useToastStore();
+const updates = useUpdatesStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -78,6 +80,7 @@ onMounted(async () => {
     store.settings ? undefined : store.load(),
     store.loadWindow(),
     app.info ? undefined : app.load(),
+    updates.support ? undefined : updates.loadSupport(),
     sources.load(),
   ]);
 });
@@ -360,6 +363,57 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
         <template v-else-if="current === 'about' && app.info">
           <h2 class="heading">About</h2>
           <p class="note">{{ app.info.name }} {{ app.info.version }}</p>
+          <!-- Hidden where Flatpak or a package manager installs the updates; the
+               platform notes below say so (ADR 0012). -->
+          <section v-if="updates.support?.offered" class="updates" aria-labelledby="updates-title">
+            <h3 id="updates-title" class="subheading">Updates</h3>
+            <div class="add">
+              <button
+                type="button"
+                class="button"
+                :disabled="updates.status === 'checking' || updates.status === 'installing'"
+                @click="updates.check()"
+              >
+                Check for updates
+              </button>
+              <button
+                v-if="updates.status === 'available' && updates.update && !updates.open"
+                type="button"
+                class="button"
+                @click="updates.open = true"
+              >
+                Show version {{ updates.update.version }}
+              </button>
+            </div>
+            <p role="status" class="note status">
+              <template v-if="updates.status === 'checking'">Checking for updates…</template>
+              <template v-else-if="updates.status === 'upToDate'"
+                >Font Manager is up to date.</template
+              >
+              <template v-else-if="updates.status === 'available' && updates.update"
+                >Version {{ updates.update.version }} is available.</template
+              >
+            </p>
+            <p v-if="updates.error && !updates.open" role="alert" class="error">
+              {{ updates.error.message }}
+            </p>
+            <label v-if="s" class="choice">
+              <input
+                type="checkbox"
+                name="check-updates-automatically"
+                aria-describedby="check-updates-hint"
+                :checked="s.checkUpdatesAutomatically"
+                @change="
+                  choose({ checkUpdatesAutomatically: ($event.target as HTMLInputElement).checked })
+                "
+              />
+              Check automatically when Font Manager starts
+            </label>
+            <p id="check-updates-hint" class="note hint">
+              Font Manager contacts its release server only when you check or when this is on.
+              Nothing installs until you confirm it.
+            </p>
+          </section>
           <h3 id="platform-notes-title" class="subheading">Platform notes</h3>
           <ul
             v-if="app.info.platformNotes?.length"
@@ -441,6 +495,15 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
 }
 .start-at-login {
   margin-top: 12px;
+}
+.updates {
+  margin-bottom: 8px;
+}
+.status {
+  margin-top: 8px;
+}
+.status:empty {
+  display: none;
 }
 .subheading {
   margin: 16px 0 8px;

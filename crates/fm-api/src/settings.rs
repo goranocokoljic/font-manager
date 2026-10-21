@@ -69,6 +69,11 @@ pub struct Settings {
     /// is hidden). Off until the user turns it on.
     #[serde(default)]
     pub start_at_login: Option<bool>,
+    /// Check for a new version when the app starts. Off unless the user
+    /// turns it on (rule 7: no network call without a user action); where
+    /// the app does not update itself the switch is hidden.
+    #[serde(default)]
+    pub check_updates_automatically: bool,
 }
 
 impl Default for Settings {
@@ -83,6 +88,7 @@ impl Default for Settings {
             rescan_interval_minutes: 60,
             keep_in_tray: true,
             start_at_login: None,
+            check_updates_automatically: false,
         }
     }
 }
@@ -119,6 +125,9 @@ pub struct SettingsUpdate {
     /// in the tray. Refused where the settings report `start_at_login: None`.
     #[serde(default)]
     pub start_at_login: Option<bool>,
+    /// Check for a new version when the app starts.
+    #[serde(default)]
+    pub check_updates_automatically: Option<bool>,
 }
 
 impl Settings {
@@ -160,6 +169,9 @@ impl Settings {
                 .unwrap_or(self.rescan_interval_minutes),
             keep_in_tray: update.keep_in_tray.unwrap_or(self.keep_in_tray),
             start_at_login: update.start_at_login.or(self.start_at_login),
+            check_updates_automatically: update
+                .check_updates_automatically
+                .unwrap_or(self.check_updates_automatically),
         })
     }
 }
@@ -204,6 +216,22 @@ mod tests {
         assert_eq!(s.rescan_interval_minutes, 60);
         assert!(s.keep_in_tray);
         assert_eq!(s.start_at_login, None);
+        assert!(!s.check_updates_automatically);
+    }
+
+    #[test]
+    fn automatic_update_checks_are_off_for_old_config_files_and_can_be_turned_on() {
+        // A config.json written before the field existed never checks by itself.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert!(!old.check_updates_automatically);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["checkUpdatesAutomatically"], false);
+        let on: SettingsUpdate =
+            serde_json::from_str(r#"{"checkUpdatesAutomatically":true}"#).expect("update");
+        let next = Settings::default().apply(&on).expect("valid");
+        assert!(next.check_updates_automatically);
+        let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert!(unchanged.check_updates_automatically);
     }
 
     #[test]

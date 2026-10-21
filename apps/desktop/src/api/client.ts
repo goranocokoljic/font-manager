@@ -85,6 +85,9 @@ import type {
   TagFacesRequest,
   Target,
   UntagFacesRequest,
+  InstallUpdateRequest,
+  UpdateCheck,
+  UpdateSupport,
   UserMetaUpdate,
   VirtualStyle,
   VirtualStyleId,
@@ -245,6 +248,12 @@ export interface FmClient {
   pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
+  /** Whether this copy updates itself; where not, Settings hides the update section. */
+  updateSupport(): Promise<UpdateSupport>;
+  /** Asks the release server once (a user action, or "Check automatically" at start). */
+  checkForUpdate(): Promise<UpdateCheck>;
+  /** Installs the update the last check found; the app quits, installs and restarts. */
+  installUpdate(req: InstallUpdateRequest): Promise<void>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
@@ -333,6 +342,9 @@ export const tauriClient: FmClient = {
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
+  updateSupport: () => invoke<UpdateSupport>('update_support'),
+  checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
+  installUpdate: (req) => invoke<void>('install_update', { req }),
 };
 
 let current: FmClient | undefined;

@@ -7,7 +7,8 @@
 //! [`crate::CoreApi::shutdown`] deregisters the session fonts (ADR 0008).
 
 use fm_api::activation::{
-    ActivationMode, ActivationOutcome, ActivationService, ActiveFace, DeactivateRequest, Target,
+    ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace,
+    ConflictPolicy, DeactivateRequest, Target,
 };
 use fm_api::settings::Settings;
 use fm_api::{ApiResult, FaceId};
@@ -96,6 +97,24 @@ pub fn deactivate_session(api: &dyn ActivationService) -> ApiResult<Vec<Activati
     api.deactivate(DeactivateRequest {
         target: Some(Target::Faces { faces }),
         except: None,
+    })
+}
+
+/// Activates `faces` for the session again: the session fonts a quit ended
+/// when the app goes on running after all (an update that did not install,
+/// E18.2). Nothing is asked of `api` when `faces` is empty.
+pub fn restore_session(
+    api: &dyn ActivationService,
+    faces: Vec<FaceId>,
+    on_conflict: ConflictPolicy,
+) -> ApiResult<Vec<ActivationOutcome>> {
+    if faces.is_empty() {
+        return Ok(Vec::new());
+    }
+    api.activate(ActivateRequest {
+        target: Target::Faces { faces },
+        mode: ActivationMode::Session,
+        on_conflict,
     })
 }
 

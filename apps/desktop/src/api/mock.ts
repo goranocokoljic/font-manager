@@ -10,6 +10,8 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type AvailableUpdate,
+  type InstallUpdateRequest,
   type Classification,
   type CssValues,
   type CssValuesRequest,
@@ -299,7 +301,27 @@ export const defaultSettings: FullSettings = {
   keepInTray: true,
   // Offered on Windows, macOS and Linux (ADR 0011), off until turned on.
   startAtLogin: false,
+  // Off unless the user turns it on (rule 7).
+  checkUpdatesAutomatically: false,
 };
+
+/** The releases the mock's server can offer the mock app (0.1.0). */
+export const mockUpdates = {
+  patch: {
+    currentVersion: '0.1.0',
+    version: '0.1.1',
+    notes: '- Scans skip unreadable folders instead of stopping.\n- Faster search.',
+    date: '2026-10-01T12:00:00Z',
+    kind: 'patch',
+  },
+  major: {
+    currentVersion: '0.1.0',
+    version: '1.0.0',
+    notes: '- The first stable release.\n- Settings moved to a new file.',
+    date: '2026-10-15T12:00:00Z',
+    kind: 'major',
+  },
+} as const satisfies Record<string, AvailableUpdate>;
 
 /** The app folders of the Rust mock. */
 export const mockFolders: AppFolders = {
@@ -641,6 +663,15 @@ export interface MockOptions {
   startAtLogin?: 'off' | 'refuse' | 'unsupported';
   /** The OS `getAppInfo` reports (`linux` by default). */
   platform?: AppInfo['platform'];
+  /**
+   * What "Check for updates" finds: `none` (the default: up to date), `patch` or
+   * `major` (an update to install), `offline` (the server cannot be reached),
+   * `unsigned` (the package is refused as unsigned), `managed` (a Flatpak: the
+   * update section is hidden and a platform note says why).
+   */
+  update?: 'none' | 'patch' | 'major' | 'offline' | 'unsigned' | 'managed';
+  /** Called with every install the mock accepts (tests). */
+  onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
   colorFace?: boolean;
 }
@@ -1747,9 +1778,68 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     throw invalid(`The mock cannot act on a ${target.kind}.`);
   };
 
+  // The same reason fm-core gives a Flatpak (update.rs).
+  const managedReason =
+    'Flatpak installs the updates of this copy (flatpak update, or your software center), so Check for updates is not shown.';
+  let pendingUpdate: AvailableUpdate | null = null;
+
   return {
-    getAppInfo: async () =>
-      options.platform ? { ...mockAppInfo, platform: options.platform } : mockAppInfo,
+    getAppInfo: async () => {
+      const info = options.platform ? { ...mockAppInfo, platform: options.platform } : mockAppInfo;
+      return options.update === 'managed'
+        ? { ...info, platformNotes: [...(info.platformNotes ?? []), managedReason] }
+        : info;
+    },
+    updateSupport: async () =>
+      options.update === 'managed'
+        ? { offered: false, reason: managedReason }
+        : { offered: true, reason: null },
+    checkForUpdate: async () => {
+      if (options.update === 'managed')
+        throw { code: 'unsupported' as const, message: managedReason, detail: null };
+      if (options.update === 'offline')
+        throw {
+          code: 'io' as const,
+          message:
+            'Font Manager could not reach its release server. Check your connection and try again.',
+          detail: 'dns error',
+        };
+      const found =
+        options.update === 'major'
+          ? mockUpdates.major
+          : options.update === 'patch' || options.update === 'unsigned'
+            ? mockUpdates.patch
+            : null;
+      pendingUpdate = found ? { ...found } : null;
+      return { currentVersion: mockAppInfo.version, update: pendingUpdate };
+    },
+    // The same rules as `InstallUpdateRequest::check` in fm-api.
+    installUpdate: async (req) => {
+      if (!pendingUpdate)
+        throw {
+          code: 'notFound' as const,
+          message: 'No update is on offer. Check for updates first.',
+          detail: null,
+        };
+      if (req.version !== pendingUpdate.version)
+        throw {
+          code: 'conflict' as const,
+          message: `Version ${req.version} is no longer the update on offer. Check for updates again.`,
+          detail: null,
+        };
+      if (pendingUpdate.kind === 'major' && !req.confirmMajor)
+        throw invalid(
+          `Version ${pendingUpdate.version} is a major update. Confirm it a second time to install it.`,
+        );
+      if (options.update === 'unsigned')
+        throw {
+          code: 'permissionDenied' as const,
+          message:
+            "The update was not installed: it is not signed with Font Manager's release key. Download Font Manager from its releases page instead.",
+          detail: 'Minisign(InvalidSignature)',
+        };
+      options.onInstall?.({ ...req });
+    },
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
@@ -2447,6 +2537,11 @@ export const mockClient: FmClient = createMockClient({
   ],
   // `?mockPlatform=windows|macos|linux` sets the OS the app reports.
   platform: platformFromUrl(),
+  // `?mockUpdate=1` offers a patch, `=2` a major update, `=3` cannot reach the
+  // server, `=4` offers an unsigned package, `=5` is a Flatpak (no update section).
+  update: (['patch', 'major', 'offline', 'unsigned', 'managed'] as const)[
+    countFromUrl('mockUpdate', 5) - 1
+  ],
   // `?mockColor=1` adds a color font with two palettes.
   colorFace: countFromUrl('mockColor', 1) > 0,
 });
