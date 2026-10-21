@@ -180,3 +180,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E19.4 #136] apps/desktop/src/components/FontPreviewRow.vue:154 — the `.sample` span has no `lang` attribute, so non-Latin samples reach screen readers untagged.
 - [E20.1 #137] crates/fm-api/src/mock.rs:2924 — `MockApi::export_web` does not de-duplicate repeated face ids (lists a file twice) while fm-core does.
 - [E16.4 #125] apps/desktop/src/components/QuickCollectionReview.vue:48 — still calls `previewRowHeight(props.preview)` without a density, so the Quick Collection review list keeps comfortable row heights in compact mode.
+
+## 2026-10-22
+
+- [E20.2 #138] crates/fm-core/src/index/faces.rs:234 — `web_export_face` returns Broken faces for export without a health filter, so whole-font export also feeds damaged data to the encoders.

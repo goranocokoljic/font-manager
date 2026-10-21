@@ -1,0 +1,18 @@
+{
+  "id": "wrap-third-party-font-crates-that-can-panic-in-catch-unwind",
+  "title": "Wrap third-party font crates that can panic in catch_unwind",
+  "category": "error-handling",
+  "rule": "When fm-core hands font bytes to a third-party crate that uses expect/unwrap or slice indexing on font data (skera, wuff, encoders, rasterizers), run the call inside `std::panic::catch_unwind(AssertUnwindSafe(..))` and map a caught panic to an FmError (or Health::Broken). Add a test with a mutated fixture (for example a table removed) that reaches the panicking path and asserts the error.",
+  "rationale": "E20.2 (#138): `subset::cut` called skera's Plan::new without a guard; a font with `loca` but no `glyf` made skera `expect` and crash the export instead of failing that face.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    138
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-21T23:27:51.551Z",
+  "last_seen": "2026-10-21T23:27:51.551Z"
+}
