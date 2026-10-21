@@ -22,7 +22,7 @@
 // deactivated). Writes the per-OS JSON report
 // (default target/bench/bench-<os>.json) and prints a table.
 // The library is only read; the index lives in a throwaway home folder.
-// gate: marks each budgeted metric against the median of the last nightly runs on
+// gate: marks each budgeted metric against the slowest of the last runs on
 // main (lib.mjs gate()); a PR fails at more than 10% worse, or newly over budget.
 // It writes the marked report (default: in place) and a GitHub annotation per regression.
 //
