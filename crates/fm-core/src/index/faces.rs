@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Health, Metrics, Slant};
+use fm_api::common::{Embedding, Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
@@ -27,6 +27,7 @@ use crate::license;
 use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
+use crate::web_font::{self, ExportFace};
 
 /// One face with what its summary and detail need.
 const FACE: &str = "
@@ -50,6 +51,15 @@ pub struct FaceLocation {
     pub collection_index: u32,
     /// The hash of the bytes last read; `None` until a scan read the file.
     pub hash: Option<FileHash>,
+}
+
+/// A face to export as a web font ([`Index::web_export_face`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebExportFace {
+    /// The face's file, output name and label.
+    pub face: ExportFace,
+    /// Its license keeps it off the web.
+    pub restricted: bool,
 }
 
 /// One face row read by [`FACE`].
@@ -215,6 +225,30 @@ impl Index {
     /// The file of the face `face`. An unknown face is `NotFound`.
     pub fn face_file(&self, face: FaceId) -> FmResult<FaceLocation> {
         Ok(self.face_row(face)?.file)
+    }
+
+    /// What a web export needs about the face `face` (E20.1): its file, its
+    /// output name and label, and whether its license keeps it off the web
+    /// (a restricted embedding and no web license declared, the family's
+    /// declaration first). An unknown face is `NotFound`.
+    pub fn web_export_face(&self, face: FaceId) -> FmResult<WebExportFace> {
+        let row = self.face_row(face)?;
+        let declared = self
+            .declared_license(&row.summary.family_name)?
+            .and_then(|d| d.license_type)
+            .or(row.license_type);
+        let restricted = license::embedding(row.fs_type) == Embedding::Restricted
+            && declared != Some(LicenseType::Web);
+        let s = &row.summary;
+        Ok(WebExportFace {
+            face: ExportFace {
+                path: row.file.path,
+                collection_index: row.file.collection_index,
+                file_stem: web_font::file_stem(&s.postscript_name, u64::from(face.0)),
+                label: format!("{} {}", s.family_name, s.style),
+            },
+            restricted,
+        })
     }
 
     /// The webview's view of [`Index::face_file`].

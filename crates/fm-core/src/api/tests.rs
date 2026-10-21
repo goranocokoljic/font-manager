@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
+use fm_api::export::{Subset, WebFormat};
 use fm_api::library::{
     FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
     ProblemKind, TrashMoveStatus,
@@ -1174,13 +1175,6 @@ fn settings_live_in_the_config_file() {
 #[test]
 fn services_not_built_yet_answer_unsupported() {
     let lib = Lib::new("api-not-built");
-    is_unsupported(lib.api.export_web(ExportWebRequest {
-        faces: vec![FaceId(1)],
-        formats: Vec::new(),
-        subset: None,
-        out_dir: "out".into(),
-        css: false,
-    }));
     is_unsupported(lib.api.pick_fonts_for_brief(BriefRequest {
         brief: "a poster".into(),
         languages: Vec::new(),
@@ -1379,6 +1373,160 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
     }
     out.sort();
     out
+}
+
+fn web_request(faces: Vec<FaceId>, out_dir: &Path) -> ExportWebRequest {
+    ExportWebRequest {
+        faces,
+        formats: vec![WebFormat::Woff2, WebFormat::Woff],
+        subset: None,
+        out_dir: out_dir.display().to_string(),
+        css: false,
+    }
+}
+
+#[test]
+fn faces_export_as_web_fonts_named_by_postscript_name() {
+    let (lib, _, _) = Lib::scanned("api-export-web");
+    let first = |name: &str| {
+        lib.api
+            .get_family(lib.family(name).id)
+            .expect("family")
+            .faces[0]
+            .clone()
+    };
+    let bebas = first("Bebas Neue");
+    let archivo = first("Archivo");
+    let ttc = lib
+        .api
+        .get_family(lib.family("Agdasima").id)
+        .expect("family")
+        .faces
+        .into_iter()
+        .find(|f| {
+            let d = lib.api.get_face(f.id).expect("face");
+            d.path.ends_with(".ttc") && d.collection_index == 1
+        })
+        .expect("a face of the collection");
+    let out = lib.dir.path().join("Web fonts ü");
+    std::fs::create_dir_all(&out).expect("out");
+    let before = files_under(&lib.root);
+    let faces = vec![bebas.id, ttc.id, archivo.id, bebas.id];
+    let res = lib
+        .api
+        .export_web(web_request(faces, &out))
+        .expect("export");
+    assert_eq!(res.css, None);
+    let mut want = Vec::new();
+    for f in [&bebas, &ttc, &archivo] {
+        for ext in ["woff2", "woff"] {
+            let path = out.join(format!("{}.{ext}", f.postscript_name));
+            want.push(path.display().to_string());
+        }
+    }
+    assert_eq!(res.files, want);
+    for f in &res.files {
+        assert!(Path::new(f).is_absolute(), "{f}");
+        let bytes = std::fs::read(f).expect("written");
+        assert!(
+            bytes.starts_with(b"wOF2") || bytes.starts_with(b"wOFF"),
+            "{f}"
+        );
+    }
+    assert_eq!(files_under(&lib.root), before, "the sources are only read");
+
+    // A second export into the same folder clashes and writes nothing.
+    let e = lib
+        .api
+        .export_web(web_request(vec![archivo.id], &out))
+        .expect_err("clash");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    let name = format!("{}.woff2", archivo.postscript_name);
+    assert!(e.message.contains(&name), "{e:?}");
+    assert_eq!(files_under(&out).len(), 6);
+}
+
+#[test]
+fn web_export_refuses_what_it_cannot_do_yet_and_bad_requests() {
+    let (lib, _, _) = Lib::scanned("api-export-web-refused");
+    let face = lib
+        .api
+        .get_family(lib.family("Bebas Neue").id)
+        .expect("family")
+        .faces[0]
+        .id;
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let code = |req| lib.api.export_web(req).expect_err("refused").code;
+
+    is_unsupported(lib.api.export_web(ExportWebRequest {
+        subset: Some(Subset::Text { text: "abc".into() }),
+        ..web_request(vec![face], &out)
+    }));
+    is_unsupported(lib.api.export_web(ExportWebRequest {
+        css: true,
+        ..web_request(vec![face], &out)
+    }));
+    assert_eq!(
+        code(web_request(Vec::new(), &out)),
+        ErrorCode::InvalidRequest
+    );
+    let no_format = ExportWebRequest {
+        formats: Vec::new(),
+        ..web_request(vec![face], &out)
+    };
+    assert_eq!(code(no_format), ErrorCode::InvalidRequest);
+    let no_folder = ExportWebRequest {
+        out_dir: "  ".into(),
+        ..web_request(vec![face], &out)
+    };
+    assert_eq!(code(no_folder), ErrorCode::InvalidRequest);
+    let unknown = web_request(vec![face, FaceId(999_999)], &out);
+    assert_eq!(code(unknown), ErrorCode::NotFound);
+    assert!(files_under(&out).is_empty());
+}
+
+#[test]
+fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
+    let lib = Lib::new("api-export-web-restricted");
+    // Bebas Neue with OS/2 fsType 0x0002: restricted license embedding.
+    let mut data = std::fs::read(fixtures().join("google-repo/bebasneue/BebasNeue-Regular.ttf"))
+        .expect("fixture");
+    let os2 = read_fonts::FontRef::new(&data)
+        .expect("font")
+        .table_directory()
+        .table_records()
+        .iter()
+        .find(|r| r.tag() == read_fonts::types::Tag::new(b"OS/2"))
+        .map(|r| r.offset() as usize)
+        .expect("OS/2");
+    data[os2 + 8..os2 + 10].copy_from_slice(&[0x00, 0x02]);
+    let folder = lib.dir.path().join("Restricted");
+    std::fs::create_dir_all(&folder).expect("folder");
+    std::fs::write(folder.join("Restricted.ttf"), &data).expect("font");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let face = lib
+        .api
+        .get_family(lib.family("Bebas Neue").id)
+        .expect("family")
+        .faces[0]
+        .id;
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let e = lib
+        .api
+        .export_web(web_request(vec![face], &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert!(e.message.contains("Bebas Neue"), "{e:?}");
+    assert!(files_under(&out).is_empty());
 }
 
 #[test]

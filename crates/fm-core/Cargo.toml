@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 blake3 = "1.8"
+brotli = "9.0"
+flate2 = "1.1"
 fm-api.workspace = true
 fm-platform.workspace = true
 harfrust = "0.14"

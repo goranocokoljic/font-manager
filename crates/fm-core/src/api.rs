@@ -82,7 +82,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{css, glyph_svg, glyphs, layout, pangrams, preview};
+use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, web_font};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -883,8 +883,54 @@ impl OrganizationService for CoreApi {
 }
 
 impl ExportService for CoreApi {
-    fn export_web(&self, _req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
-        Err(not_available("Exporting web fonts"))
+    /// The faces are looked up under the index lock; their files are read
+    /// and the web fonts written outside it. Subsetting (E20.2) and CSS
+    /// (E20.3) are not built yet.
+    fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
+        if req.faces.is_empty() || req.formats.is_empty() {
+            return Err(ApiError::invalid("Pick at least one font and one format."));
+        }
+        if req.out_dir.trim().is_empty() {
+            return Err(ApiError::invalid("Choose an output folder."));
+        }
+        if req.subset.is_some() {
+            return Err(not_available("Subsetting web fonts"));
+        }
+        if req.css {
+            return Err(not_available("Writing web font CSS"));
+        }
+        let mut ids = HashSet::new();
+        let mut formats = Vec::new();
+        for f in req.formats {
+            if !formats.contains(&f) {
+                formats.push(f);
+            }
+        }
+        let faces = {
+            let index = self.lock();
+            req.faces
+                .into_iter()
+                .filter(|id| ids.insert(*id))
+                .map(|id| {
+                    let f = index.web_export_face(id)?;
+                    if f.restricted {
+                        return Err(FmError::new(
+                            ErrorCode::PermissionDenied,
+                            format!(
+                                "{} does not allow web embedding. Declare a web license to export it.",
+                                f.face.label
+                            ),
+                        ));
+                    }
+                    Ok(f.face)
+                })
+                .collect::<FmResult<Vec<_>>>()?
+        };
+        let files = web_font::export(&faces, &formats, Path::new(&req.out_dir))?;
+        Ok(ExportWebResponse {
+            files: files.iter().map(|p| p.display().to_string()).collect(),
+            css: None,
+        })
     }
 
     /// The CSV is returned, nothing is written: the shell saves it to a

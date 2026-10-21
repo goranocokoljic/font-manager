@@ -56,7 +56,7 @@ use rusqlite::Connection;
 use crate::error::{FmError, FmResult};
 
 pub(crate) use activation::{ActiveRow, FaceRow, platform_mode};
-pub use faces::FaceLocation;
+pub use faces::{FaceLocation, WebExportFace};
 pub use family_license::{DeclaredLicense, LicenseTarget};
 pub use files::{BATCH_SIZE, Persisted};
 pub(crate) use resolutions::StoredMove;
