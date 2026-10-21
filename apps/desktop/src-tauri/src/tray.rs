@@ -168,11 +168,22 @@ pub fn show_main<R: Runtime>(app: &AppHandle<R>) {
     }
 }
 
-/// What closing `window` does: the main window hides to the tray when
-/// "Keep running in the tray" is on and the app has a tray item; every other
-/// case closes as usual. Returns the action; the caller prevents the close
-/// for [`CloseAction::HideToTray`].
-pub fn on_close_requested<R: Runtime>(window: &Window<R>) -> CloseAction {
+/// Handles a close request for `window`: the main window hides to the tray
+/// when "Keep running in the tray" is on and the app has a tray item, and
+/// `prevent_close` stops the close; every other case closes as usual.
+/// Returns the action taken.
+pub fn on_close_requested<R: Runtime>(
+    window: &Window<R>,
+    prevent_close: impl FnOnce(),
+) -> CloseAction {
+    let action = close_request_action(window);
+    if action == CloseAction::HideToTray {
+        prevent_close();
+    }
+    action
+}
+
+fn close_request_action<R: Runtime>(window: &Window<R>) -> CloseAction {
     if window.label() != MAIN_WINDOW {
         return CloseAction::Quit;
     }

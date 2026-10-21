@@ -656,10 +656,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             "no tray item yet".into(),
         )))
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event
-                && tray::on_close_requested(window) == fm_core::lifecycle::CloseAction::HideToTray
-            {
-                api.prevent_close();
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                tray::on_close_requested(window, || api.prevent_close());
             }
         })
         .register_asynchronous_uri_scheme_protocol(FONT_SCHEME, |ctx, request, responder| {

@@ -366,6 +366,18 @@ fn app(
     (app, window)
 }
 
+/// Sends a close request for `window` through the app's close handler and
+/// says whether it stopped the close (the window stays, hidden). Tauri's
+/// mock runtime drops window-event listeners, so the test calls the handler
+/// the `on_window_event` closure calls.
+fn close_is_stopped(
+    window: &tauri::WebviewWindow<tauri::test::MockRuntime>,
+) -> (CloseAction, bool) {
+    let mut stopped = false;
+    let action = on_close_requested(&window.as_ref().window(), || stopped = true);
+    (action, stopped)
+}
+
 #[test]
 fn closing_the_window_keeps_session_fonts_and_quit_ends_them() {
     for family in [SESSION_FAMILY, PERMANENT_FAMILY] {
@@ -390,8 +402,9 @@ fn closing_the_window_keeps_session_fonts_and_quit_ends_them() {
     // Close the main window: the default settings keep the app in the tray.
     let (_app, window) = app(state, TraySupport::Available);
     assert_eq!(
-        on_close_requested(&window.as_ref().window()),
-        CloseAction::HideToTray
+        close_is_stopped(&window),
+        (CloseAction::HideToTray, true),
+        "the close request was not stopped; the app would quit"
     );
     assert!(
         second_process_agrees(&home.root, SESSION_FAMILY, true),
@@ -424,8 +437,9 @@ fn closing_quits_when_the_setting_is_off_or_there_is_no_tray() {
     // No tray item (a Linux desktop without a StatusNotifier host).
     let (_app, window) = app(state, TraySupport::Unavailable("no host".into()));
     assert_eq!(
-        on_close_requested(&window.as_ref().window()),
-        CloseAction::Quit
+        close_is_stopped(&window),
+        (CloseAction::Quit, false),
+        "the window stayed open without a tray item"
     );
 
     // A tray item, but "Keep running in the tray" off.
@@ -437,7 +451,8 @@ fn closing_quits_when_the_setting_is_off_or_there_is_no_tray() {
     .expect("saved");
     let (_app, window) = app(state, TraySupport::Available);
     assert_eq!(
-        on_close_requested(&window.as_ref().window()),
-        CloseAction::Quit
+        close_is_stopped(&window),
+        (CloseAction::Quit, false),
+        "the window stayed open with \"Keep running in the tray\" off"
     );
 }
