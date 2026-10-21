@@ -1796,6 +1796,7 @@ fn layouts_are_the_core_presets_and_come_back_clamped() {
     let got = lib.api.clamp_layout(wild).expect("clamp");
     assert_eq!(got.blocks[0].size_pt, 600.0);
     assert_eq!(got.blocks[1].tracking, 0.0);
+    assert_eq!(lib.api.layout_bounds().expect("bounds"), layout::bounds());
 }
 
 #[test]
