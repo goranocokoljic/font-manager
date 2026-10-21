@@ -2,7 +2,8 @@
 // The Info tab: every field fm-api reports for the selected face, its health
 // and the activation button. Names and paths copy on click. Tags, favorite,
 // rating, the notes of the face and of its family, and the family's declared
-// license are edited here; the API stores them.
+// license are edited here; the API stores them. A color face's palette picker
+// (E16.3) comes first.
 import { computed, nextTick, ref, watch } from 'vue';
 import type { Conflict, Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
 import { useSelectionStore } from '../stores/selection';
@@ -10,6 +11,7 @@ import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
 import InspectorLicense from './InspectorLicense.vue';
+import InspectorPalettes from './InspectorPalettes.vue';
 
 const selection = useSelectionStore();
 const tags = useTagsStore();
@@ -182,6 +184,8 @@ function clashText(c: Conflict): string {
           </div>
         </div>
       </header>
+
+      <InspectorPalettes />
 
       <section aria-labelledby="fm-info-names">
         <h3 id="fm-info-names">Names</h3>

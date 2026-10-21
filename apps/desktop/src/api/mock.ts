@@ -235,6 +235,44 @@ export const mockFaces: FaceDetail[] = [
   },
 ];
 
+/**
+ * A COLR color face with two CPAL palettes (E16.3), only in browser mode with
+ * `?mockColor=1` (the Rust mock has no color fonts): the first named, the second
+ * not, so the picker shows "Palette 2" for it.
+ */
+export const mockColorFace: FaceDetail = {
+  ...structuredClone(mockFaces[1]!),
+  face: {
+    ...mockFaces[1]!.face,
+    id: 8,
+    family: 8,
+    familyName: 'Color Play',
+    postscriptName: 'ColorPlay-Regular',
+  },
+  path: '/Users/demo/Fonts/ColorPlay-Regular.ttf',
+  hash: '8'.padStart(64, '0'),
+  copyright: 'Copyright Color Play Authors',
+  designer: 'Mock Designer',
+  legacyFamily: 'Color Play',
+  foundry: 'Mock Foundry',
+  palettes: [
+    {
+      index: 0,
+      name: 'Daylight',
+      colors: ['#a00000', '#a10010', '#a20020', '#a30030', '#a40040'],
+      lightBackground: true,
+      darkBackground: false,
+    },
+    {
+      index: 1,
+      name: null,
+      colors: ['#a0101080', '#a11010', '#a21020', '#a31030', '#a41040'],
+      lightBackground: false,
+      darkBackground: true,
+    },
+  ],
+};
+
 /** The system font the Rust mock gives face 6 the same PostScript name as. */
 const systemClash: Partial<Record<FaceId, string>> = {
   6: '/System/Library/Fonts/JetBrainsMono-Regular.ttf',
@@ -603,6 +641,8 @@ export interface MockOptions {
   startAtLogin?: 'off' | 'refuse' | 'unsupported';
   /** The OS `getAppInfo` reports (`linux` by default). */
   platform?: AppInfo['platform'];
+  /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
+  colorFace?: boolean;
 }
 
 /** A saved comparison as the mock keeps it: each face with its name when saved. */
@@ -769,7 +809,7 @@ function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySumma
     added: MOCK_ADDED,
     styles,
     weightRange: weights.length ? { min: Math.min(...weights), max: Math.max(...weights) } : null,
-    isColor: false,
+    isColor: details.some((d) => (d.palettes?.length ?? 0) > 0),
     version: detail?.version ?? null,
     location: mockSources[0]!.path,
     openLicense: details.find((d) => d.license.openLicense)?.license.openLicense ?? null,
@@ -1336,6 +1376,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   // The sample faces are copied: tagging and rating edit this client's faces only.
   const faces = [
     ...mockFaces.map((f) => structuredClone(f)),
+    ...(options.colorFace ? [structuredClone(mockColorFace)] : []),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
@@ -2406,4 +2447,6 @@ export const mockClient: FmClient = createMockClient({
   ],
   // `?mockPlatform=windows|macos|linux` sets the OS the app reports.
   platform: platformFromUrl(),
+  // `?mockColor=1` adds a color font with two palettes.
+  colorFace: countFromUrl('mockColor', 1) > 0,
 });

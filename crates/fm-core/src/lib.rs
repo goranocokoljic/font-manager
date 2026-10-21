@@ -28,6 +28,7 @@ pub mod layout;
 pub mod license;
 pub mod lifecycle;
 pub mod logging;
+pub mod palettes;
 mod parallel;
 pub mod parser;
 pub mod preview;
