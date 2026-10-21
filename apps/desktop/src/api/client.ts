@@ -31,6 +31,7 @@ import type {
   FamilyId,
   FamilyNotesUpdate,
   LicenseDeclaration,
+  LicenseInventoryRequest,
   FamilySummary,
   GlyphDetail,
   GlyphPage,
@@ -134,6 +135,12 @@ export interface FmClient {
   updateFamilyNotes(req: FamilyNotesUpdate): Promise<void>;
   /** A family's declared license: type, seats, purchase date, receipt (E15.2). */
   declareLicense(req: LicenseDeclaration): Promise<void>;
+  /**
+   * "Export license inventory…" (E15.4): asks where to save with the native save dialog,
+   * suggesting `fileName`, and writes the CSV of one collection (or the whole library)
+   * there. Resolves to the number of families written; `null` when the user cancels.
+   */
+  saveLicenseInventory(req: LicenseInventoryRequest, fileName: string): Promise<number | null>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
   /** A thumbnail: text rasterized in one face, cached by face hash and settings (PNG). */
@@ -233,6 +240,8 @@ export const tauriClient: FmClient = {
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
   declareLicense: (req) => invoke<void>('declare_license', { req }),
+  saveLicenseInventory: (req, fileName) =>
+    invoke<number | null>('save_license_inventory', { req, fileName }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),

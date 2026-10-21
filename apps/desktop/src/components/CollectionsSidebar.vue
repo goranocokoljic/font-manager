@@ -4,7 +4,8 @@
 // nest (In, Out), reorder (Up, Down) and delete them with the row buttons or by dragging a
 // collection onto another (top or bottom edge: before or after it; middle:
 // inside it). Drop fonts from the list on a collection to add them; the
-// palette has an "Add selected fonts to …" command per collection. The row
+// palette has an "Add selected fonts to …" command per collection, and
+// "Export license inventory…" for the open one (a row button too). The row
 // buttons show on the open collection and under keyboard focus.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CollectionId } from '../api/types';
@@ -148,6 +149,13 @@ function registerCommands(): void {
       title: 'New collection',
       group: 'Collections',
       run: () => startEdit(null, null),
+    }),
+    // The open collection's families, or the whole library under "All fonts".
+    commands.register({
+      id: 'collections.exportLicenseInventory',
+      title: 'Export license inventory…',
+      group: 'Collections',
+      run: () => store.exportLicenseInventory(store.openId),
     }),
     ...store.collections
       .filter((c) => !c.rules)
@@ -293,6 +301,14 @@ function countLabel(n: number): string {
               @click="moveOut(row)"
             >
               Out
+            </button>
+            <button
+              type="button"
+              :aria-label="`Export the license inventory of ${row.collection.name}`"
+              title="Save a CSV of its families' licenses"
+              @click="store.exportLicenseInventory(row.collection.id)"
+            >
+              Export license inventory…
             </button>
             <button
               type="button"

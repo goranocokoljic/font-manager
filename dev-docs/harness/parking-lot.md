@@ -156,3 +156,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E12.4 #107] apps/desktop/src/views/HomeView.vue — at 1280×800 with the inspector open, the toolbar's "Inspector" button is clipped ("Inspect…").
 - [E13.1 #109] apps/desktop/src/components/GlyphCompare.vue:178 — the glyph compare dialog root has no tabindex, so a click on its non-focusable content drops focus to body and the focus trap and Escape stop working (fixed for CompareSheet in E13.1).
 - [E13.1 #109] apps/desktop/src/components/FontPreviewRow.vue:104 — FontPreviewRow, FontLayout (:124) and CompareSheet each build the same `"<family>", var(--fm-preview-fallback, system-ui), sans-serif` font stack by hand.
+- [E15.4 #121] apps/desktop/src/components/CollectionsSidebar.vue:260 — "New inside" has the accessible name "New collection inside X", which does not contain its visible label (WCAG 2.5.3).
+- [E15.4 #121] crates/fm-api/src/mock.rs:2761 — the Rust `MockApi::license_inventory` still writes the old 6-column, LF, unquoted CSV, so it no longer matches fm-core's 12-column RFC 4180 CSV.
+- [E15.4 #121] crates/fm-core/src/license.rs:223 — two private `open_license_label` functions (short "OFL" here, long "SIL Open Font License" in inventory.rs) differ on purpose and can drift.
