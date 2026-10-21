@@ -82,7 +82,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, web_font};
+use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, subset, web_font};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -883,9 +883,9 @@ impl OrganizationService for CoreApi {
 }
 
 impl ExportService for CoreApi {
-    /// The faces are looked up under the index lock; their files are read
-    /// and the web fonts written outside it. Subsetting (E20.2) and CSS
-    /// (E20.3) are not built yet.
+    /// The faces are looked up under the index lock; their files are read,
+    /// subset and written outside it. The subset is checked before any face
+    /// is looked up. CSS (E20.3) is not built yet.
     fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
         if req.faces.is_empty() || req.formats.is_empty() {
             return Err(ApiError::invalid("Pick at least one font and one format."));
@@ -893,9 +893,7 @@ impl ExportService for CoreApi {
         if req.out_dir.trim().is_empty() {
             return Err(ApiError::invalid("Choose an output folder."));
         }
-        if req.subset.is_some() {
-            return Err(not_available("Subsetting web fonts"));
-        }
+        let keep = req.subset.as_ref().map(subset::code_points).transpose()?;
         if req.css {
             return Err(not_available("Writing web font CSS"));
         }
@@ -926,7 +924,7 @@ impl ExportService for CoreApi {
                 })
                 .collect::<FmResult<Vec<_>>>()?
         };
-        let files = web_font::export(&faces, &formats, Path::new(&req.out_dir))?;
+        let files = web_font::export(&faces, &formats, keep.as_ref(), Path::new(&req.out_dir))?;
         Ok(ExportWebResponse {
             files: files.iter().map(|p| p.display().to_string()).collect(),
             css: None,

@@ -946,6 +946,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "skera",
  "skrifa 0.48.0",
  "swash",
  "tracing",
@@ -3389,6 +3390,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33f4fe9184a62d842c9ef383018f3306d8ba224fd9d836f56d7288308847c256"
 
 [[package]]
+name = "skera"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "531045338e36ad05b9652912a47ba38a935d0eaa0293c3e33d8112cfa414c14b"
+dependencies = [
+ "hashbrown 0.17.1",
+ "skrifa 0.48.0",
+ "thiserror 2.0.21",
+ "write-fonts",
+]
+
+[[package]]
 name = "skrifa"
 version = "0.44.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5116,6 +5129,17 @@ name = "wit-bindgen"
 version = "0.57.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e"
+
+[[package]]
+name = "write-fonts"
+version = "0.54.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55716cfa7e8bcdb90289e07dfac478ccb2e3ec0f9a604fe682c7a03a7984d705"
+dependencies = [
+ "font-types",
+ "log",
+ "read-fonts 0.45.1",
+]
 
 [[package]]
 name = "writeable"

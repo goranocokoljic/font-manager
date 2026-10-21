@@ -5,6 +5,8 @@
 //!   with only its own tables. Table bytes are kept as they are, except the
 //!   `head` table's `checkSumAdjustment`, which is set for the standalone
 //!   font a decoder rebuilds (tables sorted by tag, 4-byte aligned).
+//! - **Subset** (E20.2): when the request keeps only some characters, the
+//!   standalone font is cut with [`subset::cut`] before it is encoded.
 //! - **WOFF 2**: every table is stored untransformed (`glyf`/`loca` with the
 //!   null transform, version 3), and the table data is one `brotli` stream.
 //! - **WOFF 1**: each table is compressed with zlib, or stored as it is when
@@ -28,6 +30,7 @@ use read_fonts::{FileRef, FontRef, TableProvider as _};
 use crate::error::{FmError, FmResult};
 use crate::font_file::font_mime;
 use crate::glyphs;
+use crate::subset::{self, Keep};
 
 /// A face to export.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,7 +92,8 @@ pub fn file_stem(postscript_name: &str, face_id: u64) -> String {
 
 /// Writes every face of `faces` in every format of `formats` to `out_dir`
 /// as `<file_stem>.<extension>`, and answers the absolute paths written, face
-/// by face in request order.
+/// by face in request order. With `keep`, each face is first cut down to
+/// those characters ([`subset::cut`]).
 ///
 /// A target that already exists, or two faces with the same file name, is
 /// `InvalidRequest` naming the file, and nothing is written. A face that
@@ -98,6 +102,7 @@ pub fn file_stem(postscript_name: &str, face_id: u64) -> String {
 pub fn export(
     faces: &[ExportFace],
     formats: &[WebFormat],
+    keep: Option<&Keep>,
     out_dir: &Path,
 ) -> FmResult<Vec<PathBuf>> {
     let out_dir = std::path::absolute(out_dir)
@@ -126,7 +131,10 @@ pub fn export(
         let data = fs::read(&face.path).map_err(|e| {
             FmError::io(format!("{} could not be read.", face.label), &face.path, &e)
         })?;
-        let sfnt = standalone(&data, face.collection_index).map_err(|e| about(face, e))?;
+        let mut sfnt = standalone(&data, face.collection_index).map_err(|e| about(face, e))?;
+        if let Some(keep) = keep {
+            sfnt = subset::cut(&sfnt, keep).map_err(|e| about(face, e))?;
+        }
         for &format in formats {
             let Some(target) = next.next() else {
                 return Err(FmError::internal("export plan is shorter than the request"));

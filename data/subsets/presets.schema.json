@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/subsets/presets.schema.json",
+  "title": "Font Manager web font subset presets",
+  "description": "The named character sets a web font export can keep (latin, cyrillic, ...). Each is a list of CSS unicode-range values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "source", "presets"],
+  "properties": {
+    "$schema": { "const": "./presets.schema.json" },
+    "source": {
+      "description": "Where the ranges come from: the Google Fonts CSS whose unicode-range splits they copy.",
+      "type": "string",
+      "pattern": "^https://"
+    },
+    "presets": {
+      "description": "Every preset. Names are unique.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/preset" }
+    }
+  },
+  "$defs": {
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "ranges"],
+      "properties": {
+        "name": {
+          "description": "The name a request uses (latin-ext): lower case letters and digits, words joined by '-'.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "ranges": {
+          "description": "CSS unicode-range values: U+XXXX, U+XXXX-YYYY or U+4?? (hex in upper case, at most 10FFFF, first at most last).",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^U[+]([0-9A-F]{1,6}(-[0-9A-F]{1,6})?|[0-9A-F]{0,5}[?]{1,6})$"
+          }
+        }
+      }
+    }
+  }
+}
