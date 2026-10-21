@@ -1411,19 +1411,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     return trimmed;
   };
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
+  const faceHits = (words: string[], d: FaceDetail, q: Filters, rule?: RuleGroup | null) => {
+    const hay =
+      `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
+    return (
+      words.every((w) => hay.includes(w)) &&
+      matches(d, q, []) &&
+      (!rule || passesGroup(d, rule, []))
+    );
+  };
+  const wordsOf = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean);
   const hits = (query: string, q: Filters, rule?: RuleGroup | null): FamilyHit[] => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const words = wordsOf(query);
     const out: FamilyHit[] = [];
     for (const [family, details] of byFamily) {
-      const matching = details.filter((d) => {
-        const hay =
-          `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
-        return (
-          words.every((w) => hay.includes(w)) &&
-          matches(d, q, []) &&
-          (!rule || passesGroup(d, rule, []))
-        );
-      });
+      const matching = details.filter((d) => faceHits(words, d, q, rule));
       if (!matching.length) continue;
       const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
       out.push({
@@ -1435,6 +1437,15 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     }
     return out.sort((a, b) => b.score! - a.score! || a.family.name.localeCompare(b.family.name));
   };
+  // The number of family groups `hits` returns, without building their rows: the
+  // counts run it once per filter value, so a 10,000-family list stays quick.
+  const hitCount = (query: string, q: Filters, rule?: RuleGroup | null): number => {
+    const words = wordsOf(query);
+    let n = 0;
+    for (const details of byFamily.values())
+      if (details.some((d) => faceHits(words, d, q, rule))) n++;
+    return n;
+  };
   // Per value, the family groups with that value chosen and the other filters kept.
   const countEach = <T>(
     query: string,
@@ -1444,7 +1455,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     rule?: RuleGroup | null,
   ): FilterCount<T>[] =>
     values
-      .map((value) => ({ value, count: hits(query, pick(q, value), rule).length }))
+      .map((value) => ({ value, count: hitCount(query, pick(q, value), rule) }))
       .filter((c) => c.count > 0);
   const distinct = <T>(list: T[]) => [...new Set(list)];
   const both = [true, false];
