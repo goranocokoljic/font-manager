@@ -5,15 +5,16 @@
   "rule": "When a Vue component is a modal (role=\"dialog\", aria-modal) whose focus trap, Escape and shortcut blocking live in a keydown handler on the dialog element, give the dialog root tabindex=\"-1\" so a click on its non-focusable content (text, an svg, a label; in WebKit also a radio) focuses the dialog instead of body. While it is open, also handle keys whose target is outside it (a window keydown listener in the capture phase that runs the dialog's handler and stops plain keys) and pull focusin on the page behind back into it, skipping other dialogs such as the command palette. Otherwise the global shortcuts (A activates the selected face) act on the list behind the modal. Test it with a Playwright step that clicks the dialog's text and then presses Tab, Shift+Tab and a shortcut key, and with a component test that dispatches keys on document.body.",
   "rationale": "E13.1 (#109): the Compare sheet trapped Tab and blocked shortcuts only in its own keydown handler; a click on the sample text dropped focus to body, Escape stopped working, Tab left the sheet and A toggled activation of the list's face behind the modal.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
-    109
+    109,
+    114
   ],
   "file_globs": [
     "apps/desktop/src/components/**/*.vue",
     "apps/desktop/e2e/**/*.ts"
   ],
   "first_seen": "2026-10-21T09:43:52.110Z",
-  "last_seen": "2026-10-21T09:43:52.110Z"
+  "last_seen": "2026-10-21T14:22:02.907Z"
 }

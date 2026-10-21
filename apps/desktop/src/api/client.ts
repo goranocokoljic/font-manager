@@ -78,6 +78,7 @@ import type {
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
+  UpdateCollectionRulesRequest,
   Source,
   SourceId,
   Tag,
@@ -125,6 +126,8 @@ export interface FmClient {
   /** Creates a collection; with `rules`, a smart one. */
   createCollection(req: CreateCollectionRequest): Promise<Collection>;
   renameCollection(req: RenameCollectionRequest): Promise<Collection>;
+  /** Replaces the rule of a smart collection (E14.1). */
+  updateCollectionRules(req: UpdateCollectionRulesRequest): Promise<Collection>;
   /** Nests a collection under another one, or reorders it among its siblings. */
   moveCollection(req: MoveCollectionRequest): Promise<Collection>;
   /** Deletes a collection and its children; the fonts are not touched. */
@@ -259,6 +262,7 @@ export const tauriClient: FmClient = {
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
   renameCollection: (req) => invoke<Collection>('rename_collection', { req }),
+  updateCollectionRules: (req) => invoke<Collection>('update_collection_rules', { req }),
   moveCollection: (req) => invoke<Collection>('move_collection', { req }),
   deleteCollection: (collection) => invoke<void>('delete_collection', { collection }),
   addToCollection: (req) => invoke<Collection>('add_to_collection', { req }),

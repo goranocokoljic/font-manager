@@ -27,8 +27,8 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest,
     QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup,
-    RuleOp, SelectionTagsRequest, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
-    VirtualStylesRequest,
+    RuleOp, SelectionTagsRequest, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest,
+    UserMetaUpdate, VirtualStylesRequest,
 };
 use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -2066,4 +2066,108 @@ fn tagging_a_family_tags_its_faces_and_the_selection_shows_mixed_tags() {
         families: vec![FamilyId(9999)],
     });
     assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+}
+
+/// E14.1: the mock refuses the rules fm-core refuses, updates a smart
+/// collection's rule, applies a draft rule to search and counts foundries.
+#[test]
+fn rule_editor_calls_behave_like_the_core() {
+    let api = api();
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let empty = smart(&api, "Empty", RuleOp::And, vec![]).unwrap_err();
+    assert_eq!(empty.code, ErrorCode::InvalidRequest);
+    let upside_down = smart(
+        &api,
+        "Upside down",
+        RuleOp::Or,
+        vec![leaf(Filters {
+            weight: Some(WeightRange { min: 900, max: 100 }),
+            ..Filters::default()
+        })],
+    )
+    .unwrap_err();
+    assert_eq!(upside_down.code, ErrorCode::InvalidRequest);
+    assert!(api.list_collections().unwrap().is_empty());
+
+    let italic = Filters {
+        slant: Some(Slant::Italic),
+        ..Filters::default()
+    };
+    let c = smart(&api, "Italic", RuleOp::And, vec![leaf(italic.clone())]).unwrap();
+    let draft = RuleGroup {
+        op: RuleOp::Or,
+        rules: vec![
+            leaf(italic.clone()),
+            leaf(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+        ],
+    };
+    let found = api
+        .search(SearchRequest {
+            rule: Some(draft.clone()),
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..SearchRequest::default()
+        })
+        .unwrap();
+    let draft_faces: usize = found.families.iter().map(|h| h.faces.len()).sum();
+    let updated = api
+        .update_collection_rules(UpdateCollectionRulesRequest {
+            collection: c.id,
+            rule_group: draft.clone(),
+        })
+        .unwrap();
+    assert_eq!(updated.rule_group, Some(draft));
+    assert_eq!(updated.face_count as usize, draft_faces);
+    assert!(draft_faces > 0);
+
+    let refused = api
+        .update_collection_rules(UpdateCollectionRulesRequest {
+            collection: c.id,
+            rule_group: RuleGroup {
+                op: RuleOp::And,
+                rules: vec![Rule::Group {
+                    group: RuleGroup {
+                        op: RuleOp::Or,
+                        rules: vec![],
+                    },
+                }],
+            },
+        })
+        .unwrap_err();
+    assert_eq!(refused.code, ErrorCode::InvalidRequest);
+    assert_eq!(
+        api.list_collections().unwrap()[0].rule_group,
+        updated.rule_group
+    );
+    let manual = api
+        .create_collection(CreateCollectionRequest {
+            name: "Manual".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+        })
+        .unwrap();
+    let not_smart = api
+        .update_collection_rules(UpdateCollectionRulesRequest {
+            collection: manual.id,
+            rule_group: RuleGroup::from(italic),
+        })
+        .unwrap_err();
+    assert_eq!(not_smart.code, ErrorCode::InvalidRequest);
+
+    let foundries = api
+        .search(SearchRequest::default())
+        .unwrap()
+        .counts
+        .unwrap()
+        .foundry;
+    assert!(!foundries.is_empty());
+    let mut sorted = foundries.clone();
+    sorted.sort_by(|a, b| a.value.cmp(&b.value));
+    assert_eq!(foundries, sorted);
 }

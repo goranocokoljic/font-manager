@@ -83,6 +83,28 @@ Read [Sources](sources.md) to learn more about folders.
   embedding permission of the font, its license URL and its folder. From the palette,
   the file lists the collection that is open, or all fonts.
 
+## Make a smart collection
+
+A smart collection fills itself from rules. Click **New smart** in the
+**Collections** group of the sidebar, or choose **New smart collection** in the
+command palette. Give the collection a name. Then make the rules:
+
+1. In each rule, choose what the rule tests (for example **Class**, **Weight**,
+   **Supports language** or **Tag**). Then choose its value. The values come from
+   your library.
+2. Choose **all of** to keep fonts that match every rule, or **any of** to keep fonts
+   that match one rule.
+3. Click **Add group** to put rules in a group with its own **all of** or **any of**.
+   For example: Class is Sans serif, and a group of **any of** with Cyrillic and
+   Greek.
+
+The editor shows how many families match while you work. Click **Save**. When a rule
+cannot be saved (for example, a group with no rules, or a lowest weight above the
+highest weight), the editor tells you why and saves nothing. To change the rules
+later, click **Edit rules** on the smart collection. All controls work from the
+keyboard: `Tab` moves between them, `Enter` adds or removes a rule, `Esc` closes the
+editor.
+
 ## Use a font in other apps
 
 Select a font and press `A`. The font is now active: other apps can use it until you

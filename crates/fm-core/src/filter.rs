@@ -285,6 +285,8 @@ pub(crate) enum Value {
     Embedding(u8),
     OpenLicense(bool),
     WebOk(bool),
+    /// A foundry, by its place in [`Slots`]' foundry names.
+    Foundry(u32),
 }
 
 impl Value {
@@ -308,6 +310,7 @@ impl Value {
             Self::Embedding(_) => Dim::Embedding,
             Self::OpenLicense(_) => Dim::OpenLicense,
             Self::WebOk(_) => Dim::WebOk,
+            Self::Foundry(_) => Dim::Foundry,
         }
     }
 }
@@ -425,9 +428,31 @@ pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
 pub(crate) struct Slots {
     values: Vec<Value>,
     by_value: HashMap<Value, u32>,
+    /// Foundry names; a [`Value::Foundry`] holds a place in it.
+    foundries: Vec<String>,
+    foundry_at: HashMap<String, u32>,
 }
 
 impl Slots {
+    /// The slot numbers of every value `face` can be counted under
+    /// ([`values`] and its foundry), adding the new ones.
+    pub(crate) fn intern_face(&mut self, text: &FaceText, facts: &FaceFacts) -> Vec<u32> {
+        let mut all = values(text, facts);
+        if let Some(name) = &facts.foundry {
+            let at = match self.foundry_at.get(name) {
+                Some(at) => *at,
+                None => {
+                    let at = u32::try_from(self.foundries.len()).unwrap_or(u32::MAX);
+                    self.foundries.push(name.clone());
+                    self.foundry_at.insert(name.clone(), at);
+                    at
+                }
+            };
+            all.push(Value::Foundry(at));
+        }
+        self.intern(&all)
+    }
+
     /// The slot numbers of `values`, adding the new ones.
     pub(crate) fn intern(&mut self, values: &[Value]) -> Vec<u32> {
         values
@@ -507,8 +532,10 @@ impl<'a> Tally<'a> {
         let mut features: Vec<Tag> = Vec::new();
         let mut sources: Vec<SourceId> = Vec::new();
         let mut tags: Vec<TagId> = Vec::new();
+        let mut foundries: Vec<u32> = Vec::new();
         for value in &self.slots.values {
             match value {
+                Value::Foundry(at) => foundries.push(*at),
                 Value::Feature(tag) => features.push(*tag),
                 Value::Source(id) => sources.push(*id),
                 Value::Tag(id) => tags.push(*id),
@@ -518,6 +545,8 @@ impl<'a> Tally<'a> {
         features.sort_unstable();
         sources.sort_unstable();
         tags.sort_unstable();
+        let foundry_name = |at: u32| self.slots.foundries.get(at as usize).cloned();
+        foundries.sort_by_key(|at| foundry_name(*at));
         let bools = [true, false];
         FilterCounts {
             classification: list(CLASSES, Value::Classification, &count),
@@ -556,6 +585,15 @@ impl<'a> Tally<'a> {
                 .collect(),
             open_license: list(bools, Value::OpenLicense, &count),
             web_ok: list(bools, Value::WebOk, &count),
+            foundry: list(foundries, Value::Foundry, &count)
+                .into_iter()
+                .filter_map(|c| {
+                    foundry_name(c.value).map(|value| FilterCount {
+                        value,
+                        count: c.count,
+                    })
+                })
+                .collect(),
         }
     }
 }

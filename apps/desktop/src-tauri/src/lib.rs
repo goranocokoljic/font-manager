@@ -27,7 +27,8 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
     LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection,
     QuickCollectionRequest, RenameCollectionRequest, SelectionTags, SelectionTagsRequest, Tag,
-    TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -555,6 +556,15 @@ async fn delete_virtual_style(state: State<'_, AppState>, style: VirtualStyleId)
     call(&state, move |api| api.delete_virtual_style(style)).await
 }
 
+/// Replaces the rule of a smart collection (E14.1).
+#[tauri::command]
+async fn update_collection_rules(
+    state: State<'_, AppState>,
+    req: UpdateCollectionRulesRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.update_collection_rules(req)).await
+}
+
 /// Renames a collection.
 #[tauri::command]
 async fn rename_collection(
@@ -842,6 +852,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_collections,
             create_collection,
             rename_collection,
+            update_collection_rules,
             move_collection,
             delete_collection,
             add_to_collection,
