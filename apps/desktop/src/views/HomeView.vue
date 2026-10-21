@@ -140,6 +140,7 @@ onMounted(() => {
   void search.loadLanguages();
   void sets.load();
   void quick.load();
+  void compare.loadSaved();
 });
 onBeforeUnmount(() => {
   void library.stop();
@@ -199,7 +200,7 @@ useActions([
     id: 'compare.open',
     title: 'Open Compare',
     group: 'Compare',
-    enabled: () => compare.pins.length > 0,
+    enabled: () => compare.canOpen,
     run: () => compare.openSheet(),
   },
   {
@@ -245,6 +246,25 @@ useActions([
     run: () => showPreset(p),
   })),
 ]);
+
+// One palette entry per saved comparison (E13.2), kept in step with the saved list.
+let unregisterSaved: (() => void)[] = [];
+watch(
+  () => compare.saved,
+  (saved) => {
+    unregisterSaved.forEach((u) => u());
+    unregisterSaved = saved.map((c) =>
+      commands.register({
+        id: `compare.reopen.${c.id}`,
+        title: `Open comparison: ${c.name}`,
+        group: 'Compare',
+        run: () => compare.reopen(c.id),
+      }),
+    );
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => unregisterSaved.splice(0).forEach((u) => u()));
 
 const paletteChord = chordOf(ACTIONS.palette)!;
 const settingsChord = chordOf(ACTIONS.settings)!;
@@ -334,7 +354,7 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
           <button
             type="button"
             class="toggle"
-            :disabled="!compare.pins.length"
+            :disabled="!compare.canOpen"
             :title="`Compare the pinned fonts; ${formatChord(compareChord)} pins the selected font`"
             @click="compare.openSheet"
           >

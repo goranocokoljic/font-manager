@@ -9,6 +9,9 @@ use fm_api::activation::{
     DeactivateRequest, OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
+use fm_api::comparison::{
+    CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
+};
 use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
@@ -623,6 +626,78 @@ fn the_quick_collection_keeps_faces_in_the_order_added() {
     assert_eq!(ids(api.quick_collection().unwrap()), [FaceId(6), FaceId(2)]);
     api.clear_quick_collection().unwrap();
     assert!(api.quick_collection().unwrap().faces.is_empty());
+}
+
+#[test]
+fn named_comparisons_are_saved_listed_renamed_reopened_and_deleted() {
+    let api = api();
+    let save = |name: &str, faces: &[u32]| {
+        api.save_comparison(SaveComparisonRequest {
+            id: None,
+            name: name.into(),
+            faces: faces.iter().copied().map(FaceId).collect(),
+            mode: CompareMode::Stacked,
+            sample_text: "Quartz".into(),
+        })
+    };
+    let code =
+        |r: fm_api::ApiResult<fm_api::comparison::Comparison>| r.map(|_| ()).map_err(|e| e.code);
+    assert_eq!(code(save("One", &[1])), Err(ErrorCode::InvalidRequest));
+    assert_eq!(
+        code(save("Five", &[1, 2, 3, 4, 5])),
+        Err(ErrorCode::InvalidRequest)
+    );
+    assert_eq!(code(save(" ", &[1, 2])), Err(ErrorCode::InvalidRequest));
+    assert_eq!(code(save("Twice", &[1, 1])), Err(ErrorCode::InvalidRequest));
+    assert_eq!(code(save("Unknown", &[1, 999])), Err(ErrorCode::NotFound));
+    assert!(api.list_comparisons().unwrap().is_empty());
+
+    let b = save("body", &[6, 1]).unwrap();
+    assert_eq!(
+        b.faces.iter().map(|f| f.id).collect::<Vec<_>>(),
+        [FaceId(6), FaceId(1)]
+    );
+    assert_eq!(
+        (b.mode, b.sample_text.as_str()),
+        (CompareMode::Stacked, "Quartz")
+    );
+    let a = save(" Alpha ", &[1, 2, 6, 4]).unwrap();
+    assert_eq!(a.name, "Alpha");
+    let names = || -> Vec<String> {
+        api.list_comparisons()
+            .unwrap()
+            .into_iter()
+            .map(|c| c.name)
+            .collect()
+    };
+    assert_eq!(names(), ["Alpha", "body"]);
+    api.rename_comparison(RenameComparisonRequest {
+        id: b.id,
+        name: "Aa".into(),
+    })
+    .unwrap();
+    assert_eq!(names(), ["Aa", "Alpha"]);
+    assert_eq!(api.get_comparison(ComparisonRef { id: a.id }).unwrap(), a);
+
+    // A face whose source is paused is named as missing; the rest open.
+    api.set_source_paused(SetSourcePausedRequest {
+        source: SourceId(1),
+        paused: true,
+    })
+    .unwrap();
+    let hidden = api.get_comparison(ComparisonRef { id: b.id }).unwrap();
+    assert!(hidden.faces.is_empty());
+    assert_eq!(hidden.missing.len(), 2);
+    assert_eq!(hidden.missing[0].id, FaceId(6));
+
+    api.delete_comparison(ComparisonRef { id: a.id }).unwrap();
+    assert_eq!(names(), ["Aa"]);
+    assert_eq!(
+        api.delete_comparison(ComparisonRef { id: a.id })
+            .unwrap_err()
+            .code,
+        ErrorCode::NotFound
+    );
 }
 
 #[test]

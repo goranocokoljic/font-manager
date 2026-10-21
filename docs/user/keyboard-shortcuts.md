@@ -65,6 +65,12 @@ preview text of the list, all at the same size. Choose a mode: **Side by side**,
 with three or four pinned, choose the two fonts. **Remove** takes a font out of
 Compare. The pins stay until you close the app.
 
+To keep a comparison, type a name and click **Save comparison**. The fonts, the
+mode and the preview text are saved. To open a saved comparison, click its name
+under **Saved** in Compare, or run **Open comparison:** and its name in the command
+palette. If a font of the comparison is no longer in the library, Compare opens
+with the other fonts and tells you which font is missing.
+
 | Key | What it does |
 |-----|--------------|
 | `Left` and `Right` | Change the mode, when the focus is on the mode |

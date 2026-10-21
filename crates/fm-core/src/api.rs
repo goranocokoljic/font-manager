@@ -30,6 +30,10 @@ use fm_api::activation::{
     DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::comparison::{
+    Comparison, ComparisonEntry, ComparisonRef, ComparisonService, RenameComparisonRequest,
+    SaveComparisonRequest,
+};
 use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest,
@@ -942,6 +946,28 @@ impl LayoutService for CoreApi {
 
     fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
         Ok(layout::layout_width(&layout))
+    }
+}
+
+impl ComparisonService for CoreApi {
+    fn list_comparisons(&self) -> ApiResult<Vec<ComparisonEntry>> {
+        Ok(self.lock().list_comparisons()?)
+    }
+
+    fn get_comparison(&self, req: ComparisonRef) -> ApiResult<Comparison> {
+        Ok(self.lock().comparison(req.id)?)
+    }
+
+    fn save_comparison(&self, req: SaveComparisonRequest) -> ApiResult<Comparison> {
+        Ok(self.lock().save_comparison(&req)?)
+    }
+
+    fn rename_comparison(&self, req: RenameComparisonRequest) -> ApiResult<ComparisonEntry> {
+        Ok(self.lock().rename_comparison(req.id, &req.name)?)
+    }
+
+    fn delete_comparison(&self, req: ComparisonRef) -> ApiResult<()> {
+        Ok(self.lock().delete_comparison(req.id)?)
     }
 }
 
