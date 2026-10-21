@@ -133,6 +133,19 @@ pub struct Layout {
     pub name: String,
     /// The blocks, top to bottom.
     pub blocks: Vec<TextBlock>,
+    /// The text keeps a fixed width, centered, however wide the window is
+    /// (E12.4); false makes it follow the window. A layout saved without it is locked.
+    #[serde(default = "width_locked_default")]
+    pub width_locked: bool,
+    /// The width the text is locked at, in CSS pixels; none is a readable line
+    /// length at the body block's size. Kept while the width is unlocked.
+    #[serde(default)]
+    pub width_px: Option<f32>,
+}
+
+/// A layout's width is locked unless it says otherwise.
+fn width_locked_default() -> bool {
+    true
 }
 
 /// A layout template file in the layouts folder, as the list shows it (E12.5).
@@ -256,4 +269,8 @@ pub trait LayoutService {
     fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>>;
     /// Makes a version current; the content it replaces becomes a version too.
     fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout>;
+    /// The width in CSS pixels the layout's text is set at: its locked width,
+    /// or a readable line length at the body block's size when it has none;
+    /// none when the width is unlocked and follows the window (E12.4).
+    fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>>;
 }

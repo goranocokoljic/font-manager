@@ -1183,6 +1183,16 @@ export type Layout = {
 	name: string,
 	/**  The blocks, top to bottom. */
 	blocks: TextBlock[],
+	/**
+	 *  The text keeps a fixed width, centered, however wide the window is
+	 *  (E12.4); false makes it follow the window. A layout saved without it is locked.
+	 */
+	widthLocked?: boolean,
+	/**
+	 *  The width the text is locked at, in CSS pixels; none is a readable line
+	 *  length at the body block's size. Kept while the width is unlocked.
+	 */
+	widthPx?: number | null,
 };
 
 /**
@@ -2108,4 +2118,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 13, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 14, patch: 0 };

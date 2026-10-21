@@ -359,6 +359,12 @@ async fn restore_layout(
     call(&state, move |api| api.restore_layout(req)).await
 }
 
+/// The width the layout's text is set at; none when it follows the window.
+#[tauri::command]
+async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Option<f32>> {
+    call(&state, move |api| api.layout_width(req)).await
+}
+
 #[tauri::command]
 async fn get_family(state: State<'_, AppState>, family: FamilyId) -> ApiResult<Family> {
     call(&state, move |api| api.get_family(family)).await
@@ -735,6 +741,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             revert_layout,
             layout_history,
             restore_layout,
+            layout_width,
             render_preview,
             activate,
             deactivate,

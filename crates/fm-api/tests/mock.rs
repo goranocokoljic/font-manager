@@ -1714,6 +1714,31 @@ fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
 }
 
 #[test]
+fn layout_presets_start_locked_at_a_readable_width_that_follows_the_body_block() {
+    let api = api();
+    for p in api.layout_presets().expect("presets") {
+        assert!(p.width_locked, "{}", p.name);
+        assert_eq!(p.width_px, None, "{}", p.name);
+        assert!(api.layout_width(p).expect("width").is_some());
+    }
+    let book = api.layout_presets().expect("presets").remove(0);
+    // Book's body is 11 pt: 33 em at 4/3 px per point.
+    let w = api
+        .layout_width(book.clone())
+        .expect("width")
+        .expect("locked");
+    assert!((w - 11.0 * 96.0 / 72.0 * 33.0).abs() < 0.01, "{w}");
+    let mut chosen = book.clone();
+    chosen.width_px = Some(900.0);
+    assert_eq!(
+        api.layout_width(chosen.clone()).expect("width"),
+        Some(900.0)
+    );
+    chosen.width_locked = false;
+    assert_eq!(api.layout_width(chosen).expect("width"), None);
+}
+
+#[test]
 fn layout_files_save_duplicate_revert_and_restore_like_the_core() {
     let api = api();
     let r = |id: &str| LayoutRef { id: id.into() };

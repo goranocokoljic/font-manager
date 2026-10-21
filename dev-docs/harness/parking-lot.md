@@ -153,3 +153,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E14.3 #116] crates/fm-core/src/index/search/smart.rs:270 — a huge `addedWithinDays` / `activatedWithinDays` makes `strftime` return NULL, so `cutoff` gives an Io error instead of InvalidRequest.
 - [E14.3 #116] crates/fm-core/src/index/search.rs:637 — `FamilySummary.classification` is still hard-coded `None`, although search rows now read the face class from `face.parsed`.
 - [E14.3 #116] crates/fm-bench/src/lib.rs:302 — `smart_rule` says it covers every filter dimension, but no bench smart collection uses `activated_within_days`.
+- [E12.4 #107] apps/desktop/src/views/HomeView.vue — at 1280×800 with the inspector open, the toolbar's "Inspector" button is clipped ("Inspect…").

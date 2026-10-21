@@ -39,6 +39,12 @@ Read [Sources](sources.md) to learn more about folders.
   paragraph spacing, first-line indent, columns (1–3), alignment, and wrap or clip. The
   block changes at once; the other blocks stay as they are. A value out of range goes to
   the nearest limit. Press `Escape` to close the properties.
+- The text of a layout has a width that is easy to read: about 65–75 characters on a
+  line of the body text. The text is in the center of the window, and a wider window
+  does not make it wider. Click **Lock width** to turn this off: the text then follows
+  the width of the window. Click it again to keep the width that the text has at that
+  moment. The command palette has this command too ("Lock or unlock the layout width").
+  Click **Save** to keep the width with the layout.
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.

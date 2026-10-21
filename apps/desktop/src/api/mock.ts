@@ -934,61 +934,63 @@ const MOCK_BODY =
 export const MOCK_WATERFALL_SIZES_PT = [72, 48, 36, 24, 18, 14, 12, 9];
 
 /** The mock's copy of the core presets (`fm_core::layout`): the same six in the same shape. */
-export const MOCK_LAYOUT_PRESETS: readonly Layout[] = [
-  {
-    preset: 'book',
-    name: 'Book',
-    blocks: [
-      layoutBlock('Chapter One', 24, 1.2, { align: 'center', paragraphSpacingPt: 18 }),
-      layoutBlock(MOCK_BODY, 11, 1.5, { firstLineIndentEm: 1.5, align: 'justify' }),
-    ],
-  },
-  {
-    preset: 'columns',
-    name: 'Columns',
-    blocks: [
-      layoutBlock('Chapter One', 18, 1.2, { paragraphSpacingPt: 12 }),
-      layoutBlock(MOCK_BODY, 10, 1.4, { paragraphSpacingPt: 6, columns: 3, align: 'justify' }),
-    ],
-  },
-  {
-    preset: 'magazine',
-    name: 'Magazine',
-    blocks: [
-      layoutBlock('The Quiet Return of the Printed Page', 48, 1.05, {
-        tracking: -20,
-        paragraphSpacingPt: 12,
-      }),
-      layoutBlock('Readers are going back to paper.', 16, 1.35, { paragraphSpacingPt: 18 }),
-      layoutBlock(MOCK_BODY, 10, 1.45, { firstLineIndentEm: 1, columns: 2, align: 'justify' }),
-    ],
-  },
-  {
-    preset: 'quote',
-    name: 'Quote',
-    blocks: [
-      layoutBlock('“Type is a beautiful group of letters.”', 36, 1.15, {
-        align: 'center',
-        paragraphSpacingPt: 18,
-      }),
-      layoutBlock('Matthew Carter', 12, 1.3, { tracking: 100, align: 'center' }),
-    ],
-  },
-  {
-    preset: 'characters',
-    name: 'Characters',
-    blocks: ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz', '0123456789 &@#%?!'].map(
-      (t) => layoutBlock(t, 36, 1.2, { tracking: 50, paragraphSpacingPt: 12 }),
-    ),
-  },
-  {
-    preset: 'waterfall',
-    name: 'Waterfall',
-    blocks: MOCK_WATERFALL_SIZES_PT.map((size) =>
-      layoutBlock('The quick brown fox jumps over the lazy dog', size, 1.2, { overflow: 'clip' }),
-    ),
-  },
-];
+export const MOCK_LAYOUT_PRESETS: readonly Layout[] = (
+  [
+    {
+      preset: 'book',
+      name: 'Book',
+      blocks: [
+        layoutBlock('Chapter One', 24, 1.2, { align: 'center', paragraphSpacingPt: 18 }),
+        layoutBlock(MOCK_BODY, 11, 1.5, { firstLineIndentEm: 1.5, align: 'justify' }),
+      ],
+    },
+    {
+      preset: 'columns',
+      name: 'Columns',
+      blocks: [
+        layoutBlock('Chapter One', 18, 1.2, { paragraphSpacingPt: 12 }),
+        layoutBlock(MOCK_BODY, 10, 1.4, { paragraphSpacingPt: 6, columns: 3, align: 'justify' }),
+      ],
+    },
+    {
+      preset: 'magazine',
+      name: 'Magazine',
+      blocks: [
+        layoutBlock('The Quiet Return of the Printed Page', 48, 1.05, {
+          tracking: -20,
+          paragraphSpacingPt: 12,
+        }),
+        layoutBlock('Readers are going back to paper.', 16, 1.35, { paragraphSpacingPt: 18 }),
+        layoutBlock(MOCK_BODY, 10, 1.45, { firstLineIndentEm: 1, columns: 2, align: 'justify' }),
+      ],
+    },
+    {
+      preset: 'quote',
+      name: 'Quote',
+      blocks: [
+        layoutBlock('“Type is a beautiful group of letters.”', 36, 1.15, {
+          align: 'center',
+          paragraphSpacingPt: 18,
+        }),
+        layoutBlock('Matthew Carter', 12, 1.3, { tracking: 100, align: 'center' }),
+      ],
+    },
+    {
+      preset: 'characters',
+      name: 'Characters',
+      blocks: ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz', '0123456789 &@#%?!'].map(
+        (t) => layoutBlock(t, 36, 1.2, { tracking: 50, paragraphSpacingPt: 12 }),
+      ),
+    },
+    {
+      preset: 'waterfall',
+      name: 'Waterfall',
+      blocks: MOCK_WATERFALL_SIZES_PT.map((size) =>
+        layoutBlock('The quick brown fox jumps over the lazy dog', size, 1.2, { overflow: 'clip' }),
+      ),
+    },
+  ] as Layout[]
+).map((l) => ({ ...l, widthLocked: true, widthPx: null }));
 
 /** The ranges and steps of `fm_core::layout::bounds` (the fm-api mock has the same). */
 export const MOCK_LAYOUT_BOUNDS: LayoutBounds = {
@@ -1012,6 +1014,7 @@ export function mockClampLayout(layout: Layout, bounds: LayoutBounds = MOCK_LAYO
   const b = bounds;
   return {
     ...layout,
+    widthPx: mockWidthPx(layout.widthPx),
     blocks: layout.blocks.map((x) => ({
       ...x,
       sizePt: fit(x.sizePt, b.sizePt),
@@ -1022,6 +1025,41 @@ export function mockClampLayout(layout: Layout, bounds: LayoutBounds = MOCK_LAYO
       columns: Math.round(fit(x.columns, { ...b.columns, default: b.columns.min })),
     })),
   };
+}
+
+/** A locked width's range in CSS pixels (`fm_core::layout::WIDTH_PX`). */
+export const MOCK_WIDTH_PX = { min: 160, max: 20_000 };
+
+/** A locked width inside its range; one that is not a finite number is dropped (as the core). */
+function mockWidthPx(width: number | null | undefined): number | null {
+  if (width === null || width === undefined || !Number.isFinite(width)) return null;
+  return Math.min(MOCK_WIDTH_PX.max, Math.max(MOCK_WIDTH_PX.min, width));
+}
+
+/**
+ * `fm_core::layout::layout_width`: the locked width, else 33 em at the body block's size (the
+ * block with the most text, the first on a tie; 4/3 px per point); null when unlocked.
+ */
+export function mockLayoutWidth(layout: Layout): number | null {
+  if (layout.widthLocked === false) return null;
+  const chosen = mockWidthPx(layout.widthPx);
+  if (chosen !== null) return chosen;
+  const body = layout.blocks.reduce<TextBlock | null>(
+    (best, b) => (best && [...best.text].length >= [...b.text].length ? best : b),
+    null,
+  );
+  const {
+    min = 8,
+    max = 600,
+    default: fallback = 12,
+  } = MOCK_LAYOUT_BOUNDS.sizePt as {
+    min: number;
+    max: number;
+    default: number;
+  };
+  const size = body?.sizePt ?? fallback;
+  const fitted = Number.isFinite(size) ? Math.min(max, Math.max(min, size)) : fallback;
+  return mockWidthPx(((fitted * 96) / 72) * 33);
 }
 
 /** How many earlier versions of one template the mock keeps (as the core). */
@@ -1475,6 +1513,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
+    layoutWidth: async (req) => mockLayoutWidth(req),
     ...createMockLayouts(),
     cssValues: async (req) => {
       const f = find(req.face);

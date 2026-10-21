@@ -85,6 +85,18 @@ pub const FIRST_LINE_INDENT_EM_STEP: f32 = 0.5;
 pub const FIRST_LINE_INDENT_EM_PER_PX: f32 = 0.05;
 /// Columns a block flows into.
 pub const COLUMNS: std::ops::RangeInclusive<u8> = 1..=3;
+/// A readable line length in em of the body block's size: 66–75 characters of
+/// running text, whose average character is 0.44–0.5 em wide in most text faces.
+pub const MEASURE_EM: f32 = 33.0;
+/// CSS pixels per point (96 px per inch, 72 pt per inch).
+pub const PX_PER_PT: f32 = 96.0 / 72.0;
+/// A locked layout width in CSS pixels; a width that is not a number means the
+/// readable measure instead.
+pub const WIDTH_PX: Bounds = Bounds {
+    min: 160.0,
+    max: 20_000.0,
+    default: 160.0,
+};
 
 /// Every preset, in the order the UI offers them.
 pub const PRESETS: [LayoutPreset; 6] = [
@@ -220,6 +232,8 @@ pub fn preset(preset: LayoutPreset) -> Layout {
         preset: Some(preset),
         name: preset_name(preset).to_owned(),
         blocks,
+        width_locked: true,
+        width_px: None,
     }
 }
 
@@ -272,12 +286,49 @@ pub fn bounds() -> LayoutBounds {
     }
 }
 
-/// A layout with every block clamped.
+/// A layout with every block clamped, and its locked width inside
+/// [`WIDTH_PX`] (a width that is not a number is dropped).
 pub fn clamp_layout(layout: Layout) -> Layout {
     Layout {
         blocks: layout.blocks.into_iter().map(clamp_block).collect(),
+        width_px: layout
+            .width_px
+            .filter(|w| w.is_finite())
+            .map(|w| WIDTH_PX.clamp(w)),
         ..layout
     }
+}
+
+/// The body block: the one with the most text; the first of those on a tie.
+pub fn body_block(layout: &Layout) -> Option<&TextBlock> {
+    layout
+        .blocks
+        .iter()
+        .fold(None, |best: Option<&TextBlock>, b| match best {
+            Some(x) if x.text.chars().count() >= b.text.chars().count() => Some(x),
+            _ => Some(b),
+        })
+}
+
+/// A readable line length in CSS pixels: [`MEASURE_EM`] at the body block's
+/// size (clamped), or at the default size for a layout with no blocks.
+pub fn readable_width_px(layout: &Layout) -> f32 {
+    let size = SIZE_PT.clamp(body_block(layout).map_or(SIZE_PT.default, |b| b.size_pt));
+    WIDTH_PX.clamp(size * PX_PER_PT * MEASURE_EM)
+}
+
+/// The width the layout's text is set at in CSS pixels: the locked width, or
+/// the readable one when none was chosen; none when unlocked (it follows the window).
+pub fn layout_width(layout: &Layout) -> Option<f32> {
+    if !layout.width_locked {
+        return None;
+    }
+    Some(
+        layout
+            .width_px
+            .filter(|w| w.is_finite())
+            .map_or_else(|| readable_width_px(layout), |w| WIDTH_PX.clamp(w)),
+    )
 }
 
 #[cfg(test)]
@@ -479,13 +530,121 @@ mod tests {
                 size_pt: 2.0,
                 ..block("Hello\nworld", 12.0, 1.0)
             }],
+            width_locked: false,
+            width_px: Some(640.0),
         };
         let c = clamp_layout(l);
+        assert!(!c.width_locked);
+        assert_eq!(c.width_px, Some(640.0));
         assert_eq!(c.name, "Mine");
         assert_eq!(c.preset, None);
         assert_eq!(c.blocks[0].text, "Hello\nworld");
         assert_eq!(c.blocks[0].align, BlockAlign::End);
         assert_eq!(c.blocks[0].overflow, BlockOverflow::Clip);
         assert_eq!(c.blocks[0].size_pt, 8.0);
+    }
+
+    fn mine(blocks: Vec<TextBlock>) -> Layout {
+        Layout {
+            preset: None,
+            name: "Mine".into(),
+            blocks,
+            width_locked: true,
+            width_px: None,
+        }
+    }
+
+    #[test]
+    fn presets_start_locked_at_the_readable_width() {
+        for l in presets() {
+            assert!(l.width_locked, "{}", l.name);
+            assert_eq!(l.width_px, None, "{}", l.name);
+            assert_eq!(layout_width(&l), Some(readable_width_px(&l)), "{}", l.name);
+        }
+    }
+
+    #[test]
+    fn the_readable_width_is_65_to_75_average_characters_of_the_body_block() {
+        // Book: an 11 pt body under a 24 pt heading; the body sets the width.
+        let book = preset(LayoutPreset::Book);
+        let body = body_block(&book).expect("body");
+        assert_eq!(body.size_pt, 11.0);
+        let em_px = body.size_pt * PX_PER_PT;
+        let width = readable_width_px(&book);
+        // Running text averages about half an em per character.
+        let chars = width / (em_px * 0.5);
+        assert!((65.0..=75.0).contains(&chars), "{chars}");
+        assert!((width - 11.0 * 96.0 / 72.0 * MEASURE_EM).abs() < 0.01);
+        // A larger body gives a wider measure; the heading's size does not matter.
+        let mut big = book.clone();
+        big.blocks[1].size_pt = 22.0;
+        assert!((readable_width_px(&big) - 2.0 * width).abs() < 0.01);
+        big.blocks[0].size_pt = 300.0;
+        assert!((readable_width_px(&big) - 2.0 * width).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_body_block_is_the_one_with_the_most_text_the_first_on_a_tie() {
+        let l = mine(vec![
+            block("short", 30.0, 1.0),
+            block("the longest text", 10.0, 1.0),
+            block("short", 8.0, 1.0),
+        ]);
+        assert_eq!(body_block(&l).map(|b| b.size_pt), Some(10.0));
+        let tie = preset(LayoutPreset::Waterfall);
+        assert_eq!(body_block(&tie).map(|b| b.size_pt), Some(72.0));
+        assert_eq!(body_block(&mine(vec![])), None);
+        // A layout with no blocks still has a width: the default size's measure.
+        assert!(
+            (readable_width_px(&mine(vec![])) - SIZE_PT.default * PX_PER_PT * MEASURE_EM).abs()
+                < 0.01
+        );
+    }
+
+    #[test]
+    fn a_locked_width_is_kept_and_an_unlocked_one_follows_the_window() {
+        let mut l = preset(LayoutPreset::Book);
+        l.width_px = Some(900.0);
+        assert_eq!(layout_width(&l), Some(900.0));
+        l.width_locked = false;
+        assert_eq!(layout_width(&l), None);
+        // Unlocked, the chosen width is kept for when it is locked again.
+        assert_eq!(clamp_layout(l.clone()).width_px, Some(900.0));
+        l.width_locked = true;
+        assert_eq!(layout_width(&l), Some(900.0));
+    }
+
+    #[test]
+    fn a_locked_width_out_of_range_is_clamped_and_one_that_is_not_a_number_dropped() {
+        let mut l = preset(LayoutPreset::Book);
+        l.width_px = Some(5.0);
+        assert_eq!(clamp_layout(l.clone()).width_px, Some(WIDTH_PX.min));
+        assert_eq!(layout_width(&l), Some(WIDTH_PX.min));
+        l.width_px = Some(1.0e9);
+        assert_eq!(clamp_layout(l.clone()).width_px, Some(WIDTH_PX.max));
+        l.width_px = Some(f32::NAN);
+        assert_eq!(clamp_layout(l.clone()).width_px, None);
+        assert_eq!(layout_width(&l), Some(readable_width_px(&l)));
+        l.width_px = Some(f32::INFINITY);
+        assert_eq!(clamp_layout(l).width_px, None);
+    }
+
+    #[test]
+    fn a_layout_saved_before_the_width_lock_reads_as_locked_at_the_readable_width() {
+        let json = r#"{"preset":null,"name":"Old","blocks":[]}"#;
+        let l: Layout = serde_json::from_str(json).expect("old layout");
+        assert!(l.width_locked);
+        assert_eq!(l.width_px, None);
+        let back: Layout = serde_json::from_str(
+            &serde_json::to_string(&Layout {
+                width_locked: false,
+                width_px: Some(700.0),
+                ..l
+            })
+            .expect("json"),
+        )
+        .expect("round trip");
+        assert!(!back.width_locked);
+        assert_eq!(back.width_px, Some(700.0));
     }
 }

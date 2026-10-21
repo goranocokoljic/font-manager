@@ -1814,6 +1814,81 @@ fn layout_bounds_are_the_core_ranges_and_the_mock_matches_them() {
 }
 
 #[test]
+fn layout_width_is_the_core_width_and_the_mock_matches_it() {
+    let lib = Lib::new("api-layout-width");
+    let mock = fm_api::mock::MockApi::new();
+    let presets = lib.api.layout_presets().expect("presets");
+    // The UI's MockApi (browser mode, e2e) must lay out at the same widths as the core.
+    for p in &presets {
+        let want = layout::layout_width(p);
+        assert!(want.is_some(), "{} starts locked", p.name);
+        assert_eq!(lib.api.layout_width(p.clone()).expect("width"), want);
+        let got = mock.layout_width(p.clone()).expect("mock width");
+        assert!((got.unwrap() - want.unwrap()).abs() < 0.01, "{}", p.name);
+    }
+    let mut edge = presets[0].clone();
+    for w in [None, Some(5.0), Some(900.0), Some(1.0e9), Some(f32::NAN)] {
+        edge.width_px = w;
+        assert_eq!(
+            mock.clamp_layout(edge.clone()).expect("mock").width_px,
+            lib.api.clamp_layout(edge.clone()).expect("core").width_px,
+            "{w:?}"
+        );
+        assert_eq!(
+            mock.layout_width(edge.clone()).expect("mock"),
+            lib.api.layout_width(edge.clone()).expect("core"),
+            "{w:?}"
+        );
+    }
+    edge.width_locked = false;
+    assert_eq!(lib.api.layout_width(edge.clone()).expect("core"), None);
+    assert_eq!(mock.layout_width(edge).expect("mock"), None);
+}
+
+#[test]
+fn a_locked_width_stays_with_the_saved_layout_file() {
+    use fm_api::layout::{LayoutRef, SaveLayoutRequest};
+    let lib = Lib::new("api-layout-width-file");
+    let mut book = lib
+        .api
+        .get_layout(LayoutRef { id: "book".into() })
+        .expect("book");
+    assert!(book.layout.width_locked);
+    assert_eq!(book.layout.width_px, None);
+    book.layout.width_px = Some(812.0);
+    lib.api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: book.layout.clone(),
+        })
+        .expect("save");
+    let again = lib
+        .api
+        .get_layout(LayoutRef { id: "book".into() })
+        .expect("read");
+    assert!(again.layout.width_locked);
+    assert_eq!(again.layout.width_px, Some(812.0));
+    book.layout.width_locked = false;
+    lib.api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: book.layout,
+        })
+        .expect("save unlocked");
+    let unlocked = lib
+        .api
+        .get_layout(LayoutRef { id: "book".into() })
+        .expect("read");
+    assert!(!unlocked.layout.width_locked);
+    assert_eq!(unlocked.layout.width_px, Some(812.0));
+    let raw = std::fs::read_to_string(lib.paths.layouts_dir().join("book.json")).expect("file");
+    assert!(
+        raw.contains("\"widthLocked\": false") || raw.contains("\"widthLocked\":false"),
+        "{raw}"
+    );
+}
+
+#[test]
 fn layout_files_live_in_the_app_layouts_folder_through_the_api() {
     use fm_api::layout::{
         DuplicateLayoutRequest, LayoutRef, RestoreLayoutRequest, RevertLayoutRequest,

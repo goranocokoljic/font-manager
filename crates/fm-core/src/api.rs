@@ -917,6 +917,10 @@ impl LayoutService for CoreApi {
     fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout> {
         self.layouts()?.restore(&req.id, req.number)
     }
+
+    fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
+        Ok(layout::layout_width(&layout))
+    }
 }
 
 impl SettingsService for CoreApi {
