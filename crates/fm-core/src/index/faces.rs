@@ -14,7 +14,7 @@ use fm_api::activation::ActivationMode;
 use fm_api::common::{Embedding, Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
-use fm_api::search::{CoverageReport, CoverageRequest};
+use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
 use fm_api::{FaceId, FamilyId, SourceId};
 use rusqlite::{OptionalExtension, Row};
 
@@ -170,6 +170,15 @@ impl Index {
         let set = self.face_cmap(req.face)?;
         let locl = row.parsed.map(|p| p.locl_languages).unwrap_or_default();
         coverage::report(req.face, &set, &locl, &req.target)
+    }
+
+    /// The coverage list of `face` (`face_coverage`, E11.3) from its stored
+    /// `cmap` and `locl` languages. An unknown face is `NotFound`.
+    pub fn face_coverage(&self, face: FaceId) -> FmResult<FaceCoverage> {
+        let row = self.face_row(face)?;
+        let set = self.face_cmap(face)?;
+        let locl = row.parsed.map(|p| p.locl_languages).unwrap_or_default();
+        coverage::face_coverage(face, &set, &locl)
     }
 
     /// The file of the face `face`. An unknown face is `NotFound`.

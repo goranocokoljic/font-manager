@@ -18,6 +18,7 @@ import type {
   Conflict,
   CoverageReport,
   CoverageRequest,
+  FaceCoverage,
   CreateCollectionRequest,
   CssValues,
   CssValuesRequest,
@@ -94,6 +95,8 @@ export interface FmClient {
   search(req: SearchRequest): Promise<SearchResponse>;
   /** How well one face covers some languages or text: what it lacks. */
   checkCoverage(req: CoverageRequest): Promise<CoverageReport>;
+  /** One face's coverage per Unicode block and per language preset, complete languages first. */
+  faceCoverage(face: FaceId): Promise<FaceCoverage>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
   /** Every collection, parents before children, siblings in the user's order. */
@@ -178,6 +181,7 @@ export const tauriClient: FmClient = {
   getFamily: (family) => invoke<Family>('get_family', { family }),
   search: (req) => invoke<SearchResponse>('search', { req }),
   checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
+  faceCoverage: (face) => invoke<FaceCoverage>('face_coverage', { face }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),

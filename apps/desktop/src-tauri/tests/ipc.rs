@@ -15,7 +15,8 @@ use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
 use fm_api::preview::{PreviewImage, PreviewService, SampleText, SampleTextRequest};
 use fm_api::search::{
-    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse, Supports,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+    Supports,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
 use fm_api::{
@@ -241,6 +242,22 @@ fn check_coverage_reports_the_characters_a_face_lacks() {
     .unwrap();
     assert!(!lacks.complete);
     assert_eq!(lacks.missing, vec!["Ж".to_string()]);
+}
+
+#[test]
+fn face_coverage_lists_a_faces_blocks_and_languages() {
+    let api = MockApi::new();
+    let got: FaceCoverage = invoke_with("face_coverage", serde_json::json!({ "face": 6 }))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(got, api.face_coverage(FaceId(6)).unwrap());
+    assert!(!got.blocks.is_empty());
+    let err = invoke_with("face_coverage", serde_json::json!({ "face": 999 }))
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(err["code"], "notFound", "{err}");
 }
 
 #[test]
