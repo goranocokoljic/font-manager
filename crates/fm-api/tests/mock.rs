@@ -10,7 +10,10 @@ use fm_api::activation::{
 };
 use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
-use fm_api::layout::{BlockOverflow, LayoutPreset};
+use fm_api::layout::{
+    BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
+    RevertLayoutRequest, SaveLayoutRequest,
+};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
     GlyphsRequest, ImportMode, KeepCopyRequest, LicenseType, ListFamiliesRequest, OpenLicense,
@@ -1704,4 +1707,107 @@ fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
     assert_eq!(got.blocks[0].size_pt, 8.0);
     assert_eq!(got.blocks[0].line_height, 1.3);
     assert_eq!(got.blocks[0].columns, 3);
+}
+
+#[test]
+fn layout_files_save_duplicate_revert_and_restore_like_the_core() {
+    let api = api();
+    let r = |id: &str| LayoutRef { id: id.into() };
+    let entries = api.list_layouts().expect("list");
+    let ids: Vec<_> = entries.iter().map(|e| e.id.as_str()).collect();
+    assert_eq!(
+        ids,
+        [
+            "book",
+            "columns",
+            "magazine",
+            "quote",
+            "characters",
+            "waterfall",
+            "draft"
+        ]
+    );
+    assert!(entries[6].broken.is_some(), "the mock has one broken file");
+    assert_eq!(
+        api.get_layout(r("draft")).expect_err("broken").code,
+        ErrorCode::InvalidRequest
+    );
+
+    let book = api.get_layout(r("book")).expect("book").layout;
+    let mut big = book.clone();
+    big.blocks[0].size_pt = 5_000.0;
+    let saved = api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: big.clone(),
+        })
+        .expect("save");
+    assert_eq!(saved.layout.blocks[0].size_pt, 600.0);
+    api.save_layout(SaveLayoutRequest {
+        id: "book".into(),
+        layout: big,
+    })
+    .expect("same again");
+    let history = api.layout_history(r("book")).expect("history");
+    assert_eq!(history.len(), 1, "an unchanged save keeps no version");
+    assert_eq!(history[0].name.as_deref(), Some("Book"));
+
+    let copy = api
+        .duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: None,
+        })
+        .expect("copy");
+    assert_eq!(
+        (copy.id.as_str(), copy.layout.name.as_str()),
+        ("book-copy", "Book copy")
+    );
+    assert_eq!(
+        api.duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: Some("BOOK".into())
+        })
+        .expect_err("taken")
+        .code,
+        ErrorCode::Conflict
+    );
+
+    assert_eq!(
+        api.revert_layout(RevertLayoutRequest {
+            id: "book".into(),
+            to_original: false
+        })
+        .expect("revert")
+        .layout,
+        saved.layout
+    );
+    let reset = api
+        .revert_layout(RevertLayoutRequest {
+            id: "book".into(),
+            to_original: true,
+        })
+        .expect("reset");
+    assert_eq!(reset.layout, book);
+    let restored = api
+        .restore_layout(RestoreLayoutRequest {
+            id: "book".into(),
+            number: 2,
+        })
+        .expect("restore the reset-over version");
+    assert_eq!(restored.layout, saved.layout);
+    let numbers: Vec<_> = api
+        .layout_history(r("book"))
+        .expect("history")
+        .into_iter()
+        .map(|v| v.number)
+        .collect();
+    assert_eq!(numbers, [3, 2, 1]);
+    // A broken file that is no preset has no original to reset to.
+    let no_original = api
+        .revert_layout(RevertLayoutRequest {
+            id: "draft".into(),
+            to_original: true,
+        })
+        .expect_err("draft is no preset");
+    assert_eq!(no_original.code, ErrorCode::InvalidRequest);
 }

@@ -29,6 +29,14 @@ Read [Sources](sources.md) to learn more about folders.
   the page in the **Preset** box: Book, Columns, Magazine, Quote, Characters or
   Waterfall. When you change the view, the selected fonts stay selected and
   the list stays at the same font.
+- In the layout, double-click a block of text (or press `Enter` on it) to change the
+  text. Click **Save** to keep the change, or **Revert** to drop it. **Duplicate** makes
+  a copy of the layout with a new name. **Reset to original** puts back the preset as
+  the app ships it. **History** shows the earlier versions; **Restore** makes one current
+  again, and the app keeps the version it replaces.
+- Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
+  You can edit a file by hand: the app reads it the next time you open the layout view.
+  A file the app cannot read shows as "cannot be read" in the **Preset** box.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.
 - Open the **Features** tab of the inspector to see the OpenType features of the

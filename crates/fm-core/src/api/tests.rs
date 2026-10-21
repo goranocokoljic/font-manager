@@ -79,7 +79,8 @@ impl Lib {
             Arc::clone(&activator) as Arc<dyn FontActivator>,
             SettingsStore::new(&paths),
             Some(previews),
-        );
+        )
+        .with_layouts_in(paths.layouts_dir());
         Self {
             dir,
             api,
@@ -1787,4 +1788,73 @@ fn layouts_are_the_core_presets_and_come_back_clamped() {
     let got = lib.api.clamp_layout(wild).expect("clamp");
     assert_eq!(got.blocks[0].size_pt, 600.0);
     assert_eq!(got.blocks[1].tracking, 0.0);
+}
+
+#[test]
+fn layout_files_live_in_the_app_layouts_folder_through_the_api() {
+    use fm_api::layout::{
+        DuplicateLayoutRequest, LayoutRef, RestoreLayoutRequest, RevertLayoutRequest,
+        SaveLayoutRequest,
+    };
+    let lib = Lib::new("api-layout-files");
+    let listed = lib.api.list_layouts().expect("list");
+    assert_eq!(listed.len(), 6);
+    assert!(lib.paths.layouts_dir().join("book.json").is_file());
+
+    let book = lib
+        .api
+        .get_layout(LayoutRef { id: "book".into() })
+        .expect("get")
+        .layout;
+    let mut bigger = book.clone();
+    bigger.blocks[0].size_pt = 9_000.0;
+    let saved = lib
+        .api
+        .save_layout(SaveLayoutRequest {
+            id: "book".into(),
+            layout: bigger,
+        })
+        .expect("save");
+    assert_eq!(
+        saved.layout.blocks[0].size_pt, 600.0,
+        "clamped before writing"
+    );
+    let history = lib
+        .api
+        .layout_history(LayoutRef { id: "book".into() })
+        .expect("history");
+    assert_eq!(history.len(), 1);
+    let restored = lib
+        .api
+        .restore_layout(RestoreLayoutRequest {
+            id: "book".into(),
+            number: history[0].number,
+        })
+        .expect("restore");
+    assert_eq!(restored.layout, book);
+
+    let copy = lib
+        .api
+        .duplicate_layout(DuplicateLayoutRequest {
+            id: "book".into(),
+            name: None,
+        })
+        .expect("duplicate");
+    assert!(
+        lib.paths
+            .layouts_dir()
+            .join(format!("{}.json", copy.id))
+            .is_file()
+    );
+    let reset = lib
+        .api
+        .revert_layout(RevertLayoutRequest {
+            id: copy.id,
+            to_original: true,
+        })
+        .expect("reset");
+    assert_eq!(
+        reset.layout.blocks,
+        layout::preset(fm_api::layout::LayoutPreset::Book).blocks
+    );
 }

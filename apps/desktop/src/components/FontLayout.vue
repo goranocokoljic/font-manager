@@ -3,7 +3,8 @@
 // layout (a preset's list of text blocks). The face is loaded through the
 // shared face loader (asset protocol), so every block is live text in the
 // webview, never a rasterized image. Switching presets swaps the blocks; the
-// face stays loaded.
+// face stays loaded. With `editable`, each block's text can be edited in place;
+// the parent keeps the draft.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
@@ -14,7 +15,11 @@ const props = defineProps<{
   layout: Layout | null;
   /** The face to set it in; null when nothing is selected. */
   face: FaceSummary | null;
+  /** The blocks' text can be edited. */
+  editable?: boolean;
 }>();
+
+const emit = defineEmits<{ 'edit-text': [index: number, text: string] }>();
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
@@ -74,6 +79,9 @@ const fontFamily = computed(() =>
           :key="`${layout.preset ?? layout.name}-${i}`"
           :block="block"
           :font-family="fontFamily"
+          :editable="editable"
+          :label="`Block ${i + 1}`"
+          @edit="(text) => emit('edit-text', i, text)"
         />
       </div>
     </template>

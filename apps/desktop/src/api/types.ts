@@ -417,6 +417,14 @@ export type DuplicateKind =
 /**  The same PostScript name and version in files that differ. */
 "near";
 
+/**  Copies a layout into a new, independent template file. */
+export type DuplicateLayoutRequest = {
+	/**  The layout to copy. */
+	id: string,
+	/**  The copy's name; none gives "<name> copy" (then "<name> copy 2", …). */
+	name?: string | null,
+};
+
 /**  Embedding permissions from `OS/2.fsType`. */
 export type Embedding = 
 /**  Installable: no restriction. */
@@ -1138,6 +1146,18 @@ export type Layout = {
 	blocks: TextBlock[],
 };
 
+/**  A layout template file in the layouts folder, as the list shows it (E12.5). */
+export type LayoutEntry = {
+	/**  The file name without `.json` ("book"); stable while the file keeps its name. */
+	id: string,
+	/**  The layout's name, or the file name when the file cannot be read. */
+	name: string,
+	/**  The preset the layout is or started from. */
+	preset?: LayoutPreset | null,
+	/**  Why the file cannot be used (not valid JSON, not a layout); none when it can. */
+	broken?: string | null,
+};
+
 /**  A built-in layout. */
 export type LayoutPreset = 
 /**  A book page: a heading and indented paragraphs in one column. */
@@ -1152,6 +1172,24 @@ export type LayoutPreset =
 "characters" | 
 /**  The same text at falling sizes. */
 "waterfall";
+
+/**  Names one layout template file. */
+export type LayoutRef = {
+	/**  The template file's id. */
+	id: string,
+};
+
+/**  An earlier content of a template file. */
+export type LayoutVersion = {
+	/**  The version's number; a later save has a higher number. */
+	number: number,
+	/**  When the content was replaced, UTC (`2026-10-21T09:30:00Z`). */
+	savedAt: string,
+	/**  The layout's name in that version, or none when that content was broken. */
+	name?: string | null,
+	/**  Why that content cannot be used; none when it can. */
+	broken?: string | null,
+};
 
 /**
  *  Declare the license of a family (E15.2). It applies to every face of the
@@ -1523,6 +1561,25 @@ export type Resolution = {
 /**  A "Keep this one" action of the Problems view, for undo. */
 export type ResolutionId = number;
 
+/**  Makes an earlier version current again. */
+export type RestoreLayoutRequest = {
+	/**  The template file's id. */
+	id: string,
+	/**  The [`LayoutVersion::number`] to restore. */
+	number: number,
+};
+
+/**  Goes back to the saved file, or a preset back to its shipped original. */
+export type RevertLayoutRequest = {
+	/**  The template file's id. */
+	id: string,
+	/**
+	 *  Writes the shipped original of the layout's preset (the content it
+	 *  replaces is kept as a version); false only reads the saved file.
+	 */
+	toOriginal?: boolean,
+};
+
 /**  One rule of a [`RuleGroup`]. */
 export type Rule = 
 /**
@@ -1583,6 +1640,22 @@ export type SampleTextRequest = {
 	faces: FaceId[],
 	/**  The sample text the user chose. */
 	text: string,
+};
+
+/**  Writes a layout to its template file; the previous content is kept as a version. */
+export type SaveLayoutRequest = {
+	/**  The template file's id; a new id makes a new file. */
+	id: string,
+	/**  The layout; its values are clamped before they are written. */
+	layout: Layout,
+};
+
+/**  A layout as it is saved in its template file. */
+export type SavedLayout = {
+	/**  The template file's id. */
+	id: string,
+	/**  The saved layout, clamped into the block ranges. */
+	layout: Layout,
 };
 
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
@@ -1956,4 +2029,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 11, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 12, patch: 0 };

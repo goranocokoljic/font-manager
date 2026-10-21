@@ -207,3 +207,79 @@ test('a start in the layout mode with nothing selected shows the first family', 
   await expect(quote).toContainText('Inter');
   await expect(blocks(quote)).toHaveCount(2);
 });
+
+const fileBar = (page: Page) => page.getByRole('toolbar', { name: 'Layout file' });
+const action = (page: Page, name: string) =>
+  fileBar(page).getByRole('button', { name, exact: true });
+
+test('the layout view saves an edited block, reverts, duplicates and restores a version', async ({
+  page,
+}) => {
+  await open(page);
+  await modeButton(page, 'Layout').click();
+  const book = layout(page, 'Book');
+  await expect(blocks(book)).toHaveCount(2);
+  await expect(action(page, 'Save')).toBeDisabled();
+  await expect(action(page, 'Revert')).toBeDisabled();
+
+  // Edit the heading in place: double-click opens a text box, leaving it keeps the text.
+  await blocks(book).first().dblclick();
+  const box = book.getByRole('textbox', { name: 'Block 1 text' });
+  await expect(box).toBeFocused();
+  await box.fill('Chapter 12');
+  await box.blur();
+  await expect(blocks(book).first()).toHaveText('Chapter 12');
+  await expect(fileBar(page)).toContainText('Unsaved changes');
+
+  // Revert drops it; edit again and save.
+  await action(page, 'Revert').click();
+  await expect(blocks(book).first()).toHaveText('Chapter One');
+  await expect(action(page, 'Save')).toBeDisabled();
+  await blocks(book).first().focus();
+  await page.keyboard.press('Enter');
+  await box.fill('Chapter Two');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(blocks(book).first()).toBeFocused();
+  await action(page, 'Save').click();
+  await expect(fileBar(page)).toContainText('Saved.');
+  await expect(action(page, 'Save')).toBeDisabled();
+
+  // History has the content the save replaced; restoring it brings the original back.
+  await action(page, 'History').click();
+  const history = page.getByRole('region', { name: 'Layout history' });
+  await expect(history.getByRole('listitem')).toHaveCount(1);
+  await history.getByRole('button', { name: 'Restore version 1' }).click();
+  await expect(blocks(book).first()).toHaveText('Chapter One');
+  await expect(history.getByRole('listitem')).toHaveCount(2);
+
+  // Duplicate opens an independent copy that the picker lists and keeps.
+  await action(page, 'Duplicate').click();
+  await expect(fileBar(page)).toContainText('Duplicated as “Book copy”.');
+  await expect(picker(page)).toHaveValue('book-copy');
+  const copy = layout(page, 'Book copy');
+  await blocks(copy).first().dblclick();
+  await copy.getByRole('textbox', { name: 'Block 1 text' }).fill('Copy heading');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await action(page, 'Save').click();
+  await picker(page).selectOption('book');
+  await expect(blocks(layout(page, 'Book')).first()).toHaveText('Chapter One');
+  await picker(page).selectOption('book-copy');
+  await expect(blocks(layout(page, 'Book copy')).first()).toHaveText('Copy heading');
+
+  // Reset puts back the shipped preset; a broken file is listed but cannot be picked.
+  await action(page, 'Reset to original').click();
+  await expect(blocks(layout(page, 'Book copy')).first()).toHaveText('Chapter One');
+  const broken = picker(page).getByRole('option', { name: 'draft (cannot be read)' });
+  await expect(broken).toHaveAttribute('disabled', '');
+});
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the block text box is outlined at 3:1 or more (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page);
+    await modeButton(page, 'Layout').click();
+    await blocks(layout(page, 'Book')).first().dblclick();
+    const box = page.getByRole('textbox', { name: 'Block 1 text' });
+    expect(await borderContrast(box)).toBeGreaterThanOrEqual(3);
+  });
+}

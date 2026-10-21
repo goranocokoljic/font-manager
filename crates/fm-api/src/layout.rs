@@ -89,6 +89,99 @@ pub struct Layout {
     pub blocks: Vec<TextBlock>,
 }
 
+/// A layout template file in the layouts folder, as the list shows it (E12.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutEntry {
+    /// The file name without `.json` ("book"); stable while the file keeps its name.
+    pub id: String,
+    /// The layout's name, or the file name when the file cannot be read.
+    pub name: String,
+    /// The preset the layout is or started from.
+    #[serde(default)]
+    pub preset: Option<LayoutPreset>,
+    /// Why the file cannot be used (not valid JSON, not a layout); none when it can.
+    #[serde(default)]
+    pub broken: Option<String>,
+}
+
+/// A layout as it is saved in its template file.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedLayout {
+    /// The template file's id.
+    pub id: String,
+    /// The saved layout, clamped into the block ranges.
+    pub layout: Layout,
+}
+
+/// Names one layout template file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutRef {
+    /// The template file's id.
+    pub id: String,
+}
+
+/// Writes a layout to its template file; the previous content is kept as a version.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveLayoutRequest {
+    /// The template file's id; a new id makes a new file.
+    pub id: String,
+    /// The layout; its values are clamped before they are written.
+    pub layout: Layout,
+}
+
+/// Copies a layout into a new, independent template file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DuplicateLayoutRequest {
+    /// The layout to copy.
+    pub id: String,
+    /// The copy's name; none gives "<name> copy" (then "<name> copy 2", …).
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// Goes back to the saved file, or a preset back to its shipped original.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RevertLayoutRequest {
+    /// The template file's id.
+    pub id: String,
+    /// Writes the shipped original of the layout's preset (the content it
+    /// replaces is kept as a version); false only reads the saved file.
+    #[serde(default)]
+    pub to_original: bool,
+}
+
+/// An earlier content of a template file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutVersion {
+    /// The version's number; a later save has a higher number.
+    pub number: u32,
+    /// When the content was replaced, UTC (`2026-10-21T09:30:00Z`).
+    pub saved_at: String,
+    /// The layout's name in that version, or none when that content was broken.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Why that content cannot be used; none when it can.
+    #[serde(default)]
+    pub broken: Option<String>,
+}
+
+/// Makes an earlier version current again.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreLayoutRequest {
+    /// The template file's id.
+    pub id: String,
+    /// The [`LayoutVersion::number`] to restore.
+    pub number: u32,
+}
+
 /// Body-text layouts.
 pub trait LayoutService {
     /// The six presets, in the order the UI offers them.
@@ -96,4 +189,22 @@ pub trait LayoutService {
     /// The layout with every block value clamped into its range (a value that
     /// is not a number takes the default).
     fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout>;
+    /// Every template file in the layouts folder, read again on each call:
+    /// the presets first in picker order, then the others by name. The six
+    /// presets are written there on first use and never overwritten. A file
+    /// that cannot be read is listed with the reason.
+    fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>>;
+    /// One template file; a broken one answers `InvalidRequest` with the reason.
+    fn get_layout(&self, req: LayoutRef) -> ApiResult<SavedLayout>;
+    /// Writes a layout; the content it replaces becomes the newest version.
+    fn save_layout(&self, req: SaveLayoutRequest) -> ApiResult<SavedLayout>;
+    /// Copies a layout into a new template file with a new name and id.
+    fn duplicate_layout(&self, req: DuplicateLayoutRequest) -> ApiResult<SavedLayout>;
+    /// The saved file again (drops the editor's unsaved changes), or with
+    /// `to_original` the shipped original of the layout's preset.
+    fn revert_layout(&self, req: RevertLayoutRequest) -> ApiResult<SavedLayout>;
+    /// The kept versions of a template file, newest first.
+    fn layout_history(&self, req: LayoutRef) -> ApiResult<Vec<LayoutVersion>>;
+    /// Makes a version current; the content it replaces becomes a version too.
+    fn restore_layout(&self, req: RestoreLayoutRequest) -> ApiResult<SavedLayout>;
 }

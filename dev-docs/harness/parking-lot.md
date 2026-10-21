@@ -141,3 +141,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E10.4 #97] crates/fm-core/src/glyph_features.rs:83 — glyph detail still uses the generic `feature_info`, so it shows "Stylistic set N" while the Features tab shows the font's own set name.
 - [E10.4 #97] crates/fm-core/src/api/tests.rs:305 — tests look up a face with `FaceId(lib.family(..).id.0)`, relying on family and face ids having the same number.
 - [E10.4 #97] crates/fm-core/src/index/faces.rs:255 — a `face.parsed` that fails to deserialize becomes `parsed = None`, so a face indexed before a new non-default `ParsedFace` field shows an empty inspector until the next scan.
+
+## 2026-10-21
+
+- [E12.5 #108] apps/desktop/src/views/HomeView.vue:402 — the existing mode and inspector `.toggle` buttons are outlined in `--fm-border` (≈1.5:1 light and dark), the same as the new layout toolbar buttons.
