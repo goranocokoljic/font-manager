@@ -253,6 +253,58 @@ describe('LayoutBlock direct manipulation (E12.2)', () => {
     await w.setProps({ block: { ...block, sizePt: 20 } });
     expect(el(w).style.fontSize).toBe('20pt');
   });
+
+  it('a cancelled pointer puts the starting values back, emits nothing, and the next drag works', async () => {
+    const w = show();
+    await point(w, 'pointerdown', 100, 100);
+    await point(w, 'pointermove', 140, 100);
+    runFrame();
+    await w.vm.$nextTick();
+    expect(el(w).style.fontSize).toBe('56pt');
+    await point(w, 'pointercancel', 140, 100);
+    expect(el(w).style.fontSize).toBe('36pt');
+    expect(el(w).style.lineHeight).toBe('1.2');
+    expect(badge(w)).toBe('36 pt · 1.20');
+    expect(frames).toHaveLength(0);
+    // Moving on after the cancel does nothing.
+    await point(w, 'pointermove', 200, 100);
+    expect(frames).toHaveLength(0);
+    expect(w.emitted('change')).toBeUndefined();
+
+    await point(w, 'pointerdown', 100, 100);
+    await point(w, 'pointermove', 120, 100);
+    runFrame();
+    await point(w, 'pointerup', 120, 100);
+    expect(w.emitted('change')).toEqual([[{ sizePt: 46 }]]);
+  });
+
+  it('a capture lost without pointerup, or a move with the button up, ends the drag', async () => {
+    const w = show();
+    await point(w, 'pointerdown', 100, 100);
+    await point(w, 'pointermove', 140, 100);
+    runFrame();
+    await point(w, 'lostpointercapture', 140, 100, 0);
+    expect(el(w).style.fontSize).toBe('36pt');
+    await point(w, 'pointermove', 200, 100);
+    expect(frames).toHaveLength(0);
+
+    // The button came up outside the window: the next move (no button) ends the drag.
+    await point(w, 'pointerdown', 100, 100);
+    await point(w, 'pointermove', 140, 100);
+    runFrame();
+    await w.vm.$nextTick();
+    expect(el(w).style.fontSize).toBe('56pt');
+    await point(w, 'pointermove', 160, 100, 0);
+    expect(el(w).style.fontSize).toBe('36pt');
+    expect(frames).toHaveLength(0);
+    expect(w.emitted('change')).toBeUndefined();
+    // And the block takes a new drag.
+    await point(w, 'pointerdown', 100, 100);
+    await point(w, 'pointermove', 104, 100);
+    runFrame();
+    await point(w, 'pointerup', 104, 100);
+    expect(w.emitted('change')).toEqual([[{ sizePt: 38 }]]);
+  });
 });
 
 class FakeFace {

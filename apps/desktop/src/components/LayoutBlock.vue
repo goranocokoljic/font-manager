@@ -11,7 +11,8 @@
 // (a pinch in WKWebView) scale the size, and the arrow keys do both from the keyboard. While
 // a gesture runs, only this block's style changes, once per animation frame; the
 // font-family stays the same, so the face is not loaded again. The result is emitted once,
-// as `change`, when the gesture ends; Escape during a drag puts the starting values back.
+// as `change`, when the gesture ends; Escape during a drag, a cancelled pointer, a lost
+// pointer capture or a button released without a pointerup puts the starting values back.
 //
 // An editable block opens its text in a box set in the same face on a double click or
 // Enter; leaving the box (or Ctrl/Cmd+Enter) hands the text to the parent, Escape drops it.
@@ -155,6 +156,12 @@ function onPointerDown(e: PointerEvent): void {
 
 function onPointerMove(e: PointerEvent): void {
   if (!drag || e.pointerId !== drag.pointerId || !props.bounds) return;
+  // The button came up where no pointerup reached the block: the drag ends as a
+  // cancelled one does, with the starting values back.
+  if ((e.buttons & 1) === 0) {
+    endDrag(false);
+    return;
+  }
   const dx = e.clientX - drag.x;
   const dy = e.clientY - drag.y;
   if (!drag.moved && Math.abs(dx) + Math.abs(dy) < DRAG_THRESHOLD_PX) return;
@@ -175,6 +182,14 @@ function endDrag(keep: boolean): void {
 
 function onPointerUp(e: PointerEvent): void {
   if (drag && e.pointerId === drag.pointerId) endDrag(true);
+}
+
+/**
+ * A cancelled pointer, or a capture lost without a pointerup (the window lost focus, a
+ * system gesture took the pointer), puts the starting values back.
+ */
+function onPointerLost(e: PointerEvent): void {
+  if (drag && e.pointerId === drag.pointerId) endDrag(false);
 }
 
 /** Escape during a drag puts the starting values back. */
@@ -323,7 +338,8 @@ function onFieldKey(e: KeyboardEvent): void {
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
-      @pointercancel="endDrag(false)"
+      @pointercancel="onPointerLost"
+      @lostpointercapture="onPointerLost"
       @wheel="onWheel"
       @dblclick="startEdit"
       @keydown="onKeyDown"
