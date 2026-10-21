@@ -31,6 +31,9 @@ const coverageOf = process.env.FM_SCREENS_COVERAGE;
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
 // FM_SCREENS_CLICK='Block 1 properties' clicks the first button whose name starts with it before the shot.
 const click = process.env.FM_SCREENS_CLICK;
+// FM_SCREENS_PIN=3 pins the first 3 list rows with C and opens Compare; FM_SCREENS_PIN_MODE=Overlay picks a mode.
+const pinRows = Number(process.env.FM_SCREENS_PIN ?? 0);
+const pinMode = process.env.FM_SCREENS_PIN_MODE;
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -84,6 +87,18 @@ test.describe('@screens', () => {
               await expect(row).toHaveAttribute('aria-expanded', 'true');
               await row.scrollIntoViewIfNeeded();
             }
+          }
+          if (pinRows) {
+            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+            await rows.first().click();
+            for (let i = 0; i < pinRows; i++) {
+              await page.keyboard.press('c');
+              await expect(page.getByTestId('toast')).toContainText(`(${i + 1} of 4)`);
+              await page.keyboard.press('ArrowDown');
+            }
+            await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
+            await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
+            if (pinMode) await page.getByRole('radio', { name: pinMode }).check();
           }
           if (click) {
             await page

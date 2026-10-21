@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
+import CompareSheet from '../components/CompareSheet.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
 import FontLayout from '../components/FontLayout.vue';
@@ -23,6 +24,7 @@ import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap'
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
 import { useCollectionsStore } from '../stores/collections';
+import { MAX_PINS, useCompareStore } from '../stores/compare';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
@@ -50,6 +52,7 @@ const search = useSearchStore();
 const collections = useCollectionsStore();
 const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
+const compare = useCompareStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -151,7 +154,29 @@ const toggle = (mode: ActivationMode) =>
     ? activation.toggleRows(fontList.selectedRows, mode)
     : selection.toggleActivation(mode);
 
+// C pins the selected face to Compare: the inspector's once its detail has loaded,
+// else the list cursor's (the row just moved to, whose detail is still on its way).
+const pinTarget = computed(() => {
+  const shown = selection.detail?.face;
+  if (shown && shown.id === selection.faceId) return shown;
+  return fontList.cursorFace ?? shown ?? null;
+});
+
 useActions([
+  {
+    id: ACTIONS.compare,
+    title: 'Pin the selected font to Compare',
+    group: 'Compare',
+    enabled: () => pinTarget.value !== null && !compare.open,
+    run: () => (pinTarget.value ? compare.pin(pinTarget.value) : undefined),
+  },
+  {
+    id: 'compare.open',
+    title: 'Open Compare',
+    group: 'Compare',
+    enabled: () => compare.pins.length > 0,
+    run: () => compare.openSheet(),
+  },
   {
     id: ACTIONS.activateSession,
     title: 'Activate or deactivate for this session',
@@ -198,6 +223,7 @@ useActions([
 
 const paletteChord = chordOf(ACTIONS.palette)!;
 const settingsChord = chordOf(ACTIONS.settings)!;
+const compareChord = chordOf(ACTIONS.compare)!;
 
 // The selected face is in the URL (`#/?face=3`) so a reload keeps it; the
 // font list selects by changing the query.
@@ -280,6 +306,15 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         <button
           type="button"
           class="toggle"
+          :disabled="!compare.pins.length"
+          :title="`Compare the pinned fonts; ${formatChord(compareChord)} pins the selected font`"
+          @click="compare.openSheet"
+        >
+          Compare {{ compare.pins.length }}/{{ MAX_PINS }}
+        </button>
+        <button
+          type="button"
+          class="toggle"
           aria-controls="fm-inspector"
           aria-keyshortcuts="Control+I Meta+I"
           :aria-pressed="layout.inspectorVisible"
@@ -331,6 +366,7 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         <p v-else-if="search.hits">No fonts match the search and filters.</p>
         <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
       </section>
+      <CompareSheet v-if="compare.open" />
     </template>
 
     <template #inspector>
@@ -428,6 +464,9 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
   background: var(--fm-bg);
   color: inherit;
   font: inherit;
+}
+.toggle:disabled {
+  color: var(--fm-muted);
 }
 .toggle[aria-pressed='true'] {
   border-color: var(--fm-accent);
