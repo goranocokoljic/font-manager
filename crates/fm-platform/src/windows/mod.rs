@@ -17,8 +17,11 @@ mod registry;
 #[cfg(windows)]
 #[allow(unsafe_code)] // Shell and security FFI; every block has a SAFETY note.
 mod trash;
+mod tray;
 
 #[cfg(windows)]
 pub use activator::{FONTS_KEY, LEDGER_KEY, WindowsActivator};
 #[cfg(windows)]
 pub(crate) use trash::RecycleBin;
+#[cfg_attr(not(windows), allow(unused_imports))]
+pub(crate) use tray::WindowsTray;

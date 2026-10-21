@@ -59,6 +59,10 @@ pub struct Settings {
     /// Minutes between automatic rescans of the sources; 0 turns them off
     /// (at most 1440, one day).
     pub rescan_interval_minutes: u32,
+    /// Closing the main window keeps the app running in the tray (the menu
+    /// bar on macOS), so session fonts stay active; off, closing the window
+    /// quits. On by default.
+    pub keep_in_tray: bool,
 }
 
 impl Default for Settings {
@@ -71,6 +75,7 @@ impl Default for Settings {
             density: Density::Comfortable,
             cache_limit_mb: 1_024,
             rescan_interval_minutes: 60,
+            keep_in_tray: true,
         }
     }
 }
@@ -100,6 +105,9 @@ pub struct SettingsUpdate {
     /// Minutes between automatic rescans; 0 turns them off.
     #[serde(default)]
     pub rescan_interval_minutes: Option<u32>,
+    /// Keep running in the tray when the main window is closed.
+    #[serde(default)]
+    pub keep_in_tray: Option<bool>,
 }
 
 impl Settings {
@@ -133,6 +141,7 @@ impl Settings {
             rescan_interval_minutes: update
                 .rescan_interval_minutes
                 .unwrap_or(self.rescan_interval_minutes),
+            keep_in_tray: update.keep_in_tray.unwrap_or(self.keep_in_tray),
         })
     }
 }
@@ -176,6 +185,21 @@ mod tests {
         assert_eq!(s.density, Density::Comfortable);
         assert_eq!(s.cache_limit_mb, 1_024);
         assert_eq!(s.rescan_interval_minutes, 60);
+        assert!(s.keep_in_tray);
+    }
+
+    #[test]
+    fn keep_in_tray_defaults_on_for_old_config_files_and_can_be_turned_off() {
+        // A config.json written before the field existed keeps the app in the tray.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert!(old.keep_in_tray);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["keepInTray"], true);
+        let off: SettingsUpdate = serde_json::from_str(r#"{"keepInTray":false}"#).expect("update");
+        let next = Settings::default().apply(&off).expect("valid");
+        assert!(!next.keep_in_tray);
+        let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert!(!unchanged.keep_in_tray);
     }
 
     #[test]

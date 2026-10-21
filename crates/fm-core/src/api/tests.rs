@@ -618,6 +618,18 @@ fn bad_source_requests_are_errors_not_panics() {
 }
 
 #[test]
+fn app_info_says_when_closing_the_window_quits() {
+    let lib = Lib::new("api-tray-notes");
+    let quits = |notes: &[String]| notes.iter().any(|n| n.contains("closing the window quits"));
+    assert!(!quits(&lib.api.app_info().expect("info").platform_notes));
+    lib.api.set_tray_support(TraySupport::Available);
+    assert!(!quits(&lib.api.app_info().expect("info").platform_notes));
+    lib.api
+        .set_tray_support(TraySupport::Unavailable("no StatusNotifier host".into()));
+    assert!(quits(&lib.api.app_info().expect("info").platform_notes));
+}
+
+#[test]
 fn rebuilding_the_index_scans_again_and_keeps_ids() {
     let (lib, _, _) = Lib::scanned("api-rebuild");
     let before = lib.family("Barlow");

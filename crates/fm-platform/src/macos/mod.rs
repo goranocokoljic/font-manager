@@ -16,6 +16,7 @@ pub(crate) mod paths;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)] // Objective-C runtime and CoreFoundation FFI; every block has a SAFETY note.
 mod trash;
+mod tray;
 
 #[cfg(target_os = "macos")]
 pub use activator::MacosActivator;
@@ -23,3 +24,5 @@ pub use activator::MacosActivator;
 pub use ledger::LEDGER_FILE;
 #[cfg(target_os = "macos")]
 pub(crate) use trash::FinderTrash;
+#[cfg_attr(not(target_os = "macos"), allow(unused_imports))]
+pub(crate) use tray::MacosTray;

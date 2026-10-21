@@ -8,10 +8,10 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('Ctrl/Cmd+, opens Settings with its four sections; Escape closes it', async ({ page }) => {
+test('Ctrl/Cmd+, opens Settings with its five sections; Escape closes it', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+,');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  for (const name of ['Sources', 'Activation', 'Appearance', 'Advanced'])
+  for (const name of ['Sources', 'Activation', 'Appearance', 'Advanced', 'About'])
     await expect(tab(page, name)).toBeVisible();
   await expect(tab(page, 'Sources')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('list', { name: 'Sources' })).toContainText('/Users/demo/Fonts');
@@ -128,3 +128,29 @@ for (const scheme of ['light', 'dark'] as const) {
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);
   });
 }
+
+test('"Keep running in the tray" is on by default, saves, and About lists the platform notes', async ({
+  page,
+}) => {
+  await page.goto('/#/settings?section=activation');
+  const keep = page.getByRole('checkbox', {
+    name: 'Keep running in the tray when the window is closed',
+  });
+  await expect(keep).toBeChecked();
+  await expect(keep).toHaveAccessibleDescription(/closing the window quits Font Manager/);
+  await keep.focus();
+  await page.keyboard.press('Space');
+  await expect(keep).not.toBeChecked();
+  // Saved: it stays off after the window is opened again.
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.goto('/#/settings?section=activation');
+  await expect(
+    page.getByRole('checkbox', { name: 'Keep running in the tray when the window is closed' }),
+  ).not.toBeChecked();
+
+  await tab(page, 'About').click();
+  await expect(page.getByRole('heading', { name: 'Platform notes' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Platform notes' })).toContainText(
+    'no StatusNotifier host), so closing the window quits Font Manager',
+  );
+});

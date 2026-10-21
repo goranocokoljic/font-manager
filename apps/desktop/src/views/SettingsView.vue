@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { FullSettings } from '../api/client';
 import type { SettingsUpdate } from '../api/types';
 import CopyValue from '../components/CopyValue.vue';
+import { useAppStore } from '../stores/app';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSourcesStore } from '../stores/sources';
@@ -11,6 +12,7 @@ import { useSourcesStore } from '../stores/sources';
 const store = useSettingsStore();
 const sources = useSourcesStore();
 const commands = useCommandsStore();
+const app = useAppStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -19,6 +21,7 @@ const sections = [
   { id: 'activation', title: 'Activation' },
   { id: 'appearance', title: 'Appearance' },
   { id: 'advanced', title: 'Advanced' },
+  { id: 'about', title: 'About' },
 ] as const;
 type SectionId = (typeof sections)[number]['id'];
 
@@ -72,14 +75,15 @@ onMounted(async () => {
   await Promise.all([
     store.settings ? undefined : store.load(),
     store.loadWindow(),
+    app.info ? undefined : app.load(),
     sources.load(),
   ]);
 });
 onBeforeUnmount(() => sources.stop());
 
 const s = computed(() => store.settings);
-/** The last failure of either store. */
-const error = computed(() => store.error ?? sources.error);
+/** The last failure of any store this window reads. */
+const error = computed(() => store.error ?? sources.error ?? app.error);
 
 /** Radio choices; each change is saved at once. */
 function choose(patch: SettingsUpdate): void {
@@ -235,6 +239,20 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
             />
             Reactivate on launch: activate the last session's fonts again when the app starts
           </label>
+          <label class="choice">
+            <input
+              type="checkbox"
+              name="keep-in-tray"
+              aria-describedby="keep-in-tray-hint"
+              :checked="s.keepInTray"
+              @change="choose({ keepInTray: ($event.target as HTMLInputElement).checked })"
+            />
+            Keep running in the tray when the window is closed
+          </label>
+          <p id="keep-in-tray-hint" class="note hint">
+            Session fonts stay active while the app runs in the tray. Turned off, closing the window
+            quits Font Manager and ends session activations.
+          </p>
         </template>
 
         <template v-else-if="current === 'appearance' && s">
@@ -309,6 +327,20 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
             <span><CopyValue :value="store.folders.logs" label="logs folder" /></span>
           </div>
         </template>
+
+        <template v-else-if="current === 'about' && app.info">
+          <h2 class="heading">About</h2>
+          <p class="note">{{ app.info.name }} {{ app.info.version }}</p>
+          <h3 id="platform-notes-title" class="subheading">Platform notes</h3>
+          <ul
+            v-if="app.info.platformNotes?.length"
+            class="notes"
+            aria-labelledby="platform-notes-title"
+          >
+            <li v-for="note in app.info.platformNotes" :key="note">{{ note }}</li>
+          </ul>
+          <p v-else class="note">Everything works the same on this system.</p>
+        </template>
       </div>
     </div>
   </div>
@@ -374,6 +406,20 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
 .note {
   margin: 0 0 12px;
   color: var(--fm-muted);
+}
+.hint {
+  margin: 4px 0 0 22px;
+}
+.subheading {
+  margin: 16px 0 8px;
+  font-size: 13px;
+}
+.notes {
+  margin: 0;
+  padding-inline-start: 20px;
+}
+.notes li + li {
+  margin-top: 6px;
 }
 .error {
   margin: 0 0 12px;

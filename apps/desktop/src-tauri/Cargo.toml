@@ -16,7 +16,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 fm-api.workspace = true
 fm-core.workspace = true
 fm-platform.workspace = true
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tracing = "0.1"
 
@@ -30,3 +30,11 @@ workspace = true
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+# The DirectWrite probe of the tray integration test (tests/tray_lifecycle.rs).
+[target.'cfg(windows)'.dev-dependencies]
+windows = { version = "0.62", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_DirectWrite",
+  "Win32_System_Registry",
+] }

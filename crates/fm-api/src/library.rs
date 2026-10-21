@@ -36,6 +36,10 @@ pub struct AppInfo {
     pub api_version: ApiVersion,
     /// The operating system.
     pub platform: Platform,
+    /// What works differently on this system, one sentence each (Settings →
+    /// About → Platform notes). Empty when nothing does.
+    #[serde(default)]
+    pub platform_notes: Vec<String>,
 }
 
 /// Where a source's fonts come from.

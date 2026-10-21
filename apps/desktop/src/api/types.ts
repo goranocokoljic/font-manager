@@ -88,6 +88,11 @@ export type AppInfo = {
 	apiVersion: ApiVersion,
 	/**  The operating system. */
 	platform: Platform,
+	/**
+	 *  What works differently on this system, one sentence each (Settings →
+	 *  About → Platform notes). Empty when nothing does.
+	 */
+	platformNotes?: string[],
 };
 
 /**  A variation axis of a variable font. */
@@ -1796,6 +1801,12 @@ export type Settings = {
 	 *  (at most 1440, one day).
 	 */
 	rescanIntervalMinutes?: number,
+	/**
+	 *  Closing the main window keeps the app running in the tray (the menu
+	 *  bar on macOS), so session fonts stay active; off, closing the window
+	 *  quits. On by default.
+	 */
+	keepInTray?: boolean,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -1814,6 +1825,8 @@ export type SettingsUpdate = {
 	cacheLimitMb?: number | null,
 	/**  Minutes between automatic rescans; 0 turns them off. */
 	rescanIntervalMinutes?: number | null,
+	/**  Keep running in the tray when the main window is closed. */
+	keepInTray?: boolean | null,
 };
 
 /**  The shortlist for a brief. */

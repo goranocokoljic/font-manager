@@ -13,8 +13,11 @@ mod fontconfig;
 pub(crate) mod paths;
 #[cfg(target_os = "linux")]
 mod trash;
+mod tray;
 
 #[cfg(target_os = "linux")]
 pub use activator::LinuxActivator;
 #[cfg(target_os = "linux")]
 pub(crate) use trash::FreedesktopTrash;
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
+pub(crate) use tray::LinuxTray;
