@@ -29,6 +29,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `2` | Show the fonts as a table |
 | `3` | Show the fonts as a grid of cards |
 | `4` | Show the fonts as a waterfall: the preview text at six sizes |
+| `5` | Show the selected font in a layout: a page of text, for example a book page |
 | `Space` | Quick look at the font (coming in a later version) |
 | `C` | Add the font to the compare view (coming in a later version) |
 

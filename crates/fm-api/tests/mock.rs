@@ -10,6 +10,7 @@ use fm_api::activation::{
 };
 use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
+use fm_api::layout::{BlockOverflow, LayoutPreset};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
     GlyphsRequest, ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
@@ -1560,4 +1561,42 @@ fn face_coverage_lists_blocks_in_order_and_complete_languages_first() {
         api.face_coverage(FaceId(999)).unwrap_err().code,
         ErrorCode::NotFound
     );
+}
+
+#[test]
+fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
+    let api = api();
+    let presets = api.layout_presets().expect("presets");
+    let ids: Vec<_> = presets.iter().map(|l| l.preset).collect();
+    assert_eq!(
+        ids,
+        [
+            LayoutPreset::Book,
+            LayoutPreset::Columns,
+            LayoutPreset::Magazine,
+            LayoutPreset::Quote,
+            LayoutPreset::Characters,
+            LayoutPreset::Waterfall,
+        ]
+        .map(Some)
+    );
+    let waterfall = &presets[5];
+    assert!((6..=8).contains(&waterfall.blocks.len()));
+    assert!(
+        waterfall
+            .blocks
+            .iter()
+            .all(|b| b.overflow == BlockOverflow::Clip)
+    );
+    for layout in &presets {
+        assert_eq!(&api.clamp_layout(layout.clone()).expect("clamp"), layout);
+    }
+    let mut wild = presets[0].clone();
+    wild.blocks[0].size_pt = 1.0;
+    wild.blocks[0].line_height = f32::NAN;
+    wild.blocks[0].columns = 9;
+    let got = api.clamp_layout(wild).expect("clamp");
+    assert_eq!(got.blocks[0].size_pt, 8.0);
+    assert_eq!(got.blocks[0].line_height, 1.3);
+    assert_eq!(got.blocks[0].columns, 3);
 }

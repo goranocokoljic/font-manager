@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
-import type { FamilyOrder } from '../api/types';
+import type { FamilyOrder, LayoutPreset } from '../api/types';
 import {
   cycleSort,
   defaultTable,
@@ -16,15 +16,40 @@ import { clampSetting, SIZE } from './preview';
 /** The localStorage key of the saved view modes and table setups (a view preference). */
 export const VIEWS_STORAGE_KEY = 'fm.views.v1';
 
-/** How a view shows its fonts: preview rows, the detail list (table), cards, or a waterfall. */
-export type ViewMode = 'list' | 'table' | 'grid' | 'waterfall';
+/**
+ * How a view shows its fonts: preview rows, the detail list (table), cards, a waterfall, or
+ * the selected family in a body-text layout.
+ */
+export type ViewMode = 'list' | 'table' | 'grid' | 'waterfall' | 'layout';
 
 export interface ViewState {
   mode: ViewMode;
   table: TableConfig;
+  /** The layout preset the layout mode shows. */
+  preset: LayoutPreset;
 }
 
-const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall'];
+const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall', 'layout'];
+
+/** The layout presets, in the order of the picker. */
+export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
+  'book',
+  'columns',
+  'magazine',
+  'quote',
+  'characters',
+  'waterfall',
+];
+
+/** What the picker and the command palette call each preset. */
+export const PRESET_LABELS: Record<LayoutPreset, string> = {
+  book: 'Book',
+  columns: 'Columns',
+  magazine: 'Magazine',
+  quote: 'Quote',
+  characters: 'Characters',
+  waterfall: 'Waterfall',
+};
 
 export function normalizeView(raw: unknown): ViewState {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<
@@ -33,6 +58,7 @@ export function normalizeView(raw: unknown): ViewState {
   return {
     mode: MODES.includes(r.mode as ViewMode) ? (r.mode as ViewMode) : 'list',
     table: normalizeTable(r.table),
+    preset: LAYOUT_PRESETS.includes(r.preset as LayoutPreset) ? (r.preset as LayoutPreset) : 'book',
   };
 }
 
@@ -58,8 +84,8 @@ function browserStorage(): Storage | undefined {
 }
 
 /**
- * Per view: the view mode (list, table, grid or waterfall) and the table's setup — column order,
- * hidden columns, sort column and preview strip size. Saved per view as a view
+ * Per view: the view mode (list, table, grid, waterfall or layout), the layout preset and the
+ * table's setup — column order, hidden columns, sort column and preview strip size. Saved per view as a view
  * preference, like the preview settings.
  */
 export const useViewsStore = defineStore('views', () => {
@@ -67,7 +93,7 @@ export const useViewsStore = defineStore('views', () => {
   const views = ref<Record<string, ViewState>>(readSaved(storage));
 
   function stateOf(view: string): ViewState {
-    return views.value[view] ?? { mode: 'list', table: defaultTable() };
+    return views.value[view] ?? { mode: 'list', table: defaultTable(), preset: 'book' };
   }
 
   function put(view: string, state: ViewState): void {
@@ -81,6 +107,7 @@ export const useViewsStore = defineStore('views', () => {
 
   const modeFor = (view: string): ViewMode => stateOf(view).mode;
   const tableFor = (view: string): TableConfig => stateOf(view).table;
+  const presetFor = (view: string): LayoutPreset => stateOf(view).preset;
 
   /** The API order of `view`: the table's sort column in table mode, else the default. */
   function orderFor(view: string): FamilyOrder | null {
@@ -90,6 +117,11 @@ export const useViewsStore = defineStore('views', () => {
 
   function setMode(view: string, mode: ViewMode): void {
     put(view, { ...stateOf(view), mode });
+  }
+
+  /** Picks the layout preset; the selection and the shown family stay. */
+  function setPreset(view: string, preset: LayoutPreset): void {
+    put(view, { ...stateOf(view), preset });
   }
 
   const sortBy = (view: string, id: ColumnId) => updateTable(view, (t) => cycleSort(t, id));
@@ -122,8 +154,10 @@ export const useViewsStore = defineStore('views', () => {
     views,
     modeFor,
     tableFor,
+    presetFor,
     orderFor,
     setMode,
+    setPreset,
     sortBy,
     moveColumn,
     toggleColumn,

@@ -22,6 +22,7 @@ use crate::export::{
     ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest, WebFormat,
 };
+use crate::layout::{BlockAlign, BlockOverflow, Layout, LayoutPreset, TextBlock};
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphDetail,
@@ -50,9 +51,9 @@ use crate::workflows::{
 };
 use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
-    EventSource, ExportService, FaceId, FamilyId, JobId, LibraryService, OrganizationService,
-    PreviewService, ResolutionId, SearchService, SetId, SettingsService, SourceId, TagId,
-    VirtualStyleId, WorkflowService,
+    EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
+    OrganizationService, PreviewService, ResolutionId, SearchService, SetId, SettingsService,
+    SourceId, TagId, VirtualStyleId, WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
@@ -2781,6 +2782,167 @@ impl SettingsService for MockApi {
             cache: "/home/demo/.cache/font-manager".into(),
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
+    }
+}
+
+/// The mock's copy of the core presets (`fm_core::layout`): the same six in
+/// the same order and shape, with shorter text.
+fn mock_preset(preset: LayoutPreset) -> Layout {
+    let block = |text: &str, size_pt: f32, line_height: f32| TextBlock {
+        text: text.to_owned(),
+        size_pt,
+        line_height,
+        tracking: 0.0,
+        paragraph_spacing_pt: 0.0,
+        first_line_indent_em: 0.0,
+        columns: 1,
+        align: BlockAlign::Start,
+        overflow: BlockOverflow::Wrap,
+    };
+    let body = "Typography gives language a durable visual form.\n\
+                Good type does not call attention to itself.\n\
+                A body face holds up at small sizes and over long passages.";
+    let (name, blocks) = match preset {
+        LayoutPreset::Book => (
+            "Book",
+            vec![
+                TextBlock {
+                    align: BlockAlign::Center,
+                    paragraph_spacing_pt: 18.0,
+                    ..block("Chapter One", 24.0, 1.2)
+                },
+                TextBlock {
+                    first_line_indent_em: 1.5,
+                    align: BlockAlign::Justify,
+                    ..block(body, 11.0, 1.5)
+                },
+            ],
+        ),
+        LayoutPreset::Columns => (
+            "Columns",
+            vec![
+                TextBlock {
+                    paragraph_spacing_pt: 12.0,
+                    ..block("Chapter One", 18.0, 1.2)
+                },
+                TextBlock {
+                    paragraph_spacing_pt: 6.0,
+                    columns: 3,
+                    align: BlockAlign::Justify,
+                    ..block(body, 10.0, 1.4)
+                },
+            ],
+        ),
+        LayoutPreset::Magazine => (
+            "Magazine",
+            vec![
+                TextBlock {
+                    tracking: -20.0,
+                    paragraph_spacing_pt: 12.0,
+                    ..block("The Quiet Return of the Printed Page", 48.0, 1.05)
+                },
+                TextBlock {
+                    paragraph_spacing_pt: 18.0,
+                    ..block("Readers are going back to paper.", 16.0, 1.35)
+                },
+                TextBlock {
+                    first_line_indent_em: 1.0,
+                    columns: 2,
+                    align: BlockAlign::Justify,
+                    ..block(body, 10.0, 1.45)
+                },
+            ],
+        ),
+        LayoutPreset::Quote => (
+            "Quote",
+            vec![
+                TextBlock {
+                    align: BlockAlign::Center,
+                    paragraph_spacing_pt: 18.0,
+                    ..block(
+                        "\u{201c}Type is a beautiful group of letters.\u{201d}",
+                        36.0,
+                        1.15,
+                    )
+                },
+                TextBlock {
+                    tracking: 100.0,
+                    align: BlockAlign::Center,
+                    ..block("Matthew Carter", 12.0, 1.3)
+                },
+            ],
+        ),
+        LayoutPreset::Characters => (
+            "Characters",
+            [
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+                "abcdefghijklmnopqrstuvwxyz",
+                "0123456789 &@#%?!",
+            ]
+            .into_iter()
+            .map(|t| TextBlock {
+                tracking: 50.0,
+                paragraph_spacing_pt: 12.0,
+                ..block(t, 36.0, 1.2)
+            })
+            .collect(),
+        ),
+        LayoutPreset::Waterfall => (
+            "Waterfall",
+            [72.0, 48.0, 36.0, 24.0, 18.0, 14.0, 12.0, 9.0]
+                .into_iter()
+                .map(|size| TextBlock {
+                    overflow: BlockOverflow::Clip,
+                    ..block("The quick brown fox jumps over the lazy dog", size, 1.2)
+                })
+                .collect(),
+        ),
+    };
+    Layout {
+        preset: Some(preset),
+        name: name.to_owned(),
+        blocks,
+    }
+}
+
+impl LayoutService for MockApi {
+    fn layout_presets(&self) -> ApiResult<Vec<Layout>> {
+        Ok([
+            LayoutPreset::Book,
+            LayoutPreset::Columns,
+            LayoutPreset::Magazine,
+            LayoutPreset::Quote,
+            LayoutPreset::Characters,
+            LayoutPreset::Waterfall,
+        ]
+        .into_iter()
+        .map(mock_preset)
+        .collect())
+    }
+
+    /// The core's ranges (`fm_core::layout`); NaN and infinities take the default.
+    fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout> {
+        let fit = |v: f32, lo: f32, hi: f32, default: f32| {
+            if v.is_finite() {
+                v.max(lo).min(hi)
+            } else {
+                default
+            }
+        };
+        let blocks = layout
+            .blocks
+            .into_iter()
+            .map(|b| TextBlock {
+                size_pt: fit(b.size_pt, 8.0, 600.0, 12.0),
+                line_height: fit(b.line_height, 0.1, 3.0, 1.3),
+                tracking: fit(b.tracking, -200.0, 1000.0, 0.0),
+                paragraph_spacing_pt: fit(b.paragraph_spacing_pt, 0.0, 600.0, 0.0),
+                first_line_indent_em: fit(b.first_line_indent_em, 0.0, 20.0, 0.0),
+                columns: b.columns.clamp(1, 3),
+                ..b
+            })
+            .collect();
+        Ok(Layout { blocks, ..layout })
     }
 }
 

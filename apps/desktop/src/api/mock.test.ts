@@ -110,3 +110,38 @@ describe('MockApi smart collections (E14.2)', () => {
     ).rejects.toMatchObject({ code: 'invalidRequest' });
   });
 });
+
+describe('MockApi layouts (E12.1)', () => {
+  it('lists the six presets in picker order, each already inside the ranges', async () => {
+    const api = createMockClient();
+    const presets = await api.layoutPresets();
+    expect(presets.map((l) => l.preset)).toEqual([
+      'book',
+      'columns',
+      'magazine',
+      'quote',
+      'characters',
+      'waterfall',
+    ]);
+    for (const l of presets) expect(await api.clampLayout(l)).toEqual(l);
+  });
+
+  it('clamps out-of-range values and gives the default for a value that is not a number', async () => {
+    const api = createMockClient();
+    const [book] = await api.layoutPresets();
+    const wild = {
+      ...book!,
+      blocks: [
+        { ...book!.blocks[0]!, sizePt: 2, lineHeight: Number.NaN, columns: 7, tracking: 5000 },
+      ],
+    };
+    const [b] = (await api.clampLayout(wild)).blocks;
+    expect(b).toMatchObject({ sizePt: 8, lineHeight: 1.3, columns: 3, tracking: 1000 });
+  });
+
+  it('hands out copies, so editing one does not change the presets', async () => {
+    const api = createMockClient();
+    (await api.layoutPresets())[0]!.blocks[0]!.sizePt = 99;
+    expect((await api.layoutPresets())[0]!.blocks[0]!.sizePt).toBe(24);
+  });
+});
