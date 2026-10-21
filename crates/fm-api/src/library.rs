@@ -510,6 +510,20 @@ pub struct LicenseInfo {
     /// Absolute path of the receipt copy the app keeps (E15.2).
     #[serde(default)]
     pub receipt: Option<String>,
+    /// Whether the face may be used on the web, and why (E15.3).
+    #[serde(default)]
+    pub web_use: Option<WebUse>,
+}
+
+/// Whether a face may be used on the web, decided from its embedding
+/// permission, recognized open license and declared license type (E15.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct WebUse {
+    /// The face is OK for web.
+    pub ok: bool,
+    /// Why, in plain words ("Open license (OFL)").
+    pub reason: String,
 }
 
 /// Everything the info panel shows about one face.

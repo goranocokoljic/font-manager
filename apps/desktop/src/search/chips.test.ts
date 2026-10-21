@@ -172,6 +172,29 @@ describe('filter chips', () => {
     expect(toggleChip({}, 'openLicense', false)).toEqual({ openLicense: false });
   });
 
+  it('shows "OK for web" with its count and toggles it', () => {
+    const counts: FilterCounts = {
+      license: [{ value: 'desktop', count: 5 }],
+      webOk: [
+        { value: true, count: 4 },
+        { value: false, count: 3 },
+      ],
+      openLicense: [{ value: true, count: 2 }],
+    };
+    const groups = chipGroups({ webOk: true }, counts);
+    expect(groups.map((g) => g.label)).toEqual(['License', 'Usage', 'Open license']);
+    const usage = groups.find((g) => g.label === 'Usage')!;
+    expect(usage.chips.map((c) => [c.label, c.count, c.selected])).toEqual([
+      ['OK for web', 4, true],
+      ['Not for web', 3, false],
+    ]);
+    // One value; choosing it again lets it go.
+    expect(toggleChip({}, 'webOk', true)).toEqual({ webOk: true });
+    expect(toggleChip({ webOk: true }, 'webOk', false)).toEqual({ webOk: false });
+    expect(toggleChip({ webOk: true }, 'webOk', true)).toEqual({});
+    expect(hasFilters({ webOk: false })).toBe(true);
+  });
+
   it('no filter is no filter', () => {
     expect(hasFilters({})).toBe(false);
     expect(hasFilters({ formats: [], slant: null })).toBe(false);

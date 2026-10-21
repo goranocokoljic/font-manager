@@ -40,7 +40,7 @@ fn rich() -> FaceFacts {
         rating: Some(4),
         problems: true,
         embedding: Embedding::PreviewAndPrint,
-        open_license: true,
+        open_license: Some(OpenLicense::Ofl),
     }
 }
 
@@ -148,6 +148,11 @@ fn each_filter() -> Vec<(Filters, Filters, Dim)> {
             pass(|f| f.open_license = Some(false)),
             Dim::OpenLicense,
         ),
+        (
+            pass(|f| f.web_ok = Some(true)),
+            pass(|f| f.web_ok = Some(false)),
+            Dim::WebOk,
+        ),
     ]
 }
 
@@ -223,6 +228,7 @@ fn merge(into: &mut Filters, from: &Filters) {
     into.problems = from.problems.or(into.problems);
     into.embedding = from.embedding.or(into.embedding);
     into.open_license = from.open_license.or(into.open_license);
+    into.web_ok = from.web_ok.or(into.web_ok);
 }
 
 #[test]
@@ -591,10 +597,13 @@ fn embedding_and_open_license_counts_leave_out_their_own_filter() {
     };
     let families = vec![
         vec![
-            (upright(400), face(Embedding::Installable, true)),
-            (upright(700), face(Embedding::Restricted, false)),
+            (
+                upright(400),
+                face(Embedding::Installable, Some(OpenLicense::Ofl)),
+            ),
+            (upright(700), face(Embedding::Restricted, None)),
         ],
-        vec![(upright(400), face(Embedding::Restricted, false))],
+        vec![(upright(400), face(Embedding::Restricted, None))],
     ];
     let counts = tally(&Filters::default(), &families);
     assert_eq!(count(&counts.open_license, &true), 1);
@@ -622,4 +631,89 @@ fn embedding_and_open_license_counts_leave_out_their_own_filter() {
     let counts = tally(&restricted, &families);
     assert_eq!(count(&counts.open_license, &true), 0);
     assert_eq!(count(&counts.open_license, &false), 2);
+}
+
+#[test]
+fn the_web_filter_follows_the_license_rule() {
+    // (embedding, open license, declared type, OK for web)
+    let cases = [
+        (Embedding::Installable, Some(OpenLicense::Ofl), None, true),
+        (Embedding::Restricted, None, Some(LicenseType::Web), true),
+        (Embedding::Restricted, Some(OpenLicense::Ofl), None, false),
+        (
+            Embedding::Installable,
+            Some(OpenLicense::Ofl),
+            Some(LicenseType::Desktop),
+            false,
+        ),
+        (Embedding::Installable, None, None, false),
+    ];
+    for (embedding, open_license, license, ok) in cases {
+        let facts = FaceFacts {
+            embedding,
+            open_license,
+            license,
+            ..FaceFacts::new(SourceId(1))
+        };
+        let text = upright(400);
+        for (want, bit) in [(ok, 0), (!ok, Dim::WebOk.bit())] {
+            let f = Filters {
+                web_ok: Some(want),
+                ..Filters::default()
+            };
+            assert_eq!(failed(&f, &text, &facts), bit, "{facts:?} web_ok={want}");
+            assert_eq!(
+                passes(&f, &text, &facts),
+                bit == 0,
+                "{facts:?} web_ok={want}"
+            );
+        }
+        assert!(
+            values(&text, &facts).contains(&Value::WebOk(ok)),
+            "{facts:?}"
+        );
+    }
+}
+
+#[test]
+fn web_counts_leave_out_their_own_filter() {
+    // Family 1: an OFL face and a desktop-declared one; family 2: one
+    // restricted face; family 3: one face declared Web.
+    let face = |embedding, open_license, license| FaceFacts {
+        embedding,
+        open_license,
+        license,
+        ..FaceFacts::new(SourceId(1))
+    };
+    let families = vec![
+        vec![
+            (
+                upright(400),
+                face(Embedding::Installable, Some(OpenLicense::Ofl), None),
+            ),
+            (
+                upright(700),
+                face(Embedding::Installable, None, Some(LicenseType::Desktop)),
+            ),
+        ],
+        vec![(upright(400), face(Embedding::Restricted, None, None))],
+        vec![(
+            upright(400),
+            face(Embedding::Restricted, None, Some(LicenseType::Web)),
+        )],
+    ];
+    let counts = tally(&Filters::default(), &families);
+    assert_eq!(count(&counts.web_ok, &true), 2);
+    assert_eq!(count(&counts.web_ok, &false), 2);
+
+    // OK for web chosen: its own counts are unchanged, others count inside it.
+    let web = Filters {
+        web_ok: Some(true),
+        ..Filters::default()
+    };
+    let counts = tally(&web, &families);
+    assert_eq!(count(&counts.web_ok, &true), 2);
+    assert_eq!(count(&counts.web_ok, &false), 2);
+    assert_eq!(count(&counts.embedding, &Embedding::Restricted), 1);
+    assert_eq!(count(&counts.open_license, &true), 1);
 }

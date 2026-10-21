@@ -208,3 +208,92 @@ fn every_fixture_face_with_license_text_gets_its_manifest_license() {
         "only {checked} fixture faces carry license text"
     );
 }
+
+/// Every declared type (and none) with every embedding: the reason without
+/// an open license, then with one (OFL). `None` stands for the open-license
+/// reason, checked for every open license below.
+/// (declared, embedding, ok and reason without an open license, ok and reason with one)
+type Row = (
+    Option<LicenseType>,
+    Embedding,
+    (bool, &'static str),
+    (bool, Option<&'static str>),
+);
+
+#[test]
+fn web_use_table_covers_every_combination() {
+    use Embedding::{Editable, Installable, PreviewAndPrint, Restricted};
+    use fm_api::library::LicenseType::{App, Desktop, PersonalOnly, Trial, Unknown, Web};
+
+    const WEB: &str = "Declared web license";
+    const DESKTOP: &str = "Declared desktop license";
+    const TRIAL: &str = "Declared trial license";
+    const PERSONAL: &str = "Declared for personal use only";
+    const RESTRICTED: &str = "Embedding restricted, no web license declared";
+    const PREVIEW: &str = "Embedding preview & print only, no web license declared";
+    const NONE: &str = "No web license declared";
+    #[rustfmt::skip]
+    let table: [Row; 28] = [
+        (Some(Web), Installable, (true, WEB), (true, Some(WEB))),
+        (Some(Web), Editable, (true, WEB), (true, Some(WEB))),
+        (Some(Web), PreviewAndPrint, (true, WEB), (true, Some(WEB))),
+        (Some(Web), Restricted, (true, WEB), (true, Some(WEB))),
+        (Some(Desktop), Installable, (false, DESKTOP), (false, Some(DESKTOP))),
+        (Some(Desktop), Editable, (false, DESKTOP), (false, Some(DESKTOP))),
+        (Some(Desktop), PreviewAndPrint, (false, DESKTOP), (false, Some(DESKTOP))),
+        (Some(Desktop), Restricted, (false, DESKTOP), (false, Some(DESKTOP))),
+        (Some(Trial), Installable, (false, TRIAL), (false, Some(TRIAL))),
+        (Some(Trial), Editable, (false, TRIAL), (false, Some(TRIAL))),
+        (Some(Trial), PreviewAndPrint, (false, TRIAL), (false, Some(TRIAL))),
+        (Some(Trial), Restricted, (false, TRIAL), (false, Some(TRIAL))),
+        (Some(PersonalOnly), Installable, (false, PERSONAL), (false, Some(PERSONAL))),
+        (Some(PersonalOnly), Editable, (false, PERSONAL), (false, Some(PERSONAL))),
+        (Some(PersonalOnly), PreviewAndPrint, (false, PERSONAL), (false, Some(PERSONAL))),
+        (Some(PersonalOnly), Restricted, (false, PERSONAL), (false, Some(PERSONAL))),
+        (Some(App), Installable, (false, NONE), (true, None)),
+        (Some(App), Editable, (false, NONE), (true, None)),
+        (Some(App), PreviewAndPrint, (false, PREVIEW), (false, Some(PREVIEW))),
+        (Some(App), Restricted, (false, RESTRICTED), (false, Some(RESTRICTED))),
+        (Some(Unknown), Installable, (false, NONE), (true, None)),
+        (Some(Unknown), Editable, (false, NONE), (true, None)),
+        (Some(Unknown), PreviewAndPrint, (false, PREVIEW), (false, Some(PREVIEW))),
+        (Some(Unknown), Restricted, (false, RESTRICTED), (false, Some(RESTRICTED))),
+        (None, Installable, (false, NONE), (true, None)),
+        (None, Editable, (false, NONE), (true, None)),
+        (None, PreviewAndPrint, (false, PREVIEW), (false, Some(PREVIEW))),
+        (None, Restricted, (false, RESTRICTED), (false, Some(RESTRICTED))),
+    ];
+    let opens = [
+        (OpenLicense::Ofl, "Open license (OFL)"),
+        (OpenLicense::Apache, "Open license (Apache 2.0)"),
+        (OpenLicense::Ufl, "Open license (UFL)"),
+        (OpenLicense::Mit, "Open license (MIT)"),
+    ];
+    let mut pairs: Vec<_> = table
+        .iter()
+        .map(|r| format!("{:?} {:?}", r.0, r.1))
+        .collect();
+    pairs.sort();
+    pairs.dedup();
+    assert_eq!(
+        pairs.len(),
+        28,
+        "every declared type with every embedding, once"
+    );
+    for (declared, embedding, (ok, reason), (open_ok, open_reason)) in table {
+        let without = web_use(embedding, None, declared).to_api();
+        assert_eq!(
+            (without.ok, without.reason.as_str()),
+            (ok, reason),
+            "{declared:?} {embedding:?} without an open license"
+        );
+        for (open, open_text) in opens {
+            let with = web_use(embedding, Some(open), declared).to_api();
+            assert_eq!(
+                (with.ok, with.reason.as_str()),
+                (open_ok, open_reason.unwrap_or(open_text)),
+                "{declared:?} {embedding:?} {open:?}"
+            );
+        }
+    }
+}

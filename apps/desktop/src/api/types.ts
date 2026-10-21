@@ -856,6 +856,8 @@ export type FilterCounts = {
 	embedding?: FilterCount<Embedding>[],
 	/**  With an open license (true) and without (false). */
 	openLicense?: FilterCount<boolean>[],
+	/**  OK for web (true) and not (false). */
+	webOk?: FilterCount<boolean>[],
 };
 
 /**
@@ -905,6 +907,8 @@ export type Filters = {
 	embedding?: Embedding | null,
 	/**  Faces whose name table states an open license (true) or none (false) only. */
 	openLicense?: boolean | null,
+	/**  Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3). */
+	webOk?: boolean | null,
 };
 
 /**  The file format of a font. */
@@ -1233,6 +1237,8 @@ export type LicenseInfo = {
 	purchaseDate?: string | null,
 	/**  Absolute path of the receipt copy the app keeps (E15.2). */
 	receipt?: string | null,
+	/**  Whether the face may be used on the web, and why (E15.3). */
+	webUse?: WebUse | null,
 };
 
 /**  A license inventory as CSV text. */
@@ -2012,6 +2018,17 @@ export type WebFormat =
 "woff2" | 
 /**  WOFF 1. */
 "woff";
+
+/**
+ *  Whether a face may be used on the web, decided from its embedding
+ *  permission, recognized open license and declared license type (E15.3).
+ */
+export type WebUse = {
+	/**  The face is OK for web. */
+	ok: boolean,
+	/**  Why, in plain words ("Open license (OFL)"). */
+	reason: string,
+};
 
 /**  An inclusive weight range (100–1000). */
 export type WeightRange = {

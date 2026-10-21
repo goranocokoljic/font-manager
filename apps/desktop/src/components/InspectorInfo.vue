@@ -303,6 +303,8 @@ function clashText(c: Conflict): string {
           <dd>{{ d.license.openLicense ? openLicenses[d.license.openLicense] : '—' }}</dd>
           <dt>Embedding (fsType)</dt>
           <dd>{{ embeddings[d.license.embedding] }}</dd>
+          <dt>Web use</dt>
+          <dd>{{ show(d.license.webUse?.reason) }}</dd>
         </dl>
         <InspectorLicense />
       </section>
