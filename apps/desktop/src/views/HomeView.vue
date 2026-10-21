@@ -22,6 +22,8 @@ import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
+import TaggingPanel from '../components/TaggingPanel.vue';
+import TagsSidebar from '../components/TagsSidebar.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
@@ -36,6 +38,7 @@ import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
+import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useTextLayoutsStore } from '../stores/textLayouts';
@@ -57,6 +60,7 @@ const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
 const quick = useQuickCollectionStore();
+const tagging = useTaggingStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -189,6 +193,16 @@ useActions([
     run: () => quick.show(),
   },
   {
+    id: ACTIONS.tag,
+    title: 'Tag the selected fonts…',
+    group: 'Tags',
+    enabled: () =>
+      !quick.open &&
+      !tagging.open &&
+      tagging.selectionPick.faces.length + tagging.selectionPick.families.length > 0,
+    run: () => tagging.openFor(),
+  },
+  {
     id: ACTIONS.compare,
     title: 'Pin the selected font to Compare',
     group: 'Compare',
@@ -271,7 +285,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = ['Smart collections', 'Tags', 'Online catalogs'];
+const groups = ['Smart collections', 'Online catalogs'];
 </script>
 
 <template>
@@ -280,6 +294,7 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
       <SourcesSidebar />
       <QuickCollectionSidebar />
       <CollectionsSidebar />
+      <TagsSidebar />
       <ProblemsSidebar />
       <ProjectSetsSidebar />
       <ul class="groups">
@@ -396,6 +411,7 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         </section>
       </template>
       <CompareSheet v-if="compare.open" />
+      <TaggingPanel />
     </template>
 
     <template #inspector>

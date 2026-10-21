@@ -478,6 +478,7 @@ fn smart_rules_combine_with_and_or_and_through_other_collections() {
     let bold = face(&index, "Roboto-Bold");
     let tagged = index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![inter],
             tags: vec!["pick".into()],
         })
@@ -562,6 +563,7 @@ fn smart_collections_follow_index_changes() {
     let inter = face(&index, "Inter-Regular");
     let tag = index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![inter],
             tags: vec!["later".into()],
         })
@@ -631,6 +633,7 @@ fn smart_collections_follow_index_changes() {
     let one = (1, names(&["Inter-Regular"]));
     index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![inter],
             tags: vec!["later".into()],
         })

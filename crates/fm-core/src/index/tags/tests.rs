@@ -4,7 +4,7 @@ use fm_api::ErrorCode;
 use fm_api::common::{FontFormat, Health};
 use fm_api::library::SourceKind;
 use fm_api::search::{FilterCount, Filters, SearchRequest};
-use fm_api::{FaceId, SourceId, TagId};
+use fm_api::{FaceId, FamilyId, SourceId, TagId};
 
 use super::*;
 use crate::parser::{ParsedFace, ParsedFile};
@@ -64,6 +64,7 @@ fn face(index: &Index, postscript: &str) -> FaceId {
 
 fn tag(index: &mut Index, faces: &[FaceId], names: &[&str]) -> FmResult<Vec<Tag>> {
     index.tag_faces(&TagFacesRequest {
+        families: Vec::new(),
         faces: faces.to_vec(),
         tags: names.iter().map(|n| (*n).to_owned()).collect(),
     })
@@ -360,4 +361,115 @@ fn tags_favorites_and_ratings_filter_and_count_as_soon_as_they_change() {
     assert_eq!(count(&counts.tags, &display), 1);
     assert_eq!(count(&counts.favorite, &true), 0);
     assert_eq!(count(&counts.min_rating, &3), 0);
+}
+
+#[test]
+fn tag_faces_tags_every_face_of_a_family() {
+    let (mut index, _) = library();
+    let regular = face(&index, "Roboto-Regular");
+    let bold = face(&index, "Roboto-Bold");
+    let inter = face(&index, "Inter-Regular");
+    // A family's id is the id of its first face.
+    let roboto = FamilyId(regular.0);
+
+    let made = index
+        .tag_faces(&TagFacesRequest {
+            faces: vec![inter],
+            tags: vec!["Sans".to_owned()],
+            families: vec![roboto],
+        })
+        .expect("tag");
+    assert_eq!(made[0].face_count, 3, "Inter and both Roboto faces");
+    assert_eq!(names(&index), ["Sans 3"]);
+    let carried = index
+        .selection_tags(&[regular, bold, inter], &[])
+        .expect("selection");
+    assert!(carried.tags.iter().all(|t| t.all));
+
+    // Only a family, no faces: still every face of it.
+    index
+        .tag_faces(&TagFacesRequest {
+            faces: Vec::new(),
+            tags: vec!["Grotesk".to_owned()],
+            families: vec![roboto],
+        })
+        .expect("tag family only");
+    assert_eq!(names(&index), ["Grotesk 2", "Sans 3"]);
+}
+
+#[test]
+fn tag_faces_with_an_unknown_family_tags_nothing() {
+    let (mut index, _) = library();
+    let regular = face(&index, "Roboto-Regular");
+    let bold = face(&index, "Roboto-Bold");
+    let code = |r: FmResult<Vec<Tag>>| r.map(|_| ()).map_err(|e| e.code());
+    // The second face of a family is not a family id.
+    let req = |families: Vec<FamilyId>| TagFacesRequest {
+        faces: vec![regular],
+        tags: vec!["Sans".to_owned()],
+        families,
+    };
+    assert_eq!(
+        code(index.tag_faces(&req(vec![FamilyId(bold.0)]))),
+        Err(ErrorCode::NotFound)
+    );
+    assert_eq!(
+        code(index.tag_faces(&req(vec![FamilyId(9999)]))),
+        Err(ErrorCode::NotFound)
+    );
+    assert!(names(&index).is_empty());
+}
+
+#[test]
+fn selection_tags_count_the_faces_carrying_each_tag_and_tell_mixed_from_all() {
+    let (mut index, _) = library();
+    let regular = face(&index, "Roboto-Regular");
+    let bold = face(&index, "Roboto-Bold");
+    let inter = face(&index, "Inter-Regular");
+    let serif = face(&index, "SourceSerif-Regular");
+    tag(&mut index, &[regular, bold], &["Sans"]).expect("tag");
+    tag(&mut index, &[bold], &["bold"]).expect("tag");
+    tag(&mut index, &[serif], &["Serif"]).expect("tag");
+
+    // Roboto as a family plus Inter, and Regular named twice: three faces.
+    let got = index
+        .selection_tags(&[regular, inter], &[FamilyId(regular.0)])
+        .expect("selection");
+    assert_eq!(got.faces, [regular, inter, bold]);
+    let shown: Vec<(String, u32, bool)> = got
+        .tags
+        .iter()
+        .map(|t| (index_name(&index, t.tag), t.face_count, t.all))
+        .collect();
+    // A to Z; Serif is on none of them and is left out.
+    assert_eq!(
+        shown,
+        [("bold".into(), 1, false), ("Sans".into(), 2, false)]
+    );
+
+    let both = index
+        .selection_tags(&[regular, bold], &[])
+        .expect("selection");
+    let sans = both.tags.iter().find(|t| t.face_count == 2).expect("Sans");
+    assert!(sans.all);
+
+    let empty = index.selection_tags(&[], &[]).expect("empty");
+    assert!(empty.faces.is_empty() && empty.tags.is_empty());
+    assert_eq!(
+        index
+            .selection_tags(&[FaceId(9999)], &[])
+            .map(|_| ())
+            .map_err(|e| e.code()),
+        Err(ErrorCode::NotFound)
+    );
+}
+
+fn index_name(index: &Index, id: TagId) -> String {
+    index
+        .tags()
+        .expect("tags")
+        .into_iter()
+        .find(|t| t.id == id)
+        .map(|t| t.name)
+        .expect("tag")
 }

@@ -991,6 +991,7 @@ fn collections_tags_metadata_and_sets_use_the_index() {
     let tags = lib
         .api
         .tag_faces(TagFacesRequest {
+            families: Vec::new(),
             faces: vec![face],
             tags: vec!["Poster".into()],
         })

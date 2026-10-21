@@ -1780,6 +1780,38 @@ export type SearchResponse = {
 	counts?: FilterCounts | null,
 };
 
+/**  One tag of a [`SelectionTags`]. */
+export type SelectionTag = {
+	/**  The tag. */
+	tag: TagId,
+	/**
+	 *  How many of the selection's faces carry it: all of them, or some
+	 *  (a mixed state).
+	 */
+	faceCount: number,
+	/**  True when every face of the selection carries it. */
+	all: boolean,
+};
+
+/**  The tags the faces of a selection carry (E13.4). */
+export type SelectionTags = {
+	/**
+	 *  Every face the selection names, each once: the faces first, then the
+	 *  faces of each family.
+	 */
+	faces: FaceId[],
+	/**  Every tag at least one of those faces carries, A to Z. */
+	tags: SelectionTag[],
+};
+
+/**  The fonts a selection or a drag names (E13.4): faces and whole families. */
+export type SelectionTagsRequest = {
+	/**  The faces. */
+	faces: FaceId[],
+	/**  Whole families: every face of each, as the library lists it. */
+	families?: FamilyId[],
+};
+
 /**
  *  One font of an exported set, referenced by content so a teammate's copy
  *  at another path still matches.
@@ -1976,6 +2008,8 @@ export type TagFacesRequest = {
 	faces: FaceId[],
 	/**  Tag names. */
 	tags: string[],
+	/**  Whole families (E13.4): every face of each, as the library lists it. */
+	families?: FamilyId[],
 };
 
 /**  A free-form tag. */

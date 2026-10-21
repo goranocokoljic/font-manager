@@ -48,8 +48,9 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
     OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
-    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SetExport, Tag, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SelectionTags, SelectionTagsRequest,
+    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
@@ -725,8 +726,12 @@ impl OrganizationService for CoreApi {
     }
 
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
-        let tags = self.lock().tag_faces(&req)?;
-        self.updated(&req.faces);
+        let (tags, faces) = {
+            let mut index = self.lock();
+            let tags = index.tag_faces(&req)?;
+            (tags, index.faces_of(&req.faces, &req.families)?)
+        };
+        self.updated(&faces);
         Ok(tags)
     }
 
@@ -734,6 +739,10 @@ impl OrganizationService for CoreApi {
         self.lock().untag_faces(&req)?;
         self.updated(&req.faces);
         Ok(())
+    }
+
+    fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags> {
+        Ok(self.lock().selection_tags(&req.faces, &req.families)?)
     }
 
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {

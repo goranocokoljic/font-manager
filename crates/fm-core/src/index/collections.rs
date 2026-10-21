@@ -298,13 +298,7 @@ impl Index {
     /// Runs `sql` (collection id, face id) for every face `req` names, in
     /// one transaction; an unknown face or family is `NotFound`.
     fn edit_members(&mut self, req: &CollectionFacesRequest, sql: &str) -> FmResult<Collection> {
-        let mut faces = req.faces.clone();
-        for family in &req.families {
-            let members = self
-                .family_faces(*family)?
-                .ok_or_else(|| FmError::not_found(format!("Family {family}")))?;
-            faces.extend(members);
-        }
+        let faces = self.faces_of(&req.faces, &req.families)?;
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         let smart: bool = tx
             .query_row(

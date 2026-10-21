@@ -36,6 +36,9 @@ const pinRows = Number(process.env.FM_SCREENS_PIN ?? 0);
 const pinMode = process.env.FM_SCREENS_PIN_MODE;
 // FM_SCREENS_QUICK=3 adds the first 3 list rows to the Quick Collection with B and opens its review.
 const quickRows = Number(process.env.FM_SCREENS_QUICK ?? 0);
+// FM_SCREENS_TAGS=Display,Body makes those tags on the first list row with T, then opens the
+// multi-tagging panel for the first two rows (one mixed tag each).
+const tagNames = (process.env.FM_SCREENS_TAGS ?? '').split(',').filter(Boolean);
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -112,6 +115,21 @@ test.describe('@screens', () => {
             }
             await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
             await page.getByTestId('quick-collection').click();
+          }
+          if (tagNames.length) {
+            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+            await rows.first().click();
+            const panel = page.getByRole('dialog', { name: /^Tags of / });
+            for (const name of tagNames) {
+              await page.keyboard.press('t');
+              await panel.getByRole('combobox').fill(name);
+              await page.keyboard.press('Enter');
+              await expect(panel.locator(`[data-tag="${name}"]`)).toBeVisible();
+              await page.keyboard.press('Escape');
+            }
+            await page.keyboard.press('Shift+ArrowDown');
+            await page.keyboard.press('t');
+            await expect(panel).toBeVisible();
           }
           if (click) {
             await page
