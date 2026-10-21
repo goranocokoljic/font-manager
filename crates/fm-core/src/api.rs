@@ -82,7 +82,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, css, glyph_svg, glyphs, layout, preview};
+use crate::{css, glyph_svg, glyphs, layout, pangrams, preview};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -630,10 +630,7 @@ impl SearchService for CoreApi {
     }
 
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
-        Ok(charsets::load()?
-            .iter()
-            .map(charsets::Charset::preset)
-            .collect())
+        Ok(pangrams::presets()?)
     }
 
     fn find_similar(&self, _req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {

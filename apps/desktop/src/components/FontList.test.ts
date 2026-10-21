@@ -2,9 +2,10 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient, useClient } from '../api/client';
-import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
+import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
-import { ALPHABET, PANGRAMS } from '../preview/sampleText';
+import { ALPHABET } from '../preview/sampleText';
+import { useSearchStore } from '../stores/search';
 import { clearFaceAxes } from '../preview/variations';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
@@ -36,6 +37,9 @@ const MAX_IDLE = 16;
 let fonts: FakeSet;
 let loader: FaceLoader<FakeFace>;
 
+/** The mock API's pangram for `code`. */
+const pangramOf = (code: string) => mockLanguages.find((l) => l.code === code)!.pangram!;
+
 beforeEach(() => {
   setActivePinia(createPinia());
   clearFaceAxes();
@@ -58,6 +62,7 @@ afterEach(() => {
 async function listOf(options: MockOptions, props: Record<string, unknown> = {}) {
   setClient(createMockClient(options));
   await useLibraryStore().load();
+  await useSearchStore().loadLanguages();
   const list = mount(FontList, { props, attachTo: document.body });
   await flushPromises();
   return list;
@@ -363,7 +368,7 @@ describe('FontList preview settings', () => {
       preview: settings({ sample: 'pangram', language: 'fr', sizePx: 12, surface: 'light' }),
     });
     for (const sample of list.findAll('.sample')) {
-      expect(sample.text()).toBe(PANGRAMS.fr.text);
+      expect(sample.text()).toBe(pangramOf('fr'));
       expect((sample.element as HTMLElement).style.fontSize).toBe('12px');
     }
     expect(list.get('[role="tree"]').classes()).toContain('surface-light');

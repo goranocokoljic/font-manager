@@ -917,6 +917,14 @@ fn coverage_and_languages_come_from_the_stored_cmap() {
     let (lib, _, _) = Lib::scanned("api-coverage");
     let languages = lib.api.list_languages().expect("languages");
     assert!(languages.iter().any(|l| l.code == "de"), "{languages:?}");
+    let sr = languages
+        .iter()
+        .find(|l| l.code == "sr-Cyrl")
+        .expect("sr-Cyrl");
+    assert!(
+        sr.pangram.as_deref().is_some_and(|p| p.contains('џ')),
+        "{sr:?}"
+    );
     let face = FaceId(lib.family("Bebas Neue").id.0);
     let text = lib
         .api

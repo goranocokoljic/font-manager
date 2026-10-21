@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import {
   ALL_FONTS_VIEW,
@@ -10,6 +10,8 @@ import {
   previewRowHeight,
   usePreviewStore,
 } from './preview';
+import { createMockClient, mockLanguages } from '../api/mock';
+import { setClient } from '../api/client';
 
 function freshStore() {
   setActivePinia(createPinia());
@@ -17,6 +19,13 @@ function freshStore() {
 }
 
 beforeEach(() => localStorage.clear());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  setClient(undefined);
+});
+
+/** The mock API's pangram for `code`. */
+const pangramOf = (code: string) => mockLanguages.find((l) => l.code === code)!.pangram!;
 
 describe('preview store', () => {
   it('starts every view at the defaults', () => {
@@ -77,7 +86,7 @@ describe('preview store', () => {
     expect(reloaded.settingsFor('other').sizePx).toBe(60);
   });
 
-  it('falls back to the defaults for a damaged or invalid saved entry', () => {
+  it('falls back to the defaults for a damaged or invalid saved entry', async () => {
     localStorage.setItem(PREVIEW_STORAGE_KEY, '{not json');
     expect(freshStore().settingsFor('all')).toEqual(DEFAULT_PREVIEW);
     localStorage.setItem(
@@ -94,7 +103,9 @@ describe('preview store', () => {
         },
       }),
     );
-    expect(freshStore().settingsFor('all')).toEqual(DEFAULT_PREVIEW);
+    const store = freshStore();
+    await store.loadPangrams();
+    expect(store.settingsFor('all')).toEqual(DEFAULT_PREVIEW);
   });
 
   it('cuts very long custom text', () => {
@@ -113,5 +124,71 @@ describe('preview store', () => {
     // The sample line is the same at both densities; only the padding changes.
     const big = { sizePx: 120, lineHeight: 1.2 };
     expect(previewRowHeight(big, 'comfortable') - previewRowHeight(big, 'compact')).toBe(10);
+  });
+
+  describe('pangrams', () => {
+    function uiLanguages(languages: string[]) {
+      vi.stubGlobal('navigator', { ...navigator, languages, language: languages[0] });
+    }
+
+    it('lists only the languages the API returns with a pangram, in its order', async () => {
+      setClient(createMockClient());
+      const store = freshStore();
+      await store.loadPangrams();
+      const withPangram = mockLanguages.filter((l) => l.pangram);
+      expect(withPangram.length).toBeLessThan(mockLanguages.length);
+      expect(store.pangramLanguages.map((l) => l.code)).toEqual(withPangram.map((l) => l.code));
+      expect(store.pangramText('sr-Cyrl')).toBe(pangramOf('sr-Cyrl'));
+    });
+
+    it('defaults to the UI language when it has a pangram', async () => {
+      uiLanguages(['sr-RS', 'en-US']);
+      const store = freshStore();
+      await store.loadPangrams();
+      expect(store.defaultLanguage).toBe('sr-Cyrl');
+      expect(store.settingsFor(ALL_FONTS_VIEW)).toEqual({
+        ...DEFAULT_PREVIEW,
+        language: 'sr-Cyrl',
+      });
+      store.update('all', { sizePx: 40 });
+      store.reset('all');
+      expect(store.settingsFor('all').language).toBe('sr-Cyrl');
+    });
+
+    it('defaults to English when the UI language has no pangram', async () => {
+      uiLanguages(['ko-KR']);
+      const store = freshStore();
+      await store.loadPangrams();
+      expect(store.settingsFor(ALL_FONTS_VIEW).language).toBe('en');
+    });
+
+    it('still loads a choice saved from the old built-in list', async () => {
+      uiLanguages(['de-DE']);
+      localStorage.setItem(
+        PREVIEW_STORAGE_KEY,
+        JSON.stringify({ all: { ...DEFAULT_PREVIEW, sample: 'pangram', language: 'fr' } }),
+      );
+      const store = freshStore();
+      expect(store.settingsFor('all').language).toBe('fr');
+      await store.loadPangrams();
+      expect(store.settingsFor('all').language).toBe('fr');
+      expect(store.pangramText(store.settingsFor('all').language)).toBe(pangramOf('fr'));
+    });
+
+    it('shows the default language for a saved code that has no pangram', async () => {
+      uiLanguages(['de-DE']);
+      localStorage.setItem(
+        PREVIEW_STORAGE_KEY,
+        JSON.stringify({ all: { ...DEFAULT_PREVIEW, language: 'mt' } }),
+      );
+      const store = freshStore();
+      await store.loadPangrams();
+      expect(store.settingsFor('all').language).toBe('de');
+      expect(store.pangramText('mt')).toBe(pangramOf('en'));
+    });
+
+    it('gives no pangram text before the languages load', () => {
+      expect(freshStore().pangramText('en')).toBe('');
+    });
   });
 });

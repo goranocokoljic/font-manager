@@ -6,7 +6,7 @@
 import { computed, useId, watchEffect } from 'vue';
 import { sampleText } from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
-import { SIZE, type PreviewSettings } from '../stores/preview';
+import { SIZE, usePreviewStore, type PreviewSettings } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
 import { useViewsStore } from '../stores/views';
 import FontPreviewRow from './FontPreviewRow.vue';
@@ -16,12 +16,15 @@ const props = defineProps<{ view: string; preview: PreviewSettings }>();
 const list = useFontListStore();
 const views = useViewsStore();
 const samples = useSamplesStore();
+const previews = usePreviewStore();
 const uid = useId();
 
 const own = computed(() => views.tableFor(props.view).stripSizePx);
 const sizePx = computed(() => own.value ?? props.preview.sizePx);
 const face = computed(() => list.cursorFace);
-const sample = computed(() => (face.value ? sampleText(props.preview, face.value) : ''));
+const sample = computed(() =>
+  face.value ? sampleText(props.preview, face.value, previews.pangramText) : '',
+);
 const answer = computed(() => (face.value ? samples.get(face.value.id, sample.value) : undefined));
 watchEffect(() => {
   if (face.value) samples.want(face.value.id, sample.value);

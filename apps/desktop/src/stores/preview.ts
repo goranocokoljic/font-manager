@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
-import type { Density } from '../api/types';
+import { computed, ref, watch } from 'vue';
+import type { Density, LanguagePreset } from '../api/types';
 import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
 import {
-  isPangramLanguage,
+  FALLBACK_LANGUAGE,
+  isLanguageCode,
+  pickLanguage,
   SAMPLE_KINDS,
-  type PangramLanguage,
   type SampleKind,
 } from '../preview/sampleText';
+import { useSearchStore } from './search';
 
 /** The localStorage key of the saved preview settings (a view preference). */
 export const PREVIEW_STORAGE_KEY = 'fm.preview.v1';
@@ -29,7 +31,8 @@ export type Surface = 'auto' | 'light' | 'dark';
 export interface PreviewSettings {
   sample: SampleKind;
   customText: string;
-  language: PangramLanguage;
+  /** Language preset code of the pangram (`sr-Cyrl`). */
+  language: string;
   sizePx: number;
   lineHeight: number;
   trackingEm: number;
@@ -45,7 +48,7 @@ export interface PreviewSettings {
 export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   sample: 'pangram',
   customText: '',
-  language: 'en',
+  language: FALLBACK_LANGUAGE,
   sizePx: 28,
   lineHeight: 1.2,
   trackingEm: 0,
@@ -94,7 +97,7 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     ),
     customText:
       typeof r.customText === 'string' ? r.customText.slice(0, CUSTOM_TEXT_MAX) : d.customText,
-    language: isPangramLanguage(r.language) ? r.language : d.language,
+    language: isLanguageCode(r.language) ? r.language : d.language,
     sizePx: clampSetting(r.sizePx, SIZE, d.sizePx),
     lineHeight: clampSetting(r.lineHeight, LINE_HEIGHT, d.lineHeight),
     trackingEm: clampSetting(r.trackingEm, TRACKING, d.trackingEm),
@@ -129,6 +132,13 @@ function readSaved(storage: Storage | undefined): Record<string, PreviewSettings
   return views;
 }
 
+/** The UI/OS languages, most wanted first; empty where the webview gives none. */
+function uiLanguages(): readonly string[] {
+  const nav = globalThis.navigator;
+  if (!nav) return [];
+  return nav.languages?.length ? nav.languages : nav.language ? [nav.language] : [];
+}
+
 function browserStorage(): Storage | undefined {
   try {
     return globalThis.localStorage;
@@ -140,15 +150,44 @@ function browserStorage(): Storage | undefined {
 /**
  * Preview settings (sample text, size, spacing, colors, surface) for each view. Every row
  * of a view's list reads them, so a change applies to all rows at once; they are saved per
- * view as a view preference.
+ * view as a view preference. The pangrams come from `list_languages`.
  */
 export const usePreviewStore = defineStore('preview', () => {
   const storage = browserStorage();
   const views = ref<Record<string, PreviewSettings>>(readSaved(storage));
+  const search = useSearchStore();
 
-  /** The settings of `view`; the defaults until something is changed. */
+  /** The languages the API returns with a pangram, in its order. */
+  const pangramLanguages = computed<LanguagePreset[]>(() =>
+    search.languages.filter((l) => !!l.pangram),
+  );
+  const pangrams = computed(
+    () => new Map(pangramLanguages.value.map((l) => [l.code, l.pangram ?? ''])),
+  );
+  /** The pangram language that follows the UI/OS language, else English. */
+  const defaultLanguage = computed(() => pickLanguage(uiLanguages(), [...pangrams.value.keys()]));
+
+  /** Loads the languages and their pangrams (once). */
+  async function loadPangrams(): Promise<void> {
+    await search.loadLanguages();
+  }
+
+  /** The pangram of `language`; English for a code without one; empty while loading. */
+  function pangramText(language: string): string {
+    return pangrams.value.get(language) ?? pangrams.value.get(FALLBACK_LANGUAGE) ?? '';
+  }
+
+  /**
+   * The settings of `view`; the defaults until something is changed. A saved language
+   * without a pangram (once the languages are known) shows the default language.
+   */
   function settingsFor(view: string): PreviewSettings {
-    return views.value[view] ?? { ...DEFAULT_PREVIEW };
+    const saved = views.value[view];
+    if (!saved) return { ...DEFAULT_PREVIEW, language: defaultLanguage.value };
+    if (pangrams.value.size && !pangrams.value.has(saved.language)) {
+      return { ...saved, language: defaultLanguage.value };
+    }
+    return saved;
   }
 
   /** Changes some settings of `view`; invalid values fall back as in `normalizePreview`. */
@@ -171,5 +210,14 @@ export const usePreviewStore = defineStore('preview', () => {
     }
   });
 
-  return { views, settingsFor, update, reset };
+  return {
+    views,
+    pangramLanguages,
+    defaultLanguage,
+    loadPangrams,
+    pangramText,
+    settingsFor,
+    update,
+    reset,
+  };
 });
