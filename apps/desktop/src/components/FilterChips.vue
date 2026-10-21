@@ -4,17 +4,20 @@ import type { ApiError, SourceId } from '../api/types';
 import {
   chipGroups,
   chosenLanguages,
+  hasChosenFilters,
   hasFilters,
   languageName,
   toggleChip,
   toggleLanguage,
   type Chip,
 } from '../search/chips';
+import { useCollectionsStore } from '../stores/collections';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
 
 const search = useSearchStore();
+const collections = useCollectionsStore();
 const sources = useSourcesStore();
 const tags = useTagsStore();
 
@@ -28,6 +31,8 @@ const groups = computed(() => chipGroups(search.filters, search.counts, sourceNa
 const languages = computed(() => chosenLanguages(search.filters));
 const addable = computed(() => search.languages.filter((l) => !languages.value.includes(l.code)));
 const filtering = computed(() => hasFilters(search.filters));
+/** A smart collection needs a chosen filter; the open collection alone is none. */
+const savable = computed(() => hasChosenFilters(search.filters));
 
 const countLabel = (n: number) => `${n} ${n === 1 ? 'family' : 'families'}`;
 
@@ -41,12 +46,14 @@ function onLanguage(e: Event): void {
   select.value = '';
 }
 
-// Saving the chip set as a smart collection; the collections sidebar comes with E14.
+// Saving the chosen filters as a smart collection (E14.4): the rules are the
+// filters as they are, so the collection lists the families the chips gave.
 const naming = ref(false);
 const name = ref('');
 const saved = ref('');
 const saveError = ref<ApiError | null>(null);
 const nameInput = ref<HTMLInputElement | null>(null);
+const saveButton = ref<HTMLButtonElement | null>(null);
 
 async function startSave(): Promise<void> {
   naming.value = true;
@@ -56,21 +63,25 @@ async function startSave(): Promise<void> {
   nameInput.value?.focus();
 }
 
+/** Closes the name field and gives focus back to the button. */
+async function endSave(): Promise<void> {
+  naming.value = false;
+  saveError.value = null;
+  name.value = '';
+  await nextTick();
+  saveButton.value?.focus();
+}
+
 async function save(): Promise<void> {
   try {
     const c = await search.saveAsSmartCollection(name.value);
     saved.value = `Saved “${c.name}” as a smart collection.`;
-    saveError.value = null;
-    naming.value = false;
-    name.value = '';
+    await endSave();
+    // The sidebar lists it, with its count.
+    await collections.refresh();
   } catch (e) {
     saveError.value = e as ApiError;
   }
-}
-
-function cancelSave(): void {
-  naming.value = false;
-  saveError.value = null;
 }
 </script>
 
@@ -108,24 +119,46 @@ function cancelSave(): void {
         <option v-for="l in addable" :key="l.code" :value="l.code">{{ l.name }}</option>
       </select>
     </div>
-    <div v-if="filtering" class="group actions">
-      <button type="button" class="chip" @click="search.setFilters({})">Clear filters</button>
-      <form v-if="naming" class="save" @submit.prevent="save" @keydown.esc.prevent="cancelSave">
+    <div class="group actions">
+      <button v-if="filtering" type="button" class="chip" @click="search.setFilters({})">
+        Clear filters
+      </button>
+      <form
+        v-if="naming"
+        class="save"
+        aria-label="Save as smart collection"
+        @submit.prevent="save"
+        @keydown.esc.prevent="endSave"
+      >
         <input
           ref="nameInput"
           v-model="name"
           class="name"
           aria-label="Smart collection name"
           placeholder="Name"
-          required
+          :aria-invalid="saveError ? 'true' : undefined"
+          :aria-describedby="saveError ? 'fm-save-smart-error' : undefined"
+          @input="saveError = null"
         />
         <button type="submit" class="chip">Save</button>
-        <button type="button" class="chip" @click="cancelSave">Cancel</button>
+        <button type="button" class="chip" @click="endSave">Cancel</button>
+        <p v-if="saveError" id="fm-save-smart-error" role="alert" class="error">
+          {{ saveError.message }}
+        </p>
       </form>
-      <button v-else type="button" class="chip" @click="startSave">Save as smart collection</button>
+      <button
+        v-else
+        ref="saveButton"
+        type="button"
+        class="chip"
+        :disabled="!savable"
+        :title="savable ? undefined : 'Choose a filter to save it as a smart collection'"
+        @click="startSave"
+      >
+        Save as smart collection
+      </button>
     </div>
     <p v-if="search.error" role="alert" class="error">{{ search.error.message }}</p>
-    <p v-if="saveError" role="alert" class="error">{{ saveError.message }}</p>
     <p class="note" role="status">{{ saved }}</p>
   </section>
 </template>
@@ -175,11 +208,17 @@ function cancelSave(): void {
   color: var(--fm-muted);
   font-variant-numeric: tabular-nums;
 }
+.chip:disabled {
+  color: var(--fm-muted);
+  cursor: default;
+}
 .chip[aria-pressed='true'] .n {
   color: inherit;
 }
 .save {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   margin: 0;
 }
