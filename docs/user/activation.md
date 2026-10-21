@@ -96,3 +96,22 @@ can take up to 30 seconds. Some apps only see new fonts after a restart.
 
 > If Font Manager stops unexpectedly, it removes the session fonts the next time it
 > starts.
+
+## Keep fonts active after you log in
+
+Session fonts stay active while Font Manager runs. To have Font Manager start in the
+tray when you log in, open **Settings → Activation** and turn on **Start at login**.
+Font Manager adds itself to the apps that your system starts at login:
+
+| System | The login entry |
+|--------|-----------------|
+| Windows | A value under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+| macOS | A login item, `~/Library/LaunchAgents/org.fontmanager.app.autostart.plist` |
+| Linux | `~/.config/autostart/org.fontmanager.app.desktop` (or under `$XDG_CONFIG_HOME`) |
+
+Turn the switch off to remove the entry. Font Manager removes only an entry that it
+wrote. If you wrote a file with the same name yourself, Font Manager does not change
+or remove it.
+
+> Inside a Flatpak, Font Manager cannot add itself to the apps that start at login,
+> so **Start at login** is not shown. **Settings → About → Platform notes** says so.

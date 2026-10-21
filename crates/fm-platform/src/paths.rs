@@ -90,7 +90,7 @@ impl AppPaths {
 }
 
 /// An environment lookup that keeps only usable values: set, non-empty and absolute.
-pub(crate) struct Env<'a>(&'a dyn Fn(&str) -> Option<OsString>);
+pub(crate) struct Env<'a>(pub(crate) &'a dyn Fn(&str) -> Option<OsString>);
 
 impl Env<'_> {
     /// The variable as an absolute path, or `None` when unset, empty or relative.

@@ -16,11 +16,6 @@ use fm_platform::{AppPaths, Autostart};
 
 use crate::config::Config;
 
-/// Whether the app offers "Start at login". Off until E17.3 (#128) adds the
-/// Linux entry, so the option ships on every OS at once (CLAUDE.md rule 5);
-/// E17.3 turns it on.
-pub const START_AT_LOGIN_OFFERED: bool = false;
-
 /// Reads and writes the settings in the config file.
 #[derive(Debug)]
 pub struct SettingsStore {
@@ -55,14 +50,11 @@ impl SettingsStore {
         self
     }
 
-    /// This store with "Start at login" backed by the OS's login entry, when
-    /// the app offers the option ([`START_AT_LOGIN_OFFERED`]); else unchanged.
+    /// This store with "Start at login" backed by the OS's login entry
+    /// (Windows, macOS and Linux; hidden where the OS has none, as in a
+    /// Flatpak sandbox).
     pub fn with_system_autostart(self) -> Self {
-        if START_AT_LOGIN_OFFERED {
-            self.with_autostart(fm_platform::autostart::system())
-        } else {
-            self
-        }
+        self.with_autostart(fm_platform::autostart::system())
     }
 
     /// The login state as the OS has it; `None` when the option is not
@@ -71,6 +63,10 @@ impl SettingsStore {
         let autostart = self.autostart.as_ref()?;
         match autostart.is_enabled() {
             Ok(on) => Some(on),
+            Err(e) if e.kind() == std::io::ErrorKind::Unsupported => {
+                tracing::debug!(error = %e, "start at login is not offered here");
+                None
+            }
             Err(e) => {
                 tracing::warn!(error = %e, "the login entry could not be read");
                 None
@@ -291,11 +287,19 @@ mod tests {
     }
 
     #[test]
-    fn start_at_login_is_off_by_default_and_hidden_until_offered_on_every_os() {
+    fn start_at_login_is_offered_on_every_os_and_hidden_without_an_entry() {
         let dir = TempDir::new("settings-login-gate");
-        // Rule 5: off on every OS until E17.3 adds Linux.
-        const { assert!(!START_AT_LOGIN_OFFERED) };
-        let store = SettingsStore::new(&paths_in(&dir)).with_system_autostart();
+        // Rule 5: Windows, macOS and Linux offer it together (E17.3); reading
+        // the entry never changes it.
+        let system = SettingsStore::new(&paths_in(&dir)).with_system_autostart();
+        let read = system.get_settings().expect("read").start_at_login;
+        assert_eq!(
+            read.is_some(),
+            !fm_platform::autostart::sandboxed(),
+            "{read:?}"
+        );
+
+        let store = SettingsStore::new(&paths_in(&dir));
         assert_eq!(store.get_settings().expect("read").start_at_login, None);
         let err = store
             .update_settings(SettingsUpdate {

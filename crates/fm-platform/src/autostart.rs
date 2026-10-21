@@ -5,7 +5,10 @@
 //! |----|-----------|--------------|
 //! | Windows | value `org.fontmanager.app` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` | none |
 //! | macOS | `~/Library/LaunchAgents/org.fontmanager.app.autostart.plist` (a login item) | none |
-//! | Linux | E17.3: until then [`system`] answers `Unsupported` | — |
+//! | Linux | `$XDG_CONFIG_HOME/autostart/org.fontmanager.app.desktop` (default `~/.config/autostart`) | none |
+//!
+//! Inside a Flatpak sandbox ([`sandboxed`]) there is no entry: [`system`]
+//! answers `Unsupported` and the option is hidden.
 //!
 //! The entry itself is the state: [`Autostart::is_enabled`] reads it from the
 //! OS every time, nothing is cached. [`Autostart::disable`] removes only an
@@ -30,9 +33,10 @@ pub trait Autostart: Send + Sync + fmt::Debug {
     fn is_enabled(&self) -> io::Result<bool>;
 }
 
-/// The login entry of the OS the app runs on, launching the running program.
-/// Linux (until E17.3) and any other OS get an entry whose every call
-/// answers [`io::ErrorKind::Unsupported`].
+/// The login entry of the OS the app runs on, launching the running program
+/// (on Linux the AppImage file when the app runs from one). A Flatpak sandbox
+/// and any other OS get an entry whose every call answers
+/// [`io::ErrorKind::Unsupported`].
 pub fn system() -> Arc<dyn Autostart> {
     let program = match std::env::current_exe() {
         Ok(program) => program,
@@ -53,12 +57,43 @@ pub fn system() -> Arc<dyn Autostart> {
             Err(e) => Arc::new(Unsupported(e.to_string())),
         }
     }
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(target_os = "linux")]
+    {
+        if sandboxed() {
+            return Arc::new(Unsupported(
+                "start at login is not available inside the Flatpak sandbox".into(),
+            ));
+        }
+        let get = |name: &str| std::env::var_os(name);
+        let env = crate::paths::Env(&get);
+        let program = crate::linux::autostart_program(&env, program);
+        match crate::linux::LinuxAutostart::for_user(&env, crate::paths::BUNDLE_ID, &program) {
+            Ok(entry) => Arc::new(entry),
+            Err(e) => Arc::new(Unsupported(e.to_string())),
+        }
+    }
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
     {
         let _ = program;
         Arc::new(Unsupported(
-            "start at login is not available on this system yet".into(),
+            "start at login is not available on this system".into(),
         ))
+    }
+}
+
+/// Whether the app runs in a sandbox where it offers no login entry: a
+/// Flatpak on Linux (ADR 0011). Always `false` on Windows and macOS.
+pub fn sandboxed() -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        crate::linux::in_flatpak(
+            &|name| std::env::var_os(name),
+            std::path::Path::new("/.flatpak-info").exists(),
+        )
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        false
     }
 }
 
@@ -161,7 +196,7 @@ mod tests {
     fn the_system_entry_matches_the_os() {
         let entry = system();
         let read = entry.is_enabled();
-        if cfg!(any(windows, target_os = "macos")) {
+        if cfg!(any(windows, target_os = "macos", target_os = "linux")) && !sandboxed() {
             // Reading never changes anything; a CI runner has no entry.
             assert!(read.is_ok(), "{read:?}");
         } else {

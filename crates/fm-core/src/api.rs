@@ -460,6 +460,7 @@ impl LibraryService for CoreApi {
             platform_notes: crate::lifecycle::platform_notes(
                 Os::current(),
                 lock(&self.tray).as_ref(),
+                fm_platform::autostart::sandboxed(),
             ),
         })
     }

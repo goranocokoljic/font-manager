@@ -1,8 +1,8 @@
-//! Start at login against the real OS (E17.2, ADR 0011): the entry is
+//! Start at login against the real OS (E17.2, E17.3, ADR 0011): the entry is
 //! written where the OS looks for it at login, a second process (`reg` on
-//! Windows, `plutil` on macOS) reads it back after enable, and finds it
-//! gone after disable. Each run uses its own entry name, removed at the end.
-//! Linux has no entry until E17.3.
+//! Windows, `plutil` on macOS, `desktop-file-validate` on Linux) reads it
+//! back after enable, and finds it gone after disable. Each run uses its own
+//! entry name (on Linux its own `XDG_CONFIG_HOME`), removed at the end.
 
 // Helpers fail the test by panicking, which clippy's in-test allowance only
 // sees inside `#[test]` functions.
@@ -131,11 +131,143 @@ mod macos {
     }
 }
 
-#[cfg(not(any(windows, target_os = "macos")))]
-#[test]
-fn start_at_login_waits_for_e17_3_on_this_os() {
-    let err = fm_platform::autostart::system()
-        .is_enabled()
-        .expect_err("not yet");
-    assert_eq!(err.kind(), std::io::ErrorKind::Unsupported);
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    const CHILD: &str = "FM_AUTOSTART_CHILD";
+    const CHILD_TEST: &str = "linux::child_switches_the_system_entry";
+
+    /// A fresh `XDG_CONFIG_HOME` under the temp dir, removed on drop.
+    struct ConfigHome(PathBuf);
+
+    impl Drop for ConfigHome {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// Runs [`child_switches_the_system_entry`] in a new process of this test
+    /// binary with `XDG_CONFIG_HOME` set to `config` and `what` to do.
+    fn child(config: &Path, what: &str) {
+        let out = Command::new(std::env::current_exe().expect("test binary"))
+            .args([CHILD_TEST, "--exact", "--ignored", "--nocapture"])
+            .env(CHILD, what)
+            .env("XDG_CONFIG_HOME", config)
+            .env_remove("FLATPAK_ID")
+            .env_remove("APPIMAGE")
+            .output()
+            .expect("the child runs");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() && stdout.contains("1 passed"),
+            "{what}: {stdout}{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    /// `desktop-file-validate` on `file`; `None` when it is not installed and
+    /// `FM_REQUIRE_DESKTOP_FILE_VALIDATE` (set in CI) does not ask for it.
+    fn validate(file: &Path) -> Option<String> {
+        match Command::new("desktop-file-validate").arg(file).output() {
+            Ok(out) => {
+                let text = format!(
+                    "{}{}",
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr)
+                );
+                assert!(out.status.success(), "{text}");
+                Some(text)
+            }
+            Err(e) => {
+                assert!(
+                    std::env::var_os("FM_REQUIRE_DESKTOP_FILE_VALIDATE")
+                        .is_none_or(|v| v.is_empty()),
+                    "desktop-file-validate is required: {e}"
+                );
+                None
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "run as a child process by the tests below"]
+    fn child_switches_the_system_entry() {
+        let entry = fm_platform::autostart::system();
+        match std::env::var(CHILD).as_deref() {
+            Ok("on") => entry.enable().expect("enabled without admin rights"),
+            Ok("off") => assert!(entry.disable().expect("disabled")),
+            Ok("off-none") => assert!(!entry.disable().expect("nothing of ours")),
+            Ok("on-refused") => assert_eq!(
+                entry.enable().expect_err("not ours").kind(),
+                std::io::ErrorKind::AlreadyExists
+            ),
+            other => panic!("unknown {CHILD}: {other:?}"),
+        }
+    }
+
+    fn config_home(label: &str) -> ConfigHome {
+        let path =
+            std::env::temp_dir().join(format!("fm-autostart-{label}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).expect("config home");
+        ConfigHome(path)
+    }
+
+    #[test]
+    fn the_xdg_entry_is_valid_launches_with_autostart_and_is_removed_alone() {
+        let home = config_home("cycle");
+        let autostart = home.0.join("autostart");
+        let file = autostart.join("org.fontmanager.app.desktop");
+        fs::create_dir_all(&autostart).expect("autostart folder");
+        let other = autostart.join("org.example.other.desktop");
+        fs::write(
+            &other,
+            "[Desktop Entry]
+Type=Application
+Name=Other
+Exec=other
+",
+        )
+        .expect("other entry");
+
+        child(&home.0, "on");
+        let text = fs::read_to_string(&file).expect("the entry is there");
+        let program = std::env::current_exe().expect("test binary");
+        assert!(
+            text.contains(&format!(
+                "
+Exec=\"{}\" --autostart
+",
+                program.display()
+            )),
+            "{text}"
+        );
+        validate(&file);
+
+        child(&home.0, "off");
+        assert!(!file.exists(), "the entry is gone");
+        assert!(other.exists(), "another entry stays");
+        child(&home.0, "off-none");
+    }
+
+    #[test]
+    fn a_file_the_user_wrote_is_never_overwritten_or_removed() {
+        let home = config_home("foreign");
+        let autostart = home.0.join("autostart");
+        fs::create_dir_all(&autostart).expect("autostart folder");
+        let file = autostart.join("org.fontmanager.app.desktop");
+        let mine = "[Desktop Entry]
+Type=Application
+Name=Mine
+Exec=fm-app --autostart
+";
+        fs::write(&file, mine).expect("the user's entry");
+
+        child(&home.0, "on-refused");
+        child(&home.0, "off-none");
+        assert_eq!(fs::read_to_string(&file).expect("kept"), mine);
+    }
 }
