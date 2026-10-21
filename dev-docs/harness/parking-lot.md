@@ -164,3 +164,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E13.4 #112] apps/desktop/src/components/CollectionsSidebar.vue:256 — sidebar counts rely on `aria-label` on a plain `<span>` (generic role), which some screen readers do not announce; TagsSidebar.vue copies the pattern.
 - [E17.2 #127] apps/desktop/src/stores/settings.ts:51 — a failed `update` never re-reads the settings, so a value the server changed partly can show stale until the next `load`.
 - [E14.1 #114] crates/fm-api/src/mock.rs:973 — the Rust mock's weight and width filters match only a face's static class, while fm-core and the TS mock also accept a variable axis that reaches the range.
+- [E17.3 #128] apps/desktop/src-tauri/tests/tray_lifecycle.rs:187 — a test-only `#[cfg(target_os = "linux")]` lives outside `fm-platform` (pre-existing).
