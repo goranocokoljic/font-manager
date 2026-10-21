@@ -23,7 +23,7 @@ pub use activator::LinuxActivator;
 #[cfg(target_os = "linux")]
 pub use autostart::LinuxAutostart;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
-pub(crate) use autostart::{in_flatpak, program as autostart_program};
+pub(crate) use autostart::{FLATPAK_INFO, in_flatpak, system_entry};
 #[cfg(target_os = "linux")]
 pub(crate) use trash::FreedesktopTrash;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]

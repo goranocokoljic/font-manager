@@ -59,17 +59,11 @@ pub fn system() -> Arc<dyn Autostart> {
     }
     #[cfg(target_os = "linux")]
     {
-        if sandboxed() {
-            return Arc::new(Unsupported(
-                "start at login is not available inside the Flatpak sandbox".into(),
-            ));
-        }
         let get = |name: &str| std::env::var_os(name);
-        let env = crate::paths::Env(&get);
-        let program = crate::linux::autostart_program(&env, program);
-        match crate::linux::LinuxAutostart::for_user(&env, crate::paths::BUNDLE_ID, &program) {
+        let flatpak_info = std::path::Path::new(crate::linux::FLATPAK_INFO).exists();
+        match crate::linux::system_entry(&crate::paths::Env(&get), flatpak_info, program) {
             Ok(entry) => Arc::new(entry),
-            Err(e) => Arc::new(Unsupported(e.to_string())),
+            Err(reason) => Arc::new(Unsupported(reason)),
         }
     }
     #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
@@ -88,7 +82,7 @@ pub fn sandboxed() -> bool {
     {
         crate::linux::in_flatpak(
             &|name| std::env::var_os(name),
-            std::path::Path::new("/.flatpak-info").exists(),
+            std::path::Path::new(crate::linux::FLATPAK_INFO).exists(),
         )
     }
     #[cfg(not(target_os = "linux"))]

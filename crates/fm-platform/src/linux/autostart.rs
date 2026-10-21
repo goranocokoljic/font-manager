@@ -200,6 +200,24 @@ impl Autostart for LinuxAutostart {
     }
 }
 
+/// The file every Flatpak sandbox has at its root.
+pub(crate) const FLATPAK_INFO: &str = "/.flatpak-info";
+
+/// The login entry of the running app, or why there is none: inside a
+/// Flatpak (`flatpak_info`: [`FLATPAK_INFO`] exists) there is none; else
+/// the user's autostart entry launching [`program`] of `current_exe`.
+pub(crate) fn system_entry(
+    env: &Env<'_>,
+    flatpak_info: bool,
+    current_exe: PathBuf,
+) -> Result<LinuxAutostart, String> {
+    if in_flatpak(env.0, flatpak_info) {
+        return Err("start at login is not available inside the Flatpak sandbox".into());
+    }
+    let program = program(env, current_exe);
+    LinuxAutostart::for_user(env, crate::paths::BUNDLE_ID, &program).map_err(|e| e.to_string())
+}
+
 /// Whether the app runs inside a Flatpak sandbox: `FLATPAK_ID` is set or
 /// `/.flatpak-info` exists.
 pub(crate) fn in_flatpak(env: &dyn Fn(&str) -> Option<OsString>, info_file: bool) -> bool {
@@ -404,6 +422,48 @@ mod tests {
         let entry = entry(&blocker, "/usr/bin/fm-app");
         assert!(entry.enable().is_err());
         assert_eq!(fs::read_to_string(&blocker).expect("kept"), "not a folder");
+    }
+
+    #[test]
+    fn the_system_entry_is_none_inside_a_flatpak_and_the_xdg_entry_outside() {
+        let exe = PathBuf::from("/tmp/.mount_fmXYZ/usr/bin/fm-app");
+        let at = |vars: &[(&str, &str)], info: bool| {
+            let get = test_env(vars);
+            system_entry(&Env(&get), info, exe.clone())
+        };
+        let home = [("HOME", "/home/ada")];
+        let e = at(&[("HOME", "/home/ada"), ("FLATPAK_ID", APP_ID)], false)
+            .expect_err("no entry in a Flatpak");
+        assert!(e.contains("Flatpak"), "{e}");
+        assert!(at(&home, true).is_err(), "the info file alone is a Flatpak");
+
+        let entry = at(
+            &[
+                ("HOME", "/home/ada"),
+                ("XDG_CONFIG_HOME", "/cfg"),
+                ("APPIMAGE", "/apps/fm.AppImage"),
+            ],
+            false,
+        )
+        .expect("an entry outside a Flatpak");
+        assert_eq!(
+            entry.file(),
+            Path::new("/cfg/autostart/org.fontmanager.app.desktop")
+        );
+        assert!(
+            entry.desktop_entry().contains(
+                "
+Exec=\"/apps/fm.AppImage\" --autostart
+"
+            ),
+            "the AppImage file, not its mount"
+        );
+        let plain = at(&home, false).expect("entry");
+        assert!(
+            plain
+                .desktop_entry()
+                .contains(&format!("Exec=\"{}\"", exe.display()))
+        );
     }
 
     #[test]

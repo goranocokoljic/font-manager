@@ -629,6 +629,52 @@ fn app_info_says_when_closing_the_window_quits() {
     assert!(quits(&lib.api.app_info().expect("info").platform_notes));
 }
 
+const FLATPAK_CHILD: &str = "FM_FLATPAK_CHILD";
+
+/// Run by [`inside_a_flatpak_start_at_login_is_hidden_and_the_notes_say_why`]
+/// in a new process of this test binary with `FLATPAK_ID` set.
+#[test]
+#[ignore = "run as a child process with FLATPAK_ID set"]
+fn child_reports_start_at_login_inside_a_flatpak() {
+    assert!(
+        std::env::var_os(FLATPAK_CHILD).is_some(),
+        "run by the parent test"
+    );
+    let lib = Lib::new("api-flatpak-child");
+    let notes = lib.api.app_info().expect("info").platform_notes;
+    assert!(
+        notes.iter().any(|n| n.contains("Flatpak sandbox")),
+        "{notes:?}"
+    );
+    let store = SettingsStore::new(&lib.paths).with_system_autostart();
+    assert_eq!(store.get_settings().expect("read").start_at_login, None);
+}
+
+#[test]
+fn inside_a_flatpak_start_at_login_is_hidden_and_the_notes_say_why() {
+    // Only Linux has a Flatpak; elsewhere `FLATPAK_ID` means nothing.
+    if Os::current() != Os::Linux {
+        return;
+    }
+    let out = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args([
+            "api::tests::child_reports_start_at_login_inside_a_flatpak",
+            "--exact",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env(FLATPAK_CHILD, "1")
+        .env("FLATPAK_ID", "org.fontmanager.app")
+        .output()
+        .expect("the child runs");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("1 passed"),
+        "{stdout}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
 #[test]
 fn rebuilding_the_index_scans_again_and_keeps_ids() {
     let (lib, _, _) = Lib::scanned("api-rebuild");
