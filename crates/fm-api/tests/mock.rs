@@ -1707,6 +1707,10 @@ fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
     assert_eq!(got.blocks[0].size_pt, 8.0);
     assert_eq!(got.blocks[0].line_height, 1.3);
     assert_eq!(got.blocks[0].columns, 3);
+    let bounds = api.layout_bounds().expect("bounds");
+    assert_eq!(got.blocks[0].size_pt, bounds.size_pt.min);
+    assert_eq!(got.blocks[0].line_height, bounds.line_height.default);
+    assert_eq!(got.blocks[0].columns, bounds.columns.max);
 }
 
 #[test]

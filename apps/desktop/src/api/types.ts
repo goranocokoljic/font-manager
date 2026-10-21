@@ -147,6 +147,23 @@ export type BlockOverflow =
 /**  Keeps one line per paragraph and hides what overflows. */
 "clip";
 
+/**
+ *  The range of one block value: what the core clamps it into and how far the
+ *  editor and the direct-manipulation gestures move it.
+ */
+export type BlockRange = {
+	/**  Smallest value. */
+	min: number | null,
+	/**  Largest value. */
+	max: number | null,
+	/**  The value for one that is not a number. */
+	default: number | null,
+	/**  How far one arrow-key press moves the value. */
+	step: number | null,
+	/**  How far one CSS pixel of pointer drag moves the value. */
+	perPx: number | null,
+};
+
 /**  Pick fonts for a design brief. */
 export type BriefRequest = {
 	/**  The brief, in plain words ("a calm bilingual brand"). */
@@ -254,6 +271,14 @@ export type CollectionFacesRequest = {
 
 /**  A manual or smart collection. */
 export type CollectionId = number;
+
+/**  The range of [`TextBlock::columns`]. */
+export type ColumnRange = {
+	/**  Fewest columns. */
+	min: number,
+	/**  Most columns. */
+	max: number,
+};
 
 /**  A clash found before activating. */
 export type Conflict = {
@@ -1148,6 +1173,25 @@ export type Layout = {
 	name: string,
 	/**  The blocks, top to bottom. */
 	blocks: TextBlock[],
+};
+
+/**
+ *  The ranges [`LayoutService::clamp_layout`] clamps every block value into,
+ *  so the properties editor (E12.3) offers exactly those.
+ */
+export type LayoutBounds = {
+	/**  Font size in points. */
+	sizePt: BlockRange,
+	/**  Line height as a multiple of the size. */
+	lineHeight: BlockRange,
+	/**  Letter spacing in thousandths of an em. */
+	tracking: BlockRange,
+	/**  Space after each paragraph in points. */
+	paragraphSpacingPt: BlockRange,
+	/**  Indent of each paragraph's first line in em. */
+	firstLineIndentEm: BlockRange,
+	/**  Columns a block flows into. */
+	columns: ColumnRange,
 };
 
 /**  A layout template file in the layouts folder, as the list shows it (E12.5). */
@@ -2046,4 +2090,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 12, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 13, patch: 0 };

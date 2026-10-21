@@ -44,6 +44,7 @@ import {
   type LanguagePreset,
   type LicenseInfo,
   type Layout,
+  type LayoutBounds,
   type LayoutEntry,
   type LayoutVersion,
   type SavedLayout,
@@ -975,20 +976,36 @@ export const MOCK_LAYOUT_PRESETS: readonly Layout[] = [
   },
 ];
 
-/** The ranges of `fm_core::layout`; a value that is not a finite number takes the default. */
-export function mockClampLayout(layout: Layout): Layout {
-  const fit = (v: number | null, lo: number, hi: number, d: number) =>
-    v !== null && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+/** The ranges and steps of `fm_core::layout::bounds` (the fm-api mock has the same). */
+export const MOCK_LAYOUT_BOUNDS: LayoutBounds = {
+  sizePt: { min: 8, max: 600, default: 12, step: 1, perPx: 0.5 },
+  lineHeight: { min: 0.1, max: 3, default: 1.3, step: 0.05, perPx: 0.01 },
+  tracking: { min: -200, max: 1000, default: 0, step: 10, perPx: 2 },
+  paragraphSpacingPt: { min: 0, max: 600, default: 0, step: 1, perPx: 0.5 },
+  firstLineIndentEm: { min: 0, max: 20, default: 0, step: 0.5, perPx: 0.05 },
+  columns: { min: 1, max: 3 },
+};
+
+/** Clamps like `fm_core::layout`; a value that is not a finite number takes the default. */
+export function mockClampLayout(layout: Layout, bounds: LayoutBounds = MOCK_LAYOUT_BOUNDS): Layout {
+  const fit = (
+    v: number | null,
+    r: { min: number | null; max: number | null; default: number | null },
+  ) =>
+    v !== null && Number.isFinite(v)
+      ? Math.min(r.max ?? v, Math.max(r.min ?? v, v))
+      : (r.default ?? 0);
+  const b = bounds;
   return {
     ...layout,
-    blocks: layout.blocks.map((b) => ({
-      ...b,
-      sizePt: fit(b.sizePt, 8, 600, 12),
-      lineHeight: fit(b.lineHeight, 0.1, 3, 1.3),
-      tracking: fit(b.tracking, -200, 1000, 0),
-      paragraphSpacingPt: fit(b.paragraphSpacingPt, 0, 600, 0),
-      firstLineIndentEm: fit(b.firstLineIndentEm, 0, 20, 0),
-      columns: Math.round(fit(b.columns, 1, 3, 1)),
+    blocks: layout.blocks.map((x) => ({
+      ...x,
+      sizePt: fit(x.sizePt, b.sizePt),
+      lineHeight: fit(x.lineHeight, b.lineHeight),
+      tracking: fit(x.tracking, b.tracking),
+      paragraphSpacingPt: fit(x.paragraphSpacingPt, b.paragraphSpacingPt),
+      firstLineIndentEm: fit(x.firstLineIndentEm, b.firstLineIndentEm),
+      columns: Math.round(fit(x.columns, { ...b.columns, default: b.columns.min })),
     })),
   };
 }
@@ -1441,6 +1458,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     getAppInfo: async () => mockAppInfo,
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
+    layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     ...createMockLayouts(),
     cssValues: async (req) => {
       const f = find(req.face);

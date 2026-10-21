@@ -118,4 +118,66 @@ describe('text layouts store', () => {
     expect(await first).toBe(false);
     expect(store.saved?.id).toBe('quote');
   });
+
+  it('changes properties of one block through the core clamp; the other blocks keep theirs', async () => {
+    const { client, store } = fresh();
+    const clamp = vi.spyOn(client, 'clampLayout');
+    await store.open('book');
+    const before = JSON.parse(JSON.stringify(store.draft!.blocks[0]));
+    const block = await store.setBlockProps(1, { sizePt: 5000, columns: 9, align: 'center' });
+    expect(clamp).toHaveBeenCalledOnce();
+    // Only the edited block went to the core, with the change applied.
+    expect(clamp.mock.calls[0]![0].blocks).toHaveLength(1);
+    expect(clamp.mock.calls[0]![0].blocks[0]).toMatchObject({ sizePt: 5000, columns: 9 });
+    expect(block).toMatchObject({ sizePt: 600, columns: 3, align: 'center' });
+    expect(store.draft!.blocks[1]).toMatchObject({ sizePt: 600, columns: 3, align: 'center' });
+    expect(store.draft!.blocks[0]).toEqual(before);
+    expect(store.dirty).toBe(true);
+    // A field the user emptied is not a number: the core gives it the default.
+    await store.setBlockProps(1, { tracking: Number.NaN });
+    expect(store.draft!.blocks[1]!.tracking).toBe(0);
+  });
+
+  it('loads the core bounds once', async () => {
+    const { client, store } = fresh();
+    const spy = vi.spyOn(client, 'layoutBounds');
+    expect((await store.loadBounds())?.sizePt.max).toBe(600);
+    await store.loadBounds();
+    expect(spy).toHaveBeenCalledOnce();
+    expect(store.bounds?.columns).toEqual({ min: 1, max: 3 });
+  });
+
+  it('drops a property change that answers after a later one to the same block', async () => {
+    const { client, store } = fresh();
+    await store.open('book');
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    const real = client.clampLayout.bind(client);
+    vi.spyOn(client, 'clampLayout').mockImplementationOnce(async (req) => {
+      await slow;
+      return real(req);
+    });
+    const first = store.setBlockProps(0, { sizePt: 40 });
+    await store.setBlockProps(0, { sizePt: 50 });
+    release();
+    await first;
+    expect(store.draft!.blocks[0]!.sizePt).toBe(50);
+  });
+
+  it('keeps text typed while a property change was on its way', async () => {
+    const { client, store } = fresh();
+    await store.open('book');
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((r) => (release = r));
+    const real = client.clampLayout.bind(client);
+    vi.spyOn(client, 'clampLayout').mockImplementationOnce(async (req) => {
+      await slow;
+      return real(req);
+    });
+    const change = store.setBlockProps(0, { sizePt: 30 });
+    store.setBlockText(0, 'Typed meanwhile');
+    release();
+    await change;
+    expect(store.draft!.blocks[0]).toMatchObject({ sizePt: 30, text: 'Typed meanwhile' });
+  });
 });

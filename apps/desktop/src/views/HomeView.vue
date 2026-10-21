@@ -105,7 +105,10 @@ watch(
 watch(
   mode,
   (m) => {
-    if (m === 'layout') void textLayouts.loadList();
+    if (m === 'layout') {
+      void textLayouts.loadList();
+      void textLayouts.loadBounds();
+    }
   },
   { immediate: true },
 );
@@ -298,6 +301,8 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
           :layout="shownLayout"
           :face="layoutFace"
           editable
+          :bounds="textLayouts.bounds"
+          :set-props="textLayouts.setBlockProps"
           @edit-text="textLayouts.setBlockText"
         />
       </template>
