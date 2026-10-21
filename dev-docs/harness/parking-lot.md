@@ -154,3 +154,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E14.3 #116] crates/fm-core/src/index/search.rs:637 — `FamilySummary.classification` is still hard-coded `None`, although search rows now read the face class from `face.parsed`.
 - [E14.3 #116] crates/fm-bench/src/lib.rs:302 — `smart_rule` says it covers every filter dimension, but no bench smart collection uses `activated_within_days`.
 - [E12.4 #107] apps/desktop/src/views/HomeView.vue — at 1280×800 with the inspector open, the toolbar's "Inspector" button is clipped ("Inspect…").
+- [E13.1 #109] apps/desktop/src/components/GlyphCompare.vue:178 — the glyph compare dialog root has no tabindex, so a click on its non-focusable content drops focus to body and the focus trap and Escape stop working (fixed for CompareSheet in E13.1).
+- [E13.1 #109] apps/desktop/src/components/FontPreviewRow.vue:104 — FontPreviewRow, FontLayout (:124) and CompareSheet each build the same `"<family>", var(--fm-preview-fallback, system-ui), sans-serif` font stack by hand.
