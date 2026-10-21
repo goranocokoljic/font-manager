@@ -2,7 +2,9 @@
 //! value is clamped into. The UI renders a layout as live text in the webview;
 //! this module only decides what the blocks are.
 
-use fm_api::layout::{BlockAlign, BlockOverflow, Layout, LayoutPreset, TextBlock};
+use fm_api::layout::{
+    BlockAlign, BlockOverflow, BlockRange, Layout, LayoutBounds, LayoutPreset, TextBlock,
+};
 
 /// The range of a block value and what a value that is not a number becomes.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -57,6 +59,14 @@ pub const FIRST_LINE_INDENT_EM: Bounds = Bounds {
     max: 20.0,
     default: 0.0,
 };
+/// One arrow-key press on a block: 1 pt of size.
+pub const SIZE_PT_STEP: f32 = 1.0;
+/// One pixel of horizontal drag on a block: half a point of size.
+pub const SIZE_PT_PER_PX: f32 = 0.5;
+/// One arrow-key press on a block: 0.05 of line height.
+pub const LINE_HEIGHT_STEP: f32 = 0.05;
+/// One pixel of vertical drag on a block: 0.01 of line height.
+pub const LINE_HEIGHT_PER_PX: f32 = 0.01;
 /// Columns a block flows into.
 pub const COLUMNS: std::ops::RangeInclusive<u8> = 1..=3;
 
@@ -200,6 +210,21 @@ pub fn preset(preset: LayoutPreset) -> Layout {
 /// The six presets, in [`PRESETS`] order.
 pub fn presets() -> Vec<Layout> {
     PRESETS.into_iter().map(preset).collect()
+}
+
+/// The ranges and gesture steps of the values the UI resizes directly.
+pub fn bounds() -> LayoutBounds {
+    let range = |b: Bounds, step: f32, per_px: f32| BlockRange {
+        min: b.min,
+        max: b.max,
+        default: b.default,
+        step,
+        per_px,
+    };
+    LayoutBounds {
+        size_pt: range(SIZE_PT, SIZE_PT_STEP, SIZE_PT_PER_PX),
+        line_height: range(LINE_HEIGHT, LINE_HEIGHT_STEP, LINE_HEIGHT_PER_PX),
+    }
 }
 
 /// A block with every value inside its range.
@@ -359,6 +384,24 @@ mod tests {
         assert_eq!(b.tracking, TRACKING.default);
         assert_eq!(b.paragraph_spacing_pt, 0.0);
         assert_eq!(b.first_line_indent_em, 0.0);
+    }
+
+    #[test]
+    fn bounds_are_the_clamp_ranges_with_steps_that_move_the_value() {
+        let b = bounds();
+        assert_eq!((b.size_pt.min, b.size_pt.max), (8.0, 600.0));
+        assert_eq!((b.line_height.min, b.line_height.max), (0.1, 3.0));
+        assert_eq!(b.size_pt.default, SIZE_PT.default);
+        assert_eq!(b.line_height.default, LINE_HEIGHT.default);
+        for (r, clamp) in [(b.size_pt, SIZE_PT), (b.line_height, LINE_HEIGHT)] {
+            assert!(r.step > 0.0 && r.per_px > 0.0, "{r:?}");
+            // A step and a short drag stay small against the range.
+            assert!(r.step * 20.0 <= r.max - r.min, "{r:?}");
+            assert!(r.per_px * 20.0 <= r.max - r.min, "{r:?}");
+            // The edges are what clamping gives.
+            assert_eq!(clamp.clamp(r.max + r.step), r.max);
+            assert_eq!(clamp.clamp(r.min - r.step), r.min);
+        }
     }
 
     #[test]

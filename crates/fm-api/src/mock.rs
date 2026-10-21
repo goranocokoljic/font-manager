@@ -22,7 +22,9 @@ use crate::export::{
     ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest, WebFormat,
 };
-use crate::layout::{BlockAlign, BlockOverflow, Layout, LayoutPreset, TextBlock};
+use crate::layout::{
+    BlockAlign, BlockOverflow, BlockRange, Layout, LayoutBounds, LayoutPreset, TextBlock,
+};
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphDetail,
@@ -3017,6 +3019,26 @@ impl LayoutService for MockApi {
             })
             .collect();
         Ok(Layout { blocks, ..layout })
+    }
+
+    /// The core's ranges and gesture steps (`fm_core::layout::bounds`).
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
+        Ok(LayoutBounds {
+            size_pt: BlockRange {
+                min: 8.0,
+                max: 600.0,
+                default: 12.0,
+                step: 1.0,
+                per_px: 0.5,
+            },
+            line_height: BlockRange {
+                min: 0.1,
+                max: 3.0,
+                default: 1.3,
+                step: 0.05,
+                per_px: 0.01,
+            },
+        })
     }
 }
 

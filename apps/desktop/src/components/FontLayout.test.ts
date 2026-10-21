@@ -52,6 +52,12 @@ async function show(p: LayoutPreset, face = inter) {
 }
 
 const blocks = (w: Awaited<ReturnType<typeof show>>) => w.findAll('[data-testid="layout-block"]');
+/** A block's set text (its paragraphs), without the size badge. */
+const textOf = (b: ReturnType<typeof blocks>[number]) =>
+  b
+    .findAll('p')
+    .map((p) => p.text())
+    .join('\n');
 const style = (w: Awaited<ReturnType<typeof show>>, i: number) =>
   (blocks(w)[i]!.element as HTMLElement).style;
 
@@ -110,12 +116,12 @@ describe('FontLayout', () => {
     expect(style(w, 0).fontSize).toBe('36pt');
     expect(style(w, 0).textAlign).toBe('center');
     expect(style(w, 1).letterSpacing).toBe('0.1em');
-    expect(blocks(w)[1]!.text()).toBe('Matthew Carter');
+    expect(textOf(blocks(w)[1]!)).toBe('Matthew Carter');
   });
 
   it('Characters: the upper case, lower case and figures as separate blocks', async () => {
     const w = await show('characters');
-    expect(blocks(w).map((b) => b.text())).toEqual([
+    expect(blocks(w).map(textOf)).toEqual([
       'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
       'abcdefghijklmnopqrstuvwxyz',
       '0123456789 &@#%?!',
@@ -129,7 +135,7 @@ describe('FontLayout', () => {
     expect(sizes.length).toBeGreaterThanOrEqual(6);
     expect(sizes.length).toBeLessThanOrEqual(8);
     expect(sizes).toEqual(MOCK_WATERFALL_SIZES_PT);
-    expect(new Set(blocks(w).map((b) => b.text())).size).toBe(1);
+    expect(new Set(blocks(w).map(textOf)).size).toBe(1);
     for (let i = 0; i < sizes.length; i++) expect(style(w, i).fontSize).toBe(`${sizes[i]}pt`);
   });
 

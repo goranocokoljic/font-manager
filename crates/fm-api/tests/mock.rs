@@ -1704,4 +1704,9 @@ fn layout_presets_are_the_six_in_picker_order_and_clamp_keeps_ranges() {
     assert_eq!(got.blocks[0].size_pt, 8.0);
     assert_eq!(got.blocks[0].line_height, 1.3);
     assert_eq!(got.blocks[0].columns, 3);
+    // The gesture ranges are the clamp ranges.
+    let b = api.layout_bounds().expect("bounds");
+    assert_eq!((b.size_pt.min, b.size_pt.max), (8.0, 600.0));
+    assert_eq!((b.line_height.min, b.line_height.max), (0.1, 3.0));
+    assert!(b.size_pt.step > 0.0 && b.line_height.per_px > 0.0);
 }

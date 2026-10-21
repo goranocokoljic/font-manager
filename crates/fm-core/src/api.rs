@@ -34,7 +34,7 @@ use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest,
 };
-use fm_api::layout::{Layout, LayoutService};
+use fm_api::layout::{Layout, LayoutBounds, LayoutService};
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
@@ -848,6 +848,10 @@ impl LayoutService for CoreApi {
 
     fn clamp_layout(&self, req: Layout) -> ApiResult<Layout> {
         Ok(layout::clamp_layout(req))
+    }
+
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
+        Ok(layout::bounds())
     }
 }
 

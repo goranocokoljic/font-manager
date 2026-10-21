@@ -139,6 +139,14 @@ describe('MockApi layouts (E12.1)', () => {
     expect(b).toMatchObject({ sizePt: 8, lineHeight: 1.3, columns: 3, tracking: 1000 });
   });
 
+  it('gives the core bounds and steps of the block gestures', async () => {
+    const b = await createMockClient().layoutBounds();
+    expect(b.sizePt).toMatchObject({ min: 8, max: 600, default: 12 });
+    expect(b.lineHeight).toMatchObject({ min: 0.1, max: 3, default: 1.3 });
+    expect(b.sizePt.step).toBeGreaterThan(0);
+    expect(b.lineHeight.perPx).toBeGreaterThan(0);
+  });
+
   it('hands out copies, so editing one does not change the presets', async () => {
     const api = createMockClient();
     (await api.layoutPresets())[0]!.blocks[0]!.sizePt = 99;

@@ -207,3 +207,152 @@ test('a start in the layout mode with nothing selected shows the first family', 
   await expect(quote).toContainText('Inter');
   await expect(blocks(quote)).toHaveCount(2);
 });
+
+// ---- E12.2: direct manipulation ---------------------------------------------
+
+async function quoteLayout(page: Page) {
+  await open(page);
+  await page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first().click();
+  await modeButton(page, 'Layout').click();
+  await picker(page).selectOption('quote');
+  const quote = layout(page, 'Quote');
+  await expect(quote).toHaveAttribute('data-state', 'ready');
+  return quote;
+}
+
+/** The block's badge text and its computed size (px) and line height (multiple of the size). */
+const readBlock = (block: Locator) =>
+  block.evaluate((el) => {
+    const s = getComputedStyle(el);
+    return {
+      badge: el.querySelector('[data-testid="size-badge"]')?.textContent?.trim(),
+      fontPx: Math.round(parseFloat(s.fontSize) * 100) / 100,
+      lineHeight: Math.round((parseFloat(s.lineHeight) / parseFloat(s.fontSize)) * 100) / 100,
+    };
+  });
+
+const pt = (n: number) => Math.round(((n * 4) / 3) * 100) / 100;
+
+test('dragging a block sizes it sideways and spaces its lines up and down; Escape undoes a drag', async ({
+  page,
+}) => {
+  const quote = await quoteLayout(page);
+  const block = blocks(quote).first();
+  expect(await readBlock(block)).toEqual({
+    badge: '36 pt · 1.15',
+    fontPx: pt(36),
+    lineHeight: 1.15,
+  });
+  const loads: string[] = [];
+  page.on('request', (r) => {
+    if (r.url().includes('/fmfont/')) loads.push(r.url());
+  });
+
+  const box = (await block.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + 10;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 20, y, { steps: 4 });
+  await page.mouse.move(x + 40, y, { steps: 4 });
+  // The badge and the text follow while the button is held.
+  await expect(block.getByTestId('size-badge')).toHaveText('56 pt · 1.15');
+  await page.mouse.move(x + 40, y - 30, { steps: 4 });
+  await page.mouse.up();
+  expect(await readBlock(block)).toEqual({
+    badge: '56 pt · 1.45',
+    fontPx: pt(56),
+    lineHeight: 1.45,
+  });
+
+  // Escape during a drag puts the starting values back.
+  const b3 = (await block.boundingBox())!;
+  await page.mouse.move(b3.x + b3.width / 2, b3.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(b3.x + b3.width / 2 + 100, b3.y - 40, { steps: 6 });
+  await expect(block.getByTestId('size-badge')).toHaveText('106 pt · 1.95');
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  expect(await readBlock(block)).toEqual({
+    badge: '56 pt · 1.45',
+    fontPx: pt(56),
+    lineHeight: 1.45,
+  });
+
+  // Clamped to the core's bounds: 8 pt and a line height of 0.1 at the least.
+  const b2 = (await block.boundingBox())!;
+  const x2 = b2.x + b2.width / 2;
+  const y2 = b2.y + 5;
+  await page.mouse.move(x2, y2);
+  await page.mouse.down();
+  await page.mouse.move(x2 - 300, y2 + 400, { steps: 8 });
+  await page.mouse.up();
+  expect(await readBlock(block)).toMatchObject({ badge: '8 pt · 0.10', fontPx: pt(8) });
+
+  // Live text in the same face all along: no font file was fetched again.
+  expect(loads).toEqual([]);
+  await expect(quote).toHaveAttribute('data-state', 'ready');
+  // The other block kept its values.
+  expect(await readBlock(blocks(quote).nth(1))).toMatchObject({ badge: '12 pt · 1.30' });
+});
+
+test('a focused block resizes from the keyboard and has an accessible name', async ({ page }) => {
+  const quote = await quoteLayout(page);
+  await expect(
+    quote.getByRole('group', { name: 'Text block 1, 36 points, line height 1.15' }),
+  ).toBeVisible();
+  const block = blocks(quote).first();
+  await expect(block).toHaveAttribute('aria-roledescription', 'resizable text block');
+  await expect(block).toHaveAccessibleDescription(/Left and Right to change its size/);
+  await block.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Shift+ArrowRight');
+  await page.keyboard.press('ArrowUp');
+  await expect(block).toBeFocused();
+  expect(await readBlock(block)).toEqual({
+    badge: '47 pt · 1.20',
+    fontPx: pt(47),
+    lineHeight: 1.2,
+  });
+  await expect(block).toHaveAccessibleName('Text block 1, 47 points, line height 1.20');
+  // The arrows did not reach the app's shortcuts: still the layout mode.
+  await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('double-click edits a block in place; Escape cancels, Ctrl/Cmd+Enter and clicking outside keep it', async ({
+  page,
+}) => {
+  const quote = await quoteLayout(page);
+  const block = blocks(quote).nth(1);
+  const field = block.getByRole('textbox', { name: 'Block text' });
+  const shown = () => block.locator('p').allTextContents();
+
+  await block.dblclick();
+  await expect(field).toBeFocused();
+  await expect(field).toHaveValue('Matthew Carter');
+  // The field is set in the block's face and size.
+  expect(await field.evaluate((f) => getComputedStyle(f).fontFamily)).toMatch(/^"?fm-face-\d+"?,/);
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Cancelled 5');
+  await page.keyboard.press('Escape');
+  await expect(field).toHaveCount(0);
+  expect((await shown()).map((t) => t.trim())).toEqual(['Matthew Carter']);
+  // Typing "5" in the field did not switch the view mode.
+  await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
+
+  await block.dblclick();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Kept by the keyboard');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(field).toHaveCount(0);
+  expect((await shown()).map((t) => t.trim())).toEqual(['Kept by the keyboard']);
+
+  await block.dblclick();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Kept by a click');
+  await quote.locator('header').click();
+  await expect(field).toHaveCount(0);
+  expect((await shown()).map((t) => t.trim())).toEqual(['Kept by a click']);
+  // The double-clicks did not resize anything.
+  expect(await readBlock(block)).toMatchObject({ badge: '12 pt · 1.30' });
+});

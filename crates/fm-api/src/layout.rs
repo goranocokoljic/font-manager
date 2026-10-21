@@ -89,6 +89,33 @@ pub struct Layout {
     pub blocks: Vec<TextBlock>,
 }
 
+/// The range of one block value: what the core clamps it into and how far the
+/// direct-manipulation gestures move it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockRange {
+    /// Smallest value.
+    pub min: f32,
+    /// Largest value.
+    pub max: f32,
+    /// The value for one that is not a number.
+    pub default: f32,
+    /// How far one arrow-key press moves the value.
+    pub step: f32,
+    /// How far one CSS pixel of pointer drag moves the value.
+    pub per_px: f32,
+}
+
+/// The ranges of the block values the UI changes by drag, pinch and keys.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutBounds {
+    /// Font size in points.
+    pub size_pt: BlockRange,
+    /// Line height as a multiple of the size.
+    pub line_height: BlockRange,
+}
+
 /// Body-text layouts.
 pub trait LayoutService {
     /// The six presets, in the order the UI offers them.
@@ -96,4 +123,8 @@ pub trait LayoutService {
     /// The layout with every block value clamped into its range (a value that
     /// is not a number takes the default).
     fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout>;
+    /// The ranges and gesture steps of the block values the UI resizes
+    /// directly (size and line height), so a drag can stay inside them every
+    /// frame without a round trip.
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds>;
 }

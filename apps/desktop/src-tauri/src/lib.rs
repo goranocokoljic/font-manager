@@ -9,7 +9,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
-use fm_api::layout::Layout;
+use fm_api::layout::{Layout, LayoutBounds};
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
@@ -266,6 +266,12 @@ async fn layout_presets(state: State<'_, AppState>) -> ApiResult<Vec<Layout>> {
 #[tauri::command]
 async fn clamp_layout(state: State<'_, AppState>, req: Layout) -> ApiResult<Layout> {
     call(&state, move |api| api.clamp_layout(req)).await
+}
+
+/// The ranges and gesture steps of a block's size and line height.
+#[tauri::command]
+async fn layout_bounds(state: State<'_, AppState>) -> ApiResult<LayoutBounds> {
+    call(&state, move |api| api.layout_bounds()).await
 }
 
 #[tauri::command]
@@ -617,6 +623,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             css_values,
             layout_presets,
             clamp_layout,
+            layout_bounds,
             render_preview,
             activate,
             deactivate,

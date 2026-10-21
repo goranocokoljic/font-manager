@@ -147,6 +147,23 @@ export type BlockOverflow =
 /**  Keeps one line per paragraph and hides what overflows. */
 "clip";
 
+/**
+ *  The range of one block value: what the core clamps it into and how far the
+ *  direct-manipulation gestures move it.
+ */
+export type BlockRange = {
+	/**  Smallest value. */
+	min: number | null,
+	/**  Largest value. */
+	max: number | null,
+	/**  The value for one that is not a number. */
+	default: number | null,
+	/**  How far one arrow-key press moves the value. */
+	step: number | null,
+	/**  How far one CSS pixel of pointer drag moves the value. */
+	perPx: number | null,
+};
+
 /**  Pick fonts for a design brief. */
 export type BriefRequest = {
 	/**  The brief, in plain words ("a calm bilingual brand"). */
@@ -1138,6 +1155,14 @@ export type Layout = {
 	blocks: TextBlock[],
 };
 
+/**  The ranges of the block values the UI changes by drag, pinch and keys. */
+export type LayoutBounds = {
+	/**  Font size in points. */
+	sizePt: BlockRange,
+	/**  Line height as a multiple of the size. */
+	lineHeight: BlockRange,
+};
+
 /**  A built-in layout. */
 export type LayoutPreset = 
 /**  A book page: a heading and indented paragraphs in one column. */
@@ -1956,4 +1981,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 11, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 12, patch: 0 };

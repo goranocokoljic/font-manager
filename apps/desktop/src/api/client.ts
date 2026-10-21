@@ -40,6 +40,7 @@ import type {
   KeepCopyRequest,
   LanguagePreset,
   Layout,
+  LayoutBounds,
   ListFamiliesRequest,
   MoveCollectionRequest,
   Paged,
@@ -137,6 +138,8 @@ export interface FmClient {
   layoutPresets(): Promise<Layout[]>;
   /** A layout with every block value clamped into its range. */
   clampLayout(req: Layout): Promise<Layout>;
+  /** The ranges and gesture steps of a block's size and line height. */
+  layoutBounds(): Promise<LayoutBounds>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -212,6 +215,7 @@ export const tauriClient: FmClient = {
   cssValues: (req) => invoke<CssValues>('css_values', { req }),
   layoutPresets: () => invoke<Layout[]>('layout_presets'),
   clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),
+  layoutBounds: () => invoke<LayoutBounds>('layout_bounds'),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),

@@ -43,6 +43,7 @@ import {
   type JobId,
   type LanguagePreset,
   type Layout,
+  type LayoutBounds,
   type PreviewImage,
   type PreviewRequest,
   type Problem,
@@ -935,6 +936,12 @@ export const MOCK_LAYOUT_PRESETS: readonly Layout[] = [
   },
 ];
 
+/** The ranges and gesture steps of `fm_core::layout::bounds`. */
+export const MOCK_LAYOUT_BOUNDS: LayoutBounds = {
+  sizePt: { min: 8, max: 600, default: 12, step: 1, perPx: 0.5 },
+  lineHeight: { min: 0.1, max: 3, default: 1.3, step: 0.05, perPx: 0.01 },
+};
+
 /** The ranges of `fm_core::layout`; a value that is not a finite number takes the default. */
 export function mockClampLayout(layout: Layout): Layout {
   const fit = (v: number | null, lo: number, hi: number, d: number) =>
@@ -1248,6 +1255,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     getAppInfo: async () => mockAppInfo,
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
+    layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);

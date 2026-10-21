@@ -268,6 +268,8 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         v-else-if="fontList.families.length && mode === 'layout'"
         :layout="shownLayout"
         :face="layoutFace"
+        :bounds="textLayouts.bounds"
+        @change="(i, edit) => textLayouts.editBlock(preset, i, edit)"
       />
       <FontGrid
         v-else-if="fontList.families.length && mode === 'grid'"

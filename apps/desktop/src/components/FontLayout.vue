@@ -3,9 +3,11 @@
 // layout (a preset's list of text blocks). The face is loaded through the
 // shared face loader (asset protocol), so every block is live text in the
 // webview, never a rasterized image. Switching presets swaps the blocks; the
-// face stays loaded.
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import type { FaceId, FaceSummary, Layout } from '../api/types';
+// face stays loaded. Each block can be resized and retyped in place (E12.2);
+// the edits go up as `change` events and the store keeps them.
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
+import type { FaceId, FaceSummary, Layout, LayoutBounds } from '../api/types';
+import type { BlockEdit } from '../stores/textLayouts';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import LayoutBlock from './LayoutBlock.vue';
 
@@ -14,7 +16,13 @@ const props = defineProps<{
   layout: Layout | null;
   /** The face to set it in; null when nothing is selected. */
   face: FaceSummary | null;
+  /** The ranges and steps of the block gestures; null keeps the blocks read-only. */
+  bounds?: LayoutBounds | null;
 }>();
+
+const emit = defineEmits<{ change: [index: number, edit: BlockEdit] }>();
+
+const hintId = `${useId()}-hint`;
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
@@ -74,8 +82,17 @@ const fontFamily = computed(() =>
           :key="`${layout.preset ?? layout.name}-${i}`"
           :block="block"
           :font-family="fontFamily"
+          :bounds="bounds"
+          :index="i"
+          :describedby="hintId"
+          @change="(edit) => emit('change', i, edit)"
         />
       </div>
+      <p :id="hintId" class="hint">
+        Drag a block sideways or press Left and Right to change its size; drag it up and down or
+        press Up and Down to change its line height (Shift for bigger steps). Double-click it or
+        press Enter to edit its text.
+      </p>
     </template>
     <p v-else-if="!face" class="empty">Select a font to see it in a layout.</p>
   </section>
@@ -113,6 +130,12 @@ const fontFamily = computed(() =>
 .page {
   max-width: 72em;
   padding: 24px 32px;
+}
+.hint {
+  margin: 0;
+  padding: 0 32px 16px;
+  color: var(--fm-muted);
+  font-size: 12px;
 }
 .empty {
   display: grid;
