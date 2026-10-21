@@ -8,6 +8,8 @@
 //       pnpm install --frozen-lockfile, then fm-cli and the installers with --locked
 //   node scripts/release/build.mjs cli
 //       fm-cli only, with SOURCE_DATE_EPOCH and --remap-path-prefix; prints its SHA256
+//   node scripts/release/build.mjs same-hash --first <cli line> --second <cli line>
+//       prints the hash when both lines carry the same SHA256; fails otherwise
 //   node scripts/release/build.mjs packages --os <os>
 //       the system packages the build needs (apt names on Linux), one line
 //   node scripts/release/build.mjs sums --dir <dir>
@@ -243,6 +245,22 @@ export function sumsFor(dir) {
   return names.map((n) => `${sha256File(join(dir, n))}  ${n}\n`).join('');
 }
 
+/**
+ * The hash two `cli` runs agree on. Each line must be `<sha256>  <path>`; an empty or
+ * other line (a build that failed before it printed its hash) is an error, not a match.
+ */
+export function sameHash(first, second) {
+  const hash = (line, which) => {
+    const m = /^([0-9a-f]{64}) {2}\S/.exec(String(line ?? '').trim());
+    if (!m) throw new Error(`${which} build printed no SHA256 line: "${line ?? ''}"`);
+    return m[1];
+  };
+  const a = hash(first, 'first');
+  const b = hash(second, 'second');
+  if (a !== b) throw new Error(`fm-cli is not reproducible: ${a} vs ${b}`);
+  return a;
+}
+
 function git(args) {
   const r = spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
   if (r.status !== 0) throw new Error(`git ${args.join(' ')} failed: ${r.stderr}`);
@@ -259,7 +277,8 @@ function runCtx() {
 
 function run(steps) {
   for (const step of steps) {
-    console.log(`$ ${renderStep(step)}`);
+    // stderr: stdout of `cli` is the hash line alone, so a failed build prints no hash.
+    console.error(`$ ${renderStep(step)}`);
     const env = { ...process.env };
     for (const [k, v] of Object.entries(step.env)) {
       if (k === 'RUSTFLAGS') env.CARGO_ENCODED_RUSTFLAGS = v.join('\x1f');
@@ -295,6 +314,8 @@ function main([cmd, ...rest]) {
     run(cliSteps(runCtx()));
     const os = { win32: 'windows', darwin: 'macos' }[process.platform] ?? 'linux';
     console.log(`${sha256File(join(ROOT, CLI_BINARY[os]))}  ${CLI_BINARY[os]}`);
+  } else if (cmd === 'same-hash') {
+    console.log(sameHash(a.first, a.second));
   } else if (cmd === 'packages') {
     checkOs(a.os);
     console.log(SYSTEM[a.os].packages.join(' '));
@@ -313,7 +334,7 @@ function main([cmd, ...rest]) {
   } else if (cmd === 'write-doc') {
     writeFileSync(DOC, fillDoc(readFileSync(DOC, 'utf8'), docBlocks()));
   } else {
-    throw new Error('usage: build.mjs installer|cli|packages|sums|check-doc|write-doc [...]');
+    throw new Error('usage: build.mjs installer|cli|same-hash|packages|sums|check-doc|write-doc [...]');
   }
 }
 

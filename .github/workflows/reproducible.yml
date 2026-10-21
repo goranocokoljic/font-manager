@@ -113,14 +113,15 @@ jobs:
         working-directory: first
         run: rustup show active-toolchain || rustup toolchain install
 
+      # `cli` prints only `<sha256>  <path>` on stdout and exits non-zero when the build
+      # fails; `same-hash` fails unless both lines carry the same SHA256.
       - name: Build fm-cli twice and compare SHA256
+        shell: bash
         run: |
-          a=$(node first/scripts/release/build.mjs cli | tail -n 1)
-          b=$(node second-checkout/scripts/release/build.mjs cli | tail -n 1)
+          set -euo pipefail
+          a=$(node first/scripts/release/build.mjs cli)
+          b=$(node second-checkout/scripts/release/build.mjs cli)
           echo "first:  $a"
           echo "second: $b"
-          if [ "${a%% *}" != "${b%% *}" ]; then
-            echo "::error::fm-cli is not reproducible: $a vs $b"
-            exit 1
-          fi
-          echo "### fm-cli is reproducible: \`${a%% *}\`" >> "$GITHUB_STEP_SUMMARY"
+          hash=$(node first/scripts/release/build.mjs same-hash --first "$a" --second "$b")
+          echo "### fm-cli is reproducible: \`$hash\`" >> "$GITHUB_STEP_SUMMARY"

@@ -20,6 +20,7 @@ import {
   fillDoc,
   installerSteps,
   renderStep,
+  sameHash,
   reproEnv,
   staleBlocks,
   sumsFor,
@@ -164,6 +165,40 @@ describe('cliSteps and reproEnv', () => {
   });
 });
 
+describe('sameHash', () => {
+  const H1 = 'a'.repeat(64);
+  const H2 = 'b'.repeat(64);
+
+  test('returns the hash when both builds agree', () => {
+    assert.equal(sameHash(`${H1}  target/release/fm`, `${H1}  target/release/fm\n`), H1);
+  });
+
+  test('two different hashes are not reproducible', () => {
+    assert.throws(() => sameHash(`${H1}  target/release/fm`, `${H2}  target/release/fm`), /not reproducible/);
+  });
+
+  test('a failed build (no hash line) never counts as a match', () => {
+    const echo = '$ SOURCE_DATE_EPOCH=1 cargo build --release --locked -p fm-cli';
+    assert.throws(() => sameHash(echo, echo), /first build printed no SHA256 line/);
+    assert.throws(() => sameHash('', ''), /printed no SHA256 line/);
+    assert.throws(() => sameHash(undefined, undefined), /printed no SHA256 line/);
+    assert.throws(() => sameHash(`${H1}  target/release/fm`, ''), /second build printed no SHA256 line/);
+  });
+
+  test('the same-hash command exits non-zero on a mismatch or a missing line', () => {
+    const ok = spawnSync(process.execPath, [SCRIPT, 'same-hash', '--first', `${H1}  fm`, '--second', `${H1}  fm`], {
+      encoding: 'utf8',
+    });
+    assert.equal(ok.status, 0, ok.stderr);
+    assert.equal(ok.stdout.trim(), H1);
+    assert.notEqual(spawnSync(process.execPath, [SCRIPT, 'same-hash', '--first', '', '--second', '']).status, 0);
+    assert.notEqual(
+      spawnSync(process.execPath, [SCRIPT, 'same-hash', '--first', `${H1}  fm`, '--second', `${H2}  fm`]).status,
+      0,
+    );
+  });
+});
+
 describe('toolchain', () => {
   test('reads the pins of this repository', () => {
     const t = toolchain();
@@ -243,7 +278,15 @@ describe('workflows', () => {
     const yml = workflow('reproducible.yml');
     assert.match(yml, /node first\/scripts\/release\/build\.mjs cli/);
     assert.match(yml, /node second-checkout\/scripts\/release\/build\.mjs cli/);
-    assert.match(yml, /if \[ "\$\{a%% \*\}" != "\$\{b%% \*\}" \]/);
+    assert.match(yml, /node first\/scripts\/release\/build\.mjs same-hash --first "\$a" --second "\$b"/);
+  });
+
+  test('the compare step fails when a build fails (bash with pipefail, no output filter)', () => {
+    const yml = workflow('reproducible.yml');
+    const step = yml.slice(yml.indexOf('- name: Build fm-cli twice'));
+    assert.match(step, /shell: bash\n/);
+    assert.match(step, /set -euo pipefail/);
+    assert.doesNotMatch(step, /\| *tail/);
   });
 
   test('nightly.yml builds with the script and publishes SHA256SUMS', () => {
