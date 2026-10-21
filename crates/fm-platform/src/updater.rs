@@ -85,40 +85,49 @@ pub fn distribution_for(
         Os::Linux if env(APPIMAGE_ENV).is_some_and(|p| !p.is_empty()) => Distribution::AppImage,
         Os::Linux => return Distribution::SystemPackage,
     };
-    match install_folder(os, exe, env) {
-        Some(folder) if writable(&folder) => release,
+    match update_folders(os, exe, env) {
+        Some(folders) if folders.iter().all(|f| writable(f)) => release,
         _ => Distribution::NeedsAdmin,
     }
 }
 
-/// The folder an update writes into: the program's folder on Windows (the
-/// installer replaces it), the folder holding `Font Manager.app` on macOS
-/// (the updater swaps the bundle there), the AppImage's folder on Linux.
-/// `None` when it cannot be told.
-pub fn install_folder(
+/// The folders an update writes into, all of which this user must be able to
+/// write: the program's folder on Windows (the installer replaces it); on
+/// macOS the folder holding `Font Manager.app` and the bundle itself (the
+/// updater swaps the bundle, and moving a folder to another parent needs
+/// write access to it); the AppImage's folder on Linux. `None` when it
+/// cannot be told.
+pub fn update_folders(
     os: Os,
     exe: Option<&Path>,
     env: &dyn Fn(&str) -> Option<OsString>,
-) -> Option<PathBuf> {
+) -> Option<Vec<PathBuf>> {
     match os {
-        Os::Windows => exe?.parent().map(Path::to_path_buf),
+        Os::Windows => Some(vec![exe?.parent()?.to_path_buf()]),
         Os::MacOs => {
             let exe = exe?;
-            let bundle = exe
+            match exe
                 .ancestors()
-                .find(|p| p.extension().is_some_and(|e| e == "app"));
-            bundle.unwrap_or(exe).parent().map(Path::to_path_buf)
+                .find(|p| p.extension().is_some_and(|e| e == "app"))
+            {
+                Some(bundle) => Some(vec![bundle.parent()?.to_path_buf(), bundle.to_path_buf()]),
+                // An unbundled program (a dev build): its own folder.
+                None => Some(vec![exe.parent()?.to_path_buf()]),
+            }
         }
         Os::Linux => {
             let appimage = PathBuf::from(env(APPIMAGE_ENV).filter(|p| !p.is_empty())?);
-            appimage.parent().map(Path::to_path_buf)
+            Some(vec![appimage.parent()?.to_path_buf()])
         }
     }
 }
 
 /// Whether this user can create a file in `dir`: a probe file is created
 /// there and removed at once. Permission bits and ACLs are not read, since
-/// only the OS can say what they allow this process.
+/// only the OS can say what they allow this process (and no FFI crate for
+/// `access(2)` is in the library table). In the macOS bundle the probe lives
+/// for the two calls only; the bundle's seal is checked at launch, when it is
+/// gone.
 pub fn writable_dir(dir: &Path) -> bool {
     let probe = dir.join(format!(".fm-update-probe-{}", std::process::id()));
     match OpenOptions::new().write(true).create_new(true).open(&probe) {
@@ -215,18 +224,29 @@ mod tests {
             vec![
                 PathBuf::from(WIN_DIR),
                 PathBuf::from("/Applications"),
+                PathBuf::from("/Applications/Font Manager.app"),
                 PathBuf::from("/home/u/Apps"),
             ]
         );
         // An unbundled macOS program (a dev build): its own folder.
         assert_eq!(
-            install_folder(
+            update_folders(
                 Os::MacOs,
                 Some(Path::new("/src/target/debug/fm-app")),
                 &none
             ),
-            Some(PathBuf::from("/src/target/debug"))
+            Some(vec![PathBuf::from("/src/target/debug")])
         );
+    }
+
+    #[test]
+    fn a_mac_bundle_the_user_cannot_write_in_a_writable_folder_does_not_update_itself() {
+        // An admin account can write /Applications, but the bundle belongs to
+        // root or another account: swapping it would ask for admin rights.
+        let only_parent = |p: &Path| p == Path::new("/Applications");
+        assert_eq!(on(Os::MacOs, &none, &only_parent), Distribution::NeedsAdmin);
+        let only_bundle = |p: &Path| p == Path::new("/Applications/Font Manager.app");
+        assert_eq!(on(Os::MacOs, &none, &only_bundle), Distribution::NeedsAdmin);
     }
 
     #[test]

@@ -48,15 +48,18 @@ it. Flatpak and package managers already install updates for their copies.
 |-|---------|-------|-------|
 | Updates itself | the .exe (NSIS) installer, per user | the app (from the .dmg) | the AppImage (`APPIMAGE` set) |
 | Update artifact | the .exe, run in passive mode | `.app.tar.gz` | the AppImage |
-| Folder that must be writable | the program's folder | the folder holding `Font Manager.app` | the AppImage's folder |
-| Hidden, with a platform note | the .msi (per machine, Program Files); any copy in a folder the user cannot write; a build with `FM_PACKAGED_BY` | the app where the account cannot change its folder (a standard account and `/Applications`); a build with `FM_PACKAGED_BY` | an AppImage in a read-only folder; Flatpak; a system package (.deb, .rpm); a build with `FM_PACKAGED_BY` |
+| Folders that must be writable | the program's folder | the folder holding `Font Manager.app`, and the bundle itself | the AppImage's folder |
+| Hidden, with a platform note | the .msi (per machine, Program Files); any copy in a folder the user cannot write; a build with `FM_PACKAGED_BY` | the app where the account cannot change its folder or the bundle (a standard account and `/Applications`; a bundle owned by root or another account); a build with `FM_PACKAGED_BY` | an AppImage in a read-only folder; Flatpak; a system package (.deb, .rpm); a build with `FM_PACKAGED_BY` |
 
   **Never admin rights (rule 4).** Tauri's updater would elevate in two
   places: `msiexec` for the per-machine .msi, and an AppleScript
   "with administrator privileges" prompt when the app bundle cannot be
   swapped. So the app offers updates only when this user can create a file in
-  the folder the update writes into (`fm_platform::updater::writable_dir`, a
-  probe file created and removed), and asks again before every install. The
+  every folder the update writes into (`fm_platform::updater::update_folders`,
+  `writable_dir`: a probe file created and removed at once; no FFI crate for
+  `access(2)` is in the library table), and asks again before every install.
+  On macOS that is the bundle too: swapping it moves it to another folder,
+  which needs write access to the bundle itself. The
   .msi has no entry in `latest.json`. A package manager that builds the app
   sets `FM_PACKAGED_BY=<its name>` at build time. A system package is not
   updated in place either.
