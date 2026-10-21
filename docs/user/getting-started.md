@@ -76,6 +76,12 @@ Read [Sources](sources.md) to learn more about folders.
   copy in the `.fontlibrary` folder of the font's folder, so a synced folder carries
   it to your team. Font Manager copies the receipt; your file stays where it is. When
   you remove or replace a receipt, Font Manager moves its copy to the trash.
+- To get a list of your licenses for a spreadsheet, open the command palette and
+  choose **Export license inventory…**, or click **Export license inventory…** on a
+  collection. Choose where to save the CSV file. The file has one row for each
+  family: its foundry, styles, formats, your license, the open license and the
+  embedding permission of the font, its license URL and its folder. From the palette,
+  the file lists the collection that is open, or all fonts.
 
 ## Use a font in other apps
 

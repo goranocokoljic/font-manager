@@ -1075,10 +1075,6 @@ fn services_not_built_yet_answer_unsupported() {
         out_dir: "out".into(),
         css: false,
     }));
-    is_unsupported(
-        lib.api
-            .license_inventory(LicenseInventoryRequest { collection: None }),
-    );
     is_unsupported(lib.api.pick_fonts_for_brief(BriefRequest {
         brief: "a poster".into(),
         languages: Vec::new(),
@@ -1956,4 +1952,216 @@ fn layout_files_live_in_the_app_layouts_folder_through_the_api() {
         reset.layout.blocks,
         layout::preset(fm_api::layout::LayoutPreset::Book).blocks
     );
+}
+
+// --- license inventory (E15.4) -------------------------------------------
+
+/// The inventory of `collection` read back: the header, then one map per
+/// family row from column name to cell.
+fn inventory(lib: &Lib, collection: Option<CollectionId>) -> Vec<HashMap<String, String>> {
+    let inventory = lib
+        .api
+        .license_inventory(LicenseInventoryRequest { collection })
+        .expect("inventory");
+    let records = crate::inventory::tests::parse(&inventory.csv);
+    assert_eq!(records[0], crate::inventory::HEADER);
+    let rows: Vec<HashMap<String, String>> = records[1..]
+        .iter()
+        .map(|r| {
+            assert_eq!(r.len(), crate::inventory::HEADER.len(), "{r:?}");
+            crate::inventory::HEADER
+                .iter()
+                .map(|h| (*h).to_owned())
+                .zip(r.iter().cloned())
+                .collect()
+        })
+        .collect();
+    assert_eq!(inventory.rows as usize, rows.len());
+    rows
+}
+
+#[test]
+fn the_license_inventory_lists_every_family_with_its_license_facts() {
+    let (lib, _, _) = licensed("api-inventory");
+    let barlow = lib.family("Barlow");
+    // A receipt whose name needs quoting in a CSV cell.
+    let invoice = picked(&lib, "invoice, \u{201c}Barlow\u{201d}.pdf", "paid");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: invoice.display().to_string(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..declaration(barlow.id)
+        })
+        .expect("declare");
+
+    let rows = inventory(&lib, None);
+    let families = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..ListFamiliesRequest::default()
+        })
+        .expect("families");
+    assert_eq!(rows.len() as u32, families.total);
+    let mut names: Vec<&str> = rows.iter().map(|r| r["Family"].as_str()).collect();
+    let mut sorted = names.clone();
+    sorted.sort_by_key(|n| n.to_lowercase());
+    assert_eq!(names, sorted, "A to Z");
+    names.sort_unstable();
+    let mut listed: Vec<&str> = families.items.iter().map(|f| f.name.as_str()).collect();
+    listed.sort_unstable();
+    assert_eq!(names, listed);
+
+    for family in &families.items {
+        let row = rows
+            .iter()
+            .find(|r| r["Family"] == family.name)
+            .expect("listed");
+        assert_eq!(
+            row["Styles"],
+            family.style_count.to_string(),
+            "{}",
+            family.name
+        );
+        assert_eq!(row["Foundry"], family.foundry.clone().unwrap_or_default());
+        assert_eq!(
+            row["Source folder"],
+            family.location.clone().unwrap_or_default()
+        );
+        assert!(!row["Formats"].is_empty(), "{}", family.name);
+        assert!(!row["Embedding"].is_empty(), "{}", family.name);
+        let first = lib.api.get_face(FaceId(family.id.0)).expect("detail");
+        assert!(
+            row["Embedding"].contains(match first.license.embedding {
+                Embedding::Installable => "Installable",
+                Embedding::Editable => "Editable",
+                Embedding::PreviewAndPrint => "Preview and print",
+                Embedding::Restricted => "Restricted",
+            }),
+            "{}: {}",
+            family.name,
+            row["Embedding"]
+        );
+        if family.open_license == Some(OpenLicense::Ofl) {
+            assert_eq!(row["Open license"], "SIL Open Font License");
+        }
+    }
+
+    let barlow_row = rows
+        .iter()
+        .find(|r| r["Family"] == "Barlow")
+        .expect("Barlow");
+    let detail = lib
+        .api
+        .get_face(FaceId(barlow.id.0))
+        .expect("detail")
+        .license;
+    assert_eq!(barlow_row["Declared license"], "Desktop");
+    assert_eq!(barlow_row["Seats"], "3");
+    assert_eq!(barlow_row["Purchase date"], "2026-03-01");
+    assert_eq!(Some(barlow_row["Receipt"].clone()), detail.receipt);
+    assert!(barlow_row["Receipt"].ends_with("invoice, \u{201c}Barlow\u{201d}.pdf"));
+    assert_eq!(barlow_row["License URL"], detail.url.unwrap_or_default());
+    assert_eq!(barlow_row["Formats"], "TTF");
+    let bebas = rows
+        .iter()
+        .find(|r| r["Family"] == "Bebas Neue")
+        .expect("Bebas");
+    assert_eq!(
+        (
+            bebas["Declared license"].as_str(),
+            bebas["Seats"].as_str(),
+            bebas["Receipt"].as_str()
+        ),
+        ("", "", "")
+    );
+}
+
+#[test]
+fn the_license_inventory_of_a_collection_lists_only_its_families() {
+    let (lib, _, _) = Lib::scanned("api-inventory-collection");
+    let barlow = lib.family("Barlow");
+    let manual = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Headlines".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+        })
+        .expect("collection");
+    let names = |c| -> Vec<String> {
+        inventory(&lib, Some(c))
+            .into_iter()
+            .map(|r| r["Family"].clone())
+            .collect()
+    };
+    assert!(names(manual.id).is_empty(), "an empty collection");
+    // One face of the family: the family is listed, with all its styles.
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: manual.id,
+            faces: vec![FaceId(barlow.id.0)],
+            families: Vec::new(),
+        })
+        .expect("added");
+    let rows = inventory(&lib, Some(manual.id));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0]["Family"], "Barlow");
+    assert_eq!(rows[0]["Styles"], barlow.style_count.to_string());
+
+    let smart = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Variable".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            rule_group: None,
+        })
+        .expect("smart");
+    let mut variable: Vec<String> = lib
+        .api
+        .search(SearchRequest {
+            query: String::new(),
+            filters: Filters {
+                variable: Some(true),
+                ..Filters::default()
+            },
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+        })
+        .expect("search")
+        .families
+        .into_iter()
+        .map(|h| h.family.name)
+        .collect();
+    variable.sort_by_key(|n| n.to_lowercase());
+    assert!(!variable.is_empty(), "the fixtures have a variable family");
+    assert_eq!(names(smart.id), variable);
+    assert!(names(smart.id).len() < inventory(&lib, None).len());
+
+    assert_eq!(
+        lib.api
+            .license_inventory(LicenseInventoryRequest {
+                collection: Some(CollectionId(9999)),
+            })
+            .map_err(|e| e.code),
+        Err(ErrorCode::NotFound)
+    );
+}
+
+#[test]
+fn the_license_inventory_of_an_empty_library_is_the_header_alone() {
+    let lib = Lib::new("api-inventory-empty");
+    assert!(inventory(&lib, None).is_empty());
 }

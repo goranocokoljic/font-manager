@@ -29,6 +29,7 @@ mod family_license;
 mod family_notes;
 mod files;
 mod languages;
+mod license_inventory;
 mod problems;
 mod resolutions;
 mod samples;
