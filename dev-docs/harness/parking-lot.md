@@ -145,3 +145,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-21
 
 - [E12.5 #108] apps/desktop/src/views/HomeView.vue:402 — the existing mode and inspector `.toggle` buttons are outlined in `--fm-border` (≈1.5:1 light and dark), the same as the new layout toolbar buttons.
+- [E12.3 #106] apps/desktop/src/stores/textLayouts.ts:57 — the shared `busy` flag in `run` lets a property clamp re-enable Save/Revert while a save is in flight and clear an earlier save error.
+- [E12.3 #106] crates/fm-api/src/layout.rs:112 (origin/E12.2-drag-resize-blocks) — open PR #307 defines a narrower `LayoutBounds`; whichever merges second must keep the wider struct from #310.
+- [E12.3 #106] apps/desktop/src/api/mock.ts — the block ranges are copied in the TS mock, the Rust mock and fm-core; only the Rust mock is checked against the core.
