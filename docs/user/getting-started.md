@@ -23,9 +23,11 @@ Read [Sources](sources.md) to learn more about folders.
 - Type in the search box at the top. Press `/` to go to it from anywhere.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
-- Use the **List**, **Table**, **Grid** and **Waterfall** buttons to change how the
-  fonts show. The grid shows a card for each font. The waterfall shows the preview
-  text at six sizes. When you change the view, the selected fonts stay selected and
+- Use the **List**, **Table**, **Grid**, **Waterfall** and **Layout** buttons to change
+  how the fonts show. The grid shows a card for each font. The waterfall shows the
+  preview text at six sizes. The layout shows the selected font as a page of text. Pick
+  the page in the **Preset** box: Book, Columns, Magazine, Quote, Characters or
+  Waterfall. When you change the view, the selected fonts stay selected and
   the list stays at the same font.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.

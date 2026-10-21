@@ -34,6 +34,7 @@ use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest,
 };
+use fm_api::layout::{Layout, LayoutService};
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
@@ -71,7 +72,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, css, glyph_svg, glyphs, preview};
+use crate::{charsets, css, glyph_svg, glyphs, layout, preview};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -732,6 +733,16 @@ impl WorkflowService for CoreApi {
 
     fn prepare_for_web(&self, _req: PrepareForWebRequest) -> ApiResult<PrepareForWebResponse> {
         Err(not_available("Preparing fonts for the web"))
+    }
+}
+
+impl LayoutService for CoreApi {
+    fn layout_presets(&self) -> ApiResult<Vec<Layout>> {
+        Ok(layout::presets())
+    }
+
+    fn clamp_layout(&self, req: Layout) -> ApiResult<Layout> {
+        Ok(layout::clamp_layout(req))
     }
 }
 

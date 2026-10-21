@@ -5,6 +5,7 @@ import { formatApiVersion } from '../api/version';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
+import FontLayout from '../components/FontLayout.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
@@ -29,9 +30,10 @@ import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
-import type { ActivationMode, FaceId } from '../api/types';
+import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
-import { useViewsStore, type ViewMode } from '../stores/views';
+import { useTextLayoutsStore } from '../stores/textLayouts';
+import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore, type ViewMode } from '../stores/views';
 
 const app = useAppStore();
 const layout = useLayoutStore();
@@ -46,6 +48,7 @@ const views = useViewsStore();
 const search = useSearchStore();
 const collections = useCollectionsStore();
 const sets = useSetsStore();
+const textLayouts = useTextLayoutsStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -62,7 +65,40 @@ const MODES: { value: ViewMode; label: string }[] = [
   { value: 'table', label: 'Table' },
   { value: 'grid', label: 'Grid' },
   { value: 'waterfall', label: 'Waterfall' },
+  { value: 'layout', label: 'Layout' },
 ];
+
+// The layout mode sets the selected face (else the list cursor's, else the first
+// family's) in the picked preset.
+const preset = computed(() => views.presetFor(ALL_FONTS_VIEW));
+const shownLayout = computed(() => textLayouts.byPreset(preset.value));
+const layoutFace = computed(() => {
+  const first = fontList.families[0];
+  return (
+    selection.detail?.face ??
+    fontList.cursorFace ??
+    (first ? fontList.previewFace(first.id) : undefined) ??
+    null
+  );
+});
+// With no list on screen nothing else loads the styles of the fallback family.
+const layoutFamily = computed(
+  () => fontList.cursorRow?.family.id ?? fontList.families[0]?.id ?? null,
+);
+watch(
+  [mode, layoutFamily],
+  ([m, family]) => {
+    if (m !== 'layout') return;
+    void textLayouts.load();
+    if (family !== null) void library.facesOf(family).catch(() => undefined);
+  },
+  { immediate: true },
+);
+
+function showPreset(p: LayoutPreset): void {
+  views.setPreset(ALL_FONTS_VIEW, p);
+  views.setMode(ALL_FONTS_VIEW, 'layout');
+}
 
 onMounted(() => {
   void app.load();
@@ -120,12 +156,18 @@ useActions([
     enabled: () => sets.current != null && activation.count > 0 && !activation.busy,
     run: () => (sets.current ? activation.deactivateAllExcept(sets.current.id) : undefined),
   },
-  // Keys 1–4 switch the view mode, in the order of the toolbar buttons.
+  // Keys 1–5 switch the view mode, in the order of the toolbar buttons.
   ...MODES.map((m, i) => ({
-    id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4),
+    id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4 | 5),
     title: `Show fonts as a ${m.label.toLowerCase()}`,
     group: 'View',
     run: () => views.setMode(ALL_FONTS_VIEW, m.value),
+  })),
+  ...LAYOUT_PRESETS.map((p) => ({
+    id: `view.layoutPreset.${p}`,
+    title: `Show the ${PRESET_LABELS[p]} layout`,
+    group: 'View',
+    run: () => showPreset(p),
   })),
 ]);
 
@@ -193,6 +235,17 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
           </button>
         </div>
         <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
+        <label v-if="mode === 'layout'" class="preset">
+          Preset
+          <select
+            :value="preset"
+            @change="showPreset(($event.target as HTMLSelectElement).value as LayoutPreset)"
+          >
+            <option v-for="p in LAYOUT_PRESETS" :key="p" :value="p">
+              {{ PRESET_LABELS[p] }}
+            </option>
+          </select>
+        </label>
         <button
           type="button"
           class="toggle"
@@ -211,6 +264,11 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
         <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
       </template>
+      <FontLayout
+        v-else-if="fontList.families.length && mode === 'layout'"
+        :layout="shownLayout"
+        :face="layoutFace"
+      />
       <FontGrid
         v-else-if="fontList.families.length && mode === 'grid'"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"
@@ -318,6 +376,19 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
 .modes {
   display: flex;
   gap: 4px;
+}
+.preset {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.preset select {
+  padding: 2px 4px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 4px;
+  background: var(--fm-bg);
+  color: inherit;
+  font: inherit;
 }
 .toggle[aria-pressed='true'] {
   border-color: var(--fm-accent);

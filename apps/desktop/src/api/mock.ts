@@ -42,6 +42,7 @@ import {
   type Filters,
   type JobId,
   type LanguagePreset,
+  type Layout,
   type PreviewImage,
   type PreviewRequest,
   type Problem,
@@ -55,6 +56,7 @@ import {
   type Tag,
   type TagId,
   type Target,
+  type TextBlock,
   type VirtualStyle,
 } from './types';
 
@@ -847,6 +849,107 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
 export const mockPickedFolders: (string | null)[] = [];
 
 /** A mock client with its own activation, source and settings state. */
+const layoutBlock = (
+  text: string,
+  sizePt: number,
+  lineHeight: number,
+  more: Partial<TextBlock> = {},
+): TextBlock => ({
+  text,
+  sizePt,
+  lineHeight,
+  tracking: 0,
+  paragraphSpacingPt: 0,
+  firstLineIndentEm: 0,
+  columns: 1,
+  align: 'start',
+  overflow: 'wrap',
+  ...more,
+});
+
+const MOCK_BODY =
+  'Typography gives language a durable visual form. It exists to honor content, and a page set with care keeps the reader reading.\n' +
+  'Good type does not call attention to itself. Letters sit evenly on the line and the eye moves from one line to the next without effort.\n' +
+  'A body face holds up at small sizes and over long passages. Its spacing is even and its italic follows the voice of the text.';
+
+/** The waterfall preset's sizes in points, largest first (as `fm_core::layout`). */
+export const MOCK_WATERFALL_SIZES_PT = [72, 48, 36, 24, 18, 14, 12, 9];
+
+/** The mock's copy of the core presets (`fm_core::layout`): the same six in the same shape. */
+export const MOCK_LAYOUT_PRESETS: readonly Layout[] = [
+  {
+    preset: 'book',
+    name: 'Book',
+    blocks: [
+      layoutBlock('Chapter One', 24, 1.2, { align: 'center', paragraphSpacingPt: 18 }),
+      layoutBlock(MOCK_BODY, 11, 1.5, { firstLineIndentEm: 1.5, align: 'justify' }),
+    ],
+  },
+  {
+    preset: 'columns',
+    name: 'Columns',
+    blocks: [
+      layoutBlock('Chapter One', 18, 1.2, { paragraphSpacingPt: 12 }),
+      layoutBlock(MOCK_BODY, 10, 1.4, { paragraphSpacingPt: 6, columns: 3, align: 'justify' }),
+    ],
+  },
+  {
+    preset: 'magazine',
+    name: 'Magazine',
+    blocks: [
+      layoutBlock('The Quiet Return of the Printed Page', 48, 1.05, {
+        tracking: -20,
+        paragraphSpacingPt: 12,
+      }),
+      layoutBlock('Readers are going back to paper.', 16, 1.35, { paragraphSpacingPt: 18 }),
+      layoutBlock(MOCK_BODY, 10, 1.45, { firstLineIndentEm: 1, columns: 2, align: 'justify' }),
+    ],
+  },
+  {
+    preset: 'quote',
+    name: 'Quote',
+    blocks: [
+      layoutBlock('“Type is a beautiful group of letters.”', 36, 1.15, {
+        align: 'center',
+        paragraphSpacingPt: 18,
+      }),
+      layoutBlock('Matthew Carter', 12, 1.3, { tracking: 100, align: 'center' }),
+    ],
+  },
+  {
+    preset: 'characters',
+    name: 'Characters',
+    blocks: ['ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz', '0123456789 &@#%?!'].map(
+      (t) => layoutBlock(t, 36, 1.2, { tracking: 50, paragraphSpacingPt: 12 }),
+    ),
+  },
+  {
+    preset: 'waterfall',
+    name: 'Waterfall',
+    blocks: MOCK_WATERFALL_SIZES_PT.map((size) =>
+      layoutBlock('The quick brown fox jumps over the lazy dog', size, 1.2, { overflow: 'clip' }),
+    ),
+  },
+];
+
+/** The ranges of `fm_core::layout`; a value that is not a finite number takes the default. */
+export function mockClampLayout(layout: Layout): Layout {
+  const fit = (v: number | null, lo: number, hi: number, d: number) =>
+    v !== null && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d;
+  return {
+    ...layout,
+    blocks: layout.blocks.map((b) => ({
+      ...b,
+      sizePt: fit(b.sizePt, 8, 600, 12),
+      lineHeight: fit(b.lineHeight, 0.1, 3, 1.3),
+      tracking: fit(b.tracking, -200, 1000, 0),
+      paragraphSpacingPt: fit(b.paragraphSpacingPt, 0, 600, 0),
+      firstLineIndentEm: fit(b.firstLineIndentEm, 0, 20, 0),
+      columns: Math.round(fit(b.columns, 1, 3, 1)),
+    })),
+  };
+}
+
 export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
   const sources = structuredClone(mockSources);
@@ -1140,6 +1243,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
 
   return {
     getAppInfo: async () => mockAppInfo,
+    layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
+    clampLayout: async (req) => mockClampLayout(req),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);

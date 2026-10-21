@@ -1461,3 +1461,18 @@ fn the_coverage_list_counts_blocks_and_languages_of_a_face() {
     let unknown = lib.api.face_coverage(FaceId(99_999));
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
 }
+
+#[test]
+fn layouts_are_the_core_presets_and_come_back_clamped() {
+    let lib = Lib::new("api-layout");
+    assert_eq!(
+        lib.api.layout_presets().expect("presets"),
+        layout::presets()
+    );
+    let mut wild = layout::preset(fm_api::layout::LayoutPreset::Quote);
+    wild.blocks[0].size_pt = 2_000.0;
+    wild.blocks[1].tracking = f32::NAN;
+    let got = lib.api.clamp_layout(wild).expect("clamp");
+    assert_eq!(got.blocks[0].size_pt, 600.0);
+    assert_eq!(got.blocks[1].tracking, 0.0);
+}
