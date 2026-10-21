@@ -1153,6 +1153,30 @@ export type LayoutPreset =
 /**  The same text at falling sizes. */
 "waterfall";
 
+/**
+ *  Declare the license of a family (E15.2). It applies to every face of the
+ *  family and replaces what was declared before: a field left absent is
+ *  cleared. The receipt is kept unless the request clears or replaces it.
+ */
+export type LicenseDeclaration = {
+	/**  The family. */
+	family: FamilyId,
+	/**  The license type; absent clears it. */
+	licenseType?: LicenseType | null,
+	/**
+	 *  How many seats the license covers; absent clears it, below 0 is
+	 *  `InvalidRequest`.
+	 */
+	seats?: number | null,
+	/**
+	 *  The purchase date as `YYYY-MM-DD`; absent or empty clears it, any
+	 *  other form is `InvalidRequest`.
+	 */
+	purchaseDate?: string | null,
+	/**  What happens to the attached receipt. */
+	receipt?: ReceiptChange,
+};
+
 /**  What the file says, and what the user declared, about where a font may be used. */
 export type LicenseInfo = {
 	/**  License description (name ID 13). */
@@ -1165,6 +1189,12 @@ export type LicenseInfo = {
 	embedding: Embedding,
 	/**  What the user declared, if anything. */
 	declared: LicenseType | null,
+	/**  Seats the user declared for the family (E15.2). */
+	seats?: number | null,
+	/**  Purchase date the user declared, `YYYY-MM-DD` (E15.2). */
+	purchaseDate?: string | null,
+	/**  Absolute path of the receipt copy the app keeps (E15.2). */
+	receipt?: string | null,
 };
 
 /**  A license inventory as CSV text. */
@@ -1431,6 +1461,34 @@ export type ProjectSet = {
 	/**  The faces. */
 	faces: FaceId[],
 };
+
+/**  What [`LicenseDeclaration`] does to a family's receipt. */
+export type ReceiptChange = 
+/**  Leave the receipt as it is. */
+{ kind: "keep" } | 
+/**  Remove the receipt: the copy the app made goes to the OS trash. */
+{ kind: "clear" } | 
+/**
+ *  Attach a copy of the file at `path`; the file itself is never moved.
+ *  A receipt attached before goes to the OS trash. A file that is not
+ *  there is `InvalidRequest`.
+ */
+{ kind: "attach"; 
+/**  The receipt file the user picked. */
+path: string; 
+/**  Where the copy goes. */
+place: ReceiptPlace };
+
+/**  Where the app keeps the copy of a receipt. */
+export type ReceiptPlace = 
+/**
+ *  Next to the font, in its source folder's `.fontlibrary/` folder, so a
+ *  synced folder carries it to teammates. A system font folder is
+ *  `InvalidRequest`.
+ */
+"nextToFont" | 
+/**  In the app's data folder, on this machine only. */
+"appData";
 
 /**  Rename a collection. */
 export type RenameCollectionRequest = {

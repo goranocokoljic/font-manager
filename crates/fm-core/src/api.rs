@@ -20,7 +20,7 @@
 //!   `Unsupported` error with a message for the user, never a panic.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -43,9 +43,10 @@ use fm_api::library::{
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, MoveCollectionRequest, OrganizationService,
-    PinInstanceRequest, ProjectSet, RenameCollectionRequest, SetExport, Tag, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
+    OrganizationService, PinInstanceRequest, ProjectSet, ReceiptChange, ReceiptPlace,
+    RenameCollectionRequest, SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
@@ -67,7 +68,7 @@ use fm_platform::{AppPaths, FontActivator, Os, Trash};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
-use crate::index::Index;
+use crate::index::{DeclaredLicense, Index};
 use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
@@ -103,6 +104,11 @@ pub struct CoreApi {
     previews: Option<PreviewCache>,
     /// "Keep this one"; `None` when there is no trash to move copies to.
     resolver: Option<DuplicateResolver>,
+    /// The OS trash, for replaced receipts (E15.2); `None` when there is none.
+    trash: Option<Arc<dyn Trash>>,
+    /// Where receipts kept in the app's data folder go; `None` when the API
+    /// has no data folder.
+    receipts: Option<PathBuf>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -132,7 +138,8 @@ impl CoreApi {
         let previews = PreviewCache::open(&cache::cache_dir(paths), limit)
             .inspect_err(|e| tracing::warn!(error = %e, "preview cache not opened"))
             .ok();
-        let api = Self::new(index, activator, settings, previews);
+        let api = Self::new(index, activator, settings, previews)
+            .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR));
         match fm_platform::trash::system() {
             Ok(trash) => api.with_trash(trash),
             Err(e) => {
@@ -161,6 +168,8 @@ impl CoreApi {
             settings,
             previews,
             resolver: None,
+            trash: None,
+            receipts: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -173,10 +182,42 @@ impl CoreApi {
         let sink = Arc::clone(&self.events);
         self.resolver = Some(DuplicateResolver::new(
             Arc::clone(&self.index),
-            trash,
+            Arc::clone(&trash),
             move |e| sink.send(&e),
         ));
+        self.trash = Some(trash);
         self
+    }
+
+    /// The same API, keeping receipts "in the app's data folder" in `dir`.
+    #[must_use]
+    pub fn with_receipts_in(mut self, dir: PathBuf) -> Self {
+        self.receipts = Some(dir);
+        self
+    }
+
+    /// Moves the receipt copy `old` to the trash, when it is one the app
+    /// made and it is there; a path that is not the app's is only forgotten.
+    fn trash_receipt(&self, old: &Path) -> ApiResult<()> {
+        if !crate::receipt::is_app_copy(old, self.receipts.as_deref()) || !old.is_file() {
+            return Ok(());
+        }
+        let trash = self
+            .trash
+            .as_ref()
+            .ok_or_else(|| not_available("Moving files to the trash"))?;
+        trash.trash(old).map(|_| ()).map_err(|e| {
+            ApiError::from(
+                FmError::new(
+                    ErrorCode::Io,
+                    format!(
+                        "The old receipt could not be moved to the trash: {}",
+                        e.message()
+                    ),
+                )
+                .with_detail(e.detail),
+            )
+        })
     }
 
     /// The resolver, or the answer when there is no trash.
@@ -700,6 +741,70 @@ impl OrganizationService for CoreApi {
     /// The list shows the family again through `LibraryChanged`.
     fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()> {
         let faces = self.lock().update_family_notes(&req)?;
+        self.updated(&faces);
+        Ok(())
+    }
+
+    /// The receipt is copied first; the copy it replaces goes to the trash
+    /// before the declaration is stored, so a failed move changes nothing
+    /// (the new copy goes to the trash too). The list shows the family again
+    /// through `LibraryChanged`.
+    fn declare_license(&self, req: LicenseDeclaration) -> ApiResult<()> {
+        let seats = req.seats.map(crate::receipt::check_seats).transpose()?;
+        let purchase_date = req
+            .purchase_date
+            .map(|d| d.trim().to_owned())
+            .filter(|d| !d.is_empty());
+        if let Some(date) = &purchase_date {
+            crate::receipt::check_date(date)?;
+        }
+        if let ReceiptChange::Attach { path, .. } = &req.receipt {
+            crate::receipt::check_receipt(Path::new(path))?;
+        }
+        let target = self.lock().license_target(req.family)?;
+        let old = target.current.and_then(|c| c.receipt);
+        let (receipt, attached) = match req.receipt {
+            ReceiptChange::Keep => (old.clone(), false),
+            ReceiptChange::Clear => (None, false),
+            ReceiptChange::Attach { path, place } => {
+                let dir = match place {
+                    ReceiptPlace::NextToFont => target
+                        .sidecar_dir
+                        .ok_or_else(|| {
+                            FmError::invalid(
+                                "The receipt cannot be kept next to this font: its folder is a system folder, paused or not there. Keep it in the app's data folder instead.",
+                            )
+                        })?
+                        .join(crate::receipt::RECEIPTS_DIR),
+                    ReceiptPlace::AppData => self
+                        .receipts
+                        .clone()
+                        .ok_or_else(|| not_available("Keeping receipts in the app's data folder"))?,
+                };
+                (
+                    Some(crate::receipt::copy_into(Path::new(&path), &dir)?),
+                    true,
+                )
+            }
+        };
+        if let Some(old) = old.as_deref().filter(|o| receipt.as_deref() != Some(*o))
+            && let Err(e) = self.trash_receipt(old)
+        {
+            if let Some(new) = receipt.as_deref().filter(|_| attached) {
+                // The copy just made is the app's: it goes to the trash too.
+                if let Err(undo) = self.trash_receipt(new) {
+                    tracing::warn!(error = %undo, "new receipt copy left in place");
+                }
+            }
+            return Err(e);
+        }
+        let license = DeclaredLicense {
+            license_type: req.license_type,
+            seats,
+            purchase_date,
+            receipt,
+        };
+        let faces = self.lock().declare_license(req.family, &license)?;
         self.updated(&faces);
         Ok(())
     }

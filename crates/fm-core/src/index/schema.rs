@@ -449,12 +449,25 @@ const V12: &str = r"
 ALTER TABLE face ADD COLUMN open_license TEXT;
 ";
 
+/// Declared licenses (E15.2, `index/family_license.rs`): the license the user
+/// declared for a family is stored with its notes, by the family's grouping
+/// key, so it applies to every face and outlives a rescan. `license_type` is
+/// the `fm-api` serde name, `purchase_date` is `YYYY-MM-DD`, and `receipt`
+/// the path of the copy the app made (text, or the raw bytes of a path that
+/// is not UTF-8). A row with no notes and no declaration is deleted.
+const V13: &str = r"
+ALTER TABLE family_meta ADD COLUMN license_type TEXT;
+ALTER TABLE family_meta ADD COLUMN seats INTEGER;
+ALTER TABLE family_meta ADD COLUMN purchase_date TEXT;
+ALTER TABLE family_meta ADD COLUMN receipt BLOB;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
-pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12];
+pub(crate) const MIGRATIONS: &[&str] = &[V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13];
 
 /// The schema version this build writes.
 pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;

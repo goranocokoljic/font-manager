@@ -13,14 +13,15 @@ use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
 use fm_api::layout::{BlockOverflow, LayoutPreset};
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
-    GlyphsRequest, ImportMode, KeepCopyRequest, ListFamiliesRequest, OpenLicense, ScanRequest,
-    SetSourcePausedRequest, TrashMoveStatus,
+    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseType, ListFamiliesRequest, OpenLicense,
+    ScanRequest, SetSourcePausedRequest, TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, MoveCollectionRequest, PinInstanceRequest, RenameCollectionRequest, Rule,
-    RuleGroup, RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
+    FamilyNotesUpdate, LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, TagFacesRequest,
+    UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
 };
 use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -639,6 +640,110 @@ fn family_notes_are_the_familys_and_announced_as_a_library_change() {
         notes: "x".into(),
     });
     assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+}
+
+#[test]
+fn a_declared_license_applies_to_every_face_and_clears_field_by_field() {
+    let api = api();
+    let family = api.get_face(FaceId(1)).unwrap().face.family;
+    let rx = api.subscribe();
+    api.declare_license(LicenseDeclaration {
+        family,
+        license_type: Some(LicenseType::Web),
+        seats: Some(5),
+        purchase_date: Some("2026-03-01".into()),
+        receipt: ReceiptChange::Attach {
+            path: r"C:\Users\me\Downloads\invoice.pdf".into(),
+            place: ReceiptPlace::AppData,
+        },
+    })
+    .unwrap();
+    let faces: Vec<FaceId> = api
+        .get_family(family)
+        .unwrap()
+        .faces
+        .iter()
+        .map(|f| f.id)
+        .collect();
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(Event::LibraryChanged { updated, .. }) if updated == faces
+    ));
+    assert_eq!(
+        api.get_family(family).unwrap().summary.declared_license,
+        Some(LicenseType::Web)
+    );
+    for face in &faces {
+        let license = api.get_face(*face).unwrap().license;
+        assert_eq!(license.declared, Some(LicenseType::Web));
+        assert_eq!(license.seats, Some(5));
+        assert_eq!(license.purchase_date.as_deref(), Some("2026-03-01"));
+        assert_eq!(
+            license.receipt.as_deref(),
+            Some("/app-data/receipts/invoice.pdf")
+        );
+    }
+    // Absent fields clear; the receipt stays unless cleared.
+    api.declare_license(LicenseDeclaration {
+        family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    let license = api.get_face(FaceId(1)).unwrap().license;
+    assert_eq!((license.declared, license.seats), (None, None));
+    assert!(license.receipt.is_some());
+    api.declare_license(LicenseDeclaration {
+        family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Clear,
+    })
+    .unwrap();
+    assert_eq!(api.get_face(FaceId(1)).unwrap().license.receipt, None);
+
+    let bad = |req: LicenseDeclaration| api.declare_license(req).unwrap_err().code;
+    let base = LicenseDeclaration {
+        family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    };
+    assert_eq!(
+        bad(LicenseDeclaration {
+            seats: Some(-1),
+            ..base.clone()
+        }),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        bad(LicenseDeclaration {
+            purchase_date: Some("2026-13-01".into()),
+            ..base.clone()
+        }),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        bad(LicenseDeclaration {
+            receipt: ReceiptChange::Attach {
+                path: String::new(),
+                place: ReceiptPlace::NextToFont,
+            },
+            ..base.clone()
+        }),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        bad(LicenseDeclaration {
+            family: FamilyId(999),
+            ..base
+        }),
+        ErrorCode::NotFound
+    );
 }
 
 #[test]

@@ -32,9 +32,10 @@ use crate::library::{
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
-    RenameCollectionRequest, Rule, RuleGroup, RuleOp, SetEntry, SetExport, Tag, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
+    PinInstanceRequest, ProjectSet, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule,
+    RuleGroup, RuleOp, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
+    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
@@ -310,6 +311,9 @@ fn face(
                 open_license,
                 embedding,
                 declared: None,
+                seats: None,
+                purchase_date: None,
+                receipt: None,
             },
             metrics: Metrics {
                 units_per_em: 1000,
@@ -2531,6 +2535,76 @@ impl OrganizationService for MockApi {
         });
         Ok(())
     }
+
+    /// Like the core, without a file system: an empty receipt path is a file
+    /// that is not there, and the copy is a made-up path in the chosen place.
+    fn declare_license(&self, req: LicenseDeclaration) -> ApiResult<()> {
+        let mut st = self.state();
+        st.family(req.family)?;
+        if req.seats.is_some_and(|s| s < 0) {
+            return Err(ApiError::invalid("The number of seats cannot be below 0."));
+        }
+        let date = req.purchase_date.filter(|d| !d.is_empty());
+        if let Some(d) = &date
+            && !mock_date(d)
+        {
+            return Err(ApiError::invalid(format!(
+                "\"{d}\" is not a date. Write the purchase date as YYYY-MM-DD."
+            )));
+        }
+        let receipt = match &req.receipt {
+            ReceiptChange::Attach { path, .. } if path.is_empty() => {
+                return Err(ApiError::invalid("The receipt file is not there."));
+            }
+            ReceiptChange::Attach { path, place } => {
+                let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+                Some(Some(match place {
+                    ReceiptPlace::NextToFont => format!("/fonts/.fontlibrary/receipts/{name}"),
+                    ReceiptPlace::AppData => format!("/app-data/receipts/{name}"),
+                }))
+            }
+            ReceiptChange::Clear => Some(None),
+            ReceiptChange::Keep => None,
+        };
+        let mut updated = Vec::new();
+        for face in st
+            .faces
+            .iter_mut()
+            .filter(|f| f.detail.face.family == req.family)
+        {
+            let license = &mut face.detail.license;
+            license.declared = req.license_type;
+            license.seats = req.seats.and_then(|s| u32::try_from(s).ok());
+            license.purchase_date.clone_from(&date);
+            if let Some(receipt) = &receipt {
+                license.receipt.clone_from(receipt);
+            }
+            updated.push(face.detail.face.id);
+        }
+        st.emit(Event::LibraryChanged {
+            source: None,
+            added: Vec::new(),
+            removed: Vec::new(),
+            updated,
+        });
+        Ok(())
+    }
+}
+
+/// `YYYY-MM-DD` with a month 1–12 and a day 1–31: enough for the mock.
+fn mock_date(d: &str) -> bool {
+    let parts: Vec<&str> = d.split('-').collect();
+    let num = |s: &str, len: usize| {
+        (s.len() == len && s.bytes().all(|b| b.is_ascii_digit()))
+            .then(|| s.parse::<u32>().ok())
+            .flatten()
+    };
+    matches!(
+        parts.as_slice(),
+        [y, m, day] if num(y, 4).is_some()
+            && num(m, 2).is_some_and(|m| (1..=12).contains(&m))
+            && num(day, 2).is_some_and(|d| (1..=31).contains(&d))
+    )
 }
 
 fn edit_members(api: &MockApi, req: CollectionFacesRequest, add: bool) -> ApiResult<Collection> {

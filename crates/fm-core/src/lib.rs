@@ -29,6 +29,7 @@ pub mod logging;
 mod parallel;
 pub mod parser;
 pub mod preview;
+pub mod receipt;
 pub mod resolve;
 pub mod sample;
 pub mod scanner;

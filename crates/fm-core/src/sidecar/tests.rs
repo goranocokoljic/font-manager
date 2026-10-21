@@ -1,3 +1,5 @@
+use fm_api::library::LicenseType;
+
 use super::*;
 
 fn meta(favorite: bool, rating: Option<u8>, notes: Option<&str>, tags: &[&str]) -> Meta {
@@ -228,8 +230,8 @@ fn malformed_and_newer_sidecars_are_not_parsed_as_sidecars() {
         Parsed::Unreadable(_)
     ));
     assert_eq!(
-        parse(r#"{"version": 4, "faces": "anything"}"#),
-        Parsed::Newer(4)
+        parse(r#"{"version": 5, "faces": "anything"}"#),
+        Parsed::Newer(5)
     );
 }
 
@@ -354,6 +356,7 @@ fn family(notes: Option<&str>, prior: Option<&FamilyEntry>) -> FamilyEntry {
     FamilyEntry {
         notes: notes.map(Into::into),
         history: next_family_history(notes, prior),
+        license: None,
     }
 }
 
@@ -408,6 +411,21 @@ fn the_family_ancestor_follows_the_entry_history() {
     // The history grows only with a change.
     assert_eq!(next_family_history(Some("mine"), Some(&ours)), ours.history);
     assert_eq!(theirs.history.len(), 2);
+    // A family entry that only holds a license (E15.2) is no notes entry:
+    // notes cleared there were removed when the file descends from ours.
+    let license_only = FamilyEntry {
+        notes: None,
+        history: Vec::new(),
+        license: Some(LicenseEntry::default()),
+    };
+    assert_eq!(
+        family_ancestor(Some(&ours), Some(&license_only), true).as_deref(),
+        Some("mine")
+    );
+    assert_eq!(
+        family_ancestor(Some(&ours), Some(&license_only), false),
+        None
+    );
 }
 
 #[test]
@@ -421,7 +439,7 @@ fn a_sidecar_with_family_notes_is_version_3_and_reads_back() {
     assert!(!sidecar.to_json().contains("familyMeta"));
     sidecar.family_meta = Some(family(Some("Licensed for the rebrand"), None));
     sidecar.normalize();
-    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    assert_eq!(sidecar.version, FAMILY_NOTES_VERSION);
     assert_eq!(sidecar.family_notes(), Some("Licensed for the rebrand"));
     assert!(sidecar.to_json().contains(r#""familyMeta""#));
     assert_eq!(parse(&sidecar.to_json()), Parsed::Sidecar(sidecar.clone()));
@@ -443,4 +461,130 @@ fn a_change_of_the_family_notes_is_a_new_file_version() {
     let mut plain = Sidecar::new("A");
     plain.faces = ours.faces.clone();
     assert_eq!(next_file_history(&plain, None), before);
+}
+
+fn license(kind: LicenseType, seats: Option<u32>) -> License {
+    License {
+        license_type: Some(kind),
+        seats,
+        purchase_date: Some("2026-03-01".into()),
+        receipt: Some("receipts/invoice.pdf".into()),
+    }
+}
+
+fn licensed(license: Option<License>, prior: Option<&LicenseEntry>) -> FamilyEntry {
+    FamilyEntry {
+        notes: None,
+        history: Vec::new(),
+        license: license.map(|license| LicenseEntry {
+            history: next_license_history(&license, prior),
+            license,
+        }),
+    }
+}
+
+#[test]
+fn a_sidecar_with_a_declared_license_is_version_4_and_reads_back() {
+    let mut sidecar = Sidecar::new("Asap");
+    sidecar.family_meta = Some(licensed(Some(License::default()), None));
+    sidecar.normalize();
+    // An empty license is none, and no family entry is written for it.
+    assert_eq!(sidecar.family_meta, None);
+    assert_eq!(sidecar.version, PLAIN_VERSION);
+    sidecar.family_meta = Some(licensed(
+        Some(license(LicenseType::PersonalOnly, Some(0))),
+        None,
+    ));
+    sidecar.normalize();
+    assert_eq!(sidecar.version, SIDECAR_VERSION);
+    assert_eq!(
+        sidecar.family_license(),
+        Some(&license(LicenseType::PersonalOnly, Some(0)))
+    );
+    let json = sidecar.to_json();
+    assert!(json.contains(r#""licenseType": "personalOnly""#), "{json}");
+    assert!(json.contains(r#""seats": 0"#), "{json}");
+    assert!(json.contains(r#""purchaseDate": "2026-03-01""#), "{json}");
+    assert_eq!(parse(&json), Parsed::Sidecar(sidecar.clone()));
+}
+
+#[test]
+fn a_license_merges_as_one_value() {
+    let a = license(LicenseType::Desktop, Some(2));
+    let b = license(LicenseType::Web, Some(2));
+    let c = license(LicenseType::Desktop, Some(9));
+    // The side that changed wins whole.
+    let kept = merge_license(Some(&a), Some(&a), Some(&b));
+    assert_eq!((kept.license, kept.conflict), (Some(b.clone()), None));
+    let kept = merge_license(Some(&a), Some(&c), Some(&a));
+    assert_eq!((kept.license, kept.conflict), (Some(c.clone()), None));
+    // A removal on one side removes it; an empty license is none.
+    assert_eq!(merge_license(Some(&a), Some(&a), None).license, None);
+    assert_eq!(
+        merge_license(Some(&a), Some(&License::default()), Some(&a)).license,
+        None
+    );
+    // Two different changes, even of different fields, are one conflict:
+    // this machine's license stays, never a mix of the two.
+    let both = merge_license(Some(&a), Some(&c), Some(&b));
+    assert_eq!(both.license, Some(c.clone()));
+    let conflict = both.conflict.expect("conflict");
+    assert_eq!(conflict.field, Field::FamilyLicense);
+    assert_eq!(
+        Field::from_name(conflict.field.as_str()),
+        Some(Field::FamilyLicense)
+    );
+    assert!(conflict.disk.contains("\"web\""), "{}", conflict.disk);
+    // No common ancestor: two different licenses conflict.
+    assert!(merge_license(None, Some(&a), Some(&b)).conflict.is_some());
+    assert!(merge_license(None, Some(&a), Some(&a)).conflict.is_none());
+}
+
+#[test]
+fn the_license_ancestor_follows_its_own_history() {
+    let ours = licensed(Some(license(LicenseType::Desktop, None)), None);
+    let theirs = licensed(Some(license(LicenseType::Web, None)), ours.license.as_ref());
+    let unrelated = licensed(Some(license(LicenseType::Web, None)), None);
+    assert_eq!(
+        license_ancestor(Some(&ours), Some(&theirs), false),
+        Some(license(LicenseType::Desktop, None))
+    );
+    assert_eq!(license_ancestor(Some(&ours), Some(&unrelated), true), None);
+    // A license missing on disk was removed there only when the file
+    // descends from ours.
+    let without = licensed(None, None);
+    assert_eq!(
+        license_ancestor(Some(&ours), Some(&without), true),
+        Some(license(LicenseType::Desktop, None))
+    );
+    assert_eq!(license_ancestor(Some(&ours), Some(&without), false), None);
+    assert_eq!(
+        license_ancestor(Some(&ours), None, true),
+        ours.license.map(|l| l.license)
+    );
+    assert_eq!(license_ancestor(None, Some(&theirs), true), None);
+    // The history grows only with a change.
+    let entry = theirs.license.expect("license");
+    assert_eq!(
+        next_license_history(&entry.license, Some(&entry)),
+        entry.history
+    );
+    assert_eq!(entry.history.len(), 2);
+}
+
+#[test]
+fn a_change_of_the_license_is_a_new_file_version() {
+    let mut ours = Sidecar::new("A");
+    ours.family_meta = Some(family(Some("notes"), None));
+    ours.history = next_file_history(&ours, None);
+    let mut theirs = ours.clone();
+    if let Some(family) = &mut theirs.family_meta {
+        family.license = Some(LicenseEntry {
+            license: license(LicenseType::App, None),
+            history: Vec::new(),
+        });
+    }
+    theirs.history = next_file_history(&theirs, Some(&ours));
+    assert_ne!(theirs.history, ours.history);
+    assert!(descends(&ours, &theirs));
 }

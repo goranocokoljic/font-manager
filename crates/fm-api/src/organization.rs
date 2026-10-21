@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::AxisValue;
+use crate::library::LicenseType;
 use crate::search::Filters;
 use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId, VirtualStyleId};
 
@@ -227,6 +228,63 @@ pub struct FamilyNotesUpdate {
     pub notes: String,
 }
 
+/// Declare the license of a family (E15.2). It applies to every face of the
+/// family and replaces what was declared before: a field left absent is
+/// cleared. The receipt is kept unless the request clears or replaces it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LicenseDeclaration {
+    /// The family.
+    pub family: FamilyId,
+    /// The license type; absent clears it.
+    #[serde(default)]
+    pub license_type: Option<LicenseType>,
+    /// How many seats the license covers; absent clears it, below 0 is
+    /// `InvalidRequest`.
+    #[serde(default)]
+    pub seats: Option<i32>,
+    /// The purchase date as `YYYY-MM-DD`; absent or empty clears it, any
+    /// other form is `InvalidRequest`.
+    #[serde(default)]
+    pub purchase_date: Option<String>,
+    /// What happens to the attached receipt.
+    #[serde(default)]
+    pub receipt: ReceiptChange,
+}
+
+/// What [`LicenseDeclaration`] does to a family's receipt.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum ReceiptChange {
+    /// Leave the receipt as it is.
+    #[default]
+    Keep,
+    /// Remove the receipt: the copy the app made goes to the OS trash.
+    Clear,
+    /// Attach a copy of the file at `path`; the file itself is never moved.
+    /// A receipt attached before goes to the OS trash. A file that is not
+    /// there is `InvalidRequest`.
+    #[serde(rename_all = "camelCase")]
+    Attach {
+        /// The receipt file the user picked.
+        path: String,
+        /// Where the copy goes.
+        place: ReceiptPlace,
+    },
+}
+
+/// Where the app keeps the copy of a receipt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ReceiptPlace {
+    /// Next to the font, in its source folder's `.fontlibrary/` folder, so a
+    /// synced folder carries it to teammates. A system font folder is
+    /// `InvalidRequest`.
+    NextToFont,
+    /// In the app's data folder, on this machine only.
+    AppData,
+}
+
 /// A project set: fonts activated together.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -381,6 +439,10 @@ pub trait OrganizationService {
     fn delete_virtual_style(&self, style: VirtualStyleId) -> ApiResult<()>;
     /// Set the notes of a family (E13.5); an empty string clears them.
     fn update_family_notes(&self, req: FamilyNotesUpdate) -> ApiResult<()>;
+    /// Declare the license of a family (E15.2): type, seats, purchase date
+    /// and receipt. An unknown family is `NotFound`; a bad date, seats below
+    /// 0 or a receipt file that is not there is `InvalidRequest`.
+    fn declare_license(&self, req: LicenseDeclaration) -> ApiResult<()>;
 }
 
 #[cfg(test)]

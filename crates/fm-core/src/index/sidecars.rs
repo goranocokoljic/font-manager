@@ -37,6 +37,7 @@ use fm_api::library::{Problem, ProblemKind};
 use fm_api::{FaceId, SourceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
+use super::family_license::{self, DeclaredLicense};
 use super::family_notes;
 use super::files::path_from_sql;
 use super::virtual_styles::{self, Holder};
@@ -286,6 +287,12 @@ impl Index {
         Ok(out)
     }
 
+    /// The folder of the source, when its sidecars may be touched now
+    /// ([`Index::sidecar_source`]).
+    pub(super) fn sidecar_root(&self, source: SourceId) -> FmResult<Option<PathBuf>> {
+        Ok(self.sidecar_source(source)?.map(|src| src.root))
+    }
+
     /// The source, when its sidecars may be touched now: not a system
     /// source, not paused, and its folder exists.
     fn sidecar_source(&self, source: SourceId) -> FmResult<Option<SourceDir>> {
@@ -524,11 +531,36 @@ impl Index {
                 local.as_deref(),
                 disk_family.and_then(|f| f.notes.as_deref()),
             );
+            let mut changed = false;
             if merged.notes != local {
                 family_notes::set_family_notes(&tx, &key, merged.notes.as_deref())?;
+                changed = true;
+            }
+            // The declared license (E15.2) merges as one value, compared in
+            // the form this source's sidecar writes it.
+            let local_license = family_license::license_by_key(&tx, &key)?
+                .map(|l| l.to_sidecar(&src.root))
+                .filter(|l| !l.is_empty());
+            let merged_license = sidecar::merge_license(
+                sidecar::license_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
+                    .as_ref(),
+                local_license.as_ref(),
+                disk_family
+                    .and_then(|f| f.license.as_ref())
+                    .map(|l| &l.license),
+            );
+            if merged_license.license != local_license {
+                let license = merged_license
+                    .license
+                    .as_ref()
+                    .map(|l| DeclaredLicense::from_sidecar(l, &src.root));
+                family_license::set_license(&tx, &key, license.as_ref())?;
+                changed = true;
+            }
+            if changed {
                 out.families_changed += 1;
             }
-            if let Some(c) = &merged.conflict {
+            for c in merged.conflict.iter().chain(&merged_license.conflict) {
                 out.conflicts += insert_conflict(
                     &tx,
                     src.id,
@@ -545,11 +577,27 @@ impl Index {
         // now, plus the entries of faces this machine has not indexed.
         let new_base = if let Some(first) = family.first() {
             let mut next = Sidecar::new(first.family.clone());
-            let notes = family_notes::family_notes_by_key(&tx, &family_key(&first.family))?;
-            next.family_meta = notes.map(|notes| sidecar::FamilyEntry {
-                history: sidecar::next_family_history(Some(&notes), disk_family),
-                notes: Some(notes),
-            });
+            let key = family_key(&first.family);
+            let notes = family_notes::family_notes_by_key(&tx, &key)?;
+            let license = family_license::license_by_key(&tx, &key)?
+                .map(|l| l.to_sidecar(&src.root))
+                .filter(|l| !l.is_empty())
+                .map(|license| sidecar::LicenseEntry {
+                    history: sidecar::next_license_history(
+                        &license,
+                        disk_family.and_then(|f| f.license.as_ref()),
+                    ),
+                    license,
+                });
+            next.family_meta =
+                (notes.is_some() || license.is_some()).then(|| sidecar::FamilyEntry {
+                    history: notes
+                        .as_deref()
+                        .map(|n| sidecar::next_family_history(Some(n), disk_family))
+                        .unwrap_or_default(),
+                    notes,
+                    license,
+                });
             for face in &family {
                 let mut meta = local_meta(&tx, face.id, &collections)?;
                 meta.collections.extend(carried_paths(&tx, face.id)?);
@@ -1197,6 +1245,10 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
             (Some(Field::Favorite), _) => "not a favorite".into(),
             (Some(Field::Rating), serde_json::Value::Number(n)) => format!("{n} stars"),
             (Some(Field::Rating), _) => "no rating".into(),
+            (Some(Field::FamilyLicense), serde_json::Value::Object(_)) => json
+                .and_then(|j| serde_json::from_str::<sidecar::License>(j).ok())
+                .map_or_else(|| "a license".into(), |l| describe_license(&l)),
+            (Some(Field::FamilyLicense), _) => "no license".into(),
             (_, serde_json::Value::String(s)) => format!("\"{s}\""),
             _ => "empty".into(),
         }
@@ -1205,6 +1257,7 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
         Some(Field::Favorite) => "marked this font",
         Some(Field::Rating) => "rated this font",
         Some(Field::FamilyNotes) => "set the notes of this font's family to",
+        Some(Field::FamilyLicense) => "declared for this font's family",
         _ => "set the notes of this font to",
     };
     format!(
@@ -1212,6 +1265,33 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
         show(Some(disk)),
         show(local)
     )
+}
+
+/// A declared license in a few words: "desktop, 5 seats, bought 2026-03-01,
+/// with a receipt".
+fn describe_license(license: &sidecar::License) -> String {
+    let mut parts = Vec::new();
+    if let Some(t) = license.license_type {
+        let name = serde_json::to_value(t)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_owned))
+            .unwrap_or_default();
+        parts.push(format!("license type \"{name}\""));
+    }
+    if let Some(seats) = license.seats {
+        parts.push(format!("{seats} seats"));
+    }
+    if let Some(date) = &license.purchase_date {
+        parts.push(format!("bought {date}"));
+    }
+    if license.receipt.is_some() {
+        parts.push("with a receipt".into());
+    }
+    if parts.is_empty() {
+        "no license".into()
+    } else {
+        parts.join(", ")
+    }
 }
 
 #[cfg(test)]

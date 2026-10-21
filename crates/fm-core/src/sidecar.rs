@@ -32,6 +32,10 @@
 //!   machine's stay.
 //! - The family's own notes (E13.5, `familyMeta`) are one more entry with a
 //!   history of its own, and merge like a face's notes ([`merge_family`]).
+//! - The family's declared license (E15.2, `familyMeta.license`) has a
+//!   history of its own too, and merges as one value ([`merge_license`]): a
+//!   type, seats, a date and a receipt that belong together are never mixed
+//!   from two machines.
 //!
 //! Without a last-known sidecar (a new machine, a rebuilt index) the base is
 //! empty: whatever either side has set is kept, and two different values are
@@ -39,6 +43,7 @@
 
 use std::collections::BTreeMap;
 
+use fm_api::library::LicenseType;
 use serde::{Deserialize, Serialize};
 
 use crate::grouping::family_key;
@@ -51,12 +56,17 @@ pub const SIDECAR_DIR: &str = ".fontlibrary";
 /// never rewritten.
 ///
 /// Version 2 adds `pins` (virtual styles, E10.2), version 3 the family's
-/// notes (`familyMeta`, E13.5). A file is written with the lowest version
+/// notes (`familyMeta`, E13.5), version 4 its declared license
+/// (`familyMeta.license`, E15.2). A file is written with the lowest version
 /// its content needs, so an older build, which ignores fields it does not
 /// know, leaves a file it cannot hold alone instead of rewriting it without
 /// them; a file with neither stays [`PLAIN_VERSION`], so older builds still
 /// merge it.
-pub const SIDECAR_VERSION: u32 = 3;
+pub const SIDECAR_VERSION: u32 = 4;
+
+/// The format version of a sidecar with family notes and no declared
+/// license.
+pub const FAMILY_NOTES_VERSION: u32 = 3;
 
 /// The format version of a sidecar with pins and no family notes.
 pub const PINS_VERSION: u32 = 2;
@@ -131,10 +141,20 @@ impl Sidecar {
         self.faces.dedup_by_key(|f| f.key());
         if let Some(family) = &mut self.family_meta {
             family.notes = family.notes.take().filter(|n| !n.is_empty());
+            family.license = family.license.take().filter(|l| !l.license.is_empty());
         }
-        self.family_meta = self.family_meta.take().filter(|f| f.notes.is_some());
-        self.version = if self.family_meta.is_some() {
+        self.family_meta = self
+            .family_meta
+            .take()
+            .filter(|f| f.notes.is_some() || f.license.is_some());
+        let licensed = self
+            .family_meta
+            .as_ref()
+            .is_some_and(|f| f.license.is_some());
+        self.version = if licensed {
             SIDECAR_VERSION
+        } else if self.family_meta.is_some() {
+            FAMILY_NOTES_VERSION
         } else if self.faces.iter().any(|f| !f.meta.pins.is_empty()) {
             PINS_VERSION
         } else {
@@ -145,6 +165,14 @@ impl Sidecar {
     /// The family's notes, when set.
     pub fn family_notes(&self) -> Option<&str> {
         self.family_meta.as_ref().and_then(|f| f.notes.as_deref())
+    }
+
+    /// The family's declared license, when set.
+    pub fn family_license(&self) -> Option<&License> {
+        self.family_meta
+            .as_ref()
+            .and_then(|f| f.license.as_ref())
+            .map(|l| &l.license)
     }
 
     /// The file's text: pretty JSON with a final newline.
@@ -233,6 +261,52 @@ pub struct FamilyEntry {
     /// Notes on the family.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub notes: Option<String>,
+    /// Ids of this entry's last versions, newest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<String>,
+    /// The license declared for the family (E15.2), with its own history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<LicenseEntry>,
+}
+
+/// A family's declared license in a sidecar (E15.2).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct License {
+    /// The license type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license_type: Option<LicenseType>,
+    /// Seats.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seats: Option<u32>,
+    /// Purchase date, `YYYY-MM-DD`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub purchase_date: Option<String>,
+    /// The receipt: relative to the `.fontlibrary` folder, with `/`
+    /// separators, when the copy is in it; else the absolute path on the
+    /// machine that attached it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<String>,
+}
+
+impl License {
+    /// Nothing declared.
+    pub fn is_empty(&self) -> bool {
+        self.license_type.is_none()
+            && self.seats.is_none()
+            && self.purchase_date.is_none()
+            && self.receipt.is_none()
+    }
+}
+
+/// [`License`] with the ids of its last versions, newest first
+/// ([`next_license_history`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LicenseEntry {
+    /// The license.
+    #[serde(flatten)]
+    pub license: License,
     /// Ids of this entry's last versions, newest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<String>,
@@ -368,6 +442,8 @@ pub enum Field {
     Notes,
     /// The family's notes (E13.5).
     FamilyNotes,
+    /// The family's declared license (E15.2).
+    FamilyLicense,
 }
 
 impl Field {
@@ -378,6 +454,7 @@ impl Field {
             Self::Rating => "rating",
             Self::Notes => "notes",
             Self::FamilyNotes => "familyNotes",
+            Self::FamilyLicense => "familyLicense",
         }
     }
 
@@ -388,6 +465,7 @@ impl Field {
             "rating" => Some(Self::Rating),
             "notes" => Some(Self::Notes),
             "familyNotes" => Some(Self::FamilyNotes),
+            "familyLicense" => Some(Self::FamilyLicense),
             _ => None,
         }
     }
@@ -440,19 +518,40 @@ pub fn ancestor(base: Option<&FaceEntry>, disk: Option<&FaceEntry>, file_descend
 }
 
 /// [`ancestor`] for the family's notes: the common ancestor of this
-/// machine's family notes and those of the file on disk.
+/// machine's family notes and those of the file on disk. A family entry on
+/// disk without notes (one that only holds a license, E15.2) is no notes
+/// entry: notes missing from it were removed there only when the file
+/// descends from this machine's version, as before the license existed.
 pub fn family_ancestor(
     base: Option<&FamilyEntry>,
     disk: Option<&FamilyEntry>,
     file_descends: bool,
 ) -> Option<String> {
     let base = base?;
-    let disk = disk.map(|d| (&d.notes, d.history.as_slice()));
+    let disk = disk
+        .filter(|d| d.notes.is_some())
+        .map(|d| (&d.notes, d.history.as_slice()));
     if entry_descends((&base.notes, &base.history), disk, file_descends) {
         base.notes.clone()
     } else {
         None
     }
+}
+
+/// [`ancestor`] for the family's declared license: a license missing from
+/// the file on disk was removed there only when the file descends from this
+/// machine's version.
+pub fn license_ancestor(
+    base: Option<&FamilyEntry>,
+    disk: Option<&FamilyEntry>,
+    file_descends: bool,
+) -> Option<License> {
+    let base = base?.license.as_ref()?;
+    let disk = disk
+        .and_then(|d| d.license.as_ref())
+        .map(|d| (&d.license, d.history.as_slice()));
+    entry_descends((&base.license, &base.history), disk, file_descends)
+        .then(|| base.license.clone())
 }
 
 /// Whether the entry on disk descends from the base entry, each as its
@@ -492,6 +591,19 @@ pub fn next_family_history(notes: Option<&str>, prior: Option<&FamilyEntry>) -> 
     }
     extend(
         &notes,
+        prior.map(|p| p.history.as_slice()).unwrap_or_default(),
+    )
+}
+
+/// The history of the license entry holding `license` written over `prior`,
+/// the entry it replaces: unchanged when the license is, else a new version
+/// id first.
+pub fn next_license_history(license: &License, prior: Option<&LicenseEntry>) -> Vec<String> {
+    if let Some(prior) = prior.filter(|p| p.license == *license && !p.history.is_empty()) {
+        return prior.history.clone();
+    }
+    extend(
+        license,
         prior.map(|p| p.history.as_slice()).unwrap_or_default(),
     )
 }
@@ -614,6 +726,39 @@ pub fn merge_family(base: Option<&str>, local: Option<&str>, disk: Option<&str>)
     );
     MergedFamily {
         notes,
+        conflict: conflicts.pop(),
+    }
+}
+
+/// What [`merge_license`] keeps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MergedLicense {
+    /// The license to keep.
+    pub license: Option<License>,
+    /// Set when both sides declared different licenses; `license` holds the
+    /// local one.
+    pub conflict: Option<Conflict>,
+}
+
+/// Merges this machine's declared license (`local`) with the sidecar's
+/// (`disk`), both changed from `base` ([`license_ancestor`]), as one value:
+/// the side that changed it wins whole. An empty license is none.
+pub fn merge_license(
+    base: Option<&License>,
+    local: Option<&License>,
+    disk: Option<&License>,
+) -> MergedLicense {
+    let norm = |l: Option<&License>| l.filter(|l| !l.is_empty()).cloned();
+    let mut conflicts = Vec::new();
+    let license = scalar(
+        Field::FamilyLicense,
+        norm(base),
+        norm(local),
+        norm(disk),
+        &mut conflicts,
+    );
+    MergedLicense {
+        license,
         conflict: conflicts.pop(),
     }
 }

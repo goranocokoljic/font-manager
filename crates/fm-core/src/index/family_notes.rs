@@ -72,30 +72,37 @@ pub(super) fn family_notes_by_key(conn: &Connection, key: &str) -> FmResult<Opti
 }
 
 /// Stores the notes of the family with grouping key `key`; none or empty
-/// notes delete its row.
+/// notes clear them, and a row left with nothing in it is deleted.
 pub(super) fn set_family_notes(
     tx: &Transaction<'_>,
     key: &str,
     notes: Option<&str>,
 ) -> FmResult<()> {
-    match notes.filter(|n| !n.is_empty()) {
-        None => tx
-            .prepare_cached("DELETE FROM family_meta WHERE family_key = ?1")
-            .and_then(|mut s| s.execute([key])),
-        Some(notes) => tx
-            .prepare_cached(
-                "INSERT INTO family_meta (family_key, notes) VALUES (?1, ?2)
-                 ON CONFLICT (family_key) DO UPDATE SET notes = excluded.notes",
-            )
-            .and_then(|mut s| s.execute(params![key, notes])),
-    }
+    tx.prepare_cached(
+        "INSERT INTO family_meta (family_key, notes) VALUES (?1, ?2)
+         ON CONFLICT (family_key) DO UPDATE SET notes = excluded.notes",
+    )
+    .and_then(|mut s| s.execute(params![key, notes.filter(|n| !n.is_empty())]))
+    .map_err(|e| db_error(&e))?;
+    delete_empty_row(tx, key)
+}
+
+/// Deletes the `family_meta` row of `key` when it holds neither notes nor a
+/// declared license.
+pub(super) fn delete_empty_row(tx: &Transaction<'_>, key: &str) -> FmResult<()> {
+    tx.prepare_cached(
+        "DELETE FROM family_meta WHERE family_key = ?1 AND notes IS NULL
+         AND license_type IS NULL AND seats IS NULL AND purchase_date IS NULL
+         AND receipt IS NULL",
+    )
+    .and_then(|mut s| s.execute([key]))
     .map_err(|e| db_error(&e))?;
     Ok(())
 }
 
 /// Every indexed face of the family with grouping key `key`, in every
 /// source, paused ones included: each source's sidecar carries the notes.
-fn faces_of_family(tx: &Transaction<'_>, key: &str) -> FmResult<Vec<u32>> {
+pub(super) fn faces_of_family(tx: &Transaction<'_>, key: &str) -> FmResult<Vec<u32>> {
     let mut stmt = tx
         .prepare_cached("SELECT id, family FROM face")
         .map_err(|e| db_error(&e))?;

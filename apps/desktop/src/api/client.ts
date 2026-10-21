@@ -30,6 +30,7 @@ import type {
   Family,
   FamilyId,
   FamilyNotesUpdate,
+  LicenseDeclaration,
   FamilySummary,
   GlyphDetail,
   GlyphPage,
@@ -122,6 +123,8 @@ export interface FmClient {
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
   /** A family's own notes; an empty string clears them. */
   updateFamilyNotes(req: FamilyNotesUpdate): Promise<void>;
+  /** A family's declared license: type, seats, purchase date, receipt (E15.2). */
+  declareLicense(req: LicenseDeclaration): Promise<void>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
   /** A thumbnail: text rasterized in one face, cached by face hash and settings (PNG). */
@@ -172,6 +175,8 @@ export interface FmClient {
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
   /** The native folder picker; `null` when the user cancels. */
   pickFolder(title: string): Promise<string | null>;
+  /** The native file picker; `null` when the user cancels. */
+  pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
 }
@@ -200,6 +205,7 @@ export const tauriClient: FmClient = {
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
+  declareLicense: (req) => invoke<void>('declare_license', { req }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
@@ -231,6 +237,10 @@ export const tauriClient: FmClient = {
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {
     const path = await open({ directory: true, multiple: false, title });
+    return typeof path === 'string' ? path : null;
+  },
+  pickFile: async (title) => {
+    const path = await open({ directory: false, multiple: false, title });
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),

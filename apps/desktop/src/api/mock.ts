@@ -848,6 +848,9 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
 /** Folders the mock folder picker returns, one per call; `null` is a cancel. */
 export const mockPickedFolders: (string | null)[] = [];
 
+/** Files the mock file picker returns, one per call; `null` is a cancel. */
+export const mockPickedFiles: (string | null)[] = [];
+
 /** A mock client with its own activation, source and settings state. */
 const layoutBlock = (
   text: string,
@@ -1442,6 +1445,38 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       for (const d of details) d.familyNotes = req.notes || null;
       changed(details.map((d) => d.face.id));
     },
+    // Like the Rust mock: no file system, an empty path is a missing file and
+    // the copy is a made-up path in the chosen place.
+    declareLicense: async (req) => {
+      const details = byFamily.get(req.family);
+      if (!details)
+        throw {
+          code: 'notFound' as const,
+          message: `Family ${req.family} was not found.`,
+          detail: null,
+        };
+      if (req.seats != null && req.seats < 0)
+        throw invalid('The number of seats cannot be below 0.');
+      const date = req.purchaseDate || null;
+      if (date !== null && !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date))
+        throw invalid(`"${date}" is not a date. Write the purchase date as YYYY-MM-DD.`);
+      const change = req.receipt ?? { kind: 'keep' };
+      if (change.kind === 'attach' && !change.path) throw invalid('The receipt file is not there.');
+      for (const d of details) {
+        d.license.declared = req.licenseType ?? null;
+        d.license.seats = req.seats ?? null;
+        d.license.purchaseDate = date;
+        if (change.kind === 'clear') d.license.receipt = null;
+        if (change.kind === 'attach') {
+          const name = change.path.split(/[\\/]/).pop();
+          d.license.receipt =
+            change.place === 'nextToFont'
+              ? `/fonts/.fontlibrary/receipts/${name}`
+              : `/app-data/receipts/${name}`;
+        }
+      }
+      changed(details.map((d) => d.face.id));
+    },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
     renderPreview: async (req) => {
@@ -1718,6 +1753,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     pickFolder: async () =>
       mockPickedFolders.length ? mockPickedFolders.shift()! : `/Users/demo/Added ${++picks}`,
+    pickFile: async () =>
+      mockPickedFiles.length
+        ? mockPickedFiles.shift()!
+        : `/Users/demo/Downloads/receipt-${++picks}.pdf`,
     getSettings: async () => ({ ...settings }),
     // The same ranges as `Settings::apply` in fm-api.
     updateSettings: async (req) => {

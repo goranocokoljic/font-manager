@@ -1,14 +1,15 @@
 <script setup lang="ts">
 // The Info tab: every field fm-api reports for the selected face, its health
 // and the activation button. Names and paths copy on click. Tags, favorite,
-// rating and the notes of the face and of its family are edited here; the API
-// stores them.
+// rating, the notes of the face and of its family, and the family's declared
+// license are edited here; the API stores them.
 import { computed, nextTick, ref, watch } from 'vue';
 import type { Conflict, Embedding, FontFormat, OpenLicense, OutcomeStatus } from '../api/types';
 import { useSelectionStore } from '../stores/selection';
 import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
+import InspectorLicense from './InspectorLicense.vue';
 
 const selection = useSelectionStore();
 const tags = useTagsStore();
@@ -303,6 +304,7 @@ function clashText(c: Conflict): string {
           <dt>Embedding (fsType)</dt>
           <dd>{{ embeddings[d.license.embedding] }}</dd>
         </dl>
+        <InspectorLicense />
       </section>
 
       <section aria-labelledby="fm-info-user">
