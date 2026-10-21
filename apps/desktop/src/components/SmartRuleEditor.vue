@@ -4,8 +4,10 @@
 // an "all of" or "any of" group, with one level of nested groups. The count is the
 // API's answer for the draft rule; Save sends the rule and shows fm-core's message
 // when it refuses one. Every control is a native one in tab order; Add and Remove
-// move focus to the row they made or to the next control, and Escape cancels.
-import { computed, nextTick, ref, watch } from 'vue';
+// move focus to the row they made or to the next control, and Escape cancels. Like
+// CompareSheet, the dialog keeps focus and plain keys to itself while it is open:
+// Tab cycles inside it, and the list's shortcuts behind it never see a key.
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { RuleOp } from '../api/types';
 import { useRuleEditorStore, type DraftGroup, type DraftItem } from '../stores/ruleEditor';
 import SmartRuleRow from './SmartRuleRow.vue';
@@ -59,9 +61,21 @@ function remove(item: DraftItem, after: string): void {
   void nextTick(() => panel.value?.querySelector<HTMLElement>(after)?.focus());
 }
 
+function listen(on: boolean): void {
+  if (on) {
+    window.addEventListener('keydown', onOutsideKey, true);
+    document.addEventListener('focusin', onFocusIn);
+  } else {
+    window.removeEventListener('keydown', onOutsideKey, true);
+    document.removeEventListener('focusin', onFocusIn);
+  }
+}
+onBeforeUnmount(() => listen(false));
+
 watch(
   () => editor.open,
   async (open) => {
+    listen(open);
     if (open) {
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       await nextTick();
@@ -76,11 +90,55 @@ watch(
   { immediate: true },
 );
 
+/** Tab cycles inside the dialog; Escape closes it; plain keys stay out of the list's shortcuts. */
 function onKeyDown(e: KeyboardEvent): void {
-  if (e.key !== 'Escape') return;
-  e.preventDefault();
-  e.stopPropagation();
-  editor.close();
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopPropagation();
+    editor.close();
+    return;
+  }
+  if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
+  if (e.key !== 'Tab' || !panel.value) return;
+  const stops = [
+    ...panel.value.querySelectorAll<HTMLElement>('input, select, button, [tabindex="0"]'),
+  ].filter((el) => !el.hasAttribute('disabled'));
+  const first = stops[0];
+  const last = stops[stops.length - 1];
+  if (!first || !last) return;
+  if (document.activeElement === panel.value) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus();
+  } else if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+/**
+ * A key whose target is outside the dialog (focus fell to the page) is handled as if
+ * it were in the dialog: the list's shortcuts behind it never see it.
+ */
+function onOutsideKey(e: KeyboardEvent): void {
+  if (!panel.value || (e.target instanceof Node && panel.value.contains(e.target))) return;
+  // The command palette may open over the editor; it owns its keys.
+  if (e.target instanceof Element && e.target.closest('[role="dialog"]')) return;
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    panel.value.focus();
+  }
+  onKeyDown(e);
+}
+
+/** Focus that moves to the page behind the dialog is taken back to it. */
+function onFocusIn(e: FocusEvent): void {
+  const t = e.target;
+  if (!panel.value || !(t instanceof Element) || panel.value.contains(t)) return;
+  if (t.closest('[role="dialog"]')) return;
+  panel.value.focus();
 }
 </script>
 
@@ -92,6 +150,7 @@ function onKeyDown(e: KeyboardEvent): void {
       role="dialog"
       aria-modal="true"
       aria-labelledby="fm-rules-title"
+      tabindex="-1"
       @keydown="onKeyDown"
     >
       <h2 id="fm-rules-title" class="title">{{ title }}</h2>
@@ -204,6 +263,9 @@ function onKeyDown(e: KeyboardEvent): void {
   background: var(--fm-bg);
   box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
   overflow: hidden;
+}
+.panel:focus {
+  outline: none;
 }
 .title {
   margin: 0;

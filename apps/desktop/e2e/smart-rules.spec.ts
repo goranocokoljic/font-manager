@@ -145,3 +145,32 @@ test('rule rows are added, filled and removed from the keyboard', async ({ page 
   await expect(dialog).toBeHidden();
   await expect(open).toBeFocused();
 });
+
+test('the rule editor keeps focus and plain keys to itself', async ({ page }) => {
+  await page.goto('/');
+  // A selected font: a stray `a` would activate it behind the dialog.
+  await list(page).getByRole('treeitem', { name: /Inter/ }).first().click();
+  await sidebar(page).getByRole('button', { name: 'New smart collection' }).click();
+  const dialog = editor(page);
+  const name = dialog.getByRole('textbox', { name: 'Name' });
+  const save = dialog.getByRole('button', { name: 'Save' });
+  await expect(name).toBeFocused();
+
+  // Tab from the last control comes back to the first, Shift+Tab the other way.
+  await save.focus();
+  await page.keyboard.press('Tab');
+  await expect(name).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(save).toBeFocused();
+
+  // Plain keys on a button stay in the dialog: no activation, no tagging panel.
+  await dialog.getByRole('button', { name: 'Add rule', exact: true }).focus();
+  await page.keyboard.press('a');
+  await page.keyboard.press('Shift+A');
+  await page.keyboard.press('t');
+  await expect(page.getByRole('dialog', { name: /^Tags of / })).toHaveCount(0);
+  await expect(page.getByText('0 fonts active')).toBeVisible();
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+});
