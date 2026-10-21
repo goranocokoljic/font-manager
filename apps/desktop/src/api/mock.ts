@@ -259,8 +259,8 @@ export const defaultSettings: FullSettings = {
   rescanIntervalMinutes: 60,
   reactivateOnLaunch: false,
   keepInTray: true,
-  // Not offered until E17.3 adds Linux (ADR 0011): the switch is hidden.
-  startAtLogin: null,
+  // Offered on Windows, macOS and Linux (ADR 0011), off until turned on.
+  startAtLogin: false,
 };
 
 /** The app folders of the Rust mock. */
@@ -596,10 +596,13 @@ export interface MockOptions {
   /** Saved comparisons (none by default); a face the mock lacks reopens as missing. */
   comparisons?: MockComparison[];
   /**
-   * "Start at login" as a system that offers it: `off` accepts changes, `refuse`
-   * refuses them as an OS policy would (not offered by default, as in the app).
+   * "Start at login": `off` (the default, as on Windows, macOS and Linux) accepts
+   * changes, `refuse` refuses them as an OS policy would, `unsupported` is a
+   * system without a login entry (a Flatpak sandbox), where the switch is hidden.
    */
-  startAtLogin?: 'off' | 'refuse';
+  startAtLogin?: 'off' | 'refuse' | 'unsupported';
+  /** The OS `getAppInfo` reports (`linux` by default). */
+  platform?: AppInfo['platform'];
 }
 
 /** A saved comparison as the mock keeps it: each face with its name when saved. */
@@ -1300,7 +1303,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   let picks = 0;
   let settings: FullSettings = {
     ...defaultSettings,
-    startAtLogin: options.startAtLogin ? false : null,
+    startAtLogin: options.startAtLogin === 'unsupported' ? null : false,
   };
   const emit = (event: Event) => handlers.forEach((h) => h(event));
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
@@ -1704,7 +1707,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   };
 
   return {
-    getAppInfo: async () => mockAppInfo,
+    getAppInfo: async () =>
+      options.platform ? { ...mockAppInfo, platform: options.platform } : mockAppInfo,
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
@@ -2378,6 +2382,12 @@ function countFromUrl(name: string, max: number): number {
   return Number.isInteger(n) && n > 0 ? Math.min(n, max) : 0;
 }
 
+function platformFromUrl(): AppInfo['platform'] | undefined {
+  if (typeof location === 'undefined') return undefined;
+  const p = new URLSearchParams(location.search).get('mockPlatform');
+  return p === 'windows' || p === 'macos' || p === 'linux' ? p : undefined;
+}
+
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
@@ -2390,6 +2400,10 @@ export const mockClient: FmClient = createMockClient({
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
   // `?mockCjk=1` gives face 1 a CJK-sized glyph map.
   cjkFaces: countFromUrl('mockCjk', 1) ? [1] : [],
-  // `?mockStartAtLogin=1` offers "Start at login"; `=2` offers it and refuses changes.
-  startAtLogin: (['off', 'refuse'] as const)[countFromUrl('mockStartAtLogin', 2) - 1],
+  // "Start at login" is offered; `?mockStartAtLogin=2` refuses changes, `=3` hides it.
+  startAtLogin: (['off', 'refuse', 'unsupported'] as const)[
+    countFromUrl('mockStartAtLogin', 3) - 1
+  ],
+  // `?mockPlatform=windows|macos|linux` sets the OS the app reports.
+  platform: platformFromUrl(),
 });

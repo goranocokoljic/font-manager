@@ -22,7 +22,7 @@ pub use activator::{
 };
 pub use autostart::{AUTOSTART_ARG, Autostart, MockAutostart};
 #[cfg(target_os = "linux")]
-pub use linux::LinuxActivator;
+pub use linux::{LinuxActivator, LinuxAutostart};
 #[cfg(target_os = "macos")]
 pub use macos::MacosAutostart;
 #[cfg(target_os = "macos")]

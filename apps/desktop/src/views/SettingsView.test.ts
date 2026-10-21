@@ -106,7 +106,9 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
-  it('hides "Start at login" where fm-api does not offer it (every OS until E17.3)', async () => {
+  it('hides "Start at login" where fm-api does not offer it (a Flatpak sandbox)', async () => {
+    client = createMockClient({ startAtLogin: 'unsupported' });
+    setClient(client);
     const { wrapper } = await mountAt('/settings?section=activation');
     expect((await client.getSettings()).startAtLogin).toBeNull();
     expect(wrapper.find('input[name="start-at-login"]').exists()).toBe(false);
@@ -114,9 +116,7 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
-  it('turns "Start at login" on and off where offered, off by default', async () => {
-    client = createMockClient({ startAtLogin: 'off' });
-    setClient(client);
+  it('turns "Start at login" on and off, offered and off by default', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
     const box = wrapper.get('input[name="start-at-login"]');
     expect(box.element.closest('label')!.textContent!.trim()).toBe('Start at login');

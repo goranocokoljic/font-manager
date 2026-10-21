@@ -164,5 +164,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E13.4 #112] apps/desktop/src/components/CollectionsSidebar.vue:256 — sidebar counts rely on `aria-label` on a plain `<span>` (generic role), which some screen readers do not announce; TagsSidebar.vue copies the pattern.
 - [E17.2 #127] apps/desktop/src/stores/settings.ts:51 — a failed `update` never re-reads the settings, so a value the server changed partly can show stale until the next `load`.
 - [E14.1 #114] crates/fm-api/src/mock.rs:973 — the Rust mock's weight and width filters match only a face's static class, while fm-core and the TS mock also accept a variable axis that reaches the range.
+- [E17.3 #128] apps/desktop/src-tauri/tests/tray_lifecycle.rs:187 — a test-only `#[cfg(target_os = "linux")]` lives outside `fm-platform` (pre-existing).
 - [E14.4 #117] apps/desktop/src/views/HomeView.vue:309 — the "Smart collections" placeholder group from #218 stays empty; smart collections show only as badged rows in the Collections tree.
 - [E14.4 #117] apps/desktop/src/components/FilterChips.vue:169 — the chips bar is capped at max-height 96px, so at 1,000×700 the save button and its inline error sit below the fold of that scroller.
+- [E17.3 #128] scripts/bench/lib.test.mjs:396 — the debug-build bench test on the macOS runner measured activation_100 at 1008 ms (budget 1000 ms; the release bench on main measures 763 ms), so it fails on runner noise with no code change (CI run 39643524037).

@@ -101,8 +101,9 @@ pub fn deactivate_session(api: &dyn ActivationService) -> ApiResult<Vec<Activati
 
 /// What works differently on `os`, one sentence each, for Settings → About →
 /// Platform notes. `tray` is what the shell found when it made the tray item;
-/// `None` before it tried (or without a shell, as in the CLI).
-pub fn platform_notes(os: Os, tray: Option<&TraySupport>) -> Vec<String> {
+/// `None` before it tried (or without a shell, as in the CLI). `sandboxed`:
+/// the app runs in a Flatpak, where it offers no start at login.
+pub fn platform_notes(os: Os, tray: Option<&TraySupport>, sandboxed: bool) -> Vec<String> {
     let mut notes = Vec::new();
     if let Some(TraySupport::Unavailable(_)) = tray {
         notes.push(match os {
@@ -121,6 +122,12 @@ pub fn platform_notes(os: Os, tray: Option<&TraySupport>) -> Vec<String> {
         notes.push(
             "Apps that are already running can take up to 30 seconds to see a font you \
              activate; some see it only after a restart."
+                .to_owned(),
+        );
+    }
+    if sandboxed {
+        notes.push(
+            "Inside the Flatpak sandbox Font Manager cannot add itself to the apps that              start when you log in, so Start at login is not shown. Add Font Manager in              your desktop's startup settings instead."
                 .to_owned(),
         );
     }
@@ -289,15 +296,33 @@ mod tests {
     #[test]
     fn platform_notes_say_when_closing_quits() {
         let none = TraySupport::Unavailable("no host".into());
-        let linux = platform_notes(Os::Linux, Some(&none));
+        let linux = platform_notes(Os::Linux, Some(&none), false);
         assert!(linux[0].contains("no StatusNotifier host"), "{linux:?}");
         assert!(linux[0].contains("closing the window quits"), "{linux:?}");
         // With a tray, Linux keeps only the running-apps note (ADR 0008).
-        let with_tray = platform_notes(Os::Linux, Some(&TraySupport::Available));
+        let with_tray = platform_notes(Os::Linux, Some(&TraySupport::Available), false);
         assert_eq!(with_tray.len(), 1);
         assert!(with_tray[0].contains("30 seconds"));
-        assert!(platform_notes(Os::Windows, Some(&TraySupport::Available)).is_empty());
-        assert!(platform_notes(Os::MacOs, None).is_empty());
-        assert!(platform_notes(Os::Windows, Some(&none))[0].contains("closing the window quits"));
+        assert!(platform_notes(Os::Windows, Some(&TraySupport::Available), false).is_empty());
+        assert!(platform_notes(Os::MacOs, None, false).is_empty());
+        assert!(
+            platform_notes(Os::Windows, Some(&none), false)[0].contains("closing the window quits")
+        );
+    }
+
+    #[test]
+    fn platform_notes_say_why_start_at_login_is_missing_in_a_flatpak() {
+        let notes = platform_notes(Os::Linux, Some(&TraySupport::Available), true);
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(notes[1].contains("Flatpak sandbox"), "{notes:?}");
+        assert!(
+            notes[1].contains("Start at login is not shown"),
+            "{notes:?}"
+        );
+        let plain = platform_notes(Os::Linux, Some(&TraySupport::Available), false);
+        assert!(
+            !plain.iter().any(|n| n.contains("Start at login")),
+            "{plain:?}"
+        );
     }
 }

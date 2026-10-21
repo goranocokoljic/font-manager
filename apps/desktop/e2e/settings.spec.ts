@@ -155,8 +155,19 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
   );
 });
 
-test('"Start at login" stays hidden while fm-api does not offer it', async ({ page }) => {
-  await page.goto('/#/settings?section=activation');
+test('"Start at login" is visible on Windows, macOS and Linux alike', async ({ page }) => {
+  for (const platform of ['windows', 'macos', 'linux']) {
+    await page.goto(`/?mockPlatform=${platform}#/`);
+    await expect(page.getByTestId('app-info')).toContainText(`Platform${platform}`);
+    await page.keyboard.press('ControlOrMeta+,');
+    await tab(page, 'Activation').click();
+    await expect(page.getByRole('checkbox', { name: 'Start at login' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Start at login' })).not.toBeChecked();
+  }
+});
+
+test('"Start at login" stays hidden where fm-api does not offer it (Flatpak)', async ({ page }) => {
+  await page.goto('/?mockStartAtLogin=3#/settings?section=activation');
   await expect(
     page.getByRole('checkbox', { name: 'Keep running in the tray when the window is closed' }),
   ).toBeVisible();
@@ -166,7 +177,7 @@ test('"Start at login" stays hidden while fm-api does not offer it', async ({ pa
 test('"Start at login" is a labelled switch the keyboard reaches and turns on', async ({
   page,
 }) => {
-  await page.goto('/?mockStartAtLogin=1#/settings?section=activation');
+  await page.goto('/#/settings?section=activation');
   const tray = page.getByRole('checkbox', {
     name: 'Keep running in the tray when the window is closed',
   });
