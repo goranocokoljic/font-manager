@@ -10,6 +10,7 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Classification,
   type CssValues,
   type CssValuesRequest,
   type Clash,
@@ -894,6 +895,25 @@ export function mockWebUse(l: LicenseInfo): WebUse {
 }
 
 /**
+ * The class of a face's family, like the Rust mock's families: Inter and Legacy
+ * Grotesk are sans serif, JetBrains Mono is monospace; an extra family takes the
+ * class of the sample face it copies.
+ */
+export function mockClassification(d: FaceDetail): Classification {
+  const family = d.face.family;
+  const model = family >= EXTRA_ID_BASE ? ((family - EXTRA_ID_BASE) % 2 === 0 ? 1 : 3) : family;
+  return model === 3 ? 'mono' : 'sans';
+}
+
+/** True when `d` reaches every weight from `min` to `max` (a variable face by its `wght` axis). */
+function reachesWeight(d: FaceDetail, min: number, max: number): boolean {
+  const axis = d.axes.find((a) => a.tag === 'wght');
+  const lo = axis?.min ?? d.face.weight;
+  const hi = axis?.max ?? d.face.weight;
+  return lo <= max && hi >= min;
+}
+
+/**
  * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
  * `tags` are the ids of its tags; `activated`: it was ever activated (the mock's clock
  * is fixed, so that is within any `activatedWithinDays` window).
@@ -912,6 +932,10 @@ function passes(
   };
   const supports = q.supports;
   return (
+    (!q.classification?.length || q.classification.includes(mockClassification(d))) &&
+    (q.weight == null || reachesWeight(d, q.weight.min, q.weight.max)) &&
+    (q.width == null || (f.width >= q.width.min && f.width <= q.width.max)) &&
+    (q.foundry == null || q.foundry === d.foundry) &&
     (q.slant == null || q.slant === f.slant) &&
     (q.variable == null || q.variable === f.isVariable) &&
     (q.color == null || !q.color) &&
@@ -1387,14 +1411,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     return trimmed;
   };
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
-  const hits = (query: string, q: Filters): FamilyHit[] => {
+  const hits = (query: string, q: Filters, rule?: RuleGroup | null): FamilyHit[] => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     const out: FamilyHit[] = [];
     for (const [family, details] of byFamily) {
       const matching = details.filter((d) => {
         const hay =
           `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
-        return words.every((w) => hay.includes(w)) && matches(d, q, []);
+        return (
+          words.every((w) => hay.includes(w)) &&
+          matches(d, q, []) &&
+          (!rule || passesGroup(d, rule, []))
+        );
       });
       if (!matching.length) continue;
       const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
@@ -1413,48 +1441,93 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     q: Filters,
     values: T[],
     pick: (f: Filters, v: T) => Filters,
+    rule?: RuleGroup | null,
   ): FilterCount<T>[] =>
     values
-      .map((value) => ({ value, count: hits(query, pick(q, value)).length }))
+      .map((value) => ({ value, count: hits(query, pick(q, value), rule).length }))
       .filter((c) => c.count > 0);
   const distinct = <T>(list: T[]) => [...new Set(list)];
   const both = [true, false];
-  const counts = (query: string, q: Filters): FilterCounts => ({
-    slant: countEach(query, q, distinct(faces.map((d) => d.face.slant)), (f, slant) => ({
-      ...f,
-      slant,
-    })),
-    variable: countEach(query, q, both, (f, variable) => ({ ...f, variable })),
-    color: countEach(query, q, both, (f, color) => ({ ...f, color })),
-    formats: countEach(query, q, distinct(faces.map((d) => d.face.format)), (f, v) => ({
-      ...f,
-      formats: [v],
-    })),
+  const counts = (query: string, q: Filters, rule?: RuleGroup | null): FilterCounts => ({
+    classification: countEach(
+      query,
+      q,
+      distinct(faces.map(mockClassification)),
+      (f, v) => ({ ...f, classification: [v] }),
+      rule,
+    ),
+    weight: countEach(
+      query,
+      q,
+      [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      (f, v) => ({ ...f, weight: { min: v - 50, max: v + 49 } }),
+      rule,
+    ),
+    width: countEach(
+      query,
+      q,
+      [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      (f, v) => ({ ...f, width: { min: v, max: v } }),
+      rule,
+    ),
+    license: countEach(
+      query,
+      q,
+      distinct(faces.flatMap((d) => (d.license.declared ? [d.license.declared] : []))),
+      (f, license) => ({ ...f, license }),
+      rule,
+    ),
+    foundry: countEach(
+      query,
+      q,
+      distinct(faces.flatMap((d) => (d.foundry ? [d.foundry] : []))).sort(),
+      (f, foundry) => ({ ...f, foundry }),
+      rule,
+    ),
+    slant: countEach(
+      query,
+      q,
+      distinct(faces.map((d) => d.face.slant)),
+      (f, slant) => ({ ...f, slant }),
+      rule,
+    ),
+    variable: countEach(query, q, both, (f, variable) => ({ ...f, variable }), rule),
+    color: countEach(query, q, both, (f, color) => ({ ...f, color }), rule),
+    formats: countEach(
+      query,
+      q,
+      distinct(faces.map((d) => d.face.format)),
+      (f, v) => ({ ...f, formats: [v] }),
+      rule,
+    ),
     features: countEach(
       query,
       q,
       distinct(faces.flatMap((d) => d.features.map((x) => x.tag))).sort(),
       (f, v) => ({ ...f, features: distinct([...(f.features ?? []), v]) }),
+      rule,
     ),
-    sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] })),
-    problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
-    active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
+    sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] }), rule),
+    problems: countEach(query, q, both, (f, problems) => ({ ...f, problems }), rule),
+    active: countEach(query, q, both, (f, v) => ({ ...f, active: v }), rule),
     tags: countEach(
       query,
       q,
       tags.map((t) => t.id),
       (f, v) => ({ ...f, tags: distinct([...(f.tags ?? []), v]) }),
+      rule,
     ),
-    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
-    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
+    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite }), rule),
+    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating }), rule),
     embedding: countEach(
       query,
       q,
       distinct(faces.map((d) => d.license.embedding)),
       (f, embedding) => ({ ...f, embedding }),
+      rule,
     ),
-    openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense })),
-    webOk: countEach(query, q, both, (f, webOk) => ({ ...f, webOk })),
+    openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense }), rule),
+    webOk: countEach(query, q, both, (f, webOk) => ({ ...f, webOk }), rule),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
@@ -1484,6 +1557,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           ? [r.filters.collection]
           : [],
     );
+  // Refuses a rule as fm-core does (E14.1): an empty group at any depth, or a
+  // weight or width range whose minimum is above its maximum.
+  const checkShape = (g: RuleGroup): void => {
+    if (!g.rules?.length)
+      throw invalid("Every group of a smart collection's rules needs at least one rule.");
+    for (const r of g.rules) {
+      if (r.kind === 'group') checkShape(r.group);
+      else if (r.filters.weight && r.filters.weight.min > r.filters.weight.max)
+        throw invalid('The lowest weight of a rule is above its highest.');
+      else if (r.filters.width && r.filters.width.min > r.filters.width.max)
+        throw invalid('The narrowest width of a rule is above its widest.');
+    }
+  };
   const loop = (c: Collection) =>
     invalid(`The rules of "${c.name}" include the collection itself.`);
   const inCollection = (d: FaceDetail, id: CollectionId, path: CollectionId[]): boolean => {
@@ -1655,13 +1741,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     search: async (req) => {
       const query = req.query ?? '';
       const filters = req.filters ?? {};
-      const all = hits(query, filters);
+      const rule = req.rule ?? null;
+      const all = hits(query, filters, rule);
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
       return {
         families: all.slice(offset, offset + limit),
         total: all.length,
-        counts: counts(query, filters),
+        counts: counts(query, filters, rule),
       } satisfies SearchResponse;
     },
     checkCoverage: async (req) => {
@@ -1686,6 +1773,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const group: RuleGroup | null =
         req.ruleGroup ??
         (req.rules ? { op: 'and', rules: [{ kind: 'filters', filters: req.rules }] } : null);
+      if (group) checkShape(group);
       const id = ++nextId;
       for (const ref of group ? refsOf(group) : []) if (ref !== id) findCollection(ref);
       const only = group?.op === 'and' && group.rules?.length === 1 ? group.rules[0] : null;
@@ -1707,6 +1795,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return viewOf(c);
     },
     listCollections: async () => walk(null),
+    updateCollectionRules: async (req) => {
+      checkShape(req.ruleGroup);
+      const c = findCollection(req.collection);
+      if (!ruleOf(c))
+        throw invalid('A manual collection has no rules; make a smart collection instead.');
+      for (const ref of refsOf(req.ruleGroup)) if (ref !== c.id) findCollection(ref);
+      const before = { rules: c.rules, ruleGroup: c.ruleGroup };
+      const only = req.ruleGroup.op === 'and' && req.ruleGroup.rules?.length === 1;
+      const first = only ? req.ruleGroup.rules![0] : null;
+      c.ruleGroup = structuredClone(req.ruleGroup);
+      c.rules = first?.kind === 'filters' ? structuredClone(first.filters) : {};
+      try {
+        checkLoops(c.id, []);
+      } catch (e) {
+        Object.assign(c, before);
+        throw e;
+      }
+      return viewOf(c);
+    },
     renameCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');

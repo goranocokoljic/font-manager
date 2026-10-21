@@ -45,7 +45,7 @@ use crate::organization::{
     PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest, ReceiptChange,
     ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SelectionTag, SelectionTags,
     SelectionTagsRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
@@ -124,6 +124,34 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
         (_, _, None) => (false, "No web license declared".to_owned()),
     };
     WebUse { ok, reason }
+}
+
+/// Refuses a rule as fm-core does (E14.1): a group with no rules, at any
+/// depth, or a weight or width range whose minimum is above its maximum.
+fn check_rule_shape(group: &RuleGroup) -> ApiResult<()> {
+    if group.rules.is_empty() {
+        return Err(ApiError::invalid(
+            "Every group of a smart collection's rules needs at least one rule.",
+        ));
+    }
+    for rule in &group.rules {
+        match rule {
+            Rule::Filters { filters } => {
+                if filters.weight.is_some_and(|w| w.min > w.max) {
+                    return Err(ApiError::invalid(
+                        "The lowest weight of a rule is above its highest.",
+                    ));
+                }
+                if filters.width.is_some_and(|w| w.min > w.max) {
+                    return Err(ApiError::invalid(
+                        "The narrowest width of a rule is above its widest.",
+                    ));
+                }
+            }
+            Rule::Group { group } => check_rule_shape(group)?,
+        }
+    }
+    Ok(())
 }
 
 fn self_reference(c: &Collection) -> ApiError {
@@ -1592,7 +1620,12 @@ impl LibraryService for MockApi {
 
 impl State {
     /// The family groups a search returns, best first.
-    fn hits(&self, words: &[String], filters: &Filters) -> ApiResult<Vec<FamilyHit>> {
+    fn hits(
+        &self,
+        words: &[String],
+        filters: &Filters,
+        rule: Option<&RuleGroup>,
+    ) -> ApiResult<Vec<FamilyHit>> {
         let mut hits: Vec<FamilyHit> = Vec::new();
         for fam in &self.families {
             let mut faces = Vec::new();
@@ -1605,6 +1638,12 @@ impl State {
                 )
                 .to_lowercase();
                 if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, &[])? {
+                    continue;
+                }
+                // A draft rule (E14.1) applies as a smart collection's does.
+                if let Some(rule) = rule
+                    && !self.passes_group(f, rule, &[])?
+                {
                     continue;
                 }
                 if let Some(target) = &filters.supports {
@@ -1652,6 +1691,7 @@ impl State {
         &self,
         words: &[String],
         filters: &Filters,
+        rule: Option<&RuleGroup>,
         values: Vec<T>,
         pick: impl Fn(&mut Filters, &T),
     ) -> ApiResult<Vec<FilterCount<T>>> {
@@ -1659,7 +1699,7 @@ impl State {
         for value in values {
             let mut f = filters.clone();
             pick(&mut f, &value);
-            let count = self.hits(words, &f)?.len() as u32;
+            let count = self.hits(words, &f, rule)?.len() as u32;
             if count > 0 {
                 out.push(FilterCount { value, count });
             }
@@ -1668,7 +1708,12 @@ impl State {
     }
 
     /// Result counts per filter value, over the values the sample has.
-    fn counts(&self, words: &[String], q: &Filters) -> ApiResult<FilterCounts> {
+    fn counts(
+        &self,
+        words: &[String],
+        q: &Filters,
+        rule: Option<&RuleGroup>,
+    ) -> ApiResult<FilterCounts> {
         fn distinct<T: PartialEq>(items: impl Iterator<Item = T>) -> Vec<T> {
             let mut out = Vec::new();
             for x in items {
@@ -1685,34 +1730,45 @@ impl State {
         tags.sort();
         let mut sources = distinct(faces().map(|f| f.source));
         sources.sort_by_key(|s| s.0);
+        let mut foundries: Vec<String> =
+            distinct(self.families.iter().map(|f| f.foundry.to_owned()));
+        foundries.sort();
         let both = || vec![true, false];
         Ok(FilterCounts {
             classification: self
-                .count_each(words, q, classes, |f, v| f.classification = vec![*v])?,
-            weight: self.count_each(words, q, (1..=9).map(|h| h * 100).collect(), |f, v| {
-                f.weight = Some(WeightRange {
-                    min: v - 50,
-                    max: v + 49,
-                });
-            })?,
-            width: self.count_each(words, q, (1..=9).collect(), |f, v| {
+                .count_each(words, q, rule, classes, |f, v| f.classification = vec![*v])?,
+            weight: self.count_each(
+                words,
+                q,
+                rule,
+                (1..=9).map(|h| h * 100).collect(),
+                |f, v| {
+                    f.weight = Some(WeightRange {
+                        min: v - 50,
+                        max: v + 49,
+                    });
+                },
+            )?,
+            width: self.count_each(words, q, rule, (1..=9).collect(), |f, v| {
                 f.width = Some(WidthRange { min: *v, max: *v });
             })?,
             slant: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().map(|f| f.detail.face.slant)),
                 |f, v| f.slant = Some(*v),
             )?,
-            variable: self.count_each(words, q, both(), |f, v| f.variable = Some(*v))?,
-            color: self.count_each(words, q, both(), |f, v| f.color = Some(*v))?,
+            variable: self.count_each(words, q, rule, both(), |f, v| f.variable = Some(*v))?,
+            color: self.count_each(words, q, rule, both(), |f, v| f.color = Some(*v))?,
             formats: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().map(|f| f.detail.face.format)),
                 |f, v| f.formats = vec![*v],
             )?,
-            features: self.count_each(words, q, tags, |f, v| {
+            features: self.count_each(words, q, rule, tags, |f, v| {
                 if !f.features.contains(v) {
                     f.features.push(v.clone());
                 }
@@ -1720,15 +1776,17 @@ impl State {
             license: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().filter_map(|f| f.detail.license.declared)),
                 |f, v| f.license = Some(*v),
             )?,
-            sources: self.count_each(words, q, sources, |f, v| f.sources = vec![*v])?,
-            problems: self.count_each(words, q, both(), |f, v| f.problems = Some(*v))?,
-            active: self.count_each(words, q, both(), |f, v| f.active = Some(*v))?,
+            sources: self.count_each(words, q, rule, sources, |f, v| f.sources = vec![*v])?,
+            problems: self.count_each(words, q, rule, both(), |f, v| f.problems = Some(*v))?,
+            active: self.count_each(words, q, rule, both(), |f, v| f.active = Some(*v))?,
             tags: self.count_each(
                 words,
                 q,
+                rule,
                 self.tags.iter().map(|t| t.id).collect(),
                 |f, v| {
                     if !f.tags.contains(v) {
@@ -1736,18 +1794,23 @@ impl State {
                     }
                 },
             )?,
-            favorite: self.count_each(words, q, both(), |f, v| f.favorite = Some(*v))?,
-            min_rating: self.count_each(words, q, (1..=5).collect(), |f, v| {
+            favorite: self.count_each(words, q, rule, both(), |f, v| f.favorite = Some(*v))?,
+            min_rating: self.count_each(words, q, rule, (1..=5).collect(), |f, v| {
                 f.min_rating = Some(*v);
             })?,
             embedding: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().map(|f| f.detail.license.embedding)),
                 |f, v| f.embedding = Some(*v),
             )?,
-            open_license: self.count_each(words, q, both(), |f, v| f.open_license = Some(*v))?,
-            web_ok: self.count_each(words, q, both(), |f, v| f.web_ok = Some(*v))?,
+            open_license: self
+                .count_each(words, q, rule, both(), |f, v| f.open_license = Some(*v))?,
+            web_ok: self.count_each(words, q, rule, both(), |f, v| f.web_ok = Some(*v))?,
+            foundry: self.count_each(words, q, rule, foundries, |f, v| {
+                f.foundry = Some(v.clone());
+            })?,
         })
     }
 }
@@ -1760,8 +1823,8 @@ impl SearchService for MockApi {
             .split_whitespace()
             .map(str::to_lowercase)
             .collect();
-        let hits = st.hits(&words, &req.filters)?;
-        let counts = st.counts(&words, &req.filters)?;
+        let hits = st.hits(&words, &req.filters, req.rule.as_ref())?;
+        let counts = st.counts(&words, &req.filters, req.rule.as_ref())?;
         let page = State::page(&hits, req.page.offset, req.page.limit);
         Ok(SearchResponse {
             families: page.items,
@@ -2227,6 +2290,9 @@ impl OrganizationService for MockApi {
             }
             (rules, group) => group.or_else(|| rules.map(RuleGroup::from)),
         };
+        if let Some(group) = &group {
+            check_rule_shape(group)?;
+        }
         let id = CollectionId(st.next());
         if let Some(group) = &group {
             st.check_rule(id, group)?;
@@ -2242,6 +2308,26 @@ impl OrganizationService for MockApi {
             face_count: 0,
         };
         st.collections.push(c.clone());
+        Ok(st.collection_view(&c))
+    }
+
+    fn update_collection_rules(&self, req: UpdateCollectionRulesRequest) -> ApiResult<Collection> {
+        check_rule_shape(&req.rule_group)?;
+        let mut st = self.state();
+        if st.collection(req.collection)?.rule_group.is_none() {
+            return Err(ApiError::invalid(
+                "A manual collection has no rules; make a smart collection instead.",
+            ));
+        }
+        st.check_rule(req.collection, &req.rule_group)?;
+        let c = st
+            .collections
+            .iter_mut()
+            .find(|c| c.id == req.collection)
+            .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
+        c.rules = Some(req.rule_group.plain_filters().cloned().unwrap_or_default());
+        c.rule_group = Some(req.rule_group);
+        let c = c.clone();
         Ok(st.collection_view(&c))
     }
 

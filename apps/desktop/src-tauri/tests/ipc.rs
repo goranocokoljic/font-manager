@@ -855,3 +855,40 @@ fn the_help_menu_lists_every_docs_page_first_and_opens_it() {
             .ends_with("/help/keyboard-shortcuts.html")
     );
 }
+
+#[test]
+fn smart_rules_are_updated_and_refused_over_ipc() {
+    let (_app, webview) = app().unwrap();
+    let made: Collection = send(
+        &webview,
+        "create_collection",
+        serde_json::json!({ "req": { "name": "Italic", "rules": { "slant": "italic" } } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    let rule = serde_json::json!({
+        "op": "or",
+        "rules": [{ "kind": "filters", "filters": { "variable": true } }]
+    });
+    let updated: Collection = send(
+        &webview,
+        "update_collection_rules",
+        serde_json::json!({ "req": { "collection": made.id, "ruleGroup": rule } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(updated.rules.and_then(|r| r.variable), None);
+    assert!(updated.rule_group.is_some());
+    let err = send(
+        &webview,
+        "update_collection_rules",
+        serde_json::json!({ "req": { "collection": made.id, "ruleGroup": { "op": "and" } } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+}

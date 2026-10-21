@@ -22,6 +22,7 @@ import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
+import SmartRuleEditor from '../components/SmartRuleEditor.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
@@ -432,6 +433,7 @@ const groups = ['Smart collections', 'Online catalogs'];
       </template>
       <CompareSheet v-if="compare.open" />
       <TaggingPanel />
+      <SmartRuleEditor />
     </template>
 
     <template #inspector>

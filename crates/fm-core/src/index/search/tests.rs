@@ -1915,3 +1915,47 @@ fn web_ok_filters_counts_and_explains_each_face() {
         ))
     );
 }
+
+/// E14.1 criterion 3: the counts list every foundry, A to Z, counted
+/// without the foundry already chosen (the rule editor's foundry choices).
+#[test]
+fn foundry_counts_list_each_foundry_a_to_z() {
+    let (index, _, _) = filter_library();
+    let counts = filtered(&index, "", Filters::default())
+        .counts
+        .expect("counts")
+        .foundry;
+    let linotype = counts
+        .iter()
+        .find(|c| c.value == "Linotype")
+        .expect("Linotype counted");
+    assert_eq!(linotype.count, 1);
+    let mut sorted = counts.clone();
+    sorted.sort_by(|a, b| a.value.cmp(&b.value));
+    assert_eq!(counts, sorted);
+    let chosen = filtered(
+        &index,
+        "",
+        Filters {
+            foundry: Some("Linotype".into()),
+            ..Filters::default()
+        },
+    );
+    assert_eq!(chosen.counts.expect("counts").foundry, counts);
+    let narrowed = filtered(
+        &index,
+        "",
+        Filters {
+            favorite: Some(true),
+            ..Filters::default()
+        },
+    );
+    let only: Vec<_> = narrowed
+        .counts
+        .expect("counts")
+        .foundry
+        .into_iter()
+        .map(|c| (c.value, c.count))
+        .collect();
+    assert_eq!(only, [("Linotype".to_owned(), 1)]);
+}

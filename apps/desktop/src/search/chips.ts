@@ -76,7 +76,7 @@ const KIND: Record<ChipFacet, Kind> = {
   minRating: 'one',
 };
 
-const CLASSES: Record<Classification, string> = {
+export const CLASSES: Record<Classification, string> = {
   serif: 'Serif',
   sans: 'Sans serif',
   slab: 'Slab serif',
@@ -85,8 +85,12 @@ const CLASSES: Record<Classification, string> = {
   mono: 'Monospace',
   symbol: 'Symbol',
 };
-const SLANTS: Record<Slant, string> = { upright: 'Upright', italic: 'Italic', oblique: 'Oblique' };
-const FORMATS: Record<FontFormat, string> = {
+export const SLANTS: Record<Slant, string> = {
+  upright: 'Upright',
+  italic: 'Italic',
+  oblique: 'Oblique',
+};
+export const FORMATS: Record<FontFormat, string> = {
   ttf: 'TTF',
   otf: 'OTF',
   ttc: 'TTC',
@@ -97,7 +101,7 @@ const FORMATS: Record<FontFormat, string> = {
   dfont: 'dfont',
   bitmap: 'Bitmap',
 };
-const LICENSES: Record<LicenseType, string> = {
+export const LICENSES: Record<LicenseType, string> = {
   desktop: 'Desktop',
   web: 'Web',
   app: 'App',

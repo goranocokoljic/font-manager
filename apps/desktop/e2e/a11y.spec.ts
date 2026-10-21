@@ -270,3 +270,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(ratio).toBeGreaterThanOrEqual(4.5);
   });
 }
+
+test('every control of the smart-collection rule editor has a name', async ({ page }) => {
+  await open(page);
+  await page.getByRole('button', { name: 'New smart collection' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New smart collection' });
+  await dialog.getByRole('button', { name: 'Add group' }).click();
+  await dialog
+    .getByRole('combobox', { name: 'Group 1, rule 1: what it tests' })
+    .selectOption({ label: 'Weight' });
+  await dialog.getByRole('button', { name: 'Add rule', exact: true }).click();
+  await dialog
+    .getByRole('combobox', { name: 'Rule 2: what it tests', exact: true })
+    .selectOption({ label: 'Supports text' });
+  await expect(dialog.getByRole('textbox', { name: 'Rule 2: text' })).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
