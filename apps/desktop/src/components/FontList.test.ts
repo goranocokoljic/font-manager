@@ -71,7 +71,9 @@ async function scrollTo(list: VueWrapper, top: number) {
 }
 
 describe('FontList virtualization', () => {
-  it('renders only the rows on screen for 10,000 families', async () => {
+  // Building and searching a 10,000-family mock takes seconds under a loaded
+  // parallel run; the test is about the DOM row count, not speed.
+  it('renders only the rows on screen for 10,000 families', { timeout: 30_000 }, async () => {
     const list = await listOf({ extraFaces: 9997 }, { rowHeight: 50, overscan: 2 });
     const rows = items(list);
     // 600 px fallback viewport: 12 rows, +1 partly visible, +2 overscan each side.
@@ -128,6 +130,18 @@ describe('FontList virtualization', () => {
 });
 
 describe('FontList families and styles', () => {
+  it('a family whose font states an open license shows the "Open license" badge', async () => {
+    const list = await listOf({});
+    const row = (name: string) =>
+      items(list).find((r) => r.attributes('aria-label')?.startsWith(`${name},`))!;
+    const badge = row('Inter').get('[data-testid="open-license"]');
+    expect(badge.text()).toBe('Open license');
+    expect(badge.classes()).toContain('open-license');
+    expect(badge.attributes('title')).toBe('SIL Open Font License');
+    expect(row('Legacy Grotesk').find('[data-testid="open-license"]').exists()).toBe(false);
+    list.unmount();
+  });
+
   it('a family row previews its first style and says how many it has', async () => {
     const list = await listOf({ extraFaces: 1, stylesPerFamily: 4 });
     const row = list.get(`[data-key="family:${EXTRA_ID_BASE}"]`);

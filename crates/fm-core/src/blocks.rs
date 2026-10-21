@@ -4,7 +4,9 @@
 //! records the Unicode version it comes from. It is embedded at build time, so
 //! the glyph map needs no file access and no network. [`load`] parses it and
 //! checks every rule of `blocks.schema.json` plus the ones a schema cannot
-//! say: blocks sorted, not overlapping, `first` ≤ `last`, names unique.
+//! say: blocks sorted, not overlapping, `first` ≤ `last`, names unique, and
+//! `assigned` (from `DerivedGeneralCategory.txt`, see
+//! `scripts/unicode-blocks-assigned.mjs`) at most the block's size.
 
 use std::sync::LazyLock;
 
@@ -27,6 +29,8 @@ pub struct Block {
     pub first: u32,
     /// Its last code point.
     pub last: u32,
+    /// Its assigned code points: those whose General_Category is not `Cn`.
+    pub assigned: u32,
 }
 
 /// The block table.
@@ -61,6 +65,7 @@ struct RawFile {
 struct RawBlock {
     first: String,
     last: String,
+    assigned: u32,
     name: String,
 }
 
@@ -96,6 +101,12 @@ fn parse(json: &str) -> FmResult<BlockTable> {
         if first > last {
             return Err(damaged(&format!("{}: first is after last", b.name)));
         }
+        if b.assigned > last - first + 1 {
+            return Err(damaged(&format!(
+                "{}: assigned is more than the block holds",
+                b.name
+            )));
+        }
         if let Some(prev) = blocks.last()
             && prev.last >= first
         {
@@ -111,6 +122,7 @@ fn parse(json: &str) -> FmResult<BlockTable> {
             name: b.name,
             first,
             last,
+            assigned: b.assigned,
         });
     }
     Ok(BlockTable {
@@ -198,6 +210,16 @@ mod tests {
         // Between Hangul Jamo Extended-B and the surrogates there is a block;
         // past the BMP's planes 4–13 there is none.
         assert_eq!(name(0x5_0000), None);
+        let assigned = |cp| table.find(cp).map(|b| b.assigned);
+        assert_eq!(assigned(0x41), Some(128));
+        assert_eq!(assigned(0x416), Some(256));
+        // Greek and Coptic has holes (U+0378, U+0379, …).
+        assert_eq!(assigned(0x3B1), Some(135));
+        let total: u64 = table.blocks.iter().map(|b| u64::from(b.assigned)).sum();
+        // Unicode 17.0: 159,801 graphic and format characters, 65 controls,
+        // 2,048 surrogates and 137,468 private-use code points; every
+        // assigned code point is in a block.
+        assert_eq!(total, 159_801 + 65 + 2_048 + 137_468);
     }
 
     #[test]
@@ -216,35 +238,57 @@ mod tests {
         assert_eq!(schema["properties"]["$schema"]["const"], SCHEMA_REF);
         assert_eq!(schema["additionalProperties"], false);
         let block = &schema["$defs"]["block"];
-        assert_eq!(keys(&block["properties"]), ["first", "last", "name"]);
+        assert_eq!(
+            keys(&block["properties"]),
+            ["assigned", "first", "last", "name"]
+        );
         assert_eq!(block["additionalProperties"], false);
         assert_eq!(schema["$defs"]["codePoint"]["pattern"], "^[0-9A-F]{4,6}$");
         // The pattern the schema gives is the one the loader applies.
-        assert!(parse(&file(r#"{"first": "0000", "last": "007F", "name": "A"}"#)).is_ok());
-        assert!(parse(&file(r#"{"first": "000", "last": "007F", "name": "A"}"#)).is_err());
-        assert!(parse(&file(r#"{"first": "0000", "last": "007f", "name": "A"}"#)).is_err());
+        assert!(
+            parse(&file(
+                r#"{"first": "0000", "last": "007F", "assigned": 1, "name": "A"}"#
+            ))
+            .is_ok()
+        );
+        assert!(
+            parse(&file(
+                r#"{"first": "000", "last": "007F", "assigned": 1, "name": "A"}"#
+            ))
+            .is_err()
+        );
+        assert!(
+            parse(&file(
+                r#"{"first": "0000", "last": "007f", "assigned": 1, "name": "A"}"#
+            ))
+            .is_err()
+        );
     }
 
     #[test]
     fn broken_tables_are_rejected() {
         let bad = [
             // overlapping
-            r#"{"first": "0000", "last": "007F", "name": "A"},
-               {"first": "0070", "last": "00FF", "name": "B"}"#,
+            r#"{"first": "0000", "last": "007F", "assigned": 1, "name": "A"},
+               {"first": "0070", "last": "00FF", "assigned": 1, "name": "B"}"#,
             // out of order
-            r#"{"first": "0080", "last": "00FF", "name": "A"},
-               {"first": "0000", "last": "007F", "name": "B"}"#,
+            r#"{"first": "0080", "last": "00FF", "assigned": 1, "name": "A"},
+               {"first": "0000", "last": "007F", "assigned": 1, "name": "B"}"#,
             // first after last
-            r#"{"first": "00FF", "last": "0080", "name": "A"}"#,
+            r#"{"first": "00FF", "last": "0080", "assigned": 1, "name": "A"}"#,
             // name twice
-            r#"{"first": "0000", "last": "007F", "name": "A"},
-               {"first": "0080", "last": "00FF", "name": "A"}"#,
+            r#"{"first": "0000", "last": "007F", "assigned": 1, "name": "A"},
+               {"first": "0080", "last": "00FF", "assigned": 1, "name": "A"}"#,
             // empty name
-            r#"{"first": "0000", "last": "007F", "name": " "}"#,
+            r#"{"first": "0000", "last": "007F", "assigned": 1, "name": " "}"#,
             // past the last code point
-            r#"{"first": "110000", "last": "110001", "name": "A"}"#,
+            r#"{"first": "110000", "last": "110001", "assigned": 1, "name": "A"}"#,
+            // more assigned than the block holds
+            r#"{"first": "0000", "last": "000F", "assigned": 17, "name": "A"}"#,
+            // assigned missing
+            r#"{"first": "0000", "last": "007F", "name": "A"}"#,
             // unknown field
-            r#"{"first": "0000", "last": "007F", "name": "A", "alias": "x"}"#,
+            r#"{"first": "0000", "last": "007F", "assigned": 1, "name": "A", "alias": "x"}"#,
         ];
         for blocks in bad {
             let err = parse(&file(blocks)).expect_err(blocks);
@@ -254,7 +298,7 @@ mod tests {
             );
         }
         assert!(parse(&file("")).is_err(), "no blocks");
-        let no_version = file(r#"{"first": "0000", "last": "007F", "name": "A"}"#)
+        let no_version = file(r#"{"first": "0000", "last": "007F", "assigned": 1, "name": "A"}"#)
             .replace("17.0.0\"", "seventeen\"");
         assert!(parse(&no_version).is_err());
     }
@@ -262,8 +306,8 @@ mod tests {
     #[test]
     fn find_answers_the_edges_of_a_block() {
         let table = parse(&file(
-            r#"{"first": "0000", "last": "007F", "name": "A"},
-               {"first": "0100", "last": "017F", "name": "B"}"#,
+            r#"{"first": "0000", "last": "007F", "assigned": 1, "name": "A"},
+               {"first": "0100", "last": "017F", "assigned": 1, "name": "B"}"#,
         ))
         .expect("valid");
         let name = |cp| table.find(cp).map(|b| b.name.as_str());

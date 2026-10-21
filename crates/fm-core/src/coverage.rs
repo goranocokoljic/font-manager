@@ -12,6 +12,11 @@
 //! stores the result per face (`face_language`); a preset the face covers
 //! nothing of and has no `locl` for has no row (`covered = 0`).
 //!
+//! [`face_coverage`] is the coverage list of the Glyphs tab (E11.3): per
+//! Unicode block ([`crate::blocks`]) the characters a face maps against the
+//! block's assigned code points, and per preset what [`languages`] counts,
+//! complete presets first.
+//!
 //! A [`Need`] is what the `supports` search filter (E3.8) asks: the base
 //! characters of some presets, or the characters of a pasted text. Checking
 //! a face against it is one merge over the pages of its set.
@@ -19,8 +24,11 @@
 use std::sync::LazyLock;
 
 use fm_api::FaceId;
-use fm_api::search::{CoverageReport, LanguageCoverage, Supports};
+use fm_api::search::{
+    BlockCoverage, CoverageReport, FaceCoverage, FaceLanguageCoverage, LanguageCoverage, Supports,
+};
 
+use crate::blocks::{self, BlockTable};
 use crate::charsets::{self, Charset};
 use crate::error::{FmError, FmResult};
 
@@ -197,6 +205,8 @@ impl FaceLanguage {
 #[derive(Debug)]
 struct Preset {
     code: String,
+    /// English name ("Serbian (Cyrillic)").
+    name: String,
     base: CodePointSet,
     /// Characters in `base`.
     total: u32,
@@ -210,6 +220,7 @@ impl Preset {
     fn new(charset: &Charset) -> Self {
         Self {
             code: charset.code.clone(),
+            name: charset.name.clone(),
             base: CodePointSet::from_code_points(charset.base.iter().map(|&c| u32::from(c))),
             total: u32::try_from(charset.base.len()).unwrap_or(u32::MAX),
             ot_scripts: ot_scripts(&charset.script),
@@ -284,6 +295,77 @@ fn languages_of(presets: &[Preset], set: &CodePointSet, locl: &[String]) -> Vec<
             })
         })
         .collect()
+}
+
+/// The coverage list of one face (`face_coverage`) that maps `set` and has
+/// `locl` forms for `locl`: the blocks it maps anything of, in Unicode order,
+/// and the presets [`languages`] reports, complete ones first.
+pub fn face_coverage(face: FaceId, set: &CodePointSet, locl: &[String]) -> FmResult<FaceCoverage> {
+    Ok(face_coverage_of(&PRESETS, blocks::load()?, face, set, locl))
+}
+
+fn face_coverage_of(
+    presets: &[Preset],
+    table: &BlockTable,
+    face: FaceId,
+    set: &CodePointSet,
+    locl: &[String],
+) -> FaceCoverage {
+    let mut languages: Vec<FaceLanguageCoverage> = languages_of(presets, set, locl)
+        .into_iter()
+        .map(|l| FaceLanguageCoverage {
+            name: presets
+                .iter()
+                .find(|p| p.code == l.code)
+                .map_or_else(|| l.code.clone(), |p| p.name.clone()),
+            code: l.code,
+            covered: l.covered,
+            total: l.total,
+            has_locl: l.has_locl,
+        })
+        .collect();
+    // Stable: complete ones keep preset order, partial ones go by the share
+    // covered (`a/b > c/d` as `a*d > c*b`), ties in preset order.
+    languages.sort_by(|a, b| {
+        let complete = |l: &FaceLanguageCoverage| l.covered >= l.total;
+        let share = |x: &FaceLanguageCoverage, y: &FaceLanguageCoverage| {
+            u64::from(x.covered) * u64::from(y.total)
+        };
+        complete(b)
+            .cmp(&complete(a))
+            .then_with(|| share(b, a).cmp(&share(a, b)))
+    });
+    FaceCoverage {
+        face,
+        blocks: block_coverage(table, set),
+        languages,
+    }
+}
+
+/// Per block of `table` that holds a code point of `set`, how many it holds,
+/// in Unicode order. Code points outside every block are not counted. A
+/// font that maps unassigned code points cannot cover more than `assigned`.
+fn block_coverage(table: &BlockTable, set: &CodePointSet) -> Vec<BlockCoverage> {
+    let mut out: Vec<BlockCoverage> = Vec::new();
+    for cp in set.iter() {
+        let Some(block) = table.find(cp) else {
+            continue;
+        };
+        match out.last_mut() {
+            Some(last) if last.first == block.first => last.covered += 1,
+            _ => out.push(BlockCoverage {
+                name: block.name.clone(),
+                first: block.first,
+                last: block.last,
+                covered: 1,
+                assigned: block.assigned,
+            }),
+        }
+    }
+    for b in &mut out {
+        b.covered = b.covered.min(b.assigned);
+    }
+    out
 }
 
 /// A face that lacks at most this many characters of a [`Need`] is a near
@@ -532,6 +614,102 @@ mod tests {
 
     fn set(text: &str) -> CodePointSet {
         CodePointSet::from_code_points(text.chars().map(u32::from))
+    }
+
+    fn table(blocks: &[(&str, u32, u32, u32)]) -> BlockTable {
+        BlockTable {
+            unicode_version: "17.0.0".into(),
+            blocks: blocks
+                .iter()
+                .map(|&(name, first, last, assigned)| crate::blocks::Block {
+                    name: name.into(),
+                    first,
+                    last,
+                    assigned,
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn blocks_are_listed_in_unicode_order_with_covered_and_assigned() {
+        let t = table(&[
+            ("Basic Latin", 0x00, 0x7F, 128),
+            ("Latin-1 Supplement", 0x80, 0xFF, 128),
+            ("Greek and Coptic", 0x370, 0x3FF, 135),
+            ("Cyrillic", 0x400, 0x4FF, 256),
+        ]);
+        // Cyrillic before Latin in the text; U+0378 is unassigned in Greek;
+        // U+0500 is outside every block of the table.
+        let got = block_coverage(&t, &set("\u{436}\u{437}AB\u{378}\u{500}"));
+        let rows: Vec<(&str, u32, u32)> = got
+            .iter()
+            .map(|b| (b.name.as_str(), b.covered, b.assigned))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("Basic Latin", 2, 128),
+                ("Greek and Coptic", 1, 135),
+                ("Cyrillic", 2, 256),
+            ],
+            "only blocks with a covered character, in Unicode order"
+        );
+        assert_eq!((got[2].first, got[2].last), (0x400, 0x4FF));
+        assert!(block_coverage(&t, &set("")).is_empty());
+    }
+
+    #[test]
+    fn a_block_is_never_covered_past_its_assigned_code_points() {
+        let t = table(&[("Tiny", 0x00, 0x0F, 2)]);
+        let got = block_coverage(&t, &CodePointSet::from_code_points(0..16));
+        assert_eq!((got[0].covered, got[0].assigned), (2, 2));
+    }
+
+    #[test]
+    fn languages_list_complete_first_then_partial_by_share() {
+        let presets = [
+            preset("de", "Latn", Some("DEU"), "abcd"),
+            preset("en", "Latn", None, "ab"),
+            preset("pl", "Latn", Some("PLK"), "abcdefgh"),
+            preset("sr-Cyrl", "Cyrl", Some("SRB"), "\u{431}\u{433}\u{434}"),
+            preset("fr", "Latn", None, "ab"),
+            preset("ru", "Cyrl", Some("RUS"), "\u{436}\u{437}"),
+        ];
+        let t = table(&[]);
+        // de 3/4, en 2/2, pl 3/8, sr-Cyrl 0/3 with locl, fr 2/2, ru nothing.
+        let got = face_coverage_of(&presets, &t, FaceId(7), &set("abc"), &["cyrl/SRB".into()]);
+        assert_eq!(got.face, FaceId(7));
+        let rows: Vec<(&str, u32, u32, bool)> = got
+            .languages
+            .iter()
+            .map(|l| (l.code.as_str(), l.covered, l.total, l.has_locl))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("en", 2, 2, false),
+                ("fr", 2, 2, false),
+                ("de", 3, 4, false),
+                ("pl", 3, 8, false),
+                ("sr-Cyrl", 0, 3, true),
+            ]
+        );
+        assert!(
+            got.languages.iter().all(|l| l.name == l.code),
+            "names from the preset"
+        );
+    }
+
+    #[test]
+    fn the_embedded_tables_give_a_coverage_list() {
+        let got =
+            face_coverage(FaceId(1), &set("abcdefghijklmnopqrstuvwxyz\u{436}"), &[]).expect("list");
+        assert_eq!(got.blocks[0].name, "Basic Latin");
+        assert_eq!((got.blocks[0].covered, got.blocks[0].assigned), (26, 128));
+        assert_eq!(got.blocks[1].name, "Cyrillic");
+        let en = got.languages.iter().find(|l| l.code == "en").expect("en");
+        assert_eq!(en.name, "English");
     }
 
     fn preset(code: &str, script: &str, ot: Option<&str>, base: &str) -> Preset {

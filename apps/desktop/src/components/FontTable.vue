@@ -14,7 +14,9 @@ import {
   ariaSort,
   dateText,
   formatBadges,
-  licenseBadge,
+  licenseBadges,
+  OPEN_LICENSE_BADGE,
+  openLicenseName,
   visibleColumns,
   weightPosition,
   weightRangeText,
@@ -215,6 +217,8 @@ interface Cell {
   /** Plain text of the cell (also its accessible text). */
   text: string;
   badges?: string[];
+  /** Tooltip of the "Open license" badge: the license's full name. */
+  openLicense?: string;
   /** Weight line dots: position in percent, italic dots are hollow. */
   dots?: { left: number; italic: boolean }[];
   /** Weight line span of a variable family, in percent. */
@@ -271,10 +275,12 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
       return { text: fam.foundry ?? '' };
     case 'location':
       return { text: fam.location ?? '' };
-    case 'license': {
-      const badge = licenseBadge(fam);
-      return { text: '', badges: badge ? [badge] : [] };
-    }
+    case 'license':
+      return {
+        text: '',
+        badges: licenseBadges(fam),
+        openLicense: openLicenseName(fam.openLicense),
+      };
     case 'added':
       return { text: dateText(fam.added) };
     case 'tags':
@@ -416,9 +422,14 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
               <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="cellOf(item.row, col.id).badges">
-              <span v-for="b in cellOf(item.row, col.id).badges" :key="b" class="badge">{{
-                b
-              }}</span>
+              <span
+                v-for="b in cellOf(item.row, col.id).badges"
+                :key="b"
+                class="badge"
+                :class="{ good: b === OPEN_LICENSE_BADGE }"
+                :title="b === OPEN_LICENSE_BADGE ? cellOf(item.row, col.id).openLicense : undefined"
+                >{{ b }}</span
+              >
             </template>
             <span v-else class="text" :title="cellOf(item.row, col.id).text">{{
               cellOf(item.row, col.id).text
@@ -596,6 +607,10 @@ span.sort {
   color: var(--fm-muted);
   font-size: 10.5px;
   font-weight: 600;
+}
+.badge.good {
+  border-color: var(--fm-success);
+  color: var(--fm-success);
 }
 .visually-hidden {
   position: absolute;

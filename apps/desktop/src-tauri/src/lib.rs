@@ -25,7 +25,7 @@ use fm_api::preview::{
     SampleTextRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
@@ -345,6 +345,12 @@ async fn check_coverage(
     call(&state, move |api| api.check_coverage(req)).await
 }
 
+/// One face's coverage per Unicode block and language, for the Glyphs tab.
+#[tauri::command]
+async fn face_coverage(state: State<'_, AppState>, face: FaceId) -> ApiResult<FaceCoverage> {
+    call(&state, move |api| api.face_coverage(face)).await
+}
+
 /// The language presets a `supports` filter can name.
 #[tauri::command]
 async fn list_languages(state: State<'_, AppState>) -> ApiResult<Vec<LanguagePreset>> {
@@ -568,6 +574,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_family,
             search,
             check_coverage,
+            face_coverage,
             list_languages,
             list_collections,
             create_collection,

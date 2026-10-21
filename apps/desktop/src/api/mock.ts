@@ -18,6 +18,7 @@ import {
   type CollectionId,
   type Conflict,
   type CoverageReport,
+  type FaceCoverage,
   type DuplicateGroup,
   type Event,
   type FaceDetail,
@@ -267,21 +268,34 @@ function mockChars(f: FaceDetail): Set<string> {
   return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
 }
 
-/** The blocks the mock's characters fall in, like the Rust mock's: name, first, last. */
-const MOCK_BLOCKS: [string, number, number][] = [
-  ['Basic Latin', 0x0000, 0x007f],
-  ['Latin-1 Supplement', 0x0080, 0x00ff],
-  ['Latin Extended-A', 0x0100, 0x017f],
-  ['Cyrillic', 0x0400, 0x04ff],
-  ['CJK Unified Ideographs', 0x4e00, 0x9fff],
-  ['Hangul Syllables', 0xac00, 0xd7af],
+/**
+ * The blocks the mock's characters fall in, like the Rust mock's: name, first, last
+ * and assigned code points (Unicode 17.0).
+ */
+const MOCK_BLOCKS: [string, number, number, number][] = [
+  ['Basic Latin', 0x0000, 0x007f, 128],
+  ['Latin-1 Supplement', 0x0080, 0x00ff, 128],
+  ['Latin Extended-A', 0x0100, 0x017f, 128],
+  ['Cyrillic', 0x0400, 0x04ff, 256],
+  ['CJK Unified Ideographs', 0x4e00, 0x9fff, 20992],
+  ['Hangul Syllables', 0xac00, 0xd7af, 11172],
+];
+
+/** (code, name, characters) of the presets the mock's coverage list counts, like the Rust mock's. */
+const MOCK_PRESETS: [string, string, string][] = [
+  ['en', 'English', 'abcdefghijklmnopqrstuvwxyz'],
+  ['pl', 'Polish', 'aąbcćdeęfghijklłmnńoóprsśtuwyzźż'],
+  ['sr-Latn', 'Serbian (Latin)', 'abcčćdđefghijklmnoprsštuvzž'],
+  ['sr-Cyrl', 'Serbian (Cyrillic)', 'абвгдђежзијклљмнњопрстћуфхцчџш'],
 ];
 
 /** CJK ideographs and Hangul syllables: 32,164 characters, for a face given `cjk`. */
 const CJK = range(0x4e00, 0xa000) + range(0xac00, 0xd7a4);
 
-const mockBlock = (cp: number): [string, number, number] =>
-  MOCK_BLOCKS.find(([, first, last]) => cp >= first && cp <= last) ?? ['No block', cp, cp];
+const mockBlock = (cp: number): [string, number, number] => {
+  const b = MOCK_BLOCKS.find(([, first, last]) => cp >= first && cp <= last);
+  return b ? [b[0], b[1], b[2]] : ['No block', cp, cp];
+};
 
 /** `A` for letters, `uni0416` for the rest, like the Rust mock's names. */
 const mockGlyphName = (c: string) =>
@@ -302,6 +316,61 @@ export function mockCoverage(f: FaceDetail, text: string, cjk: boolean): Coverag
     (c) => !/\s/.test(c) && !has.has(c) && !(cjk && CJK.includes(c)),
   );
   return { face: f.face.id, complete: missing.length === 0, missing, languages: [] };
+}
+
+/** What a mock face lacks of the presets `codes`, like the Rust mock's `check_coverage`. */
+export function mockLanguageCoverage(f: FaceDetail, codes: string[]): CoverageReport {
+  const has = mockChars(f);
+  const all: string[] = [];
+  const languages = codes.map((code) => {
+    const preset = MOCK_PRESETS.find((p) => p[0] === code);
+    if (!preset) throw invalid(`Unknown language preset "${code}".`);
+    const letters = [...preset[2]];
+    const missing = letters.filter((c) => !has.has(c));
+    for (const c of missing) if (!all.includes(c)) all.push(c);
+    return {
+      code,
+      covered: letters.length - missing.length,
+      total: letters.length,
+      missing,
+      hasLocl: code === 'sr-Cyrl' && has.has('б'),
+    };
+  });
+  return { face: f.face.id, complete: all.length === 0, missing: all, languages };
+}
+
+/**
+ * A mock face's coverage list, like the Rust mock's `face_coverage`: its characters per
+ * block, and per preset, complete ones first, then partial by the share covered.
+ */
+export function mockFaceCoverage(f: FaceDetail, cjk: boolean): FaceCoverage {
+  const cps = [...mockChars(f)].map((c) => c.codePointAt(0)!);
+  if (cjk) cps.push(...[...CJK].map((c) => c.codePointAt(0)!));
+  const blocks = MOCK_BLOCKS.map(([name, first, last, assigned]) => ({
+    name,
+    first,
+    last,
+    covered: Math.min(cps.filter((cp) => cp >= first && cp <= last).length, assigned),
+    assigned,
+  })).filter((b) => b.covered > 0);
+  const languages = mockLanguageCoverage(
+    f,
+    MOCK_PRESETS.map((p) => p[0]),
+  )
+    .languages.filter((l) => l.covered > 0)
+    .map(({ code, covered, total, hasLocl }) => ({
+      code,
+      name: MOCK_PRESETS.find((p) => p[0] === code)![1],
+      covered,
+      total,
+      hasLocl,
+    }))
+    .sort(
+      (a, b) =>
+        Number(a.covered !== a.total) - Number(b.covered !== b.total) ||
+        b.covered * a.total - a.covered * b.total,
+    );
+  return { face: f.face.id, blocks, languages };
 }
 
 /** One page of a mock face's glyph map: its characters, plus CJK when `cjk`. */
@@ -768,6 +837,8 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
     (q.minRating == null || (d.rating ?? 0) >= q.minRating) &&
     (q.addedWithinDays == null ||
       Date.parse(MOCK_ADDED) >= Date.parse(MOCK_NOW) - q.addedWithinDays * 86_400_000) &&
+    (q.embedding == null || q.embedding === d.license.embedding) &&
+    (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -924,6 +995,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     ),
     favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
     minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
+    embedding: countEach(
+      query,
+      q,
+      distinct(faces.map((d) => d.license.embedding)),
+      (f, embedding) => ({ ...f, embedding }),
+    ),
+    openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense })),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
@@ -1125,8 +1203,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     checkCoverage: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
-      if (req.target.kind !== 'text') throw invalid('The mock checks the coverage of text only.');
+      if (req.target.kind === 'languages') return mockLanguageCoverage(f, req.target.codes);
       return mockCoverage(f, req.target.text, options.cjkFaces?.includes(req.face) ?? false);
+    },
+    faceCoverage: async (face) => {
+      const f = find(face);
+      if (!f) throw notFound(face);
+      return mockFaceCoverage(f, options.cjkFaces?.includes(face) ?? false);
     },
     listLanguages: async () => structuredClone(mockLanguages),
     createCollection: async (req) => {

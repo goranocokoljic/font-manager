@@ -51,8 +51,8 @@ use fm_api::preview::{
     SampleText, SampleTextRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, LanguagePreset, SearchRequest, SearchResponse, SearchService,
-    SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+    SearchService, SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsService, SettingsUpdate};
 use fm_api::workflows::{
@@ -537,6 +537,10 @@ impl SearchService for CoreApi {
 
     fn check_coverage(&self, req: CoverageRequest) -> ApiResult<CoverageReport> {
         Ok(self.lock().check_coverage(&req)?)
+    }
+
+    fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage> {
+        Ok(self.lock().face_coverage(face)?)
     }
 
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {

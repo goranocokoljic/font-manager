@@ -111,6 +111,13 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     await load();
   }
 
+  /** Jumps to the block `name` (from the coverage list): that block only, no search. */
+  async function showBlock(name: string): Promise<void> {
+    query.value = '';
+    block.value = name;
+    await load();
+  }
+
   /** Fetches the pages holding list indexes `start` (inclusive) to `end` (exclusive). */
   async function ensure(start: number, end: number): Promise<void> {
     if (face.value === null || end <= start) return;
@@ -183,6 +190,7 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     open,
     search,
     chooseBlock,
+    showBlock,
     ensure,
     item,
     select,

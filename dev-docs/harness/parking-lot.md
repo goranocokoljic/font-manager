@@ -121,9 +121,12 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E14.2 #115] crates/fm-api/src/mock.rs:1508 — a mock search by an unknown collection id returns nothing (also apps/desktop/src/api/mock.ts:922), while fm-core returns NotFound.
 - [E14.2 #115] .github/workflows/ci.yml:77 — PR CI runs nextest in debug only, so the 50 ms timing tests never time in CI; budgets rely on the bench job (nightly or label `bench`).
 - [E14.2 #115] apps/desktop/e2e/preview.spec.ts:71 — "1,000 rows scrolled do not leak font faces" takes ~21 s of its 30 s timeout locally and timed out once on the macOS runner.
+- [E11.3 #101] apps/desktop/src/stores/glyphs.ts:90 — `open` returns early for the same face id, so a face whose first load failed is never retried on revisit (the pattern is copied into stores/coverage.ts).
+- [E11.3 #101] apps/desktop/src/api/mock.ts:803 — the TS `mockLanguages` (en, pl, sr-Cyrl, el) has drifted from the Rust mock `LANGUAGES` (en, pl, sr-Latn, sr-Cyrl).
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.
 - [E10.5 #98] apps/desktop/src/stores/features.ts:43 — `settings()` writes feature tags into font-feature-settings without the 4-printable-ASCII check or escaping that `preview/variations.ts` and `fm_core::css` apply.
 - [E10.5 #98] apps/desktop/src/preview/variations.ts:12 — the preview writes every axis at its default when unmoved, unclamped and unrounded, so its text differs from fm-core's `css_values` for the same state.
+- [E15.1 #118] apps/desktop/src/styles/theme.css:100 — the `.surface-light`/`.surface-dark` preview surfaces do not set `--fm-danger`, so danger-colored text inside a surface-overridden font view keeps the app theme's value and can fall under AA contrast.
 
 ## 2026-10-20
 

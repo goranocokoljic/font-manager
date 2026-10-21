@@ -3,6 +3,7 @@
 // the counts come from the API (`FilterCounts`), the chips only show them.
 import type {
   Classification,
+  Embedding,
   FilterCounts,
   Filters,
   FontFormat,
@@ -26,6 +27,8 @@ export type ChipFacet =
   | 'formats'
   | 'features'
   | 'license'
+  | 'openLicense'
+  | 'embedding'
   | 'sources'
   | 'problems'
   | 'tags'
@@ -62,6 +65,8 @@ const KIND: Record<ChipFacet, Kind> = {
   formats: 'any',
   features: 'all',
   license: 'one',
+  openLicense: 'one',
+  embedding: 'one',
   sources: 'any',
   problems: 'one',
   tags: 'all',
@@ -98,6 +103,12 @@ const LICENSES: Record<LicenseType, string> = {
   personalOnly: 'Personal use',
   unknown: 'Unknown license',
 };
+const EMBEDDINGS: Record<Embedding, string> = {
+  installable: 'Installable',
+  editable: 'Editable',
+  previewAndPrint: 'Preview & print',
+  restricted: 'Restricted',
+};
 const yesNo = (yes: string, no: string) => (v: ChipValue) => (v ? yes : no);
 
 /** The groups in the order the bar shows them, with their chip labels. */
@@ -114,6 +125,12 @@ const GROUPS: { facet: ChipFacet; label: string; name: (v: ChipValue) => string 
   { facet: 'formats', label: 'Format', name: (v) => FORMATS[v as FontFormat] ?? String(v) },
   { facet: 'features', label: 'Features', name: String },
   { facet: 'license', label: 'License', name: (v) => LICENSES[v as LicenseType] ?? String(v) },
+  { facet: 'openLicense', label: 'Open license', name: yesNo('Open license', 'Not open') },
+  {
+    facet: 'embedding',
+    label: 'Embedding',
+    name: (v) => EMBEDDINGS[v as Embedding] ?? String(v),
+  },
   { facet: 'sources', label: 'Source', name: String },
   { facet: 'problems', label: 'Health', name: yesNo('Has problems', 'Healthy') },
   { facet: 'favorite', label: 'Favorite', name: yesNo('Favorites', 'Not favorites') },
