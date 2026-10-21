@@ -23,6 +23,7 @@ pub mod glyph_svg;
 pub mod glyphs;
 pub mod grouping;
 pub mod index;
+pub mod inventory;
 pub mod layout;
 pub mod license;
 pub mod lifecycle;

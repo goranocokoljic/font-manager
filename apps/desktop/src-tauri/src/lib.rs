@@ -9,6 +9,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::export::{ExportService, LicenseInventoryRequest};
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
     RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
@@ -42,6 +43,7 @@ use fm_core::{CoreApi, SettingsStore};
 use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
+use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
 pub mod tray;
@@ -592,6 +594,53 @@ async fn declare_license(state: State<'_, AppState>, req: LicenseDeclaration) ->
     call(&state, move |api| api.declare_license(req)).await
 }
 
+/// Asks where to save the license inventory (E15.4) with the native save
+/// dialog, then writes it there. The path comes from the dialog, never from
+/// the webview. Resolves to the number of families written, or `None` when
+/// the user cancels.
+#[tauri::command]
+async fn save_license_inventory<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    req: LicenseInventoryRequest,
+    file_name: String,
+) -> ApiResult<Option<u32>> {
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Export license inventory")
+        .set_file_name(file_name)
+        .add_filter("CSV", &["csv"]);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
+        .await
+        .map_err(|e| {
+            ApiError::new(ErrorCode::Internal, "The app could not finish the request.")
+                .with_detail(e.to_string())
+        })?;
+    let Some(picked) = picked else {
+        return Ok(None);
+    };
+    let path = picked.into_path().map_err(|e| {
+        ApiError::new(ErrorCode::InvalidRequest, "Choose a file on this computer.")
+            .with_detail(e.to_string())
+    })?;
+    call(&state, move |api| write_license_inventory(api, req, &path))
+        .await
+        .map(Some)
+}
+
+/// Writes the license inventory of `req` to `path`, the file the user
+/// picked; resolves to the number of families written.
+pub fn write_license_inventory(
+    api: &dyn ExportService,
+    req: LicenseInventoryRequest,
+    path: &Path,
+) -> ApiResult<u32> {
+    let inventory = api.license_inventory(req)?;
+    fm_core::inventory::save(path, &inventory.csv)?;
+    Ok(inventory.rows)
+}
+
 /// Every source: watched folders, the library folder and the system fonts.
 #[tauri::command]
 async fn list_sources(state: State<'_, AppState>) -> ApiResult<Vec<Source>> {
@@ -725,6 +774,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             update_user_meta,
             update_family_notes,
             declare_license,
+            save_license_inventory,
             list_sets,
             pin_instance,
             list_virtual_styles,

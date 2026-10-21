@@ -2,10 +2,11 @@ import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient } from '../api/mock';
+import { createMockClient, mockPickedSaves, mockSavedInventories } from '../api/mock';
 import { useCollectionsStore } from './collections';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
+import { useToastStore } from './toast';
 
 let client: FmClient;
 
@@ -95,5 +96,41 @@ describe('collections store', () => {
     await flushPromises();
     expect(store.openId).toBeNull();
     expect(search.hits).toBeNull();
+  });
+
+  it('exports the license inventory of a collection or the library to the picked file', async () => {
+    const store = await setup();
+    const toast = useToastStore();
+    mockSavedInventories.length = 0;
+    mockPickedSaves.length = 0;
+    await store.create('Client: A/B');
+    const id = store.collections[0]!.id;
+
+    await store.exportLicenseInventory(id);
+    expect(mockSavedInventories.at(-1)).toEqual({
+      path: '/Users/demo/Documents/Client- A-B license inventory.csv',
+      collection: id,
+      rows: 0,
+    });
+    expect(toast.toast?.message).toBe('Saved the license inventory: 0 families.');
+
+    await store.exportLicenseInventory(null);
+    const all = mockSavedInventories.at(-1)!;
+    expect(all.path).toBe('/Users/demo/Documents/License inventory.csv');
+    expect(all.collection).toBeNull();
+    expect(all.rows).toBeGreaterThan(1);
+    expect(toast.toast?.message).toBe(`Saved the license inventory: ${all.rows} families.`);
+
+    // A cancelled dialog saves nothing and says nothing.
+    toast.dismiss();
+    mockPickedSaves.push(null);
+    await store.exportLicenseInventory(id);
+    expect(mockSavedInventories).toHaveLength(2);
+    expect(toast.toast).toBeNull();
+
+    // A refusal from the API is shown.
+    await store.exportLicenseInventory(9999);
+    expect(toast.toast?.message).toBe('Collection 9999 was not found.');
+    expect(mockSavedInventories).toHaveLength(2);
   });
 });

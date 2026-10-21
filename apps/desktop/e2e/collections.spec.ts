@@ -80,3 +80,39 @@ test('the palette adds the selected fonts to a collection', async ({ page }) => 
   await page.keyboard.press('Enter');
   await expect(row(page, 'Picks').getByLabel(/^[1-9]\d* fonts?$/)).toBeVisible();
 });
+
+test('"Export license inventory…" saves a CSV of the library or of one collection', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const toast = page.getByTestId('toast');
+  const palette = async (query: string) => {
+    await page.keyboard.press('ControlOrMeta+k');
+    await page.getByRole('combobox', { name: 'Search commands' }).fill(query);
+    await page.keyboard.press('Enter');
+  };
+
+  // Under "All fonts" the palette exports the whole library.
+  await palette('export license inventory');
+  await expect(toast).toContainText(/Saved the license inventory: [1-9]\d* families\./);
+  const all = Number(/(\d+) families/.exec((await toast.textContent()) ?? '')?.[1]);
+
+  // A collection's own button exports its families only: none yet.
+  await make(page, 'Picks');
+  await open(page, 'Picks');
+  await row(page, 'Picks')
+    .getByRole('button', { name: 'Export the license inventory of Picks' })
+    .click();
+  await expect(toast).toContainText('Saved the license inventory: 0 families.');
+
+  // With one family in it, the palette exports the open collection.
+  const list = page.getByRole('tree', { name: 'Font list' });
+  await page.getByRole('button', { name: 'All fonts', exact: true }).click();
+  await list.getByRole('treeitem', { name: /Inter/ }).first().click();
+  await palette('add selected picks');
+  await expect(row(page, 'Picks').getByLabel(/^[1-9]\d* fonts?$/)).toBeVisible();
+  await open(page, 'Picks');
+  await palette('export license inventory');
+  await expect(toast).toContainText('Saved the license inventory: 1 family.');
+  expect(all).toBeGreaterThan(1);
+});

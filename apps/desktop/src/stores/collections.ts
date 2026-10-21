@@ -4,6 +4,7 @@ import { useClient } from '../api/client';
 import type { ApiError, Collection, CollectionId, FaceId, FamilyId } from '../api/types';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
+import { useToastStore } from './toast';
 
 /** A collection as the sidebar lists it: with its depth and its place among its siblings. */
 export interface CollectionRow {
@@ -123,6 +124,27 @@ export const useCollectionsStore = defineStore('collections', () => {
     if (openId.value === collection) await search.run();
   }
 
+  /**
+   * "Export license inventory…": saves the CSV of one collection (or, for `null`, the
+   * whole library) to a file the user picks, then says how many families it lists.
+   */
+  async function exportLicenseInventory(collection: CollectionId | null): Promise<void> {
+    const toast = useToastStore();
+    const name = collections.value.find((c) => c.id === collection)?.name;
+    // The suggested file name; characters no file system allows become "-".
+    const fileName = `${name ? `${name} license inventory` : 'License inventory'}.csv`.replace(
+      /[\\/:*?"<>|]/g,
+      '-',
+    );
+    try {
+      const rows = await useClient().saveLicenseInventory({ collection }, fileName);
+      if (rows == null) return;
+      toast.show(`Saved the license inventory: ${rows} ${rows === 1 ? 'family' : 'families'}.`);
+    } catch (e) {
+      toast.show((e as ApiError).message);
+    }
+  }
+
   // A scan or a source change moves the counts.
   watch(
     () => library.families,
@@ -142,5 +164,6 @@ export const useCollectionsStore = defineStore('collections', () => {
     move,
     remove,
     add,
+    exportLicenseInventory,
   };
 });
