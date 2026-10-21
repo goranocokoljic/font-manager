@@ -162,3 +162,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E13.3 #111] crates/fm-core/src/index/search.rs:359 — `family_of` scans the whole search cache linearly and `Index::quick_collection` calls it twice per face, so listing the Quick Collection is O(k·n) on a large library.
 - [E13.4 #112] crates/fm-api/src/mock.rs:2753 — the Rust mock `edit_members` still expands families inline instead of using the new `faces_of` helper (same behavior today, can drift).
 - [E13.4 #112] apps/desktop/src/components/CollectionsSidebar.vue:256 — sidebar counts rely on `aria-label` on a plain `<span>` (generic role), which some screen readers do not announce; TagsSidebar.vue copies the pattern.
+- [E17.2 #127] apps/desktop/src/stores/settings.ts:51 — a failed `update` never re-reads the settings, so a value the server changed partly can show stale until the next `load`.
