@@ -936,6 +936,8 @@ name = "fm-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "brotli",
+ "flate2",
  "fm-api",
  "fm-platform",
  "harfrust",
