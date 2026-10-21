@@ -159,3 +159,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E15.4 #121] apps/desktop/src/components/CollectionsSidebar.vue:260 — "New inside" has the accessible name "New collection inside X", which does not contain its visible label (WCAG 2.5.3).
 - [E15.4 #121] crates/fm-api/src/mock.rs:2761 — the Rust `MockApi::license_inventory` still writes the old 6-column, LF, unquoted CSV, so it no longer matches fm-core's 12-column RFC 4180 CSV.
 - [E15.4 #121] crates/fm-core/src/license.rs:223 — two private `open_license_label` functions (short "OFL" here, long "SIL Open Font License" in inventory.rs) differ on purpose and can drift.
+- [E13.3 #111] crates/fm-core/src/index/search.rs:359 — `family_of` scans the whole search cache linearly and `Index::quick_collection` calls it twice per face, so listing the Quick Collection is O(k·n) on a large library.
