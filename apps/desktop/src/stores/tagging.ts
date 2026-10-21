@@ -140,10 +140,14 @@ export const useTaggingStore = defineStore('tagging', () => {
     return scored.sort((a, b) => b.score - a.score || a.order - b.order).map((s) => s.row);
   });
 
-  /** The typed name when no tag has it (in the API's sense of the same name). */
+  /**
+   * The typed name when the filter matches no tag (criterion: Enter creates only on
+   * unmatched text; text that still shows tags is a filter, and Enter applies).
+   */
   const newName = computed(() => {
     const name = query.value.trim();
-    return name && !tags.tags.some((t) => sameTagName(t.name, name)) ? name : null;
+    if (!name || rows.value.length) return null;
+    return tags.tags.some((t) => sameTagName(t.name, name)) ? null : name;
   });
 
   const pending = computed(() => staged.value.size);

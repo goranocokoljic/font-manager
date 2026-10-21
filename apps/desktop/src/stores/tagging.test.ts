@@ -79,6 +79,10 @@ describe('multi-tagging panel', () => {
     expect(tagging.rows.map((r) => r.tag.name).sort()).toEqual(['Body', 'Brand']);
     tagging.query = 'brand';
     expect(tagging.newName).toBeNull();
+    // Text that still shows a tag is a filter, not a new name.
+    tagging.query = 'bra';
+    expect(tagging.rows.map((r) => r.tag.name)).toEqual(['Brand']);
+    expect(tagging.newName).toBeNull();
     tagging.query = ' Display ';
     expect(tagging.rows).toEqual([]);
     expect(tagging.newName).toBe('Display');

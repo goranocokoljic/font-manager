@@ -124,17 +124,31 @@ test('the panel is keyboard-driven: fuzzy filter, arrows, Space, Enter, Escape',
   await page.keyboard.press('ArrowUp');
   await expect(active()).toHaveAttribute('data-tag', 'Display');
 
-  // Enter on a name no tag has makes it on the selection at once.
+  // Filter, Space, Enter: text that still shows a tag is a filter, so Enter applies the
+  // staged toggle and makes no tag from the filter text.
+  await filter(page).fill('disp');
+  await expect(panel(page).getByRole('option')).toHaveCount(1);
+  await expect(panel(page)).not.toContainText('Enter makes the tag');
+  await page.keyboard.press('Space');
+  await expect(option(page, 'Display')).toHaveAttribute('data-state', 'all');
+  await page.keyboard.press('Enter');
+  await expect(panel(page)).toHaveCount(0);
+  await expect(sidebarTag(page, 'Display')).toContainText('8');
+  await expect(sidebarTag(page, 'disp')).toHaveCount(0);
+  await expect(sidebarTag(page, 'Brand')).toContainText('8');
+
+  // Enter on a name no tag has (the filter shows none) makes it on the selection at once.
+  await page.keyboard.press('t');
   await filter(page).fill('Headline');
+  await expect(panel(page).getByRole('option')).toHaveCount(0);
   await expect(panel(page)).toContainText('Enter makes the tag “Headline” on 4 fonts');
   await page.keyboard.press('Enter');
   await expect(option(page, 'Headline')).toHaveAttribute('data-state', 'all');
   await expect(sidebarTag(page, 'Headline')).toContainText('4');
 
-  // Enter with nothing typed applies the staged Brand; the panel closes.
+  // Enter with nothing typed and nothing staged just closes.
   await page.keyboard.press('Enter');
   await expect(panel(page)).toHaveCount(0);
-  await expect(sidebarTag(page, 'Brand')).toContainText('8');
 
   // Escape closes without applying.
   await page.keyboard.press('t');
