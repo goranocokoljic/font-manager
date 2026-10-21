@@ -100,7 +100,8 @@ async function toggleWidthLock(): Promise<void> {
   if (!props.setWidthLock || !props.layout) return;
   if (locked.value) return props.setWidthLock(false, null);
   const cell = page.value?.querySelector<HTMLElement>('.cell');
-  const now = cell ? Math.round(cell.getBoundingClientRect().width) : null;
+  // Floored, so the locked track (same grid as now) fits the row it was measured in.
+  const now = cell ? Math.floor(cell.getBoundingClientRect().width) : null;
   return props.setWidthLock(true, now);
 }
 
@@ -241,7 +242,9 @@ const fontFamily = computed(() =>
 }
 .row.with-badge {
   display: grid;
-  grid-template-columns: 5em minmax(0, 1fr);
+  /* An empty column opposite the badges keeps the text centered and gives the locked and
+     unlocked grids the same tracks, so locking keeps the width the text has on screen. */
+  grid-template-columns: 5em minmax(0, 1fr) 5em;
   gap: 8px;
   align-items: start;
 }

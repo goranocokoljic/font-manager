@@ -488,6 +488,8 @@ test('unlocking follows the window; locking again keeps the width it had through
   // Locked again: the width of that moment, kept through a narrower and a wider window.
   await widthLock(page).click();
   await expect(widthLock(page)).toHaveAttribute('aria-pressed', 'true');
+  // At the same window size the text keeps its width: it does not reflow.
+  expect(Math.abs((await columnWidth(book)) - atLock)).toBeLessThanOrEqual(1);
   await page.setViewportSize({ width: 2300, height: 800 });
   await expect(book).toBeVisible();
   expect(Math.abs((await columnWidth(book)) - atLock)).toBeLessThanOrEqual(1);
