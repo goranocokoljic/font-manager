@@ -43,8 +43,9 @@ use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
     PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest, ReceiptChange,
-    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SetEntry, SetExport, Tag,
-    TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SelectionTag, SelectionTags,
+    SelectionTagsRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
+    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
@@ -2341,12 +2342,10 @@ impl OrganizationService for MockApi {
         if req.tags.iter().all(|n| n.trim().is_empty()) {
             return Err(ApiError::invalid("Give the tag a name."));
         }
-        if req.faces.is_empty() {
-            return Err(ApiError::invalid("Choose the fonts to tag."));
-        }
         let mut st = self.state();
-        for id in &req.faces {
-            st.face(*id)?;
+        let faces = faces_of(&st, &req.faces, &req.families)?;
+        if faces.is_empty() {
+            return Err(ApiError::invalid("Choose the fonts to tag."));
         }
         let mut touched = Vec::new();
         for name in req.tags.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
@@ -2362,7 +2361,7 @@ impl OrganizationService for MockApi {
                     id
                 }
             };
-            for face in &req.faces {
+            for face in &faces {
                 st.face_tags.entry(*face).or_default().insert(id);
             }
             if !touched.contains(&id) {
@@ -2373,7 +2372,7 @@ impl OrganizationService for MockApi {
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
-            updated: req.faces.clone(),
+            updated: faces,
         });
         Ok(touched
             .iter()
@@ -2401,6 +2400,29 @@ impl OrganizationService for MockApi {
             updated: req.faces,
         });
         Ok(())
+    }
+
+    fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags> {
+        let st = self.state();
+        let faces = faces_of(&st, &req.faces, &req.families)?;
+        let total = faces.len() as u32;
+        let mut tags: Vec<&Tag> = st.tags.iter().collect();
+        tags.sort_by_key(|t| t.name.to_lowercase());
+        let tags = tags
+            .into_iter()
+            .filter_map(|t| {
+                let n = faces
+                    .iter()
+                    .filter(|f| st.face_tags.get(f).is_some_and(|s| s.contains(&t.id)))
+                    .count() as u32;
+                (n > 0).then_some(SelectionTag {
+                    tag: t.id,
+                    face_count: n,
+                    all: n == total,
+                })
+            })
+            .collect();
+        Ok(SelectionTags { faces, tags })
     }
 
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {
@@ -2753,6 +2775,27 @@ fn edit_members(api: &MockApi, req: CollectionFacesRequest, add: bool) -> ApiRes
         }
     }
     Ok(st.collection_view(&c))
+}
+
+/// The faces `faces` and every face of `families`, each once, the faces
+/// first, like fm-core; an unknown face or family is `NotFound`.
+fn faces_of(st: &State, faces: &[FaceId], families: &[FamilyId]) -> ApiResult<Vec<FaceId>> {
+    let mut out: Vec<FaceId> = Vec::new();
+    for id in faces {
+        st.face(*id)?;
+        if !out.contains(id) {
+            out.push(*id);
+        }
+    }
+    for family in families {
+        st.family(*family)?;
+        for id in st.family_faces(*family).map(|f| f.detail.face.id) {
+            if !out.contains(&id) {
+                out.push(id);
+            }
+        }
+    }
+    Ok(out)
 }
 
 fn tag_view(st: &State, t: &Tag) -> Tag {

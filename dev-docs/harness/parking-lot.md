@@ -160,3 +160,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E15.4 #121] crates/fm-api/src/mock.rs:2761 — the Rust `MockApi::license_inventory` still writes the old 6-column, LF, unquoted CSV, so it no longer matches fm-core's 12-column RFC 4180 CSV.
 - [E15.4 #121] crates/fm-core/src/license.rs:223 — two private `open_license_label` functions (short "OFL" here, long "SIL Open Font License" in inventory.rs) differ on purpose and can drift.
 - [E13.3 #111] crates/fm-core/src/index/search.rs:359 — `family_of` scans the whole search cache linearly and `Index::quick_collection` calls it twice per face, so listing the Quick Collection is O(k·n) on a large library.
+- [E13.4 #112] crates/fm-api/src/mock.rs:2753 — the Rust mock `edit_members` still expands families inline instead of using the new `faces_of` helper (same behavior today, can drift).
+- [E13.4 #112] apps/desktop/src/components/CollectionsSidebar.vue:256 — sidebar counts rely on `aria-label` on a plain `<span>` (generic role), which some screen readers do not announce; TagsSidebar.vue copies the pattern.

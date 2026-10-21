@@ -1541,12 +1541,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     }
     throw invalid('Choose one collection or one set for the virtual style.');
   };
-  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
-    const c = findCollection(req.collection);
-    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
-    const ids = [...req.faces];
+  // The faces and every face of whole families, each once, the faces first (like fm-core).
+  const facesOf = (ids: FaceId[], families: FamilyId[] = []): FaceId[] => {
     for (const id of ids) if (!find(id)) throw notFound(id);
-    for (const family of req.families ?? []) {
+    const out = new Set(ids);
+    for (const family of families) {
       const list = byFamily.get(family);
       if (!list)
         throw {
@@ -1554,8 +1553,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: `Family ${family} was not found.`,
           detail: null,
         };
-      ids.push(...list.map((d) => d.face.id));
+      for (const d of list) out.add(d.face.id);
     }
+    return [...out];
+  };
+  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
+    const c = findCollection(req.collection);
+    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
+    const ids = facesOf(req.faces, req.families);
     const set = members.get(c.id) ?? new Set<FaceId>();
     members.set(c.id, set);
     for (const id of ids) {
@@ -1748,8 +1753,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     tagFaces: async (req) => {
       const names = req.tags.map((n) => n.trim()).filter(Boolean);
       if (!names.length) throw invalid('Give the tag a name.');
-      if (!req.faces.length) throw invalid('Choose the fonts to tag.');
-      const targets = req.faces.map(faceOrThrow);
+      const ids = facesOf(req.faces, req.families);
+      if (!ids.length) throw invalid('Choose the fonts to tag.');
+      const targets = ids.map(faceOrThrow);
       const named: { id: TagId; name: string }[] = [];
       for (const name of names) {
         let t = tags.find((x) => sameName(x.name, name));
@@ -1758,7 +1764,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           if (!d.tags.some((n) => sameName(n, t.name))) d.tags = [...d.tags, t.name];
         if (!named.some((x) => x.id === t.id)) named.push(t);
       }
-      changed(req.faces);
+      changed(ids);
       return named.map(tagView);
     },
     untagFaces: async (req) => {
@@ -1772,6 +1778,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           tags.splice(tags.indexOf(t), 1);
       }
       changed(req.faces);
+    },
+    // Like fm-core: the tags at least one face carries, A to Z, and whether all do.
+    selectionTags: async (req) => {
+      const ids = facesOf(req.faces, req.families);
+      const targets = ids.map(faceOrThrow);
+      const byName = [...tags].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
+      return {
+        faces: ids,
+        tags: byName.flatMap((t) => {
+          const n = targets.filter((d) => d.tags.some((x) => sameName(x, t.name))).length;
+          return n ? [{ tag: t.id, faceCount: n, all: n === ids.length }] : [];
+        }),
+      };
     },
     updateUserMeta: async (req) => {
       if (req.rating != null && req.rating > 5)

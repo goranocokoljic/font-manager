@@ -73,6 +73,8 @@ import type {
   ScanRequest,
   SearchRequest,
   SearchResponse,
+  SelectionTags,
+  SelectionTagsRequest,
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
@@ -136,6 +138,8 @@ export interface FmClient {
   tagFaces(req: TagFacesRequest): Promise<Tag[]>;
   /** Takes tags off faces; a tag left on no face is gone. */
   untagFaces(req: UntagFacesRequest): Promise<void>;
+  /** The tags the faces of a selection carry, with how many carry each (E13.4). */
+  selectionTags(req: SelectionTagsRequest): Promise<SelectionTags>;
   /** Favorite, rating (0 clears it) and notes; fields left out stay. */
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
   /** A family's own notes; an empty string clears them. */
@@ -262,6 +266,7 @@ export const tauriClient: FmClient = {
   listTags: () => invoke<Tag[]>('list_tags'),
   tagFaces: (req) => invoke<Tag[]>('tag_faces', { req }),
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
+  selectionTags: (req) => invoke<SelectionTags>('selection_tags', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
   declareLicense: (req) => invoke<void>('declare_license', { req }),

@@ -188,6 +188,44 @@ pub struct TagFacesRequest {
     pub faces: Vec<FaceId>,
     /// Tag names.
     pub tags: Vec<String>,
+    /// Whole families (E13.4): every face of each, as the library lists it.
+    #[serde(default)]
+    pub families: Vec<FamilyId>,
+}
+
+/// The fonts a selection or a drag names (E13.4): faces and whole families.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTagsRequest {
+    /// The faces.
+    pub faces: Vec<FaceId>,
+    /// Whole families: every face of each, as the library lists it.
+    #[serde(default)]
+    pub families: Vec<FamilyId>,
+}
+
+/// The tags the faces of a selection carry (E13.4).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTags {
+    /// Every face the selection names, each once: the faces first, then the
+    /// faces of each family.
+    pub faces: Vec<FaceId>,
+    /// Every tag at least one of those faces carries, A to Z.
+    pub tags: Vec<SelectionTag>,
+}
+
+/// One tag of a [`SelectionTags`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTag {
+    /// The tag.
+    pub tag: TagId,
+    /// How many of the selection's faces carry it: all of them, or some
+    /// (a mixed state).
+    pub face_count: u32,
+    /// True when every face of the selection carries it.
+    pub all: bool,
 }
 
 /// Detach tags from faces.
@@ -438,6 +476,9 @@ pub trait OrganizationService {
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>>;
     /// Detach tags.
     fn untag_faces(&self, req: UntagFacesRequest) -> ApiResult<()>;
+    /// The tags the faces of a selection carry, with how many carry each
+    /// (E13.4). An unknown face or family is `NotFound`.
+    fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags>;
     /// Favorite, rating, notes.
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()>;
     /// Every project set.
