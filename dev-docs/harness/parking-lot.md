@@ -145,3 +145,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-21
 
 - [E12.5 #108] apps/desktop/src/views/HomeView.vue:402 — the existing mode and inspector `.toggle` buttons are outlined in `--fm-border` (≈1.5:1 light and dark), the same as the new layout toolbar buttons.
+- [E17.1 #126] apps/desktop/src/views/HomeView.vue:354 — the window builds its active-count text in the frontend ("0 fonts active") while fm_core::lifecycle::active_label says "No fonts active", so window and tray word zero differently.
+- [E17.1 #126] apps/desktop/src-tauri/src/lib.rs:833 — not confirmed whether a Windows logoff or shutdown with the window hidden reaches RunEvent::Exit; session rows then wait for the next-start repair.

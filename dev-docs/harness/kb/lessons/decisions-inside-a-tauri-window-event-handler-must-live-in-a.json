@@ -1,0 +1,19 @@
+{
+  "id": "decisions-inside-a-tauri-window-event-handler-must-live-in-a",
+  "title": "Decisions inside a Tauri window-event handler must live in a function a test can call",
+  "category": "testing",
+  "rule": "When a Builder::on_window_event (or Window::on_window_event) closure decides something a criterion depends on (prevent_close on CloseRequested, hide instead of quit), put the whole decision, including the call that acts on it, in a pub function that takes the window and a callback (e.g. `on_close_requested(window, || api.prevent_close())`), and keep the closure a single non-branching line. Tauri's MockRuntime drops window-event listeners (tauri test/mock_runtime.rs on_window_event is a no-op), so a test cannot reach the closure itself. Test the function with a recording callback and assert both that it is called and that it is not.",
+  "rationale": "E17.1 (#126): the close closure in lib.rs called api.prevent_close() after the tested decision function returned; deleting that call or inverting the check would have quit the app on close and dropped session fonts with every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    126
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/src/**/*.rs",
+    "apps/desktop/src-tauri/tests/**/*.rs"
+  ],
+  "first_seen": "2026-10-21T06:12:40.625Z",
+  "last_seen": "2026-10-21T06:12:40.625Z"
+}
