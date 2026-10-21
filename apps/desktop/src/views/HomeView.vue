@@ -303,6 +303,8 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
           editable
           :bounds="textLayouts.bounds"
           :set-props="textLayouts.setBlockProps"
+          :width="textLayouts.width"
+          :set-width-lock="textLayouts.setWidthLock"
           @edit-text="textLayouts.setBlockText"
         />
       </template>

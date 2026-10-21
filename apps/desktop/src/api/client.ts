@@ -162,6 +162,8 @@ export interface FmClient {
   layoutHistory(req: LayoutRef): Promise<LayoutVersion[]>;
   /** Makes a kept version current; what it replaces is kept as a version. */
   restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
+  /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
+  layoutWidth(req: Layout): Promise<number | null>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -245,6 +247,7 @@ export const tauriClient: FmClient = {
   revertLayout: (req) => invoke<SavedLayout>('revert_layout', { req }),
   layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
   restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
+  layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),

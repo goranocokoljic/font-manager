@@ -11,6 +11,7 @@ import {
   mockFaces,
 } from '../api/mock';
 import type { Layout, LayoutBounds, LayoutPreset } from '../api/types';
+import { useCommandsStore } from '../stores/commands';
 import { useTextLayoutsStore } from '../stores/textLayouts';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import FontLayout from './FontLayout.vue';
@@ -39,6 +40,7 @@ let fonts: FakeSet;
 let loader: FaceLoader<FakeFace>;
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   fonts = new FakeSet();
   loader = new FaceLoader<FakeFace>({
     fonts,
@@ -356,5 +358,62 @@ describe('FontLayout block properties (E12.3)', () => {
     const w = await show('book');
     expect(w.find('[data-testid="block-size-badge"]').exists()).toBe(false);
     w.unmount();
+  });
+
+  describe('width lock', () => {
+    async function locking() {
+      setActivePinia(createPinia());
+      setClient(createMockClient());
+      const store = useTextLayoutsStore();
+      await store.open('book');
+      const w = mount(FontLayout, {
+        props: {
+          layout: store.draft,
+          face: inter,
+          width: 500,
+          setWidthLock: store.setWidthLock,
+        },
+        attachTo: document.body,
+      });
+      await flushPromises();
+      return { w, store };
+    }
+    const lock = (w: Awaited<ReturnType<typeof locking>>['w']) =>
+      w.get('[data-testid="layout-width-lock"]');
+    const page = (w: Awaited<ReturnType<typeof locking>>['w']) =>
+      w.get('[data-testid="layout-page"]').element as HTMLElement;
+
+    it('is a labelled toggle button that sets the text at the locked width', async () => {
+      const { w } = await locking();
+      expect(lock(w).element.tagName).toBe('BUTTON');
+      expect(lock(w).text()).toBe('Lock width');
+      expect(lock(w).attributes('aria-pressed')).toBe('true');
+      expect(page(w).classList.contains('locked')).toBe(true);
+      expect(page(w).style.getPropertyValue('--fm-layout-width')).toBe('500px');
+      w.unmount();
+    });
+
+    it('unlocks and locks again through the store; the palette lists it', async () => {
+      const { w, store } = await locking();
+      const commands = useCommandsStore();
+      expect(commands.actions.some((a) => a.id === 'view.layoutWidthLock')).toBe(true);
+      await lock(w).trigger('click');
+      await flushPromises();
+      expect(store.draft!.widthLocked).toBe(false);
+      await w.setProps({ layout: store.draft });
+      expect(lock(w).attributes('aria-pressed')).toBe('false');
+      expect(page(w).classList.contains('locked')).toBe(false);
+      expect(commands.run('view.layoutWidthLock')).toBe(true);
+      await flushPromises();
+      expect(store.draft!.widthLocked).toBe(true);
+      w.unmount();
+    });
+
+    it('has no lock button without a way to change the lock', async () => {
+      setActivePinia(createPinia());
+      const w = await show('book');
+      expect(w.find('[data-testid="layout-width-lock"]').exists()).toBe(false);
+      w.unmount();
+    });
   });
 });

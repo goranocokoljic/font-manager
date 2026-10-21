@@ -1,0 +1,20 @@
+{
+  "id": "keep-a-measured-width-under-the-same-layout-it-was-measured-",
+  "title": "Keep a measured width under the same layout it was measured in",
+  "category": "correctness",
+  "rule": "When the UI measures an element's on-screen size to store it (lock a width, remember a column, pin a panel), the layout that later applies the stored value must use the same tracks, gaps and padding as the layout it was measured in. Do not add or remove a grid column, gap or margin between the measuring state and the applying state. Floor the measured value so rounding never makes it too big to fit. Add a Playwright check that toggles the state at an unchanged viewport and asserts the element keeps its width within 1 px.",
+  "rationale": "E12.4 (#107): the badge rows used `5em minmax(0, 1fr)` while unlocked but `5em minmax(0, W) 5em` once locked, so locking at the same window size shrank the text about 73 px and the text reflowed; the e2e check only measured after resizes.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    107
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue",
+    "apps/desktop/e2e/**/*.spec.ts"
+  ],
+  "first_seen": "2026-10-21T08:04:28.297Z",
+  "last_seen": "2026-10-21T08:04:28.297Z"
+}

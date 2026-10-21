@@ -7,11 +7,16 @@
 // the parent keeps the draft. With `bounds` and `setProps`, a size badge beside each block
 // opens its properties editor (E12.3) on click or Enter; Escape closes it and returns
 // focus to the badge.
+//
+// The text is set at `width` CSS px, centered, when the layout's width is locked (E12.4);
+// unlocked it follows the window. With `setWidthLock`, the Lock width button (and its
+// command palette entry) toggles the lock; locking keeps the width the text has on screen.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
+import { useActions } from '../stores/commands';
 import LayoutBlock from './LayoutBlock.vue';
 
 const props = defineProps<{
@@ -25,6 +30,10 @@ const props = defineProps<{
   bounds?: LayoutBounds | null;
   /** Changes one block's properties; answers the block as the core clamped it. */
   setProps?: (index: number, change: BlockProps) => Promise<TextBlock | null>;
+  /** The width in CSS px the text is set at; null follows the window. */
+  width?: number | null;
+  /** Locks the width (at `widthPx`, the text's width on screen now) or unlocks it. */
+  setWidthLock?: (locked: boolean, widthPx: number | null) => Promise<void>;
 }>();
 
 const emit = defineEmits<{ 'edit-text': [index: number, text: string] }>();
@@ -82,6 +91,34 @@ function sizeLabel(block: TextBlock): string {
   return `${Number((block.sizePt ?? 0).toFixed(1))} pt`;
 }
 
+const page = ref<HTMLDivElement | null>(null);
+const locked = computed(() => props.layout?.widthLocked !== false);
+const canLock = computed(() => Boolean(props.setWidthLock && props.layout && props.face));
+
+/** Locks the width the text column has now, or unlocks it. */
+async function toggleWidthLock(): Promise<void> {
+  if (!props.setWidthLock || !props.layout) return;
+  if (locked.value) return props.setWidthLock(false, null);
+  const cell = page.value?.querySelector<HTMLElement>('.cell');
+  // Floored, so the locked track (same grid as now) fits the row it was measured in.
+  const now = cell ? Math.floor(cell.getBoundingClientRect().width) : null;
+  return props.setWidthLock(true, now);
+}
+
+useActions([
+  {
+    id: 'view.layoutWidthLock',
+    title: 'Lock or unlock the layout width',
+    group: 'View',
+    enabled: () => canLock.value,
+    run: toggleWidthLock,
+  },
+]);
+
+const pageStyle = computed(() =>
+  locked.value && props.width != null ? { '--fm-layout-width': `${props.width}px` } : undefined,
+);
+
 const fontFamily = computed(() =>
   props.face
     ? `"${faceFamily(props.face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`
@@ -104,8 +141,29 @@ const fontFamily = computed(() =>
         <span v-if="state === 'failed'" class="failed" role="status">
           This font could not be loaded.
         </span>
+        <button
+          v-if="setWidthLock"
+          type="button"
+          class="lock"
+          data-testid="layout-width-lock"
+          :aria-pressed="locked"
+          :title="
+            locked
+              ? 'The text keeps its width; press to follow the window'
+              : 'The text follows the window; press to keep its width'
+          "
+          @click="toggleWidthLock"
+        >
+          Lock width
+        </button>
       </header>
-      <div class="page">
+      <div
+        ref="page"
+        class="page"
+        :class="{ locked: pageStyle !== undefined }"
+        data-testid="layout-page"
+        :style="pageStyle"
+      >
         <div
           v-for="(block, i) in layout.blocks"
           :key="`${layout.preset ?? layout.name}-${i}`"
@@ -180,14 +238,45 @@ const fontFamily = computed(() =>
   color: var(--fm-warning);
 }
 .page {
-  max-width: 72em;
   padding: 24px 32px;
 }
 .row.with-badge {
   display: grid;
-  grid-template-columns: 5em minmax(0, 1fr);
+  /* An empty column opposite the badges keeps the text centered and gives the locked and
+     unlocked grids the same tracks, so locking keeps the width the text has on screen. */
+  grid-template-columns: 5em minmax(0, 1fr) 5em;
   gap: 8px;
   align-items: start;
+}
+/* Locked: the text column keeps its width and is centered in the window. */
+.page.locked .row {
+  max-width: var(--fm-layout-width);
+  margin-inline: auto;
+}
+.page.locked .row.with-badge {
+  max-width: none;
+  grid-template-columns: 5em minmax(0, var(--fm-layout-width)) 5em;
+  justify-content: center;
+}
+.lock {
+  margin-left: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 3px;
+  background: var(--fm-bg);
+  color: var(--fm-fg);
+  font:
+    11px/1.4 system-ui,
+    sans-serif;
+  cursor: pointer;
+}
+.lock[aria-pressed='true'] {
+  border-color: var(--fm-accent);
+  color: var(--fm-accent);
+}
+.lock:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 1px;
 }
 .badge {
   justify-self: end;
