@@ -379,13 +379,15 @@ test('the properties editor works from the keyboard; Escape returns focus to the
   await page.keyboard.press('Tab');
   await expect(editor.getByRole('button', { name: 'Close' })).toBeFocused();
 
-  // The keyboard steps a value by the core's step.
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
-  await expect(editor.getByLabel('Columns')).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(blocks(book).first()).toHaveCSS('column-count', '2');
+  // The keyboard steps a number by the core's step (1 pt of size). A closed select is not
+  // stepped here: on macOS an arrow key opens its menu instead of changing the value.
+  for (let i = 0; i < names.length; i++) await page.keyboard.press('Shift+Tab');
+  const size = editor.getByLabel('Size');
+  await expect(size).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(size).toHaveValue('25');
+  await expect(blocks(book).first()).toHaveAttribute('data-size', '25');
+  await expect(badge).toHaveText('25 pt');
 
   await page.keyboard.press('Escape');
   await expect(editor).toBeHidden();
