@@ -285,6 +285,55 @@ export type ColumnRange = {
 	max: number,
 };
 
+/**  How the Compare sheet shows its faces. */
+export type CompareMode = 
+/**  One column per face. */
+"sideBySide" | 
+/**  One row per face. */
+"stacked" | 
+/**  Two faces drawn on one baseline. */
+"overlay";
+
+/**  A saved comparison, ready to reopen. */
+export type Comparison = {
+	/**  Id. */
+	id: ComparisonId,
+	/**  The name the user gave it. */
+	name: string,
+	/**  The mode it was saved in. */
+	mode: CompareMode,
+	/**
+	 *  The sample text it was saved with; empty means each face shows its
+	 *  own name.
+	 */
+	sampleText: string,
+	/**  The faces the library still shows, in the saved order. */
+	faces: FaceSummary[],
+	/**  The saved faces the library no longer shows, in the saved order. */
+	missing: MissingFace[],
+};
+
+/**  A saved comparison as the list shows it. */
+export type ComparisonEntry = {
+	/**  Id. */
+	id: ComparisonId,
+	/**  The name the user gave it. */
+	name: string,
+	/**  The mode it was saved in. */
+	mode: CompareMode,
+	/**  How many faces it was saved with, missing ones included. */
+	faceCount: number,
+};
+
+/**  A named comparison saved from the Compare sheet. */
+export type ComparisonId = number;
+
+/**  Names one saved comparison. */
+export type ComparisonRef = {
+	/**  Id. */
+	id: ComparisonId,
+};
+
 /**  A clash found before activating. */
 export type Conflict = {
 	/**  The face that would be activated. */
@@ -1369,6 +1418,17 @@ export type Missing = {
 };
 
 /**
+ *  A face a saved comparison names that the library no longer shows (its
+ *  file was removed, or its folder is paused).
+ */
+export type MissingFace = {
+	/**  The face's id when it was saved. */
+	id: FaceId,
+	/**  Its family and style name when it was saved ("Roboto Bold"). */
+	name: string,
+};
+
+/**
  *  Move a collection under another parent, or to another place among its
  *  siblings.
  */
@@ -1629,6 +1689,14 @@ export type RenameCollectionRequest = {
 	name: string,
 };
 
+/**  Gives a saved comparison a new name. */
+export type RenameComparisonRequest = {
+	/**  Id. */
+	id: ComparisonId,
+	/**  The new name; must not be empty. */
+	name: string,
+};
+
 /**
  *  A "Keep this one" action: the copy kept and the copies moved to the
  *  trash. Listed in the Problems history until undone or forgotten.
@@ -1733,6 +1801,20 @@ export type SampleTextRequest = {
 	faces: FaceId[],
 	/**  The sample text the user chose. */
 	text: string,
+};
+
+/**  Saves a comparison: a new one, or over an existing one. */
+export type SaveComparisonRequest = {
+	/**  The comparison to overwrite; none saves a new one. */
+	id?: ComparisonId | null,
+	/**  Its name; must not be empty (spaces around it are dropped). */
+	name: string,
+	/**  2–4 distinct faces, in the order the sheet shows them. */
+	faces: FaceId[],
+	/**  The mode. */
+	mode?: CompareMode,
+	/**  The sample text; empty means each face shows its own name. */
+	sampleText?: string,
 };
 
 /**  Writes a layout to its template file; the previous content is kept as a version. */
@@ -2141,4 +2223,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 14, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 15, patch: 0 };

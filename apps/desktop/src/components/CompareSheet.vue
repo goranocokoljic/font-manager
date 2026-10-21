@@ -5,10 +5,14 @@
 // opacity. Every face is live text in the webview, registered through the shared
 // face loader while the sheet shows it.
 //
+// Named comparisons (E13.2): the pins, mode and sample text are saved under a name;
+// a saved one is reopened from the list in the sheet (or the command palette) and
+// shows the fonts left, naming the ones the library no longer has.
+//
 // A modal dialog: Tab cycles inside, plain keys do not reach the list's
 // shortcuts, and Escape or Close returns focus to where it was (the list row).
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import type { FaceId, FaceSummary } from '../api/types';
+import type { ComparisonId, FaceId, FaceSummary } from '../api/types';
 import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
@@ -24,7 +28,38 @@ let returnFocus: HTMLElement | null = null;
 const SLOTS = [0, 1] as const;
 
 const settings = computed(() => preview.settingsFor(ALL_FONTS_VIEW));
-const textOf = (face: FaceSummary) => sampleText(settings.value, face);
+/** The face's text: the reopened comparison's (empty: the face's name), else the list's. */
+const textOf = (face: FaceSummary) =>
+  compare.text === null ? sampleText(settings.value, face) : compare.text || fontNameSample(face);
+
+/** The sample text a save keeps: the one shown; empty when each face shows its own name. */
+const textToSave = computed(() => {
+  if (compare.text !== null) return compare.text;
+  const s = settings.value;
+  if (s.sample === 'fontName' || (s.sample === 'custom' && !s.customText.trim())) return '';
+  const first = compare.pins[0];
+  return first ? sampleText(s, first) : '';
+});
+
+const saveName = ref(compare.current?.name ?? '');
+watch(
+  () => compare.current,
+  (c) => {
+    if (c) saveName.value = c.name;
+  },
+);
+const canSave = computed(() => compare.pins.length >= 2 && saveName.value.trim() !== '');
+
+async function onSave(): Promise<void> {
+  if (canSave.value) await compare.save(saveName.value, textToSave.value);
+}
+
+/** Reopens a saved comparison; the focus goes to its mode, as when the sheet opens. */
+async function onReopen(id: ComparisonId): Promise<void> {
+  await compare.reopen(id);
+  await nextTick();
+  dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
+}
 
 // The pinned faces' fonts, registered with the webview while the sheet is open.
 const families = reactive(new Map<FaceId, string>());
@@ -68,6 +103,7 @@ onMounted(async () => {
       : document.querySelector('main');
   window.addEventListener('keydown', onOutsideKey, true);
   document.addEventListener('focusin', onFocusIn);
+  void compare.loadSaved();
   await nextTick();
   dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
 });
@@ -183,6 +219,9 @@ function onFocusIn(e: FocusEvent): void {
     >
       <header class="head">
         <h2 id="fm-compare-sheet-title">Compare</h2>
+        <span v-if="compare.current" class="current" data-testid="compare-current">
+          {{ compare.current.name }}
+        </span>
         <span class="muted">{{ compare.pins.length }} of {{ MAX_PINS }} pinned</span>
         <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
           <span id="fm-compare-mode-label" class="muted">Mode</span>
@@ -207,6 +246,41 @@ function onFocusIn(e: FocusEvent): void {
           ×
         </button>
       </header>
+
+      <div class="named">
+        <form class="save" @submit.prevent="onSave">
+          <input
+            v-model="saveName"
+            class="field"
+            type="text"
+            aria-label="Comparison name"
+            placeholder="Name this comparison"
+            maxlength="200"
+          />
+          <button type="submit" class="button" :disabled="!canSave">Save comparison</button>
+        </form>
+        <div v-if="compare.saved.length" class="saved">
+          <span id="fm-compare-saved-label" class="muted">Saved</span>
+          <ul aria-labelledby="fm-compare-saved-label">
+            <li v-for="c in compare.saved" :key="c.id">
+              <button
+                type="button"
+                class="button"
+                :aria-current="compare.current?.id === c.id ? 'true' : undefined"
+                :aria-label="`Open comparison ${c.name}`"
+                @click="onReopen(c.id)"
+              >
+                {{ c.name }} <span class="muted">({{ c.faceCount }})</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <p v-if="compare.missing.length" class="missing" role="status" data-testid="compare-missing">
+        Not in the library now:
+        {{ compare.missing.map((m) => m.name).join(', ') }}.
+      </p>
 
       <p v-if="compare.pins.length < 2" class="muted" role="status">
         Pin at least two fonts to compare them: select a font in the list and press C.
@@ -342,6 +416,42 @@ function onFocusIn(e: FocusEvent): void {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+.current {
+  font-weight: 600;
+}
+.named {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.save {
+  display: flex;
+  gap: 6px;
+}
+.saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.saved ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.button[aria-current='true'] {
+  border-color: var(--fm-accent);
+}
+.button:disabled {
+  opacity: 0.6;
+}
+.missing {
+  margin: 0;
 }
 h2 {
   margin: 0;

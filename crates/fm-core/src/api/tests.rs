@@ -2165,3 +2165,95 @@ fn the_license_inventory_of_an_empty_library_is_the_header_alone() {
     let lib = Lib::new("api-inventory-empty");
     assert!(inventory(&lib, None).is_empty());
 }
+
+// --- comparisons ---------------------------------------------------------
+
+/// The first face of the family `name`.
+fn first_face(lib: &Lib, name: &str) -> fm_api::library::FaceSummary {
+    let family = lib.family(name);
+    lib.api
+        .get_family(family.id)
+        .expect("family")
+        .faces
+        .into_iter()
+        .next()
+        .expect("a face")
+}
+
+/// E13.2: a named comparison of real fonts survives a rescan, a rebuild and
+/// a restart; when a font's file is removed, reopening it gives the faces
+/// left and names the missing one.
+#[test]
+fn named_comparisons_survive_a_rescan_a_restart_and_a_removed_font() {
+    use fm_api::comparison::{CompareMode, ComparisonRef, MissingFace, SaveComparisonRequest};
+
+    let (lib, source, _) = Lib::scanned("api-comparisons");
+    let picked: Vec<_> = ["Bebas Neue", "Barlow", "Agdasima"]
+        .iter()
+        .map(|name| first_face(&lib, name))
+        .collect();
+    let ids: Vec<_> = picked.iter().map(|f| f.id).collect();
+    let saved = lib
+        .api
+        .save_comparison(SaveComparisonRequest {
+            id: None,
+            name: "Display options".into(),
+            faces: ids.clone(),
+            mode: CompareMode::Overlay,
+            sample_text: "Ångström 2026".into(),
+        })
+        .expect("save");
+    assert_eq!(saved.faces.iter().map(|f| f.id).collect::<Vec<_>>(), ids);
+    let reopen = |api: &CoreApi| {
+        api.get_comparison(ComparisonRef { id: saved.id })
+            .expect("reopen")
+    };
+
+    lib.scan(None, false);
+    assert_eq!(reopen(&lib.api), saved, "after a rescan");
+    rebuild(&lib);
+    assert_eq!(
+        reopen(&lib.api)
+            .faces
+            .iter()
+            .map(|f| f.id)
+            .collect::<Vec<_>>(),
+        ids,
+        "after a rebuild"
+    );
+
+    // A restart: a new core over the same index file.
+    let index = Index::open(&lib.paths.data.join(INDEX_FILE))
+        .expect("index")
+        .index;
+    let restarted = CoreApi::new(
+        index,
+        Arc::clone(&lib.activator) as Arc<dyn FontActivator>,
+        SettingsStore::new(&lib.paths),
+        None,
+    );
+    let after = reopen(&restarted);
+    assert_eq!(after.name, "Display options");
+    assert_eq!(after.mode, CompareMode::Overlay);
+    assert_eq!(after.sample_text, "Ångström 2026");
+    assert_eq!(after.faces.iter().map(|f| f.id).collect::<Vec<_>>(), ids);
+    assert_eq!(restarted.list_comparisons().expect("list").len(), 1);
+    drop(restarted);
+
+    // Bebas Neue's file is removed from the folder and the folder rescanned.
+    std::fs::remove_dir_all(lib.root.join("bebasneue")).expect("remove");
+    lib.scan(Some(source.id), true);
+    let left = reopen(&lib.api);
+    assert_eq!(
+        left.faces.iter().map(|f| f.id).collect::<Vec<_>>(),
+        ids[1..],
+        "the faces left, in order"
+    );
+    assert_eq!(
+        left.missing,
+        [MissingFace {
+            id: ids[0],
+            name: format!("{} {}", picked[0].family_name, picked[0].style),
+        }]
+    );
+}

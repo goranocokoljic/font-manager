@@ -22,6 +22,9 @@ import type {
   CreateCollectionRequest,
   CssValues,
   CssValuesRequest,
+  Comparison,
+  ComparisonEntry,
+  ComparisonRef,
   DeactivateRequest,
   DuplicateGroup,
   Event,
@@ -61,10 +64,12 @@ import type {
   QuickCollection,
   QuickCollectionRequest,
   RenameCollectionRequest,
+  RenameComparisonRequest,
   Resolution,
   ResolutionId,
   SampleText,
   SampleTextRequest,
+  SaveComparisonRequest,
   ScanRequest,
   SearchRequest,
   SearchResponse,
@@ -181,6 +186,16 @@ export interface FmClient {
   restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
   /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
   layoutWidth(req: Layout): Promise<number | null>;
+  /** Every saved comparison (E13.2), by name. */
+  listComparisons(): Promise<ComparisonEntry[]>;
+  /** One saved comparison: the faces the library still shows, and the missing ones by name. */
+  getComparison(req: ComparisonRef): Promise<Comparison>;
+  /** Saves a comparison (2–4 faces, a name), new or over `req.id`. */
+  saveComparison(req: SaveComparisonRequest): Promise<Comparison>;
+  /** Renames a saved comparison. */
+  renameComparison(req: RenameComparisonRequest): Promise<ComparisonEntry>;
+  /** Deletes a saved comparison; the fonts are not touched. */
+  deleteComparison(req: ComparisonRef): Promise<void>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -272,6 +287,11 @@ export const tauriClient: FmClient = {
   layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
   restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
   layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
+  listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),
+  getComparison: (req) => invoke<Comparison>('get_comparison', { req }),
+  saveComparison: (req) => invoke<Comparison>('save_comparison', { req }),
+  renameComparison: (req) => invoke<ComparisonEntry>('rename_comparison', { req }),
+  deleteComparison: (req) => invoke<void>('delete_comparison', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),

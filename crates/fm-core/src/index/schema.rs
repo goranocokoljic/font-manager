@@ -494,13 +494,40 @@ CREATE TABLE quick_face (
 );
 ";
 
+/// Named comparisons (E13.2, `index/comparisons.rs`): a Compare sheet's
+/// faces, mode and sample text under a name. `comparison.mode` is the
+/// `fm-api` `CompareMode` serde name; an empty `sample_text` means each face
+/// shows its own name.
+/// - `comparison_face.face_id` has no foreign key: when a face leaves the
+///   index its row stays, so reopening the comparison can name it as
+///   missing. `postscript_name` and `name` are the face's when it was saved;
+///   a face id that now holds another PostScript name counts as missing.
+/// - `position` orders the faces as the sheet showed them.
+const V16: &str = r"
+CREATE TABLE comparison (
+    id           INTEGER PRIMARY KEY,
+    name         TEXT    NOT NULL,
+    mode         TEXT    NOT NULL CHECK (mode IN ('sideBySide', 'stacked', 'overlay')),
+    sample_text  TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE comparison_face (
+    comparison_id    INTEGER NOT NULL REFERENCES comparison (id) ON DELETE CASCADE,
+    position         INTEGER NOT NULL,
+    face_id          INTEGER NOT NULL,
+    postscript_name  TEXT    NOT NULL,
+    name             TEXT    NOT NULL,
+    PRIMARY KEY (comparison_id, position)
+) WITHOUT ROWID;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15,
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16,
 ];
 
 /// The schema version this build writes.
@@ -513,6 +540,8 @@ pub(crate) const TABLES: &[&str] = &[
     "activation_registration",
     "collection",
     "collection_face",
+    "comparison",
+    "comparison_face",
     "face",
     "face_fts",
     "face_fts_config",

@@ -9,6 +9,9 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::comparison::{
+    Comparison, ComparisonEntry, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
+};
 use fm_api::export::{ExportService, LicenseInventoryRequest};
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
@@ -365,6 +368,42 @@ async fn restore_layout(
 #[tauri::command]
 async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Option<f32>> {
     call(&state, move |api| api.layout_width(req)).await
+}
+
+/// Every saved comparison, by name (E13.2).
+#[tauri::command]
+async fn list_comparisons(state: State<'_, AppState>) -> ApiResult<Vec<ComparisonEntry>> {
+    call(&state, move |api| api.list_comparisons()).await
+}
+
+/// One saved comparison: its faces left and the missing ones.
+#[tauri::command]
+async fn get_comparison(state: State<'_, AppState>, req: ComparisonRef) -> ApiResult<Comparison> {
+    call(&state, move |api| api.get_comparison(req)).await
+}
+
+/// Saves a comparison, new or over an existing one.
+#[tauri::command]
+async fn save_comparison(
+    state: State<'_, AppState>,
+    req: SaveComparisonRequest,
+) -> ApiResult<Comparison> {
+    call(&state, move |api| api.save_comparison(req)).await
+}
+
+/// Renames a saved comparison.
+#[tauri::command]
+async fn rename_comparison(
+    state: State<'_, AppState>,
+    req: RenameComparisonRequest,
+) -> ApiResult<ComparisonEntry> {
+    call(&state, move |api| api.rename_comparison(req)).await
+}
+
+/// Deletes a saved comparison; the fonts are not touched.
+#[tauri::command]
+async fn delete_comparison(state: State<'_, AppState>, req: ComparisonRef) -> ApiResult<()> {
+    call(&state, move |api| api.delete_comparison(req)).await
 }
 
 #[tauri::command]
@@ -826,6 +865,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             layout_history,
             restore_layout,
             layout_width,
+            list_comparisons,
+            get_comparison,
+            save_comparison,
+            rename_comparison,
+            delete_comparison,
             render_preview,
             activate,
             deactivate,

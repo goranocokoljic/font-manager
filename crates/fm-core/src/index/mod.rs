@@ -23,6 +23,7 @@
 
 mod activation;
 mod collections;
+mod comparisons;
 mod duplicates;
 mod faces;
 mod family_license;

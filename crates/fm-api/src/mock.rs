@@ -18,6 +18,10 @@ use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
     NamedInstance, Page, Paged, Slant,
 };
+use crate::comparison::{
+    Comparison, ComparisonEntry, ComparisonRef, ComparisonService, MAX_COMPARISON_FACES,
+    MIN_COMPARISON_FACES, MissingFace, RenameComparisonRequest, SaveComparisonRequest,
+};
 use crate::export::{
     ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest, WebFormat,
@@ -56,8 +60,8 @@ use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
 use crate::{
-    API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
-    EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
+    API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ComparisonId, ErrorCode,
+    Event, EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
     OrganizationService, PreviewService, ResolutionId, SearchService, SetId, SettingsService,
     SourceId, TagId, VirtualStyleId, WorkflowService,
 };
@@ -202,6 +206,8 @@ struct State {
     family_notes: HashMap<FamilyId, String>,
     /// The Quick Collection, first added first.
     quick: Vec<FaceId>,
+    /// Named comparisons, in the order they were saved.
+    comparisons: Vec<MockComparison>,
     settings: Settings,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
@@ -587,6 +593,7 @@ impl State {
             virtual_styles: Vec::new(),
             family_notes: HashMap::new(),
             quick: Vec::new(),
+            comparisons: Vec::new(),
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
@@ -3481,6 +3488,144 @@ fn mock_save_layout(
     let excess = file.versions.len().saturating_sub(MOCK_MAX_LAYOUT_VERSIONS);
     file.versions.drain(..excess);
     Ok(saved)
+}
+
+/// A saved comparison: its faces with the name each had when saved.
+#[derive(Debug, Clone)]
+struct MockComparison {
+    entry: ComparisonEntry,
+    sample_text: String,
+    faces: Vec<(FaceId, String)>,
+}
+
+/// The name a comparison is saved under: trimmed, not empty.
+fn comparison_name(name: &str) -> ApiResult<String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(ApiError::invalid("A comparison needs a name."));
+    }
+    Ok(name.to_owned())
+}
+
+impl ComparisonService for MockApi {
+    fn list_comparisons(&self) -> ApiResult<Vec<ComparisonEntry>> {
+        let mut out: Vec<_> = self
+            .state()
+            .comparisons
+            .iter()
+            .map(|c| c.entry.clone())
+            .collect();
+        out.sort_by(|a, b| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then(a.id.cmp(&b.id))
+        });
+        Ok(out)
+    }
+
+    fn get_comparison(&self, req: ComparisonRef) -> ApiResult<Comparison> {
+        let st = self.state();
+        let c = st
+            .comparisons
+            .iter()
+            .find(|c| c.entry.id == req.id)
+            .ok_or_else(|| ApiError::not_found(format!("Comparison {}", req.id)))?;
+        let mut faces = Vec::new();
+        let mut missing = Vec::new();
+        for (id, name) in &c.faces {
+            match st.face(*id) {
+                Ok(f) if st.visible(f) && !st.trashed.contains(&f.detail.path) => {
+                    faces.push(st.summary(f));
+                }
+                _ => missing.push(MissingFace {
+                    id: *id,
+                    name: name.clone(),
+                }),
+            }
+        }
+        Ok(Comparison {
+            id: c.entry.id,
+            name: c.entry.name.clone(),
+            mode: c.entry.mode,
+            sample_text: c.sample_text.clone(),
+            faces,
+            missing,
+        })
+    }
+
+    fn save_comparison(&self, req: SaveComparisonRequest) -> ApiResult<Comparison> {
+        let name = comparison_name(&req.name)?;
+        if !(MIN_COMPARISON_FACES..=MAX_COMPARISON_FACES).contains(&req.faces.len()) {
+            return Err(ApiError::invalid(format!(
+                "A comparison holds {MIN_COMPARISON_FACES} to {MAX_COMPARISON_FACES} fonts, not {}.",
+                req.faces.len()
+            )));
+        }
+        if req
+            .faces
+            .iter()
+            .enumerate()
+            .any(|(i, f)| req.faces[..i].contains(f))
+        {
+            return Err(ApiError::invalid("A comparison names each font once."));
+        }
+        let id = {
+            let mut st = self.state();
+            let mut faces = Vec::with_capacity(req.faces.len());
+            for id in &req.faces {
+                let s = &st.face(*id)?.detail.face;
+                faces.push((*id, format!("{} {}", s.family_name, s.style)));
+            }
+            let id = match req.id {
+                Some(id) => {
+                    if !st.comparisons.iter().any(|c| c.entry.id == id) {
+                        return Err(ApiError::not_found(format!("Comparison {id}")));
+                    }
+                    id
+                }
+                None => ComparisonId(st.next()),
+            };
+            let saved = MockComparison {
+                entry: ComparisonEntry {
+                    id,
+                    name,
+                    mode: req.mode,
+                    face_count: u32::try_from(faces.len()).unwrap_or(u32::MAX),
+                },
+                sample_text: req.sample_text,
+                faces,
+            };
+            match st.comparisons.iter_mut().find(|c| c.entry.id == id) {
+                Some(c) => *c = saved,
+                None => st.comparisons.push(saved),
+            }
+            id
+        };
+        self.get_comparison(ComparisonRef { id })
+    }
+
+    fn rename_comparison(&self, req: RenameComparisonRequest) -> ApiResult<ComparisonEntry> {
+        let name = comparison_name(&req.name)?;
+        let mut st = self.state();
+        let c = st
+            .comparisons
+            .iter_mut()
+            .find(|c| c.entry.id == req.id)
+            .ok_or_else(|| ApiError::not_found(format!("Comparison {}", req.id)))?;
+        c.entry.name = name;
+        Ok(c.entry.clone())
+    }
+
+    fn delete_comparison(&self, req: ComparisonRef) -> ApiResult<()> {
+        let mut st = self.state();
+        let before = st.comparisons.len();
+        st.comparisons.retain(|c| c.entry.id != req.id);
+        if st.comparisons.len() == before {
+            return Err(ApiError::not_found(format!("Comparison {}", req.id)));
+        }
+        Ok(())
+    }
 }
 
 impl EventSource for MockApi {
