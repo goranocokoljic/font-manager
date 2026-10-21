@@ -47,9 +47,9 @@ use fm_api::library::{
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
-    OrganizationService, PinInstanceRequest, ProjectSet, ReceiptChange, ReceiptPlace,
-    RenameCollectionRequest, SetExport, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
-    VirtualStyle, VirtualStylesRequest,
+    OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SetExport, Tag, TagFacesRequest,
+    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
@@ -847,6 +847,25 @@ impl OrganizationService for CoreApi {
         let faces = self.lock().declare_license(req.family, &license)?;
         self.updated(&faces);
         Ok(())
+    }
+
+    fn quick_collection(&self) -> ApiResult<QuickCollection> {
+        Ok(self.lock().quick_collection()?)
+    }
+
+    fn add_to_quick_collection(&self, req: QuickCollectionRequest) -> ApiResult<QuickCollection> {
+        Ok(self.lock().add_to_quick_collection(&req.faces)?)
+    }
+
+    fn remove_from_quick_collection(
+        &self,
+        req: QuickCollectionRequest,
+    ) -> ApiResult<QuickCollection> {
+        Ok(self.lock().remove_from_quick_collection(&req.faces)?)
+    }
+
+    fn clear_quick_collection(&self) -> ApiResult<()> {
+        Ok(self.lock().clear_quick_collection()?)
     }
 }
 

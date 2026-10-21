@@ -1570,6 +1570,29 @@ export type ProjectSet = {
 	faces: FaceId[],
 };
 
+/**
+ *  The Quick Collection (E13.3): one list of faces the user gathers while
+ *  browsing, to review and then keep as a collection or a tag. It is kept in
+ *  the index, so it outlives a restart.
+ */
+export type QuickCollection = {
+	/**
+	 *  Its faces in the order they were added, first added first. A face
+	 *  the library does not show (its file is gone, its source paused) is
+	 *  left out while it is hidden.
+	 */
+	faces: FaceSummary[],
+};
+
+/**  Add faces to, or remove them from, the Quick Collection. */
+export type QuickCollectionRequest = {
+	/**
+	 *  The faces. Adding a face already in it keeps its place; removing a
+	 *  face not in it does nothing.
+	 */
+	faces: FaceId[],
+};
+
 /**  What [`LicenseDeclaration`] does to a family's receipt. */
 export type ReceiptChange = 
 /**  Leave the receipt as it is. */

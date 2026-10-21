@@ -34,6 +34,8 @@ const click = process.env.FM_SCREENS_CLICK;
 // FM_SCREENS_PIN=3 pins the first 3 list rows with C and opens Compare; FM_SCREENS_PIN_MODE=Overlay picks a mode.
 const pinRows = Number(process.env.FM_SCREENS_PIN ?? 0);
 const pinMode = process.env.FM_SCREENS_PIN_MODE;
+// FM_SCREENS_QUICK=3 adds the first 3 list rows to the Quick Collection with B and opens its review.
+const quickRows = Number(process.env.FM_SCREENS_QUICK ?? 0);
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -99,6 +101,17 @@ test.describe('@screens', () => {
             await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
             await page.getByRole('button', { name: /^Compare \d\/4$/ }).click();
             if (pinMode) await page.getByRole('radio', { name: pinMode }).check();
+          }
+          if (quickRows) {
+            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+            await rows.first().click();
+            for (let i = 0; i < quickRows; i++) {
+              await page.keyboard.press('b');
+              await expect(page.getByTestId('quick-count')).not.toHaveText(String(i));
+              await page.keyboard.press('ArrowDown');
+            }
+            await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
+            await page.getByTestId('quick-collection').click();
           }
           if (click) {
             await page

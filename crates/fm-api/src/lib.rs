@@ -195,6 +195,8 @@ pub fn types() -> specta::Types {
         organization::PinInstanceRequest,
         organization::VirtualStyle,
         organization::VirtualStylesRequest,
+        organization::QuickCollection,
+        organization::QuickCollectionRequest,
         // export
         export::ExportWebRequest,
         export::ExportWebResponse,

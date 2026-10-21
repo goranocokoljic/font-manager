@@ -31,6 +31,7 @@ mod files;
 mod languages;
 mod license_inventory;
 mod problems;
+mod quick_collection;
 mod resolutions;
 mod samples;
 mod schema;

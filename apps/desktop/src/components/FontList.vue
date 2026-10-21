@@ -22,6 +22,7 @@ import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
+import { useQuickCollectionStore } from '../stores/quickCollection';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
@@ -46,6 +47,7 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const library = useLibraryStore();
+const quick = useQuickCollectionStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
 
@@ -195,7 +197,7 @@ function onToggle(row: ListRow): void {
         :aria-selected="list.isSelected(item.row.key)"
         :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
         :aria-posinset="item.row.position"
-        :aria-label="rowLabel(item.row)"
+        :aria-label="rowLabel(item.row) + (quick.holds(item.row) ? ', in Quick Collection' : '')"
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
         draggable="true"
         @click="onRowClick(item.row, $event)"
@@ -225,6 +227,14 @@ function onToggle(row: ListRow): void {
         >
           <template #lead>
             <ActivationDot :state="rowActivation(item.row)" />
+            <span
+              v-if="quick.holds(item.row)"
+              class="quick-mark"
+              data-testid="quick-mark"
+              title="In the Quick Collection"
+              aria-hidden="true"
+              >●</span
+            >
           </template>
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
@@ -348,5 +358,9 @@ function onToggle(row: ListRow): void {
 }
 .note {
   color: var(--fm-warning);
+}
+.quick-mark {
+  color: var(--fm-accent);
+  font-size: 10px;
 }
 </style>

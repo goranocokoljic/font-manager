@@ -1,0 +1,19 @@
+{
+  "id": "a-new-view-that-renders-font-previews-must-apply-the-preview",
+  "title": "A new view that renders font previews must apply the preview Surface setting",
+  "category": "accessibility",
+  "rule": "When a new component renders font samples with a view's PreviewSettings (a review panel, a sheet, a strip), bind the same `surface-light` / `surface-dark` class the font list and grid derive from `preview.surface` on the element that paints the background, next to `backgroundColor`. Text color is applied inline from the settings, so without the surface class a color picked for a dark surface lands on the app theme's background. Add a Playwright check that sets Surface Dark with a white text color in the light theme and asserts the view's computed background and sample color.",
+  "rationale": "E13.3 (#111): the Quick Collection review applied size, spacing and text color but not Surface, so white text picked for a dark surface showed white on white (1:1).",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    111
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-10-21T10:43:52.182Z",
+  "last_seen": "2026-10-21T10:43:52.182Z"
+}
