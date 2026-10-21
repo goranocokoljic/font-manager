@@ -71,7 +71,9 @@ async function scrollTo(list: VueWrapper, top: number) {
 }
 
 describe('FontList virtualization', () => {
-  it('renders only the rows on screen for 10,000 families', async () => {
+  // Building and searching a 10,000-family mock takes seconds under a loaded
+  // parallel run; the test is about the DOM row count, not speed.
+  it('renders only the rows on screen for 10,000 families', { timeout: 30_000 }, async () => {
     const list = await listOf({ extraFaces: 9997 }, { rowHeight: 50, overscan: 2 });
     const rows = items(list);
     // 600 px fallback viewport: 12 rows, +1 partly visible, +2 overscan each side.
