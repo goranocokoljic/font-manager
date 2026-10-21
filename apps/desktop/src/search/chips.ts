@@ -27,6 +27,7 @@ export type ChipFacet =
   | 'formats'
   | 'features'
   | 'license'
+  | 'webOk'
   | 'openLicense'
   | 'embedding'
   | 'sources'
@@ -65,6 +66,7 @@ const KIND: Record<ChipFacet, Kind> = {
   formats: 'any',
   features: 'all',
   license: 'one',
+  webOk: 'one',
   openLicense: 'one',
   embedding: 'one',
   sources: 'any',
@@ -125,6 +127,7 @@ const GROUPS: { facet: ChipFacet; label: string; name: (v: ChipValue) => string 
   { facet: 'formats', label: 'Format', name: (v) => FORMATS[v as FontFormat] ?? String(v) },
   { facet: 'features', label: 'Features', name: String },
   { facet: 'license', label: 'License', name: (v) => LICENSES[v as LicenseType] ?? String(v) },
+  { facet: 'webOk', label: 'Usage', name: yesNo('OK for web', 'Not for web') },
   { facet: 'openLicense', label: 'Open license', name: yesNo('Open license', 'Not open') },
   {
     facet: 'embedding',

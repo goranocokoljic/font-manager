@@ -42,10 +42,12 @@ import {
   type Filters,
   type JobId,
   type LanguagePreset,
+  type LicenseInfo,
   type Layout,
   type LayoutEntry,
   type LayoutVersion,
   type SavedLayout,
+  type OpenLicense,
   type PreviewImage,
   type PreviewRequest,
   type Problem,
@@ -61,6 +63,7 @@ import {
   type Target,
   type TextBlock,
   type VirtualStyle,
+  type WebUse,
 } from './types';
 
 export const mockAppInfo: AppInfo = {
@@ -816,6 +819,39 @@ export const mockLanguages: LanguagePreset[] = [
   { code: 'el', name: 'Greek', script: 'Grek' },
 ];
 
+const OPEN_LICENSE_LABELS: Record<OpenLicense, string> = {
+  ofl: 'OFL',
+  apache: 'Apache 2.0',
+  ufl: 'UFL',
+  mit: 'MIT',
+};
+
+/**
+ * The mock's copy of `fm_core::license::web_use`, like the Rust mock: declared
+ * Web allows; declared Desktop, Trial or Personal-only, then restricted or
+ * preview-and-print embedding, do not; an open license allows; nothing else does.
+ */
+export function mockWebUse(l: LicenseInfo): WebUse {
+  const no = (reason: string): WebUse => ({ ok: false, reason });
+  switch (l.declared) {
+    case 'web':
+      return { ok: true, reason: 'Declared web license' };
+    case 'desktop':
+      return no('Declared desktop license');
+    case 'trial':
+      return no('Declared trial license');
+    case 'personalOnly':
+      return no('Declared for personal use only');
+  }
+  if (l.embedding === 'restricted') return no('Embedding restricted, no web license declared');
+  if (l.embedding === 'previewAndPrint') {
+    return no('Embedding preview & print only, no web license declared');
+  }
+  if (l.openLicense)
+    return { ok: true, reason: `Open license (${OPEN_LICENSE_LABELS[l.openLicense]})` };
+  return no('No web license declared');
+}
+
 /**
  * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
  * `tags` are the ids of its tags.
@@ -844,6 +880,7 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
       Date.parse(MOCK_ADDED) >= Date.parse(MOCK_NOW) - q.addedWithinDays * 86_400_000) &&
     (q.embedding == null || q.embedding === d.license.embedding) &&
     (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
+    (q.webOk == null || q.webOk === mockWebUse(d.license).ok) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -1263,6 +1300,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       (f, embedding) => ({ ...f, embedding }),
     ),
     openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense })),
+    webOk: countEach(query, q, both, (f, webOk) => ({ ...f, webOk })),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
@@ -1430,6 +1468,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!f) throw notFound(id);
       const detail = structuredClone(f);
       detail.face.active = active.get(id) ?? null;
+      detail.license.webUse = mockWebUse(detail.license);
       return detail;
     },
     // Families in id order (the sample ones first), or in `order`; `sort` is not mocked.

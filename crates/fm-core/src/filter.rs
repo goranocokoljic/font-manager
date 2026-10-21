@@ -17,11 +17,12 @@ use std::collections::HashMap;
 
 use fm_api::SourceId;
 use fm_api::common::{Classification, Embedding, FontFormat, Slant};
-use fm_api::library::LicenseType;
+use fm_api::library::{LicenseType, OpenLicense};
 use fm_api::search::{FilterCount, FilterCounts, Filters};
 use fm_api::{CollectionId, TagId};
 
 use crate::coverage::Fit;
+use crate::license;
 use crate::search::{FaceText, reaches_slant, reaches_weight, reaches_width};
 
 /// A four-letter OpenType tag.
@@ -56,8 +57,15 @@ pub(crate) struct FaceFacts {
     pub problems: bool,
     /// The embedding permission of `OS/2.fsType`.
     pub embedding: Embedding,
-    /// The name table states an open license.
-    pub open_license: bool,
+    /// The open license the name table states.
+    pub open_license: Option<OpenLicense>,
+}
+
+impl FaceFacts {
+    /// The face is OK for web ([`license::web_use`]).
+    pub(crate) fn web_ok(&self) -> bool {
+        license::web_use(self.embedding, self.open_license, self.license).ok()
+    }
 }
 
 impl FaceFacts {
@@ -80,7 +88,7 @@ impl FaceFacts {
             rating: None,
             problems: false,
             embedding: Embedding::Installable,
-            open_license: false,
+            open_license: None,
         }
     }
 }
@@ -107,6 +115,7 @@ pub(crate) enum Dim {
     Problems,
     Embedding,
     OpenLicense,
+    WebOk,
     /// Language or character coverage: checked against a [`Need`](crate::coverage::Need) built
     /// once per search, so [`failed`] leaves it to [`failed_supports`].
     Supports,
@@ -122,7 +131,7 @@ impl Dim {
 }
 
 /// The filters [`failed`] and [`passes`] check, in [`Dim`] order.
-const CHECKED: [Dim; 19] = [
+const CHECKED: [Dim; 20] = [
     Dim::Classification,
     Dim::Weight,
     Dim::Width,
@@ -142,6 +151,7 @@ const CHECKED: [Dim; 19] = [
     Dim::Problems,
     Dim::Embedding,
     Dim::OpenLicense,
+    Dim::WebOk,
 ];
 
 /// Whether `face` passes the filter `dim` of `filters` (an unset filter
@@ -180,7 +190,10 @@ fn check(dim: Dim, f: &Filters, text: &FaceText, facts: &FaceFacts) -> bool {
             .is_none_or(|r| facts.rating.is_some_and(|x| x >= r)),
         Dim::Problems => f.problems.is_none_or(|p| p == facts.problems),
         Dim::Embedding => f.embedding.is_none_or(|e| e == facts.embedding),
-        Dim::OpenLicense => f.open_license.is_none_or(|o| o == facts.open_license),
+        Dim::OpenLicense => f
+            .open_license
+            .is_none_or(|o| o == facts.open_license.is_some()),
+        Dim::WebOk => f.web_ok.is_none_or(|w| w == facts.web_ok()),
         Dim::Supports | Dim::Added => true,
     }
 }
@@ -258,6 +271,7 @@ pub(crate) enum Value {
     /// An [`EMBEDDINGS`] position.
     Embedding(u8),
     OpenLicense(bool),
+    WebOk(bool),
 }
 
 impl Value {
@@ -280,6 +294,7 @@ impl Value {
             Self::Rating(_) => Dim::Rating,
             Self::Embedding(_) => Dim::Embedding,
             Self::OpenLicense(_) => Dim::OpenLicense,
+            Self::WebOk(_) => Dim::WebOk,
         }
     }
 }
@@ -339,7 +354,7 @@ fn weight_span(class: u16) -> (u16, u16) {
 
 /// Every value `face` can be counted under.
 pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
-    let mut out = Vec::with_capacity(26 + facts.features.len() + facts.tags.len());
+    let mut out = Vec::with_capacity(27 + facts.features.len() + facts.tags.len());
     out.extend(facts.classification.map(Value::Classification));
     for class in WEIGHTS {
         let (lo, hi) = weight_span(class);
@@ -387,7 +402,8 @@ pub(crate) fn values(text: &FaceText, facts: &FaceFacts) -> Vec<Value> {
             .and_then(|i| u8::try_from(i).ok())
             .map(Value::Embedding),
     );
-    out.push(Value::OpenLicense(facts.open_license));
+    out.push(Value::OpenLicense(facts.open_license.is_some()));
+    out.push(Value::WebOk(facts.web_ok()));
     out
 }
 
@@ -526,6 +542,7 @@ impl<'a> Tally<'a> {
                 })
                 .collect(),
             open_license: list(bools, Value::OpenLicense, &count),
+            web_ok: list(bools, Value::WebOk, &count),
         }
     }
 }

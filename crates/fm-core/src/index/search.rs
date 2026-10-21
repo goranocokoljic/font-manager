@@ -451,7 +451,7 @@ impl Index {
                 rating: row.get(21).map_err(|e| db_error(&e))?,
                 problems: !row.get::<_, bool>(23).map_err(|e| db_error(&e))?,
                 embedding: license::embedding(row.get(29).map_err(|e| db_error(&e))?),
-                open_license: open_license.is_some(),
+                open_license,
             };
             let face_text = FaceText::new(
                 fields,

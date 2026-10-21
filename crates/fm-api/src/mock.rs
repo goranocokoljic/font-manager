@@ -33,6 +33,7 @@ use crate::library::{
     GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo,
     LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
     ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
+    WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -86,6 +87,40 @@ fn unix_seconds(t: &str) -> Option<i64> {
 }
 
 /// The refusal of a smart collection whose rule leads back to itself.
+/// The sample's copy of `fm_core::license::web_use` (fm-api cannot depend
+/// on fm-core): declared Web allows; declared Desktop, Trial or
+/// Personal-only, then restricted or preview-and-print embedding, do not;
+/// an open license allows; nothing else does.
+fn mock_web_use(l: &LicenseInfo) -> WebUse {
+    let (ok, reason) = match (l.declared, l.embedding, l.open_license) {
+        (Some(LicenseType::Web), ..) => (true, "Declared web license".to_owned()),
+        (Some(LicenseType::Desktop), ..) => (false, "Declared desktop license".to_owned()),
+        (Some(LicenseType::Trial), ..) => (false, "Declared trial license".to_owned()),
+        (Some(LicenseType::PersonalOnly), ..) => {
+            (false, "Declared for personal use only".to_owned())
+        }
+        (_, Embedding::Restricted, _) => (
+            false,
+            "Embedding restricted, no web license declared".to_owned(),
+        ),
+        (_, Embedding::PreviewAndPrint, _) => (
+            false,
+            "Embedding preview & print only, no web license declared".to_owned(),
+        ),
+        (_, _, Some(o)) => {
+            let name = match o {
+                OpenLicense::Ofl => "OFL",
+                OpenLicense::Apache => "Apache 2.0",
+                OpenLicense::Ufl => "UFL",
+                OpenLicense::Mit => "MIT",
+            };
+            (true, format!("Open license ({name})"))
+        }
+        (_, _, None) => (false, "No web license declared".to_owned()),
+    };
+    WebUse { ok, reason }
+}
+
 fn self_reference(c: &Collection) -> ApiError {
     ApiError::invalid(format!(
         "The rules of \"{}\" include the collection itself.",
@@ -296,6 +331,18 @@ fn face(
     };
     let open_license = (embedding == Embedding::Installable).then_some(OpenLicense::Ofl);
     let char_set: BTreeSet<char> = chars.iter().flat_map(|s| s.chars()).collect();
+    let mut license = LicenseInfo {
+        description: open_license.map(|_| "SIL Open Font License 1.1".into()),
+        url: open_license.map(|_| "https://openfontlicense.org".into()),
+        open_license,
+        embedding,
+        declared: None,
+        seats: None,
+        purchase_date: None,
+        receipt: None,
+        web_use: None,
+    };
+    license.web_use = Some(mock_web_use(&license));
     MockFace {
         detail: FaceDetail {
             face: FaceSummary {
@@ -320,16 +367,7 @@ fn face(
             copyright: Some(format!("Copyright {} Authors", family.1)),
             designer: None,
             vendor_id: None,
-            license: LicenseInfo {
-                description: open_license.map(|_| "SIL Open Font License 1.1".into()),
-                url: open_license.map(|_| "https://openfontlicense.org".into()),
-                open_license,
-                embedding,
-                declared: None,
-                seats: None,
-                purchase_date: None,
-                receipt: None,
-            },
+            license,
             metrics: Metrics {
                 units_per_em: 1000,
                 ascender: 900,
@@ -896,7 +934,8 @@ impl State {
             && q.min_rating.is_none_or(|r| f.detail.rating.is_some_and(|x| x >= r))
             && q.problems.is_none_or(|p| p == (s.health != Health::Ok))
             && q.embedding.is_none_or(|e| e == f.detail.license.embedding)
-            && q.open_license.is_none_or(|o| o == f.detail.license.open_license.is_some());
+            && q.open_license.is_none_or(|o| o == f.detail.license.open_license.is_some())
+            && q.web_ok.is_none_or(|w| Some(w) == f.detail.license.web_use.as_ref().map(|u| u.ok));
         Ok(ok
             && match q.collection {
                 Some(c) => self.in_collection(f, c, path)?,
@@ -1679,6 +1718,7 @@ impl State {
                 |f, v| f.embedding = Some(*v),
             )?,
             open_license: self.count_each(words, q, both(), |f, v| f.open_license = Some(*v))?,
+            web_ok: self.count_each(words, q, both(), |f, v| f.web_ok = Some(*v))?,
         })
     }
 }
@@ -2595,6 +2635,7 @@ impl OrganizationService for MockApi {
             if let Some(receipt) = &receipt {
                 license.receipt.clone_from(receipt);
             }
+            license.web_use = Some(mock_web_use(license));
             updated.push(face.detail.face.id);
         }
         st.emit(Event::LibraryChanged {
