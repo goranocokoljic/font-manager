@@ -76,6 +76,15 @@ describe('inspector info tab', () => {
     }
   });
 
+  it('says in plain words why a face is or is not OK for web', async () => {
+    const webUse = async (face: number) => {
+      const dt = (await mountWith(face)).findAll('dt').find((d) => d.text() === 'Web use')!;
+      return (dt.element.nextElementSibling as HTMLElement).textContent?.trim();
+    };
+    expect(await webUse(1)).toBe('Open license (OFL)');
+    expect(await webUse(7)).toBe('Embedding restricted, no web license declared');
+  });
+
   it('edits tags with completion, the favorite toggle and the stars', async () => {
     setClient(createMockClient({ faceTags: { 6: ['Brand', 'Display'] } }));
     const wrapper = await mountWith(1);

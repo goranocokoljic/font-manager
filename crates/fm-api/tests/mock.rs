@@ -1815,3 +1815,51 @@ fn layout_files_save_duplicate_revert_and_restore_like_the_core() {
         .expect_err("draft is no preset");
     assert_eq!(no_original.code, ErrorCode::InvalidRequest);
 }
+
+#[test]
+fn the_web_filter_follows_declarations_and_explains_each_face() {
+    let api = api();
+    let web = |ok: bool| {
+        let res = api
+            .search(SearchRequest {
+                filters: Filters {
+                    web_ok: Some(ok),
+                    ..Filters::default()
+                },
+                ..SearchRequest::default()
+            })
+            .unwrap();
+        res.families
+            .into_iter()
+            .map(|h| h.family.name)
+            .collect::<Vec<_>>()
+    };
+    assert!(web(false).contains(&"Legacy Grotesk".to_owned()));
+    assert!(web(true).contains(&"Inter".to_owned()));
+    let legacy = api.get_face(FaceId(7)).unwrap();
+    assert_eq!(legacy.face.family_name, "Legacy Grotesk");
+    assert_eq!(
+        legacy.license.web_use.map(|w| (w.ok, w.reason)),
+        Some((
+            false,
+            "Embedding restricted, no web license declared".to_owned()
+        ))
+    );
+    api.declare_license(LicenseDeclaration {
+        family: legacy.face.family,
+        license_type: Some(LicenseType::Web),
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    assert!(web(true).contains(&"Legacy Grotesk".to_owned()));
+    assert_eq!(
+        api.get_face(FaceId(7))
+            .unwrap()
+            .license
+            .web_use
+            .map(|w| w.reason),
+        Some("Declared web license".to_owned())
+    );
+}

@@ -1840,3 +1840,78 @@ fn a_version_11_index_fills_open_licenses_from_the_stored_text() {
         Some("ofl")
     );
 }
+
+/// Declares `license_type` for the family of `postscript`.
+fn declare(index: &mut Index, postscript: &str, license_type: LicenseType) {
+    let face = FaceId(u32::try_from(face_id(index, postscript)).expect("id"));
+    let family = index.family_of(face).expect("family").expect("visible").0;
+    index
+        .declare_license(
+            family,
+            &crate::index::DeclaredLicense {
+                license_type: Some(license_type),
+                seats: None,
+                purchase_date: None,
+                receipt: None,
+            },
+        )
+        .expect("declare");
+}
+
+/// `license_library` with Mention (restricted) declared Web and Apache Sans
+/// (open, editable) declared Desktop: OK for web are Libre (OFL) and
+/// Mention (declared Web); Apache Sans (declared Desktop) and Plain
+/// (preview and print) are not.
+#[test]
+fn web_ok_filters_counts_and_explains_each_face() {
+    let (mut index, _) = indexed(&license_library());
+    declare(&mut index, "Mention-Regular", LicenseType::Web);
+    declare(&mut index, "ApacheSans-Regular", LicenseType::Desktop);
+    let only = |web_ok| {
+        names(&filtered(
+            &index,
+            "",
+            Filters {
+                web_ok: Some(web_ok),
+                ..Filters::default()
+            },
+        ))
+        .join(", ")
+    };
+    assert_eq!(only(true), "Libre, Mention");
+    assert_eq!(only(false), "Apache Sans, Plain");
+
+    let counts = filtered(&index, "", Filters::default())
+        .counts
+        .expect("counts");
+    let web: Vec<_> = counts.web_ok.iter().map(|c| (c.value, c.count)).collect();
+    assert_eq!(web, [(true, 2), (false, 2)]);
+
+    let why = |ps: &str| {
+        index
+            .face_detail(FaceId(u32::try_from(face_id(&index, ps)).expect("id")))
+            .expect("detail")
+            .license
+            .web_use
+            .map(|w| (w.ok, w.reason))
+    };
+    assert_eq!(
+        why("Libre-Regular"),
+        Some((true, "Open license (OFL)".into()))
+    );
+    assert_eq!(
+        why("Mention-Regular"),
+        Some((true, "Declared web license".into()))
+    );
+    assert_eq!(
+        why("ApacheSans-Regular"),
+        Some((false, "Declared desktop license".into()))
+    );
+    assert_eq!(
+        why("Plain-Regular"),
+        Some((
+            false,
+            "Embedding preview & print only, no web license declared".into()
+        ))
+    );
+}

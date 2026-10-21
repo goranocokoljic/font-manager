@@ -93,6 +93,9 @@ pub struct Filters {
     /// Faces whose name table states an open license (true) or none (false) only.
     #[serde(default)]
     pub open_license: Option<bool>,
+    /// Faces OK for web (true) or not (false) only; see `LicenseInfo::web_use` (E15.3).
+    #[serde(default)]
+    pub web_ok: Option<bool>,
 }
 
 /// A search. An empty query with filters lists everything that passes them.
@@ -204,6 +207,9 @@ pub struct FilterCounts {
     /// With an open license (true) and without (false).
     #[serde(default)]
     pub open_license: Vec<FilterCount<bool>>,
+    /// OK for web (true) and not (false).
+    #[serde(default)]
+    pub web_ok: Vec<FilterCount<bool>>,
 }
 
 /// How well one face covers some languages or text.
