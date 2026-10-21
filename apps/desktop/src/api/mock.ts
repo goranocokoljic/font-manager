@@ -674,6 +674,27 @@ export interface MockOptions {
   onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
   colorFace?: boolean;
+  /**
+   * Where the mock keeps its settings, as the app keeps `settings.json`, so a saved
+   * setting is there after a reload (browser mode). In memory when absent.
+   */
+  settingsStorage?: Pick<Storage, 'getItem' | 'setItem'>;
+}
+
+/** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
+export const MOCK_SETTINGS_KEY = 'fm.mock.settings.v1';
+
+/** The settings saved in `storage`, over `base`; `base` when there are none or they are damaged. */
+function savedSettings(base: FullSettings, storage: MockOptions['settingsStorage']): FullSettings {
+  try {
+    const saved: unknown = JSON.parse(storage?.getItem(MOCK_SETTINGS_KEY) ?? 'null');
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
+    // A system without a login entry stays without one.
+    const next = { ...base, ...(saved as Partial<FullSettings>) };
+    return base.startAtLogin === null ? { ...next, startAtLogin: null } : next;
+  } catch {
+    return base;
+  }
 }
 
 /** A saved comparison as the mock keeps it: each face with its name when saved. */
@@ -1372,10 +1393,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
   let picks = 0;
-  let settings: FullSettings = {
-    ...defaultSettings,
-    startAtLogin: options.startAtLogin === 'unsupported' ? null : false,
-  };
+  let settings: FullSettings = savedSettings(
+    {
+      ...defaultSettings,
+      startAtLogin: options.startAtLogin === 'unsupported' ? null : false,
+    },
+    options.settingsStorage,
+  );
   const emit = (event: Event) => handlers.forEach((h) => h(event));
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
@@ -2487,6 +2511,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const next = { ...settings };
       for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
       settings = next;
+      options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
       return { ...settings };
     },
     getAppFolders: async () => ({ ...mockFolders }),
@@ -2513,6 +2538,15 @@ function countFromUrl(name: string, max: number): number {
   return Number.isInteger(n) && n > 0 ? Math.min(n, max) : 0;
 }
 
+/** The tab's session storage, where there is one (not in Node). */
+function sessionStorageOf(): Storage | undefined {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
 function platformFromUrl(): AppInfo['platform'] | undefined {
   if (typeof location === 'undefined') return undefined;
   const p = new URLSearchParams(location.search).get('mockPlatform');
@@ -2522,6 +2556,7 @@ function platformFromUrl(): AppInfo['platform'] | undefined {
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
+  settingsStorage: sessionStorageOf(),
   extraProblems: mockExtraProblems,
   duplicates: mockDuplicates,
   sets: mockSets,

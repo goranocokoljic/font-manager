@@ -106,4 +106,12 @@ describe('preview store', () => {
     expect(previewRowHeight(DEFAULT_PREVIEW)).toBe(64);
     expect(previewRowHeight({ sizePx: 300, lineHeight: 1.5 })).toBe(480);
   });
+
+  it('pads rows by the density and keeps the sample size the user chose', () => {
+    expect(previewRowHeight(DEFAULT_PREVIEW, 'comfortable')).toBe(64);
+    expect(previewRowHeight(DEFAULT_PREVIEW, 'compact')).toBe(54);
+    // The sample line is the same at both densities; only the padding changes.
+    const big = { sizePx: 120, lineHeight: 1.2 };
+    expect(previewRowHeight(big, 'comfortable') - previewRowHeight(big, 'compact')).toBe(10);
+  });
 });

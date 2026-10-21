@@ -25,6 +25,7 @@ import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import SmartRuleEditor from '../components/SmartRuleEditor.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
+import { DENSITIES } from '../list/density';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
@@ -39,6 +40,7 @@ import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
+import { useSettingsStore } from '../stores/settings';
 import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
@@ -60,6 +62,10 @@ const collections = useCollectionsStore();
 const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
+const settings = useSettingsStore();
+const densityLabel = computed(
+  () => DENSITIES.find((d) => d.value === settings.density)?.label ?? '',
+);
 const quick = useQuickCollectionStore();
 const tagging = useTaggingStore();
 const route = useRoute();
@@ -254,6 +260,14 @@ useActions([
     group: 'View',
     run: () => views.setMode(ALL_FONTS_VIEW, m.value),
   })),
+  // The row density of the list and the table: the same setting as in Settings.
+  ...DENSITIES.map((d) => ({
+    id: `view.density.${d.value}`,
+    title: `Use ${d.label.toLowerCase()} rows`,
+    group: 'View',
+    enabled: () => settings.density !== d.value,
+    run: () => settings.setDensity(d.value),
+  })),
   ...LAYOUT_PRESETS.map((p) => ({
     id: `view.layoutPreset.${p}`,
     title: `Show the ${PRESET_LABELS[p]} layout`,
@@ -349,6 +363,15 @@ const groups = ['Smart collections', 'Online catalogs'];
               {{ m.label }}
             </button>
           </div>
+          <button
+            type="button"
+            class="toggle"
+            :aria-pressed="settings.density === 'compact'"
+            :title="`Rows: ${densityLabel}. Compact rows show more fonts at a time.`"
+            @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
+          >
+            Compact rows
+          </button>
           <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
           <label v-if="mode === 'layout'" class="preset">
             Preset

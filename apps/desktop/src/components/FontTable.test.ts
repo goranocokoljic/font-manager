@@ -7,6 +7,7 @@ import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/face
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, DEFAULT_PREVIEW } from '../stores/preview';
+import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
 import FontTable from './FontTable.vue';
 import PreviewStrip from './PreviewStrip.vue';
@@ -243,6 +244,39 @@ describe('FontTable', () => {
     await rows(t)[1]!.trigger('click');
     await flushPromises();
     expect(t.emitted('cursorFace')?.at(-1)).toEqual([6]);
+  });
+
+  it('sizes rows by the density and keeps the cursor row in view when it changes', async () => {
+    const t = await tableOf({ extraFaces: 5000 });
+    const grid = t.get('[role="treegrid"]');
+    const el = grid.element as HTMLElement;
+    const settings = useSettingsStore();
+    await settings.load();
+    await flushPromises();
+    expect(rows(t)[0]!.attributes('style')).toContain('height: 32px');
+    expect(t.get('.spacer').attributes('style')).toContain(`height: ${5003 * 32}px`);
+    const comfortable = rows(t).length;
+
+    // Row 3000 is the cursor, 200 px below the top of the viewport.
+    useFontListStore().click(useFontListStore().rows[3000]!.key, 'replace');
+    el.scrollTop = 3000 * 32 - 200;
+    await grid.trigger('scroll');
+    await flushPromises();
+
+    await settings.setDensity('compact');
+    await flushPromises();
+    expect(rows(t)[0]!.attributes('style')).toContain('height: 24px');
+    expect(t.get('.spacer').attributes('style')).toContain(`height: ${5003 * 24}px`);
+    expect(t.get('.header').attributes('style')).toContain('height: 24px');
+    expect(el.scrollTop).toBe(3000 * 24 - 200);
+    expect(grid.attributes('aria-activedescendant')).toBe(
+      rows(t)
+        .find((r) => r.classes('cursor'))!
+        .attributes('id'),
+    );
+    // Still only a window of rows: a few more fit, not the whole library.
+    expect(rows(t).length).toBeGreaterThan(comfortable);
+    expect(rows(t).length).toBeLessThan(80);
   });
 
   it('renders only a window of rows for a long library', async () => {

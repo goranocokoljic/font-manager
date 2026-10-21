@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
+import type { Density } from '../api/types';
+import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
 import {
   isPangramLanguage,
   SAMPLE_KINDS,
@@ -103,9 +105,15 @@ export function normalizePreview(raw: unknown): PreviewSettings {
   };
 }
 
-/** Height of one preview row: the sample line plus the name label and padding. */
-export function previewRowHeight(settings: Pick<PreviewSettings, 'sizePx' | 'lineHeight'>): number {
-  return Math.ceil(settings.sizePx * settings.lineHeight) + 30;
+/**
+ * Height of one preview row: the sample line at the size the user chose, plus the
+ * name label and padding of the row density.
+ */
+export function previewRowHeight(
+  settings: Pick<PreviewSettings, 'sizePx' | 'lineHeight'>,
+  density: Density = DEFAULT_DENSITY,
+): number {
+  return Math.ceil(settings.sizePx * settings.lineHeight) + DENSITY_ROWS[density].listChromePx;
 }
 
 function readSaved(storage: Storage | undefined): Record<string, PreviewSettings> {

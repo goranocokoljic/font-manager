@@ -29,6 +29,8 @@ const compareWith = process.env.FM_SCREENS_COMPARE;
 const coverageOf = process.env.FM_SCREENS_COVERAGE;
 // FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
+// FM_SCREENS_SESSION='{"fm.mock.settings.v1":"{\"density\":\"compact\"}"}' seeds sessionStorage (the mock's saved settings).
+const session: Record<string, string> = JSON.parse(process.env.FM_SCREENS_SESSION ?? '{}');
 // FM_SCREENS_CLICK='Block 1 properties' clicks the first button whose name starts with it before the shot.
 const click = process.env.FM_SCREENS_CLICK;
 // FM_SCREENS_PIN=3 pins the first 3 list rows with C and opens Compare; FM_SCREENS_PIN_MODE=Overlay picks a mode.
@@ -61,6 +63,9 @@ test.describe('@screens', () => {
           await page.addInitScript((entries) => {
             for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
           }, storage);
+          await page.addInitScript((entries) => {
+            for (const [k, v] of Object.entries(entries)) sessionStorage.setItem(k, v);
+          }, session);
           await page.setViewportSize(vp);
           await page.emulateMedia({ colorScheme: scheme });
           await page.goto(`/${query}#${path}`);

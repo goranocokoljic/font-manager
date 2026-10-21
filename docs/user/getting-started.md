@@ -53,6 +53,11 @@ Read [Sources](sources.md) to learn more about folders.
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.
+- To see more fonts at a time, click **Compact rows** in the toolbar. The rows of
+  the list and the table get less space around them. The preview text keeps its
+  size. Click **Compact rows** again to go back to comfortable rows. You can also choose
+  **Use compact rows** or **Use comfortable rows** in the command palette, or
+  **Density** in **Settings**. Font Manager keeps your choice.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.
 - Open the **Features** tab of the inspector to see the OpenType features of the
