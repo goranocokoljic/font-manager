@@ -147,3 +147,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E12.5 #108] apps/desktop/src/views/HomeView.vue:402 — the existing mode and inspector `.toggle` buttons are outlined in `--fm-border` (≈1.5:1 light and dark), the same as the new layout toolbar buttons.
 - [E17.1 #126] apps/desktop/src/views/HomeView.vue:354 — the window builds its active-count text in the frontend ("0 fonts active") while fm_core::lifecycle::active_label says "No fonts active", so window and tray word zero differently.
 - [E17.1 #126] apps/desktop/src-tauri/src/lib.rs:833 — not confirmed whether a Windows logoff or shutdown with the window hidden reaches RunEvent::Exit; session rows then wait for the next-start repair.
+- [E12.3 #106] apps/desktop/src/stores/textLayouts.ts:57 — the shared `busy` flag in `run` lets a property clamp re-enable Save/Revert while a save is in flight and clear an earlier save error.
+- [E12.3 #106] crates/fm-api/src/layout.rs:112 (origin/E12.2-drag-resize-blocks) — open PR #307 defines a narrower `LayoutBounds`; whichever merges second must keep the wider struct from #310.
+- [E12.3 #106] apps/desktop/src/api/mock.ts — the block ranges are copied in the TS mock, the Rust mock and fm-core; only the Rust mock is checked against the core.

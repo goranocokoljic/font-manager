@@ -3,7 +3,10 @@
 //! The UI renders a layout as live text in the webview; this module only
 //! decides what the blocks are.
 
-use fm_api::layout::{BlockAlign, BlockOverflow, Layout, LayoutPreset, TextBlock};
+use fm_api::layout::{
+    BlockAlign, BlockOverflow, BlockRange, ColumnRange, Layout, LayoutBounds, LayoutPreset,
+    TextBlock,
+};
 
 pub mod store;
 
@@ -60,6 +63,26 @@ pub const FIRST_LINE_INDENT_EM: Bounds = Bounds {
     max: 20.0,
     default: 0.0,
 };
+/// One arrow-key press on a block: 1 pt of size.
+pub const SIZE_PT_STEP: f32 = 1.0;
+/// One pixel of horizontal drag on a block: half a point of size.
+pub const SIZE_PT_PER_PX: f32 = 0.5;
+/// One arrow-key press on a block: 0.05 of line height.
+pub const LINE_HEIGHT_STEP: f32 = 0.05;
+/// One pixel of vertical drag on a block: 0.01 of line height.
+pub const LINE_HEIGHT_PER_PX: f32 = 0.01;
+/// One arrow-key press on tracking: 10 thousandths of an em.
+pub const TRACKING_STEP: f32 = 10.0;
+/// One pixel of drag on tracking.
+pub const TRACKING_PER_PX: f32 = 2.0;
+/// One arrow-key press on paragraph spacing: 1 pt.
+pub const PARAGRAPH_SPACING_PT_STEP: f32 = 1.0;
+/// One pixel of drag on paragraph spacing.
+pub const PARAGRAPH_SPACING_PT_PER_PX: f32 = 0.5;
+/// One arrow-key press on the first-line indent: half an em.
+pub const FIRST_LINE_INDENT_EM_STEP: f32 = 0.5;
+/// One pixel of drag on the first-line indent.
+pub const FIRST_LINE_INDENT_EM_PER_PX: f32 = 0.05;
 /// Columns a block flows into.
 pub const COLUMNS: std::ops::RangeInclusive<u8> = 1..=3;
 
@@ -218,6 +241,37 @@ pub fn clamp_block(block: TextBlock) -> TextBlock {
     }
 }
 
+/// The ranges [`clamp_block`] clamps into, with the steps the properties
+/// editor (E12.3) and the gestures move each value by.
+pub fn bounds() -> LayoutBounds {
+    let range = |b: Bounds, step: f32, per_px: f32| BlockRange {
+        min: b.min,
+        max: b.max,
+        default: b.default,
+        step,
+        per_px,
+    };
+    LayoutBounds {
+        size_pt: range(SIZE_PT, SIZE_PT_STEP, SIZE_PT_PER_PX),
+        line_height: range(LINE_HEIGHT, LINE_HEIGHT_STEP, LINE_HEIGHT_PER_PX),
+        tracking: range(TRACKING, TRACKING_STEP, TRACKING_PER_PX),
+        paragraph_spacing_pt: range(
+            PARAGRAPH_SPACING_PT,
+            PARAGRAPH_SPACING_PT_STEP,
+            PARAGRAPH_SPACING_PT_PER_PX,
+        ),
+        first_line_indent_em: range(
+            FIRST_LINE_INDENT_EM,
+            FIRST_LINE_INDENT_EM_STEP,
+            FIRST_LINE_INDENT_EM_PER_PX,
+        ),
+        columns: ColumnRange {
+            min: *COLUMNS.start(),
+            max: *COLUMNS.end(),
+        },
+    }
+}
+
 /// A layout with every block clamped.
 pub fn clamp_layout(layout: Layout) -> Layout {
     Layout {
@@ -345,6 +399,56 @@ mod tests {
         assert_eq!(low.paragraph_spacing_pt, 0.0);
         assert_eq!(low.first_line_indent_em, 0.0);
         assert_eq!(low.columns, 1);
+    }
+
+    #[test]
+    fn bounds_are_the_ranges_clamping_uses_with_steps_inside_them() {
+        let r = bounds();
+        let wild = |v: f32, columns: u8| TextBlock {
+            size_pt: v,
+            line_height: v,
+            tracking: v,
+            paragraph_spacing_pt: v,
+            first_line_indent_em: v,
+            columns,
+            ..block("x", 12.0, 1.2)
+        };
+        let high = clamp_block(wild(1.0e6, u8::MAX));
+        assert_eq!(high.size_pt, r.size_pt.max);
+        assert_eq!(high.line_height, r.line_height.max);
+        assert_eq!(high.tracking, r.tracking.max);
+        assert_eq!(high.paragraph_spacing_pt, r.paragraph_spacing_pt.max);
+        assert_eq!(high.first_line_indent_em, r.first_line_indent_em.max);
+        assert_eq!(high.columns, r.columns.max);
+        let low = clamp_block(wild(-1.0e6, 0));
+        assert_eq!(low.size_pt, r.size_pt.min);
+        assert_eq!(low.line_height, r.line_height.min);
+        assert_eq!(low.tracking, r.tracking.min);
+        assert_eq!(low.paragraph_spacing_pt, r.paragraph_spacing_pt.min);
+        assert_eq!(low.first_line_indent_em, r.first_line_indent_em.min);
+        assert_eq!(low.columns, r.columns.min);
+        let nan = clamp_block(wild(f32::NAN, 2));
+        assert_eq!(nan.size_pt, r.size_pt.default);
+        assert_eq!(nan.line_height, r.line_height.default);
+        assert_eq!(nan.tracking, r.tracking.default);
+        // Every edge is itself in range: clamping it changes nothing.
+        let edge = wild(r.size_pt.min, r.columns.max);
+        assert_eq!(clamp_block(edge.clone()).size_pt, edge.size_pt);
+        assert_eq!((r.columns.min, r.columns.max), (1, 3));
+        for b in [
+            r.size_pt,
+            r.line_height,
+            r.tracking,
+            r.paragraph_spacing_pt,
+            r.first_line_indent_em,
+        ] {
+            assert!(
+                b.min < b.max && b.min <= b.default && b.default <= b.max,
+                "{b:?}"
+            );
+            assert!(b.step > 0.0 && b.step * 20.0 <= b.max - b.min, "{b:?}");
+            assert!(b.per_px > 0.0 && b.per_px * 20.0 <= b.max - b.min, "{b:?}");
+        }
     }
 
     #[test]

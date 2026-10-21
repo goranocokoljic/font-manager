@@ -41,6 +41,7 @@ import type {
   LanguagePreset,
   DuplicateLayoutRequest,
   Layout,
+  LayoutBounds,
   LayoutEntry,
   LayoutRef,
   LayoutVersion,
@@ -145,6 +146,8 @@ export interface FmClient {
   layoutPresets(): Promise<Layout[]>;
   /** A layout with every block value clamped into its range. */
   clampLayout(req: Layout): Promise<Layout>;
+  /** The ranges `clampLayout` clamps block values into, with their steps (the properties editor). */
+  layoutBounds(): Promise<LayoutBounds>;
   /** Every layout template file (presets first); a broken file is listed with the reason. */
   listLayouts(): Promise<LayoutEntry[]>;
   /** One saved layout. */
@@ -234,6 +237,7 @@ export const tauriClient: FmClient = {
   cssValues: (req) => invoke<CssValues>('css_values', { req }),
   layoutPresets: () => invoke<Layout[]>('layout_presets'),
   clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),
+  layoutBounds: () => invoke<LayoutBounds>('layout_bounds'),
   listLayouts: () => invoke<LayoutEntry[]>('list_layouts'),
   getLayout: (req) => invoke<SavedLayout>('get_layout', { req }),
   saveLayout: (req) => invoke<SavedLayout>('save_layout', { req }),

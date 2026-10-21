@@ -35,8 +35,8 @@ use fm_api::export::{
     LicenseInventoryRequest,
 };
 use fm_api::layout::{
-    DuplicateLayoutRequest, Layout, LayoutEntry, LayoutRef, LayoutService, LayoutVersion,
-    RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
+    LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
@@ -884,6 +884,10 @@ impl LayoutService for CoreApi {
 
     fn clamp_layout(&self, req: Layout) -> ApiResult<Layout> {
         Ok(layout::clamp_layout(req))
+    }
+
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
+        Ok(layout::bounds())
     }
 
     fn list_layouts(&self) -> ApiResult<Vec<LayoutEntry>> {

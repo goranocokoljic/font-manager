@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient } from '../api/client';
-import type { ApiError, Layout, LayoutEntry, LayoutVersion, SavedLayout } from '../api/types';
+import type {
+  ApiError,
+  Layout,
+  LayoutBounds,
+  LayoutEntry,
+  LayoutVersion,
+  SavedLayout,
+  TextBlock,
+} from '../api/types';
+
+/** The block properties the properties editor changes (all but the text). */
+export type BlockProps = Partial<Omit<TextBlock, 'text'>>;
 
 /**
  * The body-text layouts as template files (fm-api `LayoutService`): the list of files, the
@@ -16,6 +27,11 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
   const draft = ref<Layout | null>(null);
   /** The kept versions of the open layout, newest first; loaded on request. */
   const history = ref<LayoutVersion[]>([]);
+  /** The ranges the core clamps block values into; loaded once, for the properties editor. */
+  const bounds = ref<LayoutBounds | null>(null);
+  /** The latest property change per block; an older one that answers late is dropped. */
+  const changing = new Map<number, number>();
+  let changes = 0;
   const error = ref<ApiError | null>(null);
   const busy = ref(false);
   let opening = 0;
@@ -82,6 +98,39 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
   function setBlockText(index: number, text: string): void {
     const block = draft.value?.blocks[index];
     if (block && block.text !== text) block.text = text;
+  }
+
+  /** Reads the block ranges from the core, once. */
+  async function loadBounds(): Promise<LayoutBounds | null> {
+    if (bounds.value) return bounds.value;
+    const b = await run(() => useClient().layoutBounds());
+    if (b) bounds.value = b;
+    return b;
+  }
+
+  /**
+   * Changes properties of one block of the draft. The changed block goes through the core's
+   * `clampLayout`, so the draft only ever holds values inside the core's ranges; the other
+   * blocks are not touched. Answers the block as it is now (null when it is gone).
+   */
+  async function setBlockProps(index: number, props: BlockProps): Promise<TextBlock | null> {
+    const layout = draft.value;
+    const block = layout?.blocks[index];
+    if (!layout || !block) return null;
+    const token = ++changes;
+    changing.set(index, token);
+    const asked: Layout = {
+      preset: layout.preset,
+      name: layout.name,
+      blocks: [{ ...block, ...props }],
+    };
+    const clamped = (await run(() => useClient().clampLayout(asked)))?.blocks[0];
+    const now = draft.value?.blocks[index];
+    if (draft.value !== layout || !now) return null;
+    if (!clamped || changing.get(index) !== token) return now;
+    changing.delete(index);
+    Object.assign(now, { ...clamped, text: now.text });
+    return now;
   }
 
   async function after(s: SavedLayout | null, list = false): Promise<SavedLayout | null> {
@@ -158,6 +207,9 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     loadList,
     open,
     setBlockText,
+    bounds,
+    loadBounds,
+    setBlockProps,
     save,
     duplicate,
     revert,

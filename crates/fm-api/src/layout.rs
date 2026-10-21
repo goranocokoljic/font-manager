@@ -76,6 +76,52 @@ pub struct TextBlock {
     pub overflow: BlockOverflow,
 }
 
+/// The range of one block value: what the core clamps it into and how far the
+/// editor and the direct-manipulation gestures move it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockRange {
+    /// Smallest value.
+    pub min: f32,
+    /// Largest value.
+    pub max: f32,
+    /// The value for one that is not a number.
+    pub default: f32,
+    /// How far one arrow-key press moves the value.
+    pub step: f32,
+    /// How far one CSS pixel of pointer drag moves the value.
+    pub per_px: f32,
+}
+
+/// The range of [`TextBlock::columns`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ColumnRange {
+    /// Fewest columns.
+    pub min: u8,
+    /// Most columns.
+    pub max: u8,
+}
+
+/// The ranges [`LayoutService::clamp_layout`] clamps every block value into,
+/// so the properties editor (E12.3) offers exactly those.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutBounds {
+    /// Font size in points.
+    pub size_pt: BlockRange,
+    /// Line height as a multiple of the size.
+    pub line_height: BlockRange,
+    /// Letter spacing in thousandths of an em.
+    pub tracking: BlockRange,
+    /// Space after each paragraph in points.
+    pub paragraph_spacing_pt: BlockRange,
+    /// Indent of each paragraph's first line in em.
+    pub first_line_indent_em: BlockRange,
+    /// Columns a block flows into.
+    pub columns: ColumnRange,
+}
+
 /// A layout: a list of text blocks, top to bottom.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -189,6 +235,9 @@ pub trait LayoutService {
     /// The layout with every block value clamped into its range (a value that
     /// is not a number takes the default).
     fn clamp_layout(&self, layout: Layout) -> ApiResult<Layout>;
+    /// The ranges `clamp_layout` clamps every block value into, with the
+    /// steps an editor moves them by (E12.3).
+    fn layout_bounds(&self) -> ApiResult<LayoutBounds>;
     /// Every template file in the layouts folder, read again on each call:
     /// the presets first in picker order, then the others by name. The six
     /// presets are written there on first use and never overwritten. A file

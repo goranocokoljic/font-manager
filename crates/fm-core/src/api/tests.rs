@@ -1803,6 +1803,17 @@ fn layouts_are_the_core_presets_and_come_back_clamped() {
 }
 
 #[test]
+fn layout_bounds_are_the_core_ranges_and_the_mock_matches_them() {
+    let lib = Lib::new("api-layout-bounds");
+    let bounds = lib.api.layout_bounds().expect("bounds");
+    assert_eq!(bounds, layout::bounds());
+    assert_eq!(bounds.size_pt.max, 600.0);
+    // The UI's MockApi (browser mode, e2e) must offer the same ranges as the core.
+    let mock = fm_api::mock::MockApi::new();
+    assert_eq!(mock.layout_bounds().expect("mock bounds"), bounds);
+}
+
+#[test]
 fn layout_files_live_in_the_app_layouts_folder_through_the_api() {
     use fm_api::layout::{
         DuplicateLayoutRequest, LayoutRef, RestoreLayoutRequest, RevertLayoutRequest,
