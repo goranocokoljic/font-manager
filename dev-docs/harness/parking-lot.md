@@ -174,3 +174,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E16.3 #124] apps/desktop/src/stores/palettes.ts:32 — `browserStorage()` is now copied in four stores (layout, preview, views, palettes); same behavior, can drift.
 - [E16.3 #124] apps/desktop/playwright.config.ts:13 — Playwright runs Chromium only, so CSS `@font-palette-values` on FontFace-loaded faces is unproven on WKWebView and WebKitGTK (the code falls back to the default palette).
 - [E16.3 #124] apps/desktop/src/components/CardLiveText.vue:21 — the face-holding pattern (`held` + `loader.acquire`/`release`) is hand-written in FontPreviewRow, FontLayout, GlyphCompare, CompareSheet and now CardLiveText; no shared composable.
+- [E19.4 #136] apps/desktop/src/stores/search.ts:112 — `loadLanguages` has no in-flight guard, so HomeView and PreviewControls both call `listLanguages` at startup (one duplicate IPC call).
+- [E19.4 #136] apps/desktop/src/stores/preview.ts:188 — changing an unsaved view before `list_languages` resolves saves `'en'` instead of the UI-language default (one IPC round-trip window).
+- [E19.4 #136] apps/desktop/src/api/mock.ts:939 — the TS `mockLanguages` and the Rust mock `LANGUAGES` (crates/fm-api/src/mock.rs:186) list different language sets.
+- [E19.4 #136] apps/desktop/src/components/FontPreviewRow.vue:154 — the `.sample` span has no `lang` attribute, so non-Latin samples reach screen readers untagged.
