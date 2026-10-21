@@ -413,3 +413,119 @@ for (const scheme of ['light', 'dark'] as const) {
     }
   });
 }
+
+const widthLock = (page: Page) => page.getByRole('button', { name: 'Lock width', exact: true });
+/** The rendered width of the text column of the first block, in CSS px. */
+const columnWidth = (region: Locator) =>
+  blocks(region)
+    .first()
+    .evaluate((el) => el.getBoundingClientRect().width);
+/** The number of characters on the first line of the first paragraph of block `i`. */
+const charsOnALine = (region: Locator, i: number) =>
+  blocks(region)
+    .nth(i)
+    .evaluate((el) => {
+      const p = el.querySelector('p') ?? el;
+      const text = p.firstChild as Text;
+      const range = document.createRange();
+      const tops: number[] = [];
+      for (let c = 0; c < text.length; c++) {
+        range.setStart(text, c);
+        range.setEnd(text, c + 1);
+        const rect = range.getClientRects()[0];
+        tops.push(rect ? Math.round(rect.top) : NaN);
+      }
+      return tops.filter((t) => t === tops[0]).length;
+    });
+
+test('by default the layout is a readable width, centered, and a wider window does not widen it', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 800 });
+  await open(page);
+  await modeButton(page, 'Layout').click();
+  const book = layout(page, 'Book');
+  await expect(book).toHaveAttribute('data-state', 'ready');
+  await expect(widthLock(page)).toHaveAttribute('aria-pressed', 'true');
+  // About 65–75 characters on a line of the 11 pt body block (its first line is indented).
+  const chars = await charsOnALine(book, 1);
+  expect(chars).toBeGreaterThanOrEqual(63);
+  expect(chars).toBeLessThanOrEqual(77);
+  const narrow = await columnWidth(book);
+  // Centered: as much room on the left of the text as on the right.
+  const page1 = await book.getByTestId('layout-page').boundingBox();
+  const cell = await blocks(book).nth(1).boundingBox();
+  const left = cell!.x - page1!.x;
+  const right = page1!.x + page1!.width - (cell!.x + cell!.width);
+  expect(Math.abs(left - right)).toBeLessThanOrEqual(2);
+
+  await page.setViewportSize({ width: 1800, height: 800 });
+  await expect
+    .poll(() => book.getByTestId('layout-page').evaluate((e) => e.clientWidth))
+    .toBeGreaterThan(1200);
+  expect(await columnWidth(book)).toBeCloseTo(narrow, 0);
+  expect(await charsOnALine(book, 1)).toBe(chars);
+});
+
+test('unlocking follows the window; locking again keeps the width it had through later resizes', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1600, height: 800 });
+  await open(page);
+  await modeButton(page, 'Layout').click();
+  const book = layout(page, 'Book');
+  await expect(book).toHaveAttribute('data-state', 'ready');
+  const locked = await columnWidth(book);
+
+  await widthLock(page).click();
+  await expect(widthLock(page)).toHaveAttribute('aria-pressed', 'false');
+  await expect.poll(() => columnWidth(book)).toBeGreaterThan(locked + 100);
+  const wide = await columnWidth(book);
+  await page.setViewportSize({ width: 1900, height: 800 });
+  await expect.poll(() => columnWidth(book)).toBeGreaterThan(wide + 200);
+  const atLock = await columnWidth(book);
+
+  // Locked again: the width of that moment, kept through a narrower and a wider window.
+  await widthLock(page).click();
+  await expect(widthLock(page)).toHaveAttribute('aria-pressed', 'true');
+  await page.setViewportSize({ width: 2300, height: 800 });
+  await expect(book).toBeVisible();
+  expect(Math.abs((await columnWidth(book)) - atLock)).toBeLessThanOrEqual(1);
+  await page.setViewportSize({ width: 2100, height: 800 });
+  await expect.poll(() => columnWidth(book)).toBeLessThanOrEqual(atLock + 1);
+  expect(Math.abs((await columnWidth(book)) - atLock)).toBeLessThanOrEqual(1);
+  // The lock and the width are part of the layout: saving keeps them with the file.
+  await action(page, 'Save').click();
+  await expect(action(page, 'Save')).toBeDisabled();
+});
+
+test('the width lock works from the keyboard and the command palette', async ({ page }) => {
+  await open(page);
+  await modeButton(page, 'Layout').click();
+  await expect(layout(page, 'Book')).toHaveAttribute('data-state', 'ready');
+  const lock = widthLock(page);
+  await lock.focus();
+  await expect(lock).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(lock).toHaveAttribute('aria-pressed', 'false');
+  await page.keyboard.press('Space');
+  await expect(lock).toHaveAttribute('aria-pressed', 'true');
+
+  await page.keyboard.press('ControlOrMeta+k');
+  const palette = page.getByRole('dialog', { name: 'Command palette' });
+  await page.keyboard.type('Lock or unlock the layout width');
+  await expect(palette.getByRole('option').first()).toContainText(
+    'Lock or unlock the layout width',
+  );
+  await page.keyboard.press('Enter');
+  await expect(lock).toHaveAttribute('aria-pressed', 'false');
+});
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the width lock button is outlined at 3:1 or more (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page);
+    await modeButton(page, 'Layout').click();
+    expect(await borderContrast(widthLock(page))).toBeGreaterThanOrEqual(3);
+  });
+}

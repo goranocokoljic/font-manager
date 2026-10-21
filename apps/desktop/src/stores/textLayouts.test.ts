@@ -180,4 +180,41 @@ describe('text layouts store', () => {
     await change;
     expect(store.draft!.blocks[0]).toMatchObject({ sizePt: 30, text: 'Typed meanwhile' });
   });
+
+  it('starts locked at the core width of the body block; unlocking follows the window', async () => {
+    const { store } = fresh();
+    await store.open('book');
+    await vi.waitFor(() => expect(store.width).not.toBeNull());
+    expect(store.widthLocked).toBe(true);
+    // Book's body is 11 pt: 33 em at 4/3 px per point.
+    expect(store.width).toBeCloseTo(11 * (96 / 72) * 33, 3);
+    await store.setWidthLock(false);
+    expect(store.draft!.widthLocked).toBe(false);
+    await vi.waitFor(() => expect(store.width).toBeNull());
+    expect(store.dirty).toBe(true);
+  });
+
+  it('locks again at the width given, clamped by the core, and keeps it with the saved file', async () => {
+    const { client, store } = fresh();
+    await store.open('book');
+    await store.setWidthLock(false);
+    await store.setWidthLock(true, 1234);
+    expect(store.draft).toMatchObject({ widthLocked: true, widthPx: 1234 });
+    await vi.waitFor(() => expect(store.width).toBe(1234));
+    await store.save();
+    const saved = await client.getLayout({ id: 'book' });
+    expect(saved.layout).toMatchObject({ widthLocked: true, widthPx: 1234 });
+    await store.setWidthLock(false);
+    await store.setWidthLock(true, 5);
+    expect(store.draft!.widthPx).toBe(160);
+  });
+
+  it('a larger body block gives a wider readable width', async () => {
+    const { store } = fresh();
+    await store.open('book');
+    await vi.waitFor(() => expect(store.width).not.toBeNull());
+    const before = store.width!;
+    await store.setBlockProps(1, { sizePt: 22 });
+    await vi.waitFor(() => expect(store.width).toBeCloseTo(before * 2, 3));
+  });
 });

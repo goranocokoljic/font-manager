@@ -3034,7 +3034,20 @@ fn mock_preset(preset: LayoutPreset) -> Layout {
         preset: Some(preset),
         name: name.to_owned(),
         blocks,
+        width_locked: true,
+        width_px: None,
     }
+}
+
+/// A locked width's range in CSS pixels (`fm_core::layout::WIDTH_PX`).
+const MOCK_WIDTH_PX: (f32, f32) = (160.0, 20_000.0);
+
+/// The core's locked width (`fm_core::layout::clamp_layout`): inside
+/// [`MOCK_WIDTH_PX`]; one that is not a number is dropped.
+fn mock_width_px(width: Option<f32>) -> Option<f32> {
+    width
+        .filter(|w| w.is_finite())
+        .map(|w| w.max(MOCK_WIDTH_PX.0).min(MOCK_WIDTH_PX.1))
 }
 
 /// The core's block ranges and steps (`fm_core::layout::bounds`).
@@ -3115,7 +3128,11 @@ impl LayoutService for MockApi {
                 ..b
             })
             .collect();
-        Ok(Layout { blocks, ..layout })
+        Ok(Layout {
+            blocks,
+            width_px: mock_width_px(layout.width_px),
+            ..layout
+        })
     }
 
     fn layout_bounds(&self) -> ApiResult<LayoutBounds> {
@@ -3240,6 +3257,34 @@ impl LayoutService for MockApi {
             .with_detail(reason)
         })?;
         mock_save_layout(&mut st.layouts, &req.id, layout)
+    }
+
+    /// `fm_core::layout::layout_width`: 33 em at the body block's size (the
+    /// block with the most text, the first on a tie), 4/3 px per point.
+    fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
+        if !layout.width_locked {
+            return Ok(None);
+        }
+        if let Some(w) = mock_width_px(layout.width_px) {
+            return Ok(Some(w));
+        }
+        let size = layout
+            .blocks
+            .iter()
+            .fold(None, |best: Option<&TextBlock>, b| match best {
+                Some(x) if x.text.chars().count() >= b.text.chars().count() => Some(x),
+                _ => Some(b),
+            })
+            .map_or(12.0, |b| b.size_pt);
+        let size = if size.is_finite() {
+            size.clamp(
+                MOCK_LAYOUT_BOUNDS.size_pt.min,
+                MOCK_LAYOUT_BOUNDS.size_pt.max,
+            )
+        } else {
+            MOCK_LAYOUT_BOUNDS.size_pt.default
+        };
+        Ok(mock_width_px(Some(size * 96.0 / 72.0 * 33.0)))
     }
 }
 

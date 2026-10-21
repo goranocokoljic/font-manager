@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { computed, ref } from 'vue';
+import { computed, ref, toRaw, watch } from 'vue';
 import { useClient } from '../api/client';
 import type {
   ApiError,
@@ -37,6 +37,12 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
   let opening = 0;
   /** Unsaved drafts of layouts the user switched away from, by id; kept for this session. */
   const parked = new Map<string, Layout>();
+  /**
+   * The width in CSS px the draft's text is set at, from the core (E12.4); null when the width
+   * is unlocked and follows the window, or before the core answers.
+   */
+  const width = ref<number | null>(null);
+  let widths = 0;
 
   const dirty = computed(
     () =>
@@ -119,11 +125,7 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     if (!layout || !block) return null;
     const token = ++changes;
     changing.set(index, token);
-    const asked: Layout = {
-      preset: layout.preset,
-      name: layout.name,
-      blocks: [{ ...block, ...props }],
-    };
+    const asked: Layout = { ...layout, blocks: [{ ...block, ...props }] };
     const clamped = (await run(() => useClient().clampLayout(asked)))?.blocks[0];
     const now = draft.value?.blocks[index];
     if (draft.value !== layout || !now) return null;
@@ -132,6 +134,53 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     Object.assign(now, { ...clamped, text: now.text });
     return now;
   }
+
+  /** The draft's width is locked (a layout saved without the field is). */
+  const widthLocked = computed(() => draft.value?.widthLocked !== false);
+
+  /**
+   * Locks or unlocks the draft's width. Locking keeps `widthPx`, the width the text has on
+   * screen at that moment, so later window resizes do not change it; unlocking keeps the
+   * chosen width in the layout for the next lock. The width goes through the core's
+   * `clampLayout`.
+   */
+  async function setWidthLock(locked: boolean, widthPx: number | null = null): Promise<void> {
+    const layout = draft.value;
+    if (!layout) return;
+    const asked: Layout = {
+      ...layout,
+      blocks: [],
+      widthLocked: locked,
+      widthPx: locked && widthPx !== null ? widthPx : (layout.widthPx ?? null),
+    };
+    const clamped = await run(() => useClient().clampLayout(asked));
+    if (!clamped || draft.value !== layout) return;
+    layout.widthLocked = clamped.widthLocked ?? true;
+    layout.widthPx = clamped.widthPx ?? null;
+  }
+
+  // The core decides the width from the lock, the chosen width and the body block's size; a
+  // width that fails to come back leaves the text following the window.
+  watch(
+    () =>
+      draft.value &&
+      JSON.stringify([
+        draft.value.widthLocked,
+        draft.value.widthPx,
+        draft.value.blocks.map((b) => [b.text.length, b.sizePt]),
+      ]),
+    async () => {
+      const layout = draft.value;
+      const token = ++widths;
+      const w = layout
+        ? await useClient()
+            .layoutWidth(structuredClone(toRaw(layout)))
+            .catch(() => null)
+        : null;
+      if (token === widths) width.value = w;
+    },
+    { immediate: true },
+  );
 
   async function after(s: SavedLayout | null, list = false): Promise<SavedLayout | null> {
     if (!s) return null;
@@ -210,6 +259,9 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     bounds,
     loadBounds,
     setBlockProps,
+    width,
+    widthLocked,
+    setWidthLock,
     save,
     duplicate,
     revert,
