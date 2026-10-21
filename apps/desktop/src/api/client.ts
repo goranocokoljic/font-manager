@@ -58,6 +58,8 @@ import type {
   PreviewRequest,
   Problem,
   ProjectSet,
+  QuickCollection,
+  QuickCollectionRequest,
   RenameCollectionRequest,
   Resolution,
   ResolutionId,
@@ -135,6 +137,14 @@ export interface FmClient {
   updateFamilyNotes(req: FamilyNotesUpdate): Promise<void>;
   /** A family's declared license: type, seats, purchase date, receipt (E15.2). */
   declareLicense(req: LicenseDeclaration): Promise<void>;
+  /** The Quick Collection (E13.3): its faces, first added first. */
+  quickCollection(): Promise<QuickCollection>;
+  /** Adds faces to the end of the Quick Collection; resolves to it. */
+  addToQuickCollection(req: QuickCollectionRequest): Promise<QuickCollection>;
+  /** Drops faces from the Quick Collection; resolves to what is left. */
+  removeFromQuickCollection(req: QuickCollectionRequest): Promise<QuickCollection>;
+  /** Empties the Quick Collection; the fonts are not touched. */
+  clearQuickCollection(): Promise<void>;
   /**
    * "Export license inventory…" (E15.4): asks where to save with the native save dialog,
    * suggesting `fileName`, and writes the CSV of one collection (or the whole library)
@@ -240,6 +250,11 @@ export const tauriClient: FmClient = {
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
   declareLicense: (req) => invoke<void>('declare_license', { req }),
+  quickCollection: () => invoke<QuickCollection>('quick_collection'),
+  addToQuickCollection: (req) => invoke<QuickCollection>('add_to_quick_collection', { req }),
+  removeFromQuickCollection: (req) =>
+    invoke<QuickCollection>('remove_from_quick_collection', { req }),
+  clearQuickCollection: () => invoke<void>('clear_quick_collection'),
   saveLicenseInventory: (req, fileName) =>
     invoke<number | null>('save_license_inventory', { req, fileName }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),

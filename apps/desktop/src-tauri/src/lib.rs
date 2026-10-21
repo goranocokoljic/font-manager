@@ -22,9 +22,9 @@ use fm_api::library::{
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
-    LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet,
-    RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle,
-    VirtualStylesRequest,
+    LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection,
+    QuickCollectionRequest, RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest,
+    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -588,6 +588,36 @@ async fn update_family_notes(state: State<'_, AppState>, req: FamilyNotesUpdate)
     call(&state, move |api| api.update_family_notes(req)).await
 }
 
+/// The Quick Collection (E13.3), first added first.
+#[tauri::command]
+async fn quick_collection(state: State<'_, AppState>) -> ApiResult<QuickCollection> {
+    call(&state, move |api| api.quick_collection()).await
+}
+
+/// Adds faces to the end of the Quick Collection.
+#[tauri::command]
+async fn add_to_quick_collection(
+    state: State<'_, AppState>,
+    req: QuickCollectionRequest,
+) -> ApiResult<QuickCollection> {
+    call(&state, move |api| api.add_to_quick_collection(req)).await
+}
+
+/// Removes faces from the Quick Collection.
+#[tauri::command]
+async fn remove_from_quick_collection(
+    state: State<'_, AppState>,
+    req: QuickCollectionRequest,
+) -> ApiResult<QuickCollection> {
+    call(&state, move |api| api.remove_from_quick_collection(req)).await
+}
+
+/// Empties the Quick Collection; the fonts are not touched.
+#[tauri::command]
+async fn clear_quick_collection(state: State<'_, AppState>) -> ApiResult<()> {
+    call(&state, move |api| api.clear_quick_collection()).await
+}
+
 /// Declares the license of a family (E15.2).
 #[tauri::command]
 async fn declare_license(state: State<'_, AppState>, req: LicenseDeclaration) -> ApiResult<()> {
@@ -774,6 +804,10 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             update_user_meta,
             update_family_notes,
             declare_license,
+            quick_collection,
+            add_to_quick_collection,
+            remove_from_quick_collection,
+            clear_quick_collection,
             save_license_inventory,
             list_sets,
             pin_instance,

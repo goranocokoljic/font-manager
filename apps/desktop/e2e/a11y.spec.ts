@@ -93,6 +93,17 @@ test('every interactive element in the command palette has a name', async ({ pag
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+test('every interactive element in the Quick Collection review has a name', async ({ page }) => {
+  await open(page);
+  await page.getByRole('treeitem').first().click();
+  await page.keyboard.press('b');
+  await expect(page.getByTestId('quick-count')).not.toHaveText('0');
+  await page.getByTestId('quick-collection').click();
+  await expect(page.getByRole('heading', { name: 'Quick Collection' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Drop / }).first()).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('every interactive element in Settings has a name', async ({ page }) => {
   await open(page, '/settings');
   for (const tab of SETTINGS_TABS) {

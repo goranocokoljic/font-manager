@@ -13,6 +13,7 @@ import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
 import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
+import { useQuickCollectionStore } from '../stores/quickCollection';
 
 /** The `DataTransfer` type a collection drag carries its id in. */
 const COLLECTION_MIME = 'application/x-fm-collection';
@@ -20,6 +21,8 @@ const COLLECTION_MIME = 'application/x-fm-collection';
 type Zone = 'before' | 'inside' | 'after';
 
 const store = useCollectionsStore();
+// While the Quick Collection review is open, no collection is the current one.
+const quick = useQuickCollectionStore();
 const fontList = useFontListStore();
 const commands = useCommandsStore();
 onMounted(() => void store.refresh());
@@ -193,7 +196,7 @@ function countLabel(n: number): string {
           <button
             type="button"
             class="name"
-            :aria-current="store.openId == null ? 'true' : undefined"
+            :aria-current="!quick.open && store.openId == null ? 'true' : undefined"
             @click="store.show(null)"
           >
             All fonts
@@ -244,7 +247,7 @@ function countLabel(n: number): string {
             <button
               type="button"
               class="name"
-              :aria-current="store.openId === row.collection.id ? 'true' : undefined"
+              :aria-current="!quick.open && store.openId === row.collection.id ? 'true' : undefined"
               @click="store.show(row.collection.id)"
             >
               {{ row.collection.name }}

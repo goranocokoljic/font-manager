@@ -55,6 +55,7 @@ import {
   type Resolution,
   type RuleGroup,
   type ProjectSet,
+  type QuickCollection,
   type SearchResponse,
   type SampleText,
   type Source,
@@ -1313,6 +1314,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     if (!f) throw notFound(id);
     return f;
   };
+  // The Quick Collection (E13.3), first added first, like the Rust mock.
+  let quick: FaceId[] = [];
+  const quickView = (): QuickCollection => ({
+    faces: quick.flatMap((id) => {
+      const f = find(id);
+      return f && !trashed.has(f.path) ? [summary(f)] : [];
+    }),
+  });
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
   const hits = (query: string, q: Filters): FamilyHit[] => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -1767,6 +1776,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         }
       }
       changed(details.map((d) => d.face.id));
+    },
+    quickCollection: async () => quickView(),
+    addToQuickCollection: async (req) => {
+      req.faces.forEach(faceOrThrow);
+      for (const id of req.faces) if (!quick.includes(id)) quick.push(id);
+      return quickView();
+    },
+    removeFromQuickCollection: async (req) => {
+      quick = quick.filter((id) => !req.faces.includes(id));
+      return quickView();
+    },
+    clearQuickCollection: async () => {
+      quick = [];
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,

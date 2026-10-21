@@ -32,6 +32,7 @@ describe('keymap', () => {
     [ACTIONS.activateSession, { key: 'a' }],
     [ACTIONS.activatePermanent, { key: 'a', shift: true }],
     [ACTIONS.compare, { key: 'c' }],
+    [ACTIONS.quickCollection, { key: 'b' }],
     [ACTIONS.viewMode(1), { key: '1' }],
     [ACTIONS.viewMode(2), { key: '2' }],
     [ACTIONS.viewMode(3), { key: '3' }],
