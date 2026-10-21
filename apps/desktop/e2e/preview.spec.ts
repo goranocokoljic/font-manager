@@ -69,6 +69,9 @@ test('a face that cannot load falls back and says so', async ({ page }) => {
 });
 
 test('1,000 rows scrolled do not leak font faces', async ({ page }) => {
+  // About 60 scroll steps, each waiting for its faces to load: some 20 s on a fast
+  // machine, so a slow CI runner (macOS) needs more than the default 30 s.
+  test.slow();
   await serveFonts(page);
   await page.goto('/?mockFaces=1000#/');
   const list = page.getByRole('tree', { name: 'Font list' });
