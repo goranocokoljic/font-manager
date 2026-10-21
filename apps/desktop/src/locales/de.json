@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "name": "Deutsch"
+  },
+  "app": {
+    "name": "Font Manager",
+    "openSettings": "Einstellungen öffnen",
+    "showConflicts": "Schriftkonflikte anzeigen",
+    "helpAction": "Hilfe: {page}",
+    "groups": {
+      "app": "Programm",
+      "help": "Hilfe"
+    }
+  },
+  "common": {
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "undo": "Rückgängig",
+    "reset": "Zurücksetzen",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "remove": "Entfernen"
+  },
+  "language": {
+    "label": "Sprache",
+    "system": "System ({name})",
+    "hint": "System folgt der Sprache deines Computers; Englisch, wenn die App sie nicht hat."
+  },
+  "errors": {
+    "notFound": "Das Gesuchte wurde nicht gefunden.",
+    "invalidRequest": "Diese Eingabe ist nicht gültig.",
+    "conflict": "Das steht im Konflikt mit etwas, das schon da ist (etwa ein Name, der schon vergeben ist).",
+    "permissionDenied": "Das ist nicht erlaubt.",
+    "unsupported": "Das wird auf diesem System oder für diese Schrift nicht unterstützt.",
+    "busy": "Gerade läuft eine andere Aufgabe. Versuche es gleich noch einmal.",
+    "io": "Eine Datei konnte nicht gelesen oder geschrieben werden.",
+    "cancelled": "Abgebrochen.",
+    "internal": "Etwas ist schiefgegangen. Die Protokolldatei enthält die Einzelheiten."
+  },
+  "shell": {
+    "helpWindowTitle": "Font Manager – Hilfe",
+    "helpPages": {
+      "getting-started": "Erste Schritte",
+      "sources": "Quellen",
+      "activation": "Aktivierung",
+      "keyboard-shortcuts": "Tastenkürzel"
+    },
+    "tray": {
+      "tooltip": "Font Manager",
+      "open": "Font Manager öffnen",
+      "deactivateSession": "Sitzungsschriften deaktivieren",
+      "quit": "Font Manager beenden",
+      "active": {
+        "zero": "Keine Schriften aktiv",
+        "one": "{count} Schrift aktiv",
+        "other": "{count} Schriften aktiv"
+      }
+    }
+  }
+}

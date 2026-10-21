@@ -1232,6 +1232,19 @@ export type KeepCopyRequest = {
 	dryRun?: boolean,
 };
 
+/**
+ *  The language of the UI. Each value but `System` names a message catalog the
+ *  desktop app ships (`apps/desktop/src/locales/<tag>.json`); a new catalog adds
+ *  a value here.
+ */
+export type Language = 
+/**  Follow the OS language; English when the app has no catalog for it. */
+"system" | 
+/**  English. */
+"en" | 
+/**  German. */
+"de";
+
 /**  Coverage of one language preset. */
 export type LanguageCoverage = {
 	/**  Preset code. */
@@ -2035,6 +2048,11 @@ export type Settings = {
 	 *  the app does not update itself the switch is hidden.
 	 */
 	checkUpdatesAutomatically?: boolean,
+	/**
+	 *  The language of the UI, the native menus and the tray; `System` by
+	 *  default.
+	 */
+	language?: Language,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -2062,6 +2080,8 @@ export type SettingsUpdate = {
 	startAtLogin?: boolean | null,
 	/**  Check for a new version when the app starts. */
 	checkUpdatesAutomatically?: boolean | null,
+	/**  The language of the UI. */
+	language?: Language | null,
 };
 
 /**  The shortlist for a brief. */

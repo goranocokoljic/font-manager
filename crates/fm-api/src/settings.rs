@@ -36,6 +36,21 @@ pub enum Density {
     Compact,
 }
 
+/// The language of the UI. Each value but `System` names a message catalog the
+/// desktop app ships (`apps/desktop/src/locales/<tag>.json`); a new catalog adds
+/// a value here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Language {
+    /// Follow the OS language; English when the app has no catalog for it.
+    #[default]
+    System,
+    /// English.
+    En,
+    /// German.
+    De,
+}
+
 /// The user's settings. Missing keys take their defaults.
 ///
 /// The TypeScript type marks every field optional because of the defaults;
@@ -74,6 +89,10 @@ pub struct Settings {
     /// the app does not update itself the switch is hidden.
     #[serde(default)]
     pub check_updates_automatically: bool,
+    /// The language of the UI, the native menus and the tray; `System` by
+    /// default.
+    #[serde(default)]
+    pub language: Language,
 }
 
 impl Default for Settings {
@@ -89,6 +108,7 @@ impl Default for Settings {
             keep_in_tray: true,
             start_at_login: None,
             check_updates_automatically: false,
+            language: Language::System,
         }
     }
 }
@@ -128,6 +148,9 @@ pub struct SettingsUpdate {
     /// Check for a new version when the app starts.
     #[serde(default)]
     pub check_updates_automatically: Option<bool>,
+    /// The language of the UI.
+    #[serde(default)]
+    pub language: Option<Language>,
 }
 
 impl Settings {
@@ -172,6 +195,7 @@ impl Settings {
             check_updates_automatically: update
                 .check_updates_automatically
                 .unwrap_or(self.check_updates_automatically),
+            language: update.language.unwrap_or(self.language),
         })
     }
 }
@@ -258,6 +282,24 @@ mod tests {
         );
         let unchanged = offered.apply(&SettingsUpdate::default()).expect("valid");
         assert_eq!(unchanged.start_at_login, Some(false));
+    }
+
+    #[test]
+    fn language_is_system_for_old_config_files_and_can_be_chosen() {
+        // A config.json written before the field existed follows the OS.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert_eq!(old.language, Language::System);
+        assert_eq!(Settings::default().language, Language::System);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["language"], "system");
+        let de: SettingsUpdate = serde_json::from_str(r#"{"language":"de"}"#).expect("update");
+        let next = Settings::default().apply(&de).expect("valid");
+        assert_eq!(next.language, Language::De);
+        assert_eq!(serde_json::to_value(next).expect("json")["language"], "de");
+        let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert_eq!(unchanged.language, Language::De);
+        let bad: Result<SettingsUpdate, _> = serde_json::from_str(r#"{"language":"xx"}"#);
+        assert!(bad.is_err(), "an unknown language is refused");
     }
 
     #[test]

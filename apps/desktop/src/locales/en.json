@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "name": "English"
+  },
+  "app": {
+    "name": "Font Manager",
+    "openSettings": "Open settings",
+    "showConflicts": "Show font conflicts",
+    "helpAction": "Help: {page}",
+    "groups": {
+      "app": "App",
+      "help": "Help"
+    }
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "copy": "Copy",
+    "copied": "Copied",
+    "undo": "Undo",
+    "reset": "Reset",
+    "rename": "Rename",
+    "delete": "Delete",
+    "remove": "Remove"
+  },
+  "language": {
+    "label": "Language",
+    "system": "System ({name})",
+    "hint": "System follows the language of your computer; English when the app does not have it."
+  },
+  "errors": {
+    "notFound": "{message}",
+    "invalidRequest": "{message}",
+    "conflict": "{message}",
+    "permissionDenied": "{message}",
+    "unsupported": "{message}",
+    "busy": "{message}",
+    "io": "{message}",
+    "cancelled": "{message}",
+    "internal": "{message}"
+  },
+  "shell": {
+    "helpWindowTitle": "Font Manager Help",
+    "helpPages": {
+      "getting-started": "Getting started",
+      "sources": "Sources",
+      "activation": "Activation",
+      "keyboard-shortcuts": "Keyboard shortcuts"
+    },
+    "tray": {
+      "tooltip": "Font Manager",
+      "open": "Open Font Manager",
+      "deactivateSession": "Deactivate session fonts",
+      "quit": "Quit Font Manager",
+      "active": {
+        "zero": "No fonts active",
+        "one": "{count} font active",
+        "other": "{count} fonts active"
+      }
+    }
+  }
+}

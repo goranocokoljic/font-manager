@@ -248,6 +248,11 @@ export interface FmClient {
   pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
+  /**
+   * Tells the native shell (Help menu, tray) which catalog locale the UI shows, so
+   * its labels follow the Language setting.
+   */
+  setShellLocale(locale: string): Promise<void>;
   /** Whether this copy updates itself; where not, Settings hides the update section. */
   updateSupport(): Promise<UpdateSupport>;
   /** Asks the release server once (a user action, or "Check automatically" at start). */
@@ -342,6 +347,7 @@ export const tauriClient: FmClient = {
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
+  setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
   updateSupport: () => invoke<UpdateSupport>('update_support'),
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
   installUpdate: (req) => invoke<void>('install_update', { req }),
