@@ -23,6 +23,7 @@ pub mod glyph_svg;
 pub mod glyphs;
 pub mod grouping;
 pub mod index;
+pub mod license;
 pub mod logging;
 mod parallel;
 pub mod parser;

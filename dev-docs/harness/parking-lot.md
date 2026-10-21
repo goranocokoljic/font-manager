@@ -122,6 +122,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.
 - [E10.5 #98] apps/desktop/src/stores/features.ts:43 — `settings()` writes feature tags into font-feature-settings without the 4-printable-ASCII check or escaping that `preview/variations.ts` and `fm_core::css` apply.
 - [E10.5 #98] apps/desktop/src/preview/variations.ts:12 — the preview writes every axis at its default when unmoved, unclamped and unrounded, so its text differs from fm-core's `css_values` for the same state.
+- [E15.1 #118] apps/desktop/src/styles/theme.css:100 — the `.surface-light`/`.surface-dark` preview surfaces do not set `--fm-danger`, so danger-colored text inside a surface-overridden font view keeps the app theme's value and can fall under AA contrast.
 
 ## 2026-10-20
 

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use fm_api::common::{Classification, Health, Page};
+use fm_api::common::{Classification, Embedding, Health, Page};
 use fm_api::library::SourceKind;
 use fm_api::search::{FilterCount, FilterCounts, Supports, WeightRange, WidthRange};
 use fm_api::{ErrorCode, SourceId};
@@ -1422,4 +1422,220 @@ fn counts_keep_the_supports_filter() {
         },
     );
     assert_eq!(names(&res), ["Full"]);
+}
+
+const OFL_TEXT: &str =
+    "This Font Software is licensed under the SIL Open Font License, Version 1.1.";
+
+/// Libre (OFL, installable), Apache Sans (Apache by its URL, editable),
+/// Mention (only names the OFL, restricted) and Plain (no license text,
+/// preview and print).
+fn license_library() -> Vec<IndexedFile> {
+    let face = |family: &str, license: Option<&str>, url: Option<&str>, fs_type: u16| {
+        let mut p = parsed(&f(family, "Regular", 400, 5, false), None, None);
+        p.license = license.map(str::to_owned);
+        p.license_url = url.map(str::to_owned);
+        p.fs_type = Some(fs_type);
+        let name = p.postscript_name.clone().unwrap_or_default();
+        file(&format!("/fonts/{name}.ttf"), vec![p])
+    };
+    vec![
+        face("Libre", Some(OFL_TEXT), None, 0x0000),
+        face(
+            "Apache Sans",
+            None,
+            Some("http://www.apache.org/licenses/LICENSE-2.0"),
+            0x0008,
+        ),
+        face(
+            "Mention",
+            Some("Unlike our SIL Open Font License fonts, this one is commercial."),
+            Some("https://example.com/eula"),
+            0x0002,
+        ),
+        face("Plain", None, None, 0x0004),
+    ]
+}
+
+fn stored_open_license(index: &Index, postscript: &str) -> Option<String> {
+    index
+        .conn
+        .query_row(
+            "SELECT open_license FROM face WHERE postscript_name = ?1",
+            [postscript],
+            |r| r.get(0),
+        )
+        .expect("open license")
+}
+
+#[test]
+fn open_licenses_are_stored_at_scan_and_shown_in_every_family_row() {
+    let (index, _) = indexed(&license_library());
+    assert_eq!(
+        stored_open_license(&index, "Libre-Regular").as_deref(),
+        Some("ofl")
+    );
+    assert_eq!(
+        stored_open_license(&index, "ApacheSans-Regular").as_deref(),
+        Some("apache")
+    );
+    assert_eq!(stored_open_license(&index, "Mention-Regular"), None);
+    assert_eq!(stored_open_license(&index, "Plain-Regular"), None);
+
+    let expected = vec![
+        ("Apache Sans".to_owned(), Some(OpenLicense::Apache)),
+        ("Libre".to_owned(), Some(OpenLicense::Ofl)),
+        ("Mention".to_owned(), None),
+        ("Plain".to_owned(), None),
+    ];
+    let res = search(&index, "");
+    let searched: Vec<_> = res
+        .families
+        .iter()
+        .map(|h| (h.family.name.clone(), h.family.open_license))
+        .collect();
+    assert_eq!(searched, expected, "search rows");
+    let listed: Vec<_> = index
+        .list_families(&ListFamiliesRequest::default())
+        .expect("list")
+        .items
+        .into_iter()
+        .map(|f| (f.name, f.open_license))
+        .collect();
+    assert_eq!(listed, expected, "list_families rows");
+}
+
+#[test]
+fn face_detail_fills_embedding_and_open_license() {
+    let (index, _) = indexed(&license_library());
+    let detail = |ps: &str| {
+        index
+            .face_detail(FaceId(u32::try_from(face_id(&index, ps)).expect("id")))
+            .expect("detail")
+            .license
+    };
+    let libre = detail("Libre-Regular");
+    assert_eq!(libre.open_license, Some(OpenLicense::Ofl));
+    assert_eq!(libre.embedding, Embedding::Installable);
+    assert_eq!(libre.description.as_deref(), Some(OFL_TEXT));
+    let apache = detail("ApacheSans-Regular");
+    assert_eq!(apache.open_license, Some(OpenLicense::Apache));
+    assert_eq!(apache.embedding, Embedding::Editable);
+    let mention = detail("Mention-Regular");
+    assert_eq!(mention.open_license, None);
+    assert_eq!(mention.embedding, Embedding::Restricted);
+    assert_eq!(
+        detail("Plain-Regular").embedding,
+        Embedding::PreviewAndPrint
+    );
+}
+
+#[test]
+fn embedding_and_open_license_filter_and_count() {
+    let (index, _) = indexed(&license_library());
+    let only = |filters: Filters| names(&filtered(&index, "", filters)).join(", ");
+    assert_eq!(
+        only(Filters {
+            open_license: Some(true),
+            ..Filters::default()
+        }),
+        "Apache Sans, Libre"
+    );
+    assert_eq!(
+        only(Filters {
+            open_license: Some(false),
+            ..Filters::default()
+        }),
+        "Mention, Plain"
+    );
+    assert_eq!(
+        only(Filters {
+            embedding: Some(Embedding::Restricted),
+            ..Filters::default()
+        }),
+        "Mention"
+    );
+    assert_eq!(
+        only(Filters {
+            embedding: Some(Embedding::Installable),
+            open_license: Some(true),
+            ..Filters::default()
+        }),
+        "Libre"
+    );
+
+    let counts = filtered(&index, "", Filters::default())
+        .counts
+        .expect("counts");
+    let open: Vec<_> = counts
+        .open_license
+        .iter()
+        .map(|c| (c.value, c.count))
+        .collect();
+    assert_eq!(open, [(true, 2), (false, 2)]);
+    let embedding: Vec<_> = counts
+        .embedding
+        .iter()
+        .map(|c| (c.value, c.count))
+        .collect();
+    assert_eq!(
+        embedding,
+        [
+            (Embedding::Installable, 1),
+            (Embedding::Editable, 1),
+            (Embedding::PreviewAndPrint, 1),
+            (Embedding::Restricted, 1),
+        ]
+    );
+}
+
+#[test]
+fn a_version_11_index_fills_open_licenses_from_the_stored_text() {
+    let dir = TempDir::new("search-migrate-v11");
+    let path = dir.path().join(INDEX_FILE);
+    {
+        let conn = Connection::open(&path).expect("open");
+        for sql in &crate::index::schema::MIGRATIONS[..11] {
+            conn.execute_batch(sql).expect("v1 to v11");
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 11;
+             INSERT INTO source (id, path, kind) VALUES (1, '/fonts', 'watched');
+             INSERT INTO font_file (id, source_id, path, hash, format, size, mtime, health)
+             VALUES (1, 1, '/fonts/old.ttc', randomblob(32), 'ttc', 10, 1700000000,
+                     '{\"kind\":\"ok\"}');
+             INSERT INTO face (file_id, collection_index, family, subfamily, postscript_name,
+                               weight, width, slant, fstype, parsed)
+             VALUES (1, 0, 'Old Libre', 'Regular', 'OldLibre-Regular', 400, 5, 'upright', 0,
+                     '{\"license\": \"Licensed under the SIL Open Font License, Version 1.1\"}'),
+                    (1, 1, 'Old Url', 'Regular', 'OldUrl-Regular', 400, 5, 'upright', 2,
+                     '{\"licenseUrl\": \"http://scripts.sil.org/OFL\"}'),
+                    (1, 2, 'Old Mention', 'Regular', 'OldMention-Regular', 400, 5, 'upright', 0,
+                     '{\"license\": \"See the OFL FAQ.\"}'),
+                    (1, 3, 'Bad Json', 'Regular', 'BadJson-Regular', 400, 5, 'upright', 0,
+                     'not json');",
+        )
+        .expect("old rows");
+    }
+    let index = Index::open(&path).expect("open").index;
+    assert_eq!(index.schema_version().expect("version"), SCHEMA_VERSION);
+    let res = search(&index, "");
+    let rows: Vec<_> = res
+        .families
+        .iter()
+        .map(|h| (h.family.name.as_str(), h.family.open_license))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("Bad Json", None),
+            ("Old Libre", Some(OpenLicense::Ofl)),
+            ("Old Mention", None),
+            ("Old Url", Some(OpenLicense::Ofl)),
+        ]
+    );
+    assert_eq!(
+        stored_open_license(&index, "OldLibre-Regular").as_deref(),
+        Some("ofl")
+    );
 }

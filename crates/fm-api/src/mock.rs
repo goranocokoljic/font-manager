@@ -774,7 +774,9 @@ impl State {
             && q.active.is_none_or(|a| a == self.active.contains_key(&s.id))
             && q.favorite.is_none_or(|v| v == f.detail.favorite)
             && q.min_rating.is_none_or(|r| f.detail.rating.is_some_and(|x| x >= r))
-            && q.problems.is_none_or(|p| p == (s.health != Health::Ok));
+            && q.problems.is_none_or(|p| p == (s.health != Health::Ok))
+            && q.embedding.is_none_or(|e| e == f.detail.license.embedding)
+            && q.open_license.is_none_or(|o| o == f.detail.license.open_license.is_some());
         Ok(ok)
     }
 
@@ -1545,6 +1547,13 @@ impl State {
             min_rating: self.count_each(words, q, (1..=5).collect(), |f, v| {
                 f.min_rating = Some(*v);
             })?,
+            embedding: self.count_each(
+                words,
+                q,
+                distinct(faces().map(|f| f.detail.license.embedding)),
+                |f, v| f.embedding = Some(*v),
+            )?,
+            open_license: self.count_each(words, q, both(), |f, v| f.open_license = Some(*v))?,
         })
     }
 }

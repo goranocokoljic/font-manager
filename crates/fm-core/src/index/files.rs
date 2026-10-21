@@ -27,10 +27,12 @@ use rusqlite::types::{Value, ValueRef};
 use rusqlite::{OptionalExtension, Transaction, params};
 use serde::Serialize;
 
+use super::faces::open_license_to_sql;
 use super::{Index, db_error, languages};
 use crate::coverage::{self, CodePointSet};
 use crate::error::{FmError, FmResult};
 use crate::grouping::{face_style, family_name};
+use crate::license;
 use crate::parallel::map_ordered;
 use crate::parser::{ParsedFace, ParsedFile};
 use crate::scanner::{FileHash, FileIndex, IndexedFile, Rescan};
@@ -73,9 +75,10 @@ RETURNING id";
 const UPSERT_FACE: &str = "
 INSERT INTO face (file_id, collection_index, family, subfamily, typographic_family,
                   postscript_name, weight, width, slant, is_variable, axes, features,
-                  fstype, parsed, cmap, languages, foundry, designer, is_color, healthy, added)
+                  fstype, parsed, cmap, languages, foundry, designer, is_color, healthy,
+                  open_license, added)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
-        ?20, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        ?20, ?21, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ON CONFLICT (file_id, collection_index) DO UPDATE SET
     family = excluded.family, subfamily = excluded.subfamily,
     typographic_family = excluded.typographic_family,
@@ -84,7 +87,8 @@ ON CONFLICT (file_id, collection_index) DO UPDATE SET
     axes = excluded.axes, features = excluded.features, fstype = excluded.fstype,
     parsed = excluded.parsed, cmap = excluded.cmap, languages = excluded.languages,
     foundry = excluded.foundry, designer = excluded.designer,
-    is_color = excluded.is_color, healthy = excluded.healthy";
+    is_color = excluded.is_color, healthy = excluded.healthy,
+    open_license = excluded.open_license";
 
 /// Faces the file no longer has. An active face stays (rule 3): the app
 /// registered it, so it must stay deregistrable.
@@ -320,6 +324,8 @@ struct FaceRow<'a> {
     designer: Option<&'a str>,
     color: bool,
     healthy: bool,
+    /// The open license the name table states, as stored.
+    open_license: Option<String>,
 }
 
 impl<'a> FileRow<'a> {
@@ -373,6 +379,10 @@ impl<'a> FaceRow<'a> {
             designer: face.designer.as_deref(),
             color: face.color,
             healthy: face.health == Health::Ok,
+            open_license: open_license_to_sql(license::open_license(
+                face.license.as_deref(),
+                face.license_url.as_deref(),
+            )),
         })
     }
 }
@@ -423,6 +433,7 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, row: &FileRow<'_>) -> FmRe
                 face.designer,
                 face.color,
                 face.healthy,
+                face.open_license,
             ])
             .map_err(|e| db_error(&e))?;
     }

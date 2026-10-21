@@ -807,6 +807,10 @@ export type FilterCounts = {
 	favorite?: FilterCount<boolean>[],
 	/**  Per `min_rating` (1–5): a face rated 4 counts under 1, 2, 3 and 4. */
 	minRating?: FilterCount<number>[],
+	/**  Per embedding permission. */
+	embedding?: FilterCount<Embedding>[],
+	/**  With an open license (true) and without (false). */
+	openLicense?: FilterCount<boolean>[],
 };
 
 /**
@@ -850,6 +854,10 @@ export type Filters = {
 	minRating?: number | null,
 	/**  Health: faces with problems (true) or healthy faces (false) only. */
 	problems?: boolean | null,
+	/**  Embedding permission (`OS/2.fsType`), exact. */
+	embedding?: Embedding | null,
+	/**  Faces whose name table states an open license (true) or none (false) only. */
+	openLicense?: boolean | null,
 };
 
 /**  The file format of a font. */

@@ -831,6 +831,8 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
     (q.tags ?? []).every((t) => tags.includes(t)) &&
     (q.favorite == null || q.favorite === d.favorite) &&
     (q.minRating == null || (d.rating ?? 0) >= q.minRating) &&
+    (q.embedding == null || q.embedding === d.license.embedding) &&
+    (q.openLicense == null || q.openLicense === (d.license.openLicense != null)) &&
     (supports?.kind !== 'languages' || supports.codes.every(covers))
   );
 }
@@ -991,6 +993,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     ),
     favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
     minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
+    embedding: countEach(
+      query,
+      q,
+      distinct(faces.map((d) => d.license.embedding)),
+      (f, embedding) => ({ ...f, embedding }),
+    ),
+    openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense })),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
