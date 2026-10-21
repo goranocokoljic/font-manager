@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/pangrams/pangram.schema.json",
+  "title": "Font Manager pangram file",
+  "description": "Pangrams for the preview, one per language preset of data/charsets at most. pangrams.json follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "pangrams"],
+  "properties": {
+    "$schema": { "const": "./pangram.schema.json" },
+    "pangrams": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/pangram" }
+    }
+  },
+  "$defs": {
+    "pangram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "kind", "text", "source"],
+      "properties": {
+        "code": {
+          "description": "BCP 47 tag of a data/charsets language preset (sr-Cyrl). Unique in the file.",
+          "type": "string",
+          "pattern": "^[a-z]{2,3}(-[A-Z][a-z]{3})?$"
+        },
+        "kind": {
+          "description": "pangram: a sentence that uses every letter (or the traditional pangram of the language); sample: a sample sentence, for a language with no true pangram (Chinese, Korean).",
+          "enum": ["pangram", "sample"]
+        },
+        "text": {
+          "description": "The text, NFC. Every character except white space and common punctuation is in the language preset's base or auxiliary characters.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\S(.*\\S)?$"
+        },
+        "source": {
+          "description": "Where the text comes from: wikipedia (Wikipedia's list of pangrams) or project (written here from the preset's characters; see README).",
+          "enum": ["wikipedia", "project"]
+        }
+      }
+    }
+  }
+}

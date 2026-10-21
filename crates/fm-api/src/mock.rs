@@ -198,6 +198,20 @@ const LANGUAGES: [(&str, &str, &str, &str); 4] = [
     ),
 ];
 
+/// (code, pangram) for the mock languages, as in `data/pangrams`.
+const PANGRAMS: [(&str, &str); 4] = [
+    ("en", "The quick brown fox jumps over the lazy dog"),
+    ("pl", "Pchnąć w tę łódź jeża lub ośm skrzyń fig"),
+    (
+        "sr-Latn",
+        "Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos",
+    ),
+    (
+        "sr-Cyrl",
+        "Љубазни фењерџија чађавог лица хоће да ми покаже штос",
+    ),
+];
+
 struct MockFamily {
     id: FamilyId,
     name: &'static str,
@@ -1903,6 +1917,10 @@ impl SearchService for MockApi {
                 code: (*code).into(),
                 name: (*name).into(),
                 script: (*script).into(),
+                pangram: PANGRAMS
+                    .iter()
+                    .find(|(c, _)| c == code)
+                    .map(|(_, text)| (*text).into()),
             })
             .collect())
     }
