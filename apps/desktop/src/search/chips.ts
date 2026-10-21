@@ -186,6 +186,15 @@ export function hasFilters(filters: Filters): boolean {
 }
 
 /**
+ * True when a filter other than the open collection is chosen: a chip, a language, a
+ * weight or width range. The open collection is where the list is, not a filter
+ * chosen on it, so it alone does not make a smart collection.
+ */
+export function hasChosenFilters(filters: Filters): boolean {
+  return hasFilters({ ...filters, collection: null });
+}
+
+/**
  * The chip groups for the counts the API returned. A chosen value with no count
  * (no result) still shows, with 0, so it can be let go; groups with no chip are left out.
  */

@@ -146,7 +146,7 @@ for (const [scheme, surface] of [
 test('a chip set is saved as a smart collection', async ({ page }) => {
   await open(page);
   const chips = page.getByRole('region', { name: 'Filters' });
-  await expect(chips.getByRole('button', { name: 'Save as smart collection' })).toBeHidden();
+  await expect(chips.getByRole('button', { name: 'Save as smart collection' })).toBeDisabled();
   await chips
     .getByRole('group', { name: 'Variable' })
     .getByRole('button', { name: /^Static/ })
@@ -162,6 +162,55 @@ test('a chip set is saved as a smart collection', async ({ page }) => {
   await name.fill('Static fonts');
   await chips.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(chips.getByRole('alert')).toContainText('already exists');
+});
+
+/** The family groups the list shows: every top-level row carries the total in aria-setsize. */
+const familyCount = (page: Page) =>
+  page
+    .getByRole('tree', { name: 'Font list' })
+    .locator('[role="treeitem"][aria-level="1"]')
+    .first()
+    .getAttribute('aria-setsize')
+    .then(Number);
+
+test('two chips saved as a smart collection list the same families from the sidebar', async ({
+  page,
+}) => {
+  await open(page, '?mockFaces=40');
+  const chips = page.getByRole('region', { name: 'Filters' });
+  const all = await familyCount(page);
+  await chips
+    .getByRole('group', { name: 'Variable' })
+    .getByRole('button', { name: /^Static/ })
+    .click();
+  await expect.poll(() => familyCount(page)).toBeLessThan(all);
+  await chips.getByRole('group', { name: 'Format' }).getByRole('button').first().click();
+  await expect(chips.getByRole('button', { pressed: true })).toHaveCount(2);
+  const narrowed = await familyCount(page);
+  const button = chips.getByRole('button', { name: 'Save as smart collection' });
+  await button.click();
+  const name = chips.getByRole('textbox', { name: 'Smart collection name' });
+  await expect(name).toBeFocused();
+  // Escape cancels and gives focus back to the button.
+  await name.fill('Never saved');
+  await page.keyboard.press('Escape');
+  await expect(name).toBeHidden();
+  await expect(button).toBeFocused();
+  await button.click();
+  await name.fill('Static picks');
+  await page.keyboard.press('Enter');
+  await expect(chips.getByRole('status')).toHaveText('Saved “Static picks” as a smart collection.');
+  await expect(button).toBeFocused();
+  // With the chips let go, the collection from the sidebar lists what they gave.
+  await chips.getByRole('button', { name: 'Clear filters' }).click();
+  await expect.poll(() => familyCount(page)).toBe(all);
+  const sidebar = page.getByRole('region', { name: 'Collections' });
+  const row = sidebar.getByRole('listitem', { name: 'Static picks' });
+  await expect(row).toContainText('Smart');
+  await expect(row.locator('.count')).not.toHaveText('0');
+  await row.getByRole('button', { name: 'Static picks' }).click();
+  await expect.poll(() => familyCount(page)).toBe(narrowed);
+  await expect(page.getByRole('listitem', { name: 'Never saved' })).toHaveCount(0);
 });
 
 test('results show 80 ms (debounce) plus under 50 ms after the last key on 1,000 families', async ({
