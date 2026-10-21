@@ -113,7 +113,7 @@ test('a glyph selected by keyboard opens its detail with code point, advance and
 
 /** WCAG contrast ratio of the field's border against the page background. */
 const borderContrast = (page: Page, name: string) =>
-  page.getByLabel(name).evaluate((el) => {
+  page.getByLabel(name, { exact: true }).evaluate((el) => {
     const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
     const lum = (c: string) => {
       const [r, g, b] = rgb(c).map((v) => {

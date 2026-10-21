@@ -40,9 +40,9 @@ use crate::preview::{
     SampleText, SampleTextRequest,
 };
 use crate::search::{
-    CoverageReport, CoverageRequest, FamilyHit, FilterCount, FilterCounts, Filters,
-    LanguageCoverage, LanguagePreset, Missing, SearchRequest, SearchResponse, SimilarFace,
-    SimilarRequest, Supports, WeightRange, WidthRange,
+    BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
+    FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, SearchRequest,
+    SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::settings::{AppFolders, Settings, SettingsUpdate};
 use crate::workflows::{
@@ -873,21 +873,25 @@ impl State {
     }
 }
 
-/// The blocks the mock's sample characters fall in: name, first, last.
+/// The blocks the mock's sample characters fall in: name, first, last and
+/// assigned code points (Unicode 17.0).
+const MOCK_BLOCKS: &[(&str, u32, u32, u32)] = &[
+    ("Basic Latin", 0x0000, 0x007F, 128),
+    ("Latin-1 Supplement", 0x0080, 0x00FF, 128),
+    ("Latin Extended-A", 0x0100, 0x017F, 128),
+    ("Cyrillic", 0x0400, 0x04FF, 256),
+    ("General Punctuation", 0x2000, 0x206F, 111),
+    ("CJK Unified Ideographs", 0x4E00, 0x9FFF, 20992),
+];
+
+/// The mock block of `cp`: name, first, last.
 fn mock_block(cp: u32) -> (&'static str, u32, u32) {
-    const BLOCKS: &[(&str, u32, u32)] = &[
-        ("Basic Latin", 0x0000, 0x007F),
-        ("Latin-1 Supplement", 0x0080, 0x00FF),
-        ("Latin Extended-A", 0x0100, 0x017F),
-        ("Cyrillic", 0x0400, 0x04FF),
-        ("General Punctuation", 0x2000, 0x206F),
-        ("CJK Unified Ideographs", 0x4E00, 0x9FFF),
-    ];
-    BLOCKS
+    MOCK_BLOCKS
         .iter()
-        .copied()
-        .find(|(_, first, last)| (*first..=*last).contains(&cp))
-        .unwrap_or(("No block", cp, cp))
+        .find(|(_, first, last, _)| (*first..=*last).contains(&cp))
+        .map_or(("No block", cp, cp), |&(name, first, last, _)| {
+            (name, first, last)
+        })
 }
 
 fn mock_glyph_name(c: char) -> String {
@@ -1580,6 +1584,56 @@ impl SearchService for MockApi {
             face: req.face,
             complete: missing.is_empty(),
             missing,
+            languages,
+        })
+    }
+
+    /// Per mock block, the face's characters in it; per mock language, its
+    /// characters the face has, complete languages first.
+    fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage> {
+        let st = self.state();
+        let f = st.face(face)?;
+        let blocks = MOCK_BLOCKS
+            .iter()
+            .filter_map(|&(name, first, last, assigned)| {
+                let covered = f
+                    .chars
+                    .iter()
+                    .filter(|&&c| (first..=last).contains(&(c as u32)))
+                    .count() as u32;
+                (covered > 0).then(|| BlockCoverage {
+                    name: name.into(),
+                    first,
+                    last,
+                    covered: covered.min(assigned),
+                    assigned,
+                })
+            })
+            .collect();
+        let mut languages: Vec<FaceLanguageCoverage> = LANGUAGES
+            .iter()
+            .filter_map(|&(code, name, _, chars)| {
+                let total = chars.chars().count() as u32;
+                let covered = chars.chars().filter(|c| f.chars.contains(c)).count() as u32;
+                (covered > 0).then(|| FaceLanguageCoverage {
+                    code: code.into(),
+                    name: name.into(),
+                    covered,
+                    total,
+                    has_locl: code == "sr-Cyrl" && f.chars.contains(&'б'),
+                })
+            })
+            .collect();
+        // As fm-core: complete first, then partial by the share covered.
+        languages.sort_by(|a, b| {
+            let share = |x: &FaceLanguageCoverage, y: &FaceLanguageCoverage| x.covered * y.total;
+            (a.covered != a.total)
+                .cmp(&(b.covered != b.total))
+                .then_with(|| share(b, a).cmp(&share(a, b)))
+        });
+        Ok(FaceCoverage {
+            face,
+            blocks,
             languages,
         })
     }

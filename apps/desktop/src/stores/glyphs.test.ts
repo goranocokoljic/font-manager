@@ -67,6 +67,17 @@ describe('glyphs store', () => {
     expect(s.blocks.map((b) => b.name)).toEqual(['Cyrillic']);
   });
 
+  it('a block from the coverage list shows that block with the search cleared', async () => {
+    const s = useGlyphsStore();
+    await s.open(1);
+    await s.search('zzz');
+    await s.showBlock('Latin Extended-A');
+    expect(calls[calls.length - 1]).toMatchObject({ block: 'Latin Extended-A', query: null });
+    expect(s.query).toBe('');
+    expect(s.blocks.map((b) => b.name)).toEqual(['Latin Extended-A']);
+    expect(s.total).toBe(128);
+  });
+
   it('drops the answer to an older list', async () => {
     const s = useGlyphsStore();
     await s.open(1);

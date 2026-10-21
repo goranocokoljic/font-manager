@@ -34,10 +34,15 @@
     "block": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["first", "last", "name"],
+      "required": ["first", "last", "assigned", "name"],
       "properties": {
         "first": { "$ref": "#/$defs/codePoint" },
         "last": { "$ref": "#/$defs/codePoint" },
+        "assigned": {
+          "description": "Code points of the block whose General_Category is not Cn (unassigned), from DerivedGeneralCategory.txt of the same version. At most the block's size.",
+          "type": "integer",
+          "minimum": 0
+        },
         "name": {
           "description": "The block name as Blocks.txt writes it (Latin Extended-A). Unique.",
           "type": "string",

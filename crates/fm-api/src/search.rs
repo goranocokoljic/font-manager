@@ -256,6 +256,53 @@ pub struct LanguagePreset {
     pub script: String,
 }
 
+/// How many characters of one Unicode block a face maps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockCoverage {
+    /// The block name from the Unicode block table (`Latin Extended-A`), as
+    /// the glyph map's `GlyphBlock::name`.
+    pub name: String,
+    /// Its first code point.
+    pub first: u32,
+    /// Its last code point.
+    pub last: u32,
+    /// Characters of the block the face maps (at most `assigned`).
+    pub covered: u32,
+    /// Assigned code points of the block.
+    pub assigned: u32,
+}
+
+/// How much of one language preset a face covers, for the coverage list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FaceLanguageCoverage {
+    /// Preset code (`sr-Cyrl`).
+    pub code: String,
+    /// English name ("Serbian (Cyrillic)").
+    pub name: String,
+    /// Base characters of the preset the face maps.
+    pub covered: u32,
+    /// Base characters the preset needs.
+    pub total: u32,
+    /// The face has `locl` forms for this language.
+    pub has_locl: bool,
+}
+
+/// The coverage of one face: per Unicode block and per language preset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FaceCoverage {
+    /// The face.
+    pub face: FaceId,
+    /// The blocks with at least one covered character, in Unicode order.
+    pub blocks: Vec<BlockCoverage>,
+    /// The presets the face covers anything of or has `locl` forms for:
+    /// complete ones first (in preset order), then partial ones, most
+    /// covered first. Missing characters come from `check_coverage`.
+    pub languages: Vec<FaceLanguageCoverage>,
+}
+
 /// Faces that look like this one.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -284,6 +331,9 @@ pub trait SearchService {
     fn search(&self, req: SearchRequest) -> ApiResult<SearchResponse>;
     /// Coverage of one face.
     fn check_coverage(&self, req: CoverageRequest) -> ApiResult<CoverageReport>;
+    /// Coverage of one face per Unicode block and per language preset, from
+    /// the code points in the index.
+    fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage>;
     /// Every language preset.
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>>;
     /// Faces ranked by visual similarity.

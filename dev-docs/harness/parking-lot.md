@@ -117,6 +117,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-21
 
+- [E11.3 #101] apps/desktop/src/stores/glyphs.ts:90 — `open` returns early for the same face id, so a face whose first load failed is never retried on revisit (the pattern is copied into stores/coverage.ts).
+- [E11.3 #101] apps/desktop/src/api/mock.ts:803 — the TS `mockLanguages` (en, pl, sr-Cyrl, el) has drifted from the Rust mock `LANGUAGES` (en, pl, sr-Latn, sr-Cyrl).
 - [E6.8 #81] apps/desktop/src-tauri/src/lib.rs:493 — the shipped shell still serves `MockApi`, so the seeded "Client brand" sample set (crates/fm-api/src/mock.rs) is visible to real users until fm-core is wired in.
 - [E10.5 #98] apps/desktop/src/stores/features.ts:43 — `settings()` writes feature tags into font-feature-settings without the 4-printable-ASCII check or escaping that `preview/variations.ts` and `fm_core::css` apply.
 - [E10.5 #98] apps/desktop/src/preview/variations.ts:12 — the preview writes every axis at its default when unmoved, unclamped and unrounded, so its text differs from fm-core's `css_values` for the same state.

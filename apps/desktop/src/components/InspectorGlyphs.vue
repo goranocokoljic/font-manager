@@ -10,6 +10,8 @@
 // ends, Enter or a click selects the glyph and opens its detail below the grid
 // (Tab reaches it); Escape or its Close button closes it and returns to the grid.
 // Its "Compare with…" button opens the compare overlay (GlyphCompare) on the glyph.
+// Below, the coverage list (GlyphCoverage): a block chosen there shows that block
+// in the grid and puts focus on it.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FeatureInfo, GlyphInfo } from '../api/types';
 import {
@@ -24,6 +26,8 @@ import { scrollToShow, windowRange } from '../list/virtual';
 import { useFaceLoader } from '../preview/faceLoader';
 import CopyValue from './CopyValue.vue';
 import GlyphCompare from './GlyphCompare.vue';
+import GlyphCoverage from './GlyphCoverage.vue';
+import { useCoverageStore } from '../stores/coverage';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
 import { useGlyphsStore } from '../stores/glyphs';
 import { useSelectionStore } from '../stores/selection';
@@ -43,6 +47,7 @@ const FALLBACK_WIDTH = 288;
 const selection = useSelectionStore();
 const glyphs = useGlyphsStore();
 const compare = useGlyphCompareStore();
+const coverage = useCoverageStore();
 const loader = useFaceLoader();
 
 const faceId = computed(() => selection.detail?.face.id ?? null);
@@ -66,7 +71,10 @@ watch(
   faceId,
   (id) => {
     hold(id);
-    if (id !== null) void glyphs.open(id);
+    if (id !== null) {
+      void glyphs.open(id);
+      void coverage.open(id);
+    }
   },
   { immediate: true },
 );
@@ -226,6 +234,13 @@ watch(
 );
 function onSearch(): void {
   void glyphs.search(searchText.value);
+}
+/** A block chosen in the coverage list: that block in the grid, focus on the grid. */
+function showBlock(name: string): void {
+  void glyphs.showBlock(name);
+  const el = viewport.value;
+  el?.scrollIntoView?.({ block: 'nearest' });
+  el?.focus();
 }
 function onBlock(e: Event): void {
   const value = (e.target as HTMLSelectElement).value;
@@ -419,6 +434,7 @@ const noResults = computed(
         </template>
       </section>
       <GlyphCompare v-if="compare.open" />
+      <GlyphCoverage @block="showBlock" />
       <p v-if="glyphs.unicodeVersion" class="muted note">
         Blocks from Unicode {{ glyphs.unicodeVersion }}.
       </p>

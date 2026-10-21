@@ -112,6 +112,23 @@ export type AxisValue = {
 	value: number | null,
 };
 
+/**  How many characters of one Unicode block a face maps. */
+export type BlockCoverage = {
+	/**
+	 *  The block name from the Unicode block table (`Latin Extended-A`), as
+	 *  the glyph map's `GlyphBlock::name`.
+	 */
+	name: string,
+	/**  Its first code point. */
+	first: number,
+	/**  Its last code point. */
+	last: number,
+	/**  Characters of the block the face maps (at most `assigned`). */
+	covered: number,
+	/**  Assigned code points of the block. */
+	assigned: number,
+};
+
 /**  Pick fonts for a design brief. */
 export type BriefRequest = {
 	/**  The brief, in plain words ("a calm bilingual brand"). */
@@ -471,6 +488,20 @@ export type ExportWebResponse = {
 	css: string | null,
 };
 
+/**  The coverage of one face: per Unicode block and per language preset. */
+export type FaceCoverage = {
+	/**  The face. */
+	face: FaceId,
+	/**  The blocks with at least one covered character, in Unicode order. */
+	blocks: BlockCoverage[],
+	/**
+	 *  The presets the face covers anything of or has `locl` forms for:
+	 *  complete ones first (in preset order), then partial ones, most
+	 *  covered first. Missing characters come from `check_coverage`.
+	 */
+	languages: FaceLanguageCoverage[],
+};
+
 /**  Everything the info panel shows about one face. */
 export type FaceDetail = {
 	/**  The list row. */
@@ -530,6 +561,20 @@ export type FaceDetail = {
 
 /**  One face (style) inside a font file; a collection file has several. */
 export type FaceId = number;
+
+/**  How much of one language preset a face covers, for the coverage list. */
+export type FaceLanguageCoverage = {
+	/**  Preset code (`sr-Cyrl`). */
+	code: string,
+	/**  English name ("Serbian (Cyrillic)"). */
+	name: string,
+	/**  Base characters of the preset the face maps. */
+	covered: number,
+	/**  Base characters the preset needs. */
+	total: number,
+	/**  The face has `locl` forms for this language. */
+	hasLocl: boolean,
+};
 
 /**  One face, as listed under its family. */
 export type FaceSummary = {
