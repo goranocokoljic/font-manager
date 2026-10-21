@@ -422,6 +422,36 @@ fn get_face_names_stylistic_sets_from_the_index() {
 }
 
 #[test]
+fn get_face_reports_the_palettes_of_a_color_face_and_none_for_a_plain_one() {
+    let (lib, source, _) = Lib::scanned("api-palettes");
+    let file = lib.root.join("cairoplay").join("CairoPlay[slnt,wght].ttf");
+    std::fs::create_dir_all(file.parent().expect("folder")).expect("folder");
+    std::fs::copy(
+        fixtures().join("google-repo/cairoplay/CairoPlay[slnt,wght].ttf"),
+        &file,
+    )
+    .expect("copy");
+    lib.scan(Some(source.id), true);
+    let cairo = FaceId(lib.family("Cairo Play").id.0);
+
+    let detail = lib.api.get_face(cairo).expect("detail");
+    assert_eq!(detail.palettes.len(), 1, "{:?}", detail.palettes);
+    assert_eq!(detail.palettes[0].index, 0);
+    assert_eq!(detail.palettes[0].colors[1], "#e53a35");
+
+    let plain = lib
+        .api
+        .get_face(FaceId(lib.family("Archivo").id.0))
+        .expect("plain");
+    assert_eq!(plain.palettes, Vec::new());
+
+    // A file gone since the scan still answers, without palettes.
+    std::fs::remove_file(&file).expect("remove the file");
+    let gone = lib.api.get_face(cairo).expect("detail of a missing file");
+    assert_eq!(gone.palettes, Vec::new());
+}
+
+#[test]
 fn problems_list_the_truncated_file_and_duplicates_answer() {
     let (lib, _, _) = Lib::scanned("api-problems");
     let problems = lib.api.list_problems().expect("problems");

@@ -6,7 +6,8 @@
 // inspector's Axes tab (the axes store), else at their defaults, through
 // `font-variation-settings`; moving an axis restyles the row, the font stays loaded.
 // Features switched in the inspector's Features tab apply through
-// `font-feature-settings`.
+// `font-feature-settings`. A color palette chosen in the inspector for the face's
+// family in `view` applies through `font-palette` (E16.3).
 // The list passes the view's preview settings (size, spacing, alignment, color).
 // When the face lacks characters of the sample, the list passes the fallback text
 // the API chose and `fallback`; the row then shows a small "Fallback" hint.
@@ -15,6 +16,8 @@ import type { Axis, AxisValue, FaceId, FaceSummary, SampleFallback } from '../ap
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
+import { usePalettesStore } from '../stores/palettes';
+import { ALL_FONTS_VIEW } from '../stores/preview';
 import { faceAxes, variationSettings } from '../preview/variations';
 
 const props = withDefaults(
@@ -35,6 +38,8 @@ const props = withDefaults(
     fallback?: SampleFallback | null;
     /** Characters of the sample the face lacks. */
     missing?: string[];
+    /** The view whose chosen color palettes apply. */
+    view?: string;
   }>(),
   {
     label: undefined,
@@ -47,6 +52,7 @@ const props = withDefaults(
     variations: () => [],
     fallback: null,
     missing: () => [],
+    view: ALL_FONTS_VIEW,
   },
 );
 
@@ -55,6 +61,7 @@ type LoadState = 'loading' | 'ready' | 'failed';
 const loader = useFaceLoader();
 const features = useFeaturesStore();
 const axesSet = useAxesStore();
+const palettes = usePalettesStore();
 const state = ref<LoadState>('loading');
 const axes = ref<Axis[]>([]);
 let held: FaceId | null = null;
@@ -112,6 +119,7 @@ const sampleStyle = computed(() => ({
     props.variations.length ? props.variations : (axesSet.values(props.face.id) ?? []),
   ),
   fontFeatureSettings: features.settings(props.face.id),
+  fontPalette: palettes.fontPaletteOf(props.view, props.face),
 }));
 
 const fallbackTitle = computed(() => {

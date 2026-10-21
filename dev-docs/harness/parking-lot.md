@@ -171,3 +171,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E18.2 #130] scripts/release/dev-build.mjs:22 — macOS builds only on macos-latest (arm64), so releases have no darwin-x86_64 update target for Intel Macs.
 - [E18.2 #130] scripts/release/build.mjs:316 — args() now treats a bare --flag as true while dev-build.mjs:93 and update-manifest.mjs:169 do not; three parsers in one folder differ.
 - [E18.2 #130] apps/desktop/src-tauri/src/lib.rs — on Windows the updater's install() calls process::exit(0), so RunEvent::Exit (log flush, tray cleanup) never runs after an update; the quit path itself already ran.
+- [E16.3 #124] apps/desktop/src/stores/palettes.ts:32 — `browserStorage()` is now copied in four stores (layout, preview, views, palettes); same behavior, can drift.
+- [E16.3 #124] apps/desktop/playwright.config.ts:13 — Playwright runs Chromium only, so CSS `@font-palette-values` on FontFace-loaded faces is unproven on WKWebView and WebKitGTK (the code falls back to the default palette).
+- [E16.3 #124] apps/desktop/src/components/CardLiveText.vue:21 — the face-holding pattern (`held` + `loader.acquire`/`release`) is hand-written in FontPreviewRow, FontLayout, GlyphCompare, CompareSheet and now CardLiveText; no shared composable.

@@ -6,7 +6,8 @@
 // them as a CSS mask in the text color, so themes and surfaces need no new render.
 //
 // Lines are virtualized like the list's rows (`list/grid.ts`), cards keyed by
-// slot. The grid shares the list's cursor, selection and keyboard model; Up/Down
+// slot. A face whose family has a color palette chosen (E16.3) shows live text in
+// that palette instead, as a mask cannot show colors. The grid shares the list's cursor, selection and keyboard model; Up/Down
 // move by a line, Left/Right by a card, Enter expands a family or opens a style.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
@@ -20,9 +21,11 @@ import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
-import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import { usePalettesStore } from '../stores/palettes';
+import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
 import ActivationDot from './ActivationDot.vue';
+import CardLiveText from './CardLiveText.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -49,6 +52,7 @@ const FALLBACK_WIDTH = 800;
 const list = useFontListStore();
 const library = useLibraryStore();
 const thumbnails = useThumbnailsStore();
+const palettes = usePalettesStore();
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -122,6 +126,7 @@ const visible = computed(() =>
     const p = previewOf(row);
     const text = cardText(p.text);
     const face = p.face;
+    const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     return {
       row,
       index,
@@ -130,8 +135,9 @@ const visible = computed(() =>
       face,
       text,
       fallback: p.fallback,
-      thumb: face ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
-      failed: face ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
+      palette,
+      thumb: face && !palette ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
+      failed: face && !palette ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
       name: row.kind === 'face' ? styleName(row) : row.family.name,
     };
   }),
@@ -140,7 +146,7 @@ const visible = computed(() =>
 // Ask for the thumbnails of the cards on screen.
 watchEffect(() => {
   for (const item of visible.value)
-    if (item.face && item.text) thumbnails.want(item.face.id, item.text, THUMB_PX);
+    if (item.face && item.text && !item.palette) thumbnails.want(item.face.id, item.text, THUMB_PX);
 });
 
 function cardStyle(index: number) {
@@ -265,7 +271,17 @@ function onToggle(row: ListRow): void {
         @dragstart="onCardDrag(item.row, $event)"
       >
         <div class="card">
+          <CardLiveText
+            v-if="item.face && item.palette"
+            :face="item.face.id"
+            :text="item.text"
+            :palette="item.palette"
+            :size-px="THUMB_PX"
+            :color="preview.textColor"
+            aria-hidden="true"
+          />
           <div
+            v-else
             class="thumb"
             data-testid="thumbnail"
             :data-state="thumbState(item)"

@@ -695,6 +695,11 @@ export type FaceDetail = {
 	codePointCount?: number | null,
 	/**  The user's notes on the face's family (E13.5); `notes` are the face's. */
 	familyNotes?: string | null,
+	/**
+	 *  The `CPAL` palettes of a `COLR` color face (E16.3); empty for a face
+	 *  without them.
+	 */
+	palettes?: Palette[],
 };
 
 /**  One face (style) inside a font file; a collection file has several. */
@@ -1523,6 +1528,26 @@ export type Paged<T> = {
 	items: T[],
 	/**  Rows in the whole list. */
 	total: number,
+};
+
+/**
+ *  One `CPAL` palette of a `COLR` color face (E16.3). The webview applies it
+ *  with CSS `font-palette` (`base-palette: index`).
+ */
+export type Palette = {
+	/**  Index of the palette in the `CPAL` table (0 is the default). */
+	index: number,
+	/**  The palette's name from the `name` table, if the font gives one. */
+	name: string | null,
+	/**
+	 *  Its colors as CSS hex, in palette-entry order: `#rrggbb`, or
+	 *  `#rrggbbaa` when the color is not opaque.
+	 */
+	colors: string[],
+	/**  The font marks it for use on a light background. */
+	lightBackground: boolean,
+	/**  The font marks it for use on a dark background. */
+	darkBackground: boolean,
 };
 
 /**

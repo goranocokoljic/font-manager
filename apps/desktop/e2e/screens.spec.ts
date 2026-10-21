@@ -39,6 +39,8 @@ const quickRows = Number(process.env.FM_SCREENS_QUICK ?? 0);
 // FM_SCREENS_TAGS=Display,Body makes those tags on the first list row with T, then opens the
 // multi-tagging panel for the first two rows (one mixed tag each).
 const tagNames = (process.env.FM_SCREENS_TAGS ?? '').split(',').filter(Boolean);
+// FM_SCREENS_QUERY='?mockColor=1' sets MockApi options (the page URL before the hash).
+const query = process.env.FM_SCREENS_QUERY ?? '';
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -61,7 +63,7 @@ test.describe('@screens', () => {
           }, storage);
           await page.setViewportSize(vp);
           await page.emulateMedia({ colorScheme: scheme });
-          await page.goto(`/#${path}`);
+          await page.goto(`/${query}#${path}`);
           await expect(page.locator('#app')).not.toBeEmpty();
           if (press) await page.keyboard.press(press);
           if (tab) {

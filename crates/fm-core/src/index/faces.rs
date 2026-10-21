@@ -24,6 +24,7 @@ use crate::coverage;
 use crate::error::{FmError, FmResult};
 use crate::features;
 use crate::license;
+use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
 
@@ -96,16 +97,30 @@ impl Index {
     /// unknown face is `NotFound`.
     pub fn face_detail(&self, face: FaceId) -> FmResult<FaceDetail> {
         let row = self.face_row(face)?;
-        let metrics = read_metrics(&row.file).unwrap_or_else(|e| {
-            tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
-            Metrics {
-                units_per_em: 0,
-                ascender: 0,
-                descender: 0,
-                x_height: None,
-                cap_height: None,
-            }
-        });
+        let data = read_file(&row.file);
+        let metrics = data
+            .as_ref()
+            .map_err(Clone::clone)
+            .and_then(|d| crate::preview::face_metrics(d, row.file.collection_index))
+            .unwrap_or_else(|e| {
+                tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
+                Metrics {
+                    units_per_em: 0,
+                    ascender: 0,
+                    descender: 0,
+                    x_height: None,
+                    cap_height: None,
+                }
+            });
+        // Only a color face can have palettes; a plain one skips the read.
+        let palettes = match (&data, row.parsed.as_ref().is_some_and(|p| p.color)) {
+            (Ok(d), true) => palettes::face_palettes(d, row.file.collection_index)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(%face, error = %e, detail = ?e.detail(), "face palettes not read");
+                    Vec::new()
+                }),
+            _ => Vec::new(),
+        };
         let tags = self.face_tag_names(face)?;
         let family_notes = self.family_notes(&row.summary.family_name)?;
         let declared = self
@@ -173,6 +188,7 @@ impl Index {
             italic_angle: parsed.and_then(|p| p.italic_angle),
             code_point_count,
             family_notes,
+            palettes,
             face: row.summary,
         })
     }
@@ -339,10 +355,9 @@ fn read_row(row: &Row<'_>) -> FmResult<FaceRow> {
     })
 }
 
-fn read_metrics(file: &FaceLocation) -> FmResult<Metrics> {
-    let data = std::fs::read(&file.path)
-        .map_err(|e| FmError::io("The font file could not be read.", &file.path, &e))?;
-    crate::preview::face_metrics(&data, file.collection_index)
+fn read_file(file: &FaceLocation) -> FmResult<Vec<u8>> {
+    std::fs::read(&file.path)
+        .map_err(|e| FmError::io("The font file could not be read.", &file.path, &e))
 }
 
 /// An open license as `face.open_license` stores it: its `fm-api` serde name.
