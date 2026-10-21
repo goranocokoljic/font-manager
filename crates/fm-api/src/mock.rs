@@ -930,6 +930,9 @@ impl State {
             && q.tags.iter().all(|t| tags.is_some_and(|set| set.contains(t)))
             && q.added_within_days.is_none_or(|days| added_within(fam.added, days))
             && q.active.is_none_or(|a| a == self.active.contains_key(&s.id))
+            // Every activation happens at the mock's fixed clock, so a face
+            // activated once is within any window, active now or not.
+            && q.activated_within_days.is_none_or(|_| self.activation_order.contains_key(&s.id))
             && q.favorite.is_none_or(|v| v == f.detail.favorite)
             && q.min_rating.is_none_or(|r| f.detail.rating.is_some_and(|x| x >= r))
             && q.problems.is_none_or(|p| p == (s.health != Health::Ok))

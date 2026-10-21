@@ -188,7 +188,14 @@ fn smart_collections_are_made_once_and_timed() {
     let index = fm_core::startup::open_index(&home_paths(home.path()))
         .expect("open")
         .index;
-    assert_eq!(index.collections().expect("list").len(), SMART_COLLECTIONS);
+    // The library's own default smart collections (E14.3) are listed too.
+    let bench = index
+        .collections()
+        .expect("list")
+        .into_iter()
+        .filter(|c| c.name.starts_with("Bench smart "))
+        .count();
+    assert_eq!(bench, SMART_COLLECTIONS);
 }
 
 #[test]

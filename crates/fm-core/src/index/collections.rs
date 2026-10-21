@@ -16,10 +16,12 @@
 use std::collections::HashMap;
 
 use fm_api::CollectionId;
+use fm_api::common::Classification;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
     RenameCollectionRequest, RuleGroup,
 };
+use fm_api::search::Filters;
 use fm_api::{ErrorCode, FaceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
@@ -243,6 +245,39 @@ impl Index {
         Ok(())
     }
 
+    /// Creates the default smart collections ([`default_collections`]) at
+    /// the top level, after any there already are, unless this library has
+    /// had them already: they are made once, so a default the user renamed
+    /// or deleted is not made again, and [`Index::rebuild`] keeps the mark.
+    /// A name a top-level collection already has is skipped. Returns whether
+    /// they were made now.
+    pub fn create_default_collections(&mut self) -> FmResult<bool> {
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        let made = tx
+            .prepare("SELECT 1 FROM index_meta WHERE key = ?1")
+            .and_then(|mut stmt| stmt.exists([DEFAULTS_KEY]))
+            .map_err(|e| db_error(&e))?;
+        if made {
+            return Ok(false);
+        }
+        for (name, filters) in default_collections() {
+            if ensure_free_name(&tx, None, name, None).is_err() {
+                continue;
+            }
+            let rules = serde_json::to_string(&RuleGroup::from(filters))
+                .map_err(|e| FmError::internal(format!("collection rules: {e}")))?;
+            insert_collection(&tx, None, name, Some(&rules))?;
+        }
+        tx.execute(
+            "INSERT INTO index_meta (key, value)
+             VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+            [DEFAULTS_KEY],
+        )
+        .map_err(|e| db_error(&e))?;
+        tx.commit().map_err(|e| db_error(&e))?;
+        Ok(true)
+    }
+
     /// Adds faces, and every face of whole families, to a manual collection.
     /// A face already in it stays once; it stays in its other collections.
     pub fn add_to_collection(&mut self, req: &CollectionFacesRequest) -> FmResult<Collection> {
@@ -302,6 +337,40 @@ impl Index {
         self.mirror_sidecars();
         self.collection(req.collection)
     }
+}
+
+/// The `index_meta` key set once the default smart collections were made;
+/// its value is when.
+const DEFAULTS_KEY: &str = "default_collections";
+
+/// What "Recently" means for the default smart collections, in days.
+pub(crate) const RECENT_DAYS: u32 = 30;
+
+/// The default smart collections (E14.3), in sidebar order: each a name and
+/// one plain rule.
+pub(crate) fn default_collections() -> Vec<(&'static str, Filters)> {
+    let rule = |set: fn(&mut Filters)| {
+        let mut f = Filters::default();
+        set(&mut f);
+        f
+    };
+    vec![
+        (
+            "Recently added",
+            rule(|f| f.added_within_days = Some(RECENT_DAYS)),
+        ),
+        (
+            "Recently activated",
+            rule(|f| f.activated_within_days = Some(RECENT_DAYS)),
+        ),
+        ("Variable", rule(|f| f.variable = Some(true))),
+        (
+            "Monospace",
+            rule(|f| f.classification = vec![Classification::Mono]),
+        ),
+        ("Web-licensed", rule(|f| f.web_ok = Some(true))),
+        ("Problems", rule(|f| f.problems = Some(true))),
+    ]
 }
 
 /// Inserts a collection last among the children of `parent`; returns its id.

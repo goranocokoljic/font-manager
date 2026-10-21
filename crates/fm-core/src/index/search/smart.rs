@@ -21,7 +21,7 @@ use rusqlite::Connection;
 use super::{Index, Row};
 use crate::coverage::Need;
 use crate::error::{FmError, FmResult};
-use crate::filter::{failed_added, passes};
+use crate::filter::{failed_activated, failed_added, passes};
 use crate::index::db_error;
 use crate::parallel::map_ordered;
 
@@ -88,7 +88,7 @@ pub(in crate::index) enum Member {
 
 impl Member {
     /// Compiles the test for the collection `id`. `conn` gives the time
-    /// for `added_within_days`.
+    /// for `added_within_days` and `activated_within_days`.
     pub(in crate::index) fn compile(
         conn: &Connection,
         rules: &Rules,
@@ -165,6 +165,8 @@ struct Leaf {
     need: Option<Need<'static>>,
     /// Faces added at this time or later pass (`added_within_days`).
     cutoff: Option<String>,
+    /// Faces last activated at this time or later pass (`activated_within_days`).
+    activated_cutoff: Option<String>,
     member: Option<Member>,
 }
 
@@ -172,6 +174,10 @@ impl Leaf {
     fn passes(&self, row: &Row, done: &[bool]) -> bool {
         passes(&self.filters, &row.text, &row.facts)
             && failed_added(self.cutoff.as_deref(), row.added.as_deref()) == 0
+            && failed_activated(
+                self.activated_cutoff.as_deref(),
+                row.last_activated.as_deref(),
+            ) == 0
             // As search's `supports` filter: complete or a near miss passes,
             // unknown coverage fails.
             && self
@@ -241,6 +247,7 @@ impl Compiler<'_> {
         Ok(Leaf {
             need: need(&filters)?,
             cutoff: cutoff(self.conn, filters.added_within_days)?,
+            activated_cutoff: cutoff(self.conn, filters.activated_within_days)?,
             filters,
             member,
         })
@@ -258,7 +265,8 @@ pub(in crate::index) fn need(filters: &Filters) -> FmResult<Option<Need<'static>
     .filter(|need| !need.is_empty()))
 }
 
-/// The time `days` days ago, as `face.added` writes it (RFC 3339, UTC).
+/// The time `days` days ago, as `face.added` and `face.last_activated`
+/// write it (RFC 3339, UTC).
 pub(in crate::index) fn cutoff(conn: &Connection, days: Option<u32>) -> FmResult<Option<String>> {
     days.map(|days| {
         conn.query_row(

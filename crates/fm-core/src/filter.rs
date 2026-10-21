@@ -122,6 +122,9 @@ pub(crate) enum Dim {
     /// Added within some days: checked against a cutoff time taken once per
     /// search, so [`failed`] leaves it to [`failed_added`].
     Added,
+    /// Activated within some days: like [`Dim::Added`], left to
+    /// [`failed_activated`].
+    Activated,
 }
 
 impl Dim {
@@ -194,7 +197,7 @@ fn check(dim: Dim, f: &Filters, text: &FaceText, facts: &FaceFacts) -> bool {
             .open_license
             .is_none_or(|o| o == facts.open_license.is_some()),
         Dim::WebOk => f.web_ok.is_none_or(|w| w == facts.web_ok()),
-        Dim::Supports | Dim::Added => true,
+        Dim::Supports | Dim::Added | Dim::Activated => true,
     }
 }
 
@@ -230,6 +233,16 @@ pub(crate) fn failed_supports(fit: Option<&Fit>) -> u32 {
 pub(crate) fn failed_added(cutoff: Option<&str>, added: Option<&str>) -> u32 {
     match cutoff {
         Some(cutoff) if added.is_none_or(|added| added < cutoff) => Dim::Added.bit(),
+        _ => 0,
+    }
+}
+
+/// The [`Dim::Activated`] bit for a face last activated at `activated`
+/// (RFC 3339, UTC) when the search keeps faces activated at `cutoff` or
+/// later; 0 without a cutoff. A face never activated fails.
+pub(crate) fn failed_activated(cutoff: Option<&str>, activated: Option<&str>) -> u32 {
+    match cutoff {
+        Some(cutoff) if activated.is_none_or(|at| at < cutoff) => Dim::Activated.bit(),
         _ => 0,
     }
 }

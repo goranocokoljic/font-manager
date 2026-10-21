@@ -861,9 +861,16 @@ export function mockWebUse(l: LicenseInfo): WebUse {
 
 /**
  * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
- * `tags` are the ids of its tags.
+ * `tags` are the ids of its tags; `activated`: it was ever activated (the mock's clock
+ * is fixed, so that is within any `activatedWithinDays` window).
  */
-function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): boolean {
+function passes(
+  d: FaceDetail,
+  active: boolean,
+  activated: boolean,
+  tags: TagId[],
+  q: Filters,
+): boolean {
   const f = d.face;
   const covers = (code: string) => {
     const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
@@ -879,6 +886,7 @@ function passes(d: FaceDetail, active: boolean, tags: TagId[], q: Filters): bool
     (q.license == null || d.license.declared === q.license) &&
     (!q.sources?.length || q.sources.includes(1)) &&
     (q.active == null || q.active === active) &&
+    (q.activatedWithinDays == null || activated) &&
     (q.problems == null || q.problems === (f.health.kind !== 'ok')) &&
     (q.tags ?? []).every((t) => tags.includes(t)) &&
     (q.favorite == null || q.favorite === d.favorite) &&
@@ -1208,6 +1216,8 @@ function createMockLayouts(): Pick<
 
 export function createMockClient(options: MockOptions = {}): FmClient {
   const active = new Map<FaceId, ActivationMode>();
+  /** Faces ever activated, active now or not. */
+  const everActivated = new Set<FaceId>();
   const sources = structuredClone(mockSources);
   const sets = structuredClone(options.sets ?? []);
   const handlers = new Set<(event: Event) => void>();
@@ -1408,7 +1418,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     return g.op === 'and' ? results.every(Boolean) : !results.length || results.some(Boolean);
   };
   const matches = (d: FaceDetail, q: Filters, path: CollectionId[]): boolean =>
-    passes(d, active.has(d.face.id), tagIdsOf(d), q) &&
+    passes(d, active.has(d.face.id), everActivated.has(d.face.id), tagIdsOf(d), q) &&
     (q.collection == null || inCollection(d, q.collection, path));
   // Refuses a stored rule of `id` that reaches a collection twice on one path.
   const checkLoops = (id: CollectionId, path: CollectionId[]) => {
@@ -1763,6 +1773,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             outcome: { status: 'conflict', with: { kind: 'system', path: clash } },
           };
         active.set(id, mode);
+        everActivated.add(id);
         activated.push(id);
         return { face: id, outcome: { status: 'done' } };
       });

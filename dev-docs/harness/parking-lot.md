@@ -150,4 +150,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E12.3 #106] apps/desktop/src/stores/textLayouts.ts:57 — the shared `busy` flag in `run` lets a property clamp re-enable Save/Revert while a save is in flight and clear an earlier save error.
 - [E12.3 #106] crates/fm-api/src/layout.rs:112 (origin/E12.2-drag-resize-blocks) — open PR #307 defines a narrower `LayoutBounds`; whichever merges second must keep the wider struct from #310.
 - [E12.3 #106] apps/desktop/src/api/mock.ts — the block ranges are copied in the TS mock, the Rust mock and fm-core; only the Rust mock is checked against the core.
+- [E14.3 #116] crates/fm-core/src/index/search/smart.rs:270 — a huge `addedWithinDays` / `activatedWithinDays` makes `strftime` return NULL, so `cutoff` gives an Io error instead of InvalidRequest.
+- [E14.3 #116] crates/fm-core/src/index/search.rs:637 — `FamilySummary.classification` is still hard-coded `None`, although search rows now read the face class from `face.parsed`.
+- [E14.3 #116] crates/fm-bench/src/lib.rs:302 — `smart_rule` says it covers every filter dimension, but no bench smart collection uses `activated_within_days`.
 - [E12.4 #107] apps/desktop/src/views/HomeView.vue — at 1280×800 with the inspector open, the toolbar's "Inspector" button is clipped ("Inspect…").
