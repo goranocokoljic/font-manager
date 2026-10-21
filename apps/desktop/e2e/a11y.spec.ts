@@ -104,6 +104,32 @@ test('every interactive element in the Quick Collection review has a name', asyn
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+test('every interactive element of the tagging panel and the Tags group has a name', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByRole('treeitem').first().click();
+  await page.keyboard.press('t');
+  const panel = page.getByRole('dialog', { name: /^Tags of / });
+  await panel.getByRole('combobox').fill('Display');
+  await page.keyboard.press('Enter');
+  await expect(panel.getByRole('option', { name: /Display/ })).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+  // The filter field's outline is the 3:1 form-field color (WCAG 1.4.11).
+  const outline = await panel.getByRole('combobox').evaluate((el) => {
+    const probe = document.createElement('div');
+    probe.style.borderTop = '1px solid var(--fm-control-border)';
+    document.body.append(probe);
+    const want = getComputedStyle(probe).borderTopColor;
+    probe.remove();
+    return [getComputedStyle(el).borderTopColor, want];
+  });
+  expect(outline[0]).toBe(outline[1]);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('region', { name: 'Tags' }).locator('li[data-tag]')).toHaveCount(1);
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('every interactive element in Settings has a name', async ({ page }) => {
   await open(page, '/settings');
   for (const tab of SETTINGS_TABS) {

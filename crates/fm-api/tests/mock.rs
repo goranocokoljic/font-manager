@@ -27,7 +27,8 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest,
     QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup,
-    RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
+    RuleOp, SelectionTagsRequest, TagFacesRequest, UntagFacesRequest, UserMetaUpdate,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
@@ -568,6 +569,7 @@ fn collections_tags_meta_and_sets() {
 
     let tags = api
         .tag_faces(TagFacesRequest {
+            families: Vec::new(),
             faces: vec![FaceId(1), FaceId(2)],
             tags: vec!["brand".into()],
         })
@@ -1044,6 +1046,7 @@ fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
 fn family_rows_carry_the_detail_list_columns() {
     let api = api();
     api.tag_faces(TagFacesRequest {
+        families: Vec::new(),
         faces: vec![FaceId(3)],
         tags: vec!["Body".into(), "brand".into()],
     })
@@ -1616,6 +1619,7 @@ fn smart_collections_follow_the_rules() {
     let first = faces_of(&api, Filters::default()).unwrap()[0];
     let tag = api
         .tag_faces(TagFacesRequest {
+            families: Vec::new(),
             faces: vec![first],
             tags: vec!["later".into()],
         })
@@ -2010,4 +2014,56 @@ fn activated_within_days_keeps_deactivated_faces() {
     })
     .unwrap();
     assert_eq!(faces_of(&api, recent).unwrap(), [FaceId(3), FaceId(4)]);
+}
+
+#[test]
+fn tagging_a_family_tags_its_faces_and_the_selection_shows_mixed_tags() {
+    let api = api();
+    let family = api
+        .list_families(ListFamiliesRequest::default())
+        .unwrap()
+        .items[0]
+        .id;
+    let members = api
+        .selection_tags(SelectionTagsRequest {
+            faces: vec![],
+            families: vec![family],
+        })
+        .unwrap()
+        .faces;
+    assert!(
+        members.len() > 1,
+        "the first sample family has several styles"
+    );
+    let outside = (1..100).map(FaceId).find(|f| !members.contains(f)).unwrap();
+
+    let made = api
+        .tag_faces(TagFacesRequest {
+            faces: vec![],
+            tags: vec!["Body".into()],
+            families: vec![family],
+        })
+        .unwrap();
+    assert_eq!(made[0].face_count as usize, members.len());
+
+    let got = api
+        .selection_tags(SelectionTagsRequest {
+            faces: vec![outside],
+            families: vec![family],
+        })
+        .unwrap();
+    assert_eq!(got.faces.len(), members.len() + 1);
+    assert_eq!(got.tags.len(), 1);
+    assert_eq!(got.tags[0].face_count as usize, members.len());
+    assert!(
+        !got.tags[0].all,
+        "the outside face does not carry it: mixed"
+    );
+
+    let unknown = api.tag_faces(TagFacesRequest {
+        faces: vec![],
+        tags: vec!["Body".into()],
+        families: vec![FamilyId(9999)],
+    });
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
 }

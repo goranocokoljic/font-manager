@@ -24,6 +24,7 @@ export const ACTIONS = {
   activatePermanent: 'activation.togglePermanent',
   compare: 'compare.add',
   quickCollection: 'quickCollection.toggle',
+  tag: 'tags.openPanel',
   viewMode: (n: 1 | 2 | 3 | 4 | 5) => `view.mode${n}`,
   settings: 'settings.open',
   inspector: 'view.toggleInspector',
@@ -34,6 +35,7 @@ export const ACTIONS = {
  * quick-look · A toggle session activation · Shift+A permanent · C add to compare ·
  * 1–5 view modes · Ctrl/Cmd+, settings. Ctrl/Cmd+I (inspector) comes from E5.1.
  * B adds the selected fonts to the Quick Collection or removes them (E13.3).
+ * T opens the multi-tagging panel for the selected fonts (E13.4).
  * Arrows and Enter inside the font list belong to the list itself (E5.2).
  */
 export const KEYMAP: readonly Binding[] = [
@@ -44,6 +46,7 @@ export const KEYMAP: readonly Binding[] = [
   { action: ACTIONS.activatePermanent, chord: { key: 'a', shift: true } },
   { action: ACTIONS.compare, chord: { key: 'c' } },
   { action: ACTIONS.quickCollection, chord: { key: 'b' } },
+  { action: ACTIONS.tag, chord: { key: 't' } },
   ...([1, 2, 3, 4, 5] as const).map((n) => ({
     action: ACTIONS.viewMode(n),
     chord: { key: String(n) },

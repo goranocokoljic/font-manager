@@ -26,8 +26,8 @@ use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
     LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection,
-    QuickCollectionRequest, RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    QuickCollectionRequest, RenameCollectionRequest, SelectionTags, SelectionTagsRequest, Tag,
+    TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -657,6 +657,15 @@ async fn clear_quick_collection(state: State<'_, AppState>) -> ApiResult<()> {
     call(&state, move |api| api.clear_quick_collection()).await
 }
 
+/// The tags the faces of a selection carry, with how many carry each (E13.4).
+#[tauri::command]
+async fn selection_tags(
+    state: State<'_, AppState>,
+    req: SelectionTagsRequest,
+) -> ApiResult<SelectionTags> {
+    call(&state, move |api| api.selection_tags(req)).await
+}
+
 /// Declares the license of a family (E15.2).
 #[tauri::command]
 async fn declare_license(state: State<'_, AppState>, req: LicenseDeclaration) -> ApiResult<()> {
@@ -841,6 +850,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             tag_faces,
             untag_faces,
             update_user_meta,
+            selection_tags,
             update_family_notes,
             declare_license,
             quick_collection,
