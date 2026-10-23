@@ -13,6 +13,9 @@
   "_main_red": "Main red at the merge gate: the harness re-runs the failed main jobs once (a flaky test), then checks every poll_min minutes for at most max_hours before it stops the lane.",
   "main_red": { "poll_min": 10, "max_hours": 6 },
 
+  "_network": "No connection to GitHub or the API (Wi-Fi, DNS, GitHub down): the harness checks every poll_min minutes for at most max_hours, then goes on as before (blocks the story, or stops after 3 picker failures).",
+  "network": { "poll_min": 5, "max_hours": 48 },
+
   "base_branch": "main",
 
   "_budget": "Per-story budget in USD = size factor x base. S = 1x, M = 2.5x, L = 5x. Off by default (a Pro/Max plan pays no per-token cost): spend is shown and logged, nothing stops. budget_enforced: true (or the -Budget switch) stops a story that goes over with harness:blocked.",
