@@ -885,7 +885,8 @@ impl OrganizationService for CoreApi {
 impl ExportService for CoreApi {
     /// The faces are looked up under the index lock; their files are read,
     /// subset and written outside it. The subset is checked before any face
-    /// is looked up. CSS (E20.3) is not built yet.
+    /// is looked up. With `css`, `fonts.css` is written beside the fonts
+    /// ([`web_font::export_with_css`]) and its text returned.
     fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
         if req.faces.is_empty() || req.formats.is_empty() {
             return Err(ApiError::invalid("Pick at least one font and one format."));
@@ -894,9 +895,6 @@ impl ExportService for CoreApi {
             return Err(ApiError::invalid("Choose an output folder."));
         }
         let keep = req.subset.as_ref().map(subset::code_points).transpose()?;
-        if req.css {
-            return Err(not_available("Writing web font CSS"));
-        }
         let mut ids = HashSet::new();
         let mut formats = Vec::new();
         for f in req.formats {
@@ -920,14 +918,22 @@ impl ExportService for CoreApi {
                             ),
                         ));
                     }
-                    Ok(f.face)
+                    Ok((f.face, f.style))
                 })
                 .collect::<FmResult<Vec<_>>>()?
         };
-        let files = web_font::export(&faces, &formats, keep.as_ref(), Path::new(&req.out_dir))?;
+        let (faces, styles): (Vec<_>, Vec<_>) = faces.into_iter().unzip();
+        let out_dir = Path::new(&req.out_dir);
+        let (files, css) = if req.css {
+            let out = web_font::export_with_css(&faces, &styles, &formats, keep.as_ref(), out_dir)?;
+            (out.files, Some(out.css))
+        } else {
+            let files = web_font::export(&faces, &formats, keep.as_ref(), out_dir)?;
+            (files, None)
+        };
         Ok(ExportWebResponse {
             files: files.iter().map(|p| p.display().to_string()).collect(),
-            css: None,
+            css,
         })
     }
 
