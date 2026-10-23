@@ -92,11 +92,6 @@ function lookup(catalog: Catalog | undefined, key: string): string | PluralForms
   return typeof node === 'string' || isPlural(node) ? node : undefined;
 }
 
-/** Whether `key` names a message in `tag`'s catalog (not its fallback). */
-export function hasMessage(key: string, tag = current.value): boolean {
-  return lookup(CATALOGS[tag], key) !== undefined;
-}
-
 /** Formats a number for the UI's locale. */
 export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
   return new Intl.NumberFormat(current.value, options).format(value);
