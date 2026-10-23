@@ -24,6 +24,8 @@ describe('textDirection', () => {
     expect(textDirection('az-Arab')).toBe('rtl');
     expect(textDirection('ku-Latn')).toBe('ltr');
     expect(textDirection('pa_Arab_PK')).toBe('rtl');
+    // A four-digit variant is no script: Hebrew stays right to left.
+    expect(textDirection('he-1996')).toBe('rtl');
   });
 
   it('every shipped catalog is left to right, so the pseudo-locale is how RTL is checked', () => {

@@ -74,7 +74,7 @@ const RTL_SCRIPTS = new Set(['adlm', 'arab', 'hebr', 'nkoo', 'rohg', 'syrc', 'th
 /** The direction a locale's UI runs in: `rtl` for Arabic, Hebrew, Persian, Urdu … */
 export function textDirection(tag: string): 'ltr' | 'rtl' {
   const parts = tag.toLowerCase().split(/[-_]/);
-  const script = parts.find((p, i) => i > 0 && p.length === 4);
+  const script = parts.find((p, i) => i > 0 && /^[a-z]{4}$/.test(p));
   if (script) return RTL_SCRIPTS.has(script) ? 'rtl' : 'ltr';
   return RTL_LANGUAGES.has(parts[0] ?? '') ? 'rtl' : 'ltr';
 }
