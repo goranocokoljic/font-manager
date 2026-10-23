@@ -673,6 +673,8 @@ When the stage is finished, print the result on the VERY LAST line, nothing afte
         if ($verdict -ne 'incomplete') { return @{ Verdict = $verdict; Reason = ($last -replace "^($BLOCKED|$FAIL):\s*", '') } }
         Write-Log "=== stage $Stage INCOMPLETE ($(if ($script:CliExit) { "claude exited $($script:CliExit)" } else { 'no sentinel' })) ===" 'Yellow'
         if (Test-OverBudget) { return @{ Verdict = 'blocked'; Reason = (Get-BudgetReason) } }
+        # No network is not the stage's fault: wait for it and do not count the attempt.
+        if ((Test-NetworkError $text) -and (Wait-Network)) { $attempt-- }
     }
     return @{ Verdict = 'failed'; Reason = "stage $Stage incomplete after $maxAttempts attempts" }
 }
@@ -759,6 +761,28 @@ function Block-Story {
     $r = Invoke-Node 'issue.mjs' @('block', "$($s.issue)", '--reason', $Reason, '--tried', $Tried)
     if ($r.Code -ne 0) { Write-Log "    could not label the issue: $($r.Err.Trim())" 'Yellow' }
     Complete-Story -Outcome 'blocked' -Reason $Reason
+}
+
+# Wi-Fi, DNS or GitHub gone: the error text of gh, node or the claude CLI.
+function Test-NetworkError {
+    param([string]$Text)
+    return [bool]($Text -match "ENOTFOUND|EAI_AGAIN|ECONNRESET|ECONNREFUSED|ETIMEDOUT|error connecting to|Can't reach the API server|no such host|dial tcp|i/o timeout|TLS handshake|network is unreachable|check your internet")
+}
+
+# Waits until GitHub answers again, every network.poll_min minutes. $true when
+# it does; $false after network.max_hours (the caller then blocks as before).
+function Wait-Network {
+    $deadline = (Get-Date).AddHours([double]($Cfg.network.max_hours ?? 48))
+    $script:RunState = 'paused'
+    try {
+        while ((Get-Date) -lt $deadline) {
+            Wait-Minutes ([double]($Cfg.network.poll_min ?? 5)) 'no connection to GitHub or the API; waiting for the network'
+            gh api rate_limit --jq .rate.remaining 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { Write-Log '    network is back' 'Green'; return $true }
+        }
+        return $false
+    }
+    finally { $script:RunState = 'running' }
 }
 
 function Wait-Minutes {
@@ -912,7 +936,10 @@ function Invoke-Story {
                 $args2 = @('--pr', "$($s.pr)", '--out', $ciFile) + $(if ($bench) { @('--bench') } else { @() })
                 $r = Invoke-Node 'ci-wait.mjs' $args2 -Live
                 $v = $null; try { $v = $r.Out | ConvertFrom-Json -Depth 20 } catch { }
-                if (-not $v) { Block-Story -Reason "ci-wait failed: $($r.Err.Trim())"; return }
+                if (-not $v) {
+                    if ((Test-NetworkError $r.Err) -and (Wait-Network)) { continue }
+                    Block-Story -Reason "ci-wait failed: $($r.Err.Trim())"; return
+                }
                 if ($v.bench -and $v.bench.metrics) { $s.bench = $v.bench.metrics }
                 switch ($v.status) {
                     'green' {
@@ -1220,6 +1247,7 @@ try {
         try { $plan = Get-NodeJson 'pick.mjs' $pickArgs; $pickFails = 0 }
         catch {
             # GitHub hiccups at night: retry a few times before giving up.
+            if ((Test-NetworkError $_.Exception.Message) -and (Wait-Network)) { continue }
             $pickFails++
             Write-Log "=== picker failed ($pickFails/3): $($_.Exception.Message) ===" 'Red'
             if ($pickFails -ge 3) { $script:HadFailures = $true; break }
