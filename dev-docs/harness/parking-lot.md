@@ -189,3 +189,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E20.3 #139] crates/fm-core/src/web_font.rs:317 — `commit` checks the target is free then calls `fs::rename`, which overwrites; a file the user creates in that gap can be replaced (fonts.css now shares this path).
 - [E20.3 #139] crates/fm-api/src/mock.rs:2279 — `css_values`'s `num` closure duplicates the new `css_range` number formatting in the same file (both copies of core `css::number`).
+
+## 2026-10-24
+
+- [E23.1 #152] crates/fm-core/src/preview.rs:549 — preview rasterizes each glyph with no per-glyph box cap before swash allocates its mask (same unbounded allocation as the fingerprint had), though only at a user-chosen size of at most 300 px.
