@@ -289,6 +289,9 @@ export const mockSources: Source[] = [
 /** `MOCK_NOW` of the Rust mock: when its activations started. */
 export const MOCK_NOW = '2026-10-16T09:00:00Z';
 
+/** The locale the app last told the (absent) native shell; browser mode and tests read it. */
+export const shellLocale = { value: '' };
+
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
   activationMode: 'session',
@@ -303,6 +306,8 @@ export const defaultSettings: FullSettings = {
   startAtLogin: false,
   // Off unless the user turns it on (rule 7).
   checkUpdatesAutomatically: false,
+  // Follows the OS language until the user picks one.
+  language: 'system',
 };
 
 /** The releases the mock's server can offer the mock app (0.1.0). */
@@ -2554,6 +2559,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: null,
         };
       if (typeof window !== 'undefined') window.open(`/help/${page}.html`, '_blank');
+    },
+    // Browser mode has no native menu or tray to relabel; the last locale is kept
+    // so tests can see what the shell was told.
+    setShellLocale: async (locale) => {
+      shellLocale.value = locale;
     },
   };
 }

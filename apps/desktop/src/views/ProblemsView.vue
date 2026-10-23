@@ -7,10 +7,10 @@
 // history below the list undoes any earlier action.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { errorMessage, formatDate, t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import {
   PROBLEM_GROUPS,
-  copies,
   groupOf,
   problemGroup,
   resolutionSummary as summary,
@@ -66,23 +66,33 @@ onMounted(() => {
   return store.load();
 });
 onBeforeUnmount(() => store.stop());
+
+/** When an action happened, in the UI's locale; the API's text if it is not a date. */
+function when(at: string): string {
+  const d = new Date(at);
+  return Number.isNaN(d.getTime()) ? at : formatDate(d);
+}
 </script>
 
 <template>
   <div class="problems" @keydown="onKey">
     <header class="bar">
-      <h1 id="problems-title" ref="title" class="title" tabindex="-1">Problems</h1>
-      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">Close</button>
+      <h1 id="problems-title" ref="title" class="title" tabindex="-1">
+        {{ t('problems.title') }}
+      </h1>
+      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">
+        {{ t('common.close') }}
+      </button>
     </header>
     <main class="panel">
-      <div class="filters" role="group" aria-label="Show problems">
+      <div class="filters" role="group" :aria-label="t('problems.filters')">
         <button
           type="button"
           class="toggle"
           :aria-pressed="filter === undefined"
           @click="setFilter(undefined)"
         >
-          All <span class="n">{{ store.total }}</span>
+          {{ t('problems.all') }} <span class="n">{{ store.total }}</span>
         </button>
         <button
           v-for="g in PROBLEM_GROUPS"
@@ -95,17 +105,17 @@ onBeforeUnmount(() => store.stop());
           {{ g.label }} <span class="n">{{ store.counts[g.id] }}</span>
         </button>
       </div>
-      <p v-if="store.error" role="alert" class="error">{{ store.error.message }}</p>
+      <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
       <p v-else-if="store.loaded && !rows.length" class="note">
-        {{ filter ? 'No problems of this kind.' : 'No problems. Your library is in good shape.' }}
+        {{ filter ? t('problems.noneOfKind') : t('problems.none') }}
       </p>
       <table v-else-if="rows.length" aria-labelledby="problems-title" class="table">
         <thead>
           <tr>
-            <th scope="col">Problem</th>
-            <th scope="col">File</th>
-            <th scope="col">With</th>
-            <th scope="col">Details</th>
+            <th scope="col">{{ t('problems.columns.problem') }}</th>
+            <th scope="col">{{ t('problems.columns.file') }}</th>
+            <th scope="col">{{ t('problems.columns.with') }}</th>
+            <th scope="col">{{ t('problems.columns.details') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -119,36 +129,36 @@ onBeforeUnmount(() => store.stop());
       </table>
 
       <section v-if="showDuplicates" aria-labelledby="duplicates-title" class="section">
-        <h2 id="duplicates-title" class="h2">Resolve duplicates</h2>
-        <p class="note">
-          Keep one copy of each font. The other copies move to the trash, and you can undo it.
+        <h2 id="duplicates-title" class="h2">{{ t('problems.duplicates.title') }}</h2>
+        <p class="note">{{ t('problems.duplicates.note') }}</p>
+        <p v-if="store.actionError" role="alert" class="error">
+          {{ errorMessage(store.actionError) }}
         </p>
-        <p v-if="store.actionError" role="alert" class="error">{{ store.actionError.message }}</p>
         <div
           v-for="(g, gi) in store.duplicates"
           :key="`${gi}-${g.copies[0]?.path}`"
           role="group"
-          :aria-label="g.postscriptName ?? 'Identical files'"
+          :aria-label="g.postscriptName ?? t('problems.duplicates.identicalFiles')"
           class="group"
         >
           <h3 class="h3">
-            {{ g.postscriptName ?? 'Identical files' }}
+            {{ g.postscriptName ?? t('problems.duplicates.identicalFiles') }}
             <span class="muted">{{
-              g.kind === 'exact' ? 'identical files' : 'same font, different files'
+              t(g.kind === 'exact' ? 'problems.duplicates.exact' : 'problems.duplicates.similar')
             }}</span>
           </h3>
           <ul class="copies">
             <li v-for="c in g.copies" :key="c.path" class="copy">
               <span class="path">{{ c.path }}</span>
               <span v-if="c.version" class="muted">{{ c.version }}</span>
-              <span v-if="c.keep" class="badge">Recommended</span>
+              <span v-if="c.keep" class="badge">{{ t('problems.duplicates.recommended') }}</span>
               <button
                 type="button"
                 class="button"
-                :aria-label="`Keep this one: ${c.path}`"
+                :aria-label="t('problems.duplicates.keepLabel', { path: c.path })"
                 @click="store.planKeep(g, c.path)"
               >
-                Keep this one
+                {{ t('problems.duplicates.keep') }}
               </button>
             </li>
           </ul>
@@ -156,19 +166,21 @@ onBeforeUnmount(() => store.stop());
       </section>
 
       <section v-if="store.history.length" aria-labelledby="history-title" class="section">
-        <h2 id="history-title" class="h2">History</h2>
+        <h2 id="history-title" class="h2">{{ t('problems.history.title') }}</h2>
         <table aria-labelledby="history-title" class="table">
           <thead>
             <tr>
-              <th scope="col">When</th>
-              <th scope="col">Kept</th>
-              <th scope="col">What happened</th>
-              <th scope="col"><span class="sr-only">Undo</span></th>
+              <th scope="col">{{ t('problems.history.when') }}</th>
+              <th scope="col">{{ t('problems.history.kept') }}</th>
+              <th scope="col">{{ t('problems.history.what') }}</th>
+              <th scope="col">
+                <span class="sr-only">{{ t('common.undo') }}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="r in store.history" :key="r.id ?? r.at">
-              <td>{{ r.at }}</td>
+              <td>{{ when(r.at) }}</td>
               <td class="path">{{ r.kept }}</td>
               <td>{{ summary(r) }}</td>
               <td>
@@ -176,10 +188,10 @@ onBeforeUnmount(() => store.stop());
                   v-if="!r.undone && r.id !== null"
                   type="button"
                   class="button"
-                  :aria-label="`Undo: ${summary(r)}`"
+                  :aria-label="t('problems.history.undoLabel', { summary: summary(r) })"
                   @click="store.undo(r.id)"
                 >
-                  Undo
+                  {{ t('common.undo') }}
                 </button>
               </td>
             </tr>
@@ -195,20 +207,24 @@ onBeforeUnmount(() => store.stop());
       aria-labelledby="plan-title"
       class="dialog"
     >
-      <h2 id="plan-title" class="h2">Move {{ copies(planned.length) }} to the trash?</h2>
+      <h2 id="plan-title" class="h2">
+        {{ t('problems.plan.title', { count: planned.length }) }}
+      </h2>
       <p class="note">
-        Keeping <span class="path">{{ store.plan.kept }}</span>
+        {{ t('problems.plan.keeping') }} <span class="path">{{ store.plan.kept }}</span>
       </p>
-      <ul v-if="planned.length" aria-label="Will move to the trash" class="copies">
+      <ul v-if="planned.length" :aria-label="t('problems.plan.willMove')" class="copies">
         <li v-for="m in planned" :key="m.path" class="path">{{ m.path }}</li>
       </ul>
-      <ul v-if="notMoving.length" aria-label="Will stay" class="copies">
+      <ul v-if="notMoving.length" :aria-label="t('problems.plan.willStay')" class="copies">
         <li v-for="m in notMoving" :key="m.path">
           <span class="path">{{ m.path }}</span> — {{ m.message }}
         </li>
       </ul>
       <div class="actions">
-        <button type="button" class="button" @click="store.cancelPlan()">Cancel</button>
+        <button type="button" class="button" @click="store.cancelPlan()">
+          {{ t('common.cancel') }}
+        </button>
         <button
           ref="confirmButton"
           type="button"
@@ -216,7 +232,7 @@ onBeforeUnmount(() => store.stop());
           :disabled="!planned.length"
           @click="store.confirmPlan()"
         >
-          Move to trash
+          {{ t('problems.plan.confirm') }}
         </button>
       </div>
     </div>

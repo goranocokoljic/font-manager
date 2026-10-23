@@ -7,6 +7,7 @@
 // font-variation-settings (the axes store); the font is not reloaded.
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { ApiError, Axis, NamedInstance } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { axisStep, useAxesStore } from '../stores/axes';
 import CopyCss from './CopyCss.vue';
 import { useCollectionsStore } from '../stores/collections';
@@ -27,8 +28,8 @@ const d = computed(() => selection.detail);
 const faceId = computed(() => d.value?.face.id ?? null);
 const axes = computed(() => d.value?.axes ?? []);
 
-/** "Weight (wght)". */
-const label = (a: Axis) => `${a.name} (${a.tag})`;
+/** "Weight (wght) value". */
+const valueLabel = (a: Axis) => t('axes.valueLabel', { name: a.name, tag: a.tag });
 const value = (a: Axis) =>
   faceId.value === null ? (a.default ?? 0) : axesSet.value(faceId.value, a);
 
@@ -88,7 +89,7 @@ const holders = computed<Holder[]>(() => [
     .map((c) => ({ key: `c${c.id}`, label: c.name, collection: c.id, set: null })),
   ...sets.sets.map((s) => ({
     key: `s${s.id}`,
-    label: `Set: ${s.name}`,
+    label: t('axes.setHolder', { name: s.name }),
     collection: null,
     set: s.id,
   })),
@@ -134,10 +135,10 @@ async function pin(): Promise<void> {
       set: holder.set,
     });
     pinError.value = null;
-    toast.show(`Pinned “${style.name}” to ${holder.label}.`);
+    toast.show(t('axes.pinned', { name: style.name, holder: holder.label }));
     if (holder.collection !== null) void collections.refresh();
   } catch (e) {
-    pinError.value = (e as ApiError).message ?? 'The instance could not be pinned.';
+    pinError.value = (e as ApiError).message ? errorMessage(e) : t('axes.pinFailed');
   } finally {
     pinning.value = false;
   }
@@ -151,24 +152,28 @@ onMounted(() => {
 
 <template>
   <div class="axes">
-    <p v-if="!d" class="placeholder">Select a face to see its axes.</p>
-    <p v-else-if="!axes.length" class="placeholder">This font has no variation axes</p>
+    <p v-if="!d" class="placeholder">{{ t('axes.noFace') }}</p>
+    <p v-else-if="!axes.length" class="placeholder">{{ t('axes.none') }}</p>
     <template v-else>
       <div class="head">
-        <p class="hint">Axes change this face's previews.</p>
+        <p class="hint">{{ t('axes.hint') }}</p>
         <div class="actions">
-          <CopyCss v-if="faceId !== null" label="axes" :css="() => axesSet.css(faceId!)" />
+          <CopyCss
+            v-if="faceId !== null"
+            :label="t('axes.cssLabel')"
+            :css="() => axesSet.css(faceId!)"
+          />
           <button
             type="button"
             class="reset"
             :disabled="faceId === null || !axesSet.isChanged(faceId)"
             @click="reset"
           >
-            Reset
+            {{ t('common.reset') }}
           </button>
         </div>
       </div>
-      <ul class="plain list" aria-label="Variation axes">
+      <ul class="plain list" :aria-label="t('axes.list')">
         <li v-for="a in axes" :key="a.tag" class="axis" :data-tag="a.tag">
           <label class="name" :for="`${uid}-${a.tag}-range`">
             {{ a.name }} <span class="tag">{{ a.tag }}</span>
@@ -187,27 +192,30 @@ onMounted(() => {
               @input="onSlide(a, $event)"
             />
             <datalist :id="`${uid}-${a.tag}-default`">
-              <option :value="a.default ?? undefined" label="Default" />
+              <option :value="a.default ?? undefined" :label="t('axes.default')" />
             </datalist>
             <input
               type="text"
               inputmode="decimal"
               class="number"
               :value="value(a)"
-              :aria-label="`${label(a)} value`"
+              :aria-label="valueLabel(a)"
               :aria-invalid="invalid.has(a.tag)"
               :aria-describedby="`${uid}-${a.tag}-range-text`"
               @change="onType(a, $event)"
             />
           </div>
           <p :id="`${uid}-${a.tag}-range-text`" class="range">
-            {{ a.min }} to {{ a.max }}, default <span class="default">{{ a.default }}</span>
-            <span v-if="invalid.has(a.tag)" class="error" role="alert"> — type a number</span>
+            {{ t('axes.range', { min: a.min ?? '', max: a.max ?? '' }) }}
+            <span class="default">{{ a.default }}</span>
+            <span v-if="invalid.has(a.tag)" class="error" role="alert">
+              — {{ t('axes.typeNumber') }}</span
+            >
           </p>
         </li>
       </ul>
       <section v-if="d.instances.length" :aria-labelledby="`${uid}-instances`">
-        <h3 :id="`${uid}-instances`">Named instances</h3>
+        <h3 :id="`${uid}-instances`">{{ t('axes.instances') }}</h3>
         <ul class="plain presets" :aria-labelledby="`${uid}-instances`">
           <li v-for="i in d.instances" :key="i.name">
             <button
@@ -223,25 +231,25 @@ onMounted(() => {
         </ul>
       </section>
       <section class="pin" :aria-labelledby="`${uid}-pin`">
-        <h3 :id="`${uid}-pin`">Pin this instance</h3>
+        <h3 :id="`${uid}-pin`">{{ t('axes.pin') }}</h3>
         <p v-if="!holders.length" class="hint">
-          Make a manual collection or a project set to pin instances into.
+          {{ t('axes.noHolder') }}
         </p>
         <template v-else>
-          <label :for="`${uid}-pin-name`">Style name</label>
+          <label :for="`${uid}-pin-name`">{{ t('axes.styleName') }}</label>
           <input
             :id="`${uid}-pin-name`"
             v-model="pinName"
             type="text"
             class="field"
-            placeholder="Condensed Semibold"
+            :placeholder="t('axes.styleNamePlaceholder')"
           />
-          <label :for="`${uid}-pin-holder`">Save in</label>
+          <label :for="`${uid}-pin-holder`">{{ t('axes.saveIn') }}</label>
           <select :id="`${uid}-pin-holder`" v-model="holderKey" class="field">
             <option v-for="h in holders" :key="h.key" :value="h.key">{{ h.label }}</option>
           </select>
           <button type="button" class="pin-button" :disabled="!canPin" @click="pin">
-            Pin this instance
+            {{ t('axes.pin') }}
           </button>
           <p v-if="pinError" class="error" role="alert">{{ pinError }}</p>
         </template>

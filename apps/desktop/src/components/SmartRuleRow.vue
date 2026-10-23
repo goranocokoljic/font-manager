@@ -3,6 +3,7 @@
 // from a menu the API filled (a range for weight and width, typed text for "supports
 // text", a number of days for "date added"), and Remove. A part of a saved rule the
 // editor has no row for shows as "Kept as saved" and is saved unchanged.
+import { t } from '../i18n';
 import {
   DIMENSIONS,
   choicesFor,
@@ -11,14 +12,15 @@ import {
   type DraftRow,
 } from '../stores/ruleEditor';
 
-const props = defineProps<{ row: DraftRow; label: string }>();
+// `inline` is `label` inside a sentence ("Remove rule 2").
+const props = defineProps<{ row: DraftRow; label: string; inline: string }>();
 const emit = defineEmits<{ remove: [] }>();
 const editor = useRuleEditorStore();
 
 function keptText(): string {
   const rule = props.row.kept;
   if (!rule) return '';
-  return rule.kind === 'group' ? 'a nested group' : Object.keys(rule.filters).join(', ');
+  return rule.kind === 'group' ? t('rules.nestedGroup') : Object.keys(rule.filters).join(', ');
 }
 
 /** Sets the row's `field` to what a select or an input holds now. */
@@ -34,19 +36,23 @@ function onDimension(e: Event): void {
 <template>
   <div class="row" :data-rule="label">
     <span v-if="row.dimension === 'kept'" class="kept" :data-focus="row.key" tabindex="-1">
-      Kept as saved: {{ keptText() }}
+      {{ t('rules.keptAsSaved', { what: keptText() }) }}
     </span>
     <template v-else>
       <select
         :value="row.dimension"
         :data-focus="row.key"
-        :aria-label="`${label}: what it tests`"
+        :aria-label="t('rules.whatItTests', { label })"
         @change="onDimension"
       >
         <option v-for="d in DIMENSIONS" :key="d.id" :value="d.id">{{ d.label }}</option>
       </select>
       <template v-if="row.dimension === 'weight' || row.dimension === 'width'">
-        <select :value="row.min" :aria-label="`${label}: from`" @change="set('min', $event)">
+        <select
+          :value="row.min"
+          :aria-label="t('rules.fromLabel', { label })"
+          @change="set('min', $event)"
+        >
           <option
             v-for="c in choicesFor(row.dimension, editor.choices) ?? []"
             :key="c.value"
@@ -55,8 +61,12 @@ function onDimension(e: Event): void {
             {{ c.label }}
           </option>
         </select>
-        <span aria-hidden="true">to</span>
-        <select :value="row.max" :aria-label="`${label}: to`" @change="set('max', $event)">
+        <span aria-hidden="true">{{ t('rules.to') }}</span>
+        <select
+          :value="row.max"
+          :aria-label="t('rules.toLabel', { label })"
+          @change="set('max', $event)"
+        >
           <option
             v-for="c in choicesFor(row.dimension, editor.choices) ?? []"
             :key="c.value"
@@ -70,29 +80,29 @@ function onDimension(e: Event): void {
         v-else-if="row.dimension === 'text'"
         :value="row.value"
         type="text"
-        placeholder="Paste the text it must cover"
-        :aria-label="`${label}: text`"
+        :placeholder="t('rules.textPlaceholder')"
+        :aria-label="t('rules.textLabel', { label })"
         @input="set('value', $event)"
       />
       <span v-else-if="row.dimension === 'added'" class="days">
-        <span aria-hidden="true">within</span>
+        <span aria-hidden="true">{{ t('rules.within') }}</span>
         <input
           :value="row.value"
           type="number"
           min="0"
           step="1"
-          :aria-label="`${label}: added within this many days`"
+          :aria-label="t('rules.daysLabel', { label })"
           @input="set('value', $event)"
         />
-        <span aria-hidden="true">days</span>
+        <span aria-hidden="true">{{ t('rules.days') }}</span>
       </span>
       <select
         v-else
         :value="row.value"
-        :aria-label="`${label}: value`"
+        :aria-label="t('rules.valueLabel', { label })"
         @change="set('value', $event)"
       >
-        <option value="" disabled>Choose…</option>
+        <option value="" disabled>{{ t('rules.choose') }}</option>
         <option
           v-for="c in choicesFor(row.dimension, editor.choices) ?? []"
           :key="c.value"
@@ -105,10 +115,10 @@ function onDimension(e: Event): void {
     <button
       type="button"
       class="button"
-      :aria-label="`Remove ${label.toLowerCase()}`"
+      :aria-label="t('rules.removeLabel', { label: inline })"
       @click="emit('remove')"
     >
-      Remove
+      {{ t('common.remove') }}
     </button>
   </div>
 </template>

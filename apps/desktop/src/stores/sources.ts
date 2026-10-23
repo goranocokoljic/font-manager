@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, reactive, ref } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
 import type { ApiError, Event, JobId, Source, SourceId } from '../api/types';
+import { t } from '../i18n';
 
 /** How far a running scan is. */
 export interface ScanProgress {
@@ -93,7 +94,7 @@ export const useSourcesStore = defineStore('sources', () => {
 
   /** Picks a folder with the native picker, adds it and scans it. */
   async function add(): Promise<void> {
-    const path = await attempt(() => useClient().pickFolder('Add a folder to the library'));
+    const path = await attempt(() => useClient().pickFolder(t('sources.addFolderTitle')));
     if (!path) return;
     const source = await attempt(() =>
       useClient().addSource({ path, mode: { kind: 'indexInPlace' } }),

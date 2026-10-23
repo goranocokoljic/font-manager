@@ -1,0 +1,1232 @@
+{
+  "meta": {
+    "name": "Deutsch"
+  },
+  "app": {
+    "name": "Font Manager",
+    "openSettings": "Einstellungen öffnen",
+    "showConflicts": "Schriftkonflikte anzeigen",
+    "helpAction": "Hilfe: {page}",
+    "groups": {
+      "app": "Programm",
+      "help": "Hilfe"
+    }
+  },
+  "common": {
+    "close": "Schließen",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "undo": "Rückgängig",
+    "reset": "Zurücksetzen",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "remove": "Entfernen"
+  },
+  "language": {
+    "label": "Sprache",
+    "system": "System ({name})",
+    "hint": "System folgt der Sprache deines Computers; Englisch, wenn die App sie nicht hat."
+  },
+  "errors": {
+    "notFound": "Das Gesuchte wurde nicht gefunden.",
+    "invalidRequest": "Diese Eingabe ist nicht gültig.",
+    "conflict": "Das steht im Konflikt mit etwas, das schon da ist (etwa ein Name, der schon vergeben ist).",
+    "permissionDenied": "Das ist nicht erlaubt.",
+    "unsupported": "Das wird auf diesem System oder für diese Schrift nicht unterstützt.",
+    "busy": "Gerade läuft eine andere Aufgabe. Versuche es gleich noch einmal.",
+    "io": "Eine Datei konnte nicht gelesen oder geschrieben werden.",
+    "cancelled": "Abgebrochen.",
+    "internal": "Etwas ist schiefgegangen. Die Protokolldatei enthält die Einzelheiten."
+  },
+  "shell": {
+    "helpWindowTitle": "Font Manager – Hilfe",
+    "helpMenu": "Hilfe",
+    "about": "Über Font Manager",
+    "helpPages": {
+      "getting-started": "Erste Schritte",
+      "sources": "Quellen",
+      "activation": "Aktivierung",
+      "keyboard-shortcuts": "Tastenkürzel"
+    },
+    "tray": {
+      "tooltip": "Font Manager",
+      "open": "Font Manager öffnen",
+      "deactivateSession": "Sitzungsschriften deaktivieren",
+      "quit": "Font Manager beenden",
+      "active": {
+        "zero": "Keine Schriften aktiv",
+        "one": "{count} Schrift aktiv",
+        "other": "{count} Schriften aktiv"
+      }
+    }
+  },
+  "textLayout": {
+    "groupView": "Ansicht",
+    "actionWidthLock": "Layoutbreite sperren oder freigeben",
+    "region": "Layout",
+    "regionNamed": "Layout {name}",
+    "loadFailed": "Diese Schrift konnte nicht geladen werden.",
+    "lockWidth": "Breite sperren",
+    "lockedTitle": "Der Text behält seine Breite; klicke, um dem Fenster zu folgen",
+    "unlockedTitle": "Der Text folgt dem Fenster; klicke, um seine Breite zu behalten",
+    "badgeLabel": "Eigenschaften von Block {n}, {size}",
+    "hint": "Ziehe einen Block seitwärts oder drücke Links und Rechts, um seine Größe zu ändern; ziehe ihn nach oben und unten oder drücke Auf und Ab, um seinen Zeilenabstand zu ändern (Umschalt für größere Schritte).",
+    "hintEdit": "Doppelklicke ihn oder drücke Enter, um seinen Text zu bearbeiten.",
+    "empty": "Wähle eine Schrift, um sie in einem Layout zu sehen.",
+    "file": {
+      "toolbar": "Layoutdatei",
+      "saveTitle": "Den bearbeiteten Text in der Layoutdatei speichern",
+      "revert": "Verwerfen",
+      "revertTitle": "Die ungespeicherten Änderungen verwerfen",
+      "duplicate": "Duplizieren",
+      "duplicateTitle": "Dieses Layout im gespeicherten Stand als neues Layout kopieren",
+      "resetOriginal": "Auf Original zurücksetzen",
+      "resetTitle": "Die Vorlage wiederherstellen, aus der dieses Layout entstand",
+      "history": "Verlauf",
+      "unsaved": "Ungespeicherte Änderungen",
+      "historyRegion": "Layoutverlauf",
+      "noHistory": "Noch keine früheren Versionen.",
+      "version": "Version {number}",
+      "unreadable": "Nicht lesbar",
+      "restore": "Wiederherstellen",
+      "restoreTitle": "Diese Version zur aktuellen machen; die aktuelle bleibt erhalten",
+      "restoreLabel": "Version {number} wiederherstellen",
+      "saved": "Gespeichert.",
+      "reverted": "Ungespeicherte Änderungen verworfen.",
+      "duplicated": "Dupliziert als „{name}“.",
+      "wasReset": "Auf die Originalvorlage zurückgesetzt.",
+      "restored": "Version {number} wiederhergestellt."
+    }
+  },
+  "blocks": {
+    "block": "Block",
+    "label": "Block {n}",
+    "properties": "Eigenschaften von {label}",
+    "sizePt": "{size} pt",
+    "badge": "{size} pt · {lineHeight}",
+    "ariaResizable": "{label}, {size} Punkt, Zeilenabstand {lineHeight}",
+    "roleDescription": "größenveränderbarer Textblock",
+    "editTitle": "Doppelklicke oder drücke Enter, um den Text zu bearbeiten",
+    "textLabel": "Text von {label}",
+    "fields": {
+      "size": "Größe",
+      "lineHeight": "Zeilenabstand",
+      "tracking": "Laufweite",
+      "paragraphSpacing": "Absatzabstand",
+      "firstLineIndent": "Erstzeileneinzug",
+      "columns": "Spalten",
+      "alignment": "Ausrichtung",
+      "overflow": "Überlauf"
+    },
+    "aligns": {
+      "start": "Anfang",
+      "center": "Mitte",
+      "end": "Ende",
+      "justify": "Blocksatz"
+    },
+    "overflows": {
+      "wrap": "Umbrechen",
+      "clip": "Abschneiden"
+    }
+  },
+  "compare": {
+    "title": "Vergleichen",
+    "pinnedCount": "{count} von {max} angeheftet",
+    "mode": "Modus",
+    "modes": {
+      "sideBySide": "Nebeneinander",
+      "stacked": "Untereinander",
+      "overlay": "Überlagert"
+    },
+    "closeLabel": "Vergleich schließen",
+    "closeTitle": "Schließen (Esc)",
+    "nameLabel": "Name des Vergleichs",
+    "namePlaceholder": "Gib dem Vergleich einen Namen",
+    "save": "Vergleich speichern",
+    "saved": "Gespeichert",
+    "openLabel": "Vergleich {name} öffnen",
+    "missing": "Jetzt nicht in der Bibliothek: {names}.",
+    "pinTwo": "Hefte mindestens zwei Schriften an, um sie zu vergleichen: Wähle eine Schrift in der Liste und drücke C.",
+    "overlay": "Überlagerung",
+    "firstFont": "Erste Schrift",
+    "secondFont": "Zweite Schrift",
+    "overlayLabel": "Überlagerung von {names}, {size} px",
+    "legend": "Legende",
+    "removeLabel": "{name} aus dem Vergleich entfernen",
+    "toasts": {
+      "already": "{name} ist bereits zum Vergleich angeheftet.",
+      "full": "Der Vergleich fasst {max} Schriften. Entferne eine, um {name} anzuheften.",
+      "pinned": "{name} zum Vergleich angeheftet ({count} von {max}).",
+      "saved": "Vergleich „{name}“ gespeichert.",
+      "noneLeft": "Keine der Schriften von „{name}“ ist jetzt in der Bibliothek: {names}.",
+      "openedMissing": "„{name}“ geöffnet. Jetzt nicht in der Bibliothek: {names}.",
+      "opened": "„{name}“ geöffnet."
+    }
+  },
+  "preview": {
+    "settings": "Vorschau-Einstellungen",
+    "sample": "Beispiel",
+    "language": "Sprache",
+    "customText": "Eigener Text",
+    "customPlaceholder": "Beispieltext eingeben",
+    "size": "Größe",
+    "sizeSlider": "Größenregler",
+    "sizeInPixels": "Größe in Pixeln",
+    "lineHeight": "Zeilenabstand",
+    "tracking": "Laufweite",
+    "alignment": "Ausrichtung",
+    "aligns": {
+      "start": "Anfang",
+      "center": "Mitte",
+      "end": "Ende"
+    },
+    "text": "Textfarbe",
+    "textColor": "Farbe des Texts",
+    "background": "Hintergrund",
+    "backgroundColor": "Hintergrundfarbe",
+    "surface": "Fläche",
+    "surfaces": {
+      "auto": "Design folgen",
+      "light": "Hell",
+      "dark": "Dunkel"
+    },
+    "strip": {
+      "region": "Vorschauleiste",
+      "size": "Leistengröße",
+      "px": "{size} px",
+      "useToolbar": "Größe der Werkzeugleiste verwenden",
+      "empty": "Wähle eine Familie, um sie hier in der Vorschau zu sehen."
+    }
+  },
+  "samples": {
+    "kinds": {
+      "pangram": "Pangramm",
+      "custom": "Eigener Text",
+      "lorem": "Lorem ipsum",
+      "alphabet": "Alphabet",
+      "numerals": "Ziffern",
+      "fontName": "Schriftname"
+    }
+  },
+  "home": {
+    "allFonts": "Alle Schriften",
+    "selected": "{count} ausgewählt",
+    "families": {
+      "one": "{count} Familie",
+      "other": "{count} Familien"
+    },
+    "viewMode": "Ansichtsmodus",
+    "modes": {
+      "list": "Liste",
+      "table": "Tabelle",
+      "grid": "Raster",
+      "waterfall": "Wasserfall",
+      "layout": "Satzbild"
+    },
+    "preset": "Vorlage",
+    "unreadable": "{name} (nicht lesbar)",
+    "density": {
+      "comfortable": "Bequem",
+      "compact": "Kompakt"
+    },
+    "densityTitle": "Zeilen: {density}. Kompakte Zeilen zeigen mehr Schriften auf einmal.",
+    "compactRows": "Kompakte Zeilen",
+    "compareTitle": "Angeheftete Schriften vergleichen; {chord} heftet die ausgewählte Schrift an",
+    "compareButton": "Vergleichen {pinned}/{max}",
+    "inspectorTitle": "Inspektor ein- oder ausblenden (Strg+I / ⌘I)",
+    "inspector": "Inspektor",
+    "fontList": "Schriftliste",
+    "noMatches": "Keine Schriften passen zur Suche und zu den Filtern.",
+    "empty": "Noch keine Schriften. Füge einen Ordner hinzu, um deine Bibliothek anzulegen.",
+    "commands": "Befehle",
+    "settings": "Einstellungen",
+    "conflicts": "Konflikte",
+    "problems": {
+      "one": "{count} Problem",
+      "other": "{count} Probleme"
+    },
+    "fontsActive": {
+      "one": "{count} Schrift aktiv",
+      "other": "{count} Schriften aktiv"
+    },
+    "info": {
+      "app": "App",
+      "api": "API",
+      "platform": "Plattform"
+    },
+    "sidebarGroups": {
+      "smart": "Intelligente Sammlungen",
+      "online": "Online-Kataloge"
+    },
+    "actions": {
+      "quickToggle": "Ausgewählte Schriften zur Schnellsammlung hinzufügen oder daraus entfernen",
+      "quickOpen": "Schnellsammlung öffnen",
+      "tag": "Ausgewählte Schriften taggen…",
+      "pin": "Ausgewählte Schrift zum Vergleich anheften",
+      "openCompare": "Vergleich öffnen",
+      "activateSession": "Für diese Sitzung aktivieren oder deaktivieren",
+      "activatePermanent": "Dauerhaft aktivieren oder deaktivieren",
+      "deactivateAll": "Alle deaktivieren",
+      "deactivateOutsideSet": "Alles deaktivieren, was nicht im aktuellen Set ist",
+      "showAs": {
+        "list": "Schriften als Liste anzeigen",
+        "table": "Schriften als Tabelle anzeigen",
+        "grid": "Schriften als Raster anzeigen",
+        "waterfall": "Schriften als Wasserfall anzeigen",
+        "layout": "Schriften als Satzbild anzeigen"
+      },
+      "density": {
+        "comfortable": "Bequeme Zeilen verwenden",
+        "compact": "Kompakte Zeilen verwenden"
+      },
+      "showPreset": "Satzbild „{preset}“ anzeigen",
+      "reopenComparison": "Vergleich öffnen: {name}"
+    }
+  },
+  "views": {
+    "presets": {
+      "book": "Buch",
+      "columns": "Spalten",
+      "magazine": "Magazin",
+      "quote": "Zitat",
+      "characters": "Zeichen",
+      "waterfall": "Wasserfall"
+    }
+  },
+  "layout": {
+    "library": "Bibliothek",
+    "fonts": "Schriften",
+    "inspector": "Inspektor",
+    "resizeSidebar": "Seitenleiste in der Breite ändern",
+    "resizeInspector": "Inspektor in der Breite ändern",
+    "actions": {
+      "toggleInspector": "Inspektor ein- oder ausblenden",
+      "goSidebar": "Zur Seitenleiste wechseln",
+      "goList": "Zur Schriftliste wechseln",
+      "goInspector": "Zum Inspektor wechseln"
+    }
+  },
+  "inspector": {
+    "tabsLabel": "Inspektor-Tabs",
+    "tabs": {
+      "info": "Infos",
+      "axes": "Achsen",
+      "features": "Funktionen",
+      "glyphs": "Glyphen"
+    }
+  },
+  "search": {
+    "label": "Schriften suchen",
+    "placeholder": "Suchen  /"
+  },
+  "chips": {
+    "filters": "Filter",
+    "chipLabel": "{name}, {families}",
+    "families": {
+      "one": "{count} Familie",
+      "other": "{count} Familien"
+    },
+    "languages": "Sprachen",
+    "language": "Sprache",
+    "addLanguage": "Sprache hinzufügen",
+    "add": "Hinzufügen…",
+    "clear": "Filter zurücksetzen",
+    "saveAsSmart": "Als intelligente Sammlung speichern",
+    "smartName": "Name der intelligenten Sammlung",
+    "namePlaceholder": "Name",
+    "saveHint": "Wähle einen Filter, um ihn als intelligente Sammlung zu speichern",
+    "saved": "„{name}“ als intelligente Sammlung gespeichert.",
+    "source": "Quelle {id}",
+    "tag": "Tag {id}",
+    "groups": {
+      "active": "Aktivierung",
+      "classification": "Klasse",
+      "slant": "Neigung",
+      "variable": "Variabel",
+      "color": "Farbe",
+      "formats": "Format",
+      "features": "Funktionen",
+      "license": "Lizenz",
+      "webOk": "Nutzung",
+      "openLicense": "Offene Lizenz",
+      "embedding": "Einbettung",
+      "sources": "Quelle",
+      "problems": "Zustand",
+      "favorite": "Favorit",
+      "minRating": "Bewertung",
+      "tags": "Tag"
+    },
+    "values": {
+      "active": "Aktiv",
+      "inactive": "Inaktiv",
+      "variable": "Variabel",
+      "static": "Statisch",
+      "color": "Farbig",
+      "notColor": "Nicht farbig",
+      "webOk": "Fürs Web geeignet",
+      "notWeb": "Nicht fürs Web",
+      "openLicense": "Offene Lizenz",
+      "notOpen": "Nicht offen",
+      "hasProblems": "Mit Problemen",
+      "healthy": "Fehlerfrei",
+      "favorites": "Favoriten",
+      "notFavorites": "Keine Favoriten",
+      "stars": "{count} Sterne",
+      "starsOrMore": "{count}+ Sterne"
+    },
+    "classes": {
+      "serif": "Serifenschrift",
+      "sans": "Serifenlos",
+      "slab": "Serifenbetont",
+      "script": "Schreibschrift",
+      "display": "Auszeichnungsschrift",
+      "mono": "Monospace",
+      "symbol": "Symbolschrift"
+    },
+    "slants": {
+      "upright": "Aufrecht",
+      "italic": "Kursiv",
+      "oblique": "Schräg"
+    },
+    "licenses": {
+      "desktop": "Desktop",
+      "web": "Web",
+      "app": "App",
+      "trial": "Testversion",
+      "personalOnly": "Private Nutzung",
+      "unknown": "Unbekannte Lizenz"
+    },
+    "embeddings": {
+      "installable": "Installierbar",
+      "editable": "Bearbeitbar",
+      "previewAndPrint": "Vorschau & Druck",
+      "restricted": "Eingeschränkt"
+    }
+  },
+  "palette": {
+    "label": "Befehlspalette",
+    "searchLabel": "Befehle suchen",
+    "placeholder": "Befehl eingeben",
+    "list": "Befehle",
+    "none": "Keine passenden Befehle",
+    "showAll": "Alle Befehle anzeigen",
+    "groups": {
+      "general": "Allgemein",
+      "view": "Ansicht",
+      "go": "Gehe zu",
+      "search": "Suche",
+      "quickCollection": "Schnellsammlung",
+      "tags": "Tags",
+      "compare": "Vergleich",
+      "activation": "Aktivierung"
+    }
+  },
+  "toast": {
+    "dismiss": "Schließen"
+  },
+  "health": {
+    "ok": "In Ordnung",
+    "broken": "Defekt",
+    "unsupported": "Nicht unterstützt"
+  },
+  "activation": {
+    "failed": "Die Aktivierung ist fehlgeschlagen.",
+    "undone": "Rückgängig gemacht.",
+    "noneDeactivated": "Es wurden keine Schriften deaktiviert.",
+    "noneActivated": "Es wurden keine Schriften aktiviert.",
+    "deactivated": {
+      "one": "{count} Schrift deaktiviert.",
+      "other": "{count} Schriften deaktiviert."
+    },
+    "activatedPermanent": {
+      "one": "{count} Schrift dauerhaft aktiviert.",
+      "other": "{count} Schriften dauerhaft aktiviert."
+    },
+    "activatedSession": {
+      "one": "{count} Schrift für diese Sitzung aktiviert.",
+      "other": "{count} Schriften für diese Sitzung aktiviert."
+    },
+    "notDeactivated": {
+      "one": "{count} Schrift nicht deaktiviert.",
+      "other": "{count} Schriften nicht deaktiviert."
+    },
+    "notActivated": {
+      "one": "{count} Schrift nicht aktiviert.",
+      "other": "{count} Schriften nicht aktiviert."
+    }
+  },
+  "info": {
+    "loading": "Wird geladen…",
+    "nothingSelected": "Nichts ausgewählt",
+    "activate": "Aktivieren",
+    "deactivate": "Deaktivieren",
+    "state": {
+      "permanent": "Aktiv (dauerhaft)",
+      "session": "Aktiv für diese Sitzung",
+      "inactive": "Nicht aktiv"
+    },
+    "outcome": {
+      "system": "Nicht aktiviert: Eine Systemschrift hat denselben PostScript-Namen ({path}).",
+      "active": "Nicht aktiviert: Eine andere aktive Schrift hat denselben PostScript-Namen (Schriftschnitt {face})."
+    },
+    "clash": {
+      "title": "Schriftname wird bereits verwendet",
+      "system": "Eine Systemschrift verwendet bereits den PostScript-Namen {name} ({path}).",
+      "active": "Eine andere aktive Schrift verwendet bereits den PostScript-Namen {name} (Schriftschnitt {face}).",
+      "keep": "Vorhandene behalten",
+      "replace": "Für diese Sitzung ersetzen"
+    },
+    "names": {
+      "title": "Namen",
+      "family": "Familie",
+      "style": "Schnitt",
+      "legacyFamily": "Familie (Name-ID 1)",
+      "legacyStyle": "Schnitt (Name-ID 2)",
+      "postscript": "PostScript-Name",
+      "version": "Version",
+      "foundry": "Schriftenhaus",
+      "vendorId": "Hersteller-ID",
+      "designer": "Gestaltung",
+      "copyright": "Urheberrecht"
+    },
+    "copyLabels": {
+      "family": "Familie",
+      "style": "Schnitt",
+      "legacyFamily": "Familie (Name-ID 1)",
+      "legacyStyle": "Schnitt (Name-ID 2)",
+      "postscript": "PostScript-Name",
+      "path": "Pfad",
+      "licenseUrl": "Lizenz-URL"
+    },
+    "file": {
+      "title": "Datei",
+      "path": "Pfad",
+      "format": "Dateiformat",
+      "faceInFile": "Schnitt in der Datei",
+      "size": "Größe",
+      "bytes": "{size} Byte",
+      "hash": "Prüfsumme"
+    },
+    "formats": {
+      "ttf": "TrueType (TTF)",
+      "otf": "OpenType CFF (OTF)",
+      "ttc": "TrueType-Sammlung (TTC)",
+      "otc": "OpenType-Sammlung (OTC)",
+      "woff": "WOFF",
+      "woff2": "WOFF2",
+      "type1": "PostScript Type 1",
+      "dfont": "Mac dfont",
+      "bitmap": "Bitmap"
+    },
+    "style": {
+      "title": "Stil",
+      "weight": "Stärke",
+      "width": "Breite",
+      "slant": "Neigung",
+      "italicAngle": "Neigungswinkel",
+      "variable": "Variabel",
+      "yes": "Ja",
+      "no": "Nein",
+      "axes": "Achsen",
+      "axis": "{name}: {min}–{max} (Standard {default})",
+      "namedInstances": "Benannte Instanzen"
+    },
+    "slants": {
+      "upright": "aufrecht",
+      "italic": "kursiv",
+      "oblique": "schräg"
+    },
+    "metrics": {
+      "title": "Metriken",
+      "unitsPerEm": "Einheiten pro Geviert",
+      "ascender": "Oberlänge",
+      "descender": "Unterlänge",
+      "xHeight": "x-Höhe",
+      "capHeight": "Versalhöhe"
+    },
+    "layout": {
+      "title": "Zeichen und Features",
+      "codePoints": "Codepunkte",
+      "scripts": "Schriftsysteme",
+      "features": "Features"
+    },
+    "license": {
+      "title": "Lizenz",
+      "license": "Lizenz",
+      "url": "Lizenz-URL",
+      "recognized": "Erkannt als",
+      "embedding": "Einbettung (fsType)",
+      "webUse": "Webnutzung"
+    },
+    "openLicenses": {
+      "ofl": "SIL Open Font License",
+      "apache": "Apache License 2.0",
+      "ufl": "Ubuntu Font Licence",
+      "mit": "MIT"
+    },
+    "embeddings": {
+      "installable": "Installierbar",
+      "editable": "Bearbeitbar",
+      "previewAndPrint": "Vorschau und Druck",
+      "restricted": "Eingeschränkt"
+    },
+    "user": {
+      "title": "Deine Notizen",
+      "tags": "Tags",
+      "removeTag": "Tag {tag} entfernen",
+      "addTag": "Tag hinzufügen",
+      "addTagPlaceholder": "Tag hinzufügen…",
+      "favorite": "Favorit",
+      "rating": "Bewertung",
+      "stars": {
+        "one": "{count} Stern",
+        "other": "{count} Sterne"
+      },
+      "clearRating": "Bewertung entfernen",
+      "ratingOf": "{rating} von 5",
+      "notRated": "Nicht bewertet",
+      "notes": "Notizen",
+      "notesPlaceholder": "Notizen zu diesem Schnitt…",
+      "familyNotes": "Notizen zur Familie",
+      "familyNotesPlaceholder": "Notizen zu {family}…"
+    }
+  },
+  "license": {
+    "title": "Deine Lizenz für diese Familie",
+    "type": "Lizenzart",
+    "notDeclared": "Nicht angegeben",
+    "types": {
+      "desktop": "Desktop-Lizenz",
+      "web": "Web-Lizenz",
+      "app": "App-Lizenz",
+      "trial": "Testversion",
+      "personalOnly": "Nur private Nutzung",
+      "unknown": "Unbekannt"
+    },
+    "seats": "Arbeitsplätze",
+    "purchaseDate": "Kaufdatum",
+    "receipt": "Beleg",
+    "receiptLabel": "Beleg",
+    "none": "Keiner",
+    "keepCopy": "Kopie ablegen",
+    "nextToFont": "Neben der Schrift (mit dem Ordner synchronisiert)",
+    "appData": "Im Datenordner der App",
+    "replaceReceipt": "Beleg ersetzen…",
+    "attachReceipt": "Beleg anhängen…",
+    "removeReceipt": "Beleg entfernen",
+    "save": "Lizenz speichern",
+    "clear": "Lizenz löschen"
+  },
+  "axes": {
+    "noFace": "Wähle einen Schnitt, um seine Achsen zu sehen.",
+    "none": "Diese Schrift hat keine Variationsachsen",
+    "hint": "Achsen ändern die Vorschau dieses Schnitts.",
+    "cssLabel": "Achsen",
+    "list": "Variationsachsen",
+    "default": "Standard",
+    "valueLabel": "Wert von {name} ({tag})",
+    "range": "{min} bis {max}, Standard",
+    "typeNumber": "gib eine Zahl ein",
+    "instances": "Benannte Instanzen",
+    "pin": "Diese Instanz anheften",
+    "noHolder": "Lege eine manuelle Sammlung oder ein Projekt-Set an, um Instanzen dort anzuheften.",
+    "styleName": "Name des Schnitts",
+    "styleNamePlaceholder": "Schmal Halbfett",
+    "saveIn": "Speichern in",
+    "setHolder": "Set: {name}",
+    "pinned": "„{name}“ an {holder} angeheftet.",
+    "pinFailed": "Die Instanz konnte nicht angeheftet werden."
+  },
+  "features": {
+    "noFace": "Wähle einen Schnitt, um seine Features zu sehen.",
+    "none": "Dieser Schnitt hat keine OpenType-Features.",
+    "hint": "Schalter ändern die Vorschau dieses Schnitts.",
+    "cssLabel": "Features",
+    "list": "OpenType-Features",
+    "automatic": "Automatisch angewendet",
+    "automaticNote": "automatisch angewendet"
+  },
+  "palettes": {
+    "title": "Farbpalette",
+    "numbered": "Palette {number}"
+  },
+  "glyphs": {
+    "noFace": "Wähle einen Schnitt, um seine Glyphen zu sehen.",
+    "search": "Glyphen suchen",
+    "searchPlaceholder": "Ж, U+0416, Name",
+    "block": "Unicode-Block",
+    "allBlocks": "Alle Blöcke",
+    "broken": "Die Glyphen dieses Schnitts können nicht gelesen werden: {reason}",
+    "noMatch": "Keine Glyphe passt zur Suche.",
+    "empty": "Dieser Schnitt enthält keine Zeichen.",
+    "characters": {
+      "one": "{count} Zeichen",
+      "other": "{count} Zeichen"
+    },
+    "grid": "Glyphen",
+    "cellLoading": "Zeichen {number}, wird geladen",
+    "noGlyphName": "(kein Glyphenname)",
+    "selected": "Ausgewählte Glyphe",
+    "codePoint": "Codepunkt",
+    "glyphName": "Glyphenname",
+    "glyphId": "Glyphen-ID",
+    "advance": "Dickte",
+    "advanceUnknown": "unbekannt",
+    "advanceLoading": "wird geladen…",
+    "none": "keiner",
+    "units": {
+      "one": "{count} Einheit",
+      "other": "{count} Einheiten"
+    },
+    "closeDetail": "Glyphendetails schließen",
+    "closeEsc": "Schließen (Esc)",
+    "compareHint": "Dieses Zeichen mit demselben Zeichen einer anderen Schrift überlagern",
+    "compareWith": "Vergleichen mit…",
+    "detailBroken": "Die Details dieser Glyphe können nicht gelesen werden: {reason}",
+    "producedBy": "Erzeugt durch",
+    "producedByNone": "Kein Feature erzeugt diese Glyphe.",
+    "replacedBy": "Ersetzt durch",
+    "replacedByNone": "Kein Feature ersetzt diese Glyphe.",
+    "unregisteredFeature": "Nicht registriertes Feature",
+    "featureTag": "Feature-Tag",
+    "unicodeVersion": "Blöcke aus Unicode {version}."
+  },
+  "coverage": {
+    "title": "Abdeckung",
+    "counting": "Abdeckung wird gezählt…",
+    "blocks": "Unicode-Blöcke",
+    "noBlocks": "Dieser Schnitt enthält kein Zeichen eines Unicode-Blocks.",
+    "blockLabel": {
+      "one": "{name}: {covered} von {count} Zeichen. In der Glyphenübersicht zeigen.",
+      "other": "{name}: {covered} von {count} Zeichen. In der Glyphenübersicht zeigen."
+    },
+    "showInMap": "{name} in der Glyphenübersicht zeigen",
+    "languages": "Sprachen",
+    "noLanguages": "Dieser Schnitt deckt keine Sprachvorgabe ab.",
+    "complete": "vollständig",
+    "ofCharacters": {
+      "one": "{covered} von {count} Zeichen",
+      "other": "{covered} von {count} Zeichen"
+    },
+    "languageLabel": "{name}: {amount}",
+    "languageLabelLocl": "{name}: {amount}, hat lokalisierte Formen (locl)",
+    "hasLocl": "Hat lokalisierte Formen (locl)",
+    "locl": "locl",
+    "allCovered": {
+      "one": "Sein einziges Zeichen ist abgedeckt.",
+      "other": "Alle {count} Zeichen sind abgedeckt."
+    },
+    "listing": "Fehlende Zeichen werden aufgelistet…",
+    "missingFrom": "Fehlt in {name}"
+  },
+  "glyphCompare": {
+    "title": "{codePoint} vergleichen",
+    "close": "Vergleich schließen",
+    "closeEsc": "Schließen (Esc)",
+    "withFont": "Mit Schrift vergleichen",
+    "searchPlaceholder": "Schriften nach Namen suchen",
+    "fonts": "Schriften",
+    "styles": {
+      "one": "{count} Schnitt",
+      "other": "{count} Schnitte"
+    },
+    "noMatch": "Keine Schrift passt zur Suche.",
+    "style": "Schnitt",
+    "size": "Größe",
+    "sizePixels": "Größe in Pixeln",
+    "px": "px",
+    "pick": "Wähle eine Schrift, mit der du {codePoint} vergleichen willst.",
+    "lacks": "{face} hat keine Glyphe für {codePoint}.",
+    "drawingOne": "{codePoint} in {face}, {size} px",
+    "drawingTwo": "{codePoint} in {first} und {second}, {size} px",
+    "lines": {
+      "xHeight": "x-Höhe {units}",
+      "capHeight": "Versalhöhe {units}"
+    },
+    "noLines": "keine x-Höhe oder Versalhöhe angegeben",
+    "legend": "Legende",
+    "solid": "— durchgezogene Linien: {lines}",
+    "notDrawn": "— nicht gezeichnet",
+    "dashed": "— gestrichelte Linien: {lines}",
+    "baseline": "Gemeinsame Grundlinie"
+  },
+  "copy": {
+    "value": "{label} kopieren: {value}",
+    "clickToCopy": "Zum Kopieren klicken",
+    "failed": "Kopieren fehlgeschlagen",
+    "css": "CSS kopieren",
+    "cssFor": "CSS für {label} kopieren"
+  },
+  "selection": {
+    "chooseReceipt": "Beleg auswählen"
+  },
+  "table": {
+    "label": "Schrifttabelle",
+    "sortBy": "Nach {column} sortieren",
+    "columnsMenu": {
+      "button": "Spalten",
+      "label": "Tabellenspalten",
+      "moveUp": "{column} nach oben verschieben",
+      "moveDown": "{column} nach unten verschieben",
+      "reset": "Spalten zurücksetzen"
+    }
+  },
+  "columns": {
+    "activation": "Aktivierung",
+    "name": "Name",
+    "styleCount": "Schnitte",
+    "weightLine": "Schnitt",
+    "weightRange": "Stärke",
+    "format": "Format",
+    "version": "Version",
+    "manufacturer": "Hersteller",
+    "location": "Speicherort",
+    "license": "Lizenz",
+    "added": "Hinzugefügt am",
+    "tags": "Tags",
+    "notes": "Notizen",
+    "badge": {
+      "variable": "Variabel",
+      "color": "Farbe",
+      "openLicense": "Offene Lizenz"
+    },
+    "declared": {
+      "desktop": "Desktop",
+      "web": "Web",
+      "app": "App",
+      "trial": "Testversion",
+      "personalOnly": "Privat",
+      "unknown": "Unbekannt"
+    },
+    "state": {
+      "inactive": "Inaktiv",
+      "partial": "Teilweise aktiv",
+      "active": "Aktiv"
+    }
+  },
+  "list": {
+    "label": "Schriftliste",
+    "inQuickCollection": ", in der Schnellsammlung",
+    "inQuickCollectionTitle": "In der Schnellsammlung",
+    "pinned": "Angeheftet",
+    "stylesUnavailable": "Schnitte nicht verfügbar",
+    "previewUnavailable": "Vorschau nicht verfügbar",
+    "variable": "Variabel",
+    "fallback": "Ersatz",
+    "fallbackTitle": {
+      "missingLetters": "Dieser Schrift fehlen {missing}, daher zeigt sie ihre eigenen Buchstaben.",
+      "missingCharacters": "Dieser Schrift fehlen {missing}, daher zeigt sie ihre eigenen Zeichen.",
+      "letters": "Dieser Schrift fehlen Zeichen des Beispieltexts, daher zeigt sie ihre eigenen Buchstaben.",
+      "characters": "Dieser Schrift fehlen Zeichen des Beispieltexts, daher zeigt sie ihre eigenen Zeichen."
+    },
+    "styleCount": {
+      "one": "{count} Schnitt",
+      "other": "{count} Schnitte"
+    },
+    "row": {
+      "family": "{name}, {styles}, {state}",
+      "face": "{family} {style}, {state}",
+      "pinnedInstance": "{name}, angeheftete Instanz",
+      "notActive": "nicht aktiv",
+      "partlyActive": "teilweise aktiv",
+      "active": "aktiv",
+      "activePermanently": "dauerhaft aktiv",
+      "activeSession": "aktiv für diese Sitzung"
+    }
+  },
+  "grid": {
+    "label": "Schriftraster"
+  },
+  "waterfall": {
+    "label": "Schriftwasserfall",
+    "size": "{size} px"
+  },
+  "density": {
+    "comfortable": "Komfortabel",
+    "compact": "Kompakt"
+  },
+  "collections": {
+    "heading": "Sammlungen",
+    "new": "Neu",
+    "newTitle": "Sammlung anlegen",
+    "newSmart": "Neu (intelligent)",
+    "newSmartLabel": "Neue intelligente Sammlung",
+    "newSmartTitle": "Sammlung anlegen, die sich nach Regeln selbst füllt",
+    "allFonts": "Alle Schriften",
+    "newName": "Name der neuen Sammlung",
+    "newNameInside": "Name der neuen Sammlung in {name}",
+    "renameLabel": "Neuer Name für {name}",
+    "smart": "Intelligent",
+    "fontCount": {
+      "one": "{count} Schrift",
+      "other": "{count} Schriften"
+    },
+    "newInside": "Neu darin",
+    "newInsideLabel": "Neue Sammlung in {name}",
+    "editRules": "Regeln bearbeiten",
+    "editRulesLabel": "Regeln von {name} bearbeiten",
+    "renameActionLabel": "{name} umbenennen",
+    "up": "Hoch",
+    "upLabel": "{name} nach oben verschieben",
+    "down": "Runter",
+    "downLabel": "{name} nach unten verschieben",
+    "in": "Hinein",
+    "inLabel": "{name} in die Sammlung darüber verschieben",
+    "inTitle": "In die Sammlung darüber einordnen",
+    "out": "Heraus",
+    "outLabel": "{name} aus der übergeordneten Sammlung herausnehmen",
+    "exportLicenseInventory": "Lizenzübersicht exportieren…",
+    "exportLabel": "Lizenzübersicht von {name} exportieren",
+    "exportTitle": "Eine CSV mit den Lizenzen ihrer Familien speichern",
+    "deleteLabel": "{name} löschen",
+    "deleteTitle": "Löscht die Sammlung und die darin enthaltenen. Die Schriften bleiben in der Bibliothek.",
+    "inventoryFile": "{name} Lizenzübersicht",
+    "inventoryFileAll": "Lizenzübersicht",
+    "inventorySaved": {
+      "one": "Lizenzübersicht gespeichert: {count} Familie.",
+      "other": "Lizenzübersicht gespeichert: {count} Familien."
+    },
+    "commands": {
+      "group": "Sammlungen",
+      "new": "Neue Sammlung",
+      "newSmart": "Neue intelligente Sammlung",
+      "exportLicenseInventory": "Lizenzübersicht exportieren…",
+      "addSelected": "Ausgewählte Schriften zu „{name}“ hinzufügen"
+    }
+  },
+  "rules": {
+    "newTitle": "Neue intelligente Sammlung",
+    "editTitle": "Regeln von „{name}“ bearbeiten",
+    "name": "Name",
+    "fontsMatch": "Schriften erfüllen",
+    "opLabel": "Schriften erfüllen alle oder eine der Regeln",
+    "theseRules": "diese Regeln",
+    "allOf": "alle",
+    "anyOf": "eine",
+    "rules": "Regeln",
+    "rule": "Regel",
+    "ruleLower": "Regel",
+    "ruleLabel": "Regel {n}",
+    "ruleInline": "Regel {n}",
+    "groupLabel": "Gruppe {n}",
+    "groupInline": "Gruppe {n}",
+    "groupRuleLabel": "Gruppe {group}, Regel {n}",
+    "groupRuleInline": "Gruppe {group}, Regel {n}",
+    "groupFontsMatch": "{label}: Schriften erfüllen",
+    "groupOpLabel": "{label}: Schriften erfüllen alle oder eine ihrer Regeln",
+    "groupRules": "Regeln von {label}",
+    "addRule": "Regel hinzufügen",
+    "addRuleTo": "Regel zu {label} hinzufügen",
+    "removeGroup": "Gruppe entfernen",
+    "removeLabel": "{label} entfernen",
+    "addGroup": "Gruppe hinzufügen",
+    "matches": {
+      "one": "{count} Familie passt",
+      "other": "{count} Familien passen"
+    },
+    "incomplete": {
+      "one": "{count} Regel hat noch keinen Wert und wird ausgelassen.",
+      "other": "{count} Regeln haben noch keinen Wert und werden ausgelassen."
+    },
+    "nestedGroup": "eine verschachtelte Gruppe",
+    "keptAsSaved": "Wie gespeichert beibehalten: {what}",
+    "whatItTests": "{label}: was sie prüft",
+    "fromLabel": "{label}: von",
+    "to": "bis",
+    "toLabel": "{label}: bis",
+    "textPlaceholder": "Text einfügen, den sie abdecken muss",
+    "textLabel": "{label}: Text",
+    "within": "innerhalb von",
+    "daysLabel": "{label}: hinzugefügt innerhalb so vieler Tage",
+    "days": "Tagen",
+    "valueLabel": "{label}: Wert",
+    "choose": "Auswählen…",
+    "stars": {
+      "one": "{count} Stern oder mehr",
+      "other": "{count} Sterne oder mehr"
+    },
+    "dimensions": {
+      "classification": "Klasse",
+      "weight": "Stärke",
+      "width": "Breite",
+      "slant": "Neigung",
+      "feature": "OpenType-Feature",
+      "language": "Unterstützt Sprache",
+      "text": "Unterstützt Text",
+      "license": "Lizenztyp",
+      "foundry": "Schriftenhersteller",
+      "format": "Dateiformat",
+      "added": "Hinzugefügt am",
+      "tag": "Tag",
+      "rating": "Bewertung",
+      "source": "Quellordner"
+    }
+  },
+  "tagging": {
+    "fonts": {
+      "one": "{count} Schrift",
+      "other": "{count} Schriften"
+    },
+    "tagCount": {
+      "one": "{count} Tag",
+      "other": "{count} Tags"
+    },
+    "title": "Tags von {fonts}",
+    "hint": "Leertaste wechselt · Enter übernimmt · Esc bricht ab",
+    "queryLabel": "Tags filtern oder einen neuen benennen",
+    "queryPlaceholder": "Tags filtern oder neuen Tag-Namen eingeben",
+    "tags": "Tags",
+    "state": {
+      "all": "an allen",
+      "some": "an einigen",
+      "none": "an keiner"
+    },
+    "someOf": "{state} ({carried} von {total})",
+    "changed": "{state}, geändert",
+    "makeNew": "Enter legt den Tag „{name}“ an {fonts} an",
+    "noTags": "Noch keine Tags",
+    "apply": "Übernehmen",
+    "applyCount": "{count} übernehmen",
+    "added": "{tags} an {fonts} hinzugefügt.",
+    "removed": "{tags} von {fonts} entfernt.",
+    "addedRemoved": "{added} hinzugefügt und {removed} entfernt an {fonts}.",
+    "dropped": "„{name}“ getaggt ({fonts})."
+  },
+  "tags": {
+    "heading": "Tags",
+    "tagCount": {
+      "one": "{count} Tag",
+      "other": "{count} Tags"
+    },
+    "fontCount": {
+      "one": "{count} Schrift",
+      "other": "{count} Schriften"
+    },
+    "empty": "Noch keine Tags. Drücke {chord}, um die ausgewählten Schriften zu taggen.",
+    "fallbackName": "Tag {id}"
+  },
+  "quickCollection": {
+    "title": "Schnellsammlung",
+    "fonts": {
+      "one": "{count} Schrift",
+      "other": "{count} Schriften"
+    },
+    "added": "{fonts} zur Schnellsammlung hinzugefügt ({total}).",
+    "removed": "{fonts} aus der Schnellsammlung entfernt ({total}).",
+    "saved": "{fonts} als Sammlung „{name}“ gespeichert.",
+    "tagged": "{fonts} mit „{name}“ getaggt.",
+    "clear": "Leeren",
+    "back": "Zurück zu den Schriften",
+    "collectionName": "Name der Sammlung",
+    "saveAsCollection": "Als Sammlung speichern",
+    "tag": "Tag",
+    "tagAll": "Alle taggen",
+    "listLabel": "Schriften in der Schnellsammlung",
+    "dropLabel": "{name} aus der Schnellsammlung nehmen",
+    "dropTitle": "Aus der Schnellsammlung nehmen (Entf)",
+    "drop": "Herausnehmen",
+    "empty": "Die Schnellsammlung ist leer. Wähle Schriften aus und drücke B, um sie hinzuzufügen.",
+    "entryTitle": "Schnellsammlung ansehen; {chord} fügt die ausgewählten Schriften hinzu oder entfernt sie"
+  },
+  "sets": {
+    "heading": "Projektsets",
+    "currentTitle": "Das aktuelle Set (drücken zum Aufheben)",
+    "makeCurrentTitle": "Zum aktuellen Set machen",
+    "empty": "Noch keine Sets."
+  },
+  "settings": {
+    "title": "Einstellungen",
+    "sections": {
+      "sources": "Quellen",
+      "activation": "Aktivierung",
+      "appearance": "Darstellung",
+      "advanced": "Erweitert",
+      "about": "Über"
+    },
+    "sources": {
+      "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Wenn du eine Quelle entfernst, vergisst die Bibliothek ihre Schriften; die Dateien bleiben, wo sie sind.",
+      "kinds": {
+        "watched": "Ordner",
+        "system": "Systemschriften",
+        "libraryFolder": "Bibliotheksordner"
+      },
+      "fonts": {
+        "one": "{count} Schrift",
+        "other": "{count} Schriften"
+      },
+      "pause": "{path} pausieren",
+      "paused": "Pausiert",
+      "remove": "{path} entfernen",
+      "systemCannotRemove": "Systemschriften können nicht entfernt werden.",
+      "addFolder": "Ordner hinzufügen…"
+    },
+    "activation": {
+      "modeLegend": "Die Schaltfläche „Aktivieren“ aktiviert Schriften",
+      "modeSession": "Für diese Sitzung (bis die App beendet wird)",
+      "modePermanent": "Dauerhaft (auch nach einem Neustart)",
+      "conflictLegend": "Wenn eine Schrift denselben Namen hat wie eine Systemschrift oder eine aktive Schrift",
+      "conflictAsk": "Frag mich: die andere Schrift behalten, sie für diese Sitzung ersetzen oder abbrechen",
+      "conflictReplace": "Die andere Schrift ohne Nachfrage für diese Sitzung ersetzen",
+      "reactivateOnLaunch": "Beim Start erneut aktivieren: die Schriften der letzten Sitzung wieder aktivieren, wenn die App startet",
+      "keepInTray": "Im Infobereich weiterlaufen, wenn das Fenster geschlossen wird",
+      "keepInTrayHint": "Sitzungsschriften bleiben aktiv, solange die App im Infobereich läuft. Ist das aus, beendet das Schließen des Fensters Font Manager und die Sitzungsaktivierungen.",
+      "startAtLogin": "Bei der Anmeldung starten",
+      "startAtLoginHint": "Font Manager startet bei deiner Anmeldung im Infobereich, ohne sein Fenster zu öffnen.",
+      "startAtLoginFailed": "„Bei der Anmeldung starten“ konnte nicht geändert werden."
+    },
+    "appearance": {
+      "theme": "Design",
+      "themes": {
+        "system": "Wie das System",
+        "light": "Hell",
+        "dark": "Dunkel"
+      },
+      "density": "Dichte",
+      "densities": {
+        "comfortable": "Großzügig",
+        "compact": "Kompakt"
+      }
+    },
+    "advanced": {
+      "cacheSize": "Größe des Vorschau-Caches (MB)",
+      "rescanInterval": "Quellen neu einlesen alle (Minuten)",
+      "rescanHint": "0 schaltet das automatische Neueinlesen aus.",
+      "logsFolder": "Protokollordner",
+      "logsFolderLabel": "Protokollordner"
+    },
+    "about": {
+      "platformNotes": "Hinweise zur Plattform",
+      "noPlatformNotes": "Auf diesem System funktioniert alles gleich."
+    }
+  },
+  "updates": {
+    "title": "Updates",
+    "check": "Nach Updates suchen",
+    "showVersion": "Version {version} anzeigen",
+    "checking": "Suche nach Updates…",
+    "upToDate": "Font Manager ist auf dem neuesten Stand.",
+    "available": "Version {version} ist verfügbar.",
+    "checkAutomatically": "Automatisch suchen, wenn Font Manager startet",
+    "checkAutomaticallyHint": "Font Manager kontaktiert seinen Release-Server nur, wenn du suchst oder wenn das hier an ist. Nichts wird installiert, bevor du es bestätigst.",
+    "dialog": {
+      "title": "Font Manager {version} ist verfügbar",
+      "currentVersion": "Du hast Version {version}.",
+      "released": "Veröffentlicht am {date}.",
+      "installQuits": "Die Installation beendet Font Manager und damit die Sitzungsaktivierungen und startet die neue Version.",
+      "releaseNotes": "Versionshinweise",
+      "noNotes": "Diese Version hat keine Hinweise.",
+      "majorTitle": "Ein großes Update installieren?",
+      "majorLead": "Version {version} ist ein großes Update gegenüber {current}. Es kann ändern, wie Font Manager funktioniert und was seine Einstellungen bedeuten. Installiere es nur, wenn du dafür bereit bist.",
+      "installing": "Wird installiert… Font Manager startet neu, wenn es fertig ist.",
+      "later": "Später",
+      "installVersion": "Version {version} installieren",
+      "installAndRestart": "Installieren und neu starten"
+    }
+  },
+  "conflicts": {
+    "title": "Schriftkonflikte",
+    "intro": "Zwei aktive Schriften mit demselben PostScript-Namen sind ein Konflikt: Apps fragen Schriften über diesen Namen an. Gewinner ist die Schrift, die die App zuerst nennt: eine Schrift, mit der du die andere für diese Sitzung ersetzt hast, oder die spätere von zwei Schriften, die die App aktiviert hat.",
+    "none": "Keine Konflikte.",
+    "columns": {
+      "postscriptName": "PostScript-Name",
+      "activeFont": "Aktive Schrift",
+      "conflictsWith": "Konflikt mit",
+      "winner": "Gewinner"
+    },
+    "installedFont": "Installierte Schrift: {path}",
+    "face": "Schriftschnitt {id}"
+  },
+  "problems": {
+    "title": "Probleme",
+    "filters": "Probleme anzeigen",
+    "all": "Alle",
+    "noneOfKind": "Keine Probleme dieser Art.",
+    "none": "Keine Probleme. Deine Bibliothek ist in gutem Zustand.",
+    "columns": {
+      "problem": "Problem",
+      "file": "Datei",
+      "with": "Mit",
+      "details": "Details"
+    },
+    "groups": {
+      "duplicates": "Duplikate",
+      "broken": "Defekte Dateien",
+      "legacy": "Veraltete Formate",
+      "sidecar": "Sidecar-Konflikte",
+      "activation": "Aktivierungskonflikte",
+      "library": "Ordner und Index"
+    },
+    "copies": {
+      "one": "{count} Kopie",
+      "other": "{count} Kopien"
+    },
+    "summary": {
+      "moved": {
+        "one": "{count} Kopie in den Papierkorb verschoben.",
+        "other": "{count} Kopien in den Papierkorb verschoben."
+      },
+      "putBack": {
+        "one": "{count} Kopie zurückgelegt.",
+        "other": "{count} Kopien zurückgelegt."
+      },
+      "stayed": {
+        "one": "{count} Kopie ist geblieben, wo sie war.",
+        "other": "{count} Kopien sind geblieben, wo sie waren."
+      }
+    },
+    "undoFailed": "Einige Kopien konnten nicht zurückgelegt werden.",
+    "duplicates": {
+      "title": "Duplikate auflösen",
+      "note": "Behalte eine Kopie jeder Schrift. Die anderen Kopien wandern in den Papierkorb, und du kannst das rückgängig machen.",
+      "identicalFiles": "Identische Dateien",
+      "exact": "identische Dateien",
+      "similar": "gleiche Schrift, verschiedene Dateien",
+      "recommended": "Empfohlen",
+      "keep": "Diese behalten",
+      "keepLabel": "Diese behalten: {path}"
+    },
+    "history": {
+      "title": "Verlauf",
+      "when": "Wann",
+      "kept": "Behalten",
+      "what": "Was passiert ist",
+      "undoLabel": "Rückgängig: {summary}"
+    },
+    "plan": {
+      "title": {
+        "one": "{count} Kopie in den Papierkorb verschieben?",
+        "other": "{count} Kopien in den Papierkorb verschieben?"
+      },
+      "keeping": "Behalten wird",
+      "willMove": "Wird in den Papierkorb verschoben",
+      "willStay": "Bleibt",
+      "confirm": "In den Papierkorb"
+    }
+  },
+  "sources": {
+    "title": "Quellen",
+    "addFolder": "Ordner hinzufügen",
+    "addFolderTitle": "Einen Ordner zur Bibliothek hinzufügen",
+    "scanningLibrary": "Bibliothek wird eingelesen",
+    "scanning": "Einlesen: {progress}",
+    "scanningSource": "{name} wird eingelesen",
+    "progress": "{done} von {total}",
+    "systemFonts": "Systemschriften",
+    "readOnly": "Schreibgeschützt",
+    "paused": "Pausiert",
+    "fonts": {
+      "one": "{count} Schrift",
+      "other": "{count} Schriften"
+    },
+    "rescan": "Neu einlesen",
+    "rescanLabel": "{name} neu einlesen",
+    "pause": "Pausieren",
+    "pauseLabel": "{name} pausieren",
+    "resume": "Fortsetzen",
+    "resumeLabel": "{name} fortsetzen",
+    "removeLabel": "{name} aus der Bibliothek entfernen",
+    "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
+  }
+}

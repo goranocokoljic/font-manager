@@ -2,18 +2,20 @@
 // nothing here inspects a font. The font-name sample uses the face's names as
 // the API reports them.
 import type { FaceSummary } from '../api/types';
+import { t } from '../i18n';
 
 /** Which text the preview rows show. */
 export type SampleKind = 'custom' | 'pangram' | 'lorem' | 'alphabet' | 'numerals' | 'fontName';
 
-export const SAMPLE_KINDS: { value: SampleKind; label: string }[] = [
-  { value: 'pangram', label: 'Pangram' },
-  { value: 'custom', label: 'Custom text' },
-  { value: 'lorem', label: 'Lorem ipsum' },
-  { value: 'alphabet', label: 'Alphabet' },
-  { value: 'numerals', label: 'Numerals' },
-  { value: 'fontName', label: 'Font name' },
-];
+// Getters: the menu label is read in the language shown now; the texts below are specimens.
+export const SAMPLE_KINDS: { value: SampleKind; label: string }[] = (
+  ['pangram', 'custom', 'lorem', 'alphabet', 'numerals', 'fontName'] as const
+).map((value) => ({
+  value,
+  get label() {
+    return t(`samples.kinds.${value}`);
+  },
+}));
 
 /** The pangram language when the UI language has none. */
 export const FALLBACK_LANGUAGE = 'en';

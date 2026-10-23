@@ -17,6 +17,7 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
+import { t } from '../i18n';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useActions } from '../stores/commands';
 import { usePalettesStore } from '../stores/palettes';
@@ -99,8 +100,10 @@ function close(i: number): void {
 
 /** "12 pt", without float noise. */
 function sizeLabel(block: TextBlock): string {
-  return `${Number((block.sizePt ?? 0).toFixed(1))} pt`;
+  return t('blocks.sizePt', { size: Number((block.sizePt ?? 0).toFixed(1)) });
 }
+
+const blockLabel = (i: number) => t('blocks.label', { n: i + 1 });
 
 const page = ref<HTMLDivElement | null>(null);
 const locked = computed(() => props.layout?.widthLocked !== false);
@@ -116,11 +119,16 @@ async function toggleWidthLock(): Promise<void> {
   return props.setWidthLock(true, now);
 }
 
+// Getters: the palette shows the title in the language chosen now.
 useActions([
   {
     id: 'view.layoutWidthLock',
-    title: 'Lock or unlock the layout width',
-    group: 'View',
+    get title() {
+      return t('textLayout.actionWidthLock');
+    },
+    get group() {
+      return t('textLayout.groupView');
+    },
     enabled: () => canLock.value,
     run: toggleWidthLock,
   },
@@ -147,7 +155,9 @@ const fontFamily = computed(() =>
   <section
     class="layout"
     tabindex="0"
-    :aria-label="layout ? `${layout.name} layout` : 'Layout'"
+    :aria-label="
+      layout ? t('textLayout.regionNamed', { name: layout.name }) : t('textLayout.region')
+    "
     :data-preset="layout?.preset ?? undefined"
     :data-state="face ? state : undefined"
   >
@@ -156,7 +166,7 @@ const fontFamily = computed(() =>
         <span class="name">{{ face.familyName }}</span>
         <span class="style">{{ face.style }}</span>
         <span v-if="state === 'failed'" class="failed" role="status">
-          This font could not be loaded.
+          {{ t('textLayout.loadFailed') }}
         </span>
         <button
           v-if="setWidthLock"
@@ -164,14 +174,10 @@ const fontFamily = computed(() =>
           class="lock"
           data-testid="layout-width-lock"
           :aria-pressed="locked"
-          :title="
-            locked
-              ? 'The text keeps its width; press to follow the window'
-              : 'The text follows the window; press to keep its width'
-          "
+          :title="locked ? t('textLayout.lockedTitle') : t('textLayout.unlockedTitle')"
           @click="toggleWidthLock"
         >
-          Lock width
+          {{ t('textLayout.lockWidth') }}
         </button>
       </header>
       <div
@@ -194,7 +200,7 @@ const fontFamily = computed(() =>
             class="badge"
             data-testid="block-size-badge"
             :data-index="i"
-            :aria-label="`Block ${i + 1} properties, ${sizeLabel(block)}`"
+            :aria-label="t('textLayout.badgeLabel', { n: i + 1, size: sizeLabel(block) })"
             aria-haspopup="dialog"
             :aria-expanded="editing === i"
             @click="toggle(i)"
@@ -206,7 +212,7 @@ const fontFamily = computed(() =>
               v-if="hasEditor && editing === i"
               :block="block"
               :bounds="bounds!"
-              :label="`Block ${i + 1}`"
+              :label="blockLabel(i)"
               :apply="(change) => setProps!(i, change)"
               @close="close(i)"
             />
@@ -214,7 +220,7 @@ const fontFamily = computed(() =>
               :block="block"
               :font-family="fontFamily"
               :editable="editable"
-              :label="`Block ${i + 1}`"
+              :label="blockLabel(i)"
               :bounds="hasEditor ? bounds : null"
               :describedby="hasEditor ? hintId : undefined"
               @edit="(text) => emit('edit-text', i, text)"
@@ -224,12 +230,11 @@ const fontFamily = computed(() =>
         </div>
       </div>
       <p v-if="hasEditor" :id="hintId" class="hint">
-        Drag a block sideways or press Left and Right to change its size; drag it up and down or
-        press Up and Down to change its line height (Shift for bigger steps).
-        <template v-if="editable">Double-click it or press Enter to edit its text.</template>
+        {{ t('textLayout.hint') }}
+        <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
       </p>
     </template>
-    <p v-else-if="!face" class="empty">Select a font to see it in a layout.</p>
+    <p v-else-if="!face" class="empty">{{ t('textLayout.empty') }}</p>
   </section>
 </template>
 

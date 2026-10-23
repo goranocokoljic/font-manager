@@ -2,8 +2,17 @@
 import { computed, nextTick, onBeforeUnmount, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { FullSettings } from '../api/client';
-import type { SettingsUpdate } from '../api/types';
+import type { Language, SettingsUpdate } from '../api/types';
 import CopyValue from '../components/CopyValue.vue';
+import {
+  CATALOGS,
+  LOCALES,
+  errorMessage,
+  resolveLocale,
+  t,
+  type Catalog,
+  type MessageKey,
+} from '../i18n';
 import { useAppStore } from '../stores/app';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
@@ -21,11 +30,11 @@ const route = useRoute();
 const router = useRouter();
 
 const sections = [
-  { id: 'sources', title: 'Sources' },
-  { id: 'activation', title: 'Activation' },
-  { id: 'appearance', title: 'Appearance' },
-  { id: 'advanced', title: 'Advanced' },
-  { id: 'about', title: 'About' },
+  { id: 'sources' },
+  { id: 'activation' },
+  { id: 'appearance' },
+  { id: 'advanced' },
+  { id: 'about' },
 ] as const;
 type SectionId = (typeof sections)[number]['id'];
 
@@ -102,7 +111,7 @@ function choose(patch: SettingsUpdate): void {
 async function saveStartAtLogin(e: Event): Promise<void> {
   const input = e.target as HTMLInputElement;
   if (await store.update({ startAtLogin: input.checked })) return;
-  toast.show(store.error?.message ?? 'Start at login could not be changed.');
+  toast.show(store.error ? errorMessage(store.error) : t('settings.activation.startAtLoginFailed'));
   input.checked = store.settings?.startAtLogin ?? false;
 }
 
@@ -116,14 +125,40 @@ async function saveNumber(key: NumberKey, e: Event): Promise<void> {
   if (!ok && store.settings) input.value = String(store.settings[key]);
 }
 
-const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'Library folder' };
+// Identifiers the template uses, kept here: the catalog check (src/i18n/templates.test.ts)
+// reads a camelCase literal in a template as text.
+const saveCacheLimit = (e: Event) => saveNumber('cacheLimitMb', e);
+const saveRescanInterval = (e: Event) => saveNumber('rescanIntervalMinutes', e);
+const KEEP_EXISTING = 'keepExisting' satisfies FullSettings['onConflict'];
+const upToDate = computed(() => updates.status === 'upToDate');
+
+/** A section's title, which is also its heading. */
+const sectionTitle = (id: SectionId) => t(`settings.sections.${id}` as MessageKey);
+
+/** A locale's own name for itself (`Deutsch`), from its catalog. */
+function localeName(tag: string): string {
+  const name = (CATALOGS[tag]?.meta as Catalog | undefined)?.name;
+  return typeof name === 'string' ? name : tag;
+}
+
+/** The locale "System" resolves to on this computer, by its own name. */
+const systemLocaleName = computed(() => {
+  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
+  return localeName(resolveLocale('system', preferred));
+});
+
+function chooseLanguage(e: Event): void {
+  choose({ language: (e.target as HTMLSelectElement).value as Language });
+}
 </script>
 
 <template>
   <div class="settings" @keydown="onKey">
     <header class="bar">
-      <h1 id="settings-title" class="title">Settings</h1>
-      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">Close</button>
+      <h1 id="settings-title" class="title">{{ t('settings.title') }}</h1>
+      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">
+        {{ t('common.close') }}
+      </button>
     </header>
 
     <div class="body">
@@ -146,7 +181,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
           :tabindex="current === section.id ? 0 : -1"
           @click="select(section.id)"
         >
-          {{ section.title }}
+          {{ sectionTitle(section.id) }}
         </button>
       </div>
 
@@ -157,55 +192,56 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
         tabindex="0"
         class="panel"
       >
-        <p v-if="error" role="alert" class="error">{{ error.message }}</p>
+        <p v-if="error" role="alert" class="error">{{ errorMessage(error) }}</p>
 
         <template v-if="current === 'sources'">
-          <h2 class="heading">Sources</h2>
-          <p class="note">
-            Folders the library indexes in place. Removing a source forgets its fonts; the files
-            stay where they are.
-          </p>
-          <ul class="sources" aria-label="Sources">
+          <h2 class="heading">{{ sectionTitle('sources') }}</h2>
+          <p class="note">{{ t('settings.sources.note') }}</p>
+          <ul class="sources" :aria-label="sectionTitle('sources')">
             <li v-for="source in sources.sources" :key="source.id" class="source">
               <div class="source-text">
                 <span class="path">{{ source.path }}</span>
                 <span class="meta">
-                  {{ kindLabel[source.kind] }} · {{ source.faceCount }}
-                  {{ source.faceCount === 1 ? 'font' : 'fonts' }}
+                  {{ t(`settings.sources.kinds.${source.kind}`) }} ·
+                  {{ t('settings.sources.fonts', { count: source.faceCount }) }}
                 </span>
               </div>
               <label class="check">
                 <input
                   type="checkbox"
                   :checked="source.paused"
-                  :aria-label="`Pause ${source.path}`"
+                  :aria-label="t('settings.sources.pause', { path: source.path })"
                   @change="
                     sources.setPaused(source.id, ($event.target as HTMLInputElement).checked)
                   "
                 />
-                Paused
+                {{ t('settings.sources.paused') }}
               </label>
               <button
                 type="button"
                 class="button"
-                :aria-label="`Remove ${source.path}`"
+                :aria-label="t('settings.sources.remove', { path: source.path })"
                 :disabled="source.kind === 'system'"
-                :title="source.kind === 'system' ? 'System fonts cannot be removed.' : undefined"
+                :title="
+                  source.kind === 'system' ? t('settings.sources.systemCannotRemove') : undefined
+                "
                 @click="sources.remove(source.id)"
               >
-                Remove
+                {{ t('common.remove') }}
               </button>
             </li>
           </ul>
           <div class="add">
-            <button type="button" class="button" @click="sources.add">Add folder…</button>
+            <button type="button" class="button" @click="sources.add">
+              {{ t('settings.sources.addFolder') }}
+            </button>
           </div>
         </template>
 
         <template v-else-if="current === 'activation' && s">
-          <h2 class="heading">Activation</h2>
+          <h2 class="heading">{{ sectionTitle('activation') }}</h2>
           <fieldset class="group">
-            <legend>The Activate button activates fonts</legend>
+            <legend>{{ t('settings.activation.modeLegend') }}</legend>
             <label class="choice">
               <input
                 type="radio"
@@ -213,7 +249,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.activationMode === 'session'"
                 @change="choose({ activationMode: 'session' })"
               />
-              For this session (until the app quits)
+              {{ t('settings.activation.modeSession') }}
             </label>
             <label class="choice">
               <input
@@ -222,19 +258,19 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.activationMode === 'permanent'"
                 @change="choose({ activationMode: 'permanent' })"
               />
-              Permanently (also after a restart)
+              {{ t('settings.activation.modePermanent') }}
             </label>
           </fieldset>
           <fieldset class="group">
-            <legend>When a font has the same name as a system font or an active font</legend>
+            <legend>{{ t('settings.activation.conflictLegend') }}</legend>
             <label class="choice">
               <input
                 type="radio"
                 name="on-conflict"
-                :checked="s.onConflict === 'keepExisting'"
-                @change="choose({ onConflict: 'keepExisting' })"
+                :checked="s.onConflict === KEEP_EXISTING"
+                @change="choose({ onConflict: KEEP_EXISTING })"
               />
-              Ask me: keep the other font, replace it for this session, or cancel
+              {{ t('settings.activation.conflictAsk') }}
             </label>
             <label class="choice">
               <input
@@ -243,7 +279,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.onConflict === 'replace'"
                 @change="choose({ onConflict: 'replace' })"
               />
-              Replace the other font for this session without asking
+              {{ t('settings.activation.conflictReplace') }}
             </label>
           </fieldset>
           <label class="choice">
@@ -253,7 +289,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
               :checked="s.reactivateOnLaunch"
               @change="choose({ reactivateOnLaunch: ($event.target as HTMLInputElement).checked })"
             />
-            Reactivate on launch: activate the last session's fonts again when the app starts
+            {{ t('settings.activation.reactivateOnLaunch') }}
           </label>
           <label class="choice">
             <input
@@ -263,11 +299,10 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
               :checked="s.keepInTray"
               @change="choose({ keepInTray: ($event.target as HTMLInputElement).checked })"
             />
-            Keep running in the tray when the window is closed
+            {{ t('settings.activation.keepInTray') }}
           </label>
           <p id="keep-in-tray-hint" class="note hint">
-            Session fonts stay active while the app runs in the tray. Turned off, closing the window
-            quits Font Manager and ends session activations.
+            {{ t('settings.activation.keepInTrayHint') }}
           </p>
           <!-- fm-api reports null where the system does not offer it (ADR 0011). -->
           <template v-if="s.startAtLogin != null">
@@ -279,24 +314,20 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.startAtLogin"
                 @change="saveStartAtLogin"
               />
-              Start at login
+              {{ t('settings.activation.startAtLogin') }}
             </label>
             <p id="start-at-login-hint" class="note hint">
-              Font Manager starts in the tray when you log in, without opening its window.
+              {{ t('settings.activation.startAtLoginHint') }}
             </p>
           </template>
         </template>
 
         <template v-else-if="current === 'appearance' && s">
-          <h2 class="heading">Appearance</h2>
+          <h2 class="heading">{{ sectionTitle('appearance') }}</h2>
           <fieldset class="group">
-            <legend>Theme</legend>
+            <legend>{{ t('settings.appearance.theme') }}</legend>
             <label
-              v-for="[value, text] in [
-                ['system', 'Same as the system'],
-                ['light', 'Light'],
-                ['dark', 'Dark'],
-              ] as const"
+              v-for="value in ['system', 'light', 'dark'] as const"
               :key="value"
               class="choice"
             >
@@ -306,67 +337,81 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :checked="s.theme === value"
                 @change="choose({ theme: value })"
               />
-              {{ text }}
+              {{ t(`settings.appearance.themes.${value}`) }}
             </label>
           </fieldset>
           <fieldset class="group">
-            <legend>Density</legend>
-            <label
-              v-for="[value, text] in [
-                ['comfortable', 'Comfortable'],
-                ['compact', 'Compact'],
-              ] as const"
-              :key="value"
-              class="choice"
-            >
+            <legend>{{ t('settings.appearance.density') }}</legend>
+            <label v-for="value in ['comfortable', 'compact'] as const" :key="value" class="choice">
               <input
                 type="radio"
                 name="density"
                 :checked="s.density === value"
                 @change="choose({ density: value })"
               />
-              {{ text }}
+              {{ t(`settings.appearance.densities.${value}`) }}
             </label>
           </fieldset>
+          <label class="field">
+            <span>{{ t('language.label') }}</span>
+            <select
+              name="language"
+              class="input select"
+              aria-describedby="language-hint"
+              :value="s.language ?? 'system'"
+              @change="chooseLanguage"
+            >
+              <option value="system">
+                {{ t('language.system', { name: systemLocaleName }) }}
+              </option>
+              <option v-for="tag in LOCALES" :key="tag" :value="tag">{{ localeName(tag) }}</option>
+            </select>
+          </label>
+          <p id="language-hint" class="note">{{ t('language.hint') }}</p>
         </template>
 
         <template v-else-if="current === 'advanced' && s">
-          <h2 class="heading">Advanced</h2>
+          <h2 class="heading">{{ sectionTitle('advanced') }}</h2>
           <label class="field">
-            <span>Preview cache size (MB)</span>
+            <span>{{ t('settings.advanced.cacheSize') }}</span>
             <input
               type="number"
               class="input number"
               inputmode="numeric"
               :value="s.cacheLimitMb"
-              @change="saveNumber('cacheLimitMb', $event)"
+              @change="saveCacheLimit"
             />
           </label>
           <label class="field">
-            <span>Rescan sources every (minutes)</span>
+            <span>{{ t('settings.advanced.rescanInterval') }}</span>
             <input
               type="number"
               class="input number"
               inputmode="numeric"
               aria-describedby="rescan-hint"
               :value="s.rescanIntervalMinutes"
-              @change="saveNumber('rescanIntervalMinutes', $event)"
+              @change="saveRescanInterval"
             />
           </label>
-          <p id="rescan-hint" class="note">0 turns automatic rescans off.</p>
+          <p id="rescan-hint" class="note">{{ t('settings.advanced.rescanHint') }}</p>
           <div v-if="store.folders" class="field">
-            <span>Logs folder</span>
-            <span><CopyValue :value="store.folders.logs" label="logs folder" /></span>
+            <span>{{ t('settings.advanced.logsFolder') }}</span>
+            <span>
+              <CopyValue
+                :value="store.folders.logs"
+                :label="t('settings.advanced.logsFolderLabel')"
+              />
+            </span>
           </div>
         </template>
 
         <template v-else-if="current === 'about' && app.info">
-          <h2 class="heading">About</h2>
+          <h2 class="heading">{{ sectionTitle('about') }}</h2>
           <p class="note">{{ app.info.name }} {{ app.info.version }}</p>
           <!-- Hidden where Flatpak or a package manager installs the updates; the
                platform notes below say so (ADR 0012). -->
           <section v-if="updates.support?.offered" class="updates" aria-labelledby="updates-title">
-            <h3 id="updates-title" class="subheading">Updates</h3>
+            <h3 id="updates-title" class="subheading">{{ t('updates.title') }}</h3>
             <div class="add">
               <button
                 type="button"
@@ -374,7 +419,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 :disabled="updates.status === 'checking' || updates.status === 'installing'"
                 @click="updates.check()"
               >
-                Check for updates
+                {{ t('updates.check') }}
               </button>
               <button
                 v-if="updates.status === 'available' && updates.update && !updates.open"
@@ -382,20 +427,18 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                 class="button"
                 @click="updates.open = true"
               >
-                Show version {{ updates.update.version }}
+                {{ t('updates.showVersion', { version: updates.update.version }) }}
               </button>
             </div>
             <p role="status" class="note status">
-              <template v-if="updates.status === 'checking'">Checking for updates…</template>
-              <template v-else-if="updates.status === 'upToDate'"
-                >Font Manager is up to date.</template
-              >
-              <template v-else-if="updates.status === 'available' && updates.update"
-                >Version {{ updates.update.version }} is available.</template
-              >
+              <template v-if="updates.status === 'checking'">{{ t('updates.checking') }}</template>
+              <template v-else-if="upToDate">{{ t('updates.upToDate') }}</template>
+              <template v-else-if="updates.status === 'available' && updates.update">{{
+                t('updates.available', { version: updates.update.version })
+              }}</template>
             </p>
             <p v-if="updates.error && !updates.open" role="alert" class="error">
-              {{ updates.error.message }}
+              {{ errorMessage(updates.error) }}
             </p>
             <label v-if="s" class="choice">
               <input
@@ -407,14 +450,15 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
                   choose({ checkUpdatesAutomatically: ($event.target as HTMLInputElement).checked })
                 "
               />
-              Check automatically when Font Manager starts
+              {{ t('updates.checkAutomatically') }}
             </label>
             <p id="check-updates-hint" class="note hint">
-              Font Manager contacts its release server only when you check or when this is on.
-              Nothing installs until you confirm it.
+              {{ t('updates.checkAutomaticallyHint') }}
             </p>
           </section>
-          <h3 id="platform-notes-title" class="subheading">Platform notes</h3>
+          <h3 id="platform-notes-title" class="subheading">
+            {{ t('settings.about.platformNotes') }}
+          </h3>
           <ul
             v-if="app.info.platformNotes?.length"
             class="notes"
@@ -422,7 +466,7 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
           >
             <li v-for="note in app.info.platformNotes" :key="note">{{ note }}</li>
           </ul>
-          <p v-else class="note">Everything works the same on this system.</p>
+          <p v-else class="note">{{ t('settings.about.noPlatformNotes') }}</p>
         </template>
       </div>
     </div>
@@ -592,6 +636,9 @@ const kindLabel = { watched: 'Folder', system: 'System fonts', libraryFolder: 'L
 }
 .number {
   width: 120px;
+}
+.select {
+  align-self: flex-start;
 }
 .button {
   padding: 4px 10px;

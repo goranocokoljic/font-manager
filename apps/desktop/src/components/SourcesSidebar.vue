@@ -4,6 +4,7 @@
 // System source is listed read-only: the app never pauses or removes it.
 import { onBeforeUnmount, onMounted } from 'vue';
 import type { Source } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { useSourcesStore, type ScanProgress } from '../stores/sources';
 
 const store = useSourcesStore();
@@ -12,32 +13,34 @@ onBeforeUnmount(() => store.stop());
 
 /** The folder's own name; the full path is in the tooltip. */
 function folderName(source: Source): string {
-  if (source.kind === 'system') return 'System fonts';
+  if (source.kind === 'system') return t('sources.systemFonts');
   const parts = source.path.split(/[\\/]/).filter(Boolean);
   return parts.at(-1) ?? source.path;
 }
 
 function progressText(p: ScanProgress): string {
-  return `${p.done} of ${p.total}`;
+  return t('sources.progress', { done: p.done, total: p.total });
 }
 </script>
 
 <template>
   <section class="sources" aria-labelledby="fm-sources-heading">
     <header class="head">
-      <h2 id="fm-sources-heading" class="heading">Sources</h2>
-      <button type="button" class="add" title="Add a folder to the library" @click="store.add">
-        Add folder
+      <h2 id="fm-sources-heading" class="heading">{{ t('sources.title') }}</h2>
+      <button type="button" class="add" :title="t('sources.addFolderTitle')" @click="store.add">
+        {{ t('sources.addFolder') }}
       </button>
     </header>
-    <p v-if="store.error" role="alert" class="error">{{ store.error.message }}</p>
+    <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
     <div v-if="store.otherScan" class="scan library-scan" data-testid="library-scan">
       <progress
         :value="store.otherScan.done"
         :max="store.otherScan.total || 1"
-        aria-label="Scanning the library"
+        :aria-label="t('sources.scanningLibrary')"
       />
-      <span class="scan-text">Scanning {{ progressText(store.otherScan) }}</span>
+      <span class="scan-text">{{
+        t('sources.scanning', { progress: progressText(store.otherScan) })
+      }}</span>
     </div>
     <ul class="list" aria-labelledby="fm-sources-heading">
       <li
@@ -50,9 +53,9 @@ function progressText(p: ScanProgress): string {
       >
         <div class="row">
           <span class="name" :title="source.path">{{ folderName(source) }}</span>
-          <span v-if="source.kind === 'system'" class="badge">Read-only</span>
-          <span v-else-if="source.paused" class="badge">Paused</span>
-          <span class="count" :aria-label="`${source.faceCount} fonts`">{{
+          <span v-if="source.kind === 'system'" class="badge">{{ t('sources.readOnly') }}</span>
+          <span v-else-if="source.paused" class="badge">{{ t('sources.paused') }}</span>
+          <span class="count" :aria-label="t('sources.fonts', { count: source.faceCount })">{{
             source.faceCount
           }}</span>
         </div>
@@ -60,32 +63,36 @@ function progressText(p: ScanProgress): string {
           <progress
             :value="store.progressOf(source.id)!.done"
             :max="store.progressOf(source.id)!.total || 1"
-            :aria-label="`Scanning ${folderName(source)}`"
+            :aria-label="t('sources.scanningSource', { name: folderName(source) })"
           />
           <span class="scan-text">{{ progressText(store.progressOf(source.id)!) }}</span>
         </div>
         <div v-if="source.kind !== 'system'" class="actions">
           <button
             type="button"
-            :aria-label="`Rescan ${folderName(source)}`"
+            :aria-label="t('sources.rescanLabel', { name: folderName(source) })"
             @click="store.rescan(source.id)"
           >
-            Rescan
+            {{ t('sources.rescan') }}
           </button>
           <button
             type="button"
-            :aria-label="`${source.paused ? 'Resume' : 'Pause'} ${folderName(source)}`"
+            :aria-label="
+              source.paused
+                ? t('sources.resumeLabel', { name: folderName(source) })
+                : t('sources.pauseLabel', { name: folderName(source) })
+            "
             @click="store.setPaused(source.id, !source.paused)"
           >
-            {{ source.paused ? 'Resume' : 'Pause' }}
+            {{ source.paused ? t('sources.resume') : t('sources.pause') }}
           </button>
           <button
             type="button"
-            :aria-label="`Remove ${folderName(source)} from the library`"
-            title="Remove from the library. The files stay where they are."
+            :aria-label="t('sources.removeLabel', { name: folderName(source) })"
+            :title="t('sources.removeTitle')"
             @click="store.remove(source.id)"
           >
-            Remove
+            {{ t('common.remove') }}
           </button>
         </div>
       </li>

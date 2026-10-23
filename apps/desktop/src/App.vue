@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onMounted, watchEffect } from 'vue';
+import { onMounted, watch, watchEffect } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import { useClient } from './api/client';
 import CommandPalette from './components/CommandPalette.vue';
 import ToastMessage from './components/ToastMessage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
 import { HELP_PAGES } from './help';
+import { locale, resolveLocale, setLocale, t, type MessageKey } from './i18n';
 import { ACTIONS } from './keyboard/keymap';
 import { useActions, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
@@ -16,24 +17,37 @@ const updates = useUpdatesStore();
 const router = useRouter();
 
 useShortcuts();
+// Getters: the palette shows the titles in the language chosen now.
 useActions([
   {
     id: ACTIONS.settings,
-    title: 'Open settings',
-    group: 'App',
+    get title() {
+      return t('app.openSettings');
+    },
+    get group() {
+      return t('app.groups.app');
+    },
     run: () => router.push({ name: 'settings' }),
   },
   {
     id: 'app.conflicts',
-    title: 'Show font conflicts',
-    group: 'App',
+    get title() {
+      return t('app.showConflicts');
+    },
+    get group() {
+      return t('app.groups.app');
+    },
     run: () => router.push({ name: 'conflicts' }),
   },
   // The same pages as the native Help menu.
   ...HELP_PAGES.map((page) => ({
     id: `help.${page.slug}`,
-    title: `Help: ${page.title}`,
-    group: 'Help',
+    get title() {
+      return t('app.helpAction', { page: t(`shell.helpPages.${page.slug}` as MessageKey) });
+    },
+    get group() {
+      return t('app.groups.help');
+    },
     run: () => useClient().openHelp(page.slug),
   })),
 ]);
@@ -52,6 +66,25 @@ watchEffect(() => {
   document.documentElement.dataset.theme = s.theme;
   document.documentElement.dataset.density = s.density;
 });
+
+// The Language setting relabels the UI at once: "System" (and the time before the
+// settings are read) follows the OS's preferred languages.
+watchEffect(() => {
+  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
+  setLocale(resolveLocale(settings.settings?.language, preferred));
+  document.documentElement.lang = locale();
+});
+
+// The native Help menu and the tray follow the same language.
+watch(
+  locale,
+  (tag) => {
+    useClient()
+      .setShellLocale(tag)
+      .catch((e: unknown) => console.warn('the shell language was not changed', e));
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

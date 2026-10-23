@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // "Copy CSS" in the Axes and Features tabs: copies the declaration fm-core
 // builds for what the user changed, with CopyValue's inline feedback.
+import { t } from '../i18n';
 import { useCopy } from './useCopy';
 
 const props = defineProps<{
@@ -16,16 +17,16 @@ const { status, copy } = useCopy();
 <template>
   <span class="copy-css">
     <span class="status" role="status">
-      <template v-if="status === 'copied'">Copied</template>
-      <template v-else-if="status === 'failed'">Could not copy</template>
+      <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
+      <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
     </span>
     <button
       type="button"
       class="button"
-      :aria-label="`Copy CSS for the ${label}`"
+      :aria-label="t('copy.cssFor', { label })"
       @click="copy(props.css())"
     >
-      Copy CSS
+      {{ t('copy.css') }}
     </button>
   </span>
 </template>

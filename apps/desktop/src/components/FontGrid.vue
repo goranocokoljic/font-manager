@@ -24,6 +24,7 @@ import { useLibraryStore } from '../stores/library';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
 
@@ -240,7 +241,7 @@ function onToggle(row: ListRow): void {
     :data-columns="columns"
     role="listbox"
     tabindex="0"
-    aria-label="Font grid"
+    :aria-label="t('grid.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -288,9 +289,9 @@ function onToggle(row: ListRow): void {
             :style="thumbStyle(item.thumb)"
             aria-hidden="true"
           />
-          <span v-if="item.failed" class="note">Preview not available</span>
+          <span v-if="item.failed" class="note">{{ t('list.previewUnavailable') }}</span>
           <span v-else-if="!item.face && library.failed.has(item.row.family.id)" class="note">
-            Styles not available
+            {{ t('list.stylesUnavailable') }}
           </span>
           <div class="meta">
             <span
@@ -305,8 +306,10 @@ function onToggle(row: ListRow): void {
             <span v-if="item.row.kind === 'family'" class="detail">{{
               styleCount(item.row.family.styleCount)
             }}</span>
-            <span v-if="item.face?.isVariable" class="badge">Variable</span>
-            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">Fallback</span>
+            <span v-if="item.face?.isVariable" class="badge">{{ t('list.variable') }}</span>
+            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">{{
+              t('list.fallback')
+            }}</span>
           </div>
         </div>
       </div>

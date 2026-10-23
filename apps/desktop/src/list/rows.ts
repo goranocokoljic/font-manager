@@ -10,6 +10,7 @@ import type {
   VirtualStyle,
   VirtualStyleId,
 } from '../api/types';
+import { t, type MessageKey } from '../i18n';
 
 export type RowKey = string;
 
@@ -99,12 +100,12 @@ export function flattenRows(
 }
 
 /** "1 style", "4 styles". */
-export const styleCount = (n: number) => (n === 1 ? '1 style' : `${n} styles`);
+export const styleCount = (n: number) => t('list.styleCount', { count: n });
 
 const FAMILY_STATE: Record<FamilySummary['activation'], string> = {
-  inactive: 'not active',
-  partial: 'partly active',
-  active: 'active',
+  inactive: 'list.row.notActive',
+  partial: 'list.row.partlyActive',
+  active: 'list.row.active',
 };
 
 /**
@@ -114,15 +115,21 @@ const FAMILY_STATE: Record<FamilySummary['activation'], string> = {
 export function rowLabel(row: ListRow): string {
   if (row.kind === 'family') {
     const { name, styleCount: n, activation } = row.family;
-    return `${name}, ${styleCount(n)}, ${FAMILY_STATE[activation]}`;
+    return t('list.row.family', {
+      name,
+      styles: styleCount(n),
+      state: t(FAMILY_STATE[activation] as MessageKey),
+    });
   }
   const { familyName, active } = row.face;
-  const style = row.virtual ? `${row.virtual.name}, pinned instance` : row.face.style;
+  const style = row.virtual
+    ? t('list.row.pinnedInstance', { name: row.virtual.name })
+    : row.face.style;
   const state =
     active === 'permanent'
-      ? 'active permanently'
+      ? t('list.row.activePermanently')
       : active === 'session'
-        ? 'active for this session'
-        : 'not active';
-  return `${familyName} ${style}, ${state}`;
+        ? t('list.row.activeSession')
+        : t('list.row.notActive');
+  return t('list.row.face', { family: familyName, style, state });
 }

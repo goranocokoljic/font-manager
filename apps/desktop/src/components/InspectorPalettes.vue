@@ -6,6 +6,7 @@
 // of the family then draws in it (the palettes store).
 import { computed } from 'vue';
 import type { Palette } from '../api/types';
+import { t } from '../i18n';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW } from '../stores/preview';
 import { useSelectionStore } from '../stores/selection';
@@ -24,7 +25,7 @@ const chosen = computed(() => {
 });
 
 /** The palette's own name, else "Palette N" counting from 1. */
-const nameOf = (p: Palette) => p.name ?? `Palette ${p.index + 1}`;
+const nameOf = (p: Palette) => p.name ?? t('palettes.numbered', { number: p.index + 1 });
 
 function choose(p: Palette): void {
   if (family.value) palettes.choose(props.view, family.value, p.index);
@@ -33,7 +34,7 @@ function choose(p: Palette): void {
 
 <template>
   <section v-if="list.length" aria-labelledby="fm-info-palettes" data-testid="palette-picker">
-    <h3 id="fm-info-palettes">Color palette</h3>
+    <h3 id="fm-info-palettes">{{ t('palettes.title') }}</h3>
     <div class="palettes" role="radiogroup" aria-labelledby="fm-info-palettes">
       <label
         v-for="p in list"

@@ -126,6 +126,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await tab(page, 'Advanced').click();
     for (const name of ['Preview cache size (MB)', 'Rescan sources every (minutes)'])
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);
+    await tab(page, 'Appearance').click();
+    expect(await borderContrast(page, 'Language')).toBeGreaterThanOrEqual(3);
   });
 }
 

@@ -13,6 +13,7 @@ import type {
   OpenLicense,
   WeightRange,
 } from '../api/types';
+import { locale, t } from '../i18n';
 import { clampSetting, SIZE } from '../stores/preview';
 
 export type ColumnId =
@@ -42,28 +43,38 @@ export interface Column {
   hideable: boolean;
 }
 
+/** A column whose label follows the UI language (`columns.<id>`). */
+const column = (
+  id: ColumnId,
+  sortKey: FamilySortKey | null,
+  width: number,
+  hideable = true,
+): Column => ({
+  id,
+  get label() {
+    return t(`columns.${id}`);
+  },
+  sortKey,
+  width,
+  hideable,
+});
+
 /** The spec's columns, in their default order. */
 export const COLUMNS: readonly Column[] = [
-  { id: 'activation', label: 'Activation', sortKey: 'activation', width: 40, hideable: true },
-  { id: 'name', label: 'Name', sortKey: 'name', width: 240, hideable: false },
-  { id: 'styleCount', label: 'Styles', sortKey: 'styleCount', width: 72, hideable: true },
-  { id: 'weightLine', label: 'Style', sortKey: 'weight', width: 140, hideable: true },
-  { id: 'weightRange', label: 'Weight', sortKey: 'weight', width: 96, hideable: true },
-  { id: 'format', label: 'Format', sortKey: 'format', width: 132, hideable: true },
-  { id: 'version', label: 'Version', sortKey: 'version', width: 120, hideable: true },
-  {
-    id: 'manufacturer',
-    label: 'Manufacturer',
-    sortKey: 'manufacturer',
-    width: 140,
-    hideable: true,
-  },
-  { id: 'location', label: 'Location', sortKey: 'location', width: 200, hideable: true },
-  { id: 'license', label: 'License', sortKey: 'license', width: 96, hideable: true },
-  { id: 'added', label: 'Date added', sortKey: 'dateAdded', width: 112, hideable: true },
-  { id: 'tags', label: 'Tags', sortKey: 'tags', width: 160, hideable: true },
+  column('activation', 'activation', 40),
+  column('name', 'name', 240, false),
+  column('styleCount', 'styleCount', 72),
+  column('weightLine', 'weight', 140),
+  column('weightRange', 'weight', 96),
+  column('format', 'format', 132),
+  column('version', 'version', 120),
+  column('manufacturer', 'manufacturer', 140),
+  column('location', 'location', 200),
+  column('license', 'license', 96),
+  column('added', 'dateAdded', 112),
+  column('tags', 'tags', 160),
   // The family's own notes; the API has no order by notes.
-  { id: 'notes', label: 'Notes', sortKey: null, width: 200, hideable: true },
+  column('notes', null, 200),
 ];
 
 const BY_ID = new Map(COLUMNS.map((c) => [c.id, c]));
@@ -198,23 +209,18 @@ export function formatBadges(
   isColor = false,
 ): string[] {
   const badges = [...new Set(formats.map((f) => FORMAT_BADGE[f]))];
-  if (isVariable) badges.push('Variable');
-  if (isColor) badges.push('Color');
+  if (isVariable) badges.push(t('columns.badge.variable'));
+  if (isColor) badges.push(t('columns.badge.color'));
   return badges;
 }
 
-const DECLARED: Record<LicenseType, string> = {
-  desktop: 'Desktop',
-  web: 'Web',
-  app: 'App',
-  trial: 'Trial',
-  personalOnly: 'Personal',
-  unknown: 'Unknown',
-};
+/** The badge of a declared license type, in the UI language. */
+const declaredBadge = (l: LicenseType): string => t(`columns.declared.${l}`);
 
 /** The badge of a family whose name table states an open license; shown in the good color. */
-export const OPEN_LICENSE_BADGE = 'Open license';
+export const openLicenseBadge = (): string => t('columns.badge.openLicense');
 
+// The licenses' own names, not translated.
 const OPEN: Record<OpenLicense, string> = {
   ofl: 'SIL Open Font License',
   apache: 'Apache License 2.0',
@@ -230,8 +236,8 @@ export function openLicenseName(l: OpenLicense | null | undefined): string {
 /** The license badges: what the user declared, then "Open license" when the font states one. */
 export function licenseBadges(f: Pick<FamilySummary, 'declaredLicense' | 'openLicense'>): string[] {
   const badges: string[] = [];
-  if (f.declaredLicense) badges.push(DECLARED[f.declaredLicense]);
-  if (f.openLicense) badges.push(OPEN_LICENSE_BADGE);
+  if (f.declaredLicense) badges.push(declaredBadge(f.declaredLicense));
+  if (f.openLicense) badges.push(openLicenseBadge());
   return badges;
 }
 
@@ -246,15 +252,22 @@ export function weightPosition(w: number): number {
   return ((clamped - 100) / 900) * 100;
 }
 
-export const ACTIVATION_LABEL: Record<FamilyActivation, string> = {
-  inactive: 'Inactive',
-  partial: 'Partly active',
-  active: 'Active',
+/** A family's activation state in a cell, in the UI language. */
+export const ACTIVATION_LABEL: Readonly<Record<FamilyActivation, string>> = {
+  get inactive() {
+    return t('columns.state.inactive');
+  },
+  get partial() {
+    return t('columns.state.partial');
+  },
+  get active() {
+    return t('columns.state.active');
+  },
 };
 
-/** A timestamp as a short date in `locale` (the user's by default); '' when unreadable. */
-export function dateText(iso: string, locale?: string): string {
+/** A timestamp as a short date in `tag` (the UI's locale by default); '' when unreadable. */
+export function dateText(iso: string, tag: string = locale()): string {
   const d = new Date(iso);
   if (!iso || Number.isNaN(d.getTime())) return '';
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }).format(d);
+  return new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeZone: 'UTC' }).format(d);
 }

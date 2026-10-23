@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useClient, type Unsubscribe } from '../api/client';
 import type { ApiError, Clash, Event, FaceId } from '../api/types';
+import { t } from '../i18n';
 
 /**
  * The Conflicts view: every clash of an active face and its winner, as fm-api
@@ -66,7 +67,7 @@ export const useConflictsStore = defineStore('conflicts', () => {
 
   /** The display name of `face`, or its id while the name is unknown. */
   function nameOf(face: FaceId): string {
-    return names.value[face] ?? `Face ${face}`;
+    return names.value[face] ?? t('conflicts.face', { id: String(face) });
   }
 
   return { clashes, error, loaded, load, stop, refresh, nameOf };

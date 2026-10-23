@@ -4,6 +4,7 @@
 // the problems store (the status bar shows the same total).
 import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
+import { t } from '../i18n';
 import { PROBLEM_GROUPS, useProblemsStore } from '../stores/problems';
 
 const store = useProblemsStore();
@@ -14,7 +15,7 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
   <section class="problems" aria-labelledby="fm-problems-heading">
     <h2 id="fm-problems-heading" class="heading">
       <RouterLink :to="{ name: 'problems' }" class="link" data-testid="sidebar-problems">
-        <span class="name">Problems</span>
+        <span class="name">{{ t('problems.title') }}</span>
         <span class="count">{{ store.total }}</span>
       </RouterLink>
     </h2>

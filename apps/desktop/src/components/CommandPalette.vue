@@ -3,6 +3,7 @@
 // query. A modal dialog with a combobox: arrows move, Enter runs, Escape closes and
 // focus returns to where it was.
 import { computed, nextTick, ref, watch } from 'vue';
+import { t } from '../i18n';
 import { highlight } from '../keyboard/fuzzy';
 import { ACTIONS, ariaShortcut, formatChord } from '../keyboard/keymap';
 import { useActions, useCommandsStore, type PaletteItem } from '../stores/commands';
@@ -16,8 +17,13 @@ let returnFocus: HTMLElement | null = null;
 useActions([
   {
     id: ACTIONS.palette,
-    title: 'Show all commands',
-    group: 'General',
+    // Getters: the palette shows the title in the language chosen now.
+    get title() {
+      return t('palette.showAll');
+    },
+    get group() {
+      return t('palette.groups.general');
+    },
     run: commands.togglePalette,
   },
 ]);
@@ -104,19 +110,19 @@ function onKeyDown(e: KeyboardEvent): void {
 
 <template>
   <div v-if="commands.open" class="backdrop" @mousedown.self="commands.closePalette">
-    <div class="palette" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="palette" role="dialog" aria-modal="true" :aria-label="t('palette.label')">
       <input
         ref="input"
         v-model="commands.query"
         class="query"
         type="text"
         role="combobox"
-        aria-label="Search commands"
+        :aria-label="t('palette.searchLabel')"
         aria-autocomplete="list"
         aria-expanded="true"
         aria-controls="fm-command-list"
         :aria-activedescendant="items.length ? optionId(active) : undefined"
-        placeholder="Type a command"
+        :placeholder="t('palette.placeholder')"
         autocomplete="off"
         spellcheck="false"
         @keydown="onKeyDown"
@@ -127,7 +133,7 @@ function onKeyDown(e: KeyboardEvent): void {
         ref="listbox"
         class="list"
         role="listbox"
-        aria-label="Commands"
+        :aria-label="t('palette.list')"
         @mousedown.prevent
       >
         <li
@@ -152,7 +158,9 @@ function onKeyDown(e: KeyboardEvent): void {
           </span>
           <kbd v-if="item.chord" class="chord">{{ formatChord(item.chord) }}</kbd>
         </li>
-        <li v-if="!items.length" class="none" role="presentation">No matching commands</li>
+        <li v-if="!items.length" class="none" role="presentation">
+          {{ t('palette.none') }}
+        </li>
       </ul>
     </div>
   </div>

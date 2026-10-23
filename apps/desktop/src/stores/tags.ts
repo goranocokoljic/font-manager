@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, shallowRef, watch } from 'vue';
 import { useClient } from '../api/client';
 import type { ApiError, Tag, TagId } from '../api/types';
+import { t } from '../i18n';
 import { useLibraryStore } from './library';
 
 /**
@@ -45,7 +46,9 @@ export const useTagsStore = defineStore('tags', () => {
 
   /** The name of tag `id`, for a chip. */
   function nameOf(id: TagId): string {
-    return tags.value.find((t) => t.id === id)?.name ?? `Tag ${id}`;
+    return (
+      tags.value.find((tag) => tag.id === id)?.name ?? t('tags.fallbackName', { id: String(id) })
+    );
   }
 
   watch(
