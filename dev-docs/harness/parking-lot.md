@@ -192,3 +192,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E19.2 #134] apps/desktop/src/views/ProblemsView.vue:126 — `{{ p.message }}` shows the core's English problem text in a German UI; it is not an ApiError, so errorMessage never sees it.
 - [E19.2 #134] apps/desktop/src/keyboard/keymap.ts:144 — chord labels `Ctrl`, `Shift`, `Space` are hard-coded English and show in the palette, tooltips and status bar.
 - [E19.2 #134] apps/desktop/src/components/MainLayout.vue:159 — the list column's `overflow: hidden` already hid Compact rows, Compare and Inspector at 1,000 px with the inspector open in English.
+
+## 2026-10-24
+
+- [E19.3 #135] apps/desktop/src/App.vue:84 — `setShellLocale('ar-XB')` is refused by the shell (src-tauri/tests/ipc.rs:862), so under the pseudo-locale the native Help menu and tray keep their previous language.
+- [E19.3 #135] apps/desktop/src/components/InspectorFeatures.vue:176 — the switch knob's slide transition has no `prefers-reduced-motion` override.
