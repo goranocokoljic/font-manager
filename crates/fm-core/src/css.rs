@@ -92,7 +92,7 @@ fn tag(tag: &str) -> Option<String> {
 
 /// A coordinate without float noise: at most [`DECIMALS`] places, trailing
 /// zeros dropped (`650`, `87.5`, `-12.25`), never `-0`.
-fn number(v: f32) -> String {
+pub(crate) fn number(v: f32) -> String {
     let s = format!("{:.*}", DECIMALS, f64::from(v));
     let s = s.trim_end_matches('0').trim_end_matches('.');
     if s == "-0" {

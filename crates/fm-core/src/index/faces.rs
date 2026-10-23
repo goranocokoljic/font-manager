@@ -27,6 +27,7 @@ use crate::license;
 use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
+use crate::web_css::FaceStyle;
 use crate::web_font::{self, ExportFace};
 
 /// One face with what its summary and detail need.
@@ -54,12 +55,14 @@ pub struct FaceLocation {
 }
 
 /// A face to export as a web font ([`Index::web_export_face`]).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WebExportFace {
     /// The face's file, output name and label.
     pub face: ExportFace,
     /// Its license keeps it off the web.
     pub restricted: bool,
+    /// What its `@font-face` block says about it (E20.3).
+    pub style: FaceStyle,
 }
 
 /// One face row read by [`FACE`].
@@ -228,9 +231,12 @@ impl Index {
     }
 
     /// What a web export needs about the face `face` (E20.1): its file, its
-    /// output name and label, and whether its license keeps it off the web
+    /// output name and label, whether its license keeps it off the web
     /// (a restricted embedding and no web license declared, the family's
-    /// declaration first). An unknown face is `NotFound`.
+    /// declaration first), and its `@font-face` style (E20.3): the
+    /// typographic family (name ID 16, else 1, else the library's family
+    /// name), slant, weight class and, for a variable face, its axes. An
+    /// unknown face is `NotFound`.
     pub fn web_export_face(&self, face: FaceId) -> FmResult<WebExportFace> {
         let row = self.face_row(face)?;
         let declared = self
@@ -240,6 +246,20 @@ impl Index {
         let restricted = license::embedding(row.fs_type) == Embedding::Restricted
             && declared != Some(LicenseType::Web);
         let s = &row.summary;
+        let parsed = row.parsed.as_ref();
+        let style = FaceStyle {
+            family: parsed
+                .and_then(|p| p.typographic_family.clone().or_else(|| p.family.clone()))
+                .filter(|f| !f.trim().is_empty())
+                .unwrap_or_else(|| s.family_name.clone()),
+            slant: s.slant,
+            weight: s.weight,
+            axes: if s.is_variable {
+                parsed.map(|p| p.axes.clone()).unwrap_or_default()
+            } else {
+                Vec::new()
+            },
+        };
         Ok(WebExportFace {
             face: ExportFace {
                 path: row.file.path,
@@ -248,6 +268,7 @@ impl Index {
                 label: format!("{} {}", s.family_name, s.style),
             },
             restricted,
+            style,
         })
     }
 

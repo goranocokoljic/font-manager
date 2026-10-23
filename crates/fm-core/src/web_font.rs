@@ -15,6 +15,9 @@
 //!   is written; an existing file is never replaced. Each file is written to
 //!   a temporary name in the output folder and renamed only when every file
 //!   of the request was written, so a failed export leaves no files behind.
+//! - **CSS** (E20.3): [`export_with_css`] also writes `fonts.css` beside the
+//!   fonts ([`web_css`]), in the same all-or-nothing way; with a subset each
+//!   block's `unicode-range` is what the written file's `cmap` maps.
 //! - **Errors**: a broken, Type 1 or unreadable face is an [`FmError`] with a
 //!   message for the user, never a panic.
 
@@ -31,6 +34,10 @@ use crate::error::{FmError, FmResult};
 use crate::font_file::font_mime;
 use crate::glyphs;
 use crate::subset::{self, Keep};
+use crate::web_css::{self, FaceStyle};
+
+/// The name of the stylesheet [`export_with_css`] writes.
+pub const CSS_FILE: &str = "fonts.css";
 
 /// A face to export.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,6 +112,52 @@ pub fn export(
     keep: Option<&Keep>,
     out_dir: &Path,
 ) -> FmResult<Vec<PathBuf>> {
+    Ok(write(faces, None, formats, keep, out_dir)?.files)
+}
+
+/// What [`export_with_css`] wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Exported {
+    /// The absolute paths written: the fonts as [`export`] lists them, then
+    /// `fonts.css`.
+    pub files: Vec<PathBuf>,
+    /// The text of `fonts.css`.
+    pub css: String,
+}
+
+/// As [`export`], and also writes [`CSS_FILE`] with one `@font-face` block
+/// per face, `styles[i]` describing `faces[i]`. An existing `fonts.css`
+/// refuses the export as an existing font file does.
+pub fn export_with_css(
+    faces: &[ExportFace],
+    styles: &[FaceStyle],
+    formats: &[WebFormat],
+    keep: Option<&Keep>,
+    out_dir: &Path,
+) -> FmResult<Exported> {
+    if styles.len() != faces.len() {
+        return Err(FmError::internal("one CSS style per exported face"));
+    }
+    let out = write(faces, Some(styles), formats, keep, out_dir)?;
+    Ok(Exported {
+        files: out.files,
+        css: out.css.unwrap_or_default(),
+    })
+}
+
+/// The files [`write`] wrote, and the stylesheet when it wrote one.
+struct Output {
+    files: Vec<PathBuf>,
+    css: Option<String>,
+}
+
+fn write(
+    faces: &[ExportFace],
+    styles: Option<&[FaceStyle]>,
+    formats: &[WebFormat],
+    keep: Option<&Keep>,
+    out_dir: &Path,
+) -> FmResult<Output> {
     let out_dir = std::path::absolute(out_dir)
         .map_err(|e| FmError::io("The output folder could not be opened.", out_dir, &e))?;
     match fs::metadata(&out_dir) {
@@ -125,9 +178,14 @@ pub fn export(
     }
 
     let targets = plan(faces, formats, &out_dir)?;
+    let css_target = match styles {
+        Some(_) => Some(free_target(&out_dir, CSS_FILE)?),
+        None => None,
+    };
     let mut written = Written::default();
     let mut next = targets.iter();
-    for face in faces {
+    let mut blocks = Vec::new();
+    for (i, face) in faces.iter().enumerate() {
         let data = fs::read(&face.path).map_err(|e| {
             FmError::io(format!("{} could not be read.", face.label), &face.path, &e)
         })?;
@@ -142,8 +200,52 @@ pub fn export(
             let bytes = encode(&sfnt, format).map_err(|e| about(face, e))?;
             written.temp(target, &bytes)?;
         }
+        if let Some(style) = styles.and_then(|s| s.get(i)) {
+            let mapped = match keep {
+                Some(_) => Some(mapped_code_points(&sfnt).map_err(|e| about(face, e))?),
+                None => None,
+            };
+            blocks.push(web_css::font_face(
+                style,
+                &face.file_stem,
+                formats,
+                mapped.as_deref(),
+            ));
+        }
     }
-    written.commit()
+    let css = match css_target {
+        Some(target) => {
+            let css = web_css::stylesheet(&blocks);
+            written.temp(&target, css.as_bytes())?;
+            Some(css)
+        }
+        None => None,
+    };
+    Ok(Output {
+        files: written.commit()?,
+        css,
+    })
+}
+
+/// The code points the `cmap` of `sfnt` maps, ascending.
+pub fn mapped_code_points(sfnt: &Sfnt) -> FmResult<Vec<u32>> {
+    use skrifa::MetadataProvider as _;
+    let bytes = sfnt_bytes(sfnt)?;
+    let font =
+        FontRef::new(&bytes).map_err(|e| broken(format!("The font header is malformed: {e}.")))?;
+    Ok(font.charmap().mappings().map(|(cp, _)| cp).collect())
+}
+
+/// `out_dir/name`, or `InvalidRequest` naming the file when it exists.
+fn free_target(out_dir: &Path, name: &str) -> FmResult<PathBuf> {
+    let target = out_dir.join(name);
+    if fs::symlink_metadata(&target).is_ok() {
+        return Err(FmError::invalid(format!(
+            "{name} already exists in the output folder. Choose another folder, or move the file first."
+        ))
+        .with_detail(target.display().to_string()));
+    }
+    Ok(target)
 }
 
 /// The target of every (face, format) in request order, after checking that
@@ -160,14 +262,7 @@ fn plan(faces: &[ExportFace], formats: &[WebFormat], out_dir: &Path) -> FmResult
                     "Two of the fonts would both be written as {name}. Export them separately."
                 )));
             }
-            let target = out_dir.join(&name);
-            if fs::symlink_metadata(&target).is_ok() {
-                return Err(FmError::invalid(format!(
-                    "{name} already exists in the output folder. Choose another folder, or move the file first."
-                ))
-                .with_detail(target.display().to_string()));
-            }
-            targets.push(target);
+            targets.push(free_target(out_dir, &name)?);
         }
     }
     Ok(targets)

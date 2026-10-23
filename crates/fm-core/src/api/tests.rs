@@ -93,7 +93,19 @@ impl Lib {
 
     /// A library whose folder is added and scanned.
     fn scanned(label: &str) -> (Self, Source, Vec<Event>) {
+        Self::scanned_with(label, &[])
+    }
+
+    /// As [`Lib::scanned`], with the fixture files `extra` (paths under
+    /// `fixtures/fonts/`) copied into the library folder too.
+    fn scanned_with(label: &str, extra: &[&str]) -> (Self, Source, Vec<Event>) {
         let lib = Self::new(label);
+        let to = lib.root.join("extra");
+        std::fs::create_dir_all(&to).expect("folder");
+        for file in extra {
+            let from = fixtures().join(file);
+            std::fs::copy(&from, to.join(from.file_name().expect("name"))).expect("copy");
+        }
         let source = lib
             .api
             .add_source(AddSourceRequest {
@@ -1447,7 +1459,7 @@ fn faces_export_as_web_fonts_named_by_postscript_name() {
 }
 
 #[test]
-fn web_export_refuses_what_it_cannot_do_yet_and_bad_requests() {
+fn web_export_refuses_bad_requests() {
     let (lib, _, _) = Lib::scanned("api-export-web-refused");
     let face = lib
         .api
@@ -1459,10 +1471,6 @@ fn web_export_refuses_what_it_cannot_do_yet_and_bad_requests() {
     std::fs::create_dir_all(&out).expect("out");
     let code = |req| lib.api.export_web(req).expect_err("refused").code;
 
-    is_unsupported(lib.api.export_web(ExportWebRequest {
-        css: true,
-        ..web_request(vec![face], &out)
-    }));
     assert_eq!(
         code(web_request(Vec::new(), &out)),
         ErrorCode::InvalidRequest
@@ -1480,6 +1488,149 @@ fn web_export_refuses_what_it_cannot_do_yet_and_bad_requests() {
     let unknown = web_request(vec![face, FaceId(999_999)], &out);
     assert_eq!(code(unknown), ErrorCode::NotFound);
     assert!(files_under(&out).is_empty());
+}
+
+/// The face of `family` whose file name ends with `file`.
+fn face_in(lib: &Lib, family: &str, file: &str) -> FaceId {
+    lib.api
+        .get_family(lib.family(family).id)
+        .expect("family")
+        .faces
+        .into_iter()
+        .find(|f| lib.api.get_face(f.id).expect("face").path.ends_with(file))
+        .unwrap_or_else(|| panic!("{family}: no face from {file}"))
+        .id
+}
+
+#[test]
+fn web_export_writes_fonts_css_for_static_variable_and_italic_faces() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-export-web-css",
+        &[
+            "google-repo/cairoplay/CairoPlay[slnt,wght].ttf",
+            "fontshare/sora/Sora-Italic.woff2",
+            // Name ID 1 "Asap SemiBold", name ID 16 "Asap": the CSS family is 16.
+            "fontshare/asap/Asap-SemiBold.otf",
+        ],
+    );
+    let faces = vec![
+        face_in(&lib, "Bebas Neue", "BebasNeue-Regular.ttf"),
+        face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
+        face_in(&lib, "Cairo Play", "CairoPlay[slnt,wght].ttf"),
+        face_in(&lib, "Sora", "Sora-Italic.woff2"),
+        face_in(&lib, "Asap", "Asap-SemiBold.otf"),
+    ];
+    let out = lib.dir.path().join("css");
+    std::fs::create_dir_all(&out).expect("out");
+    let res = lib
+        .api
+        .export_web(ExportWebRequest {
+            css: true,
+            ..web_request(faces, &out)
+        })
+        .expect("export");
+    let css = res.css.clone().expect("css");
+    let css_path = out.join("fonts.css");
+    assert_eq!(res.files.len(), 11);
+    assert_eq!(res.files.last(), Some(&css_path.display().to_string()));
+    assert_eq!(std::fs::read_to_string(&css_path).expect("written"), css);
+    assert_eq!(css, WEB_CSS_SNAPSHOT, "{css}");
+
+    // A second export clashes on the stylesheet too, and writes nothing.
+    let again = lib.dir.path().join("again");
+    std::fs::create_dir_all(&again).expect("again");
+    std::fs::write(again.join("fonts.css"), "keep me").expect("existing");
+    let e = lib
+        .api
+        .export_web(ExportWebRequest {
+            css: true,
+            ..web_request(vec![face_in(&lib, "Bebas Neue", ".ttf")], &again)
+        })
+        .expect_err("clash");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(e.message.contains("fonts.css"), "{e:?}");
+    assert_eq!(files_under(&again).len(), 1);
+    assert_eq!(
+        std::fs::read_to_string(again.join("fonts.css")).expect("kept"),
+        "keep me"
+    );
+}
+
+/// `fonts.css` of [`web_export_writes_fonts_css_for_static_variable_and_italic_faces`].
+const WEB_CSS_SNAPSHOT: &str = r#"@font-face {
+  font-family: "Bebas Neue";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("BebasNeue-Regular.woff2") format("woff2"), url("BebasNeue-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Asap Sharp";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+  src: url("AsapSharp-Regular.woff2") format("woff2"), url("AsapSharp-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Cairo Play";
+  font-style: oblique -11deg 11deg;
+  font-weight: 200 1000;
+  font-display: swap;
+  src: url("CairoPlay-Regular.woff2") format("woff2"), url("CairoPlay-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Sora";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("Sora-Italic.woff2") format("woff2"), url("Sora-Italic.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Asap";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("Asap-SemiBold.woff2") format("woff2"), url("Asap-SemiBold.woff") format("woff");
+}
+"#;
+
+#[test]
+fn a_subset_web_export_writes_the_mapped_unicode_range() {
+    let (lib, _, _) = Lib::scanned("api-export-web-css-subset");
+    let face = face_in(&lib, "Bebas Neue", "BebasNeue-Regular.ttf");
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let res = lib
+        .api
+        .export_web(ExportWebRequest {
+            css: true,
+            subset: Some(Subset::Text {
+                text: "BA日".into(),
+            }),
+            formats: vec![WebFormat::Woff],
+            ..web_request(vec![face], &out)
+        })
+        .expect("export");
+    let css = res.css.expect("css");
+    assert!(
+        css.contains(
+            "  unicode-range: U+0020, U+0041-0042;
+"
+        ),
+        "only what the written file maps: {css}"
+    );
+    assert!(
+        css.contains(
+            "  src: url(\"BebasNeue-Regular.woff\") format(\"woff\");
+"
+        ),
+        "{css}"
+    );
 }
 
 #[test]
