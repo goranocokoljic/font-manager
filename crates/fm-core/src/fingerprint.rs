@@ -49,6 +49,12 @@ const MIN_X_HEIGHT_EM: f32 = 0.05;
 /// The widest drawing, in pixels; a wider one gives no fingerprint.
 const MAX_WIDTH_PX: f32 = 8192.0;
 
+/// The widest and tallest one glyph may be, in x-heights. The rasterizer
+/// allocates a glyph's whole box before it draws, so one stray outline point
+/// (malformed data) would otherwise cost gigabytes or abort the scan; a real
+/// Latin letter is a few x-heights at most.
+const MAX_GLYPH_X_HEIGHTS: f32 = 16.0;
+
 /// How a fingerprint is taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Params {
@@ -144,15 +150,15 @@ fn take(sfnt: &[u8], index: u32, params: Params) -> Option<Fingerprint> {
     if !units.has_outlines() {
         return None;
     }
-    let mut tops = Vec::with_capacity(glyphs.len());
+    let mut boxes = Vec::with_capacity(glyphs.len());
     for &id in &glyphs {
         let outline = units.scale_outline(id)?;
         if outline.points().is_empty() {
             return None;
         }
-        tops.push(outline.bounds().max.y);
+        boxes.push(outline.bounds());
     }
-    let top = |c: char| SAMPLE.chars().position(|s| s == c).map(|i| tops[i]);
+    let top = |c: char| SAMPLE.chars().position(|s| s == c).map(|i| boxes[i].max.y);
     let (x_height, cap_height) = (top('v')?, top('H')?);
     let upem = f32::from(font.metrics(&[]).units_per_em);
     if upem <= 0.0 || x_height < upem * MIN_X_HEIGHT_EM || cap_height <= 0.0 {
@@ -161,6 +167,14 @@ fn take(sfnt: &[u8], index: u32, params: Params) -> Option<Fingerprint> {
 
     let xh_px = f32::from(params.x_height_px);
     let size = xh_px * upem / x_height;
+    let max_glyph = MAX_GLYPH_X_HEIGHTS * xh_px;
+    let scale = size / upem;
+    let fits = |b: &swash::zeno::Bounds| {
+        (b.max.x - b.min.x) * scale <= max_glyph && (b.max.y - b.min.y) * scale <= max_glyph
+    };
+    if !boxes.iter().all(fits) {
+        return None;
+    }
     let advances = font.glyph_metrics(&[]).scale(size);
     let mut scaler = context.builder(font).size(size).hint(false).build();
 

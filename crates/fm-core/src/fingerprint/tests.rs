@@ -221,3 +221,69 @@ fn a_variable_face_is_drawn_at_its_default_instance() {
     let again = fingerprint(&data, 0, Params::default()).expect("fingerprint");
     assert_eq!(first, again, "no state carries over between faces");
 }
+
+/// `data` with the outline of glyph `id` (a simple TrueType glyph) torn: its
+/// last 16-bit y delta, and with it the points after it, moved by `dy` font
+/// units.
+fn with_stray_point(data: &[u8], id: u16, dy: i16) -> Option<Vec<u8>> {
+    use read_fonts::{FontRef, TableProvider, types::Tag};
+    let font = FontRef::new(data).ok()?;
+    let glyf = font
+        .table_directory
+        .table_records()
+        .iter()
+        .find(|r| r.tag() == Tag::new(b"glyf"))?
+        .offset() as usize;
+    let loca = font.loca(None).ok()?;
+    let start = glyf + loca.get_raw(usize::from(id))? as usize;
+    let rd = |at: usize| u16::from_be_bytes([data[at], data[at + 1]]);
+    let contours = rd(start) as i16;
+    if contours <= 0 {
+        return None;
+    }
+    let ends = start + 10;
+    let points = usize::from(rd(ends + 2 * (contours as usize - 1))) + 1;
+    let instructions = ends + 2 * contours as usize;
+    let mut at = instructions + 2 + usize::from(rd(instructions));
+    let mut flags = Vec::with_capacity(points);
+    while flags.len() < points {
+        let flag = data[at];
+        at += 1;
+        let repeat = if flag & 8 != 0 {
+            at += 1;
+            usize::from(data[at - 1])
+        } else {
+            0
+        };
+        flags.extend(std::iter::repeat_n(flag, repeat + 1));
+    }
+    let size = |f: u8, short: u8, same: u8| match (f & short != 0, f & same != 0) {
+        (true, _) => 1,
+        (false, true) => 0,
+        (false, false) => 2,
+    };
+    at += flags.iter().map(|&f| size(f, 2, 16)).sum::<usize>();
+    // The last point whose y delta is 16 bits; the points after it move too.
+    let k = flags.iter().rposition(|&f| size(f, 4, 32) == 2)?;
+    at += flags[..k].iter().map(|&f| size(f, 4, 32)).sum::<usize>();
+    let old = rd(at) as i16;
+    let mut out = data.to_vec();
+    out[at..at + 2].copy_from_slice(&old.wrapping_add(dy).to_be_bytes());
+    Some(out)
+}
+
+/// One stray outline point (malformed data) would make the rasterizer
+/// allocate the glyph's whole box: the face gets no fingerprint instead.
+#[test]
+fn a_glyph_with_a_stray_point_gets_no_fingerprint() {
+    let data = read(STATIC);
+    assert!(fingerprint(&data, 0, Params::default()).is_some());
+    let charmap = swash::FontRef::from_index(&data, 0)
+        .expect("font")
+        .charmap();
+    let stray = SAMPLE
+        .chars()
+        .find_map(|c| with_stray_point(&data, charmap.map(c), 30_000))
+        .expect("a sample glyph with a 16-bit y delta");
+    assert_eq!(fingerprint(&stray, 0, Params::default()), None);
+}
