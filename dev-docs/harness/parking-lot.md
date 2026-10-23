@@ -180,3 +180,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E19.4 #136] apps/desktop/src/components/FontPreviewRow.vue:154 — the `.sample` span has no `lang` attribute, so non-Latin samples reach screen readers untagged.
 - [E20.1 #137] crates/fm-api/src/mock.rs:2924 — `MockApi::export_web` does not de-duplicate repeated face ids (lists a file twice) while fm-core does.
 - [E16.4 #125] apps/desktop/src/components/QuickCollectionReview.vue:48 — still calls `previewRowHeight(props.preview)` without a density, so the Quick Collection review list keeps comfortable row heights in compact mode.
+
+## 2026-10-23
+- [E19.2 #134] apps/desktop/src/views/ProblemsView.vue:126 — `{{ p.message }}` shows the core's English problem text in a German UI; it is not an ApiError, so errorMessage never sees it.
+- [E19.2 #134] apps/desktop/src/keyboard/keymap.ts:144 — chord labels `Ctrl`, `Shift`, `Space` are hard-coded English and show in the palette, tooltips and status bar.
+- [E19.2 #134] apps/desktop/src/components/MainLayout.vue:159 — the list column's `overflow: hidden` already hid Compact rows, Compare and Inspector at 1,000 px with the inspector open in English.
