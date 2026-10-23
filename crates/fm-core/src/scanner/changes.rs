@@ -31,6 +31,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::fingerprint;
 use crate::parallel::map_ordered_io;
 use crate::parser::{ParsedFile, parse};
 use crate::scanner::discovery::is_hidden;
@@ -76,14 +77,17 @@ impl fmt::Debug for FileHash {
     }
 }
 
-/// Reads the font file at `path` once, then hashes and parses those bytes.
+/// Reads the font file at `path` once, then hashes and parses those bytes
+/// and takes the glyph fingerprint of every face ([`fingerprint::fill`]).
 ///
 /// Fails only when the file cannot be read; malformed font data is a
 /// [`ParsedFile`] with [`fm_api::common::Health::Broken`].
 pub fn hash_and_parse(path: &Path) -> FmResult<(FileHash, ParsedFile)> {
     let data =
         fs::read(path).map_err(|e| FmError::io("The font file could not be read.", path, &e))?;
-    Ok((FileHash::of(&data), parse(&data)))
+    let mut parsed = parse(&data);
+    fingerprint::fill(&data, &mut parsed);
+    Ok((FileHash::of(&data), parsed))
 }
 
 /// One font file in the index.
@@ -526,7 +530,9 @@ mod tests {
         let entry = index.get(&path).expect("indexed");
         assert_eq!(entry.hash, FileHash::of(&other));
         assert_eq!(entry.size, other.len() as u64);
-        assert_eq!(entry.parsed, parse(&other));
+        let mut expected = parse(&other);
+        fingerprint::fill(&other, &mut expected);
+        assert_eq!(entry.parsed, expected);
     }
 
     #[test]

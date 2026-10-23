@@ -17,6 +17,7 @@ pub mod css;
 pub mod error;
 pub mod features;
 mod filter;
+pub mod fingerprint;
 pub mod font_file;
 pub mod glyph_features;
 pub mod glyph_svg;

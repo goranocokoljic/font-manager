@@ -275,7 +275,7 @@ pub(crate) fn sfnt_data(data: &[u8]) -> FmResult<Cow<'_, [u8]>> {
 /// file. The shaper and the scaler skip a missing or cut-off table silently
 /// and would draw an empty image; a font the scan marks broken is an error
 /// here too.
-fn check_face(sfnt: &[u8], index: u32) -> FmResult<()> {
+pub(crate) fn check_face(sfnt: &[u8], index: u32) -> FmResult<()> {
     let count = match FileRef::new(sfnt) {
         Ok(FileRef::Font(_)) => 1,
         Ok(FileRef::Collection(c)) => c.len(),
