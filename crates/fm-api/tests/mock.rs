@@ -12,7 +12,7 @@ use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
     CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
-use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
+use fm_api::export::{ExportWebRequest, GlyphSvgRequest, Subset, WebFormat};
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
     RevertLayoutRequest, SaveLayoutRequest,
@@ -875,6 +875,82 @@ fn export_honors_the_license_guard() {
         css: false,
     });
     assert_eq!(refused.unwrap_err().code, ErrorCode::PermissionDenied);
+}
+
+#[test]
+fn export_validates_the_subset_like_the_core() {
+    let api = api();
+    let with = |subset: Subset| ExportWebRequest {
+        faces: vec![FaceId(1)],
+        formats: vec![WebFormat::Woff2],
+        subset: Some(subset),
+        out_dir: "/tmp/out".into(),
+        css: false,
+    };
+    let ok = api
+        .export_web(with(Subset::Presets {
+            names: vec!["latin".into(), "cyrillic".into()],
+        }))
+        .unwrap();
+    assert_eq!(ok.files, ["/tmp/out/Inter-Regular.woff2"]);
+    assert!(
+        api.export_web(with(Subset::Unicode {
+            ranges: vec!["U+0000-00FF, U+4??".into()],
+        }))
+        .is_ok()
+    );
+    assert!(
+        api.export_web(with(Subset::Text { text: "Ab".into() }))
+            .is_ok()
+    );
+
+    let refused = |subset: Subset| {
+        let e = api.export_web(with(subset)).unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+        e.message
+    };
+    let m = refused(Subset::Presets {
+        names: vec!["elvish".into()],
+    });
+    assert!(m.contains("\"elvish\"") && m.contains("latin-ext"), "{m}");
+    refused(Subset::Presets { names: Vec::new() });
+    let m = refused(Subset::Unicode {
+        ranges: vec!["U+00FF-0000".into()],
+    });
+    assert!(m.contains("\"U+00FF-0000\""), "{m}");
+    refused(Subset::Unicode { ranges: Vec::new() });
+    refused(Subset::Text {
+        text: String::new(),
+    });
+    let m = refused(Subset::Text {
+        text: "日本".into(),
+    });
+    assert!(m.contains("none of the characters"), "{m}");
+
+    // The subset is checked before the faces: a bad one on an unknown face
+    // is still InvalidRequest, as in the core.
+    let e = api
+        .export_web(ExportWebRequest {
+            faces: vec![FaceId(999)],
+            ..with(Subset::Unicode {
+                ranges: vec!["U+ZZ".into()],
+            })
+        })
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    // prepare_for_web passes the subset through.
+    assert_eq!(
+        api.prepare_for_web(PrepareForWebRequest {
+            family: FamilyId(1),
+            subset: Some(Subset::Presets {
+                names: vec!["elvish".into()]
+            }),
+            out_dir: "/tmp/web".into(),
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::InvalidRequest
+    );
 }
 
 #[test]

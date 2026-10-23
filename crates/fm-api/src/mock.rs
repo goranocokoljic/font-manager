@@ -24,7 +24,7 @@ use crate::comparison::{
 };
 use crate::export::{
     ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest, WebFormat,
+    LicenseInventoryRequest, Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -179,6 +179,209 @@ const PNG_1X1: [u8; 67] = [
 const LATIN: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,;:!?'\"-()";
 const LATIN_EXT: &str = "ąćęłńóśźżčđšžĄĆĘŁŃÓŚŹŻČĐŠŽ";
 const CYRILLIC: &str = "абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ";
+
+/// The subset presets of `data/subsets/presets.json`: the mock's copy, as
+/// fm-api reads no data files. A test in fm-core checks it against the file.
+#[doc(hidden)]
+pub const SUBSET_PRESETS: &[(&str, &[(u32, u32)])] = &[
+    (
+        "latin",
+        &[
+            (0x0000, 0x00FF),
+            (0x0131, 0x0131),
+            (0x0152, 0x0153),
+            (0x02BB, 0x02BC),
+            (0x02C6, 0x02C6),
+            (0x02DA, 0x02DA),
+            (0x02DC, 0x02DC),
+            (0x0304, 0x0304),
+            (0x0308, 0x0308),
+            (0x0329, 0x0329),
+            (0x2000, 0x206F),
+            (0x20AC, 0x20AC),
+            (0x2122, 0x2122),
+            (0x2191, 0x2191),
+            (0x2193, 0x2193),
+            (0x2212, 0x2212),
+            (0x2215, 0x2215),
+            (0xFEFF, 0xFEFF),
+            (0xFFFD, 0xFFFD),
+        ],
+    ),
+    (
+        "latin-ext",
+        &[
+            (0x0100, 0x02BA),
+            (0x02BD, 0x02C5),
+            (0x02C7, 0x02CC),
+            (0x02CE, 0x02D7),
+            (0x02DD, 0x02FF),
+            (0x0304, 0x0304),
+            (0x0308, 0x0308),
+            (0x0329, 0x0329),
+            (0x1D00, 0x1DBF),
+            (0x1E00, 0x1E9F),
+            (0x1EF2, 0x1EFF),
+            (0x2020, 0x2020),
+            (0x20A0, 0x20AB),
+            (0x20AD, 0x20C4),
+            (0x2113, 0x2113),
+            (0x2C60, 0x2C7F),
+            (0xA720, 0xA7FF),
+        ],
+    ),
+    (
+        "cyrillic",
+        &[
+            (0x0301, 0x0301),
+            (0x0400, 0x045F),
+            (0x0490, 0x0491),
+            (0x04B0, 0x04B1),
+            (0x2116, 0x2116),
+        ],
+    ),
+    (
+        "cyrillic-ext",
+        &[
+            (0x0460, 0x052F),
+            (0x1C80, 0x1C8A),
+            (0x20B4, 0x20B4),
+            (0x2DE0, 0x2DFF),
+            (0xA640, 0xA69F),
+            (0xFE2E, 0xFE2F),
+        ],
+    ),
+    (
+        "greek",
+        &[
+            (0x0370, 0x0377),
+            (0x037A, 0x037F),
+            (0x0384, 0x038A),
+            (0x038C, 0x038C),
+            (0x038E, 0x03A1),
+            (0x03A3, 0x03FF),
+        ],
+    ),
+    ("greek-ext", &[(0x1F00, 0x1FFF)]),
+    (
+        "vietnamese",
+        &[
+            (0x0102, 0x0103),
+            (0x0110, 0x0111),
+            (0x0128, 0x0129),
+            (0x0168, 0x0169),
+            (0x01A0, 0x01A1),
+            (0x01AF, 0x01B0),
+            (0x0300, 0x0301),
+            (0x0303, 0x0304),
+            (0x0308, 0x0309),
+            (0x0323, 0x0323),
+            (0x0329, 0x0329),
+            (0x1EA0, 0x1EF9),
+            (0x20AB, 0x20AB),
+        ],
+    ),
+];
+
+/// The characters `subset` keeps, as sorted, merged, inclusive ranges, and
+/// whether U+0020 was only added (a text without a space). The mock's copy
+/// of `fm_core::subset::code_points`: the same rules and messages.
+#[doc(hidden)]
+pub fn subset_ranges(subset: &Subset) -> ApiResult<(Vec<(u32, u32)>, bool)> {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    let mut space_added = false;
+    match subset {
+        Subset::Presets { names } => {
+            if names.is_empty() {
+                return Err(ApiError::invalid(
+                    "Pick at least one character set to keep.",
+                ));
+            }
+            for name in names {
+                let (_, ranges) = SUBSET_PRESETS
+                    .iter()
+                    .find(|p| p.0 == name.trim())
+                    .ok_or_else(|| {
+                        ApiError::invalid(format!(
+                            "There is no character set called \"{name}\". Pick one of: {}.",
+                            SUBSET_PRESETS
+                                .iter()
+                                .map(|p| p.0)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                    })?;
+                out.extend_from_slice(ranges);
+            }
+        }
+        Subset::Unicode { ranges } => {
+            let values: Vec<&str> = ranges
+                .iter()
+                .flat_map(|r| r.split(','))
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .collect();
+            if values.is_empty() {
+                return Err(ApiError::invalid(
+                    "Enter at least one Unicode range to keep.",
+                ));
+            }
+            for value in values {
+                out.push(css_unicode_range(value).ok_or_else(|| {
+                    ApiError::invalid(format!(
+                        "\"{value}\" is not a Unicode range. Write it like U+0000-00FF, U+0131 or U+4??."
+                    ))
+                })?);
+            }
+        }
+        Subset::Text { text } => {
+            if text.is_empty() {
+                return Err(ApiError::invalid(
+                    "Type or paste the text whose characters to keep.",
+                ));
+            }
+            out.extend(text.chars().map(|c| (u32::from(c), u32::from(c))));
+            out.push((0x20, 0x20));
+            space_added = !text.contains(' ');
+        }
+    }
+    out.sort_unstable();
+    let mut merged: Vec<(u32, u32)> = Vec::with_capacity(out.len());
+    for (first, last) in out {
+        match merged.last_mut() {
+            Some(prev) if first <= prev.1.saturating_add(1) => prev.1 = prev.1.max(last),
+            _ => merged.push((first, last)),
+        }
+    }
+    Ok((merged, space_added))
+}
+
+/// One CSS `unicode-range` value (`U+0041`, `U+0000-00FF`, `U+4??`).
+fn css_unicode_range(value: &str) -> Option<(u32, u32)> {
+    let hex = |d: &str| {
+        if d.is_empty() || d.len() > 6 || !d.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        u32::from_str_radix(d, 16).ok()
+    };
+    let v = value.trim();
+    let rest = v.strip_prefix("U+").or_else(|| v.strip_prefix("u+"))?;
+    let (first, last) = if let Some((a, b)) = rest.split_once('-') {
+        (hex(a)?, hex(b)?)
+    } else if rest.ends_with('?') {
+        let digits = rest.trim_end_matches('?');
+        if rest.len() > 6 || digits.contains('?') {
+            return None;
+        }
+        let base = if digits.is_empty() { 0 } else { hex(digits)? };
+        let shift = 4 * u32::try_from(rest.len() - digits.len()).ok()?;
+        (base << shift, (base << shift) | ((1 << shift) - 1))
+    } else {
+        let one = hex(rest)?;
+        (one, one)
+    };
+    (first <= last && last <= 0x10_FFFF).then_some((first, last))
+}
 
 /// (code, name, script, characters the language needs)
 const LANGUAGES: [(&str, &str, &str, &str); 4] = [
@@ -2917,6 +3120,7 @@ impl ExportService for MockApi {
         if req.out_dir.trim().is_empty() {
             return Err(ApiError::invalid("Choose an output folder."));
         }
+        let keep = req.subset.as_ref().map(subset_ranges).transpose()?;
         let st = self.state();
         let dir = req.out_dir.trim_end_matches(['/', '\\']);
         let mut files = Vec::new();
@@ -2934,6 +3138,19 @@ impl ExportService for MockApi {
                 ));
             }
             let s = &f.detail.face;
+            if let Some((ranges, space_added)) = &keep {
+                let kept = |c: &char| {
+                    let cp = u32::from(*c);
+                    !(*space_added && cp == 0x20)
+                        && ranges.iter().any(|&(a, b)| (a..=b).contains(&cp))
+                };
+                if !f.chars.iter().any(kept) {
+                    return Err(ApiError::invalid(format!(
+                        "{} {}: The font has none of the characters to keep. Choose other characters, or export it without a subset.",
+                        s.family_name, s.style
+                    )));
+                }
+            }
             let mut srcs = Vec::new();
             for fmt in &req.formats {
                 let ext = match fmt {

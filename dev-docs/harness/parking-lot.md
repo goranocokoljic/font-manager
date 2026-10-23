@@ -181,6 +181,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E20.1 #137] crates/fm-api/src/mock.rs:2924 — `MockApi::export_web` does not de-duplicate repeated face ids (lists a file twice) while fm-core does.
 - [E16.4 #125] apps/desktop/src/components/QuickCollectionReview.vue:48 — still calls `previewRowHeight(props.preview)` without a density, so the Quick Collection review list keeps comfortable row heights in compact mode.
 
+## 2026-10-22
+
+- [E20.2 #138] crates/fm-core/src/index/faces.rs:234 — `web_export_face` returns Broken faces for export without a health filter, so whole-font export also feeds damaged data to the encoders.
+
 ## 2026-10-23
 - [E19.2 #134] apps/desktop/src/views/ProblemsView.vue:126 — `{{ p.message }}` shows the core's English problem text in a German UI; it is not an ApiError, so errorMessage never sees it.
 - [E19.2 #134] apps/desktop/src/keyboard/keymap.ts:144 — chord labels `Ctrl`, `Shift`, `Space` are hard-coded English and show in the palette, tooltips and status bar.

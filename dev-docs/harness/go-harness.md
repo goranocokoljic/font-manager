@@ -271,5 +271,6 @@ pick; then commit the changed files in a PR.
 | lane says IDLE and waits | the other lane's PR touches the same area or closes a dependency; it asks again every 10 min (`-NoIdleWait` to end instead) |
 | lane stopped: "main stayed red" | fix `main`; the next run takes the ready PR back to the merge gate |
 | lane stopped: "GitHub did not run CI" | fix billing / the spending limit, then run the lane again: it resumes the story at CI |
+| `[wait] no connection to GitHub or the API` | the PC lost the network: the lane checks every `network.poll_min` minutes (5) for at most `network.max_hours` (48) and goes on by itself; a stage that failed for it is run again and not counted |
 | a story stays `harness:in-progress` after you merged | it closes with the PR (`Closes #n`); `-EpicSync` posts its epic line |
 | leftovers in a worktree | the harness stashes them before a new story: `git -C ../font-manager-core stash list` |
