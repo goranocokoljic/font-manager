@@ -275,6 +275,29 @@ export const mockColorFace: FaceDetail = {
   ],
 };
 
+/**
+ * A Latin + Hebrew face whose name and folder mix the two scripts (E19.3), only in
+ * browser mode with `?mockHebrew=1` (the Rust mock has none): it keeps a Hebrew
+ * sample, and its name and path show the bidi isolation.
+ */
+export const mockHebrewFace: FaceDetail = {
+  ...structuredClone(mockFaces[1]!),
+  face: {
+    ...mockFaces[1]!.face,
+    id: 9,
+    family: 9,
+    familyName: 'Frank רוחל',
+    postscriptName: 'FrankRuhl-Regular',
+  },
+  path: '/Users/demo/Fonts/עברית/FrankRuhl-Regular.ttf',
+  hash: '9'.padStart(64, '0'),
+  copyright: 'Copyright Frank Ruhl Authors',
+  designer: 'Mock Designer',
+  legacyFamily: 'Frank רוחל',
+  foundry: 'Mock Foundry',
+  scripts: ['latn', 'hebr'],
+};
+
 /** The system font the Rust mock gives face 6 the same PostScript name as. */
 const systemClash: Partial<Record<FaceId, string>> = {
   6: '/System/Library/Fonts/JetBrainsMono-Regular.ttf',
@@ -343,6 +366,8 @@ const range = (from: number, to: number) =>
 const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
 const LATIN_EXT_A = range(0x100, 0x180);
 const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
+/** The Hebrew letters, final forms included (U+05D0–U+05EA). */
+const HEBREW = range(0x5d0, 0x5eb);
 
 /** (script, characters the language needs), like the Rust mock's languages. */
 const MOCK_LANGUAGES: [string, string][] = [
@@ -353,7 +378,8 @@ const MOCK_LANGUAGES: [string, string][] = [
 ];
 
 function mockChars(f: FaceDetail): Set<string> {
-  return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
+  const latin = f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN;
+  return new Set(f.scripts.includes('hebr') ? latin + HEBREW : latin);
 }
 
 /**
@@ -679,6 +705,8 @@ export interface MockOptions {
   onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
   colorFace?: boolean;
+  /** Adds the Latin + Hebrew face `mockHebrewFace` (family "Frank רוחל", E19.3). */
+  hebrewFace?: boolean;
   /**
    * Where the mock keeps its settings, as the app keeps `settings.json`, so a saved
    * setting is there after a reload (browser mode). In memory when absent.
@@ -1467,6 +1495,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const faces = [
     ...mockFaces.map((f) => structuredClone(f)),
     ...(options.colorFace ? [structuredClone(mockColorFace)] : []),
+    ...(options.hebrewFace ? [structuredClone(mockHebrewFace)] : []),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
@@ -2619,4 +2648,6 @@ export const mockClient: FmClient = createMockClient({
   ],
   // `?mockColor=1` adds a color font with two palettes.
   colorFace: countFromUrl('mockColor', 1) > 0,
+  // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.
+  hebrewFace: countFromUrl('mockHebrew', 1) > 0,
 });

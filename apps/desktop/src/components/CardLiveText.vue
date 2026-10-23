@@ -52,7 +52,7 @@ const style = computed(() => ({
 </script>
 
 <template>
-  <div class="live" data-testid="card-live-text" :data-state="state" :style="style">
+  <div class="live" dir="auto" data-testid="card-live-text" :data-state="state" :style="style">
     {{ text }}
   </div>
 </template>

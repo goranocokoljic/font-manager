@@ -44,6 +44,41 @@ export const FALLBACK_LOCALE = 'en';
 /** The locales the Language setting offers, in catalog order. */
 export const LOCALES: readonly string[] = Object.keys(CATALOGS);
 
+/**
+ * The pseudo-locale for checking the right-to-left layout (the CLDR "bidi"
+ * pseudo-locale): English messages in mirrored chrome. No catalog and no
+ * Language setting: only an OS (or browser) that prefers it shows it.
+ */
+export const PSEUDO_RTL = 'ar-XB';
+
+/** Languages written right to left (their primary subtag). */
+const RTL_LANGUAGES = new Set([
+  'ar',
+  'arc',
+  'ckb',
+  'dv',
+  'fa',
+  'he',
+  'iw',
+  'ks',
+  'ps',
+  'sd',
+  'ug',
+  'ur',
+  'yi',
+]);
+
+/** Scripts written right to left (a tag's script subtag wins over its language). */
+const RTL_SCRIPTS = new Set(['adlm', 'arab', 'hebr', 'nkoo', 'rohg', 'syrc', 'thaa']);
+
+/** The direction a locale's UI runs in: `rtl` for Arabic, Hebrew, Persian, Urdu … */
+export function textDirection(tag: string): 'ltr' | 'rtl' {
+  const parts = tag.toLowerCase().split(/[-_]/);
+  const script = parts.find((p, i) => i > 0 && p.length === 4);
+  if (script) return RTL_SCRIPTS.has(script) ? 'rtl' : 'ltr';
+  return RTL_LANGUAGES.has(parts[0] ?? '') ? 'rtl' : 'ltr';
+}
+
 const current = ref<string>(FALLBACK_LOCALE);
 
 /** The locale the UI shows now. */
@@ -51,9 +86,26 @@ export function locale(): string {
   return current.value;
 }
 
-/** Shows the UI in `tag` (a key of `CATALOGS`); an unknown tag shows English. */
+/** Shows the UI in `tag` (a key of `CATALOGS` or `PSEUDO_RTL`); an unknown tag shows English. */
 export function setLocale(tag: string): void {
-  current.value = tag in CATALOGS ? tag : FALLBACK_LOCALE;
+  current.value = tag in CATALOGS || tag === PSEUDO_RTL ? tag : FALLBACK_LOCALE;
+}
+
+/** The direction the UI runs in now; the root element's `dir` follows it. */
+export function direction(): 'ltr' | 'rtl' {
+  return textDirection(current.value);
+}
+
+/**
+ * `key` read in the inline direction: in right-to-left chrome ArrowLeft goes
+ * forward, so it reads as ArrowRight (and the other way round). Code that moves
+ * "next" on ArrowRight then follows what the user sees. Other keys pass through.
+ */
+export function inlineKey(key: string): string {
+  if (direction() !== 'rtl') return key;
+  if (key === 'ArrowLeft') return 'ArrowRight';
+  if (key === 'ArrowRight') return 'ArrowLeft';
+  return key;
 }
 
 /**
@@ -69,6 +121,7 @@ export function resolveLocale(
     return language in CATALOGS ? language : FALLBACK_LOCALE;
   }
   for (const tag of preferred) {
+    if (tag.toLowerCase() === PSEUDO_RTL.toLowerCase()) return PSEUDO_RTL;
     const lower = tag.toLowerCase();
     if (lower in CATALOGS) return lower;
     const primary = lower.split('-')[0];

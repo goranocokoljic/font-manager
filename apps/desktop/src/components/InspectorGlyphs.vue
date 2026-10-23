@@ -14,7 +14,7 @@
 // in the grid and puts focus on it.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FeatureInfo, GlyphInfo } from '../api/types';
-import { errorMessage, t } from '../i18n';
+import { errorMessage, inlineKey, t } from '../i18n';
 import {
   GLYPH_CELL,
   codePointLabel,
@@ -196,7 +196,8 @@ async function onKeyDown(e: KeyboardEvent): Promise<void> {
     }
     return;
   }
-  const next = moveCursor(layout.value, Math.max(cursor.value, 0), e.key);
+  // Left/Right follow what the user sees: the grid runs from the right in RTL chrome.
+  const next = moveCursor(layout.value, Math.max(cursor.value, 0), inlineKey(e.key));
   if (next === null) return;
   e.preventDefault();
   cursor.value = cursor.value < 0 && e.key !== 'Home' && e.key !== 'End' ? 0 : next;
@@ -496,8 +497,8 @@ select.field {
 .row {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   display: flex;
 }
 .heading {
@@ -513,7 +514,7 @@ select.field {
   flex: none;
   align-items: center;
   justify-content: center;
-  border-right: 1px solid var(--fm-border);
+  border-inline-end: 1px solid var(--fm-border);
   border-bottom: 1px solid var(--fm-border);
   font-size: 24px;
   cursor: default;

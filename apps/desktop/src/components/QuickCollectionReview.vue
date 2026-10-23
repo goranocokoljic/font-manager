@@ -295,13 +295,13 @@ async function tag(): Promise<void> {
 .slot {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
-  padding-right: 16px;
+  padding-inline-end: 16px;
   border-bottom: 1px solid var(--fm-border);
   contain: layout paint;
 }

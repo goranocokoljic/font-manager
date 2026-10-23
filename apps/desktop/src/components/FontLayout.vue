@@ -289,7 +289,7 @@ const fontFamily = computed(() =>
   justify-content: center;
 }
 .lock {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 1px 8px;
   border: 1px solid var(--fm-control-border);
   border-radius: 3px;

@@ -39,3 +39,22 @@ catalog test fails otherwise. In a `.vue` template write `{{ t('group.key') }}`
 `errorMessage(error)`: the catalog has one message per `ErrorCode` (English
 shows the core's own sentence through `{message}`). Format numbers and dates
 with `formatNumber` and `formatDate`, never by hand.
+
+## Right-to-left languages
+
+A catalog for a language written right to left (Arabic, Hebrew, Persian, Urdu …)
+mirrors the chrome by itself: `textDirection` in `src/i18n/index.ts` knows the
+language, and the app sets `dir="rtl"` on the root. For that to work:
+
+- Write CSS with logical properties (`margin-inline-start`, `inset-inline-end`,
+  `text-align: start`), never `left`/`right`. `src/styles/logical.test.ts`
+  fails on a physical one; its allow-list names the few that must not mirror.
+- An icon that points along the line (`▸`) gets the class `fm-directional`.
+- Read Left/Right arrow keys through `inlineKey()`, so "next" follows the screen.
+- Text the user chose (samples, notes) gets `dir="auto"`; names and paths go
+  in `<bdi>`. Both keep their own direction in either chrome.
+
+To see the mirrored layout before a catalog exists, set the OS (or browser)
+language to the pseudo-locale `ar-XB`: English text in right-to-left chrome.
+In browser mode: `pnpm test:e2e e2e/rtl.spec.ts`, or screenshots with
+`FM_SCREENS_LOCALE=ar-XB`.

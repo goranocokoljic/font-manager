@@ -262,7 +262,7 @@ function countLabel(n: number): string {
             open: store.openId === row.collection.id,
             [`drop-${target?.zone}`]: target?.id === row.collection.id,
           }"
-          :style="{ paddingLeft: `${8 + row.depth * 14}px` }"
+          :style="{ paddingInlineStart: `${8 + row.depth * 14}px` }"
           :data-collection="row.collection.id"
           :data-depth="row.depth"
           :aria-label="row.collection.name"
@@ -376,7 +376,7 @@ function countLabel(n: number): string {
         <li
           v-if="editing && editing.id == null && editing.parent === row.collection.id"
           class="item"
-          :style="{ paddingLeft: `${22 + row.depth * 14}px` }"
+          :style="{ paddingInlineStart: `${22 + row.depth * 14}px` }"
         >
           <form class="edit" @submit.prevent="commit">
             <input

@@ -354,6 +354,7 @@ function onFieldKey(e: KeyboardEvent): void {
         ref="field"
         v-model="text"
         class="edit"
+        dir="auto"
         data-testid="layout-block-editor"
         :aria-label="t('blocks.textLabel', { label: label ?? t('blocks.block') })"
         :rows="Math.max(2, text.split('\n').length)"
@@ -362,7 +363,13 @@ function onFieldKey(e: KeyboardEvent): void {
         @blur="finish(true)"
       />
       <template v-else>
-        <p v-for="(line, i) in paragraphs" :key="i" class="paragraph" :style="paragraphStyle">
+        <p
+          v-for="(line, i) in paragraphs"
+          :key="i"
+          class="paragraph"
+          dir="auto"
+          :style="paragraphStyle"
+        >
           {{ line }}
         </p>
       </template>
@@ -409,7 +416,7 @@ function onFieldKey(e: KeyboardEvent): void {
 .badge {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   z-index: 1;
   padding: 1px 6px;
   border: 1px solid var(--fm-control-border);

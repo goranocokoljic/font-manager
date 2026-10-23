@@ -6,7 +6,7 @@ import CommandPalette from './components/CommandPalette.vue';
 import ToastMessage from './components/ToastMessage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
 import { HELP_PAGES } from './help';
-import { locale, resolveLocale, setLocale, t, type MessageKey } from './i18n';
+import { direction, locale, resolveLocale, setLocale, t, type MessageKey } from './i18n';
 import { ACTIONS } from './keyboard/keymap';
 import { useActions, useShortcuts } from './stores/commands';
 import { useSettingsStore } from './stores/settings';
@@ -68,11 +68,14 @@ watchEffect(() => {
 });
 
 // The Language setting relabels the UI at once: "System" (and the time before the
-// settings are read) follows the OS's preferred languages.
+// settings are read) follows the OS's preferred languages. A right-to-left
+// language mirrors the chrome: theme.css and the components use logical
+// properties, so `dir` on the root is all it takes.
 watchEffect(() => {
   const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
   setLocale(resolveLocale(settings.settings?.language, preferred));
   document.documentElement.lang = locale();
+  document.documentElement.dir = direction();
 });
 
 // The native Help menu and the tray follow the same language.

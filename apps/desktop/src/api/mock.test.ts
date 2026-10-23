@@ -226,3 +226,15 @@ describe('MockApi rule editor calls (E14.1)', () => {
     ).rejects.toMatchObject({ code: 'invalidRequest' });
   });
 });
+
+describe('the Hebrew mock face (E19.3)', () => {
+  it('keeps a Hebrew sample, which the Latin faces replace', async () => {
+    const client = createMockClient({ hebrewFace: true });
+    const [hebrew, latin] = await client.sampleTexts({ faces: [9, 1], text: 'שלום עולם' });
+    expect(hebrew).toMatchObject({ face: 9, text: 'שלום עולם', fallback: null });
+    expect(latin!.fallback).not.toBeNull();
+    const detail = await client.getFace(9);
+    expect(detail.face.familyName).toBe('Frank רוחל');
+    expect(detail.path).toContain('/עברית/');
+  });
+});

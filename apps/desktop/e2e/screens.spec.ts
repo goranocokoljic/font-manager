@@ -43,6 +43,8 @@ const quickRows = Number(process.env.FM_SCREENS_QUICK ?? 0);
 const tagNames = (process.env.FM_SCREENS_TAGS ?? '').split(',').filter(Boolean);
 // FM_SCREENS_QUERY='?mockColor=1' sets MockApi options (the page URL before the hash).
 const query = process.env.FM_SCREENS_QUERY ?? '';
+// FM_SCREENS_LOCALE=ar-XB sets the browser's (the OS's) language: `ar-XB` shows the RTL chrome.
+const locale = process.env.FM_SCREENS_LOCALE;
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -50,6 +52,7 @@ const viewports = [
 
 test.describe('@screens', () => {
   test.skip(!dir, 'FM_SCREENS_DIR is not set');
+  if (locale) test.use({ locale });
 
   for (const route of routes) {
     for (const scheme of ['light', 'dark'] as const) {

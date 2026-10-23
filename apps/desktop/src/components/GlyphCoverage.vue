@@ -155,7 +155,7 @@ h4 {
   background: none;
   color: var(--fm-fg);
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 .row:hover {
   background: var(--fm-surface);
@@ -182,7 +182,8 @@ h4 {
   font-size: 11px;
 }
 .panel {
-  padding: 2px 6px 6px 18px;
+  padding-block: 2px 6px;
+  padding-inline: 18px 6px;
 }
 .missing {
   display: flex;

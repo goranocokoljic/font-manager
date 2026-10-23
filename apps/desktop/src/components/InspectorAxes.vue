@@ -320,7 +320,7 @@ h3 {
   overflow-wrap: anywhere;
 }
 .tag {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--fm-muted);
   font-family: ui-monospace, monospace;
 }

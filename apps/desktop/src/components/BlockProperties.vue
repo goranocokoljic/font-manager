@@ -160,7 +160,7 @@ async function setChoice(change: BlockProps): Promise<void> {
   color: var(--fm-muted);
 }
 .close {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .props :focus-visible {
   outline: 2px solid var(--fm-accent);
