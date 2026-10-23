@@ -2273,3 +2273,56 @@ fn a_language_preset_without_pangram_still_deserializes() {
             .expect("old shape");
     assert_eq!(p.pangram, None);
 }
+
+#[test]
+fn export_css_follows_the_core_rules() {
+    let api = api();
+    let req = |faces: Vec<u32>, subset: Option<Subset>| ExportWebRequest {
+        faces: faces.into_iter().map(FaceId).collect(),
+        formats: vec![WebFormat::Woff, WebFormat::Woff2],
+        subset,
+        out_dir: "/tmp/out".into(),
+        css: true,
+    };
+    let css = api
+        .export_web(req(vec![1, 2, 3], None))
+        .unwrap()
+        .css
+        .unwrap();
+    assert_eq!(css, MOCK_CSS_SNAPSHOT, "{css}");
+    let subset = api
+        .export_web(req(vec![1], Some(Subset::Text { text: "BA".into() })))
+        .unwrap()
+        .css
+        .unwrap();
+    assert!(
+        subset.contains("  unicode-range: U+0020, U+0041-0042;\n"),
+        "{subset}"
+    );
+}
+
+/// The same blocks `fm_core::web_css` writes for these faces.
+const MOCK_CSS_SNAPSHOT: &str = r#"@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("Inter-Regular.woff2") format("woff2"), url("Inter-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("Inter-Italic.woff2") format("woff2"), url("Inter-Italic.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("SourceSerif4-Regular.woff2") format("woff2"), url("SourceSerif4-Regular.woff") format("woff");
+}
+"#;

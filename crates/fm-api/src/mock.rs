@@ -3106,6 +3106,119 @@ fn faces_of(st: &State, faces: &[FaceId], families: &[FamilyId]) -> ApiResult<Ve
     Ok(out)
 }
 
+fn web_ext(format: WebFormat) -> &'static str {
+    match format {
+        WebFormat::Woff2 => "woff2",
+        WebFormat::Woff => "woff",
+    }
+}
+
+/// `v` as a CSS string: quoted, `"` and `\` escaped, a control character as
+/// a hex escape followed by a space.
+fn css_string(v: &str) -> String {
+    let mut out = String::from("\"");
+    for c in v.chars() {
+        match c {
+            '"' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_control() => out.push_str(&format!("\\{:X} ", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// `lo` and `hi` with `unit` (at most 3 decimals, no `-0`), or one value
+/// when they are equal.
+fn css_range(lo: f32, hi: f32, unit: &str) -> String {
+    let num = |v: f32| {
+        let t = format!("{:.3}", f64::from(v));
+        let t = t.trim_end_matches('0').trim_end_matches('.');
+        if t == "-0" {
+            "0".to_owned()
+        } else {
+            t.to_owned()
+        }
+    };
+    let (lo, hi) = (num(lo), num(hi));
+    if lo == hi {
+        format!("{lo}{unit}")
+    } else {
+        format!("{lo}{unit} {hi}{unit}")
+    }
+}
+
+/// The core's `@font-face` rules (`fm_core::web_css`): the family quoted and
+/// escaped, WOFF 2 before WOFF, ranges from the `wght`, `wdth` and `slnt`
+/// axes (`slnt` negated into an oblique angle), `font-display: swap`, and a
+/// `unicode-range` of the mapped code points when the export was subset.
+fn mock_font_face(f: &MockFace, formats: &[WebFormat], mapped: Option<&[u32]>) -> String {
+    let s = &f.detail.face;
+    let axis = |tag: &str| {
+        f.detail
+            .axes
+            .iter()
+            .find(|a| a.tag == tag && a.min.is_finite() && a.max.is_finite())
+            .map(|a| (a.min.min(a.max), a.min.max(a.max)))
+    };
+    let mut out = String::from("@font-face {\n");
+    out.push_str(&format!("  font-family: {};\n", css_string(&s.family_name)));
+    let style = match axis("slnt") {
+        Some((lo, hi)) => format!("oblique {}", css_range(-hi, -lo, "deg")),
+        None => match s.slant {
+            Slant::Upright => "normal".to_owned(),
+            Slant::Italic => "italic".to_owned(),
+            Slant::Oblique => "oblique".to_owned(),
+        },
+    };
+    out.push_str(&format!("  font-style: {style};\n"));
+    let weight =
+        axis("wght").map_or_else(|| s.weight.to_string(), |(lo, hi)| css_range(lo, hi, ""));
+    out.push_str(&format!("  font-weight: {weight};\n"));
+    if let Some((lo, hi)) = axis("wdth") {
+        out.push_str(&format!("  font-stretch: {};\n", css_range(lo, hi, "%")));
+    }
+    out.push_str("  font-display: swap;\n");
+    let srcs: Vec<String> = [WebFormat::Woff2, WebFormat::Woff]
+        .into_iter()
+        .filter(|fmt| formats.contains(fmt))
+        .map(|fmt| {
+            let ext = web_ext(fmt);
+            let file = css_string(&format!("{}.{ext}", s.postscript_name));
+            format!("url({file}) format(\"{ext}\")")
+        })
+        .collect();
+    out.push_str(&format!("  src: {};\n", srcs.join(", ")));
+    if let Some(cps) = mapped {
+        let mut cps = cps.to_vec();
+        cps.sort_unstable();
+        cps.dedup();
+        let mut ranges: Vec<(u32, u32)> = Vec::new();
+        for cp in cps {
+            match ranges.last_mut() {
+                Some(last) if last.1.checked_add(1) == Some(cp) => last.1 = cp,
+                _ => ranges.push((cp, cp)),
+            }
+        }
+        let values: Vec<String> = ranges
+            .into_iter()
+            .map(|(a, b)| {
+                if a == b {
+                    format!("U+{a:04X}")
+                } else {
+                    format!("U+{a:04X}-{b:04X}")
+                }
+            })
+            .collect();
+        out.push_str(&format!("  unicode-range: {};\n", values.join(", ")));
+    }
+    out.push_str("}\n");
+    out
+}
+
 fn tag_view(st: &State, t: &Tag) -> Tag {
     let mut t = t.clone();
     t.face_count = st.face_tags.values().filter(|s| s.contains(&t.id)).count() as u32;
@@ -3124,7 +3237,7 @@ impl ExportService for MockApi {
         let st = self.state();
         let dir = req.out_dir.trim_end_matches(['/', '\\']);
         let mut files = Vec::new();
-        let mut css = String::new();
+        let mut blocks = Vec::new();
         for id in &req.faces {
             let f = st.face(*id)?;
             let lic = &f.detail.license;
@@ -3151,30 +3264,24 @@ impl ExportService for MockApi {
                     )));
                 }
             }
-            let mut srcs = Vec::new();
             for fmt in &req.formats {
-                let ext = match fmt {
-                    WebFormat::Woff2 => "woff2",
-                    WebFormat::Woff => "woff",
-                };
-                let file = format!("{}.{ext}", s.postscript_name);
-                files.push(format!("{dir}/{file}"));
-                srcs.push(format!("url(\"{file}\") format(\"{ext}\")"));
+                files.push(format!("{dir}/{}.{}", s.postscript_name, web_ext(*fmt)));
             }
-            css.push_str(&format!(
-                "@font-face {{\n  font-family: \"{}\";\n  font-style: {};\n  font-weight: {};\n  font-display: swap;\n  src: {};\n}}\n",
-                s.family_name,
-                if s.slant == Slant::Upright { "normal" } else { "italic" },
-                if s.is_variable { "100 900".to_string() } else { s.weight.to_string() },
-                srcs.join(", "),
-            ));
+            let mapped = keep.as_ref().map(|(ranges, _)| {
+                f.chars
+                    .iter()
+                    .map(|c| u32::from(*c))
+                    .filter(|cp| ranges.iter().any(|&(a, b)| (a..=b).contains(cp)))
+                    .collect::<Vec<_>>()
+            });
+            blocks.push(mock_font_face(f, &req.formats, mapped.as_deref()));
         }
         if req.css {
             files.push(format!("{dir}/fonts.css"));
         }
         Ok(ExportWebResponse {
             files,
-            css: req.css.then_some(css),
+            css: req.css.then(|| blocks.join("\n")),
         })
     }
 
