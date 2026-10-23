@@ -184,3 +184,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-22
 
 - [E20.2 #138] crates/fm-core/src/index/faces.rs:234 — `web_export_face` returns Broken faces for export without a health filter, so whole-font export also feeds damaged data to the encoders.
+
+## 2026-10-23
+
+- [E20.3 #139] crates/fm-core/src/web_font.rs:317 — `commit` checks the target is free then calls `fs::rename`, which overwrites; a file the user creates in that gap can be replaced (fonts.css now shares this path).
+- [E20.3 #139] crates/fm-api/src/mock.rs:2279 — `css_values`'s `num` closure duplicates the new `css_range` number formatting in the same file (both copies of core `css::number`).
