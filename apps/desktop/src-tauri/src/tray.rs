@@ -100,7 +100,9 @@ impl<R: Runtime> TrayItems<R> {
     }
 }
 
-fn build<R: Runtime>(app: &AppHandle<R>, tray: &dyn Tray, api: Arc<dyn Api>) -> tauri::Result<()> {
+/// The tray menu, in the shell's language. Its items are managed, so the
+/// labels follow `shell_text::apply` and the count follows activation events.
+pub fn menu<R: Runtime>(app: &AppHandle<R>, api: Arc<dyn Api>) -> tauri::Result<Menu<R>> {
     let locale = shell_text::current(app);
     let open = MenuItem::with_id(
         app,
@@ -132,7 +134,20 @@ fn build<R: Runtime>(app: &AppHandle<R>, tray: &dyn Tray, api: Arc<dyn Api>) -> 
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(app, &[&open, &count, &separator, &deactivate, &quit])?;
+    app.manage(TrayItems {
+        open,
+        count,
+        deactivate,
+        quit,
+        api,
+    });
+    Ok(menu)
+}
 
+fn build<R: Runtime>(app: &AppHandle<R>, tray: &dyn Tray, api: Arc<dyn Api>) -> tauri::Result<()> {
+    let locale = shell_text::current(app);
+    let events = api.subscribe();
+    let menu = menu(app, Arc::clone(&api))?;
     let menu_api = Arc::clone(&api);
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip(shell_text::text(&locale, "shell.tray.tooltip"))
@@ -147,15 +162,6 @@ fn build<R: Runtime>(app: &AppHandle<R>, tray: &dyn Tray, api: Arc<dyn Api>) -> 
         builder = builder.icon(icon.clone());
     }
     builder.build(app)?;
-
-    let events = api.subscribe();
-    app.manage(TrayItems {
-        open,
-        count,
-        deactivate,
-        quit,
-        api,
-    });
 
     // The count follows activation events; nothing polls.
     let handle = app.clone();

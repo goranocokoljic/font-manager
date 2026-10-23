@@ -4,7 +4,7 @@
 //! window has no capability: the pages are static and need no IPC.
 
 use fm_api::{ApiError, ApiResult, ErrorCode};
-use tauri::menu::{HELP_SUBMENU_ID, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tauri::menu::{HELP_SUBMENU_ID, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
 
 use crate::shell_text;
@@ -127,11 +127,27 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         if help.items()?.len() > HELP_PAGES.len() {
             help.insert(&PredefinedMenuItem::separator(app)?, HELP_PAGES.len())?;
         }
+        label_submenu(&help, &locale)?;
     }
     Ok(menu)
 }
 
-/// Shows the Help menu's pages and an open help window's title in `locale`.
+/// Shows the Help menu's own title and its About item (Windows and Linux) in
+/// `locale`. About is the one predefined item with text; separators have none.
+fn label_submenu<R: Runtime>(help: &Submenu<R>, locale: &str) -> tauri::Result<()> {
+    help.set_text(shell_text::text(locale, "shell.helpMenu"))?;
+    for item in help.items()? {
+        if let Some(about) = item.as_predefined_menuitem()
+            && !about.text()?.is_empty()
+        {
+            about.set_text(shell_text::text(locale, "shell.about"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Shows the Help menu (its title, pages and About) and an open help window's
+/// title in `locale`.
 pub fn relabel<R: Runtime>(app: &AppHandle<R>, locale: &str) {
     if let Some(help) = app
         .menu()
@@ -146,6 +162,9 @@ pub fn relabel<R: Runtime>(app: &AppHandle<R>, locale: &str) {
             {
                 tracing::warn!(error = %e, page = page.slug, "help menu item not relabelled");
             }
+        }
+        if let Err(e) = label_submenu(&help, locale) {
+            tracing::warn!(error = %e, "help menu title not relabelled");
         }
     }
     if let Some(window) = app.get_webview_window(HELP_WINDOW)

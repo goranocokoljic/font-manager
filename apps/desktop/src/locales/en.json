@@ -42,6 +42,8 @@
   },
   "shell": {
     "helpWindowTitle": "Font Manager Help",
+    "helpMenu": "Help",
+    "about": "About Font Manager",
     "helpPages": {
       "getting-started": "Getting started",
       "sources": "Sources",

@@ -189,6 +189,8 @@ mod tests {
     fn every_shipped_locale_has_every_shell_label() {
         let keys = [
             "shell.helpWindowTitle",
+            "shell.helpMenu",
+            "shell.about",
             "shell.tray.tooltip",
             "shell.tray.open",
             "shell.tray.deactivateSession",

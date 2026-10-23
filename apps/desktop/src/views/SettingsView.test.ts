@@ -3,7 +3,7 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockAppInfo, mockFolders } from '../api/mock';
+import { createMockClient, mockAppInfo, mockFolders, shellLocale } from '../api/mock';
 import { setLocale } from '../i18n';
 import { createAppRouter } from '../router';
 
@@ -78,6 +78,7 @@ describe('Settings window', () => {
       'Deutsch',
     ]);
     expect(wrapper.get('h2').text()).toBe('Appearance');
+    expect(shellLocale.value, 'the native shell is told the locale at start').toBe('en');
     try {
       await select.setValue('de');
       await flushPromises();
@@ -85,8 +86,24 @@ describe('Settings window', () => {
       expect((await client.getSettings()).language).toBe('de');
       expect(wrapper.get('h2').text()).toBe('Darstellung');
       expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Darstellung');
+      expect(shellLocale.value, 'the Help menu and tray follow the choice').toBe('de');
     } finally {
       wrapper.unmount();
+      setLocale('en');
+    }
+  });
+
+  it('tells the native shell the OS language when the setting is "System"', async () => {
+    const languages = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['de-DE', 'en-US']);
+    shellLocale.value = '';
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    try {
+      expect((await client.getSettings()).language).toBe('system');
+      expect(shellLocale.value).toBe('de');
+      expect(wrapper.get('h2').text()).toBe('Darstellung');
+    } finally {
+      wrapper.unmount();
+      languages.mockRestore();
       setLocale('en');
     }
   });
