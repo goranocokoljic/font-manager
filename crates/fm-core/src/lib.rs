@@ -41,6 +41,7 @@ mod search;
 pub mod settings;
 pub mod sidecar;
 pub mod startup;
+pub mod subset;
 pub mod telemetry;
 #[cfg(test)]
 mod test_support;

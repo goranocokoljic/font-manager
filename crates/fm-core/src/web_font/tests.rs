@@ -236,7 +236,13 @@ fn export_writes_every_face_in_every_format_and_leaves_the_sources_alone() {
         face(TTC, 1, "Agdasima-Regular"),
     ];
     let before: Vec<_> = faces.iter().map(|f| fs::read(&f.path).unwrap()).collect();
-    let files = export(&faces, &[WebFormat::Woff2, WebFormat::Woff], out.path()).unwrap();
+    let files = export(
+        &faces,
+        &[WebFormat::Woff2, WebFormat::Woff],
+        None,
+        out.path(),
+    )
+    .unwrap();
     let names: Vec<_> = files
         .iter()
         .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
@@ -275,7 +281,13 @@ fn an_existing_target_refuses_the_export_and_is_kept() {
         face(STATIC_TTF, 0, "BebasNeue-Regular"),
         face(TTC, 1, "Agdasima-Regular"),
     ];
-    let err = export(&faces, &[WebFormat::Woff2, WebFormat::Woff], out.path()).unwrap_err();
+    let err = export(
+        &faces,
+        &[WebFormat::Woff2, WebFormat::Woff],
+        None,
+        out.path(),
+    )
+    .unwrap_err();
     assert_eq!(err.code(), ErrorCode::InvalidRequest);
     assert!(err.message().contains("Agdasima-Regular.woff"), "{err:?}");
     assert_eq!(listing(out.path()), ["Agdasima-Regular.woff"]);
@@ -290,7 +302,13 @@ fn a_failing_face_leaves_no_files() {
         face(CFF_OTF, 0, "Asap-SemiBold"),
         face(TYPE1, 0, "Inconsolata"),
     ];
-    let err = export(&faces, &[WebFormat::Woff2, WebFormat::Woff], out.path()).unwrap_err();
+    let err = export(
+        &faces,
+        &[WebFormat::Woff2, WebFormat::Woff],
+        None,
+        out.path(),
+    )
+    .unwrap_err();
     assert_eq!(err.code(), ErrorCode::Unsupported);
     assert!(err.message().starts_with("Inconsolata: "), "{err:?}");
     assert!(err.message().contains("Type 1"), "{err:?}");
@@ -303,7 +321,7 @@ fn a_missing_source_file_leaves_no_files() {
     let mut gone = face(STATIC_TTF, 0, "Gone");
     gone.path = out.path().join("elsewhere").join("gone.ttf");
     let faces = [face(STATIC_TTF, 0, "BebasNeue-Regular"), gone];
-    let err = export(&faces, &[WebFormat::Woff2], out.path()).unwrap_err();
+    let err = export(&faces, &[WebFormat::Woff2], None, out.path()).unwrap_err();
     assert_eq!(err.code(), ErrorCode::NotFound);
     assert!(err.message().contains("Gone"), "{err:?}");
     assert!(listing(out.path()).is_empty());
@@ -313,7 +331,7 @@ fn a_missing_source_file_leaves_no_files() {
 fn two_faces_with_one_name_are_refused_before_writing() {
     let out = TempDir::new("web-export-same-name");
     let faces = [face(STATIC_TTF, 0, "Same"), face(CFF_OTF, 0, "same")];
-    let err = export(&faces, &[WebFormat::Woff2], out.path()).unwrap_err();
+    let err = export(&faces, &[WebFormat::Woff2], None, out.path()).unwrap_err();
     assert_eq!(err.code(), ErrorCode::InvalidRequest);
     assert!(err.message().contains("same.woff2"), "{err:?}");
     assert!(listing(out.path()).is_empty());
@@ -323,11 +341,11 @@ fn two_faces_with_one_name_are_refused_before_writing() {
 fn a_missing_or_file_output_folder_is_an_error() {
     let out = TempDir::new("web-export-no-dir");
     let faces = [face(STATIC_TTF, 0, "BebasNeue-Regular")];
-    let err = export(&faces, &[WebFormat::Woff2], &out.path().join("nope")).unwrap_err();
+    let err = export(&faces, &[WebFormat::Woff2], None, &out.path().join("nope")).unwrap_err();
     assert_eq!(err.code(), ErrorCode::NotFound);
     let file = out.path().join("file");
     fs::write(&file, b"x").unwrap();
-    let err = export(&faces, &[WebFormat::Woff2], &file).unwrap_err();
+    let err = export(&faces, &[WebFormat::Woff2], None, &file).unwrap_err();
     assert_eq!(err.code(), ErrorCode::InvalidRequest);
 }
 
@@ -344,4 +362,78 @@ fn a_target_that_appears_before_the_rename_undoes_the_export() {
     assert_eq!(err.code(), ErrorCode::InvalidRequest);
     assert_eq!(listing(out.path()), ["B.woff2"]);
     assert_eq!(fs::read(&b).unwrap(), b"theirs");
+}
+
+/// Latin, Cyrillic and Greek, with a `wght` axis.
+const MULTI_SCRIPT: &str = "google-repo/mulish/Mulish[wght].ttf";
+
+#[test]
+fn a_latin_subset_export_is_smaller_than_the_whole_web_font() {
+    let whole = TempDir::new("web-export-whole");
+    let part = TempDir::new("web-export-latin");
+    let faces = [face(MULTI_SCRIPT, 0, "Mulish")];
+    let full = export(&faces, &[WebFormat::Woff2], None, whole.path()).unwrap();
+    let latin = crate::subset::code_points(&fm_api::export::Subset::Presets {
+        names: vec!["latin".into()],
+    })
+    .unwrap();
+    let cut = export(
+        &faces,
+        &[WebFormat::Woff2, WebFormat::Woff],
+        Some(&latin),
+        part.path(),
+    )
+    .unwrap();
+    assert_eq!(listing(part.path()), ["Mulish.woff", "Mulish.woff2"]);
+    let size = |p: &Path| fs::metadata(p).unwrap().len();
+    assert!(
+        size(&cut[0]) < size(&full[0]),
+        "{} < {}",
+        size(&cut[0]),
+        size(&full[0])
+    );
+    let decoded = decode(&fs::read(&cut[0]).unwrap(), WebFormat::Woff2);
+    let font = FontRef::new(&decoded).unwrap();
+    use skrifa::MetadataProvider as _;
+    let charmap = font.charmap();
+    assert!(charmap.map('A').is_some());
+    assert!(charmap.map('Ж').is_none() && charmap.map('Ω').is_none());
+}
+
+#[test]
+fn a_subset_no_face_maps_writes_nothing() {
+    let out = TempDir::new("web-export-none");
+    let faces = [
+        face(STATIC_TTF, 0, "BebasNeue-Regular"),
+        face(MULTI_SCRIPT, 0, "Mulish"),
+    ];
+    let cjk = crate::subset::code_points(&fm_api::export::Subset::Unicode {
+        ranges: vec!["U+4E00-9FFF".into()],
+    })
+    .unwrap();
+    let err = export(&faces, &[WebFormat::Woff2], Some(&cjk), out.path()).unwrap_err();
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    assert!(err.message().starts_with("BebasNeue-Regular: "), "{err:?}");
+    assert!(listing(out.path()).is_empty());
+
+    // The first face has the characters, the second does not: the file
+    // written for the first is removed.
+    let cyrillic = crate::subset::code_points(&fm_api::export::Subset::Unicode {
+        ranges: vec!["U+0410-044F".into()],
+    })
+    .unwrap();
+    let faces = [
+        face(MULTI_SCRIPT, 0, "Mulish"),
+        face(STATIC_TTF, 0, "BebasNeue-Regular"),
+    ];
+    let bebas = fs::read(fixture(STATIC_TTF)).unwrap();
+    let bebas = skrifa::FontRef::new(&bebas).unwrap();
+    use skrifa::MetadataProvider as _;
+    assert!(
+        (0x410_u32..=0x44F).all(|cp| bebas.charmap().map(cp).is_none()),
+        "the fixture has no Cyrillic letters"
+    );
+    let err = export(&faces, &[WebFormat::Woff2], Some(&cyrillic), out.path()).unwrap_err();
+    assert_eq!(err.code(), ErrorCode::InvalidRequest, "{err:?}");
+    assert!(listing(out.path()).is_empty());
 }

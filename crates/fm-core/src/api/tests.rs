@@ -1460,10 +1460,6 @@ fn web_export_refuses_what_it_cannot_do_yet_and_bad_requests() {
     let code = |req| lib.api.export_web(req).expect_err("refused").code;
 
     is_unsupported(lib.api.export_web(ExportWebRequest {
-        subset: Some(Subset::Text { text: "abc".into() }),
-        ..web_request(vec![face], &out)
-    }));
-    is_unsupported(lib.api.export_web(ExportWebRequest {
         css: true,
         ..web_request(vec![face], &out)
     }));
@@ -1484,6 +1480,54 @@ fn web_export_refuses_what_it_cannot_do_yet_and_bad_requests() {
     let unknown = web_request(vec![face, FaceId(999_999)], &out);
     assert_eq!(code(unknown), ErrorCode::NotFound);
     assert!(files_under(&out).is_empty());
+}
+
+#[test]
+fn web_export_keeps_only_the_subset_and_refuses_a_bad_one() {
+    let (lib, _, _) = Lib::scanned("api-export-web-subset");
+    let face = lib
+        .api
+        .get_family(lib.family("Bebas Neue").id)
+        .expect("family")
+        .faces[0]
+        .clone();
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let with = |subset: Subset| ExportWebRequest {
+        formats: vec![WebFormat::Woff2],
+        subset: Some(subset),
+        ..web_request(vec![face.id], &out)
+    };
+    let refused = |subset: Subset| {
+        let e = lib.api.export_web(with(subset)).expect_err("refused");
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+        assert!(files_under(&out).is_empty(), "nothing is written: {e:?}");
+        e.message
+    };
+    let m = refused(Subset::Presets {
+        names: vec!["latin".into(), "elvish".into()],
+    });
+    assert!(m.contains("\"elvish\""), "{m}");
+    let m = refused(Subset::Unicode {
+        ranges: vec!["U+00FF-0000".into()],
+    });
+    assert!(m.contains("\"U+00FF-0000\""), "{m}");
+    let m = refused(Subset::Text {
+        text: "日本".into(),
+    });
+    assert!(m.contains("none of the characters"), "{m}");
+
+    let res = lib
+        .api
+        .export_web(with(Subset::Text { text: "AB".into() }))
+        .expect("export");
+    assert_eq!(res.files.len(), 1);
+    let woff2 = std::fs::read(&res.files[0]).expect("written");
+    let sfnt = crate::glyphs::sfnt(&woff2).expect("decodes");
+    let font = skrifa::FontRef::new(&sfnt).expect("font");
+    use skrifa::MetadataProvider as _;
+    let mapped: Vec<u32> = font.charmap().mappings().map(|(cp, _)| cp).collect();
+    assert_eq!(mapped, [0x20, 0x41, 0x42]);
 }
 
 #[test]
