@@ -38,6 +38,7 @@ use skrifa::string::StringId;
 
 use crate::classify::{self, ClassGuess};
 use crate::features;
+use crate::fingerprint::FaceFingerprint;
 use crate::{FmError, FmResult};
 
 /// What [`parse`] found in one font file.
@@ -133,6 +134,12 @@ pub struct ParsedFace {
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
+    /// The glyph fingerprint (E23.1), taken when the scan reads the file
+    /// ([`crate::fingerprint::fill`]). Not in `face.parsed`: the index keeps
+    /// it in `face_fingerprint`, and a face loaded from there is
+    /// [`FaceFingerprint::NotTaken`].
+    #[serde(skip)]
+    pub fingerprint: FaceFingerprint,
     /// Whether this face could be read in full.
     pub health: Health,
 }
@@ -165,6 +172,7 @@ impl ParsedFace {
             color: false,
             classification: None,
             code_points: Vec::new(),
+            fingerprint: FaceFingerprint::NotTaken,
             health,
         }
     }
