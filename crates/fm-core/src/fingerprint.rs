@@ -20,13 +20,14 @@
 //! outline (a symbol or non-Latin face, a bitmap-only face), or whose data is
 //! malformed, has no fingerprint. That is never a panic.
 
+use std::cell::RefCell;
 use std::panic::{self, AssertUnwindSafe};
 
 use read_fonts::TableProvider;
 use swash::FontRef;
-use swash::scale::image::Image;
-use swash::scale::{Render, ScaleContext, Scaler, Source};
-use swash::zeno::{Format, Vector};
+use swash::scale::ScaleContext;
+use swash::scale::outline::Outline;
+use swash::zeno::{Bounds, Format, Mask, Origin, Point, Scratch, Vector};
 
 use crate::parser::ParsedFile;
 use crate::preview::{check_face, sfnt_data};
@@ -54,6 +55,12 @@ const MAX_WIDTH_PX: f32 = 8192.0;
 /// (malformed data) would otherwise cost gigabytes or abort the scan; a real
 /// Latin letter is a few x-heights at most.
 const MAX_GLYPH_X_HEIGHTS: f32 = 16.0;
+
+thread_local! {
+    /// The outline loader's caches, kept per scan thread: a scan takes
+    /// thousands of fingerprints.
+    static CONTEXT: RefCell<ScaleContext> = RefCell::new(ScaleContext::new());
+}
 
 /// How a fingerprint is taken.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,15 +115,15 @@ pub enum FaceFingerprint {
 /// Takes the fingerprint of every face of `parsed`, read from `data`, the
 /// bytes it was parsed from. A face that is not healthy has none.
 pub fn fill(data: &[u8], parsed: &mut ParsedFile) {
-    let Ok(sfnt) = sfnt_data(data) else {
-        for face in &mut parsed.faces {
-            face.fingerprint = FaceFingerprint::Absent;
-        }
-        return;
-    };
+    fill_sfnt(&sfnt_data(data).unwrap_or_default(), parsed);
+}
+
+/// [`fill`] from the TrueType or OpenType bytes the faces were parsed from
+/// (the font inside a WOFF or WOFF2 file; empty when it cannot be read).
+pub(crate) fn fill_sfnt(sfnt: &[u8], parsed: &mut ParsedFile) {
     for face in &mut parsed.faces {
         face.fingerprint = match face.health {
-            fm_api::common::Health::Ok => fingerprint(&sfnt, face.index, Params::default())
+            fm_api::common::Health::Ok => fingerprint(sfnt, face.index, Params::default())
                 .map_or(FaceFingerprint::Absent, FaceFingerprint::Taken),
             _ => FaceFingerprint::Absent,
         };
@@ -143,21 +150,21 @@ fn take(sfnt: &[u8], index: u32, params: Params) -> Option<Fingerprint> {
         return None;
     }
 
+    // Each outline is loaded once, in font units, and scaled for drawing.
     // Measured in font units: the x-height is the top of the flat `v`, the
     // cap height the top of the `H`. Every glyph needs an outline.
-    let mut context = ScaleContext::new();
-    let mut units = context.builder(font).hint(false).build();
-    if !units.has_outlines() {
-        return None;
-    }
-    let mut boxes = Vec::with_capacity(glyphs.len());
-    for &id in &glyphs {
-        let outline = units.scale_outline(id)?;
-        if outline.points().is_empty() {
+    let outlines = CONTEXT.with(|context| {
+        let mut context = context.try_borrow_mut().ok()?;
+        let mut units = context.builder(font).hint(false).build();
+        if !units.has_outlines() {
             return None;
         }
-        boxes.push(outline.bounds());
-    }
+        glyphs
+            .iter()
+            .map(|&id| units.scale_outline(id).filter(|o| !o.points().is_empty()))
+            .collect::<Option<Vec<_>>>()
+    })?;
+    let boxes: Vec<_> = outlines.iter().map(|o| o.bounds()).collect();
     let top = |c: char| SAMPLE.chars().position(|s| s == c).map(|i| boxes[i].max.y);
     let (x_height, cap_height) = (top('v')?, top('H')?);
     let upem = f32::from(font.metrics(&[]).units_per_em);
@@ -169,58 +176,43 @@ fn take(sfnt: &[u8], index: u32, params: Params) -> Option<Fingerprint> {
     let size = xh_px * upem / x_height;
     let max_glyph = MAX_GLYPH_X_HEIGHTS * xh_px;
     let scale = size / upem;
-    let fits = |b: &swash::zeno::Bounds| {
+    let fits = |b: &Bounds| {
         (b.max.x - b.min.x) * scale <= max_glyph && (b.max.y - b.min.y) * scale <= max_glyph
     };
     if !boxes.iter().all(fits) {
         return None;
     }
     let advances = font.glyph_metrics(&[]).scale(size);
-    let mut scaler = context.builder(font).size(size).hint(false).build();
-
-    let band_top = (BAND_TOP * xh_px).round() as i32;
-    let height = band_top + (BAND_BOTTOM * xh_px).round() as i32;
+    let band_top = (BAND_TOP * xh_px).round();
+    let height = (band_top + (BAND_BOTTOM * xh_px).round()) as usize;
+    let mut pens = Vec::with_capacity(glyphs.len());
     let mut pen = 0.0f32;
-    let mut placed = Vec::with_capacity(glyphs.len());
     for &id in &glyphs {
-        let image = render(&mut scaler, id, pen.fract());
-        placed.push((pen.floor() as i32, image));
+        pens.push(pen);
         pen += advances.advance_width(id);
-        if pen > MAX_WIDTH_PX {
+        if pen.is_nan() || pen > MAX_WIDTH_PX {
             return None;
         }
     }
-    let width = pen.ceil() as i32;
-    if width <= 0 {
+    let width = pen.ceil() as usize;
+    if width == 0 {
         return None;
     }
 
-    let mut canvas = vec![0u8; (width * height) as usize];
-    for (x, image) in placed.iter().filter_map(|(x, i)| Some((x, i.as_ref()?))) {
-        let p = image.placement;
-        for row in 0..p.height as i32 {
-            let cy = band_top - p.top + row;
-            if !(0..height).contains(&cy) {
-                continue;
-            }
-            for col in 0..p.width as i32 {
-                let cx = x + p.left + col;
-                if !(0..width).contains(&cx) {
-                    continue;
-                }
-                let src = image.data[(row * p.width as i32 + col) as usize];
-                let dst = &mut canvas[(cy * width + cx) as usize];
-                *dst = dst.saturating_add(src);
-            }
+    let mut scratch = Scratch::new();
+    let mut canvas = vec![0u8; width * height];
+    for (outline, &pen) in outlines.iter().zip(&pens) {
+        if let Some(glyph) = Image::render(&mut scratch, outline, scale, pen.fract()) {
+            glyph.add_to(&mut canvas, width, pen.floor() as i32, band_top as i32);
         }
     }
 
-    let image_of = |c: char| {
+    let mut image_of = |c: char| {
         let i = SAMPLE.chars().position(|s| s == c)?;
-        placed[i].1.as_ref()
+        Image::render(&mut scratch, &outlines[i], scale, 0.0)
     };
-    let stem = image_of('i').map_or(0.0, |i| ink_across(i, xh_px / 2.0));
-    let (thick, thin) = image_of('o').map_or((0.0, 0.0), strokes);
+    let stem = image_of('i').map_or(0.0, |i| ink_across(&i, xh_px / 2.0));
+    let (thick, thin) = image_of('o').map_or((0.0, 0.0), |o| strokes(&o));
     let contrast = if thick > 0.0 {
         1.0 - thin.min(thick) / thick
     } else {
@@ -232,7 +224,7 @@ fn take(sfnt: &[u8], index: u32, params: Params) -> Option<Fingerprint> {
         .map_or(5.0, |os2| f32::from(os2.us_width_class()));
 
     Some(Fingerprint {
-        vector: reduce(&canvas, width as usize, height as usize, params.length),
+        vector: reduce(&canvas, width, height, params.length),
         x_height_ratio: x_height / cap_height,
         contrast,
         stroke_width: stem / xh_px,
@@ -241,34 +233,87 @@ fn take(sfnt: &[u8], index: u32, params: Params) -> Option<Fingerprint> {
     })
 }
 
-/// The glyph drawn as coverage, shifted right by `offset` (a pixel fraction).
-fn render(scaler: &mut Scaler<'_>, id: u16, offset: f32) -> Option<Image> {
-    Render::new(&[Source::Outline])
-        .format(Format::Alpha)
-        .offset(Vector::new(offset, 0.0))
-        .render(scaler, id)
-        .filter(|i| i.placement.width > 0 && i.placement.height > 0)
+/// One glyph drawn with swash's rasterizer (zeno): one byte of coverage per
+/// pixel, row by row from the top.
+struct Image {
+    data: Vec<u8>,
+    width: usize,
+    height: usize,
+    /// Pixels from the pen to the left column.
+    left: i32,
+    /// Pixels from the baseline up to the top row.
+    top: i32,
+}
+
+impl Image {
+    /// `outline` (font units) at `scale`, moved right by `offset` (a pixel
+    /// fraction): what swash's `Render` draws from the same outline, without
+    /// loading the outline again.
+    fn render(scratch: &mut Scratch, outline: &Outline, scale: f32, offset: f32) -> Option<Self> {
+        let points: Vec<Point> = outline
+            .points()
+            .iter()
+            .map(|p| Point::new(p.x * scale, p.y * scale))
+            .collect();
+        let offset = Vector::new(offset, 0.0);
+        let (data, p) = Mask::with_scratch((&points[..], outline.verbs()), scratch)
+            .format(Format::Alpha)
+            .origin(Origin::BottomLeft)
+            .offset(offset)
+            .render_offset(offset)
+            // Sizes the mask first, as swash does: without it the
+            // placement's top is computed from a height of zero.
+            .inspect(|_, _, _| {})
+            .render();
+        (p.width > 0 && p.height > 0).then_some(Self {
+            data,
+            width: p.width as usize,
+            height: p.height as usize,
+            left: p.left,
+            top: p.top,
+        })
+    }
+
+    /// Adds the glyph's coverage to a `width`-wide canvas, with the pen at
+    /// column `x` and the baseline at row `baseline`; what falls outside is
+    /// cut off.
+    fn add_to(&self, canvas: &mut [u8], width: usize, x: i32, baseline: i32) {
+        let (w, cw) = (self.width as i32, width as i32);
+        let left = x + self.left;
+        let (c0, c1) = ((-left).clamp(0, w), (cw - left).clamp(0, w));
+        if c0 >= c1 {
+            return;
+        }
+        let rows = canvas.len() as i32 / cw.max(1);
+        for row in 0..self.height as i32 {
+            let cy = baseline - self.top + row;
+            if !(0..rows).contains(&cy) {
+                continue;
+            }
+            let src = &self.data[(row * w + c0) as usize..(row * w + c1) as usize];
+            let at = (cy * cw + left + c0) as usize;
+            for (dst, &src) in canvas[at..at + src.len()].iter_mut().zip(src) {
+                *dst = dst.saturating_add(src);
+            }
+        }
+    }
 }
 
 /// The ink of the image row at `y` pixels above the baseline, in pixels.
 fn ink_across(image: &Image, y: f32) -> f32 {
-    let p = image.placement;
-    let row = p.top - y.round() as i32;
-    if !(0..p.height as i32).contains(&row) {
+    let row = image.top - y.round() as i32;
+    if !(0..image.height as i32).contains(&row) {
         return 0.0;
     }
-    let start = row as usize * p.width as usize;
-    sum(&image.data[start..start + p.width as usize])
+    let start = row as usize * image.width;
+    sum(&image.data[start..start + image.width])
 }
 
 /// The thick and thin strokes of a round glyph, in pixels: the ink of the
 /// left half of its middle row (the side stroke) and of the top half of its
 /// middle column (the top stroke), thicker first.
 fn strokes(image: &Image) -> (f32, f32) {
-    let (w, h) = (
-        image.placement.width as usize,
-        image.placement.height as usize,
-    );
+    let (w, h) = (image.width, image.height);
     let row = &image.data[(h / 2) * w..(h / 2) * w + w / 2];
     let column: Vec<u8> = (0..h / 2).map(|y| image.data[y * w + w / 2]).collect();
     let (side, top) = (sum(row), sum(&column));
@@ -296,10 +341,14 @@ fn reduce(canvas: &[u8], width: usize, height: usize, length: usize) -> Vec<f32>
             let x1 = x1.max(x0 + 1).min(width);
             let mut total: u64 = 0;
             for y in y0..y1 {
-                total += canvas[y * width + x0..y * width + x1]
-                    .iter()
-                    .map(|&v| u64::from(v))
-                    .sum::<u64>();
+                // A row of one cell is at most `MAX_WIDTH_PX` bytes: no u32
+                // overflow.
+                total += u64::from(
+                    canvas[y * width + x0..y * width + x1]
+                        .iter()
+                        .map(|&v| u32::from(v))
+                        .sum::<u32>(),
+                );
             }
             let cells = ((y1 - y0) * (x1 - x0)) as f64 * 255.0;
             out.push((total as f64 / cells) as f32);

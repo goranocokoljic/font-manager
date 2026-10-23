@@ -33,7 +33,7 @@ use std::time::SystemTime;
 
 use crate::fingerprint;
 use crate::parallel::map_ordered_io;
-use crate::parser::{ParsedFile, parse};
+use crate::parser::{ParsedFile, parse_keeping_sfnt};
 use crate::scanner::discovery::is_hidden;
 use crate::scanner::{Discovery, FoundFile, Unreadable, discover, is_font_file};
 use crate::{FmError, FmResult};
@@ -85,8 +85,8 @@ impl fmt::Debug for FileHash {
 pub fn hash_and_parse(path: &Path) -> FmResult<(FileHash, ParsedFile)> {
     let data =
         fs::read(path).map_err(|e| FmError::io("The font file could not be read.", path, &e))?;
-    let mut parsed = parse(&data);
-    fingerprint::fill(&data, &mut parsed);
+    let (mut parsed, sfnt) = parse_keeping_sfnt(&data);
+    fingerprint::fill_sfnt(&sfnt, &mut parsed);
     Ok((FileHash::of(&data), parsed))
 }
 
@@ -391,6 +391,7 @@ mod tests {
     use fm_api::common::Health;
 
     use super::*;
+    use crate::parser::parse;
     use crate::scanner::discover;
     use crate::test_support::TempDir;
 
