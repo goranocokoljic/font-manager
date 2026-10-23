@@ -103,6 +103,7 @@ function colorFrom(e: Event): string {
       <span>{{ t('preview.customText') }}</span>
       <input
         type="text"
+        dir="auto"
         :value="s.customText"
         :placeholder="t('preview.customPlaceholder')"
         @input="set({ customText: ($event.target as HTMLInputElement).value })"

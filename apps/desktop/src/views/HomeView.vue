@@ -537,11 +537,15 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
       <p v-if="app.error" role="alert" class="error">{{ errorMessage(app.error) }}</p>
       <dl v-else-if="app.info" class="info" data-testid="app-info">
         <dt>{{ t('home.info.app') }}</dt>
-        <dd>{{ app.info.name }} {{ app.info.version }}</dd>
+        <dd>
+          <bdi>{{ app.info.name }} {{ app.info.version }}</bdi>
+        </dd>
         <dt>{{ t('home.info.api') }}</dt>
         <dd>{{ formatApiVersion(app.info.apiVersion) }}</dd>
         <dt>{{ t('home.info.platform') }}</dt>
-        <dd>{{ app.info.platform }}</dd>
+        <dd>
+          <bdi>{{ app.info.platform }}</bdi>
+        </dd>
       </dl>
     </template>
   </MainLayout>
@@ -639,7 +643,8 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
   content: ':';
 }
 .info dd {
-  margin: 0 8px 0 0;
+  margin-block: 0;
+  margin-inline: 0 8px;
 }
 .error {
   margin: 0;

@@ -141,7 +141,7 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
   <div class="row" :data-face="face.id" :data-state="state">
     <span class="label">
       <slot name="lead" />
-      {{ name }}
+      <bdi>{{ name }}</bdi>
       <slot name="detail" />
       <span v-if="face.isVariable" class="badge">{{ t('list.variable') }}</span>
       <span

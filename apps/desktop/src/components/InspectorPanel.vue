@@ -2,7 +2,7 @@
 // The inspector's tabs: Info, Axes, Features, then Glyphs. Arrow keys move between tabs
 // (WAI-ARIA tabs pattern); only the selected tab is in the Tab order.
 import { nextTick, ref } from 'vue';
-import { t } from '../i18n';
+import { inlineKey, t } from '../i18n';
 import InspectorAxes from './InspectorAxes.vue';
 import InspectorFeatures from './InspectorFeatures.vue';
 import InspectorGlyphs from './InspectorGlyphs.vue';
@@ -17,8 +17,10 @@ const current = ref<TabId>('info');
 async function onKey(e: KeyboardEvent): Promise<void> {
   const i = TABS.findIndex((tab) => tab.id === current.value);
   let next: number;
-  if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
-  else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+  // In right-to-left chrome the tabs run from the right: ArrowLeft is the next one.
+  const key = inlineKey(e.key);
+  if (key === 'ArrowRight') next = (i + 1) % TABS.length;
+  else if (key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
   else if (e.key === 'Home') next = 0;
   else if (e.key === 'End') next = TABS.length - 1;
   else return;

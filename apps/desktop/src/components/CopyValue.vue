@@ -17,7 +17,7 @@ const copy = () => copyValue(props.value);
     :title="t('copy.clickToCopy')"
     @click="copy"
   >
-    {{ value }}
+    <bdi>{{ value }}</bdi>
   </button>
   <span class="status" role="status">
     <template v-if="status === 'copied'">{{ t('common.copied') }}</template>

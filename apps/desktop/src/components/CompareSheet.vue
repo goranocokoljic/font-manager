@@ -376,6 +376,7 @@ function onFocusIn(e: FocusEvent): void {
           </div>
           <p
             class="sample"
+            dir="auto"
             :style="{
               fontFamily: fontOf(f),
               fontSize: `${size}px`,

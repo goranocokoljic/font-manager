@@ -40,16 +40,19 @@ const toasts = useToastStore();
 .region {
   position: fixed;
   bottom: 40px;
-  left: 50%;
+  /* Centered in either direction: both insets 0, the box as wide as its toast. */
+  inset-inline: 0;
   z-index: 9;
-  transform: translateX(-50%);
+  width: fit-content;
+  margin-inline: auto;
 }
 .toast {
   display: flex;
   align-items: center;
   gap: 12px;
   max-width: min(560px, 90vw);
-  padding: 8px 8px 8px 16px;
+  padding-block: 8px;
+  padding-inline: 16px 8px;
   border: 1px solid var(--fm-control-border);
   border-radius: 8px;
   background: var(--fm-bg);

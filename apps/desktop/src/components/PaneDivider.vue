@@ -1,7 +1,11 @@
 <script setup lang="ts">
 // A 1 px vertical divider that resizes the column next to it by pointer drag or
-// arrow keys. `direction` is +1 when the column is on the left of the divider
-// (moving right widens it) and -1 when it is on the right.
+// arrow keys. `direction` is +1 when the column is at the inline start of the
+// divider (moving toward the inline end widens it) and -1 when it is at the end.
+// Drag and arrows follow what the user sees: in right-to-left chrome the start
+// is on the right, so ArrowLeft and a drag to the left widen that column.
+import { direction as uiDirection } from '../i18n';
+
 const props = defineProps<{
   label: string;
   controls: string;
@@ -17,6 +21,9 @@ const STEP = 8;
 
 let start: { x: number; value: number } | null = null;
 
+/** +1 when a move to the right widens the column, -1 when it narrows it. */
+const visual = (): number => props.direction * (uiDirection() === 'rtl' ? -1 : 1);
+
 function onPointerDown(e: PointerEvent): void {
   if (e.button !== 0) return;
   start = { x: e.clientX, value: props.value };
@@ -26,7 +33,7 @@ function onPointerDown(e: PointerEvent): void {
 
 function onPointerMove(e: PointerEvent): void {
   if (!start) return;
-  emit('resize', start.value + props.direction * (e.clientX - start.x));
+  emit('resize', start.value + visual() * (e.clientX - start.x));
 }
 
 function onPointerUp(e: PointerEvent): void {
@@ -36,8 +43,8 @@ function onPointerUp(e: PointerEvent): void {
 
 function onKeyDown(e: KeyboardEvent): void {
   const moves: Record<string, number> = {
-    ArrowLeft: props.value - props.direction * STEP,
-    ArrowRight: props.value + props.direction * STEP,
+    ArrowLeft: props.value - visual() * STEP,
+    ArrowRight: props.value + visual() * STEP,
     Home: props.min,
     End: props.max,
   };

@@ -146,7 +146,7 @@ h3 {
   overflow-wrap: anywhere;
 }
 .tag {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--fm-muted);
   font-family: ui-monospace, monospace;
 }
@@ -168,19 +168,19 @@ h3 {
 .knob {
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--fm-control-border);
-  transition: left 0.1s;
+  transition: inset-inline-start 0.1s;
 }
 .switch[aria-checked='true'] {
   border-color: var(--fm-accent);
   background: var(--fm-accent);
 }
 .switch[aria-checked='true'] .knob {
-  left: 16px;
+  inset-inline-start: 16px;
   background: var(--fm-bg);
 }
 </style>

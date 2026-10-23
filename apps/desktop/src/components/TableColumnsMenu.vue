@@ -136,7 +136,7 @@ function onFocusOut(e: FocusEvent): void {
   position: absolute;
   z-index: 10;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   width: 240px;
   padding: 8px;
   border: 1px solid var(--fm-border);

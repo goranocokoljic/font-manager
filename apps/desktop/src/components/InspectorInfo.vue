@@ -123,7 +123,9 @@ function clashText(c: Conflict): string {
     </p>
     <template v-else>
       <header class="head">
-        <h2 class="name">{{ d.face.familyName }} {{ d.face.style }}</h2>
+        <h2 class="name">
+          <bdi>{{ d.face.familyName }} {{ d.face.style }}</bdi>
+        </h2>
         <HealthBadge :health="d.face.health" />
         <div class="activation">
           <button
@@ -391,6 +393,7 @@ function clashText(c: Conflict): string {
               id="fm-info-notes"
               v-model="faceNotes"
               class="notes"
+              dir="auto"
               rows="3"
               :placeholder="t('info.user.notesPlaceholder')"
               @blur="saveFaceNotes"
@@ -404,6 +407,7 @@ function clashText(c: Conflict): string {
               id="fm-info-family-notes"
               v-model="familyNotes"
               class="notes"
+              dir="auto"
               rows="3"
               :placeholder="t('info.user.familyNotesPlaceholder', { family: d.face.familyName })"
               @blur="saveFamilyNotes"
@@ -536,7 +540,8 @@ dd {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  padding: 0 0 0 8px;
+  padding-block: 0;
+  padding-inline: 8px 0;
   border: 1px solid var(--fm-border);
   border-radius: 999px;
 }
@@ -594,6 +599,6 @@ dd {
   color: var(--fm-accent);
 }
 .stars .state {
-  margin-left: 6px;
+  margin-inline-start: 6px;
 }
 </style>

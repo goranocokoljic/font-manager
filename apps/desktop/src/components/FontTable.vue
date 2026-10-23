@@ -418,14 +418,14 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
             <template v-else-if="col.id === 'name'">
               <span
                 v-if="item.row.kind === 'family'"
-                class="twisty"
+                class="twisty fm-directional"
                 aria-hidden="true"
                 @click.stop="onToggle(item.row)"
                 >{{ item.row.expanded ? '▾' : '▸' }}</span
               >
-              <span class="text" :title="cellOf(item.row, col.id).text">{{
+              <bdi class="text" :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
-              }}</span>
+              }}</bdi>
             </template>
             <template v-else-if="isWeightLine(col.id)">
               <span class="line" aria-hidden="true">
@@ -433,7 +433,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                   v-if="cellOf(item.row, col.id).span"
                   class="span"
                   :style="{
-                    left: `${cellOf(item.row, col.id).span!.left}%`,
+                    insetInlineStart: `${cellOf(item.row, col.id).span!.left}%`,
                     width: `${cellOf(item.row, col.id).span!.width}%`,
                   }"
                 />
@@ -442,7 +442,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                   :key="k"
                   class="mark"
                   :class="{ italic: d.italic }"
-                  :style="{ left: `${d.left}%` }"
+                  :style="{ insetInlineStart: `${d.left}%` }"
                 />
               </span>
               <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
@@ -457,9 +457,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 >{{ b }}</span
               >
             </template>
-            <span v-else class="text" :title="cellOf(item.row, col.id).text">{{
+            <bdi v-else class="text" :title="cellOf(item.row, col.id).text">{{
               cellOf(item.row, col.id).text
-            }}</span>
+            }}</bdi>
           </div>
         </div>
       </div>
@@ -538,8 +538,8 @@ span.sort {
 .tr {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: grid;
   box-sizing: border-box;
   align-items: center;
@@ -555,7 +555,7 @@ span.sort {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';
@@ -578,7 +578,7 @@ span.sort {
   white-space: nowrap;
 }
 .tr.face .col-name {
-  padding-left: 32px;
+  padding-inline-start: 32px;
 }
 .twisty {
   display: grid;
@@ -599,8 +599,8 @@ span.sort {
 .line::before {
   position: absolute;
   top: 50%;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   height: 1px;
   background: var(--fm-border);
   content: '';
@@ -618,7 +618,7 @@ span.sort {
   width: 8px;
   height: 8px;
   box-sizing: border-box;
-  margin-left: -4px;
+  margin-inline-start: -4px;
   border: 1.5px solid var(--fm-fg);
   border-radius: 50%;
   background: var(--fm-fg);

@@ -231,7 +231,7 @@ function onToggle(row: ListRow): void {
       >
         <span
           v-if="item.row.kind === 'family'"
-          class="twisty"
+          class="twisty fm-directional"
           aria-hidden="true"
           @click.stop="onToggle(item.row)"
           >{{ item.row.expanded ? '▾' : '▸' }}</span
@@ -278,7 +278,9 @@ function onToggle(row: ListRow): void {
         </FontPreviewRow>
         <div v-else class="preview placeholder">
           <span class="label"
-            ><ActivationDot :state="rowActivation(item.row)" />{{ item.row.family.name }}</span
+            ><ActivationDot :state="rowActivation(item.row)" /><bdi>{{
+              item.row.family.name
+            }}</bdi></span
           >
           <span v-if="library.failed.has(item.row.family.id)" class="note">
             {{ t('list.stylesUnavailable') }}
@@ -308,8 +310,8 @@ function onToggle(row: ListRow): void {
 .slot {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: flex;
   align-items: stretch;
   box-sizing: border-box;
@@ -318,7 +320,7 @@ function onToggle(row: ListRow): void {
   contain: layout paint;
 }
 .slot.face {
-  padding-left: 24px;
+  padding-inline-start: 24px;
 }
 .slot.selected {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
@@ -328,7 +330,7 @@ function onToggle(row: ListRow): void {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';
@@ -356,7 +358,7 @@ function onToggle(row: ListRow): void {
   border-bottom: 0;
 }
 .slot:not(.face) .preview {
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 .placeholder {
   display: flex;
@@ -364,7 +366,7 @@ function onToggle(row: ListRow): void {
   justify-content: center;
   gap: 2px;
   box-sizing: border-box;
-  padding-right: 16px;
+  padding-inline-end: 16px;
   color: var(--fm-muted);
   font-size: 11.5px;
 }

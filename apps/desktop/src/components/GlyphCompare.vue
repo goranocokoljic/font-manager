@@ -417,8 +417,8 @@ input[type='range']:focus-visible {
 .list {
   position: absolute;
   top: 100%;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   z-index: 1;
   max-height: 200px;
   margin: 2px 0 0;

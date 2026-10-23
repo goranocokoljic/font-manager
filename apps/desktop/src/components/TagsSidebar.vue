@@ -68,7 +68,9 @@ function countLabel(n: number): string {
           aria-controls="fm-tags-list"
           @click="tagging.folded = !tagging.folded"
         >
-          <span class="chevron" aria-hidden="true">{{ tagging.folded ? '▸' : '▾' }}</span>
+          <span class="chevron fm-directional" aria-hidden="true">{{
+            tagging.folded ? '▸' : '▾'
+          }}</span>
           {{ t('tags.heading') }}
         </button>
       </h2>

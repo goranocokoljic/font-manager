@@ -503,7 +503,7 @@ function chooseLanguage(e: Event): void {
   gap: 2px;
   width: 180px;
   padding: 8px;
-  border-right: 1px solid var(--fm-border);
+  border-inline-end: 1px solid var(--fm-border);
   background: var(--fm-surface);
 }
 .tab {
@@ -535,7 +535,8 @@ function chooseLanguage(e: Event): void {
   color: var(--fm-muted);
 }
 .hint {
-  margin: 4px 0 0 22px;
+  margin-block: 4px 0;
+  margin-inline: 22px 0;
 }
 .start-at-login {
   margin-top: 12px;
