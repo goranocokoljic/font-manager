@@ -1509,6 +1509,8 @@ fn web_export_writes_fonts_css_for_static_variable_and_italic_faces() {
         &[
             "google-repo/cairoplay/CairoPlay[slnt,wght].ttf",
             "fontshare/sora/Sora-Italic.woff2",
+            // Name ID 1 "Asap SemiBold", name ID 16 "Asap": the CSS family is 16.
+            "fontshare/asap/Asap-SemiBold.otf",
         ],
     );
     let faces = vec![
@@ -1516,6 +1518,7 @@ fn web_export_writes_fonts_css_for_static_variable_and_italic_faces() {
         face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
         face_in(&lib, "Cairo Play", "CairoPlay[slnt,wght].ttf"),
         face_in(&lib, "Sora", "Sora-Italic.woff2"),
+        face_in(&lib, "Asap", "Asap-SemiBold.otf"),
     ];
     let out = lib.dir.path().join("css");
     std::fs::create_dir_all(&out).expect("out");
@@ -1528,7 +1531,7 @@ fn web_export_writes_fonts_css_for_static_variable_and_italic_faces() {
         .expect("export");
     let css = res.css.clone().expect("css");
     let css_path = out.join("fonts.css");
-    assert_eq!(res.files.len(), 9);
+    assert_eq!(res.files.len(), 11);
     assert_eq!(res.files.last(), Some(&css_path.display().to_string()));
     assert_eq!(std::fs::read_to_string(&css_path).expect("written"), css);
     assert_eq!(css, WEB_CSS_SNAPSHOT, "{css}");
@@ -1585,6 +1588,14 @@ const WEB_CSS_SNAPSHOT: &str = r#"@font-face {
   font-weight: 400;
   font-display: swap;
   src: url("Sora-Italic.woff2") format("woff2"), url("Sora-Italic.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Asap";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("Asap-SemiBold.woff2") format("woff2"), url("Asap-SemiBold.woff") format("woff");
 }
 "#;
 
