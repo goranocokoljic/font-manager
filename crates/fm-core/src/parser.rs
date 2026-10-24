@@ -130,6 +130,12 @@ pub struct ParsedFace {
     /// when neither says anything (see [`crate::classify`]).
     #[serde(default)]
     pub classification: Option<ClassGuess>,
+    /// x-height as a share of the em: `OS/2.sxHeight`, else the top of the
+    /// outline of `x`; `None` when neither is there (E23.4 pairs on it).
+    /// Required in `face.parsed`, `None` included: one written before this
+    /// field fails to load, so the next scan reads the file again and fills it.
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub x_height: Option<f32>,
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
@@ -164,6 +170,7 @@ impl ParsedFace {
             locl_languages: Vec::new(),
             color: false,
             classification: None,
+            x_height: None,
             code_points: Vec::new(),
             health,
         }
@@ -471,6 +478,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         .as_deref()
         .or(face.family.as_deref());
     face.classification = classify::classify(font, family, &face.code_points);
+    face.x_height = x_height(font);
 
     let bitmap_only = is_bitmap_only(font);
     if !bitmap_only && !has_glyph_images(font) {
@@ -494,6 +502,33 @@ fn has_glyph_images(font: &FontRef<'_>) -> bool {
     [b"glyf", b"CFF ", b"CFF2", b"CBDT", b"sbix", b"SVG "]
         .iter()
         .any(|tag| has_record(font, tag))
+}
+
+/// The x-height as a share of the em: `OS/2.sxHeight` (version 2 and
+/// later), else the top of the bounding box of `x`. `None` without a usable
+/// `head`, or without either value.
+fn x_height(font: &FontRef<'_>) -> Option<f32> {
+    let upem = f32::from(font.head().ok()?.units_per_em());
+    if upem <= 0.0 {
+        return None;
+    }
+    let declared = font
+        .os2()
+        .ok()
+        .and_then(|os2| os2.sx_height())
+        .filter(|&x| x > 0)
+        .map(f32::from);
+    let height = declared.or_else(|| {
+        let gid = font.charmap().map('x')?;
+        let bounds = font
+            .glyph_metrics(
+                skrifa::instance::Size::unscaled(),
+                skrifa::instance::LocationRef::default(),
+            )
+            .bounds(gid)?;
+        (bounds.y_max > 0.0).then_some(bounds.y_max)
+    })?;
+    Some(height / upem)
 }
 
 /// Whether the face has color glyphs: layered vectors (`COLR`), color

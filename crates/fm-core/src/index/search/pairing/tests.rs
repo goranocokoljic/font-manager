@@ -1,0 +1,280 @@
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+
+use fm_api::common::{Classification, Health};
+use fm_api::library::SourceKind;
+use fm_api::search::{PairingRequest, PairingSuggestion};
+use fm_api::{ErrorCode, FaceId};
+
+use crate::index::Index;
+use crate::parser::{ParsedFace, ParsedFile};
+use crate::scanner::{FileHash, IndexedFile, discover, hash_and_parse};
+
+/// The search budget of the spec (criterion 5).
+const BUDGET: Duration = Duration::from_millis(50);
+
+/// The fixture corpus, parsed once for every test of this file.
+fn corpus() -> &'static [IndexedFile] {
+    static FILES: OnceLock<Vec<IndexedFile>> = OnceLock::new();
+    FILES.get_or_init(|| {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts");
+        discover(&root)
+            .expect("discover")
+            .files
+            .iter()
+            .map(|f| {
+                let (hash, parsed) = hash_and_parse(&f.path).expect("read fixture");
+                IndexedFile {
+                    path: f.path.clone(),
+                    size: f.size,
+                    modified: f.modified,
+                    hash,
+                    parsed,
+                    gone: false,
+                }
+            })
+            .collect()
+    })
+}
+
+fn indexed(files: &[IndexedFile]) -> Index {
+    let mut index = Index::open_in_memory().expect("open");
+    let source = index
+        .add_source("/fonts", SourceKind::Watched)
+        .expect("source")
+        .id;
+    index.persist_files(source, files).expect("persist");
+    index
+}
+
+/// The first face (by id) whose family name is `family`.
+fn face_of(index: &Index, family: &str) -> FaceId {
+    index
+        .conn
+        .query_row(
+            "SELECT min(id) FROM face WHERE family = ?1",
+            [family],
+            |r| r.get::<_, Option<u32>>(0),
+        )
+        .expect("query")
+        .map(FaceId)
+        .unwrap_or_else(|| panic!("no face of {family}"))
+}
+
+fn class_of(index: &Index, face: FaceId) -> Option<Classification> {
+    let class: Option<String> = index
+        .conn
+        .query_row(
+            "SELECT json_extract(parsed, '$.classification.class') FROM face WHERE id = ?1",
+            [face.0],
+            |r| r.get(0),
+        )
+        .expect("class");
+    class.and_then(|c| serde_json::from_value(serde_json::Value::String(c)).ok())
+}
+
+fn pairings(index: &Index, face: FaceId, limit: u32) -> Vec<PairingSuggestion> {
+    index
+        .suggest_pairings(&PairingRequest { face, limit })
+        .expect("pairings")
+}
+
+#[test]
+fn the_fixture_faces_carry_an_x_height() {
+    let faces: Vec<&ParsedFace> = corpus().iter().flat_map(|f| &f.parsed.faces).collect();
+    let known = faces.iter().filter(|f| f.x_height.is_some()).count();
+    assert!(known * 10 >= faces.len() * 9, "{known} of {}", faces.len());
+    assert!(
+        faces
+            .iter()
+            .filter_map(|f| f.x_height)
+            .all(|x| x > 0.0 && x < 1.5)
+    );
+}
+
+#[test]
+fn libre_baskerville_gets_a_sans_first() {
+    let index = indexed(corpus());
+    let face = face_of(&index, "Libre Baskerville");
+    assert_eq!(class_of(&index, face), Some(Classification::Serif));
+    let got = pairings(&index, face, 10);
+    let first = got.first().expect("a suggestion");
+    assert_eq!(
+        class_of(&index, first.face.id),
+        Some(Classification::Sans),
+        "{got:#?}"
+    );
+    assert_eq!(first.reasons[0], "contrast: serif with sans serif");
+    // Best first, one face per family, never its own family, a reason each.
+    assert!(got.windows(2).all(|w| w[0].score >= w[1].score));
+    let mut families: Vec<_> = got.iter().map(|s| s.face.family).collect();
+    families.sort_unstable();
+    families.dedup();
+    assert_eq!(families.len(), got.len());
+    assert!(
+        got.iter()
+            .all(|s| s.face.family_name != "Libre Baskerville")
+    );
+    assert!(got.iter().all(|s| !s.reasons.is_empty()));
+    assert!(got.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+}
+
+#[test]
+fn clicker_script_gets_no_script() {
+    let index = indexed(corpus());
+    let face = face_of(&index, "Clicker Script");
+    assert_eq!(class_of(&index, face), Some(Classification::Script));
+    let got = pairings(&index, face, 1000);
+    assert!(!got.is_empty());
+    for s in &got {
+        let class = class_of(&index, s.face.id);
+        assert!(
+            matches!(class, Some(Classification::Sans | Classification::Serif)),
+            "{} is {class:?}",
+            s.face.family_name
+        );
+    }
+}
+
+#[test]
+fn a_noto_sans_face_gets_a_noto_serif_face_as_same_superfamily() {
+    let index = indexed(corpus());
+    let face = face_of(&index, "Noto Sans Armenian");
+    let got = pairings(&index, face, 5);
+    let serif = got
+        .iter()
+        .find(|s| s.face.family_name.starts_with("Noto Serif"))
+        .unwrap_or_else(|| panic!("no Noto Serif in {got:#?}"));
+    assert!(
+        serif.reasons.iter().any(|r| r == "same superfamily"),
+        "{serif:?}"
+    );
+}
+
+#[test]
+fn an_unknown_or_hidden_face_is_not_found_and_limit_caps() {
+    let mut index = indexed(corpus());
+    let err = index
+        .suggest_pairings(&PairingRequest {
+            face: FaceId(99_999),
+            limit: 5,
+        })
+        .expect_err("unknown");
+    assert_eq!(err.code(), ErrorCode::NotFound);
+    let face = face_of(&index, "Libre Baskerville");
+    assert_eq!(pairings(&index, face, 3).len(), 3);
+    assert!(pairings(&index, face, 0).is_empty());
+    // A paused source hides its faces from pairing, as from search.
+    index
+        .conn
+        .execute("UPDATE source SET paused = 1", [])
+        .expect("pause");
+    let err = index
+        .suggest_pairings(&PairingRequest { face, limit: 5 })
+        .expect_err("hidden");
+    assert_eq!(err.code(), ErrorCode::NotFound);
+    index = indexed(&[]);
+    assert!(
+        index
+            .suggest_pairings(&PairingRequest { face, limit: 5 })
+            .is_err()
+    );
+}
+
+/// A face with every pairing fact set, in a file of its own.
+fn synthetic_face(i: usize) -> IndexedFile {
+    let classes = [
+        Classification::Sans,
+        Classification::Serif,
+        Classification::Slab,
+        Classification::Script,
+        Classification::Mono,
+    ];
+    let family = format!("Kamiten {} {}", ["Sans", "Serif"][i % 2], i / 5);
+    let mut face = ParsedFace::empty(0, Health::Ok);
+    face.family = Some(family.clone());
+    face.subfamily = Some("Regular".into());
+    face.postscript_name = Some(format!("Kamiten{i}"));
+    face.weight = Some(400);
+    face.width = Some(5);
+    face.designer = Some(format!("Designer {}", i % 40));
+    face.x_height = Some(0.45 + (i % 20) as f32 * 0.01);
+    face.classification = Some(crate::classify::ClassGuess {
+        class: classes[i % classes.len()],
+        confidence: 0.8,
+        source: crate::classify::ClassSource::Declared,
+    });
+    IndexedFile {
+        path: PathBuf::from(format!("/fonts/kamiten-{i}.ttf")),
+        size: 1000,
+        modified: None,
+        hash: FileHash::from([7; 32]),
+        parsed: ParsedFile {
+            format: Some(fm_api::common::FontFormat::Ttf),
+            health: Health::Ok,
+            faces: vec![face],
+        },
+        gone: false,
+    }
+}
+
+fn time_pairings(index: &Index, label: &str) {
+    let ids: Vec<u32> = index
+        .conn
+        .prepare("SELECT id FROM face ORDER BY id LIMIT 5")
+        .expect("prepare")
+        .query_map([], |r| r.get(0))
+        .expect("ids")
+        .collect::<Result<_, _>>()
+        .expect("ids");
+    for id in ids {
+        let req = PairingRequest {
+            face: FaceId(id),
+            limit: 12,
+        };
+        // Warm the search cache and the statement cache, as a running app has.
+        index.suggest_pairings(&req).expect("pairings");
+        let start = Instant::now();
+        let got = index.suggest_pairings(&req).expect("pairings");
+        let elapsed = start.elapsed();
+        eprintln!("{label}: face {id} → {} pairings in {elapsed:?}", got.len());
+        assert!(elapsed < BUDGET, "{label}: face {id} took {elapsed:?}");
+    }
+}
+
+/// Criterion 5 without the reference library: 10,000 faces. Timed in
+/// release builds only; a debug build checks the answers.
+#[test]
+fn ten_thousand_faces_pair_in_under_50_ms() {
+    let files: Vec<IndexedFile> = (0..10_000).map(synthetic_face).collect();
+    let index = indexed(&files);
+    let got = pairings(&index, face_of(&index, "Kamiten Sans 0"), 12);
+    assert_eq!(got.len(), 12);
+    if cfg!(debug_assertions) {
+        eprintln!("debug build: timing skipped");
+        return;
+    }
+    time_pairings(&index, "synthetic 10k");
+}
+
+/// Criterion 5 on the reference library (10k fonts): skipped without it.
+#[test]
+fn the_reference_library_pairs_in_under_50_ms() {
+    let Some(library) = std::env::var_os("FM_REFERENCE_LIBRARY") else {
+        eprintln!("skipped: FM_REFERENCE_LIBRARY is not set");
+        return;
+    };
+    let library = PathBuf::from(library);
+    let mut scanned = crate::scanner::FileIndex::new();
+    let report = scanned.rescan(&library, &discover(&library).expect("discover"));
+    let mut index = Index::open_in_memory().expect("open");
+    let source = index
+        .add_source(&library.to_string_lossy(), SourceKind::Watched)
+        .expect("source")
+        .id;
+    index
+        .apply_rescan(source, &scanned, &report)
+        .expect("persist");
+    time_pairings(&index, "reference library");
+}

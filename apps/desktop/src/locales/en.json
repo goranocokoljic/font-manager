@@ -155,6 +155,20 @@
     "overlayLabel": "Overlay of {names}, {size} px",
     "legend": "Legend",
     "removeLabel": "Remove {name} from Compare",
+    "pairings": {
+      "title": "Pairings for {name}",
+      "hint": "Fonts of other families that go with the first pinned font, by rule.",
+      "list": "Suggested pairings",
+      "loading": "Looking for pairings…",
+      "none": "No font in the library pairs with {name} by the rules.",
+      "error": "Font Manager could not suggest pairings. {message}",
+      "score": "{percent}% match",
+      "reasons": "Why: {reasons}",
+      "add": "Add to compare",
+      "addLabel": "Add {name} to Compare",
+      "pinned": "Pinned",
+      "pinnedLabel": "{name} is pinned"
+    },
     "toasts": {
       "already": "{name} is already pinned to Compare.",
       "full": "Compare holds {max} fonts. Remove one to pin {name}.",
