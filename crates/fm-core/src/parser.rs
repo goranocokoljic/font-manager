@@ -22,6 +22,7 @@
 //! recognized by their magic bytes and returned as [`Health::Unsupported`]
 //! without faces.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
@@ -38,6 +39,7 @@ use skrifa::string::StringId;
 
 use crate::classify::{self, ClassGuess};
 use crate::features;
+use crate::fingerprint::FaceFingerprint;
 use crate::{FmError, FmResult};
 
 /// What [`parse`] found in one font file.
@@ -139,6 +141,12 @@ pub struct ParsedFace {
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
+    /// The glyph fingerprint (E23.1), taken when the scan reads the file
+    /// ([`crate::fingerprint::fill`]). Not in `face.parsed`: the index keeps
+    /// it in `face_fingerprint`, and a face loaded from there is
+    /// [`FaceFingerprint::NotTaken`].
+    #[serde(skip)]
+    pub fingerprint: FaceFingerprint,
     /// Whether this face could be read in full.
     pub health: Health,
 }
@@ -178,6 +186,7 @@ impl ParsedFace {
                 cap_height: None,
             },
             code_points: Vec::new(),
+            fingerprint: FaceFingerprint::NotTaken,
             health,
         }
     }
@@ -196,6 +205,21 @@ pub fn parse_file(path: &Path) -> FmResult<ParsedFile> {
     let data =
         fs::read(path).map_err(|e| FmError::io("The font file could not be read.", path, &e))?;
     Ok(parse(&data))
+}
+
+/// [`parse`], also giving the TrueType or OpenType bytes it parsed: the font
+/// inside a WOFF or WOFF2 file, else `data` itself. The scan reads the faces
+/// again from them (the glyph fingerprint) without decompressing twice.
+pub(crate) fn parse_keeping_sfnt(data: &[u8]) -> (ParsedFile, Cow<'_, [u8]>) {
+    let format = match data.get(..4) {
+        Some(b"wOFF") => FontFormat::Woff,
+        Some(b"wOF2") => FontFormat::Woff2,
+        _ => return (parse(data), Cow::Borrowed(data)),
+    };
+    match decompress_web(data, format) {
+        Some(sfnt) => (parse_web_sfnt(&sfnt, format), Cow::Owned(sfnt)),
+        None => (parse_web(data, format), Cow::Borrowed(&[])),
+    }
 }
 
 /// Parses a font file held in memory. Never panics, whatever `data` holds.
@@ -302,10 +326,20 @@ fn parse_web(data: &[u8], format: FontFormat) -> ParsedFile {
             format!("The {name} data is malformed and cannot be decompressed."),
         );
     };
+    parse_web_sfnt(&sfnt, format)
+}
+
+/// The faces of a WOFF or WOFF2 file, from its decompressed data `sfnt`.
+fn parse_web_sfnt(sfnt: &[u8], format: FontFormat) -> ParsedFile {
+    let name = if format == FontFormat::Woff {
+        "WOFF"
+    } else {
+        "WOFF2"
+    };
     let mut file = match sfnt.get(..4).and_then(|m| <[u8; 4]>::try_from(m).ok()) {
-        Some(magic) if &magic == b"ttcf" => parse_collection(&sfnt),
+        Some(magic) if &magic == b"ttcf" => parse_collection(sfnt),
         Some(magic @ ([0, 1, 0, 0] | [b't', b'r', b'u', b'e'] | [b'O', b'T', b'T', b'O'])) => {
-            parse_single(&sfnt, &magic)
+            parse_single(sfnt, &magic)
         }
         _ => {
             return broken_file(
