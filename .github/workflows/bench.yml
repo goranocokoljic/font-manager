@@ -8,7 +8,8 @@
 #            scripts/harness/ci-wait.mjs as the check "bench / bench") and writes the
 #            trend against the last runs on main (nightly or by hand) into the job summary.
 #            Nightly: red when a metric is over budget. PR: red when a budgeted metric
-#            is more than 10% worse than the slowest of the last runs on main,
+#            is more than 10% (and more than 20% of its budget) worse than the slowest
+#            of the last runs on main,
 #            or newly over budget (E9.2). The `bench:accept` label lets a regression
 #            that stays within budget pass (a feature's known cost); the job annotates each regression and keeps
 #            one sticky comment with the table on the PR.

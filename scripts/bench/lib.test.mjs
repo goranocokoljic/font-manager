@@ -229,18 +229,21 @@ describe('regression gate (E9.2)', () => {
   const nightly = (...values) =>
     values.map((v, i) => ({ date: `2026-10-${String(17 - i).padStart(2, '0')}T03:00:00Z`, sha: 'a', report: linux(v) }));
 
-  test('more than 10% worse than main fails, 10% or less passes', () => {
+  test('more than 10% and more than 20% of the budget worse than main fails', () => {
     const history = nightly({ cold_start: 400 });
-    const bad = gate(linux({ cold_start: 441 }), history)['linux.cold_start'];
-    assert.deepEqual([bad.baseline, bad.change, bad.regressed], [400, 0.103, true]);
-    assert.equal(gate(linux({ cold_start: 440 }), history)['linux.cold_start'].regressed, false);
+    const bad = gate(linux({ cold_start: 602 }), history)['linux.cold_start'];
+    assert.deepEqual([bad.baseline, bad.change, bad.regressed], [400, 0.505, true]);
+    assert.equal(gate(linux({ cold_start: 600 }), history)['linux.cold_start'].regressed, false, '200 ms is 20% of the 1 s budget: noise');
+    const near = nightly({ first_scan: 21000 });
+    assert.equal(gate(linux({ first_scan: 23100 }), near)['linux.first_scan'].regressed, false, 'over 2 s but only 10% slower');
+    assert.equal(gate(linux({ first_scan: 23200 }), near)['linux.first_scan'].regressed, true);
     assert.equal(gate(linux({ cold_start: 300 }), history)['linux.cold_start'].regressed, false, 'faster is fine');
   });
 
   test('every budgeted target of the non-functional table is gated', () => {
     const budgeted = Object.entries(BUDGETS).filter(([, b]) => b.target != null).map(([k]) => k);
     const base = Object.fromEntries(budgeted.map((k) => [k, BUDGETS[k].target / 2]));
-    const worse = Object.fromEntries(budgeted.map((k) => [k, (BUDGETS[k].target / 2) * 1.2]));
+    const worse = Object.fromEntries(budgeted.map((k) => [k, (BUDGETS[k].target / 2) * 1.5]));
     assert.deepEqual(blocking(gate(linux(worse), nightly(base))).sort(), budgeted.map((k) => `linux.${k}`).sort());
   });
 
@@ -249,7 +252,8 @@ describe('regression gate (E9.2)', () => {
     const m = gate(linux({ search: 33 }), history)['linux.search'];
     assert.equal(m.baseline, 30, 'slowest of the newest 5; the 6th run is not used');
     assert.equal(m.regressed, false, '10% over the slowest run at most');
-    assert.equal(gate(linux({ search: 34 }), history)['linux.search'].regressed, true);
+    assert.equal(gate(linux({ search: 40 }), history)['linux.search'].regressed, false, '10 ms is the 20% floor of 50 ms');
+    assert.equal(gate(linux({ search: 41 }), history)['linux.search'].regressed, true);
   });
 
   test('a metric over budget on main too blocks only when it gets slower still', () => {
@@ -278,7 +282,7 @@ describe('regression gate (E9.2)', () => {
   });
 
   test('bench:accept lets a regression within budget pass, never one over budget', () => {
-    const gated = gate(linux({ cold_start: 600, search: 51 }), nightly({ cold_start: 400, search: 40 }));
+    const gated = gate(linux({ cold_start: 650, search: 51 }), nightly({ cold_start: 400, search: 40 }));
     assert.deepEqual(blocking(gated).sort(), ['linux.cold_start', 'linux.search']);
     assert.deepEqual(blocking(gated, { accept: true }), ['linux.search'], 'over the 50 ms budget still blocks');
     assert.equal(parseCli(['gate', '--accept']).accept, true);
@@ -314,11 +318,11 @@ describe('regression gate (E9.2)', () => {
 
   test('the trend shows the gate with the reason of each regression', () => {
     const history = nightly({ search: 10, cold_start: 300 });
-    const md = renderTrend(gate(linux({ search: 20, cold_start: 300 }), history), history);
+    const md = renderTrend(gate(linux({ search: 25, cold_start: 300 }), history), history);
     assert.match(md, /### Regression gate — this PR vs main \(fails at more than 10% worse\)/);
-    assert.match(md, /\| linux\.search \| 50 ms \| 10 ms \| 20 ms \| \+100% \| ✗ regressed \|/);
+    assert.match(md, /\| linux\.search \| 50 ms \| 10 ms \| 25 ms \| \+150% \| ✗ regressed \|/);
     assert.match(md, /\| linux\.cold_start \| 1000 ms \| 300 ms \| 300 ms \| 0% \| ✓ \|/);
-    assert.match(md, /\*\*Bench check failed:\*\*\n- linux\.search: 20 ms vs 10 ms on main, \+100%/);
+    assert.match(md, /\*\*Bench check failed:\*\*\n- linux\.search: 25 ms vs 10 ms on main, \+150%/);
     assert.doesNotMatch(renderTrend(linux({ search: 20 }), []), /Regression gate/, 'nightly has no gate');
   });
 
@@ -335,9 +339,9 @@ describe('regression gate (E9.2)', () => {
         const r = spawnSync(process.execPath, args, { encoding: 'utf8' });
         return { ...r, report: JSON.parse(readFileSync(file, 'utf8')) };
       };
-      const bad = cli({ search: 20, cold_start: 300 });
+      const bad = cli({ search: 25, cold_start: 300 });
       assert.equal(bad.status, 1, bad.stderr);
-      assert.match(bad.stdout, /^::error title=Bench regression::linux\.search: 20 ms vs 10 ms on main, \+100%$/m);
+      assert.match(bad.stdout, /^::error title=Bench regression::linux\.search: 25 ms vs 10 ms on main, \+150%$/m);
       assert.equal(bad.report['linux.search'].regressed, true);
       const good = cli({ search: 10.5, cold_start: 290 });
       assert.equal(good.status, 0, good.stderr);
