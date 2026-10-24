@@ -143,8 +143,14 @@ test('a Pairing Studio opened by its URL closes to the library with its face sel
   page,
 }) => {
   await open(page);
+  // The library opened in List mode, so only the studio reads the layouts folder here.
   await page.goto('/#/studio?layout=quote&face=1');
   await expect(layout(studio(page), 'Quote')).toBeVisible();
+  // The picker lists the files from `list_layouts`, not only the presets: the mock's
+  // unreadable `draft` file is there, and cannot be picked.
+  const broken = studioPicker(page).getByRole('option', { name: 'draft (cannot be read)' });
+  await expect(broken).toHaveCount(1);
+  await expect(broken).toHaveAttribute('disabled', '');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page).toHaveURL(/#\/\?face=1$/);
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
