@@ -1149,7 +1149,13 @@
     "font": "Schrift",
     "noFont": "Keine Schrift",
     "layout": "Satzbild",
-    "closeTitle": "Zurück zur Bibliothek (Escape)"
+    "closeTitle": "Zurück zur Bibliothek (Escape)",
+    "blockFont": "Schrift für {label}",
+    "panelFont": "Schrift des Panels",
+    "fonts": "Schriften",
+    "noMatch": "Keine passenden Schriften",
+    "usePanelFont": "Schrift des Panels verwenden",
+    "usePanelFontFor": "Schrift des Panels für {label} verwenden"
   },
   "conflicts": {
     "title": "Schriftkonflikte",
