@@ -65,7 +65,10 @@ describe('catalogs store: online catalogs (E22.2)', () => {
     const calls = recording();
     const store = useCatalogsStore();
     await store.load();
-    expect(store.catalogs.map((c) => [c.id, c.enabled])).toEqual([['googleFonts', false]]);
+    expect(store.catalogs.map((c) => [c.id, c.enabled])).toEqual([
+      ['googleFonts', false],
+      ['fontshare', false],
+    ]);
 
     store.show('googleFonts');
     await flushPromises();

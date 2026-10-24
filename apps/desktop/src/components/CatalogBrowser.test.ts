@@ -61,6 +61,11 @@ describe('OnlineCatalogsSidebar with catalogs', () => {
     expect(on.attributes('aria-label')).toBe('Turn on Google Fonts');
     const hint = sidebar.get(`#${on.attributes('aria-describedby')}`);
     expect(hint.text()).toBe('Connects to the internet');
+    // Every catalog of list_catalogs is listed, each with its own switch (E22.5 added Fontshare).
+    expect(sidebar.get('[data-testid="catalog-fontshare"]').text()).toBe('Fontshare');
+    expect(sidebar.get('[data-testid="catalog-turn-on-fontshare"]').attributes('aria-label')).toBe(
+      'Turn on Fontshare',
+    );
 
     await on.trigger('click');
     await flushPromises();

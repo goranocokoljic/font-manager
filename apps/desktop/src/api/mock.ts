@@ -1378,55 +1378,66 @@ function createMockCatalogs(
   FmClient,
   'listCatalogs' | 'setCatalogEnabled' | 'refreshCatalog' | 'listCatalogFamilies' | 'catalogFontUrl'
 > {
-  const id: CatalogId = 'googleFonts';
-  let enabled = mode === 'offline';
-  let cache: { refreshedAt: string; families: CatalogFamily[] } | null =
+  // Every catalog of the Rust mock, in its order (`CatalogId::ALL`).
+  const sites: [CatalogId, string, string][] = [
+    ['googleFonts', 'Google Fonts', 'https://fonts.google.com'],
+    ['fontshare', 'Fontshare', 'https://www.fontshare.com'],
+  ];
+  const enabled = new Set<CatalogId>(mode === 'offline' ? ['googleFonts'] : []);
+  const caches = new Map<CatalogId, { refreshedAt: string; families: CatalogFamily[] }>(
     mode === 'offline'
-      ? { refreshedAt: MOCK_CATALOG_CACHED_AT, families: mockCatalogFamilies(extra) }
-      : null;
-  const known = (req: { id: CatalogId }) => {
-    if (req.id !== id)
+      ? [
+          [
+            'googleFonts',
+            { refreshedAt: MOCK_CATALOG_CACHED_AT, families: mockCatalogFamilies(extra) },
+          ],
+        ]
+      : [],
+  );
+  const site = (id: CatalogId) => {
+    const found = sites.find(([s]) => s === id);
+    if (!found)
       throw { code: 'unsupported', message: 'That catalog is not available.', detail: null };
+    return found;
   };
-  const catalog = (): Catalog => ({
-    id,
-    name: 'Google Fonts',
-    homepage: 'https://fonts.google.com',
-    enabled,
-    refreshedAt: cache?.refreshedAt ?? null,
-    familyCount: cache?.families.length ?? 0,
-  });
+  const catalog = (id: CatalogId): Catalog => {
+    const [, name, homepage] = site(id);
+    const cache = caches.get(id);
+    return {
+      id,
+      name,
+      homepage,
+      enabled: enabled.has(id),
+      refreshedAt: cache?.refreshedAt ?? null,
+      familyCount: cache?.families.length ?? 0,
+    };
+  };
   return {
-    listCatalogs: async () => [catalog()],
+    listCatalogs: async () => sites.map(([id]) => catalog(id)),
     setCatalogEnabled: async (req) => {
-      known(req);
-      enabled = req.enabled;
-      return catalog();
+      site(req.id);
+      if (req.enabled) enabled.add(req.id);
+      else enabled.delete(req.id);
+      return catalog(req.id);
     },
     refreshCatalog: async (req) => {
-      known(req);
-      if (!enabled)
-        throw {
-          code: 'conflict',
-          message: 'Turn on Google Fonts before refreshing it.',
-          detail: null,
-        };
+      const [, name] = site(req.id);
+      if (!enabled.has(req.id))
+        throw { code: 'conflict', message: `Turn on ${name} before refreshing it.`, detail: null };
       if (mode === 'offline')
         throw {
           code: 'io',
-          message:
-            'Google Fonts could not be refreshed. The catalog could not be reached. Check the connection and try again.',
-          detail: 'GET https://fonts.google.com/metadata/fonts: offline',
+          message: `${name} could not be refreshed. The catalog could not be reached. Check the connection and try again.`,
+          detail: 'offline',
         };
-      cache = { refreshedAt: MOCK_NOW, families: mockCatalogFamilies(extra) };
-      return catalog();
+      caches.set(req.id, { refreshedAt: MOCK_NOW, families: mockCatalogFamilies(extra) });
+      return catalog(req.id);
     },
     listCatalogFamilies: async (req) => {
-      known(req);
+      site(req.id);
       const query = (req.query ?? '').trim().toLowerCase();
-      const hits = (enabled ? (cache?.families ?? []) : []).filter((f) =>
-        f.name.toLowerCase().includes(query),
-      );
+      const families = enabled.has(req.id) ? (caches.get(req.id)?.families ?? []) : [];
+      const hits = families.filter((f) => f.name.toLowerCase().includes(query));
       const offset = req.page?.offset ?? 0;
       const limit = Math.min(req.page?.limit ?? 100, 500);
       return { items: structuredClone(hits.slice(offset, offset + limit)), total: hits.length };

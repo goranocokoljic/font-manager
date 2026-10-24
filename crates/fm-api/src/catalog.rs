@@ -19,16 +19,19 @@ use crate::library::OpenLicense;
 pub enum CatalogId {
     /// Google Fonts (fonts.google.com).
     GoogleFonts,
+    /// Fontshare (fontshare.com), Indian Type Foundry's free fonts.
+    Fontshare,
 }
 
 impl CatalogId {
     /// Every catalog, in the order the app lists them.
-    pub const ALL: [CatalogId; 1] = [CatalogId::GoogleFonts];
+    pub const ALL: [CatalogId; 2] = [CatalogId::GoogleFonts, CatalogId::Fontshare];
 
     /// The catalog's name as the user sees it.
     pub fn name(self) -> &'static str {
         match self {
             Self::GoogleFonts => "Google Fonts",
+            Self::Fontshare => "Fontshare",
         }
     }
 }
@@ -103,6 +106,11 @@ pub struct CatalogFamily {
     /// does not; its license comes with the files.
     #[serde(default)]
     pub license: Option<OpenLicense>,
+    /// The license's name as the catalog gives it, also for a license that
+    /// is not an open license (Fontshare's "ITF Free Font License"); `None`
+    /// when the index names no license.
+    #[serde(default)]
+    pub license_name: Option<String>,
 }
 
 /// Turns a catalog on or off. Turning it off keeps its cache.
@@ -211,12 +219,21 @@ mod tests {
             last_modified: Some("2025-09-16".into()),
             open_source: true,
             license: Some(OpenLicense::Ofl),
+            license_name: Some("SIL Open Font License".into()),
         };
         let json = serde_json::to_value(&family).expect("json");
         assert_eq!(json["lastModified"], "2025-09-16");
         assert_eq!(json["openSource"], true);
+        assert_eq!(json["licenseName"], "SIL Open Font License");
         assert_eq!(json["styles"][0]["slant"], "italic");
         let back: CatalogFamily = serde_json::from_value(json).expect("round trip");
         assert_eq!(back, family);
+        assert_eq!(
+            serde_json::to_value(CatalogId::Fontshare).expect("json"),
+            "fontshare"
+        );
+        let old: CatalogFamily = serde_json::from_str(r#"{"name":"Lato","styles":[]}"#)
+            .expect("a cache without licenseName");
+        assert_eq!(old.license_name, None);
     }
 }

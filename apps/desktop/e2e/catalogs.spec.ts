@@ -54,8 +54,11 @@ test('Settings -> Online catalogs shows the same note, reachable by keyboard', a
   const entry = page.getByRole('button', { name: 'Adobe Fonts' });
   await tab.focus();
   await page.keyboard.press('Tab'); // the tab panel
-  await page.keyboard.press('Tab'); // the Google Fonts switch (E22.2)
-  await expect(page.getByRole('checkbox', { name: 'Google Fonts' })).toBeFocused();
+  // The switch of every catalog comes first (E22.2): Google Fonts, Fontshare.
+  for (const name of ['Google Fonts', 'Fontshare']) {
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('checkbox', { name })).toBeFocused();
+  }
   await page.keyboard.press('Tab');
   await expect(entry).toBeFocused();
   await expect(entry).toHaveAttribute('aria-expanded', 'false');

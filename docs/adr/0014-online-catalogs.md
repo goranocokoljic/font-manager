@@ -38,6 +38,20 @@ part that differs per catalog needs one narrow seam.
   Google's `)]}'` guard, which is skipped. The `menu` subset (Google's subset for
   drawing the family's own name) is dropped. The base URL is configurable
   (`GoogleFonts::with_base_url`) for tests.
+- **Fontshare endpoint (E22.5).** The index is `GET https://api.fontshare.com/v2/fonts`
+  (public JSON, no key, no account; about 830 KB, 100 families in October 2026, one
+  answer). It gives the family, category, script, designers, version, `license_type`
+  (`itf_ffl`, `sil_ofl`), axes and styles; each style names its weight, italic, variable
+  and its CDN file (`//cdn.fontshare.com/wf/...`, served as TrueType at that URL plus
+  `.ttf`). `CatalogFamily.licenseName` (added with E22.5) carries the license's name,
+  because the ITF Free Font License is not an `OpenLicense`: such a family has
+  `license: None` and `openSource: false`. Variable fonts give axes, not styles; an axis
+  listed twice (upright and italic variable font) is kept once. An answer that says it
+  is only part of the index (`has_more`, or `count_total` above the families sent) is an
+  error, so the cache stays. There is no per-family file list by name, so
+  `resolve_files` reads the index again and names the files like Fontshare's own
+  download (`GeneralSans-BoldItalic.ttf`). Base URL configurable
+  (`Fontshare::with_base_url`) for tests.
 - **Cache location.** `<data>/catalogs/` in the app data folder (ADR 0007):
   `<catalog>.json` (`google-fonts.json`) holds `{ format, refreshedAt, families }`,
   `refreshedAt` in RFC 3339 UTC; `catalogs.json` holds which catalogs are on. A refresh

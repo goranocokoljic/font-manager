@@ -4444,6 +4444,7 @@ fn mock_catalog_families() -> Vec<CatalogFamily> {
         last_modified: Some("2026-09-01".to_owned()),
         open_source: true,
         license: None,
+        license_name: None,
     };
     let wght = Axis {
         tag: "wght".to_owned(),
@@ -4468,6 +4469,7 @@ impl State {
             name: id.name().to_owned(),
             homepage: match id {
                 CatalogId::GoogleFonts => "https://fonts.google.com".to_owned(),
+                CatalogId::Fontshare => "https://www.fontshare.com".to_owned(),
             },
             enabled: self.catalogs_on.contains(&id),
             refreshed_at: cache.map(|(at, _)| at.clone()),
