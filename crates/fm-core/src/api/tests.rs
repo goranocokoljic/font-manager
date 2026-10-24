@@ -1818,12 +1818,10 @@ fn web_export_keeps_only_the_subset_and_refuses_a_bad_one() {
     assert_eq!(mapped, [0x20, 0x41, 0x42]);
 }
 
-#[test]
-fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
-    let lib = Lib::new("api-export-web-restricted");
-    // Bebas Neue with OS/2 fsType 0x0002: restricted license embedding.
-    let mut data = std::fs::read(fixtures().join("google-repo/bebasneue/BebasNeue-Regular.ttf"))
-        .expect("fixture");
+/// Writes a copy of the fixture `file` with `OS/2.fsType` set to `fs_type`
+/// into `folder`.
+fn with_fs_type(file: &str, fs_type: u16, folder: &Path) {
+    let mut data = std::fs::read(fixtures().join(file)).expect("fixture");
     let os2 = read_fonts::FontRef::new(&data)
         .expect("font")
         .table_directory()
@@ -1832,10 +1830,27 @@ fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
         .find(|r| r.tag() == read_fonts::types::Tag::new(b"OS/2"))
         .map(|r| r.offset() as usize)
         .expect("OS/2");
-    data[os2 + 8..os2 + 10].copy_from_slice(&[0x00, 0x02]);
-    let folder = lib.dir.path().join("Restricted");
-    std::fs::create_dir_all(&folder).expect("folder");
-    std::fs::write(folder.join("Restricted.ttf"), &data).expect("font");
+    data[os2 + 8..os2 + 10].copy_from_slice(&fs_type.to_be_bytes());
+    std::fs::create_dir_all(folder).expect("folder");
+    let name = Path::new(file).file_name().expect("name");
+    std::fs::write(folder.join(name), &data).expect("font");
+}
+
+#[test]
+fn the_license_guard_refuses_the_whole_export_on_embedding_bits() {
+    let lib = Lib::new("api-export-web-guard");
+    let folder = lib.dir.path().join("Patched");
+    // Restricted (0x0002), preview & print (0x0004), installable (0x0000)
+    // and editable (0x0008), each its own family. All four name the OFL:
+    // an open license does not lift an embedding restriction.
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    with_fs_type("google-repo/asul/Asul-Bold.ttf", 0x0004, &folder);
+    with_fs_type("google-repo/basic/Basic-Regular.ttf", 0x0000, &folder);
+    with_fs_type("google-repo/castoro/Castoro[wght].ttf", 0x0008, &folder);
     let source = lib
         .api
         .add_source(AddSourceRequest {
@@ -1844,21 +1859,81 @@ fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
         })
         .expect("source");
     lib.scan(Some(source.id), true);
-    let face = lib
-        .api
-        .get_family(lib.family("Bebas Neue").id)
-        .expect("family")
-        .faces[0]
-        .id;
+    let face = |family: &str| {
+        lib.api
+            .get_family(lib.family(family).id)
+            .expect("family")
+            .faces[0]
+            .id
+    };
+    let (restricted, preview, installable, editable) = (
+        face("Bebas Neue"),
+        face("Asul"),
+        face("Basic"),
+        face("Castoro"),
+    );
     let out = lib.dir.path().join("out");
     std::fs::create_dir_all(&out).expect("out");
+    let export = |faces: Vec<FaceId>| lib.api.export_web(web_request(faces, &out));
+
+    // One blocked face refuses the whole request: nothing is written, and
+    // the message names every blocked face with its reason.
+    let e = export(vec![installable, restricted, editable, preview]).expect_err("blocked");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert_eq!(
+        e.message,
+        "Bebas Neue Regular: Embedding restricted, no web license declared; \
+         Asul Bold: Embedding preview & print only, no web license declared. \
+         Declare a web license for the family to export it."
+    );
+    assert_eq!(
+        e.detail.as_deref(),
+        Some(format!("blocked faces: {}, {}", restricted.0, preview.0).as_str())
+    );
+    assert!(files_under(&out).is_empty());
+    // The same with CSS: no fonts.css either.
     let e = lib
         .api
-        .export_web(web_request(vec![face], &out))
-        .expect_err("restricted");
-    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
-    assert!(e.message.contains("Bebas Neue"), "{e:?}");
+        .export_web(ExportWebRequest {
+            css: true,
+            ..web_request(vec![preview], &out)
+        })
+        .expect_err("preview & print");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
     assert!(files_under(&out).is_empty());
+
+    // Installable and editable faces with no declaration export.
+    let res = export(vec![installable, editable]).expect("installable and editable");
+    assert_eq!(res.files.len(), 4);
+    for f in &res.files {
+        std::fs::remove_file(f).expect("clean up");
+    }
+
+    // A declared license that is not Web does not lift the block.
+    let declare = |family: &str, license_type| {
+        lib.api
+            .declare_license(LicenseDeclaration {
+                family: lib.family(family).id,
+                license_type,
+                seats: None,
+                purchase_date: None,
+                receipt: ReceiptChange::Keep,
+            })
+            .expect("declare");
+    };
+    declare("Bebas Neue", Some(LicenseType::Desktop));
+    let e = export(vec![restricted]).expect_err("desktop");
+    assert!(e.message.contains("Embedding restricted"), "{e:?}");
+    assert!(files_under(&out).is_empty());
+
+    // Declaring Web for both families lets the same export through.
+    declare("Bebas Neue", Some(LicenseType::Web));
+    let e = export(vec![installable, restricted, editable, preview]).expect_err("asul left");
+    assert!(e.message.starts_with("Asul Bold:"), "{e:?}");
+    assert_eq!(e.detail, Some(format!("blocked faces: {}", preview.0)));
+    declare("Asul", Some(LicenseType::Web));
+    let res = export(vec![installable, restricted, editable, preview]).expect("declared web");
+    assert_eq!(res.files.len(), 8);
 }
 
 #[test]

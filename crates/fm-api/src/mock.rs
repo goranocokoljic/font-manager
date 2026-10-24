@@ -104,14 +104,9 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
         (Some(LicenseType::PersonalOnly), ..) => {
             (false, "Declared for personal use only".to_owned())
         }
-        (_, Embedding::Restricted, _) => (
-            false,
-            "Embedding restricted, no web license declared".to_owned(),
-        ),
-        (_, Embedding::PreviewAndPrint, _) => (
-            false,
-            "Embedding preview & print only, no web license declared".to_owned(),
-        ),
+        (_, Embedding::Restricted | Embedding::PreviewAndPrint, _) => {
+            (false, mock_web_embedding_block(l).unwrap_or_default())
+        }
         (_, _, Some(o)) => {
             let name = match o {
                 OpenLicense::Ofl => "OFL",
@@ -124,6 +119,22 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
         (_, _, None) => (false, "No web license declared".to_owned()),
     };
     WebUse { ok, reason }
+}
+
+/// The sample's copy of `fm_core::license::web_embedding_block`, the
+/// license guard of a web export (E20.6): restricted or preview-and-print
+/// embedding with no web license declared, and why, in plain words.
+fn mock_web_embedding_block(l: &LicenseInfo) -> Option<String> {
+    if l.declared == Some(LicenseType::Web) {
+        return None;
+    }
+    match l.embedding {
+        Embedding::Restricted => Some("Embedding restricted, no web license declared".to_owned()),
+        Embedding::PreviewAndPrint => {
+            Some("Embedding preview & print only, no web license declared".to_owned())
+        }
+        Embedding::Installable | Embedding::Editable => None,
+    }
 }
 
 /// Refuses a rule as fm-core does (E14.1): a group with no rules, at any
@@ -528,6 +539,21 @@ impl MockApi {
         };
         st.faces.push(copy);
         Ok(id)
+    }
+
+    /// Sets the `OS/2.fsType` embedding of `face`, for tests: the sample has
+    /// no preview-and-print face.
+    #[doc(hidden)]
+    pub fn set_embedding(&self, face: FaceId, embedding: Embedding) -> ApiResult<()> {
+        let mut st = self.state();
+        let f = st
+            .faces
+            .iter_mut()
+            .find(|f| f.detail.face.id == face)
+            .ok_or_else(|| ApiError::not_found(format!("Face {face}")))?;
+        f.detail.license.embedding = embedding;
+        f.detail.license.web_use = Some(mock_web_use(&f.detail.license));
+        Ok(())
     }
 }
 
@@ -3353,18 +3379,31 @@ impl ExportService for MockApi {
         let dir = req.out_dir.trim_end_matches(['/', '\\']);
         let mut files = Vec::new();
         let mut blocks = Vec::new();
+        // The license guard, as fm-core: every blocked face is named and
+        // the whole request is refused.
+        let mut reasons = Vec::new();
+        let mut blocked: Vec<String> = Vec::new();
         for id in &req.faces {
             let f = st.face(*id)?;
-            let lic = &f.detail.license;
-            if lic.embedding == Embedding::Restricted && lic.declared != Some(LicenseType::Web) {
-                return Err(ApiError::new(
-                    ErrorCode::PermissionDenied,
-                    format!(
-                        "{} {} does not allow web embedding. Declare a web license to export it.",
-                        f.detail.face.family_name, f.detail.face.style
-                    ),
-                ));
+            let first = !blocked.contains(&id.0.to_string());
+            if let Some(why) = mock_web_embedding_block(&f.detail.license).filter(|_| first) {
+                let s = &f.detail.face;
+                reasons.push(format!("{} {}: {why}", s.family_name, s.style));
+                blocked.push(id.0.to_string());
             }
+        }
+        if !reasons.is_empty() {
+            return Err(ApiError::new(
+                ErrorCode::PermissionDenied,
+                format!(
+                    "{}. Declare a web license for the family to export it.",
+                    reasons.join("; ")
+                ),
+            )
+            .with_detail(format!("blocked faces: {}", blocked.join(", "))));
+        }
+        for id in &req.faces {
+            let f = st.face(*id)?;
             let s = &f.detail.face;
             if let Some((ranges, space_added)) = &keep {
                 let kept = |c: &char| {

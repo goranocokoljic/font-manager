@@ -903,27 +903,38 @@ impl ExportService for CoreApi {
                 formats.push(f);
             }
         }
-        let faces = {
+        let found = {
             let index = self.lock();
             req.faces
                 .into_iter()
                 .filter(|id| ids.insert(*id))
-                .map(|id| {
-                    let f = index.web_export_face(id)?;
-                    if f.restricted {
-                        return Err(FmError::new(
-                            ErrorCode::PermissionDenied,
-                            format!(
-                                "{} does not allow web embedding. Declare a web license to export it.",
-                                f.face.label
-                            ),
-                        ));
-                    }
-                    Ok((f.face, f.style))
-                })
+                .map(|id| Ok((id, index.web_export_face(id)?)))
                 .collect::<FmResult<Vec<_>>>()?
         };
-        let (faces, styles): (Vec<_>, Vec<_>) = faces.into_iter().unzip();
+        // The license guard (E20.6): one blocked face refuses the whole
+        // request before anything is written, and the refusal names them all.
+        let blocked: Vec<_> = found
+            .iter()
+            .filter_map(|(id, f)| f.blocked.map(|why| (*id, &f.face.label, why)))
+            .collect();
+        if !blocked.is_empty() {
+            let reasons: Vec<_> = blocked
+                .iter()
+                .map(|(_, label, why)| format!("{label}: {}", why.text()))
+                .collect();
+            let ids: Vec<_> = blocked.iter().map(|(id, ..)| id.0.to_string()).collect();
+            return Err(FmError::new(
+                ErrorCode::PermissionDenied,
+                format!(
+                    "{}. Declare a web license for the family to export it.",
+                    reasons.join("; ")
+                ),
+            )
+            .with_detail(format!("blocked faces: {}", ids.join(", ")))
+            .into());
+        }
+        let (faces, styles): (Vec<_>, Vec<_>) =
+            found.into_iter().map(|(_, f)| (f.face, f.style)).unzip();
         let out_dir = Path::new(&req.out_dir);
         let (files, css) = if req.css {
             let out = web_font::export_with_css(&faces, &styles, &formats, keep.as_ref(), out_dir)?;
