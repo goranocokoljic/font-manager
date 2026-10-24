@@ -197,6 +197,11 @@ pub struct Downloaded {
     pub written: Vec<DownloadedFile>,
     /// The names not written because a file of that name was there.
     pub skipped: Vec<String>,
+    /// Why the download stopped after [`Downloaded::written`] were placed
+    /// (a file that could not be saved); the files after it were not
+    /// written. `None` when every file was written or skipped. A failure
+    /// before any file was written is an `Err` of [`Catalogs::download`].
+    pub stopped: Option<FmError>,
 }
 
 /// The font files of `kind` (else of the other kind) with the name each is
@@ -570,7 +575,9 @@ impl Catalogs {
     /// into place, and a file already there is never replaced (it is listed
     /// in [`Downloaded::skipped`]). Refused with `Conflict` while the catalog
     /// is off and `NotFound` for a family the list does not have or a folder
-    /// that is not there, all before any request.
+    /// that is not there, all before any request. A file that cannot be
+    /// saved stops the download: with files already placed the answer is
+    /// `Ok` with [`Downloaded::stopped`], else the error.
     pub fn download(
         &self,
         id: CatalogId,
@@ -626,14 +633,28 @@ impl Catalogs {
         fs::create_dir_all(&folder).map_err(|e| FmError::io(cannot, &folder, &e))?;
         let mut written = Vec::new();
         let mut skipped = Vec::new();
+        let mut stopped = None;
         for (name, bytes) in fetched {
             let path = folder.join(&name);
-            if place_new(&path, &bytes).map_err(|e| FmError::io(cannot, &path, &e))? {
-                let hash = *blake3::hash(&bytes).as_bytes();
-                written.push(DownloadedFile { name, path, hash });
-            } else {
-                skipped.push(name);
+            match place_new(&path, &bytes) {
+                Ok(true) => {
+                    let hash = *blake3::hash(&bytes).as_bytes();
+                    written.push(DownloadedFile { name, path, hash });
+                }
+                Ok(false) => skipped.push(name),
+                // The files placed so far stay (they are whole, and the user's
+                // folder is never cleaned up behind their back); the caller
+                // records them and says the download stopped.
+                Err(e) => {
+                    stopped = Some(failed(FmError::io(cannot, &path, &e)));
+                    break;
+                }
             }
+        }
+        if written.is_empty()
+            && let Some(e) = stopped
+        {
+            return Err(e);
         }
         Ok(Downloaded {
             family_id: files.family_id,
@@ -642,6 +663,7 @@ impl Catalogs {
             folder,
             written,
             skipped,
+            stopped,
         })
     }
 

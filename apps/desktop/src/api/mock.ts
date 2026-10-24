@@ -14,6 +14,7 @@ import {
   type Catalog,
   type CatalogDownload,
   type CatalogFamily,
+  type DownloadFamilyResponse,
   type CatalogId,
   type AvailableUpdate,
   type InstallUpdateRequest,
@@ -733,9 +734,11 @@ export interface MockOptions {
   catalogFamilies?: number;
   /**
    * What "Download..." of a catalog family does (E22.3): `ok` (the default) "writes" the
-   * files and rescans the source; `fail` fails as a lost connection does, writing nothing.
+   * files and rescans the source; `fail` fails as a lost connection does, writing nothing;
+   * `stopped` writes the first file only and answers why it stopped (a file that could
+   * not be saved).
    */
-  catalogDownload?: 'ok' | 'fail';
+  catalogDownload?: 'ok' | 'fail' | 'stopped';
   /** How long a mock download takes before it answers (ms; default 0). */
   catalogDownloadMs?: number;
 }
@@ -1511,8 +1514,18 @@ function createMockCatalogs(
           }))
           .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
       };
+      let error: DownloadFamilyResponse['error'] = null;
+      if (download.result === 'stopped') {
+        const stoppedAt = record.files[1]?.name ?? record.files[0]!.name;
+        record.files = record.files.slice(0, 1);
+        error = {
+          code: 'io',
+          message: `${req.family} could not be downloaded. The downloaded fonts could not be saved.`,
+          detail: `${folder}/${stoppedAt}: disk full`,
+        };
+      }
       downloads.unshift(record);
-      return { download: structuredClone(record), skipped: [], scan: job };
+      return { download: structuredClone(record), skipped: [], scan: job, error };
     },
     listCatalogDownloads: async () => structuredClone(downloads),
   };
@@ -2919,8 +2932,9 @@ export const mockClient: FmClient = createMockClient({
   similar: (['ranked', 'none', 'fail'] as const)[countFromUrl('mockSimilar', 2)],
   // `?mockCatalog=1` starts with Google Fonts on, a cached list, and no connection.
   catalog: countFromUrl('mockCatalog', 1) ? 'offline' : 'online',
-  // `?mockCatalogDownload=1` makes "Download..." fail as without a connection;
+  // `?mockCatalogDownload=1` makes "Download..." fail as without a connection, `=2`
+  // stop after the first file;
   // `?mockDownloadMs=<n>` makes a download take n ms.
-  catalogDownload: countFromUrl('mockCatalogDownload', 1) ? 'fail' : 'ok',
+  catalogDownload: (['ok', 'fail', 'stopped'] as const)[countFromUrl('mockCatalogDownload', 2)],
   catalogDownloadMs: countFromUrl('mockDownloadMs', 10_000),
 });

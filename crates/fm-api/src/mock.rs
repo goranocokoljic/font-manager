@@ -4648,6 +4648,7 @@ impl CatalogService for MockApi {
             download,
             skipped: Vec::new(),
             scan,
+            error: None,
         })
     }
 

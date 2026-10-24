@@ -152,6 +152,31 @@ describe('CatalogBrowser "Download..."', () => {
     expect(w.find('[data-testid="catalog-download"] progress').exists()).toBe(false);
   });
 
+  it('a download that stopped after some files says which were written, never "No file was written"', async () => {
+    const { w, client } = await opened(
+      createMockClient({ catalog: 'offline', catalogDownload: 'stopped' }),
+    );
+    await openFor(w, 'Lato');
+    await w.get('form').trigger('submit');
+    await flushPromises();
+    await new Promise((r) => setTimeout(r, 5));
+    await flushPromises();
+
+    expect(status(w)).toBe('Lato: 1 file downloaded into /Users/demo/Fonts/Lato.');
+    const alert = w.get('[data-testid="catalog-download-error"]');
+    expect(alert.attributes('role')).toBe('alert');
+    expect(alert.text()).toBe(
+      'The download stopped before the end: Lato could not be downloaded. The downloaded fonts could not be saved. Only the files counted above were written, and they are kept.',
+    );
+    expect(alert.text()).not.toContain('No file was written');
+    expect(
+      w.find('[data-testid="catalog-download-start"]').exists(),
+      'no retry over kept files',
+    ).toBe(false);
+    const [lato] = await client.listCatalogDownloads();
+    expect(lato?.files.map((f) => f.name)).toEqual(['Lato-100.ttf']);
+  });
+
   it('a failed download says nothing was written and offers to try again', async () => {
     const { w, client } = await opened(
       createMockClient({ catalog: 'offline', catalogDownload: 'fail' }),

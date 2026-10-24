@@ -660,6 +660,14 @@ export type DownloadFamilyResponse = {
 	 *  `Event::ScanProgress` and `Event::ScanFinished`.
 	 */
 	scan: JobId,
+	/**
+	 *  Why the download stopped after the files in `download` were written
+	 *  (a file that could not be saved, or the provenance that could not be
+	 *  recorded); `None` when it finished. The files written stay and are
+	 *  rescanned. A failure before any file was written is an error of the
+	 *  call instead.
+	 */
+	error?: ApiError | null,
 };
 
 /**  One file of a duplicate group. */

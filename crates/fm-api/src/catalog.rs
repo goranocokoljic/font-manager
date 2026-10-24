@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::{Axis, Page, Paged, Slant};
 use crate::library::OpenLicense;
-use crate::{ApiResult, JobId, SourceId};
+use crate::{ApiError, ApiResult, JobId, SourceId};
 
 /// A catalog the app knows how to read.
 #[derive(
@@ -254,6 +254,13 @@ pub struct DownloadFamilyResponse {
     /// The rescan of the source; its progress and finish arrive as
     /// `Event::ScanProgress` and `Event::ScanFinished`.
     pub scan: JobId,
+    /// Why the download stopped after the files in `download` were written
+    /// (a file that could not be saved, or the provenance that could not be
+    /// recorded); `None` when it finished. The files written stay and are
+    /// rescanned. A failure before any file was written is an error of the
+    /// call instead.
+    #[serde(default)]
+    pub error: Option<ApiError>,
 }
 
 /// Online catalogs over a metadata cache.
@@ -281,7 +288,9 @@ pub trait CatalogService {
     /// Downloads a family's files into a subfolder named after it inside a
     /// watched source (requests; only on this call), records their
     /// provenance and starts a rescan of the source. A file already there is
-    /// never replaced; a failed download writes no file. An off catalog is
+    /// never replaced; a download that fails before writing a file writes
+    /// none, and one that stops after some files were written answers them
+    /// with [`DownloadFamilyResponse::error`]. An off catalog is
     /// `Conflict` and a family not in the cached list `NotFound`, both before
     /// any request; a source that is not a watched folder is `InvalidRequest`.
     fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse>;
@@ -349,5 +358,6 @@ mod tests {
         assert_eq!(answer.download.version, None);
         assert_eq!(answer.download.files[0].path, None);
         assert_eq!(answer.scan, JobId(7));
+        assert_eq!(answer.error, None, "a finished download has no error");
     }
 }

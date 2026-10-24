@@ -99,10 +99,14 @@ const status = computed(() => {
 });
 const failure = computed(() => {
   const s = state.value;
-  if (!s?.error) return null;
-  return s.phase === 'failed'
-    ? t('catalogs.download.failed', { message: errorMessage(s.error) })
-    : t('catalogs.download.scanFailed', { message: errorMessage(s.error) });
+  if (!s) return null;
+  if (s.phase === 'failed' && s.error)
+    return t('catalogs.download.failed', { message: errorMessage(s.error) });
+  // Stopped after some files: those are written, kept and rescanned; the rest are not.
+  const stopped = s.result?.error;
+  const lines = stopped ? [t('catalogs.download.stopped', { message: errorMessage(stopped) })] : [];
+  if (s.error) lines.push(t('catalogs.download.scanFailed', { message: errorMessage(s.error) }));
+  return lines.length ? lines.join(' ') : null;
 });
 const folderName = computed(() => family.value?.name ?? '');
 </script>

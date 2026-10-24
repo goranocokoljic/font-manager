@@ -1322,7 +1322,8 @@
       "nothingNew": "{name}: every file was already in {folder}. Nothing was replaced.",
       "failed": "{message} No file was written.",
       "scanFailed": "The files are downloaded, but the folder could not be read again: {message}",
-      "retry": "Try again"
+      "retry": "Try again",
+      "stopped": "The download stopped before the end: {message} Only the files counted above were written, and they are kept."
     }
   },
   "similar": {

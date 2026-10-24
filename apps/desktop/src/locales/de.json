@@ -1322,7 +1322,8 @@
       "nothingNew": "{name}: Alle Dateien waren schon in {folder}. Nichts wurde ersetzt.",
       "failed": "{message} Es wurde keine Datei geschrieben.",
       "scanFailed": "Die Dateien sind geladen, aber der Ordner konnte nicht erneut gelesen werden: {message}",
-      "retry": "Erneut versuchen"
+      "retry": "Erneut versuchen",
+      "stopped": "Der Download wurde vor dem Ende abgebrochen: {message} Nur die oben gezählten Dateien wurden geschrieben, und sie bleiben erhalten."
     }
   },
   "similar": {

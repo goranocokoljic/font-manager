@@ -1210,7 +1210,9 @@ impl CatalogService for CoreApi {
 
     /// Downloads into a watched source, records the provenance of the files
     /// written (none recorded when every file was already there) and starts
-    /// a rescan of the source, whose events bring the new faces.
+    /// a rescan of the source, whose events bring the new faces. A download
+    /// that stopped after some files were written answers them with its
+    /// `error`, recorded and rescanned like a finished one.
     fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse> {
         let catalogs = self.catalogs()?;
         let source = self
@@ -1226,9 +1228,17 @@ impl CatalogService for CoreApi {
         }
         let got = catalogs.download(req.id, &req.family, req.kind, Path::new(&source.path))?;
         let at = crate::catalog::now_rfc3339();
+        let mut error = got.stopped.clone().map(ApiError::from);
         if !got.written.is_empty() {
-            self.lock()
-                .record_catalog_download(req.id, &req.family, source.id, &at, &got)?;
+            // The files are on disk either way: a provenance that cannot be
+            // recorded is reported with them, and they are still rescanned.
+            if let Err(e) =
+                self.lock()
+                    .record_catalog_download(req.id, &req.family, source.id, &at, &got)
+            {
+                tracing::warn!(error = %e, "catalog download provenance not recorded");
+                error.get_or_insert_with(|| e.into());
+            }
         }
         let mut files: Vec<CatalogDownloadFile> = got
             .written
@@ -1257,6 +1267,7 @@ impl CatalogService for CoreApi {
             download,
             skipped: got.skipped,
             scan,
+            error,
         })
     }
 

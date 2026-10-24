@@ -3716,9 +3716,18 @@ fn catalogs_never_fetch_outside_refresh() {
 /// A scanned library whose catalogs reach the Lato fixture server over
 /// HTTP, with Google Fonts on and refreshed.
 fn downloading(label: &str) -> (Lib, Source, crate::test_support::LocalServer) {
+    downloading_from(
+        label,
+        crate::catalog::tests::lato_server((200, crate::catalog::tests::lato_font("bold"))),
+    )
+}
+
+/// As [`downloading`], over `server`.
+fn downloading_from(
+    label: &str,
+    server: crate::test_support::LocalServer,
+) -> (Lib, Source, crate::test_support::LocalServer) {
     let (lib, source, _) = Lib::scanned(label);
-    let server =
-        crate::catalog::tests::lato_server((200, crate::catalog::tests::lato_font("bold")));
     let catalogs = Catalogs::new(
         lib.paths.data.join(CATALOGS_DIR),
         Arc::new(crate::catalog::HttpFetcher::new()),
@@ -3875,6 +3884,38 @@ fn provenance_survives_a_rescan_and_follows_a_moved_file_by_hash() {
     let after = lib.api.list_catalog_downloads().expect("downloads");
     assert_eq!(after[0].files[0].path, None);
     assert_eq!(after[0].files.len(), 2);
+}
+
+#[test]
+fn a_stopped_download_records_and_rescans_what_it_wrote_and_says_why() {
+    let (lib, source, _server) = downloading_from(
+        "catalog-download-stopped",
+        crate::catalog::tests::stopping_server(),
+    );
+    let (got, events) = download_lato(&lib, source.id);
+    let error = got.error.as_ref().expect("the download says it stopped");
+    assert_eq!(error.code, ErrorCode::Io);
+    assert!(
+        error.message.starts_with("Lato could not be downloaded."),
+        "{error:?}"
+    );
+    let names: Vec<&str> = got.download.files.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["Lato-Regular.ttf"],
+        "the file written before it stopped"
+    );
+
+    // Recorded and rescanned like a finished download.
+    let listed = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].files.len(), 1);
+    assert_eq!(listed[0].files[0].name, "Lato-Regular.ttf");
+    let Some(Event::LibraryChanged { added, .. }) = events.last() else {
+        panic!("{events:?}");
+    };
+    assert_eq!(added.len(), 1, "the one file written: {events:?}");
+    assert!(lib.names().iter().any(|n| n == "Cagliostro"));
 }
 
 #[test]
