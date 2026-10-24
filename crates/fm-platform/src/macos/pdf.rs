@@ -138,6 +138,16 @@ fn start(
     later(job, mtm, wait_for_page);
 }
 
+/// How long after its print callback a job is let go, in nanoseconds.
+const RELEASE_NS: i64 = 500_000_000;
+
+/// Drops this reference to `job` on the main queue a moment from now, outside
+/// any WebKit or AppKit callback.
+fn release_later(job: Rc<Job>, mtm: MainThreadMarker) {
+    let bound = MainThreadBound::new(job, mtm);
+    let _ = DispatchQueue::main().after(DispatchTime::NOW.time(RELEASE_NS), move || drop(bound));
+}
+
 /// Runs `step` on the main queue a moment from now.
 fn later(job: Rc<Job>, mtm: MainThreadMarker, step: Step) {
     let bound = MainThreadBound::new(job, mtm);
@@ -159,16 +169,19 @@ fn wait_for_page(job: Rc<Job>, mtm: MainThreadMarker) {
         later(job, mtm, wait_for_page);
         return;
     }
-    let next = Rc::clone(&job);
+    // WebKit may release the block on any thread; the bound job is then
+    // dropped on the main thread all the same.
+    let next = MainThreadBound::new(Rc::clone(&job), mtm);
     let block = RcBlock::new(move |result: *mut AnyObject, _error: *mut NSError| {
         // SAFETY: WebKit passes a valid object or null.
         let loaded = unsafe { result.as_ref() }
             .and_then(|o| o.downcast_ref::<NSString>())
             .is_some_and(|s| s.to_string() == "loaded");
+        let job = Rc::clone(next.get(mtm));
         if loaded {
-            print(Rc::clone(&next), mtm);
+            print(job, mtm);
         } else {
-            later(Rc::clone(&next), mtm, wait_for_page);
+            later(job, mtm, wait_for_page);
         }
     });
     // SAFETY: a constant script; the block lives as long as WebKit keeps it.
@@ -260,6 +273,10 @@ fn print(job: Rc<Job>, mtm: MainThreadMarker) {
                     finished.out.display()
                 )))
             });
+            // This runs inside the print operation's callback: closing the
+            // window and releasing the web view here would free them while
+            // WebKit still uses them (it traps). Let go a moment later.
+            release_later(finished, mtm);
         }),
     );
     PENDING.with(|p| p.borrow_mut().push(delegate.clone()));
