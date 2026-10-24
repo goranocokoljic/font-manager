@@ -226,6 +226,8 @@
       "layout": "Layout"
     },
     "preset": "Preset",
+    "openStudio": "Open in Pairing Studio",
+    "openStudioTitle": "Open this layout with the shown font in its own panel",
     "unreadable": "{name} (cannot be read)",
     "density": {
       "comfortable": "Comfortable",
@@ -283,7 +285,8 @@
       },
       "showPreset": "Show the {preset} layout",
       "reopenComparison": "Open comparison: {name}",
-      "findSimilar": "Find similar fonts"
+      "findSimilar": "Find similar fonts",
+      "openStudio": "Open the layout in Pairing Studio"
     }
   },
   "views": {
@@ -1139,6 +1142,14 @@
       "installVersion": "Install version {version}",
       "installAndRestart": "Install and restart"
     }
+  },
+  "studio": {
+    "title": "Pairing Studio",
+    "region": "Pairing Studio: {name}",
+    "font": "Font",
+    "noFont": "No font",
+    "layout": "Layout",
+    "closeTitle": "Back to the library (Escape)"
   },
   "conflicts": {
     "title": "Font conflicts",

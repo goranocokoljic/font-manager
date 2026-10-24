@@ -3,6 +3,7 @@
 // unsaved changes), Duplicate (an independent copy, which opens), Reset (a preset back to
 // its shipped original) and History (the kept versions, each with Restore). Every action
 // goes through the text layouts store and the generated client; the core keeps the files.
+// The default slot adds the parent's own controls at the end of the bar.
 import { computed, ref } from 'vue';
 import { errorMessage, formatDate, t } from '../i18n';
 import { useTextLayoutsStore } from '../stores/textLayouts';
@@ -109,6 +110,7 @@ const when = (iso: string) => {
     <span class="note" role="status">{{
       layouts.error ? errorMessage(layouts.error) : (status?.() ?? '')
     }}</span>
+    <slot />
   </div>
   <section
     v-if="historyOpen"
