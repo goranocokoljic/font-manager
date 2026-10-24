@@ -222,6 +222,47 @@ export type Catalog = {
 	familyCount: number,
 };
 
+/**  Where a downloaded family came from (its provenance). */
+export type CatalogDownload = {
+	/**  The catalog. */
+	catalog: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+	/**
+	 *  The catalog's id of the family: the name for Google Fonts, the slug
+	 *  for Fontshare.
+	 */
+	catalogFamilyId: string,
+	/**
+	 *  The family's version as the catalog gives it; for a catalog that
+	 *  gives none (Google Fonts), the date it last changed.
+	 */
+	version?: string | null,
+	/**  Static or variable files. */
+	kind: CatalogFileKind,
+	/**  When it was downloaded (RFC 3339, UTC). */
+	downloadedAt: string,
+	/**  The source it was downloaded into. */
+	source: SourceId,
+	/**  The folder it was downloaded into. */
+	folder: string,
+	/**  The files written, by name. */
+	files: CatalogDownloadFile[],
+};
+
+/**  One downloaded file and where it is now. */
+export type CatalogDownloadFile = {
+	/**  Its file name as downloaded (`Lato-Bold.ttf`). */
+	name: string,
+	/**  The blake3 hash of its bytes, as lowercase hex. */
+	hash: string,
+	/**
+	 *  Where the library has a file with these bytes now (the user may have
+	 *  moved it); `None` when the library has none.
+	 */
+	path?: string | null,
+};
+
 /**  A family as a catalog describes it, before anything is downloaded. */
 export type CatalogFamily = {
 	/**  The family name ("Roboto Flex"). */
@@ -257,6 +298,16 @@ export type CatalogFamily = {
 	 */
 	licenseName?: string | null,
 };
+
+/**
+ *  Which files of a family to download: its static styles or its variable
+ *  fonts.
+ */
+export type CatalogFileKind = 
+/**  One file per style (`Lato-Bold.ttf`). */
+"static" | 
+/**  The variable fonts (`Inter[opsz,wght].ttf`). */
+"variable";
 
 /**  The preview file of one catalog family (E22.2). */
 export type CatalogFontRequest = {
@@ -576,6 +627,48 @@ export type Density =
 "comfortable" | 
 /**  More rows on screen. */
 "compact";
+
+/**  Downloads a family of a catalog into a watched source (E22.3). */
+export type DownloadFamilyRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+	/**
+	 *  Static or variable files. A family that has only the other kind gets
+	 *  that kind; [`CatalogDownload::kind`] says which.
+	 */
+	kind: CatalogFileKind,
+	/**
+	 *  The watched source to download into; the files go into a subfolder
+	 *  named after the family.
+	 */
+	source: SourceId,
+};
+
+/**  What a download wrote and the rescan it started. */
+export type DownloadFamilyResponse = {
+	/**  The provenance recorded for the files written. */
+	download: CatalogDownload,
+	/**
+	 *  Files not written because a file of that name was already in the
+	 *  folder; it is never replaced.
+	 */
+	skipped?: string[],
+	/**
+	 *  The rescan of the source; its progress and finish arrive as
+	 *  `Event::ScanProgress` and `Event::ScanFinished`.
+	 */
+	scan: JobId,
+	/**
+	 *  Why the download stopped after the files in `download` were written
+	 *  (a file that could not be saved, or the provenance that could not be
+	 *  recorded); `None` when it finished. The files written stay and are
+	 *  rescanned. A failure before any file was written is an error of the
+	 *  call instead.
+	 */
+	error?: ApiError | null,
+};
 
 /**  One file of a duplicate group. */
 export type DuplicateCopy = {

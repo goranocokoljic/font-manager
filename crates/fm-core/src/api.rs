@@ -17,7 +17,9 @@
 //!   ([`CoreApi::with_trash`]); without a trash it answers `Unsupported`
 //!   and moves nothing.
 //! - **Catalogs.** Online catalogs (E22.1) are off until the user turns
-//!   one on; only [`CatalogService::refresh_catalog`] goes to the network.
+//!   one on; only [`CatalogService::refresh_catalog`], a preview and
+//!   [`CatalogService::download_family`] go to the network. A download
+//!   records its provenance in the index and rescans the source.
 //! - **Not built yet.** Export, workflows and similar-font search answer an
 //!   `Unsupported` error with a message for the user, never a panic.
 
@@ -32,7 +34,8 @@ use fm_api::activation::{
     DeactivateRequest, Target,
 };
 use fm_api::catalog::{
-    Catalog, CatalogFamily, CatalogFontRequest, CatalogFontSource, CatalogRef, CatalogService,
+    Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
+    CatalogFontSource, CatalogRef, CatalogService, DownloadFamilyRequest, DownloadFamilyResponse,
     ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
@@ -1203,6 +1206,73 @@ impl CatalogService for CoreApi {
             family: req.family,
             path: path.to_string_lossy().into_owned(),
         })
+    }
+
+    /// Downloads into a watched source, records the provenance of the files
+    /// written (none recorded when every file was already there) and starts
+    /// a rescan of the source, whose events bring the new faces. A download
+    /// that stopped after some files were written answers them with its
+    /// `error`, recorded and rescanned like a finished one.
+    fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse> {
+        let catalogs = self.catalogs()?;
+        let source = self
+            .lock()
+            .sources()?
+            .into_iter()
+            .find(|s| s.id == req.source)
+            .ok_or_else(|| ApiError::not_found(format!("Source {}", req.source)))?;
+        if source.kind != SourceKind::Watched {
+            return Err(ApiError::invalid(
+                "Fonts can be downloaded only into a folder you added.",
+            ));
+        }
+        let got = catalogs.download(req.id, &req.family, req.kind, Path::new(&source.path))?;
+        let at = crate::catalog::now_rfc3339();
+        let mut error = got.stopped.clone().map(ApiError::from);
+        if !got.written.is_empty() {
+            // The files are on disk either way: a provenance that cannot be
+            // recorded is reported with them, and they are still rescanned.
+            if let Err(e) =
+                self.lock()
+                    .record_catalog_download(req.id, &req.family, source.id, &at, &got)
+            {
+                tracing::warn!(error = %e, "catalog download provenance not recorded");
+                error.get_or_insert_with(|| e.into());
+            }
+        }
+        let mut files: Vec<CatalogDownloadFile> = got
+            .written
+            .iter()
+            .map(|f| CatalogDownloadFile {
+                name: f.name.clone(),
+                hash: blake3::Hash::from_bytes(f.hash).to_hex().to_string(),
+                path: Some(f.path.to_string_lossy().into_owned()),
+            })
+            .collect();
+        // By name, as `list_catalog_downloads` lists them.
+        files.sort_by(|a, b| a.name.cmp(&b.name));
+        let download = CatalogDownload {
+            catalog: req.id,
+            family: req.family,
+            catalog_family_id: got.family_id,
+            version: got.version,
+            kind: got.kind,
+            downloaded_at: at,
+            source: source.id,
+            folder: got.folder.to_string_lossy().into_owned(),
+            files,
+        };
+        let scan = self.start_scan(vec![source])?;
+        Ok(DownloadFamilyResponse {
+            download,
+            skipped: got.skipped,
+            scan,
+            error,
+        })
+    }
+
+    fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>> {
+        Ok(self.lock().catalog_downloads()?)
     }
 }
 

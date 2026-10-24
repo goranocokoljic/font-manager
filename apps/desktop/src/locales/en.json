@@ -1294,7 +1294,37 @@
     "offline": "Offline - showing the list from {date}",
     "noMatches": "No family matches the search.",
     "empty": "The list is empty. Refresh to fetch it.",
-    "sizePx": "{size} px"
+    "sizePx": "{size} px",
+    "download": {
+      "action": "Download…",
+      "actionLabel": "Download {name}…",
+      "title": "Download {name}",
+      "into": "Download into",
+      "noFolder": "Add a folder to the library first. Downloads go into a folder you added.",
+      "files": "Files",
+      "static": "One file per style",
+      "variable": "Variable font",
+      "where": "The files go into a folder named {folder} inside it. A file that is already there is kept, never replaced.",
+      "start": "Download",
+      "cancel": "Cancel",
+      "close": "Close",
+      "downloading": "Downloading {name}…",
+      "scanning": "Adding {name} to the library…",
+      "scanProgress": "Adding {name} to the library: {done} of {total} files read",
+      "done": {
+        "one": "{name}: {count} file downloaded into {folder}.",
+        "other": "{name}: {count} files downloaded into {folder}."
+      },
+      "skipped": {
+        "one": "{count} file was already there and was kept.",
+        "other": "{count} files were already there and were kept."
+      },
+      "nothingNew": "{name}: every file was already in {folder}. Nothing was replaced.",
+      "failed": "{message} No file was written.",
+      "scanFailed": "The files are downloaded, but the folder could not be read again: {message}",
+      "retry": "Try again",
+      "stopped": "The download stopped before the end: {message} Only the files counted above were written, and they are kept."
+    }
   },
   "similar": {
     "title": "Similar to {name}",

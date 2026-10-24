@@ -99,6 +99,8 @@ struct Index {
 struct Entry {
     name: String,
     #[serde(default)]
+    slug: Option<String>,
+    #[serde(default)]
     category: Option<String>,
     #[serde(default)]
     script: Option<String>,
@@ -320,9 +322,11 @@ pub fn parse_files(body: &[u8], family: &str) -> FmResult<CatalogFiles> {
                 style
             };
             let name = format!("{stem}-{style}.ttf");
-            names
-                .insert(name.clone())
-                .then_some(CatalogFile { name, url })
+            names.insert(name.clone()).then_some(CatalogFile {
+                name,
+                url,
+                variable: s.is_variable,
+            })
         })
         .collect();
     if files.is_empty() {
@@ -332,7 +336,18 @@ pub fn parse_files(body: &[u8], family: &str) -> FmResult<CatalogFiles> {
         ));
     }
     let (license, _) = license(entry.license_type.as_deref());
-    Ok(CatalogFiles { files, license })
+    let family_id = entry
+        .slug
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(entry.name.trim())
+        .to_owned();
+    Ok(CatalogFiles {
+        family_id,
+        files,
+        license,
+    })
 }
 
 /// A style's TrueType URL: a scheme-relative CDN path gets `https:`, and

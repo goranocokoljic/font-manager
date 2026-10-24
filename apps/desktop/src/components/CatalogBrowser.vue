@@ -3,7 +3,8 @@
 // with the font list's preview controls (sample text, size, …) and its List, Grid and
 // Waterfall modes, virtualized the same way: only the lines on screen (plus `overscan`)
 // exist, keyed by slot. The search box filters through the core; "Refresh" fetches the
-// list again. Offline, or when a refresh fails, the cached list stays with a note.
+// list again. Offline, or when a refresh fails, the cached list stays with a note. A row's
+// "Download..." opens the download panel above the list (E22.3).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CatalogFamily } from '../api/types';
 import { errorMessage, formatDate, t } from '../i18n';
@@ -15,6 +16,7 @@ import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
 import { previewRowHeight, usePreviewStore } from '../stores/preview';
 import { useSettingsStore } from '../stores/settings';
 import { useViewsStore, type ViewMode } from '../stores/views';
+import CatalogDownload from './CatalogDownload.vue';
 import CatalogFamilyItem from './CatalogFamilyItem.vue';
 import PreviewControls from './PreviewControls.vue';
 
@@ -136,6 +138,11 @@ watch([() => store.query, mode], () => {
   scrollTop.value = 0;
 });
 
+/** A closed download panel gives the focus back to the list. */
+function downloadClosed(): void {
+  viewport.value?.focus();
+}
+
 const surfaceClass = computed(() =>
   preview.value.surface === 'auto' ? undefined : `surface-${preview.value.surface}`,
 );
@@ -197,6 +204,10 @@ const surfaceClass = computed(() =>
       {{ offlineNote }}
     </p>
     <p v-else-if="refreshFailure" class="banner error" role="alert">{{ refreshFailure }}</p>
+    <CatalogDownload
+      v-if="store.download && store.download.catalog === catalog.id"
+      @close="downloadClosed"
+    />
     <PreviewControls :view="CATALOG_VIEW" />
 
     <div v-if="!catalog.enabled" class="empty" data-testid="catalog-off">

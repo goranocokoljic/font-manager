@@ -226,3 +226,106 @@ for (const locale of ['en-US', 'de-DE']) {
     });
   });
 }
+
+// E22.3: "Download..." asks which folder of the library to download into, then shows the
+// download, the rescan and the result. The browser-mode mock writes nothing; a download
+// takes `mockDownloadMs` so its progress can be seen.
+test('download a family into a chosen folder, by keyboard, with progress and the result', async ({
+  page,
+}) => {
+  await serveFonts(page);
+  await page.goto('/?mockCatalog=1&mockDownloadMs=800');
+  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).press('Enter');
+  await expect(catalogRows(page)).toHaveCount(4);
+
+  const open = catalogRows(page)
+    .filter({ hasText: 'Lato' })
+    .getByRole('button', { name: 'Download Lato…' });
+  await expect(open).toHaveText('Download…');
+  await open.focus();
+  await page.keyboard.press('Enter');
+
+  const panel = page.getByRole('region', { name: 'Download Lato' });
+  await expect(panel).toBeVisible();
+  const into = panel.getByRole('combobox', { name: 'Download into' });
+  await expect(into, 'the folder picker takes the focus').toBeFocused();
+  // Only folders the user added: never the system fonts.
+  await expect(into.locator('option')).toHaveText(['/Users/demo/Fonts']);
+  await expect(panel).toContainText('The files go into a folder named Lato inside it.');
+
+  await page.keyboard.press('Tab');
+  const start = panel.getByRole('button', { name: 'Download', exact: true });
+  await expect(start).toBeFocused();
+  await page.keyboard.press('Enter');
+  const status = panel.getByRole('status');
+  await expect(status).toHaveText('Downloading Lato…');
+  await expect(panel.getByRole('progressbar')).toBeVisible();
+  await expect(open, 'one download at a time').toBeDisabled();
+
+  await expect(status).toHaveText('Lato: 5 files downloaded into /Users/demo/Fonts/Lato.');
+  await expect(panel.getByRole('progressbar')).toHaveCount(0);
+  const close = panel.getByRole('button', { name: 'Close' });
+  await expect(close, 'the result takes the focus').toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(panel).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Google Fonts families' })).toBeFocused();
+});
+
+test('a failed download says nothing was written; Escape closes the panel', async ({ page }) => {
+  await serveFonts(page);
+  await page.goto('/?mockCatalog=1&mockCatalogDownload=1');
+  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).press('Enter');
+  const open = catalogRows(page)
+    .filter({ hasText: 'Inter' })
+    .getByRole('button', { name: 'Download Inter…' });
+  await open.press('Enter');
+  const panel = page.getByRole('region', { name: 'Download Inter' });
+  // Inter has a variable font: the choice is a labelled group of radio buttons.
+  const files = panel.getByRole('group', { name: 'Files' });
+  await expect(files.getByRole('radio', { name: 'Variable font' })).toBeChecked();
+  await files.getByRole('radio', { name: 'One file per style' }).check();
+  await panel.getByRole('button', { name: 'Download', exact: true }).press('Enter');
+  await expect(panel.getByRole('alert')).toHaveText(
+    'Inter could not be downloaded. The catalog could not be reached. Check the connection and try again. No file was written.',
+  );
+  await expect(panel.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await panel.getByRole('combobox', { name: 'Download into' }).press('Escape');
+  await expect(panel).toHaveCount(0);
+});
+
+/** WCAG contrast ratio of an element's border against the page background. */
+const borderContrast = (el: ReturnType<Page['getByRole']>) =>
+  el.evaluate((node) => {
+    const rgb = (c: string) => (c.match(/\d+(\.\d+)?/g) ?? []).slice(0, 3).map(Number);
+    const lum = (c: string) => {
+      const [r, g, b] = rgb(c).map((v) => {
+        const s = v / 255;
+        return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const a = lum(getComputedStyle(node).borderTopColor);
+    const b = lum(getComputedStyle(document.body).backgroundColor);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  });
+
+for (const scheme of ['light', 'dark'] as const) {
+  test(`the download controls are outlined at 3:1 or more (${scheme})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await serveFonts(page);
+    await page.goto('/?mockCatalog=1');
+    const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+    await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).press('Enter');
+    const open = page.getByRole('button', { name: 'Download Lato…' });
+    expect(await borderContrast(open), 'Download…').toBeGreaterThanOrEqual(3);
+    await open.press('Enter');
+    const panel = page.getByRole('region', { name: 'Download Lato' });
+    for (const control of [
+      panel.getByRole('combobox', { name: 'Download into' }),
+      panel.getByRole('button', { name: 'Cancel' }),
+    ])
+      expect(await borderContrast(control)).toBeGreaterThanOrEqual(3);
+  });
+}

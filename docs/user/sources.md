@@ -79,4 +79,26 @@ Some copies do not move:
 Undo does not replace a file that is now at the old path. Move that file away,
 then select **Undo** again. If you emptied the trash, the copy cannot come back.
 
+## Download fonts from an online catalog
+
+You can download a free family from Google Fonts or Fontshare into one of your
+folders. Turn the catalog on first, under **Online catalogs** in the sidebar.
+
+1. Open the catalog and find the family.
+2. Select **Download…** next to the family.
+3. Under **Download into**, select one of your folders. Downloads go only into a
+   folder you added, never into the system fonts.
+4. If the family has a variable font, select **Variable font** or **One file per
+   style**.
+5. Select **Download**.
+
+Font Manager puts the files into a new folder with the name of the family, inside
+the folder you selected. Then it reads the folder again, and the family shows in
+your library. A file that is already there stays as it is. Font Manager never
+replaces it. If the download fails, Font Manager writes no file.
+
+Font Manager remembers where each downloaded family came from: the catalog, the
+version and the date. It also remembers each file by its contents, so it still
+knows the file after you move it to another folder of your library.
+
 Next: [Activation](activation.md).

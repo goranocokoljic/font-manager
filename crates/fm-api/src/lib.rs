@@ -272,6 +272,11 @@ pub fn types() -> specta::Types {
         catalog::ListCatalogFamiliesRequest,
         catalog::CatalogFontRequest,
         catalog::CatalogFontSource,
+        catalog::CatalogFileKind,
+        catalog::DownloadFamilyRequest,
+        catalog::CatalogDownloadFile,
+        catalog::CatalogDownload,
+        catalog::DownloadFamilyResponse,
         common::Paged<catalog::CatalogFamily>,
     )
 }

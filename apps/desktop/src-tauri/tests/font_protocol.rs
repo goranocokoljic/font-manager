@@ -208,6 +208,15 @@ impl CatalogService for Previews {
                 .into_owned(),
         })
     }
+    fn download_family(
+        &self,
+        _: fm_api::catalog::DownloadFamilyRequest,
+    ) -> ApiResult<fm_api::catalog::DownloadFamilyResponse> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+    fn list_catalog_downloads(&self) -> ApiResult<Vec<fm_api::catalog::CatalogDownload>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
 }
 
 /// The path the UI builds: the family name's UTF-8 as hex.

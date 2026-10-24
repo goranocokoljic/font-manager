@@ -70,6 +70,26 @@ part that differs per catalog needs one narrow seam.
   (`fmfont`, path `/catalog-<catalog id>-<the name's UTF-8 as hex>`), so a request is
   made only when a row of an open catalog is on screen. Turning a never-refreshed
   catalog on fetches its list at once; the switch says it connects to the internet.
+- **Downloads (E22.3).** `CatalogService::download_family` (catalog, family, static or
+  variable, a source) is the only call that writes into the library, and only on the
+  user's "Download…". The target must be a `watched` source (never the system fonts or
+  the library folder, rule 4); the files go into `<source>/<family>/`, the names made
+  safe on every OS (`fm_core::catalog::safe_file_name`; a catalog's `static/` prefix or
+  `../` never leaves the folder). Static vs variable: Google Fonts' file name names its
+  axes (`Inter[opsz,wght].ttf`), Fontshare's style says `is_variable`; a family without
+  the kind asked for gets the other kind, and the answer says which. Every file is
+  fetched and checked to be a font before any is written, so a failed request writes
+  nothing; each is written to `.<name>.<pid>-<n>.part` beside it and hard-linked into
+  place (renamed after a check where the file system has no hard links), so an existing
+  file is never replaced: it is reported in `skipped`. The source is then rescanned (the
+  returned `JobId`; the usual scan events bring the faces), so no new `Event` exists.
+- **Provenance.** Index tables `catalog_download` and `catalog_download_file` (schema
+  17): catalog, its family id (Google Fonts: the name, its only key; Fontshare: the
+  slug), version (Google Fonts gives none: its `lastModified` date), kind, date, source,
+  folder, and each file's name, path and blake3 hash. No foreign key to `font_file`, so
+  a rescan or rebuild keeps them; `list_catalog_downloads` finds each file's current
+  path by its hash among the files the library has (not `gone`), so a moved file is
+  followed.
 
 ## Consequences
 

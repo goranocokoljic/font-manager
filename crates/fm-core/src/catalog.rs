@@ -17,6 +17,10 @@
 //! - **Previews (E22.2).** [`Catalogs::font_source`] fetches one file of a
 //!   listed family into the app's cache folder the first time a row shows
 //!   it, and reads it from there after; refused while the catalog is off.
+//! - **Downloads (E22.3).** [`Catalogs::download`] writes a family's files
+//!   into a subfolder named after it inside a folder the user chose: every
+//!   file is fetched and checked first, then each goes through a temporary
+//!   file and is linked into place without replacing a file already there.
 
 pub mod fontshare;
 pub mod google;
@@ -29,7 +33,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fm_api::ErrorCode;
-use fm_api::catalog::{Catalog, CatalogFamily, CatalogId};
+use fm_api::catalog::{Catalog, CatalogFamily, CatalogFileKind, CatalogId};
 use fm_api::common::{Page, Paged};
 use fm_api::library::OpenLicense;
 use serde::{Deserialize, Serialize};
@@ -62,11 +66,16 @@ pub struct CatalogFile {
     pub name: String,
     /// Where to download it.
     pub url: String,
+    /// It is a variable font (`Inter[opsz,wght].ttf`), not one static style.
+    pub variable: bool,
 }
 
 /// The files of one catalog family and the license they come with.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CatalogFiles {
+    /// The catalog's id of the family: the name for Google Fonts, the slug
+    /// for Fontshare.
+    pub family_id: String,
     /// The font files.
     pub files: Vec<CatalogFile>,
     /// The license, from the license file shipped with them.
@@ -159,6 +168,153 @@ pub fn preview_file(files: &[CatalogFile]) -> Option<(&CatalogFile, &'static str
         .enumerate()
         .min_by_key(|(i, (_, _, stem))| (rank(stem), *i))
         .map(|(_, (f, ext, _))| (*f, *ext))
+}
+
+/// One file a download wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DownloadedFile {
+    /// Its file name.
+    pub name: String,
+    /// Where it was written.
+    pub path: PathBuf,
+    /// The blake3 hash of its bytes.
+    pub hash: [u8; 32],
+}
+
+/// What [`Catalogs::download`] wrote.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Downloaded {
+    /// The catalog's id of the family.
+    pub family_id: String,
+    /// The family's version, else the date the catalog last changed it.
+    pub version: Option<String>,
+    /// The kind of files written (the other kind when the family has none
+    /// of the kind asked for).
+    pub kind: CatalogFileKind,
+    /// The family's folder.
+    pub folder: PathBuf,
+    /// The files written, in the catalog's order.
+    pub written: Vec<DownloadedFile>,
+    /// The names not written because a file of that name was there.
+    pub skipped: Vec<String>,
+    /// Why the download stopped after [`Downloaded::written`] were placed
+    /// (a file that could not be saved); the files after it were not
+    /// written. `None` when every file was written or skipped. A failure
+    /// before any file was written is an `Err` of [`Catalogs::download`].
+    pub stopped: Option<FmError>,
+}
+
+/// The font files of `kind` (else of the other kind) with the name each is
+/// saved under, in the catalog's order; a name that comes twice is kept
+/// once. `None` when the family has no font file at all.
+fn download_files(
+    files: &[CatalogFile],
+    kind: CatalogFileKind,
+) -> Option<(CatalogFileKind, Vec<(String, &CatalogFile)>)> {
+    let fonts: Vec<(String, &CatalogFile)> = files
+        .iter()
+        .filter_map(|f| {
+            let base = f.name.rsplit(['/', '\\']).next().unwrap_or(&f.name);
+            let (_, ext) = base.rsplit_once('.')?;
+            if !PREVIEW_EXTENSIONS
+                .iter()
+                .any(|e| e.eq_ignore_ascii_case(ext))
+            {
+                return None;
+            }
+            Some((safe_file_name(base)?, f))
+        })
+        .collect();
+    let pick = |variable: bool| -> Vec<(String, &CatalogFile)> {
+        let mut seen = BTreeSet::new();
+        fonts
+            .iter()
+            .filter(|(name, f)| f.variable == variable && seen.insert(name.to_lowercase()))
+            .cloned()
+            .collect()
+    };
+    let other = match kind {
+        CatalogFileKind::Static => CatalogFileKind::Variable,
+        CatalogFileKind::Variable => CatalogFileKind::Static,
+    };
+    [kind, other].into_iter().find_map(|k| {
+        let chosen = pick(k == CatalogFileKind::Variable);
+        (!chosen.is_empty()).then_some((k, chosen))
+    })
+}
+
+/// `name` as a file or folder name that is safe on every OS: no path
+/// separator, no character Windows refuses, no control character, no
+/// leading or trailing dot or space, not a name Windows reserves (`CON`).
+/// `None` when nothing is left.
+pub fn safe_file_name(name: &str) -> Option<String> {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let cleaned = cleaned.trim_matches(|c: char| c == '.' || c.is_whitespace());
+    if cleaned.is_empty() || cleaned.chars().all(|c| c == '_') {
+        return None;
+    }
+    let stem = cleaned.split('.').next().unwrap_or(cleaned).trim_end();
+    let reserved = ["CON", "PRN", "AUX", "NUL"]
+        .iter()
+        .any(|r| stem.eq_ignore_ascii_case(r))
+        || (stem.len() == 4
+            && stem.is_char_boundary(3)
+            && ["COM", "LPT"]
+                .iter()
+                .any(|r| stem[..3].eq_ignore_ascii_case(r))
+            && stem.as_bytes()[3].is_ascii_digit());
+    Some(if reserved {
+        format!("_{cleaned}")
+    } else {
+        cleaned.to_owned()
+    })
+}
+
+/// Writes `data` to a new file at `path` through a temporary file next to
+/// it, without ever replacing a file: `false` (and nothing written) when
+/// `path` is already there. The temporary file is hard-linked into place,
+/// which fails when the name is taken; on a file system without hard links
+/// it is renamed after a check.
+fn place_new(path: &Path, data: &[u8]) -> io::Result<bool> {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    if fs::symlink_metadata(path).is_ok() {
+        return Ok(false);
+    }
+    let name = path
+        .file_name()
+        .map_or_else(Default::default, |n| n.to_string_lossy());
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp = path.with_file_name(format!(".{name}.{}-{n}.part", std::process::id()));
+    let written = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&tmp)
+        .and_then(|mut f| {
+            io::Write::write_all(&mut f, data)?;
+            f.sync_all()
+        });
+    if let Err(e) = written {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+    let placed = match fs::hard_link(&tmp, path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+        Err(_) if fs::symlink_metadata(path).is_ok() => Ok(false),
+        Err(_) => fs::rename(&tmp, path).map(|()| true),
+    };
+    // The app's own temporary file, never the user's: gone in every case.
+    let _ = fs::remove_file(&tmp);
+    placed
 }
 
 /// A catalog's cache file.
@@ -411,6 +567,106 @@ impl Catalogs {
         Ok(path)
     }
 
+    /// Downloads the `kind` files of `family`, a family in the cached list,
+    /// into `<into>/<family>/` (the subfolder is made when missing). A family
+    /// without files of that kind gets the other kind. Every file is fetched
+    /// and checked to be a font before any is written, so a failed request
+    /// writes nothing; each is then written to a temporary file and linked
+    /// into place, and a file already there is never replaced (it is listed
+    /// in [`Downloaded::skipped`]). Refused with `Conflict` while the catalog
+    /// is off and `NotFound` for a family the list does not have or a folder
+    /// that is not there, all before any request. A file that cannot be
+    /// saved stops the download: with files already placed the answer is
+    /// `Ok` with [`Downloaded::stopped`], else the error.
+    pub fn download(
+        &self,
+        id: CatalogId,
+        family: &str,
+        kind: CatalogFileKind,
+        into: &Path,
+    ) -> FmResult<Downloaded> {
+        let adapter = self.enabled_adapter(id)?;
+        let listed = self
+            .cache(id)?
+            .and_then(|c| c.families.iter().find(|f| f.name == family).cloned())
+            .ok_or_else(|| {
+                FmError::new(
+                    ErrorCode::NotFound,
+                    format!("{family} is not in the {id} list. Refresh the catalog."),
+                )
+            })?;
+        if !into.is_dir() {
+            return Err(FmError::not_found(format!("The folder {}", into.display())));
+        }
+        let failed = |e: FmError| {
+            let failed = FmError::new(
+                e.code(),
+                format!("{family} could not be downloaded. {}", e.message()),
+            );
+            match e.detail() {
+                Some(detail) => failed.with_detail(detail),
+                None => failed,
+            }
+        };
+        let files = adapter
+            .resolve_files(self.fetcher.as_ref(), family)
+            .map_err(failed)?;
+        let (kind, chosen) = download_files(&files.files, kind).ok_or_else(|| {
+            failed(malformed(
+                "a file list",
+                format!("{family}: no TTF, OTF or WOFF file"),
+            ))
+        })?;
+        let mut fetched = Vec::with_capacity(chosen.len());
+        for (name, file) in chosen {
+            let bytes = self.fetcher.get(&file.url).map_err(failed)?;
+            if crate::font_file::font_mime(&bytes).is_none() {
+                return Err(failed(malformed(
+                    "a file",
+                    format!("{}: not a font", file.url),
+                )));
+            }
+            fetched.push((name, bytes));
+        }
+        let folder = into.join(safe_file_name(family).unwrap_or_else(|| "Font".to_owned()));
+        let cannot = "The downloaded fonts could not be saved.";
+        fs::create_dir_all(&folder).map_err(|e| FmError::io(cannot, &folder, &e))?;
+        let mut written = Vec::new();
+        let mut skipped = Vec::new();
+        let mut stopped = None;
+        for (name, bytes) in fetched {
+            let path = folder.join(&name);
+            match place_new(&path, &bytes) {
+                Ok(true) => {
+                    let hash = *blake3::hash(&bytes).as_bytes();
+                    written.push(DownloadedFile { name, path, hash });
+                }
+                Ok(false) => skipped.push(name),
+                // The files placed so far stay (they are whole, and the user's
+                // folder is never cleaned up behind their back); the caller
+                // records them and says the download stopped.
+                Err(e) => {
+                    stopped = Some(failed(FmError::io(cannot, &path, &e)));
+                    break;
+                }
+            }
+        }
+        if written.is_empty()
+            && let Some(e) = stopped
+        {
+            return Err(e);
+        }
+        Ok(Downloaded {
+            family_id: files.family_id,
+            version: listed.version.or(listed.last_modified),
+            kind,
+            folder,
+            written,
+            skipped,
+            stopped,
+        })
+    }
+
     fn adapter(&self, id: CatalogId) -> FmResult<&dyn CatalogAdapter> {
         self.adapters
             .iter()
@@ -598,7 +854,7 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// Now as RFC 3339 in UTC, whole seconds (`2026-10-24T08:00:00Z`).
-fn now_rfc3339() -> String {
+pub(crate) fn now_rfc3339() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -628,4 +884,4 @@ fn rfc3339(secs: u64) -> String {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

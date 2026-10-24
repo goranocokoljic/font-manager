@@ -1,0 +1,20 @@
+{
+  "id": "a-multi-file-write-that-stops-partway-must-report-and-record",
+  "title": "A multi-file write that stops partway must report and record the files it already placed",
+  "category": "user-files",
+  "rule": "When one call writes several files into a user's folder one after another (a catalog download, an export, an import), a failure on file k must not throw away what files 1..k-1 did: return the placed files together with the reason (an Ok with a `stopped` reason, or an answer field such as `error: Option<ApiError>`), and let the caller record them (provenance, index rows) and rescan exactly as for a finished call. Return a plain Err only when nothing was written, and never show a 'no file was written' message for a partial result. Keep the placed files (rule 2: no cleanup of the user's folder behind their back). Test it with a file that fails to save after an earlier one was placed on every OS (a file name over 255 characters), and assert the placed file is on disk, recorded and rescanned, and that the UI text names the partial result.",
+  "rationale": "E22.3 (#148): `Catalogs::download` placed files one by one with `?`, so a failed second file dropped the list of placed files; `download_family` then recorded no provenance and started no rescan, and the UI said \"No file was written.\" while a font sat in the user's folder.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    148
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs",
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-10-24T10:27:02.605Z",
+  "last_seen": "2026-10-24T10:27:02.605Z"
+}

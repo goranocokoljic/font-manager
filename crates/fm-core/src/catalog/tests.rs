@@ -516,6 +516,7 @@ fn the_preview_file_is_the_upright_regular_else_a_variable_else_an_upright_one()
     let file = |name: &str| CatalogFile {
         name: name.to_owned(),
         url: format!("https://x/{name}"),
+        variable: name.contains('['),
     };
     let pick = |files: &[CatalogFile]| preview_file(files).map(|(f, ext)| (f.name.clone(), ext));
     assert_eq!(
@@ -571,4 +572,363 @@ fn the_shipped_catalogs_are_google_fonts_and_fontshare_all_off() {
     let e = c.refresh(CatalogId::Fontshare).expect_err("off");
     assert_eq!(e.code(), ErrorCode::Conflict);
     assert_eq!(cache_file(CatalogId::Fontshare), "fontshare.json");
+}
+
+// ---- downloads (E22.3), over the 127.0.0.1 fixture server ----
+
+const REGULAR: &str = "fonts/google-repo/cagliostro/Cagliostro-Regular.ttf";
+const BOLD: &str = "fonts/google-repo/asul/Asul-Bold.ttf";
+const VARIABLE: &str = "fonts/google-repo/castoro/Castoro[wght].ttf";
+
+/// A Google Fonts server with the recorded index and a Lato file list of two
+/// static files, one variable file and the license, served from itself;
+/// `bold` answers the bold file (status and body).
+pub(crate) fn lato_server(bold: (u16, Vec<u8>)) -> crate::test_support::LocalServer {
+    crate::test_support::LocalServer::start_with(|base| {
+        let list = format!(
+            r#")]}}'
+{{"manifest":{{"files":[{{"filename":"OFL.txt","contents":"SIL Open Font License"}}],
+"fileRefs":[
+ {{"filename":"static/Lato-Regular.ttf","url":"{base}/f/regular"}},
+ {{"filename":"static/Lato-Bold.ttf","url":"{base}/f/bold"}},
+ {{"filename":"Lato[wght].ttf","url":"{base}/f/variable"}}]}}}}"#
+        );
+        vec![
+            ("/metadata/fonts".to_owned(), 200, index_fixture()),
+            (
+                "/download/list?family=Lato".to_owned(),
+                200,
+                list.into_bytes(),
+            ),
+            ("/f/regular".to_owned(), 200, fixture(REGULAR)),
+            ("/f/bold".to_owned(), bold.0, bold.1),
+            ("/f/variable".to_owned(), 200, fixture(VARIABLE)),
+        ]
+    })
+}
+
+/// A file name no file system takes (over 255 characters): saving it fails
+/// on every OS, after the files before it were placed.
+pub(crate) fn unsavable_name() -> String {
+    format!("Lato-{}.ttf", "Bold".repeat(70))
+}
+
+/// As [`lato_server`], but the second static file has [`unsavable_name`]:
+/// every file fetches and checks out, and saving stops at the second one.
+pub(crate) fn stopping_server() -> crate::test_support::LocalServer {
+    crate::test_support::LocalServer::start_with(|base| {
+        let list = format!(
+            r#"{{"manifest":{{"files":[],"fileRefs":[
+ {{"filename":"static/Lato-Regular.ttf","url":"{base}/f/regular"}},
+ {{"filename":"static/{}","url":"{base}/f/bold"}},
+ {{"filename":"static/Lato-Thin.ttf","url":"{base}/f/regular"}}]}}}}"#,
+            unsavable_name()
+        );
+        vec![
+            ("/metadata/fonts".to_owned(), 200, index_fixture()),
+            (
+                "/download/list?family=Lato".to_owned(),
+                200,
+                list.into_bytes(),
+            ),
+            ("/f/regular".to_owned(), 200, fixture(REGULAR)),
+            ("/f/bold".to_owned(), 200, fixture(BOLD)),
+        ]
+    })
+}
+
+/// The bytes of a fixture font of the Lato server.
+pub(crate) fn lato_font(which: &str) -> Vec<u8> {
+    fixture(match which {
+        "bold" => BOLD,
+        "variable" => VARIABLE,
+        _ => REGULAR,
+    })
+}
+
+/// Catalogs on `dir` over HTTP to `server`, Google Fonts on and refreshed.
+fn downloading(dir: &TempDir, server: &crate::test_support::LocalServer) -> Catalogs {
+    let c = Catalogs::new(
+        dir.path().join(CATALOGS_DIR),
+        Arc::new(HttpFetcher::new()),
+        vec![Arc::new(GoogleFonts::with_base_url(server.base()))],
+    );
+    c.set_enabled(GOOGLE, true).expect("on");
+    c.refresh(GOOGLE).expect("refresh");
+    c
+}
+
+/// The names in `dir`, sorted; none when it is not there.
+fn listing(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_download_writes_the_static_files_into_a_folder_named_after_the_family() {
+    let dir = TempDir::new("catalog-download");
+    let server = lato_server((200, fixture(BOLD)));
+    let c = downloading(&dir, &server);
+    let source = dir.path().join("My Fonts");
+    fs::create_dir_all(&source).expect("source");
+
+    let got = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, &source)
+        .expect("download");
+    assert_eq!(got.folder, source.join("Lato"));
+    assert_eq!(got.kind, CatalogFileKind::Static);
+    assert_eq!(got.family_id, "Lato");
+    assert_eq!(
+        got.version.as_deref(),
+        Some("2025-09-16"),
+        "Lato's lastModified"
+    );
+    assert!(got.skipped.is_empty());
+    let names: Vec<&str> = got.written.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["Lato-Regular.ttf", "Lato-Bold.ttf"],
+        "no `static/`, no variable"
+    );
+    for (file, rel) in got.written.iter().zip([REGULAR, BOLD]) {
+        assert_eq!(file.path, source.join("Lato").join(&file.name));
+        let bytes = fs::read(&file.path).expect("written");
+        assert_eq!(bytes, fixture(rel));
+        assert_eq!(file.hash, *blake3::hash(&bytes).as_bytes());
+    }
+    assert_eq!(
+        listing(&source.join("Lato")),
+        ["Lato-Bold.ttf", "Lato-Regular.ttf"],
+        "no temporary file left"
+    );
+}
+
+#[test]
+fn a_variable_download_writes_only_the_variable_files() {
+    let dir = TempDir::new("catalog-download-variable");
+    let server = lato_server((200, fixture(BOLD)));
+    let c = downloading(&dir, &server);
+    let got = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Variable, dir.path())
+        .expect("download");
+    assert_eq!(got.kind, CatalogFileKind::Variable);
+    let names: Vec<&str> = got.written.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Lato[wght].ttf"]);
+    assert_eq!(
+        fs::read(&got.written[0].path).expect("file"),
+        fixture(VARIABLE)
+    );
+}
+
+#[test]
+fn a_download_never_replaces_a_file_already_there() {
+    let dir = TempDir::new("catalog-download-keep");
+    let server = lato_server((200, fixture(BOLD)));
+    let c = downloading(&dir, &server);
+    let folder = dir.path().join("Lato");
+    fs::create_dir_all(&folder).expect("folder");
+    fs::write(folder.join("Lato-Bold.ttf"), b"the user's own file").expect("theirs");
+
+    let got = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, dir.path())
+        .expect("download");
+    assert_eq!(got.skipped, ["Lato-Bold.ttf"]);
+    let names: Vec<&str> = got.written.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Lato-Regular.ttf"]);
+    assert_eq!(
+        fs::read(folder.join("Lato-Bold.ttf")).expect("theirs"),
+        b"the user's own file"
+    );
+
+    // Again: everything is there, nothing is written or replaced.
+    let again = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, dir.path())
+        .expect("again");
+    assert!(again.written.is_empty());
+    assert_eq!(again.skipped, ["Lato-Regular.ttf", "Lato-Bold.ttf"]);
+    assert_eq!(listing(&folder), ["Lato-Bold.ttf", "Lato-Regular.ttf"]);
+}
+
+#[test]
+fn a_failed_download_leaves_no_file() {
+    for (label, bold) in [
+        ("missing", (404, b"not found".to_vec())),
+        ("not-a-font", (200, b"<html>an error page</html>".to_vec())),
+    ] {
+        let dir = TempDir::new(&format!("catalog-download-{label}"));
+        let server = lato_server(bold);
+        let c = downloading(&dir, &server);
+        let e = c
+            .download(GOOGLE, "Lato", CatalogFileKind::Static, dir.path())
+            .expect_err(label);
+        assert_eq!(e.code(), ErrorCode::Io, "{label}");
+        assert!(
+            e.message().starts_with("Lato could not be downloaded."),
+            "{label}: {}",
+            e.message()
+        );
+        assert!(
+            listing(&dir.path().join("Lato")).is_empty(),
+            "{label}: no file, not even the one fetched before the failure"
+        );
+    }
+}
+
+#[test]
+fn a_download_is_refused_while_off_or_for_an_unlisted_family_before_any_request() {
+    let dir = TempDir::new("catalog-download-refused");
+    let server = lato_server((200, fixture(BOLD)));
+    let c = Catalogs::new(
+        dir.path().join(CATALOGS_DIR),
+        Arc::new(HttpFetcher::new()),
+        vec![Arc::new(GoogleFonts::with_base_url(server.base()))],
+    );
+    let e = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, dir.path())
+        .expect_err("off");
+    assert_eq!(e.code(), ErrorCode::Conflict);
+    c.set_enabled(GOOGLE, true).expect("on");
+    let e = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, dir.path())
+        .expect_err("never refreshed");
+    assert_eq!(e.code(), ErrorCode::NotFound);
+    assert_eq!(server.hits(), 0, "nothing fetched");
+
+    c.refresh(GOOGLE).expect("refresh");
+    let e = c
+        .download(GOOGLE, "Comic Sans", CatalogFileKind::Static, dir.path())
+        .expect_err("unlisted");
+    assert_eq!(e.code(), ErrorCode::NotFound);
+    let e = c
+        .download(
+            GOOGLE,
+            "Lato",
+            CatalogFileKind::Static,
+            &dir.path().join("gone"),
+        )
+        .expect_err("no folder");
+    assert_eq!(e.code(), ErrorCode::NotFound);
+    assert_eq!(server.hits(), 1, "only the refresh");
+    assert!(!dir.path().join("Lato").exists() && !dir.path().join("gone").exists());
+}
+
+#[test]
+fn a_file_that_cannot_be_saved_stops_the_download_and_keeps_what_was_placed() {
+    let dir = TempDir::new("catalog-download-stopped");
+    let server = stopping_server();
+    let c = downloading(&dir, &server);
+    let got = c
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, dir.path())
+        .expect("stopped after one file, not an error");
+    let names: Vec<&str> = got.written.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Lato-Regular.ttf"], "the file before the failure");
+    assert!(got.skipped.is_empty());
+    let e = got.stopped.expect("why it stopped");
+    assert_eq!(e.code(), ErrorCode::Io);
+    assert!(
+        e.message().starts_with("Lato could not be downloaded."),
+        "{}",
+        e.message()
+    );
+    assert_eq!(
+        listing(&dir.path().join("Lato")),
+        ["Lato-Regular.ttf"],
+        "the placed file is whole and stays; no temporary file, nothing after the failure"
+    );
+    assert_eq!(
+        fs::read(dir.path().join("Lato").join("Lato-Regular.ttf")).expect("file"),
+        fixture(REGULAR)
+    );
+
+    // When the very first file cannot be saved, nothing was written: an error.
+    let empty = TempDir::new("catalog-download-stopped-first");
+    let first = Catalogs::new(
+        empty.path().join(CATALOGS_DIR),
+        Arc::new(HttpFetcher::new()),
+        vec![Arc::new(GoogleFonts::with_base_url(server.base()))],
+    );
+    first.set_enabled(GOOGLE, true).expect("on");
+    first.refresh(GOOGLE).expect("refresh");
+    let folder = empty.path().join("Lato");
+    fs::create_dir_all(&folder).expect("folder");
+    fs::write(folder.join("Lato-Regular.ttf"), b"the user's own file").expect("theirs");
+    let e = first
+        .download(GOOGLE, "Lato", CatalogFileKind::Static, empty.path())
+        .expect_err("Regular skipped, then the second file fails: nothing written");
+    assert_eq!(e.code(), ErrorCode::Io);
+    assert_eq!(listing(&folder), ["Lato-Regular.ttf"]);
+    assert_eq!(
+        fs::read(folder.join("Lato-Regular.ttf")).expect("theirs"),
+        b"the user's own file"
+    );
+}
+
+#[test]
+fn download_files_pick_the_kind_asked_for_else_the_other() {
+    let file = |name: &str| CatalogFile {
+        name: name.to_owned(),
+        url: format!("https://x/{name}"),
+        variable: name.contains('['),
+    };
+    let names = |picked: Option<(CatalogFileKind, Vec<(String, &CatalogFile)>)>| {
+        picked.map(|(kind, files)| (kind, files.into_iter().map(|(n, _)| n).collect::<Vec<_>>()))
+    };
+    let only_static = [file("OFL.txt"), file("A-Regular.ttf"), file("A-Bold.otf")];
+    assert_eq!(
+        names(download_files(&only_static, CatalogFileKind::Variable)),
+        Some((
+            CatalogFileKind::Static,
+            vec!["A-Regular.ttf".to_owned(), "A-Bold.otf".to_owned()]
+        )),
+        "no variable file: the static ones"
+    );
+    let only_variable = [file("A[wght].ttf"), file("A-Italic[wght].ttf")];
+    assert_eq!(
+        names(download_files(&only_variable, CatalogFileKind::Static)).map(|(k, n)| (k, n.len())),
+        Some((CatalogFileKind::Variable, 2))
+    );
+    // A name from the catalog never leaves the family's folder, and comes once.
+    let tricky = [
+        file("../../evil.ttf"),
+        file("static\\..\\B.ttf"),
+        file("sub/B.TTF"),
+        file("README.md"),
+    ];
+    assert_eq!(
+        names(download_files(&tricky, CatalogFileKind::Static)),
+        Some((
+            CatalogFileKind::Static,
+            vec!["evil.ttf".to_owned(), "B.ttf".to_owned()]
+        ))
+    );
+    assert_eq!(
+        names(download_files(&[file("OFL.txt")], CatalogFileKind::Static)),
+        None
+    );
+}
+
+#[test]
+fn safe_file_names_stay_inside_the_folder_on_every_os() {
+    assert_eq!(safe_file_name("Lato").as_deref(), Some("Lato"));
+    assert_eq!(
+        safe_file_name("Noto Sans JP").as_deref(),
+        Some("Noto Sans JP")
+    );
+    assert_eq!(safe_file_name("Été 2").as_deref(), Some("Été 2"));
+    assert_eq!(safe_file_name("../x").as_deref(), Some("_x"));
+    assert_eq!(safe_file_name("a/b\\c:d*e?").as_deref(), Some("a_b_c_d_e_"));
+    assert_eq!(safe_file_name(" trailing. ").as_deref(), Some("trailing"));
+    assert_eq!(safe_file_name("CON").as_deref(), Some("_CON"));
+    assert_eq!(safe_file_name("com1.ttf").as_deref(), Some("_com1.ttf"));
+    assert_eq!(safe_file_name("Console").as_deref(), Some("Console"));
+    assert_eq!(safe_file_name("..").as_deref(), None);
+    assert_eq!(safe_file_name("/").as_deref(), None);
+    assert_eq!(safe_file_name("").as_deref(), None);
 }

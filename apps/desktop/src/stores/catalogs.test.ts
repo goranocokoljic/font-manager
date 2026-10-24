@@ -156,4 +156,48 @@ describe('catalogs store: opened before the list arrives', () => {
     await flushPromises();
     expect(store.total).toBe(4);
   });
+
+  it("a download follows its own rescan's events to the end, not another scan's", async () => {
+    const client = createMockClient({ catalog: 'offline', scanStepMs: 2 });
+    setClient(client);
+    const store = useCatalogsStore();
+    await store.load();
+    store.show('googleFonts');
+    await flushPromises();
+    const lato = store.families.find((f) => f?.name === 'Lato')!;
+    store.askDownload(lato);
+    expect(store.download?.phase).toBe('choosing');
+
+    // Another scan runs at the same time; its events are not the download's.
+    const other = await client.scan({ source: null });
+    const seen: number[] = [];
+    await client.onEvent((e) => {
+      if (e.type === 'scanProgress' && e.job === store.download?.result?.scan) seen.push(e.done);
+    });
+    await store.startDownload(1, 'static');
+    expect(store.download?.phase).toBe('scanning');
+    expect(store.download?.result?.scan).not.toBe(other);
+    expect(store.downloading).toBe(true);
+    store.closeDownload();
+    expect(store.download, 'kept open while it runs').not.toBeNull();
+
+    await new Promise((r) => setTimeout(r, 60));
+    expect(store.download?.phase).toBe('done');
+    expect(store.download?.scan).toEqual({ done: 7, total: 7 });
+    expect(seen.length).toBeGreaterThan(1);
+    expect(store.download?.error).toBeNull();
+    store.closeDownload();
+    expect(store.download).toBeNull();
+  });
+
+  it('switching to another catalog closes a finished or unstarted download panel', async () => {
+    setClient(createMockClient({ catalog: 'offline' }));
+    const store = useCatalogsStore();
+    await store.load();
+    store.show('googleFonts');
+    await flushPromises();
+    store.askDownload(store.families[0]!);
+    store.show('fontshare');
+    expect(store.download).toBeNull();
+  });
 });

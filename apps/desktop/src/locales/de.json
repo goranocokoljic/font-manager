@@ -1294,7 +1294,37 @@
     "offline": "Offline - Liste vom {date}",
     "noMatches": "Keine Familie passt zur Suche.",
     "empty": "Die Liste ist leer. Aktualisieren Sie, um sie zu laden.",
-    "sizePx": "{size} px"
+    "sizePx": "{size} px",
+    "download": {
+      "action": "Laden…",
+      "actionLabel": "{name} laden…",
+      "title": "{name} laden",
+      "into": "Laden in",
+      "noFolder": "Fügen Sie zuerst einen Ordner zur Bibliothek hinzu. Downloads kommen in einen Ordner, den Sie hinzugefügt haben.",
+      "files": "Dateien",
+      "static": "Eine Datei pro Schnitt",
+      "variable": "Variable Schrift",
+      "where": "Die Dateien kommen in einen Ordner namens {folder} darin. Eine Datei, die schon da ist, bleibt erhalten und wird nie ersetzt.",
+      "start": "Laden",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "downloading": "{name} wird geladen…",
+      "scanning": "{name} wird zur Bibliothek hinzugefügt…",
+      "scanProgress": "{name} wird zur Bibliothek hinzugefügt: {done} von {total} Dateien gelesen",
+      "done": {
+        "one": "{name}: {count} Datei in {folder} geladen.",
+        "other": "{name}: {count} Dateien in {folder} geladen."
+      },
+      "skipped": {
+        "one": "{count} Datei war schon da und blieb erhalten.",
+        "other": "{count} Dateien waren schon da und blieben erhalten."
+      },
+      "nothingNew": "{name}: Alle Dateien waren schon in {folder}. Nichts wurde ersetzt.",
+      "failed": "{message} Es wurde keine Datei geschrieben.",
+      "scanFailed": "Die Dateien sind geladen, aber der Ordner konnte nicht erneut gelesen werden: {message}",
+      "retry": "Erneut versuchen",
+      "stopped": "Der Download wurde vor dem Ende abgebrochen: {message} Nur die oben gezählten Dateien wurden geschrieben, und sie bleiben erhalten."
+    }
   },
   "similar": {
     "title": "Ähnlich wie {name}",

@@ -2636,6 +2636,64 @@ fn catalogs_are_off_until_turned_on_and_list_from_the_refreshed_cache() {
 }
 
 #[test]
+fn a_mock_download_goes_into_a_watched_source_and_is_listed() {
+    use fm_api::catalog::{
+        CatalogFileKind, CatalogId, CatalogRef, DownloadFamilyRequest, SetCatalogEnabledRequest,
+    };
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let req = |family: &str, kind, source| DownloadFamilyRequest {
+        id,
+        family: family.to_owned(),
+        kind,
+        source: SourceId(source),
+    };
+    let e = api
+        .download_family(req("Lato", CatalogFileKind::Static, 1))
+        .expect_err("off");
+    assert_eq!(e.code, ErrorCode::Conflict);
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    let e = api
+        .download_family(req("Lato", CatalogFileKind::Static, 1))
+        .expect_err("never refreshed");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    let e = api
+        .download_family(req("Lato", CatalogFileKind::Static, 2))
+        .expect_err("the system fonts");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+
+    let rx = api.subscribe();
+    let got = api
+        .download_family(req("Inter", CatalogFileKind::Variable, 1))
+        .expect("download");
+    assert_eq!(got.download.kind, CatalogFileKind::Variable);
+    let names: Vec<&str> = got.download.files.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Inter[wght].ttf"]);
+    assert!(got.download.folder.ends_with("/Inter"));
+    let events: Vec<Event> = rx.try_iter().collect();
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::ScanFinished { job, .. } if *job == got.scan)),
+        "the rescan: {events:?}"
+    );
+    let lato = api
+        .download_family(req("Lato", CatalogFileKind::Variable, 1))
+        .expect("static only");
+    assert_eq!(
+        lato.download.kind,
+        CatalogFileKind::Static,
+        "no variable font"
+    );
+    assert_eq!(lato.download.files.len(), 5);
+    let listed = api.list_catalog_downloads().expect("downloads");
+    let families: Vec<&str> = listed.iter().map(|d| d.family.as_str()).collect();
+    assert_eq!(families, ["Lato", "Inter"], "newest first");
+}
+
+#[test]
 fn a_catalog_font_source_needs_the_catalog_on_and_the_family_listed() {
     use fm_api::catalog::{CatalogFontRequest, CatalogId, CatalogRef, SetCatalogEnabledRequest};
     let api: Arc<dyn Api> = Arc::new(MockApi::new());
