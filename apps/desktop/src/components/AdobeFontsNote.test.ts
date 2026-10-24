@@ -83,6 +83,9 @@ describe('OnlineCatalogsSidebar', () => {
     const calls = recordingClient();
     const sidebar = mountWith(OnlineCatalogsSidebar);
     await flushPromises();
+    // The sidebar lists the catalogs of `list_catalogs` (E22.2); the note reads nothing.
+    expect(calls).toEqual([['listCatalogs', []]]);
+    calls.length = 0;
     expect(sidebar.get('h2').text()).toBe('Online catalogs');
     const entry = sidebar.get('[data-testid="catalog-adobe-fonts"]');
     expect(entry.text()).toBe('Adobe Fonts');

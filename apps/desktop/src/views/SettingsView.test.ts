@@ -70,6 +70,27 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('turns Google Fonts on and off under Online catalogs, saying it connects', async () => {
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    const box = wrapper.get('input[name="catalog-googleFonts"]');
+    expect(box.attributes('type')).toBe('checkbox');
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    expect(box.element.closest('label')?.textContent?.trim()).toBe('Google Fonts');
+    expect(wrapper.get(`#${box.attributes('aria-describedby')}`).text()).toContain(
+      'connects to the internet',
+    );
+    await box.setValue(true);
+    await flushPromises();
+    let [google] = await client.listCatalogs();
+    expect(google?.enabled).toBe(true);
+    expect(google?.familyCount, 'turning it on fetched the list').toBe(4);
+    await box.setValue(false);
+    await flushPromises();
+    [google] = await client.listCatalogs();
+    expect(google?.enabled).toBe(false);
+    wrapper.unmount();
+  });
+
   it('applies the theme and density the moment they change, and saves them', async () => {
     const { wrapper } = await mountAt('/settings?section=appearance');
     await radio(wrapper, 'Dark').setValue(true);

@@ -15,8 +15,8 @@ use crate::activation::{
     ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
 };
 use crate::catalog::{
-    Catalog, CatalogFamily, CatalogId, CatalogRef, CatalogService, CatalogStyle,
-    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    Catalog, CatalogFamily, CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef,
+    CatalogService, CatalogStyle, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
@@ -4529,6 +4529,34 @@ impl CatalogService for MockApi {
                 .take(req.page.limit.min(500) as usize)
                 .cloned()
                 .collect(),
+        })
+    }
+
+    /// The rules of the core without a request: an off catalog is
+    /// `Conflict`, a family not in the cache `NotFound`; the path is made up.
+    fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {
+        let st = self.state();
+        if !st.catalogs_on.contains(&req.id) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("{} is turned off. Turn it on to fetch its fonts.", req.id),
+            ));
+        }
+        let known = st
+            .catalog_cache
+            .get(&req.id)
+            .is_some_and(|(_, families)| families.iter().any(|f| f.name == req.family));
+        if !known {
+            return Err(ApiError::new(
+                ErrorCode::NotFound,
+                format!("{} is not in the {} list.", req.family, req.id),
+            ));
+        }
+        let path = format!("/mock/cache/catalogs/{}.ttf", req.family.replace(' ', "-"));
+        Ok(CatalogFontSource {
+            id: req.id,
+            family: req.family,
+            path,
         })
     }
 }

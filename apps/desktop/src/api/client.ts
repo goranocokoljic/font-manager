@@ -3,8 +3,15 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { catalogFontPath } from './catalogFont';
 import { mockClient } from './mock';
 import type {
+  Catalog,
+  CatalogFamily,
+  CatalogId,
+  CatalogRef,
+  ListCatalogFamiliesRequest,
+  SetCatalogEnabledRequest,
   ActivateRequest,
   ActivationOutcome,
   ActiveFace,
@@ -200,6 +207,19 @@ export interface FmClient {
   restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
   /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
   layoutWidth(req: Layout): Promise<number | null>;
+  /** Every online catalog (E22.1), on or off, with the state of its cache. */
+  listCatalogs(): Promise<Catalog[]>;
+  /** Turns a catalog on or off; makes no request. */
+  setCatalogEnabled(req: SetCatalogEnabledRequest): Promise<Catalog>;
+  /** Fetches the catalog's list (the only call that goes to the network); refused while off. */
+  refreshCatalog(req: CatalogRef): Promise<Catalog>;
+  /** A page of a catalog's cached families by name; makes no request. */
+  listCatalogFamilies(req: ListCatalogFamiliesRequest): Promise<Paged<CatalogFamily>>;
+  /**
+   * The URL the webview loads a catalog family's preview file from (`@font-face`); the
+   * core fetches it into the cache folder the first time, only while the catalog is on.
+   */
+  catalogFontUrl(id: CatalogId, family: string): string;
   /** Every saved comparison (E13.2), by name. */
   listComparisons(): Promise<ComparisonEntry[]>;
   /** One saved comparison: the faces the library still shows, and the missing ones by name. */
@@ -322,6 +342,11 @@ export const tauriClient: FmClient = {
   layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
   restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
   layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
+  listCatalogs: () => invoke<Catalog[]>('list_catalogs'),
+  setCatalogEnabled: (req) => invoke<Catalog>('set_catalog_enabled', { req }),
+  refreshCatalog: (req) => invoke<Catalog>('refresh_catalog', { req }),
+  listCatalogFamilies: (req) => invoke<Paged<CatalogFamily>>('list_catalog_families', { req }),
+  catalogFontUrl: (id, family) => convertFileSrc(catalogFontPath(id, family), FONT_SCHEME),
   listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),
   getComparison: (req) => invoke<Comparison>('get_comparison', { req }),
   saveComparison: (req) => invoke<Comparison>('save_comparison', { req }),

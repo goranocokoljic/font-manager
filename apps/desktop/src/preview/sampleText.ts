@@ -81,11 +81,23 @@ export function sampleText(
   face: FaceSummary,
   pangram: (language: string) => string,
 ): string {
+  return sampleTextFor(sample, fontNameSample(face), pangram);
+}
+
+/**
+ * `sampleText` for a row named `name` that has no face in the library (a catalog
+ * family, E22.2): the font-name sample and the fallbacks show `name`.
+ */
+export function sampleTextFor(
+  sample: { sample: SampleKind; customText: string; language: string },
+  name: string,
+  pangram: (language: string) => string,
+): string {
   switch (sample.sample) {
     case 'custom':
-      return sample.customText.trim() ? sample.customText : fontNameSample(face);
+      return sample.customText.trim() ? sample.customText : name;
     case 'pangram':
-      return pangram(sample.language) || fontNameSample(face);
+      return pangram(sample.language) || name;
     case 'lorem':
       return LOREM;
     case 'alphabet':
@@ -93,6 +105,6 @@ export function sampleText(
     case 'numerals':
       return NUMERALS;
     case 'fontName':
-      return fontNameSample(face);
+      return name;
   }
 }

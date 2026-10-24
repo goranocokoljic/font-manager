@@ -13,6 +13,9 @@
 //!   replaces `<catalog>.json` through a temporary file, so a failed or
 //!   malformed answer leaves the previous cache as it was. The on/off state
 //!   is `catalogs.json` in the same folder.
+//! - **Previews (E22.2).** [`Catalogs::font_source`] fetches one file of a
+//!   listed family into the app's cache folder the first time a row shows
+//!   it, and reads it from there after; refused while the catalog is off.
 
 pub mod google;
 
@@ -96,6 +99,62 @@ fn cache_file(id: CatalogId) -> &'static str {
     }
 }
 
+/// A catalog's name in file names (`google-fonts`).
+fn cache_stem(id: CatalogId) -> &'static str {
+    cache_file(id).trim_end_matches(".json")
+}
+
+/// The extensions a preview file may have, best first.
+const PREVIEW_EXTENSIONS: [&str; 4] = ["woff2", "woff", "ttf", "otf"];
+
+/// The file name (without extension) of a family's preview: a hash of the
+/// name, so any name is a safe file name and no two names share one.
+fn preview_stem(family: &str) -> String {
+    blake3::hash(family.as_bytes()).to_hex()[..32].to_owned()
+}
+
+/// The preview file already in `dir`, if any.
+fn cached_preview(dir: &Path, stem: &str) -> Option<PathBuf> {
+    PREVIEW_EXTENSIONS
+        .iter()
+        .map(|ext| dir.join(format!("{stem}.{ext}")))
+        .find(|p| p.is_file())
+}
+
+/// The file that previews a family, with its extension: the upright
+/// Regular, else an upright variable file (`Inter[opsz,wght].ttf`), else any
+/// upright file, else the first; only font files count.
+pub fn preview_file(files: &[CatalogFile]) -> Option<(&CatalogFile, &'static str)> {
+    let fonts: Vec<(&CatalogFile, &'static str, String)> = files
+        .iter()
+        .filter_map(|f| {
+            let base = f.name.rsplit('/').next().unwrap_or(&f.name);
+            let (stem, ext) = base.rsplit_once('.')?;
+            let ext = PREVIEW_EXTENSIONS
+                .iter()
+                .find(|e| e.eq_ignore_ascii_case(ext))?;
+            Some((f, *ext, stem.to_ascii_lowercase()))
+        })
+        .collect();
+    let upright = |stem: &str| !stem.contains("italic") && !stem.contains("oblique");
+    let rank = |stem: &str| -> u8 {
+        if !upright(stem) {
+            3
+        } else if stem.ends_with("-regular") || stem == "regular" {
+            0
+        } else if stem.contains('[') {
+            1
+        } else {
+            2
+        }
+    };
+    fonts
+        .iter()
+        .enumerate()
+        .min_by_key(|(i, (_, _, stem))| (rank(stem), *i))
+        .map(|(_, (f, ext, _))| (*f, *ext))
+}
+
 /// A catalog's cache file.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -124,6 +183,11 @@ pub struct Catalogs {
     loaded: Mutex<HashMap<CatalogId, Option<Arc<Cache>>>>,
     /// Held by every write, so two refreshes never interleave.
     writing: Mutex<()>,
+    /// Where preview files go (`<cache>/catalogs`); `None` without one.
+    previews: Option<PathBuf>,
+    /// One lock per preview file being fetched, so two rows showing the same
+    /// family make one request.
+    fetching: Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>,
 }
 
 impl std::fmt::Debug for Catalogs {
@@ -154,7 +218,17 @@ impl Catalogs {
             adapters,
             loaded: Mutex::new(HashMap::new()),
             writing: Mutex::new(()),
+            previews: None,
+            fetching: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// The same catalogs, keeping preview files in `dir` (the app passes
+    /// `<cache>/catalogs`).
+    #[must_use]
+    pub fn with_previews_in(mut self, dir: PathBuf) -> Self {
+        self.previews = Some(dir);
+        self
     }
 
     /// Every catalog with its state; makes no request.
@@ -260,6 +334,75 @@ impl Catalogs {
     pub fn resolve_files(&self, id: CatalogId, family: &str) -> FmResult<CatalogFiles> {
         self.enabled_adapter(id)?
             .resolve_files(self.fetcher.as_ref(), family)
+    }
+
+    /// The preview file of `family`, a family in the cached list: fetched
+    /// once into the previews folder (two requests: the file list, then the
+    /// file [`preview_file`] picks), read from there after. Refused with
+    /// `Conflict` while the catalog is off and `NotFound` for a family the
+    /// list does not have, both before any request.
+    pub fn font_source(&self, id: CatalogId, family: &str) -> FmResult<PathBuf> {
+        let adapter = self.enabled_adapter(id)?;
+        let dir = self
+            .previews
+            .as_ref()
+            .ok_or_else(|| FmError::unsupported("Catalog previews are not available here."))?
+            .join(cache_stem(id));
+        let listed = self
+            .cache(id)?
+            .is_some_and(|c| c.families.iter().any(|f| f.name == family));
+        if !listed {
+            return Err(FmError::new(
+                ErrorCode::NotFound,
+                format!("{family} is not in the {id} list. Refresh the catalog."),
+            ));
+        }
+        let stem = preview_stem(family);
+        if let Some(path) = cached_preview(&dir, &stem) {
+            return Ok(path);
+        }
+        let gate = Arc::clone(
+            lock(&self.fetching)
+                .entry(dir.join(&stem))
+                .or_insert_with(|| Arc::new(Mutex::new(()))),
+        );
+        let _fetching = lock(&gate);
+        // Another row may have fetched it while this one waited.
+        if let Some(path) = cached_preview(&dir, &stem) {
+            return Ok(path);
+        }
+        let unavailable = |e: FmError| {
+            let failed = FmError::new(
+                e.code(),
+                format!(
+                    "The preview of {family} could not be fetched. {}",
+                    e.message()
+                ),
+            );
+            match e.detail() {
+                Some(detail) => failed.with_detail(detail),
+                None => failed,
+            }
+        };
+        let files = adapter
+            .resolve_files(self.fetcher.as_ref(), family)
+            .map_err(unavailable)?;
+        let (file, ext) = preview_file(&files.files).ok_or_else(|| {
+            unavailable(malformed(
+                "a file list",
+                format!("{family}: no TTF, OTF or WOFF file"),
+            ))
+        })?;
+        let bytes = self.fetcher.get(&file.url).map_err(unavailable)?;
+        if crate::font_file::font_mime(&bytes).is_none() {
+            return Err(unavailable(malformed(
+                "a file",
+                format!("{}: not a font", file.url),
+            )));
+        }
+        let path = dir.join(format!("{stem}.{ext}"));
+        write_atomic(&path, &bytes)?;
+        Ok(path)
     }
 
     fn adapter(&self, id: CatalogId) -> FmResult<&dyn CatalogAdapter> {
@@ -429,7 +572,10 @@ fn write_atomic(path: &Path, data: &[u8]) -> FmResult<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| FmError::io(failed, dir, &e))?;
     }
-    let tmp = path.with_extension("json.tmp");
+    let tmp = path.with_extension(format!(
+        "{}.tmp",
+        path.extension().and_then(|e| e.to_str()).unwrap_or("json")
+    ));
     fs::write(&tmp, data).map_err(|e| FmError::io(failed, &tmp, &e))?;
     fs::rename(&tmp, path).map_err(|e| {
         let _ = fs::remove_file(&tmp);

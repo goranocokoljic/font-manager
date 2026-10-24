@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
+import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
 import FilterChips from '../components/FilterChips.vue';
@@ -428,6 +429,7 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 
     <template #list>
       <AdobeFontsNote v-if="catalogs.open === 'adobeFonts'" :level="1" />
+      <CatalogBrowser v-else-if="catalogs.current" />
       <QuickCollectionReview
         v-else-if="quick.open"
         :preview="preview.settingsFor(ALL_FONTS_VIEW)"

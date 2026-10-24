@@ -46,6 +46,16 @@ part that differs per catalog needs one narrow seam.
   index entry that cannot be read is left out with a warning; an index with no
   readable family is an error. A damaged cache is an error that asks for a refresh; an
   unreadable on/off file means every catalog off.
+- **Previews (E22.2).** `CatalogService::catalog_font_source` fetches one file of a
+  family in the cached list (the upright Regular, else an upright variable file, else
+  any upright file; TTF, OTF, WOFF or WOFF2, checked to be a font) into
+  `<cache>/catalogs/<catalog>/<blake3 of the name>.<ext>` in the app cache folder and
+  reads it from there after. It is refused with `Conflict` while the catalog is off and
+  `NotFound` for a family the list does not have, both before any request. The webview
+  loads it as live text through the face loader on the app's font scheme
+  (`fmfont`, path `/catalog-<catalog id>-<the name's UTF-8 as hex>`), so a request is
+  made only when a row of an open catalog is on screen. Turning a never-refreshed
+  catalog on fetches its list at once; the switch says it connects to the internet.
 
 ## Consequences
 

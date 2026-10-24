@@ -2,6 +2,7 @@
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
 import { HELP_PAGES } from '../help';
+import { catalogFontPath } from './catalogFont';
 import type { FmClient, FullSettings } from './client';
 import {
   API_VERSION,
@@ -10,6 +11,9 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Catalog,
+  type CatalogFamily,
+  type CatalogId,
   type AvailableUpdate,
   type InstallUpdateRequest,
   type Classification,
@@ -718,6 +722,12 @@ export interface MockOptions {
    * not built: `unsupported`).
    */
   similar?: 'ranked' | 'none' | 'fail';
+  /**
+   * The online catalogs (E22.2): `online` (the default) starts with every catalog off and
+   * never refreshed; `offline` starts with Google Fonts on, a list cached on
+   * `MOCK_CATALOG_CACHED_AT`, and every refresh failing as without a connection.
+   */
+  catalog?: 'online' | 'offline';
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -1319,6 +1329,104 @@ function mockSlug(name: string): string {
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '');
   return slug || 'layout';
+}
+
+/** When the `offline` mock catalog's list was cached. */
+export const MOCK_CATALOG_CACHED_AT = '2026-10-01T08:00:00Z';
+
+/** The families a refreshed catalog of the mock holds, like `mock_catalog_families` in Rust. */
+export function mockCatalogFamilies(): CatalogFamily[] {
+  const family = (
+    name: string,
+    category: string,
+    weights: number[],
+    axes: CatalogFamily['axes'] = [],
+  ): CatalogFamily => ({
+    name,
+    category,
+    styles: weights.map((weight) => ({ weight, slant: 'upright' })),
+    axes,
+    subsets: ['latin', 'latin-ext'],
+    designers: [],
+    version: null,
+    lastModified: '2026-09-01',
+    openSource: true,
+    license: null,
+  });
+  const wght = { tag: 'wght', name: 'Weight', min: 100, default: 400, max: 900 };
+  return [
+    family('Inter', 'Sans Serif', [100, 400, 900], [wght]),
+    family('Lato', 'Sans Serif', [100, 300, 400, 700, 900]),
+    family('Lora', 'Serif', [400, 700]),
+    family('Space Mono', 'Monospace', [400, 700]),
+  ];
+}
+
+/**
+ * The online catalogs of the mock (`CatalogService` of the Rust mock): off until turned on,
+ * refreshing "fetches" four families and touches no network; an off catalog lists none.
+ */
+function createMockCatalogs(
+  mode: MockOptions['catalog'] = 'online',
+): Pick<
+  FmClient,
+  'listCatalogs' | 'setCatalogEnabled' | 'refreshCatalog' | 'listCatalogFamilies' | 'catalogFontUrl'
+> {
+  const id: CatalogId = 'googleFonts';
+  let enabled = mode === 'offline';
+  let cache: { refreshedAt: string; families: CatalogFamily[] } | null =
+    mode === 'offline'
+      ? { refreshedAt: MOCK_CATALOG_CACHED_AT, families: mockCatalogFamilies() }
+      : null;
+  const known = (req: { id: CatalogId }) => {
+    if (req.id !== id)
+      throw { code: 'unsupported', message: 'That catalog is not available.', detail: null };
+  };
+  const catalog = (): Catalog => ({
+    id,
+    name: 'Google Fonts',
+    homepage: 'https://fonts.google.com',
+    enabled,
+    refreshedAt: cache?.refreshedAt ?? null,
+    familyCount: cache?.families.length ?? 0,
+  });
+  return {
+    listCatalogs: async () => [catalog()],
+    setCatalogEnabled: async (req) => {
+      known(req);
+      enabled = req.enabled;
+      return catalog();
+    },
+    refreshCatalog: async (req) => {
+      known(req);
+      if (!enabled)
+        throw {
+          code: 'conflict',
+          message: 'Turn on Google Fonts before refreshing it.',
+          detail: null,
+        };
+      if (mode === 'offline')
+        throw {
+          code: 'io',
+          message:
+            'Google Fonts could not be refreshed. The catalog could not be reached. Check the connection and try again.',
+          detail: 'GET https://fonts.google.com/metadata/fonts: offline',
+        };
+      cache = { refreshedAt: MOCK_NOW, families: mockCatalogFamilies() };
+      return catalog();
+    },
+    listCatalogFamilies: async (req) => {
+      known(req);
+      const query = (req.query ?? '').trim().toLowerCase();
+      const hits = (enabled ? (cache?.families ?? []) : []).filter((f) =>
+        f.name.toLowerCase().includes(query),
+      );
+      const offset = req.page?.offset ?? 0;
+      const limit = Math.min(req.page?.limit ?? 100, 500);
+      return { items: structuredClone(hits.slice(offset, offset + limit)), total: hits.length };
+    },
+    catalogFontUrl: (catalogId, family) => `/fmfont/${catalogFontPath(catalogId, family)}`,
+  };
 }
 
 /**
@@ -1939,6 +2047,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     layoutWidth: async (req) => mockLayoutWidth(req),
     ...createMockLayouts(),
+    ...createMockCatalogs(options.catalog),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
@@ -2707,4 +2816,6 @@ export const mockClient: FmClient = createMockClient({
   hebrewFace: countFromUrl('mockHebrew', 1) > 0,
   // `?mockSimilar=1` finds no similar face, `=2` answers with an error.
   similar: (['ranked', 'none', 'fail'] as const)[countFromUrl('mockSimilar', 2)],
+  // `?mockCatalog=1` starts with Google Fonts on, a cached list, and no connection.
+  catalog: countFromUrl('mockCatalog', 1) ? 'offline' : 'online',
 });

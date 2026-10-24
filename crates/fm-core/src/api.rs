@@ -32,8 +32,8 @@ use fm_api::activation::{
     DeactivateRequest, Target,
 };
 use fm_api::catalog::{
-    Catalog, CatalogFamily, CatalogRef, CatalogService, ListCatalogFamiliesRequest,
-    SetCatalogEnabledRequest,
+    Catalog, CatalogFamily, CatalogFontRequest, CatalogFontSource, CatalogRef, CatalogService,
+    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -169,9 +169,10 @@ impl CoreApi {
         let api = Self::new(index, activator, settings, previews)
             .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
             .with_layouts_in(paths.layouts_dir())
-            .with_catalogs(Catalogs::open(
-                paths.data.join(crate::catalog::CATALOGS_DIR),
-            ));
+            .with_catalogs(
+                Catalogs::open(paths.data.join(crate::catalog::CATALOGS_DIR))
+                    .with_previews_in(paths.cache.join(crate::catalog::CATALOGS_DIR)),
+            );
         match fm_platform::trash::system() {
             Ok(trash) => api.with_trash(trash),
             Err(e) => {
@@ -1193,6 +1194,15 @@ impl CatalogService for CoreApi {
         req: ListCatalogFamiliesRequest,
     ) -> ApiResult<Paged<CatalogFamily>> {
         Ok(self.catalogs()?.families(req.id, &req.query, req.page)?)
+    }
+
+    fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {
+        let path = self.catalogs()?.font_source(req.id, &req.family)?;
+        Ok(CatalogFontSource {
+            id: req.id,
+            family: req.family,
+            path: path.to_string_lossy().into_owned(),
+        })
     }
 }
 

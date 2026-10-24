@@ -15,6 +15,7 @@ import {
   type MessageKey,
 } from '../i18n';
 import { useAppStore } from '../stores/app';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSourcesStore } from '../stores/sources';
@@ -22,6 +23,7 @@ import { useToastStore } from '../stores/toast';
 import { useUpdatesStore } from '../stores/updates';
 
 const store = useSettingsStore();
+const catalogs = useCatalogsStore();
 const sources = useSourcesStore();
 const commands = useCommandsStore();
 const app = useAppStore();
@@ -93,6 +95,7 @@ onMounted(async () => {
     app.info ? undefined : app.load(),
     updates.support ? undefined : updates.loadSupport(),
     sources.load(),
+    catalogs.load(),
   ]);
 });
 onBeforeUnmount(() => sources.stop());
@@ -377,6 +380,25 @@ function chooseLanguage(e: Event): void {
         <template v-else-if="current === 'catalogs'">
           <h2 class="heading">{{ sectionTitle('catalogs') }}</h2>
           <p class="note">{{ t('settings.catalogs.note') }}</p>
+          <template v-for="c in catalogs.catalogs" :key="c.id">
+            <label class="choice">
+              <input
+                type="checkbox"
+                :name="`catalog-${c.id}`"
+                :aria-describedby="`catalog-hint-${c.id}`"
+                :checked="c.enabled"
+                :disabled="catalogs.busy === c.id"
+                @change="catalogs.setEnabled(c.id, ($event.target as HTMLInputElement).checked)"
+              />
+              <bdi>{{ c.name }}</bdi>
+            </label>
+            <p :id="`catalog-hint-${c.id}`" class="note hint">
+              {{ t('settings.catalogs.connectsHint', { name: c.name }) }}
+            </p>
+          </template>
+          <p v-if="catalogs.error" role="alert" class="note">
+            {{ errorMessage(catalogs.error) }}
+          </p>
           <button
             type="button"
             class="button"

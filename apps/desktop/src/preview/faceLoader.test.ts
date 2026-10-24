@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FaceLoader, faceFamily, type FontFaceSetLike } from './faceLoader';
+import { FaceLoader, catalogFamily, faceFamily, type FontFaceSetLike } from './faceLoader';
 
 /** A stand-in for `FontFace`: records its family and source. */
 class FakeFace {
@@ -120,5 +120,23 @@ describe('FaceLoader', () => {
     loader.release(9);
     expect(loader.loaded).toBe(0);
     expect(fonts.faces.size).toBe(0);
+  });
+
+  it('registers a catalog preview by its own name and URL, apart from the faces', async () => {
+    const { fonts, loader } = setup(1);
+    const name = catalogFamily('googleFonts', 'Space Mono');
+    expect(name).toBe('fm-catalog-googleFonts-5370616365204d6f6e6f');
+    const url = () => '/fmfont/catalog-googleFonts-5370616365204d6f6e6f';
+    await expect(loader.acquireSource(name, url)).resolves.toBe(name);
+    await loader.acquireSource(name, url);
+    await loader.acquire(1);
+    expect(fonts.added).toBe(2);
+    expect([...fonts.faces].find((f) => f.family === name)?.source).toBe(`url("${url()}")`);
+    loader.releaseSource(name);
+    expect(loader.inUse).toBe(2);
+    loader.releaseSource(name);
+    loader.release(1);
+    // One idle face is kept: the preview, released first, is unloaded.
+    expect(fonts.families()).toEqual([faceFamily(1)]);
   });
 });

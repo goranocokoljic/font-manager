@@ -347,3 +347,210 @@ fn timestamps_are_rfc_3339_in_utc() {
     assert_eq!(rfc3339(951_782_400), "2000-02-29T00:00:00Z");
     assert_eq!(rfc3339(1_792_800_000 + 3_661), "2026-10-24T01:01:01Z");
 }
+
+// ---- previews (E22.2) ----
+
+fn fixture(rel: &str) -> Vec<u8> {
+    fs::read(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures")
+            .join(rel),
+    )
+    .expect("fixture")
+}
+
+/// A fetcher that answers by address: the index, Lato's file list, and a
+/// font (or `font`) for any other URL; it records every URL it was asked.
+struct Routed {
+    font: Mutex<Vec<u8>>,
+    urls: Mutex<Vec<String>>,
+}
+
+impl Routed {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            font: Mutex::new(fixture(
+                "fonts/google-repo/asapsharp/AsapSharp[wdth,wght].ttf",
+            )),
+            urls: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn urls(&self) -> Vec<String> {
+        lock(&self.urls).clone()
+    }
+}
+
+impl Fetcher for Routed {
+    fn get(&self, url: &str) -> FmResult<Vec<u8>> {
+        lock(&self.urls).push(url.to_owned());
+        if url.contains("/metadata/fonts") {
+            Ok(index_fixture())
+        } else if url.contains("/download/list") {
+            Ok(fixture("catalogs/google-fonts/download-list-lato.json"))
+        } else {
+            Ok(lock(&self.font).clone())
+        }
+    }
+}
+
+fn previewing(dir: &TempDir, fetcher: &Arc<Routed>) -> Catalogs {
+    Catalogs::new(
+        dir.path().join(CATALOGS_DIR),
+        Arc::clone(fetcher) as Arc<dyn Fetcher>,
+        vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+    )
+    .with_previews_in(dir.path().join("cache").join(CATALOGS_DIR))
+}
+
+#[test]
+fn a_preview_is_fetched_once_into_the_cache_folder() {
+    let dir = TempDir::new("catalog-preview");
+    let fetcher = Routed::new();
+    let c = previewing(&dir, &fetcher);
+    c.set_enabled(GOOGLE, true).expect("on");
+    c.refresh(GOOGLE).expect("refresh");
+
+    let path = c.font_source(GOOGLE, "Lato").expect("preview");
+    assert!(
+        path.starts_with(
+            dir.path()
+                .join("cache")
+                .join(CATALOGS_DIR)
+                .join("google-fonts")
+        )
+    );
+    assert_eq!(path.extension().and_then(|e| e.to_str()), Some("ttf"));
+    assert_eq!(
+        fs::read(&path).expect("file"),
+        fixture("fonts/google-repo/asapsharp/AsapSharp[wdth,wght].ttf")
+    );
+    let urls = fetcher.urls();
+    assert_eq!(urls.len(), 3, "index, file list, file: {urls:?}");
+    assert!(
+        urls[2].ends_with("S6uyw4BMUTPHvxk6XweuBCY.ttf"),
+        "Lato-Regular: {urls:?}"
+    );
+
+    // The second time, and after a restart, it is read from the cache.
+    assert_eq!(c.font_source(GOOGLE, "Lato").expect("again"), path);
+    let restarted = previewing(&dir, &fetcher);
+    assert_eq!(
+        restarted.font_source(GOOGLE, "Lato").expect("restart"),
+        path
+    );
+    assert_eq!(fetcher.urls().len(), 3, "no new request");
+}
+
+#[test]
+fn a_preview_is_refused_while_off_or_for_an_unlisted_family_before_any_request() {
+    let dir = TempDir::new("catalog-preview-refused");
+    let fetcher = Routed::new();
+    let c = previewing(&dir, &fetcher);
+    let e = c.font_source(GOOGLE, "Lato").expect_err("off");
+    assert_eq!(e.code(), ErrorCode::Conflict);
+    c.set_enabled(GOOGLE, true).expect("on");
+    let e = c.font_source(GOOGLE, "Lato").expect_err("never refreshed");
+    assert_eq!(e.code(), ErrorCode::NotFound);
+    assert!(fetcher.urls().is_empty(), "nothing fetched");
+
+    c.refresh(GOOGLE).expect("refresh");
+    let e = c
+        .font_source(GOOGLE, "../../etc/passwd")
+        .expect_err("unlisted");
+    assert_eq!(e.code(), ErrorCode::NotFound);
+    c.font_source(GOOGLE, "Lato").expect("preview");
+    c.set_enabled(GOOGLE, false).expect("off");
+    let e = c
+        .font_source(GOOGLE, "Lato")
+        .expect_err("off again, even cached");
+    assert_eq!(e.code(), ErrorCode::Conflict);
+    assert_eq!(fetcher.urls().len(), 3, "only the refresh and one preview");
+}
+
+#[test]
+fn a_preview_that_is_not_a_font_is_not_kept() {
+    let dir = TempDir::new("catalog-preview-junk");
+    let fetcher = Routed::new();
+    *lock(&fetcher.font) = b"<html>not a font</html>".to_vec();
+    let c = previewing(&dir, &fetcher);
+    c.set_enabled(GOOGLE, true).expect("on");
+    c.refresh(GOOGLE).expect("refresh");
+    let e = c.font_source(GOOGLE, "Lato").expect_err("junk");
+    assert_eq!(e.code(), ErrorCode::Io);
+    assert!(e.message().contains("Lato"), "{}", e.message());
+    let previews = dir
+        .path()
+        .join("cache")
+        .join(CATALOGS_DIR)
+        .join("google-fonts");
+    assert!(
+        !previews.exists() || fs::read_dir(&previews).expect("dir").next().is_none(),
+        "nothing kept"
+    );
+}
+
+#[test]
+fn a_failed_preview_fetch_is_an_error_that_names_the_family() {
+    let dir = TempDir::new("catalog-preview-offline");
+    let fetcher = Scripted::answering(Ok(index_fixture()));
+    let c = Catalogs::new(
+        dir.path().join(CATALOGS_DIR),
+        Arc::clone(&fetcher) as Arc<dyn Fetcher>,
+        vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+    )
+    .with_previews_in(dir.path().join("cache"));
+    c.set_enabled(GOOGLE, true).expect("on");
+    c.refresh(GOOGLE).expect("refresh");
+    fetcher.set(Err(FmError::new(ErrorCode::Io, "offline")));
+    let e = c.font_source(GOOGLE, "Lato").expect_err("offline");
+    assert_eq!(e.code(), ErrorCode::Io);
+    assert!(
+        e.message()
+            .starts_with("The preview of Lato could not be fetched.")
+    );
+}
+
+#[test]
+fn the_preview_file_is_the_upright_regular_else_a_variable_else_an_upright_one() {
+    let file = |name: &str| CatalogFile {
+        name: name.to_owned(),
+        url: format!("https://x/{name}"),
+    };
+    let pick = |files: &[CatalogFile]| preview_file(files).map(|(f, ext)| (f.name.clone(), ext));
+    assert_eq!(
+        pick(&[
+            file("OFL.txt"),
+            file("Lato-Italic.ttf"),
+            file("Lato-Bold.ttf"),
+            file("Lato-Regular.ttf"),
+        ]),
+        Some(("Lato-Regular.ttf".to_owned(), "ttf"))
+    );
+    assert_eq!(
+        pick(&[
+            file("Inter-Italic[opsz,wght].ttf"),
+            file("Inter[opsz,wght].ttf"),
+            file("static/Inter-Black.ttf"),
+        ]),
+        Some(("Inter[opsz,wght].ttf".to_owned(), "ttf"))
+    );
+    assert_eq!(
+        pick(&[file("A-ThinItalic.OTF"), file("A-Thin.OTF")]),
+        Some(("A-Thin.OTF".to_owned(), "otf"))
+    );
+    assert_eq!(
+        pick(&[file("A-Italic.woff2")]),
+        Some(("A-Italic.woff2".to_owned(), "woff2"))
+    );
+    assert_eq!(pick(&[file("OFL.txt"), file("README")]), None);
+}
+
+#[test]
+fn preview_names_are_safe_file_names() {
+    let a = preview_stem("Noto Sans");
+    assert_eq!(a.len(), 32);
+    assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    assert_ne!(a, preview_stem("Noto-Sans"));
+    assert_eq!(preview_stem("../x").len(), 32);
+}
