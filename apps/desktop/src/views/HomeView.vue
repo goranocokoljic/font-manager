@@ -144,6 +144,17 @@ function showPreset(p: LayoutPreset): void {
   views.setMode(ALL_FONTS_VIEW, 'layout');
 }
 
+// Pairing Studio (E24.1) opens the picked layout with the face the layout mode shows.
+const canOpenStudio = computed(() => mode.value === 'layout' && layoutFace.value !== null);
+function openStudio(): void {
+  const face = layoutFace.value;
+  if (!face) return;
+  void router.push({
+    name: 'studio',
+    query: { layout: layoutId.value, face: String(face.id) },
+  });
+}
+
 onMounted(() => {
   void app.load();
   void library.load();
@@ -336,6 +347,17 @@ useActions([
     },
     run: () => showPreset(p),
   })),
+  {
+    id: 'view.openStudio',
+    get title() {
+      return t('home.actions.openStudio');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => canOpenStudio.value,
+    run: openStudio,
+  },
 ]);
 
 // One palette entry per saved comparison (E13.2), kept in step with the saved list.
@@ -490,7 +512,17 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
           <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
         </template>
         <template v-else-if="fontList.families.length && mode === 'layout'">
-          <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
+          <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
+            <button
+              type="button"
+              class="toggle studio"
+              :disabled="!canOpenStudio"
+              :title="t('home.openStudioTitle')"
+              @click="openStudio"
+            >
+              {{ t('home.openStudio') }}
+            </button>
+          </LayoutActions>
           <FontLayout
             :layout="shownLayout"
             :face="layoutFace"
@@ -614,6 +646,11 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
   background: transparent;
   color: inherit;
   font: inherit;
+}
+/* In the layout file bar: its own end, the bar's size. */
+.toggle.studio {
+  margin-inline-start: auto;
+  padding: 2px 8px;
 }
 .modes {
   display: flex;
