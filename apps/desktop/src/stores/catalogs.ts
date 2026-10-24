@@ -188,16 +188,22 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     void relist();
   }
 
-  /** Fetches the open catalog's list. A failure keeps the cached list and says why. */
-  async function refresh(id: CatalogId | undefined = current.value?.id): Promise<boolean> {
+  /**
+   * Fetches the open catalog's list. A failure keeps the cached list and says why. The
+   * Refresh button (`checks`) also compares the downloads with the new list, without
+   * another request; the first fetch of a catalog just turned on does not.
+   */
+  async function refresh(
+    id: CatalogId | undefined = current.value?.id,
+    checks = true,
+  ): Promise<boolean> {
     if (!id || refreshing.value) return false;
     refreshing.value = true;
     try {
       put(await client().refreshCatalog({ id }));
       refreshError.value = null;
       if (open.value === id) await relist();
-      // A Refresh checks the downloads against the new list too, without another request.
-      await compare(true);
+      if (checks) await compare(true);
       return true;
     } catch (e) {
       if (open.value === id) refreshError.value = toApiError(e);
@@ -218,7 +224,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       const catalog = await client().setCatalogEnabled({ id, enabled });
       put(catalog);
       error.value = null;
-      if (enabled && !catalog.refreshedAt) await refresh(id);
+      if (enabled && !catalog.refreshedAt) await refresh(id, false);
       else if (open.value === id) await relist();
     } catch (e) {
       error.value = toApiError(e);

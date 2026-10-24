@@ -228,7 +228,11 @@ describe('catalogs store: update check (E22.4)', () => {
     expect(store.libraryUpdate('Inter')).toBeNull();
 
     await store.setEnabled('googleFonts', true);
-    expect(checks, 'the first Refresh compares with the new list, no request').toEqual([true]);
+    expect(checks, 'turning a catalog on fetches its list and checks nothing').toEqual([]);
+    expect(store.updates).toBeNull();
+
+    expect(await store.refresh()).toBe(true);
+    expect(checks, 'Refresh compares with the new list, no request').toEqual([true]);
     expect(store.updateOf('googleFonts', 'Inter')?.availableVersion).toBe('2026-09-01');
 
     expect(await store.checkUpdates()).toBe(true);

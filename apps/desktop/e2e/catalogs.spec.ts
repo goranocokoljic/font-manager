@@ -347,6 +347,9 @@ test('Check for updates badges the families with a newer version, in the catalog
   await expect(check, 'off: nothing to check').toBeDisabled();
   await catalogs.getByRole('button', { name: 'Turn on Google Fonts' }).click();
   await expect(catalogRows(page)).toHaveCount(4);
+  // Turning the catalog on fetches its list and checks nothing: only the button does.
+  await expect(page.getByTestId('catalog-updates')).toHaveCount(0);
+  await expect(page.getByTestId('update-available')).toHaveCount(0);
 
   await check.click();
   await expect(page.getByTestId('catalog-updates')).toHaveText(
