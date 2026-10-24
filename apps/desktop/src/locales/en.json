@@ -1149,7 +1149,13 @@
     "font": "Font",
     "noFont": "No font",
     "layout": "Layout",
-    "closeTitle": "Back to the library (Escape)"
+    "closeTitle": "Back to the library (Escape)",
+    "blockFont": "Font for {label}",
+    "panelFont": "Panel font",
+    "fonts": "Fonts",
+    "noMatch": "No matching fonts",
+    "usePanelFont": "Use panel font",
+    "usePanelFontFor": "Use panel font for {label}"
   },
   "conflicts": {
     "title": "Font conflicts",

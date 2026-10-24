@@ -5,14 +5,20 @@
 // writes the same template file. Close or Escape goes back to the library: to the entry
 // the studio was opened from when there is one, so the selection and view come back as
 // they were.
+//
+// Each block has a font picker beside its size badge (E24.2): a block can be set in a face
+// of its own; the others use the panel's. The choice lives in the studio store for the
+// session and never goes into the layout file.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import BlockFontPicker from '../components/BlockFontPicker.vue';
 import FontLayout from '../components/FontLayout.vue';
 import LayoutActions from '../components/LayoutActions.vue';
 import { t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import { ALL_FONTS_VIEW } from '../stores/preview';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
+import { useStudioStore } from '../stores/studio';
 import { useTextLayoutsStore } from '../stores/textLayouts';
 import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore } from '../stores/views';
 
@@ -22,6 +28,7 @@ const commands = useCommandsStore();
 const selection = useSelectionStore();
 const textLayouts = useTextLayoutsStore();
 const views = useViewsStore();
+const studio = useStudioStore();
 
 /** The layout in the URL; without one, the library's Layout mode pick. */
 const layoutId = computed(() => {
@@ -53,6 +60,12 @@ watch(
     if (textLayouts.saved?.id !== id) void textLayouts.open(id);
   },
   { immediate: true },
+);
+
+/** The layout the blocks belong to, once it is open; block fonts are kept per layout. */
+const openId = computed(() => textLayouts.saved?.id ?? null);
+const blockFaces = computed(() =>
+  (textLayouts.draft?.blocks ?? []).map((_, i) => studio.faceOf(openId.value, i)),
 );
 
 /** Shows another layout in the panel; the library's Layout mode keeps its own pick. */
@@ -129,8 +142,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       :set-props="textLayouts.setBlockProps"
       :width="textLayouts.width"
       :set-width-lock="textLayouts.setWidthLock"
+      :block-faces="blockFaces"
       @edit-text="textLayouts.setBlockText"
-    />
+    >
+      <template v-if="openId" #block-tools="{ index, label }">
+        <BlockFontPicker
+          :layout-id="openId"
+          :index="index"
+          :label="label"
+          :face="blockFaces[index] ?? null"
+        />
+      </template>
+    </FontLayout>
   </section>
 </template>
 
