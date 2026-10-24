@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { FullSettings } from '../api/client';
 import type { Language, SettingsUpdate } from '../api/types';
+import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import {
   CATALOGS,
@@ -14,6 +15,7 @@ import {
   type MessageKey,
 } from '../i18n';
 import { useAppStore } from '../stores/app';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useCommandsStore } from '../stores/commands';
 import { useSettingsStore } from '../stores/settings';
 import { useSourcesStore } from '../stores/sources';
@@ -21,6 +23,7 @@ import { useToastStore } from '../stores/toast';
 import { useUpdatesStore } from '../stores/updates';
 
 const store = useSettingsStore();
+const catalogs = useCatalogsStore();
 const sources = useSourcesStore();
 const commands = useCommandsStore();
 const app = useAppStore();
@@ -33,6 +36,7 @@ const sections = [
   { id: 'sources' },
   { id: 'activation' },
   { id: 'appearance' },
+  { id: 'catalogs' },
   { id: 'advanced' },
   { id: 'about' },
 ] as const;
@@ -91,11 +95,14 @@ onMounted(async () => {
     app.info ? undefined : app.load(),
     updates.support ? undefined : updates.loadSupport(),
     sources.load(),
+    catalogs.load(),
   ]);
 });
 onBeforeUnmount(() => sources.stop());
 
 const s = computed(() => store.settings);
+/** Online catalogs: the Adobe Fonts entry shows its note when opened. */
+const adobeFontsOpen = ref(false);
 /** The last failure of any store this window reads. */
 const error = computed(() => store.error ?? sources.error ?? app.error);
 
@@ -368,6 +375,40 @@ function chooseLanguage(e: Event): void {
             </select>
           </label>
           <p id="language-hint" class="note">{{ t('language.hint') }}</p>
+        </template>
+
+        <template v-else-if="current === 'catalogs'">
+          <h2 class="heading">{{ sectionTitle('catalogs') }}</h2>
+          <p class="note">{{ t('settings.catalogs.note') }}</p>
+          <template v-for="c in catalogs.catalogs" :key="c.id">
+            <label class="choice">
+              <input
+                type="checkbox"
+                :name="`catalog-${c.id}`"
+                :aria-describedby="`catalog-hint-${c.id}`"
+                :checked="c.enabled"
+                :disabled="catalogs.busy === c.id"
+                @change="catalogs.setEnabled(c.id, ($event.target as HTMLInputElement).checked)"
+              />
+              <bdi>{{ c.name }}</bdi>
+            </label>
+            <p :id="`catalog-hint-${c.id}`" class="note hint">
+              {{ t('settings.catalogs.connectsHint', { name: c.name }) }}
+            </p>
+          </template>
+          <p v-if="catalogs.error" role="alert" class="note">
+            {{ errorMessage(catalogs.error) }}
+          </p>
+          <button
+            type="button"
+            class="button"
+            aria-controls="settings-adobe-fonts"
+            :aria-expanded="adobeFontsOpen"
+            @click="adobeFontsOpen = !adobeFontsOpen"
+          >
+            {{ t('catalogs.adobeFonts.name') }}
+          </button>
+          <AdobeFontsNote v-if="adobeFontsOpen" id="settings-adobe-fonts" :level="3" />
         </template>
 
         <template v-else-if="current === 'advanced' && s">

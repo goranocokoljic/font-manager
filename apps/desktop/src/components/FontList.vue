@@ -10,21 +10,29 @@
 // inspector; Shift extends the selection, Ctrl/Cmd moves without selecting,
 // Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A selects all. Plain Space is the
 // app's quick-look key, so the list leaves it alone.
+//
+// Each row has a "Similar" action (E23.3), shown on the cursor row and under the
+// pointer; it is out of the Tab order, the S key runs it for the keyboard.
+// A family downloaded from a catalog that the last update check found a newer
+// version of shows an "Update available" badge (E22.4).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { FaceId } from '../api/types';
+import type { FaceId, FaceSummary } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { keepRowInView } from '../list/density';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
+import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { rowActivation } from '../list/activation';
 import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSettingsStore } from '../stores/settings';
+import { useSimilarStore } from '../stores/similar';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
@@ -50,8 +58,21 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const library = useLibraryStore();
+const catalogs = useCatalogsStore();
+
+/** The "Update available" tooltip of a library family the last update check found (E22.4). */
+function updateTitle(family: string): string | null {
+  const update = catalogs.libraryUpdate(family);
+  if (!update) return null;
+  return t('catalogs.updates.badgeTitle', {
+    catalog: catalogs.catalogs.find((c) => c.id === update.catalog)?.name ?? update.catalog,
+    version: update.availableVersion ?? '',
+  });
+}
 const quick = useQuickCollectionStore();
 const settings = useSettingsStore();
+const similar = useSimilarStore();
+const similarChord = chordOf(ACTIONS.similar)!;
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
 
@@ -182,6 +203,22 @@ function onRowClick(row: ListRow, e: MouseEvent): void {
   viewport.value?.focus({ preventScroll: true });
 }
 
+const similarLabel = (face: FaceSummary) =>
+  t('list.findSimilarLabel', { name: `${face.familyName} ${face.style}` });
+
+/** The row's "Similar" action: selects the row and finds the faces like its face. */
+function findSimilar(row: ListRow, face: FaceSummary): void {
+  list.click(row.key);
+  void similar.openFor(face);
+}
+
+// A face picked elsewhere ("Find similar") becomes the cursor: scroll to it.
+watch(
+  () => list.revealed,
+  () => void revealCursor(),
+  { flush: 'post' },
+);
+
 function onToggle(row: ListRow): void {
   if (row.kind === 'family') list.toggleExpanded(row.family.id);
   viewport.value?.focus({ preventScroll: true });
@@ -271,11 +308,31 @@ function onToggle(row: ListRow): void {
               :title="openLicenseName(item.row.family.openLicense)"
               >{{ openLicenseBadge() }}</span
             >
+            <span
+              v-if="updateTitle(item.row.family.name)"
+              class="update"
+              data-testid="update-available"
+              :title="updateTitle(item.row.family.name) ?? undefined"
+              >{{ t('catalogs.updates.badge') }}</span
+            >
           </template>
           <template v-else-if="item.row.virtual" #detail>
             <span class="count">{{ t('list.pinned') }}</span>
           </template>
         </FontPreviewRow>
+        <button
+          v-if="item.face"
+          type="button"
+          class="row-action"
+          tabindex="-1"
+          data-testid="row-similar"
+          :aria-label="similarLabel(item.face)"
+          :aria-keyshortcuts="ariaShortcut(similarChord)"
+          :title="`${similarLabel(item.face)} (${formatChord(similarChord)})`"
+          @click.stop="findSimilar(item.row, item.face)"
+        >
+          {{ t('list.findSimilar') }}
+        </button>
         <div v-else class="preview placeholder">
           <span class="label"
             ><ActivationDot :state="rowActivation(item.row)" /><bdi>{{
@@ -386,8 +443,33 @@ function onToggle(row: ListRow): void {
   font-size: 10.5px;
   line-height: 14px;
 }
+.update {
+  padding: 0 4px;
+  border: 1px solid var(--fm-accent);
+  border-radius: 3px;
+  color: var(--fm-accent);
+  font-size: 10.5px;
+  line-height: 14px;
+}
 .note {
   color: var(--fm-warning);
+}
+.row-action {
+  flex: none;
+  align-self: center;
+  margin-inline-end: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 6px;
+  background: var(--fm-bg);
+  color: inherit;
+  font: inherit;
+  font-size: 11.5px;
+  visibility: hidden;
+}
+.slot:hover .row-action,
+.slot.cursor .row-action {
+  visibility: visible;
 }
 .quick-mark {
   color: var(--fm-accent);

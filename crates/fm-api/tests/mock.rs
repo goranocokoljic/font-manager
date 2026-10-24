@@ -8,11 +8,14 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
     DeactivateRequest, OutcomeStatus, Target,
 };
-use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
+use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
     CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
-use fm_api::export::{ExportWebRequest, GlyphSvgRequest, Subset, WebFormat};
+use fm_api::export::{
+    CollectionSpecimenRequest, ExportWebRequest, Framework, FrameworkSnippetRequest,
+    GlyphSvgRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat,
+};
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
     RevertLayoutRequest, SaveLayoutRequest,
@@ -878,6 +881,54 @@ fn export_honors_the_license_guard() {
         css: false,
     });
     assert_eq!(refused.unwrap_err().code, ErrorCode::PermissionDenied);
+}
+
+#[test]
+fn the_mock_license_guard_blocks_preview_and_print_as_the_core_does() {
+    let mock = Arc::new(MockApi::new());
+    // JetBrains Mono becomes preview & print; Legacy Grotesk is restricted.
+    mock.set_embedding(FaceId(6), Embedding::PreviewAndPrint)
+        .unwrap();
+    let api: Arc<dyn Api> = mock.clone();
+    let export = |faces: &[u32]| {
+        api.export_web(ExportWebRequest {
+            faces: faces.iter().copied().map(FaceId).collect(),
+            formats: vec![WebFormat::Woff2],
+            subset: None,
+            out_dir: "/tmp/out".into(),
+            css: true,
+        })
+    };
+    let e = export(&[1, 7, 6, 7]).unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(
+        e.message,
+        "Legacy Grotesk Regular: Embedding restricted, no web license declared; \
+         JetBrains Mono Regular: Embedding preview & print only, no web license declared. \
+         Declare a web license for the family to export it."
+    );
+    assert_eq!(e.detail.as_deref(), Some("blocked faces: 7, 6"));
+    // Installable and editable faces are not blocked.
+    mock.set_embedding(FaceId(3), Embedding::Editable).unwrap();
+    assert_eq!(export(&[1, 3]).unwrap().files.len(), 3);
+
+    // A Web declaration for each family lets the same export through; a
+    // Desktop one does not.
+    let declare = |family: u32, license_type| {
+        api.declare_license(LicenseDeclaration {
+            family: FamilyId(family),
+            license_type: Some(license_type),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .unwrap();
+    };
+    declare(3, LicenseType::Desktop);
+    assert_eq!(export(&[6]).unwrap_err().code, ErrorCode::PermissionDenied);
+    declare(3, LicenseType::Web);
+    declare(4, LicenseType::Web);
+    assert_eq!(export(&[1, 7, 6]).unwrap().files.len(), 4);
 }
 
 #[test]
@@ -2363,3 +2414,388 @@ const MOCK_CSS_SNAPSHOT: &str = r#"@font-face {
   src: url("SourceSerif4-Regular.woff2") format("woff2"), url("SourceSerif4-Regular.woff") format("woff");
 }
 "#;
+
+#[allow(clippy::expect_used)] // test setup: a failure fails the test
+fn snippet(api: &Arc<dyn Api>, framework: Framework, faces: Vec<FaceId>) -> String {
+    api.framework_snippet(FrameworkSnippetRequest {
+        faces,
+        framework,
+        fonts_path: None,
+    })
+    .expect("snippet")
+    .text
+}
+
+#[test]
+fn framework_snippets_follow_the_core_shape_with_the_family_class_fallback() {
+    let api = api();
+    let faces: Vec<FaceId> = [FamilyId(1), FamilyId(2)]
+        .into_iter()
+        .flat_map(|f| api.get_family(f).unwrap().faces.into_iter().map(|x| x.id))
+        .collect();
+    let tailwind = snippet(&api, Framework::Tailwind, faces.clone());
+    assert!(
+        tailwind.starts_with("// tailwind.config.js\nexport default {\n"),
+        "{tailwind}"
+    );
+    assert!(
+        tailwind.contains("        'inter': ['\"Inter\"', 'sans-serif'],\n"),
+        "{tailwind}"
+    );
+    assert!(
+        tailwind.contains("        'source-serif-4': ['\"Source Serif 4\"', 'serif'],\n"),
+        "{tailwind}"
+    );
+    let css = snippet(&api, Framework::CssVariables, faces.clone());
+    assert!(
+        css.starts_with(":root {\n  --font-inter: \"Inter\", sans-serif;\n"),
+        "{css}"
+    );
+    assert!(
+        css.contains("  --font-source-serif-4: \"Source Serif 4\", serif;\n"),
+        "{css}"
+    );
+    let next = snippet(&api, Framework::NextLocalFont, faces.clone());
+    assert!(
+        next.starts_with("import localFont from 'next/font/local';\n"),
+        "{next}"
+    );
+    assert!(
+        next.contains("export const fontInter = localFont({"),
+        "{next}"
+    );
+    assert!(
+        next.contains("export const fontSourceSerif4 = localFont({"),
+        "{next}"
+    );
+    assert_eq!(
+        next.matches("{ path: './fonts/").count(),
+        faces.len(),
+        "{next}"
+    );
+    assert!(
+        next.contains("  variable: '--font-source-serif-4',\n  display: 'swap',\n"),
+        "{next}"
+    );
+}
+
+#[test]
+fn a_framework_snippet_needs_a_known_face() {
+    let api = api();
+    let req = |faces| FrameworkSnippetRequest {
+        faces,
+        framework: Framework::Tailwind,
+        fonts_path: None,
+    };
+    let empty = api.framework_snippet(req(Vec::new())).unwrap_err();
+    assert_eq!(empty.code, ErrorCode::InvalidRequest);
+    let unknown = api.framework_snippet(req(vec![FaceId(999)])).unwrap_err();
+    assert_eq!(unknown.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn a_collection_specimen_checks_like_the_core_and_returns_the_path() {
+    let api = api();
+    let req = |collection, format| CollectionSpecimenRequest {
+        collection,
+        format,
+        out_path: "/tmp/Client.pdf".into(),
+    };
+    let collection = |name: &str, rules| {
+        api.create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: name.into(),
+            parent: None,
+            rules,
+        })
+        .unwrap()
+        .id
+    };
+    let code = |r: CollectionSpecimenRequest| api.export_collection_specimen(r).unwrap_err().code;
+    let manual = collection("Client", None);
+    assert_eq!(
+        code(req(manual, SpecimenFormat::Pdf)),
+        ErrorCode::InvalidRequest,
+        "an empty collection"
+    );
+    assert_eq!(
+        code(req(CollectionId(999), SpecimenFormat::Html)),
+        ErrorCode::NotFound
+    );
+    api.add_to_collection(CollectionFacesRequest {
+        collection: manual,
+        faces: vec![FaceId(1), FaceId(3)],
+        families: vec![],
+    })
+    .unwrap();
+    let res = api
+        .export_collection_specimen(req(manual, SpecimenFormat::Pdf))
+        .unwrap();
+    assert_eq!(res.path, "/tmp/Client.pdf");
+    assert_eq!(
+        code(CollectionSpecimenRequest {
+            out_path: " ".into(),
+            ..req(manual, SpecimenFormat::Html)
+        }),
+        ErrorCode::InvalidRequest
+    );
+    // A smart collection goes through its rule.
+    let smart = collection(
+        "Variable",
+        Some(Filters {
+            variable: Some(true),
+            ..Default::default()
+        }),
+    );
+    api.export_collection_specimen(req(smart, SpecimenFormat::Html))
+        .unwrap();
+    // The restricted face refuses the whole collection, by name.
+    api.add_to_collection(CollectionFacesRequest {
+        collection: manual,
+        faces: vec![FaceId(7)],
+        families: vec![],
+    })
+    .unwrap();
+    let e = api
+        .export_collection_specimen(req(manual, SpecimenFormat::Html))
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert!(
+        e.message
+            .starts_with("Legacy Grotesk Regular: Embedding restricted"),
+        "{e:?}"
+    );
+    assert_eq!(e.detail.as_deref(), Some("blocked faces: 7"));
+}
+
+#[test]
+fn a_specimen_checks_like_the_core_and_returns_the_path() {
+    let api = api();
+    let req = |family, format| SpecimenRequest {
+        family,
+        format,
+        out_path: "/tmp/Inter specimen.html".into(),
+    };
+    let inter = api.get_face(FaceId(1)).unwrap().face.family;
+    let res = api
+        .export_specimen(req(inter, SpecimenFormat::Html))
+        .unwrap();
+    assert_eq!(res.path, "/tmp/Inter specimen.html");
+    // The app prints a PDF (ADR 0013); the mock answers as the app does.
+    let pdf = api
+        .export_specimen(SpecimenRequest {
+            out_path: "/tmp/Inter specimen.pdf".into(),
+            ..req(inter, SpecimenFormat::Pdf)
+        })
+        .unwrap();
+    assert_eq!(pdf.path, "/tmp/Inter specimen.pdf");
+    let code = |r: SpecimenRequest| api.export_specimen(r).unwrap_err().code;
+    assert_eq!(
+        code(req(FamilyId(999), SpecimenFormat::Html)),
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        code(SpecimenRequest {
+            out_path: " ".into(),
+            ..req(inter, SpecimenFormat::Html)
+        }),
+        ErrorCode::InvalidRequest
+    );
+    // The restricted face with no license declared is refused, by name.
+    let legacy = api.get_face(FaceId(7)).unwrap();
+    assert_eq!(legacy.license.embedding, Embedding::Restricted);
+    let e = api
+        .export_specimen(req(legacy.face.family, SpecimenFormat::Html))
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert!(
+        e.message
+            .starts_with("Legacy Grotesk Regular: Embedding restricted"),
+        "{e:?}"
+    );
+    assert_eq!(e.detail.as_deref(), Some("blocked faces: 7"));
+    api.declare_license(LicenseDeclaration {
+        family: legacy.face.family,
+        license_type: Some(LicenseType::Desktop),
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    api.export_specimen(req(legacy.face.family, SpecimenFormat::Html))
+        .unwrap();
+}
+
+#[test]
+fn catalogs_are_off_until_turned_on_and_list_from_the_refreshed_cache() {
+    use fm_api::catalog::{
+        CatalogId, CatalogRef, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    };
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let catalogs = api.list_catalogs().expect("catalogs");
+    let ids: Vec<CatalogId> = catalogs.iter().map(|c| c.id).collect();
+    assert_eq!(ids, [CatalogId::GoogleFonts, CatalogId::Fontshare]);
+    assert_eq!(catalogs[1].name, "Fontshare");
+    assert!(catalogs.iter().all(|c| !c.enabled), "off by default");
+    assert_eq!(catalogs[0].refreshed_at, None);
+    assert_eq!(
+        api.refresh_catalog(CatalogRef { id })
+            .expect_err("off")
+            .code,
+        ErrorCode::Conflict
+    );
+    let list = |query: &str| {
+        api.list_catalog_families(ListCatalogFamiliesRequest {
+            id,
+            query: query.into(),
+            page: Page::default(),
+        })
+        .expect("families")
+    };
+    assert_eq!(list("").total, 0);
+
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert_eq!(list("").total, 0, "never refreshed");
+    let refreshed = api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    assert_eq!(refreshed.family_count, 4);
+    assert!(refreshed.refreshed_at.is_some());
+    let lato = list("LAT");
+    assert_eq!(lato.total, 1);
+    assert_eq!(lato.items[0].name, "Lato");
+
+    let off = api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: false })
+        .expect("off");
+    assert_eq!(off.family_count, 4, "cache kept");
+    assert_eq!(list("").total, 0, "an off catalog lists nothing");
+}
+
+#[test]
+fn a_mock_download_goes_into_a_watched_source_and_is_listed() {
+    use fm_api::catalog::{
+        CatalogFileKind, CatalogId, CatalogRef, DownloadFamilyRequest, SetCatalogEnabledRequest,
+    };
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let req = |family: &str, kind, source| DownloadFamilyRequest {
+        id,
+        family: family.to_owned(),
+        kind,
+        source: SourceId(source),
+    };
+    let e = api
+        .download_family(req("Lato", CatalogFileKind::Static, 1))
+        .expect_err("off");
+    assert_eq!(e.code, ErrorCode::Conflict);
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    let e = api
+        .download_family(req("Lato", CatalogFileKind::Static, 1))
+        .expect_err("never refreshed");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    let e = api
+        .download_family(req("Lato", CatalogFileKind::Static, 2))
+        .expect_err("the system fonts");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+
+    let rx = api.subscribe();
+    let got = api
+        .download_family(req("Inter", CatalogFileKind::Variable, 1))
+        .expect("download");
+    assert_eq!(got.download.kind, CatalogFileKind::Variable);
+    let names: Vec<&str> = got.download.files.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Inter[wght].ttf"]);
+    assert!(got.download.folder.ends_with("/Inter"));
+    let events: Vec<Event> = rx.try_iter().collect();
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::ScanFinished { job, .. } if *job == got.scan)),
+        "the rescan: {events:?}"
+    );
+    let lato = api
+        .download_family(req("Lato", CatalogFileKind::Variable, 1))
+        .expect("static only");
+    assert_eq!(
+        lato.download.kind,
+        CatalogFileKind::Static,
+        "no variable font"
+    );
+    assert_eq!(lato.download.files.len(), 5);
+    let listed = api.list_catalog_downloads().expect("downloads");
+    let families: Vec<&str> = listed.iter().map(|d| d.family.as_str()).collect();
+    assert_eq!(families, ["Lato", "Inter"], "newest first");
+}
+
+#[test]
+fn a_catalog_font_source_needs_the_catalog_on_and_the_family_listed() {
+    use fm_api::catalog::{CatalogFontRequest, CatalogId, CatalogRef, SetCatalogEnabledRequest};
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let source = |family: &str| {
+        api.catalog_font_source(CatalogFontRequest {
+            id,
+            family: family.into(),
+        })
+    };
+    assert_eq!(source("Lato").expect_err("off").code, ErrorCode::Conflict);
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert_eq!(
+        source("Lato").expect_err("not refreshed").code,
+        ErrorCode::NotFound
+    );
+    api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    let lato = source("Lato").expect("listed");
+    assert_eq!(lato.family, "Lato");
+    assert!(lato.path.ends_with(".ttf"));
+    assert_eq!(
+        source("Nope Sans").expect_err("unlisted").code,
+        ErrorCode::NotFound
+    );
+}
+
+#[test]
+fn the_mock_update_check_follows_the_rules_of_the_core() {
+    use fm_api::catalog::{
+        CatalogId, CatalogUpdateStatus, CheckUpdatesRequest, SetCatalogEnabledRequest,
+    };
+    let mock = MockApi::new();
+    let id = CatalogId::GoogleFonts;
+    // The mock families last changed on 2026-09-01.
+    mock.seed_catalog_download(id, "Lato", "2026-09-01");
+    mock.seed_catalog_download(id, "Inter", "2026-03-01");
+    mock.seed_catalog_download(id, "Retired Sans", "2025-01-01");
+    let api: Arc<dyn Api> = Arc::new(mock);
+    assert!(
+        api.check_updates(CheckUpdatesRequest::default())
+            .expect("off")
+            .is_empty(),
+        "an off catalog is skipped"
+    );
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert!(
+        api.check_updates(CheckUpdatesRequest { cached_only: true })
+            .expect("never refreshed")
+            .is_empty()
+    );
+    let updates = api
+        .check_updates(CheckUpdatesRequest::default())
+        .expect("check");
+    let found: Vec<(&str, CatalogUpdateStatus)> = updates
+        .iter()
+        .map(|u| (u.family.as_str(), u.status))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("Inter", CatalogUpdateStatus::UpdateAvailable),
+            ("Retired Sans", CatalogUpdateStatus::NoLongerListed),
+        ]
+    );
+    assert_eq!(updates[0].available_version.as_deref(), Some("2026-09-01"));
+}

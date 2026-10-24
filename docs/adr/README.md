@@ -17,5 +17,7 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0010](0010-tray-per-os.md) | The tray per OS | Accepted |
 | [0011](0011-start-at-login.md) | Start at login per OS | Accepted |
 | [0012](0012-in-app-updater.md) | In-app updates from signed releases | Accepted |
+| [0013](0013-pdf-printing-per-os.md) | PDF printing per OS | Accepted |
+| [0014](0014-online-catalogs.md) | Online catalogs: adapter interface, Google Fonts endpoint, metadata cache | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

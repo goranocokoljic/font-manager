@@ -16,6 +16,11 @@
 //!   over the OS trash ([`CoreApi::open`]) or the one a test passes
 //!   ([`CoreApi::with_trash`]); without a trash it answers `Unsupported`
 //!   and moves nothing.
+//! - **Catalogs.** Online catalogs (E22.1) are off until the user turns
+//!   one on; only [`CatalogService::refresh_catalog`], a preview,
+//!   [`CatalogService::download_family`] and
+//!   [`CatalogService::check_updates`] go to the network. A download
+//!   records its provenance in the index and rescans the source.
 //! - **Not built yet.** Export, workflows and similar-font search answer an
 //!   `Unsupported` error with a message for the user, never a panic.
 
@@ -29,14 +34,21 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActivationService, ActiveFace, Clash, Conflict,
     DeactivateRequest, Target,
 };
+use fm_api::catalog::{
+    Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
+    CatalogFontSource, CatalogRef, CatalogService, CatalogUpdate, CheckUpdatesRequest,
+    DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
+    SetCatalogEnabledRequest,
+};
 use fm_api::common::Paged;
 use fm_api::comparison::{
     Comparison, ComparisonEntry, ComparisonRef, ComparisonService, RenameComparisonRequest,
     SaveComparisonRequest,
 };
 use fm_api::export::{
-    ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest,
+    CollectionSpecimenRequest, ExportService, ExportWebRequest, ExportWebResponse,
+    FrameworkSnippet, FrameworkSnippetRequest, GlyphSvgRequest, LicenseInventory,
+    LicenseInventoryRequest, SpecimenFormat, SpecimenRequest, SpecimenResponse,
 };
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
@@ -72,17 +84,19 @@ use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
     FamilyId, JobId, ResolutionId, SetId, SourceId, VirtualStyleId,
 };
-use fm_platform::{AppPaths, FontActivator, Os, Trash, TraySupport};
+use fm_platform::{AppPaths, FontActivator, Os, PdfPrinter, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
+use crate::catalog::Catalogs;
 use crate::error::{FmError, FmResult};
+use crate::framework_snippet::{self, SnippetFace};
 use crate::index::{DeclaredLicense, Index};
 use crate::layout::store::LayoutStore;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, subset, web_font};
+use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, specimen, subset, web_font};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -120,6 +134,11 @@ pub struct CoreApi {
     receipts: Option<PathBuf>,
     /// The layout template files (E12.5); `None` when the API has no config folder.
     layouts: Option<LayoutStore>,
+    /// The OS webview printer for PDF specimens (E21.2); `None` without the
+    /// app (the CLI's direct link), when a PDF is `Unsupported`.
+    pdf: Option<Arc<dyn PdfPrinter>>,
+    /// The online catalogs (E22.1); `None` when the API has no data folder.
+    catalogs: Option<Catalogs>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -154,7 +173,11 @@ impl CoreApi {
             .ok();
         let api = Self::new(index, activator, settings, previews)
             .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
-            .with_layouts_in(paths.layouts_dir());
+            .with_layouts_in(paths.layouts_dir())
+            .with_catalogs(
+                Catalogs::open(paths.data.join(crate::catalog::CATALOGS_DIR))
+                    .with_previews_in(paths.cache.join(crate::catalog::CATALOGS_DIR)),
+            );
         match fm_platform::trash::system() {
             Ok(trash) => api.with_trash(trash),
             Err(e) => {
@@ -186,6 +209,8 @@ impl CoreApi {
             trash: None,
             receipts: None,
             layouts: None,
+            pdf: None,
+            catalogs: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -224,6 +249,28 @@ impl CoreApi {
     pub fn with_layouts_in(mut self, dir: PathBuf) -> Self {
         self.layouts = Some(LayoutStore::new(dir));
         self
+    }
+
+    /// The same API, printing PDF specimens through `printer`; the app
+    /// passes [`fm_platform::pdf::system`].
+    #[must_use]
+    pub fn with_pdf_printer(mut self, printer: Arc<dyn PdfPrinter>) -> Self {
+        self.pdf = Some(printer);
+        self
+    }
+
+    /// The same API, with these online catalogs.
+    #[must_use]
+    pub fn with_catalogs(mut self, catalogs: Catalogs) -> Self {
+        self.catalogs = Some(catalogs);
+        self
+    }
+
+    /// The catalogs, or the answer when there is no catalogs folder.
+    fn catalogs(&self) -> ApiResult<&Catalogs> {
+        self.catalogs
+            .as_ref()
+            .ok_or_else(|| not_available("Online catalogs"))
     }
 
     /// The layout files, or the answer when there is no layouts folder.
@@ -439,6 +486,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// The answer of a service that is not built yet.
+/// The answer to a PDF specimen without a printer (the CLI's direct link).
+pub const PDF_NEEDS_APP: &str = "PDF export needs the Font Manager app running.";
+
 fn not_available(what: &str) -> ApiError {
     ApiError::new(
         ErrorCode::Unsupported,
@@ -906,27 +956,38 @@ impl ExportService for CoreApi {
                 formats.push(f);
             }
         }
-        let faces = {
+        let found = {
             let index = self.lock();
             req.faces
                 .into_iter()
                 .filter(|id| ids.insert(*id))
-                .map(|id| {
-                    let f = index.web_export_face(id)?;
-                    if f.restricted {
-                        return Err(FmError::new(
-                            ErrorCode::PermissionDenied,
-                            format!(
-                                "{} does not allow web embedding. Declare a web license to export it.",
-                                f.face.label
-                            ),
-                        ));
-                    }
-                    Ok((f.face, f.style))
-                })
+                .map(|id| Ok((id, index.web_export_face(id)?)))
                 .collect::<FmResult<Vec<_>>>()?
         };
-        let (faces, styles): (Vec<_>, Vec<_>) = faces.into_iter().unzip();
+        // The license guard (E20.6): one blocked face refuses the whole
+        // request before anything is written, and the refusal names them all.
+        let blocked: Vec<_> = found
+            .iter()
+            .filter_map(|(id, f)| f.blocked.map(|why| (*id, &f.face.label, why)))
+            .collect();
+        if !blocked.is_empty() {
+            let reasons: Vec<_> = blocked
+                .iter()
+                .map(|(_, label, why)| format!("{label}: {}", why.text()))
+                .collect();
+            let ids: Vec<_> = blocked.iter().map(|(id, ..)| id.0.to_string()).collect();
+            return Err(FmError::new(
+                ErrorCode::PermissionDenied,
+                format!(
+                    "{}. Declare a web license for the family to export it.",
+                    reasons.join("; ")
+                ),
+            )
+            .with_detail(format!("blocked faces: {}", ids.join(", ")))
+            .into());
+        }
+        let (faces, styles): (Vec<_>, Vec<_>) =
+            found.into_iter().map(|(_, f)| (f.face, f.style)).unzip();
         let out_dir = Path::new(&req.out_dir);
         let (files, css) = if req.css {
             let out = web_font::export_with_css(&faces, &styles, &formats, keep.as_ref(), out_dir)?;
@@ -938,6 +999,34 @@ impl ExportService for CoreApi {
         Ok(ExportWebResponse {
             files: files.iter().map(|p| p.display().to_string()).collect(),
             css,
+        })
+    }
+
+    /// Built from the index alone ([`framework_snippet::snippet`]); no font
+    /// file is read and nothing is written, so a face whose license keeps it
+    /// off the web still gets a snippet. A face listed twice counts once.
+    fn framework_snippet(&self, req: FrameworkSnippetRequest) -> ApiResult<FrameworkSnippet> {
+        if req.faces.is_empty() {
+            return Err(ApiError::invalid("Pick at least one font."));
+        }
+        let mut ids = HashSet::new();
+        let faces = {
+            let index = self.lock();
+            req.faces
+                .into_iter()
+                .filter(|id| ids.insert(*id))
+                .map(|id| {
+                    let f = index.web_export_face(id)?;
+                    Ok(SnippetFace {
+                        style: f.style,
+                        file_stem: f.face.file_stem,
+                        classification: f.classification,
+                    })
+                })
+                .collect::<FmResult<Vec<_>>>()?
+        };
+        Ok(FrameworkSnippet {
+            text: framework_snippet::snippet(req.framework, &faces, req.fonts_path.as_deref()),
         })
     }
 
@@ -957,6 +1046,64 @@ impl ExportService for CoreApi {
             file.collection_index,
             &req,
         )?)
+    }
+
+    /// The family is looked up under the index lock; its files are read
+    /// and the page written outside it ([`specimen::write_html`]). A PDF is
+    /// that page printed by the injected printer ([`specimen::write_pdf`]),
+    /// on the caller's thread, which is never the UI thread.
+    fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        let printer = self.specimen_printer(req.format)?;
+        let spec = self.lock().specimen(req.family)?;
+        let out = Path::new(&req.out_path);
+        let path = match printer {
+            Some(printer) => specimen::write_pdf(&spec, out, printer)?,
+            None => specimen::write_html(&spec, out)?,
+        };
+        Ok(SpecimenResponse {
+            path: path.display().to_string(),
+        })
+    }
+
+    /// As [`Self::export_specimen`]: the collection's families are looked
+    /// up under the index lock ([`Index::collection_specimen`]), the files
+    /// read and the document written or printed outside it, dated today.
+    fn export_collection_specimen(
+        &self,
+        req: CollectionSpecimenRequest,
+    ) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        let printer = self.specimen_printer(req.format)?;
+        let spec = self.lock().collection_specimen(req.collection)?;
+        let out = Path::new(&req.out_path);
+        let date = specimen::today();
+        let path = match printer {
+            Some(printer) => specimen::write_collection_pdf(&spec, &date, out, printer)?,
+            None => specimen::write_collection_html(&spec, &date, out)?,
+        };
+        Ok(SpecimenResponse {
+            path: path.display().to_string(),
+        })
+    }
+}
+
+impl CoreApi {
+    /// The printer a specimen in `format` needs: none for HTML, the injected
+    /// one for a PDF (`Unsupported` without it, the CLI's direct link).
+    fn specimen_printer(&self, format: SpecimenFormat) -> ApiResult<Option<&dyn PdfPrinter>> {
+        match format {
+            SpecimenFormat::Html => Ok(None),
+            SpecimenFormat::Pdf => self
+                .pdf
+                .as_deref()
+                .map(Some)
+                .ok_or_else(|| ApiError::new(ErrorCode::Unsupported, PDF_NEEDS_APP)),
+        }
     }
 }
 
@@ -1035,6 +1182,109 @@ impl ComparisonService for CoreApi {
 
     fn delete_comparison(&self, req: ComparisonRef) -> ApiResult<()> {
         Ok(self.lock().delete_comparison(req.id)?)
+    }
+}
+
+impl CatalogService for CoreApi {
+    fn list_catalogs(&self) -> ApiResult<Vec<Catalog>> {
+        Ok(self.catalogs()?.list()?)
+    }
+
+    fn set_catalog_enabled(&self, req: SetCatalogEnabledRequest) -> ApiResult<Catalog> {
+        Ok(self.catalogs()?.set_enabled(req.id, req.enabled)?)
+    }
+
+    fn refresh_catalog(&self, req: CatalogRef) -> ApiResult<Catalog> {
+        Ok(self.catalogs()?.refresh(req.id)?)
+    }
+
+    fn list_catalog_families(
+        &self,
+        req: ListCatalogFamiliesRequest,
+    ) -> ApiResult<Paged<CatalogFamily>> {
+        Ok(self.catalogs()?.families(req.id, &req.query, req.page)?)
+    }
+
+    fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {
+        let path = self.catalogs()?.font_source(req.id, &req.family)?;
+        Ok(CatalogFontSource {
+            id: req.id,
+            family: req.family,
+            path: path.to_string_lossy().into_owned(),
+        })
+    }
+
+    /// Downloads into a watched source, records the provenance of the files
+    /// written (none recorded when every file was already there) and starts
+    /// a rescan of the source, whose events bring the new faces. A download
+    /// that stopped after some files were written answers them with its
+    /// `error`, recorded and rescanned like a finished one.
+    fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse> {
+        let catalogs = self.catalogs()?;
+        let source = self
+            .lock()
+            .sources()?
+            .into_iter()
+            .find(|s| s.id == req.source)
+            .ok_or_else(|| ApiError::not_found(format!("Source {}", req.source)))?;
+        if source.kind != SourceKind::Watched {
+            return Err(ApiError::invalid(
+                "Fonts can be downloaded only into a folder you added.",
+            ));
+        }
+        let got = catalogs.download(req.id, &req.family, req.kind, Path::new(&source.path))?;
+        let at = crate::catalog::now_rfc3339();
+        let mut error = got.stopped.clone().map(ApiError::from);
+        if !got.written.is_empty() {
+            // The files are on disk either way: a provenance that cannot be
+            // recorded is reported with them, and they are still rescanned.
+            if let Err(e) =
+                self.lock()
+                    .record_catalog_download(req.id, &req.family, source.id, &at, &got)
+            {
+                tracing::warn!(error = %e, "catalog download provenance not recorded");
+                error.get_or_insert_with(|| e.into());
+            }
+        }
+        let mut files: Vec<CatalogDownloadFile> = got
+            .written
+            .iter()
+            .map(|f| CatalogDownloadFile {
+                name: f.name.clone(),
+                hash: blake3::Hash::from_bytes(f.hash).to_hex().to_string(),
+                path: Some(f.path.to_string_lossy().into_owned()),
+            })
+            .collect();
+        // By name, as `list_catalog_downloads` lists them.
+        files.sort_by(|a, b| a.name.cmp(&b.name));
+        let download = CatalogDownload {
+            catalog: req.id,
+            family: req.family,
+            catalog_family_id: got.family_id,
+            version: got.version,
+            kind: got.kind,
+            downloaded_at: at,
+            source: source.id,
+            folder: got.folder.to_string_lossy().into_owned(),
+            files,
+        };
+        let scan = self.start_scan(vec![source])?;
+        Ok(DownloadFamilyResponse {
+            download,
+            skipped: got.skipped,
+            scan,
+            error,
+        })
+    }
+
+    fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>> {
+        Ok(self.lock().catalog_downloads()?)
+    }
+
+    fn check_updates(&self, req: CheckUpdatesRequest) -> ApiResult<Vec<CatalogUpdate>> {
+        let catalogs = self.catalogs()?;
+        let downloads = self.lock().catalog_downloads()?;
+        Ok(catalogs.check_updates(&downloads, !req.cached_only)?)
     }
 }
 

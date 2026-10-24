@@ -233,6 +233,8 @@
       "layout": "Layout"
     },
     "preset": "Preset",
+    "openStudio": "Open in Pairing Studio",
+    "openStudioTitle": "Open this layout with the shown font in its own panel",
     "unreadable": "{name} (cannot be read)",
     "density": {
       "comfortable": "Comfortable",
@@ -289,7 +291,9 @@
         "compact": "Use compact rows"
       },
       "showPreset": "Show the {preset} layout",
-      "reopenComparison": "Open comparison: {name}"
+      "reopenComparison": "Open comparison: {name}",
+      "findSimilar": "Find similar fonts",
+      "openStudio": "Open the layout in Pairing Studio"
     }
   },
   "views": {
@@ -321,8 +325,14 @@
       "info": "Info",
       "axes": "Axes",
       "features": "Features",
-      "glyphs": "Glyphs"
+      "glyphs": "Glyphs",
+      "developer": "Developer"
     }
+  },
+  "developer": {
+    "noFace": "Select a face to see its CSS.",
+    "hint": "The CSS for the axes and features set in the Axes and Features tabs.",
+    "copyLabel": "Copy the CSS snippet"
   },
   "search": {
     "label": "Search fonts",
@@ -598,7 +608,9 @@
       "notesPlaceholder": "Notes on this style…",
       "familyNotes": "Family notes",
       "familyNotesPlaceholder": "Notes on {family}…"
-    }
+    },
+    "findSimilar": "Find similar",
+    "findSimilarTitle": "Find the fonts that look like this one"
   },
   "license": {
     "title": "Your license for this family",
@@ -841,7 +853,9 @@
       "active": "active",
       "activePermanently": "active permanently",
       "activeSession": "active for this session"
-    }
+    },
+    "findSimilar": "Similar",
+    "findSimilarLabel": "Find the fonts similar to {name}"
   },
   "grid": {
     "label": "Font grid"
@@ -1049,8 +1063,13 @@
       "sources": "Sources",
       "activation": "Activation",
       "appearance": "Appearance",
+      "catalogs": "Online catalogs",
       "advanced": "Advanced",
       "about": "About"
+    },
+    "catalogs": {
+      "note": "Font catalogs on the web. Open one to see what the app can do with it.",
+      "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it."
     },
     "sources": {
       "note": "Folders the library indexes in place. Removing a source forgets its fonts; the files stay where they are.",
@@ -1131,6 +1150,30 @@
       "installVersion": "Install version {version}",
       "installAndRestart": "Install and restart"
     }
+  },
+  "studio": {
+    "title": "Pairing Studio",
+    "region": "Pairing Studio: {name}",
+    "font": "Font",
+    "noFont": "No font",
+    "layout": "Layout",
+    "closeTitle": "Back to the library (Escape)",
+    "blockFont": "Font for {label}",
+    "panelFont": "Panel font",
+    "fonts": "Fonts",
+    "noMatch": "No matching fonts",
+    "usePanelFont": "Use panel font",
+    "usePanelFontFor": "Use panel font for {label}",
+    "addPanel": "Add panel",
+    "addPanelTitle": "Add a copy of the current panel beside the others",
+    "panelsFull": "At most {max} panels",
+    "panel": "Panel {number}: {name}",
+    "noLayout": "No layout",
+    "closePanel": "Close panel",
+    "closePanelFor": "Close panel {number}",
+    "printPanel": "Print…",
+    "printPanelFor": "Print panel {number}",
+    "printTitle": "Print this panel alone, or save it as PDF from the print dialog"
   },
   "conflicts": {
     "title": "Font conflicts",
@@ -1235,5 +1278,86 @@
     "resumeLabel": "Resume {name}",
     "removeLabel": "Remove {name} from the library",
     "removeTitle": "Remove from the library. The files stay where they are."
+  },
+  "catalogs": {
+    "adobeFonts": {
+      "name": "Adobe Fonts",
+      "note": "Adobe Fonts are delivered encrypted through Creative Cloud, so no third-party app can manage them. Activate them in the Creative Cloud app.",
+      "open": "Open Adobe Fonts",
+      "openTitle": "Opens fonts.adobe.com in your browser"
+    },
+    "turnOn": "Turn on",
+    "turnOnLabel": "Turn on {name}",
+    "connects": "Connects to the internet",
+    "off": "{name} is off. Turn it on to browse its fonts.",
+    "searchLabel": "Search {name}",
+    "searchPlaceholder": "Search families",
+    "listLabel": "{name} families",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "refreshTitle": "Fetch the list of {name} again from the internet",
+    "refreshedAt": "Refreshed {date}",
+    "neverRefreshed": "Not refreshed yet",
+    "offline": "Offline - showing the list from {date}",
+    "noMatches": "No family matches the search.",
+    "empty": "The list is empty. Refresh to fetch it.",
+    "sizePx": "{size} px",
+    "download": {
+      "action": "Download…",
+      "actionLabel": "Download {name}…",
+      "title": "Download {name}",
+      "into": "Download into",
+      "noFolder": "Add a folder to the library first. Downloads go into a folder you added.",
+      "files": "Files",
+      "static": "One file per style",
+      "variable": "Variable font",
+      "where": "The files go into a folder named {folder} inside it. A file that is already there is kept, never replaced.",
+      "start": "Download",
+      "cancel": "Cancel",
+      "close": "Close",
+      "downloading": "Downloading {name}…",
+      "scanning": "Adding {name} to the library…",
+      "scanProgress": "Adding {name} to the library: {done} of {total} files read",
+      "done": {
+        "one": "{name}: {count} file downloaded into {folder}.",
+        "other": "{name}: {count} files downloaded into {folder}."
+      },
+      "skipped": {
+        "one": "{count} file was already there and was kept.",
+        "other": "{count} files were already there and were kept."
+      },
+      "nothingNew": "{name}: every file was already in {folder}. Nothing was replaced.",
+      "failed": "{message} No file was written.",
+      "scanFailed": "The files are downloaded, but the folder could not be read again: {message}",
+      "retry": "Try again",
+      "stopped": "The download stopped before the end: {message} Only the files counted above were written, and they are kept."
+    },
+    "updates": {
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "checkTitle": "Compare the families you downloaded with the catalogs, fetched again from the internet",
+      "badge": "Update available",
+      "badgeTitle": "{catalog} has a newer version: {version}",
+      "found": {
+        "zero": "Every downloaded family is up to date.",
+        "one": "{count} downloaded family has an update.",
+        "other": "{count} downloaded families have an update."
+      },
+      "noLongerListed": "No longer in the catalog: {names}"
+    }
+  },
+  "similar": {
+    "title": "Similar to {name}",
+    "hint": "Enter or a click selects a font. Esc closes.",
+    "close": "Close the similar fonts",
+    "results": "Similar fonts",
+    "loading": "Looking for similar fonts…",
+    "none": "No other font in the library looks like {name}.",
+    "error": "Font Manager could not find similar fonts. {message}",
+    "score": "{percent}% similar",
+    "noScore": "No score",
+    "resultLabel": "{name}, {score}",
+    "reasons": "Why: {reasons}",
+    "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
   }
 }

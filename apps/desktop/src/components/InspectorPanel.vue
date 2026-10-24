@@ -1,15 +1,22 @@
 <script setup lang="ts">
-// The inspector's tabs: Info, Axes, Features, then Glyphs. Arrow keys move between tabs
+// The inspector's tabs: Info, Axes, Features, Glyphs, then Developer. Arrow keys move between tabs
 // (WAI-ARIA tabs pattern); only the selected tab is in the Tab order.
 import { nextTick, ref } from 'vue';
 import { inlineKey, t } from '../i18n';
 import InspectorAxes from './InspectorAxes.vue';
+import InspectorDeveloper from './InspectorDeveloper.vue';
 import InspectorFeatures from './InspectorFeatures.vue';
 import InspectorGlyphs from './InspectorGlyphs.vue';
 import InspectorInfo from './InspectorInfo.vue';
 
 // The title of each is `inspector.tabs.<id>`.
-const TABS = [{ id: 'info' }, { id: 'axes' }, { id: 'features' }, { id: 'glyphs' }] as const;
+const TABS = [
+  { id: 'info' },
+  { id: 'axes' },
+  { id: 'features' },
+  { id: 'glyphs' },
+  { id: 'developer' },
+] as const;
 type TabId = (typeof TABS)[number]['id'];
 
 const current = ref<TabId>('info');
@@ -83,6 +90,16 @@ async function onKey(e: KeyboardEvent): Promise<void> {
     >
       <!-- Mounted only while shown: it reads the face's file and loads its font. -->
       <InspectorGlyphs v-if="current === 'glyphs'" />
+    </div>
+    <div
+      v-show="current === 'developer'"
+      id="fm-tabpanel-developer"
+      role="tabpanel"
+      aria-labelledby="fm-tab-developer"
+      tabindex="0"
+    >
+      <!-- Mounted only while shown: it asks fm-core for the CSS as the state changes. -->
+      <InspectorDeveloper v-if="current === 'developer'" />
     </div>
   </div>
 </template>

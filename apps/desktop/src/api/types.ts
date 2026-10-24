@@ -203,6 +203,194 @@ export type Candidate = {
 	reasons: string[],
 };
 
+/**  A catalog and the state of its cache. */
+export type Catalog = {
+	/**  Id. */
+	id: CatalogId,
+	/**  The name the user sees ("Google Fonts"). */
+	name: string,
+	/**  The catalog's web site. */
+	homepage: string,
+	/**  The user turned it on. Off by default; an off catalog is never fetched. */
+	enabled: boolean,
+	/**
+	 *  When the cache was last refreshed (RFC 3339, UTC); `None` before the
+	 *  first refresh.
+	 */
+	refreshedAt?: string | null,
+	/**  Families in the cache. */
+	familyCount: number,
+};
+
+/**  Where a downloaded family came from (its provenance). */
+export type CatalogDownload = {
+	/**  The catalog. */
+	catalog: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+	/**
+	 *  The catalog's id of the family: the name for Google Fonts, the slug
+	 *  for Fontshare.
+	 */
+	catalogFamilyId: string,
+	/**
+	 *  The family's version as the catalog gives it; for a catalog that
+	 *  gives none (Google Fonts), the date it last changed.
+	 */
+	version?: string | null,
+	/**  Static or variable files. */
+	kind: CatalogFileKind,
+	/**  When it was downloaded (RFC 3339, UTC). */
+	downloadedAt: string,
+	/**  The source it was downloaded into. */
+	source: SourceId,
+	/**  The folder it was downloaded into. */
+	folder: string,
+	/**  The files written, by name. */
+	files: CatalogDownloadFile[],
+};
+
+/**  One downloaded file and where it is now. */
+export type CatalogDownloadFile = {
+	/**  Its file name as downloaded (`Lato-Bold.ttf`). */
+	name: string,
+	/**  The blake3 hash of its bytes, as lowercase hex. */
+	hash: string,
+	/**
+	 *  Where the library has a file with these bytes now (the user may have
+	 *  moved it); `None` when the library has none.
+	 */
+	path?: string | null,
+};
+
+/**  A family as a catalog describes it, before anything is downloaded. */
+export type CatalogFamily = {
+	/**  The family name ("Roboto Flex"). */
+	name: string,
+	/**  The catalog's category, as the catalog names it ("Sans Serif"). */
+	category?: string | null,
+	/**  The styles it offers, upright first, then by weight. */
+	styles: CatalogStyle[],
+	/**  Its variation axes; empty for a static family. */
+	axes?: Axis[],
+	/**  The character subsets it covers ("latin", "cyrillic-ext"). */
+	subsets?: string[],
+	/**  Its designers. */
+	designers?: string[],
+	/**  Its version, when the catalog gives one. */
+	version?: string | null,
+	/**
+	 *  When the catalog last changed it, as the catalog gives it (Google
+	 *  Fonts: a date, `2025-09-04`).
+	 */
+	lastModified?: string | null,
+	/**  The catalog says it is open source. */
+	openSource?: boolean,
+	/**
+	 *  Its license, when the catalog's index names it. Google Fonts' index
+	 *  does not; its license comes with the files.
+	 */
+	license?: OpenLicense | null,
+	/**
+	 *  The license's name as the catalog gives it, also for a license that
+	 *  is not an open license (Fontshare's "ITF Free Font License"); `None`
+	 *  when the index names no license.
+	 */
+	licenseName?: string | null,
+};
+
+/**
+ *  Which files of a family to download: its static styles or its variable
+ *  fonts.
+ */
+export type CatalogFileKind = 
+/**  One file per style (`Lato-Bold.ttf`). */
+"static" | 
+/**  The variable fonts (`Inter[opsz,wght].ttf`). */
+"variable";
+
+/**  The preview file of one catalog family (E22.2). */
+export type CatalogFontRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+};
+
+/**  Where a catalog family's preview file is on disk. */
+export type CatalogFontSource = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family. */
+	family: string,
+	/**
+	 *  Absolute path of the file in the app's cache folder, served to the
+	 *  webview by the app's font scheme.
+	 */
+	path: string,
+};
+
+/**  A catalog the app knows how to read. */
+export type CatalogId = 
+/**  Google Fonts (fonts.google.com). */
+"googleFonts" | 
+/**  Fontshare (fontshare.com), Indian Type Foundry's free fonts. */
+"fontshare";
+
+/**  Names one catalog. */
+export type CatalogRef = {
+	/**  The catalog. */
+	id: CatalogId,
+};
+
+/**  One style a catalog family offers. */
+export type CatalogStyle = {
+	/**  Weight class (100–1000). */
+	weight: number,
+	/**  Upright or italic. */
+	slant: Slant,
+};
+
+/**
+ *  A downloaded family whose catalog has a newer version, or no longer lists
+ *  it (E22.4).
+ */
+export type CatalogUpdate = {
+	/**  The catalog it was downloaded from. */
+	catalog: CatalogId,
+	/**  The family's name, as the catalog listed it at the download. */
+	family: string,
+	/**
+	 *  The version recorded at the newest download of the family (Google
+	 *  Fonts: the date it last changed).
+	 */
+	downloadedVersion?: string | null,
+	/**
+	 *  The version the catalog has now; `None` when it no longer lists the
+	 *  family.
+	 */
+	availableVersion?: string | null,
+	/**  An update, or a family the catalog no longer lists. */
+	status: CatalogUpdateStatus,
+};
+
+/**  What the update check found for a downloaded family (E22.4). */
+export type CatalogUpdateStatus = 
+/**  The catalog has a newer version than the one downloaded. */
+"updateAvailable" | 
+/**  The catalog no longer lists the family: there is nothing to update to. */
+"noLongerListed";
+
+/**  Checks the downloaded families for updates (E22.4). */
+export type CheckUpdatesRequest = {
+	/**
+	 *  Compare with the cached lists as they are and make no request (the
+	 *  UI passes it right after a catalog Refresh). `false`, the default,
+	 *  refreshes the catalogs that have downloads first.
+	 */
+	cachedOnly?: boolean,
+};
+
 /**  Two active fonts with one PostScript name: one row of the Conflicts view. */
 export type Clash = {
 	/**  A face the app has active. */
@@ -290,6 +478,19 @@ export type CollectionFacesRequest = {
 
 /**  A manual or smart collection. */
 export type CollectionId = number;
+
+/**
+ *  Write one specimen of a collection to a file the user picked (E21.3): a
+ *  cover, then a page per family, for a client to sign off on.
+ */
+export type CollectionSpecimenRequest = {
+	/**  The collection, manual or smart. */
+	collection: CollectionId,
+	/**  The file format. */
+	format: SpecimenFormat,
+	/**  The file to write, as the user picked it. */
+	outPath: string,
+};
 
 /**  The range of [`TextBlock::columns`]. */
 export type ColumnRange = {
@@ -466,6 +667,48 @@ export type Density =
 "comfortable" | 
 /**  More rows on screen. */
 "compact";
+
+/**  Downloads a family of a catalog into a watched source (E22.3). */
+export type DownloadFamilyRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+	/**
+	 *  Static or variable files. A family that has only the other kind gets
+	 *  that kind; [`CatalogDownload::kind`] says which.
+	 */
+	kind: CatalogFileKind,
+	/**
+	 *  The watched source to download into; the files go into a subfolder
+	 *  named after the family.
+	 */
+	source: SourceId,
+};
+
+/**  What a download wrote and the rescan it started. */
+export type DownloadFamilyResponse = {
+	/**  The provenance recorded for the files written. */
+	download: CatalogDownload,
+	/**
+	 *  Files not written because a file of that name was already in the
+	 *  folder; it is never replaced.
+	 */
+	skipped?: string[],
+	/**
+	 *  The rescan of the source; its progress and finish arrive as
+	 *  `Event::ScanProgress` and `Event::ScanFinished`.
+	 */
+	scan: JobId,
+	/**
+	 *  Why the download stopped after the files in `download` were written
+	 *  (a file that could not be saved, or the provenance that could not be
+	 *  recorded); `None` when it finished. The files written stay and are
+	 *  rescanned. A failure before any file was written is an error of the
+	 *  call instead.
+	 */
+	error?: ApiError | null,
+};
 
 /**  One file of a duplicate group. */
 export type DuplicateCopy = {
@@ -1049,6 +1292,34 @@ export type FontSource = {
 	hash: string,
 };
 
+/**  A front-end framework a snippet is written for (E20.5). */
+export type Framework = 
+/**  A `theme.extend.fontFamily` entry for `tailwind.config.js`. */
+"tailwind" | 
+/**  CSS custom properties on `:root`. */
+"cssVariables" | 
+/**  A `localFont` call from `next/font/local`. */
+"nextLocalFont";
+
+/**  A framework snippet. */
+export type FrameworkSnippet = {
+	/**  The snippet's text. */
+	text: string,
+};
+
+/**  A snippet that uses the faces in a framework. Nothing is written. */
+export type FrameworkSnippetRequest = {
+	/**  The faces; at least one. */
+	faces: FaceId[],
+	/**  The framework. */
+	framework: Framework,
+	/**
+	 *  The folder the web fonts are in, as the project sees it; `./fonts`
+	 *  when absent. Only `NextLocalFont` uses it.
+	 */
+	fontsPath?: string | null,
+};
+
 /**  A Unicode block and how many of the listed characters it holds. */
 export type GlyphBlock = {
 	/**  The block name from the Unicode block table (`Cyrillic`). */
@@ -1432,6 +1703,19 @@ export type LicenseType =
 "personalOnly" | 
 /**  Not known. */
 "unknown";
+
+/**  A page of a catalog's cached families. */
+export type ListCatalogFamiliesRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**
+	 *  Families whose name contains this text, ignoring case; empty lists
+	 *  every family.
+	 */
+	query?: string,
+	/**  The window; `limit` is capped at 500. */
+	page?: Page,
+};
 
 /**  List families, one page at a time (the UI list is virtualized). */
 export type ListFamiliesRequest = {
@@ -1970,6 +2254,14 @@ export type SelectionTagsRequest = {
 	families?: FamilyId[],
 };
 
+/**  Turns a catalog on or off. Turning it off keeps its cache. */
+export type SetCatalogEnabledRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  On or off. */
+	enabled: boolean,
+};
+
 /**
  *  One font of an exported set, referenced by content so a teammate's copy
  *  at another path still matches.
@@ -2171,6 +2463,35 @@ export type SourceKind =
 "system" | 
 /**  The user-chosen folder that "Copy to library folder" imports into. */
 "libraryFolder";
+
+/**  The file format of a specimen (E21.1). */
+export type SpecimenFormat = 
+/**
+ *  One self-contained HTML page: the faces are embedded, nothing is
+ *  loaded from anywhere else.
+ */
+"html" | 
+/**
+ *  The same page printed by the app's webview to a paginated A4 PDF
+ *  (E21.2); `Unsupported` without the app running (the CLI's direct link).
+ */
+"pdf";
+
+/**  Write a specimen of one family to a file the user picked. */
+export type SpecimenRequest = {
+	/**  The family. */
+	family: FamilyId,
+	/**  The file format. */
+	format: SpecimenFormat,
+	/**  The file to write, as the user picked it. */
+	outPath: string,
+};
+
+/**  What the specimen export wrote. */
+export type SpecimenResponse = {
+	/**  The file written, absolute path. */
+	path: string,
+};
 
 /**  One style on a family's weight line. */
 export type StyleMark = {
@@ -2435,4 +2756,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 17, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 20, patch: 0 };

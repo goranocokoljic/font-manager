@@ -163,7 +163,8 @@ fn license_type_label(l: LicenseType) -> &'static str {
     }
 }
 
-fn open_license_label(l: OpenLicense) -> &'static str {
+/// The name of an open license as the user reads it.
+pub(crate) fn open_license_label(l: OpenLicense) -> &'static str {
     match l {
         OpenLicense::Ofl => "SIL Open Font License",
         OpenLicense::Apache => "Apache License 2.0",

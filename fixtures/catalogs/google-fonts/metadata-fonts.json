@@ -1,0 +1,634 @@
+{
+  "axisRegistry": [
+    {
+      "tag": "opsz",
+      "displayName": "Optical Size",
+      "min": 1,
+      "defaultValue": 14,
+      "max": 1200,
+      "precision": -1
+    },
+    {
+      "tag": "GRAD",
+      "displayName": "Grade",
+      "min": -1000,
+      "defaultValue": 0,
+      "max": 1000,
+      "precision": 0
+    },
+    {
+      "tag": "XOPQ",
+      "displayName": "Thick Stroke",
+      "min": -1000,
+      "defaultValue": 88,
+      "max": 2000,
+      "precision": 0
+    },
+    {
+      "tag": "XTRA",
+      "displayName": "Counter Width",
+      "min": -1000,
+      "defaultValue": 400,
+      "max": 3330,
+      "precision": 0
+    },
+    {
+      "tag": "YOPQ",
+      "displayName": "Thin Stroke",
+      "min": -1000,
+      "defaultValue": 116,
+      "max": 2000,
+      "precision": 0
+    },
+    {
+      "tag": "YTAS",
+      "displayName": "Ascender Height",
+      "min": 0,
+      "defaultValue": 750,
+      "max": 1000,
+      "precision": 0
+    },
+    {
+      "tag": "YTDE",
+      "displayName": "Descender Depth",
+      "min": -1000,
+      "defaultValue": -250,
+      "max": 0,
+      "precision": 0
+    },
+    {
+      "tag": "YTFI",
+      "displayName": "Figure Height",
+      "min": -1000,
+      "defaultValue": 600,
+      "max": 2000,
+      "precision": 0
+    },
+    {
+      "tag": "YTLC",
+      "displayName": "Lowercase Height",
+      "min": 0,
+      "defaultValue": 500,
+      "max": 1000,
+      "precision": 0
+    },
+    {
+      "tag": "YTUC",
+      "displayName": "Uppercase Height",
+      "min": 0,
+      "defaultValue": 725,
+      "max": 1000,
+      "precision": 0
+    },
+    {
+      "tag": "slnt",
+      "displayName": "Slant",
+      "min": -90,
+      "defaultValue": 0,
+      "max": 90,
+      "precision": 0
+    },
+    {
+      "tag": "wdth",
+      "displayName": "Width",
+      "min": 25,
+      "defaultValue": 100,
+      "max": 300,
+      "precision": -1
+    },
+    {
+      "tag": "wght",
+      "displayName": "Weight",
+      "min": 1,
+      "defaultValue": 400,
+      "max": 1000,
+      "precision": 0
+    }
+  ],
+  "familyMetadataList": [
+    {
+      "family": "Bebas Neue",
+      "displayName": null,
+      "category": "Sans Serif",
+      "stroke": "Sans Serif",
+      "classifications": [
+        "Display"
+      ],
+      "size": 61400,
+      "subsets": [
+        "menu",
+        "latin",
+        "latin-ext"
+      ],
+      "fonts": {
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.2
+        }
+      },
+      "axes": [],
+      "designers": [
+        "Ryoichi Tsunekawa"
+      ],
+      "lastModified": "2025-09-16",
+      "dateAdded": "2019-10-16",
+      "popularity": 27,
+      "trending": 662,
+      "defaultSort": 81,
+      "androidFragment": null,
+      "isNoto": false,
+      "colorCapabilities": [],
+      "primaryScript": "",
+      "primaryLanguage": "",
+      "isOpenSource": true,
+      "isBrandFont": false,
+      "languages": []
+    },
+    {
+      "family": "Lato",
+      "displayName": null,
+      "category": "Sans Serif",
+      "stroke": "Sans Serif",
+      "classifications": [],
+      "size": 51318,
+      "subsets": [
+        "menu",
+        "latin",
+        "latin-ext"
+      ],
+      "fonts": {
+        "100": {
+          "thickness": 1,
+          "slant": 1,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "300": {
+          "thickness": 3,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "400": {
+          "thickness": 5,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "700": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "900": {
+          "thickness": 7,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "100i": {
+          "thickness": 1,
+          "slant": 6,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "300i": {
+          "thickness": 3,
+          "slant": 4,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "400i": {
+          "thickness": 5,
+          "slant": 3,
+          "width": 6,
+          "lineHeight": 1.2
+        },
+        "700i": {
+          "thickness": 6,
+          "slant": 3,
+          "width": 7,
+          "lineHeight": 1.2
+        },
+        "900i": {
+          "thickness": 7,
+          "slant": 3,
+          "width": 7,
+          "lineHeight": 1.2
+        }
+      },
+      "axes": [],
+      "designers": [
+        "Łukasz Dziedzic"
+      ],
+      "lastModified": "2025-09-16",
+      "dateAdded": "2010-12-15",
+      "popularity": 4,
+      "trending": 309,
+      "defaultSort": 15,
+      "androidFragment": null,
+      "isNoto": false,
+      "colorCapabilities": [],
+      "primaryScript": "",
+      "primaryLanguage": "",
+      "isOpenSource": true,
+      "isBrandFont": false,
+      "languages": []
+    },
+    {
+      "family": "Noto Sans JP",
+      "displayName": "Noto Sans Japanese",
+      "category": "Sans Serif",
+      "stroke": "Sans Serif",
+      "classifications": [],
+      "size": 9589900,
+      "subsets": [
+        "menu",
+        "cyrillic",
+        "japanese",
+        "latin",
+        "latin-ext",
+        "vietnamese"
+      ],
+      "fonts": {
+        "100": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "200": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "300": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "500": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "700": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        },
+        "900": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.448
+        }
+      },
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 100,
+          "max": 900,
+          "defaultValue": 400
+        }
+      ],
+      "designers": [
+        "Google"
+      ],
+      "lastModified": "2026-10-01",
+      "dateAdded": "2015-01-29",
+      "popularity": 6,
+      "trending": 1233,
+      "defaultSort": 22,
+      "androidFragment": null,
+      "isNoto": true,
+      "colorCapabilities": [],
+      "primaryScript": "Jpan",
+      "primaryLanguage": "",
+      "isOpenSource": true,
+      "isBrandFont": true,
+      "languages": []
+    },
+    {
+      "family": "Playfair Display",
+      "displayName": null,
+      "category": "Serif",
+      "stroke": "Serif",
+      "classifications": [
+        "Display"
+      ],
+      "size": 289706,
+      "subsets": [
+        "menu",
+        "cyrillic",
+        "latin",
+        "latin-ext",
+        "vietnamese"
+      ],
+      "fonts": {
+        "400": {
+          "thickness": 4,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.333
+        },
+        "500": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.333
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.333
+        },
+        "700": {
+          "thickness": 6,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.333
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.333
+        },
+        "900": {
+          "thickness": 7,
+          "slant": 1,
+          "width": 7,
+          "lineHeight": 1.333
+        },
+        "400i": {
+          "thickness": 4,
+          "slant": 5,
+          "width": 7,
+          "lineHeight": 1.333
+        },
+        "500i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.333
+        },
+        "600i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.333
+        },
+        "700i": {
+          "thickness": 6,
+          "slant": 5,
+          "width": 7,
+          "lineHeight": 1.333
+        },
+        "800i": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1.333
+        },
+        "900i": {
+          "thickness": 7,
+          "slant": 5,
+          "width": 7,
+          "lineHeight": 1.333
+        }
+      },
+      "axes": [
+        {
+          "tag": "wght",
+          "min": 400,
+          "max": 900,
+          "defaultValue": 400
+        }
+      ],
+      "designers": [
+        "Claus Eggers Sørensen"
+      ],
+      "lastModified": "2025-09-11",
+      "dateAdded": "2011-11-16",
+      "popularity": 24,
+      "trending": 1001,
+      "defaultSort": 74,
+      "androidFragment": null,
+      "isNoto": false,
+      "colorCapabilities": [],
+      "primaryScript": "",
+      "primaryLanguage": "",
+      "isOpenSource": true,
+      "isBrandFont": false,
+      "languages": []
+    },
+    {
+      "family": "Roboto Flex",
+      "displayName": null,
+      "category": "Sans Serif",
+      "stroke": "Sans Serif",
+      "classifications": [],
+      "size": 1787292,
+      "subsets": [
+        "menu",
+        "cyrillic",
+        "cyrillic-ext",
+        "greek",
+        "latin",
+        "latin-ext",
+        "vietnamese"
+      ],
+      "fonts": {
+        "100": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "200": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "300": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "400": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "500": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "600": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "700": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "800": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "900": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        },
+        "1000": {
+          "thickness": null,
+          "slant": null,
+          "width": null,
+          "lineHeight": 1
+        }
+      },
+      "axes": [
+        {
+          "tag": "GRAD",
+          "min": -200,
+          "max": 150,
+          "defaultValue": 0
+        },
+        {
+          "tag": "XOPQ",
+          "min": 27,
+          "max": 175,
+          "defaultValue": 96
+        },
+        {
+          "tag": "XTRA",
+          "min": 323,
+          "max": 603,
+          "defaultValue": 468
+        },
+        {
+          "tag": "YOPQ",
+          "min": 25,
+          "max": 135,
+          "defaultValue": 79
+        },
+        {
+          "tag": "YTAS",
+          "min": 649,
+          "max": 854,
+          "defaultValue": 750
+        },
+        {
+          "tag": "YTDE",
+          "min": -305,
+          "max": -98,
+          "defaultValue": -203
+        },
+        {
+          "tag": "YTFI",
+          "min": 560,
+          "max": 788,
+          "defaultValue": 738
+        },
+        {
+          "tag": "YTLC",
+          "min": 416,
+          "max": 570,
+          "defaultValue": 514
+        },
+        {
+          "tag": "YTUC",
+          "min": 528,
+          "max": 760,
+          "defaultValue": 712
+        },
+        {
+          "tag": "opsz",
+          "min": 8,
+          "max": 144,
+          "defaultValue": 14
+        },
+        {
+          "tag": "slnt",
+          "min": -10,
+          "max": 0,
+          "defaultValue": 0
+        },
+        {
+          "tag": "wdth",
+          "min": 25,
+          "max": 151,
+          "defaultValue": 100
+        },
+        {
+          "tag": "wght",
+          "min": 100,
+          "max": 1000,
+          "defaultValue": 400
+        }
+      ],
+      "designers": [
+        "Font Bureau",
+        "David Berlow",
+        "Santiago Orozco",
+        "Irene Vlachou",
+        "Ilya Ruderman",
+        "Yury Ostromentsky",
+        "Mikhail Strukov"
+      ],
+      "lastModified": "2025-09-04",
+      "dateAdded": "2022-05-02",
+      "popularity": 73,
+      "trending": 1300,
+      "defaultSort": 180,
+      "androidFragment": null,
+      "isNoto": false,
+      "colorCapabilities": [],
+      "primaryScript": "",
+      "primaryLanguage": "",
+      "isOpenSource": true,
+      "isBrandFont": false,
+      "languages": []
+    }
+  ]
+}

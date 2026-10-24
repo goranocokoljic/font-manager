@@ -198,3 +198,29 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E19.3 #135] apps/desktop/src/App.vue:84 — `setShellLocale('ar-XB')` is refused by the shell (src-tauri/tests/ipc.rs:862), so under the pseudo-locale the native Help menu and tray keep their previous language.
 - [E19.3 #135] apps/desktop/src/components/InspectorFeatures.vue:176 — the switch knob's slide transition has no `prefers-reduced-motion` override.
+- [E20.4 #140] apps/desktop/src/stores/features.ts:44 — preview rows still build their `font-feature-settings` string in the frontend (`settings()`), which matches fm-core's Developer-tab string only because both sort by tag.
+- [E20.5 #141] crates/fm-core/src/web_font.rs:84 — `file_stem` gives two faces with the same PostScript name the same stem, so a web export (and now a localFont snippet) lists the same file twice.
+- [E20.5 #141] crates/fm-core/src/web_css.rs:147 — `string` (and mock `css_string`, mock.rs:3118) keeps non-ASCII literal unlike `framework_snippet::css_string`; deliberate for UTF-8 fonts.css, do not unify them.
+- [E24.1 #156] apps/desktop/src/views/HomeView.vue:644 — the shared `.toggle` class (mode buttons, Compact rows, Inspector) uses `--fm-border` (≈1.5:1) for control borders, not `--fm-control-border`.
+- [E24.1 #156] apps/desktop/src/components/LayoutActions.vue:156 — the layout file bar buttons (Save, Revert, Duplicate, History) use `--fm-border` for their borders.
+- [E20.6 #142] crates/fm-core/src/api.rs:1004 — core `prepare_for_web` still returns `not_available`; it reaches the license guard through `export_web` once it is built.
+- [E20.6 #142] crates/fm-api/src/mock.rs:3404 — mock `export_web` does not dedupe a face listed twice in its write loop (core does with `ids.insert`), so the mock returns duplicate files.
+- [E20.6 #142] crates/fm-api/src/mock.rs:3016 — clearing a family declaration sets the mock's `declared` to `None`, while core falls back to the face's own `license_type` (faces.rs:246), so the export guard can disagree after a clear.
+- [E21.2 #144] apps/desktop/src-tauri/src/lib.rs:1036 — no adapter (Tauri command, endpoint, CLI, MCP) calls `export_specimen` yet, so the PDF path (and the MockApi fallback's PDF answer) is unreachable from the app until a later story wires it.
+- [E21.2 #144] crates/fm-core/src/api.rs:455 — the doc line "The answer of a service that is not built yet." now sits above `PDF_NEEDS_APP` instead of `not_available`.
+- [E24.2 #157] apps/desktop/src/stores/glyphCompare.ts:74 — `glyphCompare.search` never clears `error` after a successful search, so one failed search leaves a stale error for the overlay session.
+- [E24.2 #157] apps/desktop/src/components/BlockFontPicker.vue:195 — no `forced-colors` handling app-wide; the active combobox option is marked only by background and box-shadow, which Windows High Contrast removes.
+- [E24.3 #158] apps/desktop/src/stores/studio.ts:123 — `setBlockFace` answering after `closePanel` leaves an orphan `p<k>/…` block-font key; panel keys are never reused, so nothing shows.
+- [E24.3 #158] apps/desktop/src/views/HomeView.vue:96 — the layout picker's preset fallback is written twice (HomeView and StudioPanel); not a defect yet.
+- [E24.4 #159] apps/desktop/src/locales/de.json:1164 — German "Panel schließen" is not a contiguous part of its accessible name "Panel {number} schließen" (WCAG 2.5.3 Label in Name).
+- [E24.4 #159] apps/desktop/src/components/LayoutBlock.vue:377 — the hover size-badge has no `fm-no-print` class; it stays off paper only through `opacity: 0` when the block is not hovered or focused.
+- [E21.3 #145] crates/fm-core/src/api/tests.rs:2966 — the E21.1 single-family specimen has no test for an unreadable face file.
+- [E21.3 #145] crates/fm-platform/src/linux/trash.rs:253 — `civil_from_days` is a third copy of the days-to-date algorithm (also `layout::store::iso_utc` and `specimen::utc_date` in fm-core).
+- [E22.1 #146] crates/fm-core/src/catalog.rs:189 — `reqwest::blocking` panics inside a tokio runtime; when E22.2 wires Tauri/rmcp, `refresh_catalog` must run under `spawn_blocking`.
+- [E22.1 #146] docs/adr/0014-online-catalogs.md:1 — the TLS trust-store source per OS (platform verifier on Windows/macOS, native certs on Linux) is not documented.
+- [E22.1 #146] crates/fm-core/src/specimen.rs:514 — `utc_date` and `fm-platform/src/linux/trash.rs:254` are further copies of the civil-date algorithm.
+- [E22.2 #147] crates/fm-core/src/config.rs:102 — its own temp-file-then-rename write with a hard-coded `json.tmp`, beside `write_atomic` in catalog.rs.
+- [E22.2 #147] crates/fm-core/src/index/sources.rs:218 — another separate temp-then-rename write copy beside `write_atomic`.
+- [E22.2 #147] apps/desktop/src/views/HomeView.vue:625 — the library toolbar is a fixed-height, non-wrapping row and can clip at narrow center widths (inspector open below ~1,280 px).
+- [E22.5 #150] crates/fm-api/src/mock.rs:117 — the mock labels `OpenLicense::Ofl` "OFL" while core's `open_license_label` (crates/fm-core/src/inventory.rs:169) says "SIL Open Font License"; two label tables for one enum will drift.
+- [E22.4 #149] apps/desktop/src/components/FontList.vue:261 — the existing open-license badge is not in the treeitem aria-label, so screen readers miss it.

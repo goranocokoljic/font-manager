@@ -3,16 +3,24 @@
 // unsaved changes), Duplicate (an independent copy, which opens), Reset (a preset back to
 // its shipped original) and History (the kept versions, each with Restore). Every action
 // goes through the text layouts store and the generated client; the core keeps the files.
-import { computed, ref } from 'vue';
+// The default slot adds the parent's own controls at the end of the bar. A Pairing Studio
+// panel passes its own store (E24.3); without one, the library's store is used.
+import { computed, ref, useId } from 'vue';
 import { errorMessage, formatDate, t } from '../i18n';
-import { useTextLayoutsStore } from '../stores/textLayouts';
+import { type TextLayoutsStore, useTextLayoutsStore } from '../stores/textLayouts';
+
+const props = defineProps<{
+  /** The text layouts store the actions work on; the library's when not given. */
+  store?: TextLayoutsStore;
+}>();
 
 const emit = defineEmits<{
   /** A new file was opened (a duplicate); the parent shows it from now on. */
   opened: [id: string];
 }>();
 
-const layouts = useTextLayoutsStore();
+const layouts = props.store ?? useTextLayoutsStore();
+const historyId = `fm-layout-history-${useId()}`;
 const historyOpen = ref(false);
 /** The last action's outcome, read in the language shown now. */
 const status = ref<(() => string) | null>(null);
@@ -98,7 +106,7 @@ const when = (iso: string) => {
     <button
       type="button"
       class="toggle"
-      aria-controls="fm-layout-history"
+      :aria-controls="historyId"
       :aria-expanded="historyOpen"
       :disabled="!layouts.saved"
       @click="toggleHistory"
@@ -109,10 +117,11 @@ const when = (iso: string) => {
     <span class="note" role="status">{{
       layouts.error ? errorMessage(layouts.error) : (status?.() ?? '')
     }}</span>
+    <slot />
   </div>
   <section
     v-if="historyOpen"
-    id="fm-layout-history"
+    :id="historyId"
     class="history"
     :aria-label="t('textLayout.file.historyRegion')"
   >

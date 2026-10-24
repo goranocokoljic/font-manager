@@ -3,11 +3,13 @@
 // and the activation button. Names and paths copy on click. Tags, favorite,
 // rating, the notes of the face and of its family, and the family's declared
 // license are edited here; the API stores them. A color face's palette picker
-// (E16.3) comes first.
+// (E16.3) comes first. "Find similar" (E23.3) sits in the header.
 import { computed, nextTick, ref, watch } from 'vue';
 import type { Axis, Conflict, OutcomeStatus } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
+import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useSelectionStore } from '../stores/selection';
+import { useSimilarStore } from '../stores/similar';
 import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
 import HealthBadge from './HealthBadge.vue';
@@ -16,6 +18,8 @@ import InspectorPalettes from './InspectorPalettes.vue';
 
 const selection = useSelectionStore();
 const tags = useTagsStore();
+const similar = useSimilarStore();
+const similarChord = chordOf(ACTIONS.similar)!;
 const d = computed(() => selection.detail);
 
 // Tag names to complete from: the library's tags the face does not have yet.
@@ -139,6 +143,15 @@ function clashText(c: Conflict): string {
             {{ d.face.active ? t('info.deactivate') : t('info.activate') }}
           </button>
           <span class="state" data-testid="activation-state">{{ activationState }}</span>
+          <button
+            type="button"
+            class="similar"
+            :aria-keyshortcuts="ariaShortcut(similarChord)"
+            :title="`${t('info.findSimilarTitle')} (${formatChord(similarChord)})`"
+            @click="similar.openFor(d.face)"
+          >
+            {{ t('info.findSimilar') }}
+          </button>
         </div>
         <p v-if="outcomeMessage" role="alert" class="outcome">{{ outcomeMessage }}</p>
         <div
@@ -495,6 +508,15 @@ function clashText(c: Conflict): string {
 }
 .state {
   color: var(--fm-muted);
+}
+.similar {
+  margin-inline-start: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
 }
 h3 {
   margin: 16px 0 8px;

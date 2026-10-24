@@ -1,0 +1,19 @@
+{
+  "id": "a-dependency-the-app-injects-into-coreapi-needs-a-test-throu",
+  "title": "A dependency the app injects into CoreApi needs a test through serve",
+  "category": "testing",
+  "rule": "When the desktop shell injects a platform service into fm-core (a with_* builder call in fm_app_lib::serve or run), add a src-tauri test that calls serve(...) and makes one API request whose answer differs with and without the service (for example NotFound instead of Unsupported), so removing the wiring fails a test. fm-core tests that inject the service by hand do not prove the app does.",
+  "rationale": "E21.2 (#144): the app's with_pdf_printer wiring in serve had no test; deleting it would have made every PDF export answer Unsupported with the suite green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    144
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/src/**",
+    "apps/desktop/src-tauri/tests/**"
+  ],
+  "first_seen": "2026-10-24T04:34:32.551Z",
+  "last_seen": "2026-10-24T04:34:32.551Z"
+}

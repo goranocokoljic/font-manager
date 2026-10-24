@@ -33,7 +33,7 @@ test('the Axes tab sits next to Info and shows each axis with its range and defa
 }) => {
   const panel = await openAxes(page);
   const tabs = page.getByRole('tablist', { name: 'Inspector tabs' }).getByRole('tab');
-  await expect(tabs).toHaveText(['Info', 'Axes', 'Features', 'Glyphs']);
+  await expect(tabs).toHaveText(['Info', 'Axes', 'Features', 'Glyphs', 'Developer']);
   const slider = wghtSlider(panel);
   await expect(slider).toHaveAttribute('min', '100');
   await expect(slider).toHaveAttribute('max', '900');

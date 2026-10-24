@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import AdobeFontsNote from '../components/AdobeFontsNote.vue';
+import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
 import FilterChips from '../components/FilterChips.vue';
@@ -13,6 +15,7 @@ import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
+import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
@@ -20,6 +23,7 @@ import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
 import QuickCollectionReview from '../components/QuickCollectionReview.vue';
 import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
+import SimilarPanel from '../components/SimilarPanel.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import SmartRuleEditor from '../components/SmartRuleEditor.vue';
@@ -39,9 +43,11 @@ import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
 import { useSettingsStore } from '../stores/settings';
+import { useSimilarStore } from '../stores/similar';
 import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
@@ -66,7 +72,9 @@ const compare = useCompareStore();
 const settings = useSettingsStore();
 const densityLabel = computed(() => t(`home.density.${settings.density}`));
 const quick = useQuickCollectionStore();
+const catalogs = useCatalogsStore();
 const tagging = useTaggingStore();
+const similar = useSimilarStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -137,6 +145,17 @@ function showPreset(p: LayoutPreset): void {
   views.setMode(ALL_FONTS_VIEW, 'layout');
 }
 
+// Pairing Studio (E24.1) opens the picked layout with the face the layout mode shows.
+const canOpenStudio = computed(() => mode.value === 'layout' && layoutFace.value !== null);
+function openStudio(): void {
+  const face = layoutFace.value;
+  if (!face) return;
+  void router.push({
+    name: 'studio',
+    query: { layout: layoutId.value, face: String(face.id) },
+  });
+}
+
 onMounted(() => {
   void app.load();
   void library.load();
@@ -165,8 +184,9 @@ const toggle = (mode: ActivationMode) =>
     ? activation.toggleRows(fontList.selectedRows, mode)
     : selection.toggleActivation(mode);
 
-// C pins the selected face to Compare: the inspector's once its detail has loaded,
-// else the list cursor's (the row just moved to, whose detail is still on its way).
+// C pins the selected face to Compare, and S finds the faces similar to it: the
+// inspector's once its detail has loaded, else the list cursor's (the row just moved
+// to, whose detail is still on its way).
 const pinTarget = computed(() => {
   const shown = selection.detail?.face;
   if (shown && shown.id === selection.faceId) return shown;
@@ -216,6 +236,17 @@ useActions([
       !tagging.open &&
       tagging.selectionPick.faces.length + tagging.selectionPick.families.length > 0,
     run: () => tagging.openFor(),
+  },
+  {
+    id: ACTIONS.similar,
+    get title() {
+      return t('home.actions.findSimilar');
+    },
+    get group() {
+      return t('palette.groups.search');
+    },
+    enabled: () => pinTarget.value !== null,
+    run: () => (pinTarget.value ? similar.openFor(pinTarget.value) : undefined),
   },
   {
     id: ACTIONS.compare,
@@ -317,6 +348,17 @@ useActions([
     },
     run: () => showPreset(p),
   })),
+  {
+    id: 'view.openStudio',
+    get title() {
+      return t('home.actions.openStudio');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => canOpenStudio.value,
+    run: openStudio,
+  },
 ]);
 
 // One palette entry per saved comparison (E13.2), kept in step with the saved list.
@@ -367,7 +409,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.online'];
+const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 </script>
 
 <template>
@@ -382,10 +424,16 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ t(group) }}</li>
       </ul>
+      <OnlineCatalogsSidebar />
     </template>
 
     <template #list>
-      <QuickCollectionReview v-if="quick.open" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+      <AdobeFontsNote v-if="catalogs.open === 'adobeFonts'" :level="1" />
+      <CatalogBrowser v-else-if="catalogs.current" />
+      <QuickCollectionReview
+        v-else-if="quick.open"
+        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+      />
       <template v-else>
         <header class="toolbar">
           <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
@@ -466,7 +514,17 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
           <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
         </template>
         <template v-else-if="fontList.families.length && mode === 'layout'">
-          <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)" />
+          <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
+            <button
+              type="button"
+              class="toggle studio"
+              :disabled="!canOpenStudio"
+              :title="t('home.openStudioTitle')"
+              @click="openStudio"
+            >
+              {{ t('home.openStudio') }}
+            </button>
+          </LayoutActions>
           <FontLayout
             :layout="shownLayout"
             :face="layoutFace"
@@ -502,6 +560,7 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
           <p v-else-if="library.loaded">{{ t('home.empty') }}</p>
         </section>
       </template>
+      <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />
       <CompareSheet v-if="compare.open" />
       <TaggingPanel />
       <SmartRuleEditor />
@@ -589,6 +648,11 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
   background: transparent;
   color: inherit;
   font: inherit;
+}
+/* In the layout file bar: its own end, the bar's size. */
+.toggle.studio {
+  margin-inline-start: auto;
+  padding: 2px 8px;
 }
 .modes {
   display: flex;

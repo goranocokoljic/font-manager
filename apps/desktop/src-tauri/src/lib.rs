@@ -9,6 +9,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
+use fm_api::catalog::{
+    Catalog, CatalogDownload, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef,
+    CatalogService, CatalogUpdate, CheckUpdatesRequest, DownloadFamilyRequest,
+    DownloadFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+};
 use fm_api::common::Paged;
 use fm_api::comparison::{
     Comparison, ComparisonEntry, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
@@ -37,6 +42,7 @@ use fm_api::preview::{
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+    SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
@@ -48,7 +54,7 @@ use fm_core::lifecycle::{self, LaunchWindow};
 use fm_core::{CoreApi, SettingsStore};
 use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, Webview, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
@@ -264,6 +270,64 @@ pub fn font_response(api: &dyn PreviewService, uri_path: &str) -> Response<Vec<u
     }
 }
 
+/// The URI path of a catalog family's preview on [`FONT_SCHEME`]:
+/// `/catalog-<catalog id>-<the family name's UTF-8 as hex>`. Hex, because the
+/// webview's address helper percent-encodes everything else.
+const CATALOG_FONT_PREFIX: &str = "/catalog-";
+
+/// The catalog and family a [`CATALOG_FONT_PREFIX`] path names; `None` for
+/// any other path, `Some(Err)` for a catalog path that is not valid.
+fn catalog_font_request(uri_path: &str) -> Option<Result<CatalogFontRequest, ()>> {
+    let rest = uri_path.strip_prefix(CATALOG_FONT_PREFIX)?;
+    let parse = || {
+        let (id, hex) = rest.split_once('-').ok_or(())?;
+        let id: CatalogId =
+            serde_json::from_value(serde_json::Value::String(id.to_owned())).map_err(|_| ())?;
+        if hex.is_empty() || hex.len() % 2 != 0 {
+            return Err(());
+        }
+        let bytes = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(hex.get(i..i + 2).ok_or(())?, 16).map_err(|_| ()))
+            .collect::<Result<Vec<u8>, ()>>()?;
+        let family = String::from_utf8(bytes).map_err(|_| ())?;
+        Ok(CatalogFontRequest { id, family })
+    };
+    Some(parse())
+}
+
+/// Answers a request on [`FONT_SCHEME`] whose path is a catalog family's
+/// preview (E22.2): the core fetches it into the cache folder the first
+/// time, only while the catalog is on. `None` when the path is not one.
+pub fn catalog_font_response(
+    api: &dyn CatalogService,
+    uri_path: &str,
+) -> Option<Response<Vec<u8>>> {
+    let Ok(req) = catalog_font_request(uri_path)? else {
+        return Some(error_response(
+            StatusCode::BAD_REQUEST,
+            "The font address is not valid.",
+        ));
+    };
+    let file = api.catalog_font_source(req).and_then(|source| {
+        fm_core::font_file::read_font_file(Path::new(&source.path)).map_err(ApiError::from)
+    });
+    Some(match file {
+        Ok(file) => font_ok(file.mime, file.bytes),
+        Err(e) => {
+            tracing::debug!(code = ?e.code, detail = ?e.detail, "catalog preview not served");
+            let status = match e.code {
+                ErrorCode::NotFound => StatusCode::NOT_FOUND,
+                ErrorCode::Conflict | ErrorCode::PermissionDenied => StatusCode::FORBIDDEN,
+                ErrorCode::Unsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                ErrorCode::Io => StatusCode::BAD_GATEWAY,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            error_response(status, &e.message)
+        }
+    })
+}
+
 /// Font loads are CORS requests and the app page has another origin than
 /// [`FONT_SCHEME`], so every answer allows any origin.
 fn font_ok(mime: &str, bytes: Vec<u8>) -> Response<Vec<u8>> {
@@ -435,6 +499,62 @@ async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Opti
     call(&state, move |api| api.layout_width(req)).await
 }
 
+/// Every online catalog with the state of its cache (E22.1).
+#[tauri::command]
+async fn list_catalogs(state: State<'_, AppState>) -> ApiResult<Vec<Catalog>> {
+    call(&state, move |api| api.list_catalogs()).await
+}
+
+/// Turns a catalog on or off; makes no request.
+#[tauri::command]
+async fn set_catalog_enabled(
+    state: State<'_, AppState>,
+    req: SetCatalogEnabledRequest,
+) -> ApiResult<Catalog> {
+    call(&state, move |api| api.set_catalog_enabled(req)).await
+}
+
+/// Fetches a catalog's index (a request of a few seconds, off the async runtime).
+#[tauri::command]
+async fn refresh_catalog(state: State<'_, AppState>, req: CatalogRef) -> ApiResult<Catalog> {
+    call(&state, move |api| api.refresh_catalog(req)).await
+}
+
+/// A page of a catalog's cached families; makes no request.
+#[tauri::command]
+async fn list_catalog_families(
+    state: State<'_, AppState>,
+    req: ListCatalogFamiliesRequest,
+) -> ApiResult<Paged<CatalogFamily>> {
+    call(&state, move |api| api.list_catalog_families(req)).await
+}
+
+/// Downloads a family into a watched source and starts its rescan (E22.3);
+/// requests of a few seconds, off the async runtime.
+#[tauri::command]
+async fn download_family(
+    state: State<'_, AppState>,
+    req: DownloadFamilyRequest,
+) -> ApiResult<DownloadFamilyResponse> {
+    call(&state, move |api| api.download_family(req)).await
+}
+
+/// Every family downloaded from a catalog, with where its files are now.
+#[tauri::command]
+async fn list_catalog_downloads(state: State<'_, AppState>) -> ApiResult<Vec<CatalogDownload>> {
+    call(&state, move |api| api.list_catalog_downloads()).await
+}
+
+/// The downloaded families with a newer version in their catalog, or no
+/// longer in it (E22.4); refreshes the catalogs first unless `cachedOnly`.
+#[tauri::command]
+async fn check_updates(
+    state: State<'_, AppState>,
+    req: CheckUpdatesRequest,
+) -> ApiResult<Vec<CatalogUpdate>> {
+    call(&state, move |api| api.check_updates(req)).await
+}
+
 /// Every saved comparison, by name (E13.2).
 #[tauri::command]
 async fn list_comparisons(state: State<'_, AppState>) -> ApiResult<Vec<ComparisonEntry>> {
@@ -551,6 +671,15 @@ async fn undo_resolution(
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
     call(&state, move |api| api.search(req)).await
+}
+
+/// Faces that look like one face, ranked, with reasons ("Find similar", E23.3).
+#[tauri::command]
+async fn find_similar(
+    state: State<'_, AppState>,
+    req: SimilarRequest,
+) -> ApiResult<Vec<SimilarFace>> {
+    call(&state, move |api| api.find_similar(req)).await
 }
 
 /// How well one face covers some languages or text, for the glyph compare overlay.
@@ -850,11 +979,37 @@ async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()>
     help::open(&app, &page)
 }
 
+/// Opens an `https://` address in the default browser (the "Open Adobe Fonts"
+/// link); `fm_platform::open_url` refuses every other scheme.
+#[tauri::command]
+async fn open_url(url: String) -> ApiResult<()> {
+    fm_platform::open_url(&url).map_err(|e| match e {
+        fm_platform::OpenUrlError::NotHttps(_) => {
+            ApiError::invalid("Only https addresses can be opened.").with_detail(e.to_string())
+        }
+        fm_platform::OpenUrlError::Launch(_) => {
+            ApiError::new(ErrorCode::Io, "The browser could not be opened.")
+                .with_detail(e.to_string())
+        }
+    })
+}
+
 /// Shows the native shell's labels (Help menu, tray) in the UI's locale; the
 /// UI calls it at start and when the Language setting changes.
 #[tauri::command]
 async fn set_shell_locale<R: Runtime>(app: AppHandle<R>, locale: String) -> ApiResult<()> {
     shell_text::apply(&app, &locale)
+}
+
+/// Opens the OS print dialog for the calling webview's page (Pairing Studio's
+/// "Print...", E24.4). The page's print stylesheet decides what prints; the
+/// dialog's own "Save as PDF" / "Print to File" makes the PDF on every OS.
+#[tauri::command]
+async fn print_page<R: Runtime>(webview: Webview<R>) -> ApiResult<()> {
+    webview.print().map_err(|e| {
+        ApiError::new(ErrorCode::Io, "The print dialog could not be opened.")
+            .with_detail(e.to_string())
+    })
 }
 
 /// Registers the shared state and every command on a builder.
@@ -888,7 +1043,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             let path = request.uri().path().to_owned();
             // Reading a file blocks; keep it off the webview's thread.
             tauri::async_runtime::spawn_blocking(move || {
-                responder.respond(font_response(api.as_ref(), &path));
+                let response = catalog_font_response(api.as_ref(), &path)
+                    .unwrap_or_else(|| font_response(api.as_ref(), &path));
+                responder.respond(response);
             });
         })
         .setup(move |app| {
@@ -930,6 +1087,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_families,
             get_family,
             search,
+            find_similar,
             check_coverage,
             face_coverage,
             list_languages,
@@ -976,6 +1134,13 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             save_comparison,
             rename_comparison,
             delete_comparison,
+            list_catalogs,
+            set_catalog_enabled,
+            refresh_catalog,
+            list_catalog_families,
+            download_family,
+            list_catalog_downloads,
+            check_updates,
             render_preview,
             activate,
             deactivate,
@@ -996,7 +1161,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             update_settings,
             get_app_folders,
             open_help,
+            open_url,
             set_shell_locale,
+            print_page,
             updater::update_support,
             updater::check_for_update,
             updater::install_update
@@ -1005,7 +1172,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
 
 /// The state the app serves from the app folders `paths` and the index
 /// startup opened: [`CoreApi`] over the index, activating through
-/// `activator`, when the index opened; it has cleaned up the last session
+/// `activator` and printing PDF specimens through the OS webview, when the
+/// index opened; it has cleaned up the last session
 /// (ADR 0008) and, when the index was rebuilt, started a scan of every source.
 /// When the index could not be opened, [`MockApi`] with the real settings.
 /// The [`CoreApi`] is returned too, for [`CoreApi::shutdown`] at exit.
@@ -1016,7 +1184,17 @@ pub fn serve(
 ) -> (AppState, Option<Arc<CoreApi>>) {
     match index {
         Ok(opened) => {
-            let core = Arc::new(CoreApi::open(paths, opened.index, activator));
+            let core = CoreApi::open(paths, opened.index, activator);
+            // PDF specimens print through an offscreen webview on this
+            // app's UI thread (ADR 0013); the CLI's direct link has none.
+            let core = match fm_platform::pdf::system(paths) {
+                Ok(printer) => core.with_pdf_printer(printer),
+                Err(e) => {
+                    tracing::warn!(error = %e, "no PDF printer: PDF specimens are unavailable");
+                    core
+                }
+            };
+            let core = Arc::new(core);
             if let Err(e) = core.start() {
                 tracing::warn!(error = %e, "activation start-up failed");
             }

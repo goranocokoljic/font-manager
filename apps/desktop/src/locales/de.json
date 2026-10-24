@@ -233,6 +233,8 @@
       "layout": "Satzbild"
     },
     "preset": "Vorlage",
+    "openStudio": "Im Pairing Studio öffnen",
+    "openStudioTitle": "Dieses Satzbild mit der gezeigten Schrift in einem eigenen Bereich öffnen",
     "unreadable": "{name} (nicht lesbar)",
     "density": {
       "comfortable": "Bequem",
@@ -289,7 +291,9 @@
         "compact": "Kompakte Zeilen verwenden"
       },
       "showPreset": "Satzbild „{preset}“ anzeigen",
-      "reopenComparison": "Vergleich öffnen: {name}"
+      "reopenComparison": "Vergleich öffnen: {name}",
+      "findSimilar": "Ähnliche Schriften finden",
+      "openStudio": "Satzbild im Pairing Studio öffnen"
     }
   },
   "views": {
@@ -321,8 +325,14 @@
       "info": "Infos",
       "axes": "Achsen",
       "features": "Funktionen",
-      "glyphs": "Glyphen"
+      "glyphs": "Glyphen",
+      "developer": "Entwickler"
     }
+  },
+  "developer": {
+    "noFace": "Wähle einen Schnitt, um sein CSS zu sehen.",
+    "hint": "Das CSS für die Achsen und Features aus den Tabs Achsen und Features.",
+    "copyLabel": "CSS-Ausschnitt kopieren"
   },
   "search": {
     "label": "Schriften suchen",
@@ -598,7 +608,9 @@
       "notesPlaceholder": "Notizen zu diesem Schnitt…",
       "familyNotes": "Notizen zur Familie",
       "familyNotesPlaceholder": "Notizen zu {family}…"
-    }
+    },
+    "findSimilar": "Ähnliche finden",
+    "findSimilarTitle": "Die Schriften finden, die wie diese aussehen"
   },
   "license": {
     "title": "Deine Lizenz für diese Familie",
@@ -841,7 +853,9 @@
       "active": "aktiv",
       "activePermanently": "dauerhaft aktiv",
       "activeSession": "aktiv für diese Sitzung"
-    }
+    },
+    "findSimilar": "Ähnliche",
+    "findSimilarLabel": "Die Schriften finden, die {name} ähneln"
   },
   "grid": {
     "label": "Schriftraster"
@@ -1049,8 +1063,13 @@
       "sources": "Quellen",
       "activation": "Aktivierung",
       "appearance": "Darstellung",
+      "catalogs": "Online-Kataloge",
       "advanced": "Erweitert",
       "about": "Über"
+    },
+    "catalogs": {
+      "note": "Schriftkataloge im Web. Öffnen Sie einen, um zu sehen, was die App damit tun kann.",
+      "connectsHint": "Wenn Sie {name} einschalten, verbindet sich die App mit dem Internet, um die Schriftliste zu laden. Vorschauen werden beim Durchsuchen geladen."
     },
     "sources": {
       "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Wenn du eine Quelle entfernst, vergisst die Bibliothek ihre Schriften; die Dateien bleiben, wo sie sind.",
@@ -1131,6 +1150,30 @@
       "installVersion": "Version {version} installieren",
       "installAndRestart": "Installieren und neu starten"
     }
+  },
+  "studio": {
+    "title": "Pairing Studio",
+    "region": "Pairing Studio: {name}",
+    "font": "Schrift",
+    "noFont": "Keine Schrift",
+    "layout": "Satzbild",
+    "closeTitle": "Zurück zur Bibliothek (Escape)",
+    "blockFont": "Schrift für {label}",
+    "panelFont": "Schrift des Panels",
+    "fonts": "Schriften",
+    "noMatch": "Keine passenden Schriften",
+    "usePanelFont": "Schrift des Panels verwenden",
+    "usePanelFontFor": "Schrift des Panels für {label} verwenden",
+    "addPanel": "Panel hinzufügen",
+    "addPanelTitle": "Eine Kopie des aktuellen Panels neben den anderen hinzufügen",
+    "panelsFull": "Höchstens {max} Panels",
+    "panel": "Panel {number}: {name}",
+    "noLayout": "Kein Layout",
+    "closePanel": "Panel schließen",
+    "closePanelFor": "Panel {number} schließen",
+    "printPanel": "Drucken…",
+    "printPanelFor": "Panel {number} drucken",
+    "printTitle": "Nur dieses Panel drucken oder im Druckdialog als PDF sichern"
   },
   "conflicts": {
     "title": "Schriftkonflikte",
@@ -1235,5 +1278,86 @@
     "resumeLabel": "{name} fortsetzen",
     "removeLabel": "{name} aus der Bibliothek entfernen",
     "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
+  },
+  "catalogs": {
+    "adobeFonts": {
+      "name": "Adobe Fonts",
+      "note": "Adobe Fonts werden verschlüsselt über Creative Cloud geliefert, daher kann keine Drittanbieter-App sie verwalten. Aktivieren Sie sie in der Creative Cloud-App.",
+      "open": "Adobe Fonts öffnen",
+      "openTitle": "Öffnet fonts.adobe.com in Ihrem Browser"
+    },
+    "turnOn": "Einschalten",
+    "turnOnLabel": "{name} einschalten",
+    "connects": "Verbindet mit dem Internet",
+    "off": "{name} ist aus. Schalten Sie den Katalog ein, um seine Schriften zu durchsuchen.",
+    "searchLabel": "{name} durchsuchen",
+    "searchPlaceholder": "Familien suchen",
+    "listLabel": "Familien von {name}",
+    "refresh": "Aktualisieren",
+    "refreshing": "Wird aktualisiert…",
+    "refreshTitle": "Die Liste von {name} erneut aus dem Internet laden",
+    "refreshedAt": "Aktualisiert {date}",
+    "neverRefreshed": "Noch nicht aktualisiert",
+    "offline": "Offline - Liste vom {date}",
+    "noMatches": "Keine Familie passt zur Suche.",
+    "empty": "Die Liste ist leer. Aktualisieren Sie, um sie zu laden.",
+    "sizePx": "{size} px",
+    "download": {
+      "action": "Laden…",
+      "actionLabel": "{name} laden…",
+      "title": "{name} laden",
+      "into": "Laden in",
+      "noFolder": "Fügen Sie zuerst einen Ordner zur Bibliothek hinzu. Downloads kommen in einen Ordner, den Sie hinzugefügt haben.",
+      "files": "Dateien",
+      "static": "Eine Datei pro Schnitt",
+      "variable": "Variable Schrift",
+      "where": "Die Dateien kommen in einen Ordner namens {folder} darin. Eine Datei, die schon da ist, bleibt erhalten und wird nie ersetzt.",
+      "start": "Laden",
+      "cancel": "Abbrechen",
+      "close": "Schließen",
+      "downloading": "{name} wird geladen…",
+      "scanning": "{name} wird zur Bibliothek hinzugefügt…",
+      "scanProgress": "{name} wird zur Bibliothek hinzugefügt: {done} von {total} Dateien gelesen",
+      "done": {
+        "one": "{name}: {count} Datei in {folder} geladen.",
+        "other": "{name}: {count} Dateien in {folder} geladen."
+      },
+      "skipped": {
+        "one": "{count} Datei war schon da und blieb erhalten.",
+        "other": "{count} Dateien waren schon da und blieben erhalten."
+      },
+      "nothingNew": "{name}: Alle Dateien waren schon in {folder}. Nichts wurde ersetzt.",
+      "failed": "{message} Es wurde keine Datei geschrieben.",
+      "scanFailed": "Die Dateien sind geladen, aber der Ordner konnte nicht erneut gelesen werden: {message}",
+      "retry": "Erneut versuchen",
+      "stopped": "Der Download wurde vor dem Ende abgebrochen: {message} Nur die oben gezählten Dateien wurden geschrieben, und sie bleiben erhalten."
+    },
+    "updates": {
+      "check": "Nach Updates suchen",
+      "checking": "Wird geprüft…",
+      "checkTitle": "Die geladenen Familien mit den Katalogen vergleichen, die erneut aus dem Internet geladen werden",
+      "badge": "Update verfügbar",
+      "badgeTitle": "{catalog} hat eine neuere Version: {version}",
+      "found": {
+        "zero": "Alle geladenen Familien sind aktuell.",
+        "one": "{count} geladene Familie hat ein Update.",
+        "other": "{count} geladene Familien haben ein Update."
+      },
+      "noLongerListed": "Nicht mehr im Katalog: {names}"
+    }
+  },
+  "similar": {
+    "title": "Ähnlich wie {name}",
+    "hint": "Eingabe oder ein Klick wählt eine Schrift. Esc schließt.",
+    "close": "Ähnliche Schriften schließen",
+    "results": "Ähnliche Schriften",
+    "loading": "Ähnliche Schriften werden gesucht …",
+    "none": "Keine andere Schrift der Bibliothek sieht wie {name} aus.",
+    "error": "Font Manager konnte keine ähnlichen Schriften finden. {message}",
+    "score": "{percent} % ähnlich",
+    "noScore": "Keine Bewertung",
+    "resultLabel": "{name}, {score}",
+    "reasons": "Warum: {reasons}",
+    "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet sie aus. Der Inspektor zeigt sie."
   }
 }

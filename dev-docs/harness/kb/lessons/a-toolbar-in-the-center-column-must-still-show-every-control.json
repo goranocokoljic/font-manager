@@ -1,0 +1,19 @@
+{
+  "id": "a-toolbar-in-the-center-column-must-still-show-every-control",
+  "title": "A toolbar in the center column must still show every control at 1,100 px with the inspector open",
+  "category": "accessibility",
+  "rule": "The center column (main.list) clips its overflow and is only about 540 px wide at 1,100 px with the sidebar and inspector open. A new toolbar there must wrap (`flex-wrap: wrap`, `min-height` instead of a fixed `height`) or move controls to a second row, so no button or status text falls outside the column, also in German. Add a Playwright check at a 1,100 px viewport in en-US and de-DE that asserts each toolbar control's bounding box sits inside main.list and that a focused button is fully in view.",
+  "rationale": "E22.2 (#147): the catalog toolbar was a fixed 48 px non-wrapping row; below ~1,265 px with the inspector open, Refresh and its date were clipped out of view.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    147
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/views/**/*.vue"
+  ],
+  "first_seen": "2026-10-24T08:57:48.318Z",
+  "last_seen": "2026-10-24T08:57:48.318Z"
+}
