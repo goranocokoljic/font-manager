@@ -141,3 +141,16 @@ describe('catalogs store: online catalogs (E22.2)', () => {
     expect(store.offline).toBe(false);
   });
 });
+
+describe('catalogs store: opened before the list arrives', () => {
+  it('reads the families once the catalogs are loaded', async () => {
+    setClient(createMockClient({ catalog: 'offline' }));
+    const store = useCatalogsStore();
+    store.show('googleFonts');
+    await flushPromises();
+    expect(store.total).toBe(0);
+    await store.load();
+    await flushPromises();
+    expect(store.total).toBe(4);
+  });
+});

@@ -75,6 +75,8 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     try {
       catalogs.value = await client().listCatalogs();
       error.value = null;
+      // A catalog opened before the list arrived reads its families now.
+      if (current.value && !listed.value) await relist();
     } catch (e) {
       error.value = toApiError(e);
     }
