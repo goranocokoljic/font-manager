@@ -291,6 +291,19 @@ export type CollectionFacesRequest = {
 /**  A manual or smart collection. */
 export type CollectionId = number;
 
+/**
+ *  Write one specimen of a collection to a file the user picked (E21.3): a
+ *  cover, then a page per family, for a client to sign off on.
+ */
+export type CollectionSpecimenRequest = {
+	/**  The collection, manual or smart. */
+	collection: CollectionId,
+	/**  The file format. */
+	format: SpecimenFormat,
+	/**  The file to write, as the user picked it. */
+	outPath: string,
+};
+
 /**  The range of [`TextBlock::columns`]. */
 export type ColumnRange = {
 	/**  Fewest columns. */

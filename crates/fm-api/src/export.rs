@@ -160,6 +160,19 @@ pub struct SpecimenRequest {
     pub out_path: String,
 }
 
+/// Write one specimen of a collection to a file the user picked (E21.3): a
+/// cover, then a page per family, for a client to sign off on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CollectionSpecimenRequest {
+    /// The collection, manual or smart.
+    pub collection: CollectionId,
+    /// The file format.
+    pub format: SpecimenFormat,
+    /// The file to write, as the user picked it.
+    pub out_path: String,
+}
+
 /// What the specimen export wrote.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -189,4 +202,13 @@ pub trait ExportService {
     /// `Pdf` without the app running is `Unsupported`, and a failed print
     /// is `Io` and leaves nothing at `out_path`.
     fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse>;
+    /// Write a specimen of the collection to `out_path`: a cover (name,
+    /// date, family count), then a page per family with a face in it, in
+    /// the collection's order; a smart collection applies its rule. An
+    /// empty collection is `InvalidRequest`, an unknown one `NotFound`; the
+    /// license refusal, `Unsupported` and `Io` are [`Self::export_specimen`]'s.
+    fn export_collection_specimen(
+        &self,
+        req: CollectionSpecimenRequest,
+    ) -> ApiResult<SpecimenResponse>;
 }

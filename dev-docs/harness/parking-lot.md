@@ -213,3 +213,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E24.3 #158] apps/desktop/src/views/HomeView.vue:96 — the layout picker's preset fallback is written twice (HomeView and StudioPanel); not a defect yet.
 - [E24.4 #159] apps/desktop/src/locales/de.json:1164 — German "Panel schließen" is not a contiguous part of its accessible name "Panel {number} schließen" (WCAG 2.5.3 Label in Name).
 - [E24.4 #159] apps/desktop/src/components/LayoutBlock.vue:377 — the hover size-badge has no `fm-no-print` class; it stays off paper only through `opacity: 0` when the block is not hovered or focused.
+- [E21.3 #145] crates/fm-core/src/api/tests.rs:2966 — the E21.1 single-family specimen has no test for an unreadable face file.
+- [E21.3 #145] crates/fm-platform/src/linux/trash.rs:253 — `civil_from_days` is a third copy of the days-to-date algorithm (also `layout::store::iso_utc` and `specimen::utc_date` in fm-core).

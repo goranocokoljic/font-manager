@@ -11,11 +11,11 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Classification, Health, Metrics, Slant};
+use fm_api::common::{Classification, Health, Metrics, Page, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
-use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
-use fm_api::{FaceId, FamilyId, SourceId};
+use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage, Filters, SearchRequest};
+use fm_api::{CollectionId, FaceId, FamilyId, SourceId};
 use rusqlite::{OptionalExtension, Row};
 
 use super::files::{format_from_sql, path_from_sql};
@@ -27,7 +27,7 @@ use crate::license;
 use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
-use crate::specimen::{Specimen, SpecimenFace};
+use crate::specimen::{CollectionSpecimen, Specimen, SpecimenFace};
 use crate::web_css::FaceStyle;
 use crate::web_font::{self, ExportFace};
 
@@ -336,6 +336,32 @@ impl Index {
             family: fam.summary.name,
             faces,
         })
+    }
+
+    /// What the specimen of `collection` shows (E21.3): the [`Index::specimen`]
+    /// of every family with a face in it, manual or smart (its rule applies),
+    /// in the order search lists the collection's families. An unknown
+    /// collection is `NotFound`; an empty one has no families.
+    pub fn collection_specimen(&self, collection: CollectionId) -> FmResult<CollectionSpecimen> {
+        let name = self.collection(collection)?.name;
+        let found = self.search(&SearchRequest {
+            query: String::new(),
+            filters: Filters {
+                collection: Some(collection),
+                ..Filters::default()
+            },
+            page: Page {
+                offset: 0,
+                limit: u32::MAX,
+            },
+            rule: None,
+        })?;
+        let families = found
+            .families
+            .iter()
+            .map(|hit| self.specimen(hit.family.id))
+            .collect::<FmResult<Vec<_>>>()?;
+        Ok(CollectionSpecimen { name, families })
     }
 
     /// The webview's view of [`Index::face_file`].
