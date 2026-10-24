@@ -8,8 +8,10 @@
 #            scripts/harness/ci-wait.mjs as the check "bench / bench") and writes the
 #            trend against the last runs on main (nightly or by hand) into the job summary.
 #            Nightly: red when a metric is over budget. PR: red when a budgeted metric
-#            is more than 10% worse than the slowest of the last runs on main,
-#            or newly over budget (E9.2); the job annotates each regression and keeps
+#            is more than 10% (and more than 20% of its budget) worse than the slowest
+#            of the last runs on main,
+#            or newly over budget (E9.2). The `bench:accept` label lets a regression
+#            that stays within budget pass (a feature's known cost); the job annotates each regression and keeps
 #            one sticky comment with the table on the PR.
 #
 # Job names must not be windows/macos/linux: ci-wait matches check runs by job name
@@ -99,6 +101,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # fm-bench links fm-platform, which needs GTK/WebKitGTK on Linux since E21.2.
+      - name: Linux system packages (as release.yml)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $(node scripts/release/build.mjs packages --os linux)
+
       - name: Rust toolchain (from rust-toolchain.toml)
         run: rustup show active-toolchain || rustup toolchain install
 
@@ -156,6 +165,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          ACCEPT: ${{ contains(github.event.pull_request.labels.*.name, 'bench:accept') && '--accept' || '' }}
         run: |
           shopt -s nullglob
           if [ -n "$PR_NUMBER" ]; then TITLE="Bench — PR #$PR_NUMBER"; else TITLE="Nightly bench"; fi
@@ -167,7 +177,8 @@ jobs:
           if [ -n "$PR_NUMBER" ]; then
             # A PR is judged against main, so a metric red on main too does not block it.
             status=0
-            node scripts/bench/bench.mjs gate --current out/bench-report.json --history history || status=$?
+            # The `bench:accept` label: a regression within budget is accepted (still shown).
+            node scripts/bench/bench.mjs gate --current out/bench-report.json --history history $ACCEPT || status=$?
           fi
           node scripts/bench/bench.mjs trend --current out/bench-report.json --history history \
             --sha "$SHA" --title "$TITLE" --out out/trend.md

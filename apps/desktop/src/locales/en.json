@@ -174,6 +174,13 @@
     "size": "Size",
     "sizeSlider": "Size slider",
     "sizeInPixels": "Size in pixels",
+    "autoSize": "Auto size",
+    "autoSizeHint": "Scale each row so every font's x-height or cap height matches at this size",
+    "autoSizes": {
+      "off": "Off",
+      "xHeight": "x-height",
+      "capHeight": "Cap height"
+    },
     "lineHeight": "Line height",
     "tracking": "Tracking",
     "alignment": "Alignment",

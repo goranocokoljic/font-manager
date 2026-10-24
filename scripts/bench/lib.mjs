@@ -129,8 +129,12 @@ export const REGRESSION_TOLERANCE = 0.1;
  * every recent run of main.
  */
 export const BASELINE_RUNS = 5;
-/** A change smaller than this share of the budget is runner noise, never a regression. */
-export const NOISE_FLOOR = 0.02;
+/**
+ * A change smaller than this share of the budget is runner noise, never a
+ * regression: on shared runners a 100-face activation swings 28-372 ms and a
+ * first scan 6-13 s from run to run on the same commit of main.
+ */
+export const NOISE_FLOOR = 0.2;
 /** Marks the sticky PR comment of the bench job, so a new push updates it. */
 export const COMMENT_MARKER = '<!-- fm-bench -->';
 
@@ -186,11 +190,14 @@ export function gate(current, history, { tolerance = REGRESSION_TOLERANCE, runs 
  * The entries that make the bench check red. A gated report (a PR): the
  * regressions and the missing OS reports. Otherwise (nightly): every metric over budget.
  */
-export function blocking(report) {
+export function blocking(report, { accept = false } = {}) {
   const entries = Object.entries(report);
   const gated = entries.some(([, m]) => 'regressed' in m);
+  // `accept` (the PR's `bench:accept` label): a regression that stays within
+  // its budget is the known cost of the feature, so it no longer blocks.
+  const regressed = (m) => m.regressed === true && !(accept && m.pass !== false);
   return entries
-    .filter(([, m]) => (gated ? m.regressed === true || (m.target == null && m.pass === false) : m.pass === false))
+    .filter(([, m]) => (gated ? regressed(m) || (m.target == null && m.pass === false) : m.pass === false))
     .map(([k]) => k);
 }
 
@@ -326,6 +333,7 @@ export function parseCli(argv, env = process.env) {
     else if (a === '--sha') opts.sha = value();
     else if (a === '--pr') opts.pr = positiveInt(a, value());
     else if (a === '--body') opts.body = value();
+    else if (a === '--accept') opts.accept = true;
     else if (a === '--help' || a === '-h') opts.help = true;
     else if (!a.startsWith('--') && command !== 'run') opts.files.push(a);
     else throw new Error(`unknown argument: ${a}`);

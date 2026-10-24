@@ -211,9 +211,12 @@ function gateCmd(opts) {
   if (!opts.current) throw usage('gate needs --current bench-report.json');
   const gated = gate(readJson(opts.current), loadHistory(opts.history));
   writeFileSync(opts.out ?? opts.current, JSON.stringify(gated, null, 2) + '\n');
-  const blocked = blocking(gated);
+  const blocked = blocking(gated, { accept: opts.accept });
   // GitHub turns these lines into annotations on the PR's checks page.
   for (const k of blocked) console.log(`::error title=Bench regression::${reason(k, gated[k])}`);
+  for (const k of blocking(gated).filter((k) => !blocked.includes(k))) {
+    console.log(`::warning title=Bench regression accepted (bench:accept)::${reason(k, gated[k])}`);
+  }
   console.log(blocked.length ? `regressed: ${blocked.join(', ')}` : 'no budgeted metric regressed');
   return blocked.length ? 1 : 0;
 }

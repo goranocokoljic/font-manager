@@ -23,6 +23,10 @@ Read [Sources](sources.md) to learn more about folders.
 - Type in the search box at the top. Press `/` to go to it from anywhere.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
+- Some fonts look small or large at the same size. Set **Auto size** to **x-height**
+  or **Cap height** to make them look the same size. Each font then shows its small
+  letters (or its capitals) at the same height. A font that does not give this height
+  stays at the size you set. Each view keeps its own setting.
 - Use the **List**, **Table**, **Grid**, **Waterfall** and **Layout** buttons to change
   how the fonts show. The grid shows a card for each font. The waterfall shows the
   preview text at six sizes. The layout shows the selected font as a page of text. Pick

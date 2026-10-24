@@ -175,6 +175,9 @@ pub fn types() -> specta::Types {
         preview::SampleText,
         preview::CssValuesRequest,
         preview::CssValues,
+        preview::SizeBasis,
+        preview::SizeFactorRequest,
+        preview::SizeFactor,
         // activation
         activation::ActivateRequest,
         activation::DeactivateRequest,

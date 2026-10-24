@@ -31,6 +31,7 @@ pub mod layout;
 pub mod license;
 pub mod lifecycle;
 pub mod logging;
+pub mod metrics;
 pub mod palettes;
 pub mod pangrams;
 mod parallel;

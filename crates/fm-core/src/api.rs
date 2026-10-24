@@ -70,7 +70,7 @@ use fm_api::organization::{
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
@@ -745,6 +745,10 @@ impl PreviewService for CoreApi {
 
     fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
         Ok(self.lock().sample_texts(&req)?)
+    }
+
+    fn size_factors(&self, req: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
+        Ok(self.lock().size_factors(&req)?)
     }
 
     /// From the face's axes and features as the inspector shows them.
