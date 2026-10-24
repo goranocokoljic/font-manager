@@ -14,6 +14,10 @@ use crate::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
     ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
 };
+use crate::catalog::{
+    Catalog, CatalogFamily, CatalogId, CatalogRef, CatalogService, CatalogStyle,
+    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+};
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
     NamedInstance, Page, Paged, Slant,
@@ -474,6 +478,10 @@ struct State {
     resolutions: Vec<Resolution>,
     /// The layout template files, in the order they were made.
     layouts: Vec<MockLayoutFile>,
+    /// The catalogs turned on.
+    catalogs_on: BTreeSet<CatalogId>,
+    /// Each refreshed catalog's cache: when, and its families.
+    catalog_cache: BTreeMap<CatalogId, (String, Vec<CatalogFamily>)>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -872,6 +880,8 @@ impl State {
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             layouts: mock_layout_files(),
+            catalogs_on: BTreeSet::new(),
+            catalog_cache: BTreeMap::new(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -4412,6 +4422,114 @@ impl ComparisonService for MockApi {
             return Err(ApiError::not_found(format!("Comparison {}", req.id)));
         }
         Ok(())
+    }
+}
+
+/// The sample families a refreshed catalog of the mock holds.
+fn mock_catalog_families() -> Vec<CatalogFamily> {
+    let family = |name: &str, category: &str, weights: &[u32], axes: Vec<Axis>| CatalogFamily {
+        name: name.to_owned(),
+        category: Some(category.to_owned()),
+        styles: weights
+            .iter()
+            .map(|&weight| CatalogStyle {
+                weight,
+                slant: Slant::Upright,
+            })
+            .collect(),
+        axes,
+        subsets: vec!["latin".to_owned(), "latin-ext".to_owned()],
+        designers: Vec::new(),
+        version: None,
+        last_modified: Some("2026-09-01".to_owned()),
+        open_source: true,
+        license: None,
+    };
+    let wght = Axis {
+        tag: "wght".to_owned(),
+        name: "Weight".to_owned(),
+        min: 100.0,
+        default: 400.0,
+        max: 900.0,
+    };
+    vec![
+        family("Inter", "Sans Serif", &[100, 400, 900], vec![wght]),
+        family("Lato", "Sans Serif", &[100, 300, 400, 700, 900], Vec::new()),
+        family("Lora", "Serif", &[400, 700], Vec::new()),
+        family("Space Mono", "Monospace", &[400, 700], Vec::new()),
+    ]
+}
+
+impl State {
+    fn catalog(&self, id: CatalogId) -> Catalog {
+        let cache = self.catalog_cache.get(&id);
+        Catalog {
+            id,
+            name: id.name().to_owned(),
+            homepage: match id {
+                CatalogId::GoogleFonts => "https://fonts.google.com".to_owned(),
+            },
+            enabled: self.catalogs_on.contains(&id),
+            refreshed_at: cache.map(|(at, _)| at.clone()),
+            family_count: cache.map_or(0, |(_, f)| u32::try_from(f.len()).unwrap_or(u32::MAX)),
+        }
+    }
+}
+
+/// Catalogs on sample data: refreshing one "fetches" four families and
+/// touches no network.
+impl CatalogService for MockApi {
+    fn list_catalogs(&self) -> ApiResult<Vec<Catalog>> {
+        let st = self.state();
+        Ok(CatalogId::ALL.iter().map(|&id| st.catalog(id)).collect())
+    }
+
+    fn set_catalog_enabled(&self, req: SetCatalogEnabledRequest) -> ApiResult<Catalog> {
+        let mut st = self.state();
+        if req.enabled {
+            st.catalogs_on.insert(req.id);
+        } else {
+            st.catalogs_on.remove(&req.id);
+        }
+        Ok(st.catalog(req.id))
+    }
+
+    fn refresh_catalog(&self, req: CatalogRef) -> ApiResult<Catalog> {
+        let mut st = self.state();
+        if !st.catalogs_on.contains(&req.id) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("Turn on {} before refreshing it.", req.id),
+            ));
+        }
+        st.catalog_cache
+            .insert(req.id, (MOCK_NOW.to_owned(), mock_catalog_families()));
+        Ok(st.catalog(req.id))
+    }
+
+    fn list_catalog_families(
+        &self,
+        req: ListCatalogFamiliesRequest,
+    ) -> ApiResult<Paged<CatalogFamily>> {
+        let st = self.state();
+        let families = match st.catalog_cache.get(&req.id) {
+            Some((_, families)) if st.catalogs_on.contains(&req.id) => families.as_slice(),
+            _ => &[],
+        };
+        let query = req.query.trim().to_lowercase();
+        let hits: Vec<&CatalogFamily> = families
+            .iter()
+            .filter(|f| f.name.to_lowercase().contains(&query))
+            .collect();
+        Ok(Paged {
+            total: u32::try_from(hits.len()).unwrap_or(u32::MAX),
+            items: hits
+                .into_iter()
+                .skip(req.page.offset as usize)
+                .take(req.page.limit.min(500) as usize)
+                .cloned()
+                .collect(),
+        })
     }
 }
 

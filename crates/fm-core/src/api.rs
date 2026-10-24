@@ -16,6 +16,8 @@
 //!   over the OS trash ([`CoreApi::open`]) or the one a test passes
 //!   ([`CoreApi::with_trash`]); without a trash it answers `Unsupported`
 //!   and moves nothing.
+//! - **Catalogs.** Online catalogs (E22.1) are off until the user turns
+//!   one on; only [`CatalogService::refresh_catalog`] goes to the network.
 //! - **Not built yet.** Export, workflows and similar-font search answer an
 //!   `Unsupported` error with a message for the user, never a panic.
 
@@ -28,6 +30,10 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActivationService, ActiveFace, Clash, Conflict,
     DeactivateRequest, Target,
+};
+use fm_api::catalog::{
+    Catalog, CatalogFamily, CatalogRef, CatalogService, ListCatalogFamiliesRequest,
+    SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -76,6 +82,7 @@ use fm_api::{
 use fm_platform::{AppPaths, FontActivator, Os, PdfPrinter, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
+use crate::catalog::Catalogs;
 use crate::error::{FmError, FmResult};
 use crate::framework_snippet::{self, SnippetFace};
 use crate::index::{DeclaredLicense, Index};
@@ -125,6 +132,8 @@ pub struct CoreApi {
     /// The OS webview printer for PDF specimens (E21.2); `None` without the
     /// app (the CLI's direct link), when a PDF is `Unsupported`.
     pdf: Option<Arc<dyn PdfPrinter>>,
+    /// The online catalogs (E22.1); `None` when the API has no data folder.
+    catalogs: Option<Catalogs>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -159,7 +168,10 @@ impl CoreApi {
             .ok();
         let api = Self::new(index, activator, settings, previews)
             .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
-            .with_layouts_in(paths.layouts_dir());
+            .with_layouts_in(paths.layouts_dir())
+            .with_catalogs(Catalogs::open(
+                paths.data.join(crate::catalog::CATALOGS_DIR),
+            ));
         match fm_platform::trash::system() {
             Ok(trash) => api.with_trash(trash),
             Err(e) => {
@@ -192,6 +204,7 @@ impl CoreApi {
             receipts: None,
             layouts: None,
             pdf: None,
+            catalogs: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -238,6 +251,20 @@ impl CoreApi {
     pub fn with_pdf_printer(mut self, printer: Arc<dyn PdfPrinter>) -> Self {
         self.pdf = Some(printer);
         self
+    }
+
+    /// The same API, with these online catalogs.
+    #[must_use]
+    pub fn with_catalogs(mut self, catalogs: Catalogs) -> Self {
+        self.catalogs = Some(catalogs);
+        self
+    }
+
+    /// The catalogs, or the answer when there is no catalogs folder.
+    fn catalogs(&self) -> ApiResult<&Catalogs> {
+        self.catalogs
+            .as_ref()
+            .ok_or_else(|| not_available("Online catalogs"))
     }
 
     /// The layout files, or the answer when there is no layouts folder.
@@ -1145,6 +1172,27 @@ impl ComparisonService for CoreApi {
 
     fn delete_comparison(&self, req: ComparisonRef) -> ApiResult<()> {
         Ok(self.lock().delete_comparison(req.id)?)
+    }
+}
+
+impl CatalogService for CoreApi {
+    fn list_catalogs(&self) -> ApiResult<Vec<Catalog>> {
+        Ok(self.catalogs()?.list()?)
+    }
+
+    fn set_catalog_enabled(&self, req: SetCatalogEnabledRequest) -> ApiResult<Catalog> {
+        Ok(self.catalogs()?.set_enabled(req.id, req.enabled)?)
+    }
+
+    fn refresh_catalog(&self, req: CatalogRef) -> ApiResult<Catalog> {
+        Ok(self.catalogs()?.refresh(req.id)?)
+    }
+
+    fn list_catalog_families(
+        &self,
+        req: ListCatalogFamiliesRequest,
+    ) -> ApiResult<Paged<CatalogFamily>> {
+        Ok(self.catalogs()?.families(req.id, &req.query, req.page)?)
     }
 }
 

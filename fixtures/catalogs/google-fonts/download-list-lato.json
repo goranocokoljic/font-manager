@@ -1,0 +1,94 @@
+)]}'
+{
+  "zipName": "Lato.zip",
+  "manifest": {
+    "files": [
+      {
+        "filename": "OFL.txt",
+        "contents": "Copyright (c) 2010-2014 by tyPoland Lukasz Dziedzic (team@latofonts.com) with Reserved Font Name \"Lato\"\r\n\r\nThis Font Software is licensed under the SIL Open Font License, Version 1.1.\r\n[trimmed]"
+      }
+    ],
+    "fileRefs": [
+      {
+        "filename": "Lato-Thin.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u8w4BMUTPHh30wWyWrFCbw7A.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-ThinItalic.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u-w4BMUTPHjxsIPy-vNiPg7MU0.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-Light.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh7USew-FGC_p9dw.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-LightItalic.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u_w4BMUTPHjxsI9w2PHA3s5dwt7w.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-Regular.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6uyw4BMUTPHvxk6XweuBCY.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-Italic.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u8w4BMUTPHjxswWyWrFCbw7A.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-Bold.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh6UVew-FGC_p9dw.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-BoldItalic.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u_w4BMUTPHjxsI5wqPHA3s5dwt7w.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-Black.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u9w4BMUTPHh50Xew-FGC_p9dw.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      },
+      {
+        "filename": "Lato-BlackItalic.ttf",
+        "url": "https://fonts.gstatic.com/s/lato/v25/S6u_w4BMUTPHjxsI3wiPHA3s5dwt7w.ttf",
+        "date": {
+          "seconds": 1758066371,
+          "nanos": 984000000
+        }
+      }
+    ]
+  }
+}
