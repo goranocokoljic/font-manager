@@ -156,6 +156,14 @@ test('every interactive element of the Conflicts view and the clash question has
   expect(await unnamedControls(page)).toEqual([]);
 });
 
+test('every interactive element of the inspector Developer tab has a name', async ({ page }) => {
+  await open(page, '/?face=1');
+  await page.getByRole('tab', { name: 'Developer' }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Developer' });
+  await expect(panel.getByRole('button', { name: 'Copy the CSS snippet' })).toBeEnabled();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
 test('every interactive element of the Problems view has a name', async ({ page }) => {
   await open(page, '/problems');
   await expect(page.getByRole('table', { name: 'Problems' })).toBeVisible();
