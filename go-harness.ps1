@@ -894,7 +894,19 @@ function Invoke-MergeGate {
             $branch = (gh pr view $s.pr --json headRefName -q .headRefName 2>$null | Out-String).Trim()
             $out = gh pr merge $s.pr --squash --match-head-commit $mc.sha 2>&1
             $out | ForEach-Object { Write-Log "    $_" 'DarkGray' }
-            if ($LASTEXITCODE -ne 0) { Block-Story -Reason "auto-merge failed: $(($out | Out-String).Trim())"; return }
+            if ($LASTEXITCODE -ne 0) {
+                $msg = ($out | Out-String).Trim()
+                # Main moved between the gate's check and the merge (the other lane
+                # merged), or the network dropped: run the gate again; it updates the
+                # branch (counted in max_branch_updates) or merges.
+                if ($msg -match 'Base branch was modified|Head branch was modified|not up to date') {
+                    Write-Log "    main moved while merging - running the merge gate again" 'Yellow'
+                    Start-Sleep -Seconds 15
+                    return 'again'
+                }
+                if ((Test-NetworkError $msg) -and (Wait-Network)) { return 'again' }
+                Block-Story -Reason "auto-merge failed: $msg"; return
+            }
             if ($branch) {
                 git -C $script:Work checkout --detach 2>&1 | Out-Null
                 git -C $script:Work branch -D $branch 2>&1 | Out-Null

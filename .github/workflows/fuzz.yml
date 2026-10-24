@@ -53,6 +53,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # fm-core reaches fm-platform's GTK/WebKitGTK crates on Linux since E21.2.
+      - name: Linux system packages (as release.yml)
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends $(node scripts/release/build.mjs packages --os linux)
+
       - name: Nightly toolchain (cargo-fuzz needs -Z flags)
         run: rustup toolchain install nightly --profile minimal
 
