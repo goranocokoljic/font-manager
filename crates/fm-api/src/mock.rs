@@ -23,8 +23,8 @@ use crate::comparison::{
     MIN_COMPARISON_FACES, MissingFace, RenameComparisonRequest, SaveComparisonRequest,
 };
 use crate::export::{
-    ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest, Subset, WebFormat,
+    ExportWebRequest, ExportWebResponse, Framework, FrameworkSnippet, FrameworkSnippetRequest,
+    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -3219,6 +3219,121 @@ fn mock_font_face(f: &MockFace, formats: &[WebFormat], mapped: Option<&[u32]>) -
     out
 }
 
+/// The `font-weight` and `font-style` of a mock face's `@font-face` block.
+fn mock_weight_style(f: &MockFace) -> (String, String) {
+    let s = &f.detail.face;
+    let axis = |tag: &str| {
+        f.detail
+            .axes
+            .iter()
+            .find(|a| a.tag == tag && a.min.is_finite() && a.max.is_finite())
+            .map(|a| (a.min.min(a.max), a.min.max(a.max)))
+    };
+    let weight =
+        axis("wght").map_or_else(|| s.weight.to_string(), |(lo, hi)| css_range(lo, hi, ""));
+    let style = match axis("slnt") {
+        Some((lo, hi)) => format!("oblique {}", css_range(-hi, -lo, "deg")),
+        None => match s.slant {
+            Slant::Upright => "normal".to_owned(),
+            Slant::Italic => "italic".to_owned(),
+            Slant::Oblique => "oblique".to_owned(),
+        },
+    };
+    (weight, style)
+}
+
+/// `name` in kebab case; `font` when nothing is left.
+fn mock_kebab(name: &str) -> String {
+    let mut out = String::new();
+    let mut gap = false;
+    for c in name.chars() {
+        if c.is_alphanumeric() {
+            if gap && !out.is_empty() {
+                out.push('-');
+            }
+            gap = false;
+            out.extend(c.to_lowercase());
+        } else {
+            gap = true;
+        }
+    }
+    if out.is_empty() {
+        "font".to_owned()
+    } else {
+        out
+    }
+}
+
+/// `s` as a single-quoted, ASCII-only JS string.
+fn mock_js_string(s: &str) -> String {
+    let mut out = String::from("'");
+    for c in s.chars() {
+        match c {
+            '\\' | '\'' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_ascii() && !c.is_ascii_control() => out.push(c),
+            c => {
+                let mut units = [0u16; 2];
+                for unit in c.encode_utf16(&mut units) {
+                    out.push_str(&format!("\\u{unit:04X}"));
+                }
+            }
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// `s` as an ASCII-only CSS string: `"` and `\` escaped, a control or
+/// non-ASCII character as a hex escape and a space.
+fn mock_css_ascii_string(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_ascii() && !c.is_ascii_control() => out.push(c),
+            c => out.push_str(&format!("\\{:X} ", u32::from(c))),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// `name`, or `name<sep>2`, … when it is taken; marked taken.
+fn mock_unique(name: String, taken: &mut BTreeSet<String>, sep: &str) -> String {
+    let mut candidate = name.clone();
+    let mut n = 2;
+    while !taken.insert(candidate.clone()) {
+        candidate = format!("{name}{sep}{n}");
+        n += 1;
+    }
+    candidate
+}
+
+/// One mock family's `localFont` call.
+fn mock_local_font(ident: &str, key: &str, base: &str, faces: &[&MockFace]) -> String {
+    let mut out = format!("\nexport const {ident} = localFont({{\n  src: [\n");
+    for f in faces {
+        let (weight, style) = mock_weight_style(f);
+        out.push_str(&format!(
+            "    {{ path: {}, weight: {}, style: {} }},\n",
+            mock_js_string(&format!("{base}/{}.woff2", f.detail.face.postscript_name)),
+            mock_js_string(&weight),
+            mock_js_string(&style),
+        ));
+    }
+    out.push_str(&format!(
+        "  ],\n  variable: {},\n  display: 'swap',\n}});\n",
+        mock_js_string(&format!("--font-{key}"))
+    ));
+    out
+}
+
 fn tag_view(st: &State, t: &Tag) -> Tag {
     let mut t = t.clone();
     t.face_count = st.face_tags.values().filter(|s| s.contains(&t.id)).count() as u32;
@@ -3283,6 +3398,91 @@ impl ExportService for MockApi {
             files,
             css: req.css.then(|| blocks.join("\n")),
         })
+    }
+
+    /// The core's snippet rules (`fm_core::framework_snippet`) over the mock
+    /// faces, grouped by family, with the family's class as the fallback.
+    fn framework_snippet(&self, req: FrameworkSnippetRequest) -> ApiResult<FrameworkSnippet> {
+        if req.faces.is_empty() {
+            return Err(ApiError::invalid("Pick at least one font."));
+        }
+        let st = self.state();
+        let mut families: Vec<(&str, Classification, Vec<&MockFace>)> = Vec::new();
+        for id in &req.faces {
+            let f = st.face(*id)?;
+            let name = f.detail.face.family_name.as_str();
+            match families.iter_mut().find(|(n, _, _)| *n == name) {
+                Some((_, _, faces)) => {
+                    if !faces.iter().any(|x| x.detail.face.id == *id) {
+                        faces.push(f);
+                    }
+                }
+                None => {
+                    let class = st.family(f.detail.face.family)?.classification;
+                    families.push((name, class, vec![f]));
+                }
+            }
+        }
+        let base = match req.fonts_path.as_deref().map(str::trim) {
+            Some(p) if !p.is_empty() => p.trim_end_matches(['/', '\\']),
+            _ => "./fonts",
+        };
+        let (mut keys, mut idents) = (BTreeSet::new(), BTreeSet::new());
+        let mut body = String::new();
+        for (name, class, faces) in &mut families {
+            faces.sort_by(|a, b| {
+                let lightest = |f: &MockFace| {
+                    f.detail
+                        .axes
+                        .iter()
+                        .find(|a| a.tag == "wght")
+                        .map_or(f32::from(f.detail.face.weight), |a| a.min.min(a.max))
+                };
+                lightest(a)
+                    .total_cmp(&lightest(b))
+                    .then((a.detail.face.slant as u8).cmp(&(b.detail.face.slant as u8)))
+            });
+            let key = mock_unique(mock_kebab(name), &mut keys, "-");
+            let fallback = match class {
+                Classification::Serif | Classification::Slab => "serif",
+                Classification::Mono => "monospace",
+                Classification::Script => "cursive",
+                _ => "sans-serif",
+            };
+            let family = mock_css_ascii_string(name);
+            match req.framework {
+                Framework::Tailwind => body.push_str(&format!(
+                    "        {}: [{}, '{fallback}'],\n",
+                    mock_js_string(&key),
+                    mock_js_string(&family)
+                )),
+                Framework::CssVariables => {
+                    let quoted = mock_css_ascii_string(&key);
+                    let prop = &quoted[1..quoted.len() - 1];
+                    body.push_str(&format!("  --font-{prop}: {family}, {fallback};\n"));
+                }
+                Framework::NextLocalFont => {
+                    let mut ident = String::from("font");
+                    for w in name
+                        .split(|c: char| !c.is_ascii_alphanumeric())
+                        .filter(|w| !w.is_empty())
+                    {
+                        ident.push_str(&w[..1].to_ascii_uppercase());
+                        ident.push_str(&w[1..]);
+                    }
+                    let ident = mock_unique(ident, &mut idents, "");
+                    body.push_str(&mock_local_font(&ident, &key, base, faces));
+                }
+            }
+        }
+        let text = match req.framework {
+            Framework::Tailwind => format!(
+                "// tailwind.config.js\nexport default {{\n  theme: {{\n    extend: {{\n      fontFamily: {{\n{body}      }},\n    }},\n  }},\n}};\n"
+            ),
+            Framework::CssVariables => format!(":root {{\n{body}}}\n"),
+            Framework::NextLocalFont => format!("import localFont from 'next/font/local';\n{body}"),
+        };
+        Ok(FrameworkSnippet { text })
     }
 
     fn license_inventory(&self, req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {

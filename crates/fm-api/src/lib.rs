@@ -210,6 +210,9 @@ pub fn types() -> specta::Types {
         export::LicenseInventoryRequest,
         export::LicenseInventory,
         export::GlyphSvgRequest,
+        export::Framework,
+        export::FrameworkSnippetRequest,
+        export::FrameworkSnippet,
         // workflows
         workflows::BriefRequest,
         workflows::Shortlist,

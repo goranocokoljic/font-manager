@@ -12,7 +12,9 @@ use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
     CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
-use fm_api::export::{ExportWebRequest, GlyphSvgRequest, Subset, WebFormat};
+use fm_api::export::{
+    ExportWebRequest, Framework, FrameworkSnippetRequest, GlyphSvgRequest, Subset, WebFormat,
+};
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
     RevertLayoutRequest, SaveLayoutRequest,
@@ -2326,3 +2328,81 @@ const MOCK_CSS_SNAPSHOT: &str = r#"@font-face {
   src: url("SourceSerif4-Regular.woff2") format("woff2"), url("SourceSerif4-Regular.woff") format("woff");
 }
 "#;
+
+#[allow(clippy::expect_used)] // test setup: a failure fails the test
+fn snippet(api: &Arc<dyn Api>, framework: Framework, faces: Vec<FaceId>) -> String {
+    api.framework_snippet(FrameworkSnippetRequest {
+        faces,
+        framework,
+        fonts_path: None,
+    })
+    .expect("snippet")
+    .text
+}
+
+#[test]
+fn framework_snippets_follow_the_core_shape_with_the_family_class_fallback() {
+    let api = api();
+    let faces: Vec<FaceId> = [FamilyId(1), FamilyId(2)]
+        .into_iter()
+        .flat_map(|f| api.get_family(f).unwrap().faces.into_iter().map(|x| x.id))
+        .collect();
+    let tailwind = snippet(&api, Framework::Tailwind, faces.clone());
+    assert!(
+        tailwind.starts_with("// tailwind.config.js\nexport default {\n"),
+        "{tailwind}"
+    );
+    assert!(
+        tailwind.contains("        'inter': ['\"Inter\"', 'sans-serif'],\n"),
+        "{tailwind}"
+    );
+    assert!(
+        tailwind.contains("        'source-serif-4': ['\"Source Serif 4\"', 'serif'],\n"),
+        "{tailwind}"
+    );
+    let css = snippet(&api, Framework::CssVariables, faces.clone());
+    assert!(
+        css.starts_with(":root {\n  --font-inter: \"Inter\", sans-serif;\n"),
+        "{css}"
+    );
+    assert!(
+        css.contains("  --font-source-serif-4: \"Source Serif 4\", serif;\n"),
+        "{css}"
+    );
+    let next = snippet(&api, Framework::NextLocalFont, faces.clone());
+    assert!(
+        next.starts_with("import localFont from 'next/font/local';\n"),
+        "{next}"
+    );
+    assert!(
+        next.contains("export const fontInter = localFont({"),
+        "{next}"
+    );
+    assert!(
+        next.contains("export const fontSourceSerif4 = localFont({"),
+        "{next}"
+    );
+    assert_eq!(
+        next.matches("{ path: './fonts/").count(),
+        faces.len(),
+        "{next}"
+    );
+    assert!(
+        next.contains("  variable: '--font-source-serif-4',\n  display: 'swap',\n"),
+        "{next}"
+    );
+}
+
+#[test]
+fn a_framework_snippet_needs_a_known_face() {
+    let api = api();
+    let req = |faces| FrameworkSnippetRequest {
+        faces,
+        framework: Framework::Tailwind,
+        fonts_path: None,
+    };
+    let empty = api.framework_snippet(req(Vec::new())).unwrap_err();
+    assert_eq!(empty.code, ErrorCode::InvalidRequest);
+    let unknown = api.framework_snippet(req(vec![FaceId(999)])).unwrap_err();
+    assert_eq!(unknown.code, ErrorCode::NotFound);
+}

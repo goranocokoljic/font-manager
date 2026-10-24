@@ -35,8 +35,8 @@ use fm_api::comparison::{
     SaveComparisonRequest,
 };
 use fm_api::export::{
-    ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest,
+    ExportService, ExportWebRequest, ExportWebResponse, FrameworkSnippet, FrameworkSnippetRequest,
+    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest,
 };
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
@@ -76,6 +76,7 @@ use fm_platform::{AppPaths, FontActivator, Os, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
+use crate::framework_snippet::{self, SnippetFace};
 use crate::index::{DeclaredLicense, Index};
 use crate::layout::store::LayoutStore;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
@@ -934,6 +935,34 @@ impl ExportService for CoreApi {
         Ok(ExportWebResponse {
             files: files.iter().map(|p| p.display().to_string()).collect(),
             css,
+        })
+    }
+
+    /// Built from the index alone ([`framework_snippet::snippet`]); no font
+    /// file is read and nothing is written, so a face whose license keeps it
+    /// off the web still gets a snippet. A face listed twice counts once.
+    fn framework_snippet(&self, req: FrameworkSnippetRequest) -> ApiResult<FrameworkSnippet> {
+        if req.faces.is_empty() {
+            return Err(ApiError::invalid("Pick at least one font."));
+        }
+        let mut ids = HashSet::new();
+        let faces = {
+            let index = self.lock();
+            req.faces
+                .into_iter()
+                .filter(|id| ids.insert(*id))
+                .map(|id| {
+                    let f = index.web_export_face(id)?;
+                    Ok(SnippetFace {
+                        style: f.style,
+                        file_stem: f.face.file_stem,
+                        classification: f.classification,
+                    })
+                })
+                .collect::<FmResult<Vec<_>>>()?
+        };
+        Ok(FrameworkSnippet {
+            text: framework_snippet::snippet(req.framework, &faces, req.fonts_path.as_deref()),
         })
     }
 
