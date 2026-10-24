@@ -1162,7 +1162,10 @@
     "panel": "Panel {number}: {name}",
     "noLayout": "Kein Layout",
     "closePanel": "Panel schließen",
-    "closePanelFor": "Panel {number} schließen"
+    "closePanelFor": "Panel {number} schließen",
+    "printPanel": "Drucken…",
+    "printPanelFor": "Panel {number} drucken",
+    "printTitle": "Nur dieses Panel drucken oder im Druckdialog als PDF sichern"
   },
   "conflicts": {
     "title": "Schriftkonflikte",

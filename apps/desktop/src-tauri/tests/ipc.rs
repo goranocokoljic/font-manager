@@ -746,6 +746,19 @@ fn scan_progress_is_forwarded_to_the_webview() {
 }
 
 #[test]
+fn print_page_opens_the_print_dialog_of_the_calling_webview_and_opens_no_window() {
+    use tauri::Manager;
+    let (app, webview) = app().unwrap();
+    let body = send(&webview, "print_page", serde_json::json!({}))
+        .unwrap()
+        .expect("print_page succeeds");
+    let value: serde_json::Value = body.deserialize().unwrap();
+    assert!(value.is_null(), "{value}");
+    // It prints the page that asked; no print window of its own.
+    assert_eq!(app.webview_windows().len(), 1);
+}
+
+#[test]
 fn open_help_opens_the_page_in_the_help_window() {
     use tauri::Manager;
     let (app, webview) = app().unwrap();

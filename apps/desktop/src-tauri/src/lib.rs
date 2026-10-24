@@ -49,7 +49,7 @@ use fm_core::lifecycle::{self, LaunchWindow};
 use fm_core::{CoreApi, SettingsStore};
 use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, Webview, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
@@ -873,6 +873,17 @@ async fn set_shell_locale<R: Runtime>(app: AppHandle<R>, locale: String) -> ApiR
     shell_text::apply(&app, &locale)
 }
 
+/// Opens the OS print dialog for the calling webview's page (Pairing Studio's
+/// "Print...", E24.4). The page's print stylesheet decides what prints; the
+/// dialog's own "Save as PDF" / "Print to File" makes the PDF on every OS.
+#[tauri::command]
+async fn print_page<R: Runtime>(webview: Webview<R>) -> ApiResult<()> {
+    webview.print().map_err(|e| {
+        ApiError::new(ErrorCode::Io, "The print dialog could not be opened.")
+            .with_detail(e.to_string())
+    })
+}
+
 /// Registers the shared state and every command on a builder.
 pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri::Builder<R> {
     setup_state(builder, AppState::new(api))
@@ -1014,6 +1025,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             open_help,
             open_url,
             set_shell_locale,
+            print_page,
             updater::update_support,
             updater::check_for_update,
             updater::install_update

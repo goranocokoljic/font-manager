@@ -1162,7 +1162,10 @@
     "panel": "Panel {number}: {name}",
     "noLayout": "No layout",
     "closePanel": "Close panel",
-    "closePanelFor": "Close panel {number}"
+    "closePanelFor": "Close panel {number}",
+    "printPanel": "Print…",
+    "printPanelFor": "Print panel {number}",
+    "printTitle": "Print this panel alone, or save it as PDF from the print dialog"
   },
   "conflicts": {
     "title": "Font conflicts",

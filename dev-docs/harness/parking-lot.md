@@ -211,6 +211,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E24.2 #157] apps/desktop/src/components/BlockFontPicker.vue:195 — no `forced-colors` handling app-wide; the active combobox option is marked only by background and box-shadow, which Windows High Contrast removes.
 - [E24.3 #158] apps/desktop/src/stores/studio.ts:123 — `setBlockFace` answering after `closePanel` leaves an orphan `p<k>/…` block-font key; panel keys are never reused, so nothing shows.
 - [E24.3 #158] apps/desktop/src/views/HomeView.vue:96 — the layout picker's preset fallback is written twice (HomeView and StudioPanel); not a defect yet.
+- [E24.4 #159] apps/desktop/src/locales/de.json:1164 — German "Panel schließen" is not a contiguous part of its accessible name "Panel {number} schließen" (WCAG 2.5.3 Label in Name).
+- [E24.4 #159] apps/desktop/src/components/LayoutBlock.vue:377 — the hover size-badge has no `fm-no-print` class; it stays off paper only through `opacity: 0` when the block is not hovered or focused.
 - [E21.3 #145] crates/fm-core/src/api/tests.rs:2966 — the E21.1 single-family specimen has no test for an unreadable face file.
 - [E21.3 #145] crates/fm-platform/src/linux/trash.rs:253 — `civil_from_days` is a third copy of the days-to-date algorithm (also `layout::store::iso_utc` and `specimen::utc_date` in fm-core).
 - [E22.1 #146] crates/fm-core/src/catalog.rs:189 — `reqwest::blocking` panics inside a tokio runtime; when E22.2 wires Tauri/rmcp, `refresh_catalog` must run under `spawn_blocking`.

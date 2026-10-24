@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { nextTick, ref } from 'vue';
 import { useClient } from '../api/client';
 import type { ApiError, FaceId, FaceSummary, FamilyHit } from '../api/types';
 import {
@@ -42,6 +42,10 @@ export function layoutsOf(panel: number): TextLayoutsStore {
  * first is the library's layout (`FIRST_PANEL`); each other one has its own text layouts
  * store and its own block fonts (`blockScope`). The panels live here, so they are as the
  * user left them when the studio opens again in the same session.
+ *
+ * "Print..." on a panel (E24.4) makes it the print target (`printPanel`) and opens the OS
+ * print dialog through the client. The print stylesheet (styles/print.css) prints only the
+ * target; the target stays until another panel prints, as it changes nothing on screen.
  */
 export const useStudioStore = defineStore('studio', () => {
   /** Block fonts by `layoutId#index`. */
@@ -94,7 +98,28 @@ export const useStudioStore = defineStore('studio', () => {
       Object.entries(blockFaces.value).filter(([k]) => !k.startsWith(prefix)),
     );
     if (searchFor.value?.startsWith(prefix)) searchFor.value = null;
+    if (printPanel.value === panel) printPanel.value = null;
+    if (printError.value?.panel === panel) printError.value = null;
     disposePanelLayoutsStore(panel);
+  }
+
+  /** The panel the print stylesheet prints: the one whose "Print..." was pressed last. */
+  const printPanel = ref<number | null>(null);
+  /** Why the last print failed, with its panel; null when it opened. */
+  const printError = ref<{ panel: number; error: ApiError } | null>(null);
+
+  /** Prints panel `panel` alone: marks it the print target, then opens the print dialog. */
+  async function print(panel: number): Promise<void> {
+    if (!panels.value.includes(panel)) return;
+    printPanel.value = panel;
+    printError.value = null;
+    // The page must carry the mark before the webview lays it out for print.
+    await nextTick();
+    try {
+      await useClient().printPage();
+    } catch (e) {
+      printError.value = { panel, error: e as ApiError };
+    }
   }
 
   /** The face block `index` of layout `layoutId` is set in; null uses the panel's. */
@@ -154,6 +179,9 @@ export const useStudioStore = defineStore('studio', () => {
     panels,
     addPanel,
     closePanel,
+    printPanel,
+    printError,
+    print,
     blockFaces,
     searchFor,
     query,

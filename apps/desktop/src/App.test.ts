@@ -61,6 +61,20 @@ describe('API client', () => {
     await expect(tauriClient.getAppInfo()).resolves.toEqual(mockAppInfo);
     expect(invoke).toHaveBeenCalledWith('get_app_info');
   });
+
+  it('prints through the print_page command in the app', async () => {
+    invoke.mockResolvedValue(null);
+    await tauriClient.printPage();
+    expect(invoke).toHaveBeenCalledTimes(1);
+    expect(invoke).toHaveBeenCalledWith('print_page');
+  });
+
+  it("prints with the browser's own dialog in browser mode", async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    await mockClient.printPage();
+    expect(print).toHaveBeenCalledTimes(1);
+    print.mockRestore();
+  });
 });
 
 describe('app store', () => {
