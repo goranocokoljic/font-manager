@@ -197,3 +197,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E19.3 #135] apps/desktop/src/App.vue:84 — `setShellLocale('ar-XB')` is refused by the shell (src-tauri/tests/ipc.rs:862), so under the pseudo-locale the native Help menu and tray keep their previous language.
 - [E19.3 #135] apps/desktop/src/components/InspectorFeatures.vue:176 — the switch knob's slide transition has no `prefers-reduced-motion` override.
+- [E20.4 #140] apps/desktop/src/stores/features.ts:44 — preview rows still build their `font-feature-settings` string in the frontend (`settings()`), which matches fm-core's Developer-tab string only because both sort by tag.

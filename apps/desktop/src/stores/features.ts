@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { reactive } from 'vue';
 import { useClient } from '../api/client';
-import type { FaceId, FeatureInfo } from '../api/types';
+import type { FaceId, FeatureInfo, FeatureSetting } from '../api/types';
 
 /**
  * OpenType features switched in the inspector's Features tab, per face, while
@@ -49,13 +49,17 @@ export const useFeaturesStore = defineStore('features', () => {
       .join(', ');
   }
 
+  /** The switches of `face` that differ from the default, for `cssValues`. */
+  function switches(face: FaceId): FeatureSetting[] {
+    const own = changed.get(face) ?? {};
+    return Object.keys(own).map((tag) => ({ tag, on: own[tag]! }));
+  }
+
   /** "Copy CSS": `font-feature-settings` for the features of `face` switched from their default (fm-core). */
   async function css(face: FaceId): Promise<string> {
-    const own = changed.get(face) ?? {};
-    const features = Object.keys(own).map((tag) => ({ tag, on: own[tag]! }));
-    const r = await useClient().cssValues({ face, variations: [], features });
+    const r = await useClient().cssValues({ face, variations: [], features: switches(face) });
     return r.featureSettings;
   }
 
-  return { isOn, set, reset, isChanged, settings, css };
+  return { isOn, set, reset, isChanged, settings, switches, css };
 });

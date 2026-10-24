@@ -314,8 +314,14 @@
       "info": "Info",
       "axes": "Axes",
       "features": "Features",
-      "glyphs": "Glyphs"
+      "glyphs": "Glyphs",
+      "developer": "Developer"
     }
+  },
+  "developer": {
+    "noFace": "Select a face to see its CSS.",
+    "hint": "The CSS for the axes and features set in the Axes and Features tabs.",
+    "copyLabel": "Copy the CSS snippet"
   },
   "search": {
     "label": "Search fonts",

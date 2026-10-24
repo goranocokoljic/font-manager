@@ -314,8 +314,14 @@
       "info": "Infos",
       "axes": "Achsen",
       "features": "Funktionen",
-      "glyphs": "Glyphen"
+      "glyphs": "Glyphen",
+      "developer": "Entwickler"
     }
+  },
+  "developer": {
+    "noFace": "Wähle einen Schnitt, um sein CSS zu sehen.",
+    "hint": "Das CSS für die Achsen und Features aus den Tabs Achsen und Features.",
+    "copyLabel": "CSS-Ausschnitt kopieren"
   },
   "search": {
     "label": "Schriften suchen",
