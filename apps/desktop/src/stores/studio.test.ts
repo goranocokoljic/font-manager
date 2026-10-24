@@ -32,13 +32,27 @@ describe('studio store', () => {
     expect(studio.results.map((h) => h.family.name)).toContain(mono.familyName);
   });
 
-  it('drops the answer to an older search', async () => {
+  it('drops the answer to an older search that comes back last', async () => {
+    const real = client.search.bind(client);
+    let releaseOlder!: () => void;
+    const olderHeld = new Promise<void>((r) => (releaseOlder = r));
+    vi.spyOn(client, 'search')
+      .mockImplementationOnce(async (req) => {
+        await olderHeld;
+        return real(req);
+      })
+      .mockImplementation(real);
     const studio = useStudioStore();
-    const older = studio.search('book', 0, 'mono');
-    await studio.search('book', 1, 'inter');
+    const older = studio.search('book', 0, mono.familyName);
+    await studio.search('book', 1, inter.familyName);
+    const newer = studio.results.map((h) => h.family.name);
+    expect(newer).toContain(inter.familyName);
+    expect(newer).not.toContain(mono.familyName);
+    // The older answer arrives after the newer one: it must not replace it.
+    releaseOlder();
     await older;
+    expect(studio.results.map((h) => h.family.name)).toEqual(newer);
     expect(studio.searchFor).toBe('book#1');
-    expect(studio.results.map((h) => h.family.name)).not.toContain(mono.familyName);
   });
 
   it('sets a block in the best face of a family hit, per layout and index', async () => {
