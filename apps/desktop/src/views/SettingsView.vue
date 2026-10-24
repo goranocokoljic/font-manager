@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { FullSettings } from '../api/client';
 import type { Language, SettingsUpdate } from '../api/types';
+import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import {
   CATALOGS,
@@ -33,6 +34,7 @@ const sections = [
   { id: 'sources' },
   { id: 'activation' },
   { id: 'appearance' },
+  { id: 'catalogs' },
   { id: 'advanced' },
   { id: 'about' },
 ] as const;
@@ -96,6 +98,8 @@ onMounted(async () => {
 onBeforeUnmount(() => sources.stop());
 
 const s = computed(() => store.settings);
+/** Online catalogs: the Adobe Fonts entry shows its note when opened. */
+const adobeFontsOpen = ref(false);
 /** The last failure of any store this window reads. */
 const error = computed(() => store.error ?? sources.error ?? app.error);
 
@@ -368,6 +372,21 @@ function chooseLanguage(e: Event): void {
             </select>
           </label>
           <p id="language-hint" class="note">{{ t('language.hint') }}</p>
+        </template>
+
+        <template v-else-if="current === 'catalogs'">
+          <h2 class="heading">{{ sectionTitle('catalogs') }}</h2>
+          <p class="note">{{ t('settings.catalogs.note') }}</p>
+          <button
+            type="button"
+            class="button"
+            aria-controls="settings-adobe-fonts"
+            :aria-expanded="adobeFontsOpen"
+            @click="adobeFontsOpen = !adobeFontsOpen"
+          >
+            {{ t('catalogs.adobeFonts.name') }}
+          </button>
+          <AdobeFontsNote v-if="adobeFontsOpen" id="settings-adobe-fonts" :level="3" />
         </template>
 
         <template v-else-if="current === 'advanced' && s">

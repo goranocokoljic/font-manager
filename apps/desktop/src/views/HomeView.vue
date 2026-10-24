@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { formatApiVersion } from '../api/version';
+import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
 import FilterChips from '../components/FilterChips.vue';
@@ -13,6 +14,7 @@ import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import MainLayout from '../components/MainLayout.vue';
+import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
@@ -39,6 +41,7 @@ import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
 import { useSettingsStore } from '../stores/settings';
@@ -66,6 +69,7 @@ const compare = useCompareStore();
 const settings = useSettingsStore();
 const densityLabel = computed(() => t(`home.density.${settings.density}`));
 const quick = useQuickCollectionStore();
+const catalogs = useCatalogsStore();
 const tagging = useTaggingStore();
 const route = useRoute();
 const router = useRouter();
@@ -367,7 +371,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.online'];
+const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 </script>
 
 <template>
@@ -382,10 +386,15 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.on
       <ul class="groups">
         <li v-for="group in groups" :key="group" class="group">{{ t(group) }}</li>
       </ul>
+      <OnlineCatalogsSidebar />
     </template>
 
     <template #list>
-      <QuickCollectionReview v-if="quick.open" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+      <AdobeFontsNote v-if="catalogs.open === 'adobeFonts'" :level="1" />
+      <QuickCollectionReview
+        v-else-if="quick.open"
+        :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+      />
       <template v-else>
         <header class="toolbar">
           <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>

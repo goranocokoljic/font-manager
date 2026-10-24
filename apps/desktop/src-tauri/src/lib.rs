@@ -841,6 +841,21 @@ async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()>
     help::open(&app, &page)
 }
 
+/// Opens an `https://` address in the default browser (the "Open Adobe Fonts"
+/// link); `fm_platform::open_url` refuses every other scheme.
+#[tauri::command]
+async fn open_url(url: String) -> ApiResult<()> {
+    fm_platform::open_url(&url).map_err(|e| match e {
+        fm_platform::OpenUrlError::NotHttps(_) => {
+            ApiError::invalid("Only https addresses can be opened.").with_detail(e.to_string())
+        }
+        fm_platform::OpenUrlError::Launch(_) => {
+            ApiError::new(ErrorCode::Io, "The browser could not be opened.")
+                .with_detail(e.to_string())
+        }
+    })
+}
+
 /// Shows the native shell's labels (Help menu, tray) in the UI's locale; the
 /// UI calls it at start and when the Language setting changes.
 #[tauri::command]
@@ -986,6 +1001,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             update_settings,
             get_app_folders,
             open_help,
+            open_url,
             set_shell_locale,
             updater::update_support,
             updater::check_for_update,

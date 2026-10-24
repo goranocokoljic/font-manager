@@ -2589,6 +2589,17 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       if (typeof window !== 'undefined') window.open(`/help/${page}.html`, '_blank');
     },
+    // Browser mode: a new tab stands in for the default browser; like
+    // fm_platform::open_url, only https addresses open.
+    openUrl: async (url) => {
+      if (!/^https:\/\/[^/?#@:\s]+[^\s"'`\\<>]*$/.test(url))
+        throw {
+          code: 'invalidRequest' as const,
+          message: 'Only https addresses can be opened.',
+          detail: null,
+        };
+      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener');
+    },
     // Browser mode has no native menu or tray to relabel; the last locale is kept
     // so tests can see what the shell was told.
     setShellLocale: async (locale) => {

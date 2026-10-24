@@ -3,12 +3,13 @@
 //! The one place with OS-specific code: the `FontActivator` trait with one
 //! implementation per OS under `src/{windows,macos,linux}/`, the app-paths
 //! helpers, the file-system calls that differ per OS (symbolic links, the
-//! trash), the tray, the login entry, how the app was installed (updates)
+//! trash), the tray, the login entry, the default browser, how the app was installed (updates)
 //! and the IPC transport. Platform differences are
 //! documented in an ADR, never hidden in `cfg` branches elsewhere.
 
 pub mod activator;
 pub mod autostart;
+pub mod browser;
 pub mod fs;
 mod linux;
 mod macos;
@@ -23,6 +24,7 @@ pub use activator::{
     MockActivator, Mode, Outcome, OutcomeStatus, Registration,
 };
 pub use autostart::{AUTOSTART_ARG, Autostart, MockAutostart};
+pub use browser::{OpenCommand, OpenUrlError, open_url};
 #[cfg(target_os = "linux")]
 pub use linux::{LinuxActivator, LinuxAutostart};
 #[cfg(target_os = "macos")]
