@@ -1049,6 +1049,34 @@ export type FontSource = {
 	hash: string,
 };
 
+/**  A front-end framework a snippet is written for (E20.5). */
+export type Framework = 
+/**  A `theme.extend.fontFamily` entry for `tailwind.config.js`. */
+"tailwind" | 
+/**  CSS custom properties on `:root`. */
+"cssVariables" | 
+/**  A `localFont` call from `next/font/local`. */
+"nextLocalFont";
+
+/**  A framework snippet. */
+export type FrameworkSnippet = {
+	/**  The snippet's text. */
+	text: string,
+};
+
+/**  A snippet that uses the faces in a framework. Nothing is written. */
+export type FrameworkSnippetRequest = {
+	/**  The faces; at least one. */
+	faces: FaceId[],
+	/**  The framework. */
+	framework: Framework,
+	/**
+	 *  The folder the web fonts are in, as the project sees it; `./fonts`
+	 *  when absent. Only `NextLocalFont` uses it.
+	 */
+	fontsPath?: string | null,
+};
+
 /**  A Unicode block and how many of the listed characters it holds. */
 export type GlyphBlock = {
 	/**  The block name from the Unicode block table (`Cyrillic`). */

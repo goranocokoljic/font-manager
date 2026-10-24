@@ -1,5 +1,5 @@
-//! Export service: web fonts with CSS, the license inventory, and one glyph's
-//! outline as SVG.
+//! Export service: web fonts with CSS, framework snippets, the license
+//! inventory, and one glyph's outline as SVG.
 
 use serde::{Deserialize, Serialize};
 
@@ -102,10 +102,48 @@ pub struct GlyphSvgRequest {
     pub variations: Vec<AxisValue>,
 }
 
-/// Web export, license reports and glyph outlines.
+/// A front-end framework a snippet is written for (E20.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Framework {
+    /// A `theme.extend.fontFamily` entry for `tailwind.config.js`.
+    Tailwind,
+    /// CSS custom properties on `:root`.
+    CssVariables,
+    /// A `localFont` call from `next/font/local`.
+    NextLocalFont,
+}
+
+/// A snippet that uses the faces in a framework. Nothing is written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkSnippetRequest {
+    /// The faces; at least one.
+    pub faces: Vec<FaceId>,
+    /// The framework.
+    pub framework: Framework,
+    /// The folder the web fonts are in, as the project sees it; `./fonts`
+    /// when absent. Only `NextLocalFont` uses it.
+    #[serde(default)]
+    pub fonts_path: Option<String>,
+}
+
+/// A framework snippet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FrameworkSnippet {
+    /// The snippet's text.
+    pub text: String,
+}
+
+/// Web export, framework snippets, license reports and glyph outlines.
 pub trait ExportService {
     /// Write web fonts (and CSS) to a folder.
     fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse>;
+    /// A Tailwind, CSS custom property or Next.js `localFont` snippet for
+    /// the faces' families, as text. An empty face list is `InvalidRequest`,
+    /// an unknown face `NotFound`.
+    fn framework_snippet(&self, req: FrameworkSnippetRequest) -> ApiResult<FrameworkSnippet>;
     /// The license inventory.
     fn license_inventory(&self, req: LicenseInventoryRequest) -> ApiResult<LicenseInventory>;
     /// The outline of one character as SVG text, upright, in font units: the

@@ -42,28 +42,11 @@ pub fn font_face(
     formats: &[WebFormat],
     code_points: Option<&[u32]>,
 ) -> String {
-    let axis = |tag: &str| {
-        style
-            .axes
-            .iter()
-            .find(|a| a.tag == tag && a.min.is_finite() && a.max.is_finite())
-            .map(|a| (a.min.min(a.max), a.min.max(a.max)))
-    };
     let mut out = String::from("@font-face {\n");
     out.push_str(&format!("  font-family: {};\n", string(&style.family)));
-    let font_style = match axis("slnt") {
-        Some((lo, hi)) => format!("oblique {}", range(-hi, -lo, "deg")),
-        None => match style.slant {
-            Slant::Upright => "normal".to_owned(),
-            Slant::Italic => "italic".to_owned(),
-            Slant::Oblique => "oblique".to_owned(),
-        },
-    };
-    out.push_str(&format!("  font-style: {font_style};\n"));
-    let weight =
-        axis("wght").map_or_else(|| style.weight.to_string(), |(lo, hi)| range(lo, hi, ""));
-    out.push_str(&format!("  font-weight: {weight};\n"));
-    if let Some((lo, hi)) = axis("wdth") {
+    out.push_str(&format!("  font-style: {};\n", font_style(style)));
+    out.push_str(&format!("  font-weight: {};\n", font_weight(style)));
+    if let Some((lo, hi)) = axis(style, "wdth") {
         out.push_str(&format!("  font-stretch: {};\n", range(lo, hi, "%")));
     }
     out.push_str("  font-display: swap;\n");
@@ -84,6 +67,34 @@ pub fn font_face(
     }
     out.push_str("}\n");
     out
+}
+
+/// The `font-style` of `style`: the negated `slnt` range of a variable
+/// face, else its slant (`normal`, `italic`, `oblique`).
+pub fn font_style(style: &FaceStyle) -> String {
+    match axis(style, "slnt") {
+        Some((lo, hi)) => format!("oblique {}", range(-hi, -lo, "deg")),
+        None => match style.slant {
+            Slant::Upright => "normal".to_owned(),
+            Slant::Italic => "italic".to_owned(),
+            Slant::Oblique => "oblique".to_owned(),
+        },
+    }
+}
+
+/// The `font-weight` of `style`: the `wght` range of a variable face
+/// (`100 900`), else its weight class.
+pub fn font_weight(style: &FaceStyle) -> String {
+    axis(style, "wght").map_or_else(|| style.weight.to_string(), |(lo, hi)| range(lo, hi, ""))
+}
+
+/// The finite range of the axis `tag` of `style`, low end first.
+fn axis(style: &FaceStyle, tag: &str) -> Option<(f32, f32)> {
+    style
+        .axes
+        .iter()
+        .find(|a| a.tag == tag && a.min.is_finite() && a.max.is_finite())
+        .map(|a| (a.min.min(a.max), a.min.max(a.max)))
 }
 
 /// The stylesheet of `blocks`, one blank line between them.

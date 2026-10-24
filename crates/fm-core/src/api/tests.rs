@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
-use fm_api::export::{Subset, WebFormat};
+use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
 use fm_api::library::{
     FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
     ProblemKind, TrashMoveStatus,
@@ -1597,6 +1597,143 @@ const WEB_CSS_SNAPSHOT: &str = r#"@font-face {
   font-display: swap;
   src: url("Asap-SemiBold.woff2") format("woff2"), url("Asap-SemiBold.woff") format("woff");
 }
+"#;
+
+fn snippet(
+    lib: &Lib,
+    framework: Framework,
+    faces: Vec<FaceId>,
+    fonts_path: Option<&str>,
+) -> String {
+    lib.api
+        .framework_snippet(FrameworkSnippetRequest {
+            faces,
+            framework,
+            fonts_path: fonts_path.map(str::to_owned),
+        })
+        .expect("snippet")
+        .text
+}
+
+#[test]
+fn framework_snippets_name_the_fixture_families_with_their_class_fallback() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-framework-snippet",
+        &[
+            "google-repo/castoro/Castoro[wght].ttf",
+            "google-repo/inconsolata/Inconsolata-SemiExpandedBold.ttf",
+            "google-repo/clickerscript/ClickerScript-Regular.ttf",
+        ],
+    );
+    let faces = vec![
+        face_in(&lib, "Castoro", "Castoro[wght].ttf"),
+        face_in(&lib, "Inconsolata", "Inconsolata-SemiExpandedBold.ttf"),
+        face_in(&lib, "Clicker Script", "ClickerScript-Regular.ttf"),
+        face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
+    ];
+    let tailwind = snippet(&lib, Framework::Tailwind, faces.clone(), None);
+    assert_eq!(tailwind, TAILWIND_SNAPSHOT, "{tailwind}");
+    let css = snippet(&lib, Framework::CssVariables, faces, None);
+    assert_eq!(css, CSS_VARIABLES_SNAPSHOT, "{css}");
+}
+
+#[test]
+fn a_next_local_font_snippet_lists_static_and_variable_faces() {
+    let (lib, _, _) = Lib::scanned("api-framework-snippet-next");
+    let faces = vec![
+        face_in(&lib, "Archivo", "Archivo-Bold.woff2"),
+        face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
+        face_in(&lib, "Archivo", "Archivo-SemiBold.woff2"),
+        // Listed twice: one entry.
+        face_in(&lib, "Archivo", "Archivo-Bold.woff2"),
+    ];
+    let next = snippet(&lib, Framework::NextLocalFont, faces.clone(), None);
+    assert_eq!(next, NEXT_LOCAL_FONT_SNAPSHOT, "{next}");
+    let elsewhere = snippet(
+        &lib,
+        Framework::NextLocalFont,
+        faces,
+        Some("../public/fonts/"),
+    );
+    assert_eq!(
+        elsewhere,
+        NEXT_LOCAL_FONT_SNAPSHOT.replace("'./fonts/", "'../public/fonts/")
+    );
+}
+
+#[test]
+fn a_framework_snippet_needs_a_known_face() {
+    let (lib, _, _) = Lib::scanned("api-framework-snippet-bad");
+    for framework in [
+        Framework::Tailwind,
+        Framework::CssVariables,
+        Framework::NextLocalFont,
+    ] {
+        let empty = lib
+            .api
+            .framework_snippet(FrameworkSnippetRequest {
+                faces: Vec::new(),
+                framework,
+                fonts_path: None,
+            })
+            .expect_err("no faces");
+        assert_eq!(empty.code, ErrorCode::InvalidRequest);
+        let unknown = lib
+            .api
+            .framework_snippet(FrameworkSnippetRequest {
+                faces: vec![FaceId(999_999)],
+                framework,
+                fonts_path: None,
+            })
+            .expect_err("unknown face");
+        assert_eq!(unknown.code, ErrorCode::NotFound);
+    }
+}
+
+/// The Tailwind snippet of [`framework_snippets_name_the_fixture_families_with_their_class_fallback`].
+const TAILWIND_SNAPSHOT: &str = r#"// tailwind.config.js
+export default {
+  theme: {
+    extend: {
+      fontFamily: {
+        'castoro': ['"Castoro"', 'serif'],
+        'inconsolata': ['"Inconsolata"', 'monospace'],
+        'clicker-script': ['"Clicker Script"', 'cursive'],
+        'asap-sharp': ['"Asap Sharp"', 'sans-serif'],
+      },
+    },
+  },
+};
+"#;
+
+/// The CSS variables of [`framework_snippets_name_the_fixture_families_with_their_class_fallback`].
+const CSS_VARIABLES_SNAPSHOT: &str = r#":root {
+  --font-castoro: "Castoro", serif;
+  --font-inconsolata: "Inconsolata", monospace;
+  --font-clicker-script: "Clicker Script", cursive;
+  --font-asap-sharp: "Asap Sharp", sans-serif;
+}
+"#;
+
+/// The `localFont` calls of [`a_next_local_font_snippet_lists_static_and_variable_faces`].
+const NEXT_LOCAL_FONT_SNAPSHOT: &str = r#"import localFont from 'next/font/local';
+
+export const fontArchivo = localFont({
+  src: [
+    { path: './fonts/Archivo-SemiBold.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/Archivo-Bold.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-archivo',
+  display: 'swap',
+});
+
+export const fontAsapSharp = localFont({
+  src: [
+    { path: './fonts/AsapSharp-Regular.woff2', weight: '100 900', style: 'normal' },
+  ],
+  variable: '--font-asap-sharp',
+  display: 'swap',
+});
 "#;
 
 #[test]
