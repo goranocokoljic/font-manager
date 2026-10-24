@@ -13,6 +13,7 @@ mod dwrite;
 #[cfg(windows)]
 #[allow(unsafe_code)] // IFileOperation and a hand-written COM sink; every block has a SAFETY note.
 mod file_op;
+mod open_url;
 pub(crate) mod paths;
 #[cfg(windows)]
 #[allow(unsafe_code)] // Win32 registry FFI; every block has a SAFETY note.
@@ -26,6 +27,7 @@ mod tray;
 pub use activator::{FONTS_KEY, LEDGER_KEY, WindowsActivator};
 #[cfg(windows)]
 pub use autostart::{RUN_KEY, WindowsAutostart};
+pub(crate) use open_url::command as open_url_command;
 #[cfg(windows)]
 pub(crate) use trash::RecycleBin;
 #[cfg_attr(not(windows), allow(unused_imports))]

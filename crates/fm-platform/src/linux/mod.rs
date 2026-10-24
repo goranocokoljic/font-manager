@@ -13,6 +13,7 @@ mod autostart;
 #[cfg(unix)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod fontconfig;
+mod open_url;
 pub(crate) mod paths;
 #[cfg(target_os = "linux")]
 mod trash;
@@ -24,6 +25,7 @@ pub use activator::LinuxActivator;
 pub use autostart::LinuxAutostart;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 pub(crate) use autostart::{FLATPAK_INFO, in_flatpak, system_entry};
+pub(crate) use open_url::command as open_url_command;
 #[cfg(target_os = "linux")]
 pub(crate) use trash::FreedesktopTrash;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]

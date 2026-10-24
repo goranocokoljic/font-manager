@@ -1048,8 +1048,12 @@
       "sources": "Sources",
       "activation": "Activation",
       "appearance": "Appearance",
+      "catalogs": "Online catalogs",
       "advanced": "Advanced",
       "about": "About"
+    },
+    "catalogs": {
+      "note": "Font catalogs on the web. Open one to see what the app can do with it."
     },
     "sources": {
       "note": "Folders the library indexes in place. Removing a source forgets its fonts; the files stay where they are.",
@@ -1234,5 +1238,13 @@
     "resumeLabel": "Resume {name}",
     "removeLabel": "Remove {name} from the library",
     "removeTitle": "Remove from the library. The files stay where they are."
+  },
+  "catalogs": {
+    "adobeFonts": {
+      "name": "Adobe Fonts",
+      "note": "Adobe Fonts are delivered encrypted through Creative Cloud, so no third-party app can manage them. Activate them in the Creative Cloud app.",
+      "open": "Open Adobe Fonts",
+      "openTitle": "Opens fonts.adobe.com in your browser"
+    }
   }
 }

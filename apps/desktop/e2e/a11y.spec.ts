@@ -59,7 +59,14 @@ async function unnamedControls(page: Page): Promise<string[]> {
   return missing;
 }
 
-const SETTINGS_TABS = ['Sources', 'Activation', 'Appearance', 'Advanced', 'About'];
+const SETTINGS_TABS = [
+  'Sources',
+  'Activation',
+  'Appearance',
+  'Online catalogs',
+  'Advanced',
+  'About',
+];
 
 test('every interactive element on the main window has a name', async ({ page }) => {
   await open(page);

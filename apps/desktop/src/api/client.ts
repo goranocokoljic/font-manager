@@ -248,6 +248,8 @@ export interface FmClient {
   pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
+  /** Opens an `https://` address in the default browser; other schemes are refused. */
+  openUrl(url: string): Promise<void>;
   /**
    * Tells the native shell (Help menu, tray) which catalog locale the UI shows, so
    * its labels follow the Language setting.
@@ -347,6 +349,7 @@ export const tauriClient: FmClient = {
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
+  openUrl: (url) => invoke<void>('open_url', { url }),
   setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
   updateSupport: () => invoke<UpdateSupport>('update_support'),
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),

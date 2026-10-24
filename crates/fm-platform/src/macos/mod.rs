@@ -15,6 +15,7 @@ mod autostart;
 mod coretext;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod ledger;
+mod open_url;
 pub(crate) mod paths;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)] // Objective-C runtime and CoreFoundation FFI; every block has a SAFETY note.
@@ -27,6 +28,7 @@ pub use activator::MacosActivator;
 pub use autostart::MacosAutostart;
 #[cfg(target_os = "macos")]
 pub use ledger::LEDGER_FILE;
+pub(crate) use open_url::command as open_url_command;
 #[cfg(target_os = "macos")]
 pub(crate) use trash::FinderTrash;
 #[cfg_attr(not(target_os = "macos"), allow(unused_imports))]

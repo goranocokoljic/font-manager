@@ -802,6 +802,21 @@ fn open_help_of_an_unknown_page_is_an_api_error_and_opens_nothing() {
     );
 }
 
+#[test]
+fn open_url_refuses_every_address_but_https() {
+    let (_app, webview) = app().unwrap();
+    for url in [
+        "file:///etc/passwd",
+        "http://fonts.adobe.com",
+        "javascript:alert(1)",
+    ] {
+        let err = send(&webview, "open_url", serde_json::json!({ "url": url }))
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(err["code"], "invalidRequest", "{url}: {err}");
+    }
+}
+
 // muda builds menus only on the main thread on macOS, and test threads are not
 // it; the mock runtime builds them inline on Windows and Linux.
 #[cfg(not(target_os = "macos"))]
