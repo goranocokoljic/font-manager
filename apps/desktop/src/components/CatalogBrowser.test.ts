@@ -3,9 +3,11 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient } from '../api/mock';
+import { poolSize } from '../list/virtual';
 import { FaceLoader, catalogFamily, setFaceLoader } from '../preview/faceLoader';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
-import { usePreviewStore } from '../stores/preview';
+import { previewRowHeight, usePreviewStore } from '../stores/preview';
+import { useSettingsStore } from '../stores/settings';
 import CatalogBrowser from './CatalogBrowser.vue';
 import OnlineCatalogsSidebar from './OnlineCatalogsSidebar.vue';
 
@@ -162,5 +164,53 @@ describe('CatalogBrowser', () => {
     await flushPromises();
     expect(w.get('[role="alert"]').text()).toBe('Google Fonts could not be refreshed.');
     expect(w.find('[data-testid="catalog-offline"]').exists()).toBe(false);
+  });
+
+  it('renders only the rows on screen of a long list and reads its pages as it scrolls', async () => {
+    const client = createMockClient({ catalog: 'offline', catalogFamilies: 996 });
+    const offsets: number[] = [];
+    setClient({
+      ...client,
+      listCatalogFamilies: (req) => {
+        offsets.push(req.page?.offset ?? 0);
+        return client.listCatalogFamilies(req);
+      },
+    });
+    const store = useCatalogsStore();
+    await store.load();
+    store.show('googleFonts');
+    const w = mount(CatalogBrowser, { props: { overscan: 2 }, attachTo: document.body });
+    wrappers.push(w);
+    await flushPromises();
+    expect(store.total).toBe(1000);
+    expect(offsets, 'only the first page is read').toEqual([0]);
+
+    const rowPx = previewRowHeight(
+      usePreviewStore().settingsFor(CATALOG_VIEW),
+      useSettingsStore().density,
+    );
+    const slots = () => w.findAll('[role="listitem"]');
+    // 600 px fallback viewport: the rows on screen, one partly visible, 2 overscan each side.
+    expect(slots()).toHaveLength(poolSize(600, rowPx, 2));
+    expect(slots()[0]!.attributes('aria-setsize')).toBe('1000');
+    expect(w.get('.spacer').attributes('style')).toContain(`height: ${1000 * rowPx}px`);
+
+    const scrollTo = async (top: number) => {
+      const list = w.get('[data-testid="catalog-list"]');
+      (list.element as HTMLElement).scrollTop = top;
+      await list.trigger('scroll');
+      await flushPromises();
+    };
+    await scrollTo(1000 * rowPx);
+    expect(offsets, 'the last page is read when the list reaches it').toEqual([0, 800]);
+    expect(slots()).toHaveLength(poolSize(600, rowPx, 2));
+    const last = slots().find((r) => r.attributes('aria-posinset') === '1000');
+    expect(last?.attributes('aria-label')).toBe('Zz Catalog 00996');
+
+    await scrollTo(250 * rowPx);
+    expect(offsets).toEqual([0, 800, 200]);
+    const row = slots().find((r) => r.attributes('aria-posinset') === '251');
+    expect(row?.attributes('aria-label')).toBe('Zz Catalog 00247');
+    expect(row?.find('[data-testid="catalog-family"]').exists()).toBe(true);
   });
 });

@@ -198,3 +198,28 @@ test('Settings -> Online catalogs turns Google Fonts on with the same switch', a
   // The sidebar sees the same state: on, no "Turn on" button.
   await expect(sidebar(page).getByRole('button', { name: 'Turn on Google Fonts' })).toHaveCount(0);
 });
+
+for (const locale of ['en-US', 'de-DE']) {
+  test.describe(`narrow window (${locale})`, () => {
+    test.use({ locale, viewport: { width: 1100, height: 700 } });
+
+    test('the catalog toolbar wraps so Refresh and its date stay inside the column', async ({
+      page,
+    }) => {
+      await serveFonts(page);
+      await page.goto('/?mockCatalog=1');
+      await expect(page.locator('#fm-inspector')).toBeVisible();
+      await page.getByTestId('catalog-googleFonts').click();
+      await expect(page.getByTestId('catalog-list').getByRole('listitem')).toHaveCount(4);
+      const column = (await page.locator('main.list').boundingBox())!;
+      for (const testId of ['catalog-refresh', 'catalog-refreshed', 'catalog-search']) {
+        const box = (await page.getByTestId(testId).boundingBox())!;
+        expect(box.x, testId).toBeGreaterThanOrEqual(column.x);
+        expect(box.x + box.width, testId).toBeLessThanOrEqual(column.x + column.width);
+      }
+      const refresh = page.getByTestId('catalog-refresh');
+      await refresh.focus();
+      await expect(refresh).toBeInViewport({ ratio: 1 });
+    });
+  });
+}

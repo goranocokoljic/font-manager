@@ -262,12 +262,16 @@ const surfaceClass = computed(() =>
   flex-direction: column;
   min-height: 0;
 }
+/* Wraps onto a second line in a narrow center (the inspector open below ~1,280 px,
+   a longer language), so Refresh and the date never fall outside the column. */
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  height: 48px;
-  padding: 0 16px;
+  min-height: 48px;
+  box-sizing: border-box;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--fm-border);
 }
 .title {

@@ -728,6 +728,8 @@ export interface MockOptions {
    * `MOCK_CATALOG_CACHED_AT`, and every refresh failing as without a connection.
    */
   catalog?: 'online' | 'offline';
+  /** Families a refreshed mock catalog holds after the four sample ones, for long lists. */
+  catalogFamilies?: number;
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -1335,7 +1337,7 @@ function mockSlug(name: string): string {
 export const MOCK_CATALOG_CACHED_AT = '2026-10-01T08:00:00Z';
 
 /** The families a refreshed catalog of the mock holds, like `mock_catalog_families` in Rust. */
-export function mockCatalogFamilies(): CatalogFamily[] {
+export function mockCatalogFamilies(extra = 0): CatalogFamily[] {
   const family = (
     name: string,
     category: string,
@@ -1359,6 +1361,9 @@ export function mockCatalogFamilies(): CatalogFamily[] {
     family('Lato', 'Sans Serif', [100, 300, 400, 700, 900]),
     family('Lora', 'Serif', [400, 700]),
     family('Space Mono', 'Monospace', [400, 700]),
+    ...Array.from({ length: extra }, (_, i) =>
+      family(`Zz Catalog ${String(i + 1).padStart(5, '0')}`, 'Display', [400]),
+    ),
   ];
 }
 
@@ -1368,6 +1373,7 @@ export function mockCatalogFamilies(): CatalogFamily[] {
  */
 function createMockCatalogs(
   mode: MockOptions['catalog'] = 'online',
+  extra = 0,
 ): Pick<
   FmClient,
   'listCatalogs' | 'setCatalogEnabled' | 'refreshCatalog' | 'listCatalogFamilies' | 'catalogFontUrl'
@@ -1376,7 +1382,7 @@ function createMockCatalogs(
   let enabled = mode === 'offline';
   let cache: { refreshedAt: string; families: CatalogFamily[] } | null =
     mode === 'offline'
-      ? { refreshedAt: MOCK_CATALOG_CACHED_AT, families: mockCatalogFamilies() }
+      ? { refreshedAt: MOCK_CATALOG_CACHED_AT, families: mockCatalogFamilies(extra) }
       : null;
   const known = (req: { id: CatalogId }) => {
     if (req.id !== id)
@@ -1412,7 +1418,7 @@ function createMockCatalogs(
             'Google Fonts could not be refreshed. The catalog could not be reached. Check the connection and try again.',
           detail: 'GET https://fonts.google.com/metadata/fonts: offline',
         };
-      cache = { refreshedAt: MOCK_NOW, families: mockCatalogFamilies() };
+      cache = { refreshedAt: MOCK_NOW, families: mockCatalogFamilies(extra) };
       return catalog();
     },
     listCatalogFamilies: async (req) => {
@@ -2047,7 +2053,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     layoutWidth: async (req) => mockLayoutWidth(req),
     ...createMockLayouts(),
-    ...createMockCatalogs(options.catalog),
+    ...createMockCatalogs(options.catalog, options.catalogFamilies),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
