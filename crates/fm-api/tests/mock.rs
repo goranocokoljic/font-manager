@@ -8,7 +8,7 @@ use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
     DeactivateRequest, OutcomeStatus, Target,
 };
-use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
+use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
     CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
@@ -877,6 +877,54 @@ fn export_honors_the_license_guard() {
         css: false,
     });
     assert_eq!(refused.unwrap_err().code, ErrorCode::PermissionDenied);
+}
+
+#[test]
+fn the_mock_license_guard_blocks_preview_and_print_as_the_core_does() {
+    let mock = Arc::new(MockApi::new());
+    // JetBrains Mono becomes preview & print; Legacy Grotesk is restricted.
+    mock.set_embedding(FaceId(6), Embedding::PreviewAndPrint)
+        .unwrap();
+    let api: Arc<dyn Api> = mock.clone();
+    let export = |faces: &[u32]| {
+        api.export_web(ExportWebRequest {
+            faces: faces.iter().copied().map(FaceId).collect(),
+            formats: vec![WebFormat::Woff2],
+            subset: None,
+            out_dir: "/tmp/out".into(),
+            css: true,
+        })
+    };
+    let e = export(&[1, 7, 6, 7]).unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(
+        e.message,
+        "Legacy Grotesk Regular: Embedding restricted, no web license declared; \
+         JetBrains Mono Regular: Embedding preview & print only, no web license declared. \
+         Declare a web license for the family to export it."
+    );
+    assert_eq!(e.detail.as_deref(), Some("blocked faces: 7, 6"));
+    // Installable and editable faces are not blocked.
+    mock.set_embedding(FaceId(3), Embedding::Editable).unwrap();
+    assert_eq!(export(&[1, 3]).unwrap().files.len(), 3);
+
+    // A Web declaration for each family lets the same export through; a
+    // Desktop one does not.
+    let declare = |family: u32, license_type| {
+        api.declare_license(LicenseDeclaration {
+            family: FamilyId(family),
+            license_type: Some(license_type),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .unwrap();
+    };
+    declare(3, LicenseType::Desktop);
+    assert_eq!(export(&[6]).unwrap_err().code, ErrorCode::PermissionDenied);
+    declare(3, LicenseType::Web);
+    declare(4, LicenseType::Web);
+    assert_eq!(export(&[1, 7, 6]).unwrap().files.len(), 4);
 }
 
 #[test]

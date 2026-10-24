@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Classification, Embedding, Health, Metrics, Slant};
+use fm_api::common::{Classification, Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
@@ -59,8 +59,9 @@ pub struct FaceLocation {
 pub struct WebExportFace {
     /// The face's file, output name and label.
     pub face: ExportFace,
-    /// Its license keeps it off the web.
-    pub restricted: bool,
+    /// Why its license keeps it off the web, when it does
+    /// ([`license::web_embedding_block`]).
+    pub blocked: Option<license::WebReason>,
     /// What its `@font-face` block says about it (E20.3).
     pub style: FaceStyle,
     /// Its design class, when known: the generic fallback of a framework
@@ -234,9 +235,9 @@ impl Index {
     }
 
     /// What a web export needs about the face `face` (E20.1): its file, its
-    /// output name and label, whether its license keeps it off the web
-    /// (a restricted embedding and no web license declared, the family's
-    /// declaration first), and its `@font-face` style (E20.3): the
+    /// output name and label, why its license keeps it off the web, if it
+    /// does (a restricted or preview-and-print embedding and no web license
+    /// declared, the family's declaration first; E20.6), and its `@font-face` style (E20.3): the
     /// typographic family (name ID 16, else 1, else the library's family
     /// name), slant, weight class and, for a variable face, its axes; and its
     /// design class (E20.5). An unknown face is `NotFound`.
@@ -246,8 +247,7 @@ impl Index {
             .declared_license(&row.summary.family_name)?
             .and_then(|d| d.license_type)
             .or(row.license_type);
-        let restricted = license::embedding(row.fs_type) == Embedding::Restricted
-            && declared != Some(LicenseType::Web);
+        let blocked = license::web_embedding_block(license::embedding(row.fs_type), declared);
         let s = &row.summary;
         let parsed = row.parsed.as_ref();
         let style = FaceStyle {
@@ -270,7 +270,7 @@ impl Index {
                 file_stem: web_font::file_stem(&s.postscript_name, u64::from(face.0)),
                 label: format!("{} {}", s.family_name, s.style),
             },
-            restricted,
+            blocked,
             style,
             classification: parsed
                 .and_then(|p| p.classification.as_ref())

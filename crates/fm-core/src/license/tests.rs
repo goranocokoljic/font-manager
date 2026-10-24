@@ -297,3 +297,50 @@ fn web_use_table_covers_every_combination() {
         }
     }
 }
+
+#[test]
+fn the_export_block_is_web_uses_embedding_rule_alone() {
+    use fm_api::library::LicenseType;
+    let embeddings = [
+        Embedding::Installable,
+        Embedding::Restricted,
+        Embedding::PreviewAndPrint,
+        Embedding::Editable,
+    ];
+    let declared = [
+        None,
+        Some(LicenseType::Web),
+        Some(LicenseType::Desktop),
+        Some(LicenseType::App),
+        Some(LicenseType::Trial),
+        Some(LicenseType::PersonalOnly),
+        Some(LicenseType::Unknown),
+    ];
+    for embedding in embeddings {
+        for d in declared {
+            let block = web_embedding_block(embedding, d);
+            let blocks = matches!(
+                embedding,
+                Embedding::Restricted | Embedding::PreviewAndPrint
+            ) && d != Some(LicenseType::Web);
+            assert_eq!(block.is_some(), blocks, "{embedding:?} {d:?}");
+            if let Some(reason) = block {
+                assert_eq!(reason, WebReason::Embedding(embedding));
+                assert!(!reason.ok());
+                // Where web_use reaches its embedding step, it gives the same answer.
+                if d.is_none() {
+                    assert_eq!(web_use(embedding, Some(OpenLicense::Ofl), d), reason);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        web_embedding_block(Embedding::Restricted, None).map(WebReason::text),
+        Some("Embedding restricted, no web license declared".to_owned())
+    );
+    assert_eq!(
+        web_embedding_block(Embedding::PreviewAndPrint, Some(LicenseType::Desktop))
+            .map(WebReason::text),
+        Some("Embedding preview & print only, no web license declared".to_owned())
+    );
+}
