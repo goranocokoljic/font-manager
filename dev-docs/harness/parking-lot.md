@@ -209,3 +209,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E21.2 #144] crates/fm-core/src/api.rs:455 — the doc line "The answer of a service that is not built yet." now sits above `PDF_NEEDS_APP` instead of `not_available`.
 - [E24.2 #157] apps/desktop/src/stores/glyphCompare.ts:74 — `glyphCompare.search` never clears `error` after a successful search, so one failed search leaves a stale error for the overlay session.
 - [E24.2 #157] apps/desktop/src/components/BlockFontPicker.vue:195 — no `forced-colors` handling app-wide; the active combobox option is marked only by background and box-shadow, which Windows High Contrast removes.
+- [E24.3 #158] apps/desktop/src/stores/studio.ts:123 — `setBlockFace` answering after `closePanel` leaves an orphan `p<k>/…` block-font key; panel keys are never reused, so nothing shows.
+- [E24.3 #158] apps/desktop/src/views/HomeView.vue:96 — the layout picker's preset fallback is written twice (HomeView and StudioPanel); not a defect yet.
