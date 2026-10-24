@@ -17,8 +17,8 @@ use crate::activation::{
 use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
     CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogStyle,
-    DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
-    SetCatalogEnabledRequest,
+    CatalogUpdate, CatalogUpdateStatus, CheckUpdatesRequest, DownloadFamilyRequest,
+    DownloadFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
@@ -4660,6 +4660,79 @@ impl CatalogService for MockApi {
             .rev()
             .cloned()
             .collect())
+    }
+
+    /// The rules of the core without a request: "refreshing" a catalog that
+    /// is on and has downloads loads the mock families, each family is
+    /// compared at its newest download, and an off catalog is skipped. The
+    /// mock compares versions as text (its versions are dates).
+    fn check_updates(&self, req: CheckUpdatesRequest) -> ApiResult<Vec<CatalogUpdate>> {
+        let mut st = self.state();
+        let catalogs: BTreeSet<CatalogId> = st
+            .catalog_downloads
+            .iter()
+            .map(|d| d.catalog)
+            .filter(|id| st.catalogs_on.contains(id))
+            .collect();
+        if !req.cached_only {
+            for &id in &catalogs {
+                st.catalog_cache
+                    .insert(id, (MOCK_NOW.to_owned(), mock_catalog_families()));
+            }
+        }
+        let mut seen = BTreeSet::new();
+        let mut updates = Vec::new();
+        for download in st.catalog_downloads.iter().rev() {
+            if !catalogs.contains(&download.catalog)
+                || !seen.insert((download.catalog, download.family.clone()))
+            {
+                continue;
+            }
+            let Some((_, families)) = st.catalog_cache.get(&download.catalog) else {
+                continue;
+            };
+            let listed = families.iter().find(|f| f.name == download.family);
+            let available =
+                listed.and_then(|f| f.version.clone().or_else(|| f.last_modified.clone()));
+            let status = match (listed, &download.version, &available) {
+                (None, _, _) => CatalogUpdateStatus::NoLongerListed,
+                (Some(_), Some(had), Some(now)) if now > had => {
+                    CatalogUpdateStatus::UpdateAvailable
+                }
+                _ => continue,
+            };
+            updates.push(CatalogUpdate {
+                catalog: download.catalog,
+                family: download.family.clone(),
+                downloaded_version: download.version.clone(),
+                available_version: available,
+                status,
+            });
+        }
+        updates.sort_by(|a, b| {
+            a.catalog
+                .cmp(&b.catalog)
+                .then_with(|| a.family.cmp(&b.family))
+        });
+        Ok(updates)
+    }
+}
+
+impl MockApi {
+    /// Records a download of `family` from `catalog` at `version`, as if it
+    /// had been downloaded before (tests of the update check).
+    pub fn seed_catalog_download(&self, catalog: CatalogId, family: &str, version: &str) {
+        self.state().catalog_downloads.push(CatalogDownload {
+            catalog,
+            family: family.to_owned(),
+            catalog_family_id: family.to_owned(),
+            version: Some(version.to_owned()),
+            kind: CatalogFileKind::Static,
+            downloaded_at: MOCK_NOW.to_owned(),
+            source: SourceId(1),
+            folder: format!("/mock/fonts/{family}"),
+            files: Vec::new(),
+        });
     }
 }
 

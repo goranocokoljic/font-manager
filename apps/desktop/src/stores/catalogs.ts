@@ -7,6 +7,7 @@ import type {
   CatalogFamily,
   CatalogFileKind,
   CatalogId,
+  CatalogUpdate,
   DownloadFamilyResponse,
   Event,
   JobId,
@@ -56,8 +57,10 @@ function toApiError(e: unknown): ApiError {
  * The online catalogs: which are on and when their list was refreshed, which one the
  * center shows instead of the font list, and that catalog's families for the search
  * text. The families are read page by page as the list scrolls; the core filters them
- * (`list_catalog_families`). Only `refresh` and turning a never-refreshed catalog on go
- * to the network, both a user action.
+ * (`list_catalog_families`). Only `refresh`, `checkUpdates` and turning a never-refreshed
+ * catalog on go to the network, each a user action. The downloaded families with an update
+ * (E22.4) are known only after the user's "Check for updates" or a Refresh; nothing checks on
+ * start or on a timer.
  */
 export const useCatalogsStore = defineStore('catalogs', () => {
   const client = () => useClient();
@@ -80,6 +83,11 @@ export const useCatalogsStore = defineStore('catalogs', () => {
   const online = ref(globalThis.navigator?.onLine ?? true);
   /** The "Download..." panel; `null` when it is closed. */
   const download = ref<CatalogDownloadState | null>(null);
+  /** What the last update check found; `null` before the first one. */
+  const updates = ref<CatalogUpdate[] | null>(null);
+  const checking = ref(false);
+  /** Why the last "Check for updates" failed. */
+  const checkError = ref<ApiError | null>(null);
   /** Bumped by every new list, so pages of an older one are dropped. */
   let generation = 0;
   const pending = new Set<number>();
@@ -188,6 +196,8 @@ export const useCatalogsStore = defineStore('catalogs', () => {
       put(await client().refreshCatalog({ id }));
       refreshError.value = null;
       if (open.value === id) await relist();
+      // A Refresh checks the downloads against the new list too, without another request.
+      await compare(true);
       return true;
     } catch (e) {
       if (open.value === id) refreshError.value = toApiError(e);
@@ -215,6 +225,57 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     } finally {
       busy.value = null;
     }
+  }
+
+  /**
+   * Asks the core which downloaded families have an update: `cachedOnly` compares with the
+   * cached lists (after a Refresh), else the core refreshes the catalogs first.
+   */
+  async function compare(cachedOnly: boolean): Promise<boolean> {
+    try {
+      updates.value = await client().checkUpdates({ cachedOnly });
+      checkError.value = null;
+      return true;
+    } catch (e) {
+      checkError.value = toApiError(e);
+      return false;
+    }
+  }
+
+  /** The "Check for updates" button: refreshes the catalogs with downloads (requests). */
+  async function checkUpdates(): Promise<boolean> {
+    if (checking.value || refreshing.value) return false;
+    checking.value = true;
+    try {
+      const done = await compare(false);
+      // The refresh brought new lists: the catalogs' dates and the open list follow.
+      if (done) {
+        catalogs.value = await client().listCatalogs();
+        if (current.value?.enabled) await relist();
+      }
+      return done;
+    } catch (e) {
+      error.value = toApiError(e);
+      return false;
+    } finally {
+      checking.value = false;
+    }
+  }
+
+  /** The update of `family` of `catalog`, when the last check found one. */
+  function updateOf(catalog: CatalogId, family: string): CatalogUpdate | null {
+    return (
+      updates.value?.find(
+        (u) => u.status === 'updateAvailable' && u.catalog === catalog && u.family === family,
+      ) ?? null
+    );
+  }
+
+  /** The update of the library family named `family`, from any catalog it came from. */
+  function libraryUpdate(family: string): CatalogUpdate | null {
+    return (
+      updates.value?.find((u) => u.status === 'updateAvailable' && u.family === family) ?? null
+    );
   }
 
   /** A download is running: the panel stays open and no other one starts. */
@@ -331,5 +392,11 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     askDownload,
     closeDownload,
     startDownload,
+    updates,
+    checking,
+    checkError,
+    checkUpdates,
+    updateOf,
+    libraryUpdate,
   };
 });

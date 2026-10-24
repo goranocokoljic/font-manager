@@ -3954,6 +3954,69 @@ fn a_download_goes_only_into_a_watched_source() {
 }
 
 #[test]
+fn the_update_check_compares_the_recorded_download_with_a_refreshed_list() {
+    let (lib, source, server) = downloading("catalog-updates-api");
+    download_lato(&lib, source.id);
+    let hits = server.hits();
+    let updates = lib
+        .api
+        .check_updates(CheckUpdatesRequest::default())
+        .expect("check");
+    assert!(updates.is_empty(), "the same version: {updates:?}");
+    assert_eq!(server.hits(), hits + 1, "one refresh of the index");
+}
+
+#[test]
+fn nothing_checks_for_updates_at_startup() {
+    let (lib, source, _server) = downloading("catalog-updates-startup");
+    download_lato(&lib, source.id);
+    // A restart: the same folders, over a fetcher that fails on any call.
+    let fetcher = Arc::new(OfflineFetcher::default());
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        Arc::clone(&fetcher) as Arc<dyn Fetcher>,
+        vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+    );
+    let lib = Lib {
+        api: lib.api.with_catalogs(catalogs),
+        fetcher,
+        ..lib
+    };
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    let listed = lib.api.list_catalogs().expect("catalogs");
+    assert!(listed[0].enabled && listed[0].refreshed_at.is_some());
+    lib.api
+        .list_catalog_families(ListCatalogFamiliesRequest {
+            id,
+            query: String::new(),
+            page: Page::default(),
+        })
+        .expect("families");
+    assert_eq!(
+        lib.api.list_catalog_downloads().expect("downloads").len(),
+        1
+    );
+    let cached = lib
+        .api
+        .check_updates(CheckUpdatesRequest { cached_only: true })
+        .expect("compared with the cache");
+    assert!(cached.is_empty(), "{cached:?}");
+    assert_eq!(lib.fetcher.calls(), 0, "the start fetches nothing");
+
+    let e = lib
+        .api
+        .check_updates(CheckUpdatesRequest::default())
+        .expect_err("offline");
+    assert_eq!(e.code, ErrorCode::Io);
+    assert_eq!(lib.fetcher.calls(), 1, "only the user's check fetches");
+    assert_eq!(
+        lib.api.list_catalogs().expect("catalogs")[0].family_count,
+        listed[0].family_count,
+        "a failed check keeps the cache"
+    );
+}
+
+#[test]
 fn catalogs_without_a_data_folder_are_not_available() {
     let dir = TempDir::new("catalog-none");
     let index = Index::open(&dir.path().join(INDEX_FILE))

@@ -4,7 +4,8 @@
 // by the shared face loader from the app's font scheme; the core fetches it into the
 // cache folder the first time a row shows it, only while the catalog is on. As a list
 // row, a grid card or a waterfall block (the six sizes). Its "Download..." button opens the
-// browser's download panel for the family (E22.3).
+// browser's download panel for the family (E22.3). A family the last update check found a
+// newer version of shows an "Update available" badge (E22.4).
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useClient } from '../api/client';
 import type { CatalogFamily, CatalogId } from '../api/types';
@@ -73,6 +74,7 @@ const sampleStyle = computed(() => ({
 }));
 const sizeStyle = (sizePx: number) => ({ ...sampleStyle.value, fontSize: `${sizePx}px` });
 const styles = computed(() => styleCount(props.family.styles.length));
+const update = computed(() => catalogs.updateOf(props.catalog, props.family.name));
 </script>
 
 <template>
@@ -90,6 +92,18 @@ const styles = computed(() => styleCount(props.family.styles.length));
         <span>{{ styles }}</span>
         <span v-if="family.axes?.length" class="badge">{{ t('list.variable') }}</span>
       </span>
+      <span
+        v-if="update"
+        class="update"
+        data-testid="update-available"
+        :title="
+          t('catalogs.updates.badgeTitle', {
+            catalog: catalogs.current?.name ?? '',
+            version: update.availableVersion ?? '',
+          })
+        "
+        >{{ t('catalogs.updates.badge') }}</span
+      >
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
       <button
         type="button"
@@ -162,6 +176,13 @@ const styles = computed(() => styleCount(props.family.styles.length));
 }
 .note {
   color: var(--fm-warning);
+}
+.update {
+  flex: none;
+  padding: 0 6px;
+  border: 1px solid var(--fm-accent);
+  border-radius: 8px;
+  color: var(--fm-accent);
 }
 .get {
   flex: none;

@@ -13,6 +13,7 @@ import {
   type AppInfo,
   type Catalog,
   type CatalogDownload,
+  type CatalogUpdate,
   type CatalogFamily,
   type DownloadFamilyResponse,
   type CatalogId,
@@ -741,6 +742,12 @@ export interface MockOptions {
   catalogDownload?: 'ok' | 'fail' | 'stopped';
   /** How long a mock download takes before it answers (ms; default 0). */
   catalogDownloadMs?: number;
+  /**
+   * Families "downloaded" before (E22.4): Inter from Google Fonts at an older version than the
+   * catalog's (an update), Lato at the catalog's, and Retired Sans, which the catalog no longer
+   * lists.
+   */
+  catalogUpdates?: boolean;
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -1387,6 +1394,7 @@ function createMockCatalogs(
   extra = 0,
   rescan: (source: SourceId) => { path: string; job: JobId },
   download: { result: MockOptions['catalogDownload']; ms: number } = { result: 'ok', ms: 0 },
+  seeded = false,
 ): Pick<
   FmClient,
   | 'listCatalogs'
@@ -1396,6 +1404,7 @@ function createMockCatalogs(
   | 'catalogFontUrl'
   | 'downloadFamily'
   | 'listCatalogDownloads'
+  | 'checkUpdates'
 > {
   // Every catalog of the Rust mock, in its order (`CatalogId::ALL`).
   const sites: [CatalogId, string, string][] = [
@@ -1404,7 +1413,25 @@ function createMockCatalogs(
   ];
   const enabled = new Set<CatalogId>(mode === 'offline' ? ['googleFonts'] : []);
   /** The families "downloaded", newest first. */
-  const downloads: CatalogDownload[] = [];
+  const downloads: CatalogDownload[] = seeded
+    ? (
+        [
+          ['Inter', '2026-03-01'],
+          ['Lato', '2026-09-01'],
+          ['Retired Sans', '2025-01-01'],
+        ] as const
+      ).map(([family, version]) => ({
+        catalog: 'googleFonts',
+        family,
+        catalogFamilyId: family,
+        version,
+        kind: 'static',
+        downloadedAt: MOCK_CATALOG_CACHED_AT,
+        source: 1,
+        folder: `/Users/demo/Fonts/${family}`,
+        files: [],
+      }))
+    : [];
   const caches = new Map<CatalogId, { refreshedAt: string; families: CatalogFamily[] }>(
     mode === 'offline'
       ? [
@@ -1528,7 +1555,47 @@ function createMockCatalogs(
       return { download: structuredClone(record), skipped: [], scan: job, error };
     },
     listCatalogDownloads: async () => structuredClone(downloads),
+    // The rules of the core (`check_updates` of the Rust mock): a refresh of every catalog
+    // that is on and has downloads (failing offline), then each family compared at its newest
+    // download; the mock's versions are dates, compared as text.
+    checkUpdates: async (req) => {
+      const ids = [...new Set(downloads.map((d) => d.catalog))].filter((id) => enabled.has(id));
+      if (!req.cachedOnly) {
+        for (const id of ids) {
+          const [, name] = site(id);
+          if (mode === 'offline')
+            throw {
+              code: 'io',
+              message: `${name} could not be refreshed. The catalog could not be reached. Check the connection and try again.`,
+              detail: 'offline',
+            };
+          caches.set(id, { refreshedAt: MOCK_NOW, families: mockCatalogFamilies(extra) });
+        }
+      }
+      const seen = new Set<string>();
+      const updates: CatalogUpdate[] = [];
+      for (const d of downloads) {
+        const key = `${d.catalog}/${d.family}`;
+        const cache = caches.get(d.catalog);
+        if (!ids.includes(d.catalog) || seen.has(key) || !cache) continue;
+        seen.add(key);
+        const listed = cache.families.find((f) => f.name === d.family);
+        const available = listed ? (listed.version ?? listed.lastModified ?? null) : null;
+        if (!listed) updates.push({ ...pick(d), availableVersion: null, status: 'noLongerListed' });
+        else if (d.version && available && available > d.version)
+          updates.push({ ...pick(d), availableVersion: available, status: 'updateAvailable' });
+      }
+      return updates.sort((a, b) =>
+        a.catalog === b.catalog
+          ? a.family.localeCompare(b.family)
+          : sites.findIndex(([s]) => s === a.catalog) - sites.findIndex(([s]) => s === b.catalog),
+      );
+    },
   };
+}
+
+function pick(d: CatalogDownload): Pick<CatalogUpdate, 'catalog' | 'family' | 'downloadedVersion'> {
+  return { catalog: d.catalog, family: d.family, downloadedVersion: d.version ?? null };
 }
 
 /**
@@ -2161,6 +2228,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         return { path: s.path, job };
       },
       { result: options.catalogDownload ?? 'ok', ms: options.catalogDownloadMs ?? 0 },
+      options.catalogUpdates ?? false,
     ),
     cssValues: async (req) => {
       const f = find(req.face);
@@ -2937,4 +3005,6 @@ export const mockClient: FmClient = createMockClient({
   // `?mockDownloadMs=<n>` makes a download take n ms.
   catalogDownload: (['ok', 'fail', 'stopped'] as const)[countFromUrl('mockCatalogDownload', 2)],
   catalogDownloadMs: countFromUrl('mockDownloadMs', 10_000),
+  // `?mockCatalogUpdates=1` starts with three families downloaded from Google Fonts before.
+  catalogUpdates: countFromUrl('mockCatalogUpdates', 1) > 0,
 });

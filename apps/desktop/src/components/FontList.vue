@@ -13,6 +13,8 @@
 //
 // Each row has a "Similar" action (E23.3), shown on the cursor row and under the
 // pointer; it is out of the Tab order, the S key runs it for the keyboard.
+// A family downloaded from a catalog that the last update check found a newer
+// version of shows an "Update available" badge (E22.4).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { FaceId, FaceSummary } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
@@ -25,6 +27,7 @@ import { rowActivation } from '../list/activation';
 import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
@@ -55,6 +58,17 @@ const emit = defineEmits<{
 
 const list = useFontListStore();
 const library = useLibraryStore();
+const catalogs = useCatalogsStore();
+
+/** The "Update available" tooltip of a library family the last update check found (E22.4). */
+function updateTitle(family: string): string | null {
+  const update = catalogs.libraryUpdate(family);
+  if (!update) return null;
+  return t('catalogs.updates.badgeTitle', {
+    catalog: catalogs.catalogs.find((c) => c.id === update.catalog)?.name ?? update.catalog,
+    version: update.availableVersion ?? '',
+  });
+}
 const quick = useQuickCollectionStore();
 const settings = useSettingsStore();
 const similar = useSimilarStore();
@@ -294,6 +308,13 @@ function onToggle(row: ListRow): void {
               :title="openLicenseName(item.row.family.openLicense)"
               >{{ openLicenseBadge() }}</span
             >
+            <span
+              v-if="updateTitle(item.row.family.name)"
+              class="update"
+              data-testid="update-available"
+              :title="updateTitle(item.row.family.name) ?? undefined"
+              >{{ t('catalogs.updates.badge') }}</span
+            >
           </template>
           <template v-else-if="item.row.virtual" #detail>
             <span class="count">{{ t('list.pinned') }}</span>
@@ -419,6 +440,14 @@ function onToggle(row: ListRow): void {
   border: 1px solid var(--fm-success);
   border-radius: 3px;
   color: var(--fm-success);
+  font-size: 10.5px;
+  line-height: 14px;
+}
+.update {
+  padding: 0 4px;
+  border: 1px solid var(--fm-accent);
+  border-radius: 3px;
+  color: var(--fm-accent);
   font-size: 10.5px;
   line-height: 14px;
 }

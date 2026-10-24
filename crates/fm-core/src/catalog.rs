@@ -21,6 +21,10 @@
 //!   into a subfolder named after it inside a folder the user chose: every
 //!   file is fetched and checked first, then each goes through a temporary
 //!   file and is linked into place without replacing a file already there.
+//! - **Updates (E22.4).** [`Catalogs::check_updates`] compares the version
+//!   recorded at each download with the catalog's list; it refreshes the
+//!   catalogs first only when the caller asks (the user's "Check for
+//!   updates"), never on its own.
 
 pub mod fontshare;
 pub mod google;
@@ -33,7 +37,10 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use fm_api::ErrorCode;
-use fm_api::catalog::{Catalog, CatalogFamily, CatalogFileKind, CatalogId};
+use fm_api::catalog::{
+    Catalog, CatalogDownload, CatalogFamily, CatalogFileKind, CatalogId, CatalogUpdate,
+    CatalogUpdateStatus,
+};
 use fm_api::common::{Page, Paged};
 use fm_api::library::OpenLicense;
 use serde::{Deserialize, Serialize};
@@ -277,6 +284,41 @@ pub fn safe_file_name(name: &str) -> Option<String> {
     } else {
         cleaned.to_owned()
     })
+}
+
+/// `available` is a newer version than `downloaded`, both as a catalog
+/// gives them: a version (`1.002`, `Version 2.1`) or a date (`2025-09-04`).
+/// Their runs of digits are compared as numbers, left to right
+/// (`1.10` > `1.9`, `2026-01-02` > `2025-12-31`); a missing run counts as
+/// 0, so `1.0` equals `1`. When either has no digit, only a different text
+/// counts as newer.
+pub fn is_newer_version(available: &str, downloaded: &str) -> bool {
+    /// The runs of digits, without leading zeros.
+    fn runs(text: &str) -> Vec<&str> {
+        text.split(|c: char| !c.is_ascii_digit())
+            .filter(|run| !run.is_empty())
+            .map(|run| match run.trim_start_matches('0') {
+                "" => "0",
+                trimmed => trimmed,
+            })
+            .collect()
+    }
+    let (now, had) = (runs(available), runs(downloaded));
+    if now.is_empty() || had.is_empty() {
+        return available.trim() != downloaded.trim();
+    }
+    for i in 0..now.len().max(had.len()) {
+        let (a, b) = (
+            now.get(i).copied().unwrap_or("0"),
+            had.get(i).copied().unwrap_or("0"),
+        );
+        // Without leading zeros, the longer run is the larger number.
+        match a.len().cmp(&b.len()).then_with(|| a.cmp(b)) {
+            std::cmp::Ordering::Equal => {}
+            order => return order.is_gt(),
+        }
+    }
+    false
 }
 
 /// Writes `data` to a new file at `path` through a temporary file next to
@@ -665,6 +707,69 @@ impl Catalogs {
             skipped,
             stopped,
         })
+    }
+
+    /// The updates of `downloads` (newest first, as the index lists them):
+    /// with `refresh`, every catalog that is on and has a download is
+    /// refreshed first (a request each; a failure is the error and the
+    /// caches stay), else the cached lists are read as they are and no
+    /// request is made. Each family is compared once, at its newest
+    /// download: reported when the catalog's version (or last change, as
+    /// recorded at the download) is newer, or when the catalog no longer
+    /// lists it. A catalog that is off or was never refreshed is skipped,
+    /// and so is a family with no version to compare. By catalog, then name.
+    pub fn check_updates(
+        &self,
+        downloads: &[CatalogDownload],
+        refresh: bool,
+    ) -> FmResult<Vec<CatalogUpdate>> {
+        let state = self.state();
+        let catalogs: BTreeSet<CatalogId> = downloads
+            .iter()
+            .map(|d| d.catalog)
+            .filter(|id| state.enabled.contains(id))
+            .collect();
+        if refresh {
+            for &id in &catalogs {
+                self.refresh(id)?;
+            }
+        }
+        let mut seen = BTreeSet::new();
+        let mut updates = Vec::new();
+        for download in downloads {
+            if !catalogs.contains(&download.catalog)
+                || !seen.insert((download.catalog, download.family.as_str()))
+            {
+                continue;
+            }
+            let Some(cache) = self.cache(download.catalog)? else {
+                continue;
+            };
+            let listed = cache.families.iter().find(|f| f.name == download.family);
+            let available =
+                listed.and_then(|f| f.version.clone().or_else(|| f.last_modified.clone()));
+            let status = match (listed, &download.version, &available) {
+                (None, _, _) => CatalogUpdateStatus::NoLongerListed,
+                (Some(_), Some(had), Some(now)) if is_newer_version(now, had) => {
+                    CatalogUpdateStatus::UpdateAvailable
+                }
+                _ => continue,
+            };
+            updates.push(CatalogUpdate {
+                catalog: download.catalog,
+                family: download.family.clone(),
+                downloaded_version: download.version.clone(),
+                available_version: available,
+                status,
+            });
+        }
+        updates.sort_by(|a, b| {
+            a.catalog
+                .cmp(&b.catalog)
+                .then_with(|| a.family.to_lowercase().cmp(&b.family.to_lowercase()))
+                .then_with(|| a.family.cmp(&b.family))
+        });
+        Ok(updates)
     }
 
     fn adapter(&self, id: CatalogId) -> FmResult<&dyn CatalogAdapter> {

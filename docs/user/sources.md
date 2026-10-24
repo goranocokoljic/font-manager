@@ -101,4 +101,19 @@ Font Manager remembers where each downloaded family came from: the catalog, the
 version and the date. It also remembers each file by its contents, so it still
 knows the file after you move it to another folder of your library.
 
+### Check for updates
+
+Font Manager never checks for updates on its own. To check, open a catalog and
+select **Check for updates**. Font Manager gets the lists of the catalogs that
+you downloaded from again, and compares each downloaded family with its catalog.
+**Refresh** compares them too.
+
+- A family with a newer version shows **Update available**, in the catalog and
+  in your library.
+- A family that the catalog no longer has is shown as **No longer in the
+  catalog**. Your files stay as they are.
+
+To get the update, download the family again into another folder. Font Manager
+never replaces a file that is already there.
+
 Next: [Activation](activation.md).

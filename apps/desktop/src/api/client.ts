@@ -11,6 +11,8 @@ import type {
   CatalogFamily,
   CatalogId,
   CatalogRef,
+  CatalogUpdate,
+  CheckUpdatesRequest,
   DownloadFamilyRequest,
   DownloadFamilyResponse,
   ListCatalogFamiliesRequest,
@@ -231,6 +233,12 @@ export interface FmClient {
   downloadFamily(req: DownloadFamilyRequest): Promise<DownloadFamilyResponse>;
   /** Every family downloaded from a catalog, newest first, with where its files are now. */
   listCatalogDownloads(): Promise<CatalogDownload[]>;
+  /**
+   * The downloaded families with a newer version in their catalog, or no longer in it
+   * (E22.4). Refreshes the catalogs that are on and have downloads first (requests: only on
+   * the user's "Check for updates"), unless `cachedOnly` (right after a Refresh).
+   */
+  checkUpdates(req: CheckUpdatesRequest): Promise<CatalogUpdate[]>;
   /** Every saved comparison (E13.2), by name. */
   listComparisons(): Promise<ComparisonEntry[]>;
   /** One saved comparison: the faces the library still shows, and the missing ones by name. */
@@ -360,6 +368,7 @@ export const tauriClient: FmClient = {
   catalogFontUrl: (id, family) => convertFileSrc(catalogFontPath(id, family), FONT_SCHEME),
   downloadFamily: (req) => invoke<DownloadFamilyResponse>('download_family', { req }),
   listCatalogDownloads: () => invoke<CatalogDownload[]>('list_catalog_downloads'),
+  checkUpdates: (req) => invoke<CatalogUpdate[]>('check_updates', { req }),
   listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),
   getComparison: (req) => invoke<Comparison>('get_comparison', { req }),
   saveComparison: (req) => invoke<Comparison>('save_comparison', { req }),

@@ -90,6 +90,15 @@ part that differs per catalog needs one narrow seam.
   a rescan or rebuild keeps them; `list_catalog_downloads` finds each file's current
   path by its hash among the files the library has (not `gone`), so a moved file is
   followed.
+- **Update check (E22.4).** `CatalogService::check_updates` runs only on the user's
+  "Check for updates" (and, with `cachedOnly`, right after a catalog Refresh, making no
+  request); nothing checks on start or on a timer. It refreshes each catalog that is on
+  and has downloads, then compares the version recorded at each family's newest download
+  with the cached list's version (else its `lastModified`), by family name. Runs of digits
+  compare as numbers, left to right (`fm_core::catalog::is_newer_version`), so dates and
+  dotted versions both work; only a newer one is an update. A family the list no longer
+  has is `noLongerListed`, not an error. An off catalog is skipped. The UI badges the
+  catalog row and the library family of the same name.
 
 ## Consequences
 

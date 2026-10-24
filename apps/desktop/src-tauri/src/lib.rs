@@ -11,8 +11,8 @@ use fm_api::activation::{
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef,
-    CatalogService, DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
-    SetCatalogEnabledRequest,
+    CatalogService, CatalogUpdate, CheckUpdatesRequest, DownloadFamilyRequest,
+    DownloadFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -534,6 +534,16 @@ async fn download_family(
 #[tauri::command]
 async fn list_catalog_downloads(state: State<'_, AppState>) -> ApiResult<Vec<CatalogDownload>> {
     call(&state, move |api| api.list_catalog_downloads()).await
+}
+
+/// The downloaded families with a newer version in their catalog, or no
+/// longer in it (E22.4); refreshes the catalogs first unless `cachedOnly`.
+#[tauri::command]
+async fn check_updates(
+    state: State<'_, AppState>,
+    req: CheckUpdatesRequest,
+) -> ApiResult<Vec<CatalogUpdate>> {
+    call(&state, move |api| api.check_updates(req)).await
 }
 
 /// Every saved comparison, by name (E13.2).
@@ -1120,6 +1130,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_catalog_families,
             download_family,
             list_catalog_downloads,
+            check_updates,
             render_preview,
             activate,
             deactivate,

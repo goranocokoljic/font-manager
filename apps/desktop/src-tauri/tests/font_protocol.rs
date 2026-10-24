@@ -217,6 +217,12 @@ impl CatalogService for Previews {
     fn list_catalog_downloads(&self) -> ApiResult<Vec<fm_api::catalog::CatalogDownload>> {
         Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }
+    fn check_updates(
+        &self,
+        _: fm_api::catalog::CheckUpdatesRequest,
+    ) -> ApiResult<Vec<fm_api::catalog::CatalogUpdate>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
 }
 
 /// The path the UI builds: the family name's UTF-8 as hex.

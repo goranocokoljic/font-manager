@@ -4,7 +4,8 @@
 // Waterfall modes, virtualized the same way: only the lines on screen (plus `overscan`)
 // exist, keyed by slot. The search box filters through the core; "Refresh" fetches the
 // list again. Offline, or when a refresh fails, the cached list stays with a note. A row's
-// "Download..." opens the download panel above the list (E22.3).
+// "Download..." opens the download panel above the list (E22.3). "Check for updates" asks the
+// core which downloaded families have a newer version (E22.4); a Refresh asks too.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CatalogFamily } from '../api/types';
 import { errorMessage, formatDate, t } from '../i18n';
@@ -48,6 +49,16 @@ const refreshedAt = computed(() => dateOf(catalog.value?.refreshedAt));
 const offlineNote = computed(() => {
   const date = dateOf(catalog.value?.refreshedAt, { dateStyle: 'medium' });
   return store.offline && date ? t('catalogs.offline', { date }) : null;
+});
+/** What the last update check found, as one line; `null` before the first one. */
+const updatesNote = computed(() => {
+  const found = store.updates;
+  if (!found) return null;
+  const count = found.filter((u) => u.status === 'updateAvailable').length;
+  const gone = found.filter((u) => u.status === 'noLongerListed').map((u) => u.family);
+  const parts = [t('catalogs.updates.found', { count })];
+  if (gone.length) parts.push(t('catalogs.updates.noLongerListed', { names: gone.join(', ') }));
+  return parts.join(' ');
 });
 /** A failed refresh that is not "offline" (or with no list to fall back on). */
 const refreshFailure = computed(() =>
@@ -199,7 +210,23 @@ const surfaceClass = computed(() =>
       >
         {{ store.refreshing ? t('catalogs.refreshing') : t('catalogs.refresh') }}
       </button>
+      <button
+        type="button"
+        class="toggle"
+        data-testid="catalog-check-updates"
+        :title="t('catalogs.updates.checkTitle')"
+        :disabled="!catalog.enabled || store.checking || store.refreshing"
+        @click="store.checkUpdates()"
+      >
+        {{ store.checking ? t('catalogs.updates.checking') : t('catalogs.updates.check') }}
+      </button>
     </header>
+    <p v-if="store.checkError" class="banner error" role="alert" data-testid="catalog-updates">
+      {{ errorMessage(store.checkError) }}
+    </p>
+    <p v-else-if="updatesNote" class="banner" role="status" data-testid="catalog-updates">
+      {{ updatesNote }}
+    </p>
     <p v-if="offlineNote" class="banner" role="status" data-testid="catalog-offline">
       {{ offlineNote }}
     </p>

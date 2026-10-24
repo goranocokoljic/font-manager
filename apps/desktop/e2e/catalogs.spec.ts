@@ -329,3 +329,36 @@ for (const scheme of ['light', 'dark'] as const) {
       expect(await borderContrast(control)).toBeGreaterThanOrEqual(3);
   });
 }
+
+test('Check for updates badges the families with a newer version, in the catalog and the library', async ({
+  page,
+}) => {
+  await serveFonts(page);
+  await page.goto('/?mockCatalogUpdates=1');
+  const tree = page.getByRole('tree', { name: 'Font list' });
+  await expect(tree.getByRole('treeitem', { name: /^Inter,/ })).toBeVisible();
+  // Nothing checks on start.
+  await expect(page.getByTestId('update-available')).toHaveCount(0);
+
+  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).click();
+  const check = page.getByTestId('catalog-check-updates');
+  await expect(check).toHaveText('Check for updates');
+  await expect(check, 'off: nothing to check').toBeDisabled();
+  await catalogs.getByRole('button', { name: 'Turn on Google Fonts' }).click();
+  await expect(catalogRows(page)).toHaveCount(4);
+
+  await check.click();
+  await expect(page.getByTestId('catalog-updates')).toHaveText(
+    '1 downloaded family has an update. No longer in the catalog: Retired Sans',
+  );
+  const inter = catalogRows(page).filter({ hasText: 'Inter' }).getByTestId('update-available');
+  await expect(inter).toHaveText('Update available');
+  await expect(inter).toHaveAttribute('title', 'Google Fonts has a newer version: 2026-09-01');
+  await expect(catalogRows(page).getByTestId('update-available'), 'Lato is current').toHaveCount(1);
+
+  await sidebar(page).getByRole('button', { name: 'All fonts' }).click();
+  const row = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('update-available');
+  await expect(row).toHaveText('Update available');
+  await expect(tree.getByTestId('update-available')).toHaveCount(1);
+});

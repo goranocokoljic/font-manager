@@ -1324,6 +1324,19 @@
       "scanFailed": "Die Dateien sind geladen, aber der Ordner konnte nicht erneut gelesen werden: {message}",
       "retry": "Erneut versuchen",
       "stopped": "Der Download wurde vor dem Ende abgebrochen: {message} Nur die oben gezählten Dateien wurden geschrieben, und sie bleiben erhalten."
+    },
+    "updates": {
+      "check": "Nach Updates suchen",
+      "checking": "Wird geprüft…",
+      "checkTitle": "Die geladenen Familien mit den Katalogen vergleichen, die erneut aus dem Internet geladen werden",
+      "badge": "Update verfügbar",
+      "badgeTitle": "{catalog} hat eine neuere Version: {version}",
+      "found": {
+        "zero": "Alle geladenen Familien sind aktuell.",
+        "one": "{count} geladene Familie hat ein Update.",
+        "other": "{count} geladene Familien haben ein Update."
+      },
+      "noLongerListed": "Nicht mehr im Katalog: {names}"
     }
   },
   "similar": {

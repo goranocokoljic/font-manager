@@ -1324,6 +1324,19 @@
       "scanFailed": "The files are downloaded, but the folder could not be read again: {message}",
       "retry": "Try again",
       "stopped": "The download stopped before the end: {message} Only the files counted above were written, and they are kept."
+    },
+    "updates": {
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "checkTitle": "Compare the families you downloaded with the catalogs, fetched again from the internet",
+      "badge": "Update available",
+      "badgeTitle": "{catalog} has a newer version: {version}",
+      "found": {
+        "zero": "Every downloaded family is up to date.",
+        "one": "{count} downloaded family has an update.",
+        "other": "{count} downloaded families have an update."
+      },
+      "noLongerListed": "No longer in the catalog: {names}"
     }
   },
   "similar": {
