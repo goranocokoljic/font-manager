@@ -23,6 +23,7 @@ import type {
   AddSourceRequest,
   Clash,
   AppFolders,
+  EndpointInfo,
   AppInfo,
   Collection,
   CollectionFacesRequest,
@@ -282,6 +283,10 @@ export interface FmClient {
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
   getAppFolders(): Promise<AppFolders>;
+  /** The local API endpoint: its address (while it runs) and the token (Settings → Local API). */
+  endpointInfo(): Promise<EndpointInfo>;
+  /** Makes a new local API token; the old one fails at once. */
+  regenerateEndpointToken(): Promise<EndpointInfo>;
   scan(req: ScanRequest): Promise<JobId>;
   /** Subscribes to the fm-api event stream; the UI subscribes, it does not poll. */
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
@@ -395,6 +400,8 @@ export const tauriClient: FmClient = {
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
+  endpointInfo: () => invoke<EndpointInfo>('endpoint_info'),
+  regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),
   scan: (req) => invoke<JobId>('scan', { req }),
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {

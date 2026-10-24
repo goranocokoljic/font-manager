@@ -14,6 +14,7 @@ brotli = "9.0"
 flate2 = "1.1"
 fm-api.workspace = true
 fm-platform.workspace = true
+getrandom.workspace = true
 harfrust = "0.14"
 notify = "8.2"
 read-fonts = "0.45"

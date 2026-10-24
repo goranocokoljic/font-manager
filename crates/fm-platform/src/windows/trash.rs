@@ -167,7 +167,7 @@ fn record_of(recycled: &Path) -> Option<PathBuf> {
 
 /// The string SID of the user running the app (`S-1-5-21-…`), the name of
 /// their folder in each `$Recycle.Bin`.
-fn user_sid() -> io::Result<String> {
+pub(crate) fn user_sid() -> io::Result<String> {
     let mut token = HANDLE::default();
     // SAFETY: the pseudo handle of this process needs no closing; `token`
     // is a valid out pointer, closed below.

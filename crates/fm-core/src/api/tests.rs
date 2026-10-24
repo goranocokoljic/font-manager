@@ -4040,3 +4040,36 @@ fn catalogs_without_a_data_folder_are_not_available() {
         ErrorCode::Unsupported
     );
 }
+
+#[test]
+fn the_local_api_needs_a_data_folder_and_then_publishes_and_regenerates() {
+    let lib = Lib::new("endpoint");
+    // Without `with_endpoint_in` (the tests' API, like no data folder).
+    let e = lib.api.endpoint_info().expect_err("no data folder");
+    assert_eq!(e.code, fm_api::ErrorCode::Unsupported);
+    assert_eq!(
+        lib.api
+            .regenerate_endpoint_token()
+            .expect_err("no data folder")
+            .code,
+        fm_api::ErrorCode::Unsupported
+    );
+    assert!(lib.api.unpublish_endpoint().is_ok(), "nothing to remove");
+
+    let api = Lib::new("endpoint-on")
+        .api
+        .with_endpoint_in(lib.paths.data.clone());
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 40001));
+    let before = api.endpoint_info().expect("info");
+    assert_eq!(before.url, None);
+    let published = api.publish_endpoint(addr).expect("publish");
+    assert_eq!(published.url.as_deref(), Some("http://127.0.0.1:40001"));
+    assert_eq!(published.token, before.token);
+    let file = lib.paths.data.join(crate::endpoint::DISCOVERY_FILE);
+    assert!(file.exists());
+    let next = api.regenerate_endpoint_token().expect("regenerate");
+    assert_ne!(next.token, before.token);
+    assert_eq!(api.endpoint_info().expect("info"), next);
+    api.unpublish_endpoint().expect("unpublish");
+    assert!(!file.exists());
+}

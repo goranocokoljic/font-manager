@@ -65,6 +65,7 @@ const SETTINGS_TABS = [
   'Appearance',
   'Online catalogs',
   'Advanced',
+  'Local API',
   'About',
 ];
 
