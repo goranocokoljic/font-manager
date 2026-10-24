@@ -277,6 +277,13 @@ describe('regression gate (E9.2)', () => {
     }
   });
 
+  test('bench:accept lets a regression within budget pass, never one over budget', () => {
+    const gated = gate(linux({ cold_start: 600, search: 51 }), nightly({ cold_start: 400, search: 40 }));
+    assert.deepEqual(blocking(gated).sort(), ['linux.cold_start', 'linux.search']);
+    assert.deepEqual(blocking(gated, { accept: true }), ['linux.search'], 'over the 50 ms budget still blocks');
+    assert.equal(parseCli(['gate', '--accept']).accept, true);
+  });
+
   test('crossing the budget fails even by less than 10%', () => {
     assert.equal(gate(linux({ cold_start: 1020 }), nightly({ cold_start: 980 }))['linux.cold_start'].regressed, true);
   });
@@ -458,7 +465,7 @@ describe('bench workflow', () => {
   });
 
   test('a PR is gated against main and flagged with a comment (E9.2)', () => {
-    assert.match(yml, /if \[ -n "\$PR_NUMBER" \]; then[\s\S]*?bench\.mjs gate --current out\/bench-report\.json --history history \|\| status=\$\?/);
+    assert.match(yml, /if \[ -n "\$PR_NUMBER" \]; then[\s\S]*?bench\.mjs gate --current out\/bench-report\.json --history history \$ACCEPT \|\| status=\$\?/);
     const gateAt = yml.indexOf('bench.mjs gate');
     assert.ok(gateAt > yml.indexOf('bench.mjs history') && gateAt < yml.indexOf('bench.mjs trend'), 'history, gate, trend');
     assert.match(yml, /if: always\(\) && github\.event_name == 'pull_request'\n\s+continue-on-error: true[\s\S]*?bench\.mjs comment --pr "\$PR_NUMBER" --body out\/trend\.md/);
