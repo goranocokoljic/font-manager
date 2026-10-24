@@ -250,12 +250,20 @@ export type CatalogFamily = {
 	 *  does not; its license comes with the files.
 	 */
 	license?: OpenLicense | null,
+	/**
+	 *  The license's name as the catalog gives it, also for a license that
+	 *  is not an open license (Fontshare's "ITF Free Font License"); `None`
+	 *  when the index names no license.
+	 */
+	licenseName?: string | null,
 };
 
 /**  A catalog the app knows how to read. */
 export type CatalogId = 
 /**  Google Fonts (fonts.google.com). */
-"googleFonts";
+"googleFonts" | 
+/**  Fontshare (fontshare.com), Indian Type Foundry's free fonts. */
+"fontshare";
 
 /**  Names one catalog. */
 export type CatalogRef = {

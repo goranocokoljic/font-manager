@@ -1,0 +1,747 @@
+{
+ "count": 4,
+ "has_more": false,
+ "fonts": [
+  {
+   "id": "b1053935-ce3e-46a0-9eef-a1b74337212c",
+   "name": "Kihim",
+   "version": "1.0",
+   "script": "latin",
+   "category": "Display",
+   "inserted_at": "2021-10-09T11:03:29Z",
+   "designers": [
+    {
+     "name": "Rocky Malaviya"
+    }
+   ],
+   "slug": "kihim",
+   "license_type": "itf_ffl",
+   "axes": [],
+   "styles": [
+    {
+     "default": true,
+     "id": "b7fd9c34-6a2e-472c-b4e4-dde4e7185aeb",
+     "file": "//cdn.fontshare.com/wf/KOGNLTCKMHYTVPJIEQEW4B7BPUKAQGXM/XLAHRPYFN6ZW2PAIAUG3R33QFYFJN5QB/4TN7YRXJ3XQYLUTKR4IXYSO62CQLPOJO",
+     "weight": {
+      "label": "Regular",
+      "name": "Regular",
+      "number": 400,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    }
+   ]
+  },
+  {
+   "id": "b37c8f3a-5635-4b57-9628-06c6cd25d7e3",
+   "name": "General Sans",
+   "version": "1.0",
+   "script": "latin",
+   "category": "Sans",
+   "inserted_at": "2021-03-12T20:35:03Z",
+   "designers": [
+    {
+     "name": "Frode Helland"
+    }
+   ],
+   "slug": "general-sans",
+   "license_type": "itf_ffl",
+   "axes": [
+    {
+     "name": "wght",
+     "property": "wght",
+     "range_left": 200,
+     "range_right": 700,
+     "range_default": 250
+    }
+   ],
+   "styles": [
+    {
+     "default": false,
+     "id": "69b37f2d-2393-405f-acd6-ebada909d55d",
+     "file": "//cdn.fontshare.com/wf/FSGJYPLPXRLVZAZIVVF74LDN3Q3S2WUF/S5KG2IZFL42XIGI5UEGBWGDAYOGDCUXQ/XC3ORZWTJXPLYORAWMH6ZXES6GBV3W5L",
+     "weight": {
+      "label": "Extralight",
+      "name": "Extralight",
+      "number": 200,
+      "weight": 200,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "5e809a1a-1fef-486a-8cf7-2fa7f515a2f5",
+     "file": "//cdn.fontshare.com/wf/SK6LO24VHSNCBK22HPNN754CZCVWE5MG/45SGHCAPKETU6PVYRSN24BZ6542XVEO7/2RR4C66MFQLZHNGTYR4MOLXHMBDI4GH5",
+     "weight": {
+      "label": "Extralight Italic",
+      "name": "ExtralightItalic",
+      "number": 201,
+      "weight": 200,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "9a4a3e92-230a-4aee-aada-14e98faa270e",
+     "file": "//cdn.fontshare.com/wf/HFTXPYOBEE22ON2ZH2TDSTBQLGERA7LU/4AOH2PGTMHZO2YX5HMTOAV52ONC3WIXE/TW4KNQIPR4LNP4I6I6C6HKQ23B2EQAU5",
+     "weight": {
+      "label": "Light",
+      "name": "Light",
+      "number": 300,
+      "weight": 300,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "9375ca23-7db7-417e-916d-b29509872c78",
+     "file": "//cdn.fontshare.com/wf/HP3OLGI4FZQOEKZSBKGAS2GNVBXMQFN6/62TU7CTLGHWAIYQX4HBC5OBID4ONBIT2/NCX5HIWY7RWQAAWGBX7MHE2SYGQLFBC6",
+     "weight": {
+      "label": "Light Italic",
+      "name": "LightItalic",
+      "number": 301,
+      "weight": 300,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "1882923f-b220-4fbb-bcc2-985902e8f3c7",
+     "file": "//cdn.fontshare.com/wf/MFQT7HFGCR2L5ULQTW6YXYZXXHMPKLJ3/YWQ244D6TACUX5JBKATPOW5I5MGJ3G73/7YY3ZAAE3TRV2LANYOLXNHTPHLXVWTKH",
+     "weight": {
+      "label": "Regular",
+      "name": "Regular",
+      "number": 400,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "630e1257-4664-4d16-ba28-5590ebbd5624",
+     "file": "//cdn.fontshare.com/wf/GQOITZI54NH6HDBP26XAMQYTXB4JQ3NQ/VY7SXNCPHYFLQTOFY72GM4OZTBH62U2D/AHPLTG2YASI4OYLGJV4CF3P25VBHPK5X",
+     "weight": {
+      "label": "Italic",
+      "name": "Italic",
+      "number": 401,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "f6fe55e4-b53b-464b-9c37-8552efa33075",
+     "file": "//cdn.fontshare.com/wf/3RZHWSNONLLWJK3RLPEKUZOMM56GO4LJ/BPDRY7AHVI3MCDXXVXTQQ76H3UXA63S3/SB2OEB6IKZPRR6JT4GFJ2TFT6HBB6AZN",
+     "weight": {
+      "label": "Medium",
+      "name": "Medium",
+      "number": 500,
+      "weight": 500,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "eda681d0-7f0e-440a-aa95-44ca15047590",
+     "file": "//cdn.fontshare.com/wf/ST6AL2GVQRSWVDOXZNSHY2SMWYYSVFEK/WJ26NN5JS6IPLBXEKX7WHB7HACXDTAKH/H7W54QQR2V6KL5KMDA2PD2KSQRCZHPRE",
+     "weight": {
+      "label": "Medium Italic",
+      "name": "MediumItalic",
+      "number": 501,
+      "weight": 500,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "d133f198-5875-43e3-82cb-4e7598cb37eb",
+     "file": "//cdn.fontshare.com/wf/K46YRH762FH3QJ25IQM3VAXAKCHEXXW4/ISLWQPUZHZF33LRIOTBMFOJL57GBGQ4B/3ZLMEXZEQPLTEPMHTQDAUXP5ZZXCZAEN",
+     "weight": {
+      "label": "Semibold",
+      "name": "Semibold",
+      "number": 600,
+      "weight": 600,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "e2a07307-e005-48f3-81d6-5b7193108ff0",
+     "file": "//cdn.fontshare.com/wf/T2VB54RK54AYH45QBSFO6FWJJBOGDZQS/WZUJLZL2KK72TQFDHQ6EV4KREZ7WEUL2/6FVUUVSLJPCCVHIJND4LQZIT4MFZBXYJ",
+     "weight": {
+      "label": "Semibold Italic",
+      "name": "SemiboldItalic",
+      "number": 601,
+      "weight": 600,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "0a2b0be7-3aab-4a32-a245-d3ae10149504",
+     "file": "//cdn.fontshare.com/wf/KWXO5X3YW4X7OLUMPO4X24HQJGJU7E2Q/VOWUQZS3YLP66ZHPTXAFSH6YACY4WJHT/NIQ54PVBBIWVK3PFSOIOUJSXIJ5WTNDP",
+     "weight": {
+      "label": "Bold",
+      "name": "Bold",
+      "number": 700,
+      "weight": 700,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "3158a2d0-6cc9-4701-8279-43781c612ee4",
+     "file": "//cdn.fontshare.com/wf/IZAMKIKJNFHYAA4XTXOGUSQUJWNXQHPE/2S5HU7TKNAV6MHTRNU2NPZD7U4OT6VKE/HCZ5OQRTYQOAVSHRS6UOFWUZ5CGI6JRO",
+     "weight": {
+      "label": "Bold Italic",
+      "name": "BoldItalic",
+      "number": 701,
+      "weight": 700,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": true,
+     "id": "562ef971-7491-4d21-852e-4751b3f85b2e",
+     "file": "//cdn.fontshare.com/wf/LHQJ5KSAL7VGAEIDSTEXCCOIUKFLT2I6/GW57XUEG4ZBVMLZZTQZTGYPROITRRQ5W/JA3IZUEMJ2J6WWT2OQVJOAWDXO3YL4YG",
+     "weight": {
+      "label": "Variable",
+      "name": "Variable",
+      "number": 1,
+      "weight": 0,
+      "native_name": null
+     },
+     "is_variable": true,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "f2b49980-639b-4b84-b77a-acdc0a302c7d",
+     "file": "//cdn.fontshare.com/wf/RRO6TYZXO7WQBHSH4BZYSTI7E7T2HKLF/55LXPUDQQQTSLB3M2T377FIN2EKQQWJY/3HUYMY6WP3BZQYPOVGG6IZQAM476CQDC",
+     "weight": {
+      "label": "Variable Italic",
+      "name": "VariableItalic",
+      "number": 2,
+      "weight": 0,
+      "native_name": null
+     },
+     "is_variable": true,
+     "is_italic": true
+    }
+   ]
+  },
+  {
+   "id": "0be0d575-ed09-4d44-90df-c28ddb50fb10",
+   "name": "Gambetta",
+   "version": "1.0",
+   "script": "latin",
+   "category": "Serif",
+   "inserted_at": "2021-03-12T20:33:23Z",
+   "designers": [
+    {
+     "name": "Paul Troppmar"
+    }
+   ],
+   "slug": "gambetta",
+   "license_type": "itf_ffl",
+   "axes": [
+    {
+     "name": "wght",
+     "property": "wght",
+     "range_left": 300,
+     "range_right": 700,
+     "range_default": 620
+    },
+    {
+     "name": "wght",
+     "property": "wght",
+     "range_left": 300,
+     "range_right": 700,
+     "range_default": 620
+    }
+   ],
+   "styles": [
+    {
+     "default": false,
+     "id": "81f8c272-4179-4131-bb6e-04e2fe17e052",
+     "file": "//cdn.fontshare.com/wf/54LXI2OCUZKIGXGLIPZLVAKCWLEVCWJ5/SMBRL4FXBYZFKSDA2XRPY55FMWX246T3/XV7ESZCVQJEU7XKHJW4AOX3XECHBBT2B",
+     "weight": {
+      "label": "Light",
+      "name": "Light",
+      "number": 300,
+      "weight": 300,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "313991d4-bc8a-4d32-8df0-669d10debe3d",
+     "file": "//cdn.fontshare.com/wf/IRIZVFO2UHI3QC7JVG4POXHIBG3CWFOL/7BTSPFB27IAXMIHAT72YQ63JRQ4RBE6G/ILBJATBRNJ556VYMTS5DDKBCKUGNCPEE",
+     "weight": {
+      "label": "Light Italic",
+      "name": "LightItalic",
+      "number": 301,
+      "weight": 300,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "333a1325-6e9e-4b84-a360-5423ad456cab",
+     "file": "//cdn.fontshare.com/wf/UZPXFLPCL3LPXEMLR5DTVJKV74OXXAV4/6OFIA3NPHGHWKE52SKZL7EQ4WH22JUMB/ODDSCHC7OZCRRQJDJV5LMJKTGF7URFO4",
+     "weight": {
+      "label": "Regular",
+      "name": "Regular",
+      "number": 400,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "61df98f3-3f96-4f8f-9603-6a0dd8212ae9",
+     "file": "//cdn.fontshare.com/wf/ITJUM5VVHQ7UW5EENVHV4QTRJFMNJPQT/KI4FEPIIYE3LPFVXSBL2RIVU6YIZOCWI/Z2AWFZWVPYXOZJYIQOV77P3V5Z2O33AT",
+     "weight": {
+      "label": "Italic",
+      "name": "Italic",
+      "number": 401,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "7e0ca611-da7e-49ee-a824-c3218cbf32b2",
+     "file": "//cdn.fontshare.com/wf/LTP7L3IV35TGGKXISPM35MXAMA7PX7BF/JOULNGXDDVVIJYXX35DI2FQJG2H4EOGJ/UMQTMTAEPCAFNEJDVEURBIXJENGOHOWO",
+     "weight": {
+      "label": "Medium",
+      "name": "Medium",
+      "number": 500,
+      "weight": 500,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "28bf01b7-abe8-41d4-aa30-ece5c3f27aa9",
+     "file": "//cdn.fontshare.com/wf/Z733ZIBC3YYP5ABJAMHNXJILE7QARCRY/DHHCV5DIQ6ZI5ZDXSPISAWTLJZBPLVER/IFFC5J45KUWNSRFYNLY7VMH6G6DXY2PW",
+     "weight": {
+      "label": "Medium Italic",
+      "name": "MediumItalic",
+      "number": 501,
+      "weight": 500,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "fc6a91f1-266f-4d12-b9cc-a81e423413fb",
+     "file": "//cdn.fontshare.com/wf/65DOO47KPW62HT2XE74NDRJWHMMD66TW/5PVPZKX2K4M6LDOCQUGGRQ7DLAVNXB2D/6KRVTMHEY26GBVOWXYL6F3ZLGUXE5ZD5",
+     "weight": {
+      "label": "Semibold",
+      "name": "Semibold",
+      "number": 600,
+      "weight": 600,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "8f7a64b8-205d-48cf-9d5a-3846b15d95d0",
+     "file": "//cdn.fontshare.com/wf/PH6ENVG2QRPJWBYIY5ZXDKJUQ6XYHPBA/TVCSC3QRP2VH77FCIZ4MISMVLSTZMAZU/YZCQBSKG3EM2SUMT7JFE332JUSKFVRR3",
+     "weight": {
+      "label": "Semibold Italic",
+      "name": "SemiboldItalic",
+      "number": 601,
+      "weight": 600,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "d1c9a518-c05c-446f-8275-84ab3da67663",
+     "file": "//cdn.fontshare.com/wf/WOIRGZ7T5ERZLQWEZC5Y5LLHOCZXTMCM/R2YNHTDIDGFZLQWUMMIJSSFU2CUMQYZ5/RMBKFTS6UFOXVBCL3EVCXLWRQBA3PN4K",
+     "weight": {
+      "label": "Bold",
+      "name": "Bold",
+      "number": 700,
+      "weight": 700,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "043d551f-b484-429a-adef-8b1ca6cdce5e",
+     "file": "//cdn.fontshare.com/wf/CVZIZER2LP5FIQPAQXVIO575UZKRLE3W/5CW22FQED2LBUGTZVJE7VRIVAFDIGYA2/ON7F73RFEWRMXOZSHNFD7LWNU2EMMTYZ",
+     "weight": {
+      "label": "Bold Italic",
+      "name": "BoldItalic",
+      "number": 701,
+      "weight": 700,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": true,
+     "id": "1a8767bc-c5a4-4b51-98b3-a664bbbbe502",
+     "file": "//cdn.fontshare.com/wf/KF6223JOZFTD7NR7IMVECSOT3R43BE2B/TQPO7YGAI6O7DJGTUUZNDSZCZ45HM7AA/5ZRASRUCHEY46ZB6T6A2OKXSW5JB4C5M",
+     "weight": {
+      "label": "Variable",
+      "name": "Variable",
+      "number": 1,
+      "weight": 0,
+      "native_name": null
+     },
+     "is_variable": true,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "c695146a-b97a-41d4-8e80-5696dd5d095f",
+     "file": "//cdn.fontshare.com/wf/PMNFESIVGZWELXBWOE4KEOW2HBZUTWQK/IPHBCP7PJIACKJKIVZ6R55WWL3JC7SGF/ZMIMUE36RZIMFJ34AVWZRQQEWM54OFWG",
+     "weight": {
+      "label": "Variable Italic",
+      "name": "VariableItalic",
+      "number": 2,
+      "weight": 0,
+      "native_name": null
+     },
+     "is_variable": true,
+     "is_italic": true
+    }
+   ]
+  },
+  {
+   "id": "077b2d1e-0625-4452-a2ae-eb4d8b593bca",
+   "name": "Literata",
+   "version": "3.021",
+   "script": "latin",
+   "category": "Serif",
+   "inserted_at": "2022-05-23T07:37:35Z",
+   "designers": [
+    {
+     "name": "TypeTogether"
+    }
+   ],
+   "slug": "literata",
+   "license_type": "sil_ofl",
+   "axes": [
+    {
+     "name": "Weight",
+     "property": "wght",
+     "range_left": 200,
+     "range_right": 900,
+     "range_default": 760
+    },
+    {
+     "name": "Optical Size",
+     "property": "opsz",
+     "range_left": 7,
+     "range_right": 72,
+     "range_default": 7
+    }
+   ],
+   "styles": [
+    {
+     "default": false,
+     "id": "1c7c13f0-e602-4dc3-8f0d-c7a37ccb1f6b",
+     "file": "//cdn.fontshare.com/wf/RC55MBXVWODRHHEMOV5KWOBKP6JCXVUG/2AJWQ4U6ZHLYACUWOG7ASG5HF54OJFQ6/VZ62GPD6XZVG3ELNIQNRH5LVCDCEM5YI",
+     "weight": {
+      "label": "Extra Light",
+      "name": "ExtraLight",
+      "number": 200,
+      "weight": 200,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "430d895e-60ad-4a6b-9e28-f4f578cb5931",
+     "file": "//cdn.fontshare.com/wf/LM73QGG6LOFJ52NUUZ4VHPYXIYEEMOKV/T7UMAIMTUUMG53QQQLNQGT2BYEFG4W26/GAIOLJL4B5TIMF2SYLMCPJCLJVDG2SFC",
+     "weight": {
+      "label": "Extra Light Italic",
+      "name": "ExtraLightItalic",
+      "number": 201,
+      "weight": 200,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "fcf28128-76ec-4abd-ab24-8033dfd83290",
+     "file": "//cdn.fontshare.com/wf/B65QZRGCRDY4UBOLQVTWSUBAU5ITCEVF/BDE5D4ZGL5YKVNZ5ER2WYDCTXDRYXN57/PBIQJW6SMGOXCPCKY64WETGO6PCUF4PW",
+     "weight": {
+      "label": "Light",
+      "name": "Light",
+      "number": 300,
+      "weight": 300,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "a39153dc-6680-4ed4-8be4-13a130b72bf1",
+     "file": "//cdn.fontshare.com/wf/J3AGS2Y2GRKXX5STTIYPCSUR6NUG5BJG/37CT5UGWXCYBFQGZUA67QSQQRICKU5QI/IX5LTG3ACRTWC52XA2C2ON37ZBGAT7X3",
+     "weight": {
+      "label": "Light Italic",
+      "name": "LightItalic",
+      "number": 301,
+      "weight": 300,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "272bffb8-93d7-4efa-acb6-09b7ac4faade",
+     "file": "//cdn.fontshare.com/wf/IHLKAM5Y4A2ZS5VXTXDLUZ2LB6O2P4PX/F32SXKG5NHNNJSRTDSICFW37TANPANWQ/FXMZX7QWHFRRDZIX4HZHD46UTQPCLCSB",
+     "weight": {
+      "label": "Regular",
+      "name": "Regular",
+      "number": 400,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "d824606c-e2ff-491c-9e8c-c796675a5208",
+     "file": "//cdn.fontshare.com/wf/TDFYGRKQUA4TSETCYNRKNETFKPBNU3AU/DKG5OWAXNQEQHSZ66TVJFNC6HZCEK6KZ/WM5LTV2SVHV3XC2IYYKCXKAZ25KN4G3B",
+     "weight": {
+      "label": "Italic",
+      "name": "Italic",
+      "number": 401,
+      "weight": 400,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "514344d4-750f-408b-bdee-c6e8382e8bc9",
+     "file": "//cdn.fontshare.com/wf/IBFCGT344NP5SQUYF42DDEAOKN56C2IG/D2QHZQNIHANTAW34AFSD2NBJHEYX6S2B/XSELBFGCSJHX4A3XZ7I72VVINBLWEVWY",
+     "weight": {
+      "label": "Medium",
+      "name": "Medium",
+      "number": 500,
+      "weight": 500,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "b7f9da24-7b49-438f-b734-852a599c77c7",
+     "file": "//cdn.fontshare.com/wf/V6ONISHHP5T7GLM5H5UXSNJEZSIFK4QC/SHIJNYLXGS2JEN4Q6TRPDHTMS6RDR7UZ/DJNP46EV7BIVEXI4MAKLA6AWAOMRYY7P",
+     "weight": {
+      "label": "Medium Italic",
+      "name": "MediumItalic",
+      "number": 501,
+      "weight": 500,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "e4f55186-bafe-4b76-9845-d1e2b4ae0476",
+     "file": "//cdn.fontshare.com/wf/32KCKTSJFWGOE4WQ5GLW4JMMI35YU2PT/4SIAVD35GGOJI3WORMF6SCUSAF2KD3IT/73SWKBQ3Q3CBPP4OAQMI27UV27LPTUD5",
+     "weight": {
+      "label": "Semi Bold",
+      "name": "SemiBold",
+      "number": 600,
+      "weight": 600,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "45a3726f-fda3-4794-9168-bbbae92cfc03",
+     "file": "//cdn.fontshare.com/wf/63FSUWFVGWPLULF6UAP55KGXLNIQPSE4/LXCBNQOCGPAY4A6XS7R6G3Q4AUXP5PC7/PLOTXGKTFBWXDORATPCI6ANZSE7OAZSF",
+     "weight": {
+      "label": "Semi Bold Italic",
+      "name": "SemiBoldItalic",
+      "number": 601,
+      "weight": 600,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "f55f8ba2-9bef-404d-812d-e0b80fab128e",
+     "file": "//cdn.fontshare.com/wf/WEXV4HCWGZB5DMGXDVOJJ2Y422K67IIF/DPNUP5KLI6F2DL6M5Y4P7IIMJYDB2DKJ/BYTTXLUEXBZFNUJKSRROFBQLFEVZCYND",
+     "weight": {
+      "label": "Bold",
+      "name": "Bold",
+      "number": 700,
+      "weight": 700,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "5b5bf9bf-2b48-4d11-ba76-2a739be17914",
+     "file": "//cdn.fontshare.com/wf/FKOGCBJDYVPQIXBVFQ5JQAOGMGO7HFR5/KKL7QDBKHZSGZD3LF5F4E3HGYL234WY2/ENT7CUPEY76XWHGFVYWAOICQIZHXJ6VH",
+     "weight": {
+      "label": "Bold Italic",
+      "name": "BoldItalic",
+      "number": 701,
+      "weight": 700,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "a4b85285-5ee8-4ee4-88d2-625b8ef2ef67",
+     "file": "//cdn.fontshare.com/wf/ZAQDNYQEE2CZ72OT5VQMMB4OCJINRYVI/S5KBRU6FDHMNV3RVZVUS52DRGWENDDV4/JGPWUPY6NKPJC5VYR6ILJR4PRQI5SP6B",
+     "weight": {
+      "label": "Extra Bold",
+      "name": "ExtraBold",
+      "number": 800,
+      "weight": 800,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "06b09e73-acb7-42e2-8bb1-d273968f88ed",
+     "file": "//cdn.fontshare.com/wf/LQI4JSMPGY5EWYQGTMJVBAQIBVDA7W2R/6NOIGJKN5TVP7GPZCSFGC6OUY6A7TYPO/VJ5TUNJIGSSUHFVF6EVVH3KUFRRL6SUR",
+     "weight": {
+      "label": "Extra Bold Italic",
+      "name": "ExtraBoldItalic",
+      "number": 801,
+      "weight": 800,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": false,
+     "id": "c3ad019b-c0ed-4645-b85f-5a73e2521b58",
+     "file": "//cdn.fontshare.com/wf/SFTFUEHDMATK6GHLKZFRVRCGK45PKISJ/ZAZUAIA3JXJD3AH4PI2RHQ5MG2XJOXYF/V2ZD27P6RUQ45O6K7QZWUFK7TP6RW2WE",
+     "weight": {
+      "label": "Black",
+      "name": "Black",
+      "number": 900,
+      "weight": 900,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "05a97066-c86f-41c8-a735-06f83620cd7d",
+     "file": "//cdn.fontshare.com/wf/LZLITLR5PYUHI4R5RRDNXWFNP3NOALVG/4IN3TS5SGZJVC74XA3ERIEDRA5W25MFV/MN36PO43M7YVDVTW6THGBXDZE4G4O6QE",
+     "weight": {
+      "label": "Black Italic",
+      "name": "BlackItalic",
+      "number": 901,
+      "weight": 900,
+      "native_name": null
+     },
+     "is_variable": false,
+     "is_italic": true
+    },
+    {
+     "default": true,
+     "id": "dad80b40-2c19-4f74-b592-37b099aa5d10",
+     "file": "//cdn.fontshare.com/wf/KN664EMG3NVEZG3VBPPRZPN5AQAGCY5X/MSM7FVKIBWW3Q6X65E2YJQPFW5MJY5WY/7EBS3IMYIOXQAIQHH3MHB5O6IEHHGXBJ",
+     "weight": {
+      "label": "Variable",
+      "name": "Variable",
+      "number": 1,
+      "weight": 0,
+      "native_name": null
+     },
+     "is_variable": true,
+     "is_italic": false
+    },
+    {
+     "default": false,
+     "id": "85e34596-d0e2-44e3-a4f1-2d289d6eadcc",
+     "file": "//cdn.fontshare.com/wf/G5TSYBYOS3B2UHUZXCPMI5R7FGXNUXPL/CWSD2Y6M7FPLW3TO3UXBXG442WT5DJ7N/ZPETCLDQL2VLZBKMQ6BZVA7D3ULIYGJJ",
+     "weight": {
+      "label": "Variable Italic",
+      "name": "VariableItalic",
+      "number": 2,
+      "weight": 0,
+      "native_name": null
+     },
+     "is_variable": true,
+     "is_italic": true
+    }
+   ]
+  }
+ ],
+ "count_total": 4
+}
