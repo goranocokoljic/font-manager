@@ -201,3 +201,59 @@ describe('catalogs store: opened before the list arrives', () => {
     expect(store.download).toBeNull();
   });
 });
+
+describe('catalogs store: update check (E22.4)', () => {
+  /** The mock with three earlier downloads, failing the test on any check at startup. */
+  function counting(options = {}) {
+    const client = createMockClient({ catalogUpdates: true, ...options });
+    const checks: boolean[] = [];
+    setClient({
+      ...client,
+      checkUpdates: (req) => {
+        checks.push(req.cachedOnly ?? false);
+        return client.checkUpdates(req);
+      },
+    });
+    return checks;
+  }
+
+  it('checks nothing on start; the button refreshes and finds the updates', async () => {
+    const checks = counting();
+    const store = useCatalogsStore();
+    await store.load();
+    store.show('googleFonts');
+    await flushPromises();
+    expect(checks, 'nothing checks on start').toEqual([]);
+    expect(store.updates).toBeNull();
+    expect(store.libraryUpdate('Inter')).toBeNull();
+
+    await store.setEnabled('googleFonts', true);
+    expect(checks, 'turning a catalog on fetches its list and checks nothing').toEqual([]);
+    expect(store.updates).toBeNull();
+
+    expect(await store.refresh()).toBe(true);
+    expect(checks, 'Refresh compares with the new list, no request').toEqual([true]);
+    expect(store.updateOf('googleFonts', 'Inter')?.availableVersion).toBe('2026-09-01');
+
+    expect(await store.checkUpdates()).toBe(true);
+    expect(checks).toEqual([true, false]);
+    expect(store.updates?.map((u) => [u.family, u.status])).toEqual([
+      ['Inter', 'updateAvailable'],
+      ['Retired Sans', 'noLongerListed'],
+    ]);
+    expect(store.libraryUpdate('Inter')?.downloadedVersion).toBe('2026-03-01');
+    expect(store.libraryUpdate('Lato'), 'the same version').toBeNull();
+    expect(store.libraryUpdate('Retired Sans'), 'no longer listed is no update').toBeNull();
+    expect(store.updateOf('fontshare', 'Inter')).toBeNull();
+  });
+
+  it('a failed check says why and keeps the last answer', async () => {
+    counting({ catalog: 'offline' });
+    const store = useCatalogsStore();
+    await store.load();
+    expect(await store.checkUpdates()).toBe(false);
+    expect(store.checkError?.code).toBe('io');
+    expect(store.updates).toBeNull();
+    expect(store.checking).toBe(false);
+  });
+});

@@ -17,8 +17,9 @@
 //!   ([`CoreApi::with_trash`]); without a trash it answers `Unsupported`
 //!   and moves nothing.
 //! - **Catalogs.** Online catalogs (E22.1) are off until the user turns
-//!   one on; only [`CatalogService::refresh_catalog`], a preview and
-//!   [`CatalogService::download_family`] go to the network. A download
+//!   one on; only [`CatalogService::refresh_catalog`], a preview,
+//!   [`CatalogService::download_family`] and
+//!   [`CatalogService::check_updates`] go to the network. A download
 //!   records its provenance in the index and rescans the source.
 //! - **Not built yet.** Export, workflows and similar-font search answer an
 //!   `Unsupported` error with a message for the user, never a panic.
@@ -35,8 +36,9 @@ use fm_api::activation::{
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
-    CatalogFontSource, CatalogRef, CatalogService, DownloadFamilyRequest, DownloadFamilyResponse,
-    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    CatalogFontSource, CatalogRef, CatalogService, CatalogUpdate, CheckUpdatesRequest,
+    DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
+    SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -1273,6 +1275,12 @@ impl CatalogService for CoreApi {
 
     fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>> {
         Ok(self.lock().catalog_downloads()?)
+    }
+
+    fn check_updates(&self, req: CheckUpdatesRequest) -> ApiResult<Vec<CatalogUpdate>> {
+        let catalogs = self.catalogs()?;
+        let downloads = self.lock().catalog_downloads()?;
+        Ok(catalogs.check_updates(&downloads, !req.cached_only)?)
     }
 }
 

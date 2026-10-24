@@ -351,6 +351,46 @@ export type CatalogStyle = {
 	slant: Slant,
 };
 
+/**
+ *  A downloaded family whose catalog has a newer version, or no longer lists
+ *  it (E22.4).
+ */
+export type CatalogUpdate = {
+	/**  The catalog it was downloaded from. */
+	catalog: CatalogId,
+	/**  The family's name, as the catalog listed it at the download. */
+	family: string,
+	/**
+	 *  The version recorded at the newest download of the family (Google
+	 *  Fonts: the date it last changed).
+	 */
+	downloadedVersion?: string | null,
+	/**
+	 *  The version the catalog has now; `None` when it no longer lists the
+	 *  family.
+	 */
+	availableVersion?: string | null,
+	/**  An update, or a family the catalog no longer lists. */
+	status: CatalogUpdateStatus,
+};
+
+/**  What the update check found for a downloaded family (E22.4). */
+export type CatalogUpdateStatus = 
+/**  The catalog has a newer version than the one downloaded. */
+"updateAvailable" | 
+/**  The catalog no longer lists the family: there is nothing to update to. */
+"noLongerListed";
+
+/**  Checks the downloaded families for updates (E22.4). */
+export type CheckUpdatesRequest = {
+	/**
+	 *  Compare with the cached lists as they are and make no request (the
+	 *  UI passes it right after a catalog Refresh). `false`, the default,
+	 *  refreshes the catalogs that have downloads first.
+	 */
+	cachedOnly?: boolean,
+};
+
 /**  Two active fonts with one PostScript name: one row of the Conflicts view. */
 export type Clash = {
 	/**  A face the app has active. */
@@ -2687,4 +2727,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 18, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 19, patch: 0 };

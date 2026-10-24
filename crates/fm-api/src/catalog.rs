@@ -263,6 +263,48 @@ pub struct DownloadFamilyResponse {
     pub error: Option<ApiError>,
 }
 
+/// What the update check found for a downloaded family (E22.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum CatalogUpdateStatus {
+    /// The catalog has a newer version than the one downloaded.
+    UpdateAvailable,
+    /// The catalog no longer lists the family: there is nothing to update to.
+    NoLongerListed,
+}
+
+/// A downloaded family whose catalog has a newer version, or no longer lists
+/// it (E22.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogUpdate {
+    /// The catalog it was downloaded from.
+    pub catalog: CatalogId,
+    /// The family's name, as the catalog listed it at the download.
+    pub family: String,
+    /// The version recorded at the newest download of the family (Google
+    /// Fonts: the date it last changed).
+    #[serde(default)]
+    pub downloaded_version: Option<String>,
+    /// The version the catalog has now; `None` when it no longer lists the
+    /// family.
+    #[serde(default)]
+    pub available_version: Option<String>,
+    /// An update, or a family the catalog no longer lists.
+    pub status: CatalogUpdateStatus,
+}
+
+/// Checks the downloaded families for updates (E22.4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckUpdatesRequest {
+    /// Compare with the cached lists as they are and make no request (the
+    /// UI passes it right after a catalog Refresh). `false`, the default,
+    /// refreshes the catalogs that have downloads first.
+    #[serde(default)]
+    pub cached_only: bool,
+}
+
 /// Online catalogs over a metadata cache.
 pub trait CatalogService {
     /// Every catalog the app knows, on or off, with the state of its cache.
@@ -297,6 +339,14 @@ pub trait CatalogService {
     /// Every family downloaded from a catalog, newest first, with where its
     /// files are now (matched by hash, so a moved file is followed).
     fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>>;
+    /// Refreshes every catalog that is on and has downloads (requests; only
+    /// on this call), then compares the version recorded at each family's
+    /// newest download with the catalog's: the families with a newer
+    /// version, and those the catalog no longer lists, by catalog and name.
+    /// A catalog that is off is skipped and not fetched. With
+    /// [`CheckUpdatesRequest::cached_only`] it makes no request. A failed
+    /// refresh is an error; the caches stay as they were.
+    fn check_updates(&self, req: CheckUpdatesRequest) -> ApiResult<Vec<CatalogUpdate>>;
 }
 
 #[cfg(test)]
@@ -359,5 +409,20 @@ mod tests {
         assert_eq!(answer.download.files[0].path, None);
         assert_eq!(answer.scan, JobId(7));
         assert_eq!(answer.error, None, "a finished download has no error");
+
+        let req: CheckUpdatesRequest = serde_json::from_str("{}").expect("cachedOnly defaults");
+        assert!(!req.cached_only, "the check refreshes by default");
+        let update = CatalogUpdate {
+            catalog: CatalogId::GoogleFonts,
+            family: "Lato".into(),
+            downloaded_version: Some("2025-01-01".into()),
+            available_version: None,
+            status: CatalogUpdateStatus::NoLongerListed,
+        };
+        let json = serde_json::to_value(&update).expect("json");
+        assert_eq!(json["status"], "noLongerListed");
+        assert_eq!(json["downloadedVersion"], "2025-01-01");
+        let back: CatalogUpdate = serde_json::from_value(json).expect("round trip");
+        assert_eq!(back, update);
     }
 }

@@ -2720,3 +2720,45 @@ fn a_catalog_font_source_needs_the_catalog_on_and_the_family_listed() {
         ErrorCode::NotFound
     );
 }
+
+#[test]
+fn the_mock_update_check_follows_the_rules_of_the_core() {
+    use fm_api::catalog::{
+        CatalogId, CatalogUpdateStatus, CheckUpdatesRequest, SetCatalogEnabledRequest,
+    };
+    let mock = MockApi::new();
+    let id = CatalogId::GoogleFonts;
+    // The mock families last changed on 2026-09-01.
+    mock.seed_catalog_download(id, "Lato", "2026-09-01");
+    mock.seed_catalog_download(id, "Inter", "2026-03-01");
+    mock.seed_catalog_download(id, "Retired Sans", "2025-01-01");
+    let api: Arc<dyn Api> = Arc::new(mock);
+    assert!(
+        api.check_updates(CheckUpdatesRequest::default())
+            .expect("off")
+            .is_empty(),
+        "an off catalog is skipped"
+    );
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert!(
+        api.check_updates(CheckUpdatesRequest { cached_only: true })
+            .expect("never refreshed")
+            .is_empty()
+    );
+    let updates = api
+        .check_updates(CheckUpdatesRequest::default())
+        .expect("check");
+    let found: Vec<(&str, CatalogUpdateStatus)> = updates
+        .iter()
+        .map(|u| (u.family.as_str(), u.status))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            ("Inter", CatalogUpdateStatus::UpdateAvailable),
+            ("Retired Sans", CatalogUpdateStatus::NoLongerListed),
+        ]
+    );
+    assert_eq!(updates[0].available_version.as_deref(), Some("2026-09-01"));
+}

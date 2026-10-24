@@ -932,3 +932,154 @@ fn safe_file_names_stay_inside_the_folder_on_every_os() {
     assert_eq!(safe_file_name("/").as_deref(), None);
     assert_eq!(safe_file_name("").as_deref(), None);
 }
+
+/// A recorded download of `family` from `catalog` at `version`.
+fn recorded(catalog: CatalogId, family: &str, version: Option<&str>) -> CatalogDownload {
+    CatalogDownload {
+        catalog,
+        family: family.to_owned(),
+        catalog_family_id: family.to_owned(),
+        version: version.map(str::to_owned),
+        kind: CatalogFileKind::Static,
+        downloaded_at: "2026-10-24T08:00:00Z".to_owned(),
+        source: fm_api::SourceId(1),
+        folder: format!("/fonts/{family}"),
+        files: Vec::new(),
+    }
+}
+
+/// Catalogs over HTTP to a server with the recorded Google Fonts index,
+/// Google Fonts on and never refreshed; Fontshare known and off.
+fn checking(dir: &TempDir) -> (Catalogs, crate::test_support::LocalServer) {
+    let server =
+        crate::test_support::LocalServer::start(vec![("/metadata/fonts", 200, index_fixture())]);
+    let c = Catalogs::new(
+        dir.path().join(CATALOGS_DIR),
+        Arc::new(HttpFetcher::new()),
+        vec![
+            Arc::new(GoogleFonts::with_base_url(server.base())),
+            Arc::new(crate::catalog::fontshare::Fontshare::with_base_url(
+                server.base(),
+            )),
+        ],
+    );
+    c.set_enabled(GOOGLE, true).expect("on");
+    (c, server)
+}
+
+#[test]
+fn the_update_check_reports_newer_versions_and_families_no_longer_listed() {
+    let dir = TempDir::new("catalog-updates");
+    let (c, server) = checking(&dir);
+    // Newest first, as the index lists them. In the fixture Lato, Bebas Neue
+    // and Roboto Flex last changed on 2025-09-16, 2025-09-16 and 2025-09-04.
+    let downloads = vec![
+        recorded(GOOGLE, "Lato", Some("2025-01-20")),
+        recorded(GOOGLE, "Bebas Neue", Some("2025-09-16")),
+        recorded(GOOGLE, "Retired Sans", Some("2024-02-02")),
+        recorded(GOOGLE, "Roboto Flex", Some("2026-01-01")),
+        recorded(GOOGLE, "Playfair Display", None),
+        // An older download of Lato: the newest one is compared.
+        recorded(GOOGLE, "Lato", Some("2025-09-16")),
+        recorded(CatalogId::Fontshare, "Satoshi", Some("1.0")),
+    ];
+    let updates = c.check_updates(&downloads, true).expect("check");
+    assert_eq!(
+        updates,
+        vec![
+            CatalogUpdate {
+                catalog: GOOGLE,
+                family: "Lato".into(),
+                downloaded_version: Some("2025-01-20".into()),
+                available_version: Some("2025-09-16".into()),
+                status: CatalogUpdateStatus::UpdateAvailable,
+            },
+            CatalogUpdate {
+                catalog: GOOGLE,
+                family: "Retired Sans".into(),
+                downloaded_version: Some("2024-02-02".into()),
+                available_version: None,
+                status: CatalogUpdateStatus::NoLongerListed,
+            },
+        ],
+        "an equal, an older or an unknown version is no update"
+    );
+    assert_eq!(
+        server.hits(),
+        1,
+        "Google Fonts refreshed once; Fontshare is off and not fetched"
+    );
+    assert!(c.list().expect("list")[0].refreshed_at.is_some());
+}
+
+#[test]
+fn the_update_check_from_the_cache_makes_no_request() {
+    let dir = TempDir::new("catalog-updates-cached");
+    let (c, server) = checking(&dir);
+    let downloads = vec![recorded(GOOGLE, "Lato", Some("2025-01-20"))];
+    assert!(
+        c.check_updates(&downloads, false)
+            .expect("never refreshed")
+            .is_empty(),
+        "no cache, nothing to compare"
+    );
+    assert_eq!(server.hits(), 0);
+    c.refresh(GOOGLE).expect("refresh");
+    let updates = c.check_updates(&downloads, false).expect("cached");
+    assert_eq!(updates.len(), 1);
+    assert_eq!(updates[0].status, CatalogUpdateStatus::UpdateAvailable);
+    assert_eq!(server.hits(), 1, "only the refresh fetched");
+}
+
+#[test]
+fn a_failed_update_check_is_an_error_and_keeps_the_cache() {
+    let dir = TempDir::new("catalog-updates-failed");
+    let (c, fetcher) = refreshed(&dir);
+    fetcher.set(Err(FmError::new(ErrorCode::Io, "offline")));
+    let downloads = vec![recorded(GOOGLE, "Retired Sans", Some("2024-02-02"))];
+    let e = c.check_updates(&downloads, true).expect_err("offline");
+    assert_eq!(e.code(), ErrorCode::Io);
+    assert!(e.message().contains("Google Fonts could not be refreshed"));
+    assert_eq!(c.list().expect("list")[0].family_count, 5, "cache kept");
+    assert_eq!(
+        c.check_updates(&[], true).expect("no downloads"),
+        Vec::new()
+    );
+    assert_eq!(fetcher.calls(), 2, "nothing to check, nothing fetched");
+}
+
+#[test]
+fn an_off_catalog_is_skipped_by_the_update_check() {
+    let dir = TempDir::new("catalog-updates-off");
+    let (c, fetcher) = refreshed(&dir);
+    c.set_enabled(GOOGLE, false).expect("off");
+    let downloads = vec![recorded(GOOGLE, "Retired Sans", Some("2024-02-02"))];
+    assert!(c.check_updates(&downloads, true).expect("off").is_empty());
+    assert_eq!(fetcher.calls(), 1, "only the first refresh");
+}
+
+#[test]
+fn versions_compare_by_their_numbers() {
+    for (now, had) in [
+        ("2025-09-16", "2025-01-20"),
+        ("2026-01-02", "2025-12-31"),
+        ("1.10", "1.9"),
+        ("Version 2.000", "Version 1.002"),
+        ("1.0.1", "1"),
+        ("10", "9"),
+        ("b", "a"),
+    ] {
+        assert!(is_newer_version(now, had), "{now} > {had}");
+    }
+    for (now, had) in [
+        ("2025-09-16", "2025-09-16"),
+        ("2025-09-04", "2026-01-01"),
+        ("1.0", "1"),
+        ("1.000", "1.0"),
+        ("Version 1.002", "1.002"),
+        ("a", "a"),
+        ("99999999999999999999998", "99999999999999999999999"),
+    ] {
+        assert!(!is_newer_version(now, had), "{now} is not newer than {had}");
+    }
+}
