@@ -1085,6 +1085,52 @@ fn previews_and_font_sources() {
 }
 
 #[test]
+fn pairings_follow_the_rules_one_face_per_other_family() {
+    use fm_api::search::PairingRequest;
+    let api = api();
+    let got = api
+        .suggest_pairings(PairingRequest {
+            face: FaceId(1),
+            limit: 10,
+        })
+        .unwrap();
+    // Inter (sans): Source Serif 4 by contrast first, through its Regular;
+    // never Inter's own Italic.
+    let first = &got[0];
+    assert_eq!(first.face.id, FaceId(3));
+    assert_eq!(
+        first.reasons,
+        ["contrast: sans serif with serif", "similar x-height"]
+    );
+    assert!((first.score - 0.5).abs() < 1e-6);
+    assert!(got.iter().all(|s| s.face.family != FamilyId(1)));
+    let families: Vec<FamilyId> = got.iter().map(|s| s.face.family).collect();
+    assert_eq!(families, [FamilyId(2), FamilyId(3), FamilyId(4)]);
+    assert!(
+        got[1..]
+            .iter()
+            .all(|s| s.reasons == ["similar x-height"] && s.score < first.score)
+    );
+
+    let one = api
+        .suggest_pairings(PairingRequest {
+            face: FaceId(1),
+            limit: 1,
+        })
+        .unwrap();
+    assert_eq!(one.len(), 1);
+    assert_eq!(
+        api.suggest_pairings(PairingRequest {
+            face: FaceId(99),
+            limit: 5
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::NotFound
+    );
+}
+
+#[test]
 fn problems_list_unsupported_files_and_system_clashes() {
     let kinds: Vec<_> = api()
         .list_problems()

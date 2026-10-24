@@ -173,6 +173,19 @@ fn search_times_every_query_for_every_round() {
 }
 
 #[test]
+fn pairings_are_timed_for_the_first_faces() {
+    let home = TempDir::new("pairings");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = pairings(home.path(), 2).expect("pairings");
+    assert_eq!(res.faces, PAIRING_FACES as usize, "{res:?}");
+    assert_eq!(res.samples, res.faces * 2, "{res:?}");
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+}
+
+#[test]
 fn smart_collections_are_made_once_and_timed() {
     let home = TempDir::new("smart");
     first_scan(&fixtures(), home.path()).expect("scan");

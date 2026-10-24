@@ -41,6 +41,7 @@ pub(crate) const FAMILY: usize = 0;
 #[cfg(test)]
 const STYLE: usize = 1;
 pub(crate) const FOUNDRY: usize = 3;
+pub(crate) const DESIGNER: usize = 4;
 
 /// What a face offers to the search: its fields, prepared for matching, and
 /// its style.

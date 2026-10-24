@@ -22,7 +22,7 @@ use fm_api::ids::FaceId;
 use fm_api::library::{LibraryService, ListFamiliesRequest, SourceKind};
 use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
-use fm_api::search::{Filters, SearchRequest, Supports};
+use fm_api::search::{Filters, PairingRequest, SearchRequest, Supports};
 use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
@@ -278,6 +278,68 @@ pub fn search(home: &Path, rounds: usize) -> BenchResult<Searched> {
         max_ms: samples.last().copied().unwrap_or_default(),
         slowest: slowest.1,
         families,
+    })
+}
+
+/// Faces the pairing measurement asks suggestions for: the first face of
+/// this many families.
+pub const PAIRING_FACES: u32 = 20;
+
+/// Pairing latency (E23.4): `suggest_pairings` for the first face of the
+/// first [`PAIRING_FACES`] families.
+#[derive(Debug, Serialize)]
+pub struct PairingTimed {
+    /// Timed calls.
+    pub samples: usize,
+    /// Faces asked about.
+    pub faces: usize,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// Times `suggest_pairings` (12 suggestions, as the Compare sheet asks) for
+/// the first face of the first [`PAIRING_FACES`] families of the index in
+/// `home`, each `rounds` times after one untimed call.
+pub fn pairings(home: &Path, rounds: usize) -> BenchResult<PairingTimed> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let families = api.list_families(ListFamiliesRequest {
+        page: Page {
+            offset: 0,
+            limit: PAIRING_FACES,
+        },
+        ..ListFamiliesRequest::default()
+    })?;
+    let mut samples = Vec::with_capacity(families.items.len() * rounds);
+    for family in &families.items {
+        let req = PairingRequest {
+            face: FaceId(family.id.0),
+            limit: 12,
+        };
+        api.suggest_pairings(req)?;
+        for _ in 0..rounds {
+            let begin = Instant::now();
+            api.suggest_pairings(req)?;
+            samples.push(ms(begin.elapsed()));
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(PairingTimed {
+        samples: samples.len(),
+        faces: families.items.len(),
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
     })
 }
 

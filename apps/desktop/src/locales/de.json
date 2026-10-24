@@ -155,6 +155,20 @@
     "overlayLabel": "Überlagerung von {names}, {size} px",
     "legend": "Legende",
     "removeLabel": "{name} aus dem Vergleich entfernen",
+    "pairings": {
+      "title": "Kombinationen für {name}",
+      "hint": "Schriften anderer Familien, die nach den Regeln zur ersten angehefteten Schrift passen.",
+      "list": "Vorgeschlagene Kombinationen",
+      "loading": "Kombinationen werden gesucht …",
+      "none": "Keine Schrift der Bibliothek passt nach den Regeln zu {name}.",
+      "error": "Font Manager konnte keine Kombinationen vorschlagen. {message}",
+      "score": "{percent} % passend",
+      "reasons": "Warum: {reasons}",
+      "add": "Zum Vergleich hinzufügen",
+      "addLabel": "{name} zum Vergleich hinzufügen",
+      "pinned": "Angeheftet",
+      "pinnedLabel": "{name} ist angeheftet"
+    },
     "toasts": {
       "already": "{name} ist bereits zum Vergleich angeheftet.",
       "full": "Der Vergleich fasst {max} Schriften. Entferne eine, um {name} anzuheften.",

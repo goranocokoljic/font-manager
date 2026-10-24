@@ -73,8 +73,8 @@ use fm_api::preview::{
     SampleText, SampleTextRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
-    SearchService, SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
+    PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsService, SettingsUpdate};
 use fm_api::workflows::{
@@ -685,6 +685,10 @@ impl SearchService for CoreApi {
 
     fn find_similar(&self, _req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
         Err(not_available("Finding similar fonts"))
+    }
+
+    fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
+        Ok(self.lock().suggest_pairings(&req)?)
     }
 }
 

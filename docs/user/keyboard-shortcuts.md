@@ -108,6 +108,12 @@ under **Saved** in Compare, or run **Open comparison:** and its name in the comm
 palette. If a font of the comparison is no longer in the library, Compare opens
 with the other fonts and tells you which font is missing.
 
+**Pairings**, below the fonts, suggests fonts from other families that go with the
+first pinned font. The rules are: a serif or slab with a sans (and the other way
+round), a display or script font only with a sans or a serif, an x-height within
+5%, the same designer, or the same superfamily ("Noto Sans" and "Noto Serif").
+Each suggestion shows how well it matches and why. **Add to compare** pins it.
+
 | Key | What it does |
 |-----|--------------|
 | `Left` and `Right` | Change the mode, when the focus is on the mode |

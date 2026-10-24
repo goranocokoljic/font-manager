@@ -61,11 +61,12 @@ test('C and the palette pin up to four fonts; a fifth is refused; a pin can be r
 
   // Remove one in the sheet; the fifth then fits.
   await compareButton(page).click();
-  await expect(sheet(page).getByRole('listitem')).toHaveCount(4);
+  const pinned = sheet(page).getByRole('list', { name: 'Side by side' }).getByRole('listitem');
+  await expect(pinned).toHaveCount(4);
   await sheet(page)
     .getByRole('button', { name: /^Remove JetBrains Mono .* from Compare$/ })
     .click();
-  await expect(sheet(page).getByRole('listitem')).toHaveCount(3);
+  await expect(pinned).toHaveCount(3);
   // The focus stays in the sheet, on the next Remove button.
   await expect(sheet(page).getByRole('button', { name: /^Remove Legacy Grotesk/ })).toBeFocused();
   await page.keyboard.press('Escape');
@@ -184,5 +185,7 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
 
   // The pins stay for the session: reopening shows them again.
   await compareButton(page).click();
-  await expect(dialog.getByRole('listitem')).toHaveCount(2);
+  await expect(
+    dialog.getByRole('list', { name: 'Side by side' }).getByRole('listitem'),
+  ).toHaveCount(2);
 });
