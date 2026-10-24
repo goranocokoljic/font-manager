@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test &lt;Sans&gt; &amp; &quot;Friends&quot; specimen</title>
+<style>
+@font-face { font-family: "f0"; src: url("data:font/ttf;base64,FACE0"); font-display: block; }
+.f0 { font-family: "f0"; }
+@font-face { font-family: "f1"; src: url("data:font/ttf;base64,FACE1"); font-display: block; }
+.f1 { font-family: "f1"; }
+@font-face { font-family: "f2"; src: url("data:font/ttf;base64,FACE2"); font-display: block; }
+.f2 { font-family: "f2"; }
+body { margin: 2rem auto; max-width: 64rem; padding: 0 1.5rem; font-family: system-ui, sans-serif; color: #1a1a1a; background: #fff; }
+h1 { font-size: 4rem; font-weight: normal; margin: 0 0 1rem; }
+h2 { font-size: 1.25rem; border-bottom: 1px solid #ccc; margin: 2.5rem 0 1rem; }
+h3 { font-size: 0.9rem; margin: 1.5rem 0 0.5rem; }
+dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 1rem; }
+dt { color: #666; }
+dd { margin: 0; }
+.row { display: grid; grid-template-columns: 8rem 1fr; gap: 1rem; align-items: baseline; }
+.label { color: #666; font-size: 0.8rem; margin: 0.25rem 0; }
+.sample { font-size: 32px; margin: 0.25rem 0; overflow-wrap: anywhere; }
+.chars { display: flex; flex-wrap: wrap; font-size: 28px; margin: 0; }
+.chars span { width: 1.6em; text-align: center; padding: 0.15em 0; }
+@media print { body { margin: 0; max-width: none; } section { break-inside: avoid-page; } }
+</style>
+</head>
+<body>
+<header>
+<h1 class="f1">Test &lt;Sans&gt; &amp; &quot;Friends&quot;</h1>
+<dl>
+<dt>Designer</dt><dd>Ann &lt;b&gt;Designer&lt;/b&gt; &amp; &quot;Co&quot;</dd>
+<dt>Foundry</dt><dd>Foundry&#58; https&#58;//foundry.example/</dd>
+<dt>Version</dt><dd>Version 2.000</dd>
+<dt>License</dt><dd>Open license (OFL)</dd>
+<dt>Web use</dt><dd>OK for web (Open license (OFL))</dd>
+</dl>
+</header>
+<section>
+<h2>Styles</h2>
+<div class="row"><p class="label">Light</p><p class="sample f0">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">Regular</p><p class="sample f1">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">Thin &lt;Italic&gt;</p><p class="sample f2" style="font-variation-settings: &quot;wght&quot; 100">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">Black Italic</p><p class="sample f2" style="font-variation-settings: &quot;wght&quot; 900">The quick brown fox jumps over the lazy dog</p></div>
+</section>
+<section>
+<h2>Waterfall</h2>
+<div class="row"><p class="label">12 px</p><p class="sample f1" style="font-size: 12px">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">16 px</p><p class="sample f1" style="font-size: 16px">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">24 px</p><p class="sample f1" style="font-size: 24px">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">36 px</p><p class="sample f1" style="font-size: 36px">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">48 px</p><p class="sample f1" style="font-size: 48px">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">72 px</p><p class="sample f1" style="font-size: 72px">The quick brown fox jumps over the lazy dog</p></div>
+</section>
+<section>
+<h2>Character set</h2>
+<h3>Basic Latin</h3>
+<p class="chars f1"><span title="U+0021">!</span><span title="U+0022">&quot;</span><span title="U+0023">#</span><span title="U+0024">$</span><span title="U+0025">%</span><span title="U+0026">&amp;</span><span title="U+0027">&#39;</span><span title="U+0028">(</span><span title="U+0029">)</span><span title="U+002A">*</span><span title="U+002B">+</span><span title="U+002C">,</span><span title="U+002D">-</span><span title="U+002E">.</span><span title="U+002F">/</span><span title="U+0030">0</span><span title="U+0031">1</span><span title="U+0032">2</span><span title="U+0033">3</span><span title="U+0034">4</span><span title="U+0035">5</span><span title="U+0036">6</span><span title="U+0037">7</span><span title="U+0038">8</span><span title="U+0039">9</span><span title="U+003A">&#58;</span><span title="U+003B">;</span><span title="U+003C">&lt;</span><span title="U+003D">=</span><span title="U+003E">&gt;</span><span title="U+003F">?</span><span title="U+0040">@</span><span title="U+0041">A</span><span title="U+0042">B</span><span title="U+0043">C</span><span title="U+0044">D</span><span title="U+0045">E</span><span title="U+0046">F</span><span title="U+0047">G</span><span title="U+0048">H</span><span title="U+0049">I</span><span title="U+004A">J</span><span title="U+004B">K</span><span title="U+004C">L</span><span title="U+004D">M</span><span title="U+004E">N</span><span title="U+004F">O</span><span title="U+0050">P</span><span title="U+0051">Q</span><span title="U+0052">R</span><span title="U+0053">S</span><span title="U+0054">T</span><span title="U+0055">U</span><span title="U+0056">V</span><span title="U+0057">W</span><span title="U+0058">X</span><span title="U+0059">Y</span><span title="U+005A">Z</span><span title="U+005B">[</span><span title="U+005C">\</span><span title="U+005D">]</span><span title="U+005E">^</span><span title="U+005F">_</span><span title="U+0060">`</span><span title="U+0061">a</span><span title="U+0062">b</span><span title="U+0063">c</span><span title="U+0064">d</span><span title="U+0065">e</span><span title="U+0066">f</span><span title="U+0067">g</span><span title="U+0068">h</span><span title="U+0069">i</span><span title="U+006A">j</span><span title="U+006B">k</span><span title="U+006C">l</span><span title="U+006D">m</span><span title="U+006E">n</span><span title="U+006F">o</span><span title="U+0070">p</span><span title="U+0071">q</span><span title="U+0072">r</span><span title="U+0073">s</span><span title="U+0074">t</span><span title="U+0075">u</span><span title="U+0076">v</span><span title="U+0077">w</span><span title="U+0078">x</span><span title="U+0079">y</span><span title="U+007A">z</span><span title="U+007B">{</span><span title="U+007C">|</span><span title="U+007D">}</span><span title="U+007E">~</span></p>
+<h3>Latin-1 Supplement</h3>
+<p class="chars f1"><span title="U+00E9">é</span></p>
+<h3>Combining Diacritical Marks</h3>
+<p class="chars f1"><span title="U+0301">́</span></p>
+<h3>Greek and Coptic</h3>
+<p class="chars f1"><span title="U+0391">Α</span><span title="U+03B1">α</span></p>
+</section>
+<section>
+<h2>Features</h2>
+<h3>Alt &lt;a&gt; &#39;single&#39; <code>ss01</code></h3>
+<div class="row"><p class="label">Off</p><p class="sample f0" style="font-feature-settings: &quot;ss01&quot; 0">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">On</p><p class="sample f0" style="font-feature-settings: &quot;ss01&quot; 1">The quick brown fox jumps over the lazy dog</p></div>
+<h3>Small capitals <code>smcp</code></h3>
+<div class="row"><p class="label">Off</p><p class="sample f1" style="font-feature-settings: &quot;smcp&quot; 0">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">On</p><p class="sample f1" style="font-feature-settings: &quot;smcp&quot; 1">The quick brown fox jumps over the lazy dog</p></div>
+<h3>Kerning <code>kern</code></h3>
+<div class="row"><p class="label">Off</p><p class="sample f1" style="font-feature-settings: &quot;kern&quot; 0">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">On</p><p class="sample f1" style="font-feature-settings: &quot;kern&quot; 1">The quick brown fox jumps over the lazy dog</p></div>
+<h3>Oldstyle figures <code>onum</code></h3>
+<div class="row"><p class="label">Off</p><p class="sample f2" style="font-feature-settings: &quot;onum&quot; 0">The quick brown fox jumps over the lazy dog</p></div>
+<div class="row"><p class="label">On</p><p class="sample f2" style="font-feature-settings: &quot;onum&quot; 1">The quick brown fox jumps over the lazy dog</p></div>
+</section>
+</body>
+</html>

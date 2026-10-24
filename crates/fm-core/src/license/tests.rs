@@ -344,3 +344,34 @@ fn the_export_block_is_web_uses_embedding_rule_alone() {
         Some("Embedding preview & print only, no web license declared".to_owned())
     );
 }
+
+#[test]
+fn only_restricted_embedding_with_no_license_keeps_a_face_out_of_a_specimen() {
+    use fm_api::library::LicenseType;
+    let embeddings = [
+        Embedding::Installable,
+        Embedding::Editable,
+        Embedding::PreviewAndPrint,
+        Embedding::Restricted,
+    ];
+    let declared = [
+        None,
+        Some(LicenseType::Desktop),
+        Some(LicenseType::Web),
+        Some(LicenseType::App),
+        Some(LicenseType::Trial),
+        Some(LicenseType::PersonalOnly),
+        Some(LicenseType::Unknown),
+    ];
+    for embedding in embeddings {
+        for d in declared {
+            let blocks = embedding == Embedding::Restricted
+                && matches!(d, None | Some(LicenseType::Unknown));
+            assert_eq!(
+                specimen_embedding_block(embedding, d),
+                blocks,
+                "{embedding:?} {d:?}"
+            );
+        }
+    }
+}

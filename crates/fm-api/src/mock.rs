@@ -24,7 +24,8 @@ use crate::comparison::{
 };
 use crate::export::{
     ExportWebRequest, ExportWebResponse, Framework, FrameworkSnippet, FrameworkSnippetRequest,
-    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, Subset, WebFormat,
+    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, SpecimenFormat, SpecimenRequest,
+    SpecimenResponse, Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -3600,6 +3601,49 @@ impl ExportService for MockApi {
         Ok(format!(
             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {advance} 1000\">             <path d=\"{path}\"/></svg>"
         ))
+    }
+
+    /// The core's checks, in its order, over the mock faces; the path is
+    /// returned and nothing is written, as `export_web`.
+    fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        if req.format == SpecimenFormat::Pdf {
+            return Err(ApiError::new(
+                ErrorCode::Unsupported,
+                "A PDF specimen is not available in this version yet.",
+            ));
+        }
+        let st = self.state();
+        st.family(req.family)?;
+        let blocked: Vec<_> = st
+            .family_faces(req.family)
+            .filter(|f| {
+                let l = &f.detail.license;
+                l.embedding == Embedding::Restricted
+                    && matches!(l.declared, None | Some(LicenseType::Unknown))
+            })
+            .collect();
+        if !blocked.is_empty() {
+            let names: Vec<_> = blocked
+                .iter()
+                .map(|f| format!("{} {}", f.detail.face.family_name, f.detail.face.style))
+                .collect();
+            let ids: Vec<_> = blocked
+                .iter()
+                .map(|f| f.detail.face.id.0.to_string())
+                .collect();
+            return Err(ApiError::new(
+                ErrorCode::PermissionDenied,
+                format!(
+                    "{}: Embedding restricted and no license declared, so the font may not be embedded in a specimen. Declare a license for the family to export it.",
+                    names.join(", ")
+                ),
+            )
+            .with_detail(format!("blocked faces: {}", ids.join(", "))));
+        }
+        Ok(SpecimenResponse { path: req.out_path })
     }
 }
 

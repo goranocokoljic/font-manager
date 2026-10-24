@@ -1,10 +1,10 @@
 //! Export service: web fonts with CSS, framework snippets, the license
-//! inventory, and one glyph's outline as SVG.
+//! inventory, one glyph's outline as SVG, and a family's specimen.
 
 use serde::{Deserialize, Serialize};
 
 use crate::common::AxisValue;
-use crate::{ApiResult, CollectionId, FaceId};
+use crate::{ApiResult, CollectionId, FaceId, FamilyId};
 
 /// A web font format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
@@ -136,6 +136,37 @@ pub struct FrameworkSnippet {
     pub text: String,
 }
 
+/// The file format of a specimen (E21.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SpecimenFormat {
+    /// One self-contained HTML page: the faces are embedded, nothing is
+    /// loaded from anywhere else.
+    Html,
+    /// A PDF; `Unsupported` until E21.2.
+    Pdf,
+}
+
+/// Write a specimen of one family to a file the user picked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecimenRequest {
+    /// The family.
+    pub family: FamilyId,
+    /// The file format.
+    pub format: SpecimenFormat,
+    /// The file to write, as the user picked it.
+    pub out_path: String,
+}
+
+/// What the specimen export wrote.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SpecimenResponse {
+    /// The file written, absolute path.
+    pub path: String,
+}
+
 /// Web export, framework snippets, license reports and glyph outlines.
 pub trait ExportService {
     /// Write web fonts (and CSS) to a folder.
@@ -151,4 +182,9 @@ pub trait ExportService {
     /// with no outline (a space) is an SVG with an empty path; a character
     /// the face does not map is `NotFound`.
     fn export_glyph_svg(&self, req: GlyphSvgRequest) -> ApiResult<String>;
+    /// Write a specimen of the family to `out_path`. A face whose embedding
+    /// is restricted while no license is declared for the family refuses
+    /// the export with `PermissionDenied`; an unknown family is `NotFound`;
+    /// `Pdf` is `Unsupported` for now.
+    fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse>;
 }
