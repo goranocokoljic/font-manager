@@ -78,6 +78,8 @@ import type {
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
+  SimilarFace,
+  SimilarRequest,
   UpdateCollectionRulesRequest,
   Source,
   SourceId,
@@ -124,6 +126,8 @@ export interface FmClient {
   faceCoverage(face: FaceId): Promise<FaceCoverage>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
+  /** Faces that look like one face, closest first, each with its score and reasons (E23.3). */
+  findSimilar(req: SimilarRequest): Promise<SimilarFace[]>;
   /** Every collection, parents before children, siblings in the user's order. */
   listCollections(): Promise<Collection[]>;
   /** Creates a collection; with `rules`, a smart one. */
@@ -275,6 +279,7 @@ export const tauriClient: FmClient = {
   checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
   faceCoverage: (face) => invoke<FaceCoverage>('face_coverage', { face }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
+  findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
   renameCollection: (req) => invoke<Collection>('rename_collection', { req }),
