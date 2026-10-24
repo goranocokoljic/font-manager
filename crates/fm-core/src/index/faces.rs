@@ -4,8 +4,9 @@
 //!
 //! A family is what search groups ([`Index::list_families`]): its id is the
 //! id of its first visible face. A face's stored `face.parsed` holds what
-//! the inspector shows; the vertical metrics are not stored, so
-//! [`Index::face_detail`] reads them from the file (one file, read only).
+//! the inspector shows, the vertical metrics with it (E16.2); a face stored
+//! without them (unreadable, or written before E16.2 and not scanned since)
+//! has [`Index::face_detail`] read them from the file (one file, read only).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -110,16 +111,36 @@ impl Index {
     }
 
     /// Everything the inspector shows about the face `face`. The metrics are
-    /// read from the file; a file that cannot be read gives zero metrics and
-    /// a warning in the log, not an error, so the rest still shows. An
-    /// unknown face is `NotFound`.
+    /// the ones the scan stored; without them they are read from the file,
+    /// and a file that cannot be read gives zero metrics and a warning in the
+    /// log, not an error, so the rest still shows. An unknown face is
+    /// `NotFound`.
     pub fn face_detail(&self, face: FaceId) -> FmResult<FaceDetail> {
         let row = self.face_row(face)?;
-        let data = read_file(&row.file);
-        let metrics = data
+        let is_color = row.parsed.as_ref().is_some_and(|p| p.color);
+        let stored = row
+            .parsed
             .as_ref()
-            .map_err(Clone::clone)
-            .and_then(|d| crate::preview::face_metrics(d, row.file.collection_index))
+            .map(|p| p.metrics)
+            .filter(|m| m.units_per_em > 0);
+        // The file is read only when the stored metrics are missing or the
+        // face is a color face whose palettes the inspector shows.
+        let data = (stored.is_none() || is_color).then(|| read_file(&row.file));
+        let metrics = stored
+            .map_or_else(
+                || {
+                    let index = row.file.collection_index;
+                    match &data {
+                        Some(d) => d
+                            .as_ref()
+                            .map_err(Clone::clone)
+                            .and_then(|d| crate::preview::face_metrics(d, index)),
+                        None => read_file(&row.file)
+                            .and_then(|d| crate::preview::face_metrics(&d, index)),
+                    }
+                },
+                Ok,
+            )
             .unwrap_or_else(|e| {
                 tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
                 Metrics {
@@ -131,8 +152,8 @@ impl Index {
                 }
             });
         // Only a color face can have palettes; a plain one skips the read.
-        let palettes = match (&data, row.parsed.as_ref().is_some_and(|p| p.color)) {
-            (Ok(d), true) => palettes::face_palettes(d, row.file.collection_index)
+        let palettes = match (&data, is_color) {
+            (Some(Ok(d)), true) => palettes::face_palettes(d, row.file.collection_index)
                 .unwrap_or_else(|e| {
                     tracing::warn!(%face, error = %e, detail = ?e.detail(), "face palettes not read");
                     Vec::new()

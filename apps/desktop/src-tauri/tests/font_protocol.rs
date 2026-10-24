@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use fm_api::mock::MockApi;
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
 use fm_app_lib::{catalog_font_response, font_response};
@@ -63,6 +63,10 @@ impl PreviewService for Files {
     }
 
     fn css_values(&self, _: CssValuesRequest) -> ApiResult<CssValues> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+
+    fn size_factors(&self, _: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
         Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }
 }
