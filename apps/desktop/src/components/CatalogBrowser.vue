@@ -121,7 +121,9 @@ const visible = computed(() => {
       style: {
         height: `${linePx.value}px`,
         width: perLine.value > 1 ? `${cardPx}px` : undefined,
-        transform: `translate(${column * cardPx}px, ${line * linePx.value}px)`,
+        // A logical side, so the grid's columns run from the right in a right-to-left UI.
+        insetInlineStart: `${column * cardPx}px`,
+        transform: `translateY(${line * linePx.value}px)`,
       },
     });
   }
@@ -345,8 +347,7 @@ const surfaceClass = computed(() =>
 .slot {
   position: absolute;
   top: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   box-sizing: border-box;
   contain: layout paint;
 }
@@ -355,7 +356,7 @@ const surfaceClass = computed(() =>
   border-bottom: 1px solid var(--fm-border);
 }
 .slot.grid {
-  right: auto;
+  inset-inline-end: auto;
 }
 .empty {
   display: grid;
