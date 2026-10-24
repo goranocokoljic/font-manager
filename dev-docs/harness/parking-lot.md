@@ -223,3 +223,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E22.2 #147] apps/desktop/src/views/HomeView.vue:625 — the library toolbar is a fixed-height, non-wrapping row and can clip at narrow center widths (inspector open below ~1,280 px).
 - [E22.5 #150] crates/fm-api/src/mock.rs:117 — the mock labels `OpenLicense::Ofl` "OFL" while core's `open_license_label` (crates/fm-core/src/inventory.rs:169) says "SIL Open Font License"; two label tables for one enum will drift.
 - [E22.4 #149] apps/desktop/src/components/FontList.vue:261 — the existing open-license badge is not in the treeitem aria-label, so screen readers miss it.
+- [E23.4 #155] apps/desktop/src/stores/similar.ts:1 — the similar, compare and new pairings stores do not subscribe to library events, so their results stay stale after a library change until reopened.
+- [E23.4 #155] crates/fm-core/src/index/faces.rs:450 — `read_row` also deserializes `face.parsed`; rows written before a required ParsedFace field lose license, axes and features in the inspector until the next scan.
+- [E23.4 #155] crates/fm-mcp/src/lib.rs:1 — `find_similar` and `suggest_pairings` are reachable only from the desktop UI, not from the CLI or the MCP server.
