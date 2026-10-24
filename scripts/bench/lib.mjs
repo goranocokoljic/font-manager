@@ -129,8 +129,12 @@ export const REGRESSION_TOLERANCE = 0.1;
  * every recent run of main.
  */
 export const BASELINE_RUNS = 5;
-/** A change smaller than this share of the budget is runner noise, never a regression. */
-export const NOISE_FLOOR = 0.02;
+/**
+ * A change smaller than this share of the budget is runner noise, never a
+ * regression: on shared runners a 100-face activation swings 28-372 ms and a
+ * first scan 6-13 s from run to run on the same commit of main.
+ */
+export const NOISE_FLOOR = 0.2;
 /** Marks the sticky PR comment of the bench job, so a new push updates it. */
 export const COMMENT_MARKER = '<!-- fm-bench -->';
 
