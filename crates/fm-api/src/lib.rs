@@ -12,7 +12,8 @@
 //! - one trait per service ([`LibraryService`], [`SearchService`],
 //!   [`PreviewService`], [`ActivationService`], [`OrganizationService`],
 //!   [`ExportService`], [`WorkflowService`], [`SettingsService`],
-//!   [`LayoutService`], [`ComparisonService`]); [`Api`] is all of them plus
+//!   [`LayoutService`], [`ComparisonService`], [`CatalogService`]); [`Api`]
+//!   is all of them plus
 //!   [`EventSource`];
 //! - every method takes one request value and returns [`ApiResult`];
 //! - methods are synchronous; long work (a scan) returns a [`JobId`] at once
@@ -20,6 +21,7 @@
 //! - [`mock::MockApi`] implements every trait on in-memory sample data.
 
 pub mod activation;
+pub mod catalog;
 pub mod common;
 pub mod comparison;
 pub mod error;
@@ -37,6 +39,7 @@ pub mod update;
 pub mod workflows;
 
 pub use activation::ActivationService;
+pub use catalog::CatalogService;
 pub use comparison::ComparisonService;
 pub use error::{ApiError, ApiResult, ErrorCode};
 pub use event::{Event, EventSource};
@@ -59,7 +62,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 16,
+    minor: 17,
     patch: 0,
 };
 
@@ -95,6 +98,7 @@ pub trait Api:
     + SettingsService
     + LayoutService
     + ComparisonService
+    + CatalogService
     + EventSource
     + Send
     + Sync
@@ -112,6 +116,7 @@ impl<T> Api for T where
         + SettingsService
         + LayoutService
         + ComparisonService
+        + CatalogService
         + EventSource
         + Send
         + Sync
@@ -257,6 +262,15 @@ pub fn types() -> specta::Types {
         comparison::SaveComparisonRequest,
         comparison::ComparisonRef,
         comparison::RenameComparisonRequest,
+        // catalogs
+        catalog::CatalogId,
+        catalog::Catalog,
+        catalog::CatalogStyle,
+        catalog::CatalogFamily,
+        catalog::SetCatalogEnabledRequest,
+        catalog::CatalogRef,
+        catalog::ListCatalogFamiliesRequest,
+        common::Paged<catalog::CatalogFamily>,
     )
 }
 
@@ -266,13 +280,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.16.0");
+        assert_eq!(API_VERSION.to_string(), "0.17.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":16,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":17,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

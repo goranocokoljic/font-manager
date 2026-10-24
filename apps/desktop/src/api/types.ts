@@ -203,6 +203,74 @@ export type Candidate = {
 	reasons: string[],
 };
 
+/**  A catalog and the state of its cache. */
+export type Catalog = {
+	/**  Id. */
+	id: CatalogId,
+	/**  The name the user sees ("Google Fonts"). */
+	name: string,
+	/**  The catalog's web site. */
+	homepage: string,
+	/**  The user turned it on. Off by default; an off catalog is never fetched. */
+	enabled: boolean,
+	/**
+	 *  When the cache was last refreshed (RFC 3339, UTC); `None` before the
+	 *  first refresh.
+	 */
+	refreshedAt?: string | null,
+	/**  Families in the cache. */
+	familyCount: number,
+};
+
+/**  A family as a catalog describes it, before anything is downloaded. */
+export type CatalogFamily = {
+	/**  The family name ("Roboto Flex"). */
+	name: string,
+	/**  The catalog's category, as the catalog names it ("Sans Serif"). */
+	category?: string | null,
+	/**  The styles it offers, upright first, then by weight. */
+	styles: CatalogStyle[],
+	/**  Its variation axes; empty for a static family. */
+	axes?: Axis[],
+	/**  The character subsets it covers ("latin", "cyrillic-ext"). */
+	subsets?: string[],
+	/**  Its designers. */
+	designers?: string[],
+	/**  Its version, when the catalog gives one. */
+	version?: string | null,
+	/**
+	 *  When the catalog last changed it, as the catalog gives it (Google
+	 *  Fonts: a date, `2025-09-04`).
+	 */
+	lastModified?: string | null,
+	/**  The catalog says it is open source. */
+	openSource?: boolean,
+	/**
+	 *  Its license, when the catalog's index names it. Google Fonts' index
+	 *  does not; its license comes with the files.
+	 */
+	license?: OpenLicense | null,
+};
+
+/**  A catalog the app knows how to read. */
+export type CatalogId = 
+/**  Google Fonts (fonts.google.com). */
+"googleFonts";
+
+/**  Names one catalog. */
+export type CatalogRef = {
+	/**  The catalog. */
+	id: CatalogId,
+};
+
+/**  One style a catalog family offers. */
+export type CatalogStyle = {
+	/**  Weight class (100–1000). */
+	weight: number,
+	/**  Upright or italic. */
+	slant: Slant,
+};
+
 /**  Two active fonts with one PostScript name: one row of the Conflicts view. */
 export type Clash = {
 	/**  A face the app has active. */
@@ -1474,6 +1542,19 @@ export type LicenseType =
 /**  Not known. */
 "unknown";
 
+/**  A page of a catalog's cached families. */
+export type ListCatalogFamiliesRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**
+	 *  Families whose name contains this text, ignoring case; empty lists
+	 *  every family.
+	 */
+	query?: string,
+	/**  The window; `limit` is capped at 500. */
+	page?: Page,
+};
+
 /**  List families, one page at a time (the UI list is virtualized). */
 export type ListFamiliesRequest = {
 	/**  One source, or all unpaused sources when absent. */
@@ -2011,6 +2092,14 @@ export type SelectionTagsRequest = {
 	families?: FamilyId[],
 };
 
+/**  Turns a catalog on or off. Turning it off keeps its cache. */
+export type SetCatalogEnabledRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  On or off. */
+	enabled: boolean,
+};
+
 /**
  *  One font of an exported set, referenced by content so a teammate's copy
  *  at another path still matches.
@@ -2476,4 +2565,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 16, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 17, patch: 0 };

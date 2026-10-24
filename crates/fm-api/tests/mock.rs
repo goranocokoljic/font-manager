@@ -2588,3 +2588,47 @@ fn a_specimen_checks_like_the_core_and_returns_the_path() {
     api.export_specimen(req(legacy.face.family, SpecimenFormat::Html))
         .unwrap();
 }
+
+#[test]
+fn catalogs_are_off_until_turned_on_and_list_from_the_refreshed_cache() {
+    use fm_api::catalog::{
+        CatalogId, CatalogRef, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    };
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let catalogs = api.list_catalogs().expect("catalogs");
+    assert_eq!(catalogs.len(), 1);
+    assert!(!catalogs[0].enabled);
+    assert_eq!(catalogs[0].refreshed_at, None);
+    assert_eq!(
+        api.refresh_catalog(CatalogRef { id })
+            .expect_err("off")
+            .code,
+        ErrorCode::Conflict
+    );
+    let list = |query: &str| {
+        api.list_catalog_families(ListCatalogFamiliesRequest {
+            id,
+            query: query.into(),
+            page: Page::default(),
+        })
+        .expect("families")
+    };
+    assert_eq!(list("").total, 0);
+
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert_eq!(list("").total, 0, "never refreshed");
+    let refreshed = api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    assert_eq!(refreshed.family_count, 4);
+    assert!(refreshed.refreshed_at.is_some());
+    let lato = list("LAT");
+    assert_eq!(lato.total, 1);
+    assert_eq!(lato.items[0].name, "Lato");
+
+    let off = api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: false })
+        .expect("off");
+    assert_eq!(off.family_count, 4, "cache kept");
+    assert_eq!(list("").total, 0, "an off catalog lists nothing");
+}

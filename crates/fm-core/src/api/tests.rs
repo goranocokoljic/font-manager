@@ -15,6 +15,8 @@ use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
 
 use super::*;
+use crate::catalog::google::GoogleFonts;
+use crate::catalog::{CATALOGS_DIR, Fetcher};
 use crate::index::INDEX_FILE;
 use crate::test_support::TempDir;
 
@@ -35,6 +37,25 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts")
 }
 
+/// A catalog fetcher that fails on any call and counts the calls.
+#[derive(Debug, Default)]
+struct OfflineFetcher {
+    calls: std::sync::atomic::AtomicU32,
+}
+
+impl OfflineFetcher {
+    fn calls(&self) -> u32 {
+        self.calls.load(Ordering::Relaxed)
+    }
+}
+
+impl Fetcher for OfflineFetcher {
+    fn get(&self, url: &str) -> FmResult<Vec<u8>> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        Err(FmError::new(ErrorCode::Io, "offline").with_detail(url.to_owned()))
+    }
+}
+
 /// A `CoreApi` over scratch app folders, a mock activator and a library
 /// folder holding copies of [`FOLDERS`] (scans write sidecars into the
 /// source, so the fixtures themselves are never a source).
@@ -42,6 +63,8 @@ struct Lib {
     dir: TempDir,
     api: CoreApi,
     activator: Arc<MockActivator>,
+    /// The catalogs' fetcher: it fails on any call.
+    fetcher: Arc<OfflineFetcher>,
     root: PathBuf,
     paths: AppPaths,
 }
@@ -82,10 +105,17 @@ impl Lib {
             Some(previews),
         )
         .with_layouts_in(paths.layouts_dir());
+        let fetcher = Arc::new(OfflineFetcher::default());
+        let api = api.with_catalogs(Catalogs::new(
+            paths.data.join(CATALOGS_DIR),
+            Arc::clone(&fetcher) as Arc<dyn Fetcher>,
+            vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+        ));
         Self {
             dir,
             api,
             activator,
+            fetcher,
             root,
             paths,
         }
@@ -3623,4 +3653,87 @@ fn a_pdf_collection_specimen_prints_the_collection_page_through_the_printer() {
     assert_eq!(page_families(page), ["Agdasima", "Archivo"]);
     assert!(!html.exists(), "the temporary page is removed");
     assert_eq!(dir_names(&out_dir), ["Sign-off.html", "Sign-off.pdf"]);
+}
+
+// ---- catalogs ----
+
+#[test]
+fn catalogs_never_fetch_outside_refresh() {
+    let (lib, source, _) = Lib::scanned("catalog-no-fetch");
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    let catalogs = lib.api.list_catalogs().expect("catalogs");
+    assert_eq!(catalogs.len(), 1);
+    assert!(!catalogs[0].enabled, "off by default");
+    let e = lib.api.refresh_catalog(CatalogRef { id }).expect_err("off");
+    assert_eq!(e.code, ErrorCode::Conflict);
+
+    let on = lib
+        .api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert!(on.enabled);
+    lib.scan(Some(source.id), false);
+    lib.api
+        .search(SearchRequest {
+            query: "bebas".into(),
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    lib.api
+        .list_families(ListFamiliesRequest::default())
+        .expect("families");
+    let page = lib
+        .api
+        .list_catalog_families(ListCatalogFamiliesRequest {
+            id,
+            query: "lato".into(),
+            page: Page::default(),
+        })
+        .expect("catalog families");
+    assert_eq!(page.total, 0, "never refreshed");
+    assert_eq!(
+        lib.fetcher.calls(),
+        0,
+        "scan, search and listing fetch nothing"
+    );
+
+    let e = lib
+        .api
+        .refresh_catalog(CatalogRef { id })
+        .expect_err("offline");
+    assert_eq!(e.code, ErrorCode::Io);
+    assert_eq!(
+        lib.fetcher.calls(),
+        1,
+        "refresh is the one call that fetches"
+    );
+    assert_eq!(
+        lib.api.list_catalogs().expect("catalogs")[0].family_count,
+        0
+    );
+}
+
+#[test]
+fn catalogs_without_a_data_folder_are_not_available() {
+    let dir = TempDir::new("catalog-none");
+    let index = Index::open(&dir.path().join(INDEX_FILE))
+        .expect("index")
+        .index;
+    let paths = AppPaths {
+        data: dir.path().join("data"),
+        config: dir.path().join("config"),
+        cache: dir.path().join("cache"),
+        logs: dir.path().join("logs"),
+        library: dir.path().join("Fonts"),
+    };
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    assert_eq!(
+        api.list_catalogs().expect_err("no folder").code,
+        ErrorCode::Unsupported
+    );
 }
