@@ -233,7 +233,8 @@ fn open_license_label(l: OpenLicense) -> &'static str {
 ///
 /// 1. A declared Web license allows it, whatever the file says.
 /// 2. A declared Desktop, Trial or Personal-only type does not.
-/// 3. Restricted or preview-and-print embedding (`OS/2.fsType`) does not.
+/// 3. Restricted or preview-and-print embedding (`OS/2.fsType`) does not
+///    ([`web_embedding_block`]).
 /// 4. A recognized open license allows it.
 /// 5. Nothing else counts as OK: an installable or editable face with no
 ///    open license and no declaration, or declared App or Unknown, is not.
@@ -251,11 +252,29 @@ pub fn web_use(
         }
         Some(LicenseType::App | LicenseType::Unknown) | None => {}
     }
-    match (embedding, open_license) {
-        (Embedding::Restricted | Embedding::PreviewAndPrint, _) => WebReason::Embedding(embedding),
-        (_, Some(l)) => WebReason::Open(l),
-        (_, None) => WebReason::NoWebLicense,
+    if let Some(blocked) = web_embedding_block(embedding, declared) {
+        return blocked;
     }
+    match open_license {
+        Some(l) => WebReason::Open(l),
+        None => WebReason::NoWebLicense,
+    }
+}
+
+/// The embedding rule of [`web_use`] on its own: what keeps a face out of
+/// a web export (E20.6). Restricted or preview-and-print embedding blocks
+/// it unless a Web license is declared; installable and editable faces are
+/// never blocked here, whatever else is declared.
+pub fn web_embedding_block(
+    embedding: Embedding,
+    declared: Option<LicenseType>,
+) -> Option<WebReason> {
+    (declared != Some(LicenseType::Web)
+        && matches!(
+            embedding,
+            Embedding::Restricted | Embedding::PreviewAndPrint
+        ))
+    .then_some(WebReason::Embedding(embedding))
 }
 
 #[cfg(test)]
