@@ -994,6 +994,18 @@ function Invoke-Story {
                         Save-State
                         return
                     }
+                    'timeout' {
+                        # GitHub sometimes starts no workflow for a push at all, or a run
+                        # hangs. Closing and reopening the PR starts CI again; once per story.
+                        if (-not $s.ci_kicked) {
+                            $s.ci_kicked = $true
+                            Write-Log "    CI on PR #$($s.pr) did not finish ($($v.note)): closing and reopening the PR once to start it again" 'Yellow'
+                            gh pr close $s.pr 2>&1 | Out-Null
+                            gh pr reopen $s.pr 2>&1 | Out-Null
+                            continue
+                        }
+                        Block-Story -Reason "CI $($v.status): $($v.note)"; return
+                    }
                     default { Block-Story -Reason "CI $($v.status): $($v.note)"; return }
                 }
             }
