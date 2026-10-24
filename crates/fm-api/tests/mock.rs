@@ -2469,11 +2469,15 @@ fn a_specimen_checks_like_the_core_and_returns_the_path() {
         .export_specimen(req(inter, SpecimenFormat::Html))
         .unwrap();
     assert_eq!(res.path, "/tmp/Inter specimen.html");
+    // The app prints a PDF (ADR 0013); the mock answers as the app does.
+    let pdf = api
+        .export_specimen(SpecimenRequest {
+            out_path: "/tmp/Inter specimen.pdf".into(),
+            ..req(inter, SpecimenFormat::Pdf)
+        })
+        .unwrap();
+    assert_eq!(pdf.path, "/tmp/Inter specimen.pdf");
     let code = |r: SpecimenRequest| api.export_specimen(r).unwrap_err().code;
-    assert_eq!(
-        code(req(inter, SpecimenFormat::Pdf)),
-        ErrorCode::Unsupported
-    );
     assert_eq!(
         code(req(FamilyId(999), SpecimenFormat::Html)),
         ErrorCode::NotFound

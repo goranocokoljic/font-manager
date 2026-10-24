@@ -30,3 +30,9 @@ wuff = "0.2.9"
 
 [lints]
 workspace = true
+
+# The PDF print test runs the OS UI loop on the main thread (ADR 0013), so it
+# has its own `main`.
+[[test]]
+name = "specimen_pdf"
+harness = false

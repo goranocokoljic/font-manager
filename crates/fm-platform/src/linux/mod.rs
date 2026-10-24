@@ -1,6 +1,7 @@
 //! Linux: the XDG Base Directory specification, the symbolic-link activator
-//! (ADR 0008), the freedesktop.org trash (E8.3), and the XDG autostart entry
-//! that starts the app at login (ADR 0011).
+//! (ADR 0008), the freedesktop.org trash (E8.3), the XDG autostart entry
+//! that starts the app at login (ADR 0011), and the WebKitGTK PDF printer
+//! (ADR 0013).
 //!
 //! The activator's logic builds on every Unix target, so its unit tests run
 //! on the Linux and macOS runners against a fake fontconfig; only Linux uses it.
@@ -16,6 +17,8 @@ mod fontconfig;
 mod open_url;
 pub(crate) mod paths;
 #[cfg(target_os = "linux")]
+mod pdf;
+#[cfg(target_os = "linux")]
 mod trash;
 mod tray;
 
@@ -26,6 +29,10 @@ pub use autostart::LinuxAutostart;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 pub(crate) use autostart::{FLATPAK_INFO, in_flatpak, system_entry};
 pub(crate) use open_url::command as open_url_command;
+#[cfg(target_os = "linux")]
+pub use pdf::LinuxPdfPrinter;
+#[cfg(target_os = "linux")]
+pub(crate) use pdf::run_ui_loop;
 #[cfg(target_os = "linux")]
 pub(crate) use trash::FreedesktopTrash;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
