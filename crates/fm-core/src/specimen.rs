@@ -14,13 +14,18 @@
 //! CSS names the faces `f0`, `f1`…, so no font name ever enters the CSS.
 //! The same family gives the same bytes: nothing depends on the time, the
 //! machine or a hash order.
+//!
+//! A PDF specimen (E21.2) is the same page printed by the OS webview
+//! ([`write_pdf`], ADR 0013).
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use fm_api::common::{Embedding, FeatureInfo, NamedInstance, Slant};
 use fm_api::library::{LicenseType, OpenLicense};
 use fm_api::{ErrorCode, FaceId};
+use fm_platform::PdfPrinter;
 
 use crate::blocks;
 use crate::coverage::{self, CodePointSet};
@@ -114,6 +119,52 @@ pub fn check_embedding(spec: &Specimen) -> FmResult<()> {
 /// refused specimen reads no font and writes nothing. A face file that
 /// cannot be read fails the export ([`font_file::read_font_file`]).
 pub fn write_html(spec: &Specimen, out: &Path) -> FmResult<PathBuf> {
+    let page = checked_page(spec)?;
+    let out = absolute(out)?;
+    std::fs::write(&out, page)
+        .map_err(|e| FmError::io("The specimen could not be saved.", &out, &e))?;
+    Ok(out)
+}
+
+/// Prints the specimen of `spec` as a paginated A4 PDF to `out` through
+/// `printer` (E21.2) and returns its absolute path. The checks are
+/// [`write_html`]'s. The page goes to a temporary HTML file, the PDF to a
+/// hidden partial file next to `out`, renamed over `out` only once the print
+/// succeeded and the file is a PDF; both temporary files are removed whatever
+/// happens, so a failed print leaves `out` as it was. Blocks until the print
+/// is done: call it off the UI thread ([`PdfPrinter::print_html`]).
+pub fn write_pdf(spec: &Specimen, out: &Path, printer: &dyn PdfPrinter) -> FmResult<PathBuf> {
+    let page = checked_page(spec)?;
+    let out = absolute(out)?;
+    let n = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let html = TempFile(std::env::temp_dir().join(format!("fm-specimen-{pid}-{n}.html")));
+    std::fs::write(&html.0, page)
+        .map_err(|e| FmError::io("The specimen could not be prepared.", &html.0, &e))?;
+    let name = out.file_name().map_or_else(
+        || "specimen.pdf".into(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let partial = TempFile(out.with_file_name(format!(".{name}.{pid}-{n}.partial")));
+    printer.print_html(&html.0, &partial.0).map_err(|e| {
+        FmError::new(ErrorCode::Io, "The PDF specimen could not be printed.")
+            .with_detail(e.to_string())
+    })?;
+    let head = std::fs::read(&partial.0).map(|b| b.starts_with(b"%PDF-"));
+    if !matches!(head, Ok(true)) {
+        return Err(
+            FmError::new(ErrorCode::Io, "The PDF specimen could not be printed.")
+                .with_detail(format!("{}: not a PDF file", partial.0.display())),
+        );
+    }
+    std::fs::rename(&partial.0, &out)
+        .map_err(|e| FmError::io("The specimen could not be saved.", &out, &e))?;
+    Ok(out)
+}
+
+/// The page of `spec` after the checks: a family with faces whose licenses
+/// allow embedding, every face file readable.
+fn checked_page(spec: &Specimen) -> FmResult<String> {
     if spec.faces.is_empty() {
         return Err(FmError::not_found(format!("Family {}", spec.family)));
     }
@@ -123,12 +174,23 @@ pub fn write_html(spec: &Specimen, out: &Path) -> FmResult<PathBuf> {
         .iter()
         .map(|f| font_file::read_font_file(&f.path))
         .collect::<FmResult<Vec<_>>>()?;
-    let page = html(spec, &files)?;
-    let out = std::path::absolute(out)
-        .map_err(|e| FmError::io("The specimen could not be saved.", out, &e))?;
-    std::fs::write(&out, page)
-        .map_err(|e| FmError::io("The specimen could not be saved.", &out, &e))?;
-    Ok(out)
+    html(spec, &files)
+}
+
+fn absolute(out: &Path) -> FmResult<PathBuf> {
+    std::path::absolute(out).map_err(|e| FmError::io("The specimen could not be saved.", out, &e))
+}
+
+/// Tells the temporary files of concurrent PDF exports apart.
+static TEMP_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// A temporary file, removed on drop when it is still there.
+struct TempFile(PathBuf);
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 /// The page, with face `i` embedded from `files[i]`.

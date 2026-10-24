@@ -143,7 +143,8 @@ pub enum SpecimenFormat {
     /// One self-contained HTML page: the faces are embedded, nothing is
     /// loaded from anywhere else.
     Html,
-    /// A PDF; `Unsupported` until E21.2.
+    /// The same page printed by the app's webview to a paginated A4 PDF
+    /// (E21.2); `Unsupported` without the app running (the CLI's direct link).
     Pdf,
 }
 
@@ -185,6 +186,7 @@ pub trait ExportService {
     /// Write a specimen of the family to `out_path`. A face whose embedding
     /// is restricted while no license is declared for the family refuses
     /// the export with `PermissionDenied`; an unknown family is `NotFound`;
-    /// `Pdf` is `Unsupported` for now.
+    /// `Pdf` without the app running is `Unsupported`, and a failed print
+    /// is `Io` and leaves nothing at `out_path`.
     fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse>;
 }

@@ -1022,7 +1022,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
 
 /// The state the app serves from the app folders `paths` and the index
 /// startup opened: [`CoreApi`] over the index, activating through
-/// `activator`, when the index opened; it has cleaned up the last session
+/// `activator` and printing PDF specimens through the OS webview, when the
+/// index opened; it has cleaned up the last session
 /// (ADR 0008) and, when the index was rebuilt, started a scan of every source.
 /// When the index could not be opened, [`MockApi`] with the real settings.
 /// The [`CoreApi`] is returned too, for [`CoreApi::shutdown`] at exit.
@@ -1033,7 +1034,17 @@ pub fn serve(
 ) -> (AppState, Option<Arc<CoreApi>>) {
     match index {
         Ok(opened) => {
-            let core = Arc::new(CoreApi::open(paths, opened.index, activator));
+            let core = CoreApi::open(paths, opened.index, activator);
+            // PDF specimens print through an offscreen webview on this
+            // app's UI thread (ADR 0013); the CLI's direct link has none.
+            let core = match fm_platform::pdf::system(paths) {
+                Ok(printer) => core.with_pdf_printer(printer),
+                Err(e) => {
+                    tracing::warn!(error = %e, "no PDF printer: PDF specimens are unavailable");
+                    core
+                }
+            };
+            let core = Arc::new(core);
             if let Err(e) = core.start() {
                 tracing::warn!(error = %e, "activation start-up failed");
             }

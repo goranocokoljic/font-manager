@@ -73,7 +73,7 @@ use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
     FamilyId, JobId, ResolutionId, SetId, SourceId, VirtualStyleId,
 };
-use fm_platform::{AppPaths, FontActivator, Os, Trash, TraySupport};
+use fm_platform::{AppPaths, FontActivator, Os, PdfPrinter, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::error::{FmError, FmResult};
@@ -122,6 +122,9 @@ pub struct CoreApi {
     receipts: Option<PathBuf>,
     /// The layout template files (E12.5); `None` when the API has no config folder.
     layouts: Option<LayoutStore>,
+    /// The OS webview printer for PDF specimens (E21.2); `None` without the
+    /// app (the CLI's direct link), when a PDF is `Unsupported`.
+    pdf: Option<Arc<dyn PdfPrinter>>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -188,6 +191,7 @@ impl CoreApi {
             trash: None,
             receipts: None,
             layouts: None,
+            pdf: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -225,6 +229,14 @@ impl CoreApi {
     #[must_use]
     pub fn with_layouts_in(mut self, dir: PathBuf) -> Self {
         self.layouts = Some(LayoutStore::new(dir));
+        self
+    }
+
+    /// The same API, printing PDF specimens through `printer`; the app
+    /// passes [`fm_platform::pdf::system`].
+    #[must_use]
+    pub fn with_pdf_printer(mut self, printer: Arc<dyn PdfPrinter>) -> Self {
+        self.pdf = Some(printer);
         self
     }
 
@@ -441,6 +453,9 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 /// The answer of a service that is not built yet.
+/// The answer to a PDF specimen without a printer (the CLI's direct link).
+pub const PDF_NEEDS_APP: &str = "PDF export needs the Font Manager app running.";
+
 fn not_available(what: &str) -> ApiError {
     ApiError::new(
         ErrorCode::Unsupported,
@@ -997,16 +1012,27 @@ impl ExportService for CoreApi {
     }
 
     /// The family is looked up under the index lock; its files are read
-    /// and the page written outside it ([`specimen::write_html`]).
+    /// and the page written outside it ([`specimen::write_html`]). A PDF is
+    /// that page printed by the injected printer ([`specimen::write_pdf`]),
+    /// on the caller's thread, which is never the UI thread.
     fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse> {
         if req.out_path.trim().is_empty() {
             return Err(ApiError::invalid("Choose a file to save the specimen to."));
         }
-        if req.format == SpecimenFormat::Pdf {
-            return Err(not_available("A PDF specimen"));
-        }
+        let printer = match req.format {
+            SpecimenFormat::Html => None,
+            SpecimenFormat::Pdf => Some(
+                self.pdf
+                    .as_deref()
+                    .ok_or_else(|| ApiError::new(ErrorCode::Unsupported, PDF_NEEDS_APP))?,
+            ),
+        };
         let spec = self.lock().specimen(req.family)?;
-        let path = specimen::write_html(&spec, Path::new(&req.out_path))?;
+        let out = Path::new(&req.out_path);
+        let path = match printer {
+            Some(printer) => specimen::write_pdf(&spec, out, printer)?,
+            None => specimen::write_html(&spec, out)?,
+        };
         Ok(SpecimenResponse {
             path: path.display().to_string(),
         })

@@ -24,8 +24,8 @@ use crate::comparison::{
 };
 use crate::export::{
     ExportWebRequest, ExportWebResponse, Framework, FrameworkSnippet, FrameworkSnippetRequest,
-    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, SpecimenFormat, SpecimenRequest,
-    SpecimenResponse, Subset, WebFormat,
+    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, SpecimenRequest, SpecimenResponse,
+    Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -3603,17 +3603,12 @@ impl ExportService for MockApi {
         ))
     }
 
-    /// The core's checks, in its order, over the mock faces; the path is
-    /// returned and nothing is written, as `export_web`.
+    /// The core's checks, in its order, over the mock faces, as the app
+    /// answers them (a PDF prints, ADR 0013); the path is returned and
+    /// nothing is written, as `export_web`.
     fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse> {
         if req.out_path.trim().is_empty() {
             return Err(ApiError::invalid("Choose a file to save the specimen to."));
-        }
-        if req.format == SpecimenFormat::Pdf {
-            return Err(ApiError::new(
-                ErrorCode::Unsupported,
-                "A PDF specimen is not available in this version yet.",
-            ));
         }
         let st = self.state();
         st.family(req.family)?;

@@ -2178,7 +2178,10 @@ export type SpecimenFormat =
  *  loaded from anywhere else.
  */
 "html" | 
-/**  A PDF; `Unsupported` until E21.2. */
+/**
+ *  The same page printed by the app's webview to a paginated A4 PDF
+ *  (E21.2); `Unsupported` without the app running (the CLI's direct link).
+ */
 "pdf";
 
 /**  Write a specimen of one family to a file the user picked. */
