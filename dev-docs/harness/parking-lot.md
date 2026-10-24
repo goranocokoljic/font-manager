@@ -200,3 +200,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E20.4 #140] apps/desktop/src/stores/features.ts:44 — preview rows still build their `font-feature-settings` string in the frontend (`settings()`), which matches fm-core's Developer-tab string only because both sort by tag.
 - [E20.5 #141] crates/fm-core/src/web_font.rs:84 — `file_stem` gives two faces with the same PostScript name the same stem, so a web export (and now a localFont snippet) lists the same file twice.
 - [E20.5 #141] crates/fm-core/src/web_css.rs:147 — `string` (and mock `css_string`, mock.rs:3118) keeps non-ASCII literal unlike `framework_snippet::css_string`; deliberate for UTF-8 fonts.css, do not unify them.
+- [E20.6 #142] crates/fm-core/src/api.rs:1004 — core `prepare_for_web` still returns `not_available`; it reaches the license guard through `export_web` once it is built.
+- [E20.6 #142] crates/fm-api/src/mock.rs:3404 — mock `export_web` does not dedupe a face listed twice in its write loop (core does with `ids.insert`), so the mock returns duplicate files.
+- [E20.6 #142] crates/fm-api/src/mock.rs:3016 — clearing a family declaration sets the mock's `declared` to `None`, while core falls back to the face's own `license_type` (faces.rs:246), so the export guard can disagree after a clear.
