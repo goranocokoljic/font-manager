@@ -306,3 +306,153 @@ fn restricted_embedding_without_a_license_refuses_the_specimen() {
     spec.faces[2].declared = Some(LicenseType::Trial);
     check_embedding(&spec).expect("declared");
 }
+
+/// A second family for a collection: one static face, a declared desktop
+/// license, a designer of its own.
+fn plain() -> Specimen {
+    let mut bold = face(10, "Bold", 700, Slant::Upright);
+    bold.label = "Plain Serif Bold".to_owned();
+    bold.designer = Some("Second Designer".to_owned());
+    bold.declared = Some(LicenseType::Desktop);
+    bold.open_license = None;
+    bold.web_use = license::web_use(Embedding::Installable, None, Some(LicenseType::Desktop));
+    bold.path = PathBuf::from("/fonts/PlainSerif-Bold.ttf");
+    Specimen {
+        family: "Plain Serif".to_owned(),
+        faces: vec![bold],
+    }
+}
+
+fn collection() -> CollectionSpecimen {
+    CollectionSpecimen {
+        name: "Client <A> & \"B\"".to_owned(),
+        families: vec![tricky(), plain()],
+    }
+}
+
+#[test]
+fn a_collection_page_has_a_cover_then_a_page_per_family_in_order() {
+    let c = collection();
+    let p = collection_page(&c, "2026-10-24", stub).expect("page");
+    // The cover: the name (escaped), the date and the number of families.
+    let cover =
+        &p[p.find("<header class=\"cover\">").expect("cover")..p.find("</header>").expect("end")];
+    assert!(
+        cover.contains("<h1>Client &lt;A&gt; &amp; &quot;B&quot;</h1>"),
+        "{cover}"
+    );
+    assert!(
+        cover.contains("<dt>Date</dt><dd>2026-10-24</dd>"),
+        "{cover}"
+    );
+    assert!(cover.contains("<dt>Families</dt><dd>2</dd>"), "{cover}");
+    assert!(p.contains("<title>Client &lt;A&gt; &amp; &quot;B&quot; specimen</title>"));
+
+    // Every face of every family is embedded once, numbered across families.
+    assert_eq!(p.matches("@font-face").count(), 4);
+    for i in 0..4 {
+        assert!(p.contains(&stub(i)), "face {i}");
+    }
+
+    // One section per family, in the collection's order, each on a new
+    // printed page.
+    let sections: Vec<&str> = p.split("<section class=\"family\">").skip(1).collect();
+    assert_eq!(sections.len(), 2);
+    assert!(COLLECTION_STYLE.contains(".family { break-before: page;"));
+    assert!(p.find("Test &lt;Sans&gt;").expect("first") < p.find("Plain Serif").expect("second"));
+
+    // The first family: its name in its Regular (f1), every style, the
+    // sample at three sizes, its license and web use.
+    let first = sections[0];
+    assert!(
+        first.starts_with("\n<h2 class=\"f1\">Test &lt;Sans&gt; &amp; &quot;Friends&quot;</h2>"),
+        "{first}"
+    );
+    for label in ["Light", "Regular", "Thin &lt;Italic&gt;", "Black Italic"] {
+        assert!(
+            first.contains(&format!("<p class=\"label\">{label}</p>")),
+            "{label}"
+        );
+    }
+    for size in COLLECTION_SIZES {
+        assert!(
+            first.contains(&format!("<p class=\"label\">{size} px</p><p class=\"sample f1\" style=\"font-size: {size}px\">")),
+            "{size}"
+        );
+    }
+    assert_eq!(first.matches(" px</p>").count(), 3);
+    let ofl = &tricky().faces[1];
+    assert!(first.contains(&format!(
+        "<dt>License</dt><dd>{}</dd>",
+        escape(&license_line(ofl))
+    )));
+    assert!(first.contains(&format!(
+        "<dt>Web use</dt><dd>{}</dd>",
+        escape(&web_line(ofl.web_use))
+    )));
+
+    // The second family's faces start after the first family's: f3.
+    let second = sections[1];
+    assert!(
+        second.starts_with("\n<h2 class=\"f3\">Plain Serif</h2>"),
+        "{second}"
+    );
+    assert!(second.contains("<p class=\"label\">Bold</p><p class=\"sample f3\">"));
+    assert!(second.contains("<dt>Designer</dt><dd>Second Designer</dd>"));
+    assert!(second.contains("<dt>License</dt><dd>Declared desktop license</dd>"));
+    let web = web_line(plain().faces[0].web_use);
+    assert!(web.starts_with("OK for web") || web.starts_with("Not OK for web"));
+    assert!(second.contains(&format!("<dt>Web use</dt><dd>{}</dd>", escape(&web))));
+    assert!(!second.contains("Test Sans"), "{second}");
+
+    // Self-contained and deterministic.
+    let lower = p.to_lowercase();
+    for bad in ["http:", "https:", "file:", "<script"] {
+        assert!(!lower.contains(bad), "{bad}");
+    }
+    assert_eq!(collection_page(&c, "2026-10-24", stub).expect("again"), p);
+}
+
+#[test]
+fn an_empty_collection_and_a_restricted_face_refuse_the_collection_specimen() {
+    let dir = crate::test_support::TempDir::new("specimen-collection-refused");
+    let out = dir.path().join("out.html");
+    let empty = CollectionSpecimen {
+        name: "Nothing yet".to_owned(),
+        families: Vec::new(),
+    };
+    let e = write_collection_html(&empty, "2026-10-24", &out).expect_err("empty");
+    assert_eq!(e.code(), ErrorCode::InvalidRequest);
+    assert_eq!(
+        e.message(),
+        "The collection Nothing yet is empty. Add fonts to it to export a specimen."
+    );
+    assert!(!out.exists());
+
+    // A restricted face in the second family refuses the whole document,
+    // the same way as a family's specimen, before any file is read.
+    let mut c = collection();
+    c.families[1].faces[0].embedding = Embedding::Restricted;
+    c.families[1].faces[0].declared = None;
+    let e = write_collection_html(&c, "2026-10-24", &out).expect_err("restricted");
+    assert_eq!(e.code(), ErrorCode::PermissionDenied);
+    assert_eq!(
+        e.message(),
+        "Plain Serif Bold: Embedding restricted and no license declared, so the font may \
+         not be embedded in a specimen. Declare a license for the family to export it."
+    );
+    assert_eq!(e.detail(), Some("blocked faces: 10"));
+    assert!(!out.exists());
+}
+
+#[test]
+fn utc_dates_follow_the_gregorian_calendar() {
+    assert_eq!(utc_date(0), "1970-01-01");
+    assert_eq!(utc_date(-1), "1969-12-31");
+    assert_eq!(utc_date(951_782_400), "2000-02-29");
+    assert_eq!(utc_date(951_868_800), "2000-03-01");
+    assert_eq!(utc_date(1_700_000_000), "2023-11-14");
+    assert_eq!(utc_date(4_107_542_399), "2100-02-28");
+    assert_eq!(utc_date(4_107_542_400), "2100-03-01");
+    assert_eq!(today().len(), 10);
+}

@@ -215,6 +215,7 @@ pub fn types() -> specta::Types {
         export::FrameworkSnippet,
         export::SpecimenFormat,
         export::SpecimenRequest,
+        export::CollectionSpecimenRequest,
         export::SpecimenResponse,
         // workflows
         workflows::BriefRequest,

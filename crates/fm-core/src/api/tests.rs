@@ -3324,3 +3324,303 @@ fn a_pdf_specimen_keeps_the_html_checks_and_never_prints_a_refused_family() {
     assert!(printer.calls().is_empty(), "nothing was printed");
     assert!(!out.exists());
 }
+
+fn collection_request(collection: CollectionId, out: &Path) -> CollectionSpecimenRequest {
+    CollectionSpecimenRequest {
+        collection,
+        format: SpecimenFormat::Html,
+        out_path: out.display().to_string(),
+    }
+}
+
+fn new_collection(lib: &Lib, name: &str, rules: Option<Filters>) -> CollectionId {
+    lib.api
+        .create_collection(CreateCollectionRequest {
+            name: name.into(),
+            parent: None,
+            rules,
+            rule_group: None,
+        })
+        .expect("collection")
+        .id
+}
+
+/// The family names of a collection specimen, in the order of its pages.
+fn page_families(page: &str) -> Vec<String> {
+    page.split("<section class=\"family\">\n<h2 class=\"f")
+        .skip(1)
+        .map(|rest| {
+            let name = &rest[rest.find('>').expect("h2") + 1..];
+            name[..name.find("</h2>").expect("end")].to_owned()
+        })
+        .collect()
+}
+
+/// The family names `search` lists for `collection`, in its order.
+fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
+    lib.api
+        .search(SearchRequest {
+            query: String::new(),
+            filters: Filters {
+                collection: Some(collection),
+                ..Filters::default()
+            },
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            rule: None,
+        })
+        .expect("search")
+        .families
+        .into_iter()
+        .map(|h| h.family.name)
+        .collect()
+}
+
+#[test]
+fn a_collection_exports_as_one_html_specimen_with_a_page_per_family() {
+    let (lib, _, _) = Lib::scanned("api-collection-specimen");
+    let manual = new_collection(&lib, "Client brief", None);
+    let archivo = lib
+        .api
+        .get_family(lib.family("Archivo").id)
+        .expect("archivo");
+    assert!(archivo.faces.len() >= 2);
+    // A whole family, and one face of another: that family shows every style.
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: manual,
+            faces: vec![archivo.faces[0].id],
+            families: vec![lib.family("Bebas Neue").id, lib.family("Agdasima").id],
+        })
+        .expect("added");
+    let out_dir = lib.dir.path().join("Specimens ü");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    let out = out_dir.join("Client brief.html");
+    let res = lib
+        .api
+        .export_collection_specimen(collection_request(manual, &out))
+        .expect("specimen");
+    assert_eq!(Path::new(&res.path), out);
+    let page = std::fs::read_to_string(&out).expect("page");
+
+    // One self-contained file.
+    let lower = page.to_lowercase();
+    for bad in ["http:", "https:", "file:", "<script", "javascript"] {
+        assert!(!lower.contains(bad), "{bad}");
+    }
+    // The cover, then the families in the collection's order.
+    assert!(page.contains("<h1>Client brief</h1>"));
+    assert!(page.contains(&format!("<dt>Date</dt><dd>{}</dd>", specimen::today())));
+    assert!(page.contains("<dt>Families</dt><dd>3</dd>"));
+    let order = searched_families(&lib, manual);
+    assert_eq!(order, ["Agdasima", "Archivo", "Bebas Neue"]);
+    assert_eq!(page_families(&page), order);
+    // Every face of every family is embedded, family by family.
+    let mut faces = Vec::new();
+    for name in &order {
+        faces.extend(
+            lib.api
+                .get_family(lib.family(name).id)
+                .expect("family")
+                .faces,
+        );
+    }
+    let fonts = embedded_fonts(&page);
+    assert_eq!(fonts.len(), faces.len());
+    for ((_, bytes), face) in fonts.iter().zip(&faces) {
+        let file = std::fs::read(lib.api.get_face(face.id).expect("face").path).expect("file");
+        assert!(*bytes == file, "{} {}", face.family_name, face.style);
+    }
+    // Archivo's page lists every style, not only the face in the collection.
+    let archivo_page = page
+        .split("<section class=\"family\">")
+        .find(|s| s.contains(">Archivo</h2>"))
+        .expect("Archivo's page");
+    for face in &archivo.faces {
+        assert!(
+            archivo_page.contains(&format!(
+                "<p class=\"label\">{}</p>",
+                specimen::escape(&face.style)
+            )),
+            "{}",
+            face.style
+        );
+    }
+    assert_eq!(archivo_page.matches(" px</p>").count(), 3);
+    assert!(archivo_page.contains("<dt>License</dt>"));
+    assert!(archivo_page.contains("<dt>Web use</dt>"));
+
+    // A smart collection exports the families its rule finds.
+    let smart = new_collection(
+        &lib,
+        "Variable",
+        Some(Filters {
+            variable: Some(true),
+            ..Filters::default()
+        }),
+    );
+    let out = out_dir.join("Variable.html");
+    lib.api
+        .export_collection_specimen(collection_request(smart, &out))
+        .expect("smart");
+    let page = std::fs::read_to_string(&out).expect("page");
+    let order = searched_families(&lib, smart);
+    assert!(order.contains(&"Asap Sharp".to_owned()), "{order:?}");
+    assert!(!order.contains(&"Bebas Neue".to_owned()), "{order:?}");
+    assert_eq!(page_families(&page), order);
+    assert!(page.contains(&format!("<dt>Families</dt><dd>{}</dd>", order.len())));
+}
+
+#[test]
+fn a_collection_specimen_refuses_empty_unknown_restricted_and_a_pdf_without_the_app() {
+    let lib = Lib::new("api-collection-specimen-refusals");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let out = lib.dir.path().join("collection.html");
+
+    let empty = new_collection(&lib, "Empty", None);
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(empty, &out))
+        .expect_err("empty");
+    assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+    assert_eq!(
+        e.message,
+        "The collection Empty is empty. Add fonts to it to export a specimen."
+    );
+    // A smart collection whose rule finds nothing is empty too.
+    let nothing = new_collection(
+        &lib,
+        "No such foundry",
+        Some(Filters {
+            foundry: Some("No Such Foundry".into()),
+            ..Filters::default()
+        }),
+    );
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(nothing, &out))
+        .expect_err("empty smart");
+    assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(CollectionId(999_999), &out))
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound, "{e:?}");
+
+    // The restricted Bebas Neue refuses the whole collection, as E21.1.
+    let bebas = lib.family("Bebas Neue").id;
+    let bebas_face = lib.api.get_family(bebas).expect("family").faces[0].id;
+    let refused = new_collection(&lib, "Refused", None);
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: refused,
+            faces: Vec::new(),
+            families: vec![bebas],
+        })
+        .expect("added");
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(refused, &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert_eq!(
+        e.message,
+        "Bebas Neue Regular: Embedding restricted and no license declared, so the font \
+         may not be embedded in a specimen. Declare a license for the family to export it."
+    );
+    assert_eq!(e.detail, Some(format!("blocked faces: {}", bebas_face.0)));
+
+    let e = lib
+        .api
+        .export_collection_specimen(CollectionSpecimenRequest {
+            format: SpecimenFormat::Pdf,
+            ..collection_request(refused, &out)
+        })
+        .expect_err("pdf");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "PDF export needs the Font Manager app running.");
+    let e = lib
+        .api
+        .export_collection_specimen(CollectionSpecimenRequest {
+            out_path: " ".into(),
+            ..collection_request(refused, &out)
+        })
+        .expect_err("no path");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(!out.exists());
+
+    // Declaring a license lets it through.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: bebas,
+            license_type: Some(LicenseType::Desktop),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("declare");
+    lib.api
+        .export_collection_specimen(collection_request(refused, &out))
+        .expect("declared");
+    assert!(out.exists());
+}
+
+#[test]
+fn a_pdf_collection_specimen_prints_the_collection_page_through_the_printer() {
+    let (lib, _, _) = Lib::scanned("api-collection-specimen-pdf");
+    let printer = FakePrinter::new(PrintOutcome::Pdf);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+        ..lib
+    };
+    let c = new_collection(&lib, "Sign-off", None);
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: c,
+            faces: Vec::new(),
+            families: vec![lib.family("Archivo").id, lib.family("Agdasima").id],
+        })
+        .expect("added");
+    let out_dir = lib.dir.path().join("Out");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    let out = out_dir.join("Sign-off.pdf");
+    let res = lib
+        .api
+        .export_collection_specimen(CollectionSpecimenRequest {
+            format: SpecimenFormat::Pdf,
+            ..collection_request(c, &out)
+        })
+        .expect("pdf");
+    assert_eq!(Path::new(&res.path), out);
+    assert!(std::fs::read(&out).expect("pdf").starts_with(b"%PDF-"));
+    let calls = printer.calls();
+    assert_eq!(calls.len(), 1);
+    let (html, page, _, _) = &calls[0];
+    // The printer was handed the collection page, the HTML export's.
+    let same = out_dir.join("Sign-off.html");
+    lib.api
+        .export_collection_specimen(collection_request(c, &same))
+        .expect("html");
+    assert_eq!(page, &std::fs::read_to_string(&same).expect("html"));
+    assert_eq!(page_families(page), ["Agdasima", "Archivo"]);
+    assert!(!html.exists(), "the temporary page is removed");
+    assert_eq!(dir_names(&out_dir), ["Sign-off.html", "Sign-off.pdf"]);
+}
