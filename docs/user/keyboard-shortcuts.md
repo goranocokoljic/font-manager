@@ -34,6 +34,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `C` | Pin the selected font to Compare (up to 4 fonts) |
 | `B` | Add the selected fonts to the Quick Collection, or remove them if they are in it |
 | `T` | Open the tagging panel for the selected fonts |
+| `S` | Find the fonts that look like the selected font |
 
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
@@ -61,6 +62,24 @@ already have.
 | `Space` | Put the tag on all the selected fonts, or take it off all of them. Press again to undo |
 | `Enter` | Apply the changes and close. If no tag has the name you typed, make that tag on the selected fonts |
 | `Esc` | Close the panel without applying the changes |
+
+## In the similar fonts
+
+Select a font and press `S`. You can also click **Similar** on the row (point to
+the row to see it), click **Find similar** in the inspector, or run **Find similar
+fonts** in the command palette. The panel **Similar to** opens below the font list.
+It shows the fonts that look like the selected font, closest first. Each font shows
+the preview text in that font, how similar it is in percent, and why.
+
+| Key | What it does |
+|-----|--------------|
+| `Up` and `Down` | Go to the previous or next font |
+| `Home` and `End` | Go to the first or last font |
+| `Enter` | Select the font in the font list and show it in the inspector |
+| `Tab` | Go to the next font, or to the close button |
+| `Esc` | Close the panel |
+
+If a search or a filter hides the font in the list, the inspector still shows it.
 
 ## In the layout
 
