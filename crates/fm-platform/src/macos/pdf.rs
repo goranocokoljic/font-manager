@@ -10,9 +10,8 @@
 
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::time::Instant;
 
 use block2::RcBlock;
@@ -31,7 +30,9 @@ use objc2_foundation::{
 };
 use objc2_web_kit::{WKWebView, WKWebViewConfiguration};
 
-use crate::pdf::{A4_POINTS, MARGIN_MM, PRINT_TIMEOUT, PdfPrinter, PrintError};
+use crate::pdf::{
+    A4_POINTS, MARGIN_MM, PRINT_TIMEOUT, PdfPrinter, PrintError, Reply, wait_for_ui_thread,
+};
 
 /// The page's viewport while it is printed, in points.
 const VIEW: (f64, f64) = (1280.0, 800.0);
@@ -54,18 +55,15 @@ impl PdfPrinter for MacosPdfPrinter {
         if MainThreadMarker::new().is_some() {
             return Err(PrintError::new("a print was started on the UI thread"));
         }
-        let (tx, rx) = mpsc::channel();
-        let (html, out) = (html.to_path_buf(), out.to_path_buf());
-        DispatchQueue::main().exec_async(move || match MainThreadMarker::new() {
-            Some(mtm) => start(mtm, &html, out, tx),
-            None => {
-                let _ = tx.send(Err(PrintError::new(
+        let html = html.to_path_buf();
+        wait_for_ui_thread(out, PRINT_TIMEOUT, |reply| {
+            DispatchQueue::main().exec_async(move || match MainThreadMarker::new() {
+                Some(mtm) => start(mtm, &html, reply),
+                None => reply.send(Err(PrintError::new(
                     "the main queue ran off the main thread",
-                )));
-            }
-        });
-        rx.recv_timeout(PRINT_TIMEOUT)
-            .map_err(|_| PrintError::new("the print did not finish in time"))?
+                ))),
+            });
+        })
     }
 }
 
@@ -73,8 +71,7 @@ impl PdfPrinter for MacosPdfPrinter {
 struct Job {
     window: Retained<NSWindow>,
     webview: Retained<WKWebView>,
-    out: PathBuf,
-    tx: mpsc::Sender<Result<(), PrintError>>,
+    reply: Reply,
     deadline: Instant,
     done: Cell<bool>,
 }
@@ -83,7 +80,7 @@ impl Job {
     /// Answers the caller once.
     fn finish(&self, result: Result<(), PrintError>) {
         if !self.done.replace(true) {
-            let _ = self.tx.send(result);
+            self.reply.send(result);
         }
     }
 }
@@ -96,12 +93,7 @@ impl Drop for Job {
 
 type Step = fn(Rc<Job>, MainThreadMarker);
 
-fn start(
-    mtm: MainThreadMarker,
-    html: &Path,
-    out: PathBuf,
-    tx: mpsc::Sender<Result<(), PrintError>>,
-) {
+fn start(mtm: MainThreadMarker, html: &Path, reply: Reply) {
     let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(VIEW.0, VIEW.1));
     // SAFETY: a fresh borderless window that is never shown; it is not
     // released on close, so the `Retained` stays the only owner.
@@ -130,8 +122,7 @@ fn start(
     let job = Rc::new(Job {
         window,
         webview,
-        out,
-        tx,
+        reply,
         deadline: Instant::now() + PRINT_TIMEOUT,
         done: Cell::new(false),
     });
@@ -160,7 +151,7 @@ fn later(job: Rc<Job>, mtm: MainThreadMarker, step: Step) {
 
 /// Waits until the page stopped loading and its fonts are loaded.
 fn wait_for_page(job: Rc<Job>, mtm: MainThreadMarker) {
-    if Instant::now() > job.deadline {
+    if job.reply.gone() || Instant::now() > job.deadline {
         job.finish(Err(PrintError::new("the page did not load in time")));
         return;
     }
@@ -233,6 +224,10 @@ impl PrintDelegate {
 }
 
 fn print(job: Rc<Job>, mtm: MainThreadMarker) {
+    if job.reply.gone() {
+        job.finish(Err(PrintError::new("the caller stopped waiting")));
+        return;
+    }
     let info = NSPrintInfo::new();
     info.setPaperSize(NSSize::new(A4_POINTS.0, A4_POINTS.1));
     info.setOrientation(NSPaperOrientation::Portrait);
@@ -245,7 +240,7 @@ fn print(job: Rc<Job>, mtm: MainThreadMarker) {
     info.setVerticalPagination(NSPrintingPaginationMode::Automatic);
     info.setHorizontallyCentered(false);
     info.setVerticallyCentered(false);
-    let out = NSURL::fileURLWithPath(&NSString::from_str(&job.out.to_string_lossy()));
+    let out = NSURL::fileURLWithPath(&NSString::from_str(&job.reply.out().to_string_lossy()));
     // SAFETY: the AppKit constants are valid for the life of the process;
     // the job-saving key takes an NSURL.
     unsafe {
@@ -270,7 +265,7 @@ fn print(job: Rc<Job>, mtm: MainThreadMarker) {
             } else {
                 Err(PrintError::new(format!(
                     "the print operation failed for {}",
-                    finished.out.display()
+                    finished.reply.out().display()
                 )))
             });
             // This runs inside the print operation's callback: closing the

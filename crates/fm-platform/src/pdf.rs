@@ -12,8 +12,9 @@
 //! [`run_ui_loop`].
 
 use std::fmt::{self, Write as _};
-use std::path::Path;
-use std::sync::Arc;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::Duration;
 
 use crate::AppPaths;
@@ -97,6 +98,64 @@ pub fn run_ui_loop<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static)
     work()
 }
 
+/// The UI thread's side of one print (macOS and Linux): answers the caller
+/// waiting in [`wait_for_ui_thread`] and, once that caller has given up,
+/// removes what the print wrote, so a late print leaves no file behind.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+#[derive(Debug)]
+pub(crate) struct Reply {
+    tx: mpsc::Sender<Result<(), PrintError>>,
+    gone: Arc<AtomicBool>,
+    out: PathBuf,
+}
+
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+impl Reply {
+    /// The file the print writes.
+    pub(crate) fn out(&self) -> &Path {
+        &self.out
+    }
+
+    /// Whether the caller stopped waiting; a print not started yet must not start.
+    pub(crate) fn gone(&self) -> bool {
+        self.gone.load(Ordering::SeqCst)
+    }
+
+    /// Answers the caller. When nobody waits any more, the file the print
+    /// may have written is removed: the caller's cleanup has already run.
+    pub(crate) fn send(&self, result: Result<(), PrintError>) {
+        if self.tx.send(result).is_err() || self.gone() {
+            let _ = std::fs::remove_file(&self.out);
+        }
+    }
+}
+
+/// Starts a print on the UI thread through `start`, which gets the
+/// [`Reply`] for `out`, and waits up to `timeout` for its answer. On a
+/// timeout the reply is marked gone, so the job does not start its print,
+/// and a print still running removes its file when it ends.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+pub(crate) fn wait_for_ui_thread(
+    out: &Path,
+    timeout: Duration,
+    start: impl FnOnce(Reply),
+) -> Result<(), PrintError> {
+    let (tx, rx) = mpsc::channel();
+    let gone = Arc::new(AtomicBool::new(false));
+    start(Reply {
+        tx,
+        gone: Arc::clone(&gone),
+        out: out.to_path_buf(),
+    });
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => {
+            gone.store(true, Ordering::SeqCst);
+            Err(PrintError::new("the print did not finish in time"))
+        }
+    }
+}
+
 /// The `file://` URL of an absolute path, every byte outside the unreserved
 /// set, `/` and `:` percent-encoded; on Windows `C:\a b` is `file:///C:/a%20b`.
 pub fn file_url(path: &Path) -> String {
@@ -132,6 +191,74 @@ mod tests {
             file_url(Path::new(r"C:\Users\A B\x#1.html")),
             "file:///C:/Users/A%20B/x%231.html"
         );
+    }
+
+    /// A scratch folder, removed at the end.
+    struct Scratch(PathBuf);
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn scratch(label: &str) -> Scratch {
+        let dir = std::env::temp_dir().join(format!("fm-pdf-{label}-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch");
+        Scratch(dir)
+    }
+
+    #[test]
+    fn a_print_that_ends_after_the_caller_gave_up_removes_its_file() {
+        let dir = scratch("late");
+        let out = dir.0.join(".Family.pdf.partial");
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let (done_tx, done_rx) = mpsc::channel();
+        let res = wait_for_ui_thread(&out, Duration::from_millis(50), |reply| {
+            std::thread::spawn(move || {
+                // The "UI thread": it started before the timeout and ends after it.
+                go_rx.recv().expect("go");
+                std::fs::write(reply.out(), b"%PDF-1.7 late").expect("write");
+                reply.send(Ok(()));
+                done_tx.send(()).expect("done");
+            });
+        });
+        assert_eq!(
+            res,
+            Err(PrintError::new("the print did not finish in time"))
+        );
+        go_tx.send(()).expect("go");
+        done_rx.recv().expect("done");
+        assert!(!out.exists(), "no file is left behind after a timeout");
+    }
+
+    #[test]
+    fn a_job_sees_the_caller_gone_before_it_starts_printing() {
+        let dir = scratch("gone");
+        let out = dir.0.join(".Family.pdf.partial");
+        let (tx, rx) = mpsc::channel();
+        let res = wait_for_ui_thread(&out, Duration::from_millis(20), |reply| {
+            tx.send(reply).expect("reply");
+        });
+        assert!(res.is_err());
+        let reply = rx.recv().expect("reply");
+        assert!(
+            reply.gone(),
+            "a job that has not printed yet must not start"
+        );
+    }
+
+    #[test]
+    fn an_answer_in_time_reaches_the_caller_and_keeps_the_file() {
+        let dir = scratch("in-time");
+        let out = dir.0.join(".Family.pdf.partial");
+        let res = wait_for_ui_thread(&out, Duration::from_secs(5), |reply| {
+            std::fs::write(reply.out(), b"%PDF-1.7").expect("write");
+            assert!(!reply.gone());
+            reply.send(Ok(()));
+        });
+        assert_eq!(res, Ok(()));
+        assert!(out.exists());
     }
 
     #[test]

@@ -9,9 +9,8 @@
 //! before GTK is initialized, is refused.
 
 use std::cell::{Cell, RefCell};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use gtk::prelude::*;
@@ -19,7 +18,9 @@ use gtk::{gio, glib};
 use javascriptcore::ValueExt as _;
 use webkit2gtk::{PrintOperation, PrintOperationExt as _, WebView, WebViewExt as _};
 
-use crate::pdf::{MARGIN_MM, PRINT_TIMEOUT, PdfPrinter, PrintError, file_url};
+use crate::pdf::{
+    MARGIN_MM, PRINT_TIMEOUT, PdfPrinter, PrintError, Reply, file_url, wait_for_ui_thread,
+};
 
 /// The page's viewport while it is printed, in pixels.
 const VIEW: (i32, i32) = (1280, 800);
@@ -45,11 +46,10 @@ impl PdfPrinter for LinuxPdfPrinter {
         if glib::MainContext::default().is_owner() {
             return Err(PrintError::new("a print was started on the UI thread"));
         }
-        let (tx, rx) = mpsc::channel();
-        let (html, out) = (html.to_path_buf(), out.to_path_buf());
-        glib::idle_add_once(move || start(&html, out, tx));
-        rx.recv_timeout(PRINT_TIMEOUT)
-            .map_err(|_| PrintError::new("the print did not finish in time"))?
+        let html = html.to_path_buf();
+        wait_for_ui_thread(out, PRINT_TIMEOUT, |reply| {
+            glib::idle_add_once(move || start(&html, reply));
+        })
     }
 }
 
@@ -57,8 +57,7 @@ impl PdfPrinter for LinuxPdfPrinter {
 struct Job {
     window: gtk::OffscreenWindow,
     webview: WebView,
-    out: PathBuf,
-    tx: mpsc::Sender<Result<(), PrintError>>,
+    reply: Reply,
     deadline: Instant,
     done: Cell<bool>,
     /// The running operation, kept alive until it finished.
@@ -70,7 +69,7 @@ impl Job {
     /// signal handler returned.
     fn finish(&self, result: Result<(), PrintError>) {
         if !self.done.replace(true) {
-            let _ = self.tx.send(result);
+            self.reply.send(result);
         }
         if let Some(op) = self.op.borrow_mut().take() {
             glib::idle_add_local_once(move || drop(op));
@@ -84,7 +83,7 @@ impl Drop for Job {
     }
 }
 
-fn start(html: &Path, out: PathBuf, tx: mpsc::Sender<Result<(), PrintError>>) {
+fn start(html: &Path, reply: Reply) {
     let window = gtk::OffscreenWindow::new();
     window.set_default_size(VIEW.0, VIEW.1);
     let webview = WebView::new();
@@ -95,8 +94,7 @@ fn start(html: &Path, out: PathBuf, tx: mpsc::Sender<Result<(), PrintError>>) {
     let job = Rc::new(Job {
         window,
         webview,
-        out,
-        tx,
+        reply,
         deadline: Instant::now() + PRINT_TIMEOUT,
         done: Cell::new(false),
         op: RefCell::new(None),
@@ -111,7 +109,7 @@ fn later(job: Rc<Job>, step: fn(Rc<Job>)) {
 
 /// Waits until the page stopped loading and its fonts are loaded.
 fn wait_for_page(job: Rc<Job>) {
-    if Instant::now() > job.deadline {
+    if job.reply.gone() || Instant::now() > job.deadline {
         job.finish(Err(PrintError::new("the page did not load in time")));
         return;
     }
@@ -139,6 +137,10 @@ fn wait_for_page(job: Rc<Job>) {
 }
 
 fn print(job: Rc<Job>) {
+    if job.reply.gone() {
+        job.finish(Err(PrintError::new("the caller stopped waiting")));
+        return;
+    }
     let paper = gtk::PaperSize::new(Some(gtk::PAPER_NAME_A4.as_str()));
     let settings = gtk::PrintSettings::new();
     // The file printer's name is translated with GTK's own catalogue.
@@ -146,7 +148,7 @@ fn print(job: Rc<Job>) {
     settings.set(gtk::PRINT_SETTINGS_OUTPUT_FILE_FORMAT.as_str(), Some("pdf"));
     settings.set(
         gtk::PRINT_SETTINGS_OUTPUT_URI.as_str(),
-        Some(&file_url(&job.out)),
+        Some(&file_url(job.reply.out())),
     );
     settings.set_paper_size(&paper);
     settings.set_orientation(gtk::PageOrientation::Portrait);
