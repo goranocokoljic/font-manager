@@ -64,8 +64,27 @@ pub(crate) fn is_private(path: &Path) -> io::Result<bool> {
         )
     };
     status.ok().map_err(io::Error::other)?;
+    let actual = dacl_text(sd);
+    // SAFETY: `sd` was allocated by GetNamedSecurityInfoW and is freed once.
+    let _ = unsafe { LocalFree(Some(HLOCAL(sd.0))) };
+    Ok(only_user(&actual?, aces_of(&expected_dacl_text()?)))
+}
+
+/// The DACL [`write`] sets, as Windows writes it back. Windows writes some
+/// SIDs as aliases (the built-in Administrator account, RID 500, is `LA`),
+/// so the expected text goes through the same conversion as the file's.
+fn expected_dacl_text() -> io::Result<String> {
+    let sd = parse_sddl(&only_user_sddl()?)?;
+    let text = dacl_text(sd);
+    // SAFETY: `sd` was allocated by the conversion in `parse_sddl`; freed once.
+    let _ = unsafe { LocalFree(Some(HLOCAL(sd.0))) };
+    text
+}
+
+/// The DACL of `sd` as SDDL text (`D:<flags>(<ace>)...`).
+fn dacl_text(sd: PSECURITY_DESCRIPTOR) -> io::Result<String> {
     let mut text = PWSTR::null();
-    // SAFETY: `sd` is the valid descriptor from above; `text` receives a
+    // SAFETY: `sd` is a valid descriptor (the caller's); `text` receives a
     // LocalAlloc'd string, freed below.
     let converted = unsafe {
         ConvertSecurityDescriptorToStringSecurityDescriptorW(
@@ -78,26 +97,28 @@ pub(crate) fn is_private(path: &Path) -> io::Result<bool> {
     };
     // SAFETY: `text` (when set) is a NUL-terminated string from the call above.
     let sddl = converted.and_then(|()| unsafe { text.to_string() }.map_err(Into::into));
-    // SAFETY: both were allocated by the calls above and are freed once.
-    unsafe {
-        if !text.is_null() {
-            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
-        }
-        let _ = LocalFree(Some(HLOCAL(sd.0)));
+    if !text.is_null() {
+        // SAFETY: allocated by the conversion above and freed once.
+        let _ = unsafe { LocalFree(Some(HLOCAL(text.0.cast()))) };
     }
-    Ok(only_user(&sddl.map_err(io::Error::other)?, &user_sid()?))
+    sddl.map_err(io::Error::other)
+}
+
+/// The ACE list of a DACL in SDDL text: everything from the first `(`.
+fn aces_of(sddl: &str) -> &str {
+    sddl.find('(').map_or("", |at| &sddl[at..])
 }
 
 /// Whether the DACL in `sddl` (`D:<flags>(<ace>)...`) is protected (`P`)
-/// and holds one entry, full access for `sid`. Windows adds the `AI`
+/// and holds exactly the entries `aces`. Windows adds the `AI`
 /// (auto-inherited) flag on its own, so the other flags do not matter.
-fn only_user(sddl: &str, sid: &str) -> bool {
+fn only_user(sddl: &str, aces: &str) -> bool {
     let Some(dacl) = sddl.strip_prefix("D:") else {
         return false;
     };
     let aces_at = dacl.find('(').unwrap_or(dacl.len());
-    let (flags, aces) = dacl.split_at(aces_at);
-    flags.contains('P') && aces == format!("(A;;FA;;;{sid})")
+    let (flags, actual) = dacl.split_at(aces_at);
+    flags.contains('P') && !aces.is_empty() && actual == aces
 }
 
 /// `D:P(A;;FA;;;<user SID>)`: a protected DACL, full access for the user.
@@ -105,23 +126,29 @@ fn only_user_sddl() -> io::Result<String> {
     Ok(format!("D:P(A;;FA;;;{})", user_sid()?))
 }
 
-/// Replaces the DACL of `path` with [`only_user_sddl`].
-fn restrict(path: &Path) -> io::Result<()> {
-    let sddl = wide(OsStr::new(&only_user_sddl()?));
+/// A LocalAlloc'd security descriptor from SDDL text; the caller frees it.
+fn parse_sddl(sddl: &str) -> io::Result<PSECURITY_DESCRIPTOR> {
+    let text = wide(OsStr::new(sddl));
     let mut sd = PSECURITY_DESCRIPTOR::default();
-    // SAFETY: `sddl` is NUL-terminated and outlives the call; `sd` receives a
-    // LocalAlloc'd descriptor, freed below.
+    // SAFETY: `text` is NUL-terminated and outlives the call; `sd` receives a
+    // LocalAlloc'd descriptor the caller frees.
     unsafe {
         ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            PCWSTR(sddl.as_ptr()),
+            PCWSTR(text.as_ptr()),
             SDDL_REVISION_1,
             &mut sd,
             None,
         )
     }
     .map_err(io::Error::other)?;
+    Ok(sd)
+}
+
+/// Replaces the DACL of `path` with [`only_user_sddl`].
+fn restrict(path: &Path) -> io::Result<()> {
+    let sd = parse_sddl(&only_user_sddl()?)?;
     let result = set_dacl(path, sd);
-    // SAFETY: `sd` was allocated by the conversion above and is freed once.
+    // SAFETY: `sd` was allocated by `parse_sddl` and is freed once.
     let _ = unsafe { LocalFree(Some(HLOCAL(sd.0))) };
     result
 }
@@ -157,20 +184,54 @@ fn wide(s: &OsStr) -> Vec<u16> {
 
 #[cfg(test)]
 mod tests {
-    use super::only_user;
+    use super::{aces_of, only_user};
 
     #[test]
     fn only_a_protected_single_user_dacl_is_private() {
         let sid = "S-1-5-21-1-2-3-1001";
-        assert!(only_user(&format!("D:PAI(A;;FA;;;{sid})"), sid));
-        assert!(only_user(&format!("D:P(A;;FA;;;{sid})"), sid));
+        let ours = format!("(A;;FA;;;{sid})");
+        assert!(only_user(&format!("D:PAI{ours}"), &ours));
+        assert!(only_user(&format!("D:P{ours}"), &ours));
         // Inherited from the folder: not protected.
-        assert!(!only_user(&format!("D:AI(A;;FA;;;{sid})"), sid));
+        assert!(!only_user(&format!("D:AI{ours}"), &ours));
         // A second entry (Administrators) or another user.
-        assert!(!only_user(&format!("D:P(A;;FA;;;{sid})(A;;FA;;;BA)"), sid));
-        assert!(!only_user("D:P(A;;FA;;;S-1-5-21-9-9-9-1002)", sid));
+        assert!(!only_user(&format!("D:P{ours}(A;;FA;;;BA)"), &ours));
+        assert!(!only_user("D:P(A;;FA;;;S-1-5-21-9-9-9-1002)", &ours));
         // Read access only, or no DACL at all.
-        assert!(!only_user(&format!("D:P(A;;FR;;;{sid})"), sid));
-        assert!(!only_user("", sid));
+        assert!(!only_user(&format!("D:P(A;;FR;;;{sid})"), &ours));
+        assert!(!only_user("", &ours));
+        assert!(!only_user("D:P", ""));
+    }
+
+    /// The built-in Administrator of this machine (RID 500, the CI runner's
+    /// account) comes back from Windows as the alias `LA`, not as its SID.
+    #[test]
+    fn an_aliased_sid_matches_through_the_same_conversion() {
+        let user = super::user_sid().expect("sid");
+        let Some((domain, _rid)) = user.rsplit_once('-') else {
+            panic!("not a SID: {user}");
+        };
+        let admin = format!("{domain}-500");
+        let expected = super::parse_sddl(&format!("D:P(A;;FA;;;{admin})"))
+            .and_then(|sd| {
+                let text = super::dacl_text(sd);
+                // SAFETY: allocated by `parse_sddl`; freed once.
+                #[allow(unsafe_code)]
+                let _ = unsafe {
+                    windows::Win32::Foundation::LocalFree(Some(windows::Win32::Foundation::HLOCAL(
+                        sd.0,
+                    )))
+                };
+                text
+            })
+            .expect("round trip");
+        assert_eq!(aces_of(&expected), "(A;;FA;;;LA)");
+        assert!(only_user("D:PAI(A;;FA;;;LA)", aces_of(&expected)));
+    }
+
+    #[test]
+    fn the_current_users_dacl_round_trips() {
+        let expected = super::expected_dacl_text().expect("expected");
+        assert!(only_user(&expected, aces_of(&expected)), "{expected}");
     }
 }
