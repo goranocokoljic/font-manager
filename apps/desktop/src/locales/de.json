@@ -1155,7 +1155,14 @@
     "fonts": "Schriften",
     "noMatch": "Keine passenden Schriften",
     "usePanelFont": "Schrift des Panels verwenden",
-    "usePanelFontFor": "Schrift des Panels für {label} verwenden"
+    "usePanelFontFor": "Schrift des Panels für {label} verwenden",
+    "addPanel": "Panel hinzufügen",
+    "addPanelTitle": "Eine Kopie des aktuellen Panels neben den anderen hinzufügen",
+    "panelsFull": "Höchstens {max} Panels",
+    "panel": "Panel {number}: {name}",
+    "noLayout": "Kein Layout",
+    "closePanel": "Panel schließen",
+    "closePanelFor": "Panel {number} schließen"
   },
   "conflicts": {
     "title": "Schriftkonflikte",

@@ -240,3 +240,147 @@ test('a block gets a face of its own from its font picker; "Use panel font" rese
   await expect(reset).toHaveCount(0);
   await expect(picker).toHaveValue('');
 });
+
+const panels = (page: Page) => studio(page).getByRole('region', { name: /^Panel \d: / });
+const panelNamed = (page: Page, name: string) =>
+  studio(page).getByRole('region', { name, exact: true });
+const addPanel = (page: Page) => studio(page).getByRole('button', { name: 'Add panel' });
+
+/** Sets block 1 of `panel` in `family` with the keyboard, through its font picker. */
+async function headingFont(page: Page, panel: Locator, family: string) {
+  const picker = panel.getByRole('combobox', { name: 'Font for Block 1' });
+  await picker.focus();
+  await page.keyboard.type(family);
+  await expect(
+    panel.getByRole('listbox', { name: 'Fonts' }).getByRole('option').first(),
+  ).toHaveText(family);
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveValue(new RegExp(`^${family} `));
+}
+
+test('panels side by side: copies, independent, close one, kept for the session', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?layout=book&face=1');
+  await expect(panels(page)).toHaveCount(1);
+  const first = panelNamed(page, 'Panel 1: Book');
+  await expect(layout(first, 'Book')).toHaveAttribute('data-state', 'ready');
+  // The first panel is the library's layout: it has no "Close panel" of its own.
+  await expect(first.getByRole('button', { name: /^Close panel/ })).toHaveCount(0);
+
+  // Panel 1: an unsaved heading and a heading font of its own.
+  await blocks(layout(first, 'Book')).first().dblclick();
+  await first.getByRole('textbox', { name: 'Block 1 text' }).fill('Copied heading');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await headingFont(page, first, 'Inter');
+  const familyOf = (panel: Locator) =>
+    blocks(layout(panel, 'Book'))
+      .first()
+      .evaluate((el) => getComputedStyle(el).fontFamily);
+  const inter = await familyOf(first);
+
+  // "Add panel" opens a copy beside it: same layout, same text, same block fonts.
+  await addPanel(page).click();
+  await expect(panels(page)).toHaveCount(2);
+  const second = panelNamed(page, 'Panel 2: Book');
+  await expect(second.getByRole('heading', { name: 'Panel 2: Book' })).toBeFocused();
+  await expect(blocks(layout(second, 'Book')).first()).toHaveText('Copied heading');
+  await expect(second.getByRole('combobox', { name: 'Font for Block 1' })).toHaveValue(/^Inter /);
+  await expect.poll(() => familyOf(second)).toBe(inter);
+
+  // Each panel is independent: font and text edits in panel 2 leave panel 1 as it was.
+  await headingFont(page, second, 'JetBrains Mono');
+  await expect.poll(() => familyOf(second)).not.toBe(inter);
+  const mono = await familyOf(second);
+  expect(await familyOf(first)).toBe(inter);
+  await blocks(layout(second, 'Book')).first().dblclick();
+  await second.getByRole('textbox', { name: 'Block 1 text' }).fill('Only panel 2');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await expect(blocks(layout(second, 'Book')).first()).toHaveText('Only panel 2');
+  await expect(blocks(layout(first, 'Book')).first()).toHaveText('Copied heading');
+
+  // A third panel copies the panel that had the focus last (panel 2), then gets its own font.
+  await addPanel(page).click();
+  await expect(panels(page)).toHaveCount(3);
+  const third = panelNamed(page, 'Panel 3: Book');
+  await expect(blocks(layout(third, 'Book')).first()).toHaveText('Only panel 2');
+  await headingFont(page, third, 'Legacy Grotesk');
+  await expect.poll(() => familyOf(third)).not.toBe(mono);
+  const legacy = await familyOf(third);
+  expect(new Set([inter, mono, legacy]).size).toBe(3);
+
+  // Equal widths.
+  const widths = await panels(page).evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().width),
+  );
+  for (const w of widths) expect(Math.abs(w - widths[0]!)).toBeLessThanOrEqual(1);
+
+  // "Close panel" removes one; the others move up and keep their fonts and text.
+  await second.getByRole('button', { name: 'Close panel 2' }).click();
+  await expect(panels(page)).toHaveCount(2);
+  await expect(addPanel(page)).toBeFocused();
+  const kept = panelNamed(page, 'Panel 2: Book');
+  await expect.poll(() => familyOf(kept)).toBe(legacy);
+  expect(await familyOf(first)).toBe(inter);
+
+  // Back to the library and into the studio again: the panels are as they were.
+  await studio(page).getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(studio(page)).toBeHidden();
+  await page.evaluate(() => (location.hash = '#/studio?layout=book&face=1'));
+  await expect(panels(page)).toHaveCount(2);
+  await expect(blocks(layout(panelNamed(page, 'Panel 1: Book'), 'Book')).first()).toHaveText(
+    'Copied heading',
+  );
+  const again = panelNamed(page, 'Panel 2: Book');
+  await expect(blocks(layout(again, 'Book')).first()).toHaveText('Only panel 2');
+  await expect.poll(() => familyOf(again)).toBe(legacy);
+
+  // Up to four panels; at four, "Add panel" says so and adds none.
+  await addPanel(page).click();
+  await addPanel(page).click();
+  await expect(panels(page)).toHaveCount(4);
+  await expect(addPanel(page)).toHaveAttribute('aria-disabled', 'true');
+  // It stays on the Tab path, so its title tells why; pressing it does nothing.
+  await addPanel(page).focus();
+  await page.keyboard.press('Enter');
+  await expect(panels(page)).toHaveCount(4);
+});
+
+test('a narrow window scrolls the panels sideways; every panel control is on the Tab path', async ({
+  page,
+}) => {
+  await open(page);
+  await page.setViewportSize({ width: 1000, height: 700 });
+  await page.goto('/#/studio?layout=book&face=1');
+  await expect(layout(studio(page), 'Book')).toHaveAttribute('data-state', 'ready');
+  await addPanel(page).click();
+  await addPanel(page).click();
+  await expect(panels(page)).toHaveCount(3);
+  const row = panels(page).first().locator('..');
+  const overflow = await row.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeGreaterThan(0);
+  await expect(row).toHaveCSS('overflow-x', 'auto');
+
+  await studio(page).getByRole('heading', { name: 'Pairing Studio' }).focus();
+  const reached: string[] = [];
+  for (let i = 0; i < 80; i++) {
+    await page.keyboard.press('Tab');
+    const name = await page.evaluate(() => {
+      const el = document.activeElement as HTMLElement | null;
+      if (!el || el === document.body) return null;
+      const label = (el as HTMLSelectElement).labels?.[0]?.textContent;
+      return (el.getAttribute('aria-label') ?? label ?? el.textContent ?? '').trim();
+    });
+    if (name === null) break;
+    expect(name, `tab stop ${i + 1} has a label`).not.toBe('');
+    reached.push(name);
+  }
+  const count = (re: RegExp) => reached.filter((r) => re.test(r)).length;
+  expect(count(/^Add panel$/)).toBe(1);
+  expect(count(/^Close panel 2$/)).toBe(1);
+  expect(count(/^Close panel 3$/)).toBe(1);
+  expect(count(/^Layout/)).toBe(3);
+  expect(count(/^Font for Block 1$/)).toBe(3);
+  expect(count(/^Duplicate$/)).toBe(3);
+});

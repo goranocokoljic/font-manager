@@ -2,7 +2,14 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient, mockFaces } from '../api/mock';
-import { STUDIO_RESULTS, useStudioStore } from './studio';
+import {
+  FIRST_PANEL,
+  MAX_PANELS,
+  STUDIO_RESULTS,
+  blockScope,
+  layoutsOf,
+  useStudioStore,
+} from './studio';
 import { useTextLayoutsStore } from './textLayouts';
 
 let client: ReturnType<typeof createMockClient>;
@@ -96,5 +103,101 @@ describe('studio store', () => {
     expect(save).toHaveBeenCalledOnce();
     expect(JSON.stringify(save.mock.calls[0])).not.toContain(String(mono.familyName));
     expect(JSON.stringify(save.mock.calls[0])).not.toMatch(/face/i);
+  });
+});
+
+describe('studio panels', () => {
+  it('starts with the first panel only, on the library store', () => {
+    const studio = useStudioStore();
+    expect(studio.panels).toEqual([FIRST_PANEL]);
+    expect(layoutsOf(FIRST_PANEL)).toBe(useTextLayoutsStore());
+  });
+
+  it('adds a panel as a copy of the current one: layout, unsaved text and block fonts', async () => {
+    const first = useTextLayoutsStore();
+    await first.open('book');
+    first.setBlockText(0, 'Unsaved heading');
+    const studio = useStudioStore();
+    await studio.setBlockFace(blockScope(FIRST_PANEL, 'book'), 0, mono.id);
+
+    const panel = studio.addPanel(FIRST_PANEL);
+    expect(panel).not.toBeNull();
+    expect(studio.panels).toEqual([FIRST_PANEL, panel]);
+    const copy = layoutsOf(panel!);
+    expect(copy).not.toBe(first);
+    expect(copy.saved?.id).toBe('book');
+    expect(copy.draft?.blocks[0]!.text).toBe('Unsaved heading');
+    expect(copy.dirty).toBe(true);
+    expect(copy.entries.map((e) => e.id)).toEqual(first.entries.map((e) => e.id));
+    expect(studio.faceOf(blockScope(panel!, 'book'), 0)?.id).toBe(mono.id);
+    expect(studio.faceOf(blockScope(panel!, 'book'), 1)).toBeNull();
+  });
+
+  it('keeps each panel independent: text, layout and block fonts', async () => {
+    const first = useTextLayoutsStore();
+    await first.open('book');
+    const studio = useStudioStore();
+    const panel = studio.addPanel(FIRST_PANEL)!;
+    const other = layoutsOf(panel);
+
+    other.setBlockText(0, 'Only in panel 2');
+    expect(first.draft?.blocks[0]!.text).toBe('Chapter One');
+    first.setBlockText(1, 'Only in panel 1');
+    expect(other.draft?.blocks[1]!.text).not.toBe('Only in panel 1');
+
+    await studio.setBlockFace(blockScope(panel, 'book'), 0, inter.id);
+    expect(studio.faceOf(blockScope(FIRST_PANEL, 'book'), 0)).toBeNull();
+    await studio.setBlockFace(blockScope(FIRST_PANEL, 'book'), 0, mono.id);
+    expect(studio.faceOf(blockScope(panel, 'book'), 0)?.id).toBe(inter.id);
+
+    await other.open('quote');
+    expect(other.saved?.id).toBe('quote');
+    expect(first.saved?.id).toBe('book');
+  });
+
+  it('copies the panel it is given, not always the first', async () => {
+    await useTextLayoutsStore().open('book');
+    const studio = useStudioStore();
+    const second = studio.addPanel(FIRST_PANEL)!;
+    await layoutsOf(second).open('quote');
+    const third = studio.addPanel(second)!;
+    expect(layoutsOf(third).saved?.id).toBe('quote');
+    expect(studio.panels).toEqual([FIRST_PANEL, second, third]);
+  });
+
+  it('opens at most four panels', async () => {
+    await useTextLayoutsStore().open('book');
+    const studio = useStudioStore();
+    for (let i = 1; i < MAX_PANELS; i++) expect(studio.addPanel(FIRST_PANEL)).not.toBeNull();
+    expect(studio.panels).toHaveLength(MAX_PANELS);
+    expect(studio.addPanel(FIRST_PANEL)).toBeNull();
+    expect(studio.panels).toHaveLength(MAX_PANELS);
+    expect(studio.addPanel(999)).toBeNull();
+  });
+
+  it('"Close panel" removes one panel with its block fonts; the first panel stays', async () => {
+    await useTextLayoutsStore().open('book');
+    const studio = useStudioStore();
+    const second = studio.addPanel(FIRST_PANEL)!;
+    const third = studio.addPanel(FIRST_PANEL)!;
+    await studio.setBlockFace(blockScope(second, 'book'), 0, inter.id);
+    await studio.setBlockFace(blockScope(third, 'book'), 0, mono.id);
+    layoutsOf(second).setBlockText(0, 'Gone with panel 2');
+
+    studio.closePanel(second);
+    expect(studio.panels).toEqual([FIRST_PANEL, third]);
+    expect(studio.faceOf(blockScope(second, 'book'), 0)).toBeNull();
+    expect(studio.faceOf(blockScope(third, 'book'), 0)?.id).toBe(mono.id);
+    // The closed panel's store is gone: asking for it again gives a fresh one.
+    expect(layoutsOf(second).draft).toBeNull();
+
+    studio.closePanel(FIRST_PANEL);
+    expect(studio.panels).toEqual([FIRST_PANEL, third]);
+  });
+
+  it('scopes no two panels the same, and leaves the first panel keys as they were', () => {
+    expect(blockScope(FIRST_PANEL, 'book')).toBe('book');
+    expect(blockScope(2, 'book')).not.toBe(blockScope(3, 'book'));
+    expect(blockScope(2, 'book')).not.toBe('book');
   });
 });

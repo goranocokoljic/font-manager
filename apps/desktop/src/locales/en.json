@@ -1155,7 +1155,14 @@
     "fonts": "Fonts",
     "noMatch": "No matching fonts",
     "usePanelFont": "Use panel font",
-    "usePanelFontFor": "Use panel font for {label}"
+    "usePanelFontFor": "Use panel font for {label}",
+    "addPanel": "Add panel",
+    "addPanelTitle": "Add a copy of the current panel beside the others",
+    "panelsFull": "At most {max} panels",
+    "panel": "Panel {number}: {name}",
+    "noLayout": "No layout",
+    "closePanel": "Close panel",
+    "closePanelFor": "Close panel {number}"
   },
   "conflicts": {
     "title": "Font conflicts",

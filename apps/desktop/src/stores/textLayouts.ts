@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, getActivePinia } from 'pinia';
 import { computed, ref, toRaw, watch } from 'vue';
 import { useClient } from '../api/client';
 import type {
@@ -18,8 +18,12 @@ export type BlockProps = Partial<Omit<TextBlock, 'text'>>;
  * The body-text layouts as template files (fm-api `LayoutService`): the list of files, the
  * open one as saved, and the editor's draft of it. Saving, duplicating, reverting and
  * restoring go through the client; the core keeps the files and their versions.
+ *
+ * The library's Layout mode and the first Pairing Studio panel share `useTextLayoutsStore`;
+ * each further studio panel (E24.3) has its own instance of the same store, from
+ * `usePanelLayoutsStore`, so its open layout and draft are its own.
  */
-export const useTextLayoutsStore = defineStore('textLayouts', () => {
+function textLayoutsSetup() {
   const entries = ref<LayoutEntry[]>([]);
   /** The open layout as its file holds it. */
   const saved = ref<SavedLayout | null>(null);
@@ -58,6 +62,25 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     parked.delete(s.id);
     saved.value = s;
     draft.value = kept ?? structuredClone(s.layout);
+  }
+
+  /**
+   * Starts as a copy of another instance of this store (a new studio panel, E24.3): the same
+   * open file, a copy of its draft with the unsaved changes, its list and its bounds. Later
+   * edits on either side do not reach the other.
+   */
+  function adopt(from: {
+    entries: LayoutEntry[];
+    saved: SavedLayout | null;
+    draft: Layout | null;
+    bounds: LayoutBounds | null;
+  }): void {
+    opening++;
+    entries.value = structuredClone(toRaw(from.entries));
+    bounds.value = from.bounds ? structuredClone(toRaw(from.bounds)) : null;
+    history.value = [];
+    saved.value = from.saved ? structuredClone(toRaw(from.saved)) : null;
+    draft.value = from.draft ? structuredClone(toRaw(from.draft)) : null;
   }
 
   /** Runs one call; its error is kept and the call answers `null`. */
@@ -255,6 +278,7 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     current,
     loadList,
     open,
+    adopt,
     setBlockText,
     bounds,
     loadBounds,
@@ -269,4 +293,34 @@ export const useTextLayoutsStore = defineStore('textLayouts', () => {
     loadHistory,
     restore,
   };
-});
+}
+
+const define = (id: string) => defineStore(id, textLayoutsSetup);
+
+export const useTextLayoutsStore = define('textLayouts');
+
+/** One instance of the text layouts store. */
+export type TextLayoutsStore = ReturnType<typeof useTextLayoutsStore>;
+
+const panelStores = new Map<number, ReturnType<typeof define>>();
+const panelId = (panel: number) => `textLayouts/panel-${panel}`;
+
+/** The text layouts store of Pairing Studio panel `panel` (a key above 0; E24.3). */
+export function usePanelLayoutsStore(panel: number): TextLayoutsStore {
+  let use = panelStores.get(panel);
+  if (!use) {
+    use = define(panelId(panel));
+    panelStores.set(panel, use);
+  }
+  return use();
+}
+
+/** Drops the store of a closed panel, its state included. */
+export function disposePanelLayoutsStore(panel: number): void {
+  const use = panelStores.get(panel);
+  if (!use) return;
+  use().$dispose();
+  panelStores.delete(panel);
+  const pinia = getActivePinia();
+  if (pinia) delete pinia.state.value[panelId(panel)];
+}

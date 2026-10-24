@@ -10,7 +10,7 @@ import { errorMessage, t } from '../i18n';
 import { useStudioStore } from '../stores/studio';
 
 const props = defineProps<{
-  /** The layout the block belongs to. */
+  /** The layout the block belongs to, as its panel's block-font scope (`blockScope`). */
   layoutId: string;
   /** The block's index in the layout. */
   index: number;
