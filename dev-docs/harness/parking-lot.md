@@ -225,3 +225,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E22.5 #150] crates/fm-api/src/mock.rs:117 — the mock labels `OpenLicense::Ofl` "OFL" while core's `open_license_label` (crates/fm-core/src/inventory.rs:169) says "SIL Open Font License"; two label tables for one enum will drift.
 - [E22.4 #149] apps/desktop/src/components/FontList.vue:261 — the existing open-license badge is not in the treeitem aria-label, so screen readers miss it.
 - [E25.1 #160] apps/desktop/src/components/CopyValue.vue:47 — `role="status"` live regions hidden with `.status:empty { display: none }` may not be announced when they first appear (also CatalogDownload.vue:240, SettingsView.vue:595, LocalApiSettings.vue).
+
+## 2026-10-25
+- [E19.1 #133] apps/desktop/src/components/FontTable.vue:642 — visually-hidden CSS is copied in three components (FontTable `.visually-hidden`, ProblemsView `.sr-only`, SourcesSidebar `.announce`); theme.css has no shared utility class.
+- [E19.1 #133] apps/desktop/src/components/UpdateDialog.vue:26 — the dialog focus-trap and return-focus pattern is hand-written in UpdateDialog, SmartRuleEditor and CompareSheet; only Compare and Quick look use `sheetReturnTarget`.
+- [E19.1 #133] apps/desktop/src/views/HomeView.vue — the "Inspector" toolbar button label spills past its border at 1280×800.
