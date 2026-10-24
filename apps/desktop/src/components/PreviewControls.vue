@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// The preview controls above a font list: sample text, size, line height,
-// tracking, alignment, colors and the preview surface. Every change goes to
+// The preview controls above a font list: sample text, size, auto size, line
+// height, tracking, alignment, colors and the preview surface. Every change goes to
 // the preview store for `view`, which every row of that list reads.
 import { computed, useId } from 'vue';
 import { t } from '../i18n';
@@ -11,6 +11,7 @@ import {
   TRACKING,
   usePreviewStore,
   type Alignment,
+  type AutoSize,
   type PreviewSettings,
   type Surface,
 } from '../stores/preview';
@@ -46,8 +47,10 @@ function typed(key: NumberKey, e: Event, commit: boolean): void {
   if (commit) input.value = String(store.settingsFor(props.view)[key]);
 }
 
-// The labels are read where they are shown (`preview.aligns.*`, `preview.surfaces.*`).
+// The labels are read where they are shown (`preview.aligns.*`, `preview.autoSizes.*`,
+// `preview.surfaces.*`).
 const alignments: Alignment[] = ['start', 'center', 'end'];
+const autoSizes: AutoSize[] = ['off', 'xHeight', 'capHeight'];
 const surfaces: Surface[] = ['auto', 'light', 'dark'];
 
 /** What a color well shows while its setting is `null` (the surface's own color). */
@@ -132,6 +135,20 @@ function colorFrom(e: Event): string {
         @input="typed(KEY.size, $event, false)"
         @change="typed(KEY.size, $event, true)"
       />
+    </div>
+    <div class="field">
+      <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
+        t('preview.autoSize')
+      }}</label>
+      <select
+        :id="`${uid}-auto-size`"
+        :value="s.autoSize"
+        @change="set({ autoSize: ($event.target as HTMLSelectElement).value as AutoSize })"
+      >
+        <option v-for="o in autoSizes" :key="o" :value="o">
+          {{ t(`preview.autoSizes.${o}`) }}
+        </option>
+      </select>
     </div>
     <label class="field">
       <span>{{ t('preview.lineHeight') }}</span>

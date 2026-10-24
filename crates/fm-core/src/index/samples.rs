@@ -1,14 +1,16 @@
 //! Dynamic previews in the index (E4.5): the text each face previews for a
-//! sample, from the `cmap` stored with the face (`face.cmap`, E3.7).
+//! sample, from the `cmap` stored with the face (`face.cmap`, E3.7); and the
+//! auto size factor of each face (E16.2), from its stored `face.metrics`.
 
 use fm_api::FaceId;
-use fm_api::preview::{SampleText, SampleTextRequest};
+use fm_api::common::Metrics;
+use fm_api::preview::{SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest};
 use rusqlite::OptionalExtension;
 
 use super::{Index, db_error};
 use crate::coverage::CodePointSet;
 use crate::error::{FmError, FmResult};
-use crate::sample;
+use crate::{metrics, sample};
 
 impl Index {
     /// The stored `cmap` blob of the face `face`; `None` when the face was
@@ -57,6 +59,30 @@ impl Index {
                     fallback: got.fallback,
                     missing: got.missing.into_iter().map(String::from).collect(),
                 })
+            })
+            .collect()
+    }
+
+    /// The auto size factor of each face of `req`, in request order (see
+    /// [`metrics::size_factor`]). A face whose `face.metrics` is missing or
+    /// unreadable keeps factor 1; an unknown face or a database error fails
+    /// the request.
+    pub fn size_factors(&self, req: &SizeFactorRequest) -> FmResult<Vec<SizeFactor>> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT metrics FROM face WHERE id = ?1")
+            .map_err(|e| db_error(&e))?;
+        req.faces
+            .iter()
+            .map(|&face| {
+                let json: Option<String> = stmt
+                    .query_row([face.0], |row| row.get(0))
+                    .optional()
+                    .map_err(|e| db_error(&e))?
+                    .ok_or_else(|| FmError::not_found(format!("Face {face}")))?;
+                let stored = json.and_then(|j| serde_json::from_str::<Metrics>(&j).ok());
+                let factor = stored.map_or(1.0, |m| metrics::size_factor(&m, req.basis));
+                Ok(SizeFactor { face, factor })
             })
             .collect()
     }

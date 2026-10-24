@@ -56,7 +56,7 @@ use crate::organization::{
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
 };
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
@@ -2368,6 +2368,41 @@ impl PreviewService for MockApi {
             feature_settings: decl("font-feature-settings", feats),
         })
     }
+
+    /// `fm_core::metrics::size_factor` over each face's metrics.
+    fn size_factors(&self, req: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
+        let st = self.state();
+        req.faces
+            .iter()
+            .map(|&face| {
+                let m = &st.face(face)?.detail.metrics;
+                Ok(SizeFactor {
+                    face,
+                    factor: mock_size_factor(m, req.basis),
+                })
+            })
+            .collect()
+    }
+}
+
+/// The core's auto size targets and usable range in em (`fm_core::metrics`).
+const MOCK_X_HEIGHT_EM: f32 = 0.5;
+const MOCK_CAP_HEIGHT_EM: f32 = 0.7;
+const MOCK_USABLE_EM: (f32, f32) = (0.2, 1.2);
+
+/// `fm_core::metrics::size_factor`: the target over the face's value in em;
+/// 1 without a usable value.
+fn mock_size_factor(m: &Metrics, basis: SizeBasis) -> f32 {
+    let (value, target) = match basis {
+        SizeBasis::XHeight => (m.x_height, MOCK_X_HEIGHT_EM),
+        SizeBasis::CapHeight => (m.cap_height, MOCK_CAP_HEIGHT_EM),
+    };
+    let upem = f32::from(m.units_per_em);
+    value
+        .filter(|_| upem > 0.0)
+        .map(|v| f32::from(v) / upem)
+        .filter(|em| (MOCK_USABLE_EM.0..=MOCK_USABLE_EM.1).contains(em))
+        .map_or(1.0, |em| target / em)
 }
 
 impl ActivationService for MockApi {
