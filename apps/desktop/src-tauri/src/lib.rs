@@ -37,6 +37,7 @@ use fm_api::preview::{
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
+    SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
 use fm_api::{
@@ -544,6 +545,15 @@ async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<Sea
     call(&state, move |api| api.search(req)).await
 }
 
+/// Faces that look like one face, ranked, with reasons ("Find similar", E23.3).
+#[tauri::command]
+async fn find_similar(
+    state: State<'_, AppState>,
+    req: SimilarRequest,
+) -> ApiResult<Vec<SimilarFace>> {
+    call(&state, move |api| api.find_similar(req)).await
+}
+
 /// How well one face covers some languages or text, for the glyph compare overlay.
 #[tauri::command]
 async fn check_coverage(
@@ -936,6 +946,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_families,
             get_family,
             search,
+            find_similar,
             check_coverage,
             face_coverage,
             list_languages,

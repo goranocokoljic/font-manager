@@ -22,6 +22,7 @@ import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
 import QuickCollectionReview from '../components/QuickCollectionReview.vue';
 import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
+import SimilarPanel from '../components/SimilarPanel.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import SmartRuleEditor from '../components/SmartRuleEditor.vue';
@@ -45,6 +46,7 @@ import { useCatalogsStore } from '../stores/catalogs';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
 import { useSettingsStore } from '../stores/settings';
+import { useSimilarStore } from '../stores/similar';
 import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
@@ -71,6 +73,7 @@ const densityLabel = computed(() => t(`home.density.${settings.density}`));
 const quick = useQuickCollectionStore();
 const catalogs = useCatalogsStore();
 const tagging = useTaggingStore();
+const similar = useSimilarStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -169,8 +172,9 @@ const toggle = (mode: ActivationMode) =>
     ? activation.toggleRows(fontList.selectedRows, mode)
     : selection.toggleActivation(mode);
 
-// C pins the selected face to Compare: the inspector's once its detail has loaded,
-// else the list cursor's (the row just moved to, whose detail is still on its way).
+// C pins the selected face to Compare, and S finds the faces similar to it: the
+// inspector's once its detail has loaded, else the list cursor's (the row just moved
+// to, whose detail is still on its way).
 const pinTarget = computed(() => {
   const shown = selection.detail?.face;
   if (shown && shown.id === selection.faceId) return shown;
@@ -220,6 +224,17 @@ useActions([
       !tagging.open &&
       tagging.selectionPick.faces.length + tagging.selectionPick.families.length > 0,
     run: () => tagging.openFor(),
+  },
+  {
+    id: ACTIONS.similar,
+    get title() {
+      return t('home.actions.findSimilar');
+    },
+    get group() {
+      return t('palette.groups.search');
+    },
+    enabled: () => pinTarget.value !== null,
+    run: () => (pinTarget.value ? similar.openFor(pinTarget.value) : undefined),
   },
   {
     id: ACTIONS.compare,
@@ -511,6 +526,7 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
           <p v-else-if="library.loaded">{{ t('home.empty') }}</p>
         </section>
       </template>
+      <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />
       <CompareSheet v-if="compare.open" />
       <TaggingPanel />
       <SmartRuleEditor />

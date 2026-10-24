@@ -282,7 +282,8 @@
         "compact": "Kompakte Zeilen verwenden"
       },
       "showPreset": "Satzbild „{preset}“ anzeigen",
-      "reopenComparison": "Vergleich öffnen: {name}"
+      "reopenComparison": "Vergleich öffnen: {name}",
+      "findSimilar": "Ähnliche Schriften finden"
     }
   },
   "views": {
@@ -597,7 +598,9 @@
       "notesPlaceholder": "Notizen zu diesem Schnitt…",
       "familyNotes": "Notizen zur Familie",
       "familyNotesPlaceholder": "Notizen zu {family}…"
-    }
+    },
+    "findSimilar": "Ähnliche finden",
+    "findSimilarTitle": "Die Schriften finden, die wie diese aussehen"
   },
   "license": {
     "title": "Deine Lizenz für diese Familie",
@@ -840,7 +843,9 @@
       "active": "aktiv",
       "activePermanently": "dauerhaft aktiv",
       "activeSession": "aktiv für diese Sitzung"
-    }
+    },
+    "findSimilar": "Ähnliche",
+    "findSimilarLabel": "Die Schriften finden, die {name} ähneln"
   },
   "grid": {
     "label": "Schriftraster"
@@ -1246,5 +1251,19 @@
       "open": "Adobe Fonts öffnen",
       "openTitle": "Öffnet fonts.adobe.com in Ihrem Browser"
     }
+  },
+  "similar": {
+    "title": "Ähnlich wie {name}",
+    "hint": "Eingabe oder ein Klick wählt eine Schrift. Esc schließt.",
+    "close": "Ähnliche Schriften schließen",
+    "results": "Ähnliche Schriften",
+    "loading": "Ähnliche Schriften werden gesucht …",
+    "none": "Keine andere Schrift der Bibliothek sieht wie {name} aus.",
+    "error": "Font Manager konnte keine ähnlichen Schriften finden. {message}",
+    "score": "{percent} % ähnlich",
+    "noScore": "Keine Bewertung",
+    "resultLabel": "{name}, {score}",
+    "reasons": "Warum: {reasons}",
+    "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet sie aus. Der Inspektor zeigt sie."
   }
 }

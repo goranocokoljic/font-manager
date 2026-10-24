@@ -34,6 +34,7 @@ describe('keymap', () => {
     [ACTIONS.compare, { key: 'c' }],
     [ACTIONS.quickCollection, { key: 'b' }],
     [ACTIONS.tag, { key: 't' }],
+    [ACTIONS.similar, { key: 's' }],
     [ACTIONS.viewMode(1), { key: '1' }],
     [ACTIONS.viewMode(2), { key: '2' }],
     [ACTIONS.viewMode(3), { key: '3' }],

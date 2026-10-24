@@ -712,6 +712,12 @@ export interface MockOptions {
    * setting is there after a reload (browser mode). In memory when absent.
    */
   settingsStorage?: Pick<Storage, 'getItem' | 'setItem'>;
+  /**
+   * What "Find similar" answers: `ranked` (the default: every other face, ranked like
+   * the Rust mock), `none` (no similar face) or `fail` (fm-core's answer while E23.2 is
+   * not built: `unsupported`).
+   */
+  similar?: 'ranked' | 'none' | 'fail';
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -2007,6 +2013,40 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return mockFaceCoverage(f, options.cjkFaces?.includes(face) ?? false);
     },
     listLanguages: async () => structuredClone(mockLanguages),
+    // The Rust mock's ranking: 0.2, +0.5 same classification, +0.2 same weight,
+    // +0.1 same x-height; closest first, `limit` of them.
+    findSimilar: async (req) => {
+      const me = faceOrThrow(req.face);
+      if (options.similar === 'fail')
+        throw {
+          code: 'unsupported' as const,
+          message: 'Finding similar fonts is not available yet.',
+          detail: 'find_similar',
+        };
+      if (options.similar === 'none') return [];
+      const ranked = faces
+        .filter((f) => f.face.id !== req.face && !trashed.has(f.path))
+        .map((f) => {
+          let score = 0.2;
+          const reasons: string[] = [];
+          if (mockClassification(f) === mockClassification(me)) {
+            score += 0.5;
+            reasons.push('same classification');
+          }
+          if (f.face.weight === me.face.weight) {
+            score += 0.2;
+            reasons.push('same weight');
+          }
+          if (f.metrics.xHeight === me.metrics.xHeight) {
+            score += 0.1;
+            reasons.push('matching x-height');
+          }
+          return { face: summary(f), score: Math.min(1, score), reasons };
+        });
+      // Stable: equal scores keep the library order.
+      ranked.sort((a, b) => b.score - a.score);
+      return ranked.slice(0, req.limit);
+    },
     createCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
@@ -2661,4 +2701,6 @@ export const mockClient: FmClient = createMockClient({
   colorFace: countFromUrl('mockColor', 1) > 0,
   // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.
   hebrewFace: countFromUrl('mockHebrew', 1) > 0,
+  // `?mockSimilar=1` finds no similar face, `=2` answers with an error.
+  similar: (['ranked', 'none', 'fail'] as const)[countFromUrl('mockSimilar', 2)],
 });

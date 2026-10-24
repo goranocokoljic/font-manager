@@ -282,7 +282,8 @@
         "compact": "Use compact rows"
       },
       "showPreset": "Show the {preset} layout",
-      "reopenComparison": "Open comparison: {name}"
+      "reopenComparison": "Open comparison: {name}",
+      "findSimilar": "Find similar fonts"
     }
   },
   "views": {
@@ -597,7 +598,9 @@
       "notesPlaceholder": "Notes on this style…",
       "familyNotes": "Family notes",
       "familyNotesPlaceholder": "Notes on {family}…"
-    }
+    },
+    "findSimilar": "Find similar",
+    "findSimilarTitle": "Find the fonts that look like this one"
   },
   "license": {
     "title": "Your license for this family",
@@ -840,7 +843,9 @@
       "active": "active",
       "activePermanently": "active permanently",
       "activeSession": "active for this session"
-    }
+    },
+    "findSimilar": "Similar",
+    "findSimilarLabel": "Find the fonts similar to {name}"
   },
   "grid": {
     "label": "Font grid"
@@ -1246,5 +1251,19 @@
       "open": "Open Adobe Fonts",
       "openTitle": "Opens fonts.adobe.com in your browser"
     }
+  },
+  "similar": {
+    "title": "Similar to {name}",
+    "hint": "Enter or a click selects a font. Esc closes.",
+    "close": "Close the similar fonts",
+    "results": "Similar fonts",
+    "loading": "Looking for similar fonts…",
+    "none": "No other font in the library looks like {name}.",
+    "error": "Font Manager could not find similar fonts. {message}",
+    "score": "{percent}% similar",
+    "noScore": "No score",
+    "resultLabel": "{name}, {score}",
+    "reasons": "Why: {reasons}",
+    "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
   }
 }

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, shallowReactive, shallowRef, watch } from 'vue';
 import type { FaceSummary, FamilyId, FamilySummary } from '../api/types';
-import { familyKey, flattenRows, type ListRow, type RowKey } from '../list/rows';
+import { faceKey, familyKey, flattenRows, type ListRow, type RowKey } from '../list/rows';
 import {
   EMPTY_SELECTION,
   moveTo,
@@ -159,6 +159,26 @@ export const useFontListStore = defineStore('fontList', () => {
     else if (rows.value[cursorIndex.value + 1]?.kind === 'face') moveBy(1);
   }
 
+  /** Bumped by `reveal`; the list scrolls its cursor row into view on each change. */
+  const revealed = shallowRef(0);
+
+  /**
+   * Puts the cursor (and the selection) on a face: expands its family and selects the
+   * face's row, or the family row when the list does not show that style. False when
+   * the list does not show the family at all (a search or filter hides it).
+   */
+  async function reveal(face: FaceSummary): Promise<boolean> {
+    const id = face.family;
+    if (!indexOf.value.has(familyKey(id))) return false;
+    expanded.add(id);
+    await library.facesOf(id).catch(() => undefined);
+    const key = indexOf.value.has(faceKey(face.id)) ? faceKey(face.id) : familyKey(id);
+    if (!indexOf.value.has(key)) return false;
+    click(key);
+    revealed.value++;
+    return true;
+  }
+
   function collapseOrLeave(): void {
     const row = cursorRow.value;
     if (!row) return;
@@ -193,5 +213,7 @@ export const useFontListStore = defineStore('fontList', () => {
     selectAll,
     expandOrEnter,
     collapseOrLeave,
+    revealed,
+    reveal,
   };
 });
