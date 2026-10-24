@@ -2,6 +2,7 @@
 // The toast at the bottom of the window, e.g. after a bulk activation, with its
 // Undo button. The live region is always in the page, so a screen reader reads
 // each new message; the toast stays while the pointer or the focus is on it.
+import { t } from '../i18n';
 import { useToastStore } from '../stores/toast';
 
 const toasts = useToastStore();
@@ -23,7 +24,14 @@ const toasts = useToastStore();
       <button v-if="toasts.toast.action" type="button" class="action" @click="toasts.act()">
         {{ toasts.toast.action.label }}
       </button>
-      <button type="button" class="close" aria-label="Dismiss" @click="toasts.dismiss()">×</button>
+      <button
+        type="button"
+        class="close"
+        :aria-label="t('toast.dismiss')"
+        @click="toasts.dismiss()"
+      >
+        ×
+      </button>
     </div>
   </div>
 </template>
@@ -32,16 +40,19 @@ const toasts = useToastStore();
 .region {
   position: fixed;
   bottom: 40px;
-  left: 50%;
+  /* Centered in either direction: both insets 0, the box as wide as its toast. */
+  inset-inline: 0;
   z-index: 9;
-  transform: translateX(-50%);
+  width: fit-content;
+  margin-inline: auto;
 }
 .toast {
   display: flex;
   align-items: center;
   gap: 12px;
   max-width: min(560px, 90vw);
-  padding: 8px 8px 8px 16px;
+  padding-block: 8px;
+  padding-inline: 16px 8px;
   border: 1px solid var(--fm-control-border);
   border-radius: 8px;
   background: var(--fm-bg);

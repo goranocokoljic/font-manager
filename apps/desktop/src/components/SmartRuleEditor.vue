@@ -9,6 +9,7 @@
 // Tab cycles inside it, and the list's shortcuts behind it never see a key.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import type { RuleOp } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { useRuleEditorStore, type DraftGroup, type DraftItem } from '../stores/ruleEditor';
 import SmartRuleRow from './SmartRuleRow.vue';
 
@@ -16,31 +17,58 @@ const editor = useRuleEditorStore();
 const panel = ref<HTMLElement | null>(null);
 let returnFocus: HTMLElement | null = null;
 
-const OPS: { value: RuleOp; label: string }[] = [
-  { value: 'and', label: 'all of' },
-  { value: 'or', label: 'any of' },
+const OPS: { value: RuleOp; readonly label: string }[] = [
+  {
+    value: 'and',
+    get label() {
+      return t('rules.allOf');
+    },
+  },
+  {
+    value: 'or',
+    get label() {
+      return t('rules.anyOf');
+    },
+  },
 ];
 
 const title = computed(() =>
-  editor.editing ? `Edit rules of “${editor.editing.name}”` : 'New smart collection',
+  editor.editing ? t('rules.editTitle', { name: editor.editing.name }) : t('rules.newTitle'),
 );
-const families = (n: number) => (n === 1 ? '1 family' : `${n} families`);
 
-/** The rows' names for their labels: "Rule 2", "Group 1, rule 1". */
+/**
+ * The rows' names for their labels: "Rule 2", "Group 1, rule 1"; `inline` is the
+ * same name inside a sentence ("Remove group 1").
+ */
 const labels = computed(() => {
-  const out = new Map<number, string>();
+  const out = new Map<number, { label: string; inline: string }>();
   let rule = 0;
   let group = 0;
   for (const item of editor.draft.items) {
-    if (item.type === 'row') out.set(item.key, `Rule ${++rule}`);
-    else {
-      out.set(item.key, `Group ${++group}`);
-      item.rows.forEach((r, i) => out.set(r.key, `Group ${group}, rule ${i + 1}`));
+    if (item.type === 'row') {
+      const n = ++rule;
+      out.set(item.key, {
+        label: t('rules.ruleLabel', { n }),
+        inline: t('rules.ruleInline', { n }),
+      });
+    } else {
+      const g = ++group;
+      out.set(item.key, {
+        label: t('rules.groupLabel', { n: g }),
+        inline: t('rules.groupInline', { n: g }),
+      });
+      item.rows.forEach((r, i) =>
+        out.set(r.key, {
+          label: t('rules.groupRuleLabel', { group: g, n: i + 1 }),
+          inline: t('rules.groupRuleInline', { group: g, n: i + 1 }),
+        }),
+      );
     }
   }
   return out;
 });
-const labelOf = (item: DraftItem) => labels.value.get(item.key) ?? 'Rule';
+const labelOf = (item: DraftItem) => labels.value.get(item.key)?.label ?? t('rules.rule');
+const inlineOf = (item: DraftItem) => labels.value.get(item.key)?.inline ?? t('rules.ruleLower');
 
 async function focusKey(key: number): Promise<void> {
   await nextTick();
@@ -156,42 +184,44 @@ function onFocusIn(e: FocusEvent): void {
       <h2 id="fm-rules-title" class="title">{{ title }}</h2>
       <form class="body" @submit.prevent="editor.save">
         <label v-if="!editor.editing" class="field">
-          <span>Name</span>
+          <span>{{ t('rules.name') }}</span>
           <input v-model="editor.name" type="text" autocomplete="off" spellcheck="false" />
         </label>
         <label class="field">
-          <span>Fonts match</span>
-          <select v-model="editor.draft.op" aria-label="Fonts match all or any of the rules">
+          <span>{{ t('rules.fontsMatch') }}</span>
+          <select v-model="editor.draft.op" :aria-label="t('rules.opLabel')">
             <option v-for="op in OPS" :key="op.value" :value="op.value">{{ op.label }}</option>
           </select>
-          <span>these rules</span>
+          <span>{{ t('rules.theseRules') }}</span>
         </label>
 
-        <ul class="rules" aria-label="Rules">
+        <ul class="rules" :aria-label="t('rules.rules')">
           <li v-for="item in editor.draft.items" :key="item.key" class="item">
             <SmartRuleRow
               v-if="item.type === 'row'"
               :row="item"
               :label="labelOf(item)"
+              :inline="inlineOf(item)"
               @remove="remove(item, '.add-rule')"
             />
             <fieldset v-else class="group" :data-group="labelOf(item)">
               <legend>
-                <span>{{ labelOf(item) }}: fonts match</span>
+                <span>{{ t('rules.groupFontsMatch', { label: labelOf(item) }) }}</span>
                 <select
                   v-model="item.op"
-                  :aria-label="`${labelOf(item)}: fonts match all or any of its rules`"
+                  :aria-label="t('rules.groupOpLabel', { label: labelOf(item) })"
                 >
                   <option v-for="op in OPS" :key="op.value" :value="op.value">
                     {{ op.label }}
                   </option>
                 </select>
               </legend>
-              <ul class="rules" :aria-label="`${labelOf(item)} rules`">
+              <ul class="rules" :aria-label="t('rules.groupRules', { label: labelOf(item) })">
                 <li v-for="row in item.rows" :key="row.key">
                   <SmartRuleRow
                     :row="row"
                     :label="labelOf(row)"
+                    :inline="inlineOf(row)"
                     @remove="remove(row, `[data-add='${item.key}']`)"
                   />
                 </li>
@@ -201,41 +231,46 @@ function onFocusIn(e: FocusEvent): void {
                   type="button"
                   class="button"
                   :data-add="item.key"
-                  :aria-label="`Add a rule to ${labelOf(item).toLowerCase()}`"
+                  :aria-label="t('rules.addRuleTo', { label: inlineOf(item) })"
                   @click="addRow(item)"
                 >
-                  Add rule
+                  {{ t('rules.addRule') }}
                 </button>
                 <button
                   type="button"
                   class="button"
-                  :aria-label="`Remove ${labelOf(item).toLowerCase()}`"
+                  :aria-label="t('rules.removeLabel', { label: inlineOf(item) })"
                   @click="remove(item, '.add-rule')"
                 >
-                  Remove group
+                  {{ t('rules.removeGroup') }}
                 </button>
               </div>
             </fieldset>
           </li>
         </ul>
         <div class="actions">
-          <button type="button" class="button add-rule" @click="addRow()">Add rule</button>
-          <button type="button" class="button" @click="addGroup">Add group</button>
+          <button type="button" class="button add-rule" @click="addRow()">
+            {{ t('rules.addRule') }}
+          </button>
+          <button type="button" class="button" @click="addGroup">{{ t('rules.addGroup') }}</button>
         </div>
 
         <p class="count" role="status" aria-live="polite">
-          <template v-if="editor.count != null"
-            >{{ families(editor.count) }} {{ editor.count === 1 ? 'matches' : 'match' }}</template
-          >
+          <template v-if="editor.count != null">{{
+            t('rules.matches', { count: editor.count })
+          }}</template>
         </p>
         <p v-if="editor.incomplete" class="hint">
-          {{ editor.incomplete === 1 ? '1 rule has' : `${editor.incomplete} rules have` }} no value
-          yet and {{ editor.incomplete === 1 ? 'is' : 'are' }} left out.
+          {{ t('rules.incomplete', { count: editor.incomplete }) }}
         </p>
-        <p v-if="editor.error" role="alert" class="error">{{ editor.error.message }}</p>
+        <p v-if="editor.error" role="alert" class="error">{{ errorMessage(editor.error) }}</p>
         <footer class="foot">
-          <button type="button" class="button" @click="editor.close">Cancel</button>
-          <button type="submit" class="button primary" :disabled="editor.busy">Save</button>
+          <button type="button" class="button" @click="editor.close">
+            {{ t('common.cancel') }}
+          </button>
+          <button type="submit" class="button primary" :disabled="editor.busy">
+            {{ t('common.save') }}
+          </button>
         </footer>
       </form>
     </div>

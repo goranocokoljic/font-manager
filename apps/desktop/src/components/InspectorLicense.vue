@@ -5,20 +5,15 @@
 // for every face of the family.
 import { computed, ref, watch } from 'vue';
 import type { LicenseType, ReceiptChange, ReceiptPlace } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { useSelectionStore } from '../stores/selection';
 import CopyValue from './CopyValue.vue';
 
 const selection = useSelectionStore();
 const license = computed(() => selection.detail?.license);
 
-const TYPES: { value: LicenseType; label: string }[] = [
-  { value: 'desktop', label: 'Desktop' },
-  { value: 'web', label: 'Web' },
-  { value: 'app', label: 'App' },
-  { value: 'trial', label: 'Trial' },
-  { value: 'personalOnly', label: 'Personal use only' },
-  { value: 'unknown', label: 'Unknown' },
-];
+// Labels come from the catalog (`license.types.*`), keyed by the value.
+const TYPES: LicenseType[] = ['desktop', 'web', 'app', 'trial', 'personalOnly', 'unknown'];
 
 // The values being edited; they follow the stored declaration when another
 // face is shown or a save comes back.
@@ -80,19 +75,25 @@ function clearAll(): void {
     novalidate
     @submit.prevent="save()"
   >
-    <h4 id="fm-license-declared">Your license for this family</h4>
+    <h4 id="fm-license-declared">{{ t('license.title') }}</h4>
     <p v-if="selection.licenseError" role="alert" class="error">
-      {{ selection.licenseError.message }}
+      {{ errorMessage(selection.licenseError) }}
     </p>
     <dl>
-      <dt><label for="fm-license-type">License type</label></dt>
+      <dt>
+        <label for="fm-license-type">{{ t('license.type') }}</label>
+      </dt>
       <dd>
         <select id="fm-license-type" v-model="kind" class="field">
-          <option value="">Not declared</option>
-          <option v-for="t in TYPES" :key="t.value" :value="t.value">{{ t.label }}</option>
+          <option value="">{{ t('license.notDeclared') }}</option>
+          <option v-for="type in TYPES" :key="type" :value="type">
+            {{ t(`license.types.${type}`) }}
+          </option>
         </select>
       </dd>
-      <dt><label for="fm-license-seats">Seats</label></dt>
+      <dt>
+        <label for="fm-license-seats">{{ t('license.seats') }}</label>
+      </dt>
       <dd>
         <input
           id="fm-license-seats"
@@ -104,28 +105,34 @@ function clearAll(): void {
           inputmode="numeric"
         />
       </dd>
-      <dt><label for="fm-license-date">Purchase date</label></dt>
+      <dt>
+        <label for="fm-license-date">{{ t('license.purchaseDate') }}</label>
+      </dt>
       <dd>
         <input id="fm-license-date" v-model="date" class="field" type="date" />
       </dd>
-      <dt id="fm-license-receipt">Receipt</dt>
+      <dt id="fm-license-receipt">{{ t('license.receipt') }}</dt>
       <dd>
-        <CopyValue v-if="license.receipt" label="receipt" :value="license.receipt" />
-        <span v-else data-testid="no-receipt">None</span>
+        <CopyValue
+          v-if="license.receipt"
+          :label="t('license.receiptLabel')"
+          :value="license.receipt"
+        />
+        <span v-else data-testid="no-receipt">{{ t('license.none') }}</span>
         <fieldset class="place">
-          <legend>Keep the copy</legend>
+          <legend>{{ t('license.keepCopy') }}</legend>
           <label>
             <input v-model="place" type="radio" name="fm-license-place" value="nextToFont" />
-            Next to the font (synced with the folder)
+            {{ t('license.nextToFont') }}
           </label>
           <label>
             <input v-model="place" type="radio" name="fm-license-place" value="appData" />
-            In the app's data folder
+            {{ t('license.appData') }}
           </label>
         </fieldset>
         <div class="actions">
           <button type="button" class="choice" @click="attach">
-            {{ license.receipt ? 'Replace receipt…' : 'Attach receipt…' }}
+            {{ license.receipt ? t('license.replaceReceipt') : t('license.attachReceipt') }}
           </button>
           <button
             v-if="license.receipt"
@@ -133,15 +140,15 @@ function clearAll(): void {
             class="choice"
             @click="save({ kind: 'clear' })"
           >
-            Remove receipt
+            {{ t('license.removeReceipt') }}
           </button>
         </div>
       </dd>
     </dl>
     <div class="actions">
-      <button type="submit" class="choice primary">Save license</button>
+      <button type="submit" class="choice primary">{{ t('license.save') }}</button>
       <button type="button" class="choice" :disabled="!declared" @click="clearAll">
-        Clear license
+        {{ t('license.clear') }}
       </button>
     </div>
   </form>

@@ -148,6 +148,45 @@ describe('FontLayout', () => {
     for (let i = 0; i < sizes.length; i++) expect(style(w, i).fontSize).toBe(`${sizes[i]}pt`);
   });
 
+  it('sets a block with a face of its own in that face, loaded once; the others keep the panel face', async () => {
+    const w = mount(FontLayout, {
+      props: { layout: preset('book'), face: inter, blockFaces: [mono, null] },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(style(w, 0).fontFamily).toContain(`fm-face-${mono.id}`);
+    expect(style(w, 1).fontFamily).toContain(`fm-face-${inter.id}`);
+    expect(loader.inUse).toBe(2);
+    expect([...fonts.faces].map((f) => f.source).sort()).toEqual(
+      [`url("fmfont://localhost/${inter.id}")`, `url("fmfont://localhost/${mono.id}")`].sort(),
+    );
+    // Two blocks in the same face hold it once; dropping both releases it.
+    await w.setProps({ blockFaces: [mono, mono] });
+    expect(loader.inUse).toBe(2);
+    await w.setProps({ blockFaces: [] });
+    expect(style(w, 0).fontFamily).toContain(`fm-face-${inter.id}`);
+    expect(loader.inUse).toBe(1);
+    await w.setProps({ blockFaces: [null, mono] });
+    w.unmount();
+    expect(loader.inUse).toBe(0);
+  });
+
+  it('puts the block-tools slot beside each block, with its index and label', async () => {
+    const w = mount(FontLayout, {
+      props: { layout: preset('book'), face: inter },
+      slots: {
+        'block-tools': `<template #block-tools="{ index, label }"><span class="tool">{{ index }}:{{ label }}</span></template>`,
+      },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(w.findAll('.tool').map((t) => t.text())).toEqual(['0:Block 1', '1:Block 2']);
+    expect(w.find('.page').classes()).toContain('with-tools');
+    const plain = await show('book');
+    expect(plain.find('.page').classes()).not.toContain('with-tools');
+    expect(plain.find('.tools').exists()).toBe(false);
+  });
+
   it('a clip block hides overflow on one line; a wrap block wraps', async () => {
     const w = await show('waterfall');
     const clip = blocks(w)[0]!;

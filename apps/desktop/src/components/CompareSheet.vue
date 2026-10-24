@@ -13,6 +13,7 @@
 // shortcuts, and Escape or Close returns focus to where it was (the list row).
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import type { ComparisonId, FaceId, FaceSummary } from '../api/types';
+import { locale, t } from '../i18n';
 import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
@@ -138,8 +139,13 @@ const overlayBaseline = computed(() => Math.round(size.value * 1.1));
 const overlayDrawn = computed(() =>
   compare.overlayPair.filter((f): f is FaceSummary => f !== null),
 );
-const overlayLabel = computed(
-  () => `Overlay of ${overlayDrawn.value.map(fontNameSample).join(' and ')}, ${size.value} px`,
+const overlayLabel = computed(() =>
+  t('compare.overlayLabel', {
+    names: new Intl.ListFormat(locale(), { type: 'conjunction' }).format(
+      overlayDrawn.value.map(fontNameSample),
+    ),
+    size: size.value,
+  }),
 );
 
 function onMode(e: Event): void {
@@ -201,9 +207,9 @@ function onOutsideKey(e: KeyboardEvent): void {
 
 /** Focus that moves to the page behind the sheet is taken back to the sheet. */
 function onFocusIn(e: FocusEvent): void {
-  const t = e.target;
-  if (!dialog.value || !(t instanceof Element) || dialog.value.contains(t)) return;
-  if (t.closest('[role="dialog"]')) return;
+  const target = e.target;
+  if (!dialog.value || !(target instanceof Element) || dialog.value.contains(target)) return;
+  if (target.closest('[role="dialog"]')) return;
   dialog.value.focus();
 }
 </script>
@@ -220,13 +226,15 @@ function onFocusIn(e: FocusEvent): void {
       @keydown="onKeyDown"
     >
       <header class="head">
-        <h2 id="fm-compare-sheet-title">Compare</h2>
+        <h2 id="fm-compare-sheet-title">{{ t('compare.title') }}</h2>
         <span v-if="compare.current" class="current" data-testid="compare-current">
           {{ compare.current.name }}
         </span>
-        <span class="muted">{{ compare.pins.length }} of {{ MAX_PINS }} pinned</span>
+        <span class="muted">{{
+          t('compare.pinnedCount', { count: compare.pins.length, max: MAX_PINS })
+        }}</span>
         <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
-          <span id="fm-compare-mode-label" class="muted">Mode</span>
+          <span id="fm-compare-mode-label" class="muted">{{ t('compare.mode') }}</span>
           <label v-for="m in COMPARE_MODES" :key="m.value" class="mode">
             <input
               type="radio"
@@ -241,8 +249,8 @@ function onFocusIn(e: FocusEvent): void {
         <button
           type="button"
           class="button close"
-          aria-label="Close compare"
-          title="Close (Esc)"
+          :aria-label="t('compare.closeLabel')"
+          :title="t('compare.closeTitle')"
           @click="compare.close"
         >
           ×
@@ -255,21 +263,21 @@ function onFocusIn(e: FocusEvent): void {
             v-model="saveName"
             class="field"
             type="text"
-            aria-label="Comparison name"
-            placeholder="Name this comparison"
+            :aria-label="t('compare.nameLabel')"
+            :placeholder="t('compare.namePlaceholder')"
             maxlength="200"
           />
-          <button type="submit" class="button" :disabled="!canSave">Save comparison</button>
+          <button type="submit" class="button" :disabled="!canSave">{{ t('compare.save') }}</button>
         </form>
         <div v-if="compare.saved.length" class="saved">
-          <span id="fm-compare-saved-label" class="muted">Saved</span>
+          <span id="fm-compare-saved-label" class="muted">{{ t('compare.saved') }}</span>
           <ul aria-labelledby="fm-compare-saved-label">
             <li v-for="c in compare.saved" :key="c.id">
               <button
                 type="button"
                 class="button"
                 :aria-current="compare.current?.id === c.id ? 'true' : undefined"
-                :aria-label="`Open comparison ${c.name}`"
+                :aria-label="t('compare.openLabel', { name: c.name })"
                 @click="onReopen(c.id)"
               >
                 {{ c.name }} <span class="muted">({{ c.faceCount }})</span>
@@ -280,28 +288,27 @@ function onFocusIn(e: FocusEvent): void {
       </div>
 
       <p v-if="compare.missing.length" class="missing" role="status" data-testid="compare-missing">
-        Not in the library now:
-        {{ compare.missing.map((m) => m.name).join(', ') }}.
+        {{ t('compare.missing', { names: compare.missing.map((m) => m.name).join(', ') }) }}
       </p>
 
       <p v-if="compare.pins.length < 2" class="muted" role="status">
-        Pin at least two fonts to compare them: select a font in the list and press C.
+        {{ t('compare.pinTwo') }}
       </p>
 
       <div
         v-if="compare.mode === 'overlay'"
         class="overlay"
         role="group"
-        aria-label="Overlay"
+        :aria-label="t('compare.overlay')"
         data-testid="compare-overlay"
       >
         <div v-if="compare.pins.length > 2" class="picks">
           <label v-for="slot in SLOTS" :key="slot" class="pick">
             <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
-            {{ slot === 0 ? 'First font' : 'Second font' }}
+            {{ slot === 0 ? t('compare.firstFont') : t('compare.secondFont') }}
             <select
               class="field"
-              :aria-label="slot === 0 ? 'First font' : 'Second font'"
+              :aria-label="slot === 0 ? t('compare.firstFont') : t('compare.secondFont')"
               :value="compare.overlayPair[slot]?.id"
               @change="onOverlay(slot, $event)"
             >
@@ -338,7 +345,7 @@ function onFocusIn(e: FocusEvent): void {
             </text>
           </svg>
         </div>
-        <ul class="legend" aria-label="Legend">
+        <ul class="legend" :aria-label="t('compare.legend')">
           <li v-for="(f, slot) in overlayDrawn" :key="f.id">
             <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
             {{ fontNameSample(f) }}
@@ -350,7 +357,9 @@ function onFocusIn(e: FocusEvent): void {
         v-else
         class="faces"
         :class="compare.mode"
-        :aria-label="compare.mode === 'stacked' ? 'Stacked' : 'Side by side'"
+        :aria-label="
+          compare.mode === 'stacked' ? t('compare.modes.stacked') : t('compare.modes.sideBySide')
+        "
       >
         <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
           <div class="label">
@@ -359,14 +368,15 @@ function onFocusIn(e: FocusEvent): void {
               type="button"
               class="button"
               :data-remove="f.id"
-              :aria-label="`Remove ${fontNameSample(f)} from Compare`"
+              :aria-label="t('compare.removeLabel', { name: fontNameSample(f) })"
               @click="remove(f.id)"
             >
-              Remove
+              {{ t('common.remove') }}
             </button>
           </div>
           <p
             class="sample"
+            dir="auto"
             :style="{
               fontFamily: fontOf(f),
               fontSize: `${size}px`,

@@ -36,6 +36,21 @@ pub enum Density {
     Compact,
 }
 
+/// The language of the UI. Each value but `System` names a message catalog the
+/// desktop app ships (`apps/desktop/src/locales/<tag>.json`); a new catalog adds
+/// a value here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Language {
+    /// Follow the OS language; English when the app has no catalog for it.
+    #[default]
+    System,
+    /// English.
+    En,
+    /// German.
+    De,
+}
+
 /// The user's settings. Missing keys take their defaults.
 ///
 /// The TypeScript type marks every field optional because of the defaults;
@@ -74,6 +89,10 @@ pub struct Settings {
     /// the app does not update itself the switch is hidden.
     #[serde(default)]
     pub check_updates_automatically: bool,
+    /// The language of the UI, the native menus and the tray; `System` by
+    /// default.
+    #[serde(default)]
+    pub language: Language,
 }
 
 impl Default for Settings {
@@ -89,6 +108,7 @@ impl Default for Settings {
             keep_in_tray: true,
             start_at_login: None,
             check_updates_automatically: false,
+            language: Language::System,
         }
     }
 }
@@ -128,6 +148,9 @@ pub struct SettingsUpdate {
     /// Check for a new version when the app starts.
     #[serde(default)]
     pub check_updates_automatically: Option<bool>,
+    /// The language of the UI.
+    #[serde(default)]
+    pub language: Option<Language>,
 }
 
 impl Settings {
@@ -172,6 +195,7 @@ impl Settings {
             check_updates_automatically: update
                 .check_updates_automatically
                 .unwrap_or(self.check_updates_automatically),
+            language: update.language.unwrap_or(self.language),
         })
     }
 }
@@ -190,7 +214,20 @@ pub struct AppFolders {
     pub logs: String,
 }
 
-/// The user's settings and the app folders.
+/// The local API endpoint (ADR 0015): where it listens and the token every
+/// request must carry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct EndpointInfo {
+    /// `http://127.0.0.1:<port>`; `None` while the endpoint is not running
+    /// (the app has not started it yet, or the caller is the CLI's direct link).
+    #[serde(default)]
+    pub url: Option<String>,
+    /// The bearer token: 64 lowercase hex digits (32 random bytes).
+    pub token: String,
+}
+
+/// The user's settings, the app folders and the local API endpoint.
 pub trait SettingsService {
     /// The current settings.
     fn get_settings(&self) -> ApiResult<Settings>;
@@ -198,6 +235,22 @@ pub trait SettingsService {
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings>;
     /// Where the app keeps its config, data, cache and logs.
     fn app_folders(&self) -> ApiResult<AppFolders>;
+    /// The local API endpoint's address and token. `Unsupported` where there
+    /// is no data folder to keep the token in.
+    fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
+        Err(endpoint_unsupported())
+    }
+    /// Makes a new token, keeps it and returns it; the old one fails at once.
+    fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
+        Err(endpoint_unsupported())
+    }
+}
+
+fn endpoint_unsupported() -> ApiError {
+    ApiError::new(
+        ErrorCode::Unsupported,
+        "The local API is not available here.",
+    )
 }
 
 #[cfg(test)]
@@ -261,6 +314,24 @@ mod tests {
     }
 
     #[test]
+    fn language_is_system_for_old_config_files_and_can_be_chosen() {
+        // A config.json written before the field existed follows the OS.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert_eq!(old.language, Language::System);
+        assert_eq!(Settings::default().language, Language::System);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["language"], "system");
+        let de: SettingsUpdate = serde_json::from_str(r#"{"language":"de"}"#).expect("update");
+        let next = Settings::default().apply(&de).expect("valid");
+        assert_eq!(next.language, Language::De);
+        assert_eq!(serde_json::to_value(next).expect("json")["language"], "de");
+        let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert_eq!(unchanged.language, Language::De);
+        let bad: Result<SettingsUpdate, _> = serde_json::from_str(r#"{"language":"xx"}"#);
+        assert!(bad.is_err(), "an unknown language is refused");
+    }
+
+    #[test]
     fn keep_in_tray_defaults_on_for_old_config_files_and_can_be_turned_off() {
         // A config.json written before the field existed keeps the app in the tray.
         let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
@@ -272,6 +343,36 @@ mod tests {
         assert!(!next.keep_in_tray);
         let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
         assert!(!unchanged.keep_in_tray);
+    }
+
+    #[test]
+    fn endpoint_info_is_camel_case_and_the_url_may_be_absent() {
+        let info = EndpointInfo {
+            url: Some("http://127.0.0.1:4242".into()),
+            token: "ab".repeat(32),
+        };
+        let json = serde_json::to_value(&info).expect("json");
+        assert_eq!(json["url"], "http://127.0.0.1:4242");
+        assert_eq!(json["token"], "ab".repeat(32));
+        let stopped: EndpointInfo = serde_json::from_str(r#"{"token":"00"}"#).expect("parse");
+        assert_eq!(stopped.url, None);
+    }
+
+    #[test]
+    fn the_mock_regenerates_a_new_64_digit_token() {
+        let api = crate::mock::MockApi::new();
+        let first = api.endpoint_info().expect("info");
+        assert_eq!(first.token.len(), 64);
+        assert!(first.token.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_eq!(
+            api.endpoint_info().expect("info"),
+            first,
+            "stable until regenerated"
+        );
+        let next = api.regenerate_endpoint_token().expect("regenerate");
+        assert_ne!(next.token, first.token);
+        assert_eq!(next.token.len(), 64);
+        assert_eq!(api.endpoint_info().expect("info"), next);
     }
 
     #[test]

@@ -1,0 +1,18 @@
+{
+  "id": "relabelling-a-native-menu-must-cover-its-title-and-the-prede",
+  "title": "Relabelling a native menu must cover its title and the predefined items, not only the items the app added",
+  "category": "correctness",
+  "rule": "When the native shell follows a UI setting (language, theme names), relabel every visible part of the menu it changes: the submenu's own title (Submenu::set_text) and Tauri's predefined items in it (About on Windows and Linux, via PredefinedMenuItem::set_text), not only the MenuItems the app inserted. Tauri's Menu::default builds those with English literals. Assert the submenu title and the predefined item texts in the ipc test after the switch.",
+  "rationale": "E19.2 (#134): set_shell_locale relabelled the four Help page items but left the 'Help' title and 'About Font Manager' in English, so criterion 4 was only half delivered.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    134
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-23T19:47:19.728Z",
+  "last_seen": "2026-10-23T19:47:19.728Z"
+}

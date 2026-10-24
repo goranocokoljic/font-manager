@@ -12,6 +12,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { FaceDetail, FaceId, FamilyHit } from '../api/types';
 import { COMPARE_SIZE, compareLayout } from '../glyphs/compare';
+import { errorMessage, t } from '../i18n';
 import { codePointLabel } from '../glyphs/layout';
 import { useFaceLoader } from '../preview/faceLoader';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
@@ -89,17 +90,19 @@ const layout = computed(() =>
     drawn.value.map((d) => d.face.metrics),
   ),
 );
-const lineName = { xHeight: 'x-height', capHeight: 'cap height' } as const;
 const drawingLabel = computed(() => {
-  const names = drawn.value.map((d) => faceName(d.face));
-  return `${cpLabel.value} in ${names.join(' and ')}, ${compare.size} px`;
+  const [first = '', second] = drawn.value.map((d) => faceName(d.face));
+  const params = { codePoint: cpLabel.value, size: compare.size };
+  return second === undefined
+    ? t('glyphCompare.drawingOne', { ...params, face: first })
+    : t('glyphCompare.drawingTwo', { ...params, first, second });
 });
 /** Each drawn face's lines, for the legend. */
 const metricText = (slot: number) =>
   layout.value.lines
     .filter((l) => drawn.value[l.font]?.slot === slot)
-    .map((l) => `${lineName[l.kind]} ${l.units.toLocaleString('en-US')}`)
-    .join(', ') || 'no x-height or cap height declared';
+    .map((l) => t(`glyphCompare.lines.${l.kind}`, { units: l.units }))
+    .join(', ') || t('glyphCompare.noLines');
 
 // The picker: a combobox over the search results.
 const active = ref(0);
@@ -181,12 +184,12 @@ function onKeyDown(e: KeyboardEvent): void {
       @keydown="onKeyDown"
     >
       <header class="head">
-        <h2 id="fm-compare-title">Compare {{ cpLabel }}</h2>
+        <h2 id="fm-compare-title">{{ t('glyphCompare.title', { codePoint: cpLabel }) }}</h2>
         <button
           type="button"
           class="close"
-          aria-label="Close compare"
-          title="Close (Esc)"
+          :aria-label="t('glyphCompare.close')"
+          :title="t('glyphCompare.closeEsc')"
           @click="compare.close"
         >
           ×
@@ -200,14 +203,14 @@ function onKeyDown(e: KeyboardEvent): void {
             class="field"
             type="text"
             role="combobox"
-            aria-label="Compare with font"
+            :aria-label="t('glyphCompare.withFont')"
             aria-autocomplete="list"
             :aria-expanded="listOpen"
             aria-controls="fm-compare-list"
             :aria-activedescendant="
               listOpen && compare.results.length ? optionId(active) : undefined
             "
-            placeholder="Search fonts by name"
+            :placeholder="t('glyphCompare.searchPlaceholder')"
             autocomplete="off"
             spellcheck="false"
             @input="onSearch"
@@ -220,7 +223,7 @@ function onKeyDown(e: KeyboardEvent): void {
             id="fm-compare-list"
             class="list"
             role="listbox"
-            aria-label="Fonts"
+            :aria-label="t('glyphCompare.fonts')"
             @mousedown.prevent
           >
             <li
@@ -236,28 +239,28 @@ function onKeyDown(e: KeyboardEvent): void {
             >
               {{ hit.family.name }}
               <span class="muted">
-                {{ hit.family.styleCount }} {{ hit.family.styleCount === 1 ? 'style' : 'styles' }}
+                {{ t('glyphCompare.styles', { count: hit.family.styleCount }) }}
               </span>
             </li>
             <li v-if="!compare.results.length" class="muted none" role="presentation">
-              No font matches the search.
+              {{ t('glyphCompare.noMatch') }}
             </li>
           </ul>
         </div>
         <select
           v-if="compare.other && compare.styles.length"
           class="field"
-          aria-label="Style"
+          :aria-label="t('glyphCompare.style')"
           :value="compare.other.face.id"
           @change="onStyle"
         >
           <option v-for="f in compare.styles" :key="f.id" :value="f.id">{{ f.style }}</option>
         </select>
         <div class="size">
-          <span aria-hidden="true">Size</span>
+          <span aria-hidden="true">{{ t('glyphCompare.size') }}</span>
           <input
             type="range"
-            aria-label="Size"
+            :aria-label="t('glyphCompare.size')"
             :min="COMPARE_SIZE.min"
             :max="COMPARE_SIZE.max"
             :step="COMPARE_SIZE.step"
@@ -267,21 +270,21 @@ function onKeyDown(e: KeyboardEvent): void {
           <input
             class="field number"
             type="number"
-            aria-label="Size in pixels"
+            :aria-label="t('glyphCompare.sizePixels')"
             :min="COMPARE_SIZE.min"
             :max="COMPARE_SIZE.max"
             :value="compare.size"
             @change="onSize"
           />
-          <span class="muted">px</span>
+          <span class="muted">{{ t('glyphCompare.px') }}</span>
         </div>
       </div>
-      <p v-if="compare.error" class="muted" role="alert">{{ compare.error.message }}</p>
+      <p v-if="compare.error" class="muted" role="alert">{{ errorMessage(compare.error) }}</p>
       <p v-if="!compare.other" class="muted" role="status">
-        Pick a font to compare {{ cpLabel }} with.
+        {{ t('glyphCompare.pick', { codePoint: cpLabel }) }}
       </p>
       <p v-else-if="lacks" class="missing" role="status">
-        {{ faceName(compare.other) }} has no glyph for {{ cpLabel }}.
+        {{ t('glyphCompare.lacks', { face: faceName(compare.other), codePoint: cpLabel }) }}
       </p>
       <div class="stage">
         <svg
@@ -325,21 +328,21 @@ function onKeyDown(e: KeyboardEvent): void {
           </template>
         </svg>
       </div>
-      <ul class="legend" aria-label="Legend">
+      <ul class="legend" :aria-label="t('glyphCompare.legend')">
         <li v-if="compare.base">
           <span class="swatch font-0" aria-hidden="true"></span>
           <span>{{ faceName(compare.base) }}</span>
-          <span class="muted">— solid lines: {{ metricText(0) }}</span>
+          <span class="muted">{{ t('glyphCompare.solid', { lines: metricText(0) }) }}</span>
         </li>
         <li v-if="compare.other">
           <span class="swatch font-1" aria-hidden="true"></span>
           <span>{{ faceName(compare.other) }}</span>
-          <span v-if="lacks" class="muted">— not drawn</span>
-          <span v-else class="muted">— dashed lines: {{ metricText(1) }}</span>
+          <span v-if="lacks" class="muted">{{ t('glyphCompare.notDrawn') }}</span>
+          <span v-else class="muted">{{ t('glyphCompare.dashed', { lines: metricText(1) }) }}</span>
         </li>
         <li>
           <span class="swatch base" aria-hidden="true"></span>
-          <span>Shared baseline</span>
+          <span>{{ t('glyphCompare.baseline') }}</span>
         </li>
       </ul>
     </div>
@@ -414,8 +417,8 @@ input[type='range']:focus-visible {
 .list {
   position: absolute;
   top: 100%;
-  left: 0;
-  right: 0;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
   z-index: 1;
   max-height: 200px;
   margin: 2px 0 0;

@@ -409,3 +409,43 @@ fn source_changes_validate_and_mirror_to_the_backup() {
         ])
     );
 }
+
+/// E16.2 criterion 3: a face stored without metrics (indexed before E16.2)
+/// or with damaged metrics keeps factor 1; a stored x-height gives its factor.
+#[test]
+fn size_factors_read_the_stored_metrics_and_keep_one_without_them() {
+    use fm_api::FaceId;
+    use fm_api::preview::{SizeBasis, SizeFactorRequest};
+
+    let mut index = Index::open_in_memory().expect("open");
+    let source = index
+        .add_source("/fonts/work", SourceKind::Watched)
+        .expect("add");
+    let none = seed_face(&index, source.id, "/fonts/work/A.otf");
+    let damaged = seed_face(&index, source.id, "/fonts/work/B.otf");
+    let stored = seed_face(&index, source.id, "/fonts/work/C.otf");
+    index
+        .conn
+        .execute_batch(&format!(
+            "UPDATE face SET metrics = '{{not json' WHERE id = {damaged};
+             UPDATE face SET metrics = '{{\"unitsPerEm\":2000,\"ascender\":1800,\"descender\":-400,\"xHeight\":1250,\"capHeight\":1400}}'
+             WHERE id = {stored};"
+        ))
+        .expect("metrics");
+    let id = |i: i64| FaceId(u32::try_from(i).expect("id"));
+    let got = index
+        .size_factors(&SizeFactorRequest {
+            faces: vec![id(none), id(damaged), id(stored)],
+            basis: SizeBasis::XHeight,
+        })
+        .expect("factors");
+    let factors: Vec<f32> = got.iter().map(|f| f.factor).collect();
+    assert_eq!(factors, [1.0, 1.0, 0.5 / 0.625]);
+    let err = index
+        .size_factors(&SizeFactorRequest {
+            faces: vec![FaceId(u32::MAX)],
+            basis: SizeBasis::CapHeight,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code(), ErrorCode::NotFound);
+}

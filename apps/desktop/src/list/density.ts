@@ -2,14 +2,23 @@
 // The virtualizers take their fixed row height from here, so the rows on screen,
 // the spacer and the keyboard paging always agree with what the density draws.
 import type { Density } from '../api/types';
+import { t } from '../i18n';
 
 /** The density before the settings are read, and the fm-api default. */
 export const DEFAULT_DENSITY: Density = 'comfortable';
 
+/** A density and its label in the UI language. */
+const density = (value: Density): { value: Density; label: string } => ({
+  value,
+  get label() {
+    return t(`density.${value}`);
+  },
+});
+
 /** The densities in the order the toolbar, the palette and Settings list them. */
 export const DENSITIES: readonly { value: Density; label: string }[] = [
-  { value: 'comfortable', label: 'Comfortable' },
-  { value: 'compact', label: 'Compact' },
+  density('comfortable'),
+  density('compact'),
 ];
 
 /** Row metrics of each density, in CSS px. */

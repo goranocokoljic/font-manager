@@ -8,6 +8,8 @@ import {
   pickLanguage,
   SAMPLE_KINDS,
   sampleText as sampleTextWith,
+  sampleTextFor,
+  type SampleKind,
 } from './sampleText';
 
 // Family and style differ from each other and from every preset text.
@@ -83,5 +85,19 @@ describe('pickLanguage', () => {
     expect(pickLanguage(['ko-KR'], available)).toBe('en');
     expect(pickLanguage([], available)).toBe('en');
     expect(pickLanguage(['de'], [])).toBe('en');
+  });
+});
+
+describe('sampleTextFor', () => {
+  const pangram = (code: string) => (code === 'en' ? 'Sphinx of black quartz' : '');
+  const s = (sample: SampleKind, customText = '') => ({ sample, customText, language: 'en' });
+  it('shows a catalog family by its name where a face would show its own', () => {
+    expect(sampleTextFor(s('fontName'), 'Space Mono', pangram)).toBe('Space Mono');
+    expect(sampleTextFor(s('custom', '  '), 'Space Mono', pangram)).toBe('Space Mono');
+    expect(sampleTextFor(s('custom', 'Hamburgefonstiv'), 'Space Mono', pangram)).toBe(
+      'Hamburgefonstiv',
+    );
+    expect(sampleTextFor(s('pangram'), 'Lora', pangram)).toBe('Sphinx of black quartz');
+    expect(sampleTextFor(s('numerals'), 'Lora', pangram)).toBe(NUMERALS);
   });
 });

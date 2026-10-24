@@ -23,6 +23,10 @@ Read [Sources](sources.md) to learn more about folders.
 - Type in the search box at the top. Press `/` to go to it from anywhere.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
+- Some fonts look small or large at the same size. Set **Auto size** to **x-height**
+  or **Cap height** to make them look the same size. Each font then shows its small
+  letters (or its capitals) at the same height. A font that does not give this height
+  stays at the size you set. Each view keeps its own setting.
 - Use the **List**, **Table**, **Grid**, **Waterfall** and **Layout** buttons to change
   how the fonts show. The grid shows a card for each font. The waterfall shows the
   preview text at six sizes. The layout shows the selected font as a page of text. Pick
@@ -53,6 +57,12 @@ Read [Sources](sources.md) to learn more about folders.
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.
+- To print a layout, open it in **Pairing Studio** and click **Print…** on its panel.
+  The print dialog of your system opens. Only that panel prints: the text at the width
+  of the layout, in its fonts, without the buttons of the app or the other panels.
+- To make a PDF of a panel, click **Print…** and choose the PDF printer in the print
+  dialog: **Microsoft Print to PDF** on Windows, **PDF** › **Save as PDF** on a Mac, and
+  **Print to File** (PDF) on Linux. The text in the PDF stays text, in its fonts.
 - To see more fonts at a time, click **Compact rows** in the toolbar. The rows of
   the list and the table get less space around them. The preview text keeps its
   size. Click **Compact rows** again to go back to comfortable rows. You can also choose
@@ -130,6 +140,17 @@ what you want to do and press `Enter`. All keys are on the
 
 Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. There you can choose the theme,
 the size of the rows, and how activation works.
+
+## Connect other programs
+
+While Font Manager runs, other programs on your computer (the `fm` command, plugins for
+design apps) can use it through a local address. Open Settings → Local API to see the
+address and the token. Each program needs the token. Click **Show** to see it and
+**Copy** to copy it. Keep the token secret: a program that has it can do everything
+Font Manager can do. If you think someone else has it, click **Regenerate**. The old
+token stops working at once.
+
+Only programs on this computer can connect. Web pages in your browser cannot.
 
 ## Get updates
 

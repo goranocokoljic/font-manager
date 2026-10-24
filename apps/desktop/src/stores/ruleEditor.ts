@@ -18,6 +18,7 @@ import type {
   Source,
   Tag,
 } from '../api/types';
+import { t } from '../i18n';
 import { CLASSES, FORMATS, LICENSES, SLANTS } from '../search/chips';
 import { useCollectionsStore } from './collections';
 import { useSearchStore } from './search';
@@ -39,22 +40,32 @@ export type Dimension =
   | 'rating'
   | 'source';
 
+/** A dimension with its label in the UI's language. */
+function dimension(id: Dimension): { id: Dimension; readonly label: string } {
+  return {
+    id,
+    get label() {
+      return t(`rules.dimensions.${id}`);
+    },
+  };
+}
+
 /** The dimensions in the order the row's first menu lists them, with their labels. */
-export const DIMENSIONS: { id: Dimension; label: string }[] = [
-  { id: 'classification', label: 'Class' },
-  { id: 'weight', label: 'Weight' },
-  { id: 'width', label: 'Width' },
-  { id: 'slant', label: 'Slant' },
-  { id: 'feature', label: 'OpenType feature' },
-  { id: 'language', label: 'Supports language' },
-  { id: 'text', label: 'Supports text' },
-  { id: 'license', label: 'License type' },
-  { id: 'foundry', label: 'Foundry' },
-  { id: 'format', label: 'Format' },
-  { id: 'added', label: 'Date added' },
-  { id: 'tag', label: 'Tag' },
-  { id: 'rating', label: 'Rating' },
-  { id: 'source', label: 'Source folder' },
+export const DIMENSIONS: { id: Dimension; readonly label: string }[] = [
+  dimension('classification'),
+  dimension('weight'),
+  dimension('width'),
+  dimension('slant'),
+  dimension('feature'),
+  dimension('language'),
+  dimension('text'),
+  dimension('license'),
+  dimension('foundry'),
+  dimension('format'),
+  dimension('added'),
+  dimension('tag'),
+  dimension('rating'),
+  dimension('source'),
 ];
 
 /**
@@ -152,7 +163,7 @@ export function choicesFor(dimension: Dimension, c: Choices): Choice[] | null {
     case 'rating':
       return (counts.minRating ?? []).map(({ value }) => ({
         value: String(value),
-        label: `${value} ${value === 1 ? 'star' : 'stars'} or more`,
+        label: t('rules.stars', { count: value }),
       }));
     case 'source':
       return c.sources.map((s) => ({ value: String(s.id), label: s.path }));

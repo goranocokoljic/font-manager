@@ -1,0 +1,1379 @@
+{
+  "meta": {
+    "name": "English"
+  },
+  "app": {
+    "name": "Font Manager",
+    "openSettings": "Open settings",
+    "showConflicts": "Show font conflicts",
+    "helpAction": "Help: {page}",
+    "groups": {
+      "app": "App",
+      "help": "Help"
+    }
+  },
+  "common": {
+    "close": "Close",
+    "cancel": "Cancel",
+    "save": "Save",
+    "copy": "Copy",
+    "copied": "Copied",
+    "undo": "Undo",
+    "reset": "Reset",
+    "rename": "Rename",
+    "delete": "Delete",
+    "remove": "Remove"
+  },
+  "language": {
+    "label": "Language",
+    "system": "System ({name})",
+    "hint": "System follows the language of your computer; English when the app does not have it."
+  },
+  "errors": {
+    "notFound": "{message}",
+    "invalidRequest": "{message}",
+    "conflict": "{message}",
+    "permissionDenied": "{message}",
+    "unsupported": "{message}",
+    "busy": "{message}",
+    "io": "{message}",
+    "cancelled": "{message}",
+    "internal": "{message}"
+  },
+  "shell": {
+    "helpWindowTitle": "Font Manager Help",
+    "helpMenu": "Help",
+    "about": "About Font Manager",
+    "helpPages": {
+      "getting-started": "Getting started",
+      "sources": "Sources",
+      "activation": "Activation",
+      "keyboard-shortcuts": "Keyboard shortcuts"
+    },
+    "tray": {
+      "tooltip": "Font Manager",
+      "open": "Open Font Manager",
+      "deactivateSession": "Deactivate session fonts",
+      "quit": "Quit Font Manager",
+      "active": {
+        "zero": "No fonts active",
+        "one": "{count} font active",
+        "other": "{count} fonts active"
+      }
+    }
+  },
+  "textLayout": {
+    "groupView": "View",
+    "actionWidthLock": "Lock or unlock the layout width",
+    "region": "Layout",
+    "regionNamed": "{name} layout",
+    "loadFailed": "This font could not be loaded.",
+    "lockWidth": "Lock width",
+    "lockedTitle": "The text keeps its width; press to follow the window",
+    "unlockedTitle": "The text follows the window; press to keep its width",
+    "badgeLabel": "Block {n} properties, {size}",
+    "hint": "Drag a block sideways or press Left and Right to change its size; drag it up and down or press Up and Down to change its line height (Shift for bigger steps).",
+    "hintEdit": "Double-click it or press Enter to edit its text.",
+    "empty": "Select a font to see it in a layout.",
+    "file": {
+      "toolbar": "Layout file",
+      "saveTitle": "Save the edited text to the layout file",
+      "revert": "Revert",
+      "revertTitle": "Drop the unsaved changes",
+      "duplicate": "Duplicate",
+      "duplicateTitle": "Copy this layout as saved into a new layout",
+      "resetOriginal": "Reset to original",
+      "resetTitle": "Put back the preset this layout started from",
+      "history": "History",
+      "unsaved": "Unsaved changes",
+      "historyRegion": "Layout history",
+      "noHistory": "No earlier versions yet.",
+      "version": "Version {number}",
+      "unreadable": "Unreadable",
+      "restore": "Restore",
+      "restoreTitle": "Make this version current; the current one is kept",
+      "restoreLabel": "Restore version {number}",
+      "saved": "Saved.",
+      "reverted": "Unsaved changes dropped.",
+      "duplicated": "Duplicated as “{name}”.",
+      "wasReset": "Reset to the original preset.",
+      "restored": "Version {number} restored."
+    }
+  },
+  "blocks": {
+    "block": "Block",
+    "label": "Block {n}",
+    "properties": "{label} properties",
+    "sizePt": "{size} pt",
+    "badge": "{size} pt · {lineHeight}",
+    "ariaResizable": "{label}, {size} points, line height {lineHeight}",
+    "roleDescription": "resizable text block",
+    "editTitle": "Double-click or press Enter to edit the text",
+    "textLabel": "{label} text",
+    "fields": {
+      "size": "Size",
+      "lineHeight": "Line height",
+      "tracking": "Tracking",
+      "paragraphSpacing": "Paragraph spacing",
+      "firstLineIndent": "First-line indent",
+      "columns": "Columns",
+      "alignment": "Alignment",
+      "overflow": "Overflow"
+    },
+    "aligns": {
+      "start": "Start",
+      "center": "Center",
+      "end": "End",
+      "justify": "Justify"
+    },
+    "overflows": {
+      "wrap": "Wrap",
+      "clip": "Clip"
+    }
+  },
+  "compare": {
+    "title": "Compare",
+    "pinnedCount": "{count} of {max} pinned",
+    "mode": "Mode",
+    "modes": {
+      "sideBySide": "Side by side",
+      "stacked": "Stacked",
+      "overlay": "Overlay"
+    },
+    "closeLabel": "Close compare",
+    "closeTitle": "Close (Esc)",
+    "nameLabel": "Comparison name",
+    "namePlaceholder": "Name this comparison",
+    "save": "Save comparison",
+    "saved": "Saved",
+    "openLabel": "Open comparison {name}",
+    "missing": "Not in the library now: {names}.",
+    "pinTwo": "Pin at least two fonts to compare them: select a font in the list and press C.",
+    "overlay": "Overlay",
+    "firstFont": "First font",
+    "secondFont": "Second font",
+    "overlayLabel": "Overlay of {names}, {size} px",
+    "legend": "Legend",
+    "removeLabel": "Remove {name} from Compare",
+    "toasts": {
+      "already": "{name} is already pinned to Compare.",
+      "full": "Compare holds {max} fonts. Remove one to pin {name}.",
+      "pinned": "{name} pinned to Compare ({count} of {max}).",
+      "saved": "Comparison “{name}” saved.",
+      "noneLeft": "None of the fonts of “{name}” are in the library now: {names}.",
+      "openedMissing": "Opened “{name}”. Not in the library now: {names}.",
+      "opened": "Opened “{name}”."
+    }
+  },
+  "preview": {
+    "settings": "Preview settings",
+    "sample": "Sample",
+    "language": "Language",
+    "customText": "Custom text",
+    "customPlaceholder": "Type a sample",
+    "size": "Size",
+    "sizeSlider": "Size slider",
+    "sizeInPixels": "Size in pixels",
+    "autoSize": "Auto size",
+    "autoSizeHint": "Scale each row so every font's x-height or cap height matches at this size",
+    "autoSizes": {
+      "off": "Off",
+      "xHeight": "x-height",
+      "capHeight": "Cap height"
+    },
+    "lineHeight": "Line height",
+    "tracking": "Tracking",
+    "alignment": "Alignment",
+    "aligns": {
+      "start": "Start",
+      "center": "Center",
+      "end": "End"
+    },
+    "text": "Text",
+    "textColor": "Text color",
+    "background": "Background",
+    "backgroundColor": "Background color",
+    "surface": "Surface",
+    "surfaces": {
+      "auto": "Follow theme",
+      "light": "Light",
+      "dark": "Dark"
+    },
+    "strip": {
+      "region": "Preview strip",
+      "size": "Strip size",
+      "px": "{size} px",
+      "useToolbar": "Use toolbar size",
+      "empty": "Select a family to preview it here."
+    }
+  },
+  "samples": {
+    "kinds": {
+      "pangram": "Pangram",
+      "custom": "Custom text",
+      "lorem": "Lorem ipsum",
+      "alphabet": "Alphabet",
+      "numerals": "Numerals",
+      "fontName": "Font name"
+    }
+  },
+  "home": {
+    "allFonts": "All fonts",
+    "selected": "{count} selected",
+    "families": {
+      "one": "{count} family",
+      "other": "{count} families"
+    },
+    "viewMode": "View mode",
+    "modes": {
+      "list": "List",
+      "table": "Table",
+      "grid": "Grid",
+      "waterfall": "Waterfall",
+      "layout": "Layout"
+    },
+    "preset": "Preset",
+    "openStudio": "Open in Pairing Studio",
+    "openStudioTitle": "Open this layout with the shown font in its own panel",
+    "unreadable": "{name} (cannot be read)",
+    "density": {
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    },
+    "densityTitle": "Rows: {density}. Compact rows show more fonts at a time.",
+    "compactRows": "Compact rows",
+    "compareTitle": "Compare the pinned fonts; {chord} pins the selected font",
+    "compareButton": "Compare {pinned}/{max}",
+    "inspectorTitle": "Show or hide the inspector (Ctrl+I / ⌘I)",
+    "inspector": "Inspector",
+    "fontList": "Font list",
+    "noMatches": "No fonts match the search and filters.",
+    "empty": "No fonts yet. Add a folder to start your library.",
+    "commands": "Commands",
+    "settings": "Settings",
+    "conflicts": "Conflicts",
+    "problems": {
+      "one": "{count} problem",
+      "other": "{count} problems"
+    },
+    "fontsActive": {
+      "one": "{count} font active",
+      "other": "{count} fonts active"
+    },
+    "info": {
+      "app": "App",
+      "api": "API",
+      "platform": "Platform"
+    },
+    "sidebarGroups": {
+      "smart": "Smart collections",
+      "online": "Online catalogs"
+    },
+    "actions": {
+      "quickToggle": "Add the selected fonts to the Quick Collection, or remove them",
+      "quickOpen": "Open the Quick Collection",
+      "tag": "Tag the selected fonts…",
+      "pin": "Pin the selected font to Compare",
+      "openCompare": "Open Compare",
+      "activateSession": "Activate or deactivate for this session",
+      "activatePermanent": "Activate or deactivate permanently",
+      "deactivateAll": "Deactivate all",
+      "deactivateOutsideSet": "Deactivate everything not in the current set",
+      "showAs": {
+        "list": "Show fonts as a list",
+        "table": "Show fonts as a table",
+        "grid": "Show fonts as a grid",
+        "waterfall": "Show fonts as a waterfall",
+        "layout": "Show fonts as a layout"
+      },
+      "density": {
+        "comfortable": "Use comfortable rows",
+        "compact": "Use compact rows"
+      },
+      "showPreset": "Show the {preset} layout",
+      "reopenComparison": "Open comparison: {name}",
+      "findSimilar": "Find similar fonts",
+      "openStudio": "Open the layout in Pairing Studio"
+    }
+  },
+  "views": {
+    "presets": {
+      "book": "Book",
+      "columns": "Columns",
+      "magazine": "Magazine",
+      "quote": "Quote",
+      "characters": "Characters",
+      "waterfall": "Waterfall"
+    }
+  },
+  "layout": {
+    "library": "Library",
+    "fonts": "Fonts",
+    "inspector": "Inspector",
+    "resizeSidebar": "Resize sidebar",
+    "resizeInspector": "Resize inspector",
+    "actions": {
+      "toggleInspector": "Show or hide the inspector",
+      "goSidebar": "Go to the sidebar",
+      "goList": "Go to the font list",
+      "goInspector": "Go to the inspector"
+    }
+  },
+  "inspector": {
+    "tabsLabel": "Inspector tabs",
+    "tabs": {
+      "info": "Info",
+      "axes": "Axes",
+      "features": "Features",
+      "glyphs": "Glyphs",
+      "developer": "Developer"
+    }
+  },
+  "developer": {
+    "noFace": "Select a face to see its CSS.",
+    "hint": "The CSS for the axes and features set in the Axes and Features tabs.",
+    "copyLabel": "Copy the CSS snippet"
+  },
+  "search": {
+    "label": "Search fonts",
+    "placeholder": "Search  /"
+  },
+  "chips": {
+    "filters": "Filters",
+    "chipLabel": "{name}, {families}",
+    "families": {
+      "one": "{count} family",
+      "other": "{count} families"
+    },
+    "languages": "Languages",
+    "language": "Language",
+    "addLanguage": "Add a language",
+    "add": "Add…",
+    "clear": "Clear filters",
+    "saveAsSmart": "Save as smart collection",
+    "smartName": "Smart collection name",
+    "namePlaceholder": "Name",
+    "saveHint": "Choose a filter to save it as a smart collection",
+    "saved": "Saved “{name}” as a smart collection.",
+    "source": "Source {id}",
+    "tag": "Tag {id}",
+    "groups": {
+      "active": "Activation",
+      "classification": "Class",
+      "slant": "Slant",
+      "variable": "Variable",
+      "color": "Color",
+      "formats": "Format",
+      "features": "Features",
+      "license": "License",
+      "webOk": "Usage",
+      "openLicense": "Open license",
+      "embedding": "Embedding",
+      "sources": "Source",
+      "problems": "Health",
+      "favorite": "Favorite",
+      "minRating": "Rating",
+      "tags": "Tag"
+    },
+    "values": {
+      "active": "Active",
+      "inactive": "Inactive",
+      "variable": "Variable",
+      "static": "Static",
+      "color": "Color",
+      "notColor": "Not color",
+      "webOk": "OK for web",
+      "notWeb": "Not for web",
+      "openLicense": "Open license",
+      "notOpen": "Not open",
+      "hasProblems": "Has problems",
+      "healthy": "Healthy",
+      "favorites": "Favorites",
+      "notFavorites": "Not favorites",
+      "stars": "{count} stars",
+      "starsOrMore": "{count}+ stars"
+    },
+    "classes": {
+      "serif": "Serif",
+      "sans": "Sans serif",
+      "slab": "Slab serif",
+      "script": "Script",
+      "display": "Display",
+      "mono": "Monospace",
+      "symbol": "Symbol"
+    },
+    "slants": {
+      "upright": "Upright",
+      "italic": "Italic",
+      "oblique": "Oblique"
+    },
+    "licenses": {
+      "desktop": "Desktop",
+      "web": "Web",
+      "app": "App",
+      "trial": "Trial",
+      "personalOnly": "Personal use",
+      "unknown": "Unknown license"
+    },
+    "embeddings": {
+      "installable": "Installable",
+      "editable": "Editable",
+      "previewAndPrint": "Preview & print",
+      "restricted": "Restricted"
+    }
+  },
+  "palette": {
+    "label": "Command palette",
+    "searchLabel": "Search commands",
+    "placeholder": "Type a command",
+    "list": "Commands",
+    "none": "No matching commands",
+    "showAll": "Show all commands",
+    "groups": {
+      "general": "General",
+      "view": "View",
+      "go": "Go",
+      "search": "Search",
+      "quickCollection": "Quick Collection",
+      "tags": "Tags",
+      "compare": "Compare",
+      "activation": "Activation"
+    }
+  },
+  "toast": {
+    "dismiss": "Dismiss"
+  },
+  "health": {
+    "ok": "OK",
+    "broken": "Broken",
+    "unsupported": "Unsupported"
+  },
+  "activation": {
+    "failed": "The activation failed.",
+    "undone": "Undone.",
+    "noneDeactivated": "No fonts were deactivated.",
+    "noneActivated": "No fonts were activated.",
+    "deactivated": {
+      "one": "Deactivated {count} font.",
+      "other": "Deactivated {count} fonts."
+    },
+    "activatedPermanent": {
+      "one": "Activated {count} font permanently.",
+      "other": "Activated {count} fonts permanently."
+    },
+    "activatedSession": {
+      "one": "Activated {count} font for this session.",
+      "other": "Activated {count} fonts for this session."
+    },
+    "notDeactivated": {
+      "one": "{count} font not deactivated.",
+      "other": "{count} fonts not deactivated."
+    },
+    "notActivated": {
+      "one": "{count} font not activated.",
+      "other": "{count} fonts not activated."
+    }
+  },
+  "info": {
+    "loading": "Loading…",
+    "nothingSelected": "Nothing selected",
+    "activate": "Activate",
+    "deactivate": "Deactivate",
+    "state": {
+      "permanent": "Active (permanent)",
+      "session": "Active for this session",
+      "inactive": "Not active"
+    },
+    "outcome": {
+      "system": "Not activated: a system font has the same PostScript name ({path}).",
+      "active": "Not activated: another active font has the same PostScript name (face {face})."
+    },
+    "clash": {
+      "title": "Font name already in use",
+      "system": "A system font already uses the PostScript name {name} ({path}).",
+      "active": "Another active font already uses the PostScript name {name} (face {face}).",
+      "keep": "Keep existing",
+      "replace": "Replace for this session"
+    },
+    "names": {
+      "title": "Names",
+      "family": "Family",
+      "style": "Style",
+      "legacyFamily": "Family (name ID 1)",
+      "legacyStyle": "Style (name ID 2)",
+      "postscript": "PostScript name",
+      "version": "Version",
+      "foundry": "Foundry",
+      "vendorId": "Vendor ID",
+      "designer": "Designer",
+      "copyright": "Copyright"
+    },
+    "copyLabels": {
+      "family": "family",
+      "style": "style",
+      "legacyFamily": "family (name ID 1)",
+      "legacyStyle": "style (name ID 2)",
+      "postscript": "PostScript name",
+      "path": "path",
+      "licenseUrl": "license URL"
+    },
+    "file": {
+      "title": "File",
+      "path": "Path",
+      "format": "Format",
+      "faceInFile": "Face in file",
+      "size": "Size",
+      "bytes": "{size} bytes",
+      "hash": "Hash"
+    },
+    "formats": {
+      "ttf": "TrueType (TTF)",
+      "otf": "OpenType CFF (OTF)",
+      "ttc": "TrueType collection (TTC)",
+      "otc": "OpenType collection (OTC)",
+      "woff": "WOFF",
+      "woff2": "WOFF2",
+      "type1": "PostScript Type 1",
+      "dfont": "Mac dfont",
+      "bitmap": "Bitmap"
+    },
+    "style": {
+      "title": "Style",
+      "weight": "Weight",
+      "width": "Width",
+      "slant": "Slant",
+      "italicAngle": "Italic angle",
+      "variable": "Variable",
+      "yes": "Yes",
+      "no": "No",
+      "axes": "Axes",
+      "axis": "{name}: {min}–{max} (default {default})",
+      "namedInstances": "Named instances"
+    },
+    "slants": {
+      "upright": "upright",
+      "italic": "italic",
+      "oblique": "oblique"
+    },
+    "metrics": {
+      "title": "Metrics",
+      "unitsPerEm": "Units per em",
+      "ascender": "Ascender",
+      "descender": "Descender",
+      "xHeight": "x-height",
+      "capHeight": "Cap height"
+    },
+    "layout": {
+      "title": "Characters and features",
+      "codePoints": "Code points",
+      "scripts": "Scripts",
+      "features": "Features"
+    },
+    "license": {
+      "title": "License",
+      "license": "License",
+      "url": "License URL",
+      "recognized": "Recognized as",
+      "embedding": "Embedding (fsType)",
+      "webUse": "Web use"
+    },
+    "openLicenses": {
+      "ofl": "SIL Open Font License",
+      "apache": "Apache License 2.0",
+      "ufl": "Ubuntu Font Licence",
+      "mit": "MIT"
+    },
+    "embeddings": {
+      "installable": "Installable",
+      "editable": "Editable",
+      "previewAndPrint": "Preview and print",
+      "restricted": "Restricted"
+    },
+    "user": {
+      "title": "Your notes",
+      "tags": "Tags",
+      "removeTag": "Remove tag {tag}",
+      "addTag": "Add a tag",
+      "addTagPlaceholder": "Add a tag…",
+      "favorite": "Favorite",
+      "rating": "Rating",
+      "stars": {
+        "one": "{count} star",
+        "other": "{count} stars"
+      },
+      "clearRating": "Clear the rating",
+      "ratingOf": "{rating} of 5",
+      "notRated": "Not rated",
+      "notes": "Notes",
+      "notesPlaceholder": "Notes on this style…",
+      "familyNotes": "Family notes",
+      "familyNotesPlaceholder": "Notes on {family}…"
+    },
+    "findSimilar": "Find similar",
+    "findSimilarTitle": "Find the fonts that look like this one"
+  },
+  "license": {
+    "title": "Your license for this family",
+    "type": "License type",
+    "notDeclared": "Not declared",
+    "types": {
+      "desktop": "Desktop",
+      "web": "Web",
+      "app": "App",
+      "trial": "Trial",
+      "personalOnly": "Personal use only",
+      "unknown": "Unknown"
+    },
+    "seats": "Seats",
+    "purchaseDate": "Purchase date",
+    "receipt": "Receipt",
+    "receiptLabel": "receipt",
+    "none": "None",
+    "keepCopy": "Keep the copy",
+    "nextToFont": "Next to the font (synced with the folder)",
+    "appData": "In the app's data folder",
+    "replaceReceipt": "Replace receipt…",
+    "attachReceipt": "Attach receipt…",
+    "removeReceipt": "Remove receipt",
+    "save": "Save license",
+    "clear": "Clear license"
+  },
+  "axes": {
+    "noFace": "Select a face to see its axes.",
+    "none": "This font has no variation axes",
+    "hint": "Axes change this face's previews.",
+    "cssLabel": "axes",
+    "list": "Variation axes",
+    "default": "Default",
+    "valueLabel": "{name} ({tag}) value",
+    "range": "{min} to {max}, default",
+    "typeNumber": "type a number",
+    "instances": "Named instances",
+    "pin": "Pin this instance",
+    "noHolder": "Make a manual collection or a project set to pin instances into.",
+    "styleName": "Style name",
+    "styleNamePlaceholder": "Condensed Semibold",
+    "saveIn": "Save in",
+    "setHolder": "Set: {name}",
+    "pinned": "Pinned “{name}” to {holder}.",
+    "pinFailed": "The instance could not be pinned."
+  },
+  "features": {
+    "noFace": "Select a face to see its features.",
+    "none": "This face has no OpenType features.",
+    "hint": "Switches change this face's previews.",
+    "cssLabel": "features",
+    "list": "Features",
+    "automatic": "Applied automatically",
+    "automaticNote": "applied automatically"
+  },
+  "palettes": {
+    "title": "Color palette",
+    "numbered": "Palette {number}"
+  },
+  "glyphs": {
+    "noFace": "Select a face to see its glyphs.",
+    "search": "Search glyphs",
+    "searchPlaceholder": "Ж, U+0416, name",
+    "block": "Block",
+    "allBlocks": "All blocks",
+    "broken": "The glyphs of this face cannot be read: {reason}",
+    "noMatch": "No glyph matches the search.",
+    "empty": "This face maps no characters.",
+    "characters": {
+      "one": "{count} character",
+      "other": "{count} characters"
+    },
+    "grid": "Glyphs",
+    "cellLoading": "Character {number}, loading",
+    "noGlyphName": "(no glyph name)",
+    "selected": "Selected glyph",
+    "codePoint": "Code point",
+    "glyphName": "Glyph name",
+    "glyphId": "Glyph id",
+    "advance": "Advance width",
+    "advanceUnknown": "unknown",
+    "advanceLoading": "loading…",
+    "none": "none",
+    "units": {
+      "one": "{count} unit",
+      "other": "{count} units"
+    },
+    "closeDetail": "Close glyph detail",
+    "closeEsc": "Close (Esc)",
+    "compareHint": "Overlay this character with the same one in another font",
+    "compareWith": "Compare with…",
+    "detailBroken": "The detail of this glyph cannot be read: {reason}",
+    "producedBy": "Produced by",
+    "producedByNone": "No feature produces this glyph.",
+    "replacedBy": "Replaced by",
+    "replacedByNone": "No feature replaces this glyph.",
+    "unregisteredFeature": "Unregistered feature",
+    "featureTag": "feature tag",
+    "unicodeVersion": "Blocks from Unicode {version}."
+  },
+  "coverage": {
+    "title": "Coverage",
+    "counting": "Counting coverage…",
+    "blocks": "Unicode blocks",
+    "noBlocks": "This face maps no character of a Unicode block.",
+    "blockLabel": {
+      "one": "{name}: {covered} of {count} character. Show in the glyph map.",
+      "other": "{name}: {covered} of {count} characters. Show in the glyph map."
+    },
+    "showInMap": "Show {name} in the glyph map",
+    "languages": "Languages",
+    "noLanguages": "This face covers no language preset.",
+    "complete": "complete",
+    "ofCharacters": {
+      "one": "{covered} of {count} character",
+      "other": "{covered} of {count} characters"
+    },
+    "languageLabel": "{name}: {amount}",
+    "languageLabelLocl": "{name}: {amount}, has localized forms (locl)",
+    "hasLocl": "Has localized forms (locl)",
+    "locl": "locl",
+    "allCovered": {
+      "one": "Its {count} character is covered.",
+      "other": "Every one of its {count} characters is covered."
+    },
+    "listing": "Listing missing characters…",
+    "missingFrom": "Missing from {name}"
+  },
+  "glyphCompare": {
+    "title": "Compare {codePoint}",
+    "close": "Close compare",
+    "closeEsc": "Close (Esc)",
+    "withFont": "Compare with font",
+    "searchPlaceholder": "Search fonts by name",
+    "fonts": "Fonts",
+    "styles": {
+      "one": "{count} style",
+      "other": "{count} styles"
+    },
+    "noMatch": "No font matches the search.",
+    "style": "Style",
+    "size": "Size",
+    "sizePixels": "Size in pixels",
+    "px": "px",
+    "pick": "Pick a font to compare {codePoint} with.",
+    "lacks": "{face} has no glyph for {codePoint}.",
+    "drawingOne": "{codePoint} in {face}, {size} px",
+    "drawingTwo": "{codePoint} in {first} and {second}, {size} px",
+    "lines": {
+      "xHeight": "x-height {units}",
+      "capHeight": "cap height {units}"
+    },
+    "noLines": "no x-height or cap height declared",
+    "legend": "Legend",
+    "solid": "— solid lines: {lines}",
+    "notDrawn": "— not drawn",
+    "dashed": "— dashed lines: {lines}",
+    "baseline": "Shared baseline"
+  },
+  "copy": {
+    "value": "Copy {label}: {value}",
+    "clickToCopy": "Click to copy",
+    "failed": "Could not copy",
+    "css": "Copy CSS",
+    "cssFor": "Copy CSS for the {label}"
+  },
+  "selection": {
+    "chooseReceipt": "Choose the receipt"
+  },
+  "table": {
+    "label": "Font table",
+    "sortBy": "Sort by {column}",
+    "columnsMenu": {
+      "button": "Columns",
+      "label": "Table columns",
+      "moveUp": "Move {column} up",
+      "moveDown": "Move {column} down",
+      "reset": "Reset columns"
+    }
+  },
+  "columns": {
+    "activation": "Activation",
+    "name": "Name",
+    "styleCount": "Styles",
+    "weightLine": "Style",
+    "weightRange": "Weight",
+    "format": "Format",
+    "version": "Version",
+    "manufacturer": "Manufacturer",
+    "location": "Location",
+    "license": "License",
+    "added": "Date added",
+    "tags": "Tags",
+    "notes": "Notes",
+    "badge": {
+      "variable": "Variable",
+      "color": "Color",
+      "openLicense": "Open license"
+    },
+    "declared": {
+      "desktop": "Desktop",
+      "web": "Web",
+      "app": "App",
+      "trial": "Trial",
+      "personalOnly": "Personal",
+      "unknown": "Unknown"
+    },
+    "state": {
+      "inactive": "Inactive",
+      "partial": "Partly active",
+      "active": "Active"
+    }
+  },
+  "list": {
+    "label": "Font list",
+    "inQuickCollection": ", in Quick Collection",
+    "inQuickCollectionTitle": "In the Quick Collection",
+    "pinned": "Pinned",
+    "stylesUnavailable": "Styles not available",
+    "previewUnavailable": "Preview not available",
+    "variable": "Variable",
+    "fallback": "Fallback",
+    "fallbackTitle": {
+      "missingLetters": "This font lacks {missing}, so it shows its own letters.",
+      "missingCharacters": "This font lacks {missing}, so it shows its own characters.",
+      "letters": "This font lacks characters of the sample text, so it shows its own letters.",
+      "characters": "This font lacks characters of the sample text, so it shows its own characters."
+    },
+    "styleCount": {
+      "one": "{count} style",
+      "other": "{count} styles"
+    },
+    "row": {
+      "family": "{name}, {styles}, {state}",
+      "face": "{family} {style}, {state}",
+      "pinnedInstance": "{name}, pinned instance",
+      "notActive": "not active",
+      "partlyActive": "partly active",
+      "active": "active",
+      "activePermanently": "active permanently",
+      "activeSession": "active for this session"
+    },
+    "findSimilar": "Similar",
+    "findSimilarLabel": "Find the fonts similar to {name}"
+  },
+  "grid": {
+    "label": "Font grid"
+  },
+  "waterfall": {
+    "label": "Font waterfall",
+    "size": "{size} px"
+  },
+  "density": {
+    "comfortable": "Comfortable",
+    "compact": "Compact"
+  },
+  "collections": {
+    "heading": "Collections",
+    "new": "New",
+    "newTitle": "Make a collection",
+    "newSmart": "New smart",
+    "newSmartLabel": "New smart collection",
+    "newSmartTitle": "Make a collection that fills itself from rules",
+    "allFonts": "All fonts",
+    "newName": "New collection name",
+    "newNameInside": "New collection name inside {name}",
+    "renameLabel": "New name for {name}",
+    "smart": "Smart",
+    "fontCount": {
+      "one": "{count} font",
+      "other": "{count} fonts"
+    },
+    "newInside": "New inside",
+    "newInsideLabel": "New collection inside {name}",
+    "editRules": "Edit rules",
+    "editRulesLabel": "Edit rules of {name}",
+    "renameActionLabel": "Rename {name}",
+    "up": "Up",
+    "upLabel": "Move {name} up",
+    "down": "Down",
+    "downLabel": "Move {name} down",
+    "in": "In",
+    "inLabel": "Move {name} into the collection above",
+    "inTitle": "Nest it inside the collection above",
+    "out": "Out",
+    "outLabel": "Move {name} out of its parent",
+    "exportLicenseInventory": "Export license inventory…",
+    "exportLabel": "Export the license inventory of {name}",
+    "exportTitle": "Save a CSV of its families' licenses",
+    "deleteLabel": "Delete {name}",
+    "deleteTitle": "Delete the collection and the ones inside it. The fonts stay in the library.",
+    "inventoryFile": "{name} license inventory",
+    "inventoryFileAll": "License inventory",
+    "inventorySaved": {
+      "one": "Saved the license inventory: {count} family.",
+      "other": "Saved the license inventory: {count} families."
+    },
+    "commands": {
+      "group": "Collections",
+      "new": "New collection",
+      "newSmart": "New smart collection",
+      "exportLicenseInventory": "Export license inventory…",
+      "addSelected": "Add selected fonts to “{name}”"
+    }
+  },
+  "rules": {
+    "newTitle": "New smart collection",
+    "editTitle": "Edit rules of “{name}”",
+    "name": "Name",
+    "fontsMatch": "Fonts match",
+    "opLabel": "Fonts match all or any of the rules",
+    "theseRules": "these rules",
+    "allOf": "all of",
+    "anyOf": "any of",
+    "rules": "Rules",
+    "rule": "Rule",
+    "ruleLower": "rule",
+    "ruleLabel": "Rule {n}",
+    "ruleInline": "rule {n}",
+    "groupLabel": "Group {n}",
+    "groupInline": "group {n}",
+    "groupRuleLabel": "Group {group}, rule {n}",
+    "groupRuleInline": "group {group}, rule {n}",
+    "groupFontsMatch": "{label}: fonts match",
+    "groupOpLabel": "{label}: fonts match all or any of its rules",
+    "groupRules": "{label} rules",
+    "addRule": "Add rule",
+    "addRuleTo": "Add a rule to {label}",
+    "removeGroup": "Remove group",
+    "removeLabel": "Remove {label}",
+    "addGroup": "Add group",
+    "matches": {
+      "one": "{count} family matches",
+      "other": "{count} families match"
+    },
+    "incomplete": {
+      "one": "{count} rule has no value yet and is left out.",
+      "other": "{count} rules have no value yet and are left out."
+    },
+    "nestedGroup": "a nested group",
+    "keptAsSaved": "Kept as saved: {what}",
+    "whatItTests": "{label}: what it tests",
+    "fromLabel": "{label}: from",
+    "to": "to",
+    "toLabel": "{label}: to",
+    "textPlaceholder": "Paste the text it must cover",
+    "textLabel": "{label}: text",
+    "within": "within",
+    "daysLabel": "{label}: added within this many days",
+    "days": "days",
+    "valueLabel": "{label}: value",
+    "choose": "Choose…",
+    "stars": {
+      "one": "{count} star or more",
+      "other": "{count} stars or more"
+    },
+    "dimensions": {
+      "classification": "Class",
+      "weight": "Weight",
+      "width": "Width",
+      "slant": "Slant",
+      "feature": "OpenType feature",
+      "language": "Supports language",
+      "text": "Supports text",
+      "license": "License type",
+      "foundry": "Foundry",
+      "format": "Format",
+      "added": "Date added",
+      "tag": "Tag",
+      "rating": "Rating",
+      "source": "Source folder"
+    }
+  },
+  "tagging": {
+    "fonts": {
+      "one": "{count} font",
+      "other": "{count} fonts"
+    },
+    "tagCount": {
+      "one": "{count} tag",
+      "other": "{count} tags"
+    },
+    "title": "Tags of {fonts}",
+    "hint": "Space toggles · Enter applies · Esc cancels",
+    "queryLabel": "Filter tags or name a new one",
+    "queryPlaceholder": "Filter tags, or type a new tag name",
+    "tags": "Tags",
+    "state": {
+      "all": "on all",
+      "some": "on some",
+      "none": "on none"
+    },
+    "someOf": "{state} ({carried} of {total})",
+    "changed": "{state}, changed",
+    "makeNew": "Enter makes the tag “{name}” on {fonts}",
+    "noTags": "No tags yet",
+    "apply": "Apply",
+    "applyCount": "Apply {count}",
+    "added": "Added {tags} on {fonts}.",
+    "removed": "Removed {tags} on {fonts}.",
+    "addedRemoved": "Added {added} and removed {removed} on {fonts}.",
+    "dropped": "Tagged “{name}” ({fonts})."
+  },
+  "tags": {
+    "heading": "Tags",
+    "tagCount": {
+      "one": "{count} tag",
+      "other": "{count} tags"
+    },
+    "fontCount": {
+      "one": "{count} font",
+      "other": "{count} fonts"
+    },
+    "empty": "No tags yet. Press {chord} to tag the selected fonts.",
+    "fallbackName": "Tag {id}"
+  },
+  "quickCollection": {
+    "title": "Quick Collection",
+    "fonts": {
+      "one": "{count} font",
+      "other": "{count} fonts"
+    },
+    "added": "Added {fonts} to Quick Collection ({total}).",
+    "removed": "Removed {fonts} from Quick Collection ({total}).",
+    "saved": "Saved {fonts} as the collection “{name}”.",
+    "tagged": "Tagged {fonts} “{name}”.",
+    "clear": "Clear",
+    "back": "Back to fonts",
+    "collectionName": "Collection name",
+    "saveAsCollection": "Save as collection",
+    "tag": "Tag",
+    "tagAll": "Tag all",
+    "listLabel": "Fonts in the Quick Collection",
+    "dropLabel": "Drop {name} from the Quick Collection",
+    "dropTitle": "Drop from the Quick Collection (Delete)",
+    "drop": "Drop",
+    "empty": "The Quick Collection is empty. Select fonts and press B to add them.",
+    "entryTitle": "Review the Quick Collection; {chord} adds or removes the selected fonts"
+  },
+  "sets": {
+    "heading": "Project sets",
+    "currentTitle": "The current set (press to clear)",
+    "makeCurrentTitle": "Make current set",
+    "empty": "No sets yet."
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "sources": "Sources",
+      "activation": "Activation",
+      "appearance": "Appearance",
+      "catalogs": "Online catalogs",
+      "advanced": "Advanced",
+      "localApi": "Local API",
+      "about": "About"
+    },
+    "catalogs": {
+      "note": "Font catalogs on the web. Open one to see what the app can do with it.",
+      "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it."
+    },
+    "sources": {
+      "note": "Folders the library indexes in place. Removing a source forgets its fonts; the files stay where they are.",
+      "kinds": {
+        "watched": "Folder",
+        "system": "System fonts",
+        "libraryFolder": "Library folder"
+      },
+      "fonts": {
+        "one": "{count} font",
+        "other": "{count} fonts"
+      },
+      "pause": "Pause {path}",
+      "paused": "Paused",
+      "remove": "Remove {path}",
+      "systemCannotRemove": "System fonts cannot be removed.",
+      "addFolder": "Add folder…"
+    },
+    "activation": {
+      "modeLegend": "The Activate button activates fonts",
+      "modeSession": "For this session (until the app quits)",
+      "modePermanent": "Permanently (also after a restart)",
+      "conflictLegend": "When a font has the same name as a system font or an active font",
+      "conflictAsk": "Ask me: keep the other font, replace it for this session, or cancel",
+      "conflictReplace": "Replace the other font for this session without asking",
+      "reactivateOnLaunch": "Reactivate on launch: activate the last session's fonts again when the app starts",
+      "keepInTray": "Keep running in the tray when the window is closed",
+      "keepInTrayHint": "Session fonts stay active while the app runs in the tray. Turned off, closing the window quits Font Manager and ends session activations.",
+      "startAtLogin": "Start at login",
+      "startAtLoginHint": "Font Manager starts in the tray when you log in, without opening its window.",
+      "startAtLoginFailed": "Start at login could not be changed."
+    },
+    "appearance": {
+      "theme": "Theme",
+      "themes": {
+        "system": "Same as the system",
+        "light": "Light",
+        "dark": "Dark"
+      },
+      "density": "Density",
+      "densities": {
+        "comfortable": "Comfortable",
+        "compact": "Compact"
+      }
+    },
+    "advanced": {
+      "cacheSize": "Preview cache size (MB)",
+      "rescanInterval": "Rescan sources every (minutes)",
+      "rescanHint": "0 turns automatic rescans off.",
+      "logsFolder": "Logs folder",
+      "logsFolderLabel": "logs folder"
+    },
+    "localApi": {
+      "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Manager through this address while the app runs. Each request needs the token.",
+      "address": "Address",
+      "addressLabel": "local API address",
+      "notRunning": "Not running.",
+      "token": "Token",
+      "tokenHint": "Keep the token secret: a program that has it can do everything in this app.",
+      "show": "Show",
+      "hide": "Hide",
+      "copy": "Copy",
+      "copyToken": "Copy token",
+      "regenerate": "Regenerate",
+      "regenerateHint": "A new token replaces the old one at once. Programs that use the old token stop working until they get the new one.",
+      "regenerated": "A new token was made. The old token no longer works."
+    },
+    "about": {
+      "platformNotes": "Platform notes",
+      "noPlatformNotes": "Everything works the same on this system."
+    }
+  },
+  "updates": {
+    "title": "Updates",
+    "check": "Check for updates",
+    "showVersion": "Show version {version}",
+    "checking": "Checking for updates…",
+    "upToDate": "Font Manager is up to date.",
+    "available": "Version {version} is available.",
+    "checkAutomatically": "Check automatically when Font Manager starts",
+    "checkAutomaticallyHint": "Font Manager contacts its release server only when you check or when this is on. Nothing installs until you confirm it.",
+    "dialog": {
+      "title": "Font Manager {version} is available",
+      "currentVersion": "You have version {version}.",
+      "released": "Released {date}.",
+      "installQuits": "Installing quits Font Manager, which ends session activations, and starts the new version.",
+      "releaseNotes": "Release notes",
+      "noNotes": "This release has no notes.",
+      "majorTitle": "Install a major update?",
+      "majorLead": "Version {version} is a major update from {current}. It can change how Font Manager works and what its settings mean. Install it only if you are ready for that.",
+      "installing": "Installing… Font Manager restarts when it is done.",
+      "later": "Later",
+      "installVersion": "Install version {version}",
+      "installAndRestart": "Install and restart"
+    }
+  },
+  "studio": {
+    "title": "Pairing Studio",
+    "region": "Pairing Studio: {name}",
+    "font": "Font",
+    "noFont": "No font",
+    "layout": "Layout",
+    "closeTitle": "Back to the library (Escape)",
+    "blockFont": "Font for {label}",
+    "panelFont": "Panel font",
+    "fonts": "Fonts",
+    "noMatch": "No matching fonts",
+    "usePanelFont": "Use panel font",
+    "usePanelFontFor": "Use panel font for {label}",
+    "addPanel": "Add panel",
+    "addPanelTitle": "Add a copy of the current panel beside the others",
+    "panelsFull": "At most {max} panels",
+    "panel": "Panel {number}: {name}",
+    "noLayout": "No layout",
+    "closePanel": "Close panel",
+    "closePanelFor": "Close panel {number}",
+    "printPanel": "Print…",
+    "printPanelFor": "Print panel {number}",
+    "printTitle": "Print this panel alone, or save it as PDF from the print dialog"
+  },
+  "conflicts": {
+    "title": "Font conflicts",
+    "intro": "Two active fonts with the same PostScript name are a conflict: apps ask for fonts by that name. The winner is the font the app puts first: a font you chose to replace the other one with for this session, or the later of two fonts the app activated.",
+    "none": "No conflicts.",
+    "columns": {
+      "postscriptName": "PostScript name",
+      "activeFont": "Active font",
+      "conflictsWith": "Conflicts with",
+      "winner": "Winner"
+    },
+    "installedFont": "Installed font: {path}",
+    "face": "Face {id}"
+  },
+  "problems": {
+    "title": "Problems",
+    "filters": "Show problems",
+    "all": "All",
+    "noneOfKind": "No problems of this kind.",
+    "none": "No problems. Your library is in good shape.",
+    "columns": {
+      "problem": "Problem",
+      "file": "File",
+      "with": "With",
+      "details": "Details"
+    },
+    "groups": {
+      "duplicates": "Duplicates",
+      "broken": "Broken files",
+      "legacy": "Legacy formats",
+      "sidecar": "Sidecar conflicts",
+      "activation": "Activation conflicts",
+      "library": "Folders and index"
+    },
+    "copies": {
+      "one": "{count} copy",
+      "other": "{count} copies"
+    },
+    "summary": {
+      "moved": {
+        "one": "Moved {count} copy to the trash.",
+        "other": "Moved {count} copies to the trash."
+      },
+      "putBack": {
+        "one": "Put back {count} copy.",
+        "other": "Put back {count} copies."
+      },
+      "stayed": {
+        "one": "{count} copy stayed where it was.",
+        "other": "{count} copies stayed where they were."
+      }
+    },
+    "undoFailed": "Some copies could not be put back.",
+    "duplicates": {
+      "title": "Resolve duplicates",
+      "note": "Keep one copy of each font. The other copies move to the trash, and you can undo it.",
+      "identicalFiles": "Identical files",
+      "exact": "identical files",
+      "similar": "same font, different files",
+      "recommended": "Recommended",
+      "keep": "Keep this one",
+      "keepLabel": "Keep this one: {path}"
+    },
+    "history": {
+      "title": "History",
+      "when": "When",
+      "kept": "Kept",
+      "what": "What happened",
+      "undoLabel": "Undo: {summary}"
+    },
+    "plan": {
+      "title": {
+        "one": "Move {count} copy to the trash?",
+        "other": "Move {count} copies to the trash?"
+      },
+      "keeping": "Keeping",
+      "willMove": "Will move to the trash",
+      "willStay": "Will stay",
+      "confirm": "Move to trash"
+    }
+  },
+  "sources": {
+    "title": "Sources",
+    "addFolder": "Add folder",
+    "addFolderTitle": "Add a folder to the library",
+    "scanningLibrary": "Scanning the library",
+    "scanning": "Scanning {progress}",
+    "scanningSource": "Scanning {name}",
+    "progress": "{done} of {total}",
+    "systemFonts": "System fonts",
+    "readOnly": "Read-only",
+    "paused": "Paused",
+    "fonts": {
+      "one": "{count} font",
+      "other": "{count} fonts"
+    },
+    "rescan": "Rescan",
+    "rescanLabel": "Rescan {name}",
+    "pause": "Pause",
+    "pauseLabel": "Pause {name}",
+    "resume": "Resume",
+    "resumeLabel": "Resume {name}",
+    "removeLabel": "Remove {name} from the library",
+    "removeTitle": "Remove from the library. The files stay where they are."
+  },
+  "catalogs": {
+    "adobeFonts": {
+      "name": "Adobe Fonts",
+      "note": "Adobe Fonts are delivered encrypted through Creative Cloud, so no third-party app can manage them. Activate them in the Creative Cloud app.",
+      "open": "Open Adobe Fonts",
+      "openTitle": "Opens fonts.adobe.com in your browser"
+    },
+    "turnOn": "Turn on",
+    "turnOnLabel": "Turn on {name}",
+    "connects": "Connects to the internet",
+    "off": "{name} is off. Turn it on to browse its fonts.",
+    "searchLabel": "Search {name}",
+    "searchPlaceholder": "Search families",
+    "listLabel": "{name} families",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "refreshTitle": "Fetch the list of {name} again from the internet",
+    "refreshedAt": "Refreshed {date}",
+    "neverRefreshed": "Not refreshed yet",
+    "offline": "Offline - showing the list from {date}",
+    "noMatches": "No family matches the search.",
+    "empty": "The list is empty. Refresh to fetch it.",
+    "sizePx": "{size} px",
+    "download": {
+      "action": "Download…",
+      "actionLabel": "Download {name}…",
+      "title": "Download {name}",
+      "into": "Download into",
+      "noFolder": "Add a folder to the library first. Downloads go into a folder you added.",
+      "files": "Files",
+      "static": "One file per style",
+      "variable": "Variable font",
+      "where": "The files go into a folder named {folder} inside it. A file that is already there is kept, never replaced.",
+      "start": "Download",
+      "cancel": "Cancel",
+      "close": "Close",
+      "downloading": "Downloading {name}…",
+      "scanning": "Adding {name} to the library…",
+      "scanProgress": "Adding {name} to the library: {done} of {total} files read",
+      "done": {
+        "one": "{name}: {count} file downloaded into {folder}.",
+        "other": "{name}: {count} files downloaded into {folder}."
+      },
+      "skipped": {
+        "one": "{count} file was already there and was kept.",
+        "other": "{count} files were already there and were kept."
+      },
+      "nothingNew": "{name}: every file was already in {folder}. Nothing was replaced.",
+      "failed": "{message} No file was written.",
+      "scanFailed": "The files are downloaded, but the folder could not be read again: {message}",
+      "retry": "Try again",
+      "stopped": "The download stopped before the end: {message} Only the files counted above were written, and they are kept."
+    },
+    "updates": {
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "checkTitle": "Compare the families you downloaded with the catalogs, fetched again from the internet",
+      "badge": "Update available",
+      "badgeTitle": "{catalog} has a newer version: {version}",
+      "found": {
+        "zero": "Every downloaded family is up to date.",
+        "one": "{count} downloaded family has an update.",
+        "other": "{count} downloaded families have an update."
+      },
+      "noLongerListed": "No longer in the catalog: {names}"
+    }
+  },
+  "similar": {
+    "title": "Similar to {name}",
+    "hint": "Enter or a click selects a font. Esc closes.",
+    "close": "Close the similar fonts",
+    "results": "Similar fonts",
+    "loading": "Looking for similar fonts…",
+    "none": "No other font in the library looks like {name}.",
+    "error": "Font Manager could not find similar fonts. {message}",
+    "score": "{percent}% similar",
+    "noScore": "No score",
+    "resultLabel": "{name}, {score}",
+    "reasons": "Why: {reasons}",
+    "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
+  }
+}

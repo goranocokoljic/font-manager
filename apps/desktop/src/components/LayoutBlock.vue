@@ -18,6 +18,7 @@
 // Enter; leaving the box (or Ctrl/Cmd+Enter) hands the text to the parent, Escape drops it.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { LayoutBounds, TextBlock } from '../api/types';
+import { formatNumber, t } from '../i18n';
 import type { BlockProps } from '../stores/textLayouts';
 import {
   DRAG_THRESHOLD_PX,
@@ -97,7 +98,11 @@ const badge = computed(() => sizeLabel(shown.value));
 const ariaLabel = computed(() => {
   if (!resizable.value) return props.editable ? props.label : undefined;
   const { sizePt, lineHeight } = shown.value;
-  return `${props.label ?? 'Block'}, ${sizePt} points, line height ${lineHeight.toFixed(2)}`;
+  return t('blocks.ariaResizable', {
+    label: props.label ?? t('blocks.block'),
+    size: sizePt,
+    lineHeight: formatNumber(lineHeight, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  });
 });
 
 // ---- frame-paced updates -------------------------------------------------
@@ -331,10 +336,10 @@ function onFieldKey(e: KeyboardEvent): void {
       :style="blockStyle"
       :tabindex="focusable ? 0 : undefined"
       :role="focusable ? 'group' : undefined"
-      :aria-roledescription="resizable ? 'resizable text block' : undefined"
+      :aria-roledescription="resizable ? t('blocks.roleDescription') : undefined"
       :aria-label="ariaLabel"
       :aria-describedby="describedby"
-      :title="editable ? 'Double-click or press Enter to edit the text' : undefined"
+      :title="editable ? t('blocks.editTitle') : undefined"
       @pointerdown="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
@@ -349,15 +354,22 @@ function onFieldKey(e: KeyboardEvent): void {
         ref="field"
         v-model="text"
         class="edit"
+        dir="auto"
         data-testid="layout-block-editor"
-        :aria-label="`${label ?? 'Block'} text`"
+        :aria-label="t('blocks.textLabel', { label: label ?? t('blocks.block') })"
         :rows="Math.max(2, text.split('\n').length)"
         :style="{ fontFamily, fontSize: `${shown.sizePt}pt`, lineHeight: String(shown.lineHeight) }"
         @keydown="onFieldKey"
         @blur="finish(true)"
       />
       <template v-else>
-        <p v-for="(line, i) in paragraphs" :key="i" class="paragraph" :style="paragraphStyle">
+        <p
+          v-for="(line, i) in paragraphs"
+          :key="i"
+          class="paragraph"
+          dir="auto"
+          :style="paragraphStyle"
+        >
           {{ line }}
         </p>
       </template>
@@ -404,7 +416,7 @@ function onFieldKey(e: KeyboardEvent): void {
 .badge {
   position: absolute;
   top: 0;
-  right: 0;
+  inset-inline-end: 0;
   z-index: 1;
   padding: 1px 6px;
   border: 1px solid var(--fm-control-border);

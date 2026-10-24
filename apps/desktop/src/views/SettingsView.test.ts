@@ -3,7 +3,8 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockAppInfo, mockFolders } from '../api/mock';
+import { createMockClient, mockAppInfo, mockFolders, shellLocale } from '../api/mock';
+import { setLocale } from '../i18n';
 import { createAppRouter } from '../router';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -38,18 +39,56 @@ const radio = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label: s
     .get('input');
 
 describe('Settings window', () => {
-  it('has the five sections as tabs and opens Sources first', async () => {
+  it('has the seven sections as tabs and opens Sources first', async () => {
     const { wrapper } = await mountAt('/settings');
     expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
       'Sources',
       'Activation',
       'Appearance',
+      'Online catalogs',
       'Advanced',
+      'Local API',
       'About',
     ]);
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Sources');
     expect(wrapper.text()).toContain('/Users/demo/Fonts');
     expect(wrapper.text()).toContain('System fonts');
+    wrapper.unmount();
+  });
+
+  it('lists Adobe Fonts under Online catalogs and opens its note', async () => {
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    expect(wrapper.get('h2').text()).toBe('Online catalogs');
+    const entry = wrapper.get('button[aria-controls="settings-adobe-fonts"]');
+    expect(entry.text()).toBe('Adobe Fonts');
+    expect(entry.attributes('aria-expanded')).toBe('false');
+    expect(wrapper.find('#settings-adobe-fonts').exists()).toBe(false);
+    await entry.trigger('click');
+    expect(entry.attributes('aria-expanded')).toBe('true');
+    const note = wrapper.get('#settings-adobe-fonts');
+    expect(note.text()).toContain('no third-party app can manage them');
+    expect(note.get('a').text()).toBe('Open Adobe Fonts');
+    wrapper.unmount();
+  });
+
+  it('turns Google Fonts on and off under Online catalogs, saying it connects', async () => {
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    const box = wrapper.get('input[name="catalog-googleFonts"]');
+    expect(box.attributes('type')).toBe('checkbox');
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    expect(box.element.closest('label')?.textContent?.trim()).toBe('Google Fonts');
+    expect(wrapper.get(`#${box.attributes('aria-describedby')}`).text()).toContain(
+      'connects to the internet',
+    );
+    await box.setValue(true);
+    await flushPromises();
+    let [google] = await client.listCatalogs();
+    expect(google?.enabled).toBe(true);
+    expect(google?.familyCount, 'turning it on fetched the list').toBe(4);
+    await box.setValue(false);
+    await flushPromises();
+    [google] = await client.listCatalogs();
+    expect(google?.enabled).toBe(false);
     wrapper.unmount();
   });
 
@@ -63,6 +102,48 @@ describe('Settings window', () => {
     expect(document.documentElement.dataset.density).toBe('compact');
     expect(await client.getSettings()).toMatchObject({ theme: 'dark', density: 'compact' });
     wrapper.unmount();
+  });
+
+  it('offers the languages and relabels the window the moment one is chosen', async () => {
+    const spy = vi.spyOn(client, 'updateSettings');
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    const select = wrapper.get('select[name="language"]');
+    expect(select.element.closest('label')!.textContent).toContain('Language');
+    expect(select.findAll('option').map((o) => o.element.value)).toEqual(['system', 'en', 'de']);
+    expect(select.findAll('option').map((o) => o.text())).toEqual([
+      'System (English)',
+      'English',
+      'Deutsch',
+    ]);
+    expect(wrapper.get('h2').text()).toBe('Appearance');
+    expect(shellLocale.value, 'the native shell is told the locale at start').toBe('en');
+    try {
+      await select.setValue('de');
+      await flushPromises();
+      expect(spy).toHaveBeenCalledWith({ language: 'de' });
+      expect((await client.getSettings()).language).toBe('de');
+      expect(wrapper.get('h2').text()).toBe('Darstellung');
+      expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Darstellung');
+      expect(shellLocale.value, 'the Help menu and tray follow the choice').toBe('de');
+    } finally {
+      wrapper.unmount();
+      setLocale('en');
+    }
+  });
+
+  it('tells the native shell the OS language when the setting is "System"', async () => {
+    const languages = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['de-DE', 'en-US']);
+    shellLocale.value = '';
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    try {
+      expect((await client.getSettings()).language).toBe('system');
+      expect(shellLocale.value).toBe('de');
+      expect(wrapper.get('h2').text()).toBe('Darstellung');
+    } finally {
+      wrapper.unmount();
+      languages.mockRestore();
+      setLocale('en');
+    }
   });
 
   it('saves the activation choices', async () => {

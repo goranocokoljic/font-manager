@@ -2,6 +2,7 @@
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
 import { HELP_PAGES } from '../help';
+import { catalogFontPath } from './catalogFont';
 import type { FmClient, FullSettings } from './client';
 import {
   API_VERSION,
@@ -10,6 +11,12 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type Catalog,
+  type CatalogDownload,
+  type CatalogUpdate,
+  type CatalogFamily,
+  type DownloadFamilyResponse,
+  type CatalogId,
   type AvailableUpdate,
   type InstallUpdateRequest,
   type Classification,
@@ -27,6 +34,7 @@ import {
   type CoverageReport,
   type FaceCoverage,
   type DuplicateGroup,
+  type EndpointInfo,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -65,6 +73,8 @@ import {
   type QuickCollection,
   type SearchResponse,
   type SampleText,
+  type SizeBasis,
+  type SizeFactor,
   type Source,
   type SourceId,
   type Tag,
@@ -275,6 +285,29 @@ export const mockColorFace: FaceDetail = {
   ],
 };
 
+/**
+ * A Latin + Hebrew face whose name and folder mix the two scripts (E19.3), only in
+ * browser mode with `?mockHebrew=1` (the Rust mock has none): it keeps a Hebrew
+ * sample, and its name and path show the bidi isolation.
+ */
+export const mockHebrewFace: FaceDetail = {
+  ...structuredClone(mockFaces[1]!),
+  face: {
+    ...mockFaces[1]!.face,
+    id: 9,
+    family: 9,
+    familyName: 'Frank רוחל',
+    postscriptName: 'FrankRuhl-Regular',
+  },
+  path: '/Users/demo/Fonts/עברית/FrankRuhl-Regular.ttf',
+  hash: '9'.padStart(64, '0'),
+  copyright: 'Copyright Frank Ruhl Authors',
+  designer: 'Mock Designer',
+  legacyFamily: 'Frank רוחל',
+  foundry: 'Mock Foundry',
+  scripts: ['latn', 'hebr'],
+};
+
 /** The system font the Rust mock gives face 6 the same PostScript name as. */
 const systemClash: Partial<Record<FaceId, string>> = {
   6: '/System/Library/Fonts/JetBrainsMono-Regular.ttf',
@@ -288,6 +321,9 @@ export const mockSources: Source[] = [
 
 /** `MOCK_NOW` of the Rust mock: when its activations started. */
 export const MOCK_NOW = '2026-10-16T09:00:00Z';
+
+/** The locale the app last told the (absent) native shell; browser mode and tests read it. */
+export const shellLocale = { value: '' };
 
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
@@ -303,6 +339,8 @@ export const defaultSettings: FullSettings = {
   startAtLogin: false,
   // Off unless the user turns it on (rule 7).
   checkUpdatesAutomatically: false,
+  // Follows the OS language until the user picks one.
+  language: 'system',
 };
 
 /** The releases the mock's server can offer the mock app (0.1.0). */
@@ -324,6 +362,21 @@ export const mockUpdates = {
 } as const satisfies Record<string, AvailableUpdate>;
 
 /** The app folders of the Rust mock. */
+/** The mock's local API address (the Rust mock reports the same). */
+export const MOCK_ENDPOINT_URL = 'http://127.0.0.1:47613';
+
+/** A 64-hex-digit token for the `generation`th regeneration; distinct for each. */
+export function mockEndpointToken(generation: number): string {
+  let x = (generation + 1) * 0x9e3779b1;
+  let out = '';
+  for (let i = 0; i < 8; i++) {
+    x = Math.imul(x ^ (x >>> 15), 0x2c1b3c6d) >>> 0;
+    x = (x ^ (x >>> 12)) >>> 0;
+    out += x.toString(16).padStart(8, '0');
+  }
+  return out;
+}
+
 export const mockFolders: AppFolders = {
   config: '/home/demo/.config/font-manager',
   data: '/home/demo/.local/share/font-manager',
@@ -338,6 +391,8 @@ const range = (from: number, to: number) =>
 const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
 const LATIN_EXT_A = range(0x100, 0x180);
 const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
+/** The Hebrew letters, final forms included (U+05D0–U+05EA). */
+const HEBREW = range(0x5d0, 0x5eb);
 
 /** (script, characters the language needs), like the Rust mock's languages. */
 const MOCK_LANGUAGES: [string, string][] = [
@@ -348,7 +403,8 @@ const MOCK_LANGUAGES: [string, string][] = [
 ];
 
 function mockChars(f: FaceDetail): Set<string> {
-  return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
+  const latin = f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN;
+  return new Set(f.scripts.includes('hebr') ? latin + HEBREW : latin);
 }
 
 /**
@@ -574,6 +630,19 @@ export function mockCssValues(f: FaceDetail, req: CssValuesRequest): CssValues {
  * it; else letters of the complete language whose script the face maps most; else
  * its own characters.
  */
+/** The core's auto size targets and usable range in em (`fm_core::metrics`). */
+const MOCK_SIZE_TARGET_EM: Record<SizeBasis, number> = { xHeight: 0.5, capHeight: 0.7 };
+const MOCK_USABLE_EM = [0.2, 1.2] as const;
+
+/** `fm_core::metrics::size_factor`: the target over the face's value in em; 1 without a usable value. */
+export function mockSizeFactor(f: FaceDetail, basis: SizeBasis): SizeFactor {
+  const m = f.metrics;
+  const value = basis === 'xHeight' ? m.xHeight : m.capHeight;
+  const em = value !== null && m.unitsPerEm > 0 ? value / m.unitsPerEm : null;
+  const usable = em !== null && em >= MOCK_USABLE_EM[0] && em <= MOCK_USABLE_EM[1];
+  return { face: f.face.id, factor: usable ? MOCK_SIZE_TARGET_EM[basis] / em : 1 };
+}
+
 export function mockSampleText(f: FaceDetail, text: string): SampleText {
   const chars = mockChars(f);
   const face = f.face.id;
@@ -674,11 +743,42 @@ export interface MockOptions {
   onInstall?: (req: InstallUpdateRequest) => void;
   /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
   colorFace?: boolean;
+  /** Adds the Latin + Hebrew face `mockHebrewFace` (family "Frank רוחל", E19.3). */
+  hebrewFace?: boolean;
   /**
    * Where the mock keeps its settings, as the app keeps `settings.json`, so a saved
    * setting is there after a reload (browser mode). In memory when absent.
    */
   settingsStorage?: Pick<Storage, 'getItem' | 'setItem'>;
+  /**
+   * What "Find similar" answers: `ranked` (the default: every other face, ranked like
+   * the Rust mock), `none` (no similar face) or `fail` (fm-core's answer while E23.2 is
+   * not built: `unsupported`).
+   */
+  similar?: 'ranked' | 'none' | 'fail';
+  /**
+   * The online catalogs (E22.2): `online` (the default) starts with every catalog off and
+   * never refreshed; `offline` starts with Google Fonts on, a list cached on
+   * `MOCK_CATALOG_CACHED_AT`, and every refresh failing as without a connection.
+   */
+  catalog?: 'online' | 'offline';
+  /** Families a refreshed mock catalog holds after the four sample ones, for long lists. */
+  catalogFamilies?: number;
+  /**
+   * What "Download..." of a catalog family does (E22.3): `ok` (the default) "writes" the
+   * files and rescans the source; `fail` fails as a lost connection does, writing nothing;
+   * `stopped` writes the first file only and answers why it stopped (a file that could
+   * not be saved).
+   */
+  catalogDownload?: 'ok' | 'fail' | 'stopped';
+  /** How long a mock download takes before it answers (ms; default 0). */
+  catalogDownloadMs?: number;
+  /**
+   * Families "downloaded" before (E22.4): Inter from Google Fonts at an older version than the
+   * catalog's (an update), Lato at the catalog's, and Retired Sans, which the catalog no longer
+   * lists.
+   */
+  catalogUpdates?: boolean;
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -1282,6 +1382,253 @@ function mockSlug(name: string): string {
   return slug || 'layout';
 }
 
+/** When the `offline` mock catalog's list was cached. */
+export const MOCK_CATALOG_CACHED_AT = '2026-10-01T08:00:00Z';
+
+/** The families a refreshed catalog of the mock holds, like `mock_catalog_families` in Rust. */
+export function mockCatalogFamilies(extra = 0): CatalogFamily[] {
+  const family = (
+    name: string,
+    category: string,
+    weights: number[],
+    axes: CatalogFamily['axes'] = [],
+  ): CatalogFamily => ({
+    name,
+    category,
+    styles: weights.map((weight) => ({ weight, slant: 'upright' })),
+    axes,
+    subsets: ['latin', 'latin-ext'],
+    designers: [],
+    version: null,
+    lastModified: '2026-09-01',
+    openSource: true,
+    license: null,
+  });
+  const wght = { tag: 'wght', name: 'Weight', min: 100, default: 400, max: 900 };
+  return [
+    family('Inter', 'Sans Serif', [100, 400, 900], [wght]),
+    family('Lato', 'Sans Serif', [100, 300, 400, 700, 900]),
+    family('Lora', 'Serif', [400, 700]),
+    family('Space Mono', 'Monospace', [400, 700]),
+    ...Array.from({ length: extra }, (_, i) =>
+      family(`Zz Catalog ${String(i + 1).padStart(5, '0')}`, 'Display', [400]),
+    ),
+  ];
+}
+
+/**
+ * The online catalogs of the mock (`CatalogService` of the Rust mock): off until turned on,
+ * refreshing "fetches" four families and touches no network; an off catalog lists none.
+ */
+function createMockCatalogs(
+  mode: MockOptions['catalog'] = 'online',
+  extra = 0,
+  rescan: (source: SourceId) => { path: string; job: JobId },
+  download: { result: MockOptions['catalogDownload']; ms: number } = { result: 'ok', ms: 0 },
+  seeded = false,
+): Pick<
+  FmClient,
+  | 'listCatalogs'
+  | 'setCatalogEnabled'
+  | 'refreshCatalog'
+  | 'listCatalogFamilies'
+  | 'catalogFontUrl'
+  | 'downloadFamily'
+  | 'listCatalogDownloads'
+  | 'checkUpdates'
+> {
+  // Every catalog of the Rust mock, in its order (`CatalogId::ALL`).
+  const sites: [CatalogId, string, string][] = [
+    ['googleFonts', 'Google Fonts', 'https://fonts.google.com'],
+    ['fontshare', 'Fontshare', 'https://www.fontshare.com'],
+  ];
+  const enabled = new Set<CatalogId>(mode === 'offline' ? ['googleFonts'] : []);
+  /** The families "downloaded", newest first. */
+  const downloads: CatalogDownload[] = seeded
+    ? (
+        [
+          ['Inter', '2026-03-01'],
+          ['Lato', '2026-09-01'],
+          ['Retired Sans', '2025-01-01'],
+        ] as const
+      ).map(([family, version]) => ({
+        catalog: 'googleFonts',
+        family,
+        catalogFamilyId: family,
+        version,
+        kind: 'static',
+        downloadedAt: MOCK_CATALOG_CACHED_AT,
+        source: 1,
+        folder: `/Users/demo/Fonts/${family}`,
+        files: [],
+      }))
+    : [];
+  const caches = new Map<CatalogId, { refreshedAt: string; families: CatalogFamily[] }>(
+    mode === 'offline'
+      ? [
+          [
+            'googleFonts',
+            { refreshedAt: MOCK_CATALOG_CACHED_AT, families: mockCatalogFamilies(extra) },
+          ],
+        ]
+      : [],
+  );
+  const site = (id: CatalogId) => {
+    const found = sites.find(([s]) => s === id);
+    if (!found)
+      throw { code: 'unsupported', message: 'That catalog is not available.', detail: null };
+    return found;
+  };
+  const catalog = (id: CatalogId): Catalog => {
+    const [, name, homepage] = site(id);
+    const cache = caches.get(id);
+    return {
+      id,
+      name,
+      homepage,
+      enabled: enabled.has(id),
+      refreshedAt: cache?.refreshedAt ?? null,
+      familyCount: cache?.families.length ?? 0,
+    };
+  };
+  return {
+    listCatalogs: async () => sites.map(([id]) => catalog(id)),
+    setCatalogEnabled: async (req) => {
+      site(req.id);
+      if (req.enabled) enabled.add(req.id);
+      else enabled.delete(req.id);
+      return catalog(req.id);
+    },
+    refreshCatalog: async (req) => {
+      const [, name] = site(req.id);
+      if (!enabled.has(req.id))
+        throw { code: 'conflict', message: `Turn on ${name} before refreshing it.`, detail: null };
+      if (mode === 'offline')
+        throw {
+          code: 'io',
+          message: `${name} could not be refreshed. The catalog could not be reached. Check the connection and try again.`,
+          detail: 'offline',
+        };
+      caches.set(req.id, { refreshedAt: MOCK_NOW, families: mockCatalogFamilies(extra) });
+      return catalog(req.id);
+    },
+    listCatalogFamilies: async (req) => {
+      site(req.id);
+      const query = (req.query ?? '').trim().toLowerCase();
+      const families = enabled.has(req.id) ? (caches.get(req.id)?.families ?? []) : [];
+      const hits = families.filter((f) => f.name.toLowerCase().includes(query));
+      const offset = req.page?.offset ?? 0;
+      const limit = Math.min(req.page?.limit ?? 100, 500);
+      return { items: structuredClone(hits.slice(offset, offset + limit)), total: hits.length };
+    },
+    catalogFontUrl: (catalogId, family) => `/fmfont/${catalogFontPath(catalogId, family)}`,
+    // The rules of the core without a request or a file (`download_family` of the Rust
+    // mock): a family with axes asked for as variable gets one variable file, else one
+    // file per style; the rescan is the mock's scan of the source.
+    downloadFamily: async (req) => {
+      const [, name] = site(req.id);
+      if (!enabled.has(req.id))
+        throw {
+          code: 'conflict',
+          message: `${name} is turned off. Turn it on to fetch its fonts.`,
+          detail: null,
+        };
+      const family = caches.get(req.id)?.families.find((f) => f.name === req.family);
+      if (!family)
+        throw {
+          code: 'notFound',
+          message: `${req.family} is not in the ${name} list.`,
+          detail: null,
+        };
+      if (download.ms > 0) await new Promise((r) => setTimeout(r, download.ms));
+      if (download.result === 'fail')
+        throw {
+          code: 'io',
+          message: `${req.family} could not be downloaded. The catalog could not be reached. Check the connection and try again.`,
+          detail: 'offline',
+        };
+      const { path, job } = rescan(req.source);
+      const stem = family.name.replace(/ /g, '');
+      const variable =
+        (family.axes?.length ?? 0) > 0 && (req.kind === 'variable' || family.styles.length === 0);
+      const names = variable
+        ? [`${stem}[${family.axes!.map((a) => a.tag).join(',')}].ttf`]
+        : family.styles.map((st) => `${stem}-${st.weight}.ttf`);
+      const folder = `${path.replace(/\/$/, '')}/${family.name}`;
+      const record: CatalogDownload = {
+        catalog: req.id,
+        family: family.name,
+        catalogFamilyId: family.name,
+        version: family.version ?? family.lastModified ?? null,
+        kind: variable ? 'variable' : 'static',
+        downloadedAt: MOCK_NOW,
+        source: req.source,
+        folder,
+        files: names
+          .map((n, i) => ({
+            name: n,
+            hash: (i + 1).toString(16).padStart(64, '0'),
+            path: `${folder}/${n}`,
+          }))
+          .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+      };
+      let error: DownloadFamilyResponse['error'] = null;
+      if (download.result === 'stopped') {
+        const stoppedAt = record.files[1]?.name ?? record.files[0]!.name;
+        record.files = record.files.slice(0, 1);
+        error = {
+          code: 'io',
+          message: `${req.family} could not be downloaded. The downloaded fonts could not be saved.`,
+          detail: `${folder}/${stoppedAt}: disk full`,
+        };
+      }
+      downloads.unshift(record);
+      return { download: structuredClone(record), skipped: [], scan: job, error };
+    },
+    listCatalogDownloads: async () => structuredClone(downloads),
+    // The rules of the core (`check_updates` of the Rust mock): a refresh of every catalog
+    // that is on and has downloads (failing offline), then each family compared at its newest
+    // download; the mock's versions are dates, compared as text.
+    checkUpdates: async (req) => {
+      const ids = [...new Set(downloads.map((d) => d.catalog))].filter((id) => enabled.has(id));
+      if (!req.cachedOnly) {
+        for (const id of ids) {
+          const [, name] = site(id);
+          if (mode === 'offline')
+            throw {
+              code: 'io',
+              message: `${name} could not be refreshed. The catalog could not be reached. Check the connection and try again.`,
+              detail: 'offline',
+            };
+          caches.set(id, { refreshedAt: MOCK_NOW, families: mockCatalogFamilies(extra) });
+        }
+      }
+      const seen = new Set<string>();
+      const updates: CatalogUpdate[] = [];
+      for (const d of downloads) {
+        const key = `${d.catalog}/${d.family}`;
+        const cache = caches.get(d.catalog);
+        if (!ids.includes(d.catalog) || seen.has(key) || !cache) continue;
+        seen.add(key);
+        const listed = cache.families.find((f) => f.name === d.family);
+        const available = listed ? (listed.version ?? listed.lastModified ?? null) : null;
+        if (!listed) updates.push({ ...pick(d), availableVersion: null, status: 'noLongerListed' });
+        else if (d.version && available && available > d.version)
+          updates.push({ ...pick(d), availableVersion: available, status: 'updateAvailable' });
+      }
+      return updates.sort((a, b) =>
+        a.catalog === b.catalog
+          ? a.family.localeCompare(b.family)
+          : sites.findIndex(([s]) => s === a.catalog) - sites.findIndex(([s]) => s === b.catalog),
+      );
+    },
+  };
+}
+
+function pick(d: CatalogDownload): Pick<CatalogUpdate, 'catalog' | 'family' | 'downloadedVersion'> {
+  return { catalog: d.catalog, family: d.family, downloadedVersion: d.version ?? null };
+}
+
 /**
  * The layout template files of the mock (`fm_core::layout::store`): the six presets and one
  * hand-edited file that is not valid JSON. A save that changes the file keeps what it replaces
@@ -1431,6 +1778,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     options.settingsStorage,
   );
   const emit = (event: Event) => handlers.forEach((h) => h(event));
+  // The local API: a fixed address, a token that changes on every regeneration.
+  let endpointGeneration = 0;
+  const endpoint = (): EndpointInfo => ({
+    url: MOCK_ENDPOINT_URL,
+    token: mockEndpointToken(endpointGeneration),
+  });
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
   const resolutions: Resolution[] = [];
@@ -1462,6 +1815,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const faces = [
     ...mockFaces.map((f) => structuredClone(f)),
     ...(options.colorFace ? [structuredClone(mockColorFace)] : []),
+    ...(options.hebrewFace ? [structuredClone(mockHebrewFace)] : []),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
@@ -1899,6 +2253,20 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     layoutWidth: async (req) => mockLayoutWidth(req),
     ...createMockLayouts(),
+    ...createMockCatalogs(
+      options.catalog,
+      options.catalogFamilies,
+      (id) => {
+        const s = findSource(id);
+        if (s.kind !== 'watched')
+          throw invalid('Fonts can be downloaded only into a folder you added.');
+        const job = ++nextId;
+        runScan(job, id, s.faceCount);
+        return { path: s.path, job };
+      },
+      { result: options.catalogDownload ?? 'ok', ms: options.catalogDownloadMs ?? 0 },
+      options.catalogUpdates ?? false,
+    ),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
@@ -1909,6 +2277,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         const f = find(id);
         if (!f) throw notFound(id);
         return mockSampleText(f, req.text);
+      }),
+    sizeFactors: async (req) =>
+      req.faces.map((id) => {
+        const f = find(id);
+        if (!f) throw notFound(id);
+        return mockSizeFactor(f, req.basis);
       }),
     listGlyphs: async (req) => {
       const f = find(req.face);
@@ -1973,6 +2347,40 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return mockFaceCoverage(f, options.cjkFaces?.includes(face) ?? false);
     },
     listLanguages: async () => structuredClone(mockLanguages),
+    // The Rust mock's ranking: 0.2, +0.5 same classification, +0.2 same weight,
+    // +0.1 same x-height; closest first, `limit` of them.
+    findSimilar: async (req) => {
+      const me = faceOrThrow(req.face);
+      if (options.similar === 'fail')
+        throw {
+          code: 'unsupported' as const,
+          message: 'Finding similar fonts is not available yet.',
+          detail: 'find_similar',
+        };
+      if (options.similar === 'none') return [];
+      const ranked = faces
+        .filter((f) => f.face.id !== req.face && !trashed.has(f.path))
+        .map((f) => {
+          let score = 0.2;
+          const reasons: string[] = [];
+          if (mockClassification(f) === mockClassification(me)) {
+            score += 0.5;
+            reasons.push('same classification');
+          }
+          if (f.face.weight === me.face.weight) {
+            score += 0.2;
+            reasons.push('same weight');
+          }
+          if (f.metrics.xHeight === me.metrics.xHeight) {
+            score += 0.1;
+            reasons.push('matching x-height');
+          }
+          return { face: summary(f), score: Math.min(1, score), reasons };
+        });
+      // Stable: equal scores keep the library order.
+      ranked.sort((a, b) => b.score - a.score);
+      return ranked.slice(0, req.limit);
+    },
     createCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
@@ -2545,6 +2953,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return { ...settings };
     },
     getAppFolders: async () => ({ ...mockFolders }),
+    endpointInfo: async () => endpoint(),
+    regenerateEndpointToken: async () => {
+      endpointGeneration += 1;
+      return endpoint();
+    },
     // Browser mode: the dev server serves the built pages from public/help/.
     openHelp: async (page) => {
       if (!HELP_PAGES.some((p) => p.slug === page))
@@ -2554,6 +2967,26 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: null,
         };
       if (typeof window !== 'undefined') window.open(`/help/${page}.html`, '_blank');
+    },
+    // Browser mode: a new tab stands in for the default browser; like
+    // fm_platform::open_url, only https addresses open.
+    openUrl: async (url) => {
+      if (!/^https:\/\/[^/?#@:\s]+[^\s"'`\\<>]*$/.test(url))
+        throw {
+          code: 'invalidRequest' as const,
+          message: 'Only https addresses can be opened.',
+          detail: null,
+        };
+      if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener');
+    },
+    // Browser mode: the browser's own print dialog, over the same print stylesheet.
+    printPage: async () => {
+      if (typeof window !== 'undefined') window.print();
+    },
+    // Browser mode has no native menu or tray to relabel; the last locale is kept
+    // so tests can see what the shell was told.
+    setShellLocale: async (locale) => {
+      shellLocale.value = locale;
     },
   };
 }
@@ -2609,4 +3042,17 @@ export const mockClient: FmClient = createMockClient({
   ],
   // `?mockColor=1` adds a color font with two palettes.
   colorFace: countFromUrl('mockColor', 1) > 0,
+  // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.
+  hebrewFace: countFromUrl('mockHebrew', 1) > 0,
+  // `?mockSimilar=1` finds no similar face, `=2` answers with an error.
+  similar: (['ranked', 'none', 'fail'] as const)[countFromUrl('mockSimilar', 2)],
+  // `?mockCatalog=1` starts with Google Fonts on, a cached list, and no connection.
+  catalog: countFromUrl('mockCatalog', 1) ? 'offline' : 'online',
+  // `?mockCatalogDownload=1` makes "Download..." fail as without a connection, `=2`
+  // stop after the first file;
+  // `?mockDownloadMs=<n>` makes a download take n ms.
+  catalogDownload: (['ok', 'fail', 'stopped'] as const)[countFromUrl('mockCatalogDownload', 2)],
+  catalogDownloadMs: countFromUrl('mockDownloadMs', 10_000),
+  // `?mockCatalogUpdates=1` starts with three families downloaded from Google Fonts before.
+  catalogUpdates: countFromUrl('mockCatalogUpdates', 1) > 0,
 });

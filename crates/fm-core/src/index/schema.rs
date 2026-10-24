@@ -521,13 +521,45 @@ CREATE TABLE comparison_face (
 ) WITHOUT ROWID;
 ";
 
+/// Catalog downloads (E22.3, `index/catalog_downloads.rs`): where a family
+/// downloaded from an online catalog came from. `catalog` and `kind` are the
+/// `fm-api` serde names; `folder` and `path` are stored as `font_file.path`
+/// is (TEXT, or the native bytes of a path that is not UTF-8); `hash` is the
+/// blake3 hash of the bytes written.
+/// - No foreign key to `source` or `font_file`: a rescan, a rebuild or a
+///   removed folder leaves the provenance as it was, and a file is found
+///   again by its hash in `font_file` when it is listed, wherever the user
+///   moved it.
+const V17: &str = r"
+CREATE TABLE catalog_download (
+    id                 INTEGER PRIMARY KEY,
+    catalog            TEXT    NOT NULL,
+    family             TEXT    NOT NULL,
+    catalog_family_id  TEXT    NOT NULL,
+    version            TEXT,
+    kind               TEXT    NOT NULL CHECK (kind IN ('static', 'variable')),
+    downloaded_at      TEXT    NOT NULL,
+    source_id          INTEGER NOT NULL,
+    folder             BLOB    NOT NULL
+);
+
+CREATE TABLE catalog_download_file (
+    download_id  INTEGER NOT NULL REFERENCES catalog_download (id) ON DELETE CASCADE,
+    name         TEXT    NOT NULL,
+    hash         BLOB    NOT NULL,
+    path         BLOB    NOT NULL,
+    PRIMARY KEY (download_id, name)
+) WITHOUT ROWID;
+CREATE INDEX catalog_download_file_hash ON catalog_download_file (hash);
+";
+
 /// Glyph fingerprints (E23.1, `fingerprint.rs`): one row per face whose
 /// fingerprint the scan has taken. `vector` is the reduced drawing as
 /// little-endian `f32`s; `NULL` with the measures when the face has no
 /// fingerprint (a symbol, non-Latin or broken face). A face without a row was
 /// indexed before this version: its file loads untrusted, so the next scan
 /// reads it again and takes the fingerprint, without a rebuild.
-const V17: &str = r"
+const V18: &str = r"
 CREATE TABLE face_fingerprint (
     face_id         INTEGER PRIMARY KEY REFERENCES face (id) ON DELETE CASCADE,
     vector          BLOB,
@@ -545,7 +577,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17,
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18,
 ];
 
 /// The schema version this build writes.
@@ -556,6 +588,8 @@ pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 pub(crate) const TABLES: &[&str] = &[
     "activation",
     "activation_registration",
+    "catalog_download",
+    "catalog_download_file",
     "collection",
     "collection_face",
     "comparison",

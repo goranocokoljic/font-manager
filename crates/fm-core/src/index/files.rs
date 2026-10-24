@@ -82,9 +82,9 @@ const UPSERT_FACE: &str = "
 INSERT INTO face (file_id, collection_index, family, subfamily, typographic_family,
                   postscript_name, weight, width, slant, is_variable, axes, features,
                   fstype, parsed, cmap, languages, foundry, designer, is_color, healthy,
-                  open_license, added)
+                  open_license, metrics, added)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
-        ?20, ?21, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        ?20, ?21, ?22, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ON CONFLICT (file_id, collection_index) DO UPDATE SET
     family = excluded.family, subfamily = excluded.subfamily,
     typographic_family = excluded.typographic_family,
@@ -94,7 +94,7 @@ ON CONFLICT (file_id, collection_index) DO UPDATE SET
     parsed = excluded.parsed, cmap = excluded.cmap, languages = excluded.languages,
     foundry = excluded.foundry, designer = excluded.designer,
     is_color = excluded.is_color, healthy = excluded.healthy,
-    open_license = excluded.open_license
+    open_license = excluded.open_license, metrics = excluded.metrics
 RETURNING id";
 
 const UPSERT_FINGERPRINT: &str = "
@@ -344,6 +344,8 @@ struct FaceRow<'a> {
     healthy: bool,
     /// The open license the name table states, as stored.
     open_license: Option<String>,
+    /// The vertical metrics as JSON (E16.2), read by auto size.
+    metrics: String,
     fingerprint: &'a FaceFingerprint,
 }
 
@@ -402,6 +404,7 @@ impl<'a> FaceRow<'a> {
                 face.license.as_deref(),
                 face.license_url.as_deref(),
             )),
+            metrics: json(&face.metrics)?,
             fingerprint: &face.fingerprint,
         })
     }
@@ -455,6 +458,7 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, row: &FileRow<'_>) -> FmRe
                     face.color,
                     face.healthy,
                     face.open_license,
+                    face.metrics,
                 ],
                 |r| r.get(0),
             )

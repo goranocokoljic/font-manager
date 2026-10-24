@@ -24,6 +24,7 @@ import { useLibraryStore } from '../stores/library';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
+import { direction, t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
 
@@ -116,6 +117,7 @@ const { previewOf } = useRowPreviews(
   () => props.preview,
   () => rendered.value,
   () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
+  false,
 );
 
 const rowId = (row: ListRow) => `fm-card-${row.key.replace(':', '-')}`;
@@ -152,10 +154,13 @@ watchEffect(() => {
 function cardStyle(index: number) {
   const cols = columns.value;
   const line = Math.floor(index / cols);
+  // Slots start at the inline start; in right-to-left chrome that is the right
+  // edge, so the next card is a step to the left.
+  const step = direction() === 'rtl' ? -100 : 100;
   return {
     width: `${100 / cols}%`,
     height: `${CARD.linePx}px`,
-    transform: `translate(${(index % cols) * 100}%, ${line * CARD.linePx}px)`,
+    transform: `translate(${(index % cols) * step}%, ${line * CARD.linePx}px)`,
   };
 }
 
@@ -240,7 +245,7 @@ function onToggle(row: ListRow): void {
     :data-columns="columns"
     role="listbox"
     tabindex="0"
-    aria-label="Font grid"
+    :aria-label="t('grid.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -288,25 +293,27 @@ function onToggle(row: ListRow): void {
             :style="thumbStyle(item.thumb)"
             aria-hidden="true"
           />
-          <span v-if="item.failed" class="note">Preview not available</span>
+          <span v-if="item.failed" class="note">{{ t('list.previewUnavailable') }}</span>
           <span v-else-if="!item.face && library.failed.has(item.row.family.id)" class="note">
-            Styles not available
+            {{ t('list.stylesUnavailable') }}
           </span>
           <div class="meta">
             <span
               v-if="item.row.kind === 'family'"
-              class="twisty"
+              class="twisty fm-directional"
               aria-hidden="true"
               @click.stop="onToggle(item.row)"
               >{{ item.row.expanded ? '▾' : '▸' }}</span
             >
             <ActivationDot :state="rowActivation(item.row)" />
-            <span class="name">{{ item.name }}</span>
+            <bdi class="name">{{ item.name }}</bdi>
             <span v-if="item.row.kind === 'family'" class="detail">{{
               styleCount(item.row.family.styleCount)
             }}</span>
-            <span v-if="item.face?.isVariable" class="badge">Variable</span>
-            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">Fallback</span>
+            <span v-if="item.face?.isVariable" class="badge">{{ t('list.variable') }}</span>
+            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">{{
+              t('list.fallback')
+            }}</span>
           </div>
         </div>
       </div>
@@ -334,7 +341,7 @@ function onToggle(row: ListRow): void {
 .slot {
   position: absolute;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   box-sizing: border-box;
   padding: 6px;
   user-select: none;
@@ -363,7 +370,7 @@ function onToggle(row: ListRow): void {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';

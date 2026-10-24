@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
 import { useSearchStore } from '../stores/search';
@@ -11,8 +12,13 @@ const chord = chordOf(ACTIONS.search)!;
 useActions([
   {
     id: ACTIONS.search,
-    title: 'Search fonts',
-    group: 'Search',
+    // Getters: the palette shows the title in the language chosen now.
+    get title() {
+      return t('search.label');
+    },
+    get group() {
+      return t('palette.groups.search');
+    },
     run: () => {
       input.value?.focus();
       input.value?.select();
@@ -32,9 +38,9 @@ function onEscape(): void {
     ref="input"
     type="search"
     class="search"
-    aria-label="Search fonts"
+    :aria-label="t('search.label')"
     :aria-keyshortcuts="ariaShortcut(chord)"
-    placeholder="Search  /"
+    :placeholder="t('search.placeholder')"
     autocomplete="off"
     spellcheck="false"
     :value="search.text"

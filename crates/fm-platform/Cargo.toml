@@ -12,6 +12,8 @@ publish.workspace = true
 workspace = true
 
 [target.'cfg(windows)'.dependencies]
+# WebView2's PrintToPdf (ADR 0013); the bindings wry (Tauri) already uses.
+webview2-com = "0.39"
 windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Graphics_DirectWrite",
@@ -24,3 +26,53 @@ windows = { version = "0.62", features = [
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }
+
+# The WKWebView PDF printer (ADR 0013): the Objective-C bindings wry (Tauri)
+# already uses, no default features.
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+dispatch2 = { version = "0.3", default-features = false, features = ["std", "block2", "objc2"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "objc2-core-foundation",
+  "NSApplication",
+  "NSEvent",
+  "NSGraphics",
+  "NSPrintInfo",
+  "NSPrintOperation",
+  "NSResponder",
+  "NSRunningApplication",
+  "NSView",
+  "NSWindow",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-core-foundation",
+  "NSDate",
+  "NSDictionary",
+  "NSError",
+  "NSGeometry",
+  "NSObject",
+  "NSRunLoop",
+  "NSString",
+  "NSURL",
+] }
+objc2-web-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "objc2-app-kit",
+  "objc2-core-foundation",
+  "WKNavigation",
+  "WKWebView",
+  "WKWebViewConfiguration",
+] }
+
+# The WebKitGTK PDF printer (ADR 0013): the GTK 3 bindings wry (Tauri) already
+# uses, at the WebKitGTK API level wry targets. glib and gio come through
+# gtk's re-exports, as wry uses them.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+javascriptcore-rs = { version = "1.1", features = ["v2_28"] }
+webkit2gtk = { version = "2.0", features = ["v2_38"] }

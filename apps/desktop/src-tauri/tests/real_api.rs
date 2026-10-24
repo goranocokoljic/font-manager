@@ -167,6 +167,30 @@ fn the_app_serves_the_core_api_when_the_folders_were_found() -> TestResult {
 }
 
 #[test]
+fn the_app_wires_the_os_pdf_printer_into_the_core_api() -> TestResult {
+    use fm_api::ExportService as _;
+    use fm_api::export::{SpecimenFormat, SpecimenRequest};
+    let home = Home::new("serve-pdf")?;
+    let index = fm_core::startup::open_index(&home.paths);
+    let (_state, core) = serve(&home.paths, index, Arc::new(MockActivator::new()));
+    let core = core.ok_or("no core api")?;
+    // Without a printer a PDF is Unsupported before the family is looked
+    // up; with the app's printer an unknown family is NotFound, and
+    // nothing is printed.
+    let e = core
+        .export_specimen(SpecimenRequest {
+            family: fm_api::FamilyId(999_999),
+            format: SpecimenFormat::Pdf,
+            out_path: home.root.join("specimen.pdf").display().to_string(),
+        })
+        .err()
+        .ok_or("an unknown family must not print")?;
+    assert_eq!(e.code, ErrorCode::NotFound, "{e:?}");
+    assert!(!home.root.join("specimen.pdf").exists());
+    Ok(())
+}
+
+#[test]
 fn the_app_serves_sample_data_only_without_an_index() -> TestResult {
     let home = Home::new("serve-mock")?;
     let (state, core) = serve(

@@ -3,14 +3,27 @@
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
+import { catalogFontPath } from './catalogFont';
 import { mockClient } from './mock';
 import type {
+  Catalog,
+  CatalogDownload,
+  CatalogFamily,
+  CatalogId,
+  CatalogRef,
+  CatalogUpdate,
+  CheckUpdatesRequest,
+  DownloadFamilyRequest,
+  DownloadFamilyResponse,
+  ListCatalogFamiliesRequest,
+  SetCatalogEnabledRequest,
   ActivateRequest,
   ActivationOutcome,
   ActiveFace,
   AddSourceRequest,
   Clash,
   AppFolders,
+  EndpointInfo,
   AppInfo,
   Collection,
   CollectionFacesRequest,
@@ -78,6 +91,10 @@ import type {
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
+  SimilarFace,
+  SimilarRequest,
+  SizeFactor,
+  SizeFactorRequest,
   UpdateCollectionRulesRequest,
   Source,
   SourceId,
@@ -124,6 +141,8 @@ export interface FmClient {
   faceCoverage(face: FaceId): Promise<FaceCoverage>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
+  /** Faces that look like one face, closest first, each with its score and reasons (E23.3). */
+  findSimilar(req: SimilarRequest): Promise<SimilarFace[]>;
   /** Every collection, parents before children, siblings in the user's order. */
   listCollections(): Promise<Collection[]>;
   /** Creates a collection; with `rules`, a smart one. */
@@ -172,6 +191,8 @@ export interface FmClient {
   renderPreview(req: PreviewRequest): Promise<PreviewImage>;
   /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
+  /** The auto size factor of each face for a basis (x-height or cap height), in order. */
+  sizeFactors(req: SizeFactorRequest): Promise<SizeFactor[]>;
   /** The CSS declarations for a face's moved axes and switched features ("Copy CSS"). */
   cssValues(req: CssValuesRequest): Promise<CssValues>;
   /** The six body-text layout presets (Book, Columns, Magazine, Quote, Characters, Waterfall). */
@@ -196,6 +217,33 @@ export interface FmClient {
   restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
   /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
   layoutWidth(req: Layout): Promise<number | null>;
+  /** Every online catalog (E22.1), on or off, with the state of its cache. */
+  listCatalogs(): Promise<Catalog[]>;
+  /** Turns a catalog on or off; makes no request. */
+  setCatalogEnabled(req: SetCatalogEnabledRequest): Promise<Catalog>;
+  /** Fetches the catalog's list (the only call that goes to the network); refused while off. */
+  refreshCatalog(req: CatalogRef): Promise<Catalog>;
+  /** A page of a catalog's cached families by name; makes no request. */
+  listCatalogFamilies(req: ListCatalogFamiliesRequest): Promise<Paged<CatalogFamily>>;
+  /**
+   * The URL the webview loads a catalog family's preview file from (`@font-face`); the
+   * core fetches it into the cache folder the first time, only while the catalog is on.
+   */
+  catalogFontUrl(id: CatalogId, family: string): string;
+  /**
+   * Downloads a family into a watched source (E22.3): its files go into a subfolder named
+   * after it, an existing file is never replaced, and the source is rescanned (the returned
+   * job's scan events follow). The only other call besides a refresh that goes to the network.
+   */
+  downloadFamily(req: DownloadFamilyRequest): Promise<DownloadFamilyResponse>;
+  /** Every family downloaded from a catalog, newest first, with where its files are now. */
+  listCatalogDownloads(): Promise<CatalogDownload[]>;
+  /**
+   * The downloaded families with a newer version in their catalog, or no longer in it
+   * (E22.4). Refreshes the catalogs that are on and have downloads first (requests: only on
+   * the user's "Check for updates"), unless `cachedOnly` (right after a Refresh).
+   */
+  checkUpdates(req: CheckUpdatesRequest): Promise<CatalogUpdate[]>;
   /** Every saved comparison (E13.2), by name. */
   listComparisons(): Promise<ComparisonEntry[]>;
   /** One saved comparison: the faces the library still shows, and the missing ones by name. */
@@ -239,6 +287,10 @@ export interface FmClient {
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
   getAppFolders(): Promise<AppFolders>;
+  /** The local API endpoint: its address (while it runs) and the token (Settings → Local API). */
+  endpointInfo(): Promise<EndpointInfo>;
+  /** Makes a new local API token; the old one fails at once. */
+  regenerateEndpointToken(): Promise<EndpointInfo>;
   scan(req: ScanRequest): Promise<JobId>;
   /** Subscribes to the fm-api event stream; the UI subscribes, it does not poll. */
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
@@ -248,6 +300,18 @@ export interface FmClient {
   pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
+  /** Opens an `https://` address in the default browser; other schemes are refused. */
+  openUrl(url: string): Promise<void>;
+  /**
+   * Opens the OS print dialog for this window's page (Pairing Studio's "Print...", E24.4);
+   * the page's print stylesheet decides what prints. PDF is the dialog's save-as-PDF.
+   */
+  printPage(): Promise<void>;
+  /**
+   * Tells the native shell (Help menu, tray) which catalog locale the UI shows, so
+   * its labels follow the Language setting.
+   */
+  setShellLocale(locale: string): Promise<void>;
   /** Whether this copy updates itself; where not, Settings hides the update section. */
   updateSupport(): Promise<UpdateSupport>;
   /** Asks the release server once (a user action, or "Check automatically" at start). */
@@ -268,6 +332,7 @@ export const tauriClient: FmClient = {
   checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
   faceCoverage: (face) => invoke<FaceCoverage>('face_coverage', { face }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
+  findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
   renameCollection: (req) => invoke<Collection>('rename_collection', { req }),
@@ -293,6 +358,7 @@ export const tauriClient: FmClient = {
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
   renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
+  sizeFactors: (req) => invoke<SizeFactor[]>('size_factors', { req }),
   cssValues: (req) => invoke<CssValues>('css_values', { req }),
   layoutPresets: () => invoke<Layout[]>('layout_presets'),
   clampLayout: (req) => invoke<Layout>('clamp_layout', { req }),
@@ -305,6 +371,14 @@ export const tauriClient: FmClient = {
   layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
   restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
   layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
+  listCatalogs: () => invoke<Catalog[]>('list_catalogs'),
+  setCatalogEnabled: (req) => invoke<Catalog>('set_catalog_enabled', { req }),
+  refreshCatalog: (req) => invoke<Catalog>('refresh_catalog', { req }),
+  listCatalogFamilies: (req) => invoke<Paged<CatalogFamily>>('list_catalog_families', { req }),
+  catalogFontUrl: (id, family) => convertFileSrc(catalogFontPath(id, family), FONT_SCHEME),
+  downloadFamily: (req) => invoke<DownloadFamilyResponse>('download_family', { req }),
+  listCatalogDownloads: () => invoke<CatalogDownload[]>('list_catalog_downloads'),
+  checkUpdates: (req) => invoke<CatalogUpdate[]>('check_updates', { req }),
   listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),
   getComparison: (req) => invoke<Comparison>('get_comparison', { req }),
   saveComparison: (req) => invoke<Comparison>('save_comparison', { req }),
@@ -331,6 +405,8 @@ export const tauriClient: FmClient = {
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
+  endpointInfo: () => invoke<EndpointInfo>('endpoint_info'),
+  regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),
   scan: (req) => invoke<JobId>('scan', { req }),
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {
@@ -342,6 +418,9 @@ export const tauriClient: FmClient = {
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
+  openUrl: (url) => invoke<void>('open_url', { url }),
+  printPage: () => invoke<void>('print_page'),
+  setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
   updateSupport: () => invoke<UpdateSupport>('update_support'),
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
   installUpdate: (req) => invoke<void>('install_update', { req }),

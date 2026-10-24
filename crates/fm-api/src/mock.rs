@@ -14,6 +14,12 @@ use crate::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
     ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
 };
+use crate::catalog::{
+    Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
+    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogStyle,
+    CatalogUpdate, CatalogUpdateStatus, CheckUpdatesRequest, DownloadFamilyRequest,
+    DownloadFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+};
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
     NamedInstance, Page, Paged, Slant,
@@ -23,8 +29,9 @@ use crate::comparison::{
     MIN_COMPARISON_FACES, MissingFace, RenameComparisonRequest, SaveComparisonRequest,
 };
 use crate::export::{
-    ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest, Subset, WebFormat,
+    CollectionSpecimenRequest, ExportWebRequest, ExportWebResponse, Framework, FrameworkSnippet,
+    FrameworkSnippetRequest, GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest,
+    SpecimenRequest, SpecimenResponse, Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -49,14 +56,14 @@ use crate::organization::{
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
 };
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
     FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, SearchRequest,
     SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
 };
-use crate::settings::{AppFolders, Settings, SettingsUpdate};
+use crate::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
 use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
@@ -104,14 +111,9 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
         (Some(LicenseType::PersonalOnly), ..) => {
             (false, "Declared for personal use only".to_owned())
         }
-        (_, Embedding::Restricted, _) => (
-            false,
-            "Embedding restricted, no web license declared".to_owned(),
-        ),
-        (_, Embedding::PreviewAndPrint, _) => (
-            false,
-            "Embedding preview & print only, no web license declared".to_owned(),
-        ),
+        (_, Embedding::Restricted | Embedding::PreviewAndPrint, _) => {
+            (false, mock_web_embedding_block(l).unwrap_or_default())
+        }
         (_, _, Some(o)) => {
             let name = match o {
                 OpenLicense::Ofl => "OFL",
@@ -124,6 +126,22 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
         (_, _, None) => (false, "No web license declared".to_owned()),
     };
     WebUse { ok, reason }
+}
+
+/// The sample's copy of `fm_core::license::web_embedding_block`, the
+/// license guard of a web export (E20.6): restricted or preview-and-print
+/// embedding with no web license declared, and why, in plain words.
+fn mock_web_embedding_block(l: &LicenseInfo) -> Option<String> {
+    if l.declared == Some(LicenseType::Web) {
+        return None;
+    }
+    match l.embedding {
+        Embedding::Restricted => Some("Embedding restricted, no web license declared".to_owned()),
+        Embedding::PreviewAndPrint => {
+            Some("Embedding preview & print only, no web license declared".to_owned())
+        }
+        Embedding::Installable | Embedding::Editable => None,
+    }
 }
 
 /// Refuses a rule as fm-core does (E14.1): a group with no rules, at any
@@ -455,6 +473,8 @@ struct State {
     /// Named comparisons, in the order they were saved.
     comparisons: Vec<MockComparison>,
     settings: Settings,
+    /// How often the local API token was regenerated; the token is made from it.
+    endpoint_tokens: u32,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
     trashed: BTreeSet<String>,
@@ -462,6 +482,12 @@ struct State {
     resolutions: Vec<Resolution>,
     /// The layout template files, in the order they were made.
     layouts: Vec<MockLayoutFile>,
+    /// The catalogs turned on.
+    catalogs_on: BTreeSet<CatalogId>,
+    /// Each refreshed catalog's cache: when, and its families.
+    catalog_cache: BTreeMap<CatalogId, (String, Vec<CatalogFamily>)>,
+    /// The families "downloaded" (E22.3), oldest first.
+    catalog_downloads: Vec<CatalogDownload>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -528,6 +554,21 @@ impl MockApi {
         };
         st.faces.push(copy);
         Ok(id)
+    }
+
+    /// Sets the `OS/2.fsType` embedding of `face`, for tests: the sample has
+    /// no preview-and-print face.
+    #[doc(hidden)]
+    pub fn set_embedding(&self, face: FaceId, embedding: Embedding) -> ApiResult<()> {
+        let mut st = self.state();
+        let f = st
+            .faces
+            .iter_mut()
+            .find(|f| f.detail.face.id == face)
+            .ok_or_else(|| ApiError::not_found(format!("Face {face}")))?;
+        f.detail.license.embedding = embedding;
+        f.detail.license.web_use = Some(mock_web_use(&f.detail.license));
+        Ok(())
     }
 }
 
@@ -842,9 +883,13 @@ impl State {
             quick: Vec::new(),
             comparisons: Vec::new(),
             settings: Settings::default(),
+            endpoint_tokens: 0,
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             layouts: mock_layout_files(),
+            catalogs_on: BTreeSet::new(),
+            catalog_cache: BTreeMap::new(),
+            catalog_downloads: Vec::new(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -2326,6 +2371,41 @@ impl PreviewService for MockApi {
             feature_settings: decl("font-feature-settings", feats),
         })
     }
+
+    /// `fm_core::metrics::size_factor` over each face's metrics.
+    fn size_factors(&self, req: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
+        let st = self.state();
+        req.faces
+            .iter()
+            .map(|&face| {
+                let m = &st.face(face)?.detail.metrics;
+                Ok(SizeFactor {
+                    face,
+                    factor: mock_size_factor(m, req.basis),
+                })
+            })
+            .collect()
+    }
+}
+
+/// The core's auto size targets and usable range in em (`fm_core::metrics`).
+const MOCK_X_HEIGHT_EM: f32 = 0.5;
+const MOCK_CAP_HEIGHT_EM: f32 = 0.7;
+const MOCK_USABLE_EM: (f32, f32) = (0.2, 1.2);
+
+/// `fm_core::metrics::size_factor`: the target over the face's value in em;
+/// 1 without a usable value.
+fn mock_size_factor(m: &Metrics, basis: SizeBasis) -> f32 {
+    let (value, target) = match basis {
+        SizeBasis::XHeight => (m.x_height, MOCK_X_HEIGHT_EM),
+        SizeBasis::CapHeight => (m.cap_height, MOCK_CAP_HEIGHT_EM),
+    };
+    let upem = f32::from(m.units_per_em);
+    value
+        .filter(|_| upem > 0.0)
+        .map(|v| f32::from(v) / upem)
+        .filter(|em| (MOCK_USABLE_EM.0..=MOCK_USABLE_EM.1).contains(em))
+        .map_or(1.0, |em| target / em)
 }
 
 impl ActivationService for MockApi {
@@ -3219,6 +3299,121 @@ fn mock_font_face(f: &MockFace, formats: &[WebFormat], mapped: Option<&[u32]>) -
     out
 }
 
+/// The `font-weight` and `font-style` of a mock face's `@font-face` block.
+fn mock_weight_style(f: &MockFace) -> (String, String) {
+    let s = &f.detail.face;
+    let axis = |tag: &str| {
+        f.detail
+            .axes
+            .iter()
+            .find(|a| a.tag == tag && a.min.is_finite() && a.max.is_finite())
+            .map(|a| (a.min.min(a.max), a.min.max(a.max)))
+    };
+    let weight =
+        axis("wght").map_or_else(|| s.weight.to_string(), |(lo, hi)| css_range(lo, hi, ""));
+    let style = match axis("slnt") {
+        Some((lo, hi)) => format!("oblique {}", css_range(-hi, -lo, "deg")),
+        None => match s.slant {
+            Slant::Upright => "normal".to_owned(),
+            Slant::Italic => "italic".to_owned(),
+            Slant::Oblique => "oblique".to_owned(),
+        },
+    };
+    (weight, style)
+}
+
+/// `name` in kebab case; `font` when nothing is left.
+fn mock_kebab(name: &str) -> String {
+    let mut out = String::new();
+    let mut gap = false;
+    for c in name.chars() {
+        if c.is_alphanumeric() {
+            if gap && !out.is_empty() {
+                out.push('-');
+            }
+            gap = false;
+            out.extend(c.to_lowercase());
+        } else {
+            gap = true;
+        }
+    }
+    if out.is_empty() {
+        "font".to_owned()
+    } else {
+        out
+    }
+}
+
+/// `s` as a single-quoted, ASCII-only JS string.
+fn mock_js_string(s: &str) -> String {
+    let mut out = String::from("'");
+    for c in s.chars() {
+        match c {
+            '\\' | '\'' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_ascii() && !c.is_ascii_control() => out.push(c),
+            c => {
+                let mut units = [0u16; 2];
+                for unit in c.encode_utf16(&mut units) {
+                    out.push_str(&format!("\\u{unit:04X}"));
+                }
+            }
+        }
+    }
+    out.push('\'');
+    out
+}
+
+/// `s` as an ASCII-only CSS string: `"` and `\` escaped, a control or
+/// non-ASCII character as a hex escape and a space.
+fn mock_css_ascii_string(s: &str) -> String {
+    let mut out = String::from("\"");
+    for c in s.chars() {
+        match c {
+            '"' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_ascii() && !c.is_ascii_control() => out.push(c),
+            c => out.push_str(&format!("\\{:X} ", u32::from(c))),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// `name`, or `name<sep>2`, … when it is taken; marked taken.
+fn mock_unique(name: String, taken: &mut BTreeSet<String>, sep: &str) -> String {
+    let mut candidate = name.clone();
+    let mut n = 2;
+    while !taken.insert(candidate.clone()) {
+        candidate = format!("{name}{sep}{n}");
+        n += 1;
+    }
+    candidate
+}
+
+/// One mock family's `localFont` call.
+fn mock_local_font(ident: &str, key: &str, base: &str, faces: &[&MockFace]) -> String {
+    let mut out = format!("\nexport const {ident} = localFont({{\n  src: [\n");
+    for f in faces {
+        let (weight, style) = mock_weight_style(f);
+        out.push_str(&format!(
+            "    {{ path: {}, weight: {}, style: {} }},\n",
+            mock_js_string(&format!("{base}/{}.woff2", f.detail.face.postscript_name)),
+            mock_js_string(&weight),
+            mock_js_string(&style),
+        ));
+    }
+    out.push_str(&format!(
+        "  ],\n  variable: {},\n  display: 'swap',\n}});\n",
+        mock_js_string(&format!("--font-{key}"))
+    ));
+    out
+}
+
 fn tag_view(st: &State, t: &Tag) -> Tag {
     let mut t = t.clone();
     t.face_count = st.face_tags.values().filter(|s| s.contains(&t.id)).count() as u32;
@@ -3238,18 +3433,31 @@ impl ExportService for MockApi {
         let dir = req.out_dir.trim_end_matches(['/', '\\']);
         let mut files = Vec::new();
         let mut blocks = Vec::new();
+        // The license guard, as fm-core: every blocked face is named and
+        // the whole request is refused.
+        let mut reasons = Vec::new();
+        let mut blocked: Vec<String> = Vec::new();
         for id in &req.faces {
             let f = st.face(*id)?;
-            let lic = &f.detail.license;
-            if lic.embedding == Embedding::Restricted && lic.declared != Some(LicenseType::Web) {
-                return Err(ApiError::new(
-                    ErrorCode::PermissionDenied,
-                    format!(
-                        "{} {} does not allow web embedding. Declare a web license to export it.",
-                        f.detail.face.family_name, f.detail.face.style
-                    ),
-                ));
+            let first = !blocked.contains(&id.0.to_string());
+            if let Some(why) = mock_web_embedding_block(&f.detail.license).filter(|_| first) {
+                let s = &f.detail.face;
+                reasons.push(format!("{} {}: {why}", s.family_name, s.style));
+                blocked.push(id.0.to_string());
             }
+        }
+        if !reasons.is_empty() {
+            return Err(ApiError::new(
+                ErrorCode::PermissionDenied,
+                format!(
+                    "{}. Declare a web license for the family to export it.",
+                    reasons.join("; ")
+                ),
+            )
+            .with_detail(format!("blocked faces: {}", blocked.join(", "))));
+        }
+        for id in &req.faces {
+            let f = st.face(*id)?;
             let s = &f.detail.face;
             if let Some((ranges, space_added)) = &keep {
                 let kept = |c: &char| {
@@ -3283,6 +3491,91 @@ impl ExportService for MockApi {
             files,
             css: req.css.then(|| blocks.join("\n")),
         })
+    }
+
+    /// The core's snippet rules (`fm_core::framework_snippet`) over the mock
+    /// faces, grouped by family, with the family's class as the fallback.
+    fn framework_snippet(&self, req: FrameworkSnippetRequest) -> ApiResult<FrameworkSnippet> {
+        if req.faces.is_empty() {
+            return Err(ApiError::invalid("Pick at least one font."));
+        }
+        let st = self.state();
+        let mut families: Vec<(&str, Classification, Vec<&MockFace>)> = Vec::new();
+        for id in &req.faces {
+            let f = st.face(*id)?;
+            let name = f.detail.face.family_name.as_str();
+            match families.iter_mut().find(|(n, _, _)| *n == name) {
+                Some((_, _, faces)) => {
+                    if !faces.iter().any(|x| x.detail.face.id == *id) {
+                        faces.push(f);
+                    }
+                }
+                None => {
+                    let class = st.family(f.detail.face.family)?.classification;
+                    families.push((name, class, vec![f]));
+                }
+            }
+        }
+        let base = match req.fonts_path.as_deref().map(str::trim) {
+            Some(p) if !p.is_empty() => p.trim_end_matches(['/', '\\']),
+            _ => "./fonts",
+        };
+        let (mut keys, mut idents) = (BTreeSet::new(), BTreeSet::new());
+        let mut body = String::new();
+        for (name, class, faces) in &mut families {
+            faces.sort_by(|a, b| {
+                let lightest = |f: &MockFace| {
+                    f.detail
+                        .axes
+                        .iter()
+                        .find(|a| a.tag == "wght")
+                        .map_or(f32::from(f.detail.face.weight), |a| a.min.min(a.max))
+                };
+                lightest(a)
+                    .total_cmp(&lightest(b))
+                    .then((a.detail.face.slant as u8).cmp(&(b.detail.face.slant as u8)))
+            });
+            let key = mock_unique(mock_kebab(name), &mut keys, "-");
+            let fallback = match class {
+                Classification::Serif | Classification::Slab => "serif",
+                Classification::Mono => "monospace",
+                Classification::Script => "cursive",
+                _ => "sans-serif",
+            };
+            let family = mock_css_ascii_string(name);
+            match req.framework {
+                Framework::Tailwind => body.push_str(&format!(
+                    "        {}: [{}, '{fallback}'],\n",
+                    mock_js_string(&key),
+                    mock_js_string(&family)
+                )),
+                Framework::CssVariables => {
+                    let quoted = mock_css_ascii_string(&key);
+                    let prop = &quoted[1..quoted.len() - 1];
+                    body.push_str(&format!("  --font-{prop}: {family}, {fallback};\n"));
+                }
+                Framework::NextLocalFont => {
+                    let mut ident = String::from("font");
+                    for w in name
+                        .split(|c: char| !c.is_ascii_alphanumeric())
+                        .filter(|w| !w.is_empty())
+                    {
+                        ident.push_str(&w[..1].to_ascii_uppercase());
+                        ident.push_str(&w[1..]);
+                    }
+                    let ident = mock_unique(ident, &mut idents, "");
+                    body.push_str(&mock_local_font(&ident, &key, base, faces));
+                }
+            }
+        }
+        let text = match req.framework {
+            Framework::Tailwind => format!(
+                "// tailwind.config.js\nexport default {{\n  theme: {{\n    extend: {{\n      fontFamily: {{\n{body}      }},\n    }},\n  }},\n}};\n"
+            ),
+            Framework::CssVariables => format!(":root {{\n{body}}}\n"),
+            Framework::NextLocalFont => format!("import localFont from 'next/font/local';\n{body}"),
+        };
+        Ok(FrameworkSnippet { text })
     }
 
     fn license_inventory(&self, req: LicenseInventoryRequest) -> ApiResult<LicenseInventory> {
@@ -3362,6 +3655,81 @@ impl ExportService for MockApi {
             "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 {advance} 1000\">             <path d=\"{path}\"/></svg>"
         ))
     }
+
+    /// The core's checks, in its order, over the mock faces, as the app
+    /// answers them (a PDF prints, ADR 0013); the path is returned and
+    /// nothing is written, as `export_web`.
+    fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        let st = self.state();
+        st.family(req.family)?;
+        specimen_guard(st.family_faces(req.family))?;
+        Ok(SpecimenResponse { path: req.out_path })
+    }
+
+    /// The core's checks over the collection's families (manual members or
+    /// a smart rule, as `license_inventory`), every visible face of each;
+    /// the path is returned and nothing is written.
+    fn export_collection_specimen(
+        &self,
+        req: CollectionSpecimenRequest,
+    ) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        let st = self.state();
+        let name = st.collection(req.collection)?.name.clone();
+        let mut families = Vec::new();
+        for fam in &st.families {
+            let mut held = false;
+            for f in st.family_faces(fam.id) {
+                held |= st.in_collection(f, req.collection, &[])?;
+            }
+            if held {
+                families.push(fam.id);
+            }
+        }
+        if families.is_empty() {
+            return Err(ApiError::invalid(format!(
+                "The collection {name} is empty. Add fonts to it to export a specimen."
+            )));
+        }
+        specimen_guard(families.iter().flat_map(|&id| st.family_faces(id)))?;
+        Ok(SpecimenResponse { path: req.out_path })
+    }
+}
+
+/// The core's license guard on a specimen: a restricted face with no
+/// license declared refuses it, naming every such face.
+fn specimen_guard<'a>(faces: impl Iterator<Item = &'a MockFace>) -> ApiResult<()> {
+    let blocked: Vec<_> = faces
+        .filter(|f| {
+            let l = &f.detail.license;
+            l.embedding == Embedding::Restricted
+                && matches!(l.declared, None | Some(LicenseType::Unknown))
+        })
+        .collect();
+    if blocked.is_empty() {
+        return Ok(());
+    }
+    let names: Vec<_> = blocked
+        .iter()
+        .map(|f| format!("{} {}", f.detail.face.family_name, f.detail.face.style))
+        .collect();
+    let ids: Vec<_> = blocked
+        .iter()
+        .map(|f| f.detail.face.id.0.to_string())
+        .collect();
+    Err(ApiError::new(
+        ErrorCode::PermissionDenied,
+        format!(
+            "{}: Embedding restricted and no license declared, so the font may not be embedded in a specimen. Declare a license for the family to export it.",
+            names.join(", ")
+        ),
+    )
+    .with_detail(format!("blocked faces: {}", ids.join(", "))))
 }
 
 impl WorkflowService for MockApi {
@@ -3444,6 +3812,37 @@ impl SettingsService for MockApi {
             cache: "/home/demo/.cache/font-manager".into(),
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
+    }
+
+    fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
+        Ok(mock_endpoint(self.state().endpoint_tokens))
+    }
+
+    fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
+        let mut st = self.state();
+        st.endpoint_tokens += 1;
+        Ok(mock_endpoint(st.endpoint_tokens))
+    }
+}
+
+/// The mock's endpoint: a fixed address and a token of 64 hex digits that
+/// changes with every regeneration (no OS random source: the mock touches
+/// no OS).
+fn mock_endpoint(generation: u32) -> EndpointInfo {
+    let mut x = 0x9e37_79b9_7f4a_7c15_u64 ^ u64::from(generation);
+    let token = (0..4)
+        .map(|_| {
+            // splitmix64
+            x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            let mut z = x;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            format!("{:016x}", z ^ (z >> 31))
+        })
+        .collect();
+    EndpointInfo {
+        url: Some("http://127.0.0.1:47613".into()),
+        token,
     }
 }
 
@@ -4097,6 +4496,312 @@ impl ComparisonService for MockApi {
             return Err(ApiError::not_found(format!("Comparison {}", req.id)));
         }
         Ok(())
+    }
+}
+
+/// The sample families a refreshed catalog of the mock holds.
+fn mock_catalog_families() -> Vec<CatalogFamily> {
+    let family = |name: &str, category: &str, weights: &[u32], axes: Vec<Axis>| CatalogFamily {
+        name: name.to_owned(),
+        category: Some(category.to_owned()),
+        styles: weights
+            .iter()
+            .map(|&weight| CatalogStyle {
+                weight,
+                slant: Slant::Upright,
+            })
+            .collect(),
+        axes,
+        subsets: vec!["latin".to_owned(), "latin-ext".to_owned()],
+        designers: Vec::new(),
+        version: None,
+        last_modified: Some("2026-09-01".to_owned()),
+        open_source: true,
+        license: None,
+        license_name: None,
+    };
+    let wght = Axis {
+        tag: "wght".to_owned(),
+        name: "Weight".to_owned(),
+        min: 100.0,
+        default: 400.0,
+        max: 900.0,
+    };
+    vec![
+        family("Inter", "Sans Serif", &[100, 400, 900], vec![wght]),
+        family("Lato", "Sans Serif", &[100, 300, 400, 700, 900], Vec::new()),
+        family("Lora", "Serif", &[400, 700], Vec::new()),
+        family("Space Mono", "Monospace", &[400, 700], Vec::new()),
+    ]
+}
+
+impl State {
+    fn catalog(&self, id: CatalogId) -> Catalog {
+        let cache = self.catalog_cache.get(&id);
+        Catalog {
+            id,
+            name: id.name().to_owned(),
+            homepage: match id {
+                CatalogId::GoogleFonts => "https://fonts.google.com".to_owned(),
+                CatalogId::Fontshare => "https://www.fontshare.com".to_owned(),
+            },
+            enabled: self.catalogs_on.contains(&id),
+            refreshed_at: cache.map(|(at, _)| at.clone()),
+            family_count: cache.map_or(0, |(_, f)| u32::try_from(f.len()).unwrap_or(u32::MAX)),
+        }
+    }
+}
+
+/// Catalogs on sample data: refreshing one "fetches" four families and
+/// touches no network.
+impl CatalogService for MockApi {
+    fn list_catalogs(&self) -> ApiResult<Vec<Catalog>> {
+        let st = self.state();
+        Ok(CatalogId::ALL.iter().map(|&id| st.catalog(id)).collect())
+    }
+
+    fn set_catalog_enabled(&self, req: SetCatalogEnabledRequest) -> ApiResult<Catalog> {
+        let mut st = self.state();
+        if req.enabled {
+            st.catalogs_on.insert(req.id);
+        } else {
+            st.catalogs_on.remove(&req.id);
+        }
+        Ok(st.catalog(req.id))
+    }
+
+    fn refresh_catalog(&self, req: CatalogRef) -> ApiResult<Catalog> {
+        let mut st = self.state();
+        if !st.catalogs_on.contains(&req.id) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("Turn on {} before refreshing it.", req.id),
+            ));
+        }
+        st.catalog_cache
+            .insert(req.id, (MOCK_NOW.to_owned(), mock_catalog_families()));
+        Ok(st.catalog(req.id))
+    }
+
+    fn list_catalog_families(
+        &self,
+        req: ListCatalogFamiliesRequest,
+    ) -> ApiResult<Paged<CatalogFamily>> {
+        let st = self.state();
+        let families = match st.catalog_cache.get(&req.id) {
+            Some((_, families)) if st.catalogs_on.contains(&req.id) => families.as_slice(),
+            _ => &[],
+        };
+        let query = req.query.trim().to_lowercase();
+        let hits: Vec<&CatalogFamily> = families
+            .iter()
+            .filter(|f| f.name.to_lowercase().contains(&query))
+            .collect();
+        Ok(Paged {
+            total: u32::try_from(hits.len()).unwrap_or(u32::MAX),
+            items: hits
+                .into_iter()
+                .skip(req.page.offset as usize)
+                .take(req.page.limit.min(500) as usize)
+                .cloned()
+                .collect(),
+        })
+    }
+
+    /// The rules of the core without a request: an off catalog is
+    /// `Conflict`, a family not in the cache `NotFound`; the path is made up.
+    fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {
+        let st = self.state();
+        if !st.catalogs_on.contains(&req.id) {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                format!("{} is turned off. Turn it on to fetch its fonts.", req.id),
+            ));
+        }
+        let known = st
+            .catalog_cache
+            .get(&req.id)
+            .is_some_and(|(_, families)| families.iter().any(|f| f.name == req.family));
+        if !known {
+            return Err(ApiError::new(
+                ErrorCode::NotFound,
+                format!("{} is not in the {} list.", req.family, req.id),
+            ));
+        }
+        let path = format!("/mock/cache/catalogs/{}.ttf", req.family.replace(' ', "-"));
+        Ok(CatalogFontSource {
+            id: req.id,
+            family: req.family,
+            path,
+        })
+    }
+
+    /// The rules of the core without a request or a file: an off catalog
+    /// is `Conflict`, an unlisted family `NotFound`, a source that is not a
+    /// watched folder `InvalidRequest`. The files are made up; a family with
+    /// axes has one variable file, else one file per style. The rescan is
+    /// the mock's scan of the source.
+    fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse> {
+        let download = {
+            let st = self.state();
+            if !st.catalogs_on.contains(&req.id) {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("{} is turned off. Turn it on to fetch its fonts.", req.id),
+                ));
+            }
+            let family = st
+                .catalog_cache
+                .get(&req.id)
+                .and_then(|(_, families)| families.iter().find(|f| f.name == req.family))
+                .cloned()
+                .ok_or_else(|| {
+                    ApiError::new(
+                        ErrorCode::NotFound,
+                        format!("{} is not in the {} list.", req.family, req.id),
+                    )
+                })?;
+            let source = st
+                .sources
+                .iter()
+                .find(|s| s.id == req.source)
+                .ok_or_else(|| ApiError::not_found(format!("Source {}", req.source)))?;
+            if source.kind != SourceKind::Watched {
+                return Err(ApiError::invalid(
+                    "Fonts can be downloaded only into a folder you added.",
+                ));
+            }
+            let stem = family.name.replace(' ', "");
+            let variable = !family.axes.is_empty()
+                && (req.kind == CatalogFileKind::Variable || family.styles.is_empty());
+            let names: Vec<String> = if variable {
+                let tags: Vec<&str> = family.axes.iter().map(|a| a.tag.as_str()).collect();
+                vec![format!("{stem}[{}].ttf", tags.join(","))]
+            } else {
+                family
+                    .styles
+                    .iter()
+                    .map(|s| format!("{stem}-{}.ttf", s.weight))
+                    .collect()
+            };
+            let folder = format!("{}/{}", source.path.trim_end_matches('/'), family.name);
+            CatalogDownload {
+                catalog: req.id,
+                family: family.name.clone(),
+                catalog_family_id: family.name.clone(),
+                version: family.version.clone().or(family.last_modified.clone()),
+                kind: if variable {
+                    CatalogFileKind::Variable
+                } else {
+                    CatalogFileKind::Static
+                },
+                downloaded_at: MOCK_NOW.to_owned(),
+                source: source.id,
+                files: names
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, name)| CatalogDownloadFile {
+                        path: Some(format!("{folder}/{name}")),
+                        hash: format!("{:064x}", i + 1),
+                        name,
+                    })
+                    .collect(),
+                folder,
+            }
+        };
+        let scan = self.scan(ScanRequest {
+            source: Some(req.source),
+        })?;
+        self.state().catalog_downloads.push(download.clone());
+        Ok(DownloadFamilyResponse {
+            download,
+            skipped: Vec::new(),
+            scan,
+            error: None,
+        })
+    }
+
+    fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>> {
+        Ok(self
+            .state()
+            .catalog_downloads
+            .iter()
+            .rev()
+            .cloned()
+            .collect())
+    }
+
+    /// The rules of the core without a request: "refreshing" a catalog that
+    /// is on and has downloads loads the mock families, each family is
+    /// compared at its newest download, and an off catalog is skipped. The
+    /// mock compares versions as text (its versions are dates).
+    fn check_updates(&self, req: CheckUpdatesRequest) -> ApiResult<Vec<CatalogUpdate>> {
+        let mut st = self.state();
+        let catalogs: BTreeSet<CatalogId> = st
+            .catalog_downloads
+            .iter()
+            .map(|d| d.catalog)
+            .filter(|id| st.catalogs_on.contains(id))
+            .collect();
+        if !req.cached_only {
+            for &id in &catalogs {
+                st.catalog_cache
+                    .insert(id, (MOCK_NOW.to_owned(), mock_catalog_families()));
+            }
+        }
+        let mut seen = BTreeSet::new();
+        let mut updates = Vec::new();
+        for download in st.catalog_downloads.iter().rev() {
+            if !catalogs.contains(&download.catalog)
+                || !seen.insert((download.catalog, download.family.clone()))
+            {
+                continue;
+            }
+            let Some((_, families)) = st.catalog_cache.get(&download.catalog) else {
+                continue;
+            };
+            let listed = families.iter().find(|f| f.name == download.family);
+            let available =
+                listed.and_then(|f| f.version.clone().or_else(|| f.last_modified.clone()));
+            let status = match (listed, &download.version, &available) {
+                (None, _, _) => CatalogUpdateStatus::NoLongerListed,
+                (Some(_), Some(had), Some(now)) if now > had => {
+                    CatalogUpdateStatus::UpdateAvailable
+                }
+                _ => continue,
+            };
+            updates.push(CatalogUpdate {
+                catalog: download.catalog,
+                family: download.family.clone(),
+                downloaded_version: download.version.clone(),
+                available_version: available,
+                status,
+            });
+        }
+        updates.sort_by(|a, b| {
+            a.catalog
+                .cmp(&b.catalog)
+                .then_with(|| a.family.cmp(&b.family))
+        });
+        Ok(updates)
+    }
+}
+
+impl MockApi {
+    /// Records a download of `family` from `catalog` at `version`, as if it
+    /// had been downloaded before (tests of the update check).
+    pub fn seed_catalog_download(&self, catalog: CatalogId, family: &str, version: &str) {
+        self.state().catalog_downloads.push(CatalogDownload {
+            catalog,
+            family: family.to_owned(),
+            catalog_family_id: family.to_owned(),
+            version: Some(version.to_owned()),
+            kind: CatalogFileKind::Static,
+            downloaded_at: MOCK_NOW.to_owned(),
+            source: SourceId(1),
+            folder: format!("/mock/fonts/{family}"),
+            files: Vec::new(),
+        });
     }
 }
 

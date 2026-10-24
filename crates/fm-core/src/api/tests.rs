@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
-use fm_api::export::{Subset, WebFormat};
+use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
 use fm_api::library::{
     FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
     ProblemKind, TrashMoveStatus,
@@ -15,6 +15,8 @@ use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
 
 use super::*;
+use crate::catalog::google::GoogleFonts;
+use crate::catalog::{CATALOGS_DIR, Fetcher};
 use crate::index::INDEX_FILE;
 use crate::test_support::TempDir;
 
@@ -35,6 +37,25 @@ fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts")
 }
 
+/// A catalog fetcher that fails on any call and counts the calls.
+#[derive(Debug, Default)]
+struct OfflineFetcher {
+    calls: std::sync::atomic::AtomicU32,
+}
+
+impl OfflineFetcher {
+    fn calls(&self) -> u32 {
+        self.calls.load(Ordering::Relaxed)
+    }
+}
+
+impl Fetcher for OfflineFetcher {
+    fn get(&self, url: &str) -> FmResult<Vec<u8>> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        Err(FmError::new(ErrorCode::Io, "offline").with_detail(url.to_owned()))
+    }
+}
+
 /// A `CoreApi` over scratch app folders, a mock activator and a library
 /// folder holding copies of [`FOLDERS`] (scans write sidecars into the
 /// source, so the fixtures themselves are never a source).
@@ -42,6 +63,8 @@ struct Lib {
     dir: TempDir,
     api: CoreApi,
     activator: Arc<MockActivator>,
+    /// The catalogs' fetcher: it fails on any call.
+    fetcher: Arc<OfflineFetcher>,
     root: PathBuf,
     paths: AppPaths,
 }
@@ -82,10 +105,17 @@ impl Lib {
             Some(previews),
         )
         .with_layouts_in(paths.layouts_dir());
+        let fetcher = Arc::new(OfflineFetcher::default());
+        let api = api.with_catalogs(Catalogs::new(
+            paths.data.join(CATALOGS_DIR),
+            Arc::clone(&fetcher) as Arc<dyn Fetcher>,
+            vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+        ));
         Self {
             dir,
             api,
             activator,
+            fetcher,
             root,
             paths,
         }
@@ -1599,6 +1629,143 @@ const WEB_CSS_SNAPSHOT: &str = r#"@font-face {
 }
 "#;
 
+fn snippet(
+    lib: &Lib,
+    framework: Framework,
+    faces: Vec<FaceId>,
+    fonts_path: Option<&str>,
+) -> String {
+    lib.api
+        .framework_snippet(FrameworkSnippetRequest {
+            faces,
+            framework,
+            fonts_path: fonts_path.map(str::to_owned),
+        })
+        .expect("snippet")
+        .text
+}
+
+#[test]
+fn framework_snippets_name_the_fixture_families_with_their_class_fallback() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-framework-snippet",
+        &[
+            "google-repo/castoro/Castoro[wght].ttf",
+            "google-repo/inconsolata/Inconsolata-SemiExpandedBold.ttf",
+            "google-repo/clickerscript/ClickerScript-Regular.ttf",
+        ],
+    );
+    let faces = vec![
+        face_in(&lib, "Castoro", "Castoro[wght].ttf"),
+        face_in(&lib, "Inconsolata", "Inconsolata-SemiExpandedBold.ttf"),
+        face_in(&lib, "Clicker Script", "ClickerScript-Regular.ttf"),
+        face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
+    ];
+    let tailwind = snippet(&lib, Framework::Tailwind, faces.clone(), None);
+    assert_eq!(tailwind, TAILWIND_SNAPSHOT, "{tailwind}");
+    let css = snippet(&lib, Framework::CssVariables, faces, None);
+    assert_eq!(css, CSS_VARIABLES_SNAPSHOT, "{css}");
+}
+
+#[test]
+fn a_next_local_font_snippet_lists_static_and_variable_faces() {
+    let (lib, _, _) = Lib::scanned("api-framework-snippet-next");
+    let faces = vec![
+        face_in(&lib, "Archivo", "Archivo-Bold.woff2"),
+        face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
+        face_in(&lib, "Archivo", "Archivo-SemiBold.woff2"),
+        // Listed twice: one entry.
+        face_in(&lib, "Archivo", "Archivo-Bold.woff2"),
+    ];
+    let next = snippet(&lib, Framework::NextLocalFont, faces.clone(), None);
+    assert_eq!(next, NEXT_LOCAL_FONT_SNAPSHOT, "{next}");
+    let elsewhere = snippet(
+        &lib,
+        Framework::NextLocalFont,
+        faces,
+        Some("../public/fonts/"),
+    );
+    assert_eq!(
+        elsewhere,
+        NEXT_LOCAL_FONT_SNAPSHOT.replace("'./fonts/", "'../public/fonts/")
+    );
+}
+
+#[test]
+fn a_framework_snippet_needs_a_known_face() {
+    let (lib, _, _) = Lib::scanned("api-framework-snippet-bad");
+    for framework in [
+        Framework::Tailwind,
+        Framework::CssVariables,
+        Framework::NextLocalFont,
+    ] {
+        let empty = lib
+            .api
+            .framework_snippet(FrameworkSnippetRequest {
+                faces: Vec::new(),
+                framework,
+                fonts_path: None,
+            })
+            .expect_err("no faces");
+        assert_eq!(empty.code, ErrorCode::InvalidRequest);
+        let unknown = lib
+            .api
+            .framework_snippet(FrameworkSnippetRequest {
+                faces: vec![FaceId(999_999)],
+                framework,
+                fonts_path: None,
+            })
+            .expect_err("unknown face");
+        assert_eq!(unknown.code, ErrorCode::NotFound);
+    }
+}
+
+/// The Tailwind snippet of [`framework_snippets_name_the_fixture_families_with_their_class_fallback`].
+const TAILWIND_SNAPSHOT: &str = r#"// tailwind.config.js
+export default {
+  theme: {
+    extend: {
+      fontFamily: {
+        'castoro': ['"Castoro"', 'serif'],
+        'inconsolata': ['"Inconsolata"', 'monospace'],
+        'clicker-script': ['"Clicker Script"', 'cursive'],
+        'asap-sharp': ['"Asap Sharp"', 'sans-serif'],
+      },
+    },
+  },
+};
+"#;
+
+/// The CSS variables of [`framework_snippets_name_the_fixture_families_with_their_class_fallback`].
+const CSS_VARIABLES_SNAPSHOT: &str = r#":root {
+  --font-castoro: "Castoro", serif;
+  --font-inconsolata: "Inconsolata", monospace;
+  --font-clicker-script: "Clicker Script", cursive;
+  --font-asap-sharp: "Asap Sharp", sans-serif;
+}
+"#;
+
+/// The `localFont` calls of [`a_next_local_font_snippet_lists_static_and_variable_faces`].
+const NEXT_LOCAL_FONT_SNAPSHOT: &str = r#"import localFont from 'next/font/local';
+
+export const fontArchivo = localFont({
+  src: [
+    { path: './fonts/Archivo-SemiBold.woff2', weight: '600', style: 'normal' },
+    { path: './fonts/Archivo-Bold.woff2', weight: '700', style: 'normal' },
+  ],
+  variable: '--font-archivo',
+  display: 'swap',
+});
+
+export const fontAsapSharp = localFont({
+  src: [
+    { path: './fonts/AsapSharp-Regular.woff2', weight: '100 900', style: 'normal' },
+  ],
+  variable: '--font-asap-sharp',
+  display: 'swap',
+});
+"#;
+
 #[test]
 fn a_subset_web_export_writes_the_mapped_unicode_range() {
     let (lib, _, _) = Lib::scanned("api-export-web-css-subset");
@@ -1681,12 +1848,10 @@ fn web_export_keeps_only_the_subset_and_refuses_a_bad_one() {
     assert_eq!(mapped, [0x20, 0x41, 0x42]);
 }
 
-#[test]
-fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
-    let lib = Lib::new("api-export-web-restricted");
-    // Bebas Neue with OS/2 fsType 0x0002: restricted license embedding.
-    let mut data = std::fs::read(fixtures().join("google-repo/bebasneue/BebasNeue-Regular.ttf"))
-        .expect("fixture");
+/// Writes a copy of the fixture `file` with `OS/2.fsType` set to `fs_type`
+/// into `folder`.
+fn with_fs_type(file: &str, fs_type: u16, folder: &Path) {
+    let mut data = std::fs::read(fixtures().join(file)).expect("fixture");
     let os2 = read_fonts::FontRef::new(&data)
         .expect("font")
         .table_directory()
@@ -1695,10 +1860,27 @@ fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
         .find(|r| r.tag() == read_fonts::types::Tag::new(b"OS/2"))
         .map(|r| r.offset() as usize)
         .expect("OS/2");
-    data[os2 + 8..os2 + 10].copy_from_slice(&[0x00, 0x02]);
-    let folder = lib.dir.path().join("Restricted");
-    std::fs::create_dir_all(&folder).expect("folder");
-    std::fs::write(folder.join("Restricted.ttf"), &data).expect("font");
+    data[os2 + 8..os2 + 10].copy_from_slice(&fs_type.to_be_bytes());
+    std::fs::create_dir_all(folder).expect("folder");
+    let name = Path::new(file).file_name().expect("name");
+    std::fs::write(folder.join(name), &data).expect("font");
+}
+
+#[test]
+fn the_license_guard_refuses_the_whole_export_on_embedding_bits() {
+    let lib = Lib::new("api-export-web-guard");
+    let folder = lib.dir.path().join("Patched");
+    // Restricted (0x0002), preview & print (0x0004), installable (0x0000)
+    // and editable (0x0008), each its own family. All four name the OFL:
+    // an open license does not lift an embedding restriction.
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    with_fs_type("google-repo/asul/Asul-Bold.ttf", 0x0004, &folder);
+    with_fs_type("google-repo/basic/Basic-Regular.ttf", 0x0000, &folder);
+    with_fs_type("google-repo/castoro/Castoro[wght].ttf", 0x0008, &folder);
     let source = lib
         .api
         .add_source(AddSourceRequest {
@@ -1707,21 +1889,81 @@ fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
         })
         .expect("source");
     lib.scan(Some(source.id), true);
-    let face = lib
-        .api
-        .get_family(lib.family("Bebas Neue").id)
-        .expect("family")
-        .faces[0]
-        .id;
+    let face = |family: &str| {
+        lib.api
+            .get_family(lib.family(family).id)
+            .expect("family")
+            .faces[0]
+            .id
+    };
+    let (restricted, preview, installable, editable) = (
+        face("Bebas Neue"),
+        face("Asul"),
+        face("Basic"),
+        face("Castoro"),
+    );
     let out = lib.dir.path().join("out");
     std::fs::create_dir_all(&out).expect("out");
+    let export = |faces: Vec<FaceId>| lib.api.export_web(web_request(faces, &out));
+
+    // One blocked face refuses the whole request: nothing is written, and
+    // the message names every blocked face with its reason.
+    let e = export(vec![installable, restricted, editable, preview]).expect_err("blocked");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert_eq!(
+        e.message,
+        "Bebas Neue Regular: Embedding restricted, no web license declared; \
+         Asul Bold: Embedding preview & print only, no web license declared. \
+         Declare a web license for the family to export it."
+    );
+    assert_eq!(
+        e.detail.as_deref(),
+        Some(format!("blocked faces: {}, {}", restricted.0, preview.0).as_str())
+    );
+    assert!(files_under(&out).is_empty());
+    // The same with CSS: no fonts.css either.
     let e = lib
         .api
-        .export_web(web_request(vec![face], &out))
-        .expect_err("restricted");
-    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
-    assert!(e.message.contains("Bebas Neue"), "{e:?}");
+        .export_web(ExportWebRequest {
+            css: true,
+            ..web_request(vec![preview], &out)
+        })
+        .expect_err("preview & print");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
     assert!(files_under(&out).is_empty());
+
+    // Installable and editable faces with no declaration export.
+    let res = export(vec![installable, editable]).expect("installable and editable");
+    assert_eq!(res.files.len(), 4);
+    for f in &res.files {
+        std::fs::remove_file(f).expect("clean up");
+    }
+
+    // A declared license that is not Web does not lift the block.
+    let declare = |family: &str, license_type| {
+        lib.api
+            .declare_license(LicenseDeclaration {
+                family: lib.family(family).id,
+                license_type,
+                seats: None,
+                purchase_date: None,
+                receipt: ReceiptChange::Keep,
+            })
+            .expect("declare");
+    };
+    declare("Bebas Neue", Some(LicenseType::Desktop));
+    let e = export(vec![restricted]).expect_err("desktop");
+    assert!(e.message.contains("Embedding restricted"), "{e:?}");
+    assert!(files_under(&out).is_empty());
+
+    // Declaring Web for both families lets the same export through.
+    declare("Bebas Neue", Some(LicenseType::Web));
+    let e = export(vec![installable, restricted, editable, preview]).expect_err("asul left");
+    assert!(e.message.starts_with("Asul Bold:"), "{e:?}");
+    assert_eq!(e.detail, Some(format!("blocked faces: {}", preview.0)));
+    declare("Asul", Some(LicenseType::Web));
+    let res = export(vec![installable, restricted, editable, preview]).expect("declared web");
+    assert_eq!(res.files.len(), 8);
 }
 
 #[test]
@@ -2616,6 +2858,78 @@ fn the_license_inventory_of_an_empty_library_is_the_header_alone() {
     assert!(inventory(&lib, None).is_empty());
 }
 
+/// E16.2 criteria 1 and 2: the scan stores each face's x-height and cap
+/// height, so `get_face` and `size_factors` answer with the files gone; one
+/// `size_factors` call answers many faces, in order, with the factor the
+/// stored metrics give; a face without metrics keeps factor 1.
+#[test]
+fn metrics_are_stored_at_scan_and_size_factors_answer_many_faces() {
+    use fm_api::preview::{SizeBasis, SizeFactorRequest};
+
+    let (lib, _, _) = Lib::scanned("api-size-factors");
+    let families = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..ListFamiliesRequest::default()
+        })
+        .expect("families")
+        .items;
+    let faces: Vec<FaceId> = families
+        .iter()
+        .flat_map(|f| lib.api.get_family(f.id).expect("family").faces)
+        .map(|f| f.id)
+        .collect();
+    assert!(faces.len() >= 6, "{faces:?}");
+    let before: Vec<_> = faces
+        .iter()
+        .map(|&f| lib.api.get_face(f).expect("face").metrics)
+        .collect();
+    std::fs::remove_dir_all(&lib.root).expect("remove the library folder");
+
+    let mut scaled = 0;
+    for basis in [SizeBasis::XHeight, SizeBasis::CapHeight] {
+        let got = lib
+            .api
+            .size_factors(SizeFactorRequest {
+                faces: faces.clone(),
+                basis,
+            })
+            .expect("factors");
+        assert_eq!(got.iter().map(|f| f.face).collect::<Vec<_>>(), faces);
+        for ((&face, m), factor) in faces.iter().zip(&before).zip(&got) {
+            let detail = lib.api.get_face(face).expect("face from the index");
+            assert_eq!(&detail.metrics, m, "{face}: stored metrics");
+            assert_eq!(factor.factor, crate::metrics::size_factor(m, basis));
+            if factor.factor != 1.0 {
+                scaled += 1;
+            }
+        }
+    }
+    assert!(scaled > 0, "some face is scaled");
+    let bebas = lib
+        .api
+        .get_face(FaceId(lib.family("Bebas Neue").id.0))
+        .expect("Bebas");
+    assert!(
+        bebas.metrics.cap_height.is_some_and(|c| c > 0),
+        "{:?}",
+        bebas.metrics
+    );
+
+    let err = lib
+        .api
+        .size_factors(SizeFactorRequest {
+            faces: vec![faces[0], FaceId(u32::MAX)],
+            basis: SizeBasis::XHeight,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
 // --- comparisons ---------------------------------------------------------
 
 /// The first face of the family `name`.
@@ -2706,4 +3020,1128 @@ fn named_comparisons_survive_a_rescan_a_restart_and_a_removed_font() {
             name: format!("{} {}", picked[0].family_name, picked[0].style),
         }]
     );
+}
+
+fn specimen_request(family: FamilyId, out: &Path) -> SpecimenRequest {
+    SpecimenRequest {
+        family,
+        format: SpecimenFormat::Html,
+        out_path: out.display().to_string(),
+    }
+}
+
+/// Every `data:` URI of `page`'s `@font-face` rules, decoded, in order.
+fn embedded_fonts(page: &str) -> Vec<(String, Vec<u8>)> {
+    page.split("src: url(\"data:")
+        .skip(1)
+        .map(|rest| {
+            let uri = &rest[..rest.find('"').expect("end of the URI")];
+            let (mime, data) = uri.split_once(";base64,").expect("base64 URI");
+            (mime.to_owned(), decode_base64(data))
+        })
+        .collect()
+}
+
+fn decode_base64(text: &str) -> Vec<u8> {
+    let value = |c: u8| match c {
+        b'A'..=b'Z' => c - b'A',
+        b'a'..=b'z' => c - b'a' + 26,
+        b'0'..=b'9' => c - b'0' + 52,
+        b'+' => 62,
+        b'/' => 63,
+        _ => panic!("not base64: {c}"),
+    };
+    assert_eq!(text.len() % 4, 0);
+    let mut out = Vec::new();
+    for quad in text.as_bytes().chunks(4) {
+        let pad = quad.iter().rev().take_while(|&&c| c == b'=').count();
+        let n = quad[..4 - pad]
+            .iter()
+            .fold(0u32, |n, &c| n << 6 | u32::from(value(c)))
+            << (6 * pad);
+        out.extend_from_slice(&[(n >> 16) as u8, (n >> 8) as u8, n as u8][..3 - pad]);
+    }
+    out
+}
+
+#[test]
+fn a_family_exports_as_a_self_contained_html_specimen() {
+    let (lib, _, _) = Lib::scanned("api-specimen-html");
+    let out_dir = lib.dir.path().join("Specimens ü");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    for name in ["Archivo", "Asap Sharp"] {
+        let family = lib.api.get_family(lib.family(name).id).expect("family");
+        let out = out_dir.join(format!("{name}.html"));
+        let res = lib
+            .api
+            .export_specimen(specimen_request(family.summary.id, &out))
+            .expect("specimen");
+        assert_eq!(Path::new(&res.path), out);
+        let page = std::fs::read_to_string(&out).expect("page");
+        // Self-contained: nothing loaded from anywhere, no script.
+        let lower = page.to_lowercase();
+        for bad in ["http:", "https:", "file:", "<script", "javascript"] {
+            assert!(!lower.contains(bad), "{name}: {bad}");
+        }
+        // Every face is embedded, in the family's order, and decoding its
+        // data URI gives the face's file bytes.
+        let fonts = embedded_fonts(&page);
+        assert_eq!(fonts.len(), family.faces.len(), "{name}");
+        for ((mime, bytes), face) in fonts.iter().zip(&family.faces) {
+            let detail = lib.api.get_face(face.id).expect("face");
+            let file = std::fs::read(&detail.path).expect("font file");
+            assert!(
+                *bytes == file,
+                "{name} {}: embedded bytes differ",
+                face.style
+            );
+            assert_eq!(
+                Some(mime.as_str()),
+                crate::font_file::font_mime(&file),
+                "{name}"
+            );
+        }
+        assert!(page.contains("<h1 class=\"f"));
+        assert!(page.contains("<h2>Waterfall</h2>"));
+        assert!(page.contains("<h3>Basic Latin</h3>"));
+        // The same family gives byte-identical HTML.
+        let again = out_dir.join(format!("{name} again.html"));
+        lib.api
+            .export_specimen(specimen_request(family.summary.id, &again))
+            .expect("again");
+        assert!(
+            std::fs::read(&again).expect("again") == page.as_bytes(),
+            "{name}"
+        );
+    }
+    // A variable family shows its named instances as styles.
+    let asap = lib
+        .api
+        .get_family(lib.family("Asap Sharp").id)
+        .expect("asap");
+    let detail = lib.api.get_face(asap.faces[0].id).expect("face");
+    assert!(!detail.instances.is_empty());
+    let page = std::fs::read_to_string(out_dir.join("Asap Sharp.html")).expect("page");
+    for inst in &detail.instances {
+        assert!(
+            page.contains(&format!(
+                "<p class=\"label\">{}</p>",
+                specimen::escape(&inst.name)
+            )),
+            "{}",
+            inst.name
+        );
+    }
+    assert!(page.contains("font-variation-settings: &quot;wght&quot;"));
+}
+
+#[test]
+fn a_specimen_refuses_an_unknown_family_a_pdf_and_no_path() {
+    let (lib, _, _) = Lib::scanned("api-specimen-refusals");
+    let out = lib.dir.path().join("out.html");
+    let e = lib
+        .api
+        .export_specimen(specimen_request(FamilyId(999_999), &out))
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    let archivo = lib.family("Archivo").id;
+    let e = lib
+        .api
+        .export_specimen(SpecimenRequest {
+            format: SpecimenFormat::Pdf,
+            ..specimen_request(archivo, &out)
+        })
+        .expect_err("pdf");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "PDF export needs the Font Manager app running.");
+    let e = lib
+        .api
+        .export_specimen(SpecimenRequest {
+            out_path: "  ".into(),
+            ..specimen_request(archivo, &out)
+        })
+        .expect_err("no path");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(!out.exists());
+}
+
+#[test]
+fn the_specimen_guard_refuses_restricted_embedding_with_no_license() {
+    let lib = Lib::new("api-specimen-guard");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    with_fs_type("google-repo/asul/Asul-Bold.ttf", 0x0004, &folder);
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let out = lib.dir.path().join("specimen.html");
+    let bebas = lib.family("Bebas Neue").id;
+    let bebas_face = lib.api.get_family(bebas).expect("family").faces[0].id;
+    let e = lib
+        .api
+        .export_specimen(specimen_request(bebas, &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert_eq!(
+        e.message,
+        "Bebas Neue Regular: Embedding restricted and no license declared, so the font \
+         may not be embedded in a specimen. Declare a license for the family to export it."
+    );
+    assert_eq!(e.detail, Some(format!("blocked faces: {}", bebas_face.0)));
+    assert!(!out.exists());
+
+    // Preview & print embeds: a specimen is a preview.
+    lib.api
+        .export_specimen(specimen_request(lib.family("Asul").id, &out))
+        .expect("preview & print");
+    assert!(out.exists());
+    std::fs::remove_file(&out).expect("clean up");
+
+    // Declaring a license for the family, any type, lets it through.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: bebas,
+            license_type: Some(LicenseType::Desktop),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("declare");
+    lib.api
+        .export_specimen(specimen_request(bebas, &out))
+        .expect("declared");
+    assert!(out.exists());
+}
+
+/// What [`FakePrinter`] does with a print.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PrintOutcome {
+    /// Writes a small PDF.
+    Pdf,
+    /// Writes half a file, then fails.
+    FailAfterWriting,
+    /// Reports success but writes something that is not a PDF.
+    NotAPdf,
+}
+
+/// A printer that records the page it was handed and the files it wrote.
+#[derive(Debug)]
+struct FakePrinter {
+    outcome: PrintOutcome,
+    /// (html path, html text, partial path, printing thread) per print.
+    calls: Mutex<Vec<(PathBuf, String, PathBuf, std::thread::ThreadId)>>,
+}
+
+impl FakePrinter {
+    fn new(outcome: PrintOutcome) -> Arc<Self> {
+        Arc::new(Self {
+            outcome,
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn calls(&self) -> Vec<(PathBuf, String, PathBuf, std::thread::ThreadId)> {
+        self.calls.lock().expect("calls").clone()
+    }
+}
+
+impl PdfPrinter for FakePrinter {
+    fn print_html(&self, html: &Path, out: &Path) -> Result<(), fm_platform::PrintError> {
+        let text = std::fs::read_to_string(html).expect("the page is there while printing");
+        self.calls.lock().expect("calls").push((
+            html.to_path_buf(),
+            text,
+            out.to_path_buf(),
+            std::thread::current().id(),
+        ));
+        match self.outcome {
+            PrintOutcome::Pdf => {
+                std::fs::write(
+                    out,
+                    b"%PDF-1.7
+%fake
+",
+                )
+                .expect("write");
+                Ok(())
+            }
+            PrintOutcome::FailAfterWriting => {
+                std::fs::write(
+                    out,
+                    b"%PDF-1.7
+1 0 obj",
+                )
+                .expect("write");
+                Err(fm_platform::PrintError::new("the webview crashed"))
+            }
+            PrintOutcome::NotAPdf => {
+                std::fs::write(out, b"<html>").expect("write");
+                Ok(())
+            }
+        }
+    }
+}
+
+fn pdf_request(family: FamilyId, out: &Path) -> SpecimenRequest {
+    SpecimenRequest {
+        format: SpecimenFormat::Pdf,
+        ..specimen_request(family, out)
+    }
+}
+
+/// The names in `dir`, sorted.
+fn dir_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(dir)
+        .expect("dir")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_pdf_specimen_prints_the_html_page_through_the_injected_printer() {
+    let (lib, _, _) = Lib::scanned("api-specimen-pdf");
+    let printer = FakePrinter::new(PrintOutcome::Pdf);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+        ..lib
+    };
+    let out_dir = lib.dir.path().join("Specimens ü");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    let out = out_dir.join("Archivo.pdf");
+    let archivo = lib.family("Archivo").id;
+    let res = lib
+        .api
+        .export_specimen(pdf_request(archivo, &out))
+        .expect("pdf");
+    assert_eq!(Path::new(&res.path), out);
+    assert!(std::fs::read(&out).expect("pdf").starts_with(b"%PDF-"));
+
+    let calls = printer.calls();
+    assert_eq!(calls.len(), 1);
+    let (html, page, partial, thread) = &calls[0];
+    // The printer was handed the E21.1 page, the faces embedded.
+    let mut html_req = specimen_request(archivo, &out_dir.join("Archivo.html"));
+    html_req.format = SpecimenFormat::Html;
+    lib.api.export_specimen(html_req).expect("html");
+    let same = std::fs::read_to_string(out_dir.join("Archivo.html")).expect("html");
+    assert_eq!(page, &same, "the PDF prints the HTML specimen");
+    assert!(!embedded_fonts(page).is_empty());
+    // On the caller's thread; the source HTML is removed afterwards.
+    assert_eq!(*thread, std::thread::current().id());
+    assert!(!html.exists(), "the temporary page is removed");
+    // The print went to a hidden partial file next to out_path, now renamed.
+    assert_eq!(partial.parent(), Some(out_dir.as_path()));
+    assert_ne!(partial, &out);
+    assert!(!partial.exists());
+    assert_eq!(dir_names(&out_dir), ["Archivo.html", "Archivo.pdf"]);
+}
+
+#[test]
+fn a_failed_pdf_specimen_print_leaves_no_partial_file_and_no_temporary_page() {
+    for outcome in [PrintOutcome::FailAfterWriting, PrintOutcome::NotAPdf] {
+        let (lib, _, _) = Lib::scanned("api-specimen-pdf-fail");
+        let printer = FakePrinter::new(outcome);
+        let lib = Lib {
+            api: lib
+                .api
+                .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+            ..lib
+        };
+        let out_dir = lib.dir.path().join("Out");
+        std::fs::create_dir_all(&out_dir).expect("out");
+        let out = out_dir.join("Archivo.pdf");
+        let e = lib
+            .api
+            .export_specimen(pdf_request(lib.family("Archivo").id, &out))
+            .expect_err("print fails");
+        assert_eq!(e.code, ErrorCode::Io, "{outcome:?}");
+        assert_eq!(e.message, "The PDF specimen could not be printed.");
+        assert!(!out.exists(), "{outcome:?}: nothing at out_path");
+        assert_eq!(dir_names(&out_dir), Vec::<String>::new(), "{outcome:?}");
+        let calls = printer.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(
+            !calls[0].0.exists(),
+            "{outcome:?}: the temporary page is removed"
+        );
+
+        // A file already at out_path is left as it was.
+        std::fs::write(&out, b"the user's old file").expect("old");
+        lib.api
+            .export_specimen(pdf_request(lib.family("Archivo").id, &out))
+            .expect_err("print fails again");
+        assert_eq!(std::fs::read(&out).expect("old"), b"the user's old file");
+        assert_eq!(dir_names(&out_dir), ["Archivo.pdf"]);
+    }
+}
+
+#[test]
+fn a_pdf_specimen_keeps_the_html_checks_and_never_prints_a_refused_family() {
+    let lib = Lib::new("api-specimen-pdf-guard");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let printer = FakePrinter::new(PrintOutcome::Pdf);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+        ..lib
+    };
+    let out = lib.dir.path().join("specimen.pdf");
+    let e = lib
+        .api
+        .export_specimen(pdf_request(lib.family("Bebas Neue").id, &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    let e = lib
+        .api
+        .export_specimen(pdf_request(FamilyId(999_999), &out))
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert!(printer.calls().is_empty(), "nothing was printed");
+    assert!(!out.exists());
+}
+
+fn collection_request(collection: CollectionId, out: &Path) -> CollectionSpecimenRequest {
+    CollectionSpecimenRequest {
+        collection,
+        format: SpecimenFormat::Html,
+        out_path: out.display().to_string(),
+    }
+}
+
+fn new_collection(lib: &Lib, name: &str, rules: Option<Filters>) -> CollectionId {
+    lib.api
+        .create_collection(CreateCollectionRequest {
+            name: name.into(),
+            parent: None,
+            rules,
+            rule_group: None,
+        })
+        .expect("collection")
+        .id
+}
+
+/// The family names of a collection specimen, in the order of its pages.
+fn page_families(page: &str) -> Vec<String> {
+    page.split("<section class=\"family\">\n<h2 class=\"f")
+        .skip(1)
+        .map(|rest| {
+            let name = &rest[rest.find('>').expect("h2") + 1..];
+            name[..name.find("</h2>").expect("end")].to_owned()
+        })
+        .collect()
+}
+
+/// The family names `search` lists for `collection`, in its order.
+fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
+    lib.api
+        .search(SearchRequest {
+            query: String::new(),
+            filters: Filters {
+                collection: Some(collection),
+                ..Filters::default()
+            },
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            rule: None,
+        })
+        .expect("search")
+        .families
+        .into_iter()
+        .map(|h| h.family.name)
+        .collect()
+}
+
+#[test]
+fn a_collection_exports_as_one_html_specimen_with_a_page_per_family() {
+    let (lib, _, _) = Lib::scanned("api-collection-specimen");
+    let manual = new_collection(&lib, "Client brief", None);
+    let archivo = lib
+        .api
+        .get_family(lib.family("Archivo").id)
+        .expect("archivo");
+    assert!(archivo.faces.len() >= 2);
+    // A whole family, and one face of another: that family shows every style.
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: manual,
+            faces: vec![archivo.faces[0].id],
+            families: vec![lib.family("Bebas Neue").id, lib.family("Agdasima").id],
+        })
+        .expect("added");
+    let out_dir = lib.dir.path().join("Specimens ü");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    let out = out_dir.join("Client brief.html");
+    let res = lib
+        .api
+        .export_collection_specimen(collection_request(manual, &out))
+        .expect("specimen");
+    assert_eq!(Path::new(&res.path), out);
+    let page = std::fs::read_to_string(&out).expect("page");
+
+    // One self-contained file.
+    let lower = page.to_lowercase();
+    for bad in ["http:", "https:", "file:", "<script", "javascript"] {
+        assert!(!lower.contains(bad), "{bad}");
+    }
+    // The cover, then the families in the collection's order.
+    assert!(page.contains("<h1>Client brief</h1>"));
+    assert!(page.contains(&format!("<dt>Date</dt><dd>{}</dd>", specimen::today())));
+    assert!(page.contains("<dt>Families</dt><dd>3</dd>"));
+    let order = searched_families(&lib, manual);
+    assert_eq!(order, ["Agdasima", "Archivo", "Bebas Neue"]);
+    assert_eq!(page_families(&page), order);
+    // Every face of every family is embedded, family by family.
+    let mut faces = Vec::new();
+    for name in &order {
+        faces.extend(
+            lib.api
+                .get_family(lib.family(name).id)
+                .expect("family")
+                .faces,
+        );
+    }
+    let fonts = embedded_fonts(&page);
+    assert_eq!(fonts.len(), faces.len());
+    for ((_, bytes), face) in fonts.iter().zip(&faces) {
+        let file = std::fs::read(lib.api.get_face(face.id).expect("face").path).expect("file");
+        assert!(*bytes == file, "{} {}", face.family_name, face.style);
+    }
+    // Archivo's page lists every style, not only the face in the collection.
+    let archivo_page = page
+        .split("<section class=\"family\">")
+        .find(|s| s.contains(">Archivo</h2>"))
+        .expect("Archivo's page");
+    for face in &archivo.faces {
+        assert!(
+            archivo_page.contains(&format!(
+                "<p class=\"label\">{}</p>",
+                specimen::escape(&face.style)
+            )),
+            "{}",
+            face.style
+        );
+    }
+    assert_eq!(archivo_page.matches(" px</p>").count(), 3);
+    assert!(archivo_page.contains("<dt>License</dt>"));
+    assert!(archivo_page.contains("<dt>Web use</dt>"));
+
+    // A smart collection exports the families its rule finds.
+    let smart = new_collection(
+        &lib,
+        "Variable",
+        Some(Filters {
+            variable: Some(true),
+            ..Filters::default()
+        }),
+    );
+    let out = out_dir.join("Variable.html");
+    lib.api
+        .export_collection_specimen(collection_request(smart, &out))
+        .expect("smart");
+    let page = std::fs::read_to_string(&out).expect("page");
+    let order = searched_families(&lib, smart);
+    assert!(order.contains(&"Asap Sharp".to_owned()), "{order:?}");
+    assert!(!order.contains(&"Bebas Neue".to_owned()), "{order:?}");
+    assert_eq!(page_families(&page), order);
+    assert!(page.contains(&format!("<dt>Families</dt><dd>{}</dd>", order.len())));
+}
+
+#[test]
+fn a_collection_specimen_refuses_empty_unknown_restricted_and_a_pdf_without_the_app() {
+    let lib = Lib::new("api-collection-specimen-refusals");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let out = lib.dir.path().join("collection.html");
+
+    let empty = new_collection(&lib, "Empty", None);
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(empty, &out))
+        .expect_err("empty");
+    assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+    assert_eq!(
+        e.message,
+        "The collection Empty is empty. Add fonts to it to export a specimen."
+    );
+    // A smart collection whose rule finds nothing is empty too.
+    let nothing = new_collection(
+        &lib,
+        "No such foundry",
+        Some(Filters {
+            foundry: Some("No Such Foundry".into()),
+            ..Filters::default()
+        }),
+    );
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(nothing, &out))
+        .expect_err("empty smart");
+    assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(CollectionId(999_999), &out))
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound, "{e:?}");
+
+    // The restricted Bebas Neue refuses the whole collection, as E21.1.
+    let bebas = lib.family("Bebas Neue").id;
+    let bebas_face = lib.api.get_family(bebas).expect("family").faces[0].id;
+    let refused = new_collection(&lib, "Refused", None);
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: refused,
+            faces: Vec::new(),
+            families: vec![bebas],
+        })
+        .expect("added");
+    let e = lib
+        .api
+        .export_collection_specimen(collection_request(refused, &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert_eq!(
+        e.message,
+        "Bebas Neue Regular: Embedding restricted and no license declared, so the font \
+         may not be embedded in a specimen. Declare a license for the family to export it."
+    );
+    assert_eq!(e.detail, Some(format!("blocked faces: {}", bebas_face.0)));
+
+    let e = lib
+        .api
+        .export_collection_specimen(CollectionSpecimenRequest {
+            format: SpecimenFormat::Pdf,
+            ..collection_request(refused, &out)
+        })
+        .expect_err("pdf");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "PDF export needs the Font Manager app running.");
+    let e = lib
+        .api
+        .export_collection_specimen(CollectionSpecimenRequest {
+            out_path: " ".into(),
+            ..collection_request(refused, &out)
+        })
+        .expect_err("no path");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(!out.exists());
+
+    // Declaring a license lets it through.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: bebas,
+            license_type: Some(LicenseType::Desktop),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("declare");
+    lib.api
+        .export_collection_specimen(collection_request(refused, &out))
+        .expect("declared");
+    assert!(out.exists());
+}
+
+#[test]
+fn a_pdf_collection_specimen_prints_the_collection_page_through_the_printer() {
+    let (lib, _, _) = Lib::scanned("api-collection-specimen-pdf");
+    let printer = FakePrinter::new(PrintOutcome::Pdf);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+        ..lib
+    };
+    let c = new_collection(&lib, "Sign-off", None);
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: c,
+            faces: Vec::new(),
+            families: vec![lib.family("Archivo").id, lib.family("Agdasima").id],
+        })
+        .expect("added");
+    let out_dir = lib.dir.path().join("Out");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    let out = out_dir.join("Sign-off.pdf");
+    let res = lib
+        .api
+        .export_collection_specimen(CollectionSpecimenRequest {
+            format: SpecimenFormat::Pdf,
+            ..collection_request(c, &out)
+        })
+        .expect("pdf");
+    assert_eq!(Path::new(&res.path), out);
+    assert!(std::fs::read(&out).expect("pdf").starts_with(b"%PDF-"));
+    let calls = printer.calls();
+    assert_eq!(calls.len(), 1);
+    let (html, page, _, _) = &calls[0];
+    // The printer was handed the collection page, the HTML export's.
+    let same = out_dir.join("Sign-off.html");
+    lib.api
+        .export_collection_specimen(collection_request(c, &same))
+        .expect("html");
+    assert_eq!(page, &std::fs::read_to_string(&same).expect("html"));
+    assert_eq!(page_families(page), ["Agdasima", "Archivo"]);
+    assert!(!html.exists(), "the temporary page is removed");
+    assert_eq!(dir_names(&out_dir), ["Sign-off.html", "Sign-off.pdf"]);
+}
+
+// ---- catalogs ----
+
+#[test]
+fn catalogs_never_fetch_outside_refresh() {
+    let (lib, source, _) = Lib::scanned("catalog-no-fetch");
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    let catalogs = lib.api.list_catalogs().expect("catalogs");
+    assert_eq!(catalogs.len(), 1);
+    assert!(!catalogs[0].enabled, "off by default");
+    let e = lib.api.refresh_catalog(CatalogRef { id }).expect_err("off");
+    assert_eq!(e.code, ErrorCode::Conflict);
+
+    let on = lib
+        .api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert!(on.enabled);
+    lib.scan(Some(source.id), false);
+    lib.api
+        .search(SearchRequest {
+            query: "bebas".into(),
+            ..SearchRequest::default()
+        })
+        .expect("search");
+    lib.api
+        .list_families(ListFamiliesRequest::default())
+        .expect("families");
+    let page = lib
+        .api
+        .list_catalog_families(ListCatalogFamiliesRequest {
+            id,
+            query: "lato".into(),
+            page: Page::default(),
+        })
+        .expect("catalog families");
+    assert_eq!(page.total, 0, "never refreshed");
+    assert_eq!(
+        lib.fetcher.calls(),
+        0,
+        "scan, search and listing fetch nothing"
+    );
+
+    let e = lib
+        .api
+        .refresh_catalog(CatalogRef { id })
+        .expect_err("offline");
+    assert_eq!(e.code, ErrorCode::Io);
+    assert_eq!(
+        lib.fetcher.calls(),
+        1,
+        "refresh is the one call that fetches"
+    );
+    assert_eq!(
+        lib.api.list_catalogs().expect("catalogs")[0].family_count,
+        0
+    );
+}
+
+/// A scanned library whose catalogs reach the Lato fixture server over
+/// HTTP, with Google Fonts on and refreshed.
+fn downloading(label: &str) -> (Lib, Source, crate::test_support::LocalServer) {
+    downloading_from(
+        label,
+        crate::catalog::tests::lato_server((200, crate::catalog::tests::lato_font("bold"))),
+    )
+}
+
+/// As [`downloading`], over `server`.
+fn downloading_from(
+    label: &str,
+    server: crate::test_support::LocalServer,
+) -> (Lib, Source, crate::test_support::LocalServer) {
+    let (lib, source, _) = Lib::scanned(label);
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        Arc::new(crate::catalog::HttpFetcher::new()),
+        vec![Arc::new(GoogleFonts::with_base_url(server.base()))],
+    );
+    let lib = Lib {
+        api: lib.api.with_catalogs(catalogs),
+        ..lib
+    };
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    lib.api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    lib.api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    (lib, source, server)
+}
+
+/// Waits for the `LibraryChanged` that ends scan `job`; the events up to it.
+fn until_library_changed(rx: &Receiver<Event>, job: JobId) -> Vec<Event> {
+    let mut events = Vec::new();
+    let mut finished = false;
+    let deadline = Instant::now() + WAIT;
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let event = match rx.recv_timeout(left) {
+            Ok(e) => e,
+            Err(e) => panic!("scan {job} did not end ({e:?}): {events:?}"),
+        };
+        match &event {
+            Event::JobFailed { job: j, .. } if *j == job => panic!("scan failed: {event:?}"),
+            Event::ScanFinished { job: j, .. } if *j == job => finished = true,
+            Event::LibraryChanged { .. } if finished => {
+                events.push(event);
+                return events;
+            }
+            _ => {}
+        }
+        events.push(event);
+    }
+}
+
+fn download_lato(lib: &Lib, source: SourceId) -> (DownloadFamilyResponse, Vec<Event>) {
+    let rx = lib.api.subscribe();
+    let got = lib
+        .api
+        .download_family(DownloadFamilyRequest {
+            id: fm_api::catalog::CatalogId::GoogleFonts,
+            family: "Lato".into(),
+            kind: fm_api::catalog::CatalogFileKind::Static,
+            source,
+        })
+        .expect("download");
+    let events = until_library_changed(&rx, got.scan);
+    (got, events)
+}
+
+#[test]
+fn a_download_is_rescanned_and_its_faces_join_the_library() {
+    let (lib, source, _server) = downloading("catalog-download-scan");
+    assert!(!lib.names().iter().any(|n| n == "Asul" || n == "Cagliostro"));
+
+    let (got, events) = download_lato(&lib, source.id);
+    assert_eq!(got.download.folder, lib.root.join("Lato").to_string_lossy());
+    assert_eq!(got.download.source, source.id);
+    assert!(got.skipped.is_empty());
+    assert!(
+        matches!(events.first(), Some(Event::ScanStarted { job, source: Some(s) }) if *job == got.scan && *s == source.id),
+        "{events:?}"
+    );
+    let Some(Event::LibraryChanged { added, .. }) = events.last() else {
+        panic!("{events:?}");
+    };
+    assert_eq!(added.len(), 2, "the two static files: {events:?}");
+    let names = lib.names();
+    for family in ["Asul", "Cagliostro"] {
+        assert!(names.iter().any(|n| n == family), "{family} in {names:?}");
+    }
+    assert!(
+        !names.iter().any(|n| n == "Castoro"),
+        "the variable file was not asked for"
+    );
+}
+
+#[test]
+fn provenance_survives_a_rescan_and_follows_a_moved_file_by_hash() {
+    let (lib, source, _server) = downloading("catalog-download-provenance");
+    let (got, _) = download_lato(&lib, source.id);
+    let folder = lib.root.join("Lato");
+    let listed = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(listed.len(), 1);
+    let d = &listed[0];
+    assert_eq!(d.catalog, fm_api::catalog::CatalogId::GoogleFonts);
+    assert_eq!(d.family, "Lato");
+    assert_eq!(d.catalog_family_id, "Lato");
+    assert_eq!(d.version.as_deref(), Some("2025-09-16"));
+    assert_eq!(d.kind, fm_api::catalog::CatalogFileKind::Static);
+    assert_eq!(d.downloaded_at, got.download.downloaded_at);
+    assert_eq!(d.source, source.id);
+    let bold_hash = blake3::hash(&crate::catalog::tests::lato_font("bold"))
+        .to_hex()
+        .to_string();
+    let files: Vec<(&str, &str, Option<&str>)> = d
+        .files
+        .iter()
+        .map(|f| (f.name.as_str(), f.hash.as_str(), f.path.as_deref()))
+        .collect();
+    let bold_at = folder.join("Lato-Bold.ttf").to_string_lossy().into_owned();
+    let regular_at = folder
+        .join("Lato-Regular.ttf")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        files[0],
+        ("Lato-Bold.ttf", bold_hash.as_str(), Some(bold_at.as_str()))
+    );
+    assert_eq!(files[1].0, "Lato-Regular.ttf");
+    assert_eq!(files[1].2, Some(regular_at.as_str()));
+    assert_eq!(d, &got.download, "the answer is what is recorded");
+
+    // A rescan and a rebuild of the index keep it.
+    lib.scan(Some(source.id), false);
+    assert_eq!(lib.api.list_catalog_downloads().expect("downloads"), listed);
+    let rx = lib.api.subscribe();
+    let job = lib.api.rebuild_index().expect("rebuild");
+    loop {
+        match rx.recv_timeout(WAIT).expect("rebuild scan") {
+            Event::ScanFinished { job: j, .. } if j == job => break,
+            _ => {}
+        }
+    }
+    // The rescan writes after `ScanFinished`; a scan of its own waits for it.
+    lib.scan(Some(source.id), false);
+    assert_eq!(lib.api.list_catalog_downloads().expect("downloads"), listed);
+
+    // The user moves the bold file elsewhere in the library and renames it.
+    let moved = lib.root.join("Sorted").join("Bold one.ttf");
+    std::fs::create_dir_all(moved.parent().expect("parent")).expect("folder");
+    std::fs::rename(folder.join("Lato-Bold.ttf"), &moved).expect("move");
+    lib.scan(Some(source.id), true);
+    let after = lib.api.list_catalog_downloads().expect("downloads");
+    let bold = &after[0].files[0];
+    assert_eq!(bold.name, "Lato-Bold.ttf", "the name it was downloaded as");
+    assert_eq!(bold.hash, bold_hash);
+    assert_eq!(
+        bold.path.as_deref(),
+        Some(moved.to_string_lossy().as_ref()),
+        "followed by its hash"
+    );
+    assert_eq!(after[0].files[1].path.as_deref(), Some(regular_at.as_str()));
+
+    // Gone from the library: still recorded, with no path.
+    std::fs::remove_file(&moved).expect("remove");
+    lib.scan(Some(source.id), true);
+    let after = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(after[0].files[0].path, None);
+    assert_eq!(after[0].files.len(), 2);
+}
+
+#[test]
+fn a_stopped_download_records_and_rescans_what_it_wrote_and_says_why() {
+    let (lib, source, _server) = downloading_from(
+        "catalog-download-stopped",
+        crate::catalog::tests::stopping_server(),
+    );
+    let (got, events) = download_lato(&lib, source.id);
+    let error = got.error.as_ref().expect("the download says it stopped");
+    assert_eq!(error.code, ErrorCode::Io);
+    assert!(
+        error.message.starts_with("Lato could not be downloaded."),
+        "{error:?}"
+    );
+    let names: Vec<&str> = got.download.files.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["Lato-Regular.ttf"],
+        "the file written before it stopped"
+    );
+
+    // Recorded and rescanned like a finished download.
+    let listed = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].files.len(), 1);
+    assert_eq!(listed[0].files[0].name, "Lato-Regular.ttf");
+    let Some(Event::LibraryChanged { added, .. }) = events.last() else {
+        panic!("{events:?}");
+    };
+    assert_eq!(added.len(), 1, "the one file written: {events:?}");
+    assert!(lib.names().iter().any(|n| n == "Cagliostro"));
+}
+
+#[test]
+fn a_download_goes_only_into_a_watched_source() {
+    let (lib, source, server) = downloading("catalog-download-target");
+    let system = lib
+        .api
+        .lock()
+        .add_source(
+            &lib.dir.path().join("System").to_string_lossy(),
+            SourceKind::System,
+        )
+        .expect("system source");
+    std::fs::create_dir_all(lib.dir.path().join("System")).expect("folder");
+    let req = |source| DownloadFamilyRequest {
+        id: fm_api::catalog::CatalogId::GoogleFonts,
+        family: "Lato".into(),
+        kind: fm_api::catalog::CatalogFileKind::Static,
+        source,
+    };
+    let hits = server.hits();
+    let e = lib
+        .api
+        .download_family(req(system.id))
+        .expect_err("system fonts");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    let e = lib
+        .api
+        .download_family(req(SourceId(999)))
+        .expect_err("unknown source");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert_eq!(server.hits(), hits, "refused before any request");
+    assert!(!lib.dir.path().join("System").join("Lato").exists());
+    assert!(lib.api.list_catalog_downloads().expect("list").is_empty());
+    let _ = source;
+}
+
+#[test]
+fn the_update_check_compares_the_recorded_download_with_a_refreshed_list() {
+    let (lib, source, server) = downloading("catalog-updates-api");
+    download_lato(&lib, source.id);
+    let hits = server.hits();
+    let updates = lib
+        .api
+        .check_updates(CheckUpdatesRequest::default())
+        .expect("check");
+    assert!(updates.is_empty(), "the same version: {updates:?}");
+    assert_eq!(server.hits(), hits + 1, "one refresh of the index");
+}
+
+#[test]
+fn nothing_checks_for_updates_at_startup() {
+    let (lib, source, _server) = downloading("catalog-updates-startup");
+    download_lato(&lib, source.id);
+    // A restart: the same folders, over a fetcher that fails on any call.
+    let fetcher = Arc::new(OfflineFetcher::default());
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        Arc::clone(&fetcher) as Arc<dyn Fetcher>,
+        vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+    );
+    let lib = Lib {
+        api: lib.api.with_catalogs(catalogs),
+        fetcher,
+        ..lib
+    };
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    let listed = lib.api.list_catalogs().expect("catalogs");
+    assert!(listed[0].enabled && listed[0].refreshed_at.is_some());
+    lib.api
+        .list_catalog_families(ListCatalogFamiliesRequest {
+            id,
+            query: String::new(),
+            page: Page::default(),
+        })
+        .expect("families");
+    assert_eq!(
+        lib.api.list_catalog_downloads().expect("downloads").len(),
+        1
+    );
+    let cached = lib
+        .api
+        .check_updates(CheckUpdatesRequest { cached_only: true })
+        .expect("compared with the cache");
+    assert!(cached.is_empty(), "{cached:?}");
+    assert_eq!(lib.fetcher.calls(), 0, "the start fetches nothing");
+
+    let e = lib
+        .api
+        .check_updates(CheckUpdatesRequest::default())
+        .expect_err("offline");
+    assert_eq!(e.code, ErrorCode::Io);
+    assert_eq!(lib.fetcher.calls(), 1, "only the user's check fetches");
+    assert_eq!(
+        lib.api.list_catalogs().expect("catalogs")[0].family_count,
+        listed[0].family_count,
+        "a failed check keeps the cache"
+    );
+}
+
+#[test]
+fn catalogs_without_a_data_folder_are_not_available() {
+    let dir = TempDir::new("catalog-none");
+    let index = Index::open(&dir.path().join(INDEX_FILE))
+        .expect("index")
+        .index;
+    let paths = AppPaths {
+        data: dir.path().join("data"),
+        config: dir.path().join("config"),
+        cache: dir.path().join("cache"),
+        logs: dir.path().join("logs"),
+        library: dir.path().join("Fonts"),
+    };
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    assert_eq!(
+        api.list_catalogs().expect_err("no folder").code,
+        ErrorCode::Unsupported
+    );
+}
+
+#[test]
+fn the_local_api_needs_a_data_folder_and_then_publishes_and_regenerates() {
+    let lib = Lib::new("endpoint");
+    // Without `with_endpoint_in` (the tests' API, like no data folder).
+    let e = lib.api.endpoint_info().expect_err("no data folder");
+    assert_eq!(e.code, fm_api::ErrorCode::Unsupported);
+    assert_eq!(
+        lib.api
+            .regenerate_endpoint_token()
+            .expect_err("no data folder")
+            .code,
+        fm_api::ErrorCode::Unsupported
+    );
+    assert!(lib.api.unpublish_endpoint().is_ok(), "nothing to remove");
+
+    let api = Lib::new("endpoint-on")
+        .api
+        .with_endpoint_in(lib.paths.data.clone());
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 40001));
+    let before = api.endpoint_info().expect("info");
+    assert_eq!(before.url, None);
+    let published = api.publish_endpoint(addr).expect("publish");
+    assert_eq!(published.url.as_deref(), Some("http://127.0.0.1:40001"));
+    assert_eq!(published.token, before.token);
+    let file = lib.paths.data.join(crate::endpoint::DISCOVERY_FILE);
+    assert!(file.exists());
+    let next = api.regenerate_endpoint_token().expect("regenerate");
+    assert_ne!(next.token, before.token);
+    assert_eq!(api.endpoint_info().expect("info"), next);
+    api.unpublish_endpoint().expect("unpublish");
+    assert!(!file.exists());
 }

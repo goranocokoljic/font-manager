@@ -5,10 +5,10 @@ use std::path::{Path, PathBuf};
 use fm_api::mock::MockApi;
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
-use fm_app_lib::font_response;
+use fm_app_lib::{catalog_font_response, font_response};
 use tauri::http::{StatusCode, header};
 
 fn fixture(rel: &str) -> PathBuf {
@@ -63,6 +63,10 @@ impl PreviewService for Files {
     }
 
     fn css_values(&self, _: CssValuesRequest) -> ApiResult<CssValues> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+
+    fn size_factors(&self, _: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
         Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }
 }
@@ -151,4 +155,142 @@ fn a_malformed_address_is_a_bad_request() {
         let res = font_response(&files, path);
         assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{path:?}");
     }
+}
+
+// ---- catalog previews (E22.2) ----
+
+use fm_api::catalog::{
+    Catalog, CatalogFamily, CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef,
+    CatalogService, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+};
+use fm_api::common::Paged;
+use std::sync::Mutex;
+
+/// A catalog whose only family with a preview is "Noto Sans JP"; it records
+/// the requests it was asked, and `off` refuses them like an off catalog.
+#[derive(Default)]
+struct Previews {
+    off: bool,
+    asked: Mutex<Vec<CatalogFontRequest>>,
+}
+
+impl CatalogService for Previews {
+    fn list_catalogs(&self) -> ApiResult<Vec<Catalog>> {
+        Ok(Vec::new())
+    }
+    fn set_catalog_enabled(&self, _: SetCatalogEnabledRequest) -> ApiResult<Catalog> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+    fn refresh_catalog(&self, _: CatalogRef) -> ApiResult<Catalog> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+    fn list_catalog_families(
+        &self,
+        _: ListCatalogFamiliesRequest,
+    ) -> ApiResult<Paged<CatalogFamily>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+    fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource> {
+        self.asked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(req.clone());
+        if self.off {
+            return Err(ApiError::new(
+                ErrorCode::Conflict,
+                "Google Fonts is turned off.",
+            ));
+        }
+        if req.family != "Noto Sans JP" {
+            return Err(ApiError::new(ErrorCode::NotFound, "Not in the list."));
+        }
+        Ok(CatalogFontSource {
+            id: req.id,
+            family: req.family,
+            path: fixture("google-repo/asapsharp/AsapSharp[wdth,wght].ttf")
+                .to_string_lossy()
+                .into_owned(),
+        })
+    }
+    fn download_family(
+        &self,
+        _: fm_api::catalog::DownloadFamilyRequest,
+    ) -> ApiResult<fm_api::catalog::DownloadFamilyResponse> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+    fn list_catalog_downloads(&self) -> ApiResult<Vec<fm_api::catalog::CatalogDownload>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+    fn check_updates(
+        &self,
+        _: fm_api::catalog::CheckUpdatesRequest,
+    ) -> ApiResult<Vec<fm_api::catalog::CatalogUpdate>> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+}
+
+/// The path the UI builds: the family name's UTF-8 as hex.
+fn catalog_path(family: &str) -> String {
+    let hex: String = family.bytes().map(|b| format!("{b:02x}")).collect();
+    format!("/catalog-googleFonts-{hex}")
+}
+
+#[test]
+fn a_catalog_preview_is_served_from_the_core_by_family_name() {
+    let api = Previews::default();
+    let res = catalog_font_response(&api, &catalog_path("Noto Sans JP")).expect("catalog path");
+    assert_eq!(res.status(), StatusCode::OK);
+    assert_eq!(header_of(&res, header::CONTENT_TYPE).unwrap(), "font/ttf");
+    assert_eq!(
+        header_of(&res, header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+        "*"
+    );
+    let asked = api.asked.lock().unwrap().clone();
+    assert_eq!(
+        asked,
+        vec![CatalogFontRequest {
+            id: CatalogId::GoogleFonts,
+            family: "Noto Sans JP".into()
+        }]
+    );
+}
+
+#[test]
+fn a_non_ascii_family_name_round_trips_through_the_path() {
+    let api = Previews::default();
+    let res = catalog_font_response(&api, &catalog_path("Zen Kaku Gothic Ñ")).expect("path");
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    assert_eq!(api.asked.lock().unwrap()[0].family, "Zen Kaku Gothic Ñ");
+}
+
+#[test]
+fn an_off_catalog_preview_is_forbidden() {
+    let api = Previews {
+        off: true,
+        ..Previews::default()
+    };
+    let res = catalog_font_response(&api, &catalog_path("Noto Sans JP")).expect("path");
+    assert_eq!(res.status(), StatusCode::FORBIDDEN);
+}
+
+#[test]
+fn a_face_path_is_not_a_catalog_path_and_a_bad_catalog_path_is_refused() {
+    let api = Previews::default();
+    assert!(catalog_font_response(&api, "/1").is_none());
+    for path in [
+        "/catalog-",
+        "/catalog-googleFonts",
+        "/catalog-googleFonts-",
+        "/catalog-googleFonts-4",
+        "/catalog-googleFonts-zz",
+        "/catalog-adobe-4c61746f",
+        "/catalog-googleFonts-ff",
+    ] {
+        let res = catalog_font_response(&api, path).expect("catalog path");
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST, "{path:?}");
+    }
+    assert!(
+        api.asked.lock().unwrap().is_empty(),
+        "no bad path reaches the core"
+    );
 }

@@ -34,6 +34,13 @@ allow = [
   # selectors); it puts no terms on our own files. GPL, LGPL and AGPL stay blocked.
   "MPL-2.0",
 ]
+exceptions = [
+  # Mozilla's CA certificates as data (permissive, no copyleft). Only
+  # rustls-platform-verifier on wasm32 uses it (via reqwest, E22.1); the
+  # Windows, macOS and Linux builds never compile it, so it is allowed for
+  # this one crate and no other.
+  { crate = "webpki-root-certs", allow = ["CDLA-Permissive-2.0"] },
+]
 
 [licenses.private]
 ignore = true

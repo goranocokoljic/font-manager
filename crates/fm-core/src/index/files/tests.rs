@@ -1077,14 +1077,14 @@ fn the_fixture_scan_matches_the_snapshot_of_the_one_thread_scan() {
                     a.collection_index, a.family, a.subfamily, a.typographic_family,
                     a.postscript_name, a.weight, a.width, a.slant, a.is_variable, a.axes,
                     a.features, a.fstype, a.parsed, a.cmap, a.languages, a.foundry,
-                    a.designer, a.is_color, a.healthy
+                    a.designer, a.is_color, a.healthy, a.metrics
              FROM face a JOIN font_file f ON f.id = a.file_id",
         )
         .expect("prepare");
     let mut rows = stmt.query([]).expect("query");
     while let Some(row) = rows.next().expect("row") {
         let path = path_from_sql(row.get_ref(0).expect("path")).expect("path");
-        let values: Vec<String> = (1..25)
+        let values: Vec<String> = (1..26)
             .map(|i| snapshot_value(row.get_ref(i).expect("column")))
             .collect();
         lines.push(format!("row  {} | {}", rel(&path), values.join(" | ")));

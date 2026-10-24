@@ -108,7 +108,9 @@ describe('FontTable', () => {
     expect(cell(inter, 'weightRange').text()).toBe('100–900'); // the wght axis
     // The weight line: one dot at 400, a span for the variable range.
     expect(cell(inter, 'weightLine').findAll('.mark')).toHaveLength(1);
-    expect(cell(inter, 'weightLine').find('.mark').attributes('style')).toContain('left: 33.3');
+    expect(cell(inter, 'weightLine').find('.mark').attributes('style')).toContain(
+      'inset-inline-start: 33.3',
+    );
     expect(cell(inter, 'weightLine').find('.span').exists()).toBe(true);
     expect(
       cell(inter, 'format')

@@ -3,37 +3,48 @@
 // unsaved changes), Duplicate (an independent copy, which opens), Reset (a preset back to
 // its shipped original) and History (the kept versions, each with Restore). Every action
 // goes through the text layouts store and the generated client; the core keeps the files.
-import { computed, ref } from 'vue';
-import { useTextLayoutsStore } from '../stores/textLayouts';
+// The default slot adds the parent's own controls at the end of the bar. A Pairing Studio
+// panel passes its own store (E24.3); without one, the library's store is used.
+import { computed, ref, useId } from 'vue';
+import { errorMessage, formatDate, t } from '../i18n';
+import { type TextLayoutsStore, useTextLayoutsStore } from '../stores/textLayouts';
+
+const props = defineProps<{
+  /** The text layouts store the actions work on; the library's when not given. */
+  store?: TextLayoutsStore;
+}>();
 
 const emit = defineEmits<{
   /** A new file was opened (a duplicate); the parent shows it from now on. */
   opened: [id: string];
 }>();
 
-const layouts = useTextLayoutsStore();
+const layouts = props.store ?? useTextLayoutsStore();
+const historyId = `fm-layout-history-${useId()}`;
 const historyOpen = ref(false);
-const status = ref('');
+/** The last action's outcome, read in the language shown now. */
+const status = ref<(() => string) | null>(null);
 
 const canReset = computed(() => layouts.saved?.layout.preset != null);
 
 async function save(): Promise<void> {
-  if (await layouts.save()) status.value = 'Saved.';
+  if (await layouts.save()) status.value = () => t('textLayout.file.saved');
 }
 
 async function revert(): Promise<void> {
-  if (await layouts.revert()) status.value = 'Unsaved changes dropped.';
+  if (await layouts.revert()) status.value = () => t('textLayout.file.reverted');
 }
 
 async function duplicate(): Promise<void> {
   const copy = await layouts.duplicate();
   if (!copy) return;
-  status.value = `Duplicated as “${copy.layout.name}”.`;
+  const name = copy.layout.name;
+  status.value = () => t('textLayout.file.duplicated', { name });
   emit('opened', copy.id);
 }
 
 async function reset(): Promise<void> {
-  if (await layouts.resetToOriginal()) status.value = 'Reset to the original preset.';
+  if (await layouts.resetToOriginal()) status.value = () => t('textLayout.file.wasReset');
 }
 
 async function toggleHistory(): Promise<void> {
@@ -42,81 +53,95 @@ async function toggleHistory(): Promise<void> {
 }
 
 async function restore(number: number): Promise<void> {
-  if (await layouts.restore(number)) status.value = `Version ${number} restored.`;
+  if (await layouts.restore(number))
+    status.value = () => t('textLayout.file.restored', { number: String(number) });
 }
 
-/** `2026-10-16T09:00:00Z` as `2026-10-16 09:00 UTC`. */
-const when = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+/** `2026-10-16T09:00:00Z` as a date and time in the UI's locale; an unreadable one as it is. */
+const when = (iso: string) => {
+  const ms = Date.parse(iso);
+  return Number.isNaN(ms) ? iso : formatDate(ms);
+};
 </script>
 
 <template>
-  <div class="actions" role="toolbar" aria-label="Layout file">
+  <div class="actions" role="toolbar" :aria-label="t('textLayout.file.toolbar')">
     <button
       type="button"
       class="toggle"
       :disabled="!layouts.dirty || layouts.busy"
-      title="Save the edited text to the layout file"
+      :title="t('textLayout.file.saveTitle')"
       @click="save"
     >
-      Save
+      {{ t('common.save') }}
     </button>
     <button
       type="button"
       class="toggle"
       :disabled="!layouts.dirty || layouts.busy"
-      title="Drop the unsaved changes"
+      :title="t('textLayout.file.revertTitle')"
       @click="revert"
     >
-      Revert
+      {{ t('textLayout.file.revert') }}
     </button>
     <button
       type="button"
       class="toggle"
       :disabled="!layouts.saved || layouts.busy"
-      title="Copy this layout as saved into a new layout"
+      :title="t('textLayout.file.duplicateTitle')"
       @click="duplicate"
     >
-      Duplicate
+      {{ t('textLayout.file.duplicate') }}
     </button>
     <button
       v-if="canReset"
       type="button"
       class="toggle"
       :disabled="layouts.busy"
-      title="Put back the preset this layout started from"
+      :title="t('textLayout.file.resetTitle')"
       @click="reset"
     >
-      Reset to original
+      {{ t('textLayout.file.resetOriginal') }}
     </button>
     <button
       type="button"
       class="toggle"
-      aria-controls="fm-layout-history"
+      :aria-controls="historyId"
       :aria-expanded="historyOpen"
       :disabled="!layouts.saved"
       @click="toggleHistory"
     >
-      History
+      {{ t('textLayout.file.history') }}
     </button>
-    <span v-if="layouts.dirty" class="note">Unsaved changes</span>
-    <span class="note" role="status">{{ layouts.error ? layouts.error.message : status }}</span>
+    <span v-if="layouts.dirty" class="note">{{ t('textLayout.file.unsaved') }}</span>
+    <span class="note" role="status">{{
+      layouts.error ? errorMessage(layouts.error) : (status?.() ?? '')
+    }}</span>
+    <slot />
   </div>
-  <section v-if="historyOpen" id="fm-layout-history" class="history" aria-label="Layout history">
-    <p v-if="!layouts.history.length" class="note">No earlier versions yet.</p>
+  <section
+    v-if="historyOpen"
+    :id="historyId"
+    class="history"
+    :aria-label="t('textLayout.file.historyRegion')"
+  >
+    <p v-if="!layouts.history.length" class="note">{{ t('textLayout.file.noHistory') }}</p>
     <ol v-else>
       <li v-for="v in layouts.history" :key="v.number">
-        <span class="version">Version {{ v.number }}</span>
-        <span>{{ v.name ?? 'Unreadable' }}</span>
+        <span class="version">{{
+          t('textLayout.file.version', { number: String(v.number) })
+        }}</span>
+        <span>{{ v.name ?? t('textLayout.file.unreadable') }}</span>
         <span class="note">{{ when(v.savedAt) }}</span>
         <button
           type="button"
           class="toggle"
           :disabled="v.broken !== null || layouts.busy"
-          :title="v.broken ?? 'Make this version current; the current one is kept'"
-          :aria-label="`Restore version ${v.number}`"
+          :title="v.broken ?? t('textLayout.file.restoreTitle')"
+          :aria-label="t('textLayout.file.restoreLabel', { number: String(v.number) })"
           @click="restore(v.number)"
         >
-          Restore
+          {{ t('textLayout.file.restore') }}
         </button>
       </li>
     </ol>

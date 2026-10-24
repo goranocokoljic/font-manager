@@ -2,12 +2,11 @@
 // Whether a face can be used, as fm-api reports it; the reason shows beside it.
 import { computed } from 'vue';
 import type { Health } from '../api/types';
+import { t } from '../i18n';
 
 const props = defineProps<{ health: Health }>();
 
-const label = computed(
-  () => ({ ok: 'OK', broken: 'Broken', unsupported: 'Unsupported' })[props.health.kind],
-);
+const label = computed(() => t(`health.${props.health.kind}`));
 const reason = computed(() => (props.health.kind === 'ok' ? null : props.health.reason));
 </script>
 

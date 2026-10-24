@@ -227,30 +227,15 @@ fn color(hex: &str) -> FmResult<[f32; 4]> {
 }
 
 /// The vertical metrics of face `collection_index` of font data held in
-/// memory, for the inspector: `hhea` ascender and descender (the `OS/2`
-/// typographic ones without `hhea`), `OS/2` x-height and cap height when the
-/// table is version 2 or later. Malformed data is an error, never a panic.
+/// memory (see [`crate::metrics::read`]). Malformed data is an error, never a
+/// panic.
 pub fn face_metrics(data: &[u8], collection_index: u32) -> FmResult<Metrics> {
     let sfnt = sfnt_data(data)?;
     let font = read_fonts::FontRef::from_index(&sfnt, collection_index)
         .map_err(|e| malformed(format!("the font header: {e}")))?;
-    let head = font
-        .head()
+    font.head()
         .map_err(|e| malformed(format!("the head table: {e}")))?;
-    let os2 = font.os2().ok();
-    let (ascender, descender) = match font.hhea() {
-        Ok(hhea) => (hhea.ascender().to_i16(), hhea.descender().to_i16()),
-        Err(_) => os2
-            .as_ref()
-            .map_or((0, 0), |o| (o.s_typo_ascender(), o.s_typo_descender())),
-    };
-    Ok(Metrics {
-        units_per_em: head.units_per_em(),
-        ascender,
-        descender,
-        x_height: os2.as_ref().and_then(|o| o.sx_height()),
-        cap_height: os2.as_ref().and_then(|o| o.s_cap_height()),
-    })
+    Ok(crate::metrics::read(&font))
 }
 
 fn malformed(detail: impl Into<String>) -> FmError {

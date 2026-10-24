@@ -13,10 +13,18 @@
 // unlocked it follows the window. With `setWidthLock`, the Lock width button (and its
 // command palette entry) toggles the lock; locking keeps the width the text has on screen.
 // A color palette chosen for the face's family (E16.3) applies through `font-palette`.
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+//
+// With `blockFaces` (Pairing Studio, E24.2), a block can be set in a face of its own; the
+// other blocks keep `face`. Each block face is loaded through the same face loader. The
+// `block-tools` slot puts the parent's controls for a block beside its size badge.
+//
+// In print (E24.4) the controls (`fm-no-print`) stay off the paper and the text keeps the
+// layout's width: the locked width, or the page's when unlocked.
+import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
+import { t } from '../i18n';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useActions } from '../stores/commands';
 import { usePalettesStore } from '../stores/palettes';
@@ -38,7 +46,14 @@ const props = defineProps<{
   width?: number | null;
   /** Locks the width (at `widthPx`, the text's width on screen now) or unlocks it. */
   setWidthLock?: (locked: boolean, widthPx: number | null) => Promise<void>;
+  /** A face of its own per block index; null (or no entry) sets the block in `face`. */
+  blockFaces?: readonly (FaceSummary | null)[];
 }>();
+defineSlots<{
+  /** Controls for one block, beside its size badge. */
+  'block-tools'?: (props: { index: number; block: TextBlock; label: string }) => unknown;
+}>();
+const slots = useSlots();
 const palettes = usePalettesStore();
 
 const emit = defineEmits<{ 'edit-text': [index: number, text: string] }>();
@@ -72,10 +87,35 @@ watch(
 );
 onBeforeUnmount(() => hold(null));
 
+// Block faces stay loaded while a block uses them; a face two blocks share loads once.
+const blockHeld = new Set<FaceId>();
+function holdBlocks(ids: FaceId[]): void {
+  const wanted = new Set(ids);
+  for (const id of blockHeld) {
+    if (!wanted.has(id)) {
+      blockHeld.delete(id);
+      loader.release(id);
+    }
+  }
+  for (const id of wanted) {
+    if (blockHeld.has(id)) continue;
+    blockHeld.add(id);
+    // A face that fails to load falls back like the panel's does; the block still shows.
+    loader.acquire(id).catch(() => undefined);
+  }
+}
+watch(
+  () => (props.blockFaces ?? []).flatMap((f) => (f ? [f.id] : [])),
+  (ids) => holdBlocks(ids),
+  { immediate: true },
+);
+onBeforeUnmount(() => holdBlocks([]));
+
 /** The block whose properties editor is open. */
 const editing = ref<number | null>(null);
 const badges = ref<HTMLButtonElement[]>([]);
 const hasEditor = computed(() => Boolean(props.bounds && props.setProps));
+const hasTools = computed(() => Boolean(slots['block-tools']));
 const hintId = `${useId()}-hint`;
 
 /** A block resized in place hands its new values to the core like an editor change. */
@@ -99,8 +139,10 @@ function close(i: number): void {
 
 /** "12 pt", without float noise. */
 function sizeLabel(block: TextBlock): string {
-  return `${Number((block.sizePt ?? 0).toFixed(1))} pt`;
+  return t('blocks.sizePt', { size: Number((block.sizePt ?? 0).toFixed(1)) });
 }
+
+const blockLabel = (i: number) => t('blocks.label', { n: i + 1 });
 
 const page = ref<HTMLDivElement | null>(null);
 const locked = computed(() => props.layout?.widthLocked !== false);
@@ -116,11 +158,16 @@ async function toggleWidthLock(): Promise<void> {
   return props.setWidthLock(true, now);
 }
 
+// Getters: the palette shows the title in the language chosen now.
 useActions([
   {
     id: 'view.layoutWidthLock',
-    title: 'Lock or unlock the layout width',
-    group: 'View',
+    get title() {
+      return t('textLayout.actionWidthLock');
+    },
+    get group() {
+      return t('textLayout.groupView');
+    },
     enabled: () => canLock.value,
     run: toggleWidthLock,
   },
@@ -136,18 +183,24 @@ const fontPaletteStyle = computed(() => {
   return value ? { fontPalette: value } : undefined;
 });
 
-const fontFamily = computed(() =>
-  props.face
-    ? `"${faceFamily(props.face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`
-    : 'inherit',
-);
+const familyOf = (face: FaceSummary) =>
+  `"${faceFamily(face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`;
+const fontFamily = computed(() => (props.face ? familyOf(props.face) : 'inherit'));
+
+/** The `font-family` of block `i`: its own face, or the layout's. */
+function blockFamily(i: number): string {
+  const own = props.blockFaces?.[i];
+  return own ? familyOf(own) : fontFamily.value;
+}
 </script>
 
 <template>
   <section
     class="layout"
     tabindex="0"
-    :aria-label="layout ? `${layout.name} layout` : 'Layout'"
+    :aria-label="
+      layout ? t('textLayout.regionNamed', { name: layout.name }) : t('textLayout.region')
+    "
     :data-preset="layout?.preset ?? undefined"
     :data-state="face ? state : undefined"
   >
@@ -156,28 +209,24 @@ const fontFamily = computed(() =>
         <span class="name">{{ face.familyName }}</span>
         <span class="style">{{ face.style }}</span>
         <span v-if="state === 'failed'" class="failed" role="status">
-          This font could not be loaded.
+          {{ t('textLayout.loadFailed') }}
         </span>
         <button
           v-if="setWidthLock"
           type="button"
-          class="lock"
+          class="lock fm-no-print"
           data-testid="layout-width-lock"
           :aria-pressed="locked"
-          :title="
-            locked
-              ? 'The text keeps its width; press to follow the window'
-              : 'The text follows the window; press to keep its width'
-          "
+          :title="locked ? t('textLayout.lockedTitle') : t('textLayout.unlockedTitle')"
           @click="toggleWidthLock"
         >
-          Lock width
+          {{ t('textLayout.lockWidth') }}
         </button>
       </header>
       <div
         ref="page"
         class="page"
-        :class="{ locked: pageStyle !== undefined }"
+        :class="{ locked: pageStyle !== undefined, 'with-tools': hasTools }"
         data-testid="layout-page"
         :style="[pageStyle, fontPaletteStyle]"
       >
@@ -185,36 +234,40 @@ const fontFamily = computed(() =>
           v-for="(block, i) in layout.blocks"
           :key="`${layout.preset ?? layout.name}-${i}`"
           class="row"
-          :class="{ 'with-badge': hasEditor }"
+          :class="{ 'with-badge': hasEditor || hasTools }"
         >
-          <button
-            v-if="hasEditor"
-            ref="badges"
-            type="button"
-            class="badge"
-            data-testid="block-size-badge"
-            :data-index="i"
-            :aria-label="`Block ${i + 1} properties, ${sizeLabel(block)}`"
-            aria-haspopup="dialog"
-            :aria-expanded="editing === i"
-            @click="toggle(i)"
-          >
-            {{ sizeLabel(block) }}
-          </button>
+          <div v-if="hasEditor || hasTools" class="tools fm-no-print">
+            <button
+              v-if="hasEditor"
+              ref="badges"
+              type="button"
+              class="badge"
+              data-testid="block-size-badge"
+              :data-index="i"
+              :aria-label="t('textLayout.badgeLabel', { n: i + 1, size: sizeLabel(block) })"
+              aria-haspopup="dialog"
+              :aria-expanded="editing === i"
+              @click="toggle(i)"
+            >
+              {{ sizeLabel(block) }}
+            </button>
+            <slot name="block-tools" :index="i" :block="block" :label="blockLabel(i)" />
+          </div>
           <div class="cell">
             <BlockProperties
               v-if="hasEditor && editing === i"
+              class="fm-no-print"
               :block="block"
               :bounds="bounds!"
-              :label="`Block ${i + 1}`"
+              :label="blockLabel(i)"
               :apply="(change) => setProps!(i, change)"
               @close="close(i)"
             />
             <LayoutBlock
               :block="block"
-              :font-family="fontFamily"
+              :font-family="blockFamily(i)"
               :editable="editable"
-              :label="`Block ${i + 1}`"
+              :label="blockLabel(i)"
               :bounds="hasEditor ? bounds : null"
               :describedby="hasEditor ? hintId : undefined"
               @edit="(text) => emit('edit-text', i, text)"
@@ -223,13 +276,12 @@ const fontFamily = computed(() =>
           </div>
         </div>
       </div>
-      <p v-if="hasEditor" :id="hintId" class="hint">
-        Drag a block sideways or press Left and Right to change its size; drag it up and down or
-        press Up and Down to change its line height (Shift for bigger steps).
-        <template v-if="editable">Double-click it or press Enter to edit its text.</template>
+      <p v-if="hasEditor" :id="hintId" class="hint fm-no-print">
+        {{ t('textLayout.hint') }}
+        <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
       </p>
     </template>
-    <p v-else-if="!face" class="empty">Select a font to see it in a layout.</p>
+    <p v-else-if="!face" class="empty">{{ t('textLayout.empty') }}</p>
   </section>
 </template>
 
@@ -263,13 +315,18 @@ const fontFamily = computed(() =>
   color: var(--fm-warning);
 }
 .page {
+  --fm-tools-width: 5em;
   padding: 24px 32px;
+}
+/* Room for the parent's block controls (a font picker) beside the badge. */
+.page.with-tools {
+  --fm-tools-width: 11em;
 }
 .row.with-badge {
   display: grid;
   /* An empty column opposite the badges keeps the text centered and gives the locked and
      unlocked grids the same tracks, so locking keeps the width the text has on screen. */
-  grid-template-columns: 5em minmax(0, 1fr) 5em;
+  grid-template-columns: var(--fm-tools-width) minmax(0, 1fr) var(--fm-tools-width);
   gap: 8px;
   align-items: start;
 }
@@ -280,11 +337,13 @@ const fontFamily = computed(() =>
 }
 .page.locked .row.with-badge {
   max-width: none;
-  grid-template-columns: 5em minmax(0, var(--fm-layout-width)) 5em;
+  grid-template-columns:
+    var(--fm-tools-width) minmax(0, var(--fm-layout-width))
+    var(--fm-tools-width);
   justify-content: center;
 }
 .lock {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 1px 8px;
   border: 1px solid var(--fm-control-border);
   border-radius: 3px;
@@ -303,9 +362,15 @@ const fontFamily = computed(() =>
   outline: 2px solid var(--fm-accent);
   outline-offset: 1px;
 }
-.badge {
-  justify-self: end;
+.tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
   margin-top: 2px;
+}
+.badge {
   padding: 1px 6px;
   border: 1px solid var(--fm-control-border);
   border-radius: 3px;
@@ -330,6 +395,24 @@ const fontFamily = computed(() =>
   padding: 0 32px 16px;
   color: var(--fm-muted);
   font-size: 12px;
+}
+@media print {
+  .layout {
+    overflow: visible;
+    background: none;
+  }
+  /* No badge column on paper: each row is its text, at the layout's width. */
+  .page {
+    padding: 0;
+  }
+  .row.with-badge {
+    display: block;
+  }
+  .page.locked .row,
+  .page.locked .row.with-badge {
+    max-width: min(var(--fm-layout-width), 100%);
+    margin-inline: auto;
+  }
 }
 .empty {
   display: grid;

@@ -4,18 +4,19 @@
 //!
 //! A family is what search groups ([`Index::list_families`]): its id is the
 //! id of its first visible face. A face's stored `face.parsed` holds what
-//! the inspector shows; the vertical metrics are not stored, so
-//! [`Index::face_detail`] reads them from the file (one file, read only).
+//! the inspector shows, the vertical metrics with it (E16.2); a face stored
+//! without them (unreadable, or written before E16.2 and not scanned since)
+//! has [`Index::face_detail`] read them from the file (one file, read only).
 
 use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Embedding, Health, Metrics, Slant};
+use fm_api::common::{Classification, Health, Metrics, Page, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
-use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
-use fm_api::{FaceId, FamilyId, SourceId};
+use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage, Filters, SearchRequest};
+use fm_api::{CollectionId, FaceId, FamilyId, SourceId};
 use rusqlite::{OptionalExtension, Row};
 
 use super::files::{format_from_sql, path_from_sql};
@@ -27,6 +28,7 @@ use crate::license;
 use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
+use crate::specimen::{CollectionSpecimen, Specimen, SpecimenFace};
 use crate::web_css::FaceStyle;
 use crate::web_font::{self, ExportFace};
 
@@ -59,10 +61,14 @@ pub struct FaceLocation {
 pub struct WebExportFace {
     /// The face's file, output name and label.
     pub face: ExportFace,
-    /// Its license keeps it off the web.
-    pub restricted: bool,
+    /// Why its license keeps it off the web, when it does
+    /// ([`license::web_embedding_block`]).
+    pub blocked: Option<license::WebReason>,
     /// What its `@font-face` block says about it (E20.3).
     pub style: FaceStyle,
+    /// Its design class, when known: the generic fallback of a framework
+    /// snippet (E20.5).
+    pub classification: Option<Classification>,
 }
 
 /// One face row read by [`FACE`].
@@ -105,16 +111,36 @@ impl Index {
     }
 
     /// Everything the inspector shows about the face `face`. The metrics are
-    /// read from the file; a file that cannot be read gives zero metrics and
-    /// a warning in the log, not an error, so the rest still shows. An
-    /// unknown face is `NotFound`.
+    /// the ones the scan stored; without them they are read from the file,
+    /// and a file that cannot be read gives zero metrics and a warning in the
+    /// log, not an error, so the rest still shows. An unknown face is
+    /// `NotFound`.
     pub fn face_detail(&self, face: FaceId) -> FmResult<FaceDetail> {
         let row = self.face_row(face)?;
-        let data = read_file(&row.file);
-        let metrics = data
+        let is_color = row.parsed.as_ref().is_some_and(|p| p.color);
+        let stored = row
+            .parsed
             .as_ref()
-            .map_err(Clone::clone)
-            .and_then(|d| crate::preview::face_metrics(d, row.file.collection_index))
+            .map(|p| p.metrics)
+            .filter(|m| m.units_per_em > 0);
+        // The file is read only when the stored metrics are missing or the
+        // face is a color face whose palettes the inspector shows.
+        let data = (stored.is_none() || is_color).then(|| read_file(&row.file));
+        let metrics = stored
+            .map_or_else(
+                || {
+                    let index = row.file.collection_index;
+                    match &data {
+                        Some(d) => d
+                            .as_ref()
+                            .map_err(Clone::clone)
+                            .and_then(|d| crate::preview::face_metrics(d, index)),
+                        None => read_file(&row.file)
+                            .and_then(|d| crate::preview::face_metrics(&d, index)),
+                    }
+                },
+                Ok,
+            )
             .unwrap_or_else(|e| {
                 tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
                 Metrics {
@@ -126,8 +152,8 @@ impl Index {
                 }
             });
         // Only a color face can have palettes; a plain one skips the read.
-        let palettes = match (&data, row.parsed.as_ref().is_some_and(|p| p.color)) {
-            (Ok(d), true) => palettes::face_palettes(d, row.file.collection_index)
+        let palettes = match (&data, is_color) {
+            (Some(Ok(d)), true) => palettes::face_palettes(d, row.file.collection_index)
                 .unwrap_or_else(|e| {
                     tracing::warn!(%face, error = %e, detail = ?e.detail(), "face palettes not read");
                     Vec::new()
@@ -231,20 +257,19 @@ impl Index {
     }
 
     /// What a web export needs about the face `face` (E20.1): its file, its
-    /// output name and label, whether its license keeps it off the web
-    /// (a restricted embedding and no web license declared, the family's
-    /// declaration first), and its `@font-face` style (E20.3): the
+    /// output name and label, why its license keeps it off the web, if it
+    /// does (a restricted or preview-and-print embedding and no web license
+    /// declared, the family's declaration first; E20.6), and its `@font-face` style (E20.3): the
     /// typographic family (name ID 16, else 1, else the library's family
-    /// name), slant, weight class and, for a variable face, its axes. An
-    /// unknown face is `NotFound`.
+    /// name), slant, weight class and, for a variable face, its axes; and its
+    /// design class (E20.5). An unknown face is `NotFound`.
     pub fn web_export_face(&self, face: FaceId) -> FmResult<WebExportFace> {
         let row = self.face_row(face)?;
         let declared = self
             .declared_license(&row.summary.family_name)?
             .and_then(|d| d.license_type)
             .or(row.license_type);
-        let restricted = license::embedding(row.fs_type) == Embedding::Restricted
-            && declared != Some(LicenseType::Web);
+        let blocked = license::web_embedding_block(license::embedding(row.fs_type), declared);
         let s = &row.summary;
         let parsed = row.parsed.as_ref();
         let style = FaceStyle {
@@ -267,9 +292,97 @@ impl Index {
                 file_stem: web_font::file_stem(&s.postscript_name, u64::from(face.0)),
                 label: format!("{} {}", s.family_name, s.style),
             },
-            restricted,
+            blocked,
             style,
+            classification: parsed
+                .and_then(|p| p.classification.as_ref())
+                .map(|c| c.class),
         })
+    }
+
+    /// What the specimen of `family` shows (E21.1), every visible face in
+    /// the order of [`Index::family`], with its license (the family's
+    /// declaration first, as [`Index::face_detail`]) and its `cmap`. No
+    /// font file is read. An unknown family is `NotFound`.
+    pub fn specimen(&self, family: FamilyId) -> FmResult<Specimen> {
+        let fam = self.family(family)?;
+        let declared = self
+            .declared_license(&fam.summary.name)?
+            .and_then(|d| d.license_type);
+        let mut faces = Vec::with_capacity(fam.faces.len());
+        for s in &fam.faces {
+            let row = self.face_row(s.id)?;
+            let parsed = row.parsed.as_ref();
+            let embedding = license::embedding(row.fs_type);
+            let declared = declared.or(row.license_type);
+            faces.push(SpecimenFace {
+                id: s.id,
+                label: format!("{} {}", s.family_name, s.style),
+                style: s.style.clone(),
+                weight: s.weight,
+                width: s.width,
+                slant: s.slant,
+                version: parsed.and_then(|p| p.version.clone()),
+                designer: row.designer,
+                foundry: row.foundry,
+                embedding,
+                declared,
+                open_license: row.open_license,
+                web_use: license::web_use(embedding, row.open_license, declared),
+                instances: if s.is_variable {
+                    parsed
+                        .map(|p| p.named_instances.clone())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                },
+                features: parsed
+                    .map(|p| {
+                        p.features
+                            .iter()
+                            .map(|tag| {
+                                features::feature_info_named(
+                                    tag,
+                                    p.feature_names.get(tag).map(String::as_str),
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                code_points: self.face_cmap(s.id)?,
+                path: row.file.path,
+            });
+        }
+        Ok(Specimen {
+            family: fam.summary.name,
+            faces,
+        })
+    }
+
+    /// What the specimen of `collection` shows (E21.3): the [`Index::specimen`]
+    /// of every family with a face in it, manual or smart (its rule applies),
+    /// in the order search lists the collection's families. An unknown
+    /// collection is `NotFound`; an empty one has no families.
+    pub fn collection_specimen(&self, collection: CollectionId) -> FmResult<CollectionSpecimen> {
+        let name = self.collection(collection)?.name;
+        let found = self.search(&SearchRequest {
+            query: String::new(),
+            filters: Filters {
+                collection: Some(collection),
+                ..Filters::default()
+            },
+            page: Page {
+                offset: 0,
+                limit: u32::MAX,
+            },
+            rule: None,
+        })?;
+        let families = found
+            .families
+            .iter()
+            .map(|hit| self.specimen(hit.family.id))
+            .collect::<FmResult<Vec<_>>>()?;
+        Ok(CollectionSpecimen { name, families })
     }
 
     /// The webview's view of [`Index::face_file`].

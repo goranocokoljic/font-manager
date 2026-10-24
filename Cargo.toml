@@ -14,6 +14,12 @@ publish = false
 fm-core = { path = "crates/fm-core" }
 fm-api = { path = "crates/fm-api" }
 fm-platform = { path = "crates/fm-platform" }
+fm-endpoint = { path = "crates/fm-endpoint" }
+# The local API endpoint (E25.1, ADR 0015): approved 2026-10-21.
+getrandom = "0.3"
+hyper = { version = "1", default-features = false }
+hyper-util = { version = "0.1", default-features = false }
+tokio = { version = "1", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

@@ -22,6 +22,7 @@
 //! the resolution log keeps the "Keep this one" actions for undo (E8.3).
 
 mod activation;
+mod catalog_downloads;
 mod collections;
 mod comparisons;
 mod duplicates;

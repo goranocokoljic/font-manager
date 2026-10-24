@@ -1,27 +1,33 @@
 <script setup lang="ts">
-// The inspector's tabs: Info, Axes, Features, then Glyphs. Arrow keys move between tabs
+// The inspector's tabs: Info, Axes, Features, Glyphs, then Developer. Arrow keys move between tabs
 // (WAI-ARIA tabs pattern); only the selected tab is in the Tab order.
 import { nextTick, ref } from 'vue';
+import { inlineKey, t } from '../i18n';
 import InspectorAxes from './InspectorAxes.vue';
+import InspectorDeveloper from './InspectorDeveloper.vue';
 import InspectorFeatures from './InspectorFeatures.vue';
 import InspectorGlyphs from './InspectorGlyphs.vue';
 import InspectorInfo from './InspectorInfo.vue';
 
+// The title of each is `inspector.tabs.<id>`.
 const TABS = [
-  { id: 'info', title: 'Info' },
-  { id: 'axes', title: 'Axes' },
-  { id: 'features', title: 'Features' },
-  { id: 'glyphs', title: 'Glyphs' },
+  { id: 'info' },
+  { id: 'axes' },
+  { id: 'features' },
+  { id: 'glyphs' },
+  { id: 'developer' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
 const current = ref<TabId>('info');
 
 async function onKey(e: KeyboardEvent): Promise<void> {
-  const i = TABS.findIndex((t) => t.id === current.value);
+  const i = TABS.findIndex((tab) => tab.id === current.value);
   let next: number;
-  if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
-  else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+  // In right-to-left chrome the tabs run from the right: ArrowLeft is the next one.
+  const key = inlineKey(e.key);
+  if (key === 'ArrowRight') next = (i + 1) % TABS.length;
+  else if (key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
   else if (e.key === 'Home') next = 0;
   else if (e.key === 'End') next = TABS.length - 1;
   else return;
@@ -34,20 +40,20 @@ async function onKey(e: KeyboardEvent): Promise<void> {
 
 <template>
   <div class="panel">
-    <div class="tabs" role="tablist" aria-label="Inspector tabs" @keydown="onKey">
+    <div class="tabs" role="tablist" :aria-label="t('inspector.tabsLabel')" @keydown="onKey">
       <button
-        v-for="t in TABS"
-        :id="`fm-tab-${t.id}`"
-        :key="t.id"
+        v-for="tab in TABS"
+        :id="`fm-tab-${tab.id}`"
+        :key="tab.id"
         type="button"
         role="tab"
         class="tab"
-        :aria-selected="current === t.id"
-        :aria-controls="`fm-tabpanel-${t.id}`"
-        :tabindex="current === t.id ? 0 : -1"
-        @click="current = t.id"
+        :aria-selected="current === tab.id"
+        :aria-controls="`fm-tabpanel-${tab.id}`"
+        :tabindex="current === tab.id ? 0 : -1"
+        @click="current = tab.id"
       >
-        {{ t.title }}
+        {{ t(`inspector.tabs.${tab.id}`) }}
       </button>
     </div>
     <div
@@ -84,6 +90,16 @@ async function onKey(e: KeyboardEvent): Promise<void> {
     >
       <!-- Mounted only while shown: it reads the face's file and loads its font. -->
       <InspectorGlyphs v-if="current === 'glyphs'" />
+    </div>
+    <div
+      v-show="current === 'developer'"
+      id="fm-tabpanel-developer"
+      role="tabpanel"
+      aria-labelledby="fm-tab-developer"
+      tabindex="0"
+    >
+      <!-- Mounted only while shown: it asks fm-core for the CSS as the state changes. -->
+      <InspectorDeveloper v-if="current === 'developer'" />
     </div>
   </div>
 </template>

@@ -5,6 +5,8 @@
 // selects all. Plain Space is the app's quick-look key, so it is left alone.
 // The grid view lays rows out in `columns` per line: Up/Down then move by a
 // line of cards and Left/Right by one card (Enter still expands a family).
+// Left/Right follow what the user sees: in right-to-left chrome they swap.
+import { inlineKey } from '../i18n';
 import type { FaceId } from '../api/types';
 import type { useFontListStore } from '../stores/fontList';
 import type { SelectMode } from './selection';
@@ -31,7 +33,7 @@ export function handleListKey(
   const mod = e.ctrlKey || e.metaKey;
   const row = list.cursorRow;
   const columns = Math.max(1, opts.columns ?? 1);
-  switch (e.key) {
+  switch (inlineKey(e.key)) {
     case 'ArrowDown':
       list.moveBy(columns, modeOf(e));
       return true;

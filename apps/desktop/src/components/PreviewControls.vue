@@ -1,8 +1,9 @@
 <script setup lang="ts">
-// The preview controls above a font list: sample text, size, line height,
-// tracking, alignment, colors and the preview surface. Every change goes to
+// The preview controls above a font list: sample text, size, auto size, line
+// height, tracking, alignment, colors and the preview surface. Every change goes to
 // the preview store for `view`, which every row of that list reads.
 import { computed, useId } from 'vue';
+import { t } from '../i18n';
 import { SAMPLE_KINDS } from '../preview/sampleText';
 import {
   LINE_HEIGHT,
@@ -10,6 +11,7 @@ import {
   TRACKING,
   usePreviewStore,
   type Alignment,
+  type AutoSize,
   type PreviewSettings,
   type Surface,
 } from '../stores/preview';
@@ -28,6 +30,8 @@ function set(patch: Partial<PreviewSettings>): void {
 
 type NumberKey = 'sizePx' | 'lineHeight' | 'trackingEm';
 const BOUNDS = { sizePx: SIZE, lineHeight: LINE_HEIGHT, trackingEm: TRACKING } as const;
+/** The number fields' setting keys, so the template holds no key literals. */
+const KEY = { size: 'sizePx', lineHeight: 'lineHeight', tracking: 'trackingEm' } as const;
 
 /**
  * While typing, only a value inside the bounds applies (so "1" on the way to "12" does
@@ -43,16 +47,11 @@ function typed(key: NumberKey, e: Event, commit: boolean): void {
   if (commit) input.value = String(store.settingsFor(props.view)[key]);
 }
 
-const alignments: { value: Alignment; label: string }[] = [
-  { value: 'start', label: 'Start' },
-  { value: 'center', label: 'Center' },
-  { value: 'end', label: 'End' },
-];
-const surfaces: { value: Surface; label: string }[] = [
-  { value: 'auto', label: 'Follow theme' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
+// The labels are read where they are shown (`preview.aligns.*`, `preview.autoSizes.*`,
+// `preview.surfaces.*`).
+const alignments: Alignment[] = ['start', 'center', 'end'];
+const autoSizes: AutoSize[] = ['off', 'xHeight', 'capHeight'];
+const surfaces: Surface[] = ['auto', 'light', 'dark'];
 
 /** What a color well shows while its setting is `null` (the surface's own color). */
 function isDarkSurface(): boolean {
@@ -72,9 +71,9 @@ function colorFrom(e: Event): string {
 </script>
 
 <template>
-  <div class="controls" role="group" aria-label="Preview settings">
+  <div class="controls" role="group" :aria-label="t('preview.settings')">
     <div class="field">
-      <label :for="`${uid}-sample`">Sample</label>
+      <label :for="`${uid}-sample`">{{ t('preview.sample') }}</label>
       <select
         :id="`${uid}-sample`"
         :value="s.sample"
@@ -88,7 +87,7 @@ function colorFrom(e: Event): string {
       </select>
     </div>
     <div v-if="s.sample === 'pangram'" class="field">
-      <label :for="`${uid}-language`">Language</label>
+      <label :for="`${uid}-language`">{{ t('preview.language') }}</label>
       <select
         :id="`${uid}-language`"
         :value="s.language"
@@ -104,40 +103,55 @@ function colorFrom(e: Event): string {
       </select>
     </div>
     <label v-if="s.sample === 'custom'" class="field grow">
-      <span>Custom text</span>
+      <span>{{ t('preview.customText') }}</span>
       <input
         type="text"
+        dir="auto"
         :value="s.customText"
-        placeholder="Type a sample"
+        :placeholder="t('preview.customPlaceholder')"
         @input="set({ customText: ($event.target as HTMLInputElement).value })"
       />
     </label>
 
     <div class="field" role="group" aria-labelledby="fm-preview-size">
-      <span id="fm-preview-size">Size</span>
+      <span id="fm-preview-size">{{ t('preview.size') }}</span>
       <input
         type="range"
-        aria-label="Size slider"
+        :aria-label="t('preview.sizeSlider')"
         :min="SIZE.min"
         :max="SIZE.max"
         :step="SIZE.step"
         :value="s.sizePx"
-        @input="typed('sizePx', $event, false)"
+        @input="typed(KEY.size, $event, false)"
       />
       <input
         type="number"
         class="number"
-        aria-label="Size in pixels"
+        :aria-label="t('preview.sizeInPixels')"
         :min="SIZE.min"
         :max="SIZE.max"
         :step="SIZE.step"
         :value="s.sizePx"
-        @input="typed('sizePx', $event, false)"
-        @change="typed('sizePx', $event, true)"
+        @input="typed(KEY.size, $event, false)"
+        @change="typed(KEY.size, $event, true)"
       />
     </div>
+    <div class="field">
+      <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
+        t('preview.autoSize')
+      }}</label>
+      <select
+        :id="`${uid}-auto-size`"
+        :value="s.autoSize"
+        @change="set({ autoSize: ($event.target as HTMLSelectElement).value as AutoSize })"
+      >
+        <option v-for="o in autoSizes" :key="o" :value="o">
+          {{ t(`preview.autoSizes.${o}`) }}
+        </option>
+      </select>
+    </div>
     <label class="field">
-      <span>Line height</span>
+      <span>{{ t('preview.lineHeight') }}</span>
       <input
         type="number"
         class="number"
@@ -145,12 +159,12 @@ function colorFrom(e: Event): string {
         :max="LINE_HEIGHT.max"
         :step="LINE_HEIGHT.step"
         :value="s.lineHeight"
-        @input="typed('lineHeight', $event, false)"
-        @change="typed('lineHeight', $event, true)"
+        @input="typed(KEY.lineHeight, $event, false)"
+        @change="typed(KEY.lineHeight, $event, true)"
       />
     </label>
     <label class="field">
-      <span>Tracking</span>
+      <span>{{ t('preview.tracking') }}</span>
       <input
         type="number"
         class="number"
@@ -158,53 +172,53 @@ function colorFrom(e: Event): string {
         :max="TRACKING.max"
         :step="TRACKING.step"
         :value="s.trackingEm"
-        @input="typed('trackingEm', $event, false)"
-        @change="typed('trackingEm', $event, true)"
+        @input="typed(KEY.tracking, $event, false)"
+        @change="typed(KEY.tracking, $event, true)"
       />
     </label>
 
-    <div class="field" role="group" aria-label="Alignment">
+    <div class="field" role="group" :aria-label="t('preview.alignment')">
       <button
         v-for="a in alignments"
-        :key="a.value"
+        :key="a"
         type="button"
         class="button"
-        :aria-pressed="s.align === a.value"
-        @click="set({ align: a.value })"
+        :aria-pressed="s.align === a"
+        @click="set({ align: a })"
       >
-        {{ a.label }}
+        {{ t(`preview.aligns.${a}`) }}
       </button>
     </div>
 
     <label class="field">
-      <span>Text</span>
+      <span>{{ t('preview.text') }}</span>
       <input
         type="color"
-        aria-label="Text color"
+        :aria-label="t('preview.textColor')"
         :value="textWell"
         @input="set({ textColor: colorFrom($event) })"
       />
     </label>
     <label class="field">
-      <span>Background</span>
+      <span>{{ t('preview.background') }}</span>
       <input
         type="color"
-        aria-label="Background color"
+        :aria-label="t('preview.backgroundColor')"
         :value="backgroundWell"
         @input="set({ backgroundColor: colorFrom($event) })"
       />
     </label>
     <div class="field">
-      <label :for="`${uid}-surface`">Surface</label>
+      <label :for="`${uid}-surface`">{{ t('preview.surface') }}</label>
       <select
         :id="`${uid}-surface`"
         :value="s.surface"
         @change="set({ surface: ($event.target as HTMLSelectElement).value as Surface })"
       >
-        <option v-for="o in surfaces" :key="o.value" :value="o.value">{{ o.label }}</option>
+        <option v-for="o in surfaces" :key="o" :value="o">{{ t(`preview.surfaces.${o}`) }}</option>
       </select>
     </div>
-    <button type="button" class="button" @click="store.reset(view)">Reset</button>
+    <button type="button" class="button" @click="store.reset(view)">{{ t('common.reset') }}</button>
   </div>
 </template>
 

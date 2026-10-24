@@ -1,0 +1,20 @@
+{
+  "id": "a-ui-test-of-a-trigger-must-show-the-result-was-absent-befor",
+  "title": "A UI test of a trigger must show the result was absent before the trigger",
+  "category": "testing",
+  "rule": "When a Playwright or component test proves that a control (a button, a menu item, a key) causes a result (a badge, a note, a list), assert that the result is absent right before the action, after every earlier step of the test has settled. An earlier step that reaches the same store action (turning a feature on, a first refresh, a load) can produce the result already, and then the test still passes with the control's handler removed. If an earlier step must not cause the result, make that a rule in the store and test it there too. Check the test once by removing the handler: it must fail.",
+  "rationale": "E22.4 (#149): the e2e test clicked Check for updates and asserted the badges, but turning the catalog on had already run a refresh that compared, so the badges were on screen before the click and removing @click failed no test.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    149
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/**/*.test.ts",
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-10-24T11:49:53.342Z",
+  "last_seen": "2026-10-24T11:49:53.342Z"
+}

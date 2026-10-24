@@ -59,7 +59,15 @@ async function unnamedControls(page: Page): Promise<string[]> {
   return missing;
 }
 
-const SETTINGS_TABS = ['Sources', 'Activation', 'Appearance', 'Advanced', 'About'];
+const SETTINGS_TABS = [
+  'Sources',
+  'Activation',
+  'Appearance',
+  'Online catalogs',
+  'Advanced',
+  'Local API',
+  'About',
+];
 
 test('every interactive element on the main window has a name', async ({ page }) => {
   await open(page);
@@ -153,6 +161,14 @@ test('every interactive element of the Conflicts view and the clash question has
   await page.getByRole('button', { name: 'Replace for this session' }).click();
   await open(page, '/conflicts');
   await expect(page.getByRole('heading', { name: 'Font conflicts' })).toBeVisible();
+  expect(await unnamedControls(page)).toEqual([]);
+});
+
+test('every interactive element of the inspector Developer tab has a name', async ({ page }) => {
+  await open(page, '/?face=1');
+  await page.getByRole('tab', { name: 'Developer' }).click();
+  const panel = page.getByRole('tabpanel', { name: 'Developer' });
+  await expect(panel.getByRole('button', { name: 'Copy the CSS snippet' })).toBeEnabled();
   expect(await unnamedControls(page)).toEqual([]);
 });
 

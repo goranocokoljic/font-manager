@@ -4,6 +4,7 @@
 // Like SmartRuleEditor, the dialog keeps focus and plain keys to itself while it is
 // open: Tab cycles inside it, and the list's shortcuts behind it never see a key.
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { errorMessage, formatDate, t } from '../i18n';
 import { useUpdatesStore } from '../stores/updates';
 
 const updates = useUpdatesStore();
@@ -14,7 +15,9 @@ const u = computed(() => updates.update);
 const installing = computed(() => updates.status === 'installing');
 const published = computed(() => {
   const d = u.value?.date ? new Date(u.value.date) : null;
-  return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString() : null;
+  return d && !Number.isNaN(d.getTime())
+    ? formatDate(d, { year: 'numeric', month: 'numeric', day: 'numeric' })
+    : null;
 });
 
 function listen(on: boolean): void {
@@ -100,9 +103,9 @@ function onOutsideKey(e: KeyboardEvent): void {
 
 /** Focus that moves to the page behind the dialog is taken back to it. */
 function onFocusIn(e: FocusEvent): void {
-  const t = e.target;
-  if (!panel.value || !(t instanceof Element) || panel.value.contains(t)) return;
-  if (t.closest('[role="dialog"]')) return;
+  const target = e.target;
+  if (!panel.value || !(target instanceof Element) || panel.value.contains(target)) return;
+  if (target.closest('[role="dialog"]')) return;
   panel.value.focus();
 }
 </script>
@@ -120,34 +123,36 @@ function onFocusIn(e: FocusEvent): void {
       @keydown="onKeyDown"
     >
       <template v-if="!updates.confirmingMajor">
-        <h2 id="fm-update-title" class="title">Font Manager {{ u.version }} is available</h2>
+        <h2 id="fm-update-title" class="title">
+          {{ t('updates.dialog.title', { version: u.version }) }}
+        </h2>
         <p id="fm-update-lead" class="lead">
-          You have version {{ u.currentVersion }}.<template v-if="published">
-            Released {{ published }}.</template
+          {{ t('updates.dialog.currentVersion', { version: u.currentVersion })
+          }}<template v-if="published">
+            {{ t('updates.dialog.released', { date: published }) }}</template
           >
-          Installing quits Font Manager, which ends session activations, and starts the new version.
+          {{ t('updates.dialog.installQuits') }}
         </p>
-        <h3 class="subheading">Release notes</h3>
-        <div class="notes" tabindex="0" aria-label="Release notes">
-          {{ u.notes || 'This release has no notes.' }}
+        <h3 class="subheading">{{ t('updates.dialog.releaseNotes') }}</h3>
+        <div class="notes" tabindex="0" :aria-label="t('updates.dialog.releaseNotes')">
+          {{ u.notes || t('updates.dialog.noNotes') }}
         </div>
       </template>
       <template v-else>
-        <h2 id="fm-update-title" class="title">Install a major update?</h2>
+        <h2 id="fm-update-title" class="title">{{ t('updates.dialog.majorTitle') }}</h2>
         <p id="fm-update-lead" class="lead">
-          Version {{ u.version }} is a major update from {{ u.currentVersion }}. It can change how
-          Font Manager works and what its settings mean. Install it only if you are ready for that.
+          {{ t('updates.dialog.majorLead', { version: u.version, current: u.currentVersion }) }}
         </p>
       </template>
 
-      <p v-if="updates.error" role="alert" class="error">{{ updates.error.message }}</p>
+      <p v-if="updates.error" role="alert" class="error">{{ errorMessage(updates.error) }}</p>
       <p v-if="installing" role="status" class="lead">
-        Installing… Font Manager restarts when it is done.
+        {{ t('updates.dialog.installing') }}
       </p>
 
       <div class="actions">
         <button type="button" class="button" :disabled="installing" @click="updates.dismiss">
-          {{ updates.confirmingMajor ? 'Cancel' : 'Later' }}
+          {{ t(updates.confirmingMajor ? 'common.cancel' : 'updates.dialog.later') }}
         </button>
         <button
           type="button"
@@ -156,7 +161,11 @@ function onFocusIn(e: FocusEvent): void {
           :disabled="installing"
           @click="updates.install"
         >
-          {{ updates.confirmingMajor ? `Install version ${u.version}` : 'Install and restart' }}
+          {{
+            updates.confirmingMajor
+              ? t('updates.dialog.installVersion', { version: u.version })
+              : t('updates.dialog.installAndRestart')
+          }}
         </button>
       </div>
     </div>

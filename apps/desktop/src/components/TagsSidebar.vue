@@ -5,6 +5,7 @@
 // fonts already carry; after the drop it folds back if it was folded.
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import type { TagId } from '../api/types';
+import { errorMessage, formatNumber, t } from '../i18n';
 import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
 import { isFontDrag, readFontDrop } from '../list/drag';
 import { useTaggingStore } from '../stores/tagging';
@@ -52,7 +53,7 @@ function onDrop(name: string, e: DragEvent): void {
 }
 
 function countLabel(n: number): string {
-  return `${n} ${n === 1 ? 'font' : 'fonts'}`;
+  return t('tags.fontCount', { count: n });
 }
 </script>
 
@@ -67,13 +68,17 @@ function countLabel(n: number): string {
           aria-controls="fm-tags-list"
           @click="tagging.folded = !tagging.folded"
         >
-          <span class="chevron" aria-hidden="true">{{ tagging.folded ? '▸' : '▾' }}</span>
-          Tags
+          <span class="chevron fm-directional" aria-hidden="true">{{
+            tagging.folded ? '▸' : '▾'
+          }}</span>
+          {{ t('tags.heading') }}
         </button>
       </h2>
-      <span class="count" :aria-label="`${tags.tags.length} tags`">{{ tags.tags.length }}</span>
+      <span class="count" :aria-label="t('tags.tagCount', { count: tags.tags.length })">{{
+        formatNumber(tags.tags.length)
+      }}</span>
     </header>
-    <p v-if="tags.error" role="alert" class="error">{{ tags.error.message }}</p>
+    <p v-if="tags.error" role="alert" class="error">{{ errorMessage(tags.error) }}</p>
     <ul v-show="!tagging.folded" id="fm-tags-list" class="list" aria-labelledby="fm-tags-heading">
       <li
         v-for="tag in tags.tags"
@@ -90,10 +95,12 @@ function countLabel(n: number): string {
         @drop="onDrop(tag.name, $event)"
       >
         <span class="name">{{ tag.name }}</span>
-        <span class="count" :aria-label="countLabel(tag.faceCount)">{{ tag.faceCount }}</span>
+        <span class="count" :aria-label="countLabel(tag.faceCount)">{{
+          formatNumber(tag.faceCount)
+        }}</span>
       </li>
       <li v-if="!tags.tags.length" class="empty">
-        No tags yet. Press {{ tagChord }} to tag the selected fonts.
+        {{ t('tags.empty', { chord: tagChord }) }}
       </li>
     </ul>
   </section>

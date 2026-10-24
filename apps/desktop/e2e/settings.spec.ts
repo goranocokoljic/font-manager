@@ -8,10 +8,18 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('Ctrl/Cmd+, opens Settings with its five sections; Escape closes it', async ({ page }) => {
+test('Ctrl/Cmd+, opens Settings with its seven sections; Escape closes it', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+,');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  for (const name of ['Sources', 'Activation', 'Appearance', 'Advanced', 'About'])
+  for (const name of [
+    'Sources',
+    'Activation',
+    'Appearance',
+    'Online catalogs',
+    'Advanced',
+    'Local API',
+    'About',
+  ])
     await expect(tab(page, name)).toBeVisible();
   await expect(tab(page, 'Sources')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('list', { name: 'Sources' })).toContainText('/Users/demo/Fonts');
@@ -126,6 +134,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await tab(page, 'Advanced').click();
     for (const name of ['Preview cache size (MB)', 'Rescan sources every (minutes)'])
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);
+    await tab(page, 'Appearance').click();
+    expect(await borderContrast(page, 'Language')).toBeGreaterThanOrEqual(3);
   });
 }
 

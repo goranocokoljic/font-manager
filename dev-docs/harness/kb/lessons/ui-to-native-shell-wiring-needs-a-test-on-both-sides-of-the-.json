@@ -1,0 +1,20 @@
+{
+  "id": "ui-to-native-shell-wiring-needs-a-test-on-both-sides-of-the-",
+  "title": "UI-to-native-shell wiring needs a test on both sides of the IPC call",
+  "category": "testing",
+  "rule": "When a UI watcher tells the Tauri shell something (setShellLocale, a tray state) and the shell changes native chrome from it, test both halves: a Vitest that mounts App on the MockApi and asserts the mock recorded the call at start and after the setting changes, and an ipc integration test that sends the command and reads the native items back (menu, tray menu). Put native items behind a pub builder (e.g. tray::menu) so the integration test can build them; Tauri lib unit tests cannot build menus on Windows (the Common Controls manifest is linked into integration tests only).",
+  "rationale": "E19.2 (#134): no test read the mock's recorded shell locale and nothing tested the tray relabel, so deleting the App.vue watch or the tray::relabel call kept every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    134
+  ],
+  "file_globs": [
+    "apps/desktop/src/App.vue",
+    "apps/desktop/src-tauri/src/**/*.rs",
+    "apps/desktop/src-tauri/tests/**/*.rs"
+  ],
+  "first_seen": "2026-10-23T19:47:19.728Z",
+  "last_seen": "2026-10-23T19:47:19.728Z"
+}

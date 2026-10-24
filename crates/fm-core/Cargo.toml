@@ -14,9 +14,11 @@ brotli = "9.0"
 flate2 = "1.1"
 fm-api.workspace = true
 fm-platform.workspace = true
+getrandom.workspace = true
 harfrust = "0.14"
 notify = "8.2"
 read-fonts = "0.45"
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -30,3 +32,9 @@ wuff = "0.2.9"
 
 [lints]
 workspace = true
+
+# The PDF print test runs the OS UI loop on the main thread (ADR 0013), so it
+# has its own `main`.
+[[test]]
+name = "specimen_pdf"
+harness = false

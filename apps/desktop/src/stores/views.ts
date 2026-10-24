@@ -11,6 +11,7 @@ import {
   type ColumnId,
   type TableConfig,
 } from '../list/columns';
+import { t } from '../i18n';
 import { clampSetting, SIZE } from './preview';
 
 /** The localStorage key of the saved view modes and table setups (a view preference). */
@@ -43,15 +44,16 @@ export const LAYOUT_PRESETS: readonly LayoutPreset[] = [
   'waterfall',
 ];
 
-/** What the picker and the command palette call each preset. */
-export const PRESET_LABELS: Record<LayoutPreset, string> = {
-  book: 'Book',
-  columns: 'Columns',
-  magazine: 'Magazine',
-  quote: 'Quote',
-  characters: 'Characters',
-  waterfall: 'Waterfall',
-};
+/**
+ * What the picker and the command palette call each preset: getters, so a label read
+ * later is in the language chosen then.
+ */
+export const PRESET_LABELS = Object.defineProperties(
+  {} as Record<LayoutPreset, string>,
+  Object.fromEntries(
+    LAYOUT_PRESETS.map((p) => [p, { enumerable: true, get: () => t(`views.presets.${p}`) }]),
+  ),
+);
 
 /** Whether `id` can name a layout template file (as `fm_core::layout::store` checks). */
 const isLayoutId = (id: unknown): id is string =>
