@@ -200,3 +200,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E20.4 #140] apps/desktop/src/stores/features.ts:44 — preview rows still build their `font-feature-settings` string in the frontend (`settings()`), which matches fm-core's Developer-tab string only because both sort by tag.
 - [E20.5 #141] crates/fm-core/src/web_font.rs:84 — `file_stem` gives two faces with the same PostScript name the same stem, so a web export (and now a localFont snippet) lists the same file twice.
 - [E20.5 #141] crates/fm-core/src/web_css.rs:147 — `string` (and mock `css_string`, mock.rs:3118) keeps non-ASCII literal unlike `framework_snippet::css_string`; deliberate for UTF-8 fonts.css, do not unify them.
+- [E24.1 #156] apps/desktop/src/views/HomeView.vue:644 — the shared `.toggle` class (mode buttons, Compact rows, Inspector) uses `--fm-border` (≈1.5:1) for control borders, not `--fm-control-border`.
+- [E24.1 #156] apps/desktop/src/components/LayoutActions.vue:156 — the layout file bar buttons (Save, Revert, Duplicate, History) use `--fm-border` for their borders.

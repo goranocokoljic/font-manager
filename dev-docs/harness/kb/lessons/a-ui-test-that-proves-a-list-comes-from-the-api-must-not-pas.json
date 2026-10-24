@@ -1,0 +1,19 @@
+{
+  "id": "a-ui-test-that-proves-a-list-comes-from-the-api-must-not-pas",
+  "title": "A UI test that proves a list comes from the API must not pass on a fallback or a preloaded store",
+  "category": "testing",
+  "rule": "When a test claims a picker or list shows what an API call returns (list_layouts, list_collections), assert an entry only that call returns (a mock file that is not a preset, a broken entry, a user copy), never only names the component's hard-coded fallback also has. Reach the view on a path where no other view loaded the shared Pinia store first (open it by URL from a mode that does not load the list), so removing the view's own load call makes the test fail. Check it once by removing the load call.",
+  "rationale": "E24.1 (#156): the Pairing Studio picker test asserted Book/Columns/Quote, which the preset fallback also supplies, after Layout mode had already loaded the list into the shared store; removing the studio's loadList() still passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    156
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**/*.spec.ts",
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-10-24T02:50:56.713Z",
+  "last_seen": "2026-10-24T02:50:56.713Z"
+}
