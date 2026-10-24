@@ -242,8 +242,9 @@ describe('regression gate (E9.2)', () => {
 
   test('every budgeted target of the non-functional table is gated', () => {
     const budgeted = Object.entries(BUDGETS).filter(([, b]) => b.target != null).map(([k]) => k);
-    const base = Object.fromEntries(budgeted.map((k) => [k, BUDGETS[k].target / 2]));
-    const worse = Object.fromEntries(budgeted.map((k) => [k, (BUDGETS[k].target / 2) * 1.5]));
+    // The report takes this machine's budget (macOS activation is 1 s, ADR 0008).
+    const base = Object.fromEntries(budgeted.map((k) => [k, target(k) / 2]));
+    const worse = Object.fromEntries(budgeted.map((k) => [k, (target(k) / 2) * 1.5]));
     assert.deepEqual(blocking(gate(linux(worse), nightly(base))).sort(), budgeted.map((k) => `linux.${k}`).sort());
   });
 
