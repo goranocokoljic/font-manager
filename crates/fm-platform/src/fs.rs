@@ -37,6 +37,63 @@ pub fn symlink_file(original: &Path, link: &Path) -> io::Result<()> {
     }
 }
 
+/// Writes `contents` to `path` (replacing it) so that only the current user
+/// can read or write it (ADR 0015): mode 0600 on macOS and Linux, a
+/// protected DACL with the user's SID alone on Windows. The bytes go to a
+/// temporary sibling that is private before they are written, then it is
+/// renamed over `path`, so no other user ever sees them.
+pub fn write_private_file(path: &Path, contents: &[u8]) -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        crate::windows::private_file::write(path, contents)
+    }
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let tmp = temp_sibling(path);
+        let written = (|| {
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create(true)
+                .truncate(true)
+                .mode(0o600)
+                .open(&tmp)?;
+            // `mode` applies only when the file is new.
+            file.set_permissions(std::fs::Permissions::from_mode(0o600))?;
+            file.write_all(contents)?;
+            file.sync_all()?;
+            std::fs::rename(&tmp, path)
+        })();
+        if written.is_err() {
+            let _ = std::fs::remove_file(&tmp);
+        }
+        written
+    }
+}
+
+/// Whether only the current user can read `path`, as
+/// [`write_private_file`] leaves it: no permission bits for group or others
+/// on macOS and Linux, exactly the user's protected DACL on Windows.
+pub fn is_private_file(path: &Path) -> io::Result<bool> {
+    #[cfg(windows)]
+    {
+        crate::windows::private_file::is_private(path)
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        Ok(std::fs::metadata(path)?.permissions().mode() & 0o077 == 0)
+    }
+}
+
+/// `<name>.tmp` next to `path`.
+pub(crate) fn temp_sibling(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    path.with_file_name(name)
+}
+
 /// The bytes of `path` in this OS's native form: raw bytes on Unix,
 /// little-endian UTF-16 code units on Windows. [`path_from_bytes`] reverses it.
 pub fn path_to_bytes(path: &Path) -> Vec<u8> {
@@ -78,6 +135,58 @@ pub fn path_from_bytes(bytes: &[u8]) -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn scratch(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fm-private-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        dir
+    }
+
+    #[test]
+    fn a_private_file_is_readable_by_the_user_only() {
+        let dir = scratch("new");
+        let path = dir.join("endpoint.json");
+        write_private_file(&path, b"{\"token\":\"secret\"}").expect("write");
+        assert_eq!(
+            std::fs::read(&path).expect("read"),
+            b"{\"token\":\"secret\"}"
+        );
+        assert!(
+            is_private_file(&path).expect("check"),
+            "{path:?} is not private"
+        );
+        assert!(
+            !temp_sibling(&path).exists(),
+            "the temporary file is left behind"
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&path).expect("meta").permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_readable_file_is_replaced_by_a_private_one() {
+        let dir = scratch("replace");
+        let path = dir.join("endpoint-token");
+        std::fs::write(&path, b"old").expect("plain write");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).expect("chmod");
+        }
+        // A file made the ordinary way inherits the folder's ACL (Windows)
+        // or the umask (Unix): it is not private.
+        assert!(!is_private_file(&path).expect("check"));
+        write_private_file(&path, b"new").expect("write");
+        assert_eq!(std::fs::read(&path).expect("read"), b"new");
+        assert!(is_private_file(&path).expect("check"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_utf8_path_round_trips_through_bytes() {

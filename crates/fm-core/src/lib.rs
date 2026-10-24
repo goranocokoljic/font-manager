@@ -15,6 +15,7 @@ pub mod config;
 pub mod coverage;
 pub mod crash;
 pub mod css;
+pub mod endpoint;
 pub mod error;
 pub mod features;
 mod filter;

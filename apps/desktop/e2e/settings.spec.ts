@@ -8,7 +8,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('Ctrl/Cmd+, opens Settings with its six sections; Escape closes it', async ({ page }) => {
+test('Ctrl/Cmd+, opens Settings with its seven sections; Escape closes it', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+,');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   for (const name of [
@@ -17,6 +17,7 @@ test('Ctrl/Cmd+, opens Settings with its six sections; Escape closes it', async 
     'Appearance',
     'Online catalogs',
     'Advanced',
+    'Local API',
     'About',
   ])
     await expect(tab(page, name)).toBeVisible();

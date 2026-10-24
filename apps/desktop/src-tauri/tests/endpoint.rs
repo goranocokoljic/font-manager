@@ -1,0 +1,134 @@
+//! The app hosts the local API endpoint over the real library (E25.1): it
+//! starts off the window's thread, writes a private `endpoint.json` with
+//! the loopback address, answers with the token, and the quit path stops it
+//! and removes the file.
+
+use std::error::Error;
+use std::io::{Read, Write};
+use std::net::TcpStream;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use fm_api::SettingsService;
+use fm_app_lib::serve;
+use fm_core::endpoint::{DISCOVERY_FILE, Discovery};
+use fm_platform::{AppPaths, MockActivator};
+
+type TestResult = Result<(), Box<dyn Error>>;
+
+struct Home {
+    root: PathBuf,
+    paths: AppPaths,
+}
+
+impl Home {
+    fn new(label: &str) -> Result<Self, Box<dyn Error>> {
+        let root = std::env::temp_dir().join(format!("fm-app-{label}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let paths = AppPaths {
+            data: root.join("data"),
+            config: root.join("config"),
+            cache: root.join("cache"),
+            logs: root.join("logs"),
+            library: root.join("Fonts"),
+        };
+        fm_core::startup::prepare(&paths)?;
+        Ok(Self { root, paths })
+    }
+}
+
+impl Drop for Home {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.root);
+    }
+}
+
+/// `POST /v1/<method>` with `token`; the status code.
+fn post(url: &str, token: &str, method: &str) -> Result<u16, Box<dyn Error>> {
+    let host = url.strip_prefix("http://").ok_or("not an http url")?;
+    let mut stream = TcpStream::connect(host)?;
+    write!(
+        stream,
+        "POST /v1/{method} HTTP/1.1\r\nHost: {host}\r\nAuthorization: Bearer {token}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )?;
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer)?;
+    let status = answer.split(' ').nth(1).ok_or("no status line")?;
+    Ok(status.parse()?)
+}
+
+#[test]
+fn the_app_publishes_the_endpoint_and_removes_the_file_on_quit() -> TestResult {
+    let home = Home::new("endpoint")?;
+    let index = fm_core::startup::open_index(&home.paths);
+    let (state, core) = serve(&home.paths, index, Arc::new(MockActivator::new()));
+    let core = core.ok_or("no core")?;
+    let file = home.paths.data.join(DISCOVERY_FILE);
+    assert!(!file.exists());
+
+    let started = state.start_endpoint().ok_or("the endpoint did not start")?;
+    started.join().map_err(|_| "start thread panicked")?;
+    let addr = state.endpoint_addr().ok_or("not running")?;
+    assert!(addr.ip().is_loopback(), "{addr}");
+    assert_eq!(addr.ip().to_string(), "127.0.0.1");
+
+    assert!(
+        fm_platform::fs::is_private_file(&file)?,
+        "endpoint.json is readable by others"
+    );
+    let discovery: Discovery = serde_json::from_slice(&std::fs::read(&file)?)?;
+    let info = core.endpoint_info()?;
+    assert_eq!(discovery.url, format!("http://{addr}"));
+    assert_eq!(info.url.as_deref(), Some(discovery.url.as_str()));
+    assert_eq!(discovery.token, info.token);
+    assert_eq!(discovery.pid, std::process::id());
+    assert_eq!(discovery.api_version, fm_api::API_VERSION.to_string());
+
+    assert_eq!(post(&discovery.url, &discovery.token, "list_sources")?, 200);
+    assert_eq!(post(&discovery.url, &"0".repeat(64), "list_sources")?, 401);
+
+    state.run_quit_path();
+    assert!(!file.exists(), "endpoint.json is left after quit");
+    assert_eq!(state.endpoint_addr(), None);
+    assert!(
+        TcpStream::connect(addr).is_err(),
+        "{addr} still accepts after quit"
+    );
+    assert_eq!(core.endpoint_info()?.url, None);
+    // The token is kept for the next start.
+    assert_eq!(core.endpoint_info()?.token, discovery.token);
+    Ok(())
+}
+
+#[test]
+fn an_update_that_did_not_install_serves_the_endpoint_again() -> TestResult {
+    let home = Home::new("endpoint-resume")?;
+    let index = fm_core::startup::open_index(&home.paths);
+    let (state, _core) = serve(&home.paths, index, Arc::new(MockActivator::new()));
+    state
+        .start_endpoint()
+        .ok_or("no start")?
+        .join()
+        .map_err(|_| "panicked")?;
+    state.run_quit_path();
+    assert_eq!(state.endpoint_addr(), None);
+    state.resume_after_quit(Vec::new());
+    // `resume_after_quit` starts it on its own thread; wait for the file.
+    let file = home.paths.data.join(DISCOVERY_FILE);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while !file.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    assert!(file.exists(), "endpoint.json not written again");
+    assert!(state.endpoint_addr().is_some());
+    state.run_quit_path();
+    assert!(!file.exists());
+    Ok(())
+}
+
+#[test]
+fn without_the_real_library_there_is_no_endpoint() {
+    let state = fm_app_lib::AppState::new(Arc::new(fm_api::mock::MockApi::new()));
+    assert!(state.start_endpoint().is_none());
+    assert_eq!(state.endpoint_addr(), None);
+}

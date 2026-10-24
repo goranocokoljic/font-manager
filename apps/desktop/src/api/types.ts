@@ -772,6 +772,20 @@ export type Embedding =
 /**  Restricted license embedding. */
 "restricted";
 
+/**
+ *  The local API endpoint (ADR 0015): where it listens and the token every
+ *  request must carry.
+ */
+export type EndpointInfo = {
+	/**
+	 *  `http://127.0.0.1:<port>`; `None` while the endpoint is not running
+	 *  (the app has not started it yet, or the caller is the CLI's direct link).
+	 */
+	url?: string | null,
+	/**  The bearer token: 64 lowercase hex digits (32 random bytes). */
+	token: string,
+};
+
 /**  What went wrong, in a form a program can branch on. */
 export type ErrorCode = 
 /**  The id or path does not exist. */
@@ -2727,4 +2741,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 19, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 20, patch: 0 };
