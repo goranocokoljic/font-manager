@@ -23,6 +23,7 @@ use serde::de::IgnoredAny;
 
 use super::{CatalogAdapter, CatalogFile, CatalogFiles, Fetcher, malformed};
 use crate::error::FmResult;
+use crate::inventory::open_license_label;
 
 /// Where Google Fonts answers.
 pub const BASE_URL: &str = "https://fonts.google.com";
@@ -171,6 +172,7 @@ fn family(entry: Entry, axis_names: &HashMap<&str, &str>) -> CatalogFamily {
     let mut styles: Vec<CatalogStyle> = entry.fonts.keys().filter_map(|k| style(k)).collect();
     styles.sort_by_key(|s| (s.slant != Slant::Upright, s.weight));
     styles.dedup();
+    let license = entry.license.as_deref().and_then(license_id);
     CatalogFamily {
         name: entry.family.trim().to_owned(),
         category: entry.category.filter(|c| !c.is_empty()),
@@ -194,7 +196,8 @@ fn family(entry: Entry, axis_names: &HashMap<&str, &str>) -> CatalogFamily {
         version: entry.version.filter(|v| !v.is_empty()),
         last_modified: entry.last_modified.filter(|d| !d.is_empty()),
         open_source: entry.is_open_source.unwrap_or(false),
-        license: entry.license.as_deref().and_then(license_id),
+        license,
+        license_name: license.map(|l| open_license_label(l).to_owned()),
     }
 }
 

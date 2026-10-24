@@ -2597,8 +2597,10 @@ fn catalogs_are_off_until_turned_on_and_list_from_the_refreshed_cache() {
     let api: Arc<dyn Api> = Arc::new(MockApi::new());
     let id = CatalogId::GoogleFonts;
     let catalogs = api.list_catalogs().expect("catalogs");
-    assert_eq!(catalogs.len(), 1);
-    assert!(!catalogs[0].enabled);
+    let ids: Vec<CatalogId> = catalogs.iter().map(|c| c.id).collect();
+    assert_eq!(ids, [CatalogId::GoogleFonts, CatalogId::Fontshare]);
+    assert_eq!(catalogs[1].name, "Fontshare");
+    assert!(catalogs.iter().all(|c| !c.enabled), "off by default");
     assert_eq!(catalogs[0].refreshed_at, None);
     assert_eq!(
         api.refresh_catalog(CatalogRef { id })

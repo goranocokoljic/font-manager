@@ -347,3 +347,21 @@ fn timestamps_are_rfc_3339_in_utc() {
     assert_eq!(rfc3339(951_782_400), "2000-02-29T00:00:00Z");
     assert_eq!(rfc3339(1_792_800_000 + 3_661), "2026-10-24T01:01:01Z");
 }
+
+#[test]
+fn the_shipped_catalogs_are_google_fonts_and_fontshare_all_off() {
+    let dir = TempDir::new("catalog-shipped");
+    // The real adapters over HTTP; listing makes no request.
+    let c = Catalogs::open(dir.path().join(CATALOGS_DIR));
+    let list = c.list().expect("list");
+    let ids: Vec<CatalogId> = list.iter().map(|c| c.id).collect();
+    assert_eq!(ids, CatalogId::ALL);
+    assert_eq!(ids, [CatalogId::GoogleFonts, CatalogId::Fontshare]);
+    let fontshare = &list[1];
+    assert_eq!(fontshare.name, "Fontshare");
+    assert_eq!(fontshare.homepage, "https://www.fontshare.com");
+    assert!(list.iter().all(|c| !c.enabled), "off by default");
+    let e = c.refresh(CatalogId::Fontshare).expect_err("off");
+    assert_eq!(e.code(), ErrorCode::Conflict);
+    assert_eq!(cache_file(CatalogId::Fontshare), "fontshare.json");
+}

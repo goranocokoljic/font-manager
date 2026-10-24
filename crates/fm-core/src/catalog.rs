@@ -1,4 +1,5 @@
-//! Online catalogs (E22.1, ADR 0014): a [`CatalogAdapter`] per font service
+//! Online catalogs (E22.1, E22.5, ADR 0014): a [`CatalogAdapter`] per font service
+//! (Google Fonts, Fontshare)
 //! and [`Catalogs`], their on/off state and metadata cache in the app's data
 //! folder.
 //!
@@ -14,6 +15,7 @@
 //!   malformed answer leaves the previous cache as it was. The on/off state
 //!   is `catalogs.json` in the same folder.
 
+pub mod fontshare;
 pub mod google;
 
 use std::collections::{BTreeSet, HashMap};
@@ -86,13 +88,17 @@ pub trait CatalogAdapter: Send + Sync {
 
 /// Every catalog the app ships, at its real address.
 pub fn default_adapters() -> Vec<Arc<dyn CatalogAdapter>> {
-    vec![Arc::new(google::GoogleFonts::new())]
+    vec![
+        Arc::new(google::GoogleFonts::new()),
+        Arc::new(fontshare::Fontshare::new()),
+    ]
 }
 
 /// The name of a catalog's cache file.
 fn cache_file(id: CatalogId) -> &'static str {
     match id {
         CatalogId::GoogleFonts => "google-fonts.json",
+        CatalogId::Fontshare => "fontshare.json",
     }
 }
 
