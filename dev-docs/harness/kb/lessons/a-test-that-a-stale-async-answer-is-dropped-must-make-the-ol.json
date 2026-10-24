@@ -1,0 +1,19 @@
+{
+  "id": "a-test-that-a-stale-async-answer-is-dropped-must-make-the-ol",
+  "title": "A test that a stale async answer is dropped must make the older answer arrive last",
+  "category": "testing",
+  "rule": "When a store drops older async answers with a 'newest request wins' counter, test it by holding the older call's answer (a deferred promise in a spy on the client method) until after the newer call has finished, then release it and assert the state still holds the newer answer. The MockApi resolves calls at once and in call order, so starting two calls and awaiting them lets the newer answer land last anyway, and the test stays green with the guard removed. Check the test by deleting the guard once: it must fail.",
+  "rationale": "E24.2 (#157): the studio store's 'drops the answer to an older search' test awaited two immediate MockApi searches in call order, so it passed with the drop-older guard removed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    157
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**/*.test.ts",
+    "apps/desktop/src/**/*.test.ts"
+  ],
+  "first_seen": "2026-10-24T04:02:48.407Z",
+  "last_seen": "2026-10-24T04:02:48.407Z"
+}
