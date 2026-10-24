@@ -13,8 +13,8 @@ use fm_api::comparison::{
     CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
 use fm_api::export::{
-    ExportWebRequest, Framework, FrameworkSnippetRequest, GlyphSvgRequest, SpecimenFormat,
-    SpecimenRequest, Subset, WebFormat,
+    CollectionSpecimenRequest, ExportWebRequest, Framework, FrameworkSnippetRequest,
+    GlyphSvgRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat,
 };
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
@@ -2454,6 +2454,81 @@ fn a_framework_snippet_needs_a_known_face() {
     assert_eq!(empty.code, ErrorCode::InvalidRequest);
     let unknown = api.framework_snippet(req(vec![FaceId(999)])).unwrap_err();
     assert_eq!(unknown.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn a_collection_specimen_checks_like_the_core_and_returns_the_path() {
+    let api = api();
+    let req = |collection, format| CollectionSpecimenRequest {
+        collection,
+        format,
+        out_path: "/tmp/Client.pdf".into(),
+    };
+    let collection = |name: &str, rules| {
+        api.create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: name.into(),
+            parent: None,
+            rules,
+        })
+        .unwrap()
+        .id
+    };
+    let code = |r: CollectionSpecimenRequest| api.export_collection_specimen(r).unwrap_err().code;
+    let manual = collection("Client", None);
+    assert_eq!(
+        code(req(manual, SpecimenFormat::Pdf)),
+        ErrorCode::InvalidRequest,
+        "an empty collection"
+    );
+    assert_eq!(
+        code(req(CollectionId(999), SpecimenFormat::Html)),
+        ErrorCode::NotFound
+    );
+    api.add_to_collection(CollectionFacesRequest {
+        collection: manual,
+        faces: vec![FaceId(1), FaceId(3)],
+        families: vec![],
+    })
+    .unwrap();
+    let res = api
+        .export_collection_specimen(req(manual, SpecimenFormat::Pdf))
+        .unwrap();
+    assert_eq!(res.path, "/tmp/Client.pdf");
+    assert_eq!(
+        code(CollectionSpecimenRequest {
+            out_path: " ".into(),
+            ..req(manual, SpecimenFormat::Html)
+        }),
+        ErrorCode::InvalidRequest
+    );
+    // A smart collection goes through its rule.
+    let smart = collection(
+        "Variable",
+        Some(Filters {
+            variable: Some(true),
+            ..Default::default()
+        }),
+    );
+    api.export_collection_specimen(req(smart, SpecimenFormat::Html))
+        .unwrap();
+    // The restricted face refuses the whole collection, by name.
+    api.add_to_collection(CollectionFacesRequest {
+        collection: manual,
+        faces: vec![FaceId(7)],
+        families: vec![],
+    })
+    .unwrap();
+    let e = api
+        .export_collection_specimen(req(manual, SpecimenFormat::Html))
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert!(
+        e.message
+            .starts_with("Legacy Grotesk Regular: Embedding restricted"),
+        "{e:?}"
+    );
+    assert_eq!(e.detail.as_deref(), Some("blocked faces: 7"));
 }
 
 #[test]

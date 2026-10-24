@@ -35,9 +35,9 @@ use fm_api::comparison::{
     SaveComparisonRequest,
 };
 use fm_api::export::{
-    ExportService, ExportWebRequest, ExportWebResponse, FrameworkSnippet, FrameworkSnippetRequest,
-    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, SpecimenFormat, SpecimenRequest,
-    SpecimenResponse,
+    CollectionSpecimenRequest, ExportService, ExportWebRequest, ExportWebResponse,
+    FrameworkSnippet, FrameworkSnippetRequest, GlyphSvgRequest, LicenseInventory,
+    LicenseInventoryRequest, SpecimenFormat, SpecimenRequest, SpecimenResponse,
 };
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
@@ -1019,14 +1019,7 @@ impl ExportService for CoreApi {
         if req.out_path.trim().is_empty() {
             return Err(ApiError::invalid("Choose a file to save the specimen to."));
         }
-        let printer = match req.format {
-            SpecimenFormat::Html => None,
-            SpecimenFormat::Pdf => Some(
-                self.pdf
-                    .as_deref()
-                    .ok_or_else(|| ApiError::new(ErrorCode::Unsupported, PDF_NEEDS_APP))?,
-            ),
-        };
+        let printer = self.specimen_printer(req.format)?;
         let spec = self.lock().specimen(req.family)?;
         let out = Path::new(&req.out_path);
         let path = match printer {
@@ -1036,6 +1029,44 @@ impl ExportService for CoreApi {
         Ok(SpecimenResponse {
             path: path.display().to_string(),
         })
+    }
+
+    /// As [`Self::export_specimen`]: the collection's families are looked
+    /// up under the index lock ([`Index::collection_specimen`]), the files
+    /// read and the document written or printed outside it, dated today.
+    fn export_collection_specimen(
+        &self,
+        req: CollectionSpecimenRequest,
+    ) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        let printer = self.specimen_printer(req.format)?;
+        let spec = self.lock().collection_specimen(req.collection)?;
+        let out = Path::new(&req.out_path);
+        let date = specimen::today();
+        let path = match printer {
+            Some(printer) => specimen::write_collection_pdf(&spec, &date, out, printer)?,
+            None => specimen::write_collection_html(&spec, &date, out)?,
+        };
+        Ok(SpecimenResponse {
+            path: path.display().to_string(),
+        })
+    }
+}
+
+impl CoreApi {
+    /// The printer a specimen in `format` needs: none for HTML, the injected
+    /// one for a PDF (`Unsupported` without it, the CLI's direct link).
+    fn specimen_printer(&self, format: SpecimenFormat) -> ApiResult<Option<&dyn PdfPrinter>> {
+        match format {
+            SpecimenFormat::Html => Ok(None),
+            SpecimenFormat::Pdf => self
+                .pdf
+                .as_deref()
+                .map(Some)
+                .ok_or_else(|| ApiError::new(ErrorCode::Unsupported, PDF_NEEDS_APP)),
+        }
     }
 }
 

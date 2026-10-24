@@ -23,9 +23,9 @@ use crate::comparison::{
     MIN_COMPARISON_FACES, MissingFace, RenameComparisonRequest, SaveComparisonRequest,
 };
 use crate::export::{
-    ExportWebRequest, ExportWebResponse, Framework, FrameworkSnippet, FrameworkSnippetRequest,
-    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, SpecimenRequest, SpecimenResponse,
-    Subset, WebFormat,
+    CollectionSpecimenRequest, ExportWebRequest, ExportWebResponse, Framework, FrameworkSnippet,
+    FrameworkSnippetRequest, GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest,
+    SpecimenRequest, SpecimenResponse, Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -3612,34 +3612,71 @@ impl ExportService for MockApi {
         }
         let st = self.state();
         st.family(req.family)?;
-        let blocked: Vec<_> = st
-            .family_faces(req.family)
-            .filter(|f| {
-                let l = &f.detail.license;
-                l.embedding == Embedding::Restricted
-                    && matches!(l.declared, None | Some(LicenseType::Unknown))
-            })
-            .collect();
-        if !blocked.is_empty() {
-            let names: Vec<_> = blocked
-                .iter()
-                .map(|f| format!("{} {}", f.detail.face.family_name, f.detail.face.style))
-                .collect();
-            let ids: Vec<_> = blocked
-                .iter()
-                .map(|f| f.detail.face.id.0.to_string())
-                .collect();
-            return Err(ApiError::new(
-                ErrorCode::PermissionDenied,
-                format!(
-                    "{}: Embedding restricted and no license declared, so the font may not be embedded in a specimen. Declare a license for the family to export it.",
-                    names.join(", ")
-                ),
-            )
-            .with_detail(format!("blocked faces: {}", ids.join(", "))));
-        }
+        specimen_guard(st.family_faces(req.family))?;
         Ok(SpecimenResponse { path: req.out_path })
     }
+
+    /// The core's checks over the collection's families (manual members or
+    /// a smart rule, as `license_inventory`), every visible face of each;
+    /// the path is returned and nothing is written.
+    fn export_collection_specimen(
+        &self,
+        req: CollectionSpecimenRequest,
+    ) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        let st = self.state();
+        let name = st.collection(req.collection)?.name.clone();
+        let mut families = Vec::new();
+        for fam in &st.families {
+            let mut held = false;
+            for f in st.family_faces(fam.id) {
+                held |= st.in_collection(f, req.collection, &[])?;
+            }
+            if held {
+                families.push(fam.id);
+            }
+        }
+        if families.is_empty() {
+            return Err(ApiError::invalid(format!(
+                "The collection {name} is empty. Add fonts to it to export a specimen."
+            )));
+        }
+        specimen_guard(families.iter().flat_map(|&id| st.family_faces(id)))?;
+        Ok(SpecimenResponse { path: req.out_path })
+    }
+}
+
+/// The core's license guard on a specimen: a restricted face with no
+/// license declared refuses it, naming every such face.
+fn specimen_guard<'a>(faces: impl Iterator<Item = &'a MockFace>) -> ApiResult<()> {
+    let blocked: Vec<_> = faces
+        .filter(|f| {
+            let l = &f.detail.license;
+            l.embedding == Embedding::Restricted
+                && matches!(l.declared, None | Some(LicenseType::Unknown))
+        })
+        .collect();
+    if blocked.is_empty() {
+        return Ok(());
+    }
+    let names: Vec<_> = blocked
+        .iter()
+        .map(|f| format!("{} {}", f.detail.face.family_name, f.detail.face.style))
+        .collect();
+    let ids: Vec<_> = blocked
+        .iter()
+        .map(|f| f.detail.face.id.0.to_string())
+        .collect();
+    Err(ApiError::new(
+        ErrorCode::PermissionDenied,
+        format!(
+            "{}: Embedding restricted and no license declared, so the font may not be embedded in a specimen. Declare a license for the family to export it.",
+            names.join(", ")
+        ),
+    )
+    .with_detail(format!("blocked faces: {}", ids.join(", "))))
 }
 
 impl WorkflowService for MockApi {
