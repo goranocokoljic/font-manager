@@ -226,6 +226,8 @@
       "layout": "Satzbild"
     },
     "preset": "Vorlage",
+    "openStudio": "Im Pairing Studio öffnen",
+    "openStudioTitle": "Dieses Satzbild mit der gezeigten Schrift in einem eigenen Bereich öffnen",
     "unreadable": "{name} (nicht lesbar)",
     "density": {
       "comfortable": "Bequem",
@@ -283,7 +285,8 @@
       },
       "showPreset": "Satzbild „{preset}“ anzeigen",
       "reopenComparison": "Vergleich öffnen: {name}",
-      "findSimilar": "Ähnliche Schriften finden"
+      "findSimilar": "Ähnliche Schriften finden",
+      "openStudio": "Satzbild im Pairing Studio öffnen"
     }
   },
   "views": {
@@ -1139,6 +1142,14 @@
       "installVersion": "Version {version} installieren",
       "installAndRestart": "Installieren und neu starten"
     }
+  },
+  "studio": {
+    "title": "Pairing Studio",
+    "region": "Pairing Studio: {name}",
+    "font": "Schrift",
+    "noFont": "Keine Schrift",
+    "layout": "Satzbild",
+    "closeTitle": "Zurück zur Bibliothek (Escape)"
   },
   "conflicts": {
     "title": "Schriftkonflikte",
