@@ -8,10 +8,17 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
-test('Ctrl/Cmd+, opens Settings with its five sections; Escape closes it', async ({ page }) => {
+test('Ctrl/Cmd+, opens Settings with its six sections; Escape closes it', async ({ page }) => {
   await page.keyboard.press('ControlOrMeta+,');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  for (const name of ['Sources', 'Activation', 'Appearance', 'Advanced', 'About'])
+  for (const name of [
+    'Sources',
+    'Activation',
+    'Appearance',
+    'Online catalogs',
+    'Advanced',
+    'About',
+  ])
     await expect(tab(page, name)).toBeVisible();
   await expect(tab(page, 'Sources')).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('list', { name: 'Sources' })).toContainText('/Users/demo/Fonts');

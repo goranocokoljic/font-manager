@@ -39,18 +39,34 @@ const radio = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label: s
     .get('input');
 
 describe('Settings window', () => {
-  it('has the five sections as tabs and opens Sources first', async () => {
+  it('has the six sections as tabs and opens Sources first', async () => {
     const { wrapper } = await mountAt('/settings');
     expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
       'Sources',
       'Activation',
       'Appearance',
+      'Online catalogs',
       'Advanced',
       'About',
     ]);
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Sources');
     expect(wrapper.text()).toContain('/Users/demo/Fonts');
     expect(wrapper.text()).toContain('System fonts');
+    wrapper.unmount();
+  });
+
+  it('lists Adobe Fonts under Online catalogs and opens its note', async () => {
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    expect(wrapper.get('h2').text()).toBe('Online catalogs');
+    const entry = wrapper.get('button[aria-controls="settings-adobe-fonts"]');
+    expect(entry.text()).toBe('Adobe Fonts');
+    expect(entry.attributes('aria-expanded')).toBe('false');
+    expect(wrapper.find('#settings-adobe-fonts').exists()).toBe(false);
+    await entry.trigger('click');
+    expect(entry.attributes('aria-expanded')).toBe('true');
+    const note = wrapper.get('#settings-adobe-fonts');
+    expect(note.text()).toContain('no third-party app can manage them');
+    expect(note.get('a').text()).toBe('Open Adobe Fonts');
     wrapper.unmount();
   });
 

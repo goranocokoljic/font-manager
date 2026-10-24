@@ -1048,8 +1048,12 @@
       "sources": "Quellen",
       "activation": "Aktivierung",
       "appearance": "Darstellung",
+      "catalogs": "Online-Kataloge",
       "advanced": "Erweitert",
       "about": "Über"
+    },
+    "catalogs": {
+      "note": "Schriftkataloge im Web. Öffnen Sie einen, um zu sehen, was die App damit tun kann."
     },
     "sources": {
       "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Wenn du eine Quelle entfernst, vergisst die Bibliothek ihre Schriften; die Dateien bleiben, wo sie sind.",
@@ -1234,5 +1238,13 @@
     "resumeLabel": "{name} fortsetzen",
     "removeLabel": "{name} aus der Bibliothek entfernen",
     "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
+  },
+  "catalogs": {
+    "adobeFonts": {
+      "name": "Adobe Fonts",
+      "note": "Adobe Fonts werden verschlüsselt über Creative Cloud geliefert, daher kann keine Drittanbieter-App sie verwalten. Aktivieren Sie sie in der Creative Cloud-App.",
+      "open": "Adobe Fonts öffnen",
+      "openTitle": "Öffnet fonts.adobe.com in Ihrem Browser"
+    }
   }
 }
