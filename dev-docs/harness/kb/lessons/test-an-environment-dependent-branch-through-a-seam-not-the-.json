@@ -1,0 +1,19 @@
+{
+  "id": "test-an-environment-dependent-branch-through-a-seam-not-the-",
+  "title": "Test an environment-dependent branch through a seam, not the real detector",
+  "category": "testing",
+  "rule": "When code takes a different path by what it detects about its environment (a Flatpak or other sandbox, an OS feature, an env var, a marker file), put the detection result behind a parameter (a crate-private fn taking the env lookup and the file check) and unit-test both answers through it. Also test the wiring end to end once: a child process of the test binary with the variable set, asserting the user-visible result (an option hidden, a note shown) and that the child ran exactly one test. A test that compares against the real detector (`assert_eq!(x.is_some(), !sandboxed())`) only ever runs the common path on CI, so deleting the branch keeps it green.",
+  "rationale": "E17.3 (#128): the Flatpak branch that hides Start at login and adds a Platform note was tested only in parts; CI never runs in a Flatpak, so removing the check or passing false to the notes left every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    128
+  ],
+  "file_globs": [
+    "crates/fm-platform/src/**",
+    "crates/fm-core/src/**"
+  ],
+  "first_seen": "2026-10-21T17:05:25.530Z",
+  "last_seen": "2026-10-21T17:05:25.530Z"
+}

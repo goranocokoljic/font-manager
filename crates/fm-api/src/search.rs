@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::common::{Classification, Embedding, FontFormat, Page, Slant};
 use crate::library::{FaceSummary, FamilySummary, LicenseType};
+use crate::organization::RuleGroup;
 use crate::{ApiResult, CollectionId, FaceId, SourceId, TagId};
 
 /// An inclusive weight range (100–1000).
@@ -113,6 +114,11 @@ pub struct SearchRequest {
     /// Filters.
     #[serde(default)]
     pub filters: Filters,
+    /// A smart-collection rule a face must pass as well, as a smart
+    /// collection applies it (E14.1: the rule editor's live count of a rule
+    /// not saved yet).
+    #[serde(default)]
+    pub rule: Option<RuleGroup>,
     /// Window over the family groups.
     #[serde(default)]
     pub page: Page,
@@ -214,6 +220,9 @@ pub struct FilterCounts {
     /// OK for web (true) and not (false).
     #[serde(default)]
     pub web_ok: Vec<FilterCount<bool>>,
+    /// Per foundry, A to Z (E14.1).
+    #[serde(default)]
+    pub foundry: Vec<FilterCount<String>>,
 }
 
 /// How well one face covers some languages or text.
@@ -266,6 +275,10 @@ pub struct LanguagePreset {
     pub name: String,
     /// ISO 15924 script (`Cyrl`).
     pub script: String,
+    /// A pangram, or a sample sentence where the language has no true
+    /// pangram, from `data/pangrams`; `None` when there is none (E19.4).
+    #[serde(default)]
+    pub pangram: Option<String>,
 }
 
 /// How many characters of one Unicode block a face maps.

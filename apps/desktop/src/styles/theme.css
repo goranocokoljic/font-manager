@@ -117,3 +117,16 @@ body {
   --fm-warning: #ffb74d;
   --fm-success: #7bd88f;
 }
+
+/* An icon that points along the line (the ▸ of a closed tree row) points the
+   other way in right-to-left chrome. */
+[dir='rtl'] .fm-directional {
+  display: inline-block;
+  transform: scaleX(-1);
+}
+
+/* A key chord reads left to right in any chrome ("Ctrl+K", not "K+Ctrl"). */
+kbd {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

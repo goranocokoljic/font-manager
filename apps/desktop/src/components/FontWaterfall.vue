@@ -17,6 +17,7 @@ import { WATERFALL_SIZES, waterfallLinePx, waterfallRowPx } from '../list/waterf
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
@@ -166,7 +167,7 @@ function onToggle(row: ListRow): void {
     :data-surface="preview.surface"
     role="tree"
     tabindex="0"
-    aria-label="Font waterfall"
+    :aria-label="t('waterfall.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -199,17 +200,17 @@ function onToggle(row: ListRow): void {
         <header class="head">
           <span
             v-if="item.row.kind === 'family'"
-            class="twisty"
+            class="twisty fm-directional"
             aria-hidden="true"
             @click.stop="onToggle(item.row)"
             >{{ item.row.expanded ? '▾' : '▸' }}</span
           >
           <ActivationDot :state="rowActivation(item.row)" />
-          <span class="name">{{
+          <bdi class="name">{{
             item.row.kind === 'face'
               ? `${item.row.family.name} ${styleName(item.row)}`
               : item.row.family.name
-          }}</span>
+          }}</bdi>
           <span v-if="item.row.kind === 'family'" class="count">{{
             styleCount(item.row.family.styleCount)
           }}</span>
@@ -223,7 +224,7 @@ function onToggle(row: ListRow): void {
             :data-size="line.size"
             :style="{ height: `${line.px}px` }"
             :face="item.face"
-            :label="`${line.size} px`"
+            :label="t('waterfall.size', { size: line.size })"
             :text="item.text"
             :size-px="line.size"
             :line-height="preview.lineHeight"
@@ -236,7 +237,7 @@ function onToggle(row: ListRow): void {
           />
         </template>
         <p v-else class="placeholder">
-          {{ library.failed.has(item.row.family.id) ? 'Styles not available' : '' }}
+          {{ library.failed.has(item.row.family.id) ? t('list.stylesUnavailable') : '' }}
         </p>
       </div>
     </div>
@@ -262,8 +263,8 @@ function onToggle(row: ListRow): void {
 .slot {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -273,7 +274,7 @@ function onToggle(row: ListRow): void {
   contain: layout paint;
 }
 .slot.face {
-  padding-left: 24px;
+  padding-inline-start: 24px;
 }
 .slot.selected {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
@@ -283,7 +284,7 @@ function onToggle(row: ListRow): void {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';
@@ -298,12 +299,13 @@ function onToggle(row: ListRow): void {
   gap: 8px;
   box-sizing: border-box;
   height: 28px;
-  padding: 0 16px 0 0;
+  padding-block: 0;
+  padding-inline: 0 16px;
   font-size: 12px;
   font-weight: 600;
 }
 .slot:not(.face) .head {
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 .twisty {
   display: grid;
@@ -315,7 +317,7 @@ function onToggle(row: ListRow): void {
   cursor: pointer;
 }
 .slot.face .head .name {
-  padding-left: 16px;
+  padding-inline-start: 16px;
 }
 .count {
   color: var(--fm-muted);
@@ -324,12 +326,12 @@ function onToggle(row: ListRow): void {
 .line {
   flex: none;
   justify-content: flex-start;
-  padding-left: 40px;
+  padding-inline-start: 40px;
   border-bottom: 0;
 }
 .placeholder {
   margin: 0;
-  padding-left: 40px;
+  padding-inline-start: 40px;
   color: var(--fm-warning);
   font-size: 11.5px;
 }

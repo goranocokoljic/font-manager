@@ -95,6 +95,20 @@ export type AppInfo = {
 	platformNotes?: string[],
 };
 
+/**  An update the release server offers. */
+export type AvailableUpdate = {
+	/**  The version running now. */
+	currentVersion: string,
+	/**  The version offered. */
+	version: string,
+	/**  The release notes, as the release wrote them (Markdown). */
+	notes?: string | null,
+	/**  When the release was published (RFC 3339). */
+	date?: string | null,
+	/**  How far the update moves the app. */
+	kind: UpdateKind,
+};
+
 /**  A variation axis of a variable font. */
 export type Axis = {
 	/**  Four-letter axis tag (`wght`, `wdth`, `opsz`, or a custom one). */
@@ -283,6 +297,55 @@ export type ColumnRange = {
 	min: number,
 	/**  Most columns. */
 	max: number,
+};
+
+/**  How the Compare sheet shows its faces. */
+export type CompareMode = 
+/**  One column per face. */
+"sideBySide" | 
+/**  One row per face. */
+"stacked" | 
+/**  Two faces drawn on one baseline. */
+"overlay";
+
+/**  A saved comparison, ready to reopen. */
+export type Comparison = {
+	/**  Id. */
+	id: ComparisonId,
+	/**  The name the user gave it. */
+	name: string,
+	/**  The mode it was saved in. */
+	mode: CompareMode,
+	/**
+	 *  The sample text it was saved with; empty means each face shows its
+	 *  own name.
+	 */
+	sampleText: string,
+	/**  The faces the library still shows, in the saved order. */
+	faces: FaceSummary[],
+	/**  The saved faces the library no longer shows, in the saved order. */
+	missing: MissingFace[],
+};
+
+/**  A saved comparison as the list shows it. */
+export type ComparisonEntry = {
+	/**  Id. */
+	id: ComparisonId,
+	/**  The name the user gave it. */
+	name: string,
+	/**  The mode it was saved in. */
+	mode: CompareMode,
+	/**  How many faces it was saved with, missing ones included. */
+	faceCount: number,
+};
+
+/**  A named comparison saved from the Compare sheet. */
+export type ComparisonId = number;
+
+/**  Names one saved comparison. */
+export type ComparisonRef = {
+	/**  Id. */
+	id: ComparisonId,
 };
 
 /**  A clash found before activating. */
@@ -632,6 +695,11 @@ export type FaceDetail = {
 	codePointCount?: number | null,
 	/**  The user's notes on the face's family (E13.5); `notes` are the face's. */
 	familyNotes?: string | null,
+	/**
+	 *  The `CPAL` palettes of a `COLR` color face (E16.3); empty for a face
+	 *  without them.
+	 */
+	palettes?: Palette[],
 };
 
 /**  One face (style) inside a font file; a collection file has several. */
@@ -888,6 +956,8 @@ export type FilterCounts = {
 	openLicense?: FilterCount<boolean>[],
 	/**  OK for web (true) and not (false). */
 	webOk?: FilterCount<boolean>[],
+	/**  Per foundry, A to Z (E14.1). */
+	foundry?: FilterCount<string>[],
 };
 
 /**
@@ -1132,6 +1202,17 @@ export type ImportSetResponse = {
 	missing: SetEntry[],
 };
 
+/**
+ *  Install the update a check found. The app quits as it does on Quit
+ *  (session fonts are deregistered), installs and starts again.
+ */
+export type InstallUpdateRequest = {
+	/**  The version the user confirmed; must be the one the last check found. */
+	version: string,
+	/**  The user confirmed a second time that a major update may install. */
+	confirmMajor?: boolean,
+};
+
 /**  A long-running job (a scan); its progress arrives as events. */
 export type JobId = number;
 
@@ -1150,6 +1231,19 @@ export type KeepCopyRequest = {
 	/**  Only say what would move; touch nothing. */
 	dryRun?: boolean,
 };
+
+/**
+ *  The language of the UI. Each value but `System` names a message catalog the
+ *  desktop app ships (`apps/desktop/src/locales/<tag>.json`); a new catalog adds
+ *  a value here.
+ */
+export type Language = 
+/**  Follow the OS language; English when the app has no catalog for it. */
+"system" | 
+/**  English. */
+"en" | 
+/**  German. */
+"de";
 
 /**  Coverage of one language preset. */
 export type LanguageCoverage = {
@@ -1173,6 +1267,11 @@ export type LanguagePreset = {
 	name: string,
 	/**  ISO 15924 script (`Cyrl`). */
 	script: string,
+	/**
+	 *  A pangram, or a sample sentence where the language has no true
+	 *  pangram, from `data/pangrams`; `None` when there is none (E19.4).
+	 */
+	pangram?: string | null,
 };
 
 /**  A layout: a list of text blocks, top to bottom. */
@@ -1369,6 +1468,17 @@ export type Missing = {
 };
 
 /**
+ *  A face a saved comparison names that the library no longer shows (its
+ *  file was removed, or its folder is paused).
+ */
+export type MissingFace = {
+	/**  The face's id when it was saved. */
+	id: FaceId,
+	/**  Its family and style name when it was saved ("Roboto Bold"). */
+	name: string,
+};
+
+/**
  *  Move a collection under another parent, or to another place among its
  *  siblings.
  */
@@ -1436,6 +1546,26 @@ export type Paged<T> = {
 	items: T[],
 	/**  Rows in the whole list. */
 	total: number,
+};
+
+/**
+ *  One `CPAL` palette of a `COLR` color face (E16.3). The webview applies it
+ *  with CSS `font-palette` (`base-palette: index`).
+ */
+export type Palette = {
+	/**  Index of the palette in the `CPAL` table (0 is the default). */
+	index: number,
+	/**  The palette's name from the `name` table, if the font gives one. */
+	name: string | null,
+	/**
+	 *  Its colors as CSS hex, in palette-entry order: `#rrggbb`, or
+	 *  `#rrggbbaa` when the color is not opaque.
+	 */
+	colors: string[],
+	/**  The font marks it for use on a light background. */
+	lightBackground: boolean,
+	/**  The font marks it for use on a dark background. */
+	darkBackground: boolean,
 };
 
 /**
@@ -1629,6 +1759,14 @@ export type RenameCollectionRequest = {
 	name: string,
 };
 
+/**  Gives a saved comparison a new name. */
+export type RenameComparisonRequest = {
+	/**  Id. */
+	id: ComparisonId,
+	/**  The new name; must not be empty. */
+	name: string,
+};
+
 /**
  *  A "Keep this one" action: the copy kept and the copies moved to the
  *  trash. Listed in the Problems history until undone or forgotten.
@@ -1735,6 +1873,20 @@ export type SampleTextRequest = {
 	text: string,
 };
 
+/**  Saves a comparison: a new one, or over an existing one. */
+export type SaveComparisonRequest = {
+	/**  The comparison to overwrite; none saves a new one. */
+	id?: ComparisonId | null,
+	/**  Its name; must not be empty (spaces around it are dropped). */
+	name: string,
+	/**  2–4 distinct faces, in the order the sheet shows them. */
+	faces: FaceId[],
+	/**  The mode. */
+	mode?: CompareMode,
+	/**  The sample text; empty means each face shows its own name. */
+	sampleText?: string,
+};
+
 /**  Writes a layout to its template file; the previous content is kept as a version. */
 export type SaveLayoutRequest = {
 	/**  The template file's id; a new id makes a new file. */
@@ -1766,6 +1918,12 @@ export type SearchRequest = {
 	query?: string,
 	/**  Filters. */
 	filters?: Filters,
+	/**
+	 *  A smart-collection rule a face must pass as well, as a smart
+	 *  collection applies it (E14.1: the rule editor's live count of a rule
+	 *  not saved yet).
+	 */
+	rule?: RuleGroup | null,
 	/**  Window over the family groups. */
 	page?: Page,
 };
@@ -1778,6 +1936,38 @@ export type SearchResponse = {
 	total: number,
 	/**  The result count of every filter value. */
 	counts?: FilterCounts | null,
+};
+
+/**  One tag of a [`SelectionTags`]. */
+export type SelectionTag = {
+	/**  The tag. */
+	tag: TagId,
+	/**
+	 *  How many of the selection's faces carry it: all of them, or some
+	 *  (a mixed state).
+	 */
+	faceCount: number,
+	/**  True when every face of the selection carries it. */
+	all: boolean,
+};
+
+/**  The tags the faces of a selection carry (E13.4). */
+export type SelectionTags = {
+	/**
+	 *  Every face the selection names, each once: the faces first, then the
+	 *  faces of each family.
+	 */
+	faces: FaceId[],
+	/**  Every tag at least one of those faces carries, A to Z. */
+	tags: SelectionTag[],
+};
+
+/**  The fonts a selection or a drag names (E13.4): faces and whole families. */
+export type SelectionTagsRequest = {
+	/**  The faces. */
+	faces: FaceId[],
+	/**  Whole families: every face of each, as the library lists it. */
+	families?: FamilyId[],
 };
 
 /**
@@ -1845,6 +2035,24 @@ export type Settings = {
 	 *  quits. On by default.
 	 */
 	keepInTray?: boolean,
+	/**
+	 *  Whether the app starts, in the tray, when the user logs in. Read from
+	 *  the OS's login entry on every request, never stored in `config.json`;
+	 *  `None` when this system does not offer the option (then the switch
+	 *  is hidden). Off until the user turns it on.
+	 */
+	startAtLogin?: boolean | null,
+	/**
+	 *  Check for a new version when the app starts. Off unless the user
+	 *  turns it on (rule 7: no network call without a user action); where
+	 *  the app does not update itself the switch is hidden.
+	 */
+	checkUpdatesAutomatically?: boolean,
+	/**
+	 *  The language of the UI, the native menus and the tray; `System` by
+	 *  default.
+	 */
+	language?: Language,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -1865,6 +2073,15 @@ export type SettingsUpdate = {
 	rescanIntervalMinutes?: number | null,
 	/**  Keep running in the tray when the main window is closed. */
 	keepInTray?: boolean | null,
+	/**
+	 *  Register (true) or remove (false) the login entry that starts the app
+	 *  in the tray. Refused where the settings report `start_at_login: None`.
+	 */
+	startAtLogin?: boolean | null,
+	/**  Check for a new version when the app starts. */
+	checkUpdatesAutomatically?: boolean | null,
+	/**  The language of the UI. */
+	language?: Language | null,
 };
 
 /**  The shortlist for a brief. */
@@ -2005,6 +2222,8 @@ export type TagFacesRequest = {
 	faces: FaceId[],
 	/**  Tag names. */
 	tags: string[],
+	/**  Whole families (E13.4): every face of each, as the library lists it. */
+	families?: FamilyId[],
 };
 
 /**  A free-form tag. */
@@ -2091,6 +2310,52 @@ export type UntagFacesRequest = {
 	tags: TagId[],
 };
 
+/**  What a check for updates found. */
+export type UpdateCheck = {
+	/**  The version running now. */
+	currentVersion: string,
+	/**  The newer release, or `None` when this is the latest. */
+	update?: AvailableUpdate | null,
+};
+
+/**
+ *  Replace the rule of a smart collection (E14.1). The rule is checked as
+ *  `create_collection` checks it.
+ */
+export type UpdateCollectionRulesRequest = {
+	/**  The smart collection; a manual one is `InvalidRequest`. */
+	collection: CollectionId,
+	/**  The new rule. */
+	ruleGroup: RuleGroup,
+};
+
+/**  How far an update moves the app, by semantic version. */
+export type UpdateKind = 
+/**  Fixes only (1.2.3 → 1.2.4). */
+"patch" | 
+/**  New features, nothing removed (1.2.3 → 1.3.0). */
+"minor" | 
+/**
+ *  May change how the app works (1.2.3 → 2.0.0). Installed only after a
+ *  second confirmation. Before 1.0, a new minor version (0.3 → 0.4) is a
+ *  major step too: semver gives 0.x no compatibility promise.
+ */
+"major";
+
+/**  Whether this copy of the app updates itself. */
+export type UpdateSupport = {
+	/**
+	 *  The app offers "Check for updates"; false where something else
+	 *  installs its updates (Flatpak, a package manager).
+	 */
+	offered: boolean,
+	/**
+	 *  Why not, one sentence for Settings → About → Platform notes; `None`
+	 *  when offered.
+	 */
+	reason?: string | null,
+};
+
 /**  Change user metadata on faces; absent fields are left as they are. */
 export type UserMetaUpdate = {
 	/**  The faces. */
@@ -2170,4 +2435,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 15, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 17, patch: 0 };

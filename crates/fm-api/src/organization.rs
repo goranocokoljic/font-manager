@@ -155,6 +155,17 @@ pub struct MoveCollectionRequest {
     pub position: u32,
 }
 
+/// Replace the rule of a smart collection (E14.1). The rule is checked as
+/// `create_collection` checks it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCollectionRulesRequest {
+    /// The smart collection; a manual one is `InvalidRequest`.
+    pub collection: CollectionId,
+    /// The new rule.
+    pub rule_group: RuleGroup,
+}
+
 /// Add faces to, or remove them from, a manual collection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -188,6 +199,44 @@ pub struct TagFacesRequest {
     pub faces: Vec<FaceId>,
     /// Tag names.
     pub tags: Vec<String>,
+    /// Whole families (E13.4): every face of each, as the library lists it.
+    #[serde(default)]
+    pub families: Vec<FamilyId>,
+}
+
+/// The fonts a selection or a drag names (E13.4): faces and whole families.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTagsRequest {
+    /// The faces.
+    pub faces: Vec<FaceId>,
+    /// Whole families: every face of each, as the library lists it.
+    #[serde(default)]
+    pub families: Vec<FamilyId>,
+}
+
+/// The tags the faces of a selection carry (E13.4).
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTags {
+    /// Every face the selection names, each once: the faces first, then the
+    /// faces of each family.
+    pub faces: Vec<FaceId>,
+    /// Every tag at least one of those faces carries, A to Z.
+    pub tags: Vec<SelectionTag>,
+}
+
+/// One tag of a [`SelectionTags`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SelectionTag {
+    /// The tag.
+    pub tag: TagId,
+    /// How many of the selection's faces carry it: all of them, or some
+    /// (a mixed state).
+    pub face_count: u32,
+    /// True when every face of the selection carries it.
+    pub all: bool,
 }
 
 /// Detach tags from faces.
@@ -426,6 +475,11 @@ pub trait OrganizationService {
     fn rename_collection(&self, req: RenameCollectionRequest) -> ApiResult<Collection>;
     /// Nest a collection under another one, or reorder it among its siblings.
     fn move_collection(&self, req: MoveCollectionRequest) -> ApiResult<Collection>;
+    /// Replace the rule of a smart collection (E14.1). A manual collection,
+    /// a group with no rules or a weight or width range whose minimum is
+    /// above its maximum is `InvalidRequest`, as is a rule that leads back
+    /// to the collection; nothing is saved then.
+    fn update_collection_rules(&self, req: UpdateCollectionRulesRequest) -> ApiResult<Collection>;
     /// Delete a collection and its children. Faces are not touched.
     fn delete_collection(&self, collection: CollectionId) -> ApiResult<()>;
     /// Add faces or families to a manual collection; a face can be in many.
@@ -438,6 +492,9 @@ pub trait OrganizationService {
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>>;
     /// Detach tags.
     fn untag_faces(&self, req: UntagFacesRequest) -> ApiResult<()>;
+    /// The tags the faces of a selection carry, with how many carry each
+    /// (E13.4). An unknown face or family is `NotFound`.
+    fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags>;
     /// Favorite, rating, notes.
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()>;
     /// Every project set.

@@ -2,12 +2,15 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient, useClient } from '../api/client';
-import { createMockClient, EXTRA_ID_BASE, type MockOptions } from '../api/mock';
+import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
-import { ALPHABET, PANGRAMS } from '../preview/sampleText';
+import { ALPHABET } from '../preview/sampleText';
+import { useSearchStore } from '../stores/search';
 import { clearFaceAxes } from '../preview/variations';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import { useFontListStore } from '../stores/fontList';
+import { useSettingsStore } from '../stores/settings';
 import FontList from './FontList.vue';
 
 class FakeFace {
@@ -34,6 +37,9 @@ const MAX_IDLE = 16;
 let fonts: FakeSet;
 let loader: FaceLoader<FakeFace>;
 
+/** The mock API's pangram for `code`. */
+const pangramOf = (code: string) => mockLanguages.find((l) => l.code === code)!.pangram!;
+
 beforeEach(() => {
   setActivePinia(createPinia());
   clearFaceAxes();
@@ -56,6 +62,7 @@ afterEach(() => {
 async function listOf(options: MockOptions, props: Record<string, unknown> = {}) {
   setClient(createMockClient(options));
   await useLibraryStore().load();
+  await useSearchStore().loadLanguages();
   const list = mount(FontList, { props, attachTo: document.body });
   await flushPromises();
   return list;
@@ -361,7 +368,7 @@ describe('FontList preview settings', () => {
       preview: settings({ sample: 'pangram', language: 'fr', sizePx: 12, surface: 'light' }),
     });
     for (const sample of list.findAll('.sample')) {
-      expect(sample.text()).toBe(PANGRAMS.fr.text);
+      expect(sample.text()).toBe(pangramOf('fr'));
       expect((sample.element as HTMLElement).style.fontSize).toBe('12px');
     }
     expect(list.get('[role="tree"]').classes()).toContain('surface-light');
@@ -511,6 +518,43 @@ describe('FontList auto size (E16.2)', () => {
     const list = mount(FontList, { props: { preview: auto('off') }, attachTo: document.body });
     await flushPromises();
     expect(calls).toEqual([]);
+    list.unmount();
+  });
+});
+
+describe('FontList density', () => {
+  it('pads rows by the density, keeps the sample size and the cursor row in view', async () => {
+    const list = await listOf(
+      { extraFaces: 997 },
+      { preview: { ...DEFAULT_PREVIEW }, overscan: 2 },
+    );
+    const tree = list.get('[role="tree"]');
+    const el = tree.element as HTMLElement;
+    const settings = useSettingsStore();
+    await settings.load();
+    await flushPromises();
+    // 28 px × 1.2 sample line + 30 px label and padding.
+    expect(items(list)[0]!.attributes('style')).toContain('height: 64px');
+    expect(list.get('.spacer').attributes('style')).toContain(`height: ${1000 * 64}px`);
+    const comfortable = items(list).length;
+
+    const store = useFontListStore();
+    store.click(store.rows[500]!.key, 'replace');
+    el.scrollTop = 500 * 64 - 128;
+    await tree.trigger('scroll');
+    await flushPromises();
+
+    await settings.setDensity('compact');
+    await flushPromises();
+    expect(items(list)[0]!.attributes('style')).toContain('height: 54px');
+    expect(list.get('.spacer').attributes('style')).toContain(`height: ${1000 * 54}px`);
+    expect(el.scrollTop).toBe(500 * 54 - 128);
+    expect(list.get('.slot.cursor').attributes('data-key')).toBe(store.rows[500]!.key);
+    // The sample keeps the size the user chose.
+    expect(list.get('.sample').attributes('style')).toContain('font-size: 28px');
+    // Only a window of rows, a few more than before.
+    expect(items(list).length).toBeGreaterThan(comfortable);
+    expect(items(list).length).toBeLessThanOrEqual(Math.ceil(600 / 54) + 1 + 4);
     list.unmount();
   });
 });

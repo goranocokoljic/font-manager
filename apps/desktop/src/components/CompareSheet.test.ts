@@ -2,9 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FaceSummary } from '../api/types';
-import { mockFaces } from '../api/mock';
+import { mockFaces, mockLanguages } from '../api/mock';
 import { FaceLoader, faceFamily, setFaceLoader } from '../preview/faceLoader';
-import { PANGRAMS } from '../preview/sampleText';
+import { useSearchStore } from '../stores/search';
 import { useCompareStore } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import CompareSheet from './CompareSheet.vue';
@@ -20,6 +20,9 @@ const name = (f: FaceSummary) => `${f.familyName} ${f.style}`;
 
 let loader: FaceLoader;
 
+/** The mock API's pangram for `code`. */
+const pangramOf = (code: string) => mockLanguages.find((l) => l.code === code)!.pangram!;
+
 async function mountWith(count: number, mode: 'sideBySide' | 'stacked' | 'overlay') {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -28,6 +31,7 @@ async function mountWith(count: number, mode: 'sideBySide' | 'stacked' | 'overla
   faces.slice(0, count).forEach((f) => s.pin(f));
   s.setMode(mode);
   s.openSheet();
+  await useSearchStore().loadLanguages();
   const wrapper = mount(CompareSheet, { global: { plugins: [pinia] }, attachTo: document.body });
   await flushPromises();
   return { wrapper, s };
@@ -63,7 +67,7 @@ describe('compare sheet', () => {
     // Live text in each face's own font, through the face loader.
     expect(styles[0]!.fontFamily).toContain(faceFamily(200));
     expect(styles[1]!.fontFamily).toContain(faceFamily(201));
-    expect(texts[0]!.text()).toBe(PANGRAMS.en.text);
+    expect(texts[0]!.text()).toBe(pangramOf('en'));
     // Two pins: nothing to choose.
     expect(wrapper.findAll('select')).toHaveLength(0);
   });

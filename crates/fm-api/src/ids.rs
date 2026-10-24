@@ -40,4 +40,6 @@ id!(
     ResolutionId,
     /// An instance of a variable font pinned as a virtual style.
     VirtualStyleId,
+    /// A named comparison saved from the Compare sheet.
+    ComparisonId,
 );

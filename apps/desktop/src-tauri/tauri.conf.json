@@ -10,7 +10,14 @@
   },
   "app": {
     "windows": [
-      { "title": "Font Manager", "width": 1280, "height": 800, "minWidth": 1000, "minHeight": 700 }
+      {
+        "title": "Font Manager",
+        "width": 1280,
+        "height": 800,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "visible": false
+      }
     ],
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: data:; font-src 'self' asset: fmfont: http://fmfont.localhost; style-src 'self' 'unsafe-inline'"
@@ -26,5 +33,17 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQwMDhFQUZCRDlBNzhERjIKUldUeWphZlorK29JUUVya1Z6ZTNkU3luVms0TzA2K1ZYNlRuc2tqdHduUHJSZE5oOCtvdU43b3EK",
+      "endpoints": [
+        "https://github.com/goranocokoljic/font-manager/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true,
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

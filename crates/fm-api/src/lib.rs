@@ -12,7 +12,7 @@
 //! - one trait per service ([`LibraryService`], [`SearchService`],
 //!   [`PreviewService`], [`ActivationService`], [`OrganizationService`],
 //!   [`ExportService`], [`WorkflowService`], [`SettingsService`],
-//!   [`LayoutService`]); [`Api`] is all of them plus
+//!   [`LayoutService`], [`ComparisonService`]); [`Api`] is all of them plus
 //!   [`EventSource`];
 //! - every method takes one request value and returns [`ApiResult`];
 //! - methods are synchronous; long work (a scan) returns a [`JobId`] at once
@@ -21,6 +21,7 @@
 
 pub mod activation;
 pub mod common;
+pub mod comparison;
 pub mod error;
 pub mod event;
 pub mod export;
@@ -32,14 +33,17 @@ pub mod organization;
 pub mod preview;
 pub mod search;
 pub mod settings;
+pub mod update;
 pub mod workflows;
 
 pub use activation::ActivationService;
+pub use comparison::ComparisonService;
 pub use error::{ApiError, ApiResult, ErrorCode};
 pub use event::{Event, EventSource};
 pub use export::ExportService;
 pub use ids::{
-    CollectionId, FaceId, FamilyId, JobId, ResolutionId, SetId, SourceId, TagId, VirtualStyleId,
+    CollectionId, ComparisonId, FaceId, FamilyId, JobId, ResolutionId, SetId, SourceId, TagId,
+    VirtualStyleId,
 };
 pub use layout::LayoutService;
 pub use library::LibraryService;
@@ -55,7 +59,7 @@ use serde::{Deserialize, Serialize};
 /// bump is the only place a breaking change may land.
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 15,
+    minor: 17,
     patch: 0,
 };
 
@@ -90,6 +94,7 @@ pub trait Api:
     + WorkflowService
     + SettingsService
     + LayoutService
+    + ComparisonService
     + EventSource
     + Send
     + Sync
@@ -106,6 +111,7 @@ impl<T> Api for T where
         + WorkflowService
         + SettingsService
         + LayoutService
+        + ComparisonService
         + EventSource
         + Send
         + Sync
@@ -179,10 +185,14 @@ pub fn types() -> specta::Types {
         organization::CreateCollectionRequest,
         organization::RenameCollectionRequest,
         organization::MoveCollectionRequest,
+        organization::UpdateCollectionRulesRequest,
         organization::CollectionFacesRequest,
         organization::Tag,
         organization::TagFacesRequest,
         organization::UntagFacesRequest,
+        organization::SelectionTagsRequest,
+        organization::SelectionTags,
+        organization::SelectionTag,
         organization::UserMetaUpdate,
         organization::FamilyNotesUpdate,
         organization::LicenseDeclaration,
@@ -212,6 +222,12 @@ pub fn types() -> specta::Types {
         settings::Settings,
         settings::SettingsUpdate,
         settings::AppFolders,
+        // updates
+        update::UpdateKind,
+        update::AvailableUpdate,
+        update::UpdateCheck,
+        update::UpdateSupport,
+        update::InstallUpdateRequest,
         // layout
         layout::Layout,
         layout::TextBlock,
@@ -229,6 +245,14 @@ pub fn types() -> specta::Types {
         layout::RevertLayoutRequest,
         layout::LayoutVersion,
         layout::RestoreLayoutRequest,
+        // comparisons
+        comparison::CompareMode,
+        comparison::ComparisonEntry,
+        comparison::MissingFace,
+        comparison::Comparison,
+        comparison::SaveComparisonRequest,
+        comparison::ComparisonRef,
+        comparison::RenameComparisonRequest,
     )
 }
 
@@ -238,13 +262,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.15.0");
+        assert_eq!(API_VERSION.to_string(), "0.17.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":15,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":17,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

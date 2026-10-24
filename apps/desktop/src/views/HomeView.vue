@@ -22,6 +22,11 @@ import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
 import SourcesSidebar from '../components/SourcesSidebar.vue';
 import TableColumnsMenu from '../components/TableColumnsMenu.vue';
+import SmartRuleEditor from '../components/SmartRuleEditor.vue';
+import TaggingPanel from '../components/TaggingPanel.vue';
+import TagsSidebar from '../components/TagsSidebar.vue';
+import { errorMessage, t, type MessageKey } from '../i18n';
+import { DENSITIES } from '../list/density';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
@@ -36,6 +41,8 @@ import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
+import { useSettingsStore } from '../stores/settings';
+import { useTaggingStore } from '../stores/tagging';
 import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useTextLayoutsStore } from '../stores/textLayouts';
@@ -56,7 +63,10 @@ const collections = useCollectionsStore();
 const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
+const settings = useSettingsStore();
+const densityLabel = computed(() => t(`home.density.${settings.density}`));
 const quick = useQuickCollectionStore();
+const tagging = useTaggingStore();
 const route = useRoute();
 const router = useRouter();
 
@@ -68,13 +78,8 @@ watch(
   { immediate: true },
 );
 const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
-const MODES: { value: ViewMode; label: string }[] = [
-  { value: 'list', label: 'List' },
-  { value: 'table', label: 'Table' },
-  { value: 'grid', label: 'Grid' },
-  { value: 'waterfall', label: 'Waterfall' },
-  { value: 'layout', label: 'Layout' },
-];
+// The label of each is `home.modes.<mode>`.
+const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall', 'layout'];
 
 // The layout mode sets the selected face (else the list cursor's, else the first
 // family's) in the picked layout file, with the editor's unsaved changes.
@@ -140,6 +145,7 @@ onMounted(() => {
   void search.loadLanguages();
   void sets.load();
   void quick.load();
+  void compare.loadSaved();
 });
 onBeforeUnmount(() => {
   void library.stop();
@@ -173,60 +179,107 @@ const quickTargets = computed(() => {
   return fontList.cursorRow ? [fontList.cursorRow] : [];
 });
 
+// Getters: the palette shows the titles in the language chosen now.
 useActions([
   {
     id: ACTIONS.quickCollection,
-    title: 'Add the selected fonts to the Quick Collection, or remove them',
-    group: 'Quick Collection',
+    get title() {
+      return t('home.actions.quickToggle');
+    },
+    get group() {
+      return t('palette.groups.quickCollection');
+    },
     enabled: () => !quick.open && quickTargets.value.length > 0,
     run: () => quick.toggleRows(quickTargets.value),
   },
   {
     id: 'quickCollection.open',
-    title: 'Open the Quick Collection',
-    group: 'Quick Collection',
+    get title() {
+      return t('home.actions.quickOpen');
+    },
+    get group() {
+      return t('palette.groups.quickCollection');
+    },
     enabled: () => !quick.open,
     run: () => quick.show(),
   },
   {
+    id: ACTIONS.tag,
+    get title() {
+      return t('home.actions.tag');
+    },
+    get group() {
+      return t('palette.groups.tags');
+    },
+    enabled: () =>
+      !quick.open &&
+      !tagging.open &&
+      tagging.selectionPick.faces.length + tagging.selectionPick.families.length > 0,
+    run: () => tagging.openFor(),
+  },
+  {
     id: ACTIONS.compare,
-    title: 'Pin the selected font to Compare',
-    group: 'Compare',
+    get title() {
+      return t('home.actions.pin');
+    },
+    get group() {
+      return t('palette.groups.compare');
+    },
     enabled: () => pinTarget.value !== null && !compare.open,
     run: () => (pinTarget.value ? compare.pin(pinTarget.value) : undefined),
   },
   {
     id: 'compare.open',
-    title: 'Open Compare',
-    group: 'Compare',
-    enabled: () => compare.pins.length > 0,
+    get title() {
+      return t('home.actions.openCompare');
+    },
+    get group() {
+      return t('palette.groups.compare');
+    },
+    enabled: () => compare.canOpen,
     run: () => compare.openSheet(),
   },
   {
     id: ACTIONS.activateSession,
-    title: 'Activate or deactivate for this session',
-    group: 'Activation',
+    get title() {
+      return t('home.actions.activateSession');
+    },
+    get group() {
+      return t('palette.groups.activation');
+    },
     enabled: canToggle,
     run: () => toggle('session'),
   },
   {
     id: ACTIONS.activatePermanent,
-    title: 'Activate or deactivate permanently',
-    group: 'Activation',
+    get title() {
+      return t('home.actions.activatePermanent');
+    },
+    get group() {
+      return t('palette.groups.activation');
+    },
     enabled: canToggle,
     run: () => toggle('permanent'),
   },
   {
     id: 'activation.deactivateAll',
-    title: 'Deactivate all',
-    group: 'Activation',
+    get title() {
+      return t('home.actions.deactivateAll');
+    },
+    get group() {
+      return t('palette.groups.activation');
+    },
     enabled: () => activation.count > 0 && !activation.busy,
     run: () => activation.deactivateAll(),
   },
   {
     id: 'activation.deactivateOutsideSet',
-    title: 'Deactivate everything not in the current set',
-    group: 'Activation',
+    get title() {
+      return t('home.actions.deactivateOutsideSet');
+    },
+    get group() {
+      return t('palette.groups.activation');
+    },
     // The current set is the one picked under Project sets in the sidebar.
     enabled: () => sets.current != null && activation.count > 0 && !activation.busy,
     run: () => (sets.current ? activation.deactivateAllExcept(sets.current.id) : undefined),
@@ -234,17 +287,60 @@ useActions([
   // Keys 1–5 switch the view mode, in the order of the toolbar buttons.
   ...MODES.map((m, i) => ({
     id: ACTIONS.viewMode((i + 1) as 1 | 2 | 3 | 4 | 5),
-    title: `Show fonts as a ${m.label.toLowerCase()}`,
-    group: 'View',
-    run: () => views.setMode(ALL_FONTS_VIEW, m.value),
+    get title() {
+      return t(`home.actions.showAs.${m}`);
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    run: () => views.setMode(ALL_FONTS_VIEW, m),
+  })),
+  // The row density of the list and the table: the same setting as in Settings.
+  ...DENSITIES.map((d) => ({
+    id: `view.density.${d.value}`,
+    get title() {
+      return t(`home.actions.density.${d.value}`);
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => settings.density !== d.value,
+    run: () => settings.setDensity(d.value),
   })),
   ...LAYOUT_PRESETS.map((p) => ({
     id: `view.layoutPreset.${p}`,
-    title: `Show the ${PRESET_LABELS[p]} layout`,
-    group: 'View',
+    get title() {
+      return t('home.actions.showPreset', { preset: PRESET_LABELS[p] });
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
     run: () => showPreset(p),
   })),
 ]);
+
+// One palette entry per saved comparison (E13.2), kept in step with the saved list.
+let unregisterSaved: (() => void)[] = [];
+watch(
+  () => compare.saved,
+  (saved) => {
+    unregisterSaved.forEach((u) => u());
+    unregisterSaved = saved.map((c) =>
+      commands.register({
+        id: `compare.reopen.${c.id}`,
+        get title() {
+          return t('home.actions.reopenComparison', { name: c.name });
+        },
+        get group() {
+          return t('palette.groups.compare');
+        },
+        run: () => compare.reopen(c.id),
+      }),
+    );
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => unregisterSaved.splice(0).forEach((u) => u()));
 
 const paletteChord = chordOf(ACTIONS.palette)!;
 const settingsChord = chordOf(ACTIONS.settings)!;
@@ -271,7 +367,7 @@ function openFace(face: FaceId): void {
 }
 
 // Sidebar groups from the spec's information architecture; later stories fill them.
-const groups = ['Smart collections', 'Tags', 'Online catalogs'];
+const groups: MessageKey[] = ['home.sidebarGroups.smart', 'home.sidebarGroups.online'];
 </script>
 
 <template>
@@ -280,10 +376,11 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
       <SourcesSidebar />
       <QuickCollectionSidebar />
       <CollectionsSidebar />
+      <TagsSidebar />
       <ProblemsSidebar />
       <ProjectSetsSidebar />
       <ul class="groups">
-        <li v-for="group in groups" :key="group" class="group">{{ group }}</li>
+        <li v-for="group in groups" :key="group" class="group">{{ t(group) }}</li>
       </ul>
     </template>
 
@@ -291,31 +388,31 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
       <QuickCollectionReview v-if="quick.open" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
       <template v-else>
         <header class="toolbar">
-          <h1 class="title">{{ collections.open?.name ?? 'All fonts' }}</h1>
+          <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
           <SearchBox />
           <p class="count" role="status">
-            <template v-if="fontList.selectedCount > 1"
-              >{{ fontList.selectedCount }} selected</template
-            >
-            <template v-else-if="search.hits"
-              >{{ search.total }} {{ search.total === 1 ? 'family' : 'families' }}</template
-            >
+            <template v-if="fontList.selectedCount > 1">{{
+              t('home.selected', { count: fontList.selectedCount })
+            }}</template>
+            <template v-else-if="search.hits">{{
+              t('home.families', { count: search.total })
+            }}</template>
           </p>
-          <div class="modes" role="group" aria-label="View mode">
+          <div class="modes" role="group" :aria-label="t('home.viewMode')">
             <button
               v-for="m in MODES"
-              :key="m.value"
+              :key="m"
               type="button"
               class="toggle"
-              :aria-pressed="mode === m.value"
-              @click="views.setMode(ALL_FONTS_VIEW, m.value)"
+              :aria-pressed="mode === m"
+              @click="views.setMode(ALL_FONTS_VIEW, m)"
             >
-              {{ m.label }}
+              {{ t(`home.modes.${m}`) }}
             </button>
           </div>
           <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
           <label v-if="mode === 'layout'" class="preset">
-            Preset
+            {{ t('home.preset') }}
             <select
               :value="layoutId"
               @change="views.setLayout(ALL_FONTS_VIEW, ($event.target as HTMLSelectElement).value)"
@@ -327,18 +424,28 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
                 :disabled="e.broken !== null"
                 :title="e.broken ?? undefined"
               >
-                {{ e.broken === null ? e.name : `${e.name} (cannot be read)` }}
+                {{ e.broken === null ? e.name : t('home.unreadable', { name: e.name }) }}
               </option>
             </select>
           </label>
+          <!-- After the controls of the view mode, so Tab from the modes reaches those first. -->
           <button
             type="button"
             class="toggle"
-            :disabled="!compare.pins.length"
-            :title="`Compare the pinned fonts; ${formatChord(compareChord)} pins the selected font`"
+            :aria-pressed="settings.density === 'compact'"
+            :title="t('home.densityTitle', { density: densityLabel })"
+            @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
+          >
+            {{ t('home.compactRows') }}
+          </button>
+          <button
+            type="button"
+            class="toggle"
+            :disabled="!compare.canOpen"
+            :title="t('home.compareTitle', { chord: formatChord(compareChord) })"
             @click="compare.openSheet"
           >
-            Compare {{ compare.pins.length }}/{{ MAX_PINS }}
+            {{ t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS }) }}
           </button>
           <button
             type="button"
@@ -346,10 +453,10 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
             aria-controls="fm-inspector"
             aria-keyshortcuts="Control+I Meta+I"
             :aria-pressed="layout.inspectorVisible"
-            title="Show or hide the inspector (Ctrl+I / ⌘I)"
+            :title="t('home.inspectorTitle')"
             @click="layout.toggleInspector"
           >
-            Inspector
+            {{ t('home.inspector') }}
           </button>
         </header>
         <FilterChips />
@@ -389,13 +496,15 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
           @cursor-face="showFace"
           @open="openFace"
         />
-        <section v-else class="empty" aria-label="Font list">
-          <p v-if="library.error" role="alert" class="error">{{ library.error.message }}</p>
-          <p v-else-if="search.hits">No fonts match the search and filters.</p>
-          <p v-else-if="library.loaded">No fonts yet. Add a folder to start your library.</p>
+        <section v-else class="empty" :aria-label="t('home.fontList')">
+          <p v-if="library.error" role="alert" class="error">{{ errorMessage(library.error) }}</p>
+          <p v-else-if="search.hits">{{ t('home.noMatches') }}</p>
+          <p v-else-if="library.loaded">{{ t('home.empty') }}</p>
         </section>
       </template>
       <CompareSheet v-if="compare.open" />
+      <TaggingPanel />
+      <SmartRuleEditor />
     </template>
 
     <template #inspector>
@@ -409,30 +518,34 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
         :aria-keyshortcuts="ariaShortcut(paletteChord)"
         @click="commands.openPalette"
       >
-        Commands <kbd>{{ formatChord(paletteChord) }}</kbd>
+        {{ t('home.commands') }} <kbd>{{ formatChord(paletteChord) }}</kbd>
       </button>
       <RouterLink
         :to="{ name: 'settings' }"
         class="hint"
         :aria-keyshortcuts="ariaShortcut(settingsChord)"
       >
-        Settings <kbd>{{ formatChord(settingsChord) }}</kbd>
+        {{ t('home.settings') }} <kbd>{{ formatChord(settingsChord) }}</kbd>
       </RouterLink>
-      <RouterLink :to="{ name: 'conflicts' }" class="hint">Conflicts</RouterLink>
+      <RouterLink :to="{ name: 'conflicts' }" class="hint">{{ t('home.conflicts') }}</RouterLink>
       <RouterLink :to="{ name: 'problems' }" class="hint" data-testid="problem-count">
-        {{ problems.total === 1 ? '1 problem' : `${problems.total} problems` }}
+        {{ t('home.problems', { count: problems.total }) }}
       </RouterLink>
       <p class="active-count" data-testid="active-count" role="status">
-        {{ activation.count === 1 ? '1 font active' : `${activation.count} fonts active` }}
+        {{ t('home.fontsActive', { count: activation.count }) }}
       </p>
-      <p v-if="app.error" role="alert" class="error">{{ app.error.message }}</p>
+      <p v-if="app.error" role="alert" class="error">{{ errorMessage(app.error) }}</p>
       <dl v-else-if="app.info" class="info" data-testid="app-info">
-        <dt>App</dt>
-        <dd>{{ app.info.name }} {{ app.info.version }}</dd>
-        <dt>API</dt>
+        <dt>{{ t('home.info.app') }}</dt>
+        <dd>
+          <bdi>{{ app.info.name }} {{ app.info.version }}</bdi>
+        </dd>
+        <dt>{{ t('home.info.api') }}</dt>
         <dd>{{ formatApiVersion(app.info.apiVersion) }}</dd>
-        <dt>Platform</dt>
-        <dd>{{ app.info.platform }}</dd>
+        <dt>{{ t('home.info.platform') }}</dt>
+        <dd>
+          <bdi>{{ app.info.platform }}</bdi>
+        </dd>
       </dl>
     </template>
   </MainLayout>
@@ -530,7 +643,8 @@ const groups = ['Smart collections', 'Tags', 'Online catalogs'];
   content: ':';
 }
 .info dd {
-  margin: 0 8px 0 0;
+  margin-block: 0;
+  margin-inline: 0 8px;
 }
 .error {
   margin: 0;

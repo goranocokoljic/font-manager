@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, tauriClient, type FmClient } from '../api/client';
-import { createMockClient, defaultSettings, mockFolders } from '../api/mock';
+import { createMockClient, defaultSettings, MOCK_SETTINGS_KEY, mockFolders } from '../api/mock';
 import { useSettingsStore } from './settings';
 
 const invoke = vi.hoisted(() => vi.fn());
@@ -50,6 +50,15 @@ describe('settings store', () => {
     expect(await client.getSettings()).toEqual(store.settings);
   });
 
+  it('reads the density as comfortable until loaded, and saves a new one', async () => {
+    const store = useSettingsStore();
+    expect(store.density).toBe('comfortable');
+    await store.load();
+    expect(await store.setDensity('compact')).toBe(true);
+    expect(store.density).toBe('compact');
+    expect((await client.getSettings()).density).toBe('compact');
+  });
+
   it('keeps the saved value and shows the error when the API refuses', async () => {
     const store = useSettingsStore();
     await store.load();
@@ -85,5 +94,25 @@ describe('settings store', () => {
     const store = useSettingsStore();
     expect(store.activationMode).toBe('session');
     expect(store.onConflict).toBe('keepExisting');
+  });
+});
+
+describe('mock settings storage', () => {
+  it('keeps saved settings for the next mock, as settings.json does for the app', async () => {
+    const saved = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => saved.get(k) ?? null,
+      setItem: (k: string, v: string) => void saved.set(k, v),
+    };
+    await createMockClient({ settingsStorage: storage }).updateSettings({ density: 'compact' });
+    expect((await createMockClient({ settingsStorage: storage }).getSettings()).density).toBe(
+      'compact',
+    );
+    // Without a storage, and with a damaged entry, the defaults.
+    expect((await createMockClient().getSettings()).density).toBe('comfortable');
+    saved.set(MOCK_SETTINGS_KEY, '{oops');
+    expect(await createMockClient({ settingsStorage: storage }).getSettings()).toEqual(
+      defaultSettings,
+    );
   });
 });

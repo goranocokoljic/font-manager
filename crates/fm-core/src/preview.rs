@@ -245,7 +245,7 @@ fn malformed(detail: impl Into<String>) -> FmError {
 
 /// The TrueType or OpenType bytes: the data itself, or the font inside a
 /// WOFF or WOFF2 file.
-fn sfnt_data(data: &[u8]) -> FmResult<Cow<'_, [u8]>> {
+pub(crate) fn sfnt_data(data: &[u8]) -> FmResult<Cow<'_, [u8]>> {
     let web = match data.get(..4) {
         Some(b"wOFF") => FontFormat::Woff,
         Some(b"wOF2") => FontFormat::Woff2,

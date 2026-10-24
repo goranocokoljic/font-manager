@@ -6,7 +6,8 @@
 // inspector's Axes tab (the axes store), else at their defaults, through
 // `font-variation-settings`; moving an axis restyles the row, the font stays loaded.
 // Features switched in the inspector's Features tab apply through
-// `font-feature-settings`.
+// `font-feature-settings`. A color palette chosen in the inspector for the face's
+// family in `view` applies through `font-palette` (E16.3).
 // The list passes the view's preview settings (size, spacing, alignment, color).
 // When the face lacks characters of the sample, the list passes the fallback text
 // the API chose and `fallback`; the row then shows a small "Fallback" hint.
@@ -15,7 +16,10 @@ import type { Axis, AxisValue, FaceId, FaceSummary, SampleFallback } from '../ap
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
+import { usePalettesStore } from '../stores/palettes';
+import { ALL_FONTS_VIEW } from '../stores/preview';
 import { faceAxes, variationSettings } from '../preview/variations';
+import { t } from '../i18n';
 
 const props = withDefaults(
   defineProps<{
@@ -35,6 +39,8 @@ const props = withDefaults(
     fallback?: SampleFallback | null;
     /** Characters of the sample the face lacks. */
     missing?: string[];
+    /** The view whose chosen color palettes apply. */
+    view?: string;
   }>(),
   {
     label: undefined,
@@ -47,6 +53,7 @@ const props = withDefaults(
     variations: () => [],
     fallback: null,
     missing: () => [],
+    view: ALL_FONTS_VIEW,
   },
 );
 
@@ -55,6 +62,7 @@ type LoadState = 'loading' | 'ready' | 'failed';
 const loader = useFaceLoader();
 const features = useFeaturesStore();
 const axesSet = useAxesStore();
+const palettes = usePalettesStore();
 const state = ref<LoadState>('loading');
 const axes = ref<Axis[]>([]);
 let held: FaceId | null = null;
@@ -112,15 +120,18 @@ const sampleStyle = computed(() => ({
     props.variations.length ? props.variations : (axesSet.values(props.face.id) ?? []),
   ),
   fontFeatureSettings: features.settings(props.face.id),
+  fontPalette: palettes.fontPaletteOf(props.view, props.face),
 }));
 
 const fallbackTitle = computed(() => {
   if (!props.fallback) return undefined;
-  const own = props.fallback.kind === 'script' ? 'letters' : 'characters';
-  const lacks = props.missing.length
-    ? `This font lacks ${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`
-    : 'This font lacks characters of the sample text';
-  return `${lacks}, so it shows its own ${own}.`;
+  const letters = props.fallback.kind === 'script';
+  if (!props.missing.length)
+    return t(letters ? 'list.fallbackTitle.letters' : 'list.fallbackTitle.characters');
+  const missing = `${props.missing.slice(0, 8).join(' ')}${props.missing.length > 8 ? ' …' : ''}`;
+  return t(letters ? 'list.fallbackTitle.missingLetters' : 'list.fallbackTitle.missingCharacters', {
+    missing,
+  });
 });
 
 const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
@@ -130,18 +141,18 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
   <div class="row" :data-face="face.id" :data-state="state">
     <span class="label">
       <slot name="lead" />
-      {{ name }}
+      <bdi>{{ name }}</bdi>
       <slot name="detail" />
-      <span v-if="face.isVariable" class="badge">Variable</span>
+      <span v-if="face.isVariable" class="badge">{{ t('list.variable') }}</span>
       <span
         v-if="fallback"
         class="fallback"
         data-testid="fallback-hint"
         :title="fallbackTitle"
         :aria-label="fallbackTitle"
-        >Fallback</span
+        >{{ t('list.fallback') }}</span
       >
-      <span v-if="state === 'failed'" class="note">Preview not available</span>
+      <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
     </span>
     <span class="sample" dir="auto" :style="sampleStyle" :data-fallback="fallback?.kind">{{
       text

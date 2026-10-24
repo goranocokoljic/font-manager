@@ -3,7 +3,8 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockAppInfo, mockFolders } from '../api/mock';
+import { createMockClient, mockAppInfo, mockFolders, shellLocale } from '../api/mock';
+import { setLocale } from '../i18n';
 import { createAppRouter } from '../router';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
@@ -65,6 +66,48 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('offers the languages and relabels the window the moment one is chosen', async () => {
+    const spy = vi.spyOn(client, 'updateSettings');
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    const select = wrapper.get('select[name="language"]');
+    expect(select.element.closest('label')!.textContent).toContain('Language');
+    expect(select.findAll('option').map((o) => o.element.value)).toEqual(['system', 'en', 'de']);
+    expect(select.findAll('option').map((o) => o.text())).toEqual([
+      'System (English)',
+      'English',
+      'Deutsch',
+    ]);
+    expect(wrapper.get('h2').text()).toBe('Appearance');
+    expect(shellLocale.value, 'the native shell is told the locale at start').toBe('en');
+    try {
+      await select.setValue('de');
+      await flushPromises();
+      expect(spy).toHaveBeenCalledWith({ language: 'de' });
+      expect((await client.getSettings()).language).toBe('de');
+      expect(wrapper.get('h2').text()).toBe('Darstellung');
+      expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Darstellung');
+      expect(shellLocale.value, 'the Help menu and tray follow the choice').toBe('de');
+    } finally {
+      wrapper.unmount();
+      setLocale('en');
+    }
+  });
+
+  it('tells the native shell the OS language when the setting is "System"', async () => {
+    const languages = vi.spyOn(navigator, 'languages', 'get').mockReturnValue(['de-DE', 'en-US']);
+    shellLocale.value = '';
+    const { wrapper } = await mountAt('/settings?section=appearance');
+    try {
+      expect((await client.getSettings()).language).toBe('system');
+      expect(shellLocale.value).toBe('de');
+      expect(wrapper.get('h2').text()).toBe('Darstellung');
+    } finally {
+      wrapper.unmount();
+      languages.mockRestore();
+      setLocale('en');
+    }
+  });
+
   it('saves the activation choices', async () => {
     const { wrapper } = await mountAt('/settings?section=activation');
     await radio(wrapper, 'Permanently (also after a restart)').setValue(true);
@@ -103,6 +146,45 @@ describe('Settings window', () => {
     await box.setValue(true);
     await flushPromises();
     expect((await client.getSettings()).keepInTray).toBe(true);
+    wrapper.unmount();
+  });
+
+  it('hides "Start at login" where fm-api does not offer it (a Flatpak sandbox)', async () => {
+    client = createMockClient({ startAtLogin: 'unsupported' });
+    setClient(client);
+    const { wrapper } = await mountAt('/settings?section=activation');
+    expect((await client.getSettings()).startAtLogin).toBeNull();
+    expect(wrapper.find('input[name="start-at-login"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Start at login');
+    wrapper.unmount();
+  });
+
+  it('turns "Start at login" on and off, offered and off by default', async () => {
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const box = wrapper.get('input[name="start-at-login"]');
+    expect(box.element.closest('label')!.textContent!.trim()).toBe('Start at login');
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    await box.setValue(true);
+    await flushPromises();
+    expect((await client.getSettings()).startAtLogin).toBe(true);
+    await box.setValue(false);
+    await flushPromises();
+    expect((await client.getSettings()).startAtLogin).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('shows a toast and the real state when the system refuses the login entry', async () => {
+    client = createMockClient({ startAtLogin: 'refuse' });
+    setClient(client);
+    const { wrapper } = await mountAt('/settings?section=activation');
+    const box = wrapper.get('input[name="start-at-login"]');
+    await box.setValue(true);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="toast"]').text()).toContain(
+      'Start at login could not be turned on',
+    );
+    expect((box.element as HTMLInputElement).checked).toBe(false);
+    expect((await client.getSettings()).startAtLogin).toBe(false);
     wrapper.unmount();
   });
 

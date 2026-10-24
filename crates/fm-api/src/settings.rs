@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::activation::{ActivationMode, ConflictPolicy};
-use crate::{ApiError, ApiResult};
+use crate::{ApiError, ApiResult, ErrorCode};
 
 /// The smallest preview cache, in megabytes.
 pub const CACHE_LIMIT_MB_MIN: u32 = 64;
@@ -36,6 +36,21 @@ pub enum Density {
     Compact,
 }
 
+/// The language of the UI. Each value but `System` names a message catalog the
+/// desktop app ships (`apps/desktop/src/locales/<tag>.json`); a new catalog adds
+/// a value here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum Language {
+    /// Follow the OS language; English when the app has no catalog for it.
+    #[default]
+    System,
+    /// English.
+    En,
+    /// German.
+    De,
+}
+
 /// The user's settings. Missing keys take their defaults.
 ///
 /// The TypeScript type marks every field optional because of the defaults;
@@ -63,6 +78,21 @@ pub struct Settings {
     /// bar on macOS), so session fonts stay active; off, closing the window
     /// quits. On by default.
     pub keep_in_tray: bool,
+    /// Whether the app starts, in the tray, when the user logs in. Read from
+    /// the OS's login entry on every request, never stored in `config.json`;
+    /// `None` when this system does not offer the option (then the switch
+    /// is hidden). Off until the user turns it on.
+    #[serde(default)]
+    pub start_at_login: Option<bool>,
+    /// Check for a new version when the app starts. Off unless the user
+    /// turns it on (rule 7: no network call without a user action); where
+    /// the app does not update itself the switch is hidden.
+    #[serde(default)]
+    pub check_updates_automatically: bool,
+    /// The language of the UI, the native menus and the tray; `System` by
+    /// default.
+    #[serde(default)]
+    pub language: Language,
 }
 
 impl Default for Settings {
@@ -76,6 +106,9 @@ impl Default for Settings {
             cache_limit_mb: 1_024,
             rescan_interval_minutes: 60,
             keep_in_tray: true,
+            start_at_login: None,
+            check_updates_automatically: false,
+            language: Language::System,
         }
     }
 }
@@ -108,6 +141,16 @@ pub struct SettingsUpdate {
     /// Keep running in the tray when the main window is closed.
     #[serde(default)]
     pub keep_in_tray: Option<bool>,
+    /// Register (true) or remove (false) the login entry that starts the app
+    /// in the tray. Refused where the settings report `start_at_login: None`.
+    #[serde(default)]
+    pub start_at_login: Option<bool>,
+    /// Check for a new version when the app starts.
+    #[serde(default)]
+    pub check_updates_automatically: Option<bool>,
+    /// The language of the UI.
+    #[serde(default)]
+    pub language: Option<Language>,
 }
 
 impl Settings {
@@ -129,6 +172,12 @@ impl Settings {
                 "The rescan interval must be between 0 (off) and {RESCAN_INTERVAL_MAX_MINUTES} minutes."
             )));
         }
+        if update.start_at_login.is_some() && self.start_at_login.is_none() {
+            return Err(ApiError::new(
+                ErrorCode::Unsupported,
+                "Start at login is not available on this system.",
+            ));
+        }
         Ok(Self {
             activation_mode: update.activation_mode.unwrap_or(self.activation_mode),
             on_conflict: update.on_conflict.unwrap_or(self.on_conflict),
@@ -142,6 +191,11 @@ impl Settings {
                 .rescan_interval_minutes
                 .unwrap_or(self.rescan_interval_minutes),
             keep_in_tray: update.keep_in_tray.unwrap_or(self.keep_in_tray),
+            start_at_login: update.start_at_login.or(self.start_at_login),
+            check_updates_automatically: update
+                .check_updates_automatically
+                .unwrap_or(self.check_updates_automatically),
+            language: update.language.unwrap_or(self.language),
         })
     }
 }
@@ -173,7 +227,6 @@ pub trait SettingsService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ErrorCode;
 
     #[test]
     fn defaults_are_session_keep_existing_system_comfortable() {
@@ -186,6 +239,67 @@ mod tests {
         assert_eq!(s.cache_limit_mb, 1_024);
         assert_eq!(s.rescan_interval_minutes, 60);
         assert!(s.keep_in_tray);
+        assert_eq!(s.start_at_login, None);
+        assert!(!s.check_updates_automatically);
+    }
+
+    #[test]
+    fn automatic_update_checks_are_off_for_old_config_files_and_can_be_turned_on() {
+        // A config.json written before the field existed never checks by itself.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert!(!old.check_updates_automatically);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["checkUpdatesAutomatically"], false);
+        let on: SettingsUpdate =
+            serde_json::from_str(r#"{"checkUpdatesAutomatically":true}"#).expect("update");
+        let next = Settings::default().apply(&on).expect("valid");
+        assert!(next.check_updates_automatically);
+        let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert!(unchanged.check_updates_automatically);
+    }
+
+    #[test]
+    fn start_at_login_is_never_written_and_refused_where_not_offered() {
+        // Not offered: null on the wire.
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["startAtLogin"], serde_json::Value::Null);
+        let on: SettingsUpdate = serde_json::from_str(r#"{"startAtLogin":true}"#).expect("update");
+        let e = Settings::default().apply(&on).expect_err("not offered");
+        assert_eq!(e.code, ErrorCode::Unsupported);
+
+        // Offered (the service filled it from the OS): the update applies.
+        let offered = Settings {
+            start_at_login: Some(false),
+            ..Settings::default()
+        };
+        assert_eq!(
+            serde_json::to_value(offered).expect("json")["startAtLogin"],
+            false
+        );
+        assert_eq!(
+            offered.apply(&on).expect("valid").start_at_login,
+            Some(true)
+        );
+        let unchanged = offered.apply(&SettingsUpdate::default()).expect("valid");
+        assert_eq!(unchanged.start_at_login, Some(false));
+    }
+
+    #[test]
+    fn language_is_system_for_old_config_files_and_can_be_chosen() {
+        // A config.json written before the field existed follows the OS.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert_eq!(old.language, Language::System);
+        assert_eq!(Settings::default().language, Language::System);
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["language"], "system");
+        let de: SettingsUpdate = serde_json::from_str(r#"{"language":"de"}"#).expect("update");
+        let next = Settings::default().apply(&de).expect("valid");
+        assert_eq!(next.language, Language::De);
+        assert_eq!(serde_json::to_value(next).expect("json")["language"], "de");
+        let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
+        assert_eq!(unchanged.language, Language::De);
+        let bad: Result<SettingsUpdate, _> = serde_json::from_str(r#"{"language":"xx"}"#);
+        assert!(bad.is_err(), "an unknown language is refused");
     }
 
     #[test]

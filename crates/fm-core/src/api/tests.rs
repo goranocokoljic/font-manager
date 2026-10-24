@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
+use fm_api::export::{Subset, WebFormat};
 use fm_api::library::{
     FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
     ProblemKind, TrashMoveStatus,
@@ -92,7 +93,19 @@ impl Lib {
 
     /// A library whose folder is added and scanned.
     fn scanned(label: &str) -> (Self, Source, Vec<Event>) {
+        Self::scanned_with(label, &[])
+    }
+
+    /// As [`Lib::scanned`], with the fixture files `extra` (paths under
+    /// `fixtures/fonts/`) copied into the library folder too.
+    fn scanned_with(label: &str, extra: &[&str]) -> (Self, Source, Vec<Event>) {
         let lib = Self::new(label);
+        let to = lib.root.join("extra");
+        std::fs::create_dir_all(&to).expect("folder");
+        for file in extra {
+            let from = fixtures().join(file);
+            std::fs::copy(&from, to.join(from.file_name().expect("name"))).expect("copy");
+        }
         let source = lib
             .api
             .add_source(AddSourceRequest {
@@ -422,6 +435,36 @@ fn get_face_names_stylistic_sets_from_the_index() {
 }
 
 #[test]
+fn get_face_reports_the_palettes_of_a_color_face_and_none_for_a_plain_one() {
+    let (lib, source, _) = Lib::scanned("api-palettes");
+    let file = lib.root.join("cairoplay").join("CairoPlay[slnt,wght].ttf");
+    std::fs::create_dir_all(file.parent().expect("folder")).expect("folder");
+    std::fs::copy(
+        fixtures().join("google-repo/cairoplay/CairoPlay[slnt,wght].ttf"),
+        &file,
+    )
+    .expect("copy");
+    lib.scan(Some(source.id), true);
+    let cairo = FaceId(lib.family("Cairo Play").id.0);
+
+    let detail = lib.api.get_face(cairo).expect("detail");
+    assert_eq!(detail.palettes.len(), 1, "{:?}", detail.palettes);
+    assert_eq!(detail.palettes[0].index, 0);
+    assert_eq!(detail.palettes[0].colors[1], "#e53a35");
+
+    let plain = lib
+        .api
+        .get_face(FaceId(lib.family("Archivo").id.0))
+        .expect("plain");
+    assert_eq!(plain.palettes, Vec::new());
+
+    // A file gone since the scan still answers, without palettes.
+    std::fs::remove_file(&file).expect("remove the file");
+    let gone = lib.api.get_face(cairo).expect("detail of a missing file");
+    assert_eq!(gone.palettes, Vec::new());
+}
+
+#[test]
 fn problems_list_the_truncated_file_and_duplicates_answer() {
     let (lib, _, _) = Lib::scanned("api-problems");
     let problems = lib.api.list_problems().expect("problems");
@@ -618,6 +661,20 @@ fn bad_source_requests_are_errors_not_panics() {
 }
 
 #[test]
+fn app_info_notes_how_updates_arrive_where_the_app_does_not_update_itself() {
+    let lib = Lib::new("api-update-notes");
+    let notes = lib.api.app_info().expect("info").platform_notes;
+    let note = crate::update::support(&fm_platform::updater::distribution()).reason;
+    match note {
+        Some(note) => assert!(notes.contains(&note), "{notes:?}"),
+        None => assert!(
+            !notes.iter().any(|n| n.contains("Check for updates")),
+            "{notes:?}"
+        ),
+    }
+}
+
+#[test]
 fn app_info_says_when_closing_the_window_quits() {
     let lib = Lib::new("api-tray-notes");
     let quits = |notes: &[String]| notes.iter().any(|n| n.contains("closing the window quits"));
@@ -627,6 +684,59 @@ fn app_info_says_when_closing_the_window_quits() {
     lib.api
         .set_tray_support(TraySupport::Unavailable("no StatusNotifier host".into()));
     assert!(quits(&lib.api.app_info().expect("info").platform_notes));
+}
+
+const FLATPAK_CHILD: &str = "FM_FLATPAK_CHILD";
+
+/// Run by [`inside_a_flatpak_start_at_login_is_hidden_and_the_notes_say_why`]
+/// in a new process of this test binary with `FLATPAK_ID` set.
+#[test]
+#[ignore = "run as a child process with FLATPAK_ID set"]
+fn child_reports_start_at_login_inside_a_flatpak() {
+    assert!(
+        std::env::var_os(FLATPAK_CHILD).is_some(),
+        "run by the parent test"
+    );
+    let lib = Lib::new("api-flatpak-child");
+    let notes = lib.api.app_info().expect("info").platform_notes;
+    assert!(
+        notes.iter().any(|n| n.contains("Flatpak sandbox")),
+        "{notes:?}"
+    );
+    // Flatpak installs the updates: the note says so (E18.2).
+    assert!(
+        notes
+            .iter()
+            .any(|n| n.contains("Flatpak installs the updates")),
+        "{notes:?}"
+    );
+    let store = SettingsStore::new(&lib.paths).with_system_autostart();
+    assert_eq!(store.get_settings().expect("read").start_at_login, None);
+}
+
+#[test]
+fn inside_a_flatpak_start_at_login_is_hidden_and_the_notes_say_why() {
+    // Only Linux has a Flatpak; elsewhere `FLATPAK_ID` means nothing.
+    if Os::current() != Os::Linux {
+        return;
+    }
+    let out = std::process::Command::new(std::env::current_exe().expect("test binary"))
+        .args([
+            "api::tests::child_reports_start_at_login_inside_a_flatpak",
+            "--exact",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env(FLATPAK_CHILD, "1")
+        .env("FLATPAK_ID", "org.fontmanager.app")
+        .output()
+        .expect("the child runs");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success() && stdout.contains("1 passed"),
+        "{stdout}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
@@ -820,6 +930,14 @@ fn coverage_and_languages_come_from_the_stored_cmap() {
     let (lib, _, _) = Lib::scanned("api-coverage");
     let languages = lib.api.list_languages().expect("languages");
     assert!(languages.iter().any(|l| l.code == "de"), "{languages:?}");
+    let sr = languages
+        .iter()
+        .find(|l| l.code == "sr-Cyrl")
+        .expect("sr-Cyrl");
+    assert!(
+        sr.pangram.as_deref().is_some_and(|p| p.contains('џ')),
+        "{sr:?}"
+    );
     let face = FaceId(lib.family("Bebas Neue").id.0);
     let text = lib
         .api
@@ -991,6 +1109,7 @@ fn collections_tags_metadata_and_sets_use_the_index() {
     let tags = lib
         .api
         .tag_faces(TagFacesRequest {
+            families: Vec::new(),
             faces: vec![face],
             tags: vec!["Poster".into()],
         })
@@ -1068,13 +1187,6 @@ fn settings_live_in_the_config_file() {
 #[test]
 fn services_not_built_yet_answer_unsupported() {
     let lib = Lib::new("api-not-built");
-    is_unsupported(lib.api.export_web(ExportWebRequest {
-        faces: vec![FaceId(1)],
-        formats: Vec::new(),
-        subset: None,
-        out_dir: "out".into(),
-        css: false,
-    }));
     is_unsupported(lib.api.pick_fonts_for_brief(BriefRequest {
         brief: "a poster".into(),
         languages: Vec::new(),
@@ -1273,6 +1385,343 @@ fn files_under(dir: &Path) -> Vec<PathBuf> {
     }
     out.sort();
     out
+}
+
+fn web_request(faces: Vec<FaceId>, out_dir: &Path) -> ExportWebRequest {
+    ExportWebRequest {
+        faces,
+        formats: vec![WebFormat::Woff2, WebFormat::Woff],
+        subset: None,
+        out_dir: out_dir.display().to_string(),
+        css: false,
+    }
+}
+
+#[test]
+fn faces_export_as_web_fonts_named_by_postscript_name() {
+    let (lib, _, _) = Lib::scanned("api-export-web");
+    let first = |name: &str| {
+        lib.api
+            .get_family(lib.family(name).id)
+            .expect("family")
+            .faces[0]
+            .clone()
+    };
+    let bebas = first("Bebas Neue");
+    let archivo = first("Archivo");
+    let ttc = lib
+        .api
+        .get_family(lib.family("Agdasima").id)
+        .expect("family")
+        .faces
+        .into_iter()
+        .find(|f| {
+            let d = lib.api.get_face(f.id).expect("face");
+            d.path.ends_with(".ttc") && d.collection_index == 1
+        })
+        .expect("a face of the collection");
+    let out = lib.dir.path().join("Web fonts ü");
+    std::fs::create_dir_all(&out).expect("out");
+    let before = files_under(&lib.root);
+    let faces = vec![bebas.id, ttc.id, archivo.id, bebas.id];
+    let res = lib
+        .api
+        .export_web(web_request(faces, &out))
+        .expect("export");
+    assert_eq!(res.css, None);
+    let mut want = Vec::new();
+    for f in [&bebas, &ttc, &archivo] {
+        for ext in ["woff2", "woff"] {
+            let path = out.join(format!("{}.{ext}", f.postscript_name));
+            want.push(path.display().to_string());
+        }
+    }
+    assert_eq!(res.files, want);
+    for f in &res.files {
+        assert!(Path::new(f).is_absolute(), "{f}");
+        let bytes = std::fs::read(f).expect("written");
+        assert!(
+            bytes.starts_with(b"wOF2") || bytes.starts_with(b"wOFF"),
+            "{f}"
+        );
+    }
+    assert_eq!(files_under(&lib.root), before, "the sources are only read");
+
+    // A second export into the same folder clashes and writes nothing.
+    let e = lib
+        .api
+        .export_web(web_request(vec![archivo.id], &out))
+        .expect_err("clash");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    let name = format!("{}.woff2", archivo.postscript_name);
+    assert!(e.message.contains(&name), "{e:?}");
+    assert_eq!(files_under(&out).len(), 6);
+}
+
+#[test]
+fn web_export_refuses_bad_requests() {
+    let (lib, _, _) = Lib::scanned("api-export-web-refused");
+    let face = lib
+        .api
+        .get_family(lib.family("Bebas Neue").id)
+        .expect("family")
+        .faces[0]
+        .id;
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let code = |req| lib.api.export_web(req).expect_err("refused").code;
+
+    assert_eq!(
+        code(web_request(Vec::new(), &out)),
+        ErrorCode::InvalidRequest
+    );
+    let no_format = ExportWebRequest {
+        formats: Vec::new(),
+        ..web_request(vec![face], &out)
+    };
+    assert_eq!(code(no_format), ErrorCode::InvalidRequest);
+    let no_folder = ExportWebRequest {
+        out_dir: "  ".into(),
+        ..web_request(vec![face], &out)
+    };
+    assert_eq!(code(no_folder), ErrorCode::InvalidRequest);
+    let unknown = web_request(vec![face, FaceId(999_999)], &out);
+    assert_eq!(code(unknown), ErrorCode::NotFound);
+    assert!(files_under(&out).is_empty());
+}
+
+/// The face of `family` whose file name ends with `file`.
+fn face_in(lib: &Lib, family: &str, file: &str) -> FaceId {
+    lib.api
+        .get_family(lib.family(family).id)
+        .expect("family")
+        .faces
+        .into_iter()
+        .find(|f| lib.api.get_face(f.id).expect("face").path.ends_with(file))
+        .unwrap_or_else(|| panic!("{family}: no face from {file}"))
+        .id
+}
+
+#[test]
+fn web_export_writes_fonts_css_for_static_variable_and_italic_faces() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-export-web-css",
+        &[
+            "google-repo/cairoplay/CairoPlay[slnt,wght].ttf",
+            "fontshare/sora/Sora-Italic.woff2",
+            // Name ID 1 "Asap SemiBold", name ID 16 "Asap": the CSS family is 16.
+            "fontshare/asap/Asap-SemiBold.otf",
+        ],
+    );
+    let faces = vec![
+        face_in(&lib, "Bebas Neue", "BebasNeue-Regular.ttf"),
+        face_in(&lib, "Asap Sharp", "AsapSharp[wdth,wght].ttf"),
+        face_in(&lib, "Cairo Play", "CairoPlay[slnt,wght].ttf"),
+        face_in(&lib, "Sora", "Sora-Italic.woff2"),
+        face_in(&lib, "Asap", "Asap-SemiBold.otf"),
+    ];
+    let out = lib.dir.path().join("css");
+    std::fs::create_dir_all(&out).expect("out");
+    let res = lib
+        .api
+        .export_web(ExportWebRequest {
+            css: true,
+            ..web_request(faces, &out)
+        })
+        .expect("export");
+    let css = res.css.clone().expect("css");
+    let css_path = out.join("fonts.css");
+    assert_eq!(res.files.len(), 11);
+    assert_eq!(res.files.last(), Some(&css_path.display().to_string()));
+    assert_eq!(std::fs::read_to_string(&css_path).expect("written"), css);
+    assert_eq!(css, WEB_CSS_SNAPSHOT, "{css}");
+
+    // A second export clashes on the stylesheet too, and writes nothing.
+    let again = lib.dir.path().join("again");
+    std::fs::create_dir_all(&again).expect("again");
+    std::fs::write(again.join("fonts.css"), "keep me").expect("existing");
+    let e = lib
+        .api
+        .export_web(ExportWebRequest {
+            css: true,
+            ..web_request(vec![face_in(&lib, "Bebas Neue", ".ttf")], &again)
+        })
+        .expect_err("clash");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(e.message.contains("fonts.css"), "{e:?}");
+    assert_eq!(files_under(&again).len(), 1);
+    assert_eq!(
+        std::fs::read_to_string(again.join("fonts.css")).expect("kept"),
+        "keep me"
+    );
+}
+
+/// `fonts.css` of [`web_export_writes_fonts_css_for_static_variable_and_italic_faces`].
+const WEB_CSS_SNAPSHOT: &str = r#"@font-face {
+  font-family: "Bebas Neue";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("BebasNeue-Regular.woff2") format("woff2"), url("BebasNeue-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Asap Sharp";
+  font-style: normal;
+  font-weight: 100 900;
+  font-stretch: 75% 125%;
+  font-display: swap;
+  src: url("AsapSharp-Regular.woff2") format("woff2"), url("AsapSharp-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Cairo Play";
+  font-style: oblique -11deg 11deg;
+  font-weight: 200 1000;
+  font-display: swap;
+  src: url("CairoPlay-Regular.woff2") format("woff2"), url("CairoPlay-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Sora";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("Sora-Italic.woff2") format("woff2"), url("Sora-Italic.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Asap";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("Asap-SemiBold.woff2") format("woff2"), url("Asap-SemiBold.woff") format("woff");
+}
+"#;
+
+#[test]
+fn a_subset_web_export_writes_the_mapped_unicode_range() {
+    let (lib, _, _) = Lib::scanned("api-export-web-css-subset");
+    let face = face_in(&lib, "Bebas Neue", "BebasNeue-Regular.ttf");
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let res = lib
+        .api
+        .export_web(ExportWebRequest {
+            css: true,
+            subset: Some(Subset::Text {
+                text: "BA日".into(),
+            }),
+            formats: vec![WebFormat::Woff],
+            ..web_request(vec![face], &out)
+        })
+        .expect("export");
+    let css = res.css.expect("css");
+    assert!(
+        css.contains(
+            "  unicode-range: U+0020, U+0041-0042;
+"
+        ),
+        "only what the written file maps: {css}"
+    );
+    assert!(
+        css.contains(
+            "  src: url(\"BebasNeue-Regular.woff\") format(\"woff\");
+"
+        ),
+        "{css}"
+    );
+}
+
+#[test]
+fn web_export_keeps_only_the_subset_and_refuses_a_bad_one() {
+    let (lib, _, _) = Lib::scanned("api-export-web-subset");
+    let face = lib
+        .api
+        .get_family(lib.family("Bebas Neue").id)
+        .expect("family")
+        .faces[0]
+        .clone();
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let with = |subset: Subset| ExportWebRequest {
+        formats: vec![WebFormat::Woff2],
+        subset: Some(subset),
+        ..web_request(vec![face.id], &out)
+    };
+    let refused = |subset: Subset| {
+        let e = lib.api.export_web(with(subset)).expect_err("refused");
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+        assert!(files_under(&out).is_empty(), "nothing is written: {e:?}");
+        e.message
+    };
+    let m = refused(Subset::Presets {
+        names: vec!["latin".into(), "elvish".into()],
+    });
+    assert!(m.contains("\"elvish\""), "{m}");
+    let m = refused(Subset::Unicode {
+        ranges: vec!["U+00FF-0000".into()],
+    });
+    assert!(m.contains("\"U+00FF-0000\""), "{m}");
+    let m = refused(Subset::Text {
+        text: "日本".into(),
+    });
+    assert!(m.contains("none of the characters"), "{m}");
+
+    let res = lib
+        .api
+        .export_web(with(Subset::Text { text: "AB".into() }))
+        .expect("export");
+    assert_eq!(res.files.len(), 1);
+    let woff2 = std::fs::read(&res.files[0]).expect("written");
+    let sfnt = crate::glyphs::sfnt(&woff2).expect("decodes");
+    let font = skrifa::FontRef::new(&sfnt).expect("font");
+    use skrifa::MetadataProvider as _;
+    let mapped: Vec<u32> = font.charmap().mappings().map(|(cp, _)| cp).collect();
+    assert_eq!(mapped, [0x20, 0x41, 0x42]);
+}
+
+#[test]
+fn a_face_whose_license_keeps_it_off_the_web_is_refused() {
+    let lib = Lib::new("api-export-web-restricted");
+    // Bebas Neue with OS/2 fsType 0x0002: restricted license embedding.
+    let mut data = std::fs::read(fixtures().join("google-repo/bebasneue/BebasNeue-Regular.ttf"))
+        .expect("fixture");
+    let os2 = read_fonts::FontRef::new(&data)
+        .expect("font")
+        .table_directory()
+        .table_records()
+        .iter()
+        .find(|r| r.tag() == read_fonts::types::Tag::new(b"OS/2"))
+        .map(|r| r.offset() as usize)
+        .expect("OS/2");
+    data[os2 + 8..os2 + 10].copy_from_slice(&[0x00, 0x02]);
+    let folder = lib.dir.path().join("Restricted");
+    std::fs::create_dir_all(&folder).expect("folder");
+    std::fs::write(folder.join("Restricted.ttf"), &data).expect("font");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let face = lib
+        .api
+        .get_family(lib.family("Bebas Neue").id)
+        .expect("family")
+        .faces[0]
+        .id;
+    let out = lib.dir.path().join("out");
+    std::fs::create_dir_all(&out).expect("out");
+    let e = lib
+        .api
+        .export_web(web_request(vec![face], &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert!(e.message.contains("Bebas Neue"), "{e:?}");
+    assert!(files_under(&out).is_empty());
 }
 
 #[test]
@@ -2139,6 +2588,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
                 offset: 0,
                 limit: 1000,
             },
+            rule: None,
         })
         .expect("search")
         .families
@@ -2236,4 +2686,96 @@ fn metrics_are_stored_at_scan_and_size_factors_answer_many_faces() {
         })
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
+}
+
+// --- comparisons ---------------------------------------------------------
+
+/// The first face of the family `name`.
+fn first_face(lib: &Lib, name: &str) -> fm_api::library::FaceSummary {
+    let family = lib.family(name);
+    lib.api
+        .get_family(family.id)
+        .expect("family")
+        .faces
+        .into_iter()
+        .next()
+        .expect("a face")
+}
+
+/// E13.2: a named comparison of real fonts survives a rescan, a rebuild and
+/// a restart; when a font's file is removed, reopening it gives the faces
+/// left and names the missing one.
+#[test]
+fn named_comparisons_survive_a_rescan_a_restart_and_a_removed_font() {
+    use fm_api::comparison::{CompareMode, ComparisonRef, MissingFace, SaveComparisonRequest};
+
+    let (lib, source, _) = Lib::scanned("api-comparisons");
+    let picked: Vec<_> = ["Bebas Neue", "Barlow", "Agdasima"]
+        .iter()
+        .map(|name| first_face(&lib, name))
+        .collect();
+    let ids: Vec<_> = picked.iter().map(|f| f.id).collect();
+    let saved = lib
+        .api
+        .save_comparison(SaveComparisonRequest {
+            id: None,
+            name: "Display options".into(),
+            faces: ids.clone(),
+            mode: CompareMode::Overlay,
+            sample_text: "Ångström 2026".into(),
+        })
+        .expect("save");
+    assert_eq!(saved.faces.iter().map(|f| f.id).collect::<Vec<_>>(), ids);
+    let reopen = |api: &CoreApi| {
+        api.get_comparison(ComparisonRef { id: saved.id })
+            .expect("reopen")
+    };
+
+    lib.scan(None, false);
+    assert_eq!(reopen(&lib.api), saved, "after a rescan");
+    rebuild(&lib);
+    assert_eq!(
+        reopen(&lib.api)
+            .faces
+            .iter()
+            .map(|f| f.id)
+            .collect::<Vec<_>>(),
+        ids,
+        "after a rebuild"
+    );
+
+    // A restart: a new core over the same index file.
+    let index = Index::open(&lib.paths.data.join(INDEX_FILE))
+        .expect("index")
+        .index;
+    let restarted = CoreApi::new(
+        index,
+        Arc::clone(&lib.activator) as Arc<dyn FontActivator>,
+        SettingsStore::new(&lib.paths),
+        None,
+    );
+    let after = reopen(&restarted);
+    assert_eq!(after.name, "Display options");
+    assert_eq!(after.mode, CompareMode::Overlay);
+    assert_eq!(after.sample_text, "Ångström 2026");
+    assert_eq!(after.faces.iter().map(|f| f.id).collect::<Vec<_>>(), ids);
+    assert_eq!(restarted.list_comparisons().expect("list").len(), 1);
+    drop(restarted);
+
+    // Bebas Neue's file is removed from the folder and the folder rescanned.
+    std::fs::remove_dir_all(lib.root.join("bebasneue")).expect("remove");
+    lib.scan(Some(source.id), true);
+    let left = reopen(&lib.api);
+    assert_eq!(
+        left.faces.iter().map(|f| f.id).collect::<Vec<_>>(),
+        ids[1..],
+        "the faces left, in order"
+    );
+    assert_eq!(
+        left.missing,
+        [MissingFace {
+            id: ids[0],
+            name: format!("{} {}", picked[0].family_name, picked[0].style),
+        }]
+    );
 }

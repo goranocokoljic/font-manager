@@ -4,6 +4,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import type { Clash } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import { useConflictsStore } from '../stores/conflicts';
 
@@ -31,7 +32,9 @@ onMounted(() => {
 onBeforeUnmount(() => store.stop());
 
 function other(c: Clash): string {
-  return c.with.kind === 'system' ? `Installed font: ${c.with.path}` : store.nameOf(c.with.face);
+  return c.with.kind === 'system'
+    ? t('conflicts.installedFont', { path: c.with.path })
+    : store.nameOf(c.with.face);
 }
 
 function winner(c: Clash): string {
@@ -42,24 +45,26 @@ function winner(c: Clash): string {
 <template>
   <div class="conflicts" @keydown="onKey">
     <header class="bar">
-      <h1 id="conflicts-title" ref="title" class="title" tabindex="-1">Font conflicts</h1>
-      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">Close</button>
+      <h1 id="conflicts-title" ref="title" class="title" tabindex="-1">
+        {{ t('conflicts.title') }}
+      </h1>
+      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">
+        {{ t('common.close') }}
+      </button>
     </header>
     <main class="panel">
-      <p class="note">
-        Two active fonts with the same PostScript name are a conflict: apps ask for fonts by that
-        name. The winner is the font the app puts first: a font you chose to replace the other one
-        with for this session, or the later of two fonts the app activated.
+      <p class="note">{{ t('conflicts.intro') }}</p>
+      <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
+      <p v-else-if="store.loaded && !store.clashes.length" class="note">
+        {{ t('conflicts.none') }}
       </p>
-      <p v-if="store.error" role="alert" class="error">{{ store.error.message }}</p>
-      <p v-else-if="store.loaded && !store.clashes.length" class="note">No conflicts.</p>
       <table v-else-if="store.clashes.length" aria-labelledby="conflicts-title" class="table">
         <thead>
           <tr>
-            <th scope="col">PostScript name</th>
-            <th scope="col">Active font</th>
-            <th scope="col">Conflicts with</th>
-            <th scope="col">Winner</th>
+            <th scope="col">{{ t('conflicts.columns.postscriptName') }}</th>
+            <th scope="col">{{ t('conflicts.columns.activeFont') }}</th>
+            <th scope="col">{{ t('conflicts.columns.conflictsWith') }}</th>
+            <th scope="col">{{ t('conflicts.columns.winner') }}</th>
           </tr>
         </thead>
         <tbody>

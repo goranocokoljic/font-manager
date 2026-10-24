@@ -3,6 +3,7 @@ import type { FilterCounts } from '../api/types';
 import {
   chipGroups,
   chosenLanguages,
+  hasChosenFilters,
   hasFilters,
   isChosen,
   languageName,
@@ -131,6 +132,16 @@ describe('filter chips', () => {
     expect(f).toEqual({});
     expect(hasFilters({ supports: { kind: 'text', text: 'ж' } })).toBe(true);
     expect(chosenLanguages({ supports: { kind: 'text', text: 'ж' } })).toEqual([]);
+  });
+
+  it('an open collection alone is not a chosen filter; a chip, language or range is', () => {
+    expect(hasChosenFilters({})).toBe(false);
+    expect(hasChosenFilters({ collection: 3 })).toBe(false);
+    expect(hasChosenFilters({ collection: 3, formats: [] })).toBe(false);
+    expect(hasChosenFilters({ collection: 3, slant: 'italic' })).toBe(true);
+    expect(hasChosenFilters({ supports: { kind: 'languages', codes: ['pl'] } })).toBe(true);
+    expect(hasChosenFilters({ weight: { min: 300, max: 500 } })).toBe(true);
+    expect(hasChosenFilters({ width: { min: 3, max: 5 } })).toBe(true);
   });
 
   it('names a language by its preset, or by its code when unknown', () => {

@@ -33,6 +33,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `Space` | Quick look at the font (coming in a later version) |
 | `C` | Pin the selected font to Compare (up to 4 fonts) |
 | `B` | Add the selected fonts to the Quick Collection, or remove them if they are in it |
+| `T` | Open the tagging panel for the selected fonts |
 
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.
@@ -43,6 +44,23 @@ in the search box.
 |-----|--------------|
 | `Up` and `Down` | Go to the previous or next font |
 | `Delete` or `Backspace` | Drop the font from the Quick Collection |
+
+## In the tagging panel
+
+Select fonts and press `T` (or run **Tag the selected fonts…** in the command
+palette). The panel lists every tag. A tag shows **on all**, **on some** or
+**on none** of the selected fonts. You can also drag fonts from the list or the
+table onto a tag under **Tags** in the sidebar. A dragged family gets the tag on
+all of its styles. While you drag, the sidebar marks the tags that the fonts
+already have.
+
+| Key | What it does |
+|-----|--------------|
+| Type a name | Show only the tags that match |
+| `Up` and `Down` | Go to the previous or next tag |
+| `Space` | Put the tag on all the selected fonts, or take it off all of them. Press again to undo |
+| `Enter` | Apply the changes and close. If no tag has the name you typed, make that tag on the selected fonts |
+| `Esc` | Close the panel without applying the changes |
 
 ## In the layout
 
@@ -64,6 +82,12 @@ preview text of the list, all at the same size. Choose a mode: **Side by side**,
 **Stacked** or **Overlay**. Overlay draws two fonts on one baseline in two colors;
 with three or four pinned, choose the two fonts. **Remove** takes a font out of
 Compare. The pins stay until you close the app.
+
+To keep a comparison, type a name and click **Save comparison**. The fonts, the
+mode and the preview text are saved. To open a saved comparison, click its name
+under **Saved** in Compare, or run **Open comparison:** and its name in the command
+palette. If a font of the comparison is no longer in the library, Compare opens
+with the other fonts and tells you which font is missing.
 
 | Key | What it does |
 |-----|--------------|

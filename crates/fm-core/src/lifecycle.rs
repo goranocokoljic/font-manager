@@ -7,11 +7,12 @@
 //! [`crate::CoreApi::shutdown`] deregisters the session fonts (ADR 0008).
 
 use fm_api::activation::{
-    ActivationMode, ActivationOutcome, ActivationService, ActiveFace, DeactivateRequest, Target,
+    ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace,
+    ConflictPolicy, DeactivateRequest, Target,
 };
 use fm_api::settings::Settings;
 use fm_api::{ApiResult, FaceId};
-use fm_platform::{Os, TraySupport};
+use fm_platform::{AUTOSTART_ARG, Os, TraySupport};
 
 /// The tray menu item that shows the main window.
 pub const MENU_OPEN: &str = "Open Font Manager";
@@ -38,6 +39,32 @@ pub fn close_action(settings: &Settings, tray: &TraySupport) -> CloseAction {
         CloseAction::HideToTray
     } else {
         CloseAction::Quit
+    }
+}
+
+/// What the main window does as the app starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchWindow {
+    /// Show the window, as any launch by the user.
+    Show,
+    /// Keep the window hidden; the app waits in the tray (a start at login).
+    StayInTray,
+}
+
+/// A launch with [`AUTOSTART_ARG`] (the login entry, ADR 0011) stays in the
+/// tray; any other launch shows the window, and so does a start at login
+/// when the desktop has no tray item, so the app is never running unseen.
+/// `args` are the program's arguments without the program itself.
+pub fn launch_window<I, S>(args: I, tray: &TraySupport) -> LaunchWindow
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let autostart = args.into_iter().any(|a| a.as_ref() == AUTOSTART_ARG);
+    if autostart && tray.is_available() {
+        LaunchWindow::StayInTray
+    } else {
+        LaunchWindow::Show
     }
 }
 
@@ -73,10 +100,29 @@ pub fn deactivate_session(api: &dyn ActivationService) -> ApiResult<Vec<Activati
     })
 }
 
+/// Activates `faces` for the session again: the session fonts a quit ended
+/// when the app goes on running after all (an update that did not install,
+/// E18.2). Nothing is asked of `api` when `faces` is empty.
+pub fn restore_session(
+    api: &dyn ActivationService,
+    faces: Vec<FaceId>,
+    on_conflict: ConflictPolicy,
+) -> ApiResult<Vec<ActivationOutcome>> {
+    if faces.is_empty() {
+        return Ok(Vec::new());
+    }
+    api.activate(ActivateRequest {
+        target: Target::Faces { faces },
+        mode: ActivationMode::Session,
+        on_conflict,
+    })
+}
+
 /// What works differently on `os`, one sentence each, for Settings → About →
 /// Platform notes. `tray` is what the shell found when it made the tray item;
-/// `None` before it tried (or without a shell, as in the CLI).
-pub fn platform_notes(os: Os, tray: Option<&TraySupport>) -> Vec<String> {
+/// `None` before it tried (or without a shell, as in the CLI). `sandboxed`:
+/// the app runs in a Flatpak, where it offers no start at login.
+pub fn platform_notes(os: Os, tray: Option<&TraySupport>, sandboxed: bool) -> Vec<String> {
     let mut notes = Vec::new();
     if let Some(TraySupport::Unavailable(_)) = tray {
         notes.push(match os {
@@ -95,6 +141,12 @@ pub fn platform_notes(os: Os, tray: Option<&TraySupport>) -> Vec<String> {
         notes.push(
             "Apps that are already running can take up to 30 seconds to see a font you \
              activate; some see it only after a restart."
+                .to_owned(),
+        );
+    }
+    if sandboxed {
+        notes.push(
+            "Inside the Flatpak sandbox Font Manager cannot add itself to the apps that              start when you log in, so Start at login is not shown. Add Font Manager in              your desktop's startup settings instead."
                 .to_owned(),
         );
     }
@@ -133,6 +185,44 @@ mod tests {
             close_action(&Settings::default(), &TraySupport::Available),
             CloseAction::HideToTray
         );
+    }
+
+    #[test]
+    fn a_start_at_login_stays_in_the_tray_and_every_other_launch_shows_the_window() {
+        let tray = TraySupport::Available;
+        let none: [&str; 0] = [];
+        assert_eq!(launch_window(none, &tray), LaunchWindow::Show);
+        assert_eq!(
+            launch_window(["--autostart"], &tray),
+            LaunchWindow::StayInTray
+        );
+        assert_eq!(
+            launch_window(["--verbose", "--autostart"], &tray),
+            LaunchWindow::StayInTray
+        );
+        // Only the exact argument: a file or another flag opens the window.
+        for other in ["--autostart=1", "--AUTOSTART", "autostart", "-autostart"] {
+            assert_eq!(launch_window([other], &tray), LaunchWindow::Show, "{other}");
+        }
+        // No tray item: the app must not run unseen.
+        let no_tray = TraySupport::Unavailable("no StatusNotifier host".into());
+        assert_eq!(launch_window(["--autostart"], &no_tray), LaunchWindow::Show);
+    }
+
+    #[test]
+    fn the_launch_argument_is_the_one_the_login_entry_writes() {
+        assert_eq!(AUTOSTART_ARG, "--autostart");
+        // Arguments that are not UTF-8 (possible on Linux) are compared as they are.
+        #[cfg(unix)]
+        {
+            use std::ffi::OsStr;
+            use std::os::unix::ffi::OsStrExt;
+            let odd = OsStr::from_bytes(b"\xff--autostart");
+            assert_eq!(
+                launch_window([odd], &TraySupport::Available),
+                LaunchWindow::Show
+            );
+        }
     }
 
     #[test]
@@ -225,15 +315,33 @@ mod tests {
     #[test]
     fn platform_notes_say_when_closing_quits() {
         let none = TraySupport::Unavailable("no host".into());
-        let linux = platform_notes(Os::Linux, Some(&none));
+        let linux = platform_notes(Os::Linux, Some(&none), false);
         assert!(linux[0].contains("no StatusNotifier host"), "{linux:?}");
         assert!(linux[0].contains("closing the window quits"), "{linux:?}");
         // With a tray, Linux keeps only the running-apps note (ADR 0008).
-        let with_tray = platform_notes(Os::Linux, Some(&TraySupport::Available));
+        let with_tray = platform_notes(Os::Linux, Some(&TraySupport::Available), false);
         assert_eq!(with_tray.len(), 1);
         assert!(with_tray[0].contains("30 seconds"));
-        assert!(platform_notes(Os::Windows, Some(&TraySupport::Available)).is_empty());
-        assert!(platform_notes(Os::MacOs, None).is_empty());
-        assert!(platform_notes(Os::Windows, Some(&none))[0].contains("closing the window quits"));
+        assert!(platform_notes(Os::Windows, Some(&TraySupport::Available), false).is_empty());
+        assert!(platform_notes(Os::MacOs, None, false).is_empty());
+        assert!(
+            platform_notes(Os::Windows, Some(&none), false)[0].contains("closing the window quits")
+        );
+    }
+
+    #[test]
+    fn platform_notes_say_why_start_at_login_is_missing_in_a_flatpak() {
+        let notes = platform_notes(Os::Linux, Some(&TraySupport::Available), true);
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(notes[1].contains("Flatpak sandbox"), "{notes:?}");
+        assert!(
+            notes[1].contains("Start at login is not shown"),
+            "{notes:?}"
+        );
+        let plain = platform_notes(Os::Linux, Some(&TraySupport::Available), false);
+        assert!(
+            !plain.iter().any(|n| n.contains("Start at login")),
+            "{plain:?}"
+        );
     }
 }

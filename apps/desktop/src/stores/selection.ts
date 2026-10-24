@@ -13,6 +13,7 @@ import type {
   ReceiptPlace,
   Target,
 } from '../api/types';
+import { t } from '../i18n';
 import { useSettingsStore } from './settings';
 import { useTagsStore } from './tags';
 
@@ -240,7 +241,7 @@ export const useSelectionStore = defineStore('selection', () => {
     req: Omit<LicenseDeclaration, 'family' | 'receipt'>,
     place: ReceiptPlace,
   ): Promise<boolean> {
-    const path = await useClient().pickFile('Choose the receipt');
+    const path = await useClient().pickFile(t('selection.chooseReceipt'));
     if (path === null) return false;
     return declareLicense({ ...req, receipt: { kind: 'attach', path, place } });
   }

@@ -98,6 +98,7 @@ impl Machine {
         let face = self.face(postscript);
         self.index
             .tag_faces(&TagFacesRequest {
+                families: Vec::new(),
                 faces: vec![face],
                 tags: tags.iter().map(|t| (*t).to_owned()).collect(),
             })
@@ -825,6 +826,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
         .map(FaceId)
         .expect("face");
     a.tag_faces(&TagFacesRequest {
+        families: Vec::new(),
         faces: vec![lora],
         tags: vec!["from-a".into()],
     })
@@ -994,6 +996,7 @@ fn a_missing_source_folder_is_never_created() {
         .expect("face");
     index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![FaceId(face)],
             tags: vec!["a".into()],
         })
@@ -1059,6 +1062,7 @@ fn a_real_scan_of_fixture_fonts_round_trips_through_a_second_machine() {
     assert_eq!(faces.len(), 2);
     first
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: faces.iter().copied().map(FaceId).collect(),
             tags: vec!["brand".into()],
         })

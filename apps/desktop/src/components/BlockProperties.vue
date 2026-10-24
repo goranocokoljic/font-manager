@@ -9,6 +9,7 @@
 // Escape closes the editor; the parent returns focus to the block's size badge.
 import { nextTick, onMounted, ref, useId } from 'vue';
 import type { BlockAlign, BlockOverflow, LayoutBounds, TextBlock } from '../api/types';
+import { t, type MessageKey } from '../i18n';
 import type { BlockProps } from '../stores/textLayouts';
 
 const props = defineProps<{
@@ -24,25 +25,18 @@ const emit = defineEmits<{ close: [] }>();
 
 type NumberKey = 'sizePt' | 'lineHeight' | 'tracking' | 'paragraphSpacingPt' | 'firstLineIndentEm';
 
+// Labels are catalog keys, read where they are shown, so they follow the language.
 const numbers: { key: NumberKey; label: string; unit: string }[] = [
-  { key: 'sizePt', label: 'Size', unit: 'pt' },
-  { key: 'lineHeight', label: 'Line height', unit: '×' },
-  { key: 'tracking', label: 'Tracking', unit: '/1000 em' },
-  { key: 'paragraphSpacingPt', label: 'Paragraph spacing', unit: 'pt' },
-  { key: 'firstLineIndentEm', label: 'First-line indent', unit: 'em' },
+  { key: 'sizePt', label: 'blocks.fields.size', unit: 'pt' },
+  { key: 'lineHeight', label: 'blocks.fields.lineHeight', unit: '×' },
+  { key: 'tracking', label: 'blocks.fields.tracking', unit: '/1000 em' },
+  { key: 'paragraphSpacingPt', label: 'blocks.fields.paragraphSpacing', unit: 'pt' },
+  { key: 'firstLineIndentEm', label: 'blocks.fields.firstLineIndent', unit: 'em' },
 ];
 
-const aligns: { value: BlockAlign; label: string }[] = [
-  { value: 'start', label: 'Start' },
-  { value: 'center', label: 'Center' },
-  { value: 'end', label: 'End' },
-  { value: 'justify', label: 'Justify' },
-];
+const aligns: BlockAlign[] = ['start', 'center', 'end', 'justify'];
 
-const overflows: { value: BlockOverflow; label: string }[] = [
-  { value: 'wrap', label: 'Wrap' },
-  { value: 'clip', label: 'Clip' },
-];
+const overflows: BlockOverflow[] = ['wrap', 'clip'];
 
 const columnChoices = (): number[] => {
   const out: number[] = [];
@@ -76,12 +70,12 @@ async function setChoice(change: BlockProps): Promise<void> {
     ref="root"
     class="props"
     role="dialog"
-    :aria-label="`${label} properties`"
+    :aria-label="t('blocks.properties', { label })"
     data-testid="block-properties"
     @keydown.esc.prevent.stop="emit('close')"
   >
     <div v-for="n in numbers" :key="n.key" class="field">
-      <label :for="`${id}-${n.key}`">{{ n.label }}</label>
+      <label :for="`${id}-${n.key}`">{{ t(n.label as MessageKey) }}</label>
       <input
         :id="`${id}-${n.key}`"
         type="number"
@@ -95,7 +89,7 @@ async function setChoice(change: BlockProps): Promise<void> {
       <span class="unit" aria-hidden="true">{{ n.unit }}</span>
     </div>
     <div class="field">
-      <label :for="`${id}-columns`">Columns</label>
+      <label :for="`${id}-columns`">{{ t('blocks.fields.columns') }}</label>
       <select
         :id="`${id}-columns`"
         name="columns"
@@ -106,18 +100,18 @@ async function setChoice(change: BlockProps): Promise<void> {
       </select>
     </div>
     <div class="field">
-      <label :for="`${id}-align`">Alignment</label>
+      <label :for="`${id}-align`">{{ t('blocks.fields.alignment') }}</label>
       <select
         :id="`${id}-align`"
         name="align"
         :value="block.align"
         @change="setChoice({ align: ($event.target as HTMLSelectElement).value as BlockAlign })"
       >
-        <option v-for="a in aligns" :key="a.value" :value="a.value">{{ a.label }}</option>
+        <option v-for="a in aligns" :key="a" :value="a">{{ t(`blocks.aligns.${a}`) }}</option>
       </select>
     </div>
     <div class="field">
-      <label :for="`${id}-overflow`">Overflow</label>
+      <label :for="`${id}-overflow`">{{ t('blocks.fields.overflow') }}</label>
       <select
         :id="`${id}-overflow`"
         name="overflow"
@@ -126,10 +120,10 @@ async function setChoice(change: BlockProps): Promise<void> {
           setChoice({ overflow: ($event.target as HTMLSelectElement).value as BlockOverflow })
         "
       >
-        <option v-for="o in overflows" :key="o.value" :value="o.value">{{ o.label }}</option>
+        <option v-for="o in overflows" :key="o" :value="o">{{ t(`blocks.overflows.${o}`) }}</option>
       </select>
     </div>
-    <button type="button" class="close" @click="emit('close')">Close</button>
+    <button type="button" class="close" @click="emit('close')">{{ t('common.close') }}</button>
   </div>
 </template>
 
@@ -166,7 +160,7 @@ async function setChoice(change: BlockProps): Promise<void> {
   color: var(--fm-muted);
 }
 .close {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .props :focus-visible {
   outline: 2px solid var(--fm-accent);

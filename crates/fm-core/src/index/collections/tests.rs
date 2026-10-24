@@ -1,10 +1,11 @@
 use std::path::PathBuf;
 
+use fm_api::common::Slant;
 use fm_api::common::{FontFormat, Health};
 use fm_api::library::LicenseType;
 use fm_api::library::SourceKind;
 use fm_api::organization::{Rule, RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate};
-use fm_api::search::{Filters, SearchRequest};
+use fm_api::search::{Filters, SearchRequest, WeightRange, WidthRange};
 use fm_api::{FamilyId, SourceId};
 
 use super::*;
@@ -478,6 +479,7 @@ fn smart_rules_combine_with_and_or_and_through_other_collections() {
     let bold = face(&index, "Roboto-Bold");
     let tagged = index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![inter],
             tags: vec!["pick".into()],
         })
@@ -550,9 +552,16 @@ fn smart_rules_combine_with_and_or_and_through_other_collections() {
         (2, names(&["Roboto-Bold", "SourceSerif-Regular"]))
     );
 
-    // An empty group holds every face.
-    let all = smart(&mut index, "All", RuleOp::Or, vec![]).expect("all");
-    assert_eq!(live(&index, all.id).0, LIBRARY.len() as u32);
+    // An empty group, stored before E14.1 refused one, holds every face.
+    index
+        .conn
+        .execute(
+            r#"INSERT INTO collection (id, name, is_smart, rules, position)
+               VALUES (90, 'All', 1, '{"op":"or","rules":[]}', 9)"#,
+            [],
+        )
+        .expect("stored empty group");
+    assert_eq!(live(&index, CollectionId(90)).0, LIBRARY.len() as u32);
 }
 
 /// Criterion 3: membership follows the index with no restart.
@@ -562,6 +571,7 @@ fn smart_collections_follow_index_changes() {
     let inter = face(&index, "Inter-Regular");
     let tag = index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![inter],
             tags: vec!["later".into()],
         })
@@ -631,6 +641,7 @@ fn smart_collections_follow_index_changes() {
     let one = (1, names(&["Inter-Regular"]));
     index
         .tag_faces(&TagFacesRequest {
+            families: Vec::new(),
             faces: vec![inter],
             tags: vec!["later".into()],
         })
@@ -731,7 +742,7 @@ fn a_rule_that_refers_to_itself_is_refused() {
 
     // Through another smart collection: stored rules that loop (no request
     // makes them today; an edited rule could).
-    let a = smart(&mut index, "A", RuleOp::And, vec![]).expect("a");
+    let a = smart(&mut index, "A", RuleOp::And, vec![leaf(Filters::default())]).expect("a");
     let b = smart(
         &mut index,
         "B",
@@ -817,6 +828,210 @@ fn bad_rules_are_refused_and_nothing_is_kept() {
         .unwrap_err();
     assert_eq!(both.code(), ErrorCode::InvalidRequest);
     assert!(index.collections().expect("list").is_empty());
+}
+
+/// E14.1 criterion 4: an empty group (at the top or nested) and a weight or
+/// width range whose minimum is above its maximum are `InvalidRequest` with
+/// a message for the user, and nothing is created.
+#[test]
+fn empty_groups_and_upside_down_ranges_are_refused_on_create() {
+    let (mut index, _) = library();
+    let refused = |index: &mut Index, op: RuleOp, rules: Vec<Rule>| {
+        let err = smart(index, "Bad", op, rules).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidRequest, "{err:?}");
+        err.to_string()
+    };
+    let top = refused(&mut index, RuleOp::And, vec![]);
+    assert!(top.contains("at least one rule"), "{top}");
+    let nested = refused(
+        &mut index,
+        RuleOp::And,
+        vec![
+            leaf(Filters::default()),
+            Rule::Group {
+                group: RuleGroup {
+                    op: RuleOp::Or,
+                    rules: vec![],
+                },
+            },
+        ],
+    );
+    assert!(nested.contains("at least one rule"), "{nested}");
+    let weight = refused(
+        &mut index,
+        RuleOp::And,
+        vec![leaf(Filters {
+            weight: Some(WeightRange { min: 700, max: 300 }),
+            ..Filters::default()
+        })],
+    );
+    assert!(weight.contains("weight"), "{weight}");
+    let width = refused(
+        &mut index,
+        RuleOp::Or,
+        vec![leaf(Filters {
+            width: Some(WidthRange { min: 7, max: 2 }),
+            ..Filters::default()
+        })],
+    );
+    assert!(width.contains("width"), "{width}");
+    // Phase-1 plain rules go through the same check.
+    let plain = index
+        .create_collection(&CreateCollectionRequest {
+            name: "Plain".into(),
+            parent: None,
+            rules: Some(Filters {
+                weight: Some(WeightRange { min: 900, max: 100 }),
+                ..Filters::default()
+            }),
+            rule_group: None,
+        })
+        .unwrap_err();
+    assert_eq!(plain.code(), ErrorCode::InvalidRequest);
+    assert!(index.collections().expect("list").is_empty());
+}
+
+/// E14.1 criterion 4: `update_collection_rules` replaces a smart
+/// collection's rule and the count follows; a refused rule, a loop, a
+/// manual collection or an unknown one leaves everything as it was.
+#[test]
+fn update_collection_rules_replaces_the_rule_or_keeps_the_old_one() {
+    let (mut index, _) = library();
+    let italic_rule = RuleGroup::from(Filters {
+        slant: Some(Slant::Italic),
+        ..Filters::default()
+    });
+    let c = smart(
+        &mut index,
+        "Italic",
+        italic_rule.op,
+        italic_rule.rules.clone(),
+    )
+    .expect("smart");
+    assert_eq!(live(&index, c.id), (1, names(&["Roboto-Italic"])));
+
+    let ttf = RuleGroup {
+        op: RuleOp::Or,
+        rules: vec![leaf(Filters {
+            formats: vec![FontFormat::Ttf],
+            ..Filters::default()
+        })],
+    };
+    let updated = index
+        .update_collection_rules(&UpdateCollectionRulesRequest {
+            collection: c.id,
+            rule_group: ttf.clone(),
+        })
+        .expect("update");
+    assert_eq!(updated.rule_group, Some(ttf));
+    assert_eq!(updated.name, "Italic");
+    assert_eq!(live(&index, c.id).0, LIBRARY.len() as u32);
+
+    index
+        .update_collection_rules(&UpdateCollectionRulesRequest {
+            collection: c.id,
+            rule_group: italic_rule.clone(),
+        })
+        .expect("back to italic");
+    let refused = [
+        RuleGroup {
+            op: RuleOp::And,
+            rules: vec![],
+        },
+        RuleGroup::from(Filters {
+            weight: Some(WeightRange { min: 800, max: 200 }),
+            ..Filters::default()
+        }),
+        RuleGroup::from(Filters {
+            collection: Some(c.id),
+            ..Filters::default()
+        }),
+    ];
+    for rule_group in refused {
+        let err = index
+            .update_collection_rules(&UpdateCollectionRulesRequest {
+                collection: c.id,
+                rule_group: rule_group.clone(),
+            })
+            .unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidRequest, "{rule_group:?}");
+        let kept = index.collection(c.id).expect("listed");
+        assert_eq!(
+            kept.rule_group.as_ref(),
+            Some(&italic_rule),
+            "{rule_group:?}"
+        );
+        assert_eq!(live(&index, c.id), (1, names(&["Roboto-Italic"])));
+    }
+
+    let manual = create(&mut index, "Manual", None);
+    let err = index
+        .update_collection_rules(&UpdateCollectionRulesRequest {
+            collection: manual.id,
+            rule_group: RuleGroup::from(Filters::default()),
+        })
+        .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    assert_eq!(
+        index.collection(manual.id).expect("manual").rule_group,
+        None
+    );
+    let err = index
+        .update_collection_rules(&UpdateCollectionRulesRequest {
+            collection: CollectionId(99),
+            rule_group: RuleGroup::from(Filters::default()),
+        })
+        .unwrap_err();
+    assert_eq!(err.code(), ErrorCode::NotFound);
+}
+
+/// E14.1 criterion 3: a search with a draft rule finds what a smart
+/// collection with that rule holds, and counts filter values inside it.
+#[test]
+fn a_draft_rule_searches_like_the_saved_collection() {
+    let (mut index, _) = library();
+    let rule = RuleGroup {
+        op: RuleOp::And,
+        rules: vec![
+            leaf(Filters {
+                formats: vec![FontFormat::Ttf],
+                ..Filters::default()
+            }),
+            Rule::Group {
+                group: RuleGroup {
+                    op: RuleOp::Or,
+                    rules: vec![
+                        leaf(Filters {
+                            slant: Some(Slant::Italic),
+                            ..Filters::default()
+                        }),
+                        leaf(Filters {
+                            foundry: Some("Nobody".into()),
+                            ..Filters::default()
+                        }),
+                    ],
+                },
+            },
+        ],
+    };
+    let draft = index
+        .search(&SearchRequest {
+            rule: Some(rule.clone()),
+            ..SearchRequest::default()
+        })
+        .expect("draft");
+    let saved = smart(&mut index, "Saved", rule.op, rule.rules.clone()).expect("saved");
+    let (count, faces) = live(&index, saved.id);
+    let draft_faces: usize = draft.families.iter().map(|h| h.faces.len()).sum();
+    assert_eq!(draft_faces, count as usize);
+    assert_eq!(faces, names(&["Roboto-Italic"]));
+    assert_eq!(draft.total, 1);
+    let slants = draft.counts.expect("counts").slant;
+    assert_eq!(slants.len(), 1, "{slants:?}");
+    assert_eq!((slants[0].value, slants[0].count), (Slant::Italic, 1));
+    // Without a draft rule, every family.
+    let all = index.search(&SearchRequest::default()).expect("all");
+    assert_eq!(all.total, 3);
 }
 
 /// The default smart collections in sidebar order.

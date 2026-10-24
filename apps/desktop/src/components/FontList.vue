@@ -14,23 +14,26 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { FaceId } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
+import { keepRowInView } from '../list/density';
 import { dragKeys, startFontDrag } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowActivation } from '../list/activation';
-import { OPEN_LICENSE_BADGE, openLicenseName } from '../list/columns';
+import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useSettingsStore } from '../stores/settings';
 import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 
 const props = withDefaults(
   defineProps<{
     preview?: PreviewSettings;
-    /** Fixed row height; derived from `preview` when absent. */
+    /** Fixed row height; derived from `preview` and the row density when absent. */
     rowHeight?: number;
     /** Rows rendered beyond each edge of the viewport. */
     overscan?: number;
@@ -48,8 +51,9 @@ const emit = defineEmits<{
 const list = useFontListStore();
 const library = useLibraryStore();
 const quick = useQuickCollectionStore();
+const settings = useSettingsStore();
 
-const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview));
+const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -140,6 +144,26 @@ async function revealCursor(): Promise<void> {
   await nextTick();
 }
 
+// A new row height (the density, the preview size) keeps the cursor row on screen;
+// without a cursor, the first visible family stays at the top. After the render,
+// so the spacer already has its new height.
+watch(
+  rowPx,
+  (after, before) => {
+    const el = viewport.value;
+    if (!el) return;
+    const i = list.cursorIndex;
+    if (i < 0) {
+      anchor.restore();
+    } else {
+      const top = keepRowInView(i, before, after, el.scrollTop, height.value);
+      if (top !== el.scrollTop) el.scrollTop = top;
+    }
+    measure();
+  },
+  { flush: 'post' },
+);
+
 function onKeyDown(e: KeyboardEvent): void {
   const page = Math.max(1, Math.floor(height.value / rowPx.value));
   if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
@@ -173,7 +197,7 @@ function onToggle(row: ListRow): void {
     :data-surface="preview.surface"
     role="tree"
     tabindex="0"
-    aria-label="Font list"
+    :aria-label="t('list.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -197,7 +221,9 @@ function onToggle(row: ListRow): void {
         :aria-selected="list.isSelected(item.row.key)"
         :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
         :aria-posinset="item.row.position"
-        :aria-label="rowLabel(item.row) + (quick.holds(item.row) ? ', in Quick Collection' : '')"
+        :aria-label="
+          rowLabel(item.row) + (quick.holds(item.row) ? t('list.inQuickCollection') : '')
+        "
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
         draggable="true"
         @click="onRowClick(item.row, $event)"
@@ -205,7 +231,7 @@ function onToggle(row: ListRow): void {
       >
         <span
           v-if="item.row.kind === 'family'"
-          class="twisty"
+          class="twisty fm-directional"
           aria-hidden="true"
           @click.stop="onToggle(item.row)"
           >{{ item.row.expanded ? '▾' : '▸' }}</span
@@ -231,7 +257,7 @@ function onToggle(row: ListRow): void {
               v-if="quick.holds(item.row)"
               class="quick-mark"
               data-testid="quick-mark"
-              title="In the Quick Collection"
+              :title="t('list.inQuickCollectionTitle')"
               aria-hidden="true"
               >●</span
             >
@@ -243,19 +269,21 @@ function onToggle(row: ListRow): void {
               class="open-license"
               data-testid="open-license"
               :title="openLicenseName(item.row.family.openLicense)"
-              >{{ OPEN_LICENSE_BADGE }}</span
+              >{{ openLicenseBadge() }}</span
             >
           </template>
           <template v-else-if="item.row.virtual" #detail>
-            <span class="count">Pinned</span>
+            <span class="count">{{ t('list.pinned') }}</span>
           </template>
         </FontPreviewRow>
         <div v-else class="preview placeholder">
           <span class="label"
-            ><ActivationDot :state="rowActivation(item.row)" />{{ item.row.family.name }}</span
+            ><ActivationDot :state="rowActivation(item.row)" /><bdi>{{
+              item.row.family.name
+            }}</bdi></span
           >
           <span v-if="library.failed.has(item.row.family.id)" class="note">
-            Styles not available
+            {{ t('list.stylesUnavailable') }}
           </span>
         </div>
       </div>
@@ -282,8 +310,8 @@ function onToggle(row: ListRow): void {
 .slot {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: flex;
   align-items: stretch;
   box-sizing: border-box;
@@ -292,7 +320,7 @@ function onToggle(row: ListRow): void {
   contain: layout paint;
 }
 .slot.face {
-  padding-left: 24px;
+  padding-inline-start: 24px;
 }
 .slot.selected {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
@@ -302,7 +330,7 @@ function onToggle(row: ListRow): void {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';
@@ -323,12 +351,14 @@ function onToggle(row: ListRow): void {
   flex: 1;
   min-width: 0;
 }
-/* The slot draws the row line, full width; the preview row sits inside it. */
+/* The slot draws the row line, full width; the preview row sits inside it, padded
+   by the density (16px comfortable, 8px compact). */
 .slot .preview {
+  padding-inline: calc(2 * var(--fm-gap));
   border-bottom: 0;
 }
 .slot:not(.face) .preview {
-  padding-left: 0;
+  padding-inline-start: 0;
 }
 .placeholder {
   display: flex;
@@ -336,7 +366,7 @@ function onToggle(row: ListRow): void {
   justify-content: center;
   gap: 2px;
   box-sizing: border-box;
-  padding-right: 16px;
+  padding-inline-end: 16px;
   color: var(--fm-muted);
   font-size: 11.5px;
 }

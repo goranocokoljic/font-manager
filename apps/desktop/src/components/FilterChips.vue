@@ -1,35 +1,43 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue';
 import type { ApiError, SourceId } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import {
   chipGroups,
   chosenLanguages,
+  hasChosenFilters,
   hasFilters,
   languageName,
   toggleChip,
   toggleLanguage,
   type Chip,
 } from '../search/chips';
+import { useCollectionsStore } from '../stores/collections';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
 
 const search = useSearchStore();
+const collections = useCollectionsStore();
 const sources = useSourcesStore();
 const tags = useTagsStore();
 
 /** A source chip shows the folder's name. */
 function sourceName(id: SourceId): string {
   const path = sources.sources.find((s) => s.id === id)?.path;
-  return path?.split(/[\\/]/).filter(Boolean).pop() ?? `Source ${id}`;
+  return path?.split(/[\\/]/).filter(Boolean).pop() ?? t('chips.source', { id: String(id) });
 }
 
 const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
 const languages = computed(() => chosenLanguages(search.filters));
 const addable = computed(() => search.languages.filter((l) => !languages.value.includes(l.code)));
 const filtering = computed(() => hasFilters(search.filters));
+/** A smart collection needs a chosen filter; the open collection alone is none. */
+const savable = computed(() => hasChosenFilters(search.filters));
 
-const countLabel = (n: number) => `${n} ${n === 1 ? 'family' : 'families'}`;
+/** A chip's accessible name: its label and the families it gives. */
+const chipLabel = (name: string, n: number) =>
+  t('chips.chipLabel', { name, families: t('chips.families', { count: n }) });
 
 function toggle(chip: Chip): void {
   search.setFilters(toggleChip(search.filters, chip.facet, chip.value));
@@ -41,12 +49,15 @@ function onLanguage(e: Event): void {
   select.value = '';
 }
 
-// Saving the chip set as a smart collection; the collections sidebar comes with E14.
+// Saving the chosen filters as a smart collection (E14.4): the rules are the
+// filters as they are, so the collection lists the families the chips gave.
 const naming = ref(false);
 const name = ref('');
+/** The name of the smart collection just saved, for the status line. */
 const saved = ref('');
 const saveError = ref<ApiError | null>(null);
 const nameInput = ref<HTMLInputElement | null>(null);
+const saveButton = ref<HTMLButtonElement | null>(null);
 
 async function startSave(): Promise<void> {
   naming.value = true;
@@ -56,26 +67,30 @@ async function startSave(): Promise<void> {
   nameInput.value?.focus();
 }
 
+/** Closes the name field and gives focus back to the button. */
+async function endSave(): Promise<void> {
+  naming.value = false;
+  saveError.value = null;
+  name.value = '';
+  await nextTick();
+  saveButton.value?.focus();
+}
+
 async function save(): Promise<void> {
   try {
     const c = await search.saveAsSmartCollection(name.value);
-    saved.value = `Saved “${c.name}” as a smart collection.`;
-    saveError.value = null;
-    naming.value = false;
-    name.value = '';
+    saved.value = c.name;
+    await endSave();
+    // The sidebar lists it, with its count.
+    await collections.refresh();
   } catch (e) {
     saveError.value = e as ApiError;
   }
 }
-
-function cancelSave(): void {
-  naming.value = false;
-  saveError.value = null;
-}
 </script>
 
 <template>
-  <section class="chips" aria-label="Filters">
+  <section class="chips" :aria-label="t('chips.filters')">
     <div v-for="g in groups" :key="g.facet" class="group" role="group" :aria-label="g.label">
       <span class="label" aria-hidden="true">{{ g.label }}</span>
       <button
@@ -84,49 +99,76 @@ function cancelSave(): void {
         type="button"
         class="chip"
         :aria-pressed="chip.selected"
-        :aria-label="`${chip.label}, ${countLabel(chip.count)}`"
+        :aria-label="chipLabel(chip.label, chip.count)"
         @click="toggle(chip)"
       >
         {{ chip.label }} <span class="n">{{ chip.count }}</span>
       </button>
     </div>
-    <div class="group" role="group" aria-label="Languages">
-      <span class="label" aria-hidden="true">Language</span>
+    <div class="group" role="group" :aria-label="t('chips.languages')">
+      <span class="label" aria-hidden="true">{{ t('chips.language') }}</span>
       <button
         v-for="code in languages"
         :key="code"
         type="button"
         class="chip"
         aria-pressed="true"
-        :aria-label="`${languageName(search.languages, code)}, ${countLabel(search.total)}`"
+        :aria-label="chipLabel(languageName(search.languages, code), search.total)"
         @click="search.setFilters(toggleLanguage(search.filters, code))"
       >
         {{ languageName(search.languages, code) }} <span class="n">{{ search.total }}</span>
       </button>
-      <select v-if="addable.length" class="add" aria-label="Add a language" @change="onLanguage">
-        <option value="">Add…</option>
+      <select
+        v-if="addable.length"
+        class="add"
+        :aria-label="t('chips.addLanguage')"
+        @change="onLanguage"
+      >
+        <option value="">{{ t('chips.add') }}</option>
         <option v-for="l in addable" :key="l.code" :value="l.code">{{ l.name }}</option>
       </select>
     </div>
-    <div v-if="filtering" class="group actions">
-      <button type="button" class="chip" @click="search.setFilters({})">Clear filters</button>
-      <form v-if="naming" class="save" @submit.prevent="save" @keydown.esc.prevent="cancelSave">
+    <div class="group actions">
+      <button v-if="filtering" type="button" class="chip" @click="search.setFilters({})">
+        {{ t('chips.clear') }}
+      </button>
+      <form
+        v-if="naming"
+        class="save"
+        :aria-label="t('chips.saveAsSmart')"
+        @submit.prevent="save"
+        @keydown.esc.prevent="endSave"
+      >
         <input
           ref="nameInput"
           v-model="name"
           class="name"
-          aria-label="Smart collection name"
-          placeholder="Name"
-          required
+          :aria-label="t('chips.smartName')"
+          :placeholder="t('chips.namePlaceholder')"
+          :aria-invalid="saveError ? 'true' : undefined"
+          :aria-describedby="saveError ? 'fm-save-smart-error' : undefined"
+          @input="saveError = null"
         />
-        <button type="submit" class="chip">Save</button>
-        <button type="button" class="chip" @click="cancelSave">Cancel</button>
+        <button type="submit" class="chip">{{ t('common.save') }}</button>
+        <button type="button" class="chip" @click="endSave">{{ t('common.cancel') }}</button>
+        <p v-if="saveError" id="fm-save-smart-error" role="alert" class="error">
+          {{ errorMessage(saveError) }}
+        </p>
       </form>
-      <button v-else type="button" class="chip" @click="startSave">Save as smart collection</button>
+      <button
+        v-else
+        ref="saveButton"
+        type="button"
+        class="chip"
+        :disabled="!savable"
+        :title="savable ? undefined : t('chips.saveHint')"
+        @click="startSave"
+      >
+        {{ t('chips.saveAsSmart') }}
+      </button>
     </div>
-    <p v-if="search.error" role="alert" class="error">{{ search.error.message }}</p>
-    <p v-if="saveError" role="alert" class="error">{{ saveError.message }}</p>
-    <p class="note" role="status">{{ saved }}</p>
+    <p v-if="search.error" role="alert" class="error">{{ errorMessage(search.error) }}</p>
+    <p class="note" role="status">{{ saved ? t('chips.saved', { name: saved }) : '' }}</p>
   </section>
 </template>
 
@@ -175,11 +217,17 @@ function cancelSave(): void {
   color: var(--fm-muted);
   font-variant-numeric: tabular-nums;
 }
+.chip:disabled {
+  color: var(--fm-muted);
+  cursor: default;
+}
 .chip[aria-pressed='true'] .n {
   color: inherit;
 }
 .save {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
   margin: 0;
 }

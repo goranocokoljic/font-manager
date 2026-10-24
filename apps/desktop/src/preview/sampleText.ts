@@ -2,47 +2,68 @@
 // nothing here inspects a font. The font-name sample uses the face's names as
 // the API reports them.
 import type { FaceSummary } from '../api/types';
+import { t } from '../i18n';
 
 /** Which text the preview rows show. */
 export type SampleKind = 'custom' | 'pangram' | 'lorem' | 'alphabet' | 'numerals' | 'fontName';
 
-export const SAMPLE_KINDS: { value: SampleKind; label: string }[] = [
-  { value: 'pangram', label: 'Pangram' },
-  { value: 'custom', label: 'Custom text' },
-  { value: 'lorem', label: 'Lorem ipsum' },
-  { value: 'alphabet', label: 'Alphabet' },
-  { value: 'numerals', label: 'Numerals' },
-  { value: 'fontName', label: 'Font name' },
-];
-
-/** Pangrams by BCP 47 language tag. */
-export const PANGRAMS = {
-  en: { label: 'English', text: 'The quick brown fox jumps over the lazy dog' },
-  de: { label: 'German', text: 'Victor jagt zwölf Boxkämpfer quer über den großen Sylter Deich' },
-  fr: { label: 'French', text: 'Portez ce vieux whisky au juge blond qui fume' },
-  es: { label: 'Spanish', text: 'El veloz murciélago hindú comía feliz cardillo y kiwi' },
-  pl: { label: 'Polish', text: 'Pchnąć w tę łódź jeża lub ośm skrzyń fig' },
-  cs: { label: 'Czech', text: 'Příliš žluťoučký kůň úpěl ďábelské ódy' },
-  ru: { label: 'Russian', text: 'Съешь же ещё этих мягких французских булок, да выпей чаю' },
-  el: { label: 'Greek', text: 'Ξεσκεπάζω την ψυχοφθόρα βδελυγμία' },
-  he: { label: 'Hebrew', text: 'דג סקרן שט בים מאוכזב ולפתע מצא חברה' },
-  ja: {
-    label: 'Japanese',
-    text: 'いろはにほへと ちりぬるを わかよたれそ つねならむ うゐのおくやま けふこえて あさきゆめみし ゑひもせす',
+// Getters: the menu label is read in the language shown now; the texts below are specimens.
+export const SAMPLE_KINDS: { value: SampleKind; label: string }[] = (
+  ['pangram', 'custom', 'lorem', 'alphabet', 'numerals', 'fontName'] as const
+).map((value) => ({
+  value,
+  get label() {
+    return t(`samples.kinds.${value}`);
   },
-} as const;
+}));
 
-export type PangramLanguage = keyof typeof PANGRAMS;
+/** The pangram language when the UI language has none. */
+export const FALLBACK_LANGUAGE = 'en';
 
-export const PANGRAM_LANGUAGES = Object.keys(PANGRAMS) as PangramLanguage[];
+/** A language preset code as `data/charsets` writes it (`pl`, `sr-Cyrl`). */
+const LANGUAGE_CODE = /^[a-z]{2,3}(-[A-Z][a-z]{3})?$/;
+
+/** Chinese regions that write Traditional characters. */
+const HANT_REGIONS = new Set(['TW', 'HK', 'MO']);
 
 export const LOREM =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
 export const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz';
 export const NUMERALS = '0123456789 $€£¥ %‰ +−×÷= ½¼¾ #&@';
 
-export function isPangramLanguage(value: unknown): value is PangramLanguage {
-  return typeof value === 'string' && Object.hasOwn(PANGRAMS, value);
+/** Whether `value` has the shape of a language preset code. */
+export function isLanguageCode(value: unknown): value is string {
+  return typeof value === 'string' && LANGUAGE_CODE.test(value);
+}
+
+/**
+ * The pangram language for the UI languages `preferred` (BCP 47 tags, most
+ * wanted first, as `navigator.languages`), out of the codes that have a
+ * pangram: an exact match, then language and script (`sr-Latn-RS`), then the
+ * language alone (`sr` takes the first `sr-*` code; `zh-TW` takes `zh-Hant`).
+ * English when none matches.
+ */
+export function pickLanguage(preferred: readonly string[], available: readonly string[]): string {
+  const has = (code: string) => available.includes(code);
+  for (const tag of preferred) {
+    const [lang = '', ...rest] = tag.split(/[-_]/);
+    const primary = lang.toLowerCase();
+    const script = rest.find((p) => p.length === 4);
+    const region = rest.find((p) => p.length === 2)?.toUpperCase();
+    const candidates = [
+      script ? `${primary}-${script[0]!.toUpperCase()}${script.slice(1).toLowerCase()}` : '',
+      primary === 'zh' && !script && region
+        ? HANT_REGIONS.has(region)
+          ? 'zh-Hant'
+          : 'zh-Hans'
+        : '',
+      primary,
+    ];
+    const hit =
+      candidates.find((c) => c && has(c)) ?? available.find((c) => c.startsWith(`${primary}-`));
+    if (hit) return hit;
+  }
+  return FALLBACK_LANGUAGE;
 }
 
 /** The face's name as the preview's font-name sample shows it. */
@@ -51,18 +72,20 @@ export function fontNameSample(face: FaceSummary): string {
 }
 
 /**
- * The text a row shows for `face`. Empty custom text falls back to the font
- * name, so a row never renders blank.
+ * The text a row shows for `face`; `pangram` gives the pangram of a language
+ * code (empty while the languages load). Empty custom text and a missing
+ * pangram fall back to the font name, so a row never renders blank.
  */
 export function sampleText(
-  sample: { sample: SampleKind; customText: string; language: PangramLanguage },
+  sample: { sample: SampleKind; customText: string; language: string },
   face: FaceSummary,
+  pangram: (language: string) => string,
 ): string {
   switch (sample.sample) {
     case 'custom':
       return sample.customText.trim() ? sample.customText : fontNameSample(face);
     case 'pangram':
-      return PANGRAMS[sample.language].text;
+      return pangram(sample.language) || fontNameSample(face);
     case 'lorem':
       return LOREM;
     case 'alphabet':

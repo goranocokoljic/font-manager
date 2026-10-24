@@ -6,14 +6,17 @@
 // inside it). Drop fonts from the list on a collection to add them; the
 // palette has an "Add selected fonts to …" command per collection, and
 // "Export license inventory…" for the open one (a row button too). The row
-// buttons show on the open collection and under keyboard focus.
+// buttons show on the open collection and under keyboard focus. "New smart" and a
+// smart collection's "Edit rules" open the rule editor (E14.1).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CollectionId } from '../api/types';
+import { errorMessage, t } from '../i18n';
 import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
 import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useRuleEditorStore } from '../stores/ruleEditor';
 
 /** The `DataTransfer` type a collection drag carries its id in. */
 const COLLECTION_MIME = 'application/x-fm-collection';
@@ -25,6 +28,7 @@ const store = useCollectionsStore();
 const quick = useQuickCollectionStore();
 const fontList = useFontListStore();
 const commands = useCommandsStore();
+const ruleEditor = useRuleEditorStore();
 onMounted(() => void store.refresh());
 
 /** A name being typed: for a new collection (under `parent`) or a rename (`id`). */
@@ -149,15 +153,33 @@ function registerCommands(): void {
   undo = [
     commands.register({
       id: 'collections.new',
-      title: 'New collection',
-      group: 'Collections',
+      get title() {
+        return t('collections.commands.new');
+      },
+      get group() {
+        return t('collections.commands.group');
+      },
       run: () => startEdit(null, null),
+    }),
+    commands.register({
+      id: 'collections.newSmart',
+      get title() {
+        return t('collections.commands.newSmart');
+      },
+      get group() {
+        return t('collections.commands.group');
+      },
+      run: () => ruleEditor.openNew(),
     }),
     // The open collection's families, or the whole library under "All fonts".
     commands.register({
       id: 'collections.exportLicenseInventory',
-      title: 'Export license inventory…',
-      group: 'Collections',
+      get title() {
+        return t('collections.commands.exportLicenseInventory');
+      },
+      get group() {
+        return t('collections.commands.group');
+      },
       run: () => store.exportLicenseInventory(store.openId),
     }),
     ...store.collections
@@ -165,8 +187,12 @@ function registerCommands(): void {
       .map((c) =>
         commands.register({
           id: `collections.add.${c.id}`,
-          title: `Add selected fonts to “${c.name}”`,
-          group: 'Collections',
+          get title() {
+            return t('collections.commands.addSelected', { name: c.name });
+          },
+          get group() {
+            return t('collections.commands.group');
+          },
           enabled: () => listPick.value.faces.length + listPick.value.families.length > 0,
           run: () => store.add(c.id, listPick.value),
         }),
@@ -177,19 +203,35 @@ watch(() => store.collections, registerCommands, { immediate: true });
 onBeforeUnmount(() => undo.splice(0).forEach((u) => u()));
 
 function countLabel(n: number): string {
-  return `${n} ${n === 1 ? 'font' : 'fonts'}`;
+  return t('collections.fontCount', { count: n });
 }
 </script>
 
 <template>
   <section class="collections" aria-labelledby="fm-collections-heading">
     <header class="head">
-      <h2 id="fm-collections-heading" class="heading">Collections</h2>
-      <button type="button" class="add" title="Make a collection" @click="startEdit(null, null)">
-        New
-      </button>
+      <h2 id="fm-collections-heading" class="heading">{{ t('collections.heading') }}</h2>
+      <span class="head-actions">
+        <button
+          type="button"
+          class="add"
+          :title="t('collections.newTitle')"
+          @click="startEdit(null, null)"
+        >
+          {{ t('collections.new') }}
+        </button>
+        <button
+          type="button"
+          class="add"
+          :aria-label="t('collections.newSmartLabel')"
+          :title="t('collections.newSmartTitle')"
+          @click="ruleEditor.openNew()"
+        >
+          {{ t('collections.newSmart') }}
+        </button>
+      </span>
     </header>
-    <p v-if="store.error" role="alert" class="error">{{ store.error.message }}</p>
+    <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
     <ul class="list" aria-labelledby="fm-collections-heading">
       <li class="item">
         <div class="row">
@@ -199,7 +241,7 @@ function countLabel(n: number): string {
             :aria-current="!quick.open && store.openId == null ? 'true' : undefined"
             @click="store.show(null)"
           >
-            All fonts
+            {{ t('collections.allFonts') }}
           </button>
         </div>
       </li>
@@ -208,7 +250,7 @@ function countLabel(n: number): string {
           <input
             ref="input"
             v-model="editing.name"
-            aria-label="New collection name"
+            :aria-label="t('collections.newName')"
             @keydown.esc="editing = null"
           />
         </form>
@@ -220,7 +262,7 @@ function countLabel(n: number): string {
             open: store.openId === row.collection.id,
             [`drop-${target?.zone}`]: target?.id === row.collection.id,
           }"
-          :style="{ paddingLeft: `${8 + row.depth * 14}px` }"
+          :style="{ paddingInlineStart: `${8 + row.depth * 14}px` }"
           :data-collection="row.collection.id"
           :data-depth="row.depth"
           :aria-label="row.collection.name"
@@ -239,7 +281,7 @@ function countLabel(n: number): string {
             <input
               ref="input"
               v-model="editing.name"
-              :aria-label="`New name for ${row.collection.name}`"
+              :aria-label="t('collections.renameLabel', { name: row.collection.name })"
               @keydown.esc="editing = null"
             />
           </form>
@@ -252,7 +294,7 @@ function countLabel(n: number): string {
             >
               {{ row.collection.name }}
             </button>
-            <span v-if="row.collection.rules" class="badge">Smart</span>
+            <span v-if="row.collection.rules" class="badge">{{ t('collections.smart') }}</span>
             <span class="count" :aria-label="countLabel(row.collection.faceCount)">{{
               row.collection.faceCount
             }}</span>
@@ -260,79 +302,87 @@ function countLabel(n: number): string {
           <div class="actions">
             <button
               type="button"
-              :aria-label="`New collection inside ${row.collection.name}`"
+              :aria-label="t('collections.newInsideLabel', { name: row.collection.name })"
               @click="startEdit(null, row.collection.id)"
             >
-              New inside
+              {{ t('collections.newInside') }}
+            </button>
+            <button
+              v-if="row.collection.rules"
+              type="button"
+              :aria-label="t('collections.editRulesLabel', { name: row.collection.name })"
+              @click="ruleEditor.openEdit(row.collection.id)"
+            >
+              {{ t('collections.editRules') }}
             </button>
             <button
               type="button"
-              :aria-label="`Rename ${row.collection.name}`"
+              :aria-label="t('collections.renameActionLabel', { name: row.collection.name })"
               @click="startEdit(row.collection.id, row.collection.parent, row.collection.name)"
             >
-              Rename
+              {{ t('common.rename') }}
             </button>
             <button
               type="button"
-              :aria-label="`Move ${row.collection.name} up`"
+              :aria-label="t('collections.upLabel', { name: row.collection.name })"
               :disabled="row.position === 0"
               @click="shift(row, -1)"
             >
-              Up
+              {{ t('collections.up') }}
             </button>
             <button
               type="button"
-              :aria-label="`Move ${row.collection.name} down`"
+              :aria-label="t('collections.downLabel', { name: row.collection.name })"
               :disabled="row.position === row.siblings - 1"
               @click="shift(row, 1)"
             >
-              Down
+              {{ t('collections.down') }}
             </button>
             <button
               v-if="row.position > 0"
               type="button"
-              :aria-label="`Move ${row.collection.name} into the collection above`"
-              title="Nest it inside the collection above"
+              :aria-label="t('collections.inLabel', { name: row.collection.name })"
+              :title="t('collections.inTitle')"
               @click="moveIn(row)"
             >
-              In
+              {{ t('collections.in') }}
             </button>
             <button
               v-if="row.collection.parent != null"
               type="button"
-              :aria-label="`Move ${row.collection.name} out of its parent`"
+              :aria-label="t('collections.outLabel', { name: row.collection.name })"
               @click="moveOut(row)"
             >
-              Out
+              {{ t('collections.out') }}
             </button>
             <button
               type="button"
-              :aria-label="`Export the license inventory of ${row.collection.name}`"
-              title="Save a CSV of its families' licenses"
+              :aria-label="t('collections.exportLabel', { name: row.collection.name })"
+              :title="t('collections.exportTitle')"
               @click="store.exportLicenseInventory(row.collection.id)"
             >
-              Export license inventory…
+              {{ t('collections.exportLicenseInventory') }}
             </button>
             <button
               type="button"
-              :aria-label="`Delete ${row.collection.name}`"
-              title="Delete the collection and the ones inside it. The fonts stay in the library."
+              :aria-label="t('collections.deleteLabel', { name: row.collection.name })"
+              :title="t('collections.deleteTitle')"
               @click="store.remove(row.collection.id)"
             >
-              Delete
+              {{ t('common.delete') }}
             </button>
           </div>
         </li>
         <li
           v-if="editing && editing.id == null && editing.parent === row.collection.id"
           class="item"
-          :style="{ paddingLeft: `${22 + row.depth * 14}px` }"
+          :style="{ paddingInlineStart: `${22 + row.depth * 14}px` }"
         >
           <form class="edit" @submit.prevent="commit">
             <input
               ref="input"
               v-model="editing.name"
-              :aria-label="`New collection name inside ${row.collection.name}`"
+              :aria-label="t('collections.newNameInside', { name: row.collection.name })"
               @keydown.esc="editing = null"
             />
           </form>
@@ -351,6 +401,10 @@ function countLabel(n: number): string {
   align-items: center;
   justify-content: space-between;
   padding: 0 8px;
+}
+.head-actions {
+  display: flex;
+  gap: 4px;
 }
 .heading {
   margin: 0;

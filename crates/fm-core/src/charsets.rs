@@ -85,12 +85,14 @@ pub struct Charset {
 }
 
 impl Charset {
-    /// The preset as the API lists it.
+    /// The preset as the API lists it, without its pangram; see
+    /// [`crate::pangrams::presets`].
     pub fn preset(&self) -> LanguagePreset {
         LanguagePreset {
             code: self.code.clone(),
             name: self.name.clone(),
             script: self.script.clone(),
+            pangram: None,
         }
     }
 }

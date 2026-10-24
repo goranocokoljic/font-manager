@@ -8,6 +8,7 @@
 // numbers and its `locl` support.
 import { computed, ref } from 'vue';
 import type { BlockCoverage, FaceLanguageCoverage } from '../api/types';
+import { errorMessage, formatNumber, t } from '../i18n';
 import { useCoverageStore } from '../stores/coverage';
 
 const emit = defineEmits<{
@@ -21,16 +22,21 @@ const open = ref(new Set<string>());
 const blocks = computed(() => store.coverage?.blocks ?? []);
 const languages = computed(() => store.coverage?.languages ?? []);
 
-const fmt = (n: number) => n.toLocaleString('en-US');
+const fmt = (n: number) => formatNumber(n);
 const isComplete = (l: FaceLanguageCoverage) => l.covered === l.total;
 
 function blockLabel(b: BlockCoverage): string {
-  return `${b.name}: ${fmt(b.covered)} of ${fmt(b.assigned)} characters. Show in the glyph map.`;
+  return t('coverage.blockLabel', { name: b.name, covered: b.covered, count: b.assigned });
 }
 
 function languageLabel(l: FaceLanguageCoverage): string {
-  const amount = isComplete(l) ? 'complete' : `${fmt(l.covered)} of ${fmt(l.total)} characters`;
-  return `${l.name}: ${amount}${l.hasLocl ? ', has localized forms (locl)' : ''}`;
+  const amount = isComplete(l)
+    ? t('coverage.complete')
+    : t('coverage.ofCharacters', { covered: l.covered, count: l.total });
+  return t(l.hasLocl ? 'coverage.languageLabelLocl' : 'coverage.languageLabel', {
+    name: l.name,
+    amount,
+  });
 }
 
 const panelId = (l: FaceLanguageCoverage) => `fm-coverage-${l.code}`;
@@ -51,19 +57,19 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
 
 <template>
   <section class="coverage" aria-labelledby="fm-coverage-title">
-    <h3 id="fm-coverage-title">Coverage</h3>
-    <p v-if="store.error" class="muted" role="alert">{{ store.error.message }}</p>
-    <p v-else-if="store.loading" class="muted" role="status">Counting coverage…</p>
+    <h3 id="fm-coverage-title">{{ t('coverage.title') }}</h3>
+    <p v-if="store.error" class="muted" role="alert">{{ errorMessage(store.error) }}</p>
+    <p v-else-if="store.loading" class="muted" role="status">{{ t('coverage.counting') }}</p>
     <template v-else-if="store.coverage">
-      <h4 id="fm-coverage-blocks">Unicode blocks</h4>
-      <p v-if="!blocks.length" class="muted">This face maps no character of a Unicode block.</p>
+      <h4 id="fm-coverage-blocks">{{ t('coverage.blocks') }}</h4>
+      <p v-if="!blocks.length" class="muted">{{ t('coverage.noBlocks') }}</p>
       <ul v-else class="rows" aria-labelledby="fm-coverage-blocks">
         <li v-for="b in blocks" :key="b.name">
           <button
             type="button"
             class="row"
             :aria-label="blockLabel(b)"
-            :title="`Show ${b.name} in the glyph map`"
+            :title="t('coverage.showInMap', { name: b.name })"
             @click="emit('block', b.name)"
           >
             <span class="name">{{ b.name }}</span>
@@ -71,8 +77,8 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
           </button>
         </li>
       </ul>
-      <h4 id="fm-coverage-languages">Languages</h4>
-      <p v-if="!languages.length" class="muted">This face covers no language preset.</p>
+      <h4 id="fm-coverage-languages">{{ t('coverage.languages') }}</h4>
+      <p v-if="!languages.length" class="muted">{{ t('coverage.noLanguages') }}</p>
       <ul v-else class="rows" aria-labelledby="fm-coverage-languages">
         <li v-for="l in languages" :key="l.code">
           <button
@@ -84,20 +90,24 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
             @click="toggle(l)"
           >
             <span class="name">{{ l.name }}</span>
-            <span v-if="l.hasLocl" class="badge" title="Has localized forms (locl)">locl</span>
+            <span v-if="l.hasLocl" class="badge" :title="t('coverage.hasLocl')">{{
+              t('coverage.locl')
+            }}</span>
             <span class="count">{{
-              isComplete(l) ? 'complete' : `${fmt(l.covered)}/${fmt(l.total)}`
+              isComplete(l) ? t('coverage.complete') : `${fmt(l.covered)}/${fmt(l.total)}`
             }}</span>
           </button>
           <div v-if="open.has(l.code)" :id="panelId(l)" class="panel">
             <p v-if="isComplete(l)" class="muted">
-              Every one of its {{ fmt(l.total) }} characters is covered.
+              {{ t('coverage.allCovered', { count: l.total }) }}
             </p>
             <p v-else-if="store.missingErrors.get(l.code)" class="muted" role="alert">
-              {{ store.missingErrors.get(l.code)!.message }}
+              {{ errorMessage(store.missingErrors.get(l.code)) }}
             </p>
-            <p v-else-if="!missingOf(l)" class="muted" role="status">Listing missing characters…</p>
-            <p v-else class="missing" :aria-label="`Missing from ${l.name}`">
+            <p v-else-if="!missingOf(l)" class="muted" role="status">
+              {{ t('coverage.listing') }}
+            </p>
+            <p v-else class="missing" :aria-label="t('coverage.missingFrom', { name: l.name })">
               <span v-for="c in missingOf(l)" :key="c" class="char">{{ c }}</span>
             </p>
           </div>
@@ -145,7 +155,7 @@ h4 {
   background: none;
   color: var(--fm-fg);
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 .row:hover {
   background: var(--fm-surface);
@@ -172,7 +182,8 @@ h4 {
   font-size: 11px;
 }
 .panel {
-  padding: 2px 6px 6px 18px;
+  padding-block: 2px 6px;
+  padding-inline: 18px 6px;
 }
 .missing {
   display: flex;

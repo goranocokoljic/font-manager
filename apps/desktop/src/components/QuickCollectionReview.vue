@@ -8,9 +8,15 @@
 // Backspace drops the focused font and moves to the next one.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
+import { t } from '../i18n';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { sampleText } from '../preview/sampleText';
-import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stores/preview';
+import {
+  DEFAULT_PREVIEW,
+  previewRowHeight,
+  usePreviewStore,
+  type PreviewSettings,
+} from '../stores/preview';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSamplesStore } from '../stores/samples';
 import FontPreviewRow from './FontPreviewRow.vue';
@@ -22,6 +28,7 @@ const props = withDefaults(defineProps<{ preview?: PreviewSettings; overscan?: n
 
 const store = useQuickCollectionStore();
 const samples = useSamplesStore();
+const previews = usePreviewStore();
 
 const FALLBACK_HEIGHT = 600;
 const viewport = ref<HTMLElement | null>(null);
@@ -60,7 +67,7 @@ const pool = computed(() => poolSize(height.value, rowPx.value, props.overscan))
 const visible = computed(() =>
   store.faces.slice(range.value.start, range.value.end).map((face, i) => {
     const index = range.value.start + i;
-    const sample = sampleText(props.preview, face);
+    const sample = sampleText(props.preview, face, previews.pangramText);
     const got = samples.get(face.id, sample);
     return {
       face,
@@ -76,7 +83,7 @@ const visible = computed(() =>
 
 watchEffect(() => {
   for (const item of visible.value)
-    samples.want(item.face.id, sampleText(props.preview, item.face));
+    samples.want(item.face.id, sampleText(props.preview, item.face, previews.pangramText));
 });
 
 /** Scrolls row `index` into view and focuses its Drop button. */
@@ -132,26 +139,30 @@ async function tag(): Promise<void> {
 <template>
   <section class="review" aria-labelledby="fm-quick-heading">
     <header class="toolbar">
-      <h1 id="fm-quick-heading" class="title">Quick Collection</h1>
+      <h1 id="fm-quick-heading" class="title">{{ t('quickCollection.title') }}</h1>
       <p class="count" role="status">
-        {{ count === 1 ? '1 font' : `${count} fonts` }}
+        {{ t('quickCollection.fonts', { count }) }}
       </p>
-      <button type="button" class="toggle" :disabled="!count" @click="store.clear">Clear</button>
-      <button type="button" class="toggle" @click="store.close">Back to fonts</button>
+      <button type="button" class="toggle" :disabled="!count" @click="store.clear">
+        {{ t('quickCollection.clear') }}
+      </button>
+      <button type="button" class="toggle" @click="store.close">
+        {{ t('quickCollection.back') }}
+      </button>
     </header>
     <div class="actions">
       <form class="action" @submit.prevent="save">
-        <label for="fm-quick-collection-name">Collection name</label>
+        <label for="fm-quick-collection-name">{{ t('quickCollection.collectionName') }}</label>
         <input id="fm-quick-collection-name" v-model="collectionName" type="text" />
         <button type="submit" class="toggle" :disabled="!count || !collectionName.trim() || busy">
-          Save as collection
+          {{ t('quickCollection.saveAsCollection') }}
         </button>
       </form>
       <form class="action" @submit.prevent="tag">
-        <label for="fm-quick-tag">Tag</label>
+        <label for="fm-quick-tag">{{ t('quickCollection.tag') }}</label>
         <input id="fm-quick-tag" v-model="tagName" type="text" />
         <button type="submit" class="toggle" :disabled="!count || !tagName.trim() || busy">
-          Tag all
+          {{ t('quickCollection.tagAll') }}
         </button>
       </form>
     </div>
@@ -165,7 +176,7 @@ async function tag(): Promise<void> {
     >
       <ul
         class="spacer"
-        aria-label="Fonts in the Quick Collection"
+        :aria-label="t('quickCollection.listLabel')"
         :style="{ height: `${count * rowPx}px` }"
       >
         <li
@@ -194,18 +205,18 @@ async function tag(): Promise<void> {
           <button
             type="button"
             class="drop toggle"
-            :aria-label="`Drop ${item.name} from the Quick Collection`"
+            :aria-label="t('quickCollection.dropLabel', { name: item.name })"
             aria-keyshortcuts="Delete Backspace"
-            title="Drop from the Quick Collection (Delete)"
+            :title="t('quickCollection.dropTitle')"
             @click="drop(item.face.id, item.index, false)"
           >
-            Drop
+            {{ t('quickCollection.drop') }}
           </button>
         </li>
       </ul>
     </div>
     <p v-if="!count" class="empty">
-      The Quick Collection is empty. Select fonts and press B to add them.
+      {{ t('quickCollection.empty') }}
     </p>
   </section>
 </template>
@@ -284,13 +295,13 @@ async function tag(): Promise<void> {
 .slot {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   box-sizing: border-box;
-  padding-right: 16px;
+  padding-inline-end: 16px;
   border-bottom: 1px solid var(--fm-border);
   contain: layout paint;
 }

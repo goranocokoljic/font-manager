@@ -4,15 +4,18 @@
 //! window has no capability: the pages are static and need no IPC.
 
 use fm_api::{ApiError, ApiResult, ErrorCode};
-use tauri::menu::{HELP_SUBMENU_ID, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tauri::menu::{HELP_SUBMENU_ID, Menu, MenuEvent, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, Runtime, WebviewUrl, WebviewWindowBuilder};
+
+use crate::shell_text;
 
 /// One page of the user docs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HelpPage {
     /// The file name without extension: `docs/user/<slug>.md`, `help/<slug>.html`.
     pub slug: &'static str,
-    /// The menu item's text.
+    /// The page's English title (its `# heading`); the menu shows the
+    /// `shell.helpPages.<slug>` label of the UI's language.
     pub title: &'static str,
 }
 
@@ -58,6 +61,11 @@ pub fn page_for_menu_id(id: &str) -> Option<&'static HelpPage> {
     id.strip_prefix(MENU_ID_PREFIX).and_then(page)
 }
 
+/// The menu label of `page` in `locale`.
+pub fn label(page: &HelpPage, locale: &str) -> String {
+    shell_text::text(locale, &format!("shell.helpPages.{}", page.slug))
+}
+
 /// The page's path inside the app's bundled frontend.
 pub fn page_path(page: &HelpPage) -> String {
     format!("help/{}.html", page.slug)
@@ -90,7 +98,10 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, slug: &str) -> ApiResult<()> {
         return Ok(());
     }
     WebviewWindowBuilder::new(app, HELP_WINDOW, WebviewUrl::App(page_path(page).into()))
-        .title("Font Manager Help")
+        .title(shell_text::text(
+            &shell_text::current(app),
+            "shell.helpWindowTitle",
+        ))
         .inner_size(960.0, 720.0)
         .min_inner_size(480.0, 400.0)
         .build()
@@ -102,20 +113,65 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, slug: &str) -> ApiResult<()> {
 /// top of the Help menu.
 pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::default(app)?;
+    let locale = shell_text::current(app);
     if let Some(help) = menu
         .get(HELP_SUBMENU_ID)
         .and_then(|i| i.as_submenu().cloned())
     {
         for (position, page) in HELP_PAGES.iter().enumerate() {
-            let item = MenuItem::with_id(app, menu_id(page), page.title, true, None::<&str>)?;
+            let item =
+                MenuItem::with_id(app, menu_id(page), label(page, &locale), true, None::<&str>)?;
             help.insert(&item, position)?;
         }
         // The default Help menu holds About on Windows and Linux.
         if help.items()?.len() > HELP_PAGES.len() {
             help.insert(&PredefinedMenuItem::separator(app)?, HELP_PAGES.len())?;
         }
+        label_submenu(&help, &locale)?;
     }
     Ok(menu)
+}
+
+/// Shows the Help menu's own title and its About item (Windows and Linux) in
+/// `locale`. About is the one predefined item with text; separators have none.
+fn label_submenu<R: Runtime>(help: &Submenu<R>, locale: &str) -> tauri::Result<()> {
+    help.set_text(shell_text::text(locale, "shell.helpMenu"))?;
+    for item in help.items()? {
+        if let Some(about) = item.as_predefined_menuitem()
+            && !about.text()?.is_empty()
+        {
+            about.set_text(shell_text::text(locale, "shell.about"))?;
+        }
+    }
+    Ok(())
+}
+
+/// Shows the Help menu (its title, pages and About) and an open help window's
+/// title in `locale`.
+pub fn relabel<R: Runtime>(app: &AppHandle<R>, locale: &str) {
+    if let Some(help) = app
+        .menu()
+        .and_then(|m| m.get(HELP_SUBMENU_ID))
+        .and_then(|i| i.as_submenu().cloned())
+    {
+        for page in HELP_PAGES {
+            if let Some(item) = help
+                .get(&menu_id(page))
+                .and_then(|i| i.as_menuitem().cloned())
+                && let Err(e) = item.set_text(label(page, locale))
+            {
+                tracing::warn!(error = %e, page = page.slug, "help menu item not relabelled");
+            }
+        }
+        if let Err(e) = label_submenu(&help, locale) {
+            tracing::warn!(error = %e, "help menu title not relabelled");
+        }
+    }
+    if let Some(window) = app.get_webview_window(HELP_WINDOW)
+        && let Err(e) = window.set_title(&shell_text::text(locale, "shell.helpWindowTitle"))
+    {
+        tracing::warn!(error = %e, "help window title not relabelled");
+    }
 }
 
 /// Sets the app menu with the Help pages on a builder and opens a page when its

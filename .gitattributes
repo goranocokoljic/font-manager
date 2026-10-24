@@ -13,3 +13,5 @@
 *.pfb binary
 # Fuzz inputs are raw bytes: never normalize their line endings.
 crates/*/fuzz/seeds/** binary
+# The updater test package is signed byte for byte.
+apps/desktop/src-tauri/tests/fixtures/updater/** binary

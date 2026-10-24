@@ -29,6 +29,8 @@ const compareWith = process.env.FM_SCREENS_COMPARE;
 const coverageOf = process.env.FM_SCREENS_COVERAGE;
 // FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
+// FM_SCREENS_SESSION='{"fm.mock.settings.v1":"{\"density\":\"compact\"}"}' seeds sessionStorage (the mock's saved settings).
+const session: Record<string, string> = JSON.parse(process.env.FM_SCREENS_SESSION ?? '{}');
 // FM_SCREENS_CLICK='Block 1 properties' clicks the first button whose name starts with it before the shot.
 const click = process.env.FM_SCREENS_CLICK;
 // FM_SCREENS_PIN=3 pins the first 3 list rows with C and opens Compare; FM_SCREENS_PIN_MODE=Overlay picks a mode.
@@ -36,6 +38,13 @@ const pinRows = Number(process.env.FM_SCREENS_PIN ?? 0);
 const pinMode = process.env.FM_SCREENS_PIN_MODE;
 // FM_SCREENS_QUICK=3 adds the first 3 list rows to the Quick Collection with B and opens its review.
 const quickRows = Number(process.env.FM_SCREENS_QUICK ?? 0);
+// FM_SCREENS_TAGS=Display,Body makes those tags on the first list row with T, then opens the
+// multi-tagging panel for the first two rows (one mixed tag each).
+const tagNames = (process.env.FM_SCREENS_TAGS ?? '').split(',').filter(Boolean);
+// FM_SCREENS_QUERY='?mockColor=1' sets MockApi options (the page URL before the hash).
+const query = process.env.FM_SCREENS_QUERY ?? '';
+// FM_SCREENS_LOCALE=ar-XB sets the browser's (the OS's) language: `ar-XB` shows the RTL chrome.
+const locale = process.env.FM_SCREENS_LOCALE;
 const viewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
@@ -43,6 +52,7 @@ const viewports = [
 
 test.describe('@screens', () => {
   test.skip(!dir, 'FM_SCREENS_DIR is not set');
+  if (locale) test.use({ locale });
 
   for (const route of routes) {
     for (const scheme of ['light', 'dark'] as const) {
@@ -56,9 +66,12 @@ test.describe('@screens', () => {
           await page.addInitScript((entries) => {
             for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
           }, storage);
+          await page.addInitScript((entries) => {
+            for (const [k, v] of Object.entries(entries)) sessionStorage.setItem(k, v);
+          }, session);
           await page.setViewportSize(vp);
           await page.emulateMedia({ colorScheme: scheme });
-          await page.goto(`/#${path}`);
+          await page.goto(`/${query}#${path}`);
           await expect(page.locator('#app')).not.toBeEmpty();
           if (press) await page.keyboard.press(press);
           if (tab) {
@@ -112,6 +125,21 @@ test.describe('@screens', () => {
             }
             await page.getByTestId('toast').getByRole('button', { name: 'Dismiss' }).click();
             await page.getByTestId('quick-collection').click();
+          }
+          if (tagNames.length) {
+            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+            await rows.first().click();
+            const panel = page.getByRole('dialog', { name: /^Tags of / });
+            for (const name of tagNames) {
+              await page.keyboard.press('t');
+              await panel.getByRole('combobox').fill(name);
+              await page.keyboard.press('Enter');
+              await expect(panel.locator(`[data-tag="${name}"]`)).toBeVisible();
+              await page.keyboard.press('Escape');
+            }
+            await page.keyboard.press('Shift+ArrowDown');
+            await page.keyboard.press('t');
+            await expect(panel).toBeVisible();
           }
           if (click) {
             await page

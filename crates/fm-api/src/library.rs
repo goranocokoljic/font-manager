@@ -530,6 +530,24 @@ pub struct WebUse {
     pub reason: String,
 }
 
+/// One `CPAL` palette of a `COLR` color face (E16.3). The webview applies it
+/// with CSS `font-palette` (`base-palette: index`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Palette {
+    /// Index of the palette in the `CPAL` table (0 is the default).
+    pub index: u16,
+    /// The palette's name from the `name` table, if the font gives one.
+    pub name: Option<String>,
+    /// Its colors as CSS hex, in palette-entry order: `#rrggbb`, or
+    /// `#rrggbbaa` when the color is not opaque.
+    pub colors: Vec<String>,
+    /// The font marks it for use on a light background.
+    pub light_background: bool,
+    /// The font marks it for use on a dark background.
+    pub dark_background: bool,
+}
+
 /// Everything the info panel shows about one face.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -591,6 +609,10 @@ pub struct FaceDetail {
     /// The user's notes on the face's family (E13.5); `notes` are the face's.
     #[serde(default)]
     pub family_notes: Option<String>,
+    /// The `CPAL` palettes of a `COLR` color face (E16.3); empty for a face
+    /// without them.
+    #[serde(default)]
+    pub palettes: Vec<Palette>,
 }
 
 /// What kind of health problem.

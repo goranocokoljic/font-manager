@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Health, Metrics, Slant};
+use fm_api::common::{Embedding, Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
@@ -25,8 +25,11 @@ use crate::coverage;
 use crate::error::{FmError, FmResult};
 use crate::features;
 use crate::license;
+use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
+use crate::web_css::FaceStyle;
+use crate::web_font::{self, ExportFace};
 
 /// One face with what its summary and detail need.
 const FACE: &str = "
@@ -50,6 +53,17 @@ pub struct FaceLocation {
     pub collection_index: u32,
     /// The hash of the bytes last read; `None` until a scan read the file.
     pub hash: Option<FileHash>,
+}
+
+/// A face to export as a web font ([`Index::web_export_face`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct WebExportFace {
+    /// The face's file, output name and label.
+    pub face: ExportFace,
+    /// Its license keeps it off the web.
+    pub restricted: bool,
+    /// What its `@font-face` block says about it (E20.3).
+    pub style: FaceStyle,
 }
 
 /// One face row read by [`FACE`].
@@ -98,13 +112,30 @@ impl Index {
     /// `NotFound`.
     pub fn face_detail(&self, face: FaceId) -> FmResult<FaceDetail> {
         let row = self.face_row(face)?;
+        let is_color = row.parsed.as_ref().is_some_and(|p| p.color);
         let stored = row
             .parsed
             .as_ref()
             .map(|p| p.metrics)
             .filter(|m| m.units_per_em > 0);
+        // The file is read only when the stored metrics are missing or the
+        // face is a color face whose palettes the inspector shows.
+        let data = (stored.is_none() || is_color).then(|| read_file(&row.file));
         let metrics = stored
-            .map_or_else(|| read_metrics(&row.file), Ok)
+            .map_or_else(
+                || {
+                    let index = row.file.collection_index;
+                    match &data {
+                        Some(d) => d
+                            .as_ref()
+                            .map_err(Clone::clone)
+                            .and_then(|d| crate::preview::face_metrics(d, index)),
+                        None => read_file(&row.file)
+                            .and_then(|d| crate::preview::face_metrics(&d, index)),
+                    }
+                },
+                Ok,
+            )
             .unwrap_or_else(|e| {
                 tracing::warn!(%face, error = %e, detail = ?e.detail(), "face metrics not read");
                 Metrics {
@@ -115,6 +146,15 @@ impl Index {
                     cap_height: None,
                 }
             });
+        // Only a color face can have palettes; a plain one skips the read.
+        let palettes = match (&data, is_color) {
+            (Some(Ok(d)), true) => palettes::face_palettes(d, row.file.collection_index)
+                .unwrap_or_else(|e| {
+                    tracing::warn!(%face, error = %e, detail = ?e.detail(), "face palettes not read");
+                    Vec::new()
+                }),
+            _ => Vec::new(),
+        };
         let tags = self.face_tag_names(face)?;
         let family_notes = self.family_notes(&row.summary.family_name)?;
         let declared = self
@@ -182,6 +222,7 @@ impl Index {
             italic_angle: parsed.and_then(|p| p.italic_angle),
             code_point_count,
             family_notes,
+            palettes,
             face: row.summary,
         })
     }
@@ -208,6 +249,48 @@ impl Index {
     /// The file of the face `face`. An unknown face is `NotFound`.
     pub fn face_file(&self, face: FaceId) -> FmResult<FaceLocation> {
         Ok(self.face_row(face)?.file)
+    }
+
+    /// What a web export needs about the face `face` (E20.1): its file, its
+    /// output name and label, whether its license keeps it off the web
+    /// (a restricted embedding and no web license declared, the family's
+    /// declaration first), and its `@font-face` style (E20.3): the
+    /// typographic family (name ID 16, else 1, else the library's family
+    /// name), slant, weight class and, for a variable face, its axes. An
+    /// unknown face is `NotFound`.
+    pub fn web_export_face(&self, face: FaceId) -> FmResult<WebExportFace> {
+        let row = self.face_row(face)?;
+        let declared = self
+            .declared_license(&row.summary.family_name)?
+            .and_then(|d| d.license_type)
+            .or(row.license_type);
+        let restricted = license::embedding(row.fs_type) == Embedding::Restricted
+            && declared != Some(LicenseType::Web);
+        let s = &row.summary;
+        let parsed = row.parsed.as_ref();
+        let style = FaceStyle {
+            family: parsed
+                .and_then(|p| p.typographic_family.clone().or_else(|| p.family.clone()))
+                .filter(|f| !f.trim().is_empty())
+                .unwrap_or_else(|| s.family_name.clone()),
+            slant: s.slant,
+            weight: s.weight,
+            axes: if s.is_variable {
+                parsed.map(|p| p.axes.clone()).unwrap_or_default()
+            } else {
+                Vec::new()
+            },
+        };
+        Ok(WebExportFace {
+            face: ExportFace {
+                path: row.file.path,
+                collection_index: row.file.collection_index,
+                file_stem: web_font::file_stem(&s.postscript_name, u64::from(face.0)),
+                label: format!("{} {}", s.family_name, s.style),
+            },
+            restricted,
+            style,
+        })
     }
 
     /// The webview's view of [`Index::face_file`].
@@ -348,10 +431,9 @@ fn read_row(row: &Row<'_>) -> FmResult<FaceRow> {
     })
 }
 
-fn read_metrics(file: &FaceLocation) -> FmResult<Metrics> {
-    let data = std::fs::read(&file.path)
-        .map_err(|e| FmError::io("The font file could not be read.", &file.path, &e))?;
-    crate::preview::face_metrics(&data, file.collection_index)
+fn read_file(file: &FaceLocation) -> FmResult<Vec<u8>> {
+    std::fs::read(&file.path)
+        .map_err(|e| FmError::io("The font file could not be read.", &file.path, &e))
 }
 
 /// An open license as `face.open_license` stores it: its `fm-api` serde name.

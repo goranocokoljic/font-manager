@@ -4,6 +4,7 @@
 // this is its single-pointer, keyboard-operable alternative).
 import { computed, nextTick, ref, useId } from 'vue';
 import { columnById, type ColumnId } from '../list/columns';
+import { t } from '../i18n';
 import { useViewsStore } from '../stores/views';
 
 const props = defineProps<{ view: string }>();
@@ -65,7 +66,7 @@ function onFocusOut(e: FocusEvent): void {
       :aria-controls="`${uid}-panel`"
       @click="toggle"
     >
-      Columns
+      {{ t('table.columnsMenu.button') }}
     </button>
     <div
       v-if="open"
@@ -73,7 +74,7 @@ function onFocusOut(e: FocusEvent): void {
       ref="panel"
       class="panel"
       role="group"
-      aria-label="Table columns"
+      :aria-label="t('table.columnsMenu.label')"
       @focusout="onFocusOut"
     >
       <ul>
@@ -89,7 +90,7 @@ function onFocusOut(e: FocusEvent): void {
           <button
             type="button"
             class="move"
-            :aria-label="`Move ${item.label} up`"
+            :aria-label="t('table.columnsMenu.moveUp', { column: item.label })"
             :disabled="item.index === 0"
             @click="move(item.id, item.index - 1, $event)"
           >
@@ -98,7 +99,7 @@ function onFocusOut(e: FocusEvent): void {
           <button
             type="button"
             class="move"
-            :aria-label="`Move ${item.label} down`"
+            :aria-label="t('table.columnsMenu.moveDown', { column: item.label })"
             :disabled="item.index === items.length - 1"
             @click="move(item.id, item.index + 1, $event)"
           >
@@ -106,7 +107,9 @@ function onFocusOut(e: FocusEvent): void {
           </button>
         </li>
       </ul>
-      <button type="button" class="reset" @click="views.resetColumns(view)">Reset columns</button>
+      <button type="button" class="reset" @click="views.resetColumns(view)">
+        {{ t('table.columnsMenu.reset') }}
+      </button>
     </div>
   </div>
 </template>
@@ -133,7 +136,7 @@ function onFocusOut(e: FocusEvent): void {
   position: absolute;
   z-index: 10;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   width: 240px;
   padding: 8px;
   border: 1px solid var(--fm-border);

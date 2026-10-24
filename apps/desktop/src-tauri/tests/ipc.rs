@@ -855,3 +855,205 @@ fn the_help_menu_lists_every_docs_page_first_and_opens_it() {
             .ends_with("/help/keyboard-shortcuts.html")
     );
 }
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
+    use fm_app_lib::help::{self, HELP_PAGES};
+    use tauri::menu::HELP_SUBMENU_ID;
+
+    let (app, webview) = app_on(help::with_help_menu(setup(
+        mock_builder(),
+        Arc::new(MockApi::new()),
+    )))
+    .unwrap();
+    let labels = || -> Vec<String> {
+        let submenu = app
+            .menu()
+            .and_then(|m| m.get(HELP_SUBMENU_ID))
+            .and_then(|i| i.as_submenu().cloned())
+            .expect("the menu has a Help submenu");
+        HELP_PAGES
+            .iter()
+            .map(|p| {
+                submenu
+                    .get(&help::menu_id(p))
+                    .and_then(|i| i.as_menuitem().cloned())
+                    .expect("a page item")
+                    .text()
+                    .unwrap()
+            })
+            .collect()
+    };
+    // The Help menu's own title and its About item (Windows and Linux).
+    let chrome = || -> (String, Vec<String>) {
+        let submenu = app
+            .menu()
+            .and_then(|m| m.get(HELP_SUBMENU_ID))
+            .and_then(|i| i.as_submenu().cloned())
+            .expect("the menu has a Help submenu");
+        let predefined = submenu
+            .items()
+            .unwrap()
+            .iter()
+            .filter_map(|i| i.as_predefined_menuitem().map(|p| p.text().unwrap()))
+            .filter(|t| !t.is_empty())
+            .collect();
+        (submenu.text().unwrap(), predefined)
+    };
+    assert_eq!(labels()[0], "Getting started");
+    assert_eq!(
+        chrome(),
+        ("Help".to_owned(), vec!["About Font Manager".to_owned()])
+    );
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "de" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        labels(),
+        ["Erste Schritte", "Quellen", "Aktivierung", "Tastenkürzel"]
+    );
+    assert_eq!(
+        chrome(),
+        ("Hilfe".to_owned(), vec!["Über Font Manager".to_owned()])
+    );
+
+    let err = send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "xx" }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+    assert_eq!(
+        labels()[0],
+        "Erste Schritte",
+        "an unknown locale changes nothing"
+    );
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "en" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(labels()[3], "Keyboard shortcuts");
+}
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn set_shell_locale_relabels_the_tray_menu() {
+    use fm_app_lib::tray;
+
+    let (app, webview) = app().unwrap();
+    let menu = tray::menu(app.handle(), Arc::new(MockApi::new())).unwrap();
+    let labels = || -> Vec<String> {
+        menu.items()
+            .unwrap()
+            .iter()
+            .filter_map(|i| i.as_menuitem().map(|m| m.text().unwrap()))
+            .collect()
+    };
+    assert_eq!(
+        labels(),
+        [
+            "Open Font Manager",
+            "No fonts active",
+            "Deactivate session fonts",
+            "Quit Font Manager",
+        ]
+    );
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "de" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        labels(),
+        [
+            "Font Manager öffnen",
+            "Keine Schriften aktiv",
+            "Sitzungsschriften deaktivieren",
+            "Font Manager beenden",
+        ]
+    );
+}
+
+#[test]
+fn smart_rules_are_updated_and_refused_over_ipc() {
+    let (_app, webview) = app().unwrap();
+    let made: Collection = send(
+        &webview,
+        "create_collection",
+        serde_json::json!({ "req": { "name": "Italic", "rules": { "slant": "italic" } } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    let rule = serde_json::json!({
+        "op": "or",
+        "rules": [{ "kind": "filters", "filters": { "variable": true } }]
+    });
+    let updated: Collection = send(
+        &webview,
+        "update_collection_rules",
+        serde_json::json!({ "req": { "collection": made.id, "ruleGroup": rule } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(updated.rules.and_then(|r| r.variable), None);
+    assert!(updated.rule_group.is_some());
+    let err = send(
+        &webview,
+        "update_collection_rules",
+        serde_json::json!({ "req": { "collection": made.id, "ruleGroup": { "op": "and" } } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "invalidRequest", "{err}");
+}
+
+#[test]
+fn update_support_says_whether_this_copy_updates_itself() {
+    let (_app, webview) = app().unwrap();
+    let body = send(&webview, "update_support", serde_json::json!({}))
+        .unwrap()
+        .unwrap();
+    let support: fm_api::update::UpdateSupport = body.deserialize().unwrap();
+    assert_eq!(support, fm_app_lib::updater::support());
+    assert_eq!(support.offered, support.reason.is_none());
+}
+
+#[test]
+fn install_update_without_a_checked_update_installs_nothing() {
+    let (_app, webview) = app().unwrap();
+    let err = send(
+        &webview,
+        "install_update",
+        serde_json::json!({ "req": { "version": "9.0.0", "confirmMajor": true } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert_eq!(err["code"], "notFound", "{err}");
+    assert!(
+        err["message"]
+            .as_str()
+            .unwrap()
+            .contains("Check for updates first")
+    );
+}

@@ -15,7 +15,7 @@ import {
   dateText,
   formatBadges,
   licenseBadges,
-  OPEN_LICENSE_BADGE,
+  openLicenseBadge,
   openLicenseName,
   visibleColumns,
   weightPosition,
@@ -29,9 +29,12 @@ import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
+import { keepRowInView, tableRowHeight } from '../list/density';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
+import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
+import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 
 const props = withDefaults(
@@ -51,15 +54,16 @@ const emit = defineEmits<{
   open: [face: FaceId];
 }>();
 
-/** Row and header height in CSS px. */
-const ROW_PX = 32;
-const HEADER_PX = 32;
 /** Viewport height before the first measurement (and where there is no layout). */
 const FALLBACK_HEIGHT = 600;
 
 const list = useFontListStore();
 const library = useLibraryStore();
 const views = useViewsStore();
+const settings = useSettingsStore();
+
+/** Row and header height in CSS px, from the row density. */
+const rowPx = computed(() => tableRowHeight(settings.density));
 
 const config = computed(() => views.tableFor(props.view));
 const columns = computed(() => visibleColumns(config.value));
@@ -82,7 +86,7 @@ function measure(): void {
   if (el.clientHeight > 0) height.value = el.clientHeight;
 }
 
-const anchor = useScrollAnchor(viewport, () => ROW_PX);
+const anchor = useScrollAnchor(viewport, () => rowPx.value);
 
 onMounted(() => {
   measure();
@@ -101,12 +105,12 @@ function onScroll(): void {
 }
 
 /** The rows' part of the viewport: the sticky header covers the top. */
-const bodyHeight = computed(() => Math.max(ROW_PX, height.value - HEADER_PX));
+const bodyHeight = computed(() => Math.max(rowPx.value, height.value - rowPx.value));
 const count = computed(() => list.rows.length);
 const range = computed(() =>
-  windowRange(scrollTop.value, bodyHeight.value, ROW_PX, props.overscan, count.value),
+  windowRange(scrollTop.value, bodyHeight.value, rowPx.value, props.overscan, count.value),
 );
-const pool = computed(() => poolSize(bodyHeight.value, ROW_PX, props.overscan));
+const pool = computed(() => poolSize(bodyHeight.value, rowPx.value, props.overscan));
 
 const rowId = (row: ListRow) => `fm-trow-${row.key.replace(':', '-')}`;
 
@@ -149,15 +153,34 @@ async function revealCursor(): Promise<void> {
   const el = viewport.value;
   const i = list.cursorIndex;
   if (!el || i < 0) return;
-  const top = scrollToShow(i, ROW_PX, el.scrollTop, bodyHeight.value);
+  const top = scrollToShow(i, rowPx.value, el.scrollTop, bodyHeight.value);
   if (top !== el.scrollTop) el.scrollTop = top;
   measure();
   await nextTick();
 }
 
+// A new row density keeps the cursor row on screen; without a cursor, the first
+// visible family stays at the top. After the render, so the spacer has its new height.
+watch(
+  rowPx,
+  (after, before) => {
+    const el = viewport.value;
+    if (!el) return;
+    const i = list.cursorIndex;
+    if (i < 0) {
+      anchor.restore();
+    } else {
+      const top = keepRowInView(i, before, after, el.scrollTop, bodyHeight.value);
+      if (top !== el.scrollTop) el.scrollTop = top;
+    }
+    measure();
+  },
+  { flush: 'post' },
+);
+
 function onKeyDown(e: KeyboardEvent): void {
   if (e.target !== viewport.value) return; // keys on a header button are the button's
-  const page = Math.max(1, Math.floor(bodyHeight.value / ROW_PX));
+  const page = Math.max(1, Math.floor(bodyHeight.value / rowPx.value));
   if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
     return;
   e.preventDefault();
@@ -211,6 +234,9 @@ function onDragEnd(): void {
 
 const SORT_ARROW = { ascending: '▲', descending: '▼', none: '' } as const;
 
+/** The weight line column draws dots, not text. */
+const isWeightLine = (id: ColumnId) => id === 'weightLine';
+
 // ---- Cells. ----
 
 interface Cell {
@@ -230,7 +256,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
     const f = row.face;
     switch (id) {
       case 'activation':
-        return { text: f.active ? 'Active' : 'Inactive' };
+        return { text: ACTIVATION_LABEL[f.active ? 'active' : 'inactive'] };
       case 'name':
         return { text: styleName(row) };
       case 'weightLine':
@@ -297,7 +323,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
     class="viewport"
     role="treegrid"
     tabindex="0"
-    aria-label="Font table"
+    :aria-label="t('table.label')"
     aria-multiselectable="true"
     :aria-rowcount="count + 1"
     :aria-colcount="columns.length"
@@ -310,7 +336,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
         class="header"
         role="row"
         aria-rowindex="1"
-        :style="{ gridTemplateColumns: gridTemplate, height: `${HEADER_PX}px` }"
+        :style="{ gridTemplateColumns: gridTemplate, height: `${rowPx}px` }"
       >
         <div
           v-for="(col, c) in columns"
@@ -337,7 +363,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
             v-else
             type="button"
             class="sort"
-            :title="`Sort by ${col.label}`"
+            :title="t('table.sortBy', { column: col.label })"
             @click="views.sortBy(view, col.id)"
           >
             <span :class="{ 'visually-hidden': col.id === 'activation' }">{{ col.label }}</span>
@@ -347,7 +373,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
         </div>
       </div>
 
-      <div class="spacer" role="none" :style="{ height: `${count * ROW_PX}px` }">
+      <div class="spacer" role="none" :style="{ height: `${count * rowPx}px` }">
         <div
           v-for="item in visible"
           :id="item.id"
@@ -369,8 +395,8 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           :aria-label="rowLabel(item.row)"
           :style="{
             gridTemplateColumns: gridTemplate,
-            height: `${ROW_PX}px`,
-            transform: `translateY(${item.index * ROW_PX}px)`,
+            height: `${rowPx}px`,
+            transform: `translateY(${item.index * rowPx}px)`,
           }"
           draggable="true"
           @click="onRowClick(item.row, $event)"
@@ -392,22 +418,22 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
             <template v-else-if="col.id === 'name'">
               <span
                 v-if="item.row.kind === 'family'"
-                class="twisty"
+                class="twisty fm-directional"
                 aria-hidden="true"
                 @click.stop="onToggle(item.row)"
                 >{{ item.row.expanded ? '▾' : '▸' }}</span
               >
-              <span class="text" :title="cellOf(item.row, col.id).text">{{
+              <bdi class="text" :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
-              }}</span>
+              }}</bdi>
             </template>
-            <template v-else-if="col.id === 'weightLine'">
+            <template v-else-if="isWeightLine(col.id)">
               <span class="line" aria-hidden="true">
                 <span
                   v-if="cellOf(item.row, col.id).span"
                   class="span"
                   :style="{
-                    left: `${cellOf(item.row, col.id).span!.left}%`,
+                    insetInlineStart: `${cellOf(item.row, col.id).span!.left}%`,
                     width: `${cellOf(item.row, col.id).span!.width}%`,
                   }"
                 />
@@ -416,7 +442,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                   :key="k"
                   class="mark"
                   :class="{ italic: d.italic }"
-                  :style="{ left: `${d.left}%` }"
+                  :style="{ insetInlineStart: `${d.left}%` }"
                 />
               </span>
               <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
@@ -426,14 +452,14 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 v-for="b in cellOf(item.row, col.id).badges"
                 :key="b"
                 class="badge"
-                :class="{ good: b === OPEN_LICENSE_BADGE }"
-                :title="b === OPEN_LICENSE_BADGE ? cellOf(item.row, col.id).openLicense : undefined"
+                :class="{ good: b === openLicenseBadge() }"
+                :title="b === openLicenseBadge() ? cellOf(item.row, col.id).openLicense : undefined"
                 >{{ b }}</span
               >
             </template>
-            <span v-else class="text" :title="cellOf(item.row, col.id).text">{{
+            <bdi v-else class="text" :title="cellOf(item.row, col.id).text">{{
               cellOf(item.row, col.id).text
-            }}</span>
+            }}</bdi>
           </div>
         </div>
       </div>
@@ -512,8 +538,8 @@ span.sort {
 .tr {
   position: absolute;
   top: 0;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   display: grid;
   box-sizing: border-box;
   align-items: center;
@@ -529,7 +555,7 @@ span.sort {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';
@@ -542,7 +568,8 @@ span.sort {
   min-width: 0;
   align-items: center;
   gap: 4px;
-  padding: 0 8px;
+  /* The density's gap: 8px comfortable, 4px compact. */
+  padding: 0 var(--fm-gap);
   overflow: hidden;
 }
 .text {
@@ -551,7 +578,7 @@ span.sort {
   white-space: nowrap;
 }
 .tr.face .col-name {
-  padding-left: 32px;
+  padding-inline-start: 32px;
 }
 .twisty {
   display: grid;
@@ -572,8 +599,8 @@ span.sort {
 .line::before {
   position: absolute;
   top: 50%;
-  right: 0;
-  left: 0;
+  inset-inline-end: 0;
+  inset-inline-start: 0;
   height: 1px;
   background: var(--fm-border);
   content: '';
@@ -591,7 +618,7 @@ span.sort {
   width: 8px;
   height: 8px;
   box-sizing: border-box;
-  margin-left: -4px;
+  margin-inline-start: -4px;
   border: 1.5px solid var(--fm-fg);
   border-radius: 50%;
   background: var(--fm-fg);

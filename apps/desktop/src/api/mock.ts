@@ -10,12 +10,19 @@ import {
   type ApiError,
   type AppFolders,
   type AppInfo,
+  type AvailableUpdate,
+  type InstallUpdateRequest,
+  type Classification,
   type CssValues,
   type CssValuesRequest,
   type Clash,
   type Collection,
   type CollectionFacesRequest,
   type CollectionId,
+  type Comparison,
+  type ComparisonEntry,
+  type ComparisonId,
+  type CompareMode,
   type Conflict,
   type CoverageReport,
   type FaceCoverage,
@@ -232,6 +239,67 @@ export const mockFaces: FaceDetail[] = [
   },
 ];
 
+/**
+ * A COLR color face with two CPAL palettes (E16.3), only in browser mode with
+ * `?mockColor=1` (the Rust mock has no color fonts): the first named, the second
+ * not, so the picker shows "Palette 2" for it.
+ */
+export const mockColorFace: FaceDetail = {
+  ...structuredClone(mockFaces[1]!),
+  face: {
+    ...mockFaces[1]!.face,
+    id: 8,
+    family: 8,
+    familyName: 'Color Play',
+    postscriptName: 'ColorPlay-Regular',
+  },
+  path: '/Users/demo/Fonts/ColorPlay-Regular.ttf',
+  hash: '8'.padStart(64, '0'),
+  copyright: 'Copyright Color Play Authors',
+  designer: 'Mock Designer',
+  legacyFamily: 'Color Play',
+  foundry: 'Mock Foundry',
+  palettes: [
+    {
+      index: 0,
+      name: 'Daylight',
+      colors: ['#a00000', '#a10010', '#a20020', '#a30030', '#a40040'],
+      lightBackground: true,
+      darkBackground: false,
+    },
+    {
+      index: 1,
+      name: null,
+      colors: ['#a0101080', '#a11010', '#a21020', '#a31030', '#a41040'],
+      lightBackground: false,
+      darkBackground: true,
+    },
+  ],
+};
+
+/**
+ * A Latin + Hebrew face whose name and folder mix the two scripts (E19.3), only in
+ * browser mode with `?mockHebrew=1` (the Rust mock has none): it keeps a Hebrew
+ * sample, and its name and path show the bidi isolation.
+ */
+export const mockHebrewFace: FaceDetail = {
+  ...structuredClone(mockFaces[1]!),
+  face: {
+    ...mockFaces[1]!.face,
+    id: 9,
+    family: 9,
+    familyName: 'Frank רוחל',
+    postscriptName: 'FrankRuhl-Regular',
+  },
+  path: '/Users/demo/Fonts/עברית/FrankRuhl-Regular.ttf',
+  hash: '9'.padStart(64, '0'),
+  copyright: 'Copyright Frank Ruhl Authors',
+  designer: 'Mock Designer',
+  legacyFamily: 'Frank רוחל',
+  foundry: 'Mock Foundry',
+  scripts: ['latn', 'hebr'],
+};
+
 /** The system font the Rust mock gives face 6 the same PostScript name as. */
 const systemClash: Partial<Record<FaceId, string>> = {
   6: '/System/Library/Fonts/JetBrainsMono-Regular.ttf',
@@ -246,6 +314,9 @@ export const mockSources: Source[] = [
 /** `MOCK_NOW` of the Rust mock: when its activations started. */
 export const MOCK_NOW = '2026-10-16T09:00:00Z';
 
+/** The locale the app last told the (absent) native shell; browser mode and tests read it. */
+export const shellLocale = { value: '' };
+
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
   activationMode: 'session',
@@ -256,7 +327,31 @@ export const defaultSettings: FullSettings = {
   rescanIntervalMinutes: 60,
   reactivateOnLaunch: false,
   keepInTray: true,
+  // Offered on Windows, macOS and Linux (ADR 0011), off until turned on.
+  startAtLogin: false,
+  // Off unless the user turns it on (rule 7).
+  checkUpdatesAutomatically: false,
+  // Follows the OS language until the user picks one.
+  language: 'system',
 };
+
+/** The releases the mock's server can offer the mock app (0.1.0). */
+export const mockUpdates = {
+  patch: {
+    currentVersion: '0.1.0',
+    version: '0.1.1',
+    notes: '- Scans skip unreadable folders instead of stopping.\n- Faster search.',
+    date: '2026-10-01T12:00:00Z',
+    kind: 'patch',
+  },
+  major: {
+    currentVersion: '0.1.0',
+    version: '1.0.0',
+    notes: '- The first stable release.\n- Settings moved to a new file.',
+    date: '2026-10-15T12:00:00Z',
+    kind: 'major',
+  },
+} as const satisfies Record<string, AvailableUpdate>;
 
 /** The app folders of the Rust mock. */
 export const mockFolders: AppFolders = {
@@ -273,6 +368,8 @@ const range = (from: number, to: number) =>
 const LATIN = range(0x20, 0x7f) + range(0xa0, 0x100);
 const LATIN_EXT_A = range(0x100, 0x180);
 const CYRILLIC = 'абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ';
+/** The Hebrew letters, final forms included (U+05D0–U+05EA). */
+const HEBREW = range(0x5d0, 0x5eb);
 
 /** (script, characters the language needs), like the Rust mock's languages. */
 const MOCK_LANGUAGES: [string, string][] = [
@@ -283,7 +380,8 @@ const MOCK_LANGUAGES: [string, string][] = [
 ];
 
 function mockChars(f: FaceDetail): Set<string> {
-  return new Set(f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN);
+  const latin = f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN;
+  return new Set(f.scripts.includes('hebr') ? latin + HEBREW : latin);
 }
 
 /**
@@ -601,7 +699,78 @@ export interface MockOptions {
   sets?: ProjectSet[];
   /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
   cjkFaces?: FaceId[];
+  /** Saved comparisons (none by default); a face the mock lacks reopens as missing. */
+  comparisons?: MockComparison[];
+  /**
+   * "Start at login": `off` (the default, as on Windows, macOS and Linux) accepts
+   * changes, `refuse` refuses them as an OS policy would, `unsupported` is a
+   * system without a login entry (a Flatpak sandbox), where the switch is hidden.
+   */
+  startAtLogin?: 'off' | 'refuse' | 'unsupported';
+  /** The OS `getAppInfo` reports (`linux` by default). */
+  platform?: AppInfo['platform'];
+  /**
+   * What "Check for updates" finds: `none` (the default: up to date), `patch` or
+   * `major` (an update to install), `offline` (the server cannot be reached),
+   * `unsigned` (the package is refused as unsigned), `managed` (a Flatpak: the
+   * update section is hidden and a platform note says why).
+   */
+  update?: 'none' | 'patch' | 'major' | 'offline' | 'unsigned' | 'managed';
+  /** Called with every install the mock accepts (tests). */
+  onInstall?: (req: InstallUpdateRequest) => void;
+  /** Adds the color face `mockColorFace` (family "Color Play", E16.3). */
+  colorFace?: boolean;
+  /** Adds the Latin + Hebrew face `mockHebrewFace` (family "Frank רוחל", E19.3). */
+  hebrewFace?: boolean;
+  /**
+   * Where the mock keeps its settings, as the app keeps `settings.json`, so a saved
+   * setting is there after a reload (browser mode). In memory when absent.
+   */
+  settingsStorage?: Pick<Storage, 'getItem' | 'setItem'>;
 }
+
+/** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
+export const MOCK_SETTINGS_KEY = 'fm.mock.settings.v1';
+
+/** The settings saved in `storage`, over `base`; `base` when there are none or they are damaged. */
+function savedSettings(base: FullSettings, storage: MockOptions['settingsStorage']): FullSettings {
+  try {
+    const saved: unknown = JSON.parse(storage?.getItem(MOCK_SETTINGS_KEY) ?? 'null');
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return base;
+    // A system without a login entry stays without one.
+    const next = { ...base, ...(saved as Partial<FullSettings>) };
+    return base.startAtLogin === null ? { ...next, startAtLogin: null } : next;
+  } catch {
+    return base;
+  }
+}
+
+/** A saved comparison as the mock keeps it: each face with its name when saved. */
+export interface MockComparison {
+  id: ComparisonId;
+  name: string;
+  mode: CompareMode;
+  sampleText: string;
+  faces: { id: FaceId; name: string }[];
+}
+
+/**
+ * A sample saved comparison for browser mode: Inter, JetBrains Mono and a face the
+ * library no longer has, so reopening it names one missing font.
+ */
+export const mockComparisons: MockComparison[] = [
+  {
+    id: 1,
+    name: 'Headline shortlist',
+    mode: 'stacked',
+    sampleText: 'Quarterly results',
+    faces: [
+      { id: 1, name: 'Inter Regular' },
+      { id: 9001, name: 'Retired Sans Bold' },
+      { id: 6, name: 'JetBrains Mono Regular' },
+    ],
+  },
+];
 
 /** A sample project set, like the Rust mock's: Inter and JetBrains Mono. */
 export const mockSets: ProjectSet[] = [{ id: 1, name: 'Client brand', faces: [1, 6] }];
@@ -740,7 +909,7 @@ function familySummary(faces: FaceSummary[], details: FaceDetail[]): FamilySumma
     added: MOCK_ADDED,
     styles,
     weightRange: weights.length ? { min: Math.min(...weights), max: Math.max(...weights) } : null,
-    isColor: false,
+    isColor: details.some((d) => (d.palettes?.length ?? 0) > 0),
     version: detail?.version ?? null,
     location: mockSources[0]!.path,
     openLicense: details.find((d) => d.license.openLicense)?.license.openLicense ?? null,
@@ -835,11 +1004,41 @@ function sortFamilies(rows: FamilySummary[], order: FamilyOrder): FamilySummary[
 const MOCK_ADDED = '2026-10-01T00:00:00Z';
 
 /** Language presets of the mock: a face covers one when it has the preset's script. */
+/** Language presets with their pangrams, as in `data/charsets` and `data/pangrams`. */
 export const mockLanguages: LanguagePreset[] = [
-  { code: 'en', name: 'English', script: 'Latn' },
-  { code: 'pl', name: 'Polish', script: 'Latn' },
-  { code: 'sr-Cyrl', name: 'Serbian (Cyrillic)', script: 'Cyrl' },
-  { code: 'el', name: 'Greek', script: 'Grek' },
+  {
+    code: 'en',
+    name: 'English',
+    script: 'Latn',
+    pangram: 'The quick brown fox jumps over the lazy dog',
+  },
+  {
+    code: 'de',
+    name: 'German',
+    script: 'Latn',
+    pangram: 'Victor jagt zwölf Boxkämpfer quer über den großen Sylter Deich',
+  },
+  {
+    code: 'fr',
+    name: 'French',
+    script: 'Latn',
+    pangram: 'Portez ce vieux whisky au juge blond qui fume',
+  },
+  {
+    code: 'pl',
+    name: 'Polish',
+    script: 'Latn',
+    pangram: 'Pchnąć w tę łódź jeża lub ośm skrzyń fig',
+  },
+  {
+    code: 'sr-Cyrl',
+    name: 'Serbian (Cyrillic)',
+    script: 'Cyrl',
+    pangram: 'Љубазни фењерџија чађавог лица хоће да ми покаже штос',
+  },
+  { code: 'el', name: 'Greek', script: 'Grek', pangram: 'Ξεσκεπάζω την ψυχοφθόρα βδελυγμία' },
+  // A preset without a pangram: the picker leaves it out.
+  { code: 'mt', name: 'Maltese', script: 'Latn', pangram: null },
 ];
 
 const OPEN_LICENSE_LABELS: Record<OpenLicense, string> = {
@@ -876,6 +1075,25 @@ export function mockWebUse(l: LicenseInfo): WebUse {
 }
 
 /**
+ * The class of a face's family, like the Rust mock's families: Inter and Legacy
+ * Grotesk are sans serif, JetBrains Mono is monospace; an extra family takes the
+ * class of the sample face it copies.
+ */
+export function mockClassification(d: FaceDetail): Classification {
+  const family = d.face.family;
+  const model = family >= EXTRA_ID_BASE ? ((family - EXTRA_ID_BASE) % 2 === 0 ? 1 : 3) : family;
+  return model === 3 ? 'mono' : 'sans';
+}
+
+/** True when `d` reaches every weight from `min` to `max` (a variable face by its `wght` axis). */
+function reachesWeight(d: FaceDetail, min: number, max: number): boolean {
+  const axis = d.axes.find((a) => a.tag === 'wght');
+  const lo = axis?.min ?? d.face.weight;
+  const hi = axis?.max ?? d.face.weight;
+  return lo <= max && hi >= min;
+}
+
+/**
  * True when face `d` passes `q` (the mock's subset of `Filters`, like the Rust mock);
  * `tags` are the ids of its tags; `activated`: it was ever activated (the mock's clock
  * is fixed, so that is within any `activatedWithinDays` window).
@@ -894,6 +1112,10 @@ function passes(
   };
   const supports = q.supports;
   return (
+    (!q.classification?.length || q.classification.includes(mockClassification(d))) &&
+    (q.weight == null || reachesWeight(d, q.weight.min, q.weight.max)) &&
+    (q.width == null || (f.width >= q.width.min && f.width <= q.width.max)) &&
+    (q.foundry == null || q.foundry === d.foundry) &&
     (q.slant == null || q.slant === f.slant) &&
     (q.variable == null || q.variable === f.isVariable) &&
     (q.color == null || !q.color) &&
@@ -1249,7 +1471,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   const handlers = new Set<(event: Event) => void>();
   let nextId = 100;
   let picks = 0;
-  let settings = { ...defaultSettings };
+  let settings: FullSettings = savedSettings(
+    {
+      ...defaultSettings,
+      startAtLogin: options.startAtLogin === 'unsupported' ? null : false,
+    },
+    options.settingsStorage,
+  );
   const emit = (event: Event) => handlers.forEach((h) => h(event));
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
@@ -1281,6 +1509,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   // The sample faces are copied: tagging and rating edit this client's faces only.
   const faces = [
     ...mockFaces.map((f) => structuredClone(f)),
+    ...(options.colorFace ? [structuredClone(mockColorFace)] : []),
+    ...(options.hebrewFace ? [structuredClone(mockHebrewFace)] : []),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
@@ -1337,16 +1567,53 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return f && !trashed.has(f.path) ? [summary(f)] : [];
     }),
   });
+  // Named comparisons (E13.2), like the Rust mock: a face it lacks (or trashed) is missing.
+  let comparisons = structuredClone(options.comparisons ?? []);
+  const comparisonEntry = (c: MockComparison): ComparisonEntry => ({
+    id: c.id,
+    name: c.name,
+    mode: c.mode,
+    faceCount: c.faces.length,
+  });
+  const comparisonOrThrow = (id: ComparisonId) => {
+    const c = comparisons.find((x) => x.id === id);
+    if (!c) throw { code: 'notFound', message: `Comparison ${id} was not found.`, detail: null };
+    return c;
+  };
+  const comparisonView = (c: MockComparison): Comparison => {
+    const shown = c.faces.map((x) => ({ ...x, f: find(x.id) }));
+    return {
+      id: c.id,
+      name: c.name,
+      mode: c.mode,
+      sampleText: c.sampleText,
+      faces: shown.flatMap(({ f }) => (f && !trashed.has(f.path) ? [summary(f)] : [])),
+      missing: shown
+        .filter(({ f }) => !f || trashed.has(f.path))
+        .map(({ id, name }) => ({ id, name })),
+    };
+  };
+  const comparisonName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw invalid('A comparison needs a name.');
+    return trimmed;
+  };
   // Family groups a search returns: name matches first, then by name (like the Rust mock).
-  const hits = (query: string, q: Filters): FamilyHit[] => {
-    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const faceHits = (words: string[], d: FaceDetail, q: Filters, rule?: RuleGroup | null) => {
+    const hay =
+      `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
+    return (
+      words.every((w) => hay.includes(w)) &&
+      matches(d, q, []) &&
+      (!rule || passesGroup(d, rule, []))
+    );
+  };
+  const wordsOf = (query: string) => query.toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = (query: string, q: Filters, rule?: RuleGroup | null): FamilyHit[] => {
+    const words = wordsOf(query);
     const out: FamilyHit[] = [];
     for (const [family, details] of byFamily) {
-      const matching = details.filter((d) => {
-        const hay =
-          `${d.face.familyName} ${d.face.style} ${d.face.postscriptName} ${d.foundry ?? ''} ${d.designer ?? ''}`.toLowerCase();
-        return words.every((w) => hay.includes(w)) && matches(d, q, []);
-      });
+      const matching = details.filter((d) => faceHits(words, d, q, rule));
       if (!matching.length) continue;
       const nameHit = words.some((w) => details[0]!.face.familyName.toLowerCase().includes(w));
       out.push({
@@ -1358,54 +1625,108 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     }
     return out.sort((a, b) => b.score! - a.score! || a.family.name.localeCompare(b.family.name));
   };
+  // The number of family groups `hits` returns, without building their rows: the
+  // counts run it once per filter value, so a 10,000-family list stays quick.
+  const hitCount = (query: string, q: Filters, rule?: RuleGroup | null): number => {
+    const words = wordsOf(query);
+    let n = 0;
+    for (const details of byFamily.values())
+      if (details.some((d) => faceHits(words, d, q, rule))) n++;
+    return n;
+  };
   // Per value, the family groups with that value chosen and the other filters kept.
   const countEach = <T>(
     query: string,
     q: Filters,
     values: T[],
     pick: (f: Filters, v: T) => Filters,
+    rule?: RuleGroup | null,
   ): FilterCount<T>[] =>
     values
-      .map((value) => ({ value, count: hits(query, pick(q, value)).length }))
+      .map((value) => ({ value, count: hitCount(query, pick(q, value), rule) }))
       .filter((c) => c.count > 0);
   const distinct = <T>(list: T[]) => [...new Set(list)];
   const both = [true, false];
-  const counts = (query: string, q: Filters): FilterCounts => ({
-    slant: countEach(query, q, distinct(faces.map((d) => d.face.slant)), (f, slant) => ({
-      ...f,
-      slant,
-    })),
-    variable: countEach(query, q, both, (f, variable) => ({ ...f, variable })),
-    color: countEach(query, q, both, (f, color) => ({ ...f, color })),
-    formats: countEach(query, q, distinct(faces.map((d) => d.face.format)), (f, v) => ({
-      ...f,
-      formats: [v],
-    })),
+  const counts = (query: string, q: Filters, rule?: RuleGroup | null): FilterCounts => ({
+    classification: countEach(
+      query,
+      q,
+      distinct(faces.map(mockClassification)),
+      (f, v) => ({ ...f, classification: [v] }),
+      rule,
+    ),
+    weight: countEach(
+      query,
+      q,
+      [100, 200, 300, 400, 500, 600, 700, 800, 900],
+      (f, v) => ({ ...f, weight: { min: v - 50, max: v + 49 } }),
+      rule,
+    ),
+    width: countEach(
+      query,
+      q,
+      [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      (f, v) => ({ ...f, width: { min: v, max: v } }),
+      rule,
+    ),
+    license: countEach(
+      query,
+      q,
+      distinct(faces.flatMap((d) => (d.license.declared ? [d.license.declared] : []))),
+      (f, license) => ({ ...f, license }),
+      rule,
+    ),
+    foundry: countEach(
+      query,
+      q,
+      distinct(faces.flatMap((d) => (d.foundry ? [d.foundry] : []))).sort(),
+      (f, foundry) => ({ ...f, foundry }),
+      rule,
+    ),
+    slant: countEach(
+      query,
+      q,
+      distinct(faces.map((d) => d.face.slant)),
+      (f, slant) => ({ ...f, slant }),
+      rule,
+    ),
+    variable: countEach(query, q, both, (f, variable) => ({ ...f, variable }), rule),
+    color: countEach(query, q, both, (f, color) => ({ ...f, color }), rule),
+    formats: countEach(
+      query,
+      q,
+      distinct(faces.map((d) => d.face.format)),
+      (f, v) => ({ ...f, formats: [v] }),
+      rule,
+    ),
     features: countEach(
       query,
       q,
       distinct(faces.flatMap((d) => d.features.map((x) => x.tag))).sort(),
       (f, v) => ({ ...f, features: distinct([...(f.features ?? []), v]) }),
+      rule,
     ),
-    sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] })),
-    problems: countEach(query, q, both, (f, problems) => ({ ...f, problems })),
-    active: countEach(query, q, both, (f, v) => ({ ...f, active: v })),
+    sources: countEach(query, q, [1], (f, v) => ({ ...f, sources: [v] }), rule),
+    problems: countEach(query, q, both, (f, problems) => ({ ...f, problems }), rule),
+    active: countEach(query, q, both, (f, v) => ({ ...f, active: v }), rule),
     tags: countEach(
       query,
       q,
       tags.map((t) => t.id),
       (f, v) => ({ ...f, tags: distinct([...(f.tags ?? []), v]) }),
+      rule,
     ),
-    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite })),
-    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating })),
+    favorite: countEach(query, q, both, (f, favorite) => ({ ...f, favorite }), rule),
+    minRating: countEach(query, q, [1, 2, 3, 4, 5], (f, minRating) => ({ ...f, minRating }), rule),
     embedding: countEach(
       query,
       q,
       distinct(faces.map((d) => d.license.embedding)),
       (f, embedding) => ({ ...f, embedding }),
+      rule,
     ),
-    openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense })),
-    webOk: countEach(query, q, both, (f, webOk) => ({ ...f, webOk })),
+    openLicense: countEach(query, q, both, (f, openLicense) => ({ ...f, openLicense }), rule),
+    webOk: countEach(query, q, both, (f, webOk) => ({ ...f, webOk }), rule),
   });
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
@@ -1435,6 +1756,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           ? [r.filters.collection]
           : [],
     );
+  // Refuses a rule as fm-core does (E14.1): an empty group at any depth, or a
+  // weight or width range whose minimum is above its maximum.
+  const checkShape = (g: RuleGroup): void => {
+    if (!g.rules?.length)
+      throw invalid("Every group of a smart collection's rules needs at least one rule.");
+    for (const r of g.rules) {
+      if (r.kind === 'group') checkShape(r.group);
+      else if (r.filters.weight && r.filters.weight.min > r.filters.weight.max)
+        throw invalid('The lowest weight of a rule is above its highest.');
+      else if (r.filters.width && r.filters.width.min > r.filters.width.max)
+        throw invalid('The narrowest width of a rule is above its widest.');
+    }
+  };
   const loop = (c: Collection) =>
     invalid(`The rules of "${c.name}" include the collection itself.`);
   const inCollection = (d: FaceDetail, id: CollectionId, path: CollectionId[]): boolean => {
@@ -1492,12 +1826,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     }
     throw invalid('Choose one collection or one set for the virtual style.');
   };
-  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
-    const c = findCollection(req.collection);
-    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
-    const ids = [...req.faces];
+  // The faces and every face of whole families, each once, the faces first (like fm-core).
+  const facesOf = (ids: FaceId[], families: FamilyId[] = []): FaceId[] => {
     for (const id of ids) if (!find(id)) throw notFound(id);
-    for (const family of req.families ?? []) {
+    const out = new Set(ids);
+    for (const family of families) {
       const list = byFamily.get(family);
       if (!list)
         throw {
@@ -1505,8 +1838,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           message: `Family ${family} was not found.`,
           detail: null,
         };
-      ids.push(...list.map((d) => d.face.id));
+      for (const d of list) out.add(d.face.id);
     }
+    return [...out];
+  };
+  const editMembers = (req: CollectionFacesRequest, add: boolean): Collection => {
+    const c = findCollection(req.collection);
+    if (c.rules) throw invalid('A smart collection fills itself from its rules.');
+    const ids = facesOf(req.faces, req.families);
     const set = members.get(c.id) ?? new Set<FaceId>();
     members.set(c.id, set);
     for (const id of ids) {
@@ -1542,8 +1881,68 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     throw invalid(`The mock cannot act on a ${target.kind}.`);
   };
 
+  // The same reason fm-core gives a Flatpak (update.rs).
+  const managedReason =
+    'Flatpak installs the updates of this copy (flatpak update, or your software center), so Check for updates is not shown.';
+  let pendingUpdate: AvailableUpdate | null = null;
+
   return {
-    getAppInfo: async () => mockAppInfo,
+    getAppInfo: async () => {
+      const info = options.platform ? { ...mockAppInfo, platform: options.platform } : mockAppInfo;
+      return options.update === 'managed'
+        ? { ...info, platformNotes: [...(info.platformNotes ?? []), managedReason] }
+        : info;
+    },
+    updateSupport: async () =>
+      options.update === 'managed'
+        ? { offered: false, reason: managedReason }
+        : { offered: true, reason: null },
+    checkForUpdate: async () => {
+      if (options.update === 'managed')
+        throw { code: 'unsupported' as const, message: managedReason, detail: null };
+      if (options.update === 'offline')
+        throw {
+          code: 'io' as const,
+          message:
+            'Font Manager could not reach its release server. Check your connection and try again.',
+          detail: 'dns error',
+        };
+      const found =
+        options.update === 'major'
+          ? mockUpdates.major
+          : options.update === 'patch' || options.update === 'unsigned'
+            ? mockUpdates.patch
+            : null;
+      pendingUpdate = found ? { ...found } : null;
+      return { currentVersion: mockAppInfo.version, update: pendingUpdate };
+    },
+    // The same rules as `InstallUpdateRequest::check` in fm-api.
+    installUpdate: async (req) => {
+      if (!pendingUpdate)
+        throw {
+          code: 'notFound' as const,
+          message: 'No update is on offer. Check for updates first.',
+          detail: null,
+        };
+      if (req.version !== pendingUpdate.version)
+        throw {
+          code: 'conflict' as const,
+          message: `Version ${req.version} is no longer the update on offer. Check for updates again.`,
+          detail: null,
+        };
+      if (pendingUpdate.kind === 'major' && !req.confirmMajor)
+        throw invalid(
+          `Version ${pendingUpdate.version} is a major update. Confirm it a second time to install it.`,
+        );
+      if (options.update === 'unsigned')
+        throw {
+          code: 'permissionDenied' as const,
+          message:
+            "The update was not installed: it is not signed with Font Manager's release key. Download Font Manager from its releases page instead.",
+          detail: 'Minisign(InvalidSignature)',
+        };
+      options.onInstall?.({ ...req });
+    },
     layoutPresets: async () => structuredClone([...MOCK_LAYOUT_PRESETS]),
     clampLayout: async (req) => mockClampLayout(req),
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
@@ -1607,13 +2006,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     search: async (req) => {
       const query = req.query ?? '';
       const filters = req.filters ?? {};
-      const all = hits(query, filters);
+      const rule = req.rule ?? null;
+      const all = hits(query, filters, rule);
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
       return {
         families: all.slice(offset, offset + limit),
         total: all.length,
-        counts: counts(query, filters),
+        counts: counts(query, filters, rule),
       } satisfies SearchResponse;
     },
     checkCoverage: async (req) => {
@@ -1638,6 +2038,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const group: RuleGroup | null =
         req.ruleGroup ??
         (req.rules ? { op: 'and', rules: [{ kind: 'filters', filters: req.rules }] } : null);
+      if (group) checkShape(group);
       const id = ++nextId;
       for (const ref of group ? refsOf(group) : []) if (ref !== id) findCollection(ref);
       const only = group?.op === 'and' && group.rules?.length === 1 ? group.rules[0] : null;
@@ -1659,6 +2060,25 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return viewOf(c);
     },
     listCollections: async () => walk(null),
+    updateCollectionRules: async (req) => {
+      checkShape(req.ruleGroup);
+      const c = findCollection(req.collection);
+      if (!ruleOf(c))
+        throw invalid('A manual collection has no rules; make a smart collection instead.');
+      for (const ref of refsOf(req.ruleGroup)) if (ref !== c.id) findCollection(ref);
+      const before = { rules: c.rules, ruleGroup: c.ruleGroup };
+      const only = req.ruleGroup.op === 'and' && req.ruleGroup.rules?.length === 1;
+      const first = only ? req.ruleGroup.rules![0] : null;
+      c.ruleGroup = structuredClone(req.ruleGroup);
+      c.rules = first?.kind === 'filters' ? structuredClone(first.filters) : {};
+      try {
+        checkLoops(c.id, []);
+      } catch (e) {
+        Object.assign(c, before);
+        throw e;
+      }
+      return viewOf(c);
+    },
     renameCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
@@ -1705,8 +2125,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     tagFaces: async (req) => {
       const names = req.tags.map((n) => n.trim()).filter(Boolean);
       if (!names.length) throw invalid('Give the tag a name.');
-      if (!req.faces.length) throw invalid('Choose the fonts to tag.');
-      const targets = req.faces.map(faceOrThrow);
+      const ids = facesOf(req.faces, req.families);
+      if (!ids.length) throw invalid('Choose the fonts to tag.');
+      const targets = ids.map(faceOrThrow);
       const named: { id: TagId; name: string }[] = [];
       for (const name of names) {
         let t = tags.find((x) => sameName(x.name, name));
@@ -1715,7 +2136,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           if (!d.tags.some((n) => sameName(n, t.name))) d.tags = [...d.tags, t.name];
         if (!named.some((x) => x.id === t.id)) named.push(t);
       }
-      changed(req.faces);
+      changed(ids);
       return named.map(tagView);
     },
     untagFaces: async (req) => {
@@ -1729,6 +2150,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           tags.splice(tags.indexOf(t), 1);
       }
       changed(req.faces);
+    },
+    // Like fm-core: the tags at least one face carries, A to Z, and whether all do.
+    selectionTags: async (req) => {
+      const ids = facesOf(req.faces, req.families);
+      const targets = ids.map(faceOrThrow);
+      const byName = [...tags].sort((a, b) =>
+        a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+      );
+      return {
+        faces: ids,
+        tags: byName.flatMap((t) => {
+          const n = targets.filter((d) => d.tags.some((x) => sameName(x, t.name))).length;
+          return n ? [{ tag: t.id, faceCount: n, all: n === ids.length }] : [];
+        }),
+      };
     },
     updateUserMeta: async (req) => {
       if (req.rating != null && req.rating > 5)
@@ -1810,6 +2246,43 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     },
     clearQuickCollection: async () => {
       quick = [];
+    },
+    listComparisons: async () =>
+      comparisons
+        .map(comparisonEntry)
+        .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id - b.id),
+    getComparison: async ({ id }) => comparisonView(comparisonOrThrow(id)),
+    saveComparison: async (req) => {
+      const name = comparisonName(req.name);
+      if (req.faces.length < 2 || req.faces.length > 4)
+        throw invalid(`A comparison holds 2 to 4 fonts, not ${req.faces.length}.`);
+      if (new Set(req.faces).size !== req.faces.length)
+        throw invalid('A comparison names each font once.');
+      const faces = req.faces.map((id) => {
+        const f = faceOrThrow(id);
+        return { id, name: `${f.face.familyName} ${f.face.style}` };
+      });
+      const saved: MockComparison = {
+        id: req.id ?? ++nextId,
+        name,
+        mode: req.mode ?? 'sideBySide',
+        sampleText: req.sampleText ?? '',
+        faces,
+      };
+      if (req.id != null) {
+        const at = comparisons.indexOf(comparisonOrThrow(req.id));
+        comparisons[at] = saved;
+      } else comparisons.push(saved);
+      return comparisonView(saved);
+    },
+    renameComparison: async ({ id, name }) => {
+      const c = comparisonOrThrow(id);
+      c.name = comparisonName(name);
+      return comparisonEntry(c);
+    },
+    deleteComparison: async ({ id }) => {
+      comparisonOrThrow(id);
+      comparisons = comparisons.filter((c) => c.id !== id);
     },
     // Same origin as the page; e2e serves fixture fonts on this path.
     fontUrl: (id) => `/fmfont/${id}`,
@@ -2101,9 +2574,29 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const min = req.rescanIntervalMinutes;
       if (min != null && min > 1440)
         throw invalid('The rescan interval must be between 0 (off) and 1440 minutes.');
+      // The same rule as `Settings::apply` and the login entry in fm-core.
+      if (req.startAtLogin != null && settings.startAtLogin == null)
+        throw {
+          code: 'unsupported' as const,
+          message: 'Start at login is not available on this system.',
+          detail: null,
+        };
+      if (
+        req.startAtLogin != null &&
+        req.startAtLogin !== settings.startAtLogin &&
+        options.startAtLogin === 'refuse'
+      )
+        throw {
+          code: 'permissionDenied' as const,
+          message: req.startAtLogin
+            ? 'Start at login could not be turned on: the system refused the login entry.'
+            : 'Start at login could not be turned off: the system refused to remove the login entry.',
+          detail: 'blocked by policy',
+        };
       const next = { ...settings };
       for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
       settings = next;
+      options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
       return { ...settings };
     },
     getAppFolders: async () => ({ ...mockFolders }),
@@ -2116,6 +2609,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: null,
         };
       if (typeof window !== 'undefined') window.open(`/help/${page}.html`, '_blank');
+    },
+    // Browser mode has no native menu or tray to relabel; the last locale is kept
+    // so tests can see what the shell was told.
+    setShellLocale: async (locale) => {
+      shellLocale.value = locale;
     },
   };
 }
@@ -2130,14 +2628,47 @@ function countFromUrl(name: string, max: number): number {
   return Number.isInteger(n) && n > 0 ? Math.min(n, max) : 0;
 }
 
+/** The tab's session storage, where there is one (not in Node). */
+function sessionStorageOf(): Storage | undefined {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function platformFromUrl(): AppInfo['platform'] | undefined {
+  if (typeof location === 'undefined') return undefined;
+  const p = new URLSearchParams(location.search).get('mockPlatform');
+  return p === 'windows' || p === 'macos' || p === 'linux' ? p : undefined;
+}
+
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
+  settingsStorage: sessionStorageOf(),
   extraProblems: mockExtraProblems,
   duplicates: mockDuplicates,
   sets: mockSets,
+  // `?mockComparisons=1` starts with a saved comparison that names a missing font.
+  comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
   // `?mockCjk=1` gives face 1 a CJK-sized glyph map.
   cjkFaces: countFromUrl('mockCjk', 1) ? [1] : [],
+  // "Start at login" is offered; `?mockStartAtLogin=2` refuses changes, `=3` hides it.
+  startAtLogin: (['off', 'refuse', 'unsupported'] as const)[
+    countFromUrl('mockStartAtLogin', 3) - 1
+  ],
+  // `?mockPlatform=windows|macos|linux` sets the OS the app reports.
+  platform: platformFromUrl(),
+  // `?mockUpdate=1` offers a patch, `=2` a major update, `=3` cannot reach the
+  // server, `=4` offers an unsigned package, `=5` is a Flatpak (no update section).
+  update: (['patch', 'major', 'offline', 'unsigned', 'managed'] as const)[
+    countFromUrl('mockUpdate', 5) - 1
+  ],
+  // `?mockColor=1` adds a color font with two palettes.
+  colorFace: countFromUrl('mockColor', 1) > 0,
+  // `?mockHebrew=1` adds a Latin + Hebrew face with a mixed-script name and path.
+  hebrewFace: countFromUrl('mockHebrew', 1) > 0,
 });

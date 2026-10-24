@@ -4,11 +4,15 @@
 
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::comparison::{
+    Comparison, ComparisonEntry, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
+};
 use fm_api::export::{ExportService, LicenseInventoryRequest};
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
@@ -23,8 +27,9 @@ use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
     LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection,
-    QuickCollectionRequest, RenameCollectionRequest, Tag, TagFacesRequest, UntagFacesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    QuickCollectionRequest, RenameCollectionRequest, SelectionTags, SelectionTagsRequest, Tag,
+    TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -39,6 +44,7 @@ use fm_api::{
     SettingsService, SourceId, VirtualStyleId,
 };
 use fm_core::index::Opened;
+use fm_core::lifecycle::{self, LaunchWindow};
 use fm_core::{CoreApi, SettingsStore};
 use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
@@ -46,7 +52,9 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
+pub mod shell_text;
 pub mod tray;
+pub mod updater;
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
@@ -77,6 +85,8 @@ pub struct AppState {
     backend: Backend,
     core: Option<Arc<CoreApi>>,
     tray: Option<Arc<dyn Tray>>,
+    /// The quit path ran ([`AppState::run_quit_path`]).
+    quit_ran: AtomicBool,
 }
 
 impl AppState {
@@ -88,6 +98,7 @@ impl AppState {
             backend: Backend::Other,
             core: None,
             tray: None,
+            quit_ran: AtomicBool::new(false),
         }
     }
 
@@ -99,6 +110,7 @@ impl AppState {
             backend: Backend::Core,
             core: Some(api),
             tray: None,
+            quit_ran: AtomicBool::new(false),
         }
     }
 
@@ -126,6 +138,53 @@ impl AppState {
     /// Which implementation the commands talk to.
     pub fn backend(&self) -> Backend {
         self.backend
+    }
+
+    /// The normal quit path, [`on_exit`], once: every quit ends here, and so
+    /// does an update before it installs (E18.2). A second run would record
+    /// an empty last session over the real one.
+    pub fn run_quit_path(&self) {
+        if !self.quit_ran.swap(true, Ordering::SeqCst) {
+            on_exit(self.core.as_deref());
+        }
+    }
+
+    /// The faces active for this session now: the ones the quit path ends.
+    /// Empty without the real library.
+    pub fn session_faces(&self) -> Vec<FaceId> {
+        let Some(core) = &self.core else {
+            return Vec::new();
+        };
+        match fm_api::ActivationService::list_active(core.as_ref()) {
+            Ok(active) => lifecycle::session_faces(&active),
+            Err(e) => {
+                tracing::warn!(error = %e, "session fonts not read");
+                Vec::new()
+            }
+        }
+    }
+
+    /// Undoes the quit path when the app goes on running after all (an
+    /// update that did not install): `faces`, the session fonts it ended,
+    /// are activated again, and the quit path runs again when the app quits,
+    /// so the last session it records is the real one.
+    pub fn resume_after_quit(&self, faces: Vec<FaceId>) {
+        if let Some(core) = &self.core {
+            let on_conflict = self.current_settings().on_conflict;
+            match lifecycle::restore_session(core.as_ref(), faces, on_conflict) {
+                Ok(outcomes) => {
+                    let missed = outcomes
+                        .iter()
+                        .filter(|o| o.outcome != fm_api::activation::OutcomeStatus::Done)
+                        .count();
+                    if missed > 0 {
+                        tracing::warn!(missed, "some session fonts were not activated again");
+                    }
+                }
+                Err(e) => tracing::warn!(error = %e, "session fonts not activated again"),
+            }
+        }
+        self.quit_ran.store(false, Ordering::SeqCst);
     }
 
     /// Serves the settings from `settings` instead of the API.
@@ -376,6 +435,42 @@ async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Opti
     call(&state, move |api| api.layout_width(req)).await
 }
 
+/// Every saved comparison, by name (E13.2).
+#[tauri::command]
+async fn list_comparisons(state: State<'_, AppState>) -> ApiResult<Vec<ComparisonEntry>> {
+    call(&state, move |api| api.list_comparisons()).await
+}
+
+/// One saved comparison: its faces left and the missing ones.
+#[tauri::command]
+async fn get_comparison(state: State<'_, AppState>, req: ComparisonRef) -> ApiResult<Comparison> {
+    call(&state, move |api| api.get_comparison(req)).await
+}
+
+/// Saves a comparison, new or over an existing one.
+#[tauri::command]
+async fn save_comparison(
+    state: State<'_, AppState>,
+    req: SaveComparisonRequest,
+) -> ApiResult<Comparison> {
+    call(&state, move |api| api.save_comparison(req)).await
+}
+
+/// Renames a saved comparison.
+#[tauri::command]
+async fn rename_comparison(
+    state: State<'_, AppState>,
+    req: RenameComparisonRequest,
+) -> ApiResult<ComparisonEntry> {
+    call(&state, move |api| api.rename_comparison(req)).await
+}
+
+/// Deletes a saved comparison; the fonts are not touched.
+#[tauri::command]
+async fn delete_comparison(state: State<'_, AppState>, req: ComparisonRef) -> ApiResult<()> {
+    call(&state, move |api| api.delete_comparison(req)).await
+}
+
 #[tauri::command]
 async fn get_family(state: State<'_, AppState>, family: FamilyId) -> ApiResult<Family> {
     call(&state, move |api| api.get_family(family)).await
@@ -525,6 +620,15 @@ async fn delete_virtual_style(state: State<'_, AppState>, style: VirtualStyleId)
     call(&state, move |api| api.delete_virtual_style(style)).await
 }
 
+/// Replaces the rule of a smart collection (E14.1).
+#[tauri::command]
+async fn update_collection_rules(
+    state: State<'_, AppState>,
+    req: UpdateCollectionRulesRequest,
+) -> ApiResult<Collection> {
+    call(&state, move |api| api.update_collection_rules(req)).await
+}
+
 /// Renames a collection.
 #[tauri::command]
 async fn rename_collection(
@@ -625,6 +729,15 @@ async fn remove_from_quick_collection(
 #[tauri::command]
 async fn clear_quick_collection(state: State<'_, AppState>) -> ApiResult<()> {
     call(&state, move |api| api.clear_quick_collection()).await
+}
+
+/// The tags the faces of a selection carry, with how many carry each (E13.4).
+#[tauri::command]
+async fn selection_tags(
+    state: State<'_, AppState>,
+    req: SelectionTagsRequest,
+) -> ApiResult<SelectionTags> {
+    call(&state, move |api| api.selection_tags(req)).await
 }
 
 /// Declares the license of a family (E15.2).
@@ -737,6 +850,13 @@ async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()>
     help::open(&app, &page)
 }
 
+/// Shows the native shell's labels (Help menu, tray) in the UI's locale; the
+/// UI calls it at start and when the Language setting changes.
+#[tauri::command]
+async fn set_shell_locale<R: Runtime>(app: AppHandle<R>, locale: String) -> ApiResult<()> {
+    shell_text::apply(&app, &locale)
+}
+
 /// Registers the shared state and every command on a builder.
 pub fn setup<R: Runtime>(builder: tauri::Builder<R>, api: Arc<dyn Api>) -> tauri::Builder<R> {
     setup_state(builder, AppState::new(api))
@@ -750,8 +870,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
     let tray_api = Arc::clone(&state.api);
     let tray = state.tray.clone();
     let core = state.core.clone();
+    let locale = shell_text::initial_locale(state.current_settings().language);
     builder
+        .manage(shell_text::ShellLocale::new(locale))
         .manage(state)
+        .manage(updater::PendingUpdate::default())
         .manage(tray::TrayState::new(TraySupport::Unavailable(
             "no tray item yet".into(),
         )))
@@ -770,12 +893,22 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
         })
         .setup(move |app| {
             // The tray is made once the event loop runs (macOS needs that).
-            if let Some(tray) = tray {
-                let support = tray::install(app.handle(), tray.as_ref(), tray_api);
-                if let Some(core) = &core {
-                    core.set_tray_support(support.clone());
+            let support = match tray {
+                Some(tray) => {
+                    let support = tray::install(app.handle(), tray.as_ref(), tray_api);
+                    if let Some(core) = &core {
+                        core.set_tray_support(support.clone());
+                    }
+                    app.state::<tray::TrayState>().set(support.clone());
+                    support
                 }
-                app.state::<tray::TrayState>().set(support);
+                None => TraySupport::Unavailable("no tray item".into()),
+            };
+            // The window starts hidden (tauri.conf.json); a start at login
+            // (ADR 0011) leaves it so, every other launch shows it.
+            if lifecycle::launch_window(std::env::args_os().skip(1), &support) == LaunchWindow::Show
+            {
+                tray::show_main(app.handle());
             }
             let handle = app.handle().clone();
             std::thread::Builder::new()
@@ -803,6 +936,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_collections,
             create_collection,
             rename_collection,
+            update_collection_rules,
             move_collection,
             delete_collection,
             add_to_collection,
@@ -811,6 +945,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             tag_faces,
             untag_faces,
             update_user_meta,
+            selection_tags,
             update_family_notes,
             declare_license,
             quick_collection,
@@ -836,6 +971,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             layout_history,
             restore_layout,
             layout_width,
+            list_comparisons,
+            get_comparison,
+            save_comparison,
+            rename_comparison,
+            delete_comparison,
             render_preview,
             activate,
             deactivate,
@@ -855,7 +995,11 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_settings,
             update_settings,
             get_app_folders,
-            open_help
+            open_help,
+            set_shell_locale,
+            updater::update_support,
+            updater::check_for_update,
+            updater::install_update
         ])
 }
 
@@ -886,7 +1030,7 @@ pub fn serve(
         Err(e) => {
             tracing::error!(error = %e, "serving sample data: the library index is not available");
             let state = AppState::new(Arc::new(MockApi::new()))
-                .with_settings(Arc::new(SettingsStore::new(paths)));
+                .with_settings(Arc::new(SettingsStore::new(paths).with_system_autostart()));
             (state, None)
         }
     }
@@ -904,28 +1048,31 @@ pub fn run() {
             None
         }
     };
-    let (state, core) = match startup.as_mut() {
+    let state = match startup.as_mut() {
         Some(startup) => {
             let index = std::mem::replace(
                 &mut startup.index,
                 Err(ApiError::new(ErrorCode::Internal, "The index is served.")),
             );
             match fm_platform::activator::system(&startup.paths) {
-                Ok(activator) => serve(&startup.paths, index, activator),
+                Ok(activator) => serve(&startup.paths, index, activator).0,
                 Err(e) => {
                     let e = ApiError::new(
                         ErrorCode::Unsupported,
                         "Font activation is not available on this system.",
                     )
                     .with_detail(e.to_string());
-                    serve(&startup.paths, Err(e), Arc::new(MockActivator::new()))
+                    serve(&startup.paths, Err(e), Arc::new(MockActivator::new())).0
                 }
             }
         }
-        None => (AppState::new(Arc::new(MockApi::new())), None),
+        None => AppState::new(Arc::new(MockApi::new())),
     };
-    let builder =
-        help::with_help_menu(tauri::Builder::default().plugin(tauri_plugin_dialog::init()));
+    let builder = help::with_help_menu(
+        tauri::Builder::default()
+            .plugin(tauri_plugin_dialog::init())
+            .plugin(tauri_plugin_updater::Builder::new().build()),
+    );
     let state = state.with_tray(fm_platform::tray::system());
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
@@ -937,10 +1084,10 @@ pub fn run() {
         }
     };
     // Every quit ends here: the tray's Quit, the app menu's Quit, closing the
-    // window without a tray item.
-    app.run(move |_, event| {
+    // window without a tray item, the restart after an update.
+    app.run(move |handle, event| {
         if let RunEvent::Exit = event {
-            on_exit(core.as_deref());
+            handle.state::<AppState>().run_quit_path();
             // `run` may exit the process without returning: flush the log now.
             drop(startup.take());
         }

@@ -57,6 +57,11 @@ Read [Sources](sources.md) to learn more about folders.
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.
+- To see more fonts at a time, click **Compact rows** in the toolbar. The rows of
+  the list and the table get less space around them. The preview text keeps its
+  size. Click **Compact rows** again to go back to comfortable rows. You can also choose
+  **Use compact rows** or **Use comfortable rows** in the command palette, or
+  **Density** in **Settings**. Font Manager keeps your choice.
 - Select a font to see its details in the inspector on the right. Press `Ctrl+I`
   (`Cmd+I` on a Mac) to show or hide the inspector.
 - Open the **Features** tab of the inspector to see the OpenType features of the
@@ -69,6 +74,10 @@ Read [Sources](sources.md) to learn more about folders.
   that block. Type in the search field to find a character: type the character itself
   (`Ж`), its code point (`U+0416` or `0416`) or its glyph name (`uni0416`). Click a
   character to see its code point, glyph name and glyph id.
+- Some color fonts have more than one color palette. For such a font, the **Info**
+  tab shows **Color palette** with the colors and the name of each palette. Click a
+  palette, or use the arrow keys, to choose it. All styles of the family then show in
+  that palette, in every view mode. Font Manager keeps your choice for the view.
 - Write notes in the **Info** tab. **Notes** are for the style that you selected.
   **Family notes** are for all styles of the family. Font Manager saves a note when
   you leave its field. To delete a note, clear its field. The **Notes** column of the
@@ -87,6 +96,28 @@ Read [Sources](sources.md) to learn more about folders.
   embedding permission of the font, its license URL and its folder. From the palette,
   the file lists the collection that is open, or all fonts.
 
+## Make a smart collection
+
+A smart collection fills itself from rules. Click **New smart** in the
+**Collections** group of the sidebar, or choose **New smart collection** in the
+command palette. Give the collection a name. Then make the rules:
+
+1. In each rule, choose what the rule tests (for example **Class**, **Weight**,
+   **Supports language** or **Tag**). Then choose its value. The values come from
+   your library.
+2. Choose **all of** to keep fonts that match every rule, or **any of** to keep fonts
+   that match one rule.
+3. Click **Add group** to put rules in a group with its own **all of** or **any of**.
+   For example: Class is Sans serif, and a group of **any of** with Cyrillic and
+   Greek.
+
+The editor shows how many families match while you work. Click **Save**. When a rule
+cannot be saved (for example, a group with no rules, or a lowest weight above the
+highest weight), the editor tells you why and saves nothing. To change the rules
+later, click **Edit rules** on the smart collection. All controls work from the
+keyboard: `Tab` moves between them, `Enter` adds or removes a rule, `Esc` closes the
+editor.
+
 ## Use a font in other apps
 
 Select a font and press `A`. The font is now active: other apps can use it until you
@@ -103,5 +134,21 @@ what you want to do and press `Enter`. All keys are on the
 
 Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. There you can choose the theme,
 the size of the rows, and how activation works.
+
+## Get updates
+
+Open Settings → About and click **Check for updates**. If a new version is out, Font
+Manager shows its number and release notes, and installs it only when you click
+**Install and restart**. A major version (for example 1.x to 2.0) asks you a second time.
+Installing quits Font Manager first, so session activations end, and then starts the new
+version. Turn on **Check automatically when Font Manager starts** to check at every start.
+It is off until you turn it on.
+
+Font Manager installs only updates signed with its release key. If you installed it with
+Flatpak or a package manager, that tool installs the updates, and Settings → About says
+so under Platform notes. Font Manager never asks for administrator rights, so a copy
+installed for all users (the .msi on Windows, or an app in a folder your account cannot
+change) does not update itself: install the new version from the releases page. The
+per-user .exe installer on Windows updates itself.
 
 > Font Manager makes no network calls unless you ask it to, and it has no accounts.

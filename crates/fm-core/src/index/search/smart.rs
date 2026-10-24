@@ -97,6 +97,23 @@ impl Member {
         Self::compile_with(conn, rules, &HashMap::new(), id)
     }
 
+    /// The test for a rule that belongs to no collection (E14.1: the rule
+    /// editor's draft). Collections it names apply as in a saved rule.
+    pub(in crate::index) fn compile_rule(
+        conn: &Connection,
+        rules: &Rules,
+        group: &RuleGroup,
+    ) -> FmResult<Self> {
+        Compiler {
+            conn,
+            rules,
+            known: &HashMap::new(),
+            path: Vec::new(),
+        }
+        .group(group)
+        .map(Self::Smart)
+    }
+
     /// [`Member::compile`], taking the result of each smart collection in
     /// `known` from its position in `done` (see [`Member::holds`]) instead
     /// of running its rule again.
@@ -252,6 +269,35 @@ impl Compiler<'_> {
             member,
         })
     }
+}
+
+/// Refuses a rule a smart collection cannot keep (E14.1): a group with no
+/// rules, at any depth, or a weight or width range whose minimum is above
+/// its maximum. Each is `InvalidRequest` with a message for the user.
+pub(in crate::index) fn check_rule(group: &RuleGroup) -> FmResult<()> {
+    if group.rules.is_empty() {
+        return Err(FmError::invalid(
+            "Every group of a smart collection's rules needs at least one rule.",
+        ));
+    }
+    for rule in &group.rules {
+        match rule {
+            Rule::Filters { filters } => {
+                if filters.weight.is_some_and(|w| w.min > w.max) {
+                    return Err(FmError::invalid(
+                        "The lowest weight of a rule is above its highest.",
+                    ));
+                }
+                if filters.width.is_some_and(|w| w.min > w.max) {
+                    return Err(FmError::invalid(
+                        "The narrowest width of a rule is above its widest.",
+                    ));
+                }
+            }
+            Rule::Group { group } => check_rule(group)?,
+        }
+    }
+    Ok(())
 }
 
 /// The characters a `supports` filter asks for; `None` when it asks for

@@ -5,10 +5,15 @@
 // opacity. Every face is live text in the webview, registered through the shared
 // face loader while the sheet shows it.
 //
+// Named comparisons (E13.2): the pins, mode and sample text are saved under a name;
+// a saved one is reopened from the list in the sheet (or the command palette) and
+// shows the fonts left, naming the ones the library no longer has.
+//
 // A modal dialog: Tab cycles inside, plain keys do not reach the list's
 // shortcuts, and Escape or Close returns focus to where it was (the list row).
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import type { FaceId, FaceSummary } from '../api/types';
+import type { ComparisonId, FaceId, FaceSummary } from '../api/types';
+import { locale, t } from '../i18n';
 import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
@@ -24,7 +29,40 @@ let returnFocus: HTMLElement | null = null;
 const SLOTS = [0, 1] as const;
 
 const settings = computed(() => preview.settingsFor(ALL_FONTS_VIEW));
-const textOf = (face: FaceSummary) => sampleText(settings.value, face);
+/** The face's text: the reopened comparison's (empty: the face's name), else the list's. */
+const textOf = (face: FaceSummary) =>
+  compare.text === null
+    ? sampleText(settings.value, face, preview.pangramText)
+    : compare.text || fontNameSample(face);
+
+/** The sample text a save keeps: the one shown; empty when each face shows its own name. */
+const textToSave = computed(() => {
+  if (compare.text !== null) return compare.text;
+  const s = settings.value;
+  if (s.sample === 'fontName' || (s.sample === 'custom' && !s.customText.trim())) return '';
+  const first = compare.pins[0];
+  return first ? sampleText(s, first, preview.pangramText) : '';
+});
+
+const saveName = ref(compare.current?.name ?? '');
+watch(
+  () => compare.current,
+  (c) => {
+    if (c) saveName.value = c.name;
+  },
+);
+const canSave = computed(() => compare.pins.length >= 2 && saveName.value.trim() !== '');
+
+async function onSave(): Promise<void> {
+  if (canSave.value) await compare.save(saveName.value, textToSave.value);
+}
+
+/** Reopens a saved comparison; the focus goes to its mode, as when the sheet opens. */
+async function onReopen(id: ComparisonId): Promise<void> {
+  await compare.reopen(id);
+  await nextTick();
+  dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
+}
 
 // The pinned faces' fonts, registered with the webview while the sheet is open.
 const families = reactive(new Map<FaceId, string>());
@@ -68,6 +106,7 @@ onMounted(async () => {
       : document.querySelector('main');
   window.addEventListener('keydown', onOutsideKey, true);
   document.addEventListener('focusin', onFocusIn);
+  void compare.loadSaved();
   await nextTick();
   dialog.value?.querySelector<HTMLInputElement>('input[name="fm-compare-mode"]:checked')?.focus();
 });
@@ -100,8 +139,13 @@ const overlayBaseline = computed(() => Math.round(size.value * 1.1));
 const overlayDrawn = computed(() =>
   compare.overlayPair.filter((f): f is FaceSummary => f !== null),
 );
-const overlayLabel = computed(
-  () => `Overlay of ${overlayDrawn.value.map(fontNameSample).join(' and ')}, ${size.value} px`,
+const overlayLabel = computed(() =>
+  t('compare.overlayLabel', {
+    names: new Intl.ListFormat(locale(), { type: 'conjunction' }).format(
+      overlayDrawn.value.map(fontNameSample),
+    ),
+    size: size.value,
+  }),
 );
 
 function onMode(e: Event): void {
@@ -163,9 +207,9 @@ function onOutsideKey(e: KeyboardEvent): void {
 
 /** Focus that moves to the page behind the sheet is taken back to the sheet. */
 function onFocusIn(e: FocusEvent): void {
-  const t = e.target;
-  if (!dialog.value || !(t instanceof Element) || dialog.value.contains(t)) return;
-  if (t.closest('[role="dialog"]')) return;
+  const target = e.target;
+  if (!dialog.value || !(target instanceof Element) || dialog.value.contains(target)) return;
+  if (target.closest('[role="dialog"]')) return;
   dialog.value.focus();
 }
 </script>
@@ -182,10 +226,15 @@ function onFocusIn(e: FocusEvent): void {
       @keydown="onKeyDown"
     >
       <header class="head">
-        <h2 id="fm-compare-sheet-title">Compare</h2>
-        <span class="muted">{{ compare.pins.length }} of {{ MAX_PINS }} pinned</span>
+        <h2 id="fm-compare-sheet-title">{{ t('compare.title') }}</h2>
+        <span v-if="compare.current" class="current" data-testid="compare-current">
+          {{ compare.current.name }}
+        </span>
+        <span class="muted">{{
+          t('compare.pinnedCount', { count: compare.pins.length, max: MAX_PINS })
+        }}</span>
         <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
-          <span id="fm-compare-mode-label" class="muted">Mode</span>
+          <span id="fm-compare-mode-label" class="muted">{{ t('compare.mode') }}</span>
           <label v-for="m in COMPARE_MODES" :key="m.value" class="mode">
             <input
               type="radio"
@@ -200,32 +249,66 @@ function onFocusIn(e: FocusEvent): void {
         <button
           type="button"
           class="button close"
-          aria-label="Close compare"
-          title="Close (Esc)"
+          :aria-label="t('compare.closeLabel')"
+          :title="t('compare.closeTitle')"
           @click="compare.close"
         >
           ×
         </button>
       </header>
 
+      <div class="named">
+        <form class="save" @submit.prevent="onSave">
+          <input
+            v-model="saveName"
+            class="field"
+            type="text"
+            :aria-label="t('compare.nameLabel')"
+            :placeholder="t('compare.namePlaceholder')"
+            maxlength="200"
+          />
+          <button type="submit" class="button" :disabled="!canSave">{{ t('compare.save') }}</button>
+        </form>
+        <div v-if="compare.saved.length" class="saved">
+          <span id="fm-compare-saved-label" class="muted">{{ t('compare.saved') }}</span>
+          <ul aria-labelledby="fm-compare-saved-label">
+            <li v-for="c in compare.saved" :key="c.id">
+              <button
+                type="button"
+                class="button"
+                :aria-current="compare.current?.id === c.id ? 'true' : undefined"
+                :aria-label="t('compare.openLabel', { name: c.name })"
+                @click="onReopen(c.id)"
+              >
+                {{ c.name }} <span class="muted">({{ c.faceCount }})</span>
+              </button>
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <p v-if="compare.missing.length" class="missing" role="status" data-testid="compare-missing">
+        {{ t('compare.missing', { names: compare.missing.map((m) => m.name).join(', ') }) }}
+      </p>
+
       <p v-if="compare.pins.length < 2" class="muted" role="status">
-        Pin at least two fonts to compare them: select a font in the list and press C.
+        {{ t('compare.pinTwo') }}
       </p>
 
       <div
         v-if="compare.mode === 'overlay'"
         class="overlay"
         role="group"
-        aria-label="Overlay"
+        :aria-label="t('compare.overlay')"
         data-testid="compare-overlay"
       >
         <div v-if="compare.pins.length > 2" class="picks">
           <label v-for="slot in SLOTS" :key="slot" class="pick">
             <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
-            {{ slot === 0 ? 'First font' : 'Second font' }}
+            {{ slot === 0 ? t('compare.firstFont') : t('compare.secondFont') }}
             <select
               class="field"
-              :aria-label="slot === 0 ? 'First font' : 'Second font'"
+              :aria-label="slot === 0 ? t('compare.firstFont') : t('compare.secondFont')"
               :value="compare.overlayPair[slot]?.id"
               @change="onOverlay(slot, $event)"
             >
@@ -262,7 +345,7 @@ function onFocusIn(e: FocusEvent): void {
             </text>
           </svg>
         </div>
-        <ul class="legend" aria-label="Legend">
+        <ul class="legend" :aria-label="t('compare.legend')">
           <li v-for="(f, slot) in overlayDrawn" :key="f.id">
             <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
             {{ fontNameSample(f) }}
@@ -274,7 +357,9 @@ function onFocusIn(e: FocusEvent): void {
         v-else
         class="faces"
         :class="compare.mode"
-        :aria-label="compare.mode === 'stacked' ? 'Stacked' : 'Side by side'"
+        :aria-label="
+          compare.mode === 'stacked' ? t('compare.modes.stacked') : t('compare.modes.sideBySide')
+        "
       >
         <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
           <div class="label">
@@ -283,14 +368,15 @@ function onFocusIn(e: FocusEvent): void {
               type="button"
               class="button"
               :data-remove="f.id"
-              :aria-label="`Remove ${fontNameSample(f)} from Compare`"
+              :aria-label="t('compare.removeLabel', { name: fontNameSample(f) })"
               @click="remove(f.id)"
             >
-              Remove
+              {{ t('common.remove') }}
             </button>
           </div>
           <p
             class="sample"
+            dir="auto"
             :style="{
               fontFamily: fontOf(f),
               fontSize: `${size}px`,
@@ -342,6 +428,42 @@ function onFocusIn(e: FocusEvent): void {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+.current {
+  font-weight: 600;
+}
+.named {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.save {
+  display: flex;
+  gap: 6px;
+}
+.saved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.saved ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.button[aria-current='true'] {
+  border-color: var(--fm-accent);
+}
+.button:disabled {
+  opacity: 0.6;
+}
+.missing {
+  margin: 0;
 }
 h2 {
   margin: 0;

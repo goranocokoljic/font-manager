@@ -18,9 +18,13 @@ use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
     NamedInstance, Page, Paged, Slant,
 };
+use crate::comparison::{
+    Comparison, ComparisonEntry, ComparisonRef, ComparisonService, MAX_COMPARISON_FACES,
+    MIN_COMPARISON_FACES, MissingFace, RenameComparisonRequest, SaveComparisonRequest,
+};
 use crate::export::{
     ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest, WebFormat,
+    LicenseInventoryRequest, Subset, WebFormat,
 };
 use crate::layout::{
     BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
@@ -39,8 +43,9 @@ use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
     PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest, ReceiptChange,
-    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SetEntry, SetExport, Tag,
-    TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SelectionTag, SelectionTags,
+    SelectionTagsRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
+    UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
@@ -56,8 +61,8 @@ use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
 use crate::{
-    API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ErrorCode, Event,
-    EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
+    API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ComparisonId, ErrorCode,
+    Event, EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
     OrganizationService, PreviewService, ResolutionId, SearchService, SetId, SettingsService,
     SourceId, TagId, VirtualStyleId, WorkflowService,
 };
@@ -121,6 +126,34 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
     WebUse { ok, reason }
 }
 
+/// Refuses a rule as fm-core does (E14.1): a group with no rules, at any
+/// depth, or a weight or width range whose minimum is above its maximum.
+fn check_rule_shape(group: &RuleGroup) -> ApiResult<()> {
+    if group.rules.is_empty() {
+        return Err(ApiError::invalid(
+            "Every group of a smart collection's rules needs at least one rule.",
+        ));
+    }
+    for rule in &group.rules {
+        match rule {
+            Rule::Filters { filters } => {
+                if filters.weight.is_some_and(|w| w.min > w.max) {
+                    return Err(ApiError::invalid(
+                        "The lowest weight of a rule is above its highest.",
+                    ));
+                }
+                if filters.width.is_some_and(|w| w.min > w.max) {
+                    return Err(ApiError::invalid(
+                        "The narrowest width of a rule is above its widest.",
+                    ));
+                }
+            }
+            Rule::Group { group } => check_rule_shape(group)?,
+        }
+    }
+    Ok(())
+}
+
 fn self_reference(c: &Collection) -> ApiError {
     ApiError::invalid(format!(
         "The rules of \"{}\" include the collection itself.",
@@ -147,6 +180,209 @@ const LATIN: &str = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456
 const LATIN_EXT: &str = "ąćęłńóśźżčđšžĄĆĘŁŃÓŚŹŻČĐŠŽ";
 const CYRILLIC: &str = "абвгдђежзијклљмнњопрстћуфхцчџшАБВГДЂЕЖЗИЈКЛЉМНЊОПРСТЋУФХЦЧЏШ";
 
+/// The subset presets of `data/subsets/presets.json`: the mock's copy, as
+/// fm-api reads no data files. A test in fm-core checks it against the file.
+#[doc(hidden)]
+pub const SUBSET_PRESETS: &[(&str, &[(u32, u32)])] = &[
+    (
+        "latin",
+        &[
+            (0x0000, 0x00FF),
+            (0x0131, 0x0131),
+            (0x0152, 0x0153),
+            (0x02BB, 0x02BC),
+            (0x02C6, 0x02C6),
+            (0x02DA, 0x02DA),
+            (0x02DC, 0x02DC),
+            (0x0304, 0x0304),
+            (0x0308, 0x0308),
+            (0x0329, 0x0329),
+            (0x2000, 0x206F),
+            (0x20AC, 0x20AC),
+            (0x2122, 0x2122),
+            (0x2191, 0x2191),
+            (0x2193, 0x2193),
+            (0x2212, 0x2212),
+            (0x2215, 0x2215),
+            (0xFEFF, 0xFEFF),
+            (0xFFFD, 0xFFFD),
+        ],
+    ),
+    (
+        "latin-ext",
+        &[
+            (0x0100, 0x02BA),
+            (0x02BD, 0x02C5),
+            (0x02C7, 0x02CC),
+            (0x02CE, 0x02D7),
+            (0x02DD, 0x02FF),
+            (0x0304, 0x0304),
+            (0x0308, 0x0308),
+            (0x0329, 0x0329),
+            (0x1D00, 0x1DBF),
+            (0x1E00, 0x1E9F),
+            (0x1EF2, 0x1EFF),
+            (0x2020, 0x2020),
+            (0x20A0, 0x20AB),
+            (0x20AD, 0x20C4),
+            (0x2113, 0x2113),
+            (0x2C60, 0x2C7F),
+            (0xA720, 0xA7FF),
+        ],
+    ),
+    (
+        "cyrillic",
+        &[
+            (0x0301, 0x0301),
+            (0x0400, 0x045F),
+            (0x0490, 0x0491),
+            (0x04B0, 0x04B1),
+            (0x2116, 0x2116),
+        ],
+    ),
+    (
+        "cyrillic-ext",
+        &[
+            (0x0460, 0x052F),
+            (0x1C80, 0x1C8A),
+            (0x20B4, 0x20B4),
+            (0x2DE0, 0x2DFF),
+            (0xA640, 0xA69F),
+            (0xFE2E, 0xFE2F),
+        ],
+    ),
+    (
+        "greek",
+        &[
+            (0x0370, 0x0377),
+            (0x037A, 0x037F),
+            (0x0384, 0x038A),
+            (0x038C, 0x038C),
+            (0x038E, 0x03A1),
+            (0x03A3, 0x03FF),
+        ],
+    ),
+    ("greek-ext", &[(0x1F00, 0x1FFF)]),
+    (
+        "vietnamese",
+        &[
+            (0x0102, 0x0103),
+            (0x0110, 0x0111),
+            (0x0128, 0x0129),
+            (0x0168, 0x0169),
+            (0x01A0, 0x01A1),
+            (0x01AF, 0x01B0),
+            (0x0300, 0x0301),
+            (0x0303, 0x0304),
+            (0x0308, 0x0309),
+            (0x0323, 0x0323),
+            (0x0329, 0x0329),
+            (0x1EA0, 0x1EF9),
+            (0x20AB, 0x20AB),
+        ],
+    ),
+];
+
+/// The characters `subset` keeps, as sorted, merged, inclusive ranges, and
+/// whether U+0020 was only added (a text without a space). The mock's copy
+/// of `fm_core::subset::code_points`: the same rules and messages.
+#[doc(hidden)]
+pub fn subset_ranges(subset: &Subset) -> ApiResult<(Vec<(u32, u32)>, bool)> {
+    let mut out: Vec<(u32, u32)> = Vec::new();
+    let mut space_added = false;
+    match subset {
+        Subset::Presets { names } => {
+            if names.is_empty() {
+                return Err(ApiError::invalid(
+                    "Pick at least one character set to keep.",
+                ));
+            }
+            for name in names {
+                let (_, ranges) = SUBSET_PRESETS
+                    .iter()
+                    .find(|p| p.0 == name.trim())
+                    .ok_or_else(|| {
+                        ApiError::invalid(format!(
+                            "There is no character set called \"{name}\". Pick one of: {}.",
+                            SUBSET_PRESETS
+                                .iter()
+                                .map(|p| p.0)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ))
+                    })?;
+                out.extend_from_slice(ranges);
+            }
+        }
+        Subset::Unicode { ranges } => {
+            let values: Vec<&str> = ranges
+                .iter()
+                .flat_map(|r| r.split(','))
+                .map(str::trim)
+                .filter(|v| !v.is_empty())
+                .collect();
+            if values.is_empty() {
+                return Err(ApiError::invalid(
+                    "Enter at least one Unicode range to keep.",
+                ));
+            }
+            for value in values {
+                out.push(css_unicode_range(value).ok_or_else(|| {
+                    ApiError::invalid(format!(
+                        "\"{value}\" is not a Unicode range. Write it like U+0000-00FF, U+0131 or U+4??."
+                    ))
+                })?);
+            }
+        }
+        Subset::Text { text } => {
+            if text.is_empty() {
+                return Err(ApiError::invalid(
+                    "Type or paste the text whose characters to keep.",
+                ));
+            }
+            out.extend(text.chars().map(|c| (u32::from(c), u32::from(c))));
+            out.push((0x20, 0x20));
+            space_added = !text.contains(' ');
+        }
+    }
+    out.sort_unstable();
+    let mut merged: Vec<(u32, u32)> = Vec::with_capacity(out.len());
+    for (first, last) in out {
+        match merged.last_mut() {
+            Some(prev) if first <= prev.1.saturating_add(1) => prev.1 = prev.1.max(last),
+            _ => merged.push((first, last)),
+        }
+    }
+    Ok((merged, space_added))
+}
+
+/// One CSS `unicode-range` value (`U+0041`, `U+0000-00FF`, `U+4??`).
+fn css_unicode_range(value: &str) -> Option<(u32, u32)> {
+    let hex = |d: &str| {
+        if d.is_empty() || d.len() > 6 || !d.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        u32::from_str_radix(d, 16).ok()
+    };
+    let v = value.trim();
+    let rest = v.strip_prefix("U+").or_else(|| v.strip_prefix("u+"))?;
+    let (first, last) = if let Some((a, b)) = rest.split_once('-') {
+        (hex(a)?, hex(b)?)
+    } else if rest.ends_with('?') {
+        let digits = rest.trim_end_matches('?');
+        if rest.len() > 6 || digits.contains('?') {
+            return None;
+        }
+        let base = if digits.is_empty() { 0 } else { hex(digits)? };
+        let shift = 4 * u32::try_from(rest.len() - digits.len()).ok()?;
+        (base << shift, (base << shift) | ((1 << shift) - 1))
+    } else {
+        let one = hex(rest)?;
+        (one, one)
+    };
+    (first <= last && last <= 0x10_FFFF).then_some((first, last))
+}
+
 /// (code, name, script, characters the language needs)
 const LANGUAGES: [(&str, &str, &str, &str); 4] = [
     ("en", "English", "Latn", "abcdefghijklmnopqrstuvwxyz"),
@@ -162,6 +398,20 @@ const LANGUAGES: [(&str, &str, &str, &str); 4] = [
         "Serbian (Cyrillic)",
         "Cyrl",
         "абвгдђежзијклљмнњопрстћуфхцчџш",
+    ),
+];
+
+/// (code, pangram) for the mock languages, as in `data/pangrams`.
+const PANGRAMS: [(&str, &str); 4] = [
+    ("en", "The quick brown fox jumps over the lazy dog"),
+    ("pl", "Pchnąć w tę łódź jeża lub ośm skrzyń fig"),
+    (
+        "sr-Latn",
+        "Ljubazni fenjerdžija čađavog lica hoće da mi pokaže štos",
+    ),
+    (
+        "sr-Cyrl",
+        "Љубазни фењерџија чађавог лица хоће да ми покаже штос",
     ),
 ];
 
@@ -202,6 +452,8 @@ struct State {
     family_notes: HashMap<FamilyId, String>,
     /// The Quick Collection, first added first.
     quick: Vec<FaceId>,
+    /// Named comparisons, in the order they were saved.
+    comparisons: Vec<MockComparison>,
     settings: Settings,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
@@ -411,6 +663,7 @@ fn face(
             italic_angle: Some(if slant == Slant::Upright { 0.0 } else { -10.0 }),
             code_point_count: Some(char_set.len() as u32),
             family_notes: None,
+            palettes: Vec::new(), // the sample has no color fonts
         },
         source: SourceId(1),
         chars: char_set,
@@ -587,6 +840,7 @@ impl State {
             virtual_styles: Vec::new(),
             family_notes: HashMap::new(),
             quick: Vec::new(),
+            comparisons: Vec::new(),
             settings: Settings::default(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
@@ -1584,7 +1838,12 @@ impl LibraryService for MockApi {
 
 impl State {
     /// The family groups a search returns, best first.
-    fn hits(&self, words: &[String], filters: &Filters) -> ApiResult<Vec<FamilyHit>> {
+    fn hits(
+        &self,
+        words: &[String],
+        filters: &Filters,
+        rule: Option<&RuleGroup>,
+    ) -> ApiResult<Vec<FamilyHit>> {
         let mut hits: Vec<FamilyHit> = Vec::new();
         for fam in &self.families {
             let mut faces = Vec::new();
@@ -1597,6 +1856,12 @@ impl State {
                 )
                 .to_lowercase();
                 if !words.iter().all(|w| hay.contains(w)) || !self.matches(f, filters, &[])? {
+                    continue;
+                }
+                // A draft rule (E14.1) applies as a smart collection's does.
+                if let Some(rule) = rule
+                    && !self.passes_group(f, rule, &[])?
+                {
                     continue;
                 }
                 if let Some(target) = &filters.supports {
@@ -1644,6 +1909,7 @@ impl State {
         &self,
         words: &[String],
         filters: &Filters,
+        rule: Option<&RuleGroup>,
         values: Vec<T>,
         pick: impl Fn(&mut Filters, &T),
     ) -> ApiResult<Vec<FilterCount<T>>> {
@@ -1651,7 +1917,7 @@ impl State {
         for value in values {
             let mut f = filters.clone();
             pick(&mut f, &value);
-            let count = self.hits(words, &f)?.len() as u32;
+            let count = self.hits(words, &f, rule)?.len() as u32;
             if count > 0 {
                 out.push(FilterCount { value, count });
             }
@@ -1660,7 +1926,12 @@ impl State {
     }
 
     /// Result counts per filter value, over the values the sample has.
-    fn counts(&self, words: &[String], q: &Filters) -> ApiResult<FilterCounts> {
+    fn counts(
+        &self,
+        words: &[String],
+        q: &Filters,
+        rule: Option<&RuleGroup>,
+    ) -> ApiResult<FilterCounts> {
         fn distinct<T: PartialEq>(items: impl Iterator<Item = T>) -> Vec<T> {
             let mut out = Vec::new();
             for x in items {
@@ -1677,34 +1948,45 @@ impl State {
         tags.sort();
         let mut sources = distinct(faces().map(|f| f.source));
         sources.sort_by_key(|s| s.0);
+        let mut foundries: Vec<String> =
+            distinct(self.families.iter().map(|f| f.foundry.to_owned()));
+        foundries.sort();
         let both = || vec![true, false];
         Ok(FilterCounts {
             classification: self
-                .count_each(words, q, classes, |f, v| f.classification = vec![*v])?,
-            weight: self.count_each(words, q, (1..=9).map(|h| h * 100).collect(), |f, v| {
-                f.weight = Some(WeightRange {
-                    min: v - 50,
-                    max: v + 49,
-                });
-            })?,
-            width: self.count_each(words, q, (1..=9).collect(), |f, v| {
+                .count_each(words, q, rule, classes, |f, v| f.classification = vec![*v])?,
+            weight: self.count_each(
+                words,
+                q,
+                rule,
+                (1..=9).map(|h| h * 100).collect(),
+                |f, v| {
+                    f.weight = Some(WeightRange {
+                        min: v - 50,
+                        max: v + 49,
+                    });
+                },
+            )?,
+            width: self.count_each(words, q, rule, (1..=9).collect(), |f, v| {
                 f.width = Some(WidthRange { min: *v, max: *v });
             })?,
             slant: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().map(|f| f.detail.face.slant)),
                 |f, v| f.slant = Some(*v),
             )?,
-            variable: self.count_each(words, q, both(), |f, v| f.variable = Some(*v))?,
-            color: self.count_each(words, q, both(), |f, v| f.color = Some(*v))?,
+            variable: self.count_each(words, q, rule, both(), |f, v| f.variable = Some(*v))?,
+            color: self.count_each(words, q, rule, both(), |f, v| f.color = Some(*v))?,
             formats: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().map(|f| f.detail.face.format)),
                 |f, v| f.formats = vec![*v],
             )?,
-            features: self.count_each(words, q, tags, |f, v| {
+            features: self.count_each(words, q, rule, tags, |f, v| {
                 if !f.features.contains(v) {
                     f.features.push(v.clone());
                 }
@@ -1712,15 +1994,17 @@ impl State {
             license: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().filter_map(|f| f.detail.license.declared)),
                 |f, v| f.license = Some(*v),
             )?,
-            sources: self.count_each(words, q, sources, |f, v| f.sources = vec![*v])?,
-            problems: self.count_each(words, q, both(), |f, v| f.problems = Some(*v))?,
-            active: self.count_each(words, q, both(), |f, v| f.active = Some(*v))?,
+            sources: self.count_each(words, q, rule, sources, |f, v| f.sources = vec![*v])?,
+            problems: self.count_each(words, q, rule, both(), |f, v| f.problems = Some(*v))?,
+            active: self.count_each(words, q, rule, both(), |f, v| f.active = Some(*v))?,
             tags: self.count_each(
                 words,
                 q,
+                rule,
                 self.tags.iter().map(|t| t.id).collect(),
                 |f, v| {
                     if !f.tags.contains(v) {
@@ -1728,18 +2012,23 @@ impl State {
                     }
                 },
             )?,
-            favorite: self.count_each(words, q, both(), |f, v| f.favorite = Some(*v))?,
-            min_rating: self.count_each(words, q, (1..=5).collect(), |f, v| {
+            favorite: self.count_each(words, q, rule, both(), |f, v| f.favorite = Some(*v))?,
+            min_rating: self.count_each(words, q, rule, (1..=5).collect(), |f, v| {
                 f.min_rating = Some(*v);
             })?,
             embedding: self.count_each(
                 words,
                 q,
+                rule,
                 distinct(faces().map(|f| f.detail.license.embedding)),
                 |f, v| f.embedding = Some(*v),
             )?,
-            open_license: self.count_each(words, q, both(), |f, v| f.open_license = Some(*v))?,
-            web_ok: self.count_each(words, q, both(), |f, v| f.web_ok = Some(*v))?,
+            open_license: self
+                .count_each(words, q, rule, both(), |f, v| f.open_license = Some(*v))?,
+            web_ok: self.count_each(words, q, rule, both(), |f, v| f.web_ok = Some(*v))?,
+            foundry: self.count_each(words, q, rule, foundries, |f, v| {
+                f.foundry = Some(v.clone());
+            })?,
         })
     }
 }
@@ -1752,8 +2041,8 @@ impl SearchService for MockApi {
             .split_whitespace()
             .map(str::to_lowercase)
             .collect();
-        let hits = st.hits(&words, &req.filters)?;
-        let counts = st.counts(&words, &req.filters)?;
+        let hits = st.hits(&words, &req.filters, req.rule.as_ref())?;
+        let counts = st.counts(&words, &req.filters, req.rule.as_ref())?;
         let page = State::page(&hits, req.page.offset, req.page.limit);
         Ok(SearchResponse {
             families: page.items,
@@ -1831,6 +2120,10 @@ impl SearchService for MockApi {
                 code: (*code).into(),
                 name: (*name).into(),
                 script: (*script).into(),
+                pangram: PANGRAMS
+                    .iter()
+                    .find(|(c, _)| c == code)
+                    .map(|(_, text)| (*text).into()),
             })
             .collect())
     }
@@ -2254,6 +2547,9 @@ impl OrganizationService for MockApi {
             }
             (rules, group) => group.or_else(|| rules.map(RuleGroup::from)),
         };
+        if let Some(group) = &group {
+            check_rule_shape(group)?;
+        }
         let id = CollectionId(st.next());
         if let Some(group) = &group {
             st.check_rule(id, group)?;
@@ -2269,6 +2565,26 @@ impl OrganizationService for MockApi {
             face_count: 0,
         };
         st.collections.push(c.clone());
+        Ok(st.collection_view(&c))
+    }
+
+    fn update_collection_rules(&self, req: UpdateCollectionRulesRequest) -> ApiResult<Collection> {
+        check_rule_shape(&req.rule_group)?;
+        let mut st = self.state();
+        if st.collection(req.collection)?.rule_group.is_none() {
+            return Err(ApiError::invalid(
+                "A manual collection has no rules; make a smart collection instead.",
+            ));
+        }
+        st.check_rule(req.collection, &req.rule_group)?;
+        let c = st
+            .collections
+            .iter_mut()
+            .find(|c| c.id == req.collection)
+            .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
+        c.rules = Some(req.rule_group.plain_filters().cloned().unwrap_or_default());
+        c.rule_group = Some(req.rule_group);
+        let c = c.clone();
         Ok(st.collection_view(&c))
     }
 
@@ -2369,12 +2685,10 @@ impl OrganizationService for MockApi {
         if req.tags.iter().all(|n| n.trim().is_empty()) {
             return Err(ApiError::invalid("Give the tag a name."));
         }
-        if req.faces.is_empty() {
-            return Err(ApiError::invalid("Choose the fonts to tag."));
-        }
         let mut st = self.state();
-        for id in &req.faces {
-            st.face(*id)?;
+        let faces = faces_of(&st, &req.faces, &req.families)?;
+        if faces.is_empty() {
+            return Err(ApiError::invalid("Choose the fonts to tag."));
         }
         let mut touched = Vec::new();
         for name in req.tags.iter().map(|n| n.trim()).filter(|n| !n.is_empty()) {
@@ -2390,7 +2704,7 @@ impl OrganizationService for MockApi {
                     id
                 }
             };
-            for face in &req.faces {
+            for face in &faces {
                 st.face_tags.entry(*face).or_default().insert(id);
             }
             if !touched.contains(&id) {
@@ -2401,7 +2715,7 @@ impl OrganizationService for MockApi {
             source: None,
             added: Vec::new(),
             removed: Vec::new(),
-            updated: req.faces.clone(),
+            updated: faces,
         });
         Ok(touched
             .iter()
@@ -2429,6 +2743,29 @@ impl OrganizationService for MockApi {
             updated: req.faces,
         });
         Ok(())
+    }
+
+    fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags> {
+        let st = self.state();
+        let faces = faces_of(&st, &req.faces, &req.families)?;
+        let total = faces.len() as u32;
+        let mut tags: Vec<&Tag> = st.tags.iter().collect();
+        tags.sort_by_key(|t| t.name.to_lowercase());
+        let tags = tags
+            .into_iter()
+            .filter_map(|t| {
+                let n = faces
+                    .iter()
+                    .filter(|f| st.face_tags.get(f).is_some_and(|s| s.contains(&t.id)))
+                    .count() as u32;
+                (n > 0).then_some(SelectionTag {
+                    tag: t.id,
+                    face_count: n,
+                    all: n == total,
+                })
+            })
+            .collect();
+        Ok(SelectionTags { faces, tags })
     }
 
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {
@@ -2783,6 +3120,140 @@ fn edit_members(api: &MockApi, req: CollectionFacesRequest, add: bool) -> ApiRes
     Ok(st.collection_view(&c))
 }
 
+/// The faces `faces` and every face of `families`, each once, the faces
+/// first, like fm-core; an unknown face or family is `NotFound`.
+fn faces_of(st: &State, faces: &[FaceId], families: &[FamilyId]) -> ApiResult<Vec<FaceId>> {
+    let mut out: Vec<FaceId> = Vec::new();
+    for id in faces {
+        st.face(*id)?;
+        if !out.contains(id) {
+            out.push(*id);
+        }
+    }
+    for family in families {
+        st.family(*family)?;
+        for id in st.family_faces(*family).map(|f| f.detail.face.id) {
+            if !out.contains(&id) {
+                out.push(id);
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn web_ext(format: WebFormat) -> &'static str {
+    match format {
+        WebFormat::Woff2 => "woff2",
+        WebFormat::Woff => "woff",
+    }
+}
+
+/// `v` as a CSS string: quoted, `"` and `\` escaped, a control character as
+/// a hex escape followed by a space.
+fn css_string(v: &str) -> String {
+    let mut out = String::from("\"");
+    for c in v.chars() {
+        match c {
+            '"' | '\\' => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if c.is_control() => out.push_str(&format!("\\{:X} ", u32::from(c))),
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
+/// `lo` and `hi` with `unit` (at most 3 decimals, no `-0`), or one value
+/// when they are equal.
+fn css_range(lo: f32, hi: f32, unit: &str) -> String {
+    let num = |v: f32| {
+        let t = format!("{:.3}", f64::from(v));
+        let t = t.trim_end_matches('0').trim_end_matches('.');
+        if t == "-0" {
+            "0".to_owned()
+        } else {
+            t.to_owned()
+        }
+    };
+    let (lo, hi) = (num(lo), num(hi));
+    if lo == hi {
+        format!("{lo}{unit}")
+    } else {
+        format!("{lo}{unit} {hi}{unit}")
+    }
+}
+
+/// The core's `@font-face` rules (`fm_core::web_css`): the family quoted and
+/// escaped, WOFF 2 before WOFF, ranges from the `wght`, `wdth` and `slnt`
+/// axes (`slnt` negated into an oblique angle), `font-display: swap`, and a
+/// `unicode-range` of the mapped code points when the export was subset.
+fn mock_font_face(f: &MockFace, formats: &[WebFormat], mapped: Option<&[u32]>) -> String {
+    let s = &f.detail.face;
+    let axis = |tag: &str| {
+        f.detail
+            .axes
+            .iter()
+            .find(|a| a.tag == tag && a.min.is_finite() && a.max.is_finite())
+            .map(|a| (a.min.min(a.max), a.min.max(a.max)))
+    };
+    let mut out = String::from("@font-face {\n");
+    out.push_str(&format!("  font-family: {};\n", css_string(&s.family_name)));
+    let style = match axis("slnt") {
+        Some((lo, hi)) => format!("oblique {}", css_range(-hi, -lo, "deg")),
+        None => match s.slant {
+            Slant::Upright => "normal".to_owned(),
+            Slant::Italic => "italic".to_owned(),
+            Slant::Oblique => "oblique".to_owned(),
+        },
+    };
+    out.push_str(&format!("  font-style: {style};\n"));
+    let weight =
+        axis("wght").map_or_else(|| s.weight.to_string(), |(lo, hi)| css_range(lo, hi, ""));
+    out.push_str(&format!("  font-weight: {weight};\n"));
+    if let Some((lo, hi)) = axis("wdth") {
+        out.push_str(&format!("  font-stretch: {};\n", css_range(lo, hi, "%")));
+    }
+    out.push_str("  font-display: swap;\n");
+    let srcs: Vec<String> = [WebFormat::Woff2, WebFormat::Woff]
+        .into_iter()
+        .filter(|fmt| formats.contains(fmt))
+        .map(|fmt| {
+            let ext = web_ext(fmt);
+            let file = css_string(&format!("{}.{ext}", s.postscript_name));
+            format!("url({file}) format(\"{ext}\")")
+        })
+        .collect();
+    out.push_str(&format!("  src: {};\n", srcs.join(", ")));
+    if let Some(cps) = mapped {
+        let mut cps = cps.to_vec();
+        cps.sort_unstable();
+        cps.dedup();
+        let mut ranges: Vec<(u32, u32)> = Vec::new();
+        for cp in cps {
+            match ranges.last_mut() {
+                Some(last) if last.1.checked_add(1) == Some(cp) => last.1 = cp,
+                _ => ranges.push((cp, cp)),
+            }
+        }
+        let values: Vec<String> = ranges
+            .into_iter()
+            .map(|(a, b)| {
+                if a == b {
+                    format!("U+{a:04X}")
+                } else {
+                    format!("U+{a:04X}-{b:04X}")
+                }
+            })
+            .collect();
+        out.push_str(&format!("  unicode-range: {};\n", values.join(", ")));
+    }
+    out.push_str("}\n");
+    out
+}
+
 fn tag_view(st: &State, t: &Tag) -> Tag {
     let mut t = t.clone();
     t.face_count = st.face_tags.values().filter(|s| s.contains(&t.id)).count() as u32;
@@ -2797,10 +3268,11 @@ impl ExportService for MockApi {
         if req.out_dir.trim().is_empty() {
             return Err(ApiError::invalid("Choose an output folder."));
         }
+        let keep = req.subset.as_ref().map(subset_ranges).transpose()?;
         let st = self.state();
         let dir = req.out_dir.trim_end_matches(['/', '\\']);
         let mut files = Vec::new();
-        let mut css = String::new();
+        let mut blocks = Vec::new();
         for id in &req.faces {
             let f = st.face(*id)?;
             let lic = &f.detail.license;
@@ -2814,30 +3286,37 @@ impl ExportService for MockApi {
                 ));
             }
             let s = &f.detail.face;
-            let mut srcs = Vec::new();
-            for fmt in &req.formats {
-                let ext = match fmt {
-                    WebFormat::Woff2 => "woff2",
-                    WebFormat::Woff => "woff",
+            if let Some((ranges, space_added)) = &keep {
+                let kept = |c: &char| {
+                    let cp = u32::from(*c);
+                    !(*space_added && cp == 0x20)
+                        && ranges.iter().any(|&(a, b)| (a..=b).contains(&cp))
                 };
-                let file = format!("{}.{ext}", s.postscript_name);
-                files.push(format!("{dir}/{file}"));
-                srcs.push(format!("url(\"{file}\") format(\"{ext}\")"));
+                if !f.chars.iter().any(kept) {
+                    return Err(ApiError::invalid(format!(
+                        "{} {}: The font has none of the characters to keep. Choose other characters, or export it without a subset.",
+                        s.family_name, s.style
+                    )));
+                }
             }
-            css.push_str(&format!(
-                "@font-face {{\n  font-family: \"{}\";\n  font-style: {};\n  font-weight: {};\n  font-display: swap;\n  src: {};\n}}\n",
-                s.family_name,
-                if s.slant == Slant::Upright { "normal" } else { "italic" },
-                if s.is_variable { "100 900".to_string() } else { s.weight.to_string() },
-                srcs.join(", "),
-            ));
+            for fmt in &req.formats {
+                files.push(format!("{dir}/{}.{}", s.postscript_name, web_ext(*fmt)));
+            }
+            let mapped = keep.as_ref().map(|(ranges, _)| {
+                f.chars
+                    .iter()
+                    .map(|c| u32::from(*c))
+                    .filter(|cp| ranges.iter().any(|&(a, b)| (a..=b).contains(cp)))
+                    .collect::<Vec<_>>()
+            });
+            blocks.push(mock_font_face(f, &req.formats, mapped.as_deref()));
         }
         if req.css {
             files.push(format!("{dir}/fonts.css"));
         }
         Ok(ExportWebResponse {
             files,
-            css: req.css.then_some(css),
+            css: req.css.then(|| blocks.join("\n")),
         })
     }
 
@@ -3516,6 +3995,144 @@ fn mock_save_layout(
     let excess = file.versions.len().saturating_sub(MOCK_MAX_LAYOUT_VERSIONS);
     file.versions.drain(..excess);
     Ok(saved)
+}
+
+/// A saved comparison: its faces with the name each had when saved.
+#[derive(Debug, Clone)]
+struct MockComparison {
+    entry: ComparisonEntry,
+    sample_text: String,
+    faces: Vec<(FaceId, String)>,
+}
+
+/// The name a comparison is saved under: trimmed, not empty.
+fn comparison_name(name: &str) -> ApiResult<String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(ApiError::invalid("A comparison needs a name."));
+    }
+    Ok(name.to_owned())
+}
+
+impl ComparisonService for MockApi {
+    fn list_comparisons(&self) -> ApiResult<Vec<ComparisonEntry>> {
+        let mut out: Vec<_> = self
+            .state()
+            .comparisons
+            .iter()
+            .map(|c| c.entry.clone())
+            .collect();
+        out.sort_by(|a, b| {
+            a.name
+                .to_lowercase()
+                .cmp(&b.name.to_lowercase())
+                .then(a.id.cmp(&b.id))
+        });
+        Ok(out)
+    }
+
+    fn get_comparison(&self, req: ComparisonRef) -> ApiResult<Comparison> {
+        let st = self.state();
+        let c = st
+            .comparisons
+            .iter()
+            .find(|c| c.entry.id == req.id)
+            .ok_or_else(|| ApiError::not_found(format!("Comparison {}", req.id)))?;
+        let mut faces = Vec::new();
+        let mut missing = Vec::new();
+        for (id, name) in &c.faces {
+            match st.face(*id) {
+                Ok(f) if st.visible(f) && !st.trashed.contains(&f.detail.path) => {
+                    faces.push(st.summary(f));
+                }
+                _ => missing.push(MissingFace {
+                    id: *id,
+                    name: name.clone(),
+                }),
+            }
+        }
+        Ok(Comparison {
+            id: c.entry.id,
+            name: c.entry.name.clone(),
+            mode: c.entry.mode,
+            sample_text: c.sample_text.clone(),
+            faces,
+            missing,
+        })
+    }
+
+    fn save_comparison(&self, req: SaveComparisonRequest) -> ApiResult<Comparison> {
+        let name = comparison_name(&req.name)?;
+        if !(MIN_COMPARISON_FACES..=MAX_COMPARISON_FACES).contains(&req.faces.len()) {
+            return Err(ApiError::invalid(format!(
+                "A comparison holds {MIN_COMPARISON_FACES} to {MAX_COMPARISON_FACES} fonts, not {}.",
+                req.faces.len()
+            )));
+        }
+        if req
+            .faces
+            .iter()
+            .enumerate()
+            .any(|(i, f)| req.faces[..i].contains(f))
+        {
+            return Err(ApiError::invalid("A comparison names each font once."));
+        }
+        let id = {
+            let mut st = self.state();
+            let mut faces = Vec::with_capacity(req.faces.len());
+            for id in &req.faces {
+                let s = &st.face(*id)?.detail.face;
+                faces.push((*id, format!("{} {}", s.family_name, s.style)));
+            }
+            let id = match req.id {
+                Some(id) => {
+                    if !st.comparisons.iter().any(|c| c.entry.id == id) {
+                        return Err(ApiError::not_found(format!("Comparison {id}")));
+                    }
+                    id
+                }
+                None => ComparisonId(st.next()),
+            };
+            let saved = MockComparison {
+                entry: ComparisonEntry {
+                    id,
+                    name,
+                    mode: req.mode,
+                    face_count: u32::try_from(faces.len()).unwrap_or(u32::MAX),
+                },
+                sample_text: req.sample_text,
+                faces,
+            };
+            match st.comparisons.iter_mut().find(|c| c.entry.id == id) {
+                Some(c) => *c = saved,
+                None => st.comparisons.push(saved),
+            }
+            id
+        };
+        self.get_comparison(ComparisonRef { id })
+    }
+
+    fn rename_comparison(&self, req: RenameComparisonRequest) -> ApiResult<ComparisonEntry> {
+        let name = comparison_name(&req.name)?;
+        let mut st = self.state();
+        let c = st
+            .comparisons
+            .iter_mut()
+            .find(|c| c.entry.id == req.id)
+            .ok_or_else(|| ApiError::not_found(format!("Comparison {}", req.id)))?;
+        c.entry.name = name;
+        Ok(c.entry.clone())
+    }
+
+    fn delete_comparison(&self, req: ComparisonRef) -> ApiResult<()> {
+        let mut st = self.state();
+        let before = st.comparisons.len();
+        st.comparisons.retain(|c| c.entry.id != req.id);
+        if st.comparisons.len() == before {
+            return Err(ApiError::not_found(format!("Comparison {}", req.id)));
+        }
+        Ok(())
+    }
 }
 
 impl EventSource for MockApi {

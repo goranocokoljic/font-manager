@@ -30,6 +30,10 @@ use fm_api::activation::{
     DeactivateRequest, Target,
 };
 use fm_api::common::Paged;
+use fm_api::comparison::{
+    Comparison, ComparisonEntry, ComparisonRef, ComparisonService, RenameComparisonRequest,
+    SaveComparisonRequest,
+};
 use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, GlyphSvgRequest, LicenseInventory,
     LicenseInventoryRequest,
@@ -48,8 +52,9 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
     OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
-    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SetExport, Tag, TagFacesRequest,
-    UntagFacesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SelectionTags, SelectionTagsRequest,
+    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest,
+    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
@@ -77,7 +82,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{charsets, css, glyph_svg, glyphs, layout, preview};
+use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, subset, web_font};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -139,7 +144,7 @@ impl CoreApi {
     /// time. A trash that cannot be found is logged too; "Keep this one" then
     /// answers `Unsupported`.
     pub fn open(paths: &AppPaths, index: Index, activator: Arc<dyn FontActivator>) -> Self {
-        let settings = SettingsStore::new(paths);
+        let settings = SettingsStore::new(paths).with_system_autostart();
         let limit = settings
             .get_settings()
             .map(|s| cache::limit_from_mb(s.cache_limit_mb))
@@ -443,6 +448,12 @@ fn not_available(what: &str) -> ApiError {
 
 impl LibraryService for CoreApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
+        let mut platform_notes = crate::lifecycle::platform_notes(
+            Os::current(),
+            lock(&self.tray).as_ref(),
+            fm_platform::autostart::sandboxed(),
+        );
+        platform_notes.extend(crate::update::support(&fm_platform::updater::distribution()).reason);
         Ok(AppInfo {
             name: "Font Manager".into(),
             version: env!("CARGO_PKG_VERSION").into(),
@@ -452,10 +463,7 @@ impl LibraryService for CoreApi {
                 Os::MacOs => Platform::Macos,
                 Os::Linux => Platform::Linux,
             },
-            platform_notes: crate::lifecycle::platform_notes(
-                Os::current(),
-                lock(&self.tray).as_ref(),
-            ),
+            platform_notes,
         })
     }
 
@@ -622,10 +630,7 @@ impl SearchService for CoreApi {
     }
 
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
-        Ok(charsets::load()?
-            .iter()
-            .map(charsets::Charset::preset)
-            .collect())
+        Ok(pangrams::presets()?)
     }
 
     fn find_similar(&self, _req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
@@ -712,6 +717,10 @@ impl OrganizationService for CoreApi {
         Ok(self.lock().move_collection(&req)?)
     }
 
+    fn update_collection_rules(&self, req: UpdateCollectionRulesRequest) -> ApiResult<Collection> {
+        Ok(self.lock().update_collection_rules(&req)?)
+    }
+
     fn delete_collection(&self, collection: CollectionId) -> ApiResult<()> {
         Ok(self.lock().delete_collection(collection)?)
     }
@@ -729,8 +738,12 @@ impl OrganizationService for CoreApi {
     }
 
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
-        let tags = self.lock().tag_faces(&req)?;
-        self.updated(&req.faces);
+        let (tags, faces) = {
+            let mut index = self.lock();
+            let tags = index.tag_faces(&req)?;
+            (tags, index.faces_of(&req.faces, &req.families)?)
+        };
+        self.updated(&faces);
         Ok(tags)
     }
 
@@ -738,6 +751,10 @@ impl OrganizationService for CoreApi {
         self.lock().untag_faces(&req)?;
         self.updated(&req.faces);
         Ok(())
+    }
+
+    fn selection_tags(&self, req: SelectionTagsRequest) -> ApiResult<SelectionTags> {
+        Ok(self.lock().selection_tags(&req.faces, &req.families)?)
     }
 
     fn update_user_meta(&self, req: UserMetaUpdate) -> ApiResult<()> {
@@ -870,8 +887,58 @@ impl OrganizationService for CoreApi {
 }
 
 impl ExportService for CoreApi {
-    fn export_web(&self, _req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
-        Err(not_available("Exporting web fonts"))
+    /// The faces are looked up under the index lock; their files are read,
+    /// subset and written outside it. The subset is checked before any face
+    /// is looked up. With `css`, `fonts.css` is written beside the fonts
+    /// ([`web_font::export_with_css`]) and its text returned.
+    fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
+        if req.faces.is_empty() || req.formats.is_empty() {
+            return Err(ApiError::invalid("Pick at least one font and one format."));
+        }
+        if req.out_dir.trim().is_empty() {
+            return Err(ApiError::invalid("Choose an output folder."));
+        }
+        let keep = req.subset.as_ref().map(subset::code_points).transpose()?;
+        let mut ids = HashSet::new();
+        let mut formats = Vec::new();
+        for f in req.formats {
+            if !formats.contains(&f) {
+                formats.push(f);
+            }
+        }
+        let faces = {
+            let index = self.lock();
+            req.faces
+                .into_iter()
+                .filter(|id| ids.insert(*id))
+                .map(|id| {
+                    let f = index.web_export_face(id)?;
+                    if f.restricted {
+                        return Err(FmError::new(
+                            ErrorCode::PermissionDenied,
+                            format!(
+                                "{} does not allow web embedding. Declare a web license to export it.",
+                                f.face.label
+                            ),
+                        ));
+                    }
+                    Ok((f.face, f.style))
+                })
+                .collect::<FmResult<Vec<_>>>()?
+        };
+        let (faces, styles): (Vec<_>, Vec<_>) = faces.into_iter().unzip();
+        let out_dir = Path::new(&req.out_dir);
+        let (files, css) = if req.css {
+            let out = web_font::export_with_css(&faces, &styles, &formats, keep.as_ref(), out_dir)?;
+            (out.files, Some(out.css))
+        } else {
+            let files = web_font::export(&faces, &formats, keep.as_ref(), out_dir)?;
+            (files, None)
+        };
+        Ok(ExportWebResponse {
+            files: files.iter().map(|p| p.display().to_string()).collect(),
+            css,
+        })
     }
 
     /// The CSV is returned, nothing is written: the shell saves it to a
@@ -946,6 +1013,28 @@ impl LayoutService for CoreApi {
 
     fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
         Ok(layout::layout_width(&layout))
+    }
+}
+
+impl ComparisonService for CoreApi {
+    fn list_comparisons(&self) -> ApiResult<Vec<ComparisonEntry>> {
+        Ok(self.lock().list_comparisons()?)
+    }
+
+    fn get_comparison(&self, req: ComparisonRef) -> ApiResult<Comparison> {
+        Ok(self.lock().comparison(req.id)?)
+    }
+
+    fn save_comparison(&self, req: SaveComparisonRequest) -> ApiResult<Comparison> {
+        Ok(self.lock().save_comparison(&req)?)
+    }
+
+    fn rename_comparison(&self, req: RenameComparisonRequest) -> ApiResult<ComparisonEntry> {
+        Ok(self.lock().rename_comparison(req.id, &req.name)?)
+    }
+
+    fn delete_comparison(&self, req: ComparisonRef) -> ApiResult<()> {
+        Ok(self.lock().delete_comparison(req.id)?)
     }
 }
 

@@ -13,6 +13,9 @@ use fm_api::settings::Settings;
 use fm_api::{ApiError, ErrorCode};
 use serde::{Deserialize, Serialize};
 
+/// The JSON key of `Settings::start_at_login`, left out of the file.
+const START_AT_LOGIN_KEY: &str = "startAtLogin";
+
 /// The app's settings.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -87,8 +90,15 @@ impl Config {
         if let Some(dir) = path.parent() {
             fs::create_dir_all(dir).map_err(|e| io_error(failed, dir, &e))?;
         }
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| ApiError::new(ErrorCode::Internal, failed).with_detail(e.to_string()))?;
+        let internal = |e: serde_json::Error| {
+            ApiError::new(ErrorCode::Internal, failed).with_detail(e.to_string())
+        };
+        let mut value = serde_json::to_value(self).map_err(internal)?;
+        // The login state is the OS's login entry (ADR 0011), never stored.
+        if let Some(map) = value.as_object_mut() {
+            map.remove(START_AT_LOGIN_KEY);
+        }
+        let json = serde_json::to_string_pretty(&value).map_err(internal)?;
         let tmp = path.with_extension("json.tmp");
         fs::write(&tmp, json + "\n").map_err(|e| io_error(failed, &tmp, &e))?;
         fs::rename(&tmp, path).map_err(|e| {

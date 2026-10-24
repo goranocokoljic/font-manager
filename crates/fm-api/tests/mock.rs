@@ -9,7 +9,10 @@ use fm_api::activation::{
     DeactivateRequest, OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, FeatureSetting, FontFormat, Page, Slant};
-use fm_api::export::{ExportWebRequest, GlyphSvgRequest, WebFormat};
+use fm_api::comparison::{
+    CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
+};
+use fm_api::export::{ExportWebRequest, GlyphSvgRequest, Subset, WebFormat};
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
     RevertLayoutRequest, SaveLayoutRequest,
@@ -24,7 +27,8 @@ use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
     FamilyNotesUpdate, LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest,
     QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup,
-    RuleOp, TagFacesRequest, UntagFacesRequest, UserMetaUpdate, VirtualStylesRequest,
+    RuleOp, SelectionTagsRequest, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest,
+    UserMetaUpdate, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest, SizeBasis,
@@ -568,6 +572,7 @@ fn collections_tags_meta_and_sets() {
 
     let tags = api
         .tag_faces(TagFacesRequest {
+            families: Vec::new(),
             faces: vec![FaceId(1), FaceId(2)],
             tags: vec!["brand".into()],
         })
@@ -626,6 +631,78 @@ fn the_quick_collection_keeps_faces_in_the_order_added() {
     assert_eq!(ids(api.quick_collection().unwrap()), [FaceId(6), FaceId(2)]);
     api.clear_quick_collection().unwrap();
     assert!(api.quick_collection().unwrap().faces.is_empty());
+}
+
+#[test]
+fn named_comparisons_are_saved_listed_renamed_reopened_and_deleted() {
+    let api = api();
+    let save = |name: &str, faces: &[u32]| {
+        api.save_comparison(SaveComparisonRequest {
+            id: None,
+            name: name.into(),
+            faces: faces.iter().copied().map(FaceId).collect(),
+            mode: CompareMode::Stacked,
+            sample_text: "Quartz".into(),
+        })
+    };
+    let code =
+        |r: fm_api::ApiResult<fm_api::comparison::Comparison>| r.map(|_| ()).map_err(|e| e.code);
+    assert_eq!(code(save("One", &[1])), Err(ErrorCode::InvalidRequest));
+    assert_eq!(
+        code(save("Five", &[1, 2, 3, 4, 5])),
+        Err(ErrorCode::InvalidRequest)
+    );
+    assert_eq!(code(save(" ", &[1, 2])), Err(ErrorCode::InvalidRequest));
+    assert_eq!(code(save("Twice", &[1, 1])), Err(ErrorCode::InvalidRequest));
+    assert_eq!(code(save("Unknown", &[1, 999])), Err(ErrorCode::NotFound));
+    assert!(api.list_comparisons().unwrap().is_empty());
+
+    let b = save("body", &[6, 1]).unwrap();
+    assert_eq!(
+        b.faces.iter().map(|f| f.id).collect::<Vec<_>>(),
+        [FaceId(6), FaceId(1)]
+    );
+    assert_eq!(
+        (b.mode, b.sample_text.as_str()),
+        (CompareMode::Stacked, "Quartz")
+    );
+    let a = save(" Alpha ", &[1, 2, 6, 4]).unwrap();
+    assert_eq!(a.name, "Alpha");
+    let names = || -> Vec<String> {
+        api.list_comparisons()
+            .unwrap()
+            .into_iter()
+            .map(|c| c.name)
+            .collect()
+    };
+    assert_eq!(names(), ["Alpha", "body"]);
+    api.rename_comparison(RenameComparisonRequest {
+        id: b.id,
+        name: "Aa".into(),
+    })
+    .unwrap();
+    assert_eq!(names(), ["Aa", "Alpha"]);
+    assert_eq!(api.get_comparison(ComparisonRef { id: a.id }).unwrap(), a);
+
+    // A face whose source is paused is named as missing; the rest open.
+    api.set_source_paused(SetSourcePausedRequest {
+        source: SourceId(1),
+        paused: true,
+    })
+    .unwrap();
+    let hidden = api.get_comparison(ComparisonRef { id: b.id }).unwrap();
+    assert!(hidden.faces.is_empty());
+    assert_eq!(hidden.missing.len(), 2);
+    assert_eq!(hidden.missing[0].id, FaceId(6));
+
+    api.delete_comparison(ComparisonRef { id: a.id }).unwrap();
+    assert_eq!(names(), ["Aa"]);
+    assert_eq!(
+        api.delete_comparison(ComparisonRef { id: a.id })
+            .unwrap_err()
+            .code,
+        ErrorCode::NotFound
+    );
 }
 
 #[test]
@@ -804,6 +881,82 @@ fn export_honors_the_license_guard() {
 }
 
 #[test]
+fn export_validates_the_subset_like_the_core() {
+    let api = api();
+    let with = |subset: Subset| ExportWebRequest {
+        faces: vec![FaceId(1)],
+        formats: vec![WebFormat::Woff2],
+        subset: Some(subset),
+        out_dir: "/tmp/out".into(),
+        css: false,
+    };
+    let ok = api
+        .export_web(with(Subset::Presets {
+            names: vec!["latin".into(), "cyrillic".into()],
+        }))
+        .unwrap();
+    assert_eq!(ok.files, ["/tmp/out/Inter-Regular.woff2"]);
+    assert!(
+        api.export_web(with(Subset::Unicode {
+            ranges: vec!["U+0000-00FF, U+4??".into()],
+        }))
+        .is_ok()
+    );
+    assert!(
+        api.export_web(with(Subset::Text { text: "Ab".into() }))
+            .is_ok()
+    );
+
+    let refused = |subset: Subset| {
+        let e = api.export_web(with(subset)).unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
+        e.message
+    };
+    let m = refused(Subset::Presets {
+        names: vec!["elvish".into()],
+    });
+    assert!(m.contains("\"elvish\"") && m.contains("latin-ext"), "{m}");
+    refused(Subset::Presets { names: Vec::new() });
+    let m = refused(Subset::Unicode {
+        ranges: vec!["U+00FF-0000".into()],
+    });
+    assert!(m.contains("\"U+00FF-0000\""), "{m}");
+    refused(Subset::Unicode { ranges: Vec::new() });
+    refused(Subset::Text {
+        text: String::new(),
+    });
+    let m = refused(Subset::Text {
+        text: "日本".into(),
+    });
+    assert!(m.contains("none of the characters"), "{m}");
+
+    // The subset is checked before the faces: a bad one on an unknown face
+    // is still InvalidRequest, as in the core.
+    let e = api
+        .export_web(ExportWebRequest {
+            faces: vec![FaceId(999)],
+            ..with(Subset::Unicode {
+                ranges: vec!["U+ZZ".into()],
+            })
+        })
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    // prepare_for_web passes the subset through.
+    assert_eq!(
+        api.prepare_for_web(PrepareForWebRequest {
+            family: FamilyId(1),
+            subset: Some(Subset::Presets {
+                names: vec!["elvish".into()]
+            }),
+            out_dir: "/tmp/web".into(),
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::InvalidRequest
+    );
+}
+
+#[test]
 fn workflows_compose_the_other_services() {
     let api = api();
     let list = api
@@ -972,6 +1125,7 @@ fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
 fn family_rows_carry_the_detail_list_columns() {
     let api = api();
     api.tag_faces(TagFacesRequest {
+        families: Vec::new(),
         faces: vec![FaceId(3)],
         tags: vec!["Body".into(), "brand".into()],
     })
@@ -1544,6 +1698,7 @@ fn smart_collections_follow_the_rules() {
     let first = faces_of(&api, Filters::default()).unwrap()[0];
     let tag = api
         .tag_faces(TagFacesRequest {
+            families: Vec::new(),
             faces: vec![first],
             tags: vec!["later".into()],
         })
@@ -1973,3 +2128,238 @@ fn size_factors_answer_each_face_in_order() {
         .expect_err("unknown");
     assert_eq!(err.code, ErrorCode::NotFound);
 }
+
+#[test]
+fn tagging_a_family_tags_its_faces_and_the_selection_shows_mixed_tags() {
+    let api = api();
+    let family = api
+        .list_families(ListFamiliesRequest::default())
+        .unwrap()
+        .items[0]
+        .id;
+    let members = api
+        .selection_tags(SelectionTagsRequest {
+            faces: vec![],
+            families: vec![family],
+        })
+        .unwrap()
+        .faces;
+    assert!(
+        members.len() > 1,
+        "the first sample family has several styles"
+    );
+    let outside = (1..100).map(FaceId).find(|f| !members.contains(f)).unwrap();
+
+    let made = api
+        .tag_faces(TagFacesRequest {
+            faces: vec![],
+            tags: vec!["Body".into()],
+            families: vec![family],
+        })
+        .unwrap();
+    assert_eq!(made[0].face_count as usize, members.len());
+
+    let got = api
+        .selection_tags(SelectionTagsRequest {
+            faces: vec![outside],
+            families: vec![family],
+        })
+        .unwrap();
+    assert_eq!(got.faces.len(), members.len() + 1);
+    assert_eq!(got.tags.len(), 1);
+    assert_eq!(got.tags[0].face_count as usize, members.len());
+    assert!(
+        !got.tags[0].all,
+        "the outside face does not carry it: mixed"
+    );
+
+    let unknown = api.tag_faces(TagFacesRequest {
+        faces: vec![],
+        tags: vec!["Body".into()],
+        families: vec![FamilyId(9999)],
+    });
+    assert_eq!(unknown.unwrap_err().code, ErrorCode::NotFound);
+}
+
+/// E14.1: the mock refuses the rules fm-core refuses, updates a smart
+/// collection's rule, applies a draft rule to search and counts foundries.
+#[test]
+fn rule_editor_calls_behave_like_the_core() {
+    let api = api();
+    let leaf = |filters: Filters| Rule::Filters { filters };
+    let empty = smart(&api, "Empty", RuleOp::And, vec![]).unwrap_err();
+    assert_eq!(empty.code, ErrorCode::InvalidRequest);
+    let upside_down = smart(
+        &api,
+        "Upside down",
+        RuleOp::Or,
+        vec![leaf(Filters {
+            weight: Some(WeightRange { min: 900, max: 100 }),
+            ..Filters::default()
+        })],
+    )
+    .unwrap_err();
+    assert_eq!(upside_down.code, ErrorCode::InvalidRequest);
+    assert!(api.list_collections().unwrap().is_empty());
+
+    let italic = Filters {
+        slant: Some(Slant::Italic),
+        ..Filters::default()
+    };
+    let c = smart(&api, "Italic", RuleOp::And, vec![leaf(italic.clone())]).unwrap();
+    let draft = RuleGroup {
+        op: RuleOp::Or,
+        rules: vec![
+            leaf(italic.clone()),
+            leaf(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+        ],
+    };
+    let found = api
+        .search(SearchRequest {
+            rule: Some(draft.clone()),
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..SearchRequest::default()
+        })
+        .unwrap();
+    let draft_faces: usize = found.families.iter().map(|h| h.faces.len()).sum();
+    let updated = api
+        .update_collection_rules(UpdateCollectionRulesRequest {
+            collection: c.id,
+            rule_group: draft.clone(),
+        })
+        .unwrap();
+    assert_eq!(updated.rule_group, Some(draft));
+    assert_eq!(updated.face_count as usize, draft_faces);
+    assert!(draft_faces > 0);
+
+    let refused = api
+        .update_collection_rules(UpdateCollectionRulesRequest {
+            collection: c.id,
+            rule_group: RuleGroup {
+                op: RuleOp::And,
+                rules: vec![Rule::Group {
+                    group: RuleGroup {
+                        op: RuleOp::Or,
+                        rules: vec![],
+                    },
+                }],
+            },
+        })
+        .unwrap_err();
+    assert_eq!(refused.code, ErrorCode::InvalidRequest);
+    assert_eq!(
+        api.list_collections().unwrap()[0].rule_group,
+        updated.rule_group
+    );
+    let manual = api
+        .create_collection(CreateCollectionRequest {
+            name: "Manual".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+        })
+        .unwrap();
+    let not_smart = api
+        .update_collection_rules(UpdateCollectionRulesRequest {
+            collection: manual.id,
+            rule_group: RuleGroup::from(italic),
+        })
+        .unwrap_err();
+    assert_eq!(not_smart.code, ErrorCode::InvalidRequest);
+
+    let foundries = api
+        .search(SearchRequest::default())
+        .unwrap()
+        .counts
+        .unwrap()
+        .foundry;
+    assert!(!foundries.is_empty());
+    let mut sorted = foundries.clone();
+    sorted.sort_by(|a, b| a.value.cmp(&b.value));
+    assert_eq!(foundries, sorted);
+}
+
+#[test]
+fn every_mock_language_carries_its_pangram() {
+    let languages = api().list_languages().expect("languages");
+    assert!(!languages.is_empty());
+    for l in &languages {
+        assert!(
+            l.pangram.as_deref().is_some_and(|p| !p.is_empty()),
+            "{}",
+            l.code
+        );
+    }
+    let sr = languages
+        .iter()
+        .find(|l| l.code == "sr-Cyrl")
+        .expect("sr-Cyrl");
+    assert!(sr.pangram.as_deref().is_some_and(|p| p.contains('џ')));
+}
+
+#[test]
+fn a_language_preset_without_pangram_still_deserializes() {
+    let p: fm_api::search::LanguagePreset =
+        serde_json::from_str(r#"{"code":"en","name":"English","script":"Latn"}"#)
+            .expect("old shape");
+    assert_eq!(p.pangram, None);
+}
+
+#[test]
+fn export_css_follows_the_core_rules() {
+    let api = api();
+    let req = |faces: Vec<u32>, subset: Option<Subset>| ExportWebRequest {
+        faces: faces.into_iter().map(FaceId).collect(),
+        formats: vec![WebFormat::Woff, WebFormat::Woff2],
+        subset,
+        out_dir: "/tmp/out".into(),
+        css: true,
+    };
+    let css = api
+        .export_web(req(vec![1, 2, 3], None))
+        .unwrap()
+        .css
+        .unwrap();
+    assert_eq!(css, MOCK_CSS_SNAPSHOT, "{css}");
+    let subset = api
+        .export_web(req(vec![1], Some(Subset::Text { text: "BA".into() })))
+        .unwrap()
+        .css
+        .unwrap();
+    assert!(
+        subset.contains("  unicode-range: U+0020, U+0041-0042;\n"),
+        "{subset}"
+    );
+}
+
+/// The same blocks `fm_core::web_css` writes for these faces.
+const MOCK_CSS_SNAPSHOT: &str = r#"@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("Inter-Regular.woff2") format("woff2"), url("Inter-Regular.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Inter";
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("Inter-Italic.woff2") format("woff2"), url("Inter-Italic.woff") format("woff");
+}
+
+@font-face {
+  font-family: "Source Serif 4";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("SourceSerif4-Regular.woff2") format("woff2"), url("SourceSerif4-Regular.woff") format("woff");
+}
+"#;

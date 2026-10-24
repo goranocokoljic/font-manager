@@ -6,7 +6,8 @@
 // them as a CSS mask in the text color, so themes and surfaces need no new render.
 //
 // Lines are virtualized like the list's rows (`list/grid.ts`), cards keyed by
-// slot. The grid shares the list's cursor, selection and keyboard model; Up/Down
+// slot. A face whose family has a color palette chosen (E16.3) shows live text in
+// that palette instead, as a mask cannot show colors. The grid shares the list's cursor, selection and keyboard model; Up/Down
 // move by a line, Left/Right by a card, Enter expands a family or opens a style.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
@@ -20,9 +21,12 @@ import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
-import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import { usePalettesStore } from '../stores/palettes';
+import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
+import { direction, t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
+import CardLiveText from './CardLiveText.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -49,6 +53,7 @@ const FALLBACK_WIDTH = 800;
 const list = useFontListStore();
 const library = useLibraryStore();
 const thumbnails = useThumbnailsStore();
+const palettes = usePalettesStore();
 
 const surfaceClass = computed(() =>
   props.preview.surface === 'auto' ? undefined : `surface-${props.preview.surface}`,
@@ -123,6 +128,7 @@ const visible = computed(() =>
     const p = previewOf(row);
     const text = cardText(p.text);
     const face = p.face;
+    const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     return {
       row,
       index,
@@ -131,8 +137,9 @@ const visible = computed(() =>
       face,
       text,
       fallback: p.fallback,
-      thumb: face ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
-      failed: face ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
+      palette,
+      thumb: face && !palette ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
+      failed: face && !palette ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
       name: row.kind === 'face' ? styleName(row) : row.family.name,
     };
   }),
@@ -141,16 +148,19 @@ const visible = computed(() =>
 // Ask for the thumbnails of the cards on screen.
 watchEffect(() => {
   for (const item of visible.value)
-    if (item.face && item.text) thumbnails.want(item.face.id, item.text, THUMB_PX);
+    if (item.face && item.text && !item.palette) thumbnails.want(item.face.id, item.text, THUMB_PX);
 });
 
 function cardStyle(index: number) {
   const cols = columns.value;
   const line = Math.floor(index / cols);
+  // Slots start at the inline start; in right-to-left chrome that is the right
+  // edge, so the next card is a step to the left.
+  const step = direction() === 'rtl' ? -100 : 100;
   return {
     width: `${100 / cols}%`,
     height: `${CARD.linePx}px`,
-    transform: `translate(${(index % cols) * 100}%, ${line * CARD.linePx}px)`,
+    transform: `translate(${(index % cols) * step}%, ${line * CARD.linePx}px)`,
   };
 }
 
@@ -235,7 +245,7 @@ function onToggle(row: ListRow): void {
     :data-columns="columns"
     role="listbox"
     tabindex="0"
-    aria-label="Font grid"
+    :aria-label="t('grid.label')"
     aria-multiselectable="true"
     :aria-activedescendant="activeId"
     @scroll="onScroll"
@@ -266,32 +276,44 @@ function onToggle(row: ListRow): void {
         @dragstart="onCardDrag(item.row, $event)"
       >
         <div class="card">
+          <CardLiveText
+            v-if="item.face && item.palette"
+            :face="item.face.id"
+            :text="item.text"
+            :palette="item.palette"
+            :size-px="THUMB_PX"
+            :color="preview.textColor"
+            aria-hidden="true"
+          />
           <div
+            v-else
             class="thumb"
             data-testid="thumbnail"
             :data-state="thumbState(item)"
             :style="thumbStyle(item.thumb)"
             aria-hidden="true"
           />
-          <span v-if="item.failed" class="note">Preview not available</span>
+          <span v-if="item.failed" class="note">{{ t('list.previewUnavailable') }}</span>
           <span v-else-if="!item.face && library.failed.has(item.row.family.id)" class="note">
-            Styles not available
+            {{ t('list.stylesUnavailable') }}
           </span>
           <div class="meta">
             <span
               v-if="item.row.kind === 'family'"
-              class="twisty"
+              class="twisty fm-directional"
               aria-hidden="true"
               @click.stop="onToggle(item.row)"
               >{{ item.row.expanded ? '▾' : '▸' }}</span
             >
             <ActivationDot :state="rowActivation(item.row)" />
-            <span class="name">{{ item.name }}</span>
+            <bdi class="name">{{ item.name }}</bdi>
             <span v-if="item.row.kind === 'family'" class="detail">{{
               styleCount(item.row.family.styleCount)
             }}</span>
-            <span v-if="item.face?.isVariable" class="badge">Variable</span>
-            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">Fallback</span>
+            <span v-if="item.face?.isVariable" class="badge">{{ t('list.variable') }}</span>
+            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">{{
+              t('list.fallback')
+            }}</span>
           </div>
         </div>
       </div>
@@ -319,7 +341,7 @@ function onToggle(row: ListRow): void {
 .slot {
   position: absolute;
   top: 0;
-  left: 0;
+  inset-inline-start: 0;
   box-sizing: border-box;
   padding: 6px;
   user-select: none;
@@ -348,7 +370,7 @@ function onToggle(row: ListRow): void {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
+  inset-inline-start: 0;
   width: 4px;
   background: var(--fm-accent);
   content: '';

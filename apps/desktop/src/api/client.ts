@@ -22,6 +22,9 @@ import type {
   CreateCollectionRequest,
   CssValues,
   CssValuesRequest,
+  Comparison,
+  ComparisonEntry,
+  ComparisonRef,
   DeactivateRequest,
   DuplicateGroup,
   Event,
@@ -61,24 +64,32 @@ import type {
   QuickCollection,
   QuickCollectionRequest,
   RenameCollectionRequest,
+  RenameComparisonRequest,
   Resolution,
   ResolutionId,
   SampleText,
   SampleTextRequest,
+  SaveComparisonRequest,
   ScanRequest,
   SearchRequest,
   SearchResponse,
+  SelectionTags,
+  SelectionTagsRequest,
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
   SizeFactor,
   SizeFactorRequest,
+  UpdateCollectionRulesRequest,
   Source,
   SourceId,
   Tag,
   TagFacesRequest,
   Target,
   UntagFacesRequest,
+  InstallUpdateRequest,
+  UpdateCheck,
+  UpdateSupport,
   UserMetaUpdate,
   VirtualStyle,
   VirtualStyleId,
@@ -120,6 +131,8 @@ export interface FmClient {
   /** Creates a collection; with `rules`, a smart one. */
   createCollection(req: CreateCollectionRequest): Promise<Collection>;
   renameCollection(req: RenameCollectionRequest): Promise<Collection>;
+  /** Replaces the rule of a smart collection (E14.1). */
+  updateCollectionRules(req: UpdateCollectionRulesRequest): Promise<Collection>;
   /** Nests a collection under another one, or reorders it among its siblings. */
   moveCollection(req: MoveCollectionRequest): Promise<Collection>;
   /** Deletes a collection and its children; the fonts are not touched. */
@@ -133,6 +146,8 @@ export interface FmClient {
   tagFaces(req: TagFacesRequest): Promise<Tag[]>;
   /** Takes tags off faces; a tag left on no face is gone. */
   untagFaces(req: UntagFacesRequest): Promise<void>;
+  /** The tags the faces of a selection carry, with how many carry each (E13.4). */
+  selectionTags(req: SelectionTagsRequest): Promise<SelectionTags>;
   /** Favorite, rating (0 clears it) and notes; fields left out stay. */
   updateUserMeta(req: UserMetaUpdate): Promise<void>;
   /** A family's own notes; an empty string clears them. */
@@ -185,6 +200,16 @@ export interface FmClient {
   restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
   /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
   layoutWidth(req: Layout): Promise<number | null>;
+  /** Every saved comparison (E13.2), by name. */
+  listComparisons(): Promise<ComparisonEntry[]>;
+  /** One saved comparison: the faces the library still shows, and the missing ones by name. */
+  getComparison(req: ComparisonRef): Promise<Comparison>;
+  /** Saves a comparison (2–4 faces, a name), new or over `req.id`. */
+  saveComparison(req: SaveComparisonRequest): Promise<Comparison>;
+  /** Renames a saved comparison. */
+  renameComparison(req: RenameComparisonRequest): Promise<ComparisonEntry>;
+  /** Deletes a saved comparison; the fonts are not touched. */
+  deleteComparison(req: ComparisonRef): Promise<void>;
   activate(req: ActivateRequest): Promise<ActivationOutcome[]>;
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]>;
   /** Every face the app has active. */
@@ -227,6 +252,17 @@ export interface FmClient {
   pickFile(title: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
+  /**
+   * Tells the native shell (Help menu, tray) which catalog locale the UI shows, so
+   * its labels follow the Language setting.
+   */
+  setShellLocale(locale: string): Promise<void>;
+  /** Whether this copy updates itself; where not, Settings hides the update section. */
+  updateSupport(): Promise<UpdateSupport>;
+  /** Asks the release server once (a user action, or "Check automatically" at start). */
+  checkForUpdate(): Promise<UpdateCheck>;
+  /** Installs the update the last check found; the app quits, installs and restarts. */
+  installUpdate(req: InstallUpdateRequest): Promise<void>;
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
@@ -244,6 +280,7 @@ export const tauriClient: FmClient = {
   listCollections: () => invoke<Collection[]>('list_collections'),
   createCollection: (req) => invoke<Collection>('create_collection', { req }),
   renameCollection: (req) => invoke<Collection>('rename_collection', { req }),
+  updateCollectionRules: (req) => invoke<Collection>('update_collection_rules', { req }),
   moveCollection: (req) => invoke<Collection>('move_collection', { req }),
   deleteCollection: (collection) => invoke<void>('delete_collection', { collection }),
   addToCollection: (req) => invoke<Collection>('add_to_collection', { req }),
@@ -251,6 +288,7 @@ export const tauriClient: FmClient = {
   listTags: () => invoke<Tag[]>('list_tags'),
   tagFaces: (req) => invoke<Tag[]>('tag_faces', { req }),
   untagFaces: (req) => invoke<void>('untag_faces', { req }),
+  selectionTags: (req) => invoke<SelectionTags>('selection_tags', { req }),
   updateUserMeta: (req) => invoke<void>('update_user_meta', { req }),
   updateFamilyNotes: (req) => invoke<void>('update_family_notes', { req }),
   declareLicense: (req) => invoke<void>('declare_license', { req }),
@@ -277,6 +315,11 @@ export const tauriClient: FmClient = {
   layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
   restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
   layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
+  listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),
+  getComparison: (req) => invoke<Comparison>('get_comparison', { req }),
+  saveComparison: (req) => invoke<Comparison>('save_comparison', { req }),
+  renameComparison: (req) => invoke<ComparisonEntry>('rename_comparison', { req }),
+  deleteComparison: (req) => invoke<void>('delete_comparison', { req }),
   activate: (req) => invoke<ActivationOutcome[]>('activate', { req }),
   deactivate: (req) => invoke<ActivationOutcome[]>('deactivate', { req }),
   listActive: () => invoke<ActiveFace[]>('list_active'),
@@ -309,6 +352,10 @@ export const tauriClient: FmClient = {
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
+  setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
+  updateSupport: () => invoke<UpdateSupport>('update_support'),
+  checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
+  installUpdate: (req) => invoke<void>('install_update', { req }),
 };
 
 let current: FmClient | undefined;

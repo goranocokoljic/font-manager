@@ -11,21 +11,23 @@ import type {
   ResolutionId,
   TrashMoveStatus,
 } from '../api/types';
+import { t } from '../i18n';
 import { useToastStore, type ToastAction } from './toast';
 
 /** "1 copy", "2 copies". */
 export function copies(n: number): string {
-  return n === 1 ? '1 copy' : `${n} copies`;
+  return t('problems.copies', { count: n });
 }
 
 /** One line about a "Keep this one" action: what moved, what stayed. */
 export function resolutionSummary(r: Resolution): string {
   const count = (s: TrashMoveStatus) => r.moves.filter((m) => m.status === s).length;
   const moved = count('trashed') + count('restored');
-  const parts = [r.undone ? `Put back ${copies(moved)}.` : `Moved ${copies(moved)} to the trash.`];
+  const parts = [
+    t(r.undone ? 'problems.summary.putBack' : 'problems.summary.moved', { count: moved }),
+  ];
   const stayed = count('skipped') + count('failed');
-  if (stayed)
-    parts.push(`${copies(stayed)} stayed where ${stayed === 1 ? 'it was' : 'they were'}.`);
+  if (stayed) parts.push(t('problems.summary.stayed', { count: stayed }));
   return parts.join(' ');
 }
 
@@ -39,17 +41,28 @@ export interface ProblemGroup {
   kinds: ProblemKind[];
 }
 
+/** A group whose `label` follows the UI's language (a getter over the catalog). */
+function group(id: ProblemGroupId, kinds: ProblemKind[]): ProblemGroup {
+  return {
+    id,
+    get label() {
+      return t(`problems.groups.${id}`);
+    },
+    kinds,
+  };
+}
+
 /**
  * The filters of the Problems view, in display order. A label table over the kinds
  * fm-api reports, like the facet labels in `search/chips.ts`; every kind is in one group.
  */
 export const PROBLEM_GROUPS: ProblemGroup[] = [
-  { id: 'duplicates', label: 'Duplicates', kinds: ['duplicateFile', 'duplicateFace'] },
-  { id: 'broken', label: 'Broken files', kinds: ['broken', 'noUnicodeCmap'] },
-  { id: 'legacy', label: 'Legacy formats', kinds: ['unsupported'] },
-  { id: 'sidecar', label: 'Sidecar conflicts', kinds: ['sidecarConflict'] },
-  { id: 'activation', label: 'Activation conflicts', kinds: ['systemConflict', 'activeConflict'] },
-  { id: 'library', label: 'Folders and index', kinds: ['missingSource', 'indexRebuilt'] },
+  group('duplicates', ['duplicateFile', 'duplicateFace']),
+  group('broken', ['broken', 'noUnicodeCmap']),
+  group('legacy', ['unsupported']),
+  group('sidecar', ['sidecarConflict']),
+  group('activation', ['systemConflict', 'activeConflict']),
+  group('library', ['missingSource', 'indexRebuilt']),
 ];
 
 /** The group `id` names, or `undefined` for anything else (a stale URL). */
@@ -145,7 +158,12 @@ export const useProblemsStore = defineStore('problems', () => {
       toasts.show(resolutionSummary(resolution));
       return;
     }
-    const action: ToastAction = { label: 'Undo', run: () => undo(id) };
+    const action: ToastAction = {
+      get label() {
+        return t('common.undo');
+      },
+      run: () => undo(id),
+    };
     toastUndo = { action, id };
     toasts.show(resolutionSummary(resolution), action);
   }
@@ -200,7 +218,7 @@ export const useProblemsStore = defineStore('problems', () => {
         const failed = r.moves.find((m) => m.status === 'failed');
         actionError.value = {
           code: 'io',
-          message: failed?.message ?? 'Some copies could not be put back.',
+          message: failed?.message ?? t('problems.undoFailed'),
           detail: null,
         };
       }

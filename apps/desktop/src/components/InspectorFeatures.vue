@@ -7,6 +7,7 @@
 // CSS" copies font-feature-settings for the switched features (E10.5).
 import { computed } from 'vue';
 import type { FeatureInfo } from '../api/types';
+import { t } from '../i18n';
 import { useFeaturesStore } from '../stores/features';
 import { useSelectionStore } from '../stores/selection';
 import CopyCss from './CopyCss.vue';
@@ -31,24 +32,28 @@ function reset(): void {
 
 <template>
   <div class="features">
-    <p v-if="!d" class="placeholder">Select a face to see its features.</p>
-    <p v-else-if="!d.features.length" class="placeholder">This face has no OpenType features.</p>
+    <p v-if="!d" class="placeholder">{{ t('features.noFace') }}</p>
+    <p v-else-if="!d.features.length" class="placeholder">{{ t('features.none') }}</p>
     <template v-else>
       <div class="head">
-        <p class="hint">Switches change this face's previews.</p>
+        <p class="hint">{{ t('features.hint') }}</p>
         <div class="actions">
-          <CopyCss v-if="faceId !== null" label="features" :css="() => features.css(faceId!)" />
+          <CopyCss
+            v-if="faceId !== null"
+            :label="t('features.cssLabel')"
+            :css="() => features.css(faceId!)"
+          />
           <button
             type="button"
             class="reset"
             :disabled="faceId === null || !features.isChanged(faceId)"
             @click="reset"
           >
-            Reset
+            {{ t('common.reset') }}
           </button>
         </div>
       </div>
-      <ul v-if="switchable.length" class="plain list" aria-label="Features">
+      <ul v-if="switchable.length" class="plain list" :aria-label="t('features.list')">
         <li v-for="f in switchable" :key="f.tag" class="row">
           <span class="name">
             {{ f.name ?? f.tag }}
@@ -68,14 +73,14 @@ function reset(): void {
         </li>
       </ul>
       <section v-if="automatic.length" aria-labelledby="fm-features-automatic">
-        <h3 id="fm-features-automatic">Applied automatically</h3>
-        <ul class="plain list" aria-label="Applied automatically">
+        <h3 id="fm-features-automatic">{{ t('features.automatic') }}</h3>
+        <ul class="plain list" :aria-label="t('features.automatic')">
           <li v-for="f in automatic" :key="f.tag" class="row" :data-tag="f.tag">
             <span class="name">
               {{ f.name ?? f.tag }}
               <span v-if="f.name" class="tag">{{ f.tag }}</span>
             </span>
-            <span class="auto">applied automatically</span>
+            <span class="auto">{{ t('features.automaticNote') }}</span>
           </li>
         </ul>
       </section>
@@ -141,7 +146,7 @@ h3 {
   overflow-wrap: anywhere;
 }
 .tag {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   color: var(--fm-muted);
   font-family: ui-monospace, monospace;
 }
@@ -163,19 +168,19 @@ h3 {
 .knob {
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: var(--fm-control-border);
-  transition: left 0.1s;
+  transition: inset-inline-start 0.1s;
 }
 .switch[aria-checked='true'] {
   border-color: var(--fm-accent);
   background: var(--fm-accent);
 }
 .switch[aria-checked='true'] .knob {
-  left: 16px;
+  inset-inline-start: 16px;
   background: var(--fm-bg);
 }
 </style>

@@ -1,0 +1,19 @@
+{
+  "id": "a-combobox-that-filters-and-creates-must-call-text-unmatched",
+  "title": "A combobox that filters and creates must call text 'unmatched' by the same rule as the list it shows",
+  "category": "correctness",
+  "rule": "When one input both filters a list (fuzzy or prefix) and makes a new item on Enter, decide 'no match, so create' from the filtered rows the user sees (rows.length === 0), not from an exact-name check. Text that still shows a row is a filter: Enter acts on the list (applies, picks). Add a test that types part of an existing name, acts on the row (Space/arrow) and presses Enter, and asserts no new item named after the typed text exists.",
+  "rationale": "E13.4 (#112): the tagging panel created a tag from the filter text whenever no tag had exactly that name, so 'disp' + Space + Enter tagged every selected font 'disp' and dropped the staged toggle.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    112
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-10-21T12:56:52.480Z",
+  "last_seen": "2026-10-21T12:56:52.480Z"
+}

@@ -161,3 +161,40 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E15.4 #121] crates/fm-core/src/license.rs:223 — two private `open_license_label` functions (short "OFL" here, long "SIL Open Font License" in inventory.rs) differ on purpose and can drift.
 - [E16.2 #123] crates/fm-core/src/index/faces.rs:290 — a `face.parsed` that no longer deserializes after a new no-default ParsedFace field makes `face_detail` drop version, copyright, license and vendor until the next scan rewrites the row.
 - [E13.3 #111] crates/fm-core/src/index/search.rs:359 — `family_of` scans the whole search cache linearly and `Index::quick_collection` calls it twice per face, so listing the Quick Collection is O(k·n) on a large library.
+- [E13.4 #112] crates/fm-api/src/mock.rs:2753 — the Rust mock `edit_members` still expands families inline instead of using the new `faces_of` helper (same behavior today, can drift).
+- [E13.4 #112] apps/desktop/src/components/CollectionsSidebar.vue:256 — sidebar counts rely on `aria-label` on a plain `<span>` (generic role), which some screen readers do not announce; TagsSidebar.vue copies the pattern.
+- [E17.2 #127] apps/desktop/src/stores/settings.ts:51 — a failed `update` never re-reads the settings, so a value the server changed partly can show stale until the next `load`.
+- [E14.1 #114] crates/fm-api/src/mock.rs:973 — the Rust mock's weight and width filters match only a face's static class, while fm-core and the TS mock also accept a variable axis that reaches the range.
+- [E17.3 #128] apps/desktop/src-tauri/tests/tray_lifecycle.rs:187 — a test-only `#[cfg(target_os = "linux")]` lives outside `fm-platform` (pre-existing).
+- [E14.4 #117] apps/desktop/src/views/HomeView.vue:309 — the "Smart collections" placeholder group from #218 stays empty; smart collections show only as badged rows in the Collections tree.
+- [E14.4 #117] apps/desktop/src/components/FilterChips.vue:169 — the chips bar is capped at max-height 96px, so at 1,000×700 the save button and its inline error sit below the fold of that scroller.
+- [E17.3 #128] scripts/bench/lib.test.mjs:396 — the debug-build bench test on the macOS runner measured activation_100 at 1008 ms (budget 1000 ms; the release bench on main measures 763 ms), so it fails on runner noise with no code change (CI run 39643524037).
+- [E18.2 #130] scripts/release/dev-build.mjs:22 — macOS builds only on macos-latest (arm64), so releases have no darwin-x86_64 update target for Intel Macs.
+- [E18.2 #130] scripts/release/build.mjs:316 — args() now treats a bare --flag as true while dev-build.mjs:93 and update-manifest.mjs:169 do not; three parsers in one folder differ.
+- [E18.2 #130] apps/desktop/src-tauri/src/lib.rs — on Windows the updater's install() calls process::exit(0), so RunEvent::Exit (log flush, tray cleanup) never runs after an update; the quit path itself already ran.
+- [E16.3 #124] apps/desktop/src/stores/palettes.ts:32 — `browserStorage()` is now copied in four stores (layout, preview, views, palettes); same behavior, can drift.
+- [E16.3 #124] apps/desktop/playwright.config.ts:13 — Playwright runs Chromium only, so CSS `@font-palette-values` on FontFace-loaded faces is unproven on WKWebView and WebKitGTK (the code falls back to the default palette).
+- [E16.3 #124] apps/desktop/src/components/CardLiveText.vue:21 — the face-holding pattern (`held` + `loader.acquire`/`release`) is hand-written in FontPreviewRow, FontLayout, GlyphCompare, CompareSheet and now CardLiveText; no shared composable.
+- [E19.4 #136] apps/desktop/src/stores/search.ts:112 — `loadLanguages` has no in-flight guard, so HomeView and PreviewControls both call `listLanguages` at startup (one duplicate IPC call).
+- [E19.4 #136] apps/desktop/src/stores/preview.ts:188 — changing an unsaved view before `list_languages` resolves saves `'en'` instead of the UI-language default (one IPC round-trip window).
+- [E19.4 #136] apps/desktop/src/api/mock.ts:939 — the TS `mockLanguages` and the Rust mock `LANGUAGES` (crates/fm-api/src/mock.rs:186) list different language sets.
+- [E19.4 #136] apps/desktop/src/components/FontPreviewRow.vue:154 — the `.sample` span has no `lang` attribute, so non-Latin samples reach screen readers untagged.
+- [E20.1 #137] crates/fm-api/src/mock.rs:2924 — `MockApi::export_web` does not de-duplicate repeated face ids (lists a file twice) while fm-core does.
+- [E16.4 #125] apps/desktop/src/components/QuickCollectionReview.vue:48 — still calls `previewRowHeight(props.preview)` without a density, so the Quick Collection review list keeps comfortable row heights in compact mode.
+
+## 2026-10-22
+
+- [E20.2 #138] crates/fm-core/src/index/faces.rs:234 — `web_export_face` returns Broken faces for export without a health filter, so whole-font export also feeds damaged data to the encoders.
+
+## 2026-10-23
+
+- [E20.3 #139] crates/fm-core/src/web_font.rs:317 — `commit` checks the target is free then calls `fs::rename`, which overwrites; a file the user creates in that gap can be replaced (fonts.css now shares this path).
+- [E20.3 #139] crates/fm-api/src/mock.rs:2279 — `css_values`'s `num` closure duplicates the new `css_range` number formatting in the same file (both copies of core `css::number`).
+- [E19.2 #134] apps/desktop/src/views/ProblemsView.vue:126 — `{{ p.message }}` shows the core's English problem text in a German UI; it is not an ApiError, so errorMessage never sees it.
+- [E19.2 #134] apps/desktop/src/keyboard/keymap.ts:144 — chord labels `Ctrl`, `Shift`, `Space` are hard-coded English and show in the palette, tooltips and status bar.
+- [E19.2 #134] apps/desktop/src/components/MainLayout.vue:159 — the list column's `overflow: hidden` already hid Compact rows, Compare and Inspector at 1,000 px with the inspector open in English.
+
+## 2026-10-24
+
+- [E19.3 #135] apps/desktop/src/App.vue:84 — `setShellLocale('ar-XB')` is refused by the shell (src-tauri/tests/ipc.rs:862), so under the pseudo-locale the native Help menu and tray keep their previous language.
+- [E19.3 #135] apps/desktop/src/components/InspectorFeatures.vue:176 — the switch knob's slide transition has no `prefers-reduced-motion` override.

@@ -29,6 +29,8 @@ pub mod license;
 pub mod lifecycle;
 pub mod logging;
 pub mod metrics;
+pub mod palettes;
+pub mod pangrams;
 mod parallel;
 pub mod parser;
 pub mod preview;
@@ -40,9 +42,13 @@ mod search;
 pub mod settings;
 pub mod sidecar;
 pub mod startup;
+pub mod subset;
 pub mod telemetry;
 #[cfg(test)]
 mod test_support;
+pub mod update;
+pub mod web_css;
+pub mod web_font;
 
 pub use activation::ActivationManager;
 pub use api::CoreApi;

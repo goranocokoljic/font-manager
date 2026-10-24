@@ -15,5 +15,7 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0008](0008-font-activation.md) | Font activation per OS | Accepted |
 | [0009](0009-os-trash.md) | The OS trash per OS | Accepted |
 | [0010](0010-tray-per-os.md) | The tray per OS | Accepted |
+| [0011](0011-start-at-login.md) | Start at login per OS | Accepted |
+| [0012](0012-in-app-updater.md) | In-app updates from signed releases | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

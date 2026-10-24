@@ -1,0 +1,20 @@
+{
+  "id": "a-step-that-ends-session-activations-before-an-action-that-c",
+  "title": "A step that ends session activations before an action that can fail must restore them on failure",
+  "category": "user-files",
+  "rule": "When code runs the quit path (ActivationManager::shutdown: deregister session fonts, record last_session) before an action that may fail and leave the app running (an update install, a restart), remember the session faces first and, when the action fails, activate them again and let the quit path run again later. Otherwise the app runs without the user's fonts and the next quit records an empty last session over the real one, so 'reactivate on launch' restores nothing. Test a failed action: the active set after it equals the set before, and the next launch reactivates it.",
+  "rationale": "E18.2 (#130): a failed update install left the session fonts deregistered, and the rearmed quit path wiped last_session at the next quit.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    130
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/**",
+    "crates/fm-core/src/lifecycle.rs",
+    "crates/fm-core/src/activation*"
+  ],
+  "first_seen": "2026-10-21T19:08:06.062Z",
+  "last_seen": "2026-10-21T19:08:06.062Z"
+}

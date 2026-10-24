@@ -126,6 +126,8 @@ for (const scheme of ['light', 'dark'] as const) {
     await tab(page, 'Advanced').click();
     for (const name of ['Preview cache size (MB)', 'Rescan sources every (minutes)'])
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);
+    await tab(page, 'Appearance').click();
+    expect(await borderContrast(page, 'Language')).toBeGreaterThanOrEqual(3);
   });
 }
 
@@ -153,4 +155,59 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
   await expect(page.getByRole('list', { name: 'Platform notes' })).toContainText(
     'no StatusNotifier host), so closing the window quits Font Manager',
   );
+});
+
+test('"Start at login" is visible on Windows, macOS and Linux alike', async ({ page }) => {
+  for (const platform of ['windows', 'macos', 'linux']) {
+    await page.goto(`/?mockPlatform=${platform}#/`);
+    await expect(page.getByTestId('app-info')).toContainText(`Platform${platform}`);
+    await page.keyboard.press('ControlOrMeta+,');
+    await tab(page, 'Activation').click();
+    await expect(page.getByRole('checkbox', { name: 'Start at login' })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Start at login' })).not.toBeChecked();
+  }
+});
+
+test('"Start at login" stays hidden where fm-api does not offer it (Flatpak)', async ({ page }) => {
+  await page.goto('/?mockStartAtLogin=3#/settings?section=activation');
+  await expect(
+    page.getByRole('checkbox', { name: 'Keep running in the tray when the window is closed' }),
+  ).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Start at login' })).toHaveCount(0);
+});
+
+test('"Start at login" is a labelled switch the keyboard reaches and turns on', async ({
+  page,
+}) => {
+  await page.goto('/#/settings?section=activation');
+  const tray = page.getByRole('checkbox', {
+    name: 'Keep running in the tray when the window is closed',
+  });
+  const login = page.getByRole('checkbox', { name: 'Start at login' });
+  await expect(login).not.toBeChecked();
+  await expect(login).toHaveAccessibleDescription(/starts in the tray when you log in/);
+  await tray.focus();
+  await page.keyboard.press('Tab');
+  await expect(login).toBeFocused();
+  await page.keyboard.press('Space');
+  await expect(login).toBeChecked();
+  await expect(page.getByTestId('toast')).toHaveCount(0);
+  // The saved state comes back from fm-api after a reopen.
+  await page.getByRole('button', { name: 'Close' }).click();
+  await page.keyboard.press('ControlOrMeta+,');
+  await tab(page, 'Activation').click();
+  await expect(login).toBeChecked();
+});
+
+test('"Start at login" shows an error toast when the system refuses the entry', async ({
+  page,
+}) => {
+  await page.goto('/?mockStartAtLogin=2#/settings?section=activation');
+  const login = page.getByRole('checkbox', { name: 'Start at login' });
+  await login.focus();
+  await page.keyboard.press('Space');
+  await expect(page.getByTestId('toast')).toContainText(
+    'Start at login could not be turned on: the system refused the login entry.',
+  );
+  await expect(login).not.toBeChecked();
 });

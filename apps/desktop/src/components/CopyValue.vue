@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // A value that copies itself to the clipboard on click (names and paths).
+import { t } from '../i18n';
 import { useCopy } from './useCopy';
 
 const props = defineProps<{ value: string; label: string }>();
@@ -12,15 +13,15 @@ const copy = () => copyValue(props.value);
   <button
     type="button"
     class="copy"
-    :aria-label="`Copy ${label}: ${value}`"
-    title="Click to copy"
+    :aria-label="t('copy.value', { label, value })"
+    :title="t('copy.clickToCopy')"
     @click="copy"
   >
-    {{ value }}
+    <bdi>{{ value }}</bdi>
   </button>
   <span class="status" role="status">
-    <template v-if="status === 'copied'">Copied</template>
-    <template v-else-if="status === 'failed'">Could not copy</template>
+    <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
+    <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
   </span>
 </template>
 
