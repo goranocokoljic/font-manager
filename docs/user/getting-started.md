@@ -53,6 +53,12 @@ Read [Sources](sources.md) to learn more about folders.
 - Each layout is a text file (JSON) in the `layouts` folder of the app's config folder.
   You can edit a file by hand: the app reads it the next time you open the layout view.
   A file the app cannot read shows as "cannot be read" in the **Preset** box.
+- To print a layout, open it in **Pairing Studio** and click **Print…** on its panel.
+  The print dialog of your system opens. Only that panel prints: the text at the width
+  of the layout, in its fonts, without the buttons of the app or the other panels.
+- To make a PDF of a panel, click **Print…** and choose the PDF printer in the print
+  dialog: **Microsoft Print to PDF** on Windows, **PDF** › **Save as PDF** on a Mac, and
+  **Print to File** (PDF) on Linux. The text in the PDF stays text, in its fonts.
 - To see more fonts at a time, click **Compact rows** in the toolbar. The rows of
   the list and the table get less space around them. The preview text keeps its
   size. Click **Compact rows** again to go back to comfortable rows. You can also choose

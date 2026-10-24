@@ -255,6 +255,11 @@ export interface FmClient {
   /** Opens an `https://` address in the default browser; other schemes are refused. */
   openUrl(url: string): Promise<void>;
   /**
+   * Opens the OS print dialog for this window's page (Pairing Studio's "Print...", E24.4);
+   * the page's print stylesheet decides what prints. PDF is the dialog's save-as-PDF.
+   */
+  printPage(): Promise<void>;
+  /**
    * Tells the native shell (Help menu, tray) which catalog locale the UI shows, so
    * its labels follow the Language setting.
    */
@@ -355,6 +360,7 @@ export const tauriClient: FmClient = {
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
   openUrl: (url) => invoke<void>('open_url', { url }),
+  printPage: () => invoke<void>('print_page'),
   setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
   updateSupport: () => invoke<UpdateSupport>('update_support'),
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),

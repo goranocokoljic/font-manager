@@ -2640,6 +2640,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         };
       if (typeof window !== 'undefined') window.open(url, '_blank', 'noopener');
     },
+    // Browser mode: the browser's own print dialog, over the same print stylesheet.
+    printPage: async () => {
+      if (typeof window !== 'undefined') window.print();
+    },
     // Browser mode has no native menu or tray to relabel; the last locale is kept
     // so tests can see what the shell was told.
     setShellLocale: async (locale) => {

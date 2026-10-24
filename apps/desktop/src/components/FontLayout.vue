@@ -17,6 +17,9 @@
 // With `blockFaces` (Pairing Studio, E24.2), a block can be set in a face of its own; the
 // other blocks keep `face`. Each block face is loaded through the same face loader. The
 // `block-tools` slot puts the parent's controls for a block beside its size badge.
+//
+// In print (E24.4) the controls (`fm-no-print`) stay off the paper and the text keeps the
+// layout's width: the locked width, or the page's when unlocked.
 import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
@@ -211,7 +214,7 @@ function blockFamily(i: number): string {
         <button
           v-if="setWidthLock"
           type="button"
-          class="lock"
+          class="lock fm-no-print"
           data-testid="layout-width-lock"
           :aria-pressed="locked"
           :title="locked ? t('textLayout.lockedTitle') : t('textLayout.unlockedTitle')"
@@ -233,7 +236,7 @@ function blockFamily(i: number): string {
           class="row"
           :class="{ 'with-badge': hasEditor || hasTools }"
         >
-          <div v-if="hasEditor || hasTools" class="tools">
+          <div v-if="hasEditor || hasTools" class="tools fm-no-print">
             <button
               v-if="hasEditor"
               ref="badges"
@@ -253,6 +256,7 @@ function blockFamily(i: number): string {
           <div class="cell">
             <BlockProperties
               v-if="hasEditor && editing === i"
+              class="fm-no-print"
               :block="block"
               :bounds="bounds!"
               :label="blockLabel(i)"
@@ -272,7 +276,7 @@ function blockFamily(i: number): string {
           </div>
         </div>
       </div>
-      <p v-if="hasEditor" :id="hintId" class="hint">
+      <p v-if="hasEditor" :id="hintId" class="hint fm-no-print">
         {{ t('textLayout.hint') }}
         <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
       </p>
@@ -391,6 +395,24 @@ function blockFamily(i: number): string {
   padding: 0 32px 16px;
   color: var(--fm-muted);
   font-size: 12px;
+}
+@media print {
+  .layout {
+    overflow: visible;
+    background: none;
+  }
+  /* No badge column on paper: each row is its text, at the layout's width. */
+  .page {
+    padding: 0;
+  }
+  .row.with-badge {
+    display: block;
+  }
+  .page.locked .row,
+  .page.locked .row.with-badge {
+    max-width: min(var(--fm-layout-width), 100%);
+    margin-inline: auto;
+  }
 }
 .empty {
   display: grid;

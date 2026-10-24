@@ -195,6 +195,42 @@ describe('studio panels', () => {
     expect(studio.panels).toEqual([FIRST_PANEL, third]);
   });
 
+  it('"Print..." marks the panel as the print target before it opens the print dialog', async () => {
+    const studio = useStudioStore();
+    const second = studio.addPanel(FIRST_PANEL)!;
+    let targetWhenPrinted: number | null = null;
+    const printPage = vi.spyOn(client, 'printPage').mockImplementation(async () => {
+      targetWhenPrinted = studio.printPanel;
+    });
+    await studio.print(second);
+    expect(printPage).toHaveBeenCalledTimes(1);
+    expect(targetWhenPrinted).toBe(second);
+    expect(studio.printError).toBeNull();
+
+    // Another panel's print moves the target; closing the target clears it.
+    await studio.print(FIRST_PANEL);
+    expect(studio.printPanel).toBe(FIRST_PANEL);
+    await studio.print(second);
+    studio.closePanel(second);
+    expect(studio.printPanel).toBeNull();
+
+    // A panel that is not open prints nothing.
+    await studio.print(second);
+    expect(printPage).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps the error of a print dialog that could not open, for its panel', async () => {
+    const studio = useStudioStore();
+    const failure = { code: 'io' as const, message: 'No dialog.', detail: 'x' };
+    vi.spyOn(client, 'printPage').mockRejectedValueOnce(failure);
+    await studio.print(FIRST_PANEL);
+    expect(studio.printError).toEqual({ panel: FIRST_PANEL, error: failure });
+    // The next print that opens clears it.
+    vi.spyOn(client, 'printPage').mockResolvedValueOnce(undefined);
+    await studio.print(FIRST_PANEL);
+    expect(studio.printError).toBeNull();
+  });
+
   it('scopes no two panels the same, and leaves the first panel keys as they were', () => {
     expect(blockScope(FIRST_PANEL, 'book')).toBe('book');
     expect(blockScope(2, 'book')).not.toBe(blockScope(3, 'book'));
