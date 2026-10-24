@@ -127,7 +127,7 @@ fn a_malformed_index_is_an_error() {
 
 #[test]
 fn the_recorded_file_list_gives_urls_and_the_license() {
-    let files = parse_files(&fixture("download-list-lato.json")).expect("file list");
+    let files = parse_files(&fixture("download-list-lato.json"), "Lato").expect("file list");
     assert_eq!(files.files.len(), 10);
     assert_eq!(files.files[0].name, "Lato-Thin.ttf");
     assert!(
@@ -136,6 +136,31 @@ fn the_recorded_file_list_gives_urls_and_the_license() {
             .starts_with("https://fonts.gstatic.com/s/lato/")
     );
     assert_eq!(files.license, Some(OpenLicense::Ofl));
+    assert_eq!(
+        files.family_id, "Lato",
+        "Google Fonts keys a family by its name"
+    );
+    assert!(files.files.iter().all(|f| !f.variable), "Lato is static");
+}
+
+#[test]
+fn a_file_that_names_its_axes_is_variable() {
+    let body = br#"{"manifest":{"files":[],"fileRefs":[
+        {"filename":"Inter[opsz,wght].ttf","url":"https://x/a"},
+        {"filename":"static/Inter_18pt-Bold.ttf","url":"https://x/b"}]}}"#;
+    let files = parse_files(body, "Inter").expect("list");
+    let kinds: Vec<(&str, bool)> = files
+        .files
+        .iter()
+        .map(|f| (f.name.as_str(), f.variable))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("Inter[opsz,wght].ttf", true),
+            ("static/Inter_18pt-Bold.ttf", false)
+        ]
+    );
 }
 
 #[test]
@@ -149,7 +174,10 @@ fn the_license_file_names_the_license() {
             r#"{{"manifest":{{"files":[{{"filename":"{name}"}}],
                 "fileRefs":[{{"filename":"A.ttf","url":"https://x/A.ttf"}}]}}}}"#
         );
-        assert_eq!(parse_files(body.as_bytes()).expect("list").license, license);
+        assert_eq!(
+            parse_files(body.as_bytes(), "X").expect("list").license,
+            license
+        );
     }
 }
 
@@ -161,7 +189,7 @@ fn a_file_list_without_files_is_an_error() {
         b"not json",
     ] {
         assert_eq!(
-            parse_files(body).expect_err("no files").code(),
+            parse_files(body, "X").expect_err("no files").code(),
             ErrorCode::Io
         );
     }

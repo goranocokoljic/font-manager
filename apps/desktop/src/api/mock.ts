@@ -12,6 +12,7 @@ import {
   type AppFolders,
   type AppInfo,
   type Catalog,
+  type CatalogDownload,
   type CatalogFamily,
   type CatalogId,
   type AvailableUpdate,
@@ -730,6 +731,13 @@ export interface MockOptions {
   catalog?: 'online' | 'offline';
   /** Families a refreshed mock catalog holds after the four sample ones, for long lists. */
   catalogFamilies?: number;
+  /**
+   * What "Download..." of a catalog family does (E22.3): `ok` (the default) "writes" the
+   * files and rescans the source; `fail` fails as a lost connection does, writing nothing.
+   */
+  catalogDownload?: 'ok' | 'fail';
+  /** How long a mock download takes before it answers (ms; default 0). */
+  catalogDownloadMs?: number;
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -1374,9 +1382,17 @@ export function mockCatalogFamilies(extra = 0): CatalogFamily[] {
 function createMockCatalogs(
   mode: MockOptions['catalog'] = 'online',
   extra = 0,
+  rescan: (source: SourceId) => { path: string; job: JobId },
+  download: { result: MockOptions['catalogDownload']; ms: number } = { result: 'ok', ms: 0 },
 ): Pick<
   FmClient,
-  'listCatalogs' | 'setCatalogEnabled' | 'refreshCatalog' | 'listCatalogFamilies' | 'catalogFontUrl'
+  | 'listCatalogs'
+  | 'setCatalogEnabled'
+  | 'refreshCatalog'
+  | 'listCatalogFamilies'
+  | 'catalogFontUrl'
+  | 'downloadFamily'
+  | 'listCatalogDownloads'
 > {
   // Every catalog of the Rust mock, in its order (`CatalogId::ALL`).
   const sites: [CatalogId, string, string][] = [
@@ -1384,6 +1400,8 @@ function createMockCatalogs(
     ['fontshare', 'Fontshare', 'https://www.fontshare.com'],
   ];
   const enabled = new Set<CatalogId>(mode === 'offline' ? ['googleFonts'] : []);
+  /** The families "downloaded", newest first. */
+  const downloads: CatalogDownload[] = [];
   const caches = new Map<CatalogId, { refreshedAt: string; families: CatalogFamily[] }>(
     mode === 'offline'
       ? [
@@ -1443,6 +1461,60 @@ function createMockCatalogs(
       return { items: structuredClone(hits.slice(offset, offset + limit)), total: hits.length };
     },
     catalogFontUrl: (catalogId, family) => `/fmfont/${catalogFontPath(catalogId, family)}`,
+    // The rules of the core without a request or a file (`download_family` of the Rust
+    // mock): a family with axes asked for as variable gets one variable file, else one
+    // file per style; the rescan is the mock's scan of the source.
+    downloadFamily: async (req) => {
+      const [, name] = site(req.id);
+      if (!enabled.has(req.id))
+        throw {
+          code: 'conflict',
+          message: `${name} is turned off. Turn it on to fetch its fonts.`,
+          detail: null,
+        };
+      const family = caches.get(req.id)?.families.find((f) => f.name === req.family);
+      if (!family)
+        throw {
+          code: 'notFound',
+          message: `${req.family} is not in the ${name} list.`,
+          detail: null,
+        };
+      if (download.ms > 0) await new Promise((r) => setTimeout(r, download.ms));
+      if (download.result === 'fail')
+        throw {
+          code: 'io',
+          message: `${req.family} could not be downloaded. The catalog could not be reached. Check the connection and try again.`,
+          detail: 'offline',
+        };
+      const { path, job } = rescan(req.source);
+      const stem = family.name.replace(/ /g, '');
+      const variable =
+        (family.axes?.length ?? 0) > 0 && (req.kind === 'variable' || family.styles.length === 0);
+      const names = variable
+        ? [`${stem}[${family.axes!.map((a) => a.tag).join(',')}].ttf`]
+        : family.styles.map((st) => `${stem}-${st.weight}.ttf`);
+      const folder = `${path.replace(/\/$/, '')}/${family.name}`;
+      const record: CatalogDownload = {
+        catalog: req.id,
+        family: family.name,
+        catalogFamilyId: family.name,
+        version: family.version ?? family.lastModified ?? null,
+        kind: variable ? 'variable' : 'static',
+        downloadedAt: MOCK_NOW,
+        source: req.source,
+        folder,
+        files: names
+          .map((n, i) => ({
+            name: n,
+            hash: (i + 1).toString(16).padStart(64, '0'),
+            path: `${folder}/${n}`,
+          }))
+          .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)),
+      };
+      downloads.unshift(record);
+      return { download: structuredClone(record), skipped: [], scan: job };
+    },
+    listCatalogDownloads: async () => structuredClone(downloads),
   };
 }
 
@@ -2064,7 +2136,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     layoutBounds: async () => structuredClone(MOCK_LAYOUT_BOUNDS),
     layoutWidth: async (req) => mockLayoutWidth(req),
     ...createMockLayouts(),
-    ...createMockCatalogs(options.catalog, options.catalogFamilies),
+    ...createMockCatalogs(
+      options.catalog,
+      options.catalogFamilies,
+      (id) => {
+        const s = findSource(id);
+        if (s.kind !== 'watched')
+          throw invalid('Fonts can be downloaded only into a folder you added.');
+        const job = ++nextId;
+        runScan(job, id, s.faceCount);
+        return { path: s.path, job };
+      },
+      { result: options.catalogDownload ?? 'ok', ms: options.catalogDownloadMs ?? 0 },
+    ),
     cssValues: async (req) => {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
@@ -2835,4 +2919,8 @@ export const mockClient: FmClient = createMockClient({
   similar: (['ranked', 'none', 'fail'] as const)[countFromUrl('mockSimilar', 2)],
   // `?mockCatalog=1` starts with Google Fonts on, a cached list, and no connection.
   catalog: countFromUrl('mockCatalog', 1) ? 'offline' : 'online',
+  // `?mockCatalogDownload=1` makes "Download..." fail as without a connection;
+  // `?mockDownloadMs=<n>` makes a download take n ms.
+  catalogDownload: countFromUrl('mockCatalogDownload', 1) ? 'fail' : 'ok',
+  catalogDownloadMs: countFromUrl('mockDownloadMs', 10_000),
 });

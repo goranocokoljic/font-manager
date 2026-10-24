@@ -1,7 +1,17 @@
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useClient } from '../api/client';
-import type { ApiError, Catalog, CatalogFamily, CatalogId } from '../api/types';
+import type {
+  ApiError,
+  Catalog,
+  CatalogFamily,
+  CatalogFileKind,
+  CatalogId,
+  DownloadFamilyResponse,
+  Event,
+  JobId,
+  SourceId,
+} from '../api/types';
 import { useQuickCollectionStore } from './quickCollection';
 import { useSearchStore } from './search';
 
@@ -16,6 +26,26 @@ export const CATALOG_VIEW = 'catalog';
 
 /** Families one `list_catalog_families` call reads (the API caps a page at 500). */
 export const CATALOG_PAGE = 200;
+
+/**
+ * Where a "Download..." of a catalog family is: `choosing` the source, `downloading` (the
+ * core fetches and writes the files), `scanning` (the source's rescan brings the faces in),
+ * `done`, or `failed` (nothing was written; the user may try again).
+ */
+export type DownloadPhase = 'choosing' | 'downloading' | 'scanning' | 'done' | 'failed';
+
+/** The open "Download..." panel of the catalog browser (E22.3). */
+export interface CatalogDownloadState {
+  catalog: CatalogId;
+  family: CatalogFamily;
+  phase: DownloadPhase;
+  /** The rescan's progress, from its `scanProgress` events. */
+  scan: { done: number; total: number } | null;
+  /** What the download wrote; set from `scanning` on. */
+  result: DownloadFamilyResponse | null;
+  /** Why the download (or its rescan) failed. */
+  error: ApiError | null;
+}
 
 function toApiError(e: unknown): ApiError {
   if (e && typeof e === 'object' && 'code' in e && 'message' in e) return e as ApiError;
@@ -48,6 +78,8 @@ export const useCatalogsStore = defineStore('catalogs', () => {
   const error = ref<ApiError | null>(null);
   /** The webview's own idea of the connection; `false` shows the offline note. */
   const online = ref(globalThis.navigator?.onLine ?? true);
+  /** The "Download..." panel; `null` when it is closed. */
+  const download = ref<CatalogDownloadState | null>(null);
   /** Bumped by every new list, so pages of an older one are dropped. */
   let generation = 0;
   const pending = new Set<number>();
@@ -130,6 +162,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     quick.close();
     if (open.value === entry) return;
     open.value = entry;
+    closeDownload();
     query.value = '';
     refreshError.value = null;
     if (entry !== 'adobeFonts') void relist();
@@ -137,6 +170,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
 
   function close(): void {
     open.value = null;
+    closeDownload();
   }
 
   /** The search text of the open catalog; the core filters by it. */
@@ -183,6 +217,84 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     }
   }
 
+  /** A download is running: the panel stays open and no other one starts. */
+  const downloading = computed(
+    () => download.value?.phase === 'downloading' || download.value?.phase === 'scanning',
+  );
+
+  /** Opens the "Download..." panel for a family of the open catalog. */
+  function askDownload(family: CatalogFamily): void {
+    const id = current.value?.id;
+    if (!id || downloading.value) return;
+    download.value = {
+      catalog: id,
+      family,
+      phase: 'choosing',
+      scan: null,
+      result: null,
+      error: null,
+    };
+  }
+
+  /** Closes the panel; a running download keeps it open. */
+  function closeDownload(): void {
+    if (!downloading.value) download.value = null;
+  }
+
+  /**
+   * Downloads the panel's family into `source` (a user action: the call goes to the
+   * network), then follows the rescan it started through its scan events until it ends.
+   */
+  async function startDownload(source: SourceId, kind: CatalogFileKind): Promise<void> {
+    const d = download.value;
+    if (!d || (d.phase !== 'choosing' && d.phase !== 'failed')) return;
+    d.phase = 'downloading';
+    d.error = null;
+    d.scan = null;
+    // Listen before the call, so a fast rescan's events are not missed.
+    let job: JobId | null = null;
+    const early: Event[] = [];
+    let unsubscribe: (() => void) | null = null;
+    const follow = (event: Event): void => {
+      if (job === null) {
+        early.push(event);
+        return;
+      }
+      if (!('job' in event) || event.job !== job) return;
+      if (event.type === 'scanProgress') d.scan = { done: event.done, total: event.total };
+      else if (event.type === 'scanFinished' || event.type === 'jobFailed') {
+        if (event.type === 'jobFailed') d.error = event.error;
+        d.phase = 'done';
+        unsubscribe?.();
+        unsubscribe = null;
+      }
+    };
+    try {
+      unsubscribe = await client().onEvent(follow);
+    } catch {
+      unsubscribe = null;
+    }
+    try {
+      const result = await client().downloadFamily({
+        id: d.catalog,
+        family: d.family.name,
+        kind,
+        source,
+      });
+      d.result = result;
+      d.phase = 'scanning';
+      job = result.scan;
+      early.splice(0).forEach(follow);
+      // Without the event stream there is no progress to follow: the files are written.
+      if (!unsubscribe && d.phase === 'scanning') d.phase = 'done';
+    } catch (e) {
+      d.error = toApiError(e);
+      d.phase = 'failed';
+      unsubscribe?.();
+      unsubscribe = null;
+    }
+  }
+
   // The Quick Collection review, a collection or All fonts takes the center back.
   watch(
     () => quick.open,
@@ -214,5 +326,10 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     want,
     refresh,
     setEnabled,
+    download,
+    downloading,
+    askDownload,
+    closeDownload,
+    startDownload,
   };
 });

@@ -191,6 +191,17 @@ fn a_family_resolves_to_its_ttf_urls() {
         "{names:?}"
     );
     assert_eq!(files.license, None, "ITF Free Font License");
+    assert_eq!(files.family_id, "general-sans", "the slug");
+    let variable: Vec<&str> = files
+        .files
+        .iter()
+        .filter(|f| f.variable)
+        .map(|f| f.name.as_str())
+        .collect();
+    assert_eq!(
+        variable,
+        ["GeneralSans-Variable.ttf", "GeneralSans-VariableItalic.ttf"]
+    );
 
     let literata = parse_files(&fixture(), "literata").expect("any case");
     assert_eq!(literata.files.len(), 18);

@@ -10,8 +10,9 @@ use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
 use fm_api::catalog::{
-    Catalog, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef, CatalogService,
-    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    Catalog, CatalogDownload, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef,
+    CatalogService, DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
+    SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -517,6 +518,22 @@ async fn list_catalog_families(
     req: ListCatalogFamiliesRequest,
 ) -> ApiResult<Paged<CatalogFamily>> {
     call(&state, move |api| api.list_catalog_families(req)).await
+}
+
+/// Downloads a family into a watched source and starts its rescan (E22.3);
+/// requests of a few seconds, off the async runtime.
+#[tauri::command]
+async fn download_family(
+    state: State<'_, AppState>,
+    req: DownloadFamilyRequest,
+) -> ApiResult<DownloadFamilyResponse> {
+    call(&state, move |api| api.download_family(req)).await
+}
+
+/// Every family downloaded from a catalog, with where its files are now.
+#[tauri::command]
+async fn list_catalog_downloads(state: State<'_, AppState>) -> ApiResult<Vec<CatalogDownload>> {
+    call(&state, move |api| api.list_catalog_downloads()).await
 }
 
 /// Every saved comparison, by name (E13.2).
@@ -1101,6 +1118,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             set_catalog_enabled,
             refresh_catalog,
             list_catalog_families,
+            download_family,
+            list_catalog_downloads,
             render_preview,
             activate,
             deactivate,

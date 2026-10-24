@@ -3,7 +3,8 @@
 // font and the sample in the family itself, live text. The preview file is registered
 // by the shared face loader from the app's font scheme; the core fetches it into the
 // cache folder the first time a row shows it, only while the catalog is on. As a list
-// row, a grid card or a waterfall block (the six sizes).
+// row, a grid card or a waterfall block (the six sizes). Its "Download..." button opens the
+// browser's download panel for the family (E22.3).
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useClient } from '../api/client';
 import type { CatalogFamily, CatalogId } from '../api/types';
@@ -12,6 +13,7 @@ import { cardText } from '../list/grid';
 import { styleCount } from '../list/rows';
 import { WATERFALL_SIZES } from '../list/waterfall';
 import { catalogFamily, useFaceLoader } from '../preview/faceLoader';
+import { useCatalogsStore } from '../stores/catalogs';
 import type { PreviewSettings } from '../stores/preview';
 
 const props = defineProps<{
@@ -24,6 +26,7 @@ const props = defineProps<{
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
+const catalogs = useCatalogsStore();
 const loader = useFaceLoader();
 const state = ref<LoadState>('loading');
 let held: string | null = null;
@@ -88,6 +91,16 @@ const styles = computed(() => styleCount(props.family.styles.length));
         <span v-if="family.axes?.length" class="badge">{{ t('list.variable') }}</span>
       </span>
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
+      <button
+        type="button"
+        class="get"
+        data-testid="catalog-download-open"
+        :aria-label="t('catalogs.download.actionLabel', { name: family.name })"
+        :disabled="catalogs.downloading"
+        @click="catalogs.askDownload(family)"
+      >
+        {{ t('catalogs.download.action') }}
+      </button>
     </span>
     <template v-if="mode === 'waterfall'">
       <span v-for="size in WATERFALL_SIZES" :key="size" class="line">
@@ -149,6 +162,19 @@ const styles = computed(() => styleCount(props.family.styles.length));
 }
 .note {
   color: var(--fm-warning);
+}
+.get {
+  flex: none;
+  margin-inline-start: auto;
+  padding: 1px 8px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fm-fg);
+  font: inherit;
+}
+.get:disabled {
+  color: var(--fm-muted);
 }
 .line {
   display: flex;

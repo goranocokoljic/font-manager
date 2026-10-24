@@ -3713,6 +3713,205 @@ fn catalogs_never_fetch_outside_refresh() {
     );
 }
 
+/// A scanned library whose catalogs reach the Lato fixture server over
+/// HTTP, with Google Fonts on and refreshed.
+fn downloading(label: &str) -> (Lib, Source, crate::test_support::LocalServer) {
+    let (lib, source, _) = Lib::scanned(label);
+    let server =
+        crate::catalog::tests::lato_server((200, crate::catalog::tests::lato_font("bold")));
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        Arc::new(crate::catalog::HttpFetcher::new()),
+        vec![Arc::new(GoogleFonts::with_base_url(server.base()))],
+    );
+    let lib = Lib {
+        api: lib.api.with_catalogs(catalogs),
+        ..lib
+    };
+    let id = fm_api::catalog::CatalogId::GoogleFonts;
+    lib.api
+        .set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    lib.api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    (lib, source, server)
+}
+
+/// Waits for the `LibraryChanged` that ends scan `job`; the events up to it.
+fn until_library_changed(rx: &Receiver<Event>, job: JobId) -> Vec<Event> {
+    let mut events = Vec::new();
+    let mut finished = false;
+    let deadline = Instant::now() + WAIT;
+    loop {
+        let left = deadline.saturating_duration_since(Instant::now());
+        let event = match rx.recv_timeout(left) {
+            Ok(e) => e,
+            Err(e) => panic!("scan {job} did not end ({e:?}): {events:?}"),
+        };
+        match &event {
+            Event::JobFailed { job: j, .. } if *j == job => panic!("scan failed: {event:?}"),
+            Event::ScanFinished { job: j, .. } if *j == job => finished = true,
+            Event::LibraryChanged { .. } if finished => {
+                events.push(event);
+                return events;
+            }
+            _ => {}
+        }
+        events.push(event);
+    }
+}
+
+fn download_lato(lib: &Lib, source: SourceId) -> (DownloadFamilyResponse, Vec<Event>) {
+    let rx = lib.api.subscribe();
+    let got = lib
+        .api
+        .download_family(DownloadFamilyRequest {
+            id: fm_api::catalog::CatalogId::GoogleFonts,
+            family: "Lato".into(),
+            kind: fm_api::catalog::CatalogFileKind::Static,
+            source,
+        })
+        .expect("download");
+    let events = until_library_changed(&rx, got.scan);
+    (got, events)
+}
+
+#[test]
+fn a_download_is_rescanned_and_its_faces_join_the_library() {
+    let (lib, source, _server) = downloading("catalog-download-scan");
+    assert!(!lib.names().iter().any(|n| n == "Asul" || n == "Cagliostro"));
+
+    let (got, events) = download_lato(&lib, source.id);
+    assert_eq!(got.download.folder, lib.root.join("Lato").to_string_lossy());
+    assert_eq!(got.download.source, source.id);
+    assert!(got.skipped.is_empty());
+    assert!(
+        matches!(events.first(), Some(Event::ScanStarted { job, source: Some(s) }) if *job == got.scan && *s == source.id),
+        "{events:?}"
+    );
+    let Some(Event::LibraryChanged { added, .. }) = events.last() else {
+        panic!("{events:?}");
+    };
+    assert_eq!(added.len(), 2, "the two static files: {events:?}");
+    let names = lib.names();
+    for family in ["Asul", "Cagliostro"] {
+        assert!(names.iter().any(|n| n == family), "{family} in {names:?}");
+    }
+    assert!(
+        !names.iter().any(|n| n == "Castoro"),
+        "the variable file was not asked for"
+    );
+}
+
+#[test]
+fn provenance_survives_a_rescan_and_follows_a_moved_file_by_hash() {
+    let (lib, source, _server) = downloading("catalog-download-provenance");
+    let (got, _) = download_lato(&lib, source.id);
+    let folder = lib.root.join("Lato");
+    let listed = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(listed.len(), 1);
+    let d = &listed[0];
+    assert_eq!(d.catalog, fm_api::catalog::CatalogId::GoogleFonts);
+    assert_eq!(d.family, "Lato");
+    assert_eq!(d.catalog_family_id, "Lato");
+    assert_eq!(d.version.as_deref(), Some("2025-09-16"));
+    assert_eq!(d.kind, fm_api::catalog::CatalogFileKind::Static);
+    assert_eq!(d.downloaded_at, got.download.downloaded_at);
+    assert_eq!(d.source, source.id);
+    let bold_hash = blake3::hash(&crate::catalog::tests::lato_font("bold"))
+        .to_hex()
+        .to_string();
+    let files: Vec<(&str, &str, Option<&str>)> = d
+        .files
+        .iter()
+        .map(|f| (f.name.as_str(), f.hash.as_str(), f.path.as_deref()))
+        .collect();
+    let bold_at = folder.join("Lato-Bold.ttf").to_string_lossy().into_owned();
+    let regular_at = folder
+        .join("Lato-Regular.ttf")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(
+        files[0],
+        ("Lato-Bold.ttf", bold_hash.as_str(), Some(bold_at.as_str()))
+    );
+    assert_eq!(files[1].0, "Lato-Regular.ttf");
+    assert_eq!(files[1].2, Some(regular_at.as_str()));
+    assert_eq!(d, &got.download, "the answer is what is recorded");
+
+    // A rescan and a rebuild of the index keep it.
+    lib.scan(Some(source.id), false);
+    assert_eq!(lib.api.list_catalog_downloads().expect("downloads"), listed);
+    let rx = lib.api.subscribe();
+    let job = lib.api.rebuild_index().expect("rebuild");
+    loop {
+        match rx.recv_timeout(WAIT).expect("rebuild scan") {
+            Event::ScanFinished { job: j, .. } if j == job => break,
+            _ => {}
+        }
+    }
+    // The rescan writes after `ScanFinished`; a scan of its own waits for it.
+    lib.scan(Some(source.id), false);
+    assert_eq!(lib.api.list_catalog_downloads().expect("downloads"), listed);
+
+    // The user moves the bold file elsewhere in the library and renames it.
+    let moved = lib.root.join("Sorted").join("Bold one.ttf");
+    std::fs::create_dir_all(moved.parent().expect("parent")).expect("folder");
+    std::fs::rename(folder.join("Lato-Bold.ttf"), &moved).expect("move");
+    lib.scan(Some(source.id), true);
+    let after = lib.api.list_catalog_downloads().expect("downloads");
+    let bold = &after[0].files[0];
+    assert_eq!(bold.name, "Lato-Bold.ttf", "the name it was downloaded as");
+    assert_eq!(bold.hash, bold_hash);
+    assert_eq!(
+        bold.path.as_deref(),
+        Some(moved.to_string_lossy().as_ref()),
+        "followed by its hash"
+    );
+    assert_eq!(after[0].files[1].path.as_deref(), Some(regular_at.as_str()));
+
+    // Gone from the library: still recorded, with no path.
+    std::fs::remove_file(&moved).expect("remove");
+    lib.scan(Some(source.id), true);
+    let after = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(after[0].files[0].path, None);
+    assert_eq!(after[0].files.len(), 2);
+}
+
+#[test]
+fn a_download_goes_only_into_a_watched_source() {
+    let (lib, source, server) = downloading("catalog-download-target");
+    let system = lib
+        .api
+        .lock()
+        .add_source(
+            &lib.dir.path().join("System").to_string_lossy(),
+            SourceKind::System,
+        )
+        .expect("system source");
+    std::fs::create_dir_all(lib.dir.path().join("System")).expect("folder");
+    let req = |source| DownloadFamilyRequest {
+        id: fm_api::catalog::CatalogId::GoogleFonts,
+        family: "Lato".into(),
+        kind: fm_api::catalog::CatalogFileKind::Static,
+        source,
+    };
+    let hits = server.hits();
+    let e = lib
+        .api
+        .download_family(req(system.id))
+        .expect_err("system fonts");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    let e = lib
+        .api
+        .download_family(req(SourceId(999)))
+        .expect_err("unknown source");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert_eq!(server.hits(), hits, "refused before any request");
+    assert!(!lib.dir.path().join("System").join("Lato").exists());
+    assert!(lib.api.list_catalog_downloads().expect("list").is_empty());
+    let _ = source;
+}
+
 #[test]
 fn catalogs_without_a_data_folder_are_not_available() {
     let dir = TempDir::new("catalog-none");

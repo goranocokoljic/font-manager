@@ -15,8 +15,10 @@ use crate::activation::{
     ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
 };
 use crate::catalog::{
-    Catalog, CatalogFamily, CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef,
-    CatalogService, CatalogStyle, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
+    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogStyle,
+    DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
+    SetCatalogEnabledRequest,
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
@@ -482,6 +484,8 @@ struct State {
     catalogs_on: BTreeSet<CatalogId>,
     /// Each refreshed catalog's cache: when, and its families.
     catalog_cache: BTreeMap<CatalogId, (String, Vec<CatalogFamily>)>,
+    /// The families "downloaded" (E22.3), oldest first.
+    catalog_downloads: Vec<CatalogDownload>,
     next_id: u32,
     subscribers: Vec<Sender<Event>>,
 }
@@ -882,6 +886,7 @@ impl State {
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
             catalog_cache: BTreeMap::new(),
+            catalog_downloads: Vec::new(),
             next_id: 100,
             subscribers: Vec::new(),
         }
@@ -4560,6 +4565,100 @@ impl CatalogService for MockApi {
             family: req.family,
             path,
         })
+    }
+
+    /// The rules of the core without a request or a file: an off catalog
+    /// is `Conflict`, an unlisted family `NotFound`, a source that is not a
+    /// watched folder `InvalidRequest`. The files are made up; a family with
+    /// axes has one variable file, else one file per style. The rescan is
+    /// the mock's scan of the source.
+    fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse> {
+        let download = {
+            let st = self.state();
+            if !st.catalogs_on.contains(&req.id) {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("{} is turned off. Turn it on to fetch its fonts.", req.id),
+                ));
+            }
+            let family = st
+                .catalog_cache
+                .get(&req.id)
+                .and_then(|(_, families)| families.iter().find(|f| f.name == req.family))
+                .cloned()
+                .ok_or_else(|| {
+                    ApiError::new(
+                        ErrorCode::NotFound,
+                        format!("{} is not in the {} list.", req.family, req.id),
+                    )
+                })?;
+            let source = st
+                .sources
+                .iter()
+                .find(|s| s.id == req.source)
+                .ok_or_else(|| ApiError::not_found(format!("Source {}", req.source)))?;
+            if source.kind != SourceKind::Watched {
+                return Err(ApiError::invalid(
+                    "Fonts can be downloaded only into a folder you added.",
+                ));
+            }
+            let stem = family.name.replace(' ', "");
+            let variable = !family.axes.is_empty()
+                && (req.kind == CatalogFileKind::Variable || family.styles.is_empty());
+            let names: Vec<String> = if variable {
+                let tags: Vec<&str> = family.axes.iter().map(|a| a.tag.as_str()).collect();
+                vec![format!("{stem}[{}].ttf", tags.join(","))]
+            } else {
+                family
+                    .styles
+                    .iter()
+                    .map(|s| format!("{stem}-{}.ttf", s.weight))
+                    .collect()
+            };
+            let folder = format!("{}/{}", source.path.trim_end_matches('/'), family.name);
+            CatalogDownload {
+                catalog: req.id,
+                family: family.name.clone(),
+                catalog_family_id: family.name.clone(),
+                version: family.version.clone().or(family.last_modified.clone()),
+                kind: if variable {
+                    CatalogFileKind::Variable
+                } else {
+                    CatalogFileKind::Static
+                },
+                downloaded_at: MOCK_NOW.to_owned(),
+                source: source.id,
+                files: names
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, name)| CatalogDownloadFile {
+                        path: Some(format!("{folder}/{name}")),
+                        hash: format!("{:064x}", i + 1),
+                        name,
+                    })
+                    .collect(),
+                folder,
+            }
+        };
+        let scan = self.scan(ScanRequest {
+            source: Some(req.source),
+        })?;
+        self.state().catalog_downloads.push(download.clone());
+        Ok(DownloadFamilyResponse {
+            download,
+            skipped: Vec::new(),
+            scan,
+        })
+    }
+
+    fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>> {
+        Ok(self
+            .state()
+            .catalog_downloads
+            .iter()
+            .rev()
+            .cloned()
+            .collect())
     }
 }
 

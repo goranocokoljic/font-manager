@@ -88,7 +88,7 @@ impl CatalogAdapter for GoogleFonts {
     }
 
     fn resolve_files(&self, fetcher: &dyn Fetcher, family: &str) -> FmResult<CatalogFiles> {
-        parse_files(&fetcher.get(&self.files_url(family))?)
+        parse_files(&fetcher.get(&self.files_url(family))?, family)
     }
 }
 
@@ -249,7 +249,7 @@ struct FileRef {
 }
 
 /// A family's file list: its font files and the license shipped with them.
-pub fn parse_files(body: &[u8]) -> FmResult<CatalogFiles> {
+pub fn parse_files(body: &[u8], family: &str) -> FmResult<CatalogFiles> {
     let list: DownloadList = serde_json::from_slice(strip_guard(body))
         .map_err(|e| malformed("a file list", format!("Google Fonts file list: {e}")))?;
     let files: Vec<CatalogFile> = list
@@ -258,6 +258,12 @@ pub fn parse_files(body: &[u8]) -> FmResult<CatalogFiles> {
         .into_iter()
         .filter(|f| !f.filename.is_empty() && !f.url.is_empty())
         .map(|f| CatalogFile {
+            // A variable font names its axes: `Inter[opsz,wght].ttf`.
+            variable: f
+                .filename
+                .rsplit('/')
+                .next()
+                .is_some_and(|n| n.contains('[')),
             name: f.filename,
             url: f.url,
         })
@@ -277,7 +283,11 @@ pub fn parse_files(body: &[u8]) -> FmResult<CatalogFiles> {
             _ => None,
         }
     });
-    Ok(CatalogFiles { files, license })
+    Ok(CatalogFiles {
+        family_id: family.to_owned(),
+        files,
+        license,
+    })
 }
 
 /// The body without a byte-order mark, white space and Google's `)]}'` guard.

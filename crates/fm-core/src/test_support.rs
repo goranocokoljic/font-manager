@@ -38,13 +38,23 @@ pub(crate) struct LocalServer {
 impl LocalServer {
     /// Serves `routes` (path with query → status and body); any other path is a 404.
     pub(crate) fn start(routes: Vec<(&str, u16, Vec<u8>)>) -> Self {
-        use std::io::{BufRead, BufReader, Write};
-        let routes: std::collections::HashMap<String, (u16, Vec<u8>)> = routes
+        let routes: Vec<(String, u16, Vec<u8>)> = routes
             .into_iter()
-            .map(|(path, status, body)| (path.to_owned(), (status, body)))
+            .map(|(path, status, body)| (path.to_owned(), status, body))
             .collect();
+        Self::start_with(|_| routes)
+    }
+
+    /// Serves the routes `routes` makes from the server's base URL, for an
+    /// answer that links to the server itself (a file list's URLs).
+    pub(crate) fn start_with(routes: impl FnOnce(&str) -> Vec<(String, u16, Vec<u8>)>) -> Self {
+        use std::io::{BufRead, BufReader, Write};
         let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind 127.0.0.1");
         let base = format!("http://{}", listener.local_addr().expect("address"));
+        let routes: std::collections::HashMap<String, (u16, Vec<u8>)> = routes(&base)
+            .into_iter()
+            .map(|(path, status, body)| (path, (status, body)))
+            .collect();
         let hits = std::sync::Arc::new(AtomicU32::new(0));
         let counter = std::sync::Arc::clone(&hits);
         std::thread::spawn(move || {

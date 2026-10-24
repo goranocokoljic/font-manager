@@ -7,9 +7,12 @@ import { catalogFontPath } from './catalogFont';
 import { mockClient } from './mock';
 import type {
   Catalog,
+  CatalogDownload,
   CatalogFamily,
   CatalogId,
   CatalogRef,
+  DownloadFamilyRequest,
+  DownloadFamilyResponse,
   ListCatalogFamiliesRequest,
   SetCatalogEnabledRequest,
   ActivateRequest,
@@ -220,6 +223,14 @@ export interface FmClient {
    * core fetches it into the cache folder the first time, only while the catalog is on.
    */
   catalogFontUrl(id: CatalogId, family: string): string;
+  /**
+   * Downloads a family into a watched source (E22.3): its files go into a subfolder named
+   * after it, an existing file is never replaced, and the source is rescanned (the returned
+   * job's scan events follow). The only other call besides a refresh that goes to the network.
+   */
+  downloadFamily(req: DownloadFamilyRequest): Promise<DownloadFamilyResponse>;
+  /** Every family downloaded from a catalog, newest first, with where its files are now. */
+  listCatalogDownloads(): Promise<CatalogDownload[]>;
   /** Every saved comparison (E13.2), by name. */
   listComparisons(): Promise<ComparisonEntry[]>;
   /** One saved comparison: the faces the library still shows, and the missing ones by name. */
@@ -347,6 +358,8 @@ export const tauriClient: FmClient = {
   refreshCatalog: (req) => invoke<Catalog>('refresh_catalog', { req }),
   listCatalogFamilies: (req) => invoke<Paged<CatalogFamily>>('list_catalog_families', { req }),
   catalogFontUrl: (id, family) => convertFileSrc(catalogFontPath(id, family), FONT_SCHEME),
+  downloadFamily: (req) => invoke<DownloadFamilyResponse>('download_family', { req }),
+  listCatalogDownloads: () => invoke<CatalogDownload[]>('list_catalog_downloads'),
   listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),
   getComparison: (req) => invoke<Comparison>('get_comparison', { req }),
   saveComparison: (req) => invoke<Comparison>('save_comparison', { req }),
