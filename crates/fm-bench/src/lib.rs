@@ -22,7 +22,7 @@ use fm_api::ids::FaceId;
 use fm_api::library::{LibraryService, ListFamiliesRequest, SourceKind};
 use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
-use fm_api::search::{Filters, SearchRequest, Supports};
+use fm_api::search::{Filters, SearchRequest, SimilarRequest, Supports};
 use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
@@ -458,6 +458,73 @@ pub fn smart_collections(home: &Path, rounds: usize) -> BenchResult<SmartTimed> 
         search_p95_ms,
         list_p95_ms,
         p95_ms: search_p95_ms.max(list_p95_ms),
+    })
+}
+
+/// Faces the similar-font measurement asks about.
+pub const SIMILAR_FACES: u32 = 10;
+
+/// Results each similar-font search asks for (E23.2: "20 results").
+pub const SIMILAR_RESULTS: u32 = 20;
+
+/// Similar-font latency (E23.2): [`SIMILAR_RESULTS`] faces like each of
+/// [`SIMILAR_FACES`] faces.
+#[derive(Debug, Serialize)]
+pub struct SimilarTimed {
+    /// Faces asked about.
+    pub faces: usize,
+    /// Timed searches.
+    pub samples: usize,
+    /// The first search, which reads the profiles once per library change:
+    /// reported, not budgeted (as the first text search after a write).
+    pub first_ms: f64,
+    /// Median, in milliseconds.
+    pub p50_ms: f64,
+    /// 95th percentile, in milliseconds: the budgeted number.
+    pub p95_ms: f64,
+    /// Slowest, in milliseconds.
+    pub max_ms: f64,
+}
+
+/// Times `find_similar` for [`SIMILAR_FACES`] faces of the index in `home`,
+/// each `rounds` times after one untimed run.
+pub fn similar(home: &Path, rounds: usize) -> BenchResult<SimilarTimed> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    let faces = index.activatable_faces(SIMILAR_FACES)?;
+    let Some(&first) = faces.first() else {
+        return Err("the index has no faces: run the scan first".into());
+    };
+    let api = CoreApi::new(
+        index,
+        Arc::new(MockActivator::new()),
+        SettingsStore::new(&paths),
+        None,
+    );
+    let req = |face| SimilarRequest {
+        face,
+        limit: SIMILAR_RESULTS,
+    };
+    let begin = Instant::now();
+    api.find_similar(req(first))?;
+    let first_ms = ms(begin.elapsed());
+    let mut samples = Vec::with_capacity(faces.len() * rounds);
+    for &face in &faces {
+        api.find_similar(req(face))?;
+        for _ in 0..rounds {
+            let begin = Instant::now();
+            api.find_similar(req(face))?;
+            samples.push(ms(begin.elapsed()));
+        }
+    }
+    samples.sort_by(f64::total_cmp);
+    Ok(SimilarTimed {
+        faces: faces.len(),
+        samples: samples.len(),
+        first_ms,
+        p50_ms: percentile(&samples, 50),
+        p95_ms: percentile(&samples, 95),
+        max_ms: samples.last().copied().unwrap_or_default(),
     })
 }
 

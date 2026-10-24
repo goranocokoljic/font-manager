@@ -999,7 +999,22 @@ fn coverage_and_languages_come_from_the_stored_cmap() {
         })
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
-    is_unsupported(lib.api.find_similar(SimilarRequest { face, limit: 5 }));
+    // E23.2: similar faces come from the index, never the face itself.
+    let similar = lib
+        .api
+        .find_similar(SimilarRequest { face, limit: 5 })
+        .expect("similar");
+    assert!(!similar.is_empty() && similar.len() <= 5, "{similar:?}");
+    assert!(similar.iter().all(|s| s.face.id != face));
+    assert!(similar.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+    let err = lib
+        .api
+        .find_similar(SimilarRequest {
+            face: FaceId(99_999),
+            limit: 5,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
 
 // --- preview -------------------------------------------------------------

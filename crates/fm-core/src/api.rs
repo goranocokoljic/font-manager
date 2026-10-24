@@ -21,7 +21,7 @@
 //!   [`CatalogService::download_family`] and
 //!   [`CatalogService::check_updates`] go to the network. A download
 //!   records its provenance in the index and rescans the source.
-//! - **Not built yet.** Export, workflows and similar-font search answer an
+//! - **Not built yet.** Export and workflows answer an
 //!   `Unsupported` error with a message for the user, never a panic.
 
 use std::collections::{HashMap, HashSet};
@@ -718,8 +718,8 @@ impl SearchService for CoreApi {
         Ok(pangrams::presets()?)
     }
 
-    fn find_similar(&self, _req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
-        Err(not_available("Finding similar fonts"))
+    fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
+        Ok(self.lock().find_similar(&req)?)
     }
 }
 

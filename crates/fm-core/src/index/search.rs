@@ -88,6 +88,9 @@ pub(super) struct SearchCache {
     tag_names: HashMap<TagId, String>,
     /// Family notes by grouping key, for the family summaries.
     family_notes: HashMap<String, String>,
+    /// What similar-font search compares (E23.2), by face id: read on the
+    /// first such search after the database changed.
+    profiles: Option<HashMap<u32, crate::similar::Profile>>,
 }
 
 /// One searchable face.
@@ -399,6 +402,7 @@ impl Index {
             slots,
             tag_names,
             family_notes,
+            profiles: None,
         };
         Ok(())
     }
@@ -698,6 +702,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(serde_json::Value::String(name.to_owned())).ok()
 }
 
+mod similar;
 pub(super) mod smart;
 
 #[cfg(test)]
