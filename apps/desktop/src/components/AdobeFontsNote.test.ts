@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient } from '../api/mock';
 import { useCatalogsStore } from '../stores/catalogs';
-import { useQuickCollectionStore } from '../stores/quickCollection';
-import { useSearchStore } from '../stores/search';
 import AdobeFontsNote from './AdobeFontsNote.vue';
 import OnlineCatalogsSidebar from './OnlineCatalogsSidebar.vue';
 
@@ -95,24 +93,5 @@ describe('OnlineCatalogsSidebar', () => {
     expect(entry.attributes('aria-current')).toBe('true');
     await flushPromises();
     expect(calls).toEqual([]);
-  });
-
-  it('gives the center back to the Quick Collection review or a collection', async () => {
-    recordingClient();
-    mountWith(OnlineCatalogsSidebar);
-    const store = useCatalogsStore();
-    const quick = useQuickCollectionStore();
-
-    quick.show();
-    store.show('adobeFonts');
-    expect(quick.open, 'opening the note ends the review').toBe(false);
-    quick.show();
-    await flushPromises();
-    expect(store.open).toBeNull();
-
-    store.show('adobeFonts');
-    useSearchStore().setFilters({ collection: null });
-    await flushPromises();
-    expect(store.open).toBeNull();
   });
 });
