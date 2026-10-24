@@ -18,6 +18,21 @@ const inspector = ref<HTMLElement | null>(null);
 let query: MediaQueryList | undefined;
 const onWidthChange = (e: { matches: boolean }) => layout.setNarrow(e.matches);
 
+/** The font view in the list column: list, table, grid or waterfall. */
+const FONT_VIEW = '[role="tree"], [role="treegrid"], [role="listbox"]';
+
+/**
+ * Up and Down on the list column itself move the focus into its font view, so the
+ * keyboard reaches the rows without tabbing through the toolbar and the filters.
+ */
+function onListKey(e: KeyboardEvent): void {
+  if (e.target !== list.value || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return;
+  const view = list.value?.querySelector<HTMLElement>(FONT_VIEW);
+  if (!view) return;
+  e.preventDefault();
+  view.focus();
+}
+
 async function goToInspector(): Promise<void> {
   if (!layout.inspectorVisible) layout.toggleInspector();
   await nextTick();
@@ -103,7 +118,13 @@ onBeforeUnmount(() => {
         :direction="1"
         @resize="layout.setSidebarWidth"
       />
-      <main ref="list" class="list column" tabindex="0" :aria-label="t('layout.fonts')">
+      <main
+        ref="list"
+        class="list column"
+        tabindex="0"
+        :aria-label="t('layout.fonts')"
+        @keydown="onListKey"
+      >
         <slot name="list" />
       </main>
       <template v-if="layout.inspectorVisible">

@@ -84,6 +84,21 @@ body {
   outline-offset: 1px;
 }
 
+/* Pointer targets are at least 24×24 px (WCAG 2.5.8). Buttons and selects grow to
+   it; check boxes and radio buttons keep their native size and get the spacing
+   that makes up the rest. */
+button,
+select {
+  min-width: 24px;
+  min-height: 24px;
+}
+input[type='checkbox'],
+input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  margin: 4px;
+}
+
 /* The OS reduce-motion setting turns every animation and transition off. */
 @media (prefers-reduced-motion: reduce) {
   *,
