@@ -180,6 +180,63 @@ test('every Pairing Studio control is reachable with Tab and has a label', async
     reached.push(name);
   }
   const expected = [/^Layout/, /^Close$/, /^Duplicate$/, /^History$/, /^Book layout$/];
-  expected.push(/^Lock width$/, /^Block 1 properties/, /^Block 1/);
+  expected.push(/^Lock width$/, /^Block 1 properties/, /^Font for Block 1$/, /^Block 1/);
+  expected.push(/^Font for Block 2$/);
   for (const name of expected) expect(reached.some((r) => name.test(r))).toBe(true);
+});
+
+test('a block gets a face of its own from its font picker; "Use panel font" resets it', async ({
+  page,
+}) => {
+  await open(page);
+  await page.goto('/#/studio?layout=book&face=1');
+  const panel = studio(page);
+  const book = layout(panel, 'Book');
+  await expect(book).toHaveAttribute('data-state', 'ready');
+  const heading = blocks(book).nth(0);
+  const body = blocks(book).nth(1);
+  const familyOf = (block: Locator) => block.evaluate((el) => getComputedStyle(el).fontFamily);
+  // Both blocks start in the panel's face.
+  expect(await familyOf(heading)).toBe(await familyOf(body));
+
+  // Keyboard only: Tab from the heading's size badge reaches its font picker.
+  await panel.getByRole('button', { name: /^Block 1 properties/ }).focus();
+  await page.keyboard.press('Tab');
+  const picker = panel.getByRole('combobox', { name: 'Font for Block 1' });
+  await expect(picker).toBeFocused();
+  await expect(panel.getByRole('combobox', { name: 'Font for Block 2' })).toBeVisible();
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
+
+  // The list comes from the library search: typing narrows it.
+  await page.keyboard.type('JetBrains');
+  const list = panel.getByRole('listbox', { name: 'Fonts' });
+  await expect(list.getByRole('option')).toHaveText(['JetBrains Mono']);
+  await page.keyboard.press('Enter');
+  await expect(picker).toHaveAttribute('aria-expanded', 'false');
+  await expect(picker).toHaveValue(/^JetBrains Mono /);
+
+  // The heading is set in its own face, as live text; the body keeps the panel's face.
+  await expect.poll(() => familyOf(heading)).not.toBe(await familyOf(body));
+  expect(await familyOf(heading)).toMatch(/^"?fm-face-\d+/);
+  expect(await familyOf(body)).toMatch(/^"?fm-face-1"?,/);
+  await expect(book).toHaveAttribute('data-state', 'ready');
+
+  // Escape in an open list closes the list only, not the studio.
+  await picker.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(picker).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(picker).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel).toBeVisible();
+
+  // The choice is not part of the layout file: nothing to save.
+  await expect(fileAction(page, 'Save')).toBeDisabled();
+
+  // "Use panel font" puts the heading back in the panel's face.
+  const reset = panel.getByRole('button', { name: 'Use panel font for Block 1' });
+  await reset.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => familyOf(heading)).toBe(await familyOf(body));
+  await expect(reset).toHaveCount(0);
+  await expect(picker).toHaveValue('');
 });

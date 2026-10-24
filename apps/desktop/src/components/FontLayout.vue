@@ -13,7 +13,11 @@
 // unlocked it follows the window. With `setWidthLock`, the Lock width button (and its
 // command palette entry) toggles the lock; locking keeps the width the text has on screen.
 // A color palette chosen for the face's family (E16.3) applies through `font-palette`.
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
+//
+// With `blockFaces` (Pairing Studio, E24.2), a block can be set in a face of its own; the
+// other blocks keep `face`. Each block face is loaded through the same face loader. The
+// `block-tools` slot puts the parent's controls for a block beside its size badge.
+import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from 'vue';
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
@@ -39,7 +43,14 @@ const props = defineProps<{
   width?: number | null;
   /** Locks the width (at `widthPx`, the text's width on screen now) or unlocks it. */
   setWidthLock?: (locked: boolean, widthPx: number | null) => Promise<void>;
+  /** A face of its own per block index; null (or no entry) sets the block in `face`. */
+  blockFaces?: readonly (FaceSummary | null)[];
 }>();
+defineSlots<{
+  /** Controls for one block, beside its size badge. */
+  'block-tools'?: (props: { index: number; block: TextBlock; label: string }) => unknown;
+}>();
+const slots = useSlots();
 const palettes = usePalettesStore();
 
 const emit = defineEmits<{ 'edit-text': [index: number, text: string] }>();
@@ -73,10 +84,35 @@ watch(
 );
 onBeforeUnmount(() => hold(null));
 
+// Block faces stay loaded while a block uses them; a face two blocks share loads once.
+const blockHeld = new Set<FaceId>();
+function holdBlocks(ids: FaceId[]): void {
+  const wanted = new Set(ids);
+  for (const id of blockHeld) {
+    if (!wanted.has(id)) {
+      blockHeld.delete(id);
+      loader.release(id);
+    }
+  }
+  for (const id of wanted) {
+    if (blockHeld.has(id)) continue;
+    blockHeld.add(id);
+    // A face that fails to load falls back like the panel's does; the block still shows.
+    loader.acquire(id).catch(() => undefined);
+  }
+}
+watch(
+  () => (props.blockFaces ?? []).flatMap((f) => (f ? [f.id] : [])),
+  (ids) => holdBlocks(ids),
+  { immediate: true },
+);
+onBeforeUnmount(() => holdBlocks([]));
+
 /** The block whose properties editor is open. */
 const editing = ref<number | null>(null);
 const badges = ref<HTMLButtonElement[]>([]);
 const hasEditor = computed(() => Boolean(props.bounds && props.setProps));
+const hasTools = computed(() => Boolean(slots['block-tools']));
 const hintId = `${useId()}-hint`;
 
 /** A block resized in place hands its new values to the core like an editor change. */
@@ -144,11 +180,15 @@ const fontPaletteStyle = computed(() => {
   return value ? { fontPalette: value } : undefined;
 });
 
-const fontFamily = computed(() =>
-  props.face
-    ? `"${faceFamily(props.face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`
-    : 'inherit',
-);
+const familyOf = (face: FaceSummary) =>
+  `"${faceFamily(face.id)}", var(--fm-preview-fallback, system-ui), sans-serif`;
+const fontFamily = computed(() => (props.face ? familyOf(props.face) : 'inherit'));
+
+/** The `font-family` of block `i`: its own face, or the layout's. */
+function blockFamily(i: number): string {
+  const own = props.blockFaces?.[i];
+  return own ? familyOf(own) : fontFamily.value;
+}
 </script>
 
 <template>
@@ -183,7 +223,7 @@ const fontFamily = computed(() =>
       <div
         ref="page"
         class="page"
-        :class="{ locked: pageStyle !== undefined }"
+        :class="{ locked: pageStyle !== undefined, 'with-tools': hasTools }"
         data-testid="layout-page"
         :style="[pageStyle, fontPaletteStyle]"
       >
@@ -191,22 +231,25 @@ const fontFamily = computed(() =>
           v-for="(block, i) in layout.blocks"
           :key="`${layout.preset ?? layout.name}-${i}`"
           class="row"
-          :class="{ 'with-badge': hasEditor }"
+          :class="{ 'with-badge': hasEditor || hasTools }"
         >
-          <button
-            v-if="hasEditor"
-            ref="badges"
-            type="button"
-            class="badge"
-            data-testid="block-size-badge"
-            :data-index="i"
-            :aria-label="t('textLayout.badgeLabel', { n: i + 1, size: sizeLabel(block) })"
-            aria-haspopup="dialog"
-            :aria-expanded="editing === i"
-            @click="toggle(i)"
-          >
-            {{ sizeLabel(block) }}
-          </button>
+          <div v-if="hasEditor || hasTools" class="tools">
+            <button
+              v-if="hasEditor"
+              ref="badges"
+              type="button"
+              class="badge"
+              data-testid="block-size-badge"
+              :data-index="i"
+              :aria-label="t('textLayout.badgeLabel', { n: i + 1, size: sizeLabel(block) })"
+              aria-haspopup="dialog"
+              :aria-expanded="editing === i"
+              @click="toggle(i)"
+            >
+              {{ sizeLabel(block) }}
+            </button>
+            <slot name="block-tools" :index="i" :block="block" :label="blockLabel(i)" />
+          </div>
           <div class="cell">
             <BlockProperties
               v-if="hasEditor && editing === i"
@@ -218,7 +261,7 @@ const fontFamily = computed(() =>
             />
             <LayoutBlock
               :block="block"
-              :font-family="fontFamily"
+              :font-family="blockFamily(i)"
               :editable="editable"
               :label="blockLabel(i)"
               :bounds="hasEditor ? bounds : null"
@@ -268,13 +311,18 @@ const fontFamily = computed(() =>
   color: var(--fm-warning);
 }
 .page {
+  --fm-tools-width: 5em;
   padding: 24px 32px;
+}
+/* Room for the parent's block controls (a font picker) beside the badge. */
+.page.with-tools {
+  --fm-tools-width: 11em;
 }
 .row.with-badge {
   display: grid;
   /* An empty column opposite the badges keeps the text centered and gives the locked and
      unlocked grids the same tracks, so locking keeps the width the text has on screen. */
-  grid-template-columns: 5em minmax(0, 1fr) 5em;
+  grid-template-columns: var(--fm-tools-width) minmax(0, 1fr) var(--fm-tools-width);
   gap: 8px;
   align-items: start;
 }
@@ -285,7 +333,9 @@ const fontFamily = computed(() =>
 }
 .page.locked .row.with-badge {
   max-width: none;
-  grid-template-columns: 5em minmax(0, var(--fm-layout-width)) 5em;
+  grid-template-columns:
+    var(--fm-tools-width) minmax(0, var(--fm-layout-width))
+    var(--fm-tools-width);
   justify-content: center;
 }
 .lock {
@@ -308,9 +358,15 @@ const fontFamily = computed(() =>
   outline: 2px solid var(--fm-accent);
   outline-offset: 1px;
 }
-.badge {
-  justify-self: end;
+.tools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
   margin-top: 2px;
+}
+.badge {
   padding: 1px 6px;
   border: 1px solid var(--fm-control-border);
   border-radius: 3px;
