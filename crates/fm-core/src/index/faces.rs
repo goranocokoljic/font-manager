@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
-use fm_api::common::{Embedding, Health, Metrics, Slant};
+use fm_api::common::{Classification, Embedding, Health, Metrics, Slant};
 use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage};
@@ -63,6 +63,9 @@ pub struct WebExportFace {
     pub restricted: bool,
     /// What its `@font-face` block says about it (E20.3).
     pub style: FaceStyle,
+    /// Its design class, when known: the generic fallback of a framework
+    /// snippet (E20.5).
+    pub classification: Option<Classification>,
 }
 
 /// One face row read by [`FACE`].
@@ -235,8 +238,8 @@ impl Index {
     /// (a restricted embedding and no web license declared, the family's
     /// declaration first), and its `@font-face` style (E20.3): the
     /// typographic family (name ID 16, else 1, else the library's family
-    /// name), slant, weight class and, for a variable face, its axes. An
-    /// unknown face is `NotFound`.
+    /// name), slant, weight class and, for a variable face, its axes; and its
+    /// design class (E20.5). An unknown face is `NotFound`.
     pub fn web_export_face(&self, face: FaceId) -> FmResult<WebExportFace> {
         let row = self.face_row(face)?;
         let declared = self
@@ -269,6 +272,9 @@ impl Index {
             },
             restricted,
             style,
+            classification: parsed
+                .and_then(|p| p.classification.as_ref())
+                .map(|c| c.class),
         })
     }
 
