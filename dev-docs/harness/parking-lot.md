@@ -207,3 +207,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E20.6 #142] crates/fm-api/src/mock.rs:3016 — clearing a family declaration sets the mock's `declared` to `None`, while core falls back to the face's own `license_type` (faces.rs:246), so the export guard can disagree after a clear.
 - [E24.2 #157] apps/desktop/src/stores/glyphCompare.ts:74 — `glyphCompare.search` never clears `error` after a successful search, so one failed search leaves a stale error for the overlay session.
 - [E24.2 #157] apps/desktop/src/components/BlockFontPicker.vue:195 — no `forced-colors` handling app-wide; the active combobox option is marked only by background and box-shadow, which Windows High Contrast removes.
+- [E24.3 #158] apps/desktop/src/stores/studio.ts:123 — `setBlockFace` answering after `closePanel` leaves an orphan `p<k>/…` block-font key; panel keys are never reused, so nothing shows.
+- [E24.3 #158] apps/desktop/src/views/HomeView.vue:96 — the layout picker's preset fallback is written twice (HomeView and StudioPanel); not a defect yet.
