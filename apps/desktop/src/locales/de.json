@@ -1065,6 +1065,7 @@
       "appearance": "Darstellung",
       "catalogs": "Online-Kataloge",
       "advanced": "Erweitert",
+      "localApi": "Lokale API",
       "about": "Über"
     },
     "catalogs": {
@@ -1121,6 +1122,21 @@
       "rescanHint": "0 schaltet das automatische Neueinlesen aus.",
       "logsFolder": "Protokollordner",
       "logsFolderLabel": "Protokollordner"
+    },
+    "localApi": {
+      "note": "Andere Programme auf diesem Computer, etwa der Befehl fm und Plug-ins für Design-Apps, erreichen Font Manager über diese Adresse, solange die App läuft. Jede Anfrage braucht das Token.",
+      "address": "Adresse",
+      "addressLabel": "Adresse der lokalen API",
+      "notRunning": "Läuft nicht.",
+      "token": "Token",
+      "tokenHint": "Halten Sie das Token geheim: Ein Programm, das es kennt, kann in dieser App alles tun.",
+      "show": "Anzeigen",
+      "hide": "Ausblenden",
+      "copy": "Kopieren",
+      "copyToken": "Token kopieren",
+      "regenerate": "Neu erzeugen",
+      "regenerateHint": "Ein neues Token ersetzt das alte sofort. Programme mit dem alten Token funktionieren erst wieder, wenn sie das neue bekommen.",
+      "regenerated": "Ein neues Token wurde erzeugt. Das alte Token gilt nicht mehr."
     },
     "about": {
       "platformNotes": "Hinweise zur Plattform",

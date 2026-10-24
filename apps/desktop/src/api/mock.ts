@@ -34,6 +34,7 @@ import {
   type CoverageReport,
   type FaceCoverage,
   type DuplicateGroup,
+  type EndpointInfo,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -361,6 +362,21 @@ export const mockUpdates = {
 } as const satisfies Record<string, AvailableUpdate>;
 
 /** The app folders of the Rust mock. */
+/** The mock's local API address (the Rust mock reports the same). */
+export const MOCK_ENDPOINT_URL = 'http://127.0.0.1:47613';
+
+/** A 64-hex-digit token for the `generation`th regeneration; distinct for each. */
+export function mockEndpointToken(generation: number): string {
+  let x = (generation + 1) * 0x9e3779b1;
+  let out = '';
+  for (let i = 0; i < 8; i++) {
+    x = Math.imul(x ^ (x >>> 15), 0x2c1b3c6d) >>> 0;
+    x = (x ^ (x >>> 12)) >>> 0;
+    out += x.toString(16).padStart(8, '0');
+  }
+  return out;
+}
+
 export const mockFolders: AppFolders = {
   config: '/home/demo/.config/font-manager',
   data: '/home/demo/.local/share/font-manager',
@@ -1762,6 +1778,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     options.settingsStorage,
   );
   const emit = (event: Event) => handlers.forEach((h) => h(event));
+  // The local API: a fixed address, a token that changes on every regeneration.
+  let endpointGeneration = 0;
+  const endpoint = (): EndpointInfo => ({
+    url: MOCK_ENDPOINT_URL,
+    token: mockEndpointToken(endpointGeneration),
+  });
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
   const resolutions: Resolution[] = [];
@@ -2931,6 +2953,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return { ...settings };
     },
     getAppFolders: async () => ({ ...mockFolders }),
+    endpointInfo: async () => endpoint(),
+    regenerateEndpointToken: async () => {
+      endpointGeneration += 1;
+      return endpoint();
+    },
     // Browser mode: the dev server serves the built pages from public/help/.
     openHelp: async (page) => {
       if (!HELP_PAGES.some((p) => p.slug === page))

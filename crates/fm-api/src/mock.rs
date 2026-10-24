@@ -63,7 +63,7 @@ use crate::search::{
     FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, SearchRequest,
     SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
 };
-use crate::settings::{AppFolders, Settings, SettingsUpdate};
+use crate::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
 use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
@@ -473,6 +473,8 @@ struct State {
     /// Named comparisons, in the order they were saved.
     comparisons: Vec<MockComparison>,
     settings: Settings,
+    /// How often the local API token was regenerated; the token is made from it.
+    endpoint_tokens: u32,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
     trashed: BTreeSet<String>,
@@ -881,6 +883,7 @@ impl State {
             quick: Vec::new(),
             comparisons: Vec::new(),
             settings: Settings::default(),
+            endpoint_tokens: 0,
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             layouts: mock_layout_files(),
@@ -3809,6 +3812,37 @@ impl SettingsService for MockApi {
             cache: "/home/demo/.cache/font-manager".into(),
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
+    }
+
+    fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
+        Ok(mock_endpoint(self.state().endpoint_tokens))
+    }
+
+    fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
+        let mut st = self.state();
+        st.endpoint_tokens += 1;
+        Ok(mock_endpoint(st.endpoint_tokens))
+    }
+}
+
+/// The mock's endpoint: a fixed address and a token of 64 hex digits that
+/// changes with every regeneration (no OS random source: the mock touches
+/// no OS).
+fn mock_endpoint(generation: u32) -> EndpointInfo {
+    let mut x = 0x9e37_79b9_7f4a_7c15_u64 ^ u64::from(generation);
+    let token = (0..4)
+        .map(|_| {
+            // splitmix64
+            x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            let mut z = x;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            format!("{:016x}", z ^ (z >> 31))
+        })
+        .collect();
+    EndpointInfo {
+        url: Some("http://127.0.0.1:47613".into()),
+        token,
     }
 }
 

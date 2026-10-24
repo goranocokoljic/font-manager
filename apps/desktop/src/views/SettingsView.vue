@@ -5,6 +5,7 @@ import type { FullSettings } from '../api/client';
 import type { Language, SettingsUpdate } from '../api/types';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
+import LocalApiSettings from '../components/LocalApiSettings.vue';
 import {
   CATALOGS,
   LOCALES,
@@ -38,6 +39,7 @@ const sections = [
   { id: 'appearance' },
   { id: 'catalogs' },
   { id: 'advanced' },
+  { id: 'localApi' },
   { id: 'about' },
 ] as const;
 type SectionId = (typeof sections)[number]['id'];
@@ -445,6 +447,8 @@ function chooseLanguage(e: Event): void {
             </span>
           </div>
         </template>
+
+        <LocalApiSettings v-else-if="current === 'localApi'" />
 
         <template v-else-if="current === 'about' && app.info">
           <h2 class="heading">{{ sectionTitle('about') }}</h2>

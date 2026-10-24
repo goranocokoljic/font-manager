@@ -20,6 +20,9 @@ pub(crate) mod paths;
 #[allow(unsafe_code)] // WebView2 COM calls; every block has a SAFETY note.
 mod pdf;
 #[cfg(windows)]
+#[allow(unsafe_code)] // Win32 security descriptor FFI; every block has a SAFETY note.
+pub(crate) mod private_file;
+#[cfg(windows)]
 #[allow(unsafe_code)] // Win32 registry FFI; every block has a SAFETY note.
 mod registry;
 #[cfg(windows)]

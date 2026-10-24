@@ -141,6 +141,17 @@ what you want to do and press `Enter`. All keys are on the
 Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. There you can choose the theme,
 the size of the rows, and how activation works.
 
+## Connect other programs
+
+While Font Manager runs, other programs on your computer (the `fm` command, plugins for
+design apps) can use it through a local address. Open Settings → Local API to see the
+address and the token. Each program needs the token. Click **Show** to see it and
+**Copy** to copy it. Keep the token secret: a program that has it can do everything
+Font Manager can do. If you think someone else has it, click **Regenerate**. The old
+token stops working at once.
+
+Only programs on this computer can connect. Web pages in your browser cannot.
+
 ## Get updates
 
 Open Settings → About and click **Check for updates**. If a new version is out, Font

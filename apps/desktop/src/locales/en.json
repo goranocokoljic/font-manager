@@ -1065,6 +1065,7 @@
       "appearance": "Appearance",
       "catalogs": "Online catalogs",
       "advanced": "Advanced",
+      "localApi": "Local API",
       "about": "About"
     },
     "catalogs": {
@@ -1121,6 +1122,21 @@
       "rescanHint": "0 turns automatic rescans off.",
       "logsFolder": "Logs folder",
       "logsFolderLabel": "logs folder"
+    },
+    "localApi": {
+      "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Manager through this address while the app runs. Each request needs the token.",
+      "address": "Address",
+      "addressLabel": "local API address",
+      "notRunning": "Not running.",
+      "token": "Token",
+      "tokenHint": "Keep the token secret: a program that has it can do everything in this app.",
+      "show": "Show",
+      "hide": "Hide",
+      "copy": "Copy",
+      "copyToken": "Copy token",
+      "regenerate": "Regenerate",
+      "regenerateHint": "A new token replaces the old one at once. Programs that use the old token stop working until they get the new one.",
+      "regenerated": "A new token was made. The old token no longer works."
     },
     "about": {
       "platformNotes": "Platform notes",

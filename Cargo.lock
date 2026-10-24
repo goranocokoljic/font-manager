@@ -953,6 +953,7 @@ version = "0.1.0"
 dependencies = [
  "fm-api",
  "fm-core",
+ "fm-endpoint",
  "fm-platform",
  "serde",
  "serde_json",
@@ -991,6 +992,7 @@ dependencies = [
  "flate2",
  "fm-api",
  "fm-platform",
+ "getrandom 0.3.4",
  "harfrust",
  "notify",
  "read-fonts 0.45.1",
@@ -1005,6 +1007,19 @@ dependencies = [
  "tracing-appender",
  "tracing-subscriber",
  "wuff",
+]
+
+[[package]]
+name = "fm-endpoint"
+version = "0.1.0"
+dependencies = [
+ "fm-api",
+ "hyper",
+ "hyper-util",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1596,6 +1611,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "httpdate"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
 name = "hyper"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1607,6 +1628,7 @@ dependencies = [
  "http",
  "http-body",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
