@@ -203,3 +203,35 @@ fn a_variable_face_gives_a_weight_range() {
         "{next}"
     );
 }
+
+#[test]
+fn each_face_entry_carries_the_style_of_its_slant() {
+    let slnt = Axis {
+        tag: "slnt".into(),
+        name: "Slant".into(),
+        min: -10.0,
+        default: 0.0,
+        max: 0.0,
+    };
+    let faces = [
+        face("Sora", "Sora-Regular", Slant::Upright, 400, Vec::new()),
+        face("Sora", "Sora-Italic", Slant::Italic, 400, Vec::new()),
+        face("Sora", "Sora-Oblique", Slant::Oblique, 400, Vec::new()),
+        face(
+            "Roboto Flex",
+            "RobotoFlex-Regular",
+            Slant::Upright,
+            400,
+            vec![slnt],
+        ),
+    ];
+    let next = snippet(Framework::NextLocalFont, &faces, None);
+    for line in [
+        "    { path: './fonts/Sora-Regular.woff2', weight: '400', style: 'normal' },\n",
+        "    { path: './fonts/Sora-Italic.woff2', weight: '400', style: 'italic' },\n",
+        "    { path: './fonts/Sora-Oblique.woff2', weight: '400', style: 'oblique' },\n",
+        "    { path: './fonts/RobotoFlex-Regular.woff2', weight: '400', style: 'oblique 0deg 10deg' },\n",
+    ] {
+        assert!(next.contains(line), "{line}\n{next}");
+    }
+}
