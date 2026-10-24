@@ -2171,6 +2171,32 @@ export type SourceKind =
 /**  The user-chosen folder that "Copy to library folder" imports into. */
 "libraryFolder";
 
+/**  The file format of a specimen (E21.1). */
+export type SpecimenFormat = 
+/**
+ *  One self-contained HTML page: the faces are embedded, nothing is
+ *  loaded from anywhere else.
+ */
+"html" | 
+/**  A PDF; `Unsupported` until E21.2. */
+"pdf";
+
+/**  Write a specimen of one family to a file the user picked. */
+export type SpecimenRequest = {
+	/**  The family. */
+	family: FamilyId,
+	/**  The file format. */
+	format: SpecimenFormat,
+	/**  The file to write, as the user picked it. */
+	outPath: string,
+};
+
+/**  What the specimen export wrote. */
+export type SpecimenResponse = {
+	/**  The file written, absolute path. */
+	path: string,
+};
+
 /**  One style on a family's weight line. */
 export type StyleMark = {
 	/**  `OS/2.usWeightClass` (100–1000). */

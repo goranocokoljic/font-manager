@@ -13,7 +13,8 @@ use fm_api::comparison::{
     CompareMode, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
 };
 use fm_api::export::{
-    ExportWebRequest, Framework, FrameworkSnippetRequest, GlyphSvgRequest, Subset, WebFormat,
+    ExportWebRequest, Framework, FrameworkSnippetRequest, GlyphSvgRequest, SpecimenFormat,
+    SpecimenRequest, Subset, WebFormat,
 };
 use fm_api::layout::{
     BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
@@ -2453,4 +2454,58 @@ fn a_framework_snippet_needs_a_known_face() {
     assert_eq!(empty.code, ErrorCode::InvalidRequest);
     let unknown = api.framework_snippet(req(vec![FaceId(999)])).unwrap_err();
     assert_eq!(unknown.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn a_specimen_checks_like_the_core_and_returns_the_path() {
+    let api = api();
+    let req = |family, format| SpecimenRequest {
+        family,
+        format,
+        out_path: "/tmp/Inter specimen.html".into(),
+    };
+    let inter = api.get_face(FaceId(1)).unwrap().face.family;
+    let res = api
+        .export_specimen(req(inter, SpecimenFormat::Html))
+        .unwrap();
+    assert_eq!(res.path, "/tmp/Inter specimen.html");
+    let code = |r: SpecimenRequest| api.export_specimen(r).unwrap_err().code;
+    assert_eq!(
+        code(req(inter, SpecimenFormat::Pdf)),
+        ErrorCode::Unsupported
+    );
+    assert_eq!(
+        code(req(FamilyId(999), SpecimenFormat::Html)),
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        code(SpecimenRequest {
+            out_path: " ".into(),
+            ..req(inter, SpecimenFormat::Html)
+        }),
+        ErrorCode::InvalidRequest
+    );
+    // The restricted face with no license declared is refused, by name.
+    let legacy = api.get_face(FaceId(7)).unwrap();
+    assert_eq!(legacy.license.embedding, Embedding::Restricted);
+    let e = api
+        .export_specimen(req(legacy.face.family, SpecimenFormat::Html))
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert!(
+        e.message
+            .starts_with("Legacy Grotesk Regular: Embedding restricted"),
+        "{e:?}"
+    );
+    assert_eq!(e.detail.as_deref(), Some("blocked faces: 7"));
+    api.declare_license(LicenseDeclaration {
+        family: legacy.face.family,
+        license_type: Some(LicenseType::Desktop),
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    api.export_specimen(req(legacy.face.family, SpecimenFormat::Html))
+        .unwrap();
 }

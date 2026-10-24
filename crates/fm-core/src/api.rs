@@ -36,7 +36,8 @@ use fm_api::comparison::{
 };
 use fm_api::export::{
     ExportService, ExportWebRequest, ExportWebResponse, FrameworkSnippet, FrameworkSnippetRequest,
-    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest,
+    GlyphSvgRequest, LicenseInventory, LicenseInventoryRequest, SpecimenFormat, SpecimenRequest,
+    SpecimenResponse,
 };
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
@@ -83,7 +84,7 @@ use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, subset, web_font};
+use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, specimen, subset, web_font};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -993,6 +994,22 @@ impl ExportService for CoreApi {
             file.collection_index,
             &req,
         )?)
+    }
+
+    /// The family is looked up under the index lock; its files are read
+    /// and the page written outside it ([`specimen::write_html`]).
+    fn export_specimen(&self, req: SpecimenRequest) -> ApiResult<SpecimenResponse> {
+        if req.out_path.trim().is_empty() {
+            return Err(ApiError::invalid("Choose a file to save the specimen to."));
+        }
+        if req.format == SpecimenFormat::Pdf {
+            return Err(not_available("A PDF specimen"));
+        }
+        let spec = self.lock().specimen(req.family)?;
+        let path = specimen::write_html(&spec, Path::new(&req.out_path))?;
+        Ok(SpecimenResponse {
+            path: path.display().to_string(),
+        })
     }
 }
 

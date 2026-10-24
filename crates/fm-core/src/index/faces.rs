@@ -27,6 +27,7 @@ use crate::license;
 use crate::palettes;
 use crate::parser::ParsedFace;
 use crate::scanner::FileHash;
+use crate::specimen::{Specimen, SpecimenFace};
 use crate::web_css::FaceStyle;
 use crate::web_font::{self, ExportFace};
 
@@ -275,6 +276,65 @@ impl Index {
             classification: parsed
                 .and_then(|p| p.classification.as_ref())
                 .map(|c| c.class),
+        })
+    }
+
+    /// What the specimen of `family` shows (E21.1), every visible face in
+    /// the order of [`Index::family`], with its license (the family's
+    /// declaration first, as [`Index::face_detail`]) and its `cmap`. No
+    /// font file is read. An unknown family is `NotFound`.
+    pub fn specimen(&self, family: FamilyId) -> FmResult<Specimen> {
+        let fam = self.family(family)?;
+        let declared = self
+            .declared_license(&fam.summary.name)?
+            .and_then(|d| d.license_type);
+        let mut faces = Vec::with_capacity(fam.faces.len());
+        for s in &fam.faces {
+            let row = self.face_row(s.id)?;
+            let parsed = row.parsed.as_ref();
+            let embedding = license::embedding(row.fs_type);
+            let declared = declared.or(row.license_type);
+            faces.push(SpecimenFace {
+                id: s.id,
+                label: format!("{} {}", s.family_name, s.style),
+                style: s.style.clone(),
+                weight: s.weight,
+                width: s.width,
+                slant: s.slant,
+                version: parsed.and_then(|p| p.version.clone()),
+                designer: row.designer,
+                foundry: row.foundry,
+                embedding,
+                declared,
+                open_license: row.open_license,
+                web_use: license::web_use(embedding, row.open_license, declared),
+                instances: if s.is_variable {
+                    parsed
+                        .map(|p| p.named_instances.clone())
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                },
+                features: parsed
+                    .map(|p| {
+                        p.features
+                            .iter()
+                            .map(|tag| {
+                                features::feature_info_named(
+                                    tag,
+                                    p.feature_names.get(tag).map(String::as_str),
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                code_points: self.face_cmap(s.id)?,
+                path: row.file.path,
+            });
+        }
+        Ok(Specimen {
+            family: fam.summary.name,
+            faces,
         })
     }
 

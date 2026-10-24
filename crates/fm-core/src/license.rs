@@ -277,5 +277,14 @@ pub fn web_embedding_block(
     .then_some(WebReason::Embedding(embedding))
 }
 
+/// Whether a face's embedding keeps it out of a specimen (E21.1): a
+/// specimen embeds the whole file, so restricted embedding with no license
+/// declared refuses it. Any declared type lifts this (the user says they
+/// hold a license), but `Unknown` is not a license. Preview and print,
+/// installable and editable faces always embed: a specimen is a preview.
+pub fn specimen_embedding_block(embedding: Embedding, declared: Option<LicenseType>) -> bool {
+    embedding == Embedding::Restricted && matches!(declared, None | Some(LicenseType::Unknown))
+}
+
 #[cfg(test)]
 mod tests;

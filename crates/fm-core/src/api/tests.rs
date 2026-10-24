@@ -2919,3 +2919,202 @@ fn named_comparisons_survive_a_rescan_a_restart_and_a_removed_font() {
         }]
     );
 }
+
+fn specimen_request(family: FamilyId, out: &Path) -> SpecimenRequest {
+    SpecimenRequest {
+        family,
+        format: SpecimenFormat::Html,
+        out_path: out.display().to_string(),
+    }
+}
+
+/// Every `data:` URI of `page`'s `@font-face` rules, decoded, in order.
+fn embedded_fonts(page: &str) -> Vec<(String, Vec<u8>)> {
+    page.split("src: url(\"data:")
+        .skip(1)
+        .map(|rest| {
+            let uri = &rest[..rest.find('"').expect("end of the URI")];
+            let (mime, data) = uri.split_once(";base64,").expect("base64 URI");
+            (mime.to_owned(), decode_base64(data))
+        })
+        .collect()
+}
+
+fn decode_base64(text: &str) -> Vec<u8> {
+    let value = |c: u8| match c {
+        b'A'..=b'Z' => c - b'A',
+        b'a'..=b'z' => c - b'a' + 26,
+        b'0'..=b'9' => c - b'0' + 52,
+        b'+' => 62,
+        b'/' => 63,
+        _ => panic!("not base64: {c}"),
+    };
+    assert_eq!(text.len() % 4, 0);
+    let mut out = Vec::new();
+    for quad in text.as_bytes().chunks(4) {
+        let pad = quad.iter().rev().take_while(|&&c| c == b'=').count();
+        let n = quad[..4 - pad]
+            .iter()
+            .fold(0u32, |n, &c| n << 6 | u32::from(value(c)))
+            << (6 * pad);
+        out.extend_from_slice(&[(n >> 16) as u8, (n >> 8) as u8, n as u8][..3 - pad]);
+    }
+    out
+}
+
+#[test]
+fn a_family_exports_as_a_self_contained_html_specimen() {
+    let (lib, _, _) = Lib::scanned("api-specimen-html");
+    let out_dir = lib.dir.path().join("Specimens ü");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    for name in ["Archivo", "Asap Sharp"] {
+        let family = lib.api.get_family(lib.family(name).id).expect("family");
+        let out = out_dir.join(format!("{name}.html"));
+        let res = lib
+            .api
+            .export_specimen(specimen_request(family.summary.id, &out))
+            .expect("specimen");
+        assert_eq!(Path::new(&res.path), out);
+        let page = std::fs::read_to_string(&out).expect("page");
+        // Self-contained: nothing loaded from anywhere, no script.
+        let lower = page.to_lowercase();
+        for bad in ["http:", "https:", "file:", "<script", "javascript"] {
+            assert!(!lower.contains(bad), "{name}: {bad}");
+        }
+        // Every face is embedded, in the family's order, and decoding its
+        // data URI gives the face's file bytes.
+        let fonts = embedded_fonts(&page);
+        assert_eq!(fonts.len(), family.faces.len(), "{name}");
+        for ((mime, bytes), face) in fonts.iter().zip(&family.faces) {
+            let detail = lib.api.get_face(face.id).expect("face");
+            let file = std::fs::read(&detail.path).expect("font file");
+            assert!(
+                *bytes == file,
+                "{name} {}: embedded bytes differ",
+                face.style
+            );
+            assert_eq!(
+                Some(mime.as_str()),
+                crate::font_file::font_mime(&file),
+                "{name}"
+            );
+        }
+        assert!(page.contains("<h1 class=\"f"));
+        assert!(page.contains("<h2>Waterfall</h2>"));
+        assert!(page.contains("<h3>Basic Latin</h3>"));
+        // The same family gives byte-identical HTML.
+        let again = out_dir.join(format!("{name} again.html"));
+        lib.api
+            .export_specimen(specimen_request(family.summary.id, &again))
+            .expect("again");
+        assert!(
+            std::fs::read(&again).expect("again") == page.as_bytes(),
+            "{name}"
+        );
+    }
+    // A variable family shows its named instances as styles.
+    let asap = lib
+        .api
+        .get_family(lib.family("Asap Sharp").id)
+        .expect("asap");
+    let detail = lib.api.get_face(asap.faces[0].id).expect("face");
+    assert!(!detail.instances.is_empty());
+    let page = std::fs::read_to_string(out_dir.join("Asap Sharp.html")).expect("page");
+    for inst in &detail.instances {
+        assert!(
+            page.contains(&format!(
+                "<p class=\"label\">{}</p>",
+                specimen::escape(&inst.name)
+            )),
+            "{}",
+            inst.name
+        );
+    }
+    assert!(page.contains("font-variation-settings: &quot;wght&quot;"));
+}
+
+#[test]
+fn a_specimen_refuses_an_unknown_family_a_pdf_and_no_path() {
+    let (lib, _, _) = Lib::scanned("api-specimen-refusals");
+    let out = lib.dir.path().join("out.html");
+    let e = lib
+        .api
+        .export_specimen(specimen_request(FamilyId(999_999), &out))
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    let archivo = lib.family("Archivo").id;
+    let e = lib
+        .api
+        .export_specimen(SpecimenRequest {
+            format: SpecimenFormat::Pdf,
+            ..specimen_request(archivo, &out)
+        })
+        .expect_err("pdf");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    let e = lib
+        .api
+        .export_specimen(SpecimenRequest {
+            out_path: "  ".into(),
+            ..specimen_request(archivo, &out)
+        })
+        .expect_err("no path");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert!(!out.exists());
+}
+
+#[test]
+fn the_specimen_guard_refuses_restricted_embedding_with_no_license() {
+    let lib = Lib::new("api-specimen-guard");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    with_fs_type("google-repo/asul/Asul-Bold.ttf", 0x0004, &folder);
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let out = lib.dir.path().join("specimen.html");
+    let bebas = lib.family("Bebas Neue").id;
+    let bebas_face = lib.api.get_family(bebas).expect("family").faces[0].id;
+    let e = lib
+        .api
+        .export_specimen(specimen_request(bebas, &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert_eq!(
+        e.message,
+        "Bebas Neue Regular: Embedding restricted and no license declared, so the font \
+         may not be embedded in a specimen. Declare a license for the family to export it."
+    );
+    assert_eq!(e.detail, Some(format!("blocked faces: {}", bebas_face.0)));
+    assert!(!out.exists());
+
+    // Preview & print embeds: a specimen is a preview.
+    lib.api
+        .export_specimen(specimen_request(lib.family("Asul").id, &out))
+        .expect("preview & print");
+    assert!(out.exists());
+    std::fs::remove_file(&out).expect("clean up");
+
+    // Declaring a license for the family, any type, lets it through.
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: bebas,
+            license_type: Some(LicenseType::Desktop),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("declare");
+    lib.api
+        .export_specimen(specimen_request(bebas, &out))
+        .expect("declared");
+    assert!(out.exists());
+}
