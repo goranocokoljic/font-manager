@@ -146,6 +146,29 @@ pub struct ListCatalogFamiliesRequest {
     pub page: Page,
 }
 
+/// The preview file of one catalog family (E22.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogFontRequest {
+    /// The catalog.
+    pub id: CatalogId,
+    /// The family's name, as the catalog lists it.
+    pub family: String,
+}
+
+/// Where a catalog family's preview file is on disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogFontSource {
+    /// The catalog.
+    pub id: CatalogId,
+    /// The family.
+    pub family: String,
+    /// Absolute path of the file in the app's cache folder, served to the
+    /// webview by the app's font scheme.
+    pub path: String,
+}
+
 /// Online catalogs over a metadata cache.
 pub trait CatalogService {
     /// Every catalog the app knows, on or off, with the state of its cache.
@@ -163,6 +186,11 @@ pub trait CatalogService {
         &self,
         req: ListCatalogFamiliesRequest,
     ) -> ApiResult<Paged<CatalogFamily>>;
+    /// The preview file of a family in the cache: fetched once (a request)
+    /// into the app's cache folder, then read from there. An off catalog is
+    /// `Conflict` and nothing is fetched; a family not in the cached list is
+    /// `NotFound`.
+    fn catalog_font_source(&self, req: CatalogFontRequest) -> ApiResult<CatalogFontSource>;
 }
 
 #[cfg(test)]

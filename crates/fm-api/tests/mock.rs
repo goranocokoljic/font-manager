@@ -2634,3 +2634,31 @@ fn catalogs_are_off_until_turned_on_and_list_from_the_refreshed_cache() {
     assert_eq!(off.family_count, 4, "cache kept");
     assert_eq!(list("").total, 0, "an off catalog lists nothing");
 }
+
+#[test]
+fn a_catalog_font_source_needs_the_catalog_on_and_the_family_listed() {
+    use fm_api::catalog::{CatalogFontRequest, CatalogId, CatalogRef, SetCatalogEnabledRequest};
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let source = |family: &str| {
+        api.catalog_font_source(CatalogFontRequest {
+            id,
+            family: family.into(),
+        })
+    };
+    assert_eq!(source("Lato").expect_err("off").code, ErrorCode::Conflict);
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    assert_eq!(
+        source("Lato").expect_err("not refreshed").code,
+        ErrorCode::NotFound
+    );
+    api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    let lato = source("Lato").expect("listed");
+    assert_eq!(lato.family, "Lato");
+    assert!(lato.path.ends_with(".ttf"));
+    assert_eq!(
+        source("Nope Sans").expect_err("unlisted").code,
+        ErrorCode::NotFound
+    );
+}

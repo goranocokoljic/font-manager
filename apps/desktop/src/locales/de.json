@@ -1061,7 +1061,8 @@
       "about": "Über"
     },
     "catalogs": {
-      "note": "Schriftkataloge im Web. Öffnen Sie einen, um zu sehen, was die App damit tun kann."
+      "note": "Schriftkataloge im Web. Öffnen Sie einen, um zu sehen, was die App damit tun kann.",
+      "connectsHint": "Wenn Sie {name} einschalten, verbindet sich die App mit dem Internet, um die Schriftliste zu laden. Vorschauen werden beim Durchsuchen geladen."
     },
     "sources": {
       "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Wenn du eine Quelle entfernst, vergisst die Bibliothek ihre Schriften; die Dateien bleiben, wo sie sind.",
@@ -1277,7 +1278,23 @@
       "note": "Adobe Fonts werden verschlüsselt über Creative Cloud geliefert, daher kann keine Drittanbieter-App sie verwalten. Aktivieren Sie sie in der Creative Cloud-App.",
       "open": "Adobe Fonts öffnen",
       "openTitle": "Öffnet fonts.adobe.com in Ihrem Browser"
-    }
+    },
+    "turnOn": "Einschalten",
+    "turnOnLabel": "{name} einschalten",
+    "connects": "Verbindet mit dem Internet",
+    "off": "{name} ist aus. Schalten Sie den Katalog ein, um seine Schriften zu durchsuchen.",
+    "searchLabel": "{name} durchsuchen",
+    "searchPlaceholder": "Familien suchen",
+    "listLabel": "Familien von {name}",
+    "refresh": "Aktualisieren",
+    "refreshing": "Wird aktualisiert…",
+    "refreshTitle": "Die Liste von {name} erneut aus dem Internet laden",
+    "refreshedAt": "Aktualisiert {date}",
+    "neverRefreshed": "Noch nicht aktualisiert",
+    "offline": "Offline - Liste vom {date}",
+    "noMatches": "Keine Familie passt zur Suche.",
+    "empty": "Die Liste ist leer. Aktualisieren Sie, um sie zu laden.",
+    "sizePx": "{size} px"
   },
   "similar": {
     "title": "Ähnlich wie {name}",

@@ -1,0 +1,20 @@
+{
+  "id": "a-new-virtualized-list-needs-a-test-over-more-rows-than-one-",
+  "title": "A new virtualized list needs a test over more rows than one page and one screen",
+  "category": "testing",
+  "rule": "When a component virtualizes a list or reads it page by page (a window over `store.total`, a `want(start, end)` page loader), test it with mock data far larger than one viewport and one page (hundreds or thousands of items): assert that only the window plus overscan renders (the poolSize count), that aria-setsize is the total, and that scrolling past the first page requests the next page's offset and shows its rows by name. A mock with a handful of items renders everything and proves nothing about virtualization or paging.",
+  "rationale": "E22.2 (#147): the catalog browser's tests used 4 mock families, so rendering every row or a broken page offset past page 0 passed every test.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    147
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/stores/**/*.ts",
+    "apps/desktop/src/api/mock.ts"
+  ],
+  "first_seen": "2026-10-24T08:57:48.318Z",
+  "last_seen": "2026-10-24T08:57:48.318Z"
+}

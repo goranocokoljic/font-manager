@@ -258,6 +258,27 @@ export type CatalogFamily = {
 	licenseName?: string | null,
 };
 
+/**  The preview file of one catalog family (E22.2). */
+export type CatalogFontRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+};
+
+/**  Where a catalog family's preview file is on disk. */
+export type CatalogFontSource = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family. */
+	family: string,
+	/**
+	 *  Absolute path of the file in the app's cache folder, served to the
+	 *  webview by the app's font scheme.
+	 */
+	path: string,
+};
+
 /**  A catalog the app knows how to read. */
 export type CatalogId = 
 /**  Google Fonts (fonts.google.com). */
@@ -2573,4 +2594,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 17, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 18, patch: 0 };

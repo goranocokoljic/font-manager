@@ -1061,7 +1061,8 @@
       "about": "About"
     },
     "catalogs": {
-      "note": "Font catalogs on the web. Open one to see what the app can do with it."
+      "note": "Font catalogs on the web. Open one to see what the app can do with it.",
+      "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it."
     },
     "sources": {
       "note": "Folders the library indexes in place. Removing a source forgets its fonts; the files stay where they are.",
@@ -1277,7 +1278,23 @@
       "note": "Adobe Fonts are delivered encrypted through Creative Cloud, so no third-party app can manage them. Activate them in the Creative Cloud app.",
       "open": "Open Adobe Fonts",
       "openTitle": "Opens fonts.adobe.com in your browser"
-    }
+    },
+    "turnOn": "Turn on",
+    "turnOnLabel": "Turn on {name}",
+    "connects": "Connects to the internet",
+    "off": "{name} is off. Turn it on to browse its fonts.",
+    "searchLabel": "Search {name}",
+    "searchPlaceholder": "Search families",
+    "listLabel": "{name} families",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing…",
+    "refreshTitle": "Fetch the list of {name} again from the internet",
+    "refreshedAt": "Refreshed {date}",
+    "neverRefreshed": "Not refreshed yet",
+    "offline": "Offline - showing the list from {date}",
+    "noMatches": "No family matches the search.",
+    "empty": "The list is empty. Refresh to fetch it.",
+    "sizePx": "{size} px"
   },
   "similar": {
     "title": "Similar to {name}",

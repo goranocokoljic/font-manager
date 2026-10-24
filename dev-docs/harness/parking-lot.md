@@ -218,4 +218,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E22.1 #146] crates/fm-core/src/catalog.rs:189 — `reqwest::blocking` panics inside a tokio runtime; when E22.2 wires Tauri/rmcp, `refresh_catalog` must run under `spawn_blocking`.
 - [E22.1 #146] docs/adr/0014-online-catalogs.md:1 — the TLS trust-store source per OS (platform verifier on Windows/macOS, native certs on Linux) is not documented.
 - [E22.1 #146] crates/fm-core/src/specimen.rs:514 — `utc_date` and `fm-platform/src/linux/trash.rs:254` are further copies of the civil-date algorithm.
+- [E22.2 #147] crates/fm-core/src/config.rs:102 — its own temp-file-then-rename write with a hard-coded `json.tmp`, beside `write_atomic` in catalog.rs.
+- [E22.2 #147] crates/fm-core/src/index/sources.rs:218 — another separate temp-then-rename write copy beside `write_atomic`.
+- [E22.2 #147] apps/desktop/src/views/HomeView.vue:625 — the library toolbar is a fixed-height, non-wrapping row and can clip at narrow center widths (inspector open below ~1,280 px).
 - [E22.5 #150] crates/fm-api/src/mock.rs:117 — the mock labels `OpenLicense::Ofl` "OFL" while core's `open_license_label` (crates/fm-core/src/inventory.rs:169) says "SIL Open Font License"; two label tables for one enum will drift.

@@ -9,6 +9,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
 };
+use fm_api::catalog::{
+    Catalog, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef, CatalogService,
+    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+};
 use fm_api::common::Paged;
 use fm_api::comparison::{
     Comparison, ComparisonEntry, ComparisonRef, RenameComparisonRequest, SaveComparisonRequest,
@@ -265,6 +269,64 @@ pub fn font_response(api: &dyn PreviewService, uri_path: &str) -> Response<Vec<u
     }
 }
 
+/// The URI path of a catalog family's preview on [`FONT_SCHEME`]:
+/// `/catalog-<catalog id>-<the family name's UTF-8 as hex>`. Hex, because the
+/// webview's address helper percent-encodes everything else.
+const CATALOG_FONT_PREFIX: &str = "/catalog-";
+
+/// The catalog and family a [`CATALOG_FONT_PREFIX`] path names; `None` for
+/// any other path, `Some(Err)` for a catalog path that is not valid.
+fn catalog_font_request(uri_path: &str) -> Option<Result<CatalogFontRequest, ()>> {
+    let rest = uri_path.strip_prefix(CATALOG_FONT_PREFIX)?;
+    let parse = || {
+        let (id, hex) = rest.split_once('-').ok_or(())?;
+        let id: CatalogId =
+            serde_json::from_value(serde_json::Value::String(id.to_owned())).map_err(|_| ())?;
+        if hex.is_empty() || hex.len() % 2 != 0 {
+            return Err(());
+        }
+        let bytes = (0..hex.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(hex.get(i..i + 2).ok_or(())?, 16).map_err(|_| ()))
+            .collect::<Result<Vec<u8>, ()>>()?;
+        let family = String::from_utf8(bytes).map_err(|_| ())?;
+        Ok(CatalogFontRequest { id, family })
+    };
+    Some(parse())
+}
+
+/// Answers a request on [`FONT_SCHEME`] whose path is a catalog family's
+/// preview (E22.2): the core fetches it into the cache folder the first
+/// time, only while the catalog is on. `None` when the path is not one.
+pub fn catalog_font_response(
+    api: &dyn CatalogService,
+    uri_path: &str,
+) -> Option<Response<Vec<u8>>> {
+    let Ok(req) = catalog_font_request(uri_path)? else {
+        return Some(error_response(
+            StatusCode::BAD_REQUEST,
+            "The font address is not valid.",
+        ));
+    };
+    let file = api.catalog_font_source(req).and_then(|source| {
+        fm_core::font_file::read_font_file(Path::new(&source.path)).map_err(ApiError::from)
+    });
+    Some(match file {
+        Ok(file) => font_ok(file.mime, file.bytes),
+        Err(e) => {
+            tracing::debug!(code = ?e.code, detail = ?e.detail, "catalog preview not served");
+            let status = match e.code {
+                ErrorCode::NotFound => StatusCode::NOT_FOUND,
+                ErrorCode::Conflict | ErrorCode::PermissionDenied => StatusCode::FORBIDDEN,
+                ErrorCode::Unsupported => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                ErrorCode::Io => StatusCode::BAD_GATEWAY,
+                _ => StatusCode::INTERNAL_SERVER_ERROR,
+            };
+            error_response(status, &e.message)
+        }
+    })
+}
+
 /// Font loads are CORS requests and the app page has another origin than
 /// [`FONT_SCHEME`], so every answer allows any origin.
 fn font_ok(mime: &str, bytes: Vec<u8>) -> Response<Vec<u8>> {
@@ -425,6 +487,36 @@ async fn restore_layout(
 #[tauri::command]
 async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Option<f32>> {
     call(&state, move |api| api.layout_width(req)).await
+}
+
+/// Every online catalog with the state of its cache (E22.1).
+#[tauri::command]
+async fn list_catalogs(state: State<'_, AppState>) -> ApiResult<Vec<Catalog>> {
+    call(&state, move |api| api.list_catalogs()).await
+}
+
+/// Turns a catalog on or off; makes no request.
+#[tauri::command]
+async fn set_catalog_enabled(
+    state: State<'_, AppState>,
+    req: SetCatalogEnabledRequest,
+) -> ApiResult<Catalog> {
+    call(&state, move |api| api.set_catalog_enabled(req)).await
+}
+
+/// Fetches a catalog's index (a request of a few seconds, off the async runtime).
+#[tauri::command]
+async fn refresh_catalog(state: State<'_, AppState>, req: CatalogRef) -> ApiResult<Catalog> {
+    call(&state, move |api| api.refresh_catalog(req)).await
+}
+
+/// A page of a catalog's cached families; makes no request.
+#[tauri::command]
+async fn list_catalog_families(
+    state: State<'_, AppState>,
+    req: ListCatalogFamiliesRequest,
+) -> ApiResult<Paged<CatalogFamily>> {
+    call(&state, move |api| api.list_catalog_families(req)).await
 }
 
 /// Every saved comparison, by name (E13.2).
@@ -915,7 +1007,9 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             let path = request.uri().path().to_owned();
             // Reading a file blocks; keep it off the webview's thread.
             tauri::async_runtime::spawn_blocking(move || {
-                responder.respond(font_response(api.as_ref(), &path));
+                let response = catalog_font_response(api.as_ref(), &path)
+                    .unwrap_or_else(|| font_response(api.as_ref(), &path));
+                responder.respond(response);
             });
         })
         .setup(move |app| {
@@ -1003,6 +1097,10 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             save_comparison,
             rename_comparison,
             delete_comparison,
+            list_catalogs,
+            set_catalog_enabled,
+            refresh_catalog,
+            list_catalog_families,
             render_preview,
             activate,
             deactivate,
