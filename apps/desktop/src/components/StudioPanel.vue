@@ -4,6 +4,10 @@
 // The first panel is the library's layout: its layout comes from the URL (`layoutId`) and a
 // pick goes back up as `pick`. The others open their pick in their own store. Each panel is
 // a region named by its place and layout ("Panel 2: Book").
+//
+// "Print..." (E24.4) prints this panel alone through the OS print dialog: the studio store
+// marks it the print target and the print stylesheet leaves out everything else, the
+// controls marked `fm-no-print` included. PDF is the dialog's save-as-PDF.
 import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
@@ -72,6 +76,11 @@ const blockFaces = computed(() =>
   (layouts.draft?.blocks ?? []).map((_, i) => studio.faceOf(scope.value, i)),
 );
 
+const printing = computed(() => studio.printPanel === props.panel);
+const printError = computed(() =>
+  studio.printError?.panel === props.panel ? studio.printError.error : null,
+);
+
 const heading = ref<HTMLHeadingElement | null>(null);
 defineExpose({ focus: () => heading.value?.focus() });
 
@@ -82,8 +91,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="panel" :aria-labelledby="headingId" data-testid="studio-panel">
-    <header class="bar">
+  <section
+    class="panel"
+    :aria-labelledby="headingId"
+    data-testid="studio-panel"
+    :data-print-target="printing ? '' : undefined"
+  >
+    <header class="bar fm-no-print">
       <h2 :id="headingId" ref="heading" class="name" tabindex="-1">{{ label }}</h2>
       <label class="picker">
         {{ t('studio.layout') }}
@@ -100,6 +114,15 @@ onMounted(() => {
         </select>
       </label>
       <button
+        type="button"
+        class="button"
+        :aria-label="t('studio.printPanelFor', { number: String(number) })"
+        :title="t('studio.printTitle')"
+        @click="studio.print(panel)"
+      >
+        {{ t('studio.printPanel') }}
+      </button>
+      <button
         v-if="closable"
         type="button"
         class="button"
@@ -109,7 +132,10 @@ onMounted(() => {
         {{ t('studio.closePanel') }}
       </button>
     </header>
-    <LayoutActions :store="layouts" @opened="pick" />
+    <p v-if="printError" class="error fm-no-print" role="alert">{{ printError.message }}</p>
+    <div class="fm-no-print">
+      <LayoutActions :store="layouts" @opened="pick" />
+    </div>
     <FontLayout
       :layout="layouts.draft"
       :face="face"
@@ -181,6 +207,11 @@ onMounted(() => {
   background: transparent;
   color: inherit;
   font: inherit;
+}
+.error {
+  margin: 0;
+  padding: 4px 16px;
+  color: var(--fm-danger);
 }
 .name:focus-visible,
 .picker select:focus-visible,

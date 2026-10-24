@@ -1,0 +1,47 @@
+/* Print (E24.4): when an element carries `data-print-target` (the Pairing Studio panel
+   whose "Print..." was pressed), only it prints. Everything else on the page is left
+   out, its ancestors give up their screen layout (fixed heights, scrolling, flex rows),
+   so the content runs over as many pages as it needs, and controls marked `fm-no-print`
+   inside it stay off the paper. The text stays live text in its own fonts, so the
+   dialog's save-as-PDF embeds the fonts. Without a target, the page prints as it is. */
+@media print {
+  html:has([data-print-target])
+    body
+    :not(:has([data-print-target]), [data-print-target], [data-print-target] *) {
+    display: none !important;
+  }
+  html:has([data-print-target]) body,
+  html:has([data-print-target]) body :has([data-print-target]) {
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: none !important;
+  }
+  /* Paper is white: the light palette, whatever the app theme. */
+  [data-print-target] {
+    color-scheme: light;
+    --fm-bg: #ffffff;
+    --fm-fg: #000000;
+    --fm-muted: #404040;
+    --fm-border: #d4d4d4;
+    display: block !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    background: none !important;
+    color: #000000;
+  }
+  [data-print-target] .fm-no-print {
+    display: none !important;
+  }
+}

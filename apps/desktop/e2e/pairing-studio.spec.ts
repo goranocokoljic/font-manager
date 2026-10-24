@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { readPdf } from './pdf-text';
 
 // Layout blocks load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -9,6 +10,11 @@ const fixture = readFileSync(
       '../../../fixtures/fonts/google-repo/asapsharp/AsapSharp[wdth,wght].ttf',
       import.meta.url,
     ),
+  ),
+);
+const staticFixture = readFileSync(
+  fileURLToPath(
+    new URL('../../../fixtures/fonts/fontshare/public-sans/PublicSans-Bold.ttf', import.meta.url),
   ),
 );
 
@@ -383,4 +389,102 @@ test('a narrow window scrolls the panels sideways; every panel control is on the
   expect(count(/^Layout/)).toBe(3);
   expect(count(/^Font for Block 1$/)).toBe(3);
   expect(count(/^Duplicate$/)).toBe(3);
+  expect(count(/^Print panel [123]$/)).toBe(3);
+});
+
+test('"Print..." prints one panel alone, as live text in its fonts, and the PDF holds its text', async ({
+  page,
+}) => {
+  // Browser mode prints through window.print(); count the calls instead of opening a dialog.
+  await page.addInitScript(() => {
+    const w = window as unknown as { fmPrints: number };
+    w.fmPrints = 0;
+    window.print = () => {
+      w.fmPrints++;
+    };
+  });
+  await open(page);
+  // A static font: Chromium's PDF embeds it with its PostScript name (a variable font
+  // becomes an unnamed Type 3 font), so the PDF can show which font set the text.
+  await page.route('**/fmfont/*', (route) =>
+    route.fulfill({ status: 200, contentType: 'font/ttf', body: staticFixture }),
+  );
+  // A fresh document, so no face is still loaded from the other fixture.
+  await page.goto('about:blank');
+  await page.goto('/#/studio?layout=book&face=1');
+  const first = panelNamed(page, 'Panel 1: Book');
+  await expect(layout(first, 'Book')).toHaveAttribute('data-state', 'ready');
+  await addPanel(page).click();
+  const second = panelNamed(page, 'Panel 2: Book');
+  await expect(layout(second, 'Book')).toHaveAttribute('data-state', 'ready');
+  // Text that only one panel has, to tell the printed panel from the other on paper.
+  const setHeading = async (panel: Locator, text: string) => {
+    await blocks(layout(panel, 'Book')).first().dblclick();
+    await panel.getByRole('textbox', { name: 'Block 1 text' }).fill(text);
+    await page.keyboard.press('ControlOrMeta+Enter');
+    await expect(blocks(layout(panel, 'Book')).first()).toHaveText(text);
+  };
+  await setHeading(first, 'Left out of print');
+  await setHeading(second, 'Printed panel two');
+
+  // The button has a label and is on the Tab path right after the panel's layout picker.
+  const print = second.getByRole('button', { name: 'Print panel 2', exact: true });
+  await expect(print).toHaveText('Print…');
+  await second.getByRole('combobox', { name: 'Layout' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(print).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { fmPrints: number }).fmPrints))
+    .toBe(1);
+  await expect(second).toHaveAttribute('data-print-target', '');
+  await expect(first).not.toHaveAttribute('data-print-target');
+
+  // Under print media only that panel's layout shows: no app chrome, no other panel.
+  await page.emulateMedia({ media: 'print' });
+  await expect(first).toBeHidden();
+  await expect(addPanel(page)).toBeHidden();
+  await expect(studio(page).getByRole('heading', { name: 'Pairing Studio' })).toBeHidden();
+  await expect(print).toBeHidden();
+  await expect(second.getByRole('heading', { name: 'Panel 2: Book' })).toBeHidden();
+  await expect(second.getByRole('toolbar', { name: 'Layout file' })).toBeHidden();
+  await expect(second.getByTestId('block-size-badge').first()).toBeHidden();
+  await expect(second.getByTestId('layout-width-lock')).toBeHidden();
+  const printed = blocks(layout(second, 'Book'));
+  await expect(printed.first()).toBeVisible();
+  // Live text in the face, at the layout's locked width.
+  expect(await printed.first().evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(
+    /^"?fm-face-\d+/,
+  );
+  const width = await layout(second, 'Book')
+    .getByTestId('layout-page')
+    .evaluate((el) => parseFloat(getComputedStyle(el).getPropertyValue('--fm-layout-width')));
+  expect(width).toBeGreaterThan(0);
+  const rowWidth = await printed
+    .first()
+    .evaluate((el) => el.closest('.row')!.getBoundingClientRect().width);
+  expect(Math.abs(rowWidth - width)).toBeLessThanOrEqual(1);
+
+  // The PDF of that print holds the panel's text, set in the embedded layout font.
+  await page.evaluate(() => document.fonts.ready);
+  const pdf = readPdf(await page.pdf({ format: 'A4' }));
+  const squash = (s: string) => s.replace(/\s+/g, '');
+  expect(squash(pdf.text)).toContain(squash('Printed panel two'));
+  expect(squash(pdf.text)).not.toContain(squash('Left out of print'));
+  expect(squash(pdf.text)).not.toContain(squash('Add panel'));
+  expect(squash(pdf.text)).not.toContain(squash('Print…'));
+  const heading = pdf.runs.find((r) => squash(r.text).includes(squash('Printed panel two')));
+  expect(heading?.font).toMatch(/^[A-Z]{6}\+PublicSans-Bold$/);
+  expect(pdf.fonts).toContain(heading?.font);
+
+  // On screen nothing changed; the other panel prints alone after its own "Print...".
+  await page.emulateMedia({ media: 'screen' });
+  await expect(first).toBeVisible();
+  await first.getByRole('button', { name: 'Print panel 1', exact: true }).click();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { fmPrints: number }).fmPrints))
+    .toBe(2);
+  await page.emulateMedia({ media: 'print' });
+  await expect(second).toBeHidden();
+  await expect(blocks(layout(first, 'Book')).first()).toBeVisible();
 });
