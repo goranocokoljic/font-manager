@@ -115,6 +115,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("font_source", "1".into()),
         ("sample_texts", r#"{"faces":[1],"text":"Ag"}"#.into()),
         ("css_values", r#"{"face":1}"#.into()),
+        ("size_factors", r#"{"faces":[1],"basis":"xHeight"}"#.into()),
         // activation
         ("activate", format!(r#"{{"target":{faces}}}"#)),
         ("deactivate", format!(r#"{{"target":{faces}}}"#)),

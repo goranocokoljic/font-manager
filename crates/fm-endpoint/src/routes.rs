@@ -65,6 +65,7 @@ routes! {
     font_source(face),
     sample_texts(req),
     css_values(req),
+    size_factors(req),
     // activation
     activate(req),
     deactivate(req),
