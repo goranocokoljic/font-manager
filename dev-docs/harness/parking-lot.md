@@ -213,3 +213,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E24.3 #158] apps/desktop/src/views/HomeView.vue:96 — the layout picker's preset fallback is written twice (HomeView and StudioPanel); not a defect yet.
 - [E21.3 #145] crates/fm-core/src/api/tests.rs:2966 — the E21.1 single-family specimen has no test for an unreadable face file.
 - [E21.3 #145] crates/fm-platform/src/linux/trash.rs:253 — `civil_from_days` is a third copy of the days-to-date algorithm (also `layout::store::iso_utc` and `specimen::utc_date` in fm-core).
+- [E22.1 #146] crates/fm-core/src/catalog.rs:189 — `reqwest::blocking` panics inside a tokio runtime; when E22.2 wires Tauri/rmcp, `refresh_catalog` must run under `spawn_blocking`.
+- [E22.1 #146] docs/adr/0014-online-catalogs.md:1 — the TLS trust-store source per OS (platform verifier on Windows/macOS, native certs on Linux) is not documented.
+- [E22.1 #146] crates/fm-core/src/specimen.rs:514 — `utc_date` and `fm-platform/src/linux/trash.rs:254` are further copies of the civil-date algorithm.
