@@ -3051,6 +3051,7 @@ fn a_specimen_refuses_an_unknown_family_a_pdf_and_no_path() {
         })
         .expect_err("pdf");
     assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "PDF export needs the Font Manager app running.");
     let e = lib
         .api
         .export_specimen(SpecimenRequest {
@@ -3117,4 +3118,209 @@ fn the_specimen_guard_refuses_restricted_embedding_with_no_license() {
         .export_specimen(specimen_request(bebas, &out))
         .expect("declared");
     assert!(out.exists());
+}
+
+/// What [`FakePrinter`] does with a print.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum PrintOutcome {
+    /// Writes a small PDF.
+    Pdf,
+    /// Writes half a file, then fails.
+    FailAfterWriting,
+    /// Reports success but writes something that is not a PDF.
+    NotAPdf,
+}
+
+/// A printer that records the page it was handed and the files it wrote.
+#[derive(Debug)]
+struct FakePrinter {
+    outcome: PrintOutcome,
+    /// (html path, html text, partial path, printing thread) per print.
+    calls: Mutex<Vec<(PathBuf, String, PathBuf, std::thread::ThreadId)>>,
+}
+
+impl FakePrinter {
+    fn new(outcome: PrintOutcome) -> Arc<Self> {
+        Arc::new(Self {
+            outcome,
+            calls: Mutex::new(Vec::new()),
+        })
+    }
+
+    fn calls(&self) -> Vec<(PathBuf, String, PathBuf, std::thread::ThreadId)> {
+        self.calls.lock().expect("calls").clone()
+    }
+}
+
+impl PdfPrinter for FakePrinter {
+    fn print_html(&self, html: &Path, out: &Path) -> Result<(), fm_platform::PrintError> {
+        let text = std::fs::read_to_string(html).expect("the page is there while printing");
+        self.calls.lock().expect("calls").push((
+            html.to_path_buf(),
+            text,
+            out.to_path_buf(),
+            std::thread::current().id(),
+        ));
+        match self.outcome {
+            PrintOutcome::Pdf => {
+                std::fs::write(
+                    out,
+                    b"%PDF-1.7
+%fake
+",
+                )
+                .expect("write");
+                Ok(())
+            }
+            PrintOutcome::FailAfterWriting => {
+                std::fs::write(
+                    out,
+                    b"%PDF-1.7
+1 0 obj",
+                )
+                .expect("write");
+                Err(fm_platform::PrintError::new("the webview crashed"))
+            }
+            PrintOutcome::NotAPdf => {
+                std::fs::write(out, b"<html>").expect("write");
+                Ok(())
+            }
+        }
+    }
+}
+
+fn pdf_request(family: FamilyId, out: &Path) -> SpecimenRequest {
+    SpecimenRequest {
+        format: SpecimenFormat::Pdf,
+        ..specimen_request(family, out)
+    }
+}
+
+/// The names in `dir`, sorted.
+fn dir_names(dir: &Path) -> Vec<String> {
+    let mut names: Vec<_> = std::fs::read_dir(dir)
+        .expect("dir")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn a_pdf_specimen_prints_the_html_page_through_the_injected_printer() {
+    let (lib, _, _) = Lib::scanned("api-specimen-pdf");
+    let printer = FakePrinter::new(PrintOutcome::Pdf);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+        ..lib
+    };
+    let out_dir = lib.dir.path().join("Specimens ü");
+    std::fs::create_dir_all(&out_dir).expect("out");
+    let out = out_dir.join("Archivo.pdf");
+    let archivo = lib.family("Archivo").id;
+    let res = lib
+        .api
+        .export_specimen(pdf_request(archivo, &out))
+        .expect("pdf");
+    assert_eq!(Path::new(&res.path), out);
+    assert!(std::fs::read(&out).expect("pdf").starts_with(b"%PDF-"));
+
+    let calls = printer.calls();
+    assert_eq!(calls.len(), 1);
+    let (html, page, partial, thread) = &calls[0];
+    // The printer was handed the E21.1 page, the faces embedded.
+    let mut html_req = specimen_request(archivo, &out_dir.join("Archivo.html"));
+    html_req.format = SpecimenFormat::Html;
+    lib.api.export_specimen(html_req).expect("html");
+    let same = std::fs::read_to_string(out_dir.join("Archivo.html")).expect("html");
+    assert_eq!(page, &same, "the PDF prints the HTML specimen");
+    assert!(!embedded_fonts(page).is_empty());
+    // On the caller's thread; the source HTML is removed afterwards.
+    assert_eq!(*thread, std::thread::current().id());
+    assert!(!html.exists(), "the temporary page is removed");
+    // The print went to a hidden partial file next to out_path, now renamed.
+    assert_eq!(partial.parent(), Some(out_dir.as_path()));
+    assert_ne!(partial, &out);
+    assert!(!partial.exists());
+    assert_eq!(dir_names(&out_dir), ["Archivo.html", "Archivo.pdf"]);
+}
+
+#[test]
+fn a_failed_pdf_specimen_print_leaves_no_partial_file_and_no_temporary_page() {
+    for outcome in [PrintOutcome::FailAfterWriting, PrintOutcome::NotAPdf] {
+        let (lib, _, _) = Lib::scanned("api-specimen-pdf-fail");
+        let printer = FakePrinter::new(outcome);
+        let lib = Lib {
+            api: lib
+                .api
+                .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+            ..lib
+        };
+        let out_dir = lib.dir.path().join("Out");
+        std::fs::create_dir_all(&out_dir).expect("out");
+        let out = out_dir.join("Archivo.pdf");
+        let e = lib
+            .api
+            .export_specimen(pdf_request(lib.family("Archivo").id, &out))
+            .expect_err("print fails");
+        assert_eq!(e.code, ErrorCode::Io, "{outcome:?}");
+        assert_eq!(e.message, "The PDF specimen could not be printed.");
+        assert!(!out.exists(), "{outcome:?}: nothing at out_path");
+        assert_eq!(dir_names(&out_dir), Vec::<String>::new(), "{outcome:?}");
+        let calls = printer.calls();
+        assert_eq!(calls.len(), 1);
+        assert!(
+            !calls[0].0.exists(),
+            "{outcome:?}: the temporary page is removed"
+        );
+
+        // A file already at out_path is left as it was.
+        std::fs::write(&out, b"the user's old file").expect("old");
+        lib.api
+            .export_specimen(pdf_request(lib.family("Archivo").id, &out))
+            .expect_err("print fails again");
+        assert_eq!(std::fs::read(&out).expect("old"), b"the user's old file");
+        assert_eq!(dir_names(&out_dir), ["Archivo.pdf"]);
+    }
+}
+
+#[test]
+fn a_pdf_specimen_keeps_the_html_checks_and_never_prints_a_refused_family() {
+    let lib = Lib::new("api-specimen-pdf-guard");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let printer = FakePrinter::new(PrintOutcome::Pdf);
+    let lib = Lib {
+        api: lib
+            .api
+            .with_pdf_printer(Arc::clone(&printer) as Arc<dyn PdfPrinter>),
+        ..lib
+    };
+    let out = lib.dir.path().join("specimen.pdf");
+    let e = lib
+        .api
+        .export_specimen(pdf_request(lib.family("Bebas Neue").id, &out))
+        .expect_err("restricted");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    let e = lib
+        .api
+        .export_specimen(pdf_request(FamilyId(999_999), &out))
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert!(printer.calls().is_empty(), "nothing was printed");
+    assert!(!out.exists());
 }

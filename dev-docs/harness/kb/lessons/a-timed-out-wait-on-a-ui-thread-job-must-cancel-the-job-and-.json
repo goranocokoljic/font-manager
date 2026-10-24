@@ -1,0 +1,19 @@
+{
+  "id": "a-timed-out-wait-on-a-ui-thread-job-must-cancel-the-job-and-",
+  "title": "A timed-out wait on a UI-thread job must cancel the job and make a late job clean up its files",
+  "category": "user-files",
+  "rule": "When a worker thread hands a job to the UI thread (main dispatch queue, GTK idle source, an event loop) and waits with a timeout, the timeout must reach the job: share a cancelled flag the caller sets when it gives up, have the job check it before it starts any write, and have a job that finishes after the caller left remove what it wrote (detect it by the flag or by a failed send on the reply channel). The caller's own cleanup guard runs before the late job writes, so it cannot cover that file. Test it with a stand-in job that writes after the timeout and assert no file is left.",
+  "rationale": "E21.2 (#144): on macOS and Linux a PDF print that outlived the caller's 120 s wait still wrote its hidden .partial file next to the user's chosen path after fm-core had already removed it, leaving the file for good.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    144
+  ],
+  "file_globs": [
+    "crates/fm-platform/src/**",
+    "crates/fm-core/src/**"
+  ],
+  "first_seen": "2026-10-24T04:34:32.551Z",
+  "last_seen": "2026-10-24T04:34:32.551Z"
+}

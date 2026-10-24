@@ -205,6 +205,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E20.6 #142] crates/fm-core/src/api.rs:1004 — core `prepare_for_web` still returns `not_available`; it reaches the license guard through `export_web` once it is built.
 - [E20.6 #142] crates/fm-api/src/mock.rs:3404 — mock `export_web` does not dedupe a face listed twice in its write loop (core does with `ids.insert`), so the mock returns duplicate files.
 - [E20.6 #142] crates/fm-api/src/mock.rs:3016 — clearing a family declaration sets the mock's `declared` to `None`, while core falls back to the face's own `license_type` (faces.rs:246), so the export guard can disagree after a clear.
+- [E21.2 #144] apps/desktop/src-tauri/src/lib.rs:1036 — no adapter (Tauri command, endpoint, CLI, MCP) calls `export_specimen` yet, so the PDF path (and the MockApi fallback's PDF answer) is unreachable from the app until a later story wires it.
+- [E21.2 #144] crates/fm-core/src/api.rs:455 — the doc line "The answer of a service that is not built yet." now sits above `PDF_NEEDS_APP` instead of `not_available`.
 - [E24.2 #157] apps/desktop/src/stores/glyphCompare.ts:74 — `glyphCompare.search` never clears `error` after a successful search, so one failed search leaves a stale error for the overlay session.
 - [E24.2 #157] apps/desktop/src/components/BlockFontPicker.vue:195 — no `forced-colors` handling app-wide; the active combobox option is marked only by background and box-shadow, which Windows High Contrast removes.
 - [E24.3 #158] apps/desktop/src/stores/studio.ts:123 — `setBlockFace` answering after `closePanel` leaves an orphan `p<k>/…` block-font key; panel keys are never reused, so nothing shows.
