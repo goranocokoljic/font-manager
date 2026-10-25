@@ -350,6 +350,28 @@ pub struct SimilarFace {
     pub reasons: Vec<String>,
 }
 
+/// Faces that pair well with this one (E23.4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingRequest {
+    /// The face to find partners for.
+    pub face: FaceId,
+    /// Suggestions to return.
+    pub limit: u32,
+}
+
+/// A face suggested as a partner and why.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct PairingSuggestion {
+    /// The face: one per family, the style closest to the one asked about.
+    pub face: FaceSummary,
+    /// 0.0–1.0; higher pairs better.
+    pub score: f32,
+    /// Plain-word reasons, one per rule that holds ("same superfamily").
+    pub reasons: Vec<String>,
+}
+
 /// Search, filters, coverage and similarity.
 pub trait SearchService {
     /// Ranked results grouped by family.
@@ -363,4 +385,8 @@ pub trait SearchService {
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>>;
     /// Faces ranked by visual similarity.
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>>;
+    /// Faces of other families that pair with this one by rule: contrasting
+    /// classes, a matching x-height, the same designer or superfamily. Best
+    /// first; a face no rule holds for is not suggested.
+    fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>>;
 }

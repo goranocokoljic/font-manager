@@ -33,6 +33,7 @@ pub mod license;
 pub mod lifecycle;
 pub mod logging;
 pub mod metrics;
+pub mod pairing;
 pub mod palettes;
 pub mod pangrams;
 mod parallel;

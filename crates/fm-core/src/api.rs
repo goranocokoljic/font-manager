@@ -73,8 +73,8 @@ use fm_api::preview::{
     SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
-    SearchService, SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
+    PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, EndpointInfo, Settings, SettingsService, SettingsUpdate};
 use fm_api::workflows::{
@@ -720,6 +720,10 @@ impl SearchService for CoreApi {
 
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
         Ok(self.lock().find_similar(&req)?)
+    }
+
+    fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
+        Ok(self.lock().suggest_pairings(&req)?)
     }
 }
 

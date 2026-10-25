@@ -9,6 +9,9 @@
 // a saved one is reopened from the list in the sheet (or the command palette) and
 // shows the fonts left, naming the ones the library no longer has.
 //
+// Pairings (E23.4): a panel below the faces suggests fonts that go with the first
+// pin, each with an "Add to compare" button.
+//
 // A modal dialog: Tab cycles inside, plain keys do not reach the list's
 // shortcuts, and Escape or Close returns focus to where it was (the list row).
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
@@ -19,6 +22,7 @@ import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
+import PairingsPanel from './PairingsPanel.vue';
 
 const compare = useCompareStore();
 const preview = usePreviewStore();
@@ -385,6 +389,8 @@ function onFocusIn(e: FocusEvent): void {
           </p>
         </li>
       </ul>
+
+      <PairingsPanel />
     </div>
   </div>
 </template>

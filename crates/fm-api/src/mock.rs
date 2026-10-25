@@ -60,8 +60,9 @@ use crate::preview::{
 };
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
-    FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, SearchRequest,
-    SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
+    FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, PairingRequest,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
+    WeightRange, WidthRange,
 };
 use crate::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
 use crate::workflows::{
@@ -2204,6 +2205,91 @@ impl SearchService for MockApi {
                 reasons,
             });
         }
+        out.sort_by(|a, b| b.score.total_cmp(&a.score));
+        out.truncate(req.limit as usize);
+        Ok(out)
+    }
+
+    /// fm-core's rules on the sample families, without the superfamily one:
+    /// contrasting classes +0.4 (a display or script face only with a sans
+    /// or serif), the same designer +0.2, x-heights within 5% +0.1. One
+    /// face per other family, the closest in weight; best first, then by
+    /// family id.
+    fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
+        use Classification::{Display, Sans, Script, Serif, Slab};
+        let st = self.state();
+        let me = st.face(req.face)?;
+        let mine = st.family(me.detail.face.family)?;
+        let ratio = |f: &MockFace| {
+            let m = f.detail.metrics;
+            m.x_height
+                .filter(|_| m.units_per_em > 0)
+                .map(|x| f32::from(x) / f32::from(m.units_per_em))
+        };
+        let my_ratio = ratio(me);
+        let mut best: BTreeMap<FamilyId, (&MockFace, &MockFamily)> = BTreeMap::new();
+        for f in st.faces.iter().filter(|f| {
+            f.detail.face.family != me.detail.face.family
+                && st.visible(f)
+                && !st.trashed.contains(&f.detail.path)
+        }) {
+            let fam = st.family(f.detail.face.family)?;
+            let closer = |o: &MockFace| {
+                (
+                    o.detail.face.weight.abs_diff(me.detail.face.weight),
+                    o.detail.face.slant != me.detail.face.slant,
+                    o.detail.face.id,
+                )
+            };
+            let keep = best.get(&fam.id).is_none_or(|(o, _)| closer(f) < closer(o));
+            if keep {
+                best.insert(fam.id, (f, fam));
+            }
+        }
+        let mut out = Vec::new();
+        for (f, fam) in best.into_values() {
+            let (a, b) = (mine.classification, fam.classification);
+            let loose = |c| matches!(c, Display | Script);
+            if (loose(a) && !matches!(b, Sans | Serif)) || (loose(b) && !matches!(a, Sans | Serif))
+            {
+                continue;
+            }
+            let mut score: f32 = 0.0;
+            let mut reasons = Vec::new();
+            let contrast = matches!((a, b), (Serif | Slab, Sans) | (Sans, Serif | Slab))
+                || loose(a)
+                || loose(b);
+            if contrast {
+                score += 0.4;
+                let word = |c| match c {
+                    Serif => "serif",
+                    Sans => "sans serif",
+                    Slab => "slab serif",
+                    Display => "display",
+                    Script => "script",
+                    _ => "other",
+                };
+                reasons.push(format!("contrast: {} with {}", word(a), word(b)));
+            }
+            if fam.designer == mine.designer {
+                score += 0.2;
+                reasons.push("same designer".to_string());
+            }
+            if let (Some(x), Some(y)) = (my_ratio, ratio(f))
+                && (x / y - 1.0).abs() <= 0.05
+            {
+                score += 0.1;
+                reasons.push("similar x-height".to_string());
+            }
+            if !reasons.is_empty() {
+                out.push(PairingSuggestion {
+                    face: st.summary(f),
+                    score,
+                    reasons,
+                });
+            }
+        }
+        // Stable: equal scores keep the family order.
         out.sort_by(|a, b| b.score.total_cmp(&a.score));
         out.truncate(req.limit as usize);
         Ok(out)

@@ -1017,6 +1017,39 @@ fn coverage_and_languages_come_from_the_stored_cmap() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+#[test]
+fn pairings_come_from_the_index_by_rule() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-pairings",
+        &["google-repo/librebaskerville/LibreBaskerville[wght].ttf"],
+    );
+    let serif = FaceId(lib.family("Libre Baskerville").id.0);
+    let got = lib
+        .api
+        .suggest_pairings(PairingRequest {
+            face: serif,
+            limit: 3,
+        })
+        .expect("pairings");
+    assert_eq!(got.len(), 3);
+    assert!(
+        got[0].reasons[0].starts_with("contrast: serif with "),
+        "{got:?}"
+    );
+    assert!(
+        got.iter()
+            .all(|s| s.face.family_name != "Libre Baskerville")
+    );
+    let err = lib
+        .api
+        .suggest_pairings(PairingRequest {
+            face: FaceId(99_999),
+            limit: 3,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
 // --- preview -------------------------------------------------------------
 
 #[test]

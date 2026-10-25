@@ -1846,6 +1846,24 @@ export type Paged<T> = {
 	total: number,
 };
 
+/**  Faces that pair well with this one (E23.4). */
+export type PairingRequest = {
+	/**  The face to find partners for. */
+	face: FaceId,
+	/**  Suggestions to return. */
+	limit: number,
+};
+
+/**  A face suggested as a partner and why. */
+export type PairingSuggestion = {
+	/**  The face: one per family, the style closest to the one asked about. */
+	face: FaceSummary,
+	/**  0.0–1.0; higher pairs better. */
+	score: number | null,
+	/**  Plain-word reasons, one per rule that holds ("same superfamily"). */
+	reasons: string[],
+};
+
 /**
  *  One `CPAL` palette of a `COLR` color face (E16.3). The webview applies it
  *  with CSS `font-palette` (`base-palette: index`).

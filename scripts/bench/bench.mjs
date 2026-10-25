@@ -16,7 +16,8 @@
 // latency (p95 over --rounds rounds of the query set), smart-collection latency
 // (p95 of a search by each of 20 smart collections and of list_collections,
 // E14.2), similar-font latency (p95 of 20 similar faces for each of 10
-// faces, E23.2), idle memory (resident
+// faces, E23.2), pairing latency (p95 of suggest_pairings for 20 faces,
+// E23.4), idle memory (resident
 // set of a started process after --settle-ms), preview-cache hit latency (p95
 // over --rounds hits on up to 200 cached thumbnails, E4.3) and 100-face
 // activation (one session request through this OS's activator, then
@@ -132,6 +133,7 @@ async function run(opts) {
     const search = bench(bin, ['search', '--home', home, '--rounds', String(opts.rounds)]);
     const smart = bench(bin, ['smart', '--home', home, '--rounds', String(opts.rounds)]);
     const similar = bench(bin, ['similar', '--home', home, '--rounds', String(opts.rounds)]);
+    const paired = bench(bin, ['pairings', '--home', home, '--rounds', String(opts.rounds)]);
     const previewCache = bench(bin, ['preview-cache', '--home', home, '--rounds', String(opts.rounds)]);
     const activation = bench(bin, ['activate', '--home', home]);
     console.log(`activation: ${activation.done}/${activation.faces} faces activated, ${activation.conflicts} clashes`);
@@ -150,13 +152,14 @@ async function run(opts) {
         search: metric('search', search.p95_ms),
         smart_collections: metric('smart_collections', smart.p95_ms),
         similar: metric('similar', similar.p95_ms),
+        pairings: metric('pairings', paired.p95_ms),
         activation_100: activation100(activation),
         idle_memory: metric('idle_memory', idle),
         preview_cache_hit: previewCache.samples
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, preview_cache: previewCache, activation },
+      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, preview_cache: previewCache, activation },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');

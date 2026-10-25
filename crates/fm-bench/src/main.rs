@@ -8,6 +8,7 @@
 //! fm-bench search --home DIR [--rounds N]
 //! fm-bench smart --home DIR [--rounds N]          # search by 20 smart collections, list them
 //! fm-bench similar --home DIR [--rounds N]        # 20 similar faces for each of 10 faces
+//! fm-bench pairings --home DIR [--rounds N]       # suggest_pairings for 20 faces
 //! fm-bench activate --home DIR                 # 100 faces of the scanned index, one request
 //! fm-bench preview-cache --home DIR [--rounds N]
 //! ```
@@ -20,12 +21,12 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use fm_bench::{
-    BenchResult, activate, first_scan, incremental, preview_cache, search, similar,
+    BenchResult, activate, first_scan, incremental, pairings, preview_cache, search, similar,
     smart_collections, start,
 };
 use serde::Serialize;
 
-const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|smart|similar|preview-cache|activate> --home DIR [--library DIR] [--rounds N]";
+const USAGE: &str = "usage: fm-bench <start|idle|scan|incremental|search|smart|similar|pairings|preview-cache|activate> --home DIR [--library DIR] [--rounds N]";
 
 #[derive(Debug, Default)]
 struct Args {
@@ -85,6 +86,7 @@ fn run(args: Args) -> BenchResult<()> {
         "search" => print(&search(&home, args.rounds.unwrap_or(20))?),
         "smart" => print(&smart_collections(&home, args.rounds.unwrap_or(5))?),
         "similar" => print(&similar(&home, args.rounds.unwrap_or(5))?),
+        "pairings" => print(&pairings(&home, args.rounds.unwrap_or(5))?),
         "preview-cache" => print(&preview_cache(&home, args.rounds.unwrap_or(20))?),
         "activate" => print(&activate(&home)?),
         other => Err(format!("unknown command: {other}\n{USAGE}").into()),

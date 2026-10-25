@@ -48,7 +48,7 @@ use crate::filter::{
 };
 use crate::grouping::{family_key, slant_rank};
 use crate::license;
-use crate::search::{FAMILY, FIELD_COUNT, FOUNDRY, FaceText, Query};
+use crate::search::{DESIGNER, FAMILY, FIELD_COUNT, FOUNDRY, FaceText, Query};
 use smart::Member;
 
 /// Every searchable face with what its family summary needs.
@@ -67,7 +67,10 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
        CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.version') END,
        face.open_license, face.fstype, face.last_activated,
        CASE WHEN json_valid(face.parsed)
-            THEN json_extract(face.parsed, '$.classification.class') END
+            THEN json_extract(face.parsed, '$.classification.class') END,
+       CASE WHEN json_valid(face.metrics)
+            THEN CAST(json_extract(face.metrics, '$.xHeight') AS REAL)
+                 / nullif(json_extract(face.metrics, '$.unitsPerEm'), 0) END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -121,6 +124,10 @@ struct Row {
     version: Option<String>,
     /// The open license its name table states.
     open_license: Option<OpenLicense>,
+    /// Its designer as written (name ID 9).
+    designer: Option<String>,
+    /// Its x-height as a share of the em (E23.4).
+    x_height: Option<f32>,
 }
 
 impl Index {
@@ -511,6 +518,13 @@ impl Index {
                     .map(|dir| dir.display().to_string()),
                 version: text(27)?.map(str::to_owned),
                 open_license,
+                designer: fields[DESIGNER].map(str::to_owned),
+                // Not a number (a damaged row): unknown, like a missing one.
+                x_height: row
+                    .get::<_, Option<f64>>(32)
+                    .ok()
+                    .flatten()
+                    .map(|x| x as f32),
             });
         }
         Ok(out)
@@ -702,6 +716,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
     serde_json::from_value(serde_json::Value::String(name.to_owned())).ok()
 }
 
+mod pairing;
 mod similar;
 pub(super) mod smart;
 

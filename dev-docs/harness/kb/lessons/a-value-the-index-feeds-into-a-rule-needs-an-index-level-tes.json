@@ -1,0 +1,19 @@
+{
+  "id": "a-value-the-index-feeds-into-a-rule-needs-an-index-level-tes",
+  "title": "A value the index feeds into a rule needs an index-level test for that rule",
+  "category": "testing",
+  "rule": "When a rule in fm-core reads a value that comes from an SQL column or a JSON key of the index (a search-cache row, a json_extract), add a test that goes through the index (persist_files, then the public query) where only that rule can hold, and assert its exact reason or effect. Read code that turns a bad read into None (`.ok().flatten()`) as silent: unit tests of the rule on hand-built inputs and fixture tests that assert only another rule's reason pass with the value always None. Check the test by breaking the column index or the key once and seeing it fail.",
+  "rationale": "E23.4 (#155): the x-height (face.metrics column 32) and designer feeding the pairing rules were tested only as pure functions and through the mocks; a wrong column or JSON key would have dropped 'similar x-height' and 'same designer' from the app with every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    155
+  ],
+  "file_globs": [
+    "crates/fm-core/src/index/**/*.rs",
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-25T01:30:30.721Z",
+  "last_seen": "2026-10-25T01:30:30.721Z"
+}

@@ -41,8 +41,8 @@ use fm_api::preview::{
     SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
-    SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
 use fm_api::{
@@ -756,6 +756,16 @@ async fn find_similar(
     call(&state, move |api| api.find_similar(req)).await
 }
 
+/// Faces of other families that pair with one face by rule, with reasons
+/// (the Compare sheet's Pairings panel, E23.4).
+#[tauri::command]
+async fn suggest_pairings(
+    state: State<'_, AppState>,
+    req: PairingRequest,
+) -> ApiResult<Vec<PairingSuggestion>> {
+    call(&state, move |api| api.suggest_pairings(req)).await
+}
+
 /// How well one face covers some languages or text, for the glyph compare overlay.
 #[tauri::command]
 async fn check_coverage(
@@ -1176,6 +1186,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_family,
             search,
             find_similar,
+            suggest_pairings,
             check_coverage,
             face_coverage,
             list_languages,

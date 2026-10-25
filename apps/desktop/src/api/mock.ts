@@ -2381,6 +2381,68 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       ranked.sort((a, b) => b.score - a.score);
       return ranked.slice(0, req.limit);
     },
+    // The Rust mock's pairing rules: contrasting classes +0.4 (a display or script face
+    // only with a sans or serif), the same designer +0.2, x-heights within 5% +0.1; one
+    // face per other family, the closest in weight; best first, then by family id.
+    suggestPairings: async (req) => {
+      const me = faceOrThrow(req.face);
+      const mine = mockClassification(me);
+      const ratio = (d: FaceDetail) =>
+        d.metrics.xHeight != null && d.metrics.unitsPerEm > 0
+          ? d.metrics.xHeight / d.metrics.unitsPerEm
+          : null;
+      // Below zero when `a` is closer to `me` than `b`: weight, then slant, then id.
+      const closer = (a: FaceDetail, b: FaceDetail) =>
+        Math.abs(a.face.weight - me.face.weight) - Math.abs(b.face.weight - me.face.weight) ||
+        Number(a.face.slant !== me.face.slant) - Number(b.face.slant !== me.face.slant) ||
+        a.face.id - b.face.id;
+      const nearest = new Map<number, FaceDetail>();
+      for (const f of faces) {
+        if (f.face.family === me.face.family || trashed.has(f.path)) continue;
+        const held = nearest.get(f.face.family);
+        if (!held || closer(f, held) < 0) nearest.set(f.face.family, f);
+      }
+      const loose = (c: Classification) => c === 'display' || c === 'script';
+      const plain = (c: Classification) => c === 'sans' || c === 'serif';
+      const word: Partial<Record<Classification, string>> = {
+        serif: 'serif',
+        sans: 'sans serif',
+        slab: 'slab serif',
+        display: 'display',
+        script: 'script',
+      };
+      const out = [...nearest.entries()]
+        .sort(([a], [b]) => a - b)
+        .flatMap(([, f]) => {
+          const theirs = mockClassification(f);
+          if ((loose(mine) && !plain(theirs)) || (loose(theirs) && !plain(mine))) return [];
+          let score = 0;
+          const reasons: string[] = [];
+          const text = (c: Classification) => c === 'serif' || c === 'slab';
+          if (
+            (text(mine) && theirs === 'sans') ||
+            (mine === 'sans' && text(theirs)) ||
+            loose(mine) ||
+            loose(theirs)
+          ) {
+            score += 0.4;
+            reasons.push(`contrast: ${word[mine] ?? 'other'} with ${word[theirs] ?? 'other'}`);
+          }
+          if (f.designer != null && f.designer === me.designer) {
+            score += 0.2;
+            reasons.push('same designer');
+          }
+          const [x, y] = [ratio(me), ratio(f)];
+          if (x !== null && y !== null && Math.abs(x / y - 1) <= 0.05) {
+            score += 0.1;
+            reasons.push('similar x-height');
+          }
+          return reasons.length ? [{ face: summary(f), score, reasons }] : [];
+        });
+      // Stable: equal scores keep the family order.
+      out.sort((a, b) => b.score - a.score);
+      return out.slice(0, req.limit);
+    },
     createCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');

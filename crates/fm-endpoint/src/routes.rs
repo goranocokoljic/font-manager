@@ -60,6 +60,7 @@ routes! {
     face_coverage(face),
     list_languages(),
     find_similar(req),
+    suggest_pairings(req),
     // preview
     render_preview(req),
     font_source(face),

@@ -228,6 +228,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E22.2 #147] apps/desktop/src/views/HomeView.vue:625 — the library toolbar is a fixed-height, non-wrapping row and can clip at narrow center widths (inspector open below ~1,280 px).
 - [E22.5 #150] crates/fm-api/src/mock.rs:117 — the mock labels `OpenLicense::Ofl` "OFL" while core's `open_license_label` (crates/fm-core/src/inventory.rs:169) says "SIL Open Font License"; two label tables for one enum will drift.
 - [E22.4 #149] apps/desktop/src/components/FontList.vue:261 — the existing open-license badge is not in the treeitem aria-label, so screen readers miss it.
+- [E23.4 #155] apps/desktop/src/stores/similar.ts:1 — the similar, compare and new pairings stores do not subscribe to library events, so their results stay stale after a library change until reopened.
+- [E23.4 #155] crates/fm-core/src/index/faces.rs:450 — `read_row` also deserializes `face.parsed`; rows written before a required ParsedFace field lose license, axes and features in the inspector until the next scan.
+- [E23.4 #155] crates/fm-mcp/src/lib.rs:1 — `find_similar` and `suggest_pairings` are reachable only from the desktop UI, not from the CLI or the MCP server.
 - [E25.1 #160] apps/desktop/src/components/CopyValue.vue:47 — `role="status"` live regions hidden with `.status:empty { display: none }` may not be announced when they first appear (also CatalogDownload.vue:240, SettingsView.vue:595, LocalApiSettings.vue).
 
 ## 2026-10-25
@@ -236,3 +239,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E19.1 #133] apps/desktop/src/components/UpdateDialog.vue:26 — the dialog focus-trap and return-focus pattern is hand-written in UpdateDialog, SmartRuleEditor and CompareSheet; only Compare and Quick look use `sheetReturnTarget`.
 - [E19.1 #133] apps/desktop/src/views/HomeView.vue — the "Inspector" toolbar button label spills past its border at 1280×800.
 - [E23.2 #153] apps/desktop/src/api/mock.ts:2357 — MockApi `find_similar` still answers "not available yet" (asserted by apps/desktop/e2e/similar.spec.ts:157 and SimilarPanel.test.ts:110), so browser-mode tests cover a behaviour the core no longer has.
+- [E23.4 #155] apps/desktop/src/stores/compare.ts:1 — Compare pins never subscribe to library-change events, so a face removed while the sheet is open stays pinned (the pairings store inherits this).
+- [E23.4 #155] .github/workflows/bench.yml:157 — after `gh run rerun --failed`, the gate job's `download-artifact` (pattern bench-os-*, merge-multiple) judged the first attempt's linux report (activation_100 542.3 ms) although the re-run measure job uploaded a new one (61.1 ms); re-running a red bench job cannot turn the gate green (run 40150913939, attempt 3).
