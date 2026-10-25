@@ -4,20 +4,20 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use clap::Parser;
+use fm_api::activation::ActivationMode;
 use fm_api::mock::MockApi;
+use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, SetEntry, SetExport};
 use fm_api::search::{Filters, SearchRequest, SimilarRequest, Supports};
-use fm_api::{API_VERSION, ApiError, ErrorCode, LibraryService, SearchService};
-use fm_cli::{Cli, Exit, Output};
+use fm_api::{
+    API_VERSION, ActivationService, ApiError, ErrorCode, FaceId, LibraryService,
+    OrganizationService, SearchService, SetId,
+};
+use fm_cli::{Cli, Exit, Link, Output};
 use serde_json::Value;
 
 /// Runs `fm <args>` on a fresh mock: exit, stdout, stderr.
 fn fm(args: &[&str]) -> (Exit, String, String) {
-    let cli = Cli::try_parse_from(std::iter::once("fm").chain(args.iter().copied()))
-        .expect("valid command line");
-    let (mut out, mut err) = (Vec::new(), Vec::new());
-    let exit = fm_cli::run(&MockApi::new(), &cli, &mut out, &mut err);
-    let text = |b: Vec<u8>| String::from_utf8(b).expect("UTF-8");
-    (exit, text(out), text(err))
+    fm_on(&MockApi::new(), args)
 }
 
 fn json(text: &str) -> Value {
@@ -134,12 +134,18 @@ fn a_usage_error_exits_2_and_is_json_with_the_flag() {
     assert_eq!(e["detail"], "error: unrecognized subcommand");
 }
 
-/// Runs `fm <args>` on `api`: exit, stdout, stderr.
+/// Runs `fm <args>` on `api`, as through the app's endpoint: exit, stdout,
+/// stderr.
 fn fm_on(api: &MockApi, args: &[&str]) -> (Exit, String, String) {
+    fm_linked(api, Link::Endpoint, args)
+}
+
+/// Runs `fm <args>` on `api`, reached over `link`: exit, stdout, stderr.
+fn fm_linked(api: &MockApi, link: Link, args: &[&str]) -> (Exit, String, String) {
     let cli = Cli::try_parse_from(std::iter::once("fm").chain(args.iter().copied()))
         .expect("valid command line");
     let (mut out, mut err) = (Vec::new(), Vec::new());
-    let exit = fm_cli::run(api, &cli, &mut out, &mut err);
+    let exit = fm_cli::run(api, link, &cli, &mut out, &mut err);
     let text = |b: Vec<u8>| String::from_utf8(b).expect("UTF-8");
     (exit, text(out), text(err))
 }
@@ -460,4 +466,336 @@ fn similar_prints_the_similar_faces() {
     assert_eq!(exit, Exit::Success);
     assert!(out.contains("SCORE") && out.contains("REASONS"), "{out}");
     assert!(out.contains(&direct[0].face.postscript_name), "{out}");
+}
+
+/// The faces the app has active, with their mode.
+fn active(api: &MockApi) -> Vec<(u32, ActivationMode)> {
+    api.list_active()
+        .unwrap()
+        .into_iter()
+        .map(|a| (a.face.0, a.mode))
+        .collect()
+}
+
+/// The `status` of each outcome of a `--json` activation, by face id.
+fn statuses(out: &str) -> Vec<(u64, String)> {
+    json(out)
+        .as_array()
+        .expect("an array of outcomes")
+        .iter()
+        .map(|o| {
+            (
+                o["face"].as_u64().expect("face"),
+                o["outcome"]["status"].as_str().expect("status").to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// The line of `out` that starts with face `id`.
+fn line_of(out: &str, id: u32) -> &str {
+    out.lines()
+        .map(str::trim)
+        .find(|l| l.starts_with(&format!("{id} ")))
+        .unwrap_or_else(|| panic!("no line for face {id}: {out}"))
+}
+
+#[test]
+fn activate_a_family_name_activates_every_style_one_line_per_face() {
+    let api = MockApi::new();
+    let (exit, out, err) = fm_on(&api, &["activate", "Inter"]);
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    assert_eq!(
+        out.lines().count(),
+        3,
+        "a header and one line per face: {out}"
+    );
+    let regular = line_of(&out, 1);
+    assert!(
+        regular.contains("Inter Regular") && regular.ends_with("done"),
+        "{out}"
+    );
+    let italic = line_of(&out, 2);
+    assert!(
+        italic.contains("Inter Italic") && italic.ends_with("done"),
+        "{out}"
+    );
+    assert_eq!(
+        active(&api),
+        [(1, ActivationMode::Session), (2, ActivationMode::Session)]
+    );
+
+    // Already active: unchanged is a success too.
+    let (exit, out, _) = fm_on(&api, &["--json", "activate", "Inter"]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(
+        statuses(&out),
+        [(1, "unchanged".to_owned()), (2, "unchanged".to_owned())]
+    );
+}
+
+#[test]
+fn activate_permanent_asks_for_a_permanent_activation_of_one_face() {
+    let api = MockApi::new();
+    let (exit, out, _) = fm_on(&api, &["--json", "activate", "Inter-Italic", "--permanent"]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(statuses(&out), [(2, "done".to_owned())]);
+    assert_eq!(active(&api), [(2, ActivationMode::Permanent)]);
+}
+
+#[test]
+fn activate_a_set_exits_4_when_a_face_clashes_and_activates_the_rest() {
+    let api = MockApi::new();
+    // The mock set "Client brand": Inter Regular, and JetBrains Mono, which
+    // clashes with an installed font.
+    let (exit, out, err) = fm_on(&api, &["activate", "--set", "client BRAND"]);
+    assert_eq!((exit, err.as_str()), (Exit::Refused, ""));
+    assert!(line_of(&out, 1).ends_with("done"), "{out}");
+    let clash = line_of(&out, 6);
+    assert!(
+        clash.contains("JetBrains Mono Regular") && clash.contains("conflict: an installed font"),
+        "{out}"
+    );
+    assert_eq!(active(&api), [(1, ActivationMode::Session)]);
+
+    let (exit, out, _) = fm_on(&MockApi::new(), &["--json", "activate", "--set", "1"]);
+    assert_eq!(exit, Exit::Refused);
+    assert_eq!(
+        statuses(&out),
+        [(1, "done".to_owned()), (6, "conflict".to_owned())]
+    );
+}
+
+#[test]
+fn activate_a_font_that_cannot_be_activated_exits_4_with_the_reason() {
+    let api = MockApi::new();
+    let (exit, out, _) = fm_on(&api, &["activate", "LegacyGrotesk"]);
+    assert_eq!(exit, Exit::Refused);
+    assert!(
+        line_of(&out, 7).contains("skipped: Type 1 fonts cannot be activated"),
+        "{out}"
+    );
+    assert!(active(&api).is_empty());
+}
+
+#[test]
+fn activate_and_deactivate_a_collection_by_name_or_id() {
+    let api = MockApi::new();
+    let picks = api
+        .create_collection(CreateCollectionRequest {
+            name: "Serif picks".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+        })
+        .unwrap();
+    api.add_to_collection(CollectionFacesRequest {
+        collection: picks.id,
+        faces: vec![FaceId(3), FaceId(5)],
+        families: Vec::new(),
+    })
+    .unwrap();
+
+    let (exit, out, _) = fm_on(
+        &api,
+        &["--json", "activate", "--collection", " serif picks "],
+    );
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(
+        statuses(&out),
+        [(3, "done".to_owned()), (5, "done".to_owned())]
+    );
+
+    let id = picks.id.0.to_string();
+    let (exit, out, _) = fm_on(&api, &["--json", "deactivate", "--collection", &id]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(
+        statuses(&out),
+        [(3, "done".to_owned()), (5, "done".to_owned())]
+    );
+    assert!(active(&api).is_empty());
+}
+
+#[test]
+fn a_target_that_names_nothing_or_several_things_is_refused() {
+    let api = MockApi::new();
+    let (exit, out, err) = fm_on(&api, &["activate", "--collection", "Nope"]);
+    assert_eq!((exit, out.as_str()), (Exit::NotFound, ""));
+    assert!(
+        err.contains("No collection in the library is called \"Nope\"."),
+        "{err}"
+    );
+
+    let (exit, _, err) = fm_on(&api, &["--json", "deactivate", "--set", "Nope"]);
+    assert_eq!(exit, Exit::NotFound);
+    assert_eq!(json(&err)["code"], "notFound");
+
+    let (exit, _, _) = fm_on(&api, &["activate", "No Such Font"]);
+    assert_eq!(exit, Exit::NotFound);
+
+    // Two collections of one name, under different parents.
+    let new = |name: &str, parent| {
+        api.create_collection(CreateCollectionRequest {
+            name: name.into(),
+            parent,
+            rules: None,
+            rule_group: None,
+        })
+        .unwrap()
+    };
+    let (a, b) = (new("Work", None), new("Play", None));
+    let (x, y) = (new("Drafts", Some(a.id)), new("Drafts", Some(b.id)));
+    let (exit, out, err) = fm_on(&api, &["--json", "activate", "--collection", "drafts"]);
+    assert_eq!((exit, out.as_str()), (Exit::Usage, ""));
+    let e = json(&err);
+    assert_eq!(e["code"], "invalidRequest");
+    let detail = e["detail"].as_str().expect("detail");
+    assert!(detail.contains(&format!("{}\tDrafts", x.id)), "{detail}");
+    assert!(detail.contains(&format!("{}\tDrafts", y.id)), "{detail}");
+    assert!(active(&api).is_empty());
+
+    // A font, a collection or a set: one at a time.
+    assert!(Cli::try_parse_from(["fm", "activate", "x", "--collection", "--set"]).is_err());
+}
+
+#[test]
+fn deactivate_reports_faces_the_app_did_not_activate_as_skipped() {
+    let api = MockApi::new();
+    fm_on(&api, &["activate", "Inter-Regular"]);
+    let (exit, out, err) = fm_on(&api, &["deactivate", "Inter"]);
+    assert_eq!((exit, err.as_str()), (Exit::Refused, ""));
+    assert!(line_of(&out, 1).ends_with("done"), "{out}");
+    assert!(
+        line_of(&out, 2).contains("skipped: The app did not activate this font."),
+        "{out}"
+    );
+    assert!(active(&api).is_empty());
+}
+
+#[test]
+fn deactivate_never_deregisters_a_font_activated_outside_the_app() {
+    let api = MockApi::new();
+    fm_on(&api, &["activate", "Inter-Regular"]);
+    // JetBrains Mono is installed on the system, not activated by the app.
+    let (exit, out, _) = fm_on(&api, &["--json", "deactivate", "JetBrainsMono-Regular"]);
+    assert_eq!(exit, Exit::Refused);
+    assert_eq!(statuses(&out), [(6, "skipped".to_owned())]);
+    // What the app did activate is left alone too.
+    assert_eq!(active(&api), [(1, ActivationMode::Session)]);
+}
+
+#[test]
+fn direct_link_mode_refuses_to_activate_or_deactivate() {
+    let api = MockApi::new();
+    let message = "fm: Font Manager must be running to activate fonts; start it and try again\n";
+    let (exit, out, err) = fm_linked(&api, Link::Direct, &["activate", "Inter"]);
+    assert_eq!(
+        (exit, out.as_str(), err.as_str()),
+        (Exit::Refused, "", message)
+    );
+    assert!(active(&api).is_empty(), "nothing was activated");
+
+    fm_on(&api, &["activate", "Inter-Regular"]);
+    let (exit, out, err) = fm_linked(&api, Link::Direct, &["--json", "deactivate", "Inter"]);
+    assert_eq!((exit, out.as_str()), (Exit::Refused, ""));
+    assert_eq!(json(&err)["code"], "unsupported");
+    assert_eq!(
+        active(&api),
+        [(1, ActivationMode::Session)],
+        "nothing was deactivated"
+    );
+
+    // Other commands still run in direct-link mode.
+    let (exit, _, _) = fm_linked(&api, Link::Direct, &["resolve", "Inter-Regular"]);
+    assert_eq!(exit, Exit::Success);
+}
+
+/// A path under the system temp folder for one test's file.
+fn temp_file(label: &str) -> std::path::PathBuf {
+    std::env::temp_dir().join(format!("fm-cli-{label}-{}.json", std::process::id()))
+}
+
+#[test]
+fn sets_export_prints_the_export_json_or_writes_it_to_a_file() {
+    let api = MockApi::new();
+    let expected = api.export_set(SetId(1)).unwrap();
+
+    let (exit, out, err) = fm_on(&api, &["sets", "export", "Client brand"]);
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    let printed: SetExport = serde_json::from_str(&out).expect("the export JSON");
+    assert_eq!(printed, expected);
+
+    let (exit, out, _) = fm_on(&api, &["--json", "sets", "export", "1"]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(json(&out), serde_json::to_value(&expected).unwrap());
+
+    let file = temp_file("export");
+    let path = file.display().to_string();
+    let (exit, out, _) = fm_on(&api, &["sets", "export", "Client brand", "--out", &path]);
+    assert_eq!(exit, Exit::Success);
+    assert!(
+        out.contains(&format!("Wrote set \"Client brand\" (2 fonts) to {path}")),
+        "{out}"
+    );
+    let written: SetExport =
+        serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).expect("JSON file");
+    let _ = std::fs::remove_file(&file);
+    assert_eq!(written, expected);
+
+    let (exit, _, _) = fm_on(&api, &["sets", "export", "No such set"]);
+    assert_eq!(exit, Exit::NotFound);
+}
+
+#[test]
+fn sets_import_prints_the_fonts_found_and_missing() {
+    let api = MockApi::new();
+    let mut export = api.export_set(SetId(1)).unwrap();
+    export.name = "From a teammate".into();
+    export.fonts.push(SetEntry {
+        family: "Gone Sans".into(),
+        style: "Black".into(),
+        hash: "00".repeat(32),
+    });
+    let file = temp_file("import");
+    std::fs::write(&file, serde_json::to_string(&export).unwrap()).unwrap();
+    let path = file.display().to_string();
+
+    let (exit, out, err) = fm_on(&api, &["sets", "import", &path]);
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    assert!(out.contains("Imported set \"From a teammate\""), "{out}");
+    assert!(out.contains("2 fonts found, 1 missing."), "{out}");
+    assert!(line_of(&out, 1).contains("Inter Regular"), "{out}");
+    assert!(line_of(&out, 6).contains("JetBrains Mono Regular"), "{out}");
+    assert!(out.contains("Gone Sans") && out.contains("Black"), "{out}");
+
+    let (exit, out, _) = fm_on(&api, &["--json", "sets", "import", &path]);
+    let _ = std::fs::remove_file(&file);
+    assert_eq!(exit, Exit::Success);
+    let v = json(&out);
+    assert_eq!(v["set"]["faces"], serde_json::json!([1, 6]));
+    assert_eq!(v["missing"][0]["family"], "Gone Sans");
+}
+
+#[test]
+fn sets_import_refuses_a_file_that_is_missing_or_not_an_export() {
+    let api = MockApi::new();
+    let sets = api.list_sets().unwrap().len();
+    let missing = temp_file("no-such-export");
+    let (exit, _, err) = fm_on(
+        &api,
+        &["--json", "sets", "import", &missing.display().to_string()],
+    );
+    assert_eq!(exit, Exit::NotFound);
+    assert_eq!(json(&err)["code"], "notFound");
+
+    let file = temp_file("not-an-export");
+    std::fs::write(&file, "{\"fonts\": 3}").unwrap();
+    let (exit, out, err) = fm_on(&api, &["sets", "import", &file.display().to_string()]);
+    let _ = std::fs::remove_file(&file);
+    assert_eq!((exit, out.as_str()), (Exit::Usage, ""));
+    assert!(
+        err.contains("is not a set exported by Font Manager"),
+        "{err}"
+    );
+    assert_eq!(api.list_sets().unwrap().len(), sets, "no set was made");
 }

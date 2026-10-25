@@ -15,7 +15,7 @@ use fm_api::Api;
 use fm_api::library::{FontMatch, ResolveFontRequest};
 use fm_api::search::Supports;
 
-pub use commands::{Scanned, SearchFlags};
+pub use commands::{Scanned, SearchFlags, TargetKind};
 pub use exit::{EXIT_CODES, Exit};
 pub use output::Output;
 
@@ -99,10 +99,91 @@ pub enum Command {
         #[arg(long, default_value_t = 10)]
         limit: u32,
     },
+    /// Activate a font (a family name names every style), a collection or
+    /// a set; one line per face. Exits 4 when any face was not activated.
+    /// Needs the app running.
+    Activate {
+        /// A font argument, or with --collection or --set an id or a name.
+        target: String,
+        /// Keep the fonts active after a restart (per user).
+        #[arg(long)]
+        permanent: bool,
+        #[command(flatten)]
+        kind: KindFlags,
+    },
+    /// Deactivate a font, a collection or a set. Only fonts the app
+    /// activated are deactivated; the others are reported as skipped (exit
+    /// 4). Needs the app running.
+    Deactivate {
+        /// A font argument, or with --collection or --set an id or a name.
+        target: String,
+        #[command(flatten)]
+        kind: KindFlags,
+    },
+    /// Export or import project sets.
+    Sets {
+        /// What to do with sets.
+        #[command(subcommand)]
+        command: SetsCommand,
+    },
 }
 
-/// Runs `cli` on `api`, printing to `out` and errors to `err`; the exit code.
-pub fn run(api: &dyn Api, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -> Exit {
+/// What the target of `fm activate` and `fm deactivate` names: a font
+/// unless a flag says otherwise.
+#[derive(Debug, Clone, Copy, Default, clap::Args)]
+pub struct KindFlags {
+    /// The target is a collection.
+    #[arg(long, conflicts_with = "set")]
+    pub collection: bool,
+    /// The target is a project set.
+    #[arg(long)]
+    pub set: bool,
+}
+
+impl KindFlags {
+    /// The kind of target the flags ask for.
+    pub fn kind(self) -> TargetKind {
+        match (self.collection, self.set) {
+            (true, _) => TargetKind::Collection,
+            (_, true) => TargetKind::Set,
+            _ => TargetKind::Font,
+        }
+    }
+}
+
+/// The `fm sets` commands.
+#[derive(Debug, Subcommand)]
+pub enum SetsCommand {
+    /// Print a set as portable JSON (the fonts by content hash), or write it
+    /// to a file.
+    Export {
+        /// The set: its id or its name.
+        set: String,
+        /// Write the JSON to this file instead of stdout.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Import a set exported by `fm sets export`; prints the fonts found in
+    /// the library and the fonts missing from it.
+    Import {
+        /// The JSON file.
+        file: PathBuf,
+    },
+}
+
+/// How `fm` reaches the library.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Link {
+    /// Through the index directly, with the app closed: a session
+    /// activation would end with the `fm` process, so activation refuses.
+    Direct,
+    /// Through the running app's endpoint.
+    Endpoint,
+}
+
+/// Runs `cli` on `api`, reached over `link`, printing to `out` and errors
+/// to `err`; the exit code.
+pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -> Exit {
     let mut output = Output::new(cli.json, out, err);
     match &cli.command {
         Command::Version => output.print(api.app_info(), output::version),
@@ -160,6 +241,38 @@ pub fn run(api: &dyn Api, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -
             .print(commands::similar(api, font, *limit), |s, o| {
                 output::similar(s, o)
             }),
+        Command::Activate { .. } | Command::Deactivate { .. } if link == Link::Direct => {
+            let refused: Result<(), _> = Err(commands::needs_the_app());
+            output.print(refused, |(), _| Ok(()))
+        }
+        Command::Activate {
+            target,
+            permanent,
+            kind,
+        } => output.check(
+            commands::activate(api, kind.kind(), target, *permanent),
+            |r, o| output::outcomes(api, r, o),
+            |r| commands::activation_exit(r),
+        ),
+        Command::Deactivate { target, kind } => output.check(
+            commands::deactivate(api, kind.kind(), target),
+            |r, o| output::outcomes(api, r, o),
+            |r| commands::activation_exit(r),
+        ),
+        Command::Sets {
+            command: SetsCommand::Export { set, out },
+        } => {
+            let exported = commands::export_set(api, set, out.as_deref());
+            match out {
+                Some(path) => output.print(exported, |e, o| output::set_written(e, path, o)),
+                None => output.print(exported, output::set_export),
+            }
+        }
+        Command::Sets {
+            command: SetsCommand::Import { file },
+        } => output.print(commands::import_set(api, file), |r, o| {
+            output::imported(api, r, o)
+        }),
     }
 }
 
