@@ -979,3 +979,45 @@ fn export_asks_for_every_face_of_the_family_in_the_formats_given() {
     assert!(Cli::try_parse_from(["fm", "export", "Inter", "--woff2"]).is_err());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A file name that is not valid Unicode, in this OS's own encoding.
+fn non_unicode_name() -> std::ffi::OsString {
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStringExt;
+        std::ffi::OsString::from_vec(b"bad-\xff.png".to_vec())
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::OsStringExt;
+        // A lone surrogate.
+        std::ffi::OsString::from_wide(&[0x62, 0xd800, 0x2e, 0x70])
+    }
+}
+
+#[test]
+fn an_out_path_that_is_not_unicode_is_refused_and_nothing_is_written() {
+    let api = MockApi::new();
+    let dir = temp_dir("non-unicode");
+    let out = dir.join(non_unicode_name());
+    let commands: [Vec<std::ffi::OsString>; 3] = [
+        vec!["preview".into(), "1".into(), "--text".into(), "Hi".into()],
+        vec!["specimen".into(), "Inter".into()],
+        vec!["export".into(), "Inter".into(), "--woff2".into()],
+    ];
+    for args in commands {
+        let mut line: Vec<std::ffi::OsString> = vec!["fm".into(), "--json".into()];
+        line.extend(args);
+        line.extend(["--out".into(), out.clone().into_os_string()]);
+        let cli = Cli::try_parse_from(&line).expect("valid command line");
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let exit = fm_cli::run(&api, Link::Endpoint, &cli, &mut stdout, &mut stderr);
+        assert_eq!(exit, Exit::Usage, "{line:?}");
+        assert!(stdout.is_empty());
+        let e = json(std::str::from_utf8(&stderr).unwrap());
+        assert_eq!(e["code"], "invalidRequest");
+        assert!(e["message"].as_str().unwrap().contains("not valid Unicode"));
+    }
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+    let _ = std::fs::remove_dir_all(&dir);
+}
