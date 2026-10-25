@@ -246,3 +246,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E16.1 #122] apps/desktop/src/preview/variations.ts:39 — `clearFaceAxes` has no non-test caller, so cached axes outlive a library rescan.
 - [E25.3 #162] crates/fm-endpoint/src/routes.rs:165 — `no_body` refuses `{"a":1}` (400) on no-request routes, so a newer-minor client that sends extra fields there is refused, not ignored; ADR 0015 "Versions" does not name this exception.
 - [E25.3 #162] crates/fm-cli/src/main.rs:1 — neither fm-cli nor fm-mcp calls `fm_api::check_client_version` or sends `Fm-Api-Version` yet; wire it when they become endpoint clients.
+- [E25.4 #163] crates/fm-endpoint/src/body.rs:92 — an over-32 MiB request gets its 413 before the body is read, so a blocking client still writing sees a reset ("connection lost") instead of the 413 message.
+- [E25.4 #163] apps/desktop/src-tauri/tests/endpoint.rs:78 — still parses `endpoint.json` by hand instead of the new `fm_core::endpoint::Discovery::read` (test-only, same behavior).

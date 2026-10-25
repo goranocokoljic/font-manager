@@ -158,6 +158,38 @@ is written, then it is renamed over the target.
 A token file that another program made readable is written again privately
 the next time it is read.
 
+**Client** (E25.4). `crates/fm-client` is the one client: `Client`
+implements `fm_api::Api` by calling the routes above (every service method,
+and `EventSource::subscribe` over `GET /v1/events`). `fm-cli` and `fm-mcp`
+hold it as `Arc<dyn Api>` (`fm_client::running_app()`) and have no HTTP
+code or HTTP crate of their own.
+
+- **Discovery.** `fm_client::connect(&AppPaths)` reads `endpoint.json`
+  (`fm_core::endpoint::Discovery::read`) and returns `None` when the file
+  is missing or broken, its `pid` is gone (`fm_platform::process::is_running`:
+  `OpenProcess` on Windows, `kill -0` on macOS, `/proc/<pid>` on Linux),
+  its `url` is not loopback (the token is never sent elsewhere), or the
+  port does not accept a connection within 500 ms.
+- **Blocking, on `std::net`.** The service traits are synchronous and the
+  MCP host is async: a client with its own async runtime would panic when
+  called from inside another one. So each call is one connection
+  (`Connection: close`) with a 500 ms connect timeout; hyper and tokio stay
+  in the server.
+- **Versions.** Every request carries the bearer token and
+  `Fm-Api-Version`. The app's error answer (422 `unsupported` on a major
+  mismatch) comes back as it is; an answer whose `Fm-Api-Version` names
+  another major is refused by the client itself
+  (`fm_api::check_server_version`, the same sentence).
+- **Failures.** No answer → `io` "Font Manager is not running, or its local
+  API does not answer."; a connection lost mid-call or an answer cut short
+  → `io` "The connection to Font Manager was lost."; an answer that is not
+  the local API → `internal`. Never a panic.
+- **Events.** `subscribe` returns once the server's `: stream open` frame
+  arrived, so the subscription sees every event sent after it. When the
+  stream ends the receiver disconnects; an event this client does not know
+  (a newer minor) is skipped. A client that regenerates the token keeps
+  working with the new one.
+
 ## Consequences
 
 - The CLI's endpoint mode (when the app is open), the MCP shim and the

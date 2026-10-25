@@ -23,6 +23,9 @@ mod pdf;
 #[allow(unsafe_code)] // Win32 security descriptor FFI; every block has a SAFETY note.
 pub(crate) mod private_file;
 #[cfg(windows)]
+#[allow(unsafe_code)] // OpenProcess and GetExitCodeProcess; every block has a SAFETY note.
+mod process;
+#[cfg(windows)]
 #[allow(unsafe_code)] // Win32 registry FFI; every block has a SAFETY note.
 mod registry;
 #[cfg(windows)]
@@ -37,6 +40,8 @@ pub use autostart::{RUN_KEY, WindowsAutostart};
 pub(crate) use open_url::command as open_url_command;
 #[cfg(windows)]
 pub use pdf::WindowsPdfPrinter;
+#[cfg(windows)]
+pub(crate) use process::is_running;
 #[cfg(windows)]
 pub(crate) use trash::RecycleBin;
 #[cfg_attr(not(windows), allow(unused_imports))]
