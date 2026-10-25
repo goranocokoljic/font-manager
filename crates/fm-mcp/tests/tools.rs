@@ -12,9 +12,10 @@ use std::sync::Arc;
 use fm_api::activation::{ActivateRequest, ActivationMode, ConflictPolicy, Target};
 use fm_api::mock::MockApi;
 use fm_api::organization::CreateCollectionRequest;
+use fm_api::search::{PairingRequest, SimilarRequest};
 use fm_api::{
     ActivationService as _, Api, ApiError, ErrorCode, FaceId, LibraryService as _,
-    OrganizationService as _,
+    OrganizationService as _, SearchService as _,
 };
 use fm_mcp::tools::{MUTATING, NAMES};
 use fm_mcp::{AllowAll, McpServer, ToolGate};
@@ -129,20 +130,45 @@ async fn every_tool_answers_over_mock_api_without_font_bytes() {
     );
     results.push(by_text);
 
+    // Both ask for 3 results for the same face, and the API's two answers
+    // differ, so a tool that called the other method would fail here.
+    let similar_api = api
+        .find_similar(SimilarRequest {
+            face: FaceId(inter),
+            limit: 3,
+        })
+        .expect("similar");
+    let pairings_api = api
+        .suggest_pairings(PairingRequest {
+            face: FaceId(inter),
+            limit: 3,
+        })
+        .expect("pairings");
+    assert_ne!(
+        serde_json::to_value(&similar_api).unwrap(),
+        serde_json::to_value(&pairings_api).unwrap(),
+        "the test data must tell the two methods apart"
+    );
+
     let similar = client
         .ok("find_similar", json!({ "face_id": inter, "limit": 3 }))
         .await;
-    let similar_list = similar["similar"].as_array().expect("a list");
-    assert!(
-        !similar_list.is_empty() && similar_list.len() <= 3,
-        "{similar}"
+    assert!(!similar_api.is_empty());
+    assert_eq!(
+        similar["similar"],
+        serde_json::to_value(&similar_api).unwrap()
     );
     results.push(similar);
 
     let pairings = client
-        .ok("get_pairings", json!({ "face_id": inter, "limit": 2 }))
+        .ok("get_pairings", json!({ "face_id": inter, "limit": 3 }))
         .await;
-    assert!(pairings["pairings"].is_array(), "{pairings}");
+    assert!(!pairings_api.is_empty());
+    assert_eq!(
+        pairings["pairings"],
+        serde_json::to_value(&pairings_api).unwrap(),
+        "get_pairings is the E23.4 pairing method"
+    );
     results.push(pairings);
 
     let license = client.ok("get_license", json!({ "face_id": inter })).await;
