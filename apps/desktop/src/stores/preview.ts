@@ -47,6 +47,10 @@ export interface PreviewSettings {
   surface: Surface;
   /** Scales each row so every face's x-height (or cap height) matches at `sizePx`. */
   autoSize: AutoSize;
+  /** Draws each row's baseline, x-height and cap-height lines (E16.1). */
+  metrics: boolean;
+  /** Shows the sample text as outlines: stroke, no fill (E16.1). */
+  outline: boolean;
 }
 
 export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
@@ -61,6 +65,8 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   backgroundColor: null,
   surface: 'auto',
   autoSize: 'off',
+  metrics: false,
+  outline: false,
 });
 
 const ALIGNMENTS: readonly Alignment[] = ['start', 'center', 'end'];
@@ -112,6 +118,8 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     backgroundColor: color(r.backgroundColor),
     surface: pick(r.surface, SURFACES, d.surface),
     autoSize: pick(r.autoSize, AUTO_SIZES, d.autoSize),
+    metrics: typeof r.metrics === 'boolean' ? r.metrics : d.metrics,
+    outline: typeof r.outline === 'boolean' ? r.outline : d.outline,
   };
 }
 
@@ -155,7 +163,8 @@ function browserStorage(): Storage | undefined {
 }
 
 /**
- * Preview settings (sample text, size, spacing, colors, surface, auto size) for each view. Every row
+ * Preview settings (sample text, size, spacing, colors, surface, auto size, metrics lines,
+ * outline) for each view. Every row
  * of a view's list reads them, so a change applies to all rows at once; they are saved per
  * view as a view preference. The pangrams come from `list_languages`.
  */

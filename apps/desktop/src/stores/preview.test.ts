@@ -131,6 +131,23 @@ describe('preview store', () => {
     expect(normalizePreview({ autoSize: 'ascender' }).autoSize).toBe('off');
   });
 
+  it('keeps the metrics and outline toggles per view and reads them back after a reload', async () => {
+    const store = freshStore();
+    expect(store.settingsFor('all')).toMatchObject({ metrics: false, outline: false });
+    store.update('all', { metrics: true });
+    store.update('collection-2', { outline: true });
+    await nextTick();
+    const again = freshStore();
+    expect(again.settingsFor('all')).toMatchObject({ metrics: true, outline: false });
+    expect(again.settingsFor('collection-2')).toMatchObject({ metrics: false, outline: true });
+    again.update('all', { metrics: false });
+    expect(again.settingsFor('all').metrics).toBe(false);
+    expect(normalizePreview({ metrics: 'yes', outline: 1 })).toMatchObject({
+      metrics: false,
+      outline: false,
+    });
+  });
+
   it('pads rows by the density and keeps the sample size the user chose', () => {
     expect(previewRowHeight(DEFAULT_PREVIEW, 'comfortable')).toBe(64);
     expect(previewRowHeight(DEFAULT_PREVIEW, 'compact')).toBe(54);

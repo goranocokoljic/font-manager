@@ -229,6 +229,8 @@ function onToggle(row: ListRow): void {
             :size-px="line.size"
             :line-height="preview.lineHeight"
             :tracking-em="preview.trackingEm"
+            :metrics="item.metrics"
+            :outline="preview.outline"
             :align="preview.align"
             :color="preview.textColor"
             :fallback="k === 0 ? item.fallback : null"

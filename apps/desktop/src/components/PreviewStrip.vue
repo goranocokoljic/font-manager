@@ -3,9 +3,11 @@
 // cursor in the view's sample text, at the toolbar size until the strip's own
 // size slider moves; "Use toolbar size" follows the toolbar again. A face that
 // lacks characters of the sample shows the API's fallback text, like the list.
+// Tracking, outline and the metrics lines follow the view's preview settings.
 import { computed, useId, watchEffect } from 'vue';
 import { t } from '../i18n';
 import { sampleText } from '../preview/sampleText';
+import { useFaceMetricsStore } from '../stores/faceMetrics';
 import { useFontListStore } from '../stores/fontList';
 import { SIZE, usePreviewStore, type PreviewSettings } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
@@ -18,6 +20,7 @@ const list = useFontListStore();
 const views = useViewsStore();
 const samples = useSamplesStore();
 const previews = usePreviewStore();
+const faceMetrics = useFaceMetricsStore();
 const uid = useId();
 
 const own = computed(() => views.tableFor(props.view).stripSizePx);
@@ -30,6 +33,12 @@ const answer = computed(() => (face.value ? samples.get(face.value.id, sample.va
 watchEffect(() => {
   if (face.value) samples.want(face.value.id, sample.value);
 });
+watchEffect(() => {
+  if (face.value && props.preview.metrics) faceMetrics.want(face.value.id);
+});
+const metrics = computed(() =>
+  face.value && props.preview.metrics ? (faceMetrics.get(face.value.id) ?? null) : null,
+);
 const label = computed(() => {
   const row = list.cursorRow;
   if (!row) return '';
@@ -81,6 +90,8 @@ function onInput(e: Event): void {
       :size-px="sizePx"
       :line-height="preview.lineHeight"
       :tracking-em="preview.trackingEm"
+      :metrics="metrics"
+      :outline="preview.outline"
       :align="preview.align"
       :color="preview.textColor"
     />

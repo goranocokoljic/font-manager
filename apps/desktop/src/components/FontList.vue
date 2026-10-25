@@ -282,6 +282,8 @@ function onToggle(row: ListRow): void {
           :size-px="preview.sizePx * item.sizeFactor"
           :line-height="preview.lineHeight"
           :tracking-em="preview.trackingEm"
+          :metrics="item.metrics"
+          :outline="preview.outline"
           :align="preview.align"
           :color="preview.textColor"
           :fallback="item.fallback"
