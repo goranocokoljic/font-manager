@@ -20,12 +20,10 @@ gen = ["dep:specta-typescript", "dep:specta-serde"]
 [dependencies]
 semver = "1"
 serde.workspace = true
+serde_json.workspace = true
 specta = { version = "2.0.0-rc.25", features = ["derive"] }
 specta-serde = { version = "0.0.12", optional = true }
 specta-typescript = { version = "0.0.12", optional = true }
-
-[dev-dependencies]
-serde_json.workspace = true
 
 [lints]
 workspace = true

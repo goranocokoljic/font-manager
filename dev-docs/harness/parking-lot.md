@@ -244,3 +244,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E25.2 #161] crates/fm-endpoint/src/lib.rs:398 — `error()` falls back to `{}` (no `code` field) when an `ApiError` fails to serialize; unreachable in practice but breaks the documented error shape.
 - [E16.1 #122] apps/desktop/src/views/HomeView.vue:542 — Layout mode ignores every preview control (size, line height, color, and now outline and tracking) while PreviewControls stays shown above it.
 - [E16.1 #122] apps/desktop/src/preview/variations.ts:39 — `clearFaceAxes` has no non-test caller, so cached axes outlive a library rescan.
+- [E25.3 #162] crates/fm-endpoint/src/routes.rs:165 — `no_body` refuses `{"a":1}` (400) on no-request routes, so a newer-minor client that sends extra fields there is refused, not ignored; ADR 0015 "Versions" does not name this exception.
+- [E25.3 #162] crates/fm-cli/src/main.rs:1 — neither fm-cli nor fm-mcp calls `fm_api::check_client_version` or sends `Fm-Api-Version` yet; wire it when they become endpoint clients.

@@ -16,6 +16,13 @@
 //! `GET /v1/events` streams every [`fm_api::Event`] as Server-Sent Events,
 //! one [`fm_api::EventSource::subscribe`] per connection ([`events`]).
 //!
+//! Versions (ADR 0015): every answer carries `Fm-Api-Version` with
+//! [`fm_api::API_VERSION`]; `GET /v1/version` tells a client without a token
+//! what this app serves ([`fm_api::VersionInfo`]); a client that sends
+//! `Fm-Api-Version` with another major is refused
+//! ([`fm_api::check_client_version`]); an answer with a deprecated field
+//! carries an `Fm-Deprecation` header per field.
+//!
 //! The endpoint knows nothing about fonts and keeps no state but the socket
 //! and its open streams: the token and the discovery file belong to `fm-core`.
 
@@ -33,7 +40,10 @@ use std::task::Poll;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use fm_api::{Api, ApiError, ErrorCode};
+use fm_api::{
+    API_VERSION, Api, ApiError, ApiVersion, DEPRECATION_HEADER, Deprecation, ErrorCode,
+    VERSION_HEADER, VersionInfo,
+};
 use hyper::body::Incoming;
 use hyper::header::{self, HeaderValue};
 use hyper::{Method, Request, Response, StatusCode};
@@ -48,6 +58,9 @@ pub const MAX_BODY_BYTES: usize = 32 * 1024 * 1024;
 
 /// The path prefix of every route.
 pub const ROUTE_PREFIX: &str = "/v1/";
+
+/// What this app serves, without a token (`GET`).
+pub const VERSION_ROUTE: &str = "/v1/version";
 
 /// A running endpoint. Dropping it (or [`Endpoint::stop`]) closes the socket.
 #[derive(Debug)]
@@ -67,6 +80,23 @@ impl Endpoint {
 
     /// [`Endpoint::start`] with other event-stream limits (tests).
     pub fn start_with(api: Arc<dyn Api>, options: StreamOptions) -> io::Result<Self> {
+        Self::serve(api, options, fm_api::deprecations())
+    }
+
+    /// [`Endpoint::start`] with another deprecation list (tests: the real
+    /// one, [`fm_api::deprecations`], is empty today).
+    pub fn start_with_deprecations(
+        api: Arc<dyn Api>,
+        deprecations: Vec<Deprecation>,
+    ) -> io::Result<Self> {
+        Self::serve(api, StreamOptions::default(), deprecations)
+    }
+
+    fn serve(
+        api: Arc<dyn Api>,
+        options: StreamOptions,
+        deprecations: Vec<Deprecation>,
+    ) -> io::Result<Self> {
         let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -81,6 +111,8 @@ impl Endpoint {
             port: addr.port(),
             options,
             streams: Arc::clone(&streams),
+            deprecations: Arc::new(deprecations),
+            version: version_header(),
         };
         let thread = std::thread::Builder::new()
             .name("fm-endpoint".into())
@@ -148,6 +180,16 @@ struct Server {
     port: u16,
     options: StreamOptions,
     streams: Arc<AtomicUsize>,
+    /// What answers are checked against for `Fm-Deprecation`.
+    deprecations: Arc<Vec<Deprecation>>,
+    /// `Fm-Api-Version` of every answer.
+    version: HeaderValue,
+}
+
+fn version_header() -> HeaderValue {
+    // Digits and dots only, so always a valid header value.
+    HeaderValue::from_str(&API_VERSION.to_string())
+        .unwrap_or_else(|_| HeaderValue::from_static("0.0.0"))
 }
 
 async fn accept_loop(listener: tokio::net::TcpListener, server: Arc<Server>) {
@@ -196,22 +238,40 @@ async fn accept_loop(listener: tokio::net::TcpListener, server: Arc<Server>) {
     }
 }
 
-/// One request, in this order: `Host` and `Origin` (403), the token (401),
-/// then the event stream or a service call.
+/// One request, then `Fm-Api-Version` on its answer, whatever it is.
 async fn handle(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> Response<Reply> {
+    let mut response = route(server, close, req).await;
+    response
+        .headers_mut()
+        .insert(VERSION_HEADER, server.version.clone());
+    response
+}
+
+/// In this order: `Host` and `Origin` (403), `GET /v1/version`, the token
+/// (401), the client's `Fm-Api-Version` (400, 422), then the event stream or
+/// a service call.
+async fn route(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> Response<Reply> {
+    if let Err(refused) = check_origin(&req, server.port) {
+        return refused.map(Reply::Full);
+    }
+    if req.uri().path() == VERSION_ROUTE {
+        return version(server, &req).await.map(Reply::Full);
+    }
     if let Err(refused) = authorize(server, &req).await {
+        return refused.map(Reply::Full);
+    }
+    if let Err(refused) = check_client_version(&req) {
         return refused.map(Reply::Full);
     }
     if req.uri().path() == EVENTS_ROUTE {
         return stream_events(server, close, &req).await;
     }
-    call(Arc::clone(&server.api), req).await.map(Reply::Full)
+    call(server, req).await.map(Reply::Full)
 }
 
-/// `Host` and `Origin` (403), then the token (401).
+/// The token (401).
 #[allow(clippy::result_large_err)]
 async fn authorize(server: &Server, req: &Request<Incoming>) -> Result<(), Response<Full>> {
-    check_origin(req, server.port)?;
     let presented = bearer(req).map(str::to_owned);
     let info_api = Arc::clone(&server.api);
     let current = match blocking(move || info_api.endpoint_info()).await {
@@ -225,6 +285,65 @@ async fn authorize(server: &Server, req: &Request<Incoming>) -> Result<(), Respo
         ));
     }
     Ok(())
+}
+
+/// The client's `Fm-Api-Version`, when it sends one: not
+/// `major.minor.patch` → 400; another major → 422 (`unsupported`). A client
+/// that sends none is served.
+#[allow(clippy::result_large_err)]
+fn check_client_version(req: &Request<Incoming>) -> Result<(), Response<Full>> {
+    let Some(value) = req.headers().get(VERSION_HEADER) else {
+        return Ok(());
+    };
+    let client = value
+        .to_str()
+        .map_err(|e| e.to_string())
+        .and_then(|v| v.parse::<ApiVersion>().map_err(|e| e.to_string()));
+    match client {
+        Ok(client) => fm_api::check_client_version(client).map_err(|e| error(&e)),
+        Err(why) => Err(error(
+            &ApiError::invalid(format!(
+                "The {VERSION_HEADER} header must be a version like {API_VERSION}."
+            ))
+            .with_detail(why),
+        )),
+    }
+}
+
+/// `GET /v1/version` (405 for another method): the app version, the API
+/// version and the deprecation list. No token: a client learns here whether
+/// it can talk to this app at all.
+async fn version(server: &Server, req: &Request<Incoming>) -> Response<Full> {
+    if req.method() != Method::GET {
+        let mut response = refuse(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "The version route takes GET.",
+        );
+        response
+            .headers_mut()
+            .insert(header::ALLOW, HeaderValue::from_static("GET"));
+        return response;
+    }
+    let api = Arc::clone(&server.api);
+    let deprecations = Vec::clone(&server.deprecations);
+    let info = blocking(move || {
+        Ok(VersionInfo {
+            app_version: api.app_info()?.version,
+            api_version: API_VERSION,
+            deprecations,
+        })
+    })
+    .await
+    .and_then(|info| {
+        serde_json::to_vec(&info).map_err(|e| {
+            ApiError::new(ErrorCode::Internal, "The answer could not be encoded.")
+                .with_detail(e.to_string())
+        })
+    });
+    match info {
+        Ok(json) => json_response(StatusCode::OK, json),
+        Err(e) => error(&e),
+    }
 }
 
 /// `GET /v1/events` (405 for another method): a new subscription, streamed
@@ -269,7 +388,7 @@ async fn stream_events(
 
 /// A service call: the method and route (405, 404), the body (413, 400),
 /// then the service.
-async fn call(api: Arc<dyn Api>, req: Request<Incoming>) -> Response<Full> {
+async fn call(server: &Server, req: Request<Incoming>) -> Response<Full> {
     let Some(method) = req
         .uri()
         .path()
@@ -301,8 +420,10 @@ async fn call(api: Arc<dyn Api>, req: Request<Incoming>) -> Response<Full> {
             return error(&ApiError::invalid("The request body could not be read.").with_detail(e));
         }
     };
+    let api = Arc::clone(&server.api);
+    let deprecated = Arc::clone(&server.deprecations);
     let answer = blocking(move || {
-        routes::dispatch(api.as_ref(), &method, &body).unwrap_or_else(|| {
+        routes::dispatch(api.as_ref(), &method, &body, &deprecated).unwrap_or_else(|| {
             Err(ApiError::new(
                 ErrorCode::Internal,
                 "The route has no method.",
@@ -311,7 +432,18 @@ async fn call(api: Arc<dyn Api>, req: Request<Incoming>) -> Response<Full> {
     })
     .await;
     match answer {
-        Ok(json) => json_response(StatusCode::OK, json),
+        Ok(answer) => {
+            let mut response = json_response(StatusCode::OK, answer.json);
+            for note in answer.deprecations {
+                match HeaderValue::from_str(&note) {
+                    Ok(value) => {
+                        response.headers_mut().append(DEPRECATION_HEADER, value);
+                    }
+                    Err(_) => tracing::warn!(%note, "a deprecation note is not a valid header"),
+                }
+            }
+            response
+        }
         Err(e) => error(&e),
     }
 }

@@ -1020,6 +1020,7 @@ dependencies = [
  "hyper-util",
  "serde",
  "serde_json",
+ "specta",
  "tokio",
  "tracing",
 ]
