@@ -1,0 +1,20 @@
+{
+  "id": "a-path-the-user-gave-must-be-made-absolute-in-the-adapter-s-",
+  "title": "A path the user gave must be made absolute in the adapter's process before it crosses to another process",
+  "category": "correctness",
+  "rule": "When a CLI, MCP or plugin adapter sends a user-given file or folder path (an --out, an export folder, a source) through fm-api, make it absolute with std::path::absolute in the adapter's own process before building the request, and run every local check (exists, --force) on that same absolute path. In endpoint mode the running app serves the call and resolves a relative path against its own working folder, so the file lands elsewhere and a local existence check is about another file. Test it with the built binary run from a temp working folder against an endpoint over MockApi and a relative path, and assert the path the API got is in that folder.",
+  "rationale": "E26.6 (#169): `fm specimen --out rel.html` sent the relative path to the app in endpoint mode; the app wrote it in its own working folder, past the --force check that looked in fm's folder.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    169
+  ],
+  "file_globs": [
+    "crates/fm-cli/**",
+    "crates/fm-mcp/**",
+    "plugins/**"
+  ],
+  "first_seen": "2026-10-25T13:27:32.053Z",
+  "last_seen": "2026-10-25T13:27:32.053Z"
+}
