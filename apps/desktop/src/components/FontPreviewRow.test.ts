@@ -200,4 +200,60 @@ describe('FontPreviewRow', () => {
       'This font lacks a b c d e f g h …, so it shows its own characters.',
     );
   });
+
+  describe('metrics overlay and outline (E16.1)', () => {
+    const metrics = {
+      unitsPerEm: 2048,
+      ascender: 1900,
+      descender: -500,
+      xHeight: 1024,
+      capHeight: 1434,
+    };
+    const bottoms = (row: ReturnType<typeof mount>) =>
+      row
+        .findAll('[data-line]')
+        .map((l) => [l.attributes('data-line'), (l.element as HTMLElement).style.bottom]);
+
+    it('draws the baseline and each metric as its share of the em above it', async () => {
+      const row = mount(FontPreviewRow, { props: { face: mono, metrics } });
+      await flushPromises();
+      expect(bottoms(row)).toEqual([
+        ['baseline', '0em'],
+        ['xHeight', '0.5em'],
+        ['capHeight', `${1434 / 2048}em`],
+      ]);
+      // Inside the sample, so it shares its font size and baseline; hidden from readers.
+      const overlay = row.get('.sample [data-testid="metrics"]');
+      expect(overlay.attributes('aria-hidden')).toBe('true');
+      expect(row.get('.sample').text()).toBe('The quick brown fox jumps over the lazy dog');
+    });
+
+    it('skips a metric the face does not declare and survives a bad em size', async () => {
+      const row = mount(FontPreviewRow, {
+        props: {
+          face: mono,
+          metrics: { ...metrics, unitsPerEm: 0, xHeight: null, capHeight: 700 },
+        },
+      });
+      await flushPromises();
+      expect(bottoms(row)).toEqual([
+        ['baseline', '0em'],
+        ['capHeight', '0.7em'],
+      ]);
+    });
+
+    it('draws nothing without metrics', async () => {
+      const row = mount(FontPreviewRow, { props: { face: mono } });
+      await flushPromises();
+      expect(row.find('[data-testid="metrics"]').exists()).toBe(false);
+    });
+
+    it('draws the sample as outlines while outline is on', async () => {
+      const row = mount(FontPreviewRow, { props: { face: mono, outline: true } });
+      await flushPromises();
+      expect(row.get('.sample').classes()).toContain('outline');
+      await row.setProps({ outline: false });
+      expect(row.get('.sample').classes()).not.toContain('outline');
+    });
+  });
 });

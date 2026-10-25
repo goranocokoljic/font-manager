@@ -9,6 +9,7 @@ import { useSearchStore } from '../stores/search';
 import { clearFaceAxes } from '../preview/variations';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
+import { useFaceMetricsStore } from '../stores/faceMetrics';
 import { useFontListStore } from '../stores/fontList';
 import { useSettingsStore } from '../stores/settings';
 import FontList from './FontList.vue';
@@ -518,6 +519,102 @@ describe('FontList auto size (E16.2)', () => {
     const list = mount(FontList, { props: { preview: auto('off') }, attachTo: document.body });
     await flushPromises();
     expect(calls).toEqual([]);
+    list.unmount();
+  });
+});
+
+describe('FontList metrics overlay and outline (E16.1)', () => {
+  const on = (patch: Partial<PreviewSettings>): PreviewSettings => ({
+    ...DEFAULT_PREVIEW,
+    ...patch,
+  });
+  /** `data-line` → `bottom` (em) of the row of `face`. */
+  const lines = (list: VueWrapper, face: number) =>
+    Object.fromEntries(
+      list
+        .findAll(`[data-face="${face}"] [data-line]`)
+        .map((l) => [l.attributes('data-line'), (l.element as HTMLElement).style.bottom]),
+    );
+
+  function counting(options: MockOptions = {}) {
+    const mock = createMockClient(options);
+    const asked: number[] = [];
+    setClient({
+      ...mock,
+      getFace: (face) => {
+        asked.push(face);
+        return mock.getFace(face);
+      },
+    });
+    return asked;
+  }
+
+  it("draws each row's baseline, x-height and cap height at the face's own metrics", async () => {
+    counting();
+    await useLibraryStore().load();
+    const list = mount(FontList, { props: { preview: on({}) }, attachTo: document.body });
+    await flushPromises();
+    expect(list.findAll('[data-testid="metrics"]')).toHaveLength(0);
+
+    await list.setProps({ preview: on({ metrics: true }) });
+    await flushPromises();
+    // Faces 1, 6, 7: x-height 520/1000, 550/1000, none; cap height 720/1000, 730/1000, 1434/2048.
+    expect(lines(list, 1)).toEqual({ baseline: '0em', xHeight: '0.52em', capHeight: '0.72em' });
+    expect(lines(list, 6)).toEqual({ baseline: '0em', xHeight: '0.55em', capHeight: '0.73em' });
+    expect(lines(list, 7)).toEqual({ baseline: '0em', capHeight: `${1434 / 2048}em` });
+
+    await list.setProps({ preview: on({ metrics: false }) });
+    await flushPromises();
+    expect(list.findAll('[data-testid="metrics"]')).toHaveLength(0);
+    list.unmount();
+  });
+
+  it('draws the sample as outlines while outline is on', async () => {
+    counting();
+    await useLibraryStore().load();
+    const list = mount(FontList, {
+      props: { preview: on({ outline: true }) },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    const samples = list.findAll('.sample');
+    expect(samples.length).toBeGreaterThan(1);
+    for (const s of samples) expect(s.classes()).toContain('outline');
+    await list.setProps({ preview: on({ outline: false }) });
+    for (const s of list.findAll('.sample')) expect(s.classes()).not.toContain('outline');
+    list.unmount();
+  });
+
+  it('stays virtualized with both on and asks metrics only for the rows on screen', async () => {
+    const asked = counting({ extraFaces: 997 });
+    await useLibraryStore().load();
+    const list = mount(FontList, {
+      props: { preview: on({ metrics: true, outline: true }), rowHeight: 50, overscan: 2 },
+      attachTo: document.body,
+    });
+    await flushPromises();
+    expect(items(list)).toHaveLength(17);
+    expect(list.findAll('[data-testid="metrics"]')).toHaveLength(17);
+    const first = new Set(asked);
+    expect(first.size).toBeLessThanOrEqual(17);
+    await list.setProps({ preview: on({ metrics: true, sizePx: 60 }) });
+    await flushPromises();
+    expect(new Set(asked).size).toBe(first.size);
+    list.unmount();
+  });
+
+  it('asks no metrics while the overlay is off', async () => {
+    const asked = counting();
+    await useLibraryStore().load();
+    const list = mount(FontList, { props: { preview: on({}) }, attachTo: document.body });
+    await flushPromises();
+    // A variable face (1) asks for its detail for its axes; nothing else does.
+    expect(asked.filter((f) => f !== 1)).toEqual([]);
+    expect([1, 6, 7].map((f) => useFaceMetricsStore().get(f))).toEqual([
+      undefined,
+      undefined,
+      undefined,
+    ]);
     list.unmount();
   });
 });

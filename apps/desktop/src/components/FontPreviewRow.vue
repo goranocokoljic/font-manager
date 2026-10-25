@@ -11,8 +11,12 @@
 // The list passes the view's preview settings (size, spacing, alignment, color).
 // When the face lacks characters of the sample, the list passes the fallback text
 // the API chose and `fallback`; the row then shows a small "Fallback" hint.
+// With `metrics` (E16.1) the row draws the face's baseline, x-height and cap-height
+// lines over the sample: a zero-size box inside the text sits on the webview's own
+// baseline, and each line is the metric's share of the em above it, so the lines
+// follow size and line height. With `outline` the sample is drawn as outlines.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import type { Axis, AxisValue, FaceId, FaceSummary, SampleFallback } from '../api/types';
+import type { Axis, AxisValue, FaceId, FaceSummary, Metrics, SampleFallback } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
@@ -41,6 +45,10 @@ const props = withDefaults(
     missing?: string[];
     /** The view whose chosen color palettes apply. */
     view?: string;
+    /** The face's vertical metrics: draws its baseline, x-height and cap-height lines. */
+    metrics?: Metrics | null;
+    /** Draws the sample as outlines (stroke, no fill). */
+    outline?: boolean;
   }>(),
   {
     label: undefined,
@@ -54,6 +62,8 @@ const props = withDefaults(
     fallback: null,
     missing: () => [],
     view: ALL_FONTS_VIEW,
+    metrics: null,
+    outline: false,
   },
 );
 
@@ -123,6 +133,23 @@ const sampleStyle = computed(() => ({
   fontPalette: palettes.fontPaletteOf(props.view, props.face),
 }));
 
+/** The overlay's lines, each the metric's share of the em above the baseline. */
+const metricLines = computed(() => {
+  const m = props.metrics;
+  if (!m) return [];
+  const upem = m.unitsPerEm > 0 ? m.unitsPerEm : 1000;
+  const lines: { kind: 'baseline' | 'xHeight' | 'capHeight'; em: number }[] = [
+    { kind: 'baseline', em: 0 },
+  ];
+  for (const kind of ['xHeight', 'capHeight'] as const) {
+    const units = m[kind];
+    if (units !== null && Number.isFinite(units) && units > 0) {
+      lines.push({ kind, em: units / upem });
+    }
+  }
+  return lines;
+});
+
 const fallbackTitle = computed(() => {
   if (!props.fallback) return undefined;
   const letters = props.fallback.kind === 'script';
@@ -154,9 +181,22 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
       >
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
     </span>
-    <span class="sample" dir="auto" :style="sampleStyle" :data-fallback="fallback?.kind">{{
-      text
-    }}</span>
+    <span
+      class="sample"
+      :class="{ outline }"
+      dir="auto"
+      :style="sampleStyle"
+      :data-fallback="fallback?.kind"
+      ><span v-if="metricLines.length" class="metrics" data-testid="metrics" aria-hidden="true"
+        ><i
+          v-for="line in metricLines"
+          :key="line.kind"
+          class="metric"
+          :class="line.kind"
+          :data-line="line.kind"
+          :style="{ bottom: `${line.em}em` }" /></span
+      >{{ text }}</span
+    >
   </div>
 </template>
 
@@ -197,5 +237,30 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.sample.outline {
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 1px currentColor;
+}
+/* Sits on the text's baseline: an empty inline-block's bottom is its baseline. */
+.metrics {
+  position: relative;
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: baseline;
+}
+.metric {
+  position: absolute;
+  inset-inline-start: -100vw;
+  width: 300vw;
+  height: 0;
+  border-top: 1px solid var(--fm-accent);
+  pointer-events: none;
+}
+.metric.xHeight,
+.metric.capHeight {
+  border-top-style: dashed;
+  opacity: 0.7;
 }
 </style>

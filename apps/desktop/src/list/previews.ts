@@ -3,10 +3,12 @@
 // answer for the view's sample (the sample, or a fallback the face covers). A
 // virtual style's row previews its face at the style's coordinates. With auto size on
 // (E16.2), each row also carries its face's size factor; the factors of the rows on
-// screen are asked for in one call.
+// screen are asked for in one call. With the metrics overlay on (E16.1), each row also
+// carries its face's vertical metrics, asked for the rows on screen only.
 import { watchEffect } from 'vue';
-import type { AxisValue, FaceSummary, SampleFallback } from '../api/types';
+import type { AxisValue, FaceSummary, Metrics, SampleFallback } from '../api/types';
 import { sampleText } from '../preview/sampleText';
+import { useFaceMetricsStore } from '../stores/faceMetrics';
 import { useFontListStore } from '../stores/fontList';
 import { useLibraryStore } from '../stores/library';
 import { usePreviewStore, type PreviewSettings } from '../stores/preview';
@@ -27,6 +29,8 @@ export interface RowPreview {
   variations?: AxisValue[];
   /** What the view's size is multiplied by: the auto size factor, 1 when auto size is off. */
   sizeFactor: number;
+  /** The face's vertical metrics while the metrics overlay is on; absent until they arrive. */
+  metrics?: Metrics;
 }
 
 /**
@@ -34,18 +38,21 @@ export interface RowPreview {
  * per tick). `around` gives those rows plus a margin: their families' faces are
  * fetched, so rows scrolled in already have a face to preview. `autoSize` is false
  * for a view that keeps its own sizes (the grid's thumbnails, the waterfall's labelled
- * sizes): its rows keep factor 1 and no factor is asked for.
+ * sizes): its rows keep factor 1 and no factor is asked for. `metrics` is false for a
+ * view that draws no metrics lines (the grid's cards): no metrics are asked for.
  */
 export function useRowPreviews(
   preview: () => PreviewSettings,
   rendered: () => readonly ListRow[],
   around: () => readonly ListRow[],
   autoSize = true,
+  metrics = true,
 ) {
   const list = useFontListStore();
   const library = useLibraryStore();
   const samples = useSamplesStore();
   const sizes = useSizeFactorsStore();
+  const faceMetrics = useFaceMetricsStore();
   const previews = usePreviewStore();
 
   const faceOf = (row: ListRow) =>
@@ -56,6 +63,7 @@ export function useRowPreviews(
     const sample = face ? sampleText(preview(), face, previews.pangramText) : '';
     const got = face ? samples.get(face.id, sample) : undefined;
     const basis = autoSize ? preview().autoSize : 'off';
+    const lines = face && metrics && preview().metrics ? faceMetrics.get(face.id) : undefined;
     return {
       face,
       sample,
@@ -63,6 +71,7 @@ export function useRowPreviews(
       fallback: got?.fallback ?? null,
       missing: got?.missing ?? [],
       sizeFactor: face && basis !== 'off' ? sizes.get(face.id, basis) : 1,
+      ...(lines ? { metrics: lines } : {}),
       ...(row.kind === 'face' && row.virtual ? { variations: row.virtual.coordinates } : {}),
     };
   }
@@ -80,6 +89,14 @@ export function useRowPreviews(
     for (const row of rendered()) {
       const face = faceOf(row);
       if (face) sizes.want(face.id, basis);
+    }
+  });
+
+  watchEffect(() => {
+    if (!metrics || !preview().metrics) return;
+    for (const row of rendered()) {
+      const face = faceOf(row);
+      if (face) faceMetrics.want(face.id);
     }
   });
 

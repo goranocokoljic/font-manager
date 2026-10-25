@@ -148,6 +148,38 @@ describe('FontGrid', () => {
   });
 });
 
+describe('FontGrid outline and tracking (E16.1)', () => {
+  it('cards draw live webview text with tracking or outline, thumbnails without', async () => {
+    await load({ extraFaces: 5 });
+    const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW } });
+    const cards = () => grid.findAll('[role="option"]');
+    expect(cards()[0]!.find('[data-testid="thumbnail"]').exists()).toBe(true);
+    expect(grid.find('[data-testid="card-live-text"]').exists()).toBe(false);
+    const thumbs = renders.length;
+
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, trackingEm: 0.25 } });
+    await flushPromises();
+    for (const card of cards()) {
+      const live = card.get('[data-testid="card-live-text"]');
+      expect((live.element as HTMLElement).style.letterSpacing).toBe('0.25em');
+      expect(live.classes()).not.toContain('outline');
+      expect(card.find('[data-testid="thumbnail"]').exists()).toBe(false);
+    }
+
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, outline: true } });
+    await flushPromises();
+    for (const card of cards())
+      expect(card.get('[data-testid="card-live-text"]').classes()).toContain('outline');
+    // Live text needs no thumbnail render.
+    expect(renders).toHaveLength(thumbs);
+
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW } });
+    await flushPromises();
+    expect(grid.find('[data-testid="card-live-text"]').exists()).toBe(false);
+    expect(cards()[0]!.find('[data-testid="thumbnail"]').exists()).toBe(true);
+  });
+});
+
 function useClientWithFailingRenders(): FmClient {
   return {
     ...createMockClient({ extraFaces: 1 }),
@@ -172,6 +204,29 @@ describe('FontWaterfall', () => {
         expect(line.text()).toContain(`${WATERFALL_SIZES[k]} px`);
       }
     }
+  });
+});
+
+describe('FontWaterfall metrics, outline and tracking (E16.1)', () => {
+  it('every size line draws its metrics lines, outlines and tracking', async () => {
+    await load({ extraFaces: 2 });
+    const preview = { ...DEFAULT_PREVIEW, metrics: true, outline: true, trackingEm: 0.1 };
+    const fall = await mountView(FontWaterfall, { preview });
+    const lines = fall.findAll('[data-face="1"][data-testid="waterfall-line"]');
+    expect(lines).toHaveLength(WATERFALL_SIZES.length);
+    for (const line of lines) {
+      const sample = line.get('.sample');
+      expect(sample.classes()).toContain('outline');
+      expect((sample.element as HTMLElement).style.letterSpacing).toBe('0.1em');
+      expect(line.findAll('[data-line]').map((l) => l.attributes('data-line'))).toEqual([
+        'baseline',
+        'xHeight',
+        'capHeight',
+      ]);
+    }
+    await fall.setProps({ preview: { ...DEFAULT_PREVIEW } });
+    expect(fall.find('[data-line]').exists()).toBe(false);
+    expect(fall.find('.sample.outline').exists()).toBe(false);
   });
 });
 

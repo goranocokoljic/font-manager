@@ -201,6 +201,11 @@
     },
     "lineHeight": "Line height",
     "tracking": "Tracking",
+    "trackingSlider": "Tracking slider",
+    "trackingInEm": "Tracking in em",
+    "metrics": "Metrics",
+    "metricsHint": "Draw each row's baseline, x-height and cap-height lines",
+    "outline": "Outline",
     "alignment": "Alignment",
     "aligns": {
       "start": "Start",

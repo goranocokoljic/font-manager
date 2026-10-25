@@ -95,4 +95,38 @@ describe('PreviewControls', () => {
     expect(store.settingsFor('collection-3').autoSize).toBe('capHeight');
     expect(store.settingsFor('all').autoSize).toBe('off');
   });
+
+  it('has a tracking slider from -0.2 to 1 em next to the number field', async () => {
+    const { wrapper, store } = mountControls();
+    const slider = wrapper.get('input[type="range"][aria-label="Tracking slider"]');
+    expect(slider.attributes()).toMatchObject({ min: '-0.2', max: '1', step: '0.01' });
+    await slider.setValue('0.35');
+    expect(store.settingsFor('all').trackingEm).toBe(0.35);
+    const number = wrapper.get('input[aria-label="Tracking in em"]');
+    expect((number.element as HTMLInputElement).value).toBe('0.35');
+    await slider.setValue('-0.2');
+    expect(store.settingsFor('all').trackingEm).toBe(-0.2);
+    const group = wrapper.get(
+      `[role="group"][aria-labelledby="${slider.element.parentElement!.getAttribute('aria-labelledby')}"]`,
+    );
+    expect(group.text()).toContain('Tracking');
+  });
+
+  it('toggles metrics and outline from labelled checkboxes, per view', async () => {
+    const { wrapper, store } = mountControls('collection-3');
+    const box = (name: string) =>
+      wrapper
+        .findAll('label')
+        .find((l) => l.text() === name)!
+        .get('input[type="checkbox"]');
+    expect((box('Metrics').element as HTMLInputElement).checked).toBe(false);
+    await box('Metrics').setValue(true);
+    expect(store.settingsFor('collection-3').metrics).toBe(true);
+    await box('Outline').setValue(true);
+    expect(store.settingsFor('collection-3').outline).toBe(true);
+    expect(store.settingsFor('all')).toMatchObject({ metrics: false, outline: false });
+    await box('Metrics').setValue(false);
+    expect(store.settingsFor('collection-3').metrics).toBe(false);
+    expect((box('Outline').element as HTMLInputElement).checked).toBe(true);
+  });
 });

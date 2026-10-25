@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // A grid card's text as live webview text in the face itself, for a face drawn in a
-// chosen color palette (E16.3): the card's thumbnail is a one-color mask, so it
-// cannot show a palette. The face is held through the shared face loader while the
-// card shows it.
+// chosen color palette (E16.3), or with tracking or as outlines (E16.1): the card's
+// thumbnail is a one-color mask, so it cannot show any of them. The face is held
+// through the shared face loader while the card shows it.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
@@ -10,9 +10,13 @@ import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 const props = defineProps<{
   face: FaceId;
   text: string;
-  /** The CSS `font-palette` to draw in. */
-  palette: string;
+  /** The CSS `font-palette` to draw in; the face's default when absent. */
+  palette?: string;
   sizePx: number;
+  /** Letter spacing in em. */
+  trackingEm?: number;
+  /** Draws the text as outlines (stroke, no fill). */
+  outline?: boolean;
   color?: string | null;
 }>();
 
@@ -47,12 +51,20 @@ const style = computed(() => ({
   fontFamily: `"${faceFamily(props.face)}", var(--fm-preview-fallback, system-ui), sans-serif`,
   fontSize: `${props.sizePx}px`,
   fontPalette: props.palette,
+  letterSpacing: props.trackingEm ? `${props.trackingEm}em` : undefined,
   color: props.color ?? undefined,
 }));
 </script>
 
 <template>
-  <div class="live" dir="auto" data-testid="card-live-text" :data-state="state" :style="style">
+  <div
+    class="live"
+    :class="{ outline }"
+    dir="auto"
+    data-testid="card-live-text"
+    :data-state="state"
+    :style="style"
+  >
     {{ text }}
   </div>
 </template>
@@ -64,5 +76,9 @@ const style = computed(() => ({
   overflow: hidden;
   line-height: 1.2;
   white-space: nowrap;
+}
+.live.outline {
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke: 1px currentColor;
 }
 </style>
