@@ -9,9 +9,13 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-use fm_api::library::{AddSourceRequest, ImportMode, ScanRequest};
+use fm_api::library::{AddSourceRequest, ImportMode, ResolveFontRequest, ScanRequest};
+use fm_api::organization::{CreateSetRequest, SetExport};
 use fm_api::search::{FamilyHit, Filters, SearchRequest, SimilarFace, Supports};
-use fm_api::{API_VERSION, Event, EventSource, LibraryService, SearchService};
+use fm_api::{
+    API_VERSION, ActivationService, Event, EventSource, FaceId, LibraryService,
+    OrganizationService, SearchService,
+};
 use fm_core::{CoreApi, startup};
 use fm_platform::{AppPaths, MockActivator};
 use serde_json::Value;
@@ -34,10 +38,7 @@ impl Home {
     fn scanned(label: &str, folders: &[&str]) -> Self {
         let home = Self::new(label);
         let library = home.library(folders);
-        let paths = AppPaths::under(&home.0);
-        startup::prepare(&paths).expect("app folders");
-        let index = startup::open_index(&paths).expect("index").index;
-        let api = CoreApi::open(&paths, index, Arc::new(MockActivator::new()));
+        let api = home.api();
         let source = api
             .add_source(AddSourceRequest {
                 path: library.display().to_string(),
@@ -62,6 +63,14 @@ impl Home {
             }
         }
         home
+    }
+
+    /// The core over this home's index, as `fm` opens it.
+    fn api(&self) -> CoreApi {
+        let paths = AppPaths::under(&self.0);
+        startup::prepare(&paths).expect("app folders");
+        let index = startup::open_index(&paths).expect("index").index;
+        CoreApi::open(&paths, index, Arc::new(MockActivator::new()))
     }
 
     /// A `Library` folder holding copies of `folders` (under `fixtures/fonts/`).
@@ -362,5 +371,110 @@ fn a_folder_that_fails_to_scan_does_not_stop_the_others() {
     assert!(
         printed.contains("ERROR") && printed.contains("Unplugged"),
         "{printed}"
+    );
+}
+
+#[test]
+fn activate_and_deactivate_in_direct_link_mode_do_nothing_and_exit_4() {
+    let home = Home::scanned("direct-link", &["google-repo/barlow"]);
+
+    let out = home.fm(&["activate", "Barlow-BoldItalic"]);
+    assert_eq!(code(&out), 4);
+    assert!(out.stdout.is_empty());
+    assert_eq!(
+        text(&out.stderr).trim_end(),
+        "fm: Font Manager must be running to activate fonts; start it and try again"
+    );
+
+    let out = home.fm(&["--json", "deactivate", "Barlow-BoldItalic"]);
+    assert_eq!(code(&out), 4);
+    assert!(out.stdout.is_empty());
+    let e: Value = serde_json::from_slice(&out.stderr).expect("JSON error");
+    assert_eq!(e["code"], "unsupported");
+
+    assert!(
+        home.api().list_active().expect("active").is_empty(),
+        "nothing was activated"
+    );
+}
+
+#[test]
+fn a_set_exported_then_imported_on_a_fresh_index_round_trips() {
+    let folders = ["derived/agdasima", "google-repo/barlow"];
+    let from = Home::scanned("set-from", &folders);
+    let faces: Vec<FaceId> = {
+        let api = from.api();
+        let mut faces = Vec::new();
+        // A face of a two-face collection file, and a single-face file.
+        for font in ["Agdasima-Bold", "Barlow-BoldItalic"] {
+            let matches = api
+                .resolve_font(ResolveFontRequest { font: font.into() })
+                .expect("in the library");
+            faces.extend(matches.faces.iter().map(|m| m.face));
+        }
+        api.create_set(CreateSetRequest {
+            name: "Brand".into(),
+            faces: faces.clone(),
+        })
+        .expect("set");
+        faces
+    };
+
+    let file = from.0.join("brand.json");
+    let out = from.fm(&[
+        "sets",
+        "export",
+        "brand",
+        "--out",
+        &file.display().to_string(),
+    ]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("Wrote set \"Brand\""));
+    let exported: SetExport =
+        serde_json::from_str(&std::fs::read_to_string(&file).expect("file")).expect("JSON");
+    assert_eq!(exported.fonts.len(), faces.len());
+
+    // Without --out the same JSON goes to stdout.
+    let out = from.fm(&["sets", "export", "Brand"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let printed: SetExport = serde_json::from_slice(&out.stdout).expect("JSON");
+    assert_eq!(printed, exported);
+
+    // A fresh index of the same fonts finds every one.
+    let to = Home::scanned("set-to", &folders);
+    let out = to.fm(&["sets", "import", &file.display().to_string()]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let printed = text(&out.stdout);
+    assert!(
+        printed.contains(&format!("{} fonts found, 0 missing.", faces.len())),
+        "{printed}"
+    );
+    assert!(printed.contains("Barlow Bold Italic"), "{printed}");
+
+    let imported: Value = json(&to.fm(&["--json", "sets", "export", "Brand"]));
+    let imported: SetExport = serde_json::from_value(imported).expect("an export");
+    let sorted = |e: &SetExport| {
+        let mut fonts: Vec<_> = e
+            .fonts
+            .iter()
+            .map(|f| (f.family.clone(), f.style.clone(), f.hash.clone()))
+            .collect();
+        fonts.sort();
+        fonts
+    };
+    assert_eq!(imported.name, exported.name);
+    assert_eq!(sorted(&imported), sorted(&exported));
+
+    // A library without Barlow reports it missing.
+    let partial = Home::scanned("set-partial", &["derived/agdasima"]);
+    let out = partial.fm(&["--json", "sets", "import", &file.display().to_string()]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let v = json(&out);
+    let missing = v["missing"].as_array().expect("missing");
+    assert_eq!(missing.len(), 1, "{v}");
+    assert_eq!(missing[0]["family"], "Barlow");
+    assert_eq!(
+        v["set"]["faces"].as_array().expect("faces").len(),
+        faces.len() - 1
     );
 }

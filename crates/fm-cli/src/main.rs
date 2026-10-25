@@ -13,7 +13,7 @@ use std::sync::Arc;
 use clap::Parser;
 use clap::error::ErrorKind;
 use fm_api::{Api, ApiError, ApiResult, ErrorCode};
-use fm_cli::{Cli, Output};
+use fm_cli::{Cli, Link, Output};
 use fm_core::{CoreApi, startup};
 use fm_platform::AppPaths;
 
@@ -41,7 +41,8 @@ fn main() -> ExitCode {
                 .into();
         }
     };
-    fm_cli::run(api.as_ref(), &cli, &mut out, &mut err).into()
+    // Always the index directly until E26.6 talks to the running app.
+    fm_cli::run(api.as_ref(), Link::Direct, &cli, &mut out, &mut err).into()
 }
 
 /// A usage error clap found, printed as `fm` prints errors.

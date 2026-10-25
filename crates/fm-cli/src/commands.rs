@@ -6,16 +6,21 @@
 use std::io::Write;
 use std::path::Path;
 
+use fm_api::activation::{
+    ActivateRequest, ActivationMode, ActivationOutcome, ConflictPolicy, DeactivateRequest,
+    OutcomeStatus, Target,
+};
 use fm_api::common::Page;
 use fm_api::library::{
-    AddSourceRequest, FaceDetail, FaceSummary, FamilySummary, ImportMode, ListFamiliesRequest,
-    ScanRequest, Source,
+    AddSourceRequest, FaceDetail, FaceSummary, FamilySummary, FontMatchKind, ImportMode,
+    ListFamiliesRequest, ResolveFontRequest, ScanRequest, Source,
 };
+use fm_api::organization::{ImportSetResponse, ProjectSet, SetExport};
 use fm_api::search::{
     CoverageReport, CoverageRequest, FamilyHit, Filters, SearchRequest, SimilarFace,
     SimilarRequest, Supports,
 };
-use fm_api::{Api, ApiError, ErrorCode, Event};
+use fm_api::{Api, ApiError, CollectionId, ErrorCode, Event};
 use serde::Serialize;
 
 use crate::output::Failure;
@@ -255,4 +260,210 @@ pub fn coverage(api: &dyn Api, font: &str, target: Supports) -> Result<CoverageR
 pub fn similar(api: &dyn Api, font: &str, limit: u32) -> Result<Vec<SimilarFace>, Failure> {
     let face = resolve(api, font)?.face;
     Ok(api.find_similar(SimilarRequest { face, limit })?)
+}
+
+/// What the argument of `fm activate` and `fm deactivate` names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TargetKind {
+    /// A font argument (the default).
+    #[default]
+    Font,
+    /// A collection: its id or its name.
+    Collection,
+    /// A project set: its id or its name.
+    Set,
+}
+
+/// The `Target` an argument names. A font argument that matches by family
+/// name targets every face it matches (a family name names every style);
+/// any other font match must be one face, as for `fm info`.
+pub fn target(api: &dyn Api, kind: TargetKind, arg: &str) -> Result<Target, Failure> {
+    match kind {
+        TargetKind::Font => {
+            let matches = api.resolve_font(ResolveFontRequest { font: arg.into() })?;
+            if matches.matched_by == FontMatchKind::FamilyStyle {
+                let faces = matches.faces.iter().map(|m| m.face).collect();
+                return Ok(Target::Faces { faces });
+            }
+            let candidates = matches.faces.clone();
+            let face = matches
+                .single(arg)
+                .map_err(|error| Failure::Ambiguous { error, candidates })?
+                .face;
+            Ok(Target::Faces { faces: vec![face] })
+        }
+        TargetKind::Collection => {
+            let collections = api.list_collections()?;
+            let id = named(
+                arg,
+                "collection",
+                collections.iter().map(|c| (c.id.0, c.name.as_str())),
+            )?;
+            Ok(Target::Collection {
+                collection: CollectionId(id),
+            })
+        }
+        TargetKind::Set => Ok(Target::Set {
+            set: find_set(api, arg)?.id,
+        }),
+    }
+}
+
+/// The project set `arg` names: its id or its name.
+fn find_set(api: &dyn Api, arg: &str) -> Result<ProjectSet, Failure> {
+    let sets = api.list_sets()?;
+    let id = named(arg, "set", sets.iter().map(|s| (s.id.0, s.name.as_str())))?;
+    sets.into_iter()
+        .find(|s| s.id.0 == id)
+        .ok_or_else(|| not_called(arg, "set").into())
+}
+
+/// The id of the item `arg` names among `items` (id, name): the one whose
+/// id it is, else the one whose name equals it, ignoring case and
+/// surrounding space. Several of that name is `InvalidRequest` listing
+/// their ids, as an ambiguous font argument is.
+fn named<'a>(
+    arg: &str,
+    noun: &str,
+    items: impl Iterator<Item = (u32, &'a str)> + Clone,
+) -> Result<u32, ApiError> {
+    let wanted = arg.trim().to_lowercase();
+    if wanted.is_empty() {
+        return Err(ApiError::new(
+            ErrorCode::InvalidRequest,
+            format!("Name a {noun}: its id or its name."),
+        ));
+    }
+    if let Ok(id) = wanted.parse::<u32>()
+        && items.clone().any(|(i, _)| i == id)
+    {
+        return Ok(id);
+    }
+    let hits: Vec<(u32, &str)> = items
+        .filter(|(_, name)| name.trim().to_lowercase() == wanted)
+        .collect();
+    match hits.as_slice() {
+        [] => Err(not_called(arg, noun)),
+        [(id, _)] => Ok(*id),
+        _ => {
+            let lines: Vec<String> = hits.iter().map(|(id, n)| format!("{id}\t{n}")).collect();
+            Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                format!(
+                    "\"{arg}\" matches {} {noun}s. Use one of their ids instead.",
+                    hits.len()
+                ),
+            )
+            .with_detail(lines.join("\n")))
+        }
+    }
+}
+
+/// No `noun` in the library is called `arg`.
+fn not_called(arg: &str, noun: &str) -> ApiError {
+    ApiError::new(
+        ErrorCode::NotFound,
+        format!("No {noun} in the library is called \"{arg}\"."),
+    )
+}
+
+/// `fm activate`: activates what `arg` names, for the session or permanently.
+/// A clash is reported, never replaced: the command line cannot ask.
+pub fn activate(
+    api: &dyn Api,
+    kind: TargetKind,
+    arg: &str,
+    permanent: bool,
+) -> Result<Vec<ActivationOutcome>, Failure> {
+    let target = target(api, kind, arg)?;
+    let mode = if permanent {
+        ActivationMode::Permanent
+    } else {
+        ActivationMode::Session
+    };
+    Ok(api.activate(ActivateRequest {
+        target,
+        mode,
+        on_conflict: ConflictPolicy::KeepExisting,
+    })?)
+}
+
+/// `fm deactivate`: deactivates what `arg` names. The API leaves a face the
+/// app did not register alone and reports it `Skipped` (rule 3).
+pub fn deactivate(
+    api: &dyn Api,
+    kind: TargetKind,
+    arg: &str,
+) -> Result<Vec<ActivationOutcome>, Failure> {
+    let target = target(api, kind, arg)?;
+    Ok(api.deactivate(DeactivateRequest {
+        target: Some(target),
+        except: None,
+    })?)
+}
+
+/// The exit code of an activation or deactivation: 0 when every face is
+/// done or already was, 4 when any was refused (a conflict, skipped) or
+/// failed.
+pub fn activation_exit(outcomes: &[ActivationOutcome]) -> Exit {
+    let refused = outcomes
+        .iter()
+        .any(|o| !matches!(o.outcome, OutcomeStatus::Done | OutcomeStatus::Unchanged));
+    if refused {
+        Exit::Refused
+    } else {
+        Exit::Success
+    }
+}
+
+/// Why `fm activate` and `fm deactivate` do nothing in direct-link mode: a
+/// session activation would end with the `fm` process.
+pub fn needs_the_app() -> Failure {
+    ApiError::new(
+        ErrorCode::Unsupported,
+        "Font Manager must be running to activate fonts; start it and try again",
+    )
+    .into()
+}
+
+/// `fm sets export <set>`: the set as portable JSON, also written to `out`
+/// when given (a file the user named).
+pub fn export_set(api: &dyn Api, set: &str, out: Option<&Path>) -> Result<SetExport, Failure> {
+    let set = find_set(api, set)?;
+    let export = api.export_set(set.id)?;
+    if let Some(path) = out {
+        let json = serde_json::to_string_pretty(&export).map_err(|e| {
+            ApiError::new(ErrorCode::Internal, "The set could not be written as JSON.")
+                .with_detail(e.to_string())
+        })?;
+        std::fs::write(path, json + "\n").map_err(|e| {
+            ApiError::new(
+                ErrorCode::Io,
+                format!("The set could not be written to {}.", path.display()),
+            )
+            .with_detail(e.to_string())
+        })?;
+    }
+    Ok(export)
+}
+
+/// `fm sets import <file>`: reads a set export and imports it as a new set.
+pub fn import_set(api: &dyn Api, file: &Path) -> Result<ImportSetResponse, Failure> {
+    let text = std::fs::read_to_string(file).map_err(|e| {
+        let code = if e.kind() == std::io::ErrorKind::NotFound {
+            ErrorCode::NotFound
+        } else {
+            ErrorCode::Io
+        };
+        ApiError::new(code, format!("{} could not be read.", file.display()))
+            .with_detail(e.to_string())
+    })?;
+    let export: SetExport = serde_json::from_str(&text).map_err(|e| {
+        ApiError::new(
+            ErrorCode::InvalidRequest,
+            format!("{} is not a set exported by Font Manager.", file.display()),
+        )
+        .with_detail(e.to_string())
+    })?;
+    Ok(api.import_set(export)?)
 }

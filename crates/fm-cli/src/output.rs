@@ -4,12 +4,15 @@
 //! comfy-table, and the error's message on stderr.
 
 use std::io::{self, Write};
+use std::path::Path;
 
 use comfy_table::{Table, presets};
-use fm_api::ApiError;
+use fm_api::activation::{ActivationOutcome, ConflictWith, OutcomeStatus};
 use fm_api::common::Health;
 use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
+use fm_api::organization::{ImportSetResponse, SetExport};
 use fm_api::search::{CoverageReport, FamilyHit, SimilarFace};
+use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
 use crate::Exit;
@@ -400,6 +403,109 @@ pub fn similar(faces: &[SimilarFace], out: &mut dyn Write) -> io::Result<()> {
         ]);
     }
     writeln!(out, "{table}")
+}
+
+/// `fm activate` and `fm deactivate`: one line per face, its id, name and
+/// what happened to it. A face whose name cannot be read shows its id only.
+pub fn outcomes(
+    api: &dyn Api,
+    outcomes: &[ActivationOutcome],
+    out: &mut dyn Write,
+) -> io::Result<()> {
+    if outcomes.is_empty() {
+        return writeln!(out, "No fonts to act on.");
+    }
+    let mut table = Table::new();
+    table
+        .load_preset(presets::NOTHING)
+        .set_header(["ID", "FONT", "OUTCOME"]);
+    for o in outcomes {
+        table.add_row([
+            o.face.to_string(),
+            face_name(api, o.face),
+            outcome(&o.outcome),
+        ]);
+    }
+    writeln!(out, "{table}")
+}
+
+/// What happened to a face, in plain words.
+fn outcome(status: &OutcomeStatus) -> String {
+    match status {
+        OutcomeStatus::Done => "done".into(),
+        OutcomeStatus::Unchanged => "unchanged".into(),
+        OutcomeStatus::Conflict {
+            with: ConflictWith::System { path },
+        } => format!("conflict: an installed font has the same name ({path})"),
+        OutcomeStatus::Conflict {
+            with: ConflictWith::Active { face },
+        } => format!("conflict: face {face} with the same name is active"),
+        OutcomeStatus::Skipped { reason } => format!("skipped: {reason}"),
+        OutcomeStatus::Failed { error } => format!("failed: {}", error.message),
+    }
+}
+
+/// `Family Style` of a face, or nothing when it cannot be read.
+fn face_name(api: &dyn Api, face: FaceId) -> String {
+    api.get_face(face)
+        .map(|d| format!("{} {}", d.face.family_name, d.face.style))
+        .unwrap_or_default()
+}
+
+/// `fm sets export` without `--out`: the export as the file holds it.
+pub fn set_export(export: &SetExport, out: &mut dyn Write) -> io::Result<()> {
+    serde_json::to_writer_pretty(&mut *out, export)?;
+    writeln!(out)
+}
+
+/// `fm sets export --out`: where the set went.
+pub fn set_written(export: &SetExport, path: &Path, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(
+        out,
+        "Wrote set \"{}\" ({} fonts) to {}",
+        export.name,
+        export.fonts.len(),
+        path.display()
+    )
+}
+
+/// `fm sets import`: the new set, the fonts found in the library and the
+/// fonts missing from it.
+pub fn imported(
+    api: &dyn Api,
+    imported: &ImportSetResponse,
+    out: &mut dyn Write,
+) -> io::Result<()> {
+    let set = &imported.set;
+    writeln!(
+        out,
+        "Imported set \"{}\" (id {}): {} fonts found, {} missing.",
+        set.name,
+        set.id,
+        set.faces.len(),
+        imported.missing.len()
+    )?;
+    if !set.faces.is_empty() {
+        let mut table = Table::new();
+        table
+            .load_preset(presets::NOTHING)
+            .set_header(["ID", "FOUND"]);
+        for face in &set.faces {
+            table.add_row([face.to_string(), face_name(api, *face)]);
+        }
+        writeln!(out, "{table}")?;
+    }
+    if !imported.missing.is_empty() {
+        let mut table = Table::new();
+        table
+            .load_preset(presets::NOTHING)
+            .set_header(["MISSING", "STYLE", "HASH"]);
+        for m in &imported.missing {
+            table.add_row([m.family.clone(), m.style.clone(), m.hash.clone()]);
+        }
+        writeln!(out, "{table}")?;
+    }
+    Ok(())
 }
 
 fn yes(b: bool) -> &'static str {
