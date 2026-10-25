@@ -158,6 +158,7 @@ fn a_wrong_token_is_permission_denied_and_names_settings_local_api() {
     let e = client.list_sources().unwrap_err();
     assert_eq!(e.code, ErrorCode::PermissionDenied);
     assert!(e.message.contains("Settings > Local API"), "{}", e.message);
+    assert!(!e.message.contains("  "), "no double spaces: {}", e.message);
     // The app's own words stay in the detail.
     assert!(
         e.detail.as_deref().is_some_and(|d| d.contains("token")),

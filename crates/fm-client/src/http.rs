@@ -77,7 +77,7 @@ impl Answer {
 /// The message for the app's 401: the token in `endpoint.json` is not the
 /// one the app holds now. It names where the user sees the current token;
 /// the app's own message stays in the detail.
-pub(crate) const WRONG_TOKEN: &str = "Font Manager did not accept the token of its local API.      Check the token in Font Manager under Settings > Local API, or restart Font Manager.";
+pub(crate) const WRONG_TOKEN: &str = "Font Manager did not accept the token of its local API. Check the token in Font Manager under Settings > Local API, or restart Font Manager.";
 
 fn wrong_token(e: ApiError) -> ApiError {
     let detail = match e.detail {
