@@ -9,7 +9,7 @@ folders, so the app does not have to run.
 |---------|--------------|
 | `fm version` | Show the app version and the API version |
 | `fm resolve <font>` | Show which font a name or id stands for |
-| `fm scan [folder]` | Add the folder to the library and scan it. Without a folder, scan every folder of the library. Progress goes to stderr. |
+| `fm scan [folder]` | Add the folder to the library and scan it. Without a folder, scan every folder of the library. Progress goes to stderr. A folder that fails to scan does not stop the others; `fm` then exits with the code of the first failure. |
 | `fm list` | List the families |
 | `fm list --family <font>` | List the faces of a family |
 | `fm search [words] [--supports sr-Cyrl,sr-Latn] [--feature smcp] [--variable]` | Find families. With `--supports`, show the characters each family misses. |

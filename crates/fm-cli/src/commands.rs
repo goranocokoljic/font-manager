@@ -19,12 +19,13 @@ use fm_api::{Api, ApiError, ErrorCode, Event};
 use serde::Serialize;
 
 use crate::output::Failure;
-use crate::resolve;
+use crate::{Exit, resolve};
 
 /// Rows asked for per page when a command lists everything.
 const PAGE: u32 = 500;
 
-/// What a scan of one source found: its `ScanFinished` counts.
+/// What a scan of one source found: its `ScanFinished` counts, or why it
+/// failed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scanned {
@@ -38,11 +39,25 @@ pub struct Scanned {
     pub removed: u32,
     /// Problems found.
     pub problems: u32,
+    /// The scan failed (the folder is gone, say); the counts are 0.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<ApiError>,
+}
+
+impl Scanned {
+    /// The exit code of a run of scans: that of the first failed one, else 0.
+    pub fn exit(scans: &[Self]) -> Exit {
+        scans
+            .iter()
+            .find_map(|s| s.error.as_ref())
+            .map_or(Exit::Success, |e| Exit::of(e.code))
+    }
 }
 
 /// `fm scan [path]`: adds `path` as a source when given (a folder that is one
 /// already is scanned again), then scans it, or every source that is not
-/// paused. Progress goes to `progress` while each scan runs.
+/// paused. A source whose scan fails does not stop the others, as in the
+/// core's own scan of every source. Progress goes to `progress`.
 pub fn scan(
     api: &dyn Api,
     path: Option<&Path>,
@@ -56,12 +71,19 @@ pub fn scan(
             .filter(|s| !s.paused)
             .collect(),
     };
-    let mut scanned = Vec::with_capacity(sources.len());
-    for source in sources {
-        let finished = scan_one(api, &source, &mut progress)?;
-        scanned.push(finished);
-    }
-    Ok(scanned)
+    Ok(sources
+        .into_iter()
+        .map(|source| {
+            scan_one(api, &source, &mut progress).unwrap_or_else(|error| Scanned {
+                source,
+                added: 0,
+                changed: 0,
+                removed: 0,
+                problems: 0,
+                error: Some(error),
+            })
+        })
+        .collect())
 }
 
 /// The source for `path`, added as one when it is not one yet.
@@ -91,7 +113,7 @@ fn scan_one(
     api: &dyn Api,
     source: &Source,
     progress: &mut Option<&mut dyn Write>,
-) -> Result<Scanned, Failure> {
+) -> Result<Scanned, ApiError> {
     // Subscribed first: the scan's events may come before `scan` returns.
     let events = api.subscribe();
     let job = api.scan(ScanRequest {
@@ -125,9 +147,10 @@ fn scan_one(
                     changed,
                     removed,
                     problems,
+                    error: None,
                 });
             }
-            Event::JobFailed { job: j, error } if j == job => return Err(error.into()),
+            Event::JobFailed { job: j, error } if j == job => return Err(error),
             _ => {}
         }
     }

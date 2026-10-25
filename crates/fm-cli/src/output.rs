@@ -69,24 +69,21 @@ impl<'a> Output<'a> {
         answer: Result<T, E>,
         human: impl FnOnce(&T, &mut dyn Write) -> io::Result<()>,
     ) -> Exit {
-        self.check(answer, human, |_| true)
+        self.check(answer, human, |_| Exit::Success)
     }
 
-    /// As [`Output::print`] for a check: an answer that is not `passed` is
-    /// printed the same way and exits 5.
+    /// As [`Output::print`] for an answer that can report a failure of its
+    /// own (a check that found problems, a scan of one folder that failed):
+    /// it is printed the same way and exits with what `exit` says of it.
     pub fn check<T: Serialize, E: Into<Failure>>(
         self,
         answer: Result<T, E>,
         human: impl FnOnce(&T, &mut dyn Write) -> io::Result<()>,
-        passed: fn(&T) -> bool,
+        exit: impl FnOnce(&T) -> Exit,
     ) -> Exit {
         let written = match answer.map_err(Into::into) {
             Ok(value) => {
-                let exit = if passed(&value) {
-                    Exit::Success
-                } else {
-                    Exit::Problems
-                };
+                let exit = exit(&value);
                 self.answer(&value, human).map(|()| exit)
             }
             Err(failure) => {
@@ -189,18 +186,38 @@ pub fn scanned(scans: &[Scanned], out: &mut dyn Write) -> io::Result<()> {
     if scans.is_empty() {
         return writeln!(out, "No folder to scan. Add one with fm scan <folder>.");
     }
+    let failed = scans.iter().any(|s| s.error.is_some());
+    let mut header = vec!["FOLDER", "ADDED", "CHANGED", "REMOVED", "PROBLEMS"];
+    if failed {
+        header.push("ERROR");
+    }
     let mut table = Table::new();
-    table
-        .load_preset(presets::NOTHING)
-        .set_header(["FOLDER", "ADDED", "CHANGED", "REMOVED", "PROBLEMS"]);
+    table.load_preset(presets::NOTHING).set_header(header);
     for s in scans {
-        table.add_row([
-            s.source.path.clone(),
-            s.added.to_string(),
-            s.changed.to_string(),
-            s.removed.to_string(),
-            s.problems.to_string(),
-        ]);
+        let mut row = match &s.error {
+            Some(_) => vec![
+                s.source.path.clone(),
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                "-".into(),
+            ],
+            None => vec![
+                s.source.path.clone(),
+                s.added.to_string(),
+                s.changed.to_string(),
+                s.removed.to_string(),
+                s.problems.to_string(),
+            ],
+        };
+        if failed {
+            row.push(
+                s.error
+                    .as_ref()
+                    .map_or_else(String::new, |e| e.message.clone()),
+            );
+        }
+        table.add_row(row);
     }
     writeln!(out, "{table}")
 }

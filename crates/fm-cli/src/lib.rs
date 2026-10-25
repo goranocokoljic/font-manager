@@ -109,7 +109,7 @@ pub fn run(api: &dyn Api, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -
         Command::Resolve { font } => output.print(resolve(api, font), output::font),
         Command::Scan { path } => {
             let scanned = commands::scan(api, path.as_deref(), output.progress());
-            output.print(scanned, |s, o| output::scanned(s, o))
+            output.check(scanned, |s, o| output::scanned(s, o), |s| Scanned::exit(s))
         }
         Command::List { family: None } => {
             output.print(commands::families(api), |f, o| output::families(f, o))
@@ -147,7 +147,13 @@ pub fn run(api: &dyn Api, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -
             output.check(
                 commands::coverage(api, font, target),
                 output::coverage,
-                |r| r.complete,
+                |r| {
+                    if r.complete {
+                        Exit::Success
+                    } else {
+                        Exit::Problems
+                    }
+                },
             )
         }
         Command::Similar { font, limit } => output

@@ -322,3 +322,45 @@ fn info_coverage_and_similar_run_on_the_core() {
     assert_eq!(code(&out), 3);
     assert!(out.stdout.is_empty());
 }
+
+#[test]
+fn a_folder_that_fails_to_scan_does_not_stop_the_others() {
+    let home = Home::new("scan-gone");
+    // The first source is a folder that is gone by the time of the scan
+    // (an unplugged drive); the second holds fonts.
+    let gone = home.0.join("Unplugged");
+    std::fs::create_dir_all(&gone).expect("folder");
+    let out = home.fm(&["scan", &gone.display().to_string()]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let library = home.library(&["google-repo/barlow"]);
+    let out = home.fm(&["scan", &library.display().to_string()]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    std::fs::remove_dir_all(&gone).expect("unplug");
+    // Changed on disk since the last scan, so the second scan has news.
+    std::fs::remove_file(library.join("barlow").join("Barlow-BoldItalic.ttf")).expect("remove");
+
+    let out = home.fm(&["--json", "scan"]);
+    let exit = code(&out);
+    assert_ne!(exit, 0, "a failed folder is not a success");
+    let v: Value = serde_json::from_slice(&out.stdout).expect("the scans, as JSON");
+    let scans = v.as_array().expect("one row per folder");
+    assert_eq!(scans.len(), 2, "{v}");
+    assert_eq!(scans[0]["source"]["path"], gone.display().to_string());
+    let error = &scans[0]["error"];
+    assert!(error["message"].is_string(), "{v}");
+    let expected = match error["code"].as_str() {
+        Some("notFound") => 3,
+        Some("io" | "internal" | "cancelled") => 1,
+        other => panic!("unexpected error code {other:?}"),
+    };
+    assert_eq!(exit, expected);
+    assert!(scans[1].get("error").is_none(), "{v}");
+    assert_eq!(scans[1]["removed"], 1, "the second folder was scanned: {v}");
+
+    let out = home.fm(&["scan"]);
+    let printed = text(&out.stdout);
+    assert!(
+        printed.contains("ERROR") && printed.contains("Unplugged"),
+        "{printed}"
+    );
+}
