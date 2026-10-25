@@ -190,6 +190,69 @@ fn an_unknown_or_hidden_face_is_not_found_and_limit_caps() {
     );
 }
 
+/// A sans face of `family` with `designer` and an x-height of `x_height`
+/// thousandths of the em, in a file of its own: no contrast or superfamily
+/// with another one, so only the designer and x-height rules can hold.
+fn plain_sans(i: u8, family: &str, designer: &str, x_height: i16) -> IndexedFile {
+    let mut face = ParsedFace::empty(0, Health::Ok);
+    face.family = Some(family.into());
+    face.subfamily = Some("Regular".into());
+    face.weight = Some(400);
+    face.designer = Some(designer.into());
+    face.metrics = Metrics {
+        units_per_em: 2000,
+        ascender: 1600,
+        descender: -400,
+        x_height: Some(x_height * 2),
+        cap_height: Some(1400),
+    };
+    face.classification = Some(crate::classify::ClassGuess {
+        class: Classification::Sans,
+        confidence: 0.8,
+        source: crate::classify::ClassSource::Declared,
+    });
+    IndexedFile {
+        path: PathBuf::from(format!("/fonts/plain-{i}.ttf")),
+        size: 1000,
+        modified: None,
+        hash: FileHash::from([i; 32]),
+        parsed: ParsedFile {
+            format: Some(fm_api::common::FontFormat::Ttf),
+            health: Health::Ok,
+            faces: vec![face],
+        },
+        gone: false,
+    }
+}
+
+#[test]
+fn the_index_feeds_designer_and_x_height_to_the_rules() {
+    let index = indexed(&[
+        plain_sans(1, "Alder", "Ada Lovelace", 500),
+        plain_sans(2, "Birch", "ada lovelace", 510),
+        plain_sans(3, "Cedar", "Bob", 505),
+        plain_sans(4, "Damson", "Ada Lovelace", 700),
+        plain_sans(5, "Elm", "Bob", 700),
+    ]);
+    let got = pairings(&index, face_of(&index, "Alder"), 10);
+    let reasons: Vec<(&str, Vec<&str>)> = got
+        .iter()
+        .map(|s| {
+            let r = s.reasons.iter().map(String::as_str).collect();
+            (s.face.family_name.as_str(), r)
+        })
+        .collect();
+    assert_eq!(
+        reasons,
+        [
+            ("Birch", vec!["same designer", "similar x-height"]),
+            ("Damson", vec!["same designer"]),
+            ("Cedar", vec!["similar x-height"]),
+        ],
+        "{got:#?}"
+    );
+}
+
 /// A face with every pairing fact set, in a file of its own.
 fn synthetic_face(i: usize) -> IndexedFile {
     let classes = [
