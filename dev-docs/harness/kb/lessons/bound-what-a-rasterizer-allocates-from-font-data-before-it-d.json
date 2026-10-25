@@ -1,0 +1,18 @@
+{
+  "id": "bound-what-a-rasterizer-allocates-from-font-data-before-it-d",
+  "title": "Bound what a rasterizer allocates from font data before it draws, not only with catch_unwind",
+  "category": "error-handling",
+  "rule": "When fm-core rasterizes glyphs without a user choosing the size (at scan time, in a batch, for thumbnails), compute each glyph's box from its outline in font units, scale it to the render size, and skip the glyph or face (no fingerprint, Health::Broken, an FmError) when the box is over a fixed pixel cap, before calling the rasterizer. swash and zeno size the mask buffer from the outline bounds with no limit, so one stray point in malformed data allocates gigabytes, and a failed allocation aborts the process: catch_unwind does not catch it. Test it with a fixture whose outline is torn (a coordinate patched by thousands of units) and assert the guard rejects it while the intact fixture passes.",
+  "rationale": "E23.1 (#152): the scan-time glyph fingerprint rendered every sample glyph with swash at up to 640 px/em; a malformed outline with one far point could make the scan commit ~1.7 GB per glyph or abort, because the only guards were catch_unwind and a pen-advance width cap.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    152
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-23T22:48:17.379Z",
+  "last_seen": "2026-10-23T22:48:17.379Z"
+}

@@ -179,6 +179,10 @@
       "opened": "„{name}“ geöffnet."
     }
   },
+  "quickLook": {
+    "title": "Übersicht: {name}",
+    "hint": "Leertaste oder Escape schließt die Übersicht."
+  },
   "preview": {
     "settings": "Vorschau-Einstellungen",
     "sample": "Beispiel",
@@ -188,6 +192,13 @@
     "size": "Größe",
     "sizeSlider": "Größenregler",
     "sizeInPixels": "Größe in Pixeln",
+    "autoSize": "Automatische Größe",
+    "autoSizeHint": "Jede Zeile so skalieren, dass x-Höhe oder Versalhöhe aller Schriften bei dieser Größe gleich ist",
+    "autoSizes": {
+      "off": "Aus",
+      "xHeight": "x-Höhe",
+      "capHeight": "Versalhöhe"
+    },
     "lineHeight": "Zeilenabstand",
     "tracking": "Laufweite",
     "alignment": "Ausrichtung",
@@ -300,7 +311,8 @@
       "showPreset": "Satzbild „{preset}“ anzeigen",
       "reopenComparison": "Vergleich öffnen: {name}",
       "findSimilar": "Ähnliche Schriften finden",
-      "openStudio": "Satzbild im Pairing Studio öffnen"
+      "openStudio": "Satzbild im Pairing Studio öffnen",
+      "quickLook": "Ausgewählte Schrift in der Übersicht ansehen"
     }
   },
   "views": {
@@ -736,8 +748,9 @@
       "one": "{covered} von {count} Zeichen",
       "other": "{covered} von {count} Zeichen"
     },
+    "ofCount": "{covered} von {count}",
     "languageLabel": "{name}: {amount}",
-    "languageLabelLocl": "{name}: {amount}, hat lokalisierte Formen (locl)",
+    "languageLabelLocl": "{name}: {amount}, locl (hat lokalisierte Formen)",
     "hasLocl": "Hat lokalisierte Formen (locl)",
     "locl": "locl",
     "allCovered": {
@@ -1072,6 +1085,7 @@
       "appearance": "Darstellung",
       "catalogs": "Online-Kataloge",
       "advanced": "Erweitert",
+      "localApi": "Lokale API",
       "about": "Über"
     },
     "catalogs": {
@@ -1128,6 +1142,21 @@
       "rescanHint": "0 schaltet das automatische Neueinlesen aus.",
       "logsFolder": "Protokollordner",
       "logsFolderLabel": "Protokollordner"
+    },
+    "localApi": {
+      "note": "Andere Programme auf diesem Computer, etwa der Befehl fm und Plug-ins für Design-Apps, erreichen Font Manager über diese Adresse, solange die App läuft. Jede Anfrage braucht das Token.",
+      "address": "Adresse",
+      "addressLabel": "Adresse der lokalen API",
+      "notRunning": "Läuft nicht.",
+      "token": "Token",
+      "tokenHint": "Halten Sie das Token geheim: Ein Programm, das es kennt, kann in dieser App alles tun.",
+      "show": "Anzeigen",
+      "hide": "Ausblenden",
+      "copy": "Kopieren",
+      "copyToken": "Token kopieren",
+      "regenerate": "Neu erzeugen",
+      "regenerateHint": "Ein neues Token ersetzt das alte sofort. Programme mit dem alten Token funktionieren erst wieder, wenn sie das neue bekommen.",
+      "regenerated": "Ein neues Token wurde erzeugt. Das alte Token gilt nicht mehr."
     },
     "about": {
       "platformNotes": "Hinweise zur Plattform",
@@ -1269,6 +1298,7 @@
     "scanningLibrary": "Bibliothek wird eingelesen",
     "scanning": "Einlesen: {progress}",
     "scanningSource": "{name} wird eingelesen",
+    "scanningSourceProgress": "{name} wird eingelesen: {progress}",
     "progress": "{done} von {total}",
     "systemFonts": "Systemschriften",
     "readOnly": "Schreibgeschützt",

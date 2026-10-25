@@ -553,13 +553,31 @@ CREATE TABLE catalog_download_file (
 CREATE INDEX catalog_download_file_hash ON catalog_download_file (hash);
 ";
 
+/// Glyph fingerprints (E23.1, `fingerprint.rs`): one row per face whose
+/// fingerprint the scan has taken. `vector` is the reduced drawing as
+/// little-endian `f32`s; `NULL` with the measures when the face has no
+/// fingerprint (a symbol, non-Latin or broken face). A face without a row was
+/// indexed before this version: its file loads untrusted, so the next scan
+/// reads it again and takes the fingerprint, without a rebuild.
+const V18: &str = r"
+CREATE TABLE face_fingerprint (
+    face_id         INTEGER PRIMARY KEY REFERENCES face (id) ON DELETE CASCADE,
+    vector          BLOB,
+    x_height_ratio  REAL,
+    contrast        REAL,
+    stroke_width    REAL,
+    width_class     REAL,
+    advance_ratio   REAL
+);
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17,
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18,
 ];
 
 /// The schema version this build writes.
@@ -577,6 +595,7 @@ pub(crate) const TABLES: &[&str] = &[
     "comparison",
     "comparison_face",
     "face",
+    "face_fingerprint",
     "face_fts",
     "face_fts_config",
     "face_fts_content",

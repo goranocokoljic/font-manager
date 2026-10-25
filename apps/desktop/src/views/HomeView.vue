@@ -20,6 +20,7 @@ import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
 import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
+import QuickLookSheet from '../components/QuickLookSheet.vue';
 import QuickCollectionReview from '../components/QuickCollectionReview.vue';
 import QuickCollectionSidebar from '../components/QuickCollectionSidebar.vue';
 import SearchBox from '../components/SearchBox.vue';
@@ -43,6 +44,7 @@ import { useLibraryStore } from '../stores/library';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import { useQuickLookStore } from '../stores/quickLook';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useSearchStore } from '../stores/search';
 import { useSetsStore } from '../stores/sets';
@@ -69,6 +71,7 @@ const collections = useCollectionsStore();
 const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
+const quickLook = useQuickLookStore();
 const settings = useSettingsStore();
 const densityLabel = computed(() => t(`home.density.${settings.density}`));
 const quick = useQuickCollectionStore();
@@ -247,6 +250,17 @@ useActions([
     },
     enabled: () => pinTarget.value !== null,
     run: () => (pinTarget.value ? similar.openFor(pinTarget.value) : undefined),
+  },
+  {
+    id: ACTIONS.quickLook,
+    get title() {
+      return t('home.actions.quickLook');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => pinTarget.value !== null && !compare.open,
+    run: () => (pinTarget.value ? quickLook.toggle(pinTarget.value) : undefined),
   },
   {
     id: ACTIONS.compare,
@@ -562,6 +576,7 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
       </template>
       <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />
       <CompareSheet v-if="compare.open" />
+      <QuickLookSheet v-if="quickLook.face" :key="quickLook.face.id" :face="quickLook.face" />
       <TaggingPanel />
       <SmartRuleEditor />
     </template>

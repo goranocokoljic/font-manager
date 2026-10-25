@@ -3,8 +3,8 @@
 //! service method off the async runtime (ADR 0006) and returns its result as is.
 
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActiveFace, Clash, Conflict, DeactivateRequest, Target,
@@ -38,13 +38,13 @@ use fm_api::organization::{
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
-    SampleTextRequest,
+    SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
 };
-use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
+use fm_api::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
     SettingsService, SourceId, VirtualStyleId,
@@ -93,6 +93,15 @@ pub struct AppState {
     tray: Option<Arc<dyn Tray>>,
     /// The quit path ran ([`AppState::run_quit_path`]).
     quit_ran: AtomicBool,
+    /// The local API endpoint (ADR 0015); shared with the thread that starts it.
+    endpoint: Arc<Mutex<EndpointSlot>>,
+}
+
+/// The local API endpoint while it runs, and whether the quit path stopped it.
+#[derive(Debug, Default)]
+struct EndpointSlot {
+    running: Option<fm_endpoint::Endpoint>,
+    stopped: bool,
 }
 
 impl AppState {
@@ -105,6 +114,7 @@ impl AppState {
             core: None,
             tray: None,
             quit_ran: AtomicBool::new(false),
+            endpoint: Arc::default(),
         }
     }
 
@@ -117,6 +127,7 @@ impl AppState {
             core: Some(api),
             tray: None,
             quit_ran: AtomicBool::new(false),
+            endpoint: Arc::default(),
         }
     }
 
@@ -151,8 +162,65 @@ impl AppState {
     /// an empty last session over the real one.
     pub fn run_quit_path(&self) {
         if !self.quit_ran.swap(true, Ordering::SeqCst) {
+            self.stop_endpoint();
             on_exit(self.core.as_deref());
         }
+    }
+
+    /// Starts the local API endpoint (ADR 0015) on a thread of its own, so
+    /// the window never waits for it; it then writes `endpoint.json`. Only
+    /// the real library is served: without it there is no data folder.
+    /// The handle is for tests, which wait for the start.
+    pub fn start_endpoint(&self) -> Option<std::thread::JoinHandle<()>> {
+        let core = Arc::clone(self.core.as_ref()?);
+        let slot = Arc::clone(&self.endpoint);
+        lock_slot(&slot).stopped = false;
+        let started = std::thread::Builder::new()
+            .name("fm-endpoint-start".into())
+            .spawn(move || {
+                let endpoint = match fm_endpoint::Endpoint::start(Arc::clone(&core) as Arc<dyn Api>)
+                {
+                    Ok(endpoint) => endpoint,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "the local API could not start");
+                        return;
+                    }
+                };
+                let mut slot = lock_slot(&slot);
+                // The app began to quit meanwhile: no discovery file.
+                if slot.stopped || slot.running.is_some() {
+                    return;
+                }
+                if let Err(e) = core.publish_endpoint(endpoint.addr()) {
+                    tracing::warn!(error = %e, "endpoint.json not written");
+                }
+                slot.running = Some(endpoint);
+            });
+        started
+            .inspect_err(|e| tracing::warn!(error = %e, "the local API could not start"))
+            .ok()
+    }
+
+    /// Stops the local API endpoint and removes `endpoint.json`.
+    pub fn stop_endpoint(&self) {
+        let mut slot = lock_slot(&self.endpoint);
+        slot.stopped = true;
+        if let Some(endpoint) = slot.running.take() {
+            endpoint.stop();
+        }
+        if let Some(core) = &self.core
+            && let Err(e) = core.unpublish_endpoint()
+        {
+            tracing::warn!(error = %e, "endpoint.json not removed");
+        }
+    }
+
+    /// Where the local API endpoint listens; `None` while it does not run.
+    pub fn endpoint_addr(&self) -> Option<std::net::SocketAddr> {
+        lock_slot(&self.endpoint)
+            .running
+            .as_ref()
+            .map(fm_endpoint::Endpoint::addr)
     }
 
     /// The faces active for this session now: the ones the quit path ends.
@@ -191,6 +259,8 @@ impl AppState {
             }
         }
         self.quit_ran.store(false, Ordering::SeqCst);
+        // The quit path stopped the local API; it serves again.
+        self.start_endpoint();
     }
 
     /// Serves the settings from `settings` instead of the API.
@@ -204,6 +274,10 @@ impl std::fmt::Debug for AppState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppState").finish_non_exhaustive()
     }
+}
+
+fn lock_slot(slot: &Mutex<EndpointSlot>) -> std::sync::MutexGuard<'_, EndpointSlot> {
+    slot.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Runs a synchronous API call on the blocking pool.
@@ -404,6 +478,15 @@ async fn sample_texts(
     req: SampleTextRequest,
 ) -> ApiResult<Vec<SampleText>> {
     call(&state, move |api| api.sample_texts(req)).await
+}
+
+/// The auto size factor of each face, for the faces on screen (E16.2).
+#[tauri::command]
+async fn size_factors(
+    state: State<'_, AppState>,
+    req: SizeFactorRequest,
+) -> ApiResult<Vec<SizeFactor>> {
+    call(&state, move |api| api.size_factors(req)).await
 }
 
 /// The CSS for a face's moved axes and switched features ("Copy CSS").
@@ -974,6 +1057,18 @@ async fn get_app_folders(state: State<'_, AppState>) -> ApiResult<AppFolders> {
     call_settings(&state, |s| s.app_folders()).await
 }
 
+/// The local API endpoint's address and token (Settings → Local API).
+#[tauri::command]
+async fn endpoint_info(state: State<'_, AppState>) -> ApiResult<EndpointInfo> {
+    call(&state, |api| api.endpoint_info()).await
+}
+
+/// Makes a new local API token; the old one fails at once.
+#[tauri::command]
+async fn regenerate_endpoint_token(state: State<'_, AppState>) -> ApiResult<EndpointInfo> {
+    call(&state, |api| api.regenerate_endpoint_token()).await
+}
+
 /// Opens a page of the user docs in the help window (the palette's Help actions).
 #[tauri::command]
 async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()> {
@@ -1068,6 +1163,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             {
                 tray::show_main(app.handle());
             }
+            // After the window: the local API never delays it (E25.1).
+            app.state::<AppState>().start_endpoint();
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("fm-events".into())
@@ -1118,6 +1215,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_virtual_styles,
             delete_virtual_style,
             sample_texts,
+            size_factors,
             css_values,
             layout_presets,
             clamp_layout,
@@ -1161,6 +1259,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_settings,
             update_settings,
             get_app_folders,
+            endpoint_info,
+            regenerate_endpoint_token,
             open_help,
             open_url,
             set_shell_locale,

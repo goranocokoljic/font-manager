@@ -173,6 +173,19 @@ fn search_times_every_query_for_every_round() {
 }
 
 #[test]
+fn similar_faces_are_timed_for_every_face_and_round() {
+    let home = TempDir::new("similar");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = similar(home.path(), 2).expect("similar");
+    assert_eq!(res.faces, SIMILAR_FACES as usize, "{res:?}");
+    assert_eq!(res.samples, res.faces * 2);
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+}
+
+#[test]
 fn pairings_are_timed_for_the_first_faces() {
     let home = TempDir::new("pairings");
     first_scan(&fixtures(), home.path()).expect("scan");
@@ -183,6 +196,12 @@ fn pairings_are_timed_for_the_first_faces() {
         res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
         "{res:?}"
     );
+}
+
+#[test]
+fn similar_needs_a_scanned_index() {
+    let home = TempDir::new("similar-empty");
+    assert!(similar(home.path(), 1).is_err());
 }
 
 #[test]

@@ -68,7 +68,9 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
        face.open_license, face.fstype, face.last_activated,
        CASE WHEN json_valid(face.parsed)
             THEN json_extract(face.parsed, '$.classification.class') END,
-       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.xHeight') END
+       CASE WHEN json_valid(face.metrics)
+            THEN CAST(json_extract(face.metrics, '$.xHeight') AS REAL)
+                 / nullif(json_extract(face.metrics, '$.unitsPerEm'), 0) END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -89,6 +91,9 @@ pub(super) struct SearchCache {
     tag_names: HashMap<TagId, String>,
     /// Family notes by grouping key, for the family summaries.
     family_notes: HashMap<String, String>,
+    /// What similar-font search compares (E23.2), by face id: read on the
+    /// first such search after the database changed.
+    profiles: Option<HashMap<u32, crate::similar::Profile>>,
 }
 
 /// One searchable face.
@@ -404,6 +409,7 @@ impl Index {
             slots,
             tag_names,
             family_notes,
+            profiles: None,
         };
         Ok(())
     }
@@ -711,6 +717,7 @@ fn name_of<T: serde::de::DeserializeOwned>(name: &str) -> Option<T> {
 }
 
 mod pairing;
+mod similar;
 pub(super) mod smart;
 
 #[cfg(test)]

@@ -31,7 +31,7 @@ describe('GlyphCoverage', () => {
       'Basic Latin: 95 of 128 characters. Show in the glyph map.',
       'Latin-1 Supplement: 96 of 128 characters. Show in the glyph map.',
     ]);
-    expect(rows[0]!.text()).toContain('95/128');
+    expect(rows[0]!.text()).toContain('95 of 128');
     await rows[1]!.trigger('click');
     expect(w.emitted('block')).toEqual([['Latin-1 Supplement']]);
   });
@@ -45,7 +45,7 @@ describe('GlyphCoverage', () => {
       'Serbian (Latin): 22 of 27 characters',
       'Polish: 24 of 32 characters',
     ]);
-    expect(rows[1]!.text()).toContain('22/27');
+    expect(rows[1]!.text()).toContain('22 of 27');
   });
 
   it('marks locl support', async () => {
@@ -54,7 +54,7 @@ describe('GlyphCoverage', () => {
       .findAll('[aria-labelledby="fm-coverage-languages"] > li > button')
       .find((r) => r.text().includes('Serbian (Cyrillic)'));
     expect(sr?.attributes('aria-label')).toBe(
-      'Serbian (Cyrillic): complete, has localized forms (locl)',
+      'Serbian (Cyrillic): complete, locl (has localized forms)',
     );
     expect(sr?.find('.badge').text()).toBe('locl');
   });

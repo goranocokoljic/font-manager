@@ -22,12 +22,13 @@
 //! recognized by their magic bytes and returned as [`Health::Unsupported`]
 //! without faces.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fs;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
-use fm_api::common::{Axis, AxisValue, FontFormat, Health, NamedInstance};
+use fm_api::common::{Axis, AxisValue, FontFormat, Health, Metrics, NamedInstance};
 use read_fonts::tables::gsub::Gsub;
 use read_fonts::tables::layout::FeatureParams;
 use read_fonts::types::Tag;
@@ -38,6 +39,7 @@ use skrifa::string::StringId;
 
 use crate::classify::{self, ClassGuess};
 use crate::features;
+use crate::fingerprint::FaceFingerprint;
 use crate::{FmError, FmResult};
 
 /// What [`parse`] found in one font file.
@@ -130,15 +132,21 @@ pub struct ParsedFace {
     /// when neither says anything (see [`crate::classify`]).
     #[serde(default)]
     pub classification: Option<ClassGuess>,
-    /// x-height as a share of the em: `OS/2.sxHeight`, else the top of the
-    /// outline of `x`; `None` when neither is there (E23.4 pairs on it).
-    /// Required in `face.parsed`, `None` included: one written before this
-    /// field fails to load, so the next scan reads the file again and fills it.
-    #[serde(deserialize_with = "Option::deserialize")]
-    pub x_height: Option<f32>,
+    /// Vertical metrics, x-height and cap height measured from the outlines
+    /// when `OS/2` lacks them (see [`crate::metrics::read`]); zero for a face
+    /// that could not be read. No serde default: a `face.parsed` written
+    /// before this field fails to load, so the next scan reads the file again
+    /// and fills it, and `face.metrics` with it.
+    pub metrics: Metrics,
     /// Code points mapped by `cmap`, sorted, without duplicates.
     #[serde(skip)]
     pub code_points: Vec<u32>,
+    /// The glyph fingerprint (E23.1), taken when the scan reads the file
+    /// ([`crate::fingerprint::fill`]). Not in `face.parsed`: the index keeps
+    /// it in `face_fingerprint`, and a face loaded from there is
+    /// [`FaceFingerprint::NotTaken`].
+    #[serde(skip)]
+    pub fingerprint: FaceFingerprint,
     /// Whether this face could be read in full.
     pub health: Health,
 }
@@ -170,8 +178,15 @@ impl ParsedFace {
             locl_languages: Vec::new(),
             color: false,
             classification: None,
-            x_height: None,
+            metrics: Metrics {
+                units_per_em: 0,
+                ascender: 0,
+                descender: 0,
+                x_height: None,
+                cap_height: None,
+            },
             code_points: Vec::new(),
+            fingerprint: FaceFingerprint::NotTaken,
             health,
         }
     }
@@ -190,6 +205,21 @@ pub fn parse_file(path: &Path) -> FmResult<ParsedFile> {
     let data =
         fs::read(path).map_err(|e| FmError::io("The font file could not be read.", path, &e))?;
     Ok(parse(&data))
+}
+
+/// [`parse`], also giving the TrueType or OpenType bytes it parsed: the font
+/// inside a WOFF or WOFF2 file, else `data` itself. The scan reads the faces
+/// again from them (the glyph fingerprint) without decompressing twice.
+pub(crate) fn parse_keeping_sfnt(data: &[u8]) -> (ParsedFile, Cow<'_, [u8]>) {
+    let format = match data.get(..4) {
+        Some(b"wOFF") => FontFormat::Woff,
+        Some(b"wOF2") => FontFormat::Woff2,
+        _ => return (parse(data), Cow::Borrowed(data)),
+    };
+    match decompress_web(data, format) {
+        Some(sfnt) => (parse_web_sfnt(&sfnt, format), Cow::Owned(sfnt)),
+        None => (parse_web(data, format), Cow::Borrowed(&[])),
+    }
 }
 
 /// Parses a font file held in memory. Never panics, whatever `data` holds.
@@ -296,10 +326,20 @@ fn parse_web(data: &[u8], format: FontFormat) -> ParsedFile {
             format!("The {name} data is malformed and cannot be decompressed."),
         );
     };
+    parse_web_sfnt(&sfnt, format)
+}
+
+/// The faces of a WOFF or WOFF2 file, from its decompressed data `sfnt`.
+fn parse_web_sfnt(sfnt: &[u8], format: FontFormat) -> ParsedFile {
+    let name = if format == FontFormat::Woff {
+        "WOFF"
+    } else {
+        "WOFF2"
+    };
     let mut file = match sfnt.get(..4).and_then(|m| <[u8; 4]>::try_from(m).ok()) {
-        Some(magic) if &magic == b"ttcf" => parse_collection(&sfnt),
+        Some(magic) if &magic == b"ttcf" => parse_collection(sfnt),
         Some(magic @ ([0, 1, 0, 0] | [b't', b'r', b'u', b'e'] | [b'O', b'T', b'T', b'O'])) => {
-            parse_single(&sfnt, &magic)
+            parse_single(sfnt, &magic)
         }
         _ => {
             return broken_file(
@@ -478,7 +518,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         .as_deref()
         .or(face.family.as_deref());
     face.classification = classify::classify(font, family, &face.code_points);
-    face.x_height = x_height(font);
+    face.metrics = crate::metrics::read(font);
 
     let bitmap_only = is_bitmap_only(font);
     if !bitmap_only && !has_glyph_images(font) {
@@ -502,33 +542,6 @@ fn has_glyph_images(font: &FontRef<'_>) -> bool {
     [b"glyf", b"CFF ", b"CFF2", b"CBDT", b"sbix", b"SVG "]
         .iter()
         .any(|tag| has_record(font, tag))
-}
-
-/// The x-height as a share of the em: `OS/2.sxHeight` (version 2 and
-/// later), else the top of the bounding box of `x`. `None` without a usable
-/// `head`, or without either value.
-fn x_height(font: &FontRef<'_>) -> Option<f32> {
-    let upem = f32::from(font.head().ok()?.units_per_em());
-    if upem <= 0.0 {
-        return None;
-    }
-    let declared = font
-        .os2()
-        .ok()
-        .and_then(|os2| os2.sx_height())
-        .filter(|&x| x > 0)
-        .map(f32::from);
-    let height = declared.or_else(|| {
-        let gid = font.charmap().map('x')?;
-        let bounds = font
-            .glyph_metrics(
-                skrifa::instance::Size::unscaled(),
-                skrifa::instance::LocationRef::default(),
-            )
-            .bounds(gid)?;
-        (bounds.y_max > 0.0).then_some(bounds.y_max)
-    })?;
-    Some(height / upem)
 }
 
 /// Whether the face has color glyphs: layered vectors (`COLR`), color

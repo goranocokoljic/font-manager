@@ -1,0 +1,102 @@
+# 0015 — The local API endpoint
+
+Status: Accepted (2026-10-24, E25.1)
+
+## Context
+
+The CLI (when the app is open), the MCP server's stdio shim and the design-app
+plugins need to reach the running app. ADR 0006 names "the localhost endpoint"
+as one of the four adapters over `fm-api`. It must serve the whole contract,
+stay out of the window's way at start (cold start < 1 s), and admit only
+programs of the logged-in user: other users of the machine, and web pages in a
+browser, must not get in. Rule 7 (no network without a user action) is not
+touched: the socket is loopback only.
+
+The story asked for `docs/adr/0011-local-api-endpoint.md`; 0011 was already
+taken by start at login, so this is 0015.
+
+## Decision
+
+**Crate.** `crates/fm-endpoint` is transport only, over `Arc<dyn Api>`:
+hyper 1 (HTTP/1.1 server), hyper-util (the tokio adapter) and tokio (a
+current-thread runtime on a thread of its own, `spawn_blocking` for every
+service call as ADR 0006 says). No other HTTP crate; the two body helpers it
+needs are twenty lines in `body.rs`. `fm-app` hosts it: `AppState::start_endpoint`
+starts it on a thread after the window is set up, so the window never waits;
+the quit path stops it. Only the real library (`CoreApi`) is served; the
+`MockApi` fallback has no data folder to publish into.
+
+**Routes.** One per service method: `POST /v1/<method>`, the method's Rust
+name (`list_families`, `regenerate_endpoint_token`). The body is the method's
+request value as JSON (the same camelCase wire format as the UI); a method
+without one takes an empty body, `null` or `{}`. The answer is the value as
+JSON, `null` for `()`. The table is a macro in `routes.rs`; a test parses
+every `pub trait *Service` in `fm-api` and fails when a method has no route or
+a route no method. `EventSource::subscribe` is not a service and has no route
+yet (events over HTTP are a later story).
+
+**Status by `ErrorCode`.** An `ApiError` keeps its JSON shape
+(`{ code, message, detail }`); the status is fixed:
+
+| `ErrorCode` | HTTP |
+|-------------|------|
+| `notFound` | 404 |
+| `invalidRequest` | 400 |
+| `conflict` | 409 |
+| `permissionDenied` | 403 |
+| `unsupported` | 422 |
+| `busy` | 503 |
+| `io`, `internal` | 500 |
+| `cancelled` | 410 |
+
+The transport's own refusals use the same shape: 401 (no or wrong token,
+`permissionDenied`, `WWW-Authenticate: Bearer`), 403 (Host or Origin), 404
+(no such route), 405 (not POST, `Allow: POST`), 413 (body over 32 MiB), 400
+(a body that is not the method's JSON; its `detail` starts `request body: `).
+
+**Checks, in this order.** (1) Any `Origin` header → 403: every cross-site
+`fetch` or form post from a web page carries one, a local program does not.
+(2) `Host` must be `127.0.0.1:<port>` or `localhost:<port>` → else 403: a
+page that rebinds its own host name to 127.0.0.1 sends that name. (3)
+`Authorization: Bearer <token>` compared in constant time with the token
+`SettingsService::endpoint_info` reports at that moment → else 401. Nothing
+else runs before these pass.
+
+**Token.** 32 bytes from the OS random source (`getrandom`), 64 lowercase hex
+digits, in `<data>/endpoint-token`, so it survives a restart. Settings →
+Local API shows it masked with Show, Copy and Regenerate
+(`SettingsService::endpoint_info`, `regenerate_endpoint_token`).
+Regenerate saves the new token at once; because the endpoint asks for the
+current token on every request, the old one fails from the next request on.
+
+**Discovery file.** While the endpoint runs, `<data>/endpoint.json` holds
+`{ "url": "http://127.0.0.1:<port>", "token", "pid", "apiVersion" }`
+(`fm_core::endpoint::Discovery`). It is written after the socket is bound,
+rewritten on Regenerate, and removed by the quit path, only when its `pid` is
+this process. The port is the one the OS picked (bind to port 0), so it
+changes from run to run; programs read the file.
+
+**Private files, per OS** (`fm_platform::fs::write_private_file`, used for
+both files). The bytes go to a temporary sibling that is private before it
+is written, then it is renamed over the target.
+
+| | Windows | macOS | Linux |
+|-|---------|-------|-------|
+| Permission | a protected DACL (`D:P(A;;FA;;;<user SID>)`): one entry, full access for the user; nothing inherited, so no Administrators or SYSTEM entry | mode `0600` | mode `0600` |
+| Set by | `SetNamedSecurityInfoW` on the empty temporary file; a rename on the same volume keeps it | `open(…, 0600)` plus `fchmod` (the mode applies only to a new file) | the same |
+| Checked by | `is_private_file`: the DACL is protected and is exactly that one entry (Windows adds `AI` itself) | no group or other bits | the same |
+
+A token file that another program made readable is written again privately
+the next time it is read.
+
+## Consequences
+
+- The CLI's endpoint mode (when the app is open), the MCP shim and the
+  plugins read `endpoint.json` and send the token; none needs its own
+  discovery.
+- A new service method needs a line in `routes.rs`, or CI fails.
+- A program of the same user can do everything the UI can. That is the
+  trust boundary: the same as the user's own files.
+- The endpoint is HTTP/1.1 without TLS: it never leaves the loopback
+  interface.
+- No events yet; a client that needs them polls until the event route exists.

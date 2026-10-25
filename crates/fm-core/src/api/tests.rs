@@ -999,7 +999,22 @@ fn coverage_and_languages_come_from_the_stored_cmap() {
         })
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
-    is_unsupported(lib.api.find_similar(SimilarRequest { face, limit: 5 }));
+    // E23.2: similar faces come from the index, never the face itself.
+    let similar = lib
+        .api
+        .find_similar(SimilarRequest { face, limit: 5 })
+        .expect("similar");
+    assert!(!similar.is_empty() && similar.len() <= 5, "{similar:?}");
+    assert!(similar.iter().all(|s| s.face.id != face));
+    assert!(similar.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+    let err = lib
+        .api
+        .find_similar(SimilarRequest {
+            face: FaceId(99_999),
+            limit: 5,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
 
 #[test]
@@ -2891,6 +2906,78 @@ fn the_license_inventory_of_an_empty_library_is_the_header_alone() {
     assert!(inventory(&lib, None).is_empty());
 }
 
+/// E16.2 criteria 1 and 2: the scan stores each face's x-height and cap
+/// height, so `get_face` and `size_factors` answer with the files gone; one
+/// `size_factors` call answers many faces, in order, with the factor the
+/// stored metrics give; a face without metrics keeps factor 1.
+#[test]
+fn metrics_are_stored_at_scan_and_size_factors_answer_many_faces() {
+    use fm_api::preview::{SizeBasis, SizeFactorRequest};
+
+    let (lib, _, _) = Lib::scanned("api-size-factors");
+    let families = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..ListFamiliesRequest::default()
+        })
+        .expect("families")
+        .items;
+    let faces: Vec<FaceId> = families
+        .iter()
+        .flat_map(|f| lib.api.get_family(f.id).expect("family").faces)
+        .map(|f| f.id)
+        .collect();
+    assert!(faces.len() >= 6, "{faces:?}");
+    let before: Vec<_> = faces
+        .iter()
+        .map(|&f| lib.api.get_face(f).expect("face").metrics)
+        .collect();
+    std::fs::remove_dir_all(&lib.root).expect("remove the library folder");
+
+    let mut scaled = 0;
+    for basis in [SizeBasis::XHeight, SizeBasis::CapHeight] {
+        let got = lib
+            .api
+            .size_factors(SizeFactorRequest {
+                faces: faces.clone(),
+                basis,
+            })
+            .expect("factors");
+        assert_eq!(got.iter().map(|f| f.face).collect::<Vec<_>>(), faces);
+        for ((&face, m), factor) in faces.iter().zip(&before).zip(&got) {
+            let detail = lib.api.get_face(face).expect("face from the index");
+            assert_eq!(&detail.metrics, m, "{face}: stored metrics");
+            assert_eq!(factor.factor, crate::metrics::size_factor(m, basis));
+            if factor.factor != 1.0 {
+                scaled += 1;
+            }
+        }
+    }
+    assert!(scaled > 0, "some face is scaled");
+    let bebas = lib
+        .api
+        .get_face(FaceId(lib.family("Bebas Neue").id.0))
+        .expect("Bebas");
+    assert!(
+        bebas.metrics.cap_height.is_some_and(|c| c > 0),
+        "{:?}",
+        bebas.metrics
+    );
+
+    let err = lib
+        .api
+        .size_factors(SizeFactorRequest {
+            faces: vec![faces[0], FaceId(u32::MAX)],
+            basis: SizeBasis::XHeight,
+        })
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
 // --- comparisons ---------------------------------------------------------
 
 /// The first face of the family `name`.
@@ -4072,4 +4159,37 @@ fn catalogs_without_a_data_folder_are_not_available() {
         api.list_catalogs().expect_err("no folder").code,
         ErrorCode::Unsupported
     );
+}
+
+#[test]
+fn the_local_api_needs_a_data_folder_and_then_publishes_and_regenerates() {
+    let lib = Lib::new("endpoint");
+    // Without `with_endpoint_in` (the tests' API, like no data folder).
+    let e = lib.api.endpoint_info().expect_err("no data folder");
+    assert_eq!(e.code, fm_api::ErrorCode::Unsupported);
+    assert_eq!(
+        lib.api
+            .regenerate_endpoint_token()
+            .expect_err("no data folder")
+            .code,
+        fm_api::ErrorCode::Unsupported
+    );
+    assert!(lib.api.unpublish_endpoint().is_ok(), "nothing to remove");
+
+    let api = Lib::new("endpoint-on")
+        .api
+        .with_endpoint_in(lib.paths.data.clone());
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 40001));
+    let before = api.endpoint_info().expect("info");
+    assert_eq!(before.url, None);
+    let published = api.publish_endpoint(addr).expect("publish");
+    assert_eq!(published.url.as_deref(), Some("http://127.0.0.1:40001"));
+    assert_eq!(published.token, before.token);
+    let file = lib.paths.data.join(crate::endpoint::DISCOVERY_FILE);
+    assert!(file.exists());
+    let next = api.regenerate_endpoint_token().expect("regenerate");
+    assert_ne!(next.token, before.token);
+    assert_eq!(api.endpoint_info().expect("info"), next);
+    api.unpublish_endpoint().expect("unpublish");
+    assert!(!file.exists());
 }

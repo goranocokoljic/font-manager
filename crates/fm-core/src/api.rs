@@ -21,7 +21,7 @@
 //!   [`CatalogService::download_family`] and
 //!   [`CatalogService::check_updates`] go to the network. A download
 //!   records its provenance in the index and rescans the source.
-//! - **Not built yet.** Export, workflows and similar-font search answer an
+//! - **Not built yet.** Export and workflows answer an
 //!   `Unsupported` error with a message for the user, never a panic.
 
 use std::collections::{HashMap, HashSet};
@@ -70,13 +70,13 @@ use fm_api::organization::{
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
     PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
 };
-use fm_api::settings::{AppFolders, Settings, SettingsService, SettingsUpdate};
+use fm_api::settings::{AppFolders, EndpointInfo, Settings, SettingsService, SettingsUpdate};
 use fm_api::workflows::{
     BriefRequest, PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
 };
@@ -88,6 +88,7 @@ use fm_platform::{AppPaths, FontActivator, Os, PdfPrinter, Trash, TraySupport};
 
 use crate::activation::ActivationManager;
 use crate::catalog::Catalogs;
+use crate::endpoint::EndpointKeys;
 use crate::error::{FmError, FmResult};
 use crate::framework_snippet::{self, SnippetFace};
 use crate::index::{DeclaredLicense, Index};
@@ -139,6 +140,9 @@ pub struct CoreApi {
     pdf: Option<Arc<dyn PdfPrinter>>,
     /// The online catalogs (E22.1); `None` when the API has no data folder.
     catalogs: Option<Catalogs>,
+    /// The local API token and discovery file (E25.1); `None` when the API
+    /// has no data folder.
+    endpoint: Option<EndpointKeys>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -174,6 +178,7 @@ impl CoreApi {
         let api = Self::new(index, activator, settings, previews)
             .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
             .with_layouts_in(paths.layouts_dir())
+            .with_endpoint_in(paths.data.clone())
             .with_catalogs(
                 Catalogs::open(paths.data.join(crate::catalog::CATALOGS_DIR))
                     .with_previews_in(paths.cache.join(crate::catalog::CATALOGS_DIR)),
@@ -211,6 +216,7 @@ impl CoreApi {
             layouts: None,
             pdf: None,
             catalogs: None,
+            endpoint: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -249,6 +255,35 @@ impl CoreApi {
     pub fn with_layouts_in(mut self, dir: PathBuf) -> Self {
         self.layouts = Some(LayoutStore::new(dir));
         self
+    }
+
+    /// The same API, keeping the local API token and discovery file in the
+    /// data folder `dir` (ADR 0015).
+    #[must_use]
+    pub fn with_endpoint_in(mut self, dir: PathBuf) -> Self {
+        self.endpoint = Some(EndpointKeys::new(dir));
+        self
+    }
+
+    /// The app's endpoint listens on `addr`: writes `endpoint.json`, and
+    /// [`SettingsService::endpoint_info`] reports the address.
+    pub fn publish_endpoint(&self, addr: std::net::SocketAddr) -> ApiResult<EndpointInfo> {
+        Ok(self.endpoint_keys()?.publish(addr)?)
+    }
+
+    /// The app's endpoint stopped: removes `endpoint.json`. Nothing to do
+    /// without a data folder.
+    pub fn unpublish_endpoint(&self) -> ApiResult<()> {
+        match &self.endpoint {
+            Some(keys) => Ok(keys.unpublish()?),
+            None => Ok(()),
+        }
+    }
+
+    fn endpoint_keys(&self) -> FmResult<&EndpointKeys> {
+        self.endpoint
+            .as_ref()
+            .ok_or_else(|| FmError::unsupported("The local API is not available here."))
     }
 
     /// The same API, printing PDF specimens through `printer`; the app
@@ -683,8 +718,8 @@ impl SearchService for CoreApi {
         Ok(pangrams::presets()?)
     }
 
-    fn find_similar(&self, _req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
-        Err(not_available("Finding similar fonts"))
+    fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
+        Ok(self.lock().find_similar(&req)?)
     }
 
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
@@ -714,6 +749,10 @@ impl PreviewService for CoreApi {
 
     fn sample_texts(&self, req: SampleTextRequest) -> ApiResult<Vec<SampleText>> {
         Ok(self.lock().sample_texts(&req)?)
+    }
+
+    fn size_factors(&self, req: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
+        Ok(self.lock().size_factors(&req)?)
     }
 
     /// From the face's axes and features as the inspector shows them.
@@ -1304,6 +1343,14 @@ impl SettingsService for CoreApi {
 
     fn app_folders(&self) -> ApiResult<AppFolders> {
         self.settings.app_folders()
+    }
+
+    fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
+        Ok(self.endpoint_keys()?.info()?)
+    }
+
+    fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
+        Ok(self.endpoint_keys()?.regenerate()?)
     }
 }
 

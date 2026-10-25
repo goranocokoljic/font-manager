@@ -23,6 +23,10 @@ Read [Sources](sources.md) to learn more about folders.
 - Type in the search box at the top. Press `/` to go to it from anywhere.
 - The list shows a preview of each font. Change the preview text and size above the
   list.
+- Some fonts look small or large at the same size. Set **Auto size** to **x-height**
+  or **Cap height** to make them look the same size. Each font then shows its small
+  letters (or its capitals) at the same height. A font that does not give this height
+  stays at the size you set. Each view keeps its own setting.
 - Use the **List**, **Table**, **Grid**, **Waterfall** and **Layout** buttons to change
   how the fonts show. The grid shows a card for each font. The waterfall shows the
   preview text at six sizes. The layout shows the selected font as a page of text. Pick
@@ -136,6 +140,17 @@ what you want to do and press `Enter`. All keys are on the
 
 Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. There you can choose the theme,
 the size of the rows, and how activation works.
+
+## Connect other programs
+
+While Font Manager runs, other programs on your computer (the `fm` command, plugins for
+design apps) can use it through a local address. Open Settings → Local API to see the
+address and the token. Each program needs the token. Click **Show** to see it and
+**Copy** to copy it. Keep the token secret: a program that has it can do everything
+Font Manager can do. If you think someone else has it, click **Regenerate**. The old
+token stops working at once.
+
+Only programs on this computer can connect. Web pages in your browser cannot.
 
 ## Get updates
 

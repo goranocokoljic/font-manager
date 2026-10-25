@@ -123,6 +123,38 @@ pub struct CssValues {
     pub feature_settings: String,
 }
 
+/// The metric auto size makes equal across faces (E16.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SizeBasis {
+    /// The height of the lowercase `x`.
+    XHeight,
+    /// The height of the capital `H`.
+    CapHeight,
+}
+
+/// The auto size factors of some faces, for one basis (E16.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeFactorRequest {
+    /// The faces, usually the ones on screen.
+    pub faces: Vec<FaceId>,
+    /// The metric to make equal.
+    pub basis: SizeBasis,
+}
+
+/// How much one face's preview size is scaled so that its x-height (or cap
+/// height) matches every other face's at the same toolbar size.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SizeFactor {
+    /// The face.
+    pub face: FaceId,
+    /// The factor to multiply the preview size by; `1` for a face with no
+    /// usable metric.
+    pub factor: f32,
+}
+
 /// Thumbnails and font files for the webview.
 pub trait PreviewService {
     /// Rasterize text in a face (cached by face hash and settings).
@@ -135,4 +167,8 @@ pub trait PreviewService {
     /// The CSS declarations for the axes moved and the features switched away
     /// from the face's defaults, ready to paste into a stylesheet.
     fn css_values(&self, req: CssValuesRequest) -> ApiResult<CssValues>;
+    /// The auto size factor of each face for the basis (one answer per face,
+    /// in order): the preview size times the factor gives every face the
+    /// same x-height (or cap height) in pixels (E16.2).
+    fn size_factors(&self, req: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>>;
 }

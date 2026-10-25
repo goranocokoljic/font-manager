@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient, type FullSettings } from '../api/client';
-import type { ApiError, AppFolders, Density, SettingsUpdate } from '../api/types';
+import type { ApiError, AppFolders, Density, EndpointInfo, SettingsUpdate } from '../api/types';
 import { DEFAULT_DENSITY } from '../list/density';
 
 /**
@@ -12,6 +12,8 @@ import { DEFAULT_DENSITY } from '../list/density';
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<FullSettings | null>(null);
   const folders = ref<AppFolders | null>(null);
+  /** The local API endpoint (Settings → Local API); read when that section opens. */
+  const endpoint = ref<EndpointInfo | null>(null);
   /** The last request that failed, for the Settings window to show. */
   const error = ref<ApiError | null>(null);
 
@@ -48,6 +50,22 @@ export const useSettingsStore = defineStore('settings', () => {
     });
   }
 
+  /** Reads the local API address and token. */
+  function loadEndpoint(): Promise<boolean> {
+    return attempt(async () => {
+      endpoint.value = await useClient().endpointInfo();
+    });
+  }
+
+  /** Makes a new local API token; programs with the old one are refused from now on. */
+  function regenerateEndpointToken(): Promise<boolean> {
+    return enqueue(() =>
+      attempt(async () => {
+        endpoint.value = await useClient().regenerateEndpointToken();
+      }),
+    );
+  }
+
   /** Changes some settings; false (and `error` set) when the API refused. */
   function update(patch: SettingsUpdate): Promise<boolean> {
     return enqueue(() =>
@@ -72,12 +90,15 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     settings,
     folders,
+    endpoint,
     error,
     activationMode,
     onConflict,
     density,
     load,
     loadWindow,
+    loadEndpoint,
+    regenerateEndpointToken,
     update,
     setDensity,
   };

@@ -9,7 +9,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
-    // The contrast test reads the theme's colors (`theme.css?raw`).
-    css: { include: [/theme\.css/] },
+    // The contrast test reads the theme's and the print palette's colors (`?raw`).
+    css: { include: [/(theme|print)\.css/] },
   },
 });

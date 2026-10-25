@@ -159,6 +159,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E15.4 #121] apps/desktop/src/components/CollectionsSidebar.vue:260 — "New inside" has the accessible name "New collection inside X", which does not contain its visible label (WCAG 2.5.3).
 - [E15.4 #121] crates/fm-api/src/mock.rs:2761 — the Rust `MockApi::license_inventory` still writes the old 6-column, LF, unquoted CSV, so it no longer matches fm-core's 12-column RFC 4180 CSV.
 - [E15.4 #121] crates/fm-core/src/license.rs:223 — two private `open_license_label` functions (short "OFL" here, long "SIL Open Font License" in inventory.rs) differ on purpose and can drift.
+- [E16.2 #123] crates/fm-core/src/index/faces.rs:290 — a `face.parsed` that no longer deserializes after a new no-default ParsedFace field makes `face_detail` drop version, copyright, license and vendor until the next scan rewrites the row.
 - [E13.3 #111] crates/fm-core/src/index/search.rs:359 — `family_of` scans the whole search cache linearly and `Index::quick_collection` calls it twice per face, so listing the Quick Collection is O(k·n) on a large library.
 - [E13.4 #112] crates/fm-api/src/mock.rs:2753 — the Rust mock `edit_members` still expands families inline instead of using the new `faces_of` helper (same behavior today, can drift).
 - [E13.4 #112] apps/desktop/src/components/CollectionsSidebar.vue:256 — sidebar counts rely on `aria-label` on a plain `<span>` (generic role), which some screen readers do not announce; TagsSidebar.vue copies the pattern.
@@ -189,6 +190,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E20.3 #139] crates/fm-core/src/web_font.rs:317 — `commit` checks the target is free then calls `fs::rename`, which overwrites; a file the user creates in that gap can be replaced (fonts.css now shares this path).
 - [E20.3 #139] crates/fm-api/src/mock.rs:2279 — `css_values`'s `num` closure duplicates the new `css_range` number formatting in the same file (both copies of core `css::number`).
+
+## 2026-10-24
+
+- [E23.1 #152] crates/fm-core/src/preview.rs:549 — preview rasterizes each glyph with no per-glyph box cap before swash allocates its mask (same unbounded allocation as the fingerprint had), though only at a user-chosen size of at most 300 px.
 - [E19.2 #134] apps/desktop/src/views/ProblemsView.vue:126 — `{{ p.message }}` shows the core's English problem text in a German UI; it is not an ApiError, so errorMessage never sees it.
 - [E19.2 #134] apps/desktop/src/keyboard/keymap.ts:144 — chord labels `Ctrl`, `Shift`, `Space` are hard-coded English and show in the palette, tooltips and status bar.
 - [E19.2 #134] apps/desktop/src/components/MainLayout.vue:159 — the list column's `overflow: hidden` already hid Compact rows, Compare and Inspector at 1,000 px with the inspector open in English.
@@ -226,3 +231,11 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E23.4 #155] apps/desktop/src/stores/similar.ts:1 — the similar, compare and new pairings stores do not subscribe to library events, so their results stay stale after a library change until reopened.
 - [E23.4 #155] crates/fm-core/src/index/faces.rs:450 — `read_row` also deserializes `face.parsed`; rows written before a required ParsedFace field lose license, axes and features in the inspector until the next scan.
 - [E23.4 #155] crates/fm-mcp/src/lib.rs:1 — `find_similar` and `suggest_pairings` are reachable only from the desktop UI, not from the CLI or the MCP server.
+- [E25.1 #160] apps/desktop/src/components/CopyValue.vue:47 — `role="status"` live regions hidden with `.status:empty { display: none }` may not be announced when they first appear (also CatalogDownload.vue:240, SettingsView.vue:595, LocalApiSettings.vue).
+
+## 2026-10-25
+
+- [E19.1 #133] apps/desktop/src/components/FontTable.vue:642 — visually-hidden CSS is copied in three components (FontTable `.visually-hidden`, ProblemsView `.sr-only`, SourcesSidebar `.announce`); theme.css has no shared utility class.
+- [E19.1 #133] apps/desktop/src/components/UpdateDialog.vue:26 — the dialog focus-trap and return-focus pattern is hand-written in UpdateDialog, SmartRuleEditor and CompareSheet; only Compare and Quick look use `sheetReturnTarget`.
+- [E19.1 #133] apps/desktop/src/views/HomeView.vue — the "Inspector" toolbar button label spills past its border at 1280×800.
+- [E23.2 #153] apps/desktop/src/api/mock.ts:2357 — MockApi `find_similar` still answers "not available yet" (asserted by apps/desktop/e2e/similar.spec.ts:157 and SimilarPanel.test.ts:110), so browser-mode tests cover a behaviour the core no longer has.

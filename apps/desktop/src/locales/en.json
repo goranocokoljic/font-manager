@@ -179,6 +179,10 @@
       "opened": "Opened “{name}”."
     }
   },
+  "quickLook": {
+    "title": "Quick look: {name}",
+    "hint": "Space or Escape closes the quick look."
+  },
   "preview": {
     "settings": "Preview settings",
     "sample": "Sample",
@@ -188,6 +192,13 @@
     "size": "Size",
     "sizeSlider": "Size slider",
     "sizeInPixels": "Size in pixels",
+    "autoSize": "Auto size",
+    "autoSizeHint": "Scale each row so every font's x-height or cap height matches at this size",
+    "autoSizes": {
+      "off": "Off",
+      "xHeight": "x-height",
+      "capHeight": "Cap height"
+    },
     "lineHeight": "Line height",
     "tracking": "Tracking",
     "alignment": "Alignment",
@@ -300,7 +311,8 @@
       "showPreset": "Show the {preset} layout",
       "reopenComparison": "Open comparison: {name}",
       "findSimilar": "Find similar fonts",
-      "openStudio": "Open the layout in Pairing Studio"
+      "openStudio": "Open the layout in Pairing Studio",
+      "quickLook": "Quick look at the selected font"
     }
   },
   "views": {
@@ -736,8 +748,9 @@
       "one": "{covered} of {count} character",
       "other": "{covered} of {count} characters"
     },
+    "ofCount": "{covered} of {count}",
     "languageLabel": "{name}: {amount}",
-    "languageLabelLocl": "{name}: {amount}, has localized forms (locl)",
+    "languageLabelLocl": "{name}: {amount}, locl (has localized forms)",
     "hasLocl": "Has localized forms (locl)",
     "locl": "locl",
     "allCovered": {
@@ -1072,6 +1085,7 @@
       "appearance": "Appearance",
       "catalogs": "Online catalogs",
       "advanced": "Advanced",
+      "localApi": "Local API",
       "about": "About"
     },
     "catalogs": {
@@ -1128,6 +1142,21 @@
       "rescanHint": "0 turns automatic rescans off.",
       "logsFolder": "Logs folder",
       "logsFolderLabel": "logs folder"
+    },
+    "localApi": {
+      "note": "Other programs on this computer, like the fm command and design-app plugins, reach Font Manager through this address while the app runs. Each request needs the token.",
+      "address": "Address",
+      "addressLabel": "local API address",
+      "notRunning": "Not running.",
+      "token": "Token",
+      "tokenHint": "Keep the token secret: a program that has it can do everything in this app.",
+      "show": "Show",
+      "hide": "Hide",
+      "copy": "Copy",
+      "copyToken": "Copy token",
+      "regenerate": "Regenerate",
+      "regenerateHint": "A new token replaces the old one at once. Programs that use the old token stop working until they get the new one.",
+      "regenerated": "A new token was made. The old token no longer works."
     },
     "about": {
       "platformNotes": "Platform notes",
@@ -1269,6 +1298,7 @@
     "scanningLibrary": "Scanning the library",
     "scanning": "Scanning {progress}",
     "scanningSource": "Scanning {name}",
+    "scanningSourceProgress": "Scanning {name}: {progress}",
     "progress": "{done} of {total}",
     "systemFonts": "System fonts",
     "readOnly": "Read-only",

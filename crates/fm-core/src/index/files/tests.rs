@@ -60,6 +60,25 @@ fn open_db(dir: &TempDir) -> (Index, SourceId, PathBuf) {
     (index, source, path)
 }
 
+/// `file` as the index loads it back: the fingerprints stay in
+/// `face_fingerprint`, so a loaded face has not taken one.
+fn as_loaded(file: &IndexedFile) -> IndexedFile {
+    let mut file = file.clone();
+    for face in &mut file.parsed.faces {
+        face.fingerprint = crate::fingerprint::FaceFingerprint::NotTaken;
+    }
+    file
+}
+
+/// Every file of `index` [`as_loaded`].
+fn all_as_loaded(index: &FileIndex) -> FileIndex {
+    let mut out = FileIndex::new();
+    for file in index.files() {
+        out.insert(as_loaded(file));
+    }
+    out
+}
+
 fn memory_db() -> (Index, SourceId) {
     let mut index = Index::open_in_memory().expect("open");
     let source = index
@@ -125,7 +144,11 @@ fn persisted_files_load_back_unchanged() {
     );
 
     let loaded = index.load_files().expect("load");
-    assert_eq!(loaded, scanned, "what was saved loads back exactly");
+    assert_eq!(
+        loaded,
+        all_as_loaded(&scanned),
+        "what was saved loads back exactly"
+    );
     assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM font_file"), 8);
     assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM face"), faces);
     assert_eq!(
@@ -306,7 +329,7 @@ fn writing_a_file_again_keeps_its_face_ids_and_user_data() {
     assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM user_meta"), 1);
     assert_eq!(
         index.load_files().expect("load").get(&files[0].path),
-        Some(&files[0])
+        Some(&as_loaded(&files[0]))
     );
 }
 
@@ -378,8 +401,8 @@ fn a_non_utf8_path_is_stored_exactly() {
     index.persist_files(source, &files).expect("persist");
 
     let loaded = index.load_files().expect("load");
-    assert_eq!(loaded.get(&odd), Some(&files[0]));
-    assert_eq!(loaded.get(&files[1].path), Some(&files[1]));
+    assert_eq!(loaded.get(&odd), Some(&as_loaded(&files[0])));
+    assert_eq!(loaded.get(&files[1].path), Some(&as_loaded(&files[1])));
     assert_eq!(
         count(
             &index.conn,
@@ -440,7 +463,7 @@ fn apply_rescan_writes_gone_files_and_clears_the_flag_when_they_return() {
     assert_eq!(report.unchanged.len(), 2, "{report:?}");
     index.apply_rescan(source, &files, &report).expect("apply");
     assert_eq!(gone(&index), 0);
-    assert_eq!(index.load_files().expect("load"), files);
+    assert_eq!(index.load_files().expect("load"), all_as_loaded(&files));
 }
 
 #[test]
@@ -465,7 +488,7 @@ fn rows_that_cannot_be_trusted_are_read_again() {
         let entry = loaded.get(&file.path).expect("file");
         assert_eq!(entry.modified.is_none(), i < 2, "file {i}");
     }
-    assert_eq!(loaded.get(&files[2].path), Some(&files[2]));
+    assert_eq!(loaded.get(&files[2].path), Some(&as_loaded(&files[2])));
 }
 
 /// E10.4 criterion 2: a face stored before the font's feature names were
@@ -489,7 +512,11 @@ fn a_face_stored_without_feature_names_is_read_again() {
         .expect("an index from before E10.4");
 
     let loaded = index.load_files().expect("load");
-    assert_eq!(loaded.get(&files[0].path), Some(&files[0]), "names kept");
+    assert_eq!(
+        loaded.get(&files[0].path),
+        Some(&as_loaded(&files[0])),
+        "names kept"
+    );
     let old = loaded.get(&files[1].path).expect("old file");
     assert_eq!(old.modified, None, "not trusted, so read again");
 }
@@ -973,7 +1000,10 @@ fn a_gone_file_not_yet_in_the_index_is_written_in_full() {
     };
     let done = index.apply_rescan(source, &files, &report).expect("apply");
     assert_eq!(done.faces, 1);
-    assert_eq!(index.load_files().expect("load").get(&path), Some(&file));
+    assert_eq!(
+        index.load_files().expect("load").get(&path),
+        Some(&as_loaded(&file))
+    );
 }
 
 /// One value of a snapshot row: short text as is, long text and bytes as
@@ -1047,14 +1077,14 @@ fn the_fixture_scan_matches_the_snapshot_of_the_one_thread_scan() {
                     a.collection_index, a.family, a.subfamily, a.typographic_family,
                     a.postscript_name, a.weight, a.width, a.slant, a.is_variable, a.axes,
                     a.features, a.fstype, a.parsed, a.cmap, a.languages, a.foundry,
-                    a.designer, a.is_color, a.healthy
+                    a.designer, a.is_color, a.healthy, a.metrics
              FROM face a JOIN font_file f ON f.id = a.file_id",
         )
         .expect("prepare");
     let mut rows = stmt.query([]).expect("query");
     while let Some(row) = rows.next().expect("row") {
         let path = path_from_sql(row.get_ref(0).expect("path")).expect("path");
-        let values: Vec<String> = (1..25)
+        let values: Vec<String> = (1..26)
             .map(|i| snapshot_value(row.get_ref(i).expect("column")))
             .collect();
         lines.push(format!("row  {} | {}", rel(&path), values.join(" | ")));
@@ -1081,4 +1111,153 @@ fn the_fixture_scan_matches_the_snapshot_of_the_one_thread_scan() {
         actual.lines().count(),
         expected.lines().count()
     );
+}
+
+/// Every face of a scanned file gets a `face_fingerprint` row; a Latin face
+/// holds a vector of the default length, a broken file none.
+#[test]
+fn a_scan_writes_one_fingerprint_row_per_face() {
+    let dir = TempDir::new("files-fingerprint");
+    let fonts = dir.path().join("fonts");
+    copy_fixture(&fonts, STATIC, "static.ttf");
+    copy_fixture(&fonts, COLLECTION, "collection.ttc");
+    copy_fixture(&fonts, TRUNCATED, "truncated.ttf");
+    let (scanned, _) = scan(&fonts);
+    let (mut index, source, _) = open_db(&dir);
+    index
+        .persist_files(source, scanned.files())
+        .expect("persist");
+    assert_eq!(
+        count(&index.conn, "SELECT COUNT(*) FROM face_fingerprint"),
+        count(&index.conn, "SELECT COUNT(*) FROM face"),
+    );
+    let bytes = (crate::fingerprint::Params::default().length * 4) as i64;
+    assert_eq!(
+        count(
+            &index.conn,
+            &format!("SELECT COUNT(*) FROM face_fingerprint WHERE length(vector) = {bytes}")
+        ),
+        3,
+        "the static face and both faces of the collection"
+    );
+    let vector: Vec<u8> = index
+        .conn
+        .query_row(
+            "SELECT vector FROM face_fingerprint JOIN face ON face.id = face_id
+             JOIN font_file ON font_file.id = file_id WHERE path LIKE '%static.ttf'",
+            [],
+            |r| r.get(0),
+        )
+        .expect("vector");
+    let crate::fingerprint::FaceFingerprint::Taken(fp) = &scanned
+        .files()
+        .find(|f| f.path.ends_with("static.ttf"))
+        .expect("static")
+        .parsed
+        .faces[0]
+        .fingerprint
+    else {
+        unreachable!("the static face has a fingerprint")
+    };
+    assert_eq!(
+        crate::fingerprint::vector_from_bytes(&vector).as_ref(),
+        Some(&fp.vector)
+    );
+}
+
+/// A rescan of unchanged files does not read them, so it takes no
+/// fingerprint again and leaves the rows as they are.
+#[test]
+fn an_unchanged_file_is_not_fingerprinted_again() {
+    let dir = TempDir::new("files-fingerprint-unchanged");
+    let fonts = dir.path().join("fonts");
+    copy_fixture(&fonts, STATIC, "static.ttf");
+    copy_fixture(&fonts, VARIABLE, "variable.ttf");
+    let (scanned, _) = scan(&fonts);
+    let (mut index, source, _) = open_db(&dir);
+    index
+        .persist_files(source, scanned.files())
+        .expect("persist");
+    index
+        .conn
+        .execute("UPDATE face_fingerprint SET contrast = -1", [])
+        .expect("mark rows");
+
+    let mut loaded = index.load_files().expect("load");
+    let again = rescan(&mut loaded, &fonts);
+    assert_eq!(again.unchanged.len(), 2, "{again:?}");
+    assert!(again.added.is_empty() && again.changed.is_empty());
+    index.apply_rescan(source, &loaded, &again).expect("apply");
+    assert_eq!(
+        count(
+            &index.conn,
+            "SELECT COUNT(*) FROM face_fingerprint WHERE contrast = -1"
+        ),
+        2,
+        "the rows were not written again"
+    );
+}
+
+/// An index from before `face_fingerprint` existed fills the rows in on the
+/// next scan: only the files without them are read again, and the face ids
+/// (with the user data on them) stay.
+#[test]
+fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
+    let dir = TempDir::new("files-fingerprint-migration");
+    let fonts = dir.path().join("fonts");
+    copy_fixture(&fonts, STATIC, "static.ttf");
+    copy_fixture(&fonts, COLLECTION, "collection.ttc");
+    let (scanned, _) = scan(&fonts);
+    let (mut index, source, path) = open_db(&dir);
+    index
+        .persist_files(source, scanned.files())
+        .expect("persist");
+    let ids_before: Vec<i64> = face_ids(&index.conn);
+    drop(index);
+    {
+        // The schema as it was one version back.
+        let conn = Connection::open(&path).expect("open");
+        conn.execute_batch(&format!(
+            "DROP TABLE face_fingerprint; PRAGMA user_version = {};",
+            SCHEMA_VERSION - 1
+        ))
+        .expect("downgrade");
+    }
+
+    let mut index = Index::open(&path).expect("open").index;
+    assert_eq!(index.schema_version().expect("version"), SCHEMA_VERSION);
+    assert_eq!(
+        count(&index.conn, "SELECT COUNT(*) FROM face_fingerprint"),
+        0
+    );
+    let mut loaded = index.load_files().expect("load");
+    let next = rescan(&mut loaded, &fonts);
+    assert_eq!(next.changed.len(), 2, "both files are read again: {next:?}");
+    index.apply_rescan(source, &loaded, &next).expect("apply");
+    assert_eq!(
+        count(
+            &index.conn,
+            "SELECT COUNT(*) FROM face_fingerprint WHERE vector IS NOT NULL"
+        ),
+        3
+    );
+    assert_eq!(
+        face_ids(&index.conn),
+        ids_before,
+        "no rebuild: the faces keep their ids"
+    );
+
+    let mut loaded = index.load_files().expect("load");
+    let after = rescan(&mut loaded, &fonts);
+    assert_eq!(after.unchanged.len(), 2, "filled in once: {after:?}");
+}
+
+fn face_ids(conn: &Connection) -> Vec<i64> {
+    let mut stmt = conn
+        .prepare("SELECT id FROM face ORDER BY id")
+        .expect("prepare");
+    stmt.query_map([], |r| r.get(0))
+        .expect("query")
+        .collect::<Result<_, _>>()
+        .expect("ids")
 }

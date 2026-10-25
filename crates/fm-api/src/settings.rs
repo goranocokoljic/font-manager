@@ -214,7 +214,20 @@ pub struct AppFolders {
     pub logs: String,
 }
 
-/// The user's settings and the app folders.
+/// The local API endpoint (ADR 0015): where it listens and the token every
+/// request must carry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct EndpointInfo {
+    /// `http://127.0.0.1:<port>`; `None` while the endpoint is not running
+    /// (the app has not started it yet, or the caller is the CLI's direct link).
+    #[serde(default)]
+    pub url: Option<String>,
+    /// The bearer token: 64 lowercase hex digits (32 random bytes).
+    pub token: String,
+}
+
+/// The user's settings, the app folders and the local API endpoint.
 pub trait SettingsService {
     /// The current settings.
     fn get_settings(&self) -> ApiResult<Settings>;
@@ -222,6 +235,22 @@ pub trait SettingsService {
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings>;
     /// Where the app keeps its config, data, cache and logs.
     fn app_folders(&self) -> ApiResult<AppFolders>;
+    /// The local API endpoint's address and token. `Unsupported` where there
+    /// is no data folder to keep the token in.
+    fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
+        Err(endpoint_unsupported())
+    }
+    /// Makes a new token, keeps it and returns it; the old one fails at once.
+    fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
+        Err(endpoint_unsupported())
+    }
+}
+
+fn endpoint_unsupported() -> ApiError {
+    ApiError::new(
+        ErrorCode::Unsupported,
+        "The local API is not available here.",
+    )
 }
 
 #[cfg(test)]
@@ -314,6 +343,36 @@ mod tests {
         assert!(!next.keep_in_tray);
         let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
         assert!(!unchanged.keep_in_tray);
+    }
+
+    #[test]
+    fn endpoint_info_is_camel_case_and_the_url_may_be_absent() {
+        let info = EndpointInfo {
+            url: Some("http://127.0.0.1:4242".into()),
+            token: "ab".repeat(32),
+        };
+        let json = serde_json::to_value(&info).expect("json");
+        assert_eq!(json["url"], "http://127.0.0.1:4242");
+        assert_eq!(json["token"], "ab".repeat(32));
+        let stopped: EndpointInfo = serde_json::from_str(r#"{"token":"00"}"#).expect("parse");
+        assert_eq!(stopped.url, None);
+    }
+
+    #[test]
+    fn the_mock_regenerates_a_new_64_digit_token() {
+        let api = crate::mock::MockApi::new();
+        let first = api.endpoint_info().expect("info");
+        assert_eq!(first.token.len(), 64);
+        assert!(first.token.bytes().all(|b| b.is_ascii_hexdigit()));
+        assert_eq!(
+            api.endpoint_info().expect("info"),
+            first,
+            "stable until regenerated"
+        );
+        let next = api.regenerate_endpoint_token().expect("regenerate");
+        assert_ne!(next.token, first.token);
+        assert_eq!(next.token.len(), 64);
+        assert_eq!(api.endpoint_info().expect("info"), next);
     }
 
     #[test]

@@ -99,6 +99,7 @@ const { previewOf } = useRowPreviews(
   () => props.preview,
   () => rendered.value,
   () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
+  false,
 );
 
 const rowId = (row: ListRow) => `fm-wrow-${row.key.replace(':', '-')}`;

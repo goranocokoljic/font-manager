@@ -16,6 +16,11 @@
 //! Each face is written with its coverage (E3.7): the `cmap` as a
 //! [`CodePointSet`] in `face.cmap`, and its coverage of every language
 //! preset in `face.languages` (see [`crate::coverage`]).
+//!
+//! A face read from its file is written with its glyph fingerprint (E23.1)
+//! in `face_fingerprint`. A face without a fingerprint row (indexed before
+//! the table existed) loads untrusted like the rows above, so the next scan
+//! reads its file again and fills the row in, without a rebuild.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -31,6 +36,7 @@ use super::faces::open_license_to_sql;
 use super::{Index, db_error, languages};
 use crate::coverage::{self, CodePointSet};
 use crate::error::{FmError, FmResult};
+use crate::fingerprint::{self, FaceFingerprint};
 use crate::grouping::{face_style, family_name};
 use crate::license;
 use crate::parallel::map_ordered;
@@ -76,9 +82,9 @@ const UPSERT_FACE: &str = "
 INSERT INTO face (file_id, collection_index, family, subfamily, typographic_family,
                   postscript_name, weight, width, slant, is_variable, axes, features,
                   fstype, parsed, cmap, languages, foundry, designer, is_color, healthy,
-                  open_license, added)
+                  open_license, metrics, added)
 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
-        ?20, ?21, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+        ?20, ?21, ?22, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
 ON CONFLICT (file_id, collection_index) DO UPDATE SET
     family = excluded.family, subfamily = excluded.subfamily,
     typographic_family = excluded.typographic_family,
@@ -88,7 +94,13 @@ ON CONFLICT (file_id, collection_index) DO UPDATE SET
     parsed = excluded.parsed, cmap = excluded.cmap, languages = excluded.languages,
     foundry = excluded.foundry, designer = excluded.designer,
     is_color = excluded.is_color, healthy = excluded.healthy,
-    open_license = excluded.open_license";
+    open_license = excluded.open_license, metrics = excluded.metrics
+RETURNING id";
+
+const UPSERT_FINGERPRINT: &str = "
+INSERT OR REPLACE INTO face_fingerprint
+    (face_id, vector, x_height_ratio, contrast, stroke_width, width_class, advance_ratio)
+VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
 
 /// Faces the file no longer has. An active face stays (rule 3): the app
 /// registered it, so it must stay deregistrable.
@@ -206,7 +218,11 @@ impl Index {
     fn load_faces(&self) -> FmResult<HashMap<i64, (Vec<ParsedFace>, bool)>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT file_id, parsed, cmap FROM face ORDER BY file_id, collection_index")
+            .prepare(
+                "SELECT file_id, parsed, cmap,
+                        EXISTS (SELECT 1 FROM face_fingerprint WHERE face_id = face.id)
+                 FROM face ORDER BY file_id, collection_index",
+            )
             .map_err(|e| db_error(&e))?;
         let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
         let mut out: HashMap<i64, (Vec<ParsedFace>, bool)> = HashMap::new();
@@ -214,6 +230,7 @@ impl Index {
             let file_id: i64 = row.get(0).map_err(|e| db_error(&e))?;
             let parsed: Option<String> = row.get(1).map_err(|e| db_error(&e))?;
             let cmap: Option<Vec<u8>> = row.get(2).map_err(|e| db_error(&e))?;
+            let fingerprinted: bool = row.get(3).map_err(|e| db_error(&e))?;
             let entry = out.entry(file_id).or_insert_with(|| (Vec::new(), true));
             let face = parsed
                 .and_then(|json| serde_json::from_str::<ParsedFace>(&json).ok())
@@ -224,6 +241,7 @@ impl Index {
                 Some((mut face, code_points)) => {
                     face.code_points = code_points;
                     entry.0.push(face);
+                    entry.1 &= fingerprinted;
                 }
                 None => entry.1 = false,
             }
@@ -326,6 +344,9 @@ struct FaceRow<'a> {
     healthy: bool,
     /// The open license the name table states, as stored.
     open_license: Option<String>,
+    /// The vertical metrics as JSON (E16.2), read by auto size.
+    metrics: String,
+    fingerprint: &'a FaceFingerprint,
 }
 
 impl<'a> FileRow<'a> {
@@ -383,6 +404,8 @@ impl<'a> FaceRow<'a> {
                 face.license.as_deref(),
                 face.license_url.as_deref(),
             )),
+            metrics: json(&face.metrics)?,
+            fingerprint: &face.fingerprint,
         })
     }
 }
@@ -411,36 +434,65 @@ fn write_file(tx: &Transaction<'_>, source: SourceId, row: &FileRow<'_>) -> FmRe
 
     let mut face_stmt = tx.prepare_cached(UPSERT_FACE).map_err(|e| db_error(&e))?;
     for face in &row.faces {
-        face_stmt
-            .execute(params![
-                file_id,
-                face.index,
-                face.family,
-                face.subfamily,
-                face.typographic_family,
-                face.postscript_name,
-                face.weight,
-                face.width,
-                face.slant,
-                face.is_variable,
-                face.axes,
-                face.features,
-                face.fs_type,
-                face.parsed,
-                face.cmap,
-                face.languages,
-                face.foundry,
-                face.designer,
-                face.color,
-                face.healthy,
-                face.open_license,
-            ])
+        let face_id: i64 = face_stmt
+            .query_row(
+                params![
+                    file_id,
+                    face.index,
+                    face.family,
+                    face.subfamily,
+                    face.typographic_family,
+                    face.postscript_name,
+                    face.weight,
+                    face.width,
+                    face.slant,
+                    face.is_variable,
+                    face.axes,
+                    face.features,
+                    face.fs_type,
+                    face.parsed,
+                    face.cmap,
+                    face.languages,
+                    face.foundry,
+                    face.designer,
+                    face.color,
+                    face.healthy,
+                    face.open_license,
+                    face.metrics,
+                ],
+                |r| r.get(0),
+            )
             .map_err(|e| db_error(&e))?;
+        write_fingerprint(tx, face_id, face.fingerprint)?;
     }
     tx.prepare_cached(DELETE_OLD_FACES)
         .and_then(|mut s| s.execute(params![file_id, row.face_count]))
         .map_err(|e| db_error(&e))?;
     Ok(row.faces.len())
+}
+
+/// Writes the fingerprint row of a face read from its file; a face that was
+/// not read ([`FaceFingerprint::NotTaken`]) keeps the row it has.
+fn write_fingerprint(tx: &Transaction<'_>, face_id: i64, fp: &FaceFingerprint) -> FmResult<()> {
+    let taken = match fp {
+        FaceFingerprint::NotTaken => return Ok(()),
+        FaceFingerprint::Absent => None,
+        FaceFingerprint::Taken(fp) => Some(fp),
+    };
+    tx.prepare_cached(UPSERT_FINGERPRINT)
+        .and_then(|mut s| {
+            s.execute(params![
+                face_id,
+                taken.map(|f| fingerprint::vector_to_bytes(&f.vector)),
+                taken.map(|f| f64::from(f.x_height_ratio)),
+                taken.map(|f| f64::from(f.contrast)),
+                taken.map(|f| f64::from(f.stroke_width)),
+                taken.map(|f| f64::from(f.width_class)),
+                taken.map(|f| f64::from(f.advance_ratio)),
+            ])
+        })
+        .map_err(|e| db_error(&e))?;
+    Ok(())
 }
 
 /// A path as SQL: TEXT when it is UTF-8, else its native bytes as a BLOB, so

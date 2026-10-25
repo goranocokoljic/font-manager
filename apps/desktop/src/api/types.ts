@@ -772,6 +772,20 @@ export type Embedding =
 /**  Restricted license embedding. */
 "restricted";
 
+/**
+ *  The local API endpoint (ADR 0015): where it listens and the token every
+ *  request must carry.
+ */
+export type EndpointInfo = {
+	/**
+	 *  `http://127.0.0.1:<port>`; `None` while the endpoint is not running
+	 *  (the app has not started it yet, or the caller is the CLI's direct link).
+	 */
+	url?: string | null,
+	/**  The bearer token: 64 lowercase hex digits (32 random bytes). */
+	token: string,
+};
+
 /**  What went wrong, in a form a program can branch on. */
 export type ErrorCode = 
 /**  The id or path does not exist. */
@@ -2418,6 +2432,35 @@ export type SimilarRequest = {
 	limit: number,
 };
 
+/**  The metric auto size makes equal across faces (E16.2). */
+export type SizeBasis = 
+/**  The height of the lowercase `x`. */
+"xHeight" | 
+/**  The height of the capital `H`. */
+"capHeight";
+
+/**
+ *  How much one face's preview size is scaled so that its x-height (or cap
+ *  height) matches every other face's at the same toolbar size.
+ */
+export type SizeFactor = {
+	/**  The face. */
+	face: FaceId,
+	/**
+	 *  The factor to multiply the preview size by; `1` for a face with no
+	 *  usable metric.
+	 */
+	factor: number | null,
+};
+
+/**  The auto size factors of some faces, for one basis (E16.2). */
+export type SizeFactorRequest = {
+	/**  The faces, usually the ones on screen. */
+	faces: FaceId[],
+	/**  The metric to make equal. */
+	basis: SizeBasis,
+};
+
 /**  Upright, italic or oblique. */
 export type Slant = 
 /**  Upright. */
@@ -2745,4 +2788,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 19, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 21, patch: 0 };

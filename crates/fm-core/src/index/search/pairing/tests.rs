@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use fm_api::common::{Classification, Health};
+use fm_api::common::{Classification, Health, Metrics};
 use fm_api::library::SourceKind;
 use fm_api::search::{PairingRequest, PairingSuggestion};
 use fm_api::{ErrorCode, FaceId};
@@ -80,15 +80,23 @@ fn pairings(index: &Index, face: FaceId, limit: u32) -> Vec<PairingSuggestion> {
         .expect("pairings")
 }
 
+/// The x-height of `face` as a share of the em, as the search cache reads it.
+fn x_height_em(face: &ParsedFace) -> Option<f32> {
+    let m = face.metrics;
+    m.x_height
+        .filter(|_| m.units_per_em > 0)
+        .map(|x| f32::from(x) / f32::from(m.units_per_em))
+}
+
 #[test]
 fn the_fixture_faces_carry_an_x_height() {
     let faces: Vec<&ParsedFace> = corpus().iter().flat_map(|f| &f.parsed.faces).collect();
-    let known = faces.iter().filter(|f| f.x_height.is_some()).count();
+    let known = faces.iter().filter(|f| x_height_em(f).is_some()).count();
     assert!(known * 10 >= faces.len() * 9, "{known} of {}", faces.len());
     assert!(
         faces
             .iter()
-            .filter_map(|f| f.x_height)
+            .filter_map(|f| x_height_em(f))
             .all(|x| x > 0.0 && x < 1.5)
     );
 }
@@ -199,7 +207,13 @@ fn synthetic_face(i: usize) -> IndexedFile {
     face.weight = Some(400);
     face.width = Some(5);
     face.designer = Some(format!("Designer {}", i % 40));
-    face.x_height = Some(0.45 + (i % 20) as f32 * 0.01);
+    face.metrics = Metrics {
+        units_per_em: 1000,
+        ascender: 800,
+        descender: -200,
+        x_height: Some(450 + (i % 20) as i16 * 10),
+        cap_height: Some(700),
+    };
     face.classification = Some(crate::classify::ClassGuess {
         class: classes[i % classes.len()],
         confidence: 0.8,

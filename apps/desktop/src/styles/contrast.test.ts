@@ -3,6 +3,9 @@
 // change that breaks contrast fails here.
 import { describe, expect, it } from 'vitest';
 import theme from './theme.css?raw';
+import print from './print.css?raw';
+import compareSheet from '../components/CompareSheet.vue?raw';
+import glyphCompare from '../components/GlyphCompare.vue?raw';
 
 type Palette = Record<string, string>;
 
@@ -95,5 +98,50 @@ describe('palettes stay in step', () => {
     ['.surface-dark', dark],
   ])('the list surface %s uses the theme colors', (selector, p) => {
     for (const [k, v] of Object.entries(palette(theme, selector))) expect(v, k).toBe(p[k]);
+  });
+});
+
+// E19.1: every chrome color token is checked, and the tokens declared outside
+// theme.css (Compare's two colors, the print palette) meet contrast too.
+
+/** Colors with no contrast duty: row and panel separators (WCAG 1.4.11 exempts them). */
+const DECORATIVE = ['border'];
+const CHECKED = [...TEXT, 'bg', 'surface', 'control-border'];
+
+describe('every color token', () => {
+  it.each([
+    ['light', light],
+    ['dark', dark],
+  ])('of the %s palette is checked or declared decorative', (_, p) => {
+    for (const k of Object.keys(p)) expect([...CHECKED, ...DECORATIVE], k).toContain(k);
+  });
+});
+
+/** The `--fm-compare-*` colors a component declares. */
+function compareColors(css: string): string[] {
+  return [...css.matchAll(/--fm-compare-\d:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1]!.toLowerCase());
+}
+
+describe('Compare colors', () => {
+  it('are the same in the Compare sheet and the glyph compare', () => {
+    expect(compareColors(compareSheet)).toHaveLength(2);
+    expect(compareColors(glyphCompare)).toEqual(compareColors(compareSheet));
+  });
+
+  it.each([
+    ['light', light],
+    ['dark', dark],
+  ])('are at least 3:1 on the %s background and surface (1.4.11)', (_, p) => {
+    for (const c of compareColors(compareSheet))
+      for (const bg of [p.bg!, p.surface!])
+        expect(contrast(rgb(c), rgb(bg)), `${c} on ${bg}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('the print palette', () => {
+  it('has text at least 4.5:1 on the paper', () => {
+    const p = palette(print, '[data-print-target]');
+    for (const k of ['fg', 'muted'])
+      expect(contrast(rgb(p[k]!), rgb(p.bg!)), k).toBeGreaterThanOrEqual(4.5);
   });
 });

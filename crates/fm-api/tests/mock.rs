@@ -33,7 +33,10 @@ use fm_api::organization::{
     RuleOp, SelectionTagsRequest, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest,
     UserMetaUpdate, VirtualStylesRequest,
 };
-use fm_api::preview::{CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest};
+use fm_api::preview::{
+    CssValuesRequest, PreviewRequest, SampleFallback, SampleTextRequest, SizeBasis,
+    SizeFactorRequest,
+};
 use fm_api::search::{CoverageRequest, Filters, SearchRequest, Supports, WeightRange};
 use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
 use fm_api::{
@@ -2187,6 +2190,40 @@ fn activated_within_days_keeps_deactivated_faces() {
     })
     .unwrap();
     assert_eq!(faces_of(&api, recent).unwrap(), [FaceId(3), FaceId(4)]);
+}
+
+/// E16.2: the mock answers auto size factors like the core: one per face,
+/// in order, the target over the face's metric in em; an unknown face fails.
+#[test]
+fn size_factors_answer_each_face_in_order() {
+    let api = api();
+    let faces = vec![FaceId(2), FaceId(1)];
+    let got = api
+        .size_factors(SizeFactorRequest {
+            faces: faces.clone(),
+            basis: SizeBasis::XHeight,
+        })
+        .expect("factors");
+    assert_eq!(got.iter().map(|f| f.face).collect::<Vec<_>>(), faces);
+    for f in &got {
+        let m = api.get_face(f.face).expect("face").metrics;
+        let em = f32::from(m.x_height.expect("x-height")) / f32::from(m.units_per_em);
+        assert!((f.factor - 0.5 / em).abs() < 1e-6, "{f:?}");
+    }
+    let cap = api
+        .size_factors(SizeFactorRequest {
+            faces: vec![FaceId(1)],
+            basis: SizeBasis::CapHeight,
+        })
+        .expect("cap factors");
+    assert!((cap[0].factor - 0.7 / 0.72).abs() < 1e-6, "{cap:?}");
+    let err = api
+        .size_factors(SizeFactorRequest {
+            faces: vec![FaceId(999_999)],
+            basis: SizeBasis::XHeight,
+        })
+        .expect_err("unknown");
+    assert_eq!(err.code, ErrorCode::NotFound);
 }
 
 #[test]

@@ -6,6 +6,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import { t } from '../i18n';
 import { highlight } from '../keyboard/fuzzy';
 import { ACTIONS, ariaShortcut, formatChord } from '../keyboard/keymap';
+import { setPaletteOrigin } from '../keyboard/returnFocus';
 import { useActions, useCommandsStore, type PaletteItem } from '../stores/commands';
 
 const commands = useCommandsStore();
@@ -36,6 +37,7 @@ watch(
   async (open) => {
     if (open) {
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      setPaletteOrigin(returnFocus);
       active.value = 0;
       await nextTick();
       input.value?.focus();
@@ -45,6 +47,8 @@ watch(
       // The action may have moved focus on purpose (e.g. "Go to sidebar"); only put it
       // back when it was left on the closed dialog or nowhere.
       await nextTick();
+      // A sheet the action opened has read the origin by now.
+      setPaletteOrigin(null);
       if (
         target?.isConnected &&
         (!document.activeElement || document.activeElement === document.body)

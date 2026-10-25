@@ -56,7 +56,7 @@ use crate::organization::{
 };
 use crate::preview::{
     CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
-    SampleText, SampleTextRequest,
+    SampleText, SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
 };
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
@@ -64,7 +64,7 @@ use crate::search::{
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
     WeightRange, WidthRange,
 };
-use crate::settings::{AppFolders, Settings, SettingsUpdate};
+use crate::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
 use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
@@ -474,6 +474,8 @@ struct State {
     /// Named comparisons, in the order they were saved.
     comparisons: Vec<MockComparison>,
     settings: Settings,
+    /// How often the local API token was regenerated; the token is made from it.
+    endpoint_tokens: u32,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
     trashed: BTreeSet<String>,
@@ -882,6 +884,7 @@ impl State {
             quick: Vec::new(),
             comparisons: Vec::new(),
             settings: Settings::default(),
+            endpoint_tokens: 0,
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             layouts: mock_layout_files(),
@@ -2454,6 +2457,41 @@ impl PreviewService for MockApi {
             feature_settings: decl("font-feature-settings", feats),
         })
     }
+
+    /// `fm_core::metrics::size_factor` over each face's metrics.
+    fn size_factors(&self, req: SizeFactorRequest) -> ApiResult<Vec<SizeFactor>> {
+        let st = self.state();
+        req.faces
+            .iter()
+            .map(|&face| {
+                let m = &st.face(face)?.detail.metrics;
+                Ok(SizeFactor {
+                    face,
+                    factor: mock_size_factor(m, req.basis),
+                })
+            })
+            .collect()
+    }
+}
+
+/// The core's auto size targets and usable range in em (`fm_core::metrics`).
+const MOCK_X_HEIGHT_EM: f32 = 0.5;
+const MOCK_CAP_HEIGHT_EM: f32 = 0.7;
+const MOCK_USABLE_EM: (f32, f32) = (0.2, 1.2);
+
+/// `fm_core::metrics::size_factor`: the target over the face's value in em;
+/// 1 without a usable value.
+fn mock_size_factor(m: &Metrics, basis: SizeBasis) -> f32 {
+    let (value, target) = match basis {
+        SizeBasis::XHeight => (m.x_height, MOCK_X_HEIGHT_EM),
+        SizeBasis::CapHeight => (m.cap_height, MOCK_CAP_HEIGHT_EM),
+    };
+    let upem = f32::from(m.units_per_em);
+    value
+        .filter(|_| upem > 0.0)
+        .map(|v| f32::from(v) / upem)
+        .filter(|em| (MOCK_USABLE_EM.0..=MOCK_USABLE_EM.1).contains(em))
+        .map_or(1.0, |em| target / em)
 }
 
 impl ActivationService for MockApi {
@@ -3860,6 +3898,37 @@ impl SettingsService for MockApi {
             cache: "/home/demo/.cache/font-manager".into(),
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
+    }
+
+    fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
+        Ok(mock_endpoint(self.state().endpoint_tokens))
+    }
+
+    fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
+        let mut st = self.state();
+        st.endpoint_tokens += 1;
+        Ok(mock_endpoint(st.endpoint_tokens))
+    }
+}
+
+/// The mock's endpoint: a fixed address and a token of 64 hex digits that
+/// changes with every regeneration (no OS random source: the mock touches
+/// no OS).
+fn mock_endpoint(generation: u32) -> EndpointInfo {
+    let mut x = 0x9e37_79b9_7f4a_7c15_u64 ^ u64::from(generation);
+    let token = (0..4)
+        .map(|_| {
+            // splitmix64
+            x = x.wrapping_add(0x9e37_79b9_7f4a_7c15);
+            let mut z = x;
+            z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+            format!("{:016x}", z ^ (z >> 31))
+        })
+        .collect();
+    EndpointInfo {
+        url: Some("http://127.0.0.1:47613".into()),
+        token,
     }
 }
 
