@@ -478,3 +478,220 @@ fn a_set_exported_then_imported_on_a_fresh_index_round_trips() {
         faces.len() - 1
     );
 }
+
+/// Sets the `OS/2` `fsType` (embedding bits) of the font file at `path`.
+fn set_fs_type(path: &Path, fs_type: u16) {
+    let mut data = std::fs::read(path).expect("font");
+    let be16 = |d: &[u8], at: usize| usize::from(u16::from_be_bytes([d[at], d[at + 1]]));
+    let tables = be16(&data, 4);
+    let os2 = (0..tables)
+        .map(|i| 12 + 16 * i)
+        .find(|&record| &data[record..record + 4] == b"OS/2")
+        .map(|record| {
+            u32::from_be_bytes(data[record + 8..record + 12].try_into().expect("offset")) as usize
+        })
+        .expect("OS/2");
+    data[os2 + 8..os2 + 10].copy_from_slice(&fs_type.to_be_bytes());
+    std::fs::write(path, data).expect("patched font");
+}
+
+/// The width and height a PNG's `IHDR` chunk declares.
+fn png_size(png: &[u8]) -> (u32, u32) {
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n", "a PNG");
+    assert_eq!(&png[12..16], b"IHDR");
+    let be = |b: &[u8]| u32::from_be_bytes(b.try_into().expect("4 bytes"));
+    (be(&png[16..20]), be(&png[20..24]))
+}
+
+#[test]
+fn export_writes_the_family_as_web_fonts_and_css_into_out_only() {
+    let home = Home::scanned("export", &["google-repo/bebasneue"]);
+    let dir = home.0.join("Web");
+    std::fs::create_dir_all(&dir).expect("out");
+    let out_dir = dir.display().to_string();
+    let args = [
+        "export",
+        "Bebas Neue",
+        "--woff2",
+        "--woff",
+        "--css",
+        "--out",
+        &out_dir,
+    ];
+
+    let out = home.fm(&args);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let printed: Vec<String> = text(&out.stdout).lines().map(str::to_owned).collect();
+    let woff2 = dir.join("BebasNeue-Regular.woff2");
+    let css = dir.join("fonts.css");
+    assert_eq!(printed.len(), 3, "{printed:?}");
+    assert_eq!(printed[0], woff2.display().to_string());
+    assert_eq!(printed[2], css.display().to_string());
+    // The WOFF2 decodes to a font with outlines and a character map.
+    let data = std::fs::read(&woff2).expect("woff2");
+    assert_eq!(&data[..4], b"wOF2");
+    let sfnt = fm_core::web_font::standalone(&data, 0).expect("the WOFF2 opens");
+    let tags: Vec<[u8; 4]> = sfnt.tables.iter().map(|t| t.tag).collect();
+    assert!(tags.contains(b"cmap") && tags.contains(b"glyf"), "{tags:?}");
+    assert_eq!(
+        &std::fs::read(dir.join("BebasNeue-Regular.woff")).expect("woff")[..4],
+        b"wOFF"
+    );
+    assert!(
+        std::fs::read_to_string(&css)
+            .expect("css")
+            .contains("@font-face")
+    );
+    // Nothing is written anywhere but the folder given.
+    let mut names: Vec<String> = std::fs::read_dir(&dir)
+        .expect("listing")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "BebasNeue-Regular.woff",
+            "BebasNeue-Regular.woff2",
+            "fonts.css"
+        ]
+    );
+
+    // Again: the files exist, so the export is refused and changes nothing.
+    std::fs::write(&css, "mine").expect("css");
+    let out = home.fm(&args);
+    assert_eq!(code(&out), 2, "{}", text(&out.stderr));
+    assert!(text(&out.stderr).contains("already exists"));
+    assert_eq!(std::fs::read_to_string(&css).expect("css"), "mine");
+
+    let mut forced = args.to_vec();
+    forced.extend(["--force", "--json"]);
+    let v = json(&home.fm(&forced));
+    assert_eq!(v["files"].as_array().map(Vec::len), Some(3), "{v}");
+    assert!(v["css"].as_str().is_some_and(|c| c.contains("@font-face")));
+    assert!(
+        std::fs::read_to_string(&css)
+            .expect("css")
+            .contains("@font-face")
+    );
+}
+
+#[test]
+fn export_of_a_family_whose_license_forbids_it_exits_4_with_the_reason() {
+    let home = Home::new("export-guard");
+    let library = home.library(&["google-repo/bebasneue"]);
+    // Restricted license embedding: not for the web.
+    set_fs_type(&library.join("bebasneue/BebasNeue-Regular.ttf"), 0x0002);
+    let out = home.fm(&["scan", &library.display().to_string()]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let dir = home.0.join("Web");
+    std::fs::create_dir_all(&dir).expect("out");
+    let out_dir = dir.display().to_string();
+
+    let out = home.fm(&["export", "Bebas Neue", "--woff2", "--out", &out_dir]);
+    assert_eq!(code(&out), 4);
+    assert!(out.stdout.is_empty());
+    let err = text(&out.stderr);
+    assert!(err.starts_with("fm: Bebas Neue"), "{err}");
+    assert!(err.contains("Declare a web license"), "{err}");
+
+    let out = home.fm(&[
+        "--json",
+        "export",
+        "Bebas Neue",
+        "--woff2",
+        "--out",
+        &out_dir,
+    ]);
+    assert_eq!(code(&out), 4);
+    let e: Value = serde_json::from_slice(&out.stderr).expect("JSON error");
+    assert_eq!(e["code"], "permissionDenied");
+    assert_eq!(std::fs::read_dir(&dir).expect("listing").count(), 0);
+}
+
+#[test]
+fn specimen_writes_html_and_pdf_is_refused_without_the_app() {
+    let home = Home::scanned("specimen", &["google-repo/bebasneue"]);
+    let file = home.0.join("bebas.html");
+    let path = file.display().to_string();
+
+    let out = home.fm(&["--json", "specimen", "Bebas Neue", "--html", "--out", &path]);
+    let v = json(&out);
+    assert_eq!(v["path"], path);
+    let page = std::fs::read_to_string(&file).expect("specimen");
+    assert!(
+        page.contains("<html") && page.contains("Bebas Neue"),
+        "an HTML specimen"
+    );
+
+    std::fs::write(&file, "mine").expect("file");
+    let out = home.fm(&["specimen", "Bebas Neue", "--out", &path]);
+    assert_eq!(code(&out), 2);
+    assert_eq!(std::fs::read_to_string(&file).expect("file"), "mine");
+    let out = home.fm(&["specimen", "Bebas Neue", "--out", &path, "--force"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    assert!(
+        std::fs::read_to_string(&file)
+            .expect("file")
+            .contains("<html")
+    );
+
+    let pdf = home.0.join("bebas.pdf");
+    let out = home.fm(&[
+        "specimen",
+        "Bebas Neue",
+        "--pdf",
+        "--out",
+        &pdf.display().to_string(),
+    ]);
+    assert_eq!(code(&out), 4);
+    assert!(out.stdout.is_empty());
+    assert_eq!(
+        text(&out.stderr).trim_end(),
+        format!("fm: {}", fm_core::api::PDF_NEEDS_APP)
+    );
+    assert!(!pdf.exists());
+}
+
+#[test]
+fn preview_writes_a_png_file_or_the_bytes_to_stdout() {
+    let home = Home::scanned("preview", &["google-repo/bebasneue"]);
+    let file = home.0.join("preview.png");
+    let path = file.display().to_string();
+    let args = [
+        "preview",
+        "BebasNeue-Regular",
+        "--text",
+        "Hamburg",
+        "--size",
+        "40",
+    ];
+
+    let mut with_file = vec!["--json"];
+    with_file.extend(args);
+    with_file.extend(["--fg", "#1a1a1a", "--bg", "#ffffff", "--out", &path]);
+    let v = json(&home.fm(&with_file));
+    let png = std::fs::read(&file).expect("png");
+    let (w, h) = png_size(&png);
+    assert!(w > 1 && h > 1, "{w}×{h}");
+    assert_eq!(v["width"], w);
+    assert_eq!(v["height"], h);
+    assert_eq!(v["bytes"], png.len());
+    assert_eq!(v["path"], path);
+
+    let mut to_stdout = args.to_vec();
+    to_stdout.extend(["--out", "-"]);
+    let out = home.fm(&to_stdout);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    assert!(out.stderr.is_empty());
+    let (sw, sh) = png_size(&out.stdout);
+    assert!(sw > 1 && sh > 1);
+
+    let mut again = args.to_vec();
+    again.extend(["--out", &path]);
+    let out = home.fm(&again);
+    assert_eq!(code(&out), 2);
+    assert!(text(&out.stderr).contains("--force"));
+    again.push("--force");
+    assert_eq!(code(&home.fm(&again)), 0);
+}

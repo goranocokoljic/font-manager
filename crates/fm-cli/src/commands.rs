@@ -4,23 +4,28 @@
 //! and waits for its scan.
 
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ConflictPolicy, DeactivateRequest,
     OutcomeStatus, Target,
 };
 use fm_api::common::Page;
+use fm_api::export::{
+    ExportWebRequest, ExportWebResponse, SpecimenFormat, SpecimenRequest, SpecimenResponse,
+    WebFormat,
+};
 use fm_api::library::{
     AddSourceRequest, FaceDetail, FaceSummary, FamilySummary, FontMatchKind, ImportMode,
     ListFamiliesRequest, ResolveFontRequest, ScanRequest, Source,
 };
 use fm_api::organization::{ImportSetResponse, ProjectSet, SetExport};
+use fm_api::preview::PreviewRequest;
 use fm_api::search::{
     CoverageReport, CoverageRequest, FamilyHit, Filters, SearchRequest, SimilarFace,
     SimilarRequest, Supports,
 };
-use fm_api::{Api, ApiError, CollectionId, ErrorCode, Event};
+use fm_api::{Api, ApiError, CollectionId, ErrorCode, Event, FaceId, FamilyId};
 use serde::Serialize;
 
 use crate::output::Failure;
@@ -183,16 +188,8 @@ pub fn families(api: &dyn Api) -> Result<Vec<FamilySummary>, Failure> {
 /// `fm list --family <font>`: the faces of the families a font argument
 /// names, as `resolve_font` matches it (a family name names every style).
 pub fn faces(api: &dyn Api, font: &str) -> Result<Vec<FaceSummary>, Failure> {
-    let matches = api.resolve_font(fm_api::library::ResolveFontRequest { font: font.into() })?;
-    let mut families = Vec::new();
-    for m in &matches.faces {
-        let family = api.get_face(m.face)?.face.family;
-        if !families.contains(&family) {
-            families.push(family);
-        }
-    }
     let mut faces = Vec::new();
-    for family in families {
+    for family in families_of(api, font)? {
         faces.extend(api.get_family(family)?.faces);
     }
     Ok(faces)
@@ -466,4 +463,230 @@ pub fn import_set(api: &dyn Api, file: &Path) -> Result<ImportSetResponse, Failu
         .with_detail(e.to_string())
     })?;
     Ok(api.import_set(export)?)
+}
+
+/// The families a font argument names, as `resolve_font` matches it, in
+/// match order: a family name names its family, a face names its own.
+fn families_of(api: &dyn Api, font: &str) -> Result<Vec<FamilyId>, Failure> {
+    let matches = api.resolve_font(ResolveFontRequest { font: font.into() })?;
+    let mut families = Vec::new();
+    for m in &matches.faces {
+        let family = api.get_face(m.face)?.face.family;
+        if !families.contains(&family) {
+            families.push(family);
+        }
+    }
+    Ok(families)
+}
+
+/// The one family a font argument names; several is `InvalidRequest` with
+/// the faces it matched (exit 2), as an ambiguous `<font>` is.
+fn one_family(api: &dyn Api, font: &str) -> Result<FamilyId, Failure> {
+    let families = families_of(api, font)?;
+    match families.as_slice() {
+        [family] => Ok(*family),
+        _ => {
+            let candidates = api
+                .resolve_font(ResolveFontRequest { font: font.into() })?
+                .faces;
+            Err(Failure::Ambiguous {
+                error: ApiError::new(
+                    ErrorCode::InvalidRequest,
+                    format!(
+                        "\"{font}\" matches {} families. Name one family.",
+                        families.len()
+                    ),
+                ),
+                candidates,
+            })
+        }
+    }
+}
+
+/// The path the user gave, as the API takes it. A path that is not valid
+/// Unicode is refused: a lossy copy of it would be a path the user did not
+/// give.
+fn user_path(path: &Path) -> Result<String, ApiError> {
+    path.to_str().map(str::to_owned).ok_or_else(|| {
+        ApiError::new(
+            ErrorCode::InvalidRequest,
+            "The output path is not valid Unicode. Choose another path.",
+        )
+        .with_detail(path.to_string_lossy().into_owned())
+    })
+}
+
+/// `InvalidRequest` when `path` exists and `force` is off: `fm` replaces a
+/// file only when asked to, as the core refuses an existing web font.
+fn refuse_existing(path: &Path, force: bool) -> Result<(), ApiError> {
+    if !force && std::fs::symlink_metadata(path).is_ok() {
+        return Err(already_exists(path));
+    }
+    Ok(())
+}
+
+fn already_exists(path: &Path) -> ApiError {
+    ApiError::new(
+        ErrorCode::InvalidRequest,
+        format!(
+            "{} already exists. Use --force to replace it.",
+            path.display()
+        ),
+    )
+    .with_detail(path.display().to_string())
+}
+
+/// `fm export <family>`: every face of the families the argument names,
+/// written as web fonts (and `fonts.css`) to `out_dir`, the folder the
+/// user gave. Files of the same name are replaced only with `force`.
+pub fn export_web(
+    api: &dyn Api,
+    family: &str,
+    formats: Vec<WebFormat>,
+    css: bool,
+    out_dir: &Path,
+    force: bool,
+) -> Result<ExportWebResponse, Failure> {
+    let out_dir = user_path(out_dir)?;
+    let faces = faces(api, family)?.into_iter().map(|f| f.id).collect();
+    Ok(api.export_web(ExportWebRequest {
+        faces,
+        formats,
+        subset: None,
+        out_dir,
+        css,
+        overwrite: force,
+    })?)
+}
+
+/// `fm specimen <family>`: the family's specimen written to `out`, the
+/// file the user gave; an existing file only with `force`.
+pub fn specimen(
+    api: &dyn Api,
+    family: &str,
+    format: SpecimenFormat,
+    out: &Path,
+    force: bool,
+) -> Result<SpecimenResponse, Failure> {
+    let out_path = user_path(out)?;
+    let family = one_family(api, family)?;
+    refuse_existing(out, force)?;
+    Ok(api.export_specimen(SpecimenRequest {
+        family,
+        format,
+        out_path,
+    })?)
+}
+
+/// Where `fm preview` writes the PNG.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PreviewOut {
+    /// `--out -`: the bytes to stdout.
+    Stdout,
+    /// A file the user gave.
+    File(PathBuf),
+}
+
+/// The `fm preview` settings.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PreviewFlags {
+    /// The text to render.
+    pub text: String,
+    /// Size in pixels.
+    pub size: f32,
+    /// Text color, CSS hex.
+    pub fg: Option<String>,
+    /// Background color, CSS hex.
+    pub bg: Option<String>,
+}
+
+/// What `fm preview` rendered and where it went. The PNG bytes are not
+/// serialized: `--json` prints the path and the size only.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Previewed {
+    /// The face rendered.
+    pub face: FaceId,
+    /// The file written, absolute; absent when the PNG went to stdout.
+    pub path: Option<String>,
+    /// Width in pixels.
+    pub width: u32,
+    /// Height in pixels.
+    pub height: u32,
+    /// Size of the PNG in bytes.
+    pub bytes: usize,
+    /// The PNG, for stdout.
+    #[serde(skip)]
+    pub png: Vec<u8>,
+}
+
+/// `fm preview <font>`: the face's rendering of the text, written to the
+/// file the user gave (a new one, or any with `force`), or kept for stdout.
+pub fn preview(
+    api: &dyn Api,
+    font: &str,
+    flags: &PreviewFlags,
+    out: &PreviewOut,
+    force: bool,
+) -> Result<Previewed, Failure> {
+    let face = resolve(api, font)?.face;
+    if let PreviewOut::File(path) = out {
+        user_path(path)?;
+        refuse_existing(path, force)?;
+    }
+    let image = api.render_preview(PreviewRequest {
+        face,
+        text: flags.text.clone(),
+        size_px: flags.size,
+        variations: Vec::new(),
+        features: Vec::new(),
+        foreground: flags.fg.clone(),
+        background: flags.bg.clone(),
+    })?;
+    let path = match out {
+        PreviewOut::Stdout => None,
+        PreviewOut::File(path) => Some(write_png(path, &image.png, force)?),
+    };
+    Ok(Previewed {
+        face,
+        path,
+        width: image.width,
+        height: image.height,
+        bytes: image.png.len(),
+        png: image.png,
+    })
+}
+
+/// Writes `png` to `path`: a new file, or over an existing one with
+/// `force`. Answers the absolute path.
+fn write_png(path: &Path, png: &[u8], force: bool) -> Result<String, ApiError> {
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true);
+    if force {
+        options.create(true).truncate(true);
+    } else {
+        // A file made since the check is not replaced either.
+        options.create_new(true);
+    }
+    let failed = |e: std::io::Error| {
+        if e.kind() == std::io::ErrorKind::AlreadyExists {
+            return already_exists(path);
+        }
+        ApiError::new(
+            ErrorCode::Io,
+            format!("The preview could not be written to {}.", path.display()),
+        )
+        .with_detail(e.to_string())
+    };
+    let mut file = options.open(path).map_err(failed)?;
+    if let Err(e) = file.write_all(png) {
+        drop(file);
+        if !force {
+            // The file this command just made, never one of the user's.
+            let _ = std::fs::remove_file(path);
+        }
+        return Err(failed(e));
+    }
+    let absolute = std::path::absolute(path).map_err(failed)?;
+    Ok(absolute.display().to_string())
 }

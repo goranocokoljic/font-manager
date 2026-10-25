@@ -1502,6 +1502,7 @@ fn web_request(faces: Vec<FaceId>, out_dir: &Path) -> ExportWebRequest {
         subset: None,
         out_dir: out_dir.display().to_string(),
         css: false,
+        overwrite: false,
     }
 }
 

@@ -3894,6 +3894,7 @@ impl WorkflowService for MockApi {
             subset: req.subset,
             out_dir: req.out_dir,
             css: true,
+            overwrite: false,
         })?;
         let activated = self.activate(ActivateRequest {
             target: Target::Faces { faces },

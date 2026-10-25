@@ -57,6 +57,11 @@ pub struct ExportWebRequest {
     /// Also write `fonts.css`.
     #[serde(default)]
     pub css: bool,
+    /// Replace files of the same name in `out_dir` (`fm export --force`).
+    /// Without it, a file that exists refuses the export with
+    /// `InvalidRequest` and nothing is written.
+    #[serde(default)]
+    pub overwrite: bool,
 }
 
 /// What the export wrote.

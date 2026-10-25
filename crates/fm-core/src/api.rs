@@ -996,7 +996,8 @@ impl ExportService for CoreApi {
     /// The faces are looked up under the index lock; their files are read,
     /// subset and written outside it. The subset is checked before any face
     /// is looked up. With `css`, `fonts.css` is written beside the fonts
-    /// ([`web_font::export_with_css`]) and its text returned.
+    /// ([`web_font::export_with_css`]) and its text returned; with
+    /// `overwrite`, files of the same name are replaced ([`web_font::write`]).
     fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
         if req.faces.is_empty() || req.formats.is_empty() {
             return Err(ApiError::invalid("Pick at least one font and one format."));
@@ -1044,17 +1045,23 @@ impl ExportService for CoreApi {
         }
         let (faces, styles): (Vec<_>, Vec<_>) =
             found.into_iter().map(|(_, f)| (f.face, f.style)).unzip();
-        let out_dir = Path::new(&req.out_dir);
-        let (files, css) = if req.css {
-            let out = web_font::export_with_css(&faces, &styles, &formats, keep.as_ref(), out_dir)?;
-            (out.files, Some(out.css))
+        let existing = if req.overwrite {
+            web_font::Existing::Replace
         } else {
-            let files = web_font::export(&faces, &formats, keep.as_ref(), out_dir)?;
-            (files, None)
+            web_font::Existing::Refuse
         };
+        let styles = req.css.then_some(styles.as_slice());
+        let out = web_font::write(
+            &faces,
+            styles,
+            &formats,
+            keep.as_ref(),
+            Path::new(&req.out_dir),
+            existing,
+        )?;
         Ok(ExportWebResponse {
-            files: files.iter().map(|p| p.display().to_string()).collect(),
-            css,
+            files: out.files.iter().map(|p| p.display().to_string()).collect(),
+            css: out.css,
         })
     }
 

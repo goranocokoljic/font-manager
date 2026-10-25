@@ -21,6 +21,9 @@ folders, so the app does not have to run.
 | `fm deactivate <font>` (or `--collection`, `--set`) | Deactivate fonts. `fm` deactivates only fonts that the app activated. It shows other fonts as skipped and exits with code 4. The app must run. |
 | `fm sets export <set> [--out file.json]` | Write a project set as JSON. Without `--out`, the JSON goes to stdout. |
 | `fm sets import <file.json>` | Make a new project set from an exported set. Shows the fonts found in your library and the fonts that are missing. |
+| `fm export <family> --woff2 [--woff] [--css] --out <folder> [--force]` | Write every style of a family as web fonts into the folder. `--css` also writes `fonts.css`. Shows the files written. Exits with code 4 when the license of a font does not allow web use. |
+| `fm specimen <family> [--html] --out <file.html> [--force]` | Write a specimen page of a family. `--pdf` needs the app running; when the app is closed, `fm` exits with code 4. |
+| `fm preview <font> --text "..." [--size 48] [--fg "#1a1a1a"] [--bg "#ffffff"] --out <file.png> [--force]` | Draw the text in the font and write a PNG. `--out -` writes the PNG to stdout. |
 | `fm --help` | Show every command and the exit codes |
 
 ## Activation needs the app
@@ -28,6 +31,12 @@ folders, so the app does not have to run.
 `fm activate` and `fm deactivate` work only when Font Manager runs. When the
 app is closed, they do nothing and exit with code 4. A font that `fm`
 activated itself would stop when `fm` stops.
+
+## Files that `fm` writes
+
+`fm export`, `fm specimen` and `fm preview` write only to the path that you
+give with `--out`. When a file with the same name is there, `fm` does not
+replace it and exits with code 2. Add `--force` to replace it.
 
 ## Name a font
 
@@ -46,7 +55,8 @@ with code 2. Give the id instead.
 
 Add `--json` to any command. Then `fm` prints one JSON value and nothing
 else: the answer on stdout, or the error on stderr. Without `--json`, `fm`
-prints text and tables.
+prints text and tables. The JSON shows paths and sizes, never font or image
+data, so `fm preview --out -` cannot be used with `--json`.
 
 ## Exit codes
 

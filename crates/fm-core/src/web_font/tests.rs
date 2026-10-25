@@ -364,6 +364,62 @@ fn a_target_that_appears_before_the_rename_undoes_the_export() {
     assert_eq!(fs::read(&b).unwrap(), b"theirs");
 }
 
+#[test]
+fn replace_writes_over_an_existing_target_and_refuse_does_not() {
+    let out = TempDir::new("web-export-replace");
+    let faces = [face(STATIC_TTF, 0, "BebasNeue-Regular")];
+    let clash = out.path().join("BebasNeue-Regular.woff2");
+    fs::write(&clash, b"mine").unwrap();
+    let refused = write(
+        &faces,
+        None,
+        &[WebFormat::Woff2],
+        None,
+        out.path(),
+        Existing::Refuse,
+    )
+    .unwrap_err();
+    assert_eq!(refused.code(), ErrorCode::InvalidRequest);
+    assert_eq!(fs::read(&clash).unwrap(), b"mine");
+
+    let written = write(
+        &faces,
+        None,
+        &[WebFormat::Woff2],
+        None,
+        out.path(),
+        Existing::Replace,
+    )
+    .unwrap();
+    assert_eq!(written.files, [std::path::absolute(&clash).unwrap()]);
+    assert_eq!(written.css, None);
+    assert_eq!(&fs::read(&clash).unwrap()[..4], b"wOF2");
+    assert_eq!(listing(out.path()), ["BebasNeue-Regular.woff2"]);
+}
+
+#[test]
+fn a_failed_replacing_commit_keeps_the_replaced_file_and_removes_the_new_ones() {
+    let out = TempDir::new("web-export-replace-fail");
+    let mut written = Written::default();
+    written.existing = Existing::Replace;
+    let (a, b, c) = (
+        out.path().join("A.woff2"),
+        out.path().join("B.woff2"),
+        out.path().join("C.woff2"),
+    );
+    fs::write(&b, b"theirs").unwrap();
+    written.temp(&a, b"a").unwrap();
+    written.temp(&b, b"b").unwrap();
+    written.temp(&c, b"c").unwrap();
+    // A folder where C goes makes its rename fail after A and B moved.
+    fs::create_dir(&c).unwrap();
+    written.commit().unwrap_err();
+    let mut left = listing(out.path());
+    left.sort();
+    assert_eq!(left, ["B.woff2", "C.woff2"]);
+    assert_eq!(fs::read(&b).unwrap(), b"b");
+}
+
 /// Latin, Cyrillic and Greek, with a `wght` axis.
 const MULTI_SCRIPT: &str = "google-repo/mulish/Mulish[wght].ttf";
 
