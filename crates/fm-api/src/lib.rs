@@ -36,6 +36,7 @@ pub mod preview;
 pub mod search;
 pub mod settings;
 pub mod update;
+pub mod version;
 pub mod workflows;
 
 pub use activation::ActivationService;
@@ -54,15 +55,20 @@ pub use organization::OrganizationService;
 pub use preview::PreviewService;
 pub use search::SearchService;
 pub use settings::SettingsService;
+pub use version::{
+    DEPRECATION_HEADER, Deprecation, NEGOTIATED_MAJOR, VERSION_HEADER, VersionInfo,
+    check_client_version, deprecations, deprecations_in,
+};
 pub use workflows::WorkflowService;
 
 use serde::{Deserialize, Serialize};
 
 /// The version of the API contract. Bumped on every contract change; a major
-/// bump is the only place a breaking change may land.
+/// bump is the only place a breaking change may land, and it must move
+/// [`NEGOTIATED_MAJOR`] too (ADR 0015).
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 21,
+    minor: 22,
     patch: 0,
 };
 
@@ -134,6 +140,8 @@ pub fn types() -> specta::Types {
     register!(
         ApiVersion,
         ApiError,
+        version::VersionInfo,
+        version::Deprecation,
         Event,
         // library
         library::AppInfo,
@@ -296,13 +304,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.21.0");
+        assert_eq!(API_VERSION.to_string(), "0.22.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":21,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":22,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

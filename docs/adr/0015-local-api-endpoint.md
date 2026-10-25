@@ -92,7 +92,44 @@ The transport's own refusals use the same shape: 401 (no or wrong token,
 page that rebinds its own host name to 127.0.0.1 sends that name. (3)
 `Authorization: Bearer <token>` compared in constant time with the token
 `SettingsService::endpoint_info` reports at that moment → else 401. Nothing
-else runs before these pass.
+else runs before these pass, except `GET /v1/version` (below), which runs
+after (1) and (2) and needs no token. (4) The client's `Fm-Api-Version`,
+when it sends one (below) → 400 or 422.
+
+**Versions** (E25.3). The rules live in `fm_api::version`, so the
+endpoint, the CLI and the MCP server negotiate the same way.
+
+- Every answer, refusals and the event stream included, carries
+  `Fm-Api-Version: <API_VERSION>` (`major.minor.patch`).
+- `GET /v1/version` answers `fm_api::VersionInfo`:
+  `{ "appVersion", "apiVersion": { major, minor, patch }, "deprecations": [...] }`.
+  No token, so a client can tell whether it can talk to this app before it
+  reads the discovery file; the `Origin` and `Host` checks still apply.
+  Another method gets 405, `Allow: GET`.
+- **Additive within a major.** A minor adds types, routes and
+  `Option`/`#[serde(default)]` fields (ADR 0006); a patch changes no
+  contract. So a client of the same major is served at any minor or patch:
+  an older one asks for less, and the request fields a newer one adds are
+  ignored (no request type denies unknown fields).
+- **Refusal on major mismatch.** A client sends `Fm-Api-Version` with the
+  contract it was built against. Not `major.minor.patch` → 400
+  `invalidRequest`. Another major → 422 `unsupported` with one sentence
+  naming both versions and what to update: "The client speaks API 1.0.0 but
+  Font Manager serves API 0.22.0: update Font Manager to a version that
+  serves API 1.x." (an older client is told to update the client). No
+  header → served, as before E25.3. The check runs after the token, so a
+  program without the token learns nothing more than `/v1/version` says.
+- The served major is `fm_api::NEGOTIATED_MAJOR`, kept apart from
+  `API_VERSION` on purpose: a test fails when `API_VERSION`'s major
+  changes and it does not, so a major bump is a deliberate step that
+  revisits these rules.
+- **Deprecation notes.** `fm_api::deprecations()` lists the fields on
+  their way out (`typeName`, wire `field`, `since`, `note`); it is empty
+  today. A field stays working until the next major removes it. An answer
+  that contains one (its type is the method's answer type or reachable
+  from it, and the field is a key in the answer) carries one
+  `Fm-Deprecation: <Type>.<field> (since <version>): <note>` header per
+  field. Notes are plain ASCII, one sentence: what to use instead.
 
 **Token.** 32 bytes from the OS random source (`getrandom`), 64 lowercase hex
 digits, in `<data>/endpoint-token`, so it survives a restart. Settings →
@@ -133,3 +170,6 @@ the next time it is read.
   interface.
 - Clients get events from `GET /v1/events` instead of polling. One that
   falls 1,024 frames behind is closed and must reconnect.
+- A client that sends `Fm-Api-Version` is refused plainly across a major
+  instead of failing on a changed field; one that reads `Fm-Deprecation`
+  learns about a removal a whole major ahead.

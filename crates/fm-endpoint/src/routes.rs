@@ -4,8 +4,10 @@
 //! that takes none accepts an empty body, `null` or `{}`. The answer is the
 //! method's value as JSON (`null` for `()`). A test compares this table with
 //! the service traits in `fm-api`, so a new method without a route fails CI.
+//! An answer that contains a deprecated field names it
+//! ([`Answer::deprecations`], [`fm_api::deprecations_in`]).
 
-use fm_api::{Api, ApiError, ApiResult};
+use fm_api::{Api, ApiError, ApiResult, Deprecation};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
@@ -19,19 +21,25 @@ macro_rules! routes {
         pub const ROUTES: &[&str] = &[$(stringify!($name)),*];
 
         /// Runs `method` on `api` with the request in `body`; `None` when
-        /// there is no such route.
-        pub fn dispatch(api: &dyn Api, method: &str, body: &[u8]) -> Option<ApiResult<Vec<u8>>> {
+        /// there is no such route. `deprecated` is the list the answer is
+        /// checked against ([`fm_api::deprecations`] when served).
+        pub fn dispatch(
+            api: &dyn Api,
+            method: &str,
+            body: &[u8],
+            deprecated: &[Deprecation],
+        ) -> Option<ApiResult<Answer>> {
             Some(match method {
-                $(stringify!($name) => routes!(@call api body $name $($arg)?),)*
+                $(stringify!($name) => routes!(@call api body deprecated $name $($arg)?),)*
                 _ => return None,
             })
         }
     };
-    (@call $api:ident $body:ident $name:ident) => {
-        no_body($body).and_then(|()| $api.$name()).and_then(|v| to_json(&v))
+    (@call $api:ident $body:ident $list:ident $name:ident) => {
+        no_body($body).and_then(|()| $api.$name()).and_then(|v| answer(&v, $list))
     };
-    (@call $api:ident $body:ident $name:ident $arg:ident) => {
-        parse($body).and_then(|$arg| $api.$name($arg)).and_then(|v| to_json(&v))
+    (@call $api:ident $body:ident $list:ident $name:ident $arg:ident) => {
+        parse($body).and_then(|$arg| $api.$name($arg)).and_then(|v| answer(&v, $list))
     };
 }
 
@@ -166,14 +174,37 @@ fn no_body(body: &[u8]) -> ApiResult<()> {
     }
 }
 
-fn to_json<T: Serialize>(value: &T) -> ApiResult<Vec<u8>> {
-    serde_json::to_vec(value).map_err(|e| {
-        ApiError::new(
-            fm_api::ErrorCode::Internal,
-            "The answer could not be encoded.",
-        )
-        .with_detail(e.to_string())
-    })
+/// A service's answer: its JSON, and the [`Deprecation::header_value`] of
+/// each deprecated field in it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Answer {
+    pub json: Vec<u8>,
+    pub deprecations: Vec<String>,
+}
+
+fn answer<T: Serialize + specta::Type>(value: &T, deprecated: &[Deprecation]) -> ApiResult<Answer> {
+    let json = serde_json::to_vec(value).map_err(not_encoded)?;
+    if deprecated.is_empty() {
+        return Ok(Answer {
+            json,
+            deprecations: Vec::new(),
+        });
+    }
+    // A tree only to look for keys: the bytes keep the field order serde wrote.
+    let tree = serde_json::to_value(value).map_err(not_encoded)?;
+    let deprecations = fm_api::deprecations_in::<T>(deprecated, &tree)
+        .into_iter()
+        .map(Deprecation::header_value)
+        .collect();
+    Ok(Answer { json, deprecations })
+}
+
+fn not_encoded(e: serde_json::Error) -> ApiError {
+    ApiError::new(
+        fm_api::ErrorCode::Internal,
+        "The answer could not be encoded.",
+    )
+    .with_detail(e.to_string())
 }
 
 #[cfg(test)]

@@ -270,3 +270,32 @@ fn parse(block: &str) -> Message {
     }
     message
 }
+
+impl Served {
+    /// A served `MockApi` that checks answers against `deprecations`.
+    pub fn with_deprecations(deprecations: Vec<fm_api::Deprecation>) -> Self {
+        let api = Arc::new(MockApi::new());
+        let endpoint =
+            Endpoint::start_with_deprecations(Arc::clone(&api) as Arc<dyn Api>, deprecations)
+                .expect("start");
+        Self { api, endpoint }
+    }
+}
+
+impl Reply {
+    /// Every value of the header `name` (any case), in order.
+    pub fn header(&self, name: &str) -> Vec<String> {
+        header_values(&self.headers, name)
+    }
+}
+
+/// Every value of the header `name` (any case) in a raw header block.
+pub fn header_values(block: &str, name: &str) -> Vec<String> {
+    block
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split_once(':'))
+        .filter(|(n, _)| n.trim().eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.trim().to_owned())
+        .collect()
+}

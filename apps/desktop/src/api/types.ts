@@ -668,6 +668,21 @@ export type Density =
 /**  More rows on screen. */
 "compact";
 
+/**  A field that still works but will be removed in the next major. */
+export type Deprecation = {
+	/**
+	 *  The type that holds the field, by its Rust (and TypeScript) name,
+	 *  e.g. `AppInfo`.
+	 */
+	typeName: string,
+	/**  The field by its wire name (camelCase), e.g. `platformNotes`. */
+	field: string,
+	/**  The contract version that deprecated it. */
+	since: ApiVersion,
+	/**  One plain sentence: what to use instead. */
+	note: string,
+};
+
 /**  Downloads a family of a catalog into a watched source (E22.3). */
 export type DownloadFamilyRequest = {
 	/**  The catalog. */
@@ -2722,6 +2737,19 @@ export type UserMetaUpdate = {
 };
 
 /**
+ *  What `GET /v1/version` answers: enough for a client to decide whether it
+ *  can talk to this app before it holds a token.
+ */
+export type VersionInfo = {
+	/**  The app version (semver). */
+	appVersion: string,
+	/**  The API contract this build serves. */
+	apiVersion: ApiVersion,
+	/**  The fields on their way out, oldest first. */
+	deprecations: Deprecation[],
+};
+
+/**
  *  An instance of a variable face, pinned as a style of its own. The font
  *  file is not changed: activating it activates the face.
  */
@@ -2788,4 +2816,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 21, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 22, patch: 0 };
