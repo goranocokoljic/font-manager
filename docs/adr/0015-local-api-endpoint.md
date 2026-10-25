@@ -32,8 +32,40 @@ request value as JSON (the same camelCase wire format as the UI); a method
 without one takes an empty body, `null` or `{}`. The answer is the value as
 JSON, `null` for `()`. The table is a macro in `routes.rs`; a test parses
 every `pub trait *Service` in `fm-api` and fails when a method has no route or
-a route no method. `EventSource::subscribe` is not a service and has no route
-yet (events over HTTP are a later story).
+a route no method. `EventSource::subscribe` is not a service; it is the
+event stream below.
+
+**Event stream** (E25.2). `GET /v1/events` streams every `fm_api::Event`
+as Server-Sent Events (`Content-Type: text/event-stream`), after the same
+three checks as every route (another method gets 405, `Allow: GET`). The
+first frame is the comment `: stream open`, so a client knows it is
+subscribed. Each event is one frame:
+
+```
+id: 3
+event: scanFinished
+data: {"type":"scanFinished","job":7,"added":12,"changed":0,"removed":0,"problems":0}
+
+```
+
+`event` is the event's `type` tag, `data` the event as the same JSON the UI
+gets (always one line), `id` the stream's own sequence number from 1. A
+stream sees the events sent after it opened; there is no replay, so
+`Last-Event-ID` is ignored and a client that reconnects reads again the
+state it needs. A stream that sent nothing for 15 s gets the comment
+`: keep-alive`.
+
+Each connection is one `EventSource::subscribe` and one thread
+(`fm-endpoint-events`). The thread moves events from the subscription (an
+unbounded channel, so the sender never waits) into a queue of 1,024 frames
+that the response body reads. **Slow-client rule:** a client that stops
+reading fills the queue; on the next frame the server closes that
+connection (not only the body: hyper polls a body only when the socket
+takes bytes) and the thread ends, which drops the subscription. The API,
+the UI's own subscription and other streams never wait on a stream. A
+client closed this way reconnects. A client that went away is noticed on
+the next frame the server writes (an event or the keep-alive); its thread
+ends within 200 ms of that.
 
 **Status by `ErrorCode`.** An `ApiError` keeps its JSON shape
 (`{ code, message, detail }`); the status is fixed:
@@ -99,4 +131,5 @@ the next time it is read.
   trust boundary: the same as the user's own files.
 - The endpoint is HTTP/1.1 without TLS: it never leaves the loopback
   interface.
-- No events yet; a client that needs them polls until the event route exists.
+- Clients get events from `GET /v1/events` instead of polling. One that
+  falls 1,024 frames behind is closed and must reconnect.

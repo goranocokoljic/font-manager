@@ -19,3 +19,7 @@ tracing = "0.1"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+fm-core.workspace = true
+fm-platform.workspace = true
