@@ -40,6 +40,18 @@ fn version_prints_the_app_and_api_versions() {
 }
 
 #[test]
+fn version_reports_the_mode() {
+    let api = MockApi::new();
+    for (link, mode) in [(Link::Endpoint, "endpoint"), (Link::Direct, "direct")] {
+        let (exit, out, _) = fm_linked(&api, link, &["version", "--json"]);
+        assert_eq!(exit, Exit::Success);
+        assert_eq!(json(&out)["mode"], mode);
+        let (_, out, _) = fm_linked(&api, link, &["version"]);
+        assert!(out.contains(&format!("Mode: {mode} ")), "{out}");
+    }
+}
+
+#[test]
 fn json_is_a_global_flag() {
     let (_, before, _) = fm(&["--json", "version"]);
     let (_, after, _) = fm(&["version", "--json"]);

@@ -18,8 +18,7 @@ path = "src/main.rs"
 
 [dependencies]
 fm-api.workspace = true
-# The app's local API when the app is open (ADR 0015); E26.6 picks it, this
-# story links fm-core directly.
+# The app's local API when the app is open (ADR 0015, endpoint mode).
 fm-client.workspace = true
 fm-core.workspace = true
 fm-platform.workspace = true
@@ -30,6 +29,8 @@ serde_json.workspace = true
 
 [dev-dependencies]
 fm-core.workspace = true
+# A real endpoint over MockApi for the endpoint-mode tests.
+fm-endpoint.workspace = true
 
 [lints]
 workspace = true

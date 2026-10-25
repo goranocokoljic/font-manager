@@ -64,7 +64,7 @@ impl Answer {
         let status = self.head.status;
         if !(200..300).contains(&status) {
             if let Ok(e) = serde_json::from_slice::<ApiError>(&self.body) {
-                return Err(e);
+                return Err(if status == 401 { wrong_token(e) } else { e });
             }
             self.head.check_version()?;
             return Err(unreadable(format!("HTTP {status} without an error")));
@@ -72,6 +72,19 @@ impl Answer {
         self.head.check_version()?;
         serde_json::from_slice(&self.body).map_err(|e| unreadable(format!("answer: {e}")))
     }
+}
+
+/// The message for the app's 401: the token in `endpoint.json` is not the
+/// one the app holds now. It names where the user sees the current token;
+/// the app's own message stays in the detail.
+pub(crate) const WRONG_TOKEN: &str = "Font Manager did not accept the token of its local API.      Check the token in Font Manager under Settings > Local API, or restart Font Manager.";
+
+fn wrong_token(e: ApiError) -> ApiError {
+    let detail = match e.detail {
+        Some(detail) => format!("{}; {detail}", e.message),
+        None => e.message,
+    };
+    ApiError::new(ErrorCode::PermissionDenied, WRONG_TOKEN).with_detail(detail)
 }
 
 /// Sends `POST <path>` with `body` and reads the whole answer.

@@ -190,6 +190,18 @@ code or HTTP crate of their own.
   (a newer minor) is skipped. A client that regenerates the token keeps
   working with the new one.
 
+**CLI modes** (E26.6). `fm` calls `fm_client::connect` over its app
+folders (`FM_HOME` included) on start (`fm_cli::link::reach`). The app
+answers → endpoint mode: every command goes through the `Client` and `fm`
+never opens the index, so activation state and events are the app's (`fm
+scan` reads progress from `GET /v1/events`). No answer → direct-link mode on
+`fm-core` and the index; a stale `endpoint.json` costs at most the 500 ms
+connect timeout. `--direct` skips the lookup. A wrong token is not a stale
+file: the client turns the 401 into `permissionDenied` with a message that
+names Settings > Local API, and `fm` exits 4 instead of falling back.
+`fm version --json` adds `mode` (`endpoint` or `direct`) to the `AppInfo`
+of the API it reached.
+
 ## Consequences
 
 - The CLI's endpoint mode (when the app is open), the MCP shim and the

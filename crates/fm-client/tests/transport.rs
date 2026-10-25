@@ -149,3 +149,20 @@ fn a_wrong_token_is_the_endpoints_refusal() {
     assert!(events.recv_timeout(Duration::from_secs(5)).is_err());
     assert_eq!(served.endpoint.event_streams(), 0);
 }
+
+#[test]
+fn a_wrong_token_is_permission_denied_and_names_settings_local_api() {
+    // A real endpoint over MockApi, asked with a token it does not hold.
+    let served = Served::new();
+    let client = Client::new(served.endpoint.addr(), "not-the-token");
+    let e = client.list_sources().unwrap_err();
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert!(e.message.contains("Settings > Local API"), "{}", e.message);
+    // The app's own words stay in the detail.
+    assert!(
+        e.detail.as_deref().is_some_and(|d| d.contains("token")),
+        "{e:?}"
+    );
+    // The right token still works.
+    assert!(served.client.list_sources().is_ok());
+}
