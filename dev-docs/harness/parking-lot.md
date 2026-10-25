@@ -252,3 +252,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E26.2 #165] crates/fm-core/src/api.rs:466 — `ScanJob::run` changes the in-memory `FileIndex` before `apply_rescan`; if the write fails the cache disagrees with the database until `forget_files`.
 - [E26.2 #165] crates/fm-cli/src/commands.rs:143 — the `list_families`/`search` paging loops are only tested with less than one page (more than 500 rows untested).
 - [E26.2 #165] apps/desktop/src-tauri/tests/tray_lifecycle.rs:307 — the comment says "`ScanFinished` comes before the index is written", no longer true after E26.2 (the test waits on `LibraryChanged` and still passes).
+- [E26.4 #167] crates/fm-core/src/api.rs:1124 — `export_specimen` writes over an existing `out_path` without asking; only the CLI guards it, so MCP and UI callers get no overwrite refusal.
+- [E26.4 #167] crates/fm-core/src/specimen.rs:163 — the HTML specimen `save` writes in place with `fs::write`, so a failed write leaves a truncated file (the PDF path writes a partial file and renames it).
+- [E26.4 #167] crates/fm-cli/src/commands.rs:435 — `fm sets export --out` (E26.3) still replaces an existing file silently, while export, specimen and preview refuse without `--force`.
