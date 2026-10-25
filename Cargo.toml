@@ -25,6 +25,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # The fm command line (E26.1): named in the spec's library table and the story.
 clap = { version = "4", features = ["derive"] }
+# Shell completions and man pages from the clap tree (E26.7): named in the story.
+clap_complete = "4"
+clap_mangen = "0.3"
 comfy-table = "7"
 
 [workspace.lints.rust]

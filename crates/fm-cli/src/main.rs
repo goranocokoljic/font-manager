@@ -32,6 +32,9 @@ fn main() -> ExitCode {
         }
     };
     let (mut out, mut err) = (io::stdout().lock(), io::stderr().lock());
+    if let Some(exit) = fm_cli::run_offline(&cli, &mut out, &mut err) {
+        return exit.into();
+    }
     let reached = app_paths().and_then(|paths| fm_cli::link::reach(&paths, cli.direct));
     let (api, link) = match reached {
         Ok(reached) => reached,
