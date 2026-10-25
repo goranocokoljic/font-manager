@@ -255,3 +255,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E26.4 #167] crates/fm-core/src/api.rs:1124 — `export_specimen` writes over an existing `out_path` without asking; only the CLI guards it, so MCP and UI callers get no overwrite refusal.
 - [E26.4 #167] crates/fm-core/src/specimen.rs:163 — the HTML specimen `save` writes in place with `fs::write`, so a failed write leaves a truncated file (the PDF path writes a partial file and renames it).
 - [E26.4 #167] crates/fm-cli/src/commands.rs:435 — `fm sets export --out` (E26.3) still replaces an existing file silently, while export, specimen and preview refuse without `--force`.
+- [E26.5 #168] crates/fm-core/src/activation.rs:549 — `list_conflicts` holds the index mutex across the platform `activator.conflicts` call; `fm doctor` makes that call twice (directly and through `list_problems`).
+- [E26.5 #168] crates/fm-core/src/activation.rs:559 — the conflict check is one batch OS query, so a DirectWrite/Core Text/fontconfig failure fails all of `list_conflicts` and with it `list_problems`.
