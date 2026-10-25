@@ -192,7 +192,8 @@ async function toggle(event: globalThis.Event): Promise<void> {
   margin: 0 0 8px;
 }
 .grant-hint {
-  margin: 2px 0 0 24px;
+  margin-block: 2px 0;
+  margin-inline: 24px 0;
 }
 .choice {
   display: flex;
