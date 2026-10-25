@@ -1,0 +1,21 @@
+{
+  "id": "a-test-loop-guarded-by-a-filter-must-prove-the-filter-keeps-",
+  "title": "A test loop guarded by a filter must prove the filter keeps at least one item",
+  "category": "testing",
+  "rule": "When a test asserts inside a loop or an `if let` that only runs for some results (`.filter(|m| !m.chars.is_empty())`, `if let Some(x)`), first assert that the data has at least one such result, or pick test data that is known to produce one (a named near-miss row) and assert on that row directly. A loop over zero matching items asserts nothing, so a regression in the printed or computed value passes.",
+  "rationale": "E26.2 (#165): the check that `fm search --supports` prints the missing characters looped over hits with non-empty `missing`, but every MockApi hit for sr-Cyrl covered fully, so the loop never ran and a broken MISSING column passed.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    165
+  ],
+  "file_globs": [
+    "crates/*/tests/**",
+    "crates/*/src/**",
+    "apps/desktop/src/**/*.test.ts",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-10-25T09:55:47.743Z",
+  "last_seen": "2026-10-25T09:55:47.743Z"
+}

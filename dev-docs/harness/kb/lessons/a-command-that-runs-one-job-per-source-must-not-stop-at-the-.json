@@ -1,0 +1,20 @@
+{
+  "id": "a-command-that-runs-one-job-per-source-must-not-stop-at-the-",
+  "title": "A command that runs one job per source must not stop at the first failed source",
+  "category": "error-handling",
+  "rule": "When an adapter (CLI, MCP tool, UI action) loops over several sources, folders or faces and runs one job each (scan, export, activate), a failure of one job must become that item's result (a row with an `error` field), not a `?` that leaves the loop. Run the rest, return every result, and exit or report non-zero from the first failure at the end. Match the core's own batch behavior (CoreApi scan-all logs a failed source and goes on). Test it with a first item that fails (a folder removed before the run) and assert the later items still ran.",
+  "rationale": "E26.2 (#165): `fm scan` without a folder used `?` on each source's scan, so one unplugged folder stopped every later source from being scanned and dropped the counts already collected.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    165
+  ],
+  "file_globs": [
+    "crates/fm-cli/**",
+    "crates/fm-mcp/**",
+    "apps/desktop/src-tauri/src/**"
+  ],
+  "first_seen": "2026-10-25T09:55:47.743Z",
+  "last_seen": "2026-10-25T09:55:47.743Z"
+}

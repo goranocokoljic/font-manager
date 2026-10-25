@@ -248,3 +248,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E25.3 #162] crates/fm-cli/src/main.rs:1 — neither fm-cli nor fm-mcp calls `fm_api::check_client_version` or sends `Fm-Api-Version` yet; wire it when they become endpoint clients.
 - [E25.4 #163] crates/fm-endpoint/src/body.rs:92 — an over-32 MiB request gets its 413 before the body is read, so a blocking client still writing sees a reset ("connection lost") instead of the 413 message.
 - [E25.4 #163] apps/desktop/src-tauri/tests/endpoint.rs:78 — still parses `endpoint.json` by hand instead of the new `fm_core::endpoint::Discovery::read` (test-only, same behavior).
+- [E26.2 #165] crates/fm-core/src/scanner/job.rs:67 — `ScanJob::run` still sends `ScanFinished` from inside the walk; only `Scan::try_run` holds it back until the index write, so a new caller that does not buffer it would bring back "finished before written".
+- [E26.2 #165] crates/fm-core/src/api.rs:466 — `ScanJob::run` changes the in-memory `FileIndex` before `apply_rescan`; if the write fails the cache disagrees with the database until `forget_files`.
+- [E26.2 #165] crates/fm-cli/src/commands.rs:143 — the `list_families`/`search` paging loops are only tested with less than one page (more than 500 rows untested).
+- [E26.2 #165] apps/desktop/src-tauri/tests/tray_lifecycle.rs:307 — the comment says "`ScanFinished` comes before the index is written", no longer true after E26.2 (the test waits on `LibraryChanged` and still passes).
