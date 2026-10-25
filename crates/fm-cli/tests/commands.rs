@@ -10,7 +10,7 @@ use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, SetE
 use fm_api::search::{Filters, SearchRequest, SimilarRequest, Supports};
 use fm_api::{
     API_VERSION, ActivationService, ApiError, ErrorCode, FaceId, LibraryService,
-    OrganizationService, SearchService, SetId,
+    OrganizationService, PreviewService, SearchService, SetId,
 };
 use fm_cli::{Cli, Exit, Link, Output};
 use serde_json::Value;
@@ -798,4 +798,184 @@ fn sets_import_refuses_a_file_that_is_missing_or_not_an_export() {
         "{err}"
     );
     assert_eq!(api.list_sets().unwrap().len(), sets, "no set was made");
+}
+
+/// Runs `fm <args>` on `api`: exit, stdout as bytes, stderr.
+fn fm_bytes(api: &MockApi, args: &[&str]) -> (Exit, Vec<u8>, String) {
+    let cli = Cli::try_parse_from(std::iter::once("fm").chain(args.iter().copied()))
+        .expect("valid command line");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
+    let exit = fm_cli::run(api, Link::Endpoint, &cli, &mut out, &mut err);
+    (exit, out, String::from_utf8(err).expect("UTF-8"))
+}
+
+/// The width and height a PNG's `IHDR` chunk declares.
+fn png_size(png: &[u8]) -> (u32, u32) {
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n", "a PNG");
+    assert_eq!(&png[12..16], b"IHDR");
+    let be = |b: &[u8]| u32::from_be_bytes(b.try_into().unwrap());
+    (be(&png[16..20]), be(&png[20..24]))
+}
+
+/// A fresh temp folder for one test, removed first if a run left it.
+fn temp_dir(label: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join(format!("fm-cli-{label}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn preview_to_stdout_writes_the_png_bytes_of_the_response() {
+    let api = MockApi::new();
+    let expected = api
+        .render_preview(fm_api::preview::PreviewRequest {
+            face: FaceId(1),
+            text: "Hamburg".into(),
+            size_px: 48.0,
+            variations: Vec::new(),
+            features: Vec::new(),
+            foreground: None,
+            background: None,
+        })
+        .unwrap();
+    let (exit, out, err) = fm_bytes(
+        &api,
+        &[
+            "preview",
+            "Inter-Regular",
+            "--text",
+            "Hamburg",
+            "--out",
+            "-",
+        ],
+    );
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    assert_eq!(out, expected.png);
+    assert_eq!(png_size(&out), (expected.width, expected.height));
+
+    // JSON never carries the bytes, so it cannot go with stdout.
+    let (exit, out, err) = fm_bytes(
+        &api,
+        &["--json", "preview", "1", "--text", "Hi", "--out", "-"],
+    );
+    assert_eq!(exit, Exit::Usage);
+    assert!(out.is_empty());
+    assert_eq!(json(&err)["code"], "invalidRequest");
+}
+
+#[test]
+fn preview_writes_the_file_it_was_given_and_replaces_one_only_with_force() {
+    let api = MockApi::new();
+    let dir = temp_dir("preview");
+    let file = dir.join("preview.png");
+    let path = file.display().to_string();
+    let args = ["--json", "preview", "1", "--text", "Hi", "--size", "64"];
+
+    let (exit, out, err) = fm_on(&api, &[&args[..], &["--out", &path]].concat());
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    let v = json(&out);
+    let png = std::fs::read(&file).unwrap();
+    assert_eq!(v["path"], path);
+    assert_eq!(v["face"], 1);
+    assert_eq!(v["bytes"], png.len());
+    let (w, h) = png_size(&png);
+    assert_eq!(
+        (v["width"].as_u64(), v["height"].as_u64()),
+        (Some(w.into()), Some(h.into()))
+    );
+    assert!(v.get("png").is_none(), "no image bytes in JSON: {v}");
+
+    std::fs::write(&file, b"mine").unwrap();
+    let (exit, out, err) = fm_on(&api, &["preview", "1", "--text", "Hi", "--out", &path]);
+    assert_eq!((exit, out.as_str()), (Exit::Usage, ""));
+    assert!(err.contains("already exists. Use --force"), "{err}");
+    assert_eq!(std::fs::read(&file).unwrap(), b"mine");
+
+    let (exit, out, _) = fm_on(
+        &api,
+        &["preview", "1", "--text", "Hi", "--out", &path, "--force"],
+    );
+    assert_eq!(exit, Exit::Success);
+    assert!(out.contains(&format!("preview to {path}")), "{out}");
+    assert_eq!(png_size(&std::fs::read(&file).unwrap()), (w, h));
+
+    // A size the API refuses is its error, and writes nothing.
+    let other = dir.join("big.png");
+    let (exit, _, _) = fm_on(
+        &api,
+        &[
+            "preview",
+            "1",
+            "--text",
+            "Hi",
+            "--size",
+            "999",
+            "--out",
+            &other.display().to_string(),
+        ],
+    );
+    assert_eq!(exit, Exit::Usage);
+    assert!(!other.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn specimen_writes_to_out_only_and_refuses_an_existing_file_without_force() {
+    let api = MockApi::new();
+    let dir = temp_dir("specimen");
+    let file = dir.join("inter.html");
+    let path = file.display().to_string();
+
+    let (exit, out, err) = fm_on(&api, &["--json", "specimen", "Inter", "--out", &path]);
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    assert_eq!(json(&out)["path"], path);
+
+    std::fs::write(&file, b"mine").unwrap();
+    let (exit, out, err) = fm_on(&api, &["specimen", "Inter", "--html", "--out", &path]);
+    assert_eq!((exit, out.as_str()), (Exit::Usage, ""));
+    assert!(err.contains("already exists"), "{err}");
+    let (exit, out, _) = fm_on(&api, &["specimen", "Inter", "--out", &path, "--force"]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(out, format!("Wrote the specimen to {path}\n"));
+
+    let (exit, _, err) = fm_on(&api, &["--json", "specimen", "No Such", "--out", &path]);
+    assert_eq!(exit, Exit::NotFound);
+    assert_eq!(json(&err)["code"], "notFound");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn export_asks_for_every_face_of_the_family_in_the_formats_given() {
+    let api = MockApi::new();
+    let dir = temp_dir("export");
+    let out_dir = dir.display().to_string();
+    let (exit, out, err) = fm_on(
+        &api,
+        &[
+            "--json", "export", "Inter", "--woff2", "--woff", "--css", "--out", &out_dir,
+        ],
+    );
+    assert_eq!((exit, err.as_str()), (Exit::Success, ""));
+    let v = json(&out);
+    let files: Vec<&str> = v["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f.as_str().unwrap())
+        .collect();
+    // Two faces in two formats, then the stylesheet.
+    assert_eq!(files.len(), 5, "{files:?}");
+    assert_eq!(files.iter().filter(|f| f.ends_with(".woff2")).count(), 2);
+    assert_eq!(files.iter().filter(|f| f.ends_with(".woff")).count(), 2);
+    assert!(files[4].ends_with("fonts.css"), "{files:?}");
+
+    let (exit, out, _) = fm_on(&api, &["export", "Inter", "--woff2", "--out", &out_dir]);
+    assert_eq!(exit, Exit::Success);
+    assert_eq!(out.lines().count(), 2, "{out}");
+
+    // No format is a usage error from clap.
+    assert!(Cli::try_parse_from(["fm", "export", "Inter", "--out", "x"]).is_err());
+    assert!(Cli::try_parse_from(["fm", "export", "Inter", "--woff2"]).is_err());
+    let _ = std::fs::remove_dir_all(&dir);
 }

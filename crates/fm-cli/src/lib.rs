@@ -11,11 +11,12 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use fm_api::Api;
+use fm_api::export::{SpecimenFormat, WebFormat};
 use fm_api::library::{FontMatch, ResolveFontRequest};
 use fm_api::search::Supports;
+use fm_api::{Api, ApiError, ErrorCode};
 
-pub use commands::{Scanned, SearchFlags, TargetKind};
+pub use commands::{PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
 pub use exit::{EXIT_CODES, Exit};
 pub use output::Output;
 
@@ -125,6 +126,67 @@ pub enum Command {
         /// What to do with sets.
         #[command(subcommand)]
         command: SetsCommand,
+    },
+    /// Write a family's faces as web fonts to a folder; prints the files
+    /// written. Exits 4 when a face's license does not allow it.
+    Export {
+        /// The family (a family name or any font argument).
+        family: String,
+        /// Write WOFF 2 files.
+        #[arg(long, required_unless_present = "woff")]
+        woff2: bool,
+        /// Write WOFF 1 files.
+        #[arg(long)]
+        woff: bool,
+        /// Also write fonts.css with one @font-face per face.
+        #[arg(long)]
+        css: bool,
+        /// The folder to write to; it must exist.
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
+        /// Replace files of the same name in the folder.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Write a family's specimen to a file.
+    Specimen {
+        /// The family (a family name or any font argument).
+        family: String,
+        /// An HTML page with the fonts embedded (the default).
+        #[arg(long, conflicts_with = "pdf")]
+        html: bool,
+        /// A PDF; needs the app running.
+        #[arg(long)]
+        pdf: bool,
+        /// The file to write.
+        #[arg(long, value_name = "FILE")]
+        out: PathBuf,
+        /// Replace the file when it exists.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Render a line of text in a face as a PNG.
+    Preview {
+        /// A face id or a font name.
+        font: String,
+        /// The text to render.
+        #[arg(long)]
+        text: String,
+        /// Size in pixels (8–300).
+        #[arg(long, default_value_t = 48.0)]
+        size: f32,
+        /// Text color, CSS hex (`#1a1a1a`); black by default.
+        #[arg(long, value_name = "COLOR")]
+        fg: Option<String>,
+        /// Background color, CSS hex; transparent by default.
+        #[arg(long, value_name = "COLOR")]
+        bg: Option<String>,
+        /// The PNG file to write, or `-` for stdout.
+        #[arg(long, value_name = "FILE")]
+        out: PathBuf,
+        /// Replace the file when it exists.
+        #[arg(long)]
+        force: bool,
     },
 }
 
@@ -273,6 +335,72 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
         } => output.print(commands::import_set(api, file), |r, o| {
             output::imported(api, r, o)
         }),
+        Command::Export {
+            family,
+            woff2,
+            woff,
+            css,
+            out,
+            force,
+        } => {
+            let formats = [(*woff2, WebFormat::Woff2), (*woff, WebFormat::Woff)]
+                .into_iter()
+                .filter_map(|(on, format)| on.then_some(format))
+                .collect();
+            output.print(
+                commands::export_web(api, family, formats, *css, out, *force),
+                output::exported,
+            )
+        }
+        Command::Specimen {
+            family,
+            pdf,
+            out,
+            force,
+            ..
+        } => {
+            let format = if *pdf {
+                SpecimenFormat::Pdf
+            } else {
+                SpecimenFormat::Html
+            };
+            output.print(
+                commands::specimen(api, family, format, out, *force),
+                output::specimen,
+            )
+        }
+        Command::Preview {
+            font,
+            text,
+            size,
+            fg,
+            bg,
+            out,
+            force,
+        } => {
+            let out = if out.as_os_str() == "-" {
+                PreviewOut::Stdout
+            } else {
+                PreviewOut::File(out.clone())
+            };
+            if cli.json && out == PreviewOut::Stdout {
+                let refused: Result<(), _> = Err(ApiError::new(
+                    ErrorCode::InvalidRequest,
+                    "--out - writes the PNG to stdout and cannot be used with --json. Name a file.",
+                ));
+                return output.print(refused, |(), _| Ok(()));
+            }
+            let flags = PreviewFlags {
+                text: text.clone(),
+                size: *size,
+                fg: fg.clone(),
+                bg: bg.clone(),
+            };
+            output.print(
+                commands::preview(api, font, &flags, &out, *force),
+                output::previewed,
+            )
+        }
     }
 }
 

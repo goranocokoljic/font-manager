@@ -865,6 +865,7 @@ fn export_honors_the_license_guard() {
             subset: None,
             out_dir: "/tmp/out".into(),
             css: true,
+            overwrite: false,
         })
         .unwrap();
     assert_eq!(
@@ -879,6 +880,7 @@ fn export_honors_the_license_guard() {
         subset: None,
         out_dir: "/tmp/out".into(),
         css: false,
+        overwrite: false,
     });
     assert_eq!(refused.unwrap_err().code, ErrorCode::PermissionDenied);
 }
@@ -897,6 +899,7 @@ fn the_mock_license_guard_blocks_preview_and_print_as_the_core_does() {
             subset: None,
             out_dir: "/tmp/out".into(),
             css: true,
+            overwrite: false,
         })
     };
     let e = export(&[1, 7, 6, 7]).unwrap_err();
@@ -940,6 +943,7 @@ fn export_validates_the_subset_like_the_core() {
         subset: Some(subset),
         out_dir: "/tmp/out".into(),
         css: false,
+        overwrite: false,
     };
     let ok = api
         .export_web(with(Subset::Presets {
@@ -2417,6 +2421,7 @@ fn export_css_follows_the_core_rules() {
         subset,
         out_dir: "/tmp/out".into(),
         css: true,
+        overwrite: false,
     };
     let css = api
         .export_web(req(vec![1, 2, 3], None))

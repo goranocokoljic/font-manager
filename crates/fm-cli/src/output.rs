@@ -9,6 +9,7 @@ use std::path::Path;
 use comfy_table::{Table, presets};
 use fm_api::activation::{ActivationOutcome, ConflictWith, OutcomeStatus};
 use fm_api::common::Health;
+use fm_api::export::{ExportWebResponse, SpecimenResponse};
 use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
 use fm_api::organization::{ImportSetResponse, SetExport};
 use fm_api::search::{CoverageReport, FamilyHit, SimilarFace};
@@ -16,7 +17,7 @@ use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
 use crate::Exit;
-use crate::commands::Scanned;
+use crate::commands::{Previewed, Scanned};
 
 /// Why a command failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -506,6 +507,30 @@ pub fn imported(
         writeln!(out, "{table}")?;
     }
     Ok(())
+}
+
+/// `fm export`: the files written, one per line.
+pub fn exported(exported: &ExportWebResponse, out: &mut dyn Write) -> io::Result<()> {
+    for file in &exported.files {
+        writeln!(out, "{file}")?;
+    }
+    Ok(())
+}
+
+/// `fm specimen`: where the specimen went.
+pub fn specimen(written: &SpecimenResponse, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(out, "Wrote the specimen to {}", written.path)
+}
+
+/// `fm preview`: the PNG bytes for `--out -`, else where the PNG went.
+pub fn previewed(p: &Previewed, out: &mut dyn Write) -> io::Result<()> {
+    match &p.path {
+        None => {
+            out.write_all(&p.png)?;
+            out.flush()
+        }
+        Some(path) => writeln!(out, "Wrote a {}×{} preview to {path}", p.width, p.height),
+    }
 }
 
 fn yes(b: bool) -> &'static str {

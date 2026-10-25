@@ -12,7 +12,8 @@
 //! - **WOFF 1**: each table is compressed with zlib, or stored as it is when
 //!   that is not smaller.
 //! - **Export**: all or nothing. Every target name is checked before anything
-//!   is written; an existing file is never replaced. Each file is written to
+//!   is written; an existing file is replaced only when the request says so
+//!   ([`Existing::Replace`], `fm export --force`). Each file is written to
 //!   a temporary name in the output folder and renamed only when every file
 //!   of the request was written, so a failed export leaves no files behind.
 //! - **CSS** (E20.3): [`export_with_css`] also writes `fonts.css` beside the
@@ -38,6 +39,16 @@ use crate::web_css::{self, FaceStyle};
 
 /// The name of the stylesheet [`export_with_css`] writes.
 pub const CSS_FILE: &str = "fonts.css";
+
+/// What an export does with a target file that already exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Existing {
+    /// Refuse the whole export with `InvalidRequest` naming the file.
+    #[default]
+    Refuse,
+    /// Replace it: the user asked to (`ExportWebRequest::overwrite`).
+    Replace,
+}
 
 /// A face to export.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,7 +123,7 @@ pub fn export(
     keep: Option<&Keep>,
     out_dir: &Path,
 ) -> FmResult<Vec<PathBuf>> {
-    Ok(write(faces, None, formats, keep, out_dir)?.files)
+    Ok(write(faces, None, formats, keep, out_dir, Existing::Refuse)?.files)
 }
 
 /// What [`export_with_css`] wrote.
@@ -138,7 +149,14 @@ pub fn export_with_css(
     if styles.len() != faces.len() {
         return Err(FmError::internal("one CSS style per exported face"));
     }
-    let out = write(faces, Some(styles), formats, keep, out_dir)?;
+    let out = write(
+        faces,
+        Some(styles),
+        formats,
+        keep,
+        out_dir,
+        Existing::Refuse,
+    )?;
     Ok(Exported {
         files: out.files,
         css: out.css.unwrap_or_default(),
@@ -146,17 +164,25 @@ pub fn export_with_css(
 }
 
 /// The files [`write`] wrote, and the stylesheet when it wrote one.
-struct Output {
-    files: Vec<PathBuf>,
-    css: Option<String>,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Output {
+    /// The absolute paths written, as [`export_with_css`] lists them.
+    pub files: Vec<PathBuf>,
+    /// The text of `fonts.css`, when `styles` was given.
+    pub css: Option<String>,
 }
 
-fn write(
+/// As [`export`], or [`export_with_css`] when `styles` is given, with
+/// `existing` saying what to do with a target that exists. A replaced file
+/// is replaced in one rename, and is left as written when a later file of
+/// the export fails: removing it would lose the user's file and the new one.
+pub fn write(
     faces: &[ExportFace],
     styles: Option<&[FaceStyle]>,
     formats: &[WebFormat],
     keep: Option<&Keep>,
     out_dir: &Path,
+    existing: Existing,
 ) -> FmResult<Output> {
     let out_dir = std::path::absolute(out_dir)
         .map_err(|e| FmError::io("The output folder could not be opened.", out_dir, &e))?;
@@ -177,12 +203,13 @@ fn write(
         }
     }
 
-    let targets = plan(faces, formats, &out_dir)?;
+    let targets = plan(faces, formats, &out_dir, existing)?;
     let css_target = match styles {
-        Some(_) => Some(free_target(&out_dir, CSS_FILE)?),
+        Some(_) => Some(free_target(&out_dir, CSS_FILE, existing)?),
         None => None,
     };
     let mut written = Written::default();
+    written.existing = existing;
     let mut next = targets.iter();
     let mut blocks = Vec::new();
     for (i, face) in faces.iter().enumerate() {
@@ -236,10 +263,11 @@ pub fn mapped_code_points(sfnt: &Sfnt) -> FmResult<Vec<u32>> {
     Ok(font.charmap().mappings().map(|(cp, _)| cp).collect())
 }
 
-/// `out_dir/name`, or `InvalidRequest` naming the file when it exists.
-fn free_target(out_dir: &Path, name: &str) -> FmResult<PathBuf> {
+/// `out_dir/name`, or `InvalidRequest` naming the file when it exists and
+/// `existing` refuses it.
+fn free_target(out_dir: &Path, name: &str, existing: Existing) -> FmResult<PathBuf> {
     let target = out_dir.join(name);
-    if fs::symlink_metadata(&target).is_ok() {
+    if existing == Existing::Refuse && fs::symlink_metadata(&target).is_ok() {
         return Err(FmError::invalid(format!(
             "{name} already exists in the output folder. Choose another folder, or move the file first."
         ))
@@ -249,9 +277,14 @@ fn free_target(out_dir: &Path, name: &str) -> FmResult<PathBuf> {
 }
 
 /// The target of every (face, format) in request order, after checking that
-/// none exists and no two share a name. File systems that ignore case would
+/// none exists (unless `existing` replaces it) and no two share a name. File systems that ignore case would
 /// put `A.woff2` and `a.woff2` in one file, so names are compared without it.
-fn plan(faces: &[ExportFace], formats: &[WebFormat], out_dir: &Path) -> FmResult<Vec<PathBuf>> {
+fn plan(
+    faces: &[ExportFace],
+    formats: &[WebFormat],
+    out_dir: &Path,
+    existing: Existing,
+) -> FmResult<Vec<PathBuf>> {
     let mut seen = HashSet::new();
     let mut targets = Vec::with_capacity(faces.len() * formats.len());
     for face in faces {
@@ -262,7 +295,7 @@ fn plan(faces: &[ExportFace], formats: &[WebFormat], out_dir: &Path) -> FmResult
                     "Two of the fonts would both be written as {name}. Export them separately."
                 )));
             }
-            targets.push(free_target(out_dir, &name)?);
+            targets.push(free_target(out_dir, &name, existing)?);
         }
     }
     Ok(targets)
@@ -281,12 +314,15 @@ fn about(face: &ExportFace, e: FmError) -> FmError {
 /// The files of one export: temporary ones until [`Written::commit`], and
 /// the targets renamed so far. Dropped before the commit ends, it removes
 /// every file it created, so a failed export leaves nothing behind. These are
-/// files this export made, never one of the user's.
+/// files this export made, never one of the user's: a target that replaced
+/// a file ([`Existing::Replace`]) is listed in `files` but not in `done`.
 #[derive(Debug, Default)]
 struct Written {
     temps: Vec<(PathBuf, PathBuf)>,
+    files: Vec<PathBuf>,
     done: Vec<PathBuf>,
     committed: bool,
+    existing: Existing,
 }
 
 impl Written {
@@ -309,12 +345,14 @@ impl Written {
     }
 
     /// Renames every temporary file to its target. A target that appeared
-    /// since the plan is not replaced: the export fails and is undone.
+    /// since the plan is not replaced unless the export replaces files: the
+    /// export fails and is undone.
     fn commit(mut self) -> FmResult<Vec<PathBuf>> {
         let temps = std::mem::take(&mut self.temps);
         let mut left = temps.iter();
         for (temp, target) in left.by_ref() {
-            let moved = if fs::symlink_metadata(target).is_ok() {
+            let exists = fs::symlink_metadata(target).is_ok();
+            let moved = if exists && self.existing == Existing::Refuse {
                 Err(FmError::invalid(format!(
                     "{} already exists in the output folder. Choose another folder, or move the file first.",
                     target.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
@@ -325,7 +363,12 @@ impl Written {
                     .map_err(|e| FmError::io("The web font could not be written.", target, &e))
             };
             match moved {
-                Ok(()) => self.done.push(target.clone()),
+                Ok(()) => {
+                    self.files.push(target.clone());
+                    if !exists {
+                        self.done.push(target.clone());
+                    }
+                }
                 Err(e) => {
                     let _ = fs::remove_file(temp);
                     self.temps = left.cloned().collect();
@@ -334,7 +377,7 @@ impl Written {
             }
         }
         self.committed = true;
-        Ok(std::mem::take(&mut self.done))
+        Ok(std::mem::take(&mut self.files))
     }
 }
 

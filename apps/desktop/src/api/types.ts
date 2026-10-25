@@ -888,6 +888,12 @@ export type ExportWebRequest = {
 	outDir: string,
 	/**  Also write `fonts.css`. */
 	css?: boolean,
+	/**
+	 *  Replace files of the same name in `out_dir` (`fm export --force`).
+	 *  Without it, a file that exists refuses the export with
+	 *  `InvalidRequest` and nothing is written.
+	 */
+	overwrite?: boolean,
 };
 
 /**  What the export wrote. */
