@@ -87,6 +87,29 @@ jobs:
           # Linux: the autostart test must run desktop-file-validate on the entry (E17.3).
           FM_REQUIRE_DESKTOP_FILE_VALIDATE: ${{ runner.os == 'Linux' && '1' || '' }}
 
+      - name: Shell completions parse (Linux bash and fish)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run -q -p fm-cli --bin fm -- completions bash > "$RUNNER_TEMP/fm.bash"
+          bash -n "$RUNNER_TEMP/fm.bash"
+          if command -v fish > /dev/null; then
+            cargo run -q -p fm-cli --bin fm -- completions fish > "$RUNNER_TEMP/fm.fish"
+            fish --no-execute "$RUNNER_TEMP/fm.fish"
+          else
+            echo "fish is not installed; the fish check is skipped."
+          fi
+
+      - name: Shell completions parse (Windows PowerShell)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $script = cargo run -q -p fm-cli --bin fm -- completions powershell | Out-String
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not $script.Trim()) { throw 'fm completions powershell printed nothing.' }
+          $null = [scriptblock]::Create($script)
+
       - name: Frontend and harness tests
         run: pnpm test
 

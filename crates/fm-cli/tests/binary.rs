@@ -828,3 +828,72 @@ fn doctor_exits_0_on_a_clean_library_and_an_empty_one() {
         assert!(printed.contains(line), "{line}: {printed}");
     }
 }
+
+#[test]
+fn completions_and_man_run_without_the_app_or_the_index() {
+    let home = Home::new("generate");
+    let out = home.fm(&["completions", "bash"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    assert!(text(&out.stdout).contains("_fm()"), "{}", text(&out.stdout));
+
+    let json = home.fm(&["completions", "zsh", "--json"]);
+    assert_eq!(code(&json), 0, "{}", text(&json.stderr));
+    let value: Value = serde_json::from_slice(&json.stdout).expect("json");
+    assert_eq!(value["shell"], "zsh");
+    assert!(
+        value["script"]
+            .as_str()
+            .expect("script")
+            .contains("#compdef fm")
+    );
+
+    let pages = home.0.join("pages");
+    let man = home.fm(&["man", "--out", &pages.display().to_string()]);
+    assert_eq!(code(&man), 0, "{}", text(&man.stderr));
+    assert!(pages.join("fm.1").is_file());
+    assert!(pages.join("fm-sets-export.1").is_file());
+    assert!(
+        text(&man.stdout).lines().count() > 10,
+        "{}",
+        text(&man.stdout)
+    );
+
+    // Again without --force: refused with the usage exit code.
+    let again = home.fm(&["man", "--out", &pages.display().to_string()]);
+    assert_eq!(code(&again), 2, "{}", text(&again.stderr));
+    assert!(
+        text(&again.stderr).contains("--force"),
+        "{}",
+        text(&again.stderr)
+    );
+
+    // Neither command opened the index: the home holds only the pages.
+    let entries: Vec<_> = std::fs::read_dir(&home.0)
+        .expect("home")
+        .map(|e| e.expect("entry").file_name())
+        .collect();
+    assert_eq!(entries, vec![std::ffi::OsString::from("pages")]);
+}
+
+#[test]
+fn completions_help_has_install_notes_for_every_shell() {
+    let home = Home::new("completions-help");
+    let out = home.fm(&["completions", "--help"]);
+    assert_eq!(code(&out), 0);
+    let help = text(&out.stdout);
+    for line in [
+        "fm completions bash >",
+        "fm completions zsh >",
+        "fm completions fish >",
+        "fm completions powershell | Out-String | Invoke-Expression",
+    ] {
+        assert!(help.contains(line), "{line:?} in {help}");
+    }
+}
+
+#[test]
+fn completions_refuses_an_unknown_shell() {
+    let home = Home::new("completions-bad");
+    let out = home.fm(&["completions", "tcsh"]);
+    assert_eq!(code(&out), 2, "{}", text(&out.stderr));
+}

@@ -5,6 +5,7 @@
 
 mod commands;
 mod exit;
+mod generate;
 pub mod link;
 mod output;
 
@@ -19,6 +20,10 @@ use fm_api::{Api, ApiError, ErrorCode};
 
 pub use commands::{Doctor, PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
 pub use exit::{EXIT_CODES, Exit};
+pub use generate::{
+    COMPLETIONS_INSTALL, Completions, ManPage, ManPages, Shell, completions as completions_script,
+    man_pages, write_man_pages,
+};
 pub use output::{Output, VersionReport};
 
 /// Font Manager on the command line.
@@ -198,6 +203,24 @@ pub enum Command {
         #[arg(long)]
         force: bool,
     },
+    /// Print a shell completion script, made from the same command tree as
+    /// this help. Runs without the app or the index.
+    #[command(after_help = COMPLETIONS_INSTALL)]
+    Completions {
+        /// The shell.
+        shell: Shell,
+    },
+    /// Write the man pages to a folder: fm.1 and one per subcommand
+    /// (fm-scan.1, fm-sets-export.1); prints the files written. Runs
+    /// without the app or the index.
+    Man {
+        /// The folder to write to; made when it is not there.
+        #[arg(long, value_name = "DIR")]
+        out: PathBuf,
+        /// Replace pages of the same name in the folder.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// What the target of `fm activate` and `fm deactivate` names: a font
@@ -252,6 +275,25 @@ pub enum Link {
     Direct,
     /// Through the running app's endpoint.
     Endpoint,
+}
+
+/// Runs `cli` when its command only describes `fm` (`completions`,
+/// `man`) and needs neither the app nor the index; `None` for the others.
+pub fn run_offline(cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -> Option<Exit> {
+    let output = Output::new(cli.json, out, err);
+    match &cli.command {
+        Command::Completions { shell } => Some(completions(output, *shell)),
+        Command::Man { out, force } => Some(man(output, out, *force)),
+        _ => None,
+    }
+}
+
+fn completions(output: Output, shell: Shell) -> Exit {
+    output.print(generate::completions(shell), generate::script)
+}
+
+fn man(output: Output, dir: &std::path::Path, force: bool) -> Exit {
+    output.print(generate::write_man_pages(dir, force), generate::written)
 }
 
 /// Runs `cli` on `api`, reached over `link`, printing to `out` and errors
@@ -420,6 +462,8 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
                 output::previewed,
             )
         }
+        Command::Completions { shell } => completions(output, *shell),
+        Command::Man { out, force } => man(output, out, *force),
     }
 }
 
