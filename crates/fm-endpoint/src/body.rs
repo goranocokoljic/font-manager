@@ -1,11 +1,14 @@
-//! The two body helpers the endpoint needs: a whole-buffer response body and
-//! a request body read up to a limit (no extra crate for either).
+//! The body helpers the endpoint needs: a whole-buffer response body, the
+//! [`Reply`] that is it or an event stream, and
+//! a request body read up to a limit (no extra crate for any).
 
 use std::convert::Infallible;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use hyper::body::{Body, Bytes, Frame, Incoming, SizeHint};
+
+use crate::events::EventBody;
 
 /// A response body sent in one frame.
 #[derive(Debug)]
@@ -34,6 +37,44 @@ impl Body for Full {
 
     fn size_hint(&self) -> SizeHint {
         SizeHint::with_exact(self.0.as_ref().map_or(0, |b| b.len() as u64))
+    }
+}
+
+/// Every response body: a whole answer, or an event stream.
+#[derive(Debug)]
+pub enum Reply {
+    /// A service answer or a refusal.
+    Full(Full),
+    /// `GET /v1/events`.
+    Events(EventBody),
+}
+
+impl Body for Reply {
+    type Data = Bytes;
+    type Error = Infallible;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Bytes>, Infallible>>> {
+        match self.get_mut() {
+            Self::Full(full) => Pin::new(full).poll_frame(cx),
+            Self::Events(events) => Pin::new(events).poll_frame(cx),
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        match self {
+            Self::Full(full) => full.is_end_stream(),
+            Self::Events(events) => events.is_end_stream(),
+        }
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        match self {
+            Self::Full(full) => full.size_hint(),
+            Self::Events(events) => events.size_hint(),
+        }
     }
 }
 

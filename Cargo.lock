@@ -1014,6 +1014,8 @@ name = "fm-endpoint"
 version = "0.1.0"
 dependencies = [
  "fm-api",
+ "fm-core",
+ "fm-platform",
  "hyper",
  "hyper-util",
  "serde",

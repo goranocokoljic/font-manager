@@ -13,16 +13,23 @@
 //! refused with 403 before the token is read: a web page in a browser can
 //! neither reach the endpoint by DNS rebinding nor send it a request.
 //!
-//! The endpoint knows nothing about fonts and keeps no state but the socket:
-//! the token and the discovery file belong to `fm-core`.
+//! `GET /v1/events` streams every [`fm_api::Event`] as Server-Sent Events,
+//! one [`fm_api::EventSource::subscribe`] per connection ([`events`]).
+//!
+//! The endpoint knows nothing about fonts and keeps no state but the socket
+//! and its open streams: the token and the discovery file belong to `fm-core`.
 
 mod body;
+pub mod events;
 pub mod routes;
 
 use std::convert::Infallible;
+use std::future::Future as _;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr, TcpListener as StdListener};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::task::Poll;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -31,9 +38,10 @@ use hyper::body::Incoming;
 use hyper::header::{self, HeaderValue};
 use hyper::{Method, Request, Response, StatusCode};
 use hyper_util::rt::TokioIo;
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 
-use crate::body::{Full, read_limited};
+use crate::body::{Full, Reply, read_limited};
+use crate::events::{EVENTS_ROUTE, StreamOptions};
 
 /// The largest request body, in bytes.
 pub const MAX_BODY_BYTES: usize = 32 * 1024 * 1024;
@@ -45,6 +53,7 @@ pub const ROUTE_PREFIX: &str = "/v1/";
 #[derive(Debug)]
 pub struct Endpoint {
     addr: SocketAddr,
+    streams: Arc<AtomicUsize>,
     stop: Option<oneshot::Sender<()>>,
     thread: Option<JoinHandle<()>>,
 }
@@ -53,6 +62,11 @@ impl Endpoint {
     /// Binds `127.0.0.1` on a port the OS picks and serves `api` on a
     /// thread of its own. Returns once the socket is bound.
     pub fn start(api: Arc<dyn Api>) -> io::Result<Self> {
+        Self::start_with(api, StreamOptions::default())
+    }
+
+    /// [`Endpoint::start`] with other event-stream limits (tests).
+    pub fn start_with(api: Arc<dyn Api>, options: StreamOptions) -> io::Result<Self> {
         let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
@@ -61,12 +75,19 @@ impl Endpoint {
             .enable_time()
             .build()?;
         let (stop, stopped) = oneshot::channel();
+        let streams = Arc::new(AtomicUsize::new(0));
+        let server = Server {
+            api,
+            port: addr.port(),
+            options,
+            streams: Arc::clone(&streams),
+        };
         let thread = std::thread::Builder::new()
             .name("fm-endpoint".into())
             .spawn(move || {
                 runtime.block_on(async move {
                     let accept = match tokio::net::TcpListener::from_std(listener) {
-                        Ok(listener) => tokio::spawn(accept_loop(listener, api, addr.port())),
+                        Ok(listener) => tokio::spawn(accept_loop(listener, Arc::new(server))),
                         Err(e) => {
                             tracing::error!(error = %e, "the local API socket could not be used");
                             return;
@@ -81,6 +102,7 @@ impl Endpoint {
         tracing::info!(%addr, "local API listening");
         Ok(Self {
             addr,
+            streams,
             stop: Some(stop),
             thread: Some(thread),
         })
@@ -89,6 +111,12 @@ impl Endpoint {
     /// Where it listens: always `127.0.0.1:<port>`.
     pub fn addr(&self) -> SocketAddr {
         self.addr
+    }
+
+    /// How many event streams are open: each holds one subscription and one
+    /// thread, and stops counting once both are gone.
+    pub fn event_streams(&self) -> usize {
+        self.streams.load(Ordering::SeqCst)
     }
 
     /// Closes the socket and waits for the serving thread to end.
@@ -114,7 +142,15 @@ impl Drop for Endpoint {
     }
 }
 
-async fn accept_loop(listener: tokio::net::TcpListener, api: Arc<dyn Api>, port: u16) {
+/// What every connection shares.
+struct Server {
+    api: Arc<dyn Api>,
+    port: u16,
+    options: StreamOptions,
+    streams: Arc<AtomicUsize>,
+}
+
+async fn accept_loop(listener: tokio::net::TcpListener, server: Arc<Server>) {
     loop {
         let stream = match listener.accept().await {
             Ok((stream, _)) => stream,
@@ -125,40 +161,115 @@ async fn accept_loop(listener: tokio::net::TcpListener, api: Arc<dyn Api>, port:
                 continue;
             }
         };
-        let api = Arc::clone(&api);
+        let server = Arc::clone(&server);
         tokio::spawn(async move {
+            // An event stream whose client fell too far behind closes the
+            // whole connection: hyper polls a body only when the socket
+            // takes bytes, so the stalled stream itself would never end.
+            let close = Arc::new(Notify::new());
+            let closed = Arc::clone(&close);
             let service = hyper::service::service_fn(move |req| {
-                let api = Arc::clone(&api);
-                async move { Ok::<_, Infallible>(handle(api, port, req).await) }
+                let server = Arc::clone(&server);
+                let close = Arc::clone(&close);
+                async move { Ok::<_, Infallible>(handle(&server, close, req).await) }
             });
-            if let Err(e) = hyper::server::conn::http1::Builder::new()
-                .serve_connection(TokioIo::new(stream), service)
-                .await
-            {
-                tracing::debug!(error = %e, "local API connection ended");
+            let connection = hyper::server::conn::http1::Builder::new()
+                .serve_connection(TokioIo::new(stream), service);
+            let mut connection = std::pin::pin!(connection);
+            let mut closed = std::pin::pin!(closed.notified());
+            // Whichever ends first; dropping the connection closes the socket.
+            let ended = std::future::poll_fn(|cx| {
+                if closed.as_mut().poll(cx).is_ready() {
+                    return Poll::Ready(None);
+                }
+                connection.as_mut().poll(cx).map(Some)
+            })
+            .await;
+            match ended {
+                Some(Err(e)) => tracing::debug!(error = %e, "local API connection ended"),
+                Some(Ok(())) => {}
+                None => {
+                    tracing::debug!("local API connection closed: its client stopped reading");
+                }
             }
         });
     }
 }
 
 /// One request, in this order: `Host` and `Origin` (403), the token (401),
-/// the method and route (405, 404), the body (413, 400), then the service.
-async fn handle(api: Arc<dyn Api>, port: u16, req: Request<Incoming>) -> Response<Full> {
-    if let Err(refused) = check_origin(&req, port) {
-        return refused;
+/// then the event stream or a service call.
+async fn handle(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> Response<Reply> {
+    if let Err(refused) = authorize(server, &req).await {
+        return refused.map(Reply::Full);
     }
-    let presented = bearer(&req).map(str::to_owned);
-    let info_api = Arc::clone(&api);
+    if req.uri().path() == EVENTS_ROUTE {
+        return stream_events(server, close, &req).await;
+    }
+    call(Arc::clone(&server.api), req).await.map(Reply::Full)
+}
+
+/// `Host` and `Origin` (403), then the token (401).
+#[allow(clippy::result_large_err)]
+async fn authorize(server: &Server, req: &Request<Incoming>) -> Result<(), Response<Full>> {
+    check_origin(req, server.port)?;
+    let presented = bearer(req).map(str::to_owned);
+    let info_api = Arc::clone(&server.api);
     let current = match blocking(move || info_api.endpoint_info()).await {
         Ok(info) => info.token,
-        Err(e) => return error(&e),
+        Err(e) => return Err(error(&e)),
     };
     if !presented.is_some_and(|t| same_token(t.as_bytes(), current.as_bytes())) {
-        return refuse(
+        return Err(refuse(
             StatusCode::UNAUTHORIZED,
             "A valid token is required (Authorization: Bearer <token>).",
-        );
+        ));
     }
+    Ok(())
+}
+
+/// `GET /v1/events` (405 for another method): a new subscription, streamed
+/// as `text/event-stream` until the client goes or falls behind.
+async fn stream_events(
+    server: &Server,
+    close: Arc<Notify>,
+    req: &Request<Incoming>,
+) -> Response<Reply> {
+    if req.method() != Method::GET {
+        let mut response = refuse(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "The event stream takes GET.",
+        );
+        response
+            .headers_mut()
+            .insert(header::ALLOW, HeaderValue::from_static("GET"));
+        return response.map(Reply::Full);
+    }
+    let api = Arc::clone(&server.api);
+    let opened = blocking(move || Ok(api.subscribe()))
+        .await
+        .and_then(|events| {
+            events::open(events, server.options, close, Arc::clone(&server.streams)).map_err(|e| {
+                ApiError::new(ErrorCode::Internal, "The event stream could not start.")
+                    .with_detail(e.to_string())
+            })
+        });
+    let body = match opened {
+        Ok(body) => body,
+        Err(e) => return error(&e).map(Reply::Full),
+    };
+    let mut response = Response::new(Reply::Events(body));
+    let headers = response.headers_mut();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("text/event-stream"),
+    );
+    headers.insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    response
+}
+
+/// A service call: the method and route (405, 404), the body (413, 400),
+/// then the service.
+async fn call(api: Arc<dyn Api>, req: Request<Incoming>) -> Response<Full> {
     let Some(method) = req
         .uri()
         .path()
