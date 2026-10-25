@@ -19,6 +19,7 @@ pub mod endpoint;
 pub mod error;
 pub mod features;
 mod filter;
+pub mod fingerprint;
 pub mod font_file;
 pub mod framework_snippet;
 pub mod glyph_features;
