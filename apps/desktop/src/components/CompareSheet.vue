@@ -14,6 +14,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import type { ComparisonId, FaceId, FaceSummary } from '../api/types';
 import { locale, t } from '../i18n';
+import { sheetReturnTarget } from '../keyboard/returnFocus';
 import { fontNameSample, sampleText } from '../preview/sampleText';
 import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
@@ -97,13 +98,9 @@ const fontOf = (face: FaceSummary) => {
 };
 
 onMounted(async () => {
-  const was = document.activeElement;
   // Opened from the command palette, the focus is in the palette (or already nowhere,
-  // the palette gone): the list column takes it back instead.
-  returnFocus =
-    was instanceof HTMLElement && was !== document.body && !was.closest('[role="dialog"]')
-      ? was
-      : document.querySelector('main');
+  // the palette gone): it goes back to where the palette was opened from.
+  returnFocus = sheetReturnTarget();
   window.addEventListener('keydown', onOutsideKey, true);
   document.addEventListener('focusin', onFocusIn);
   void compare.loadSaved();

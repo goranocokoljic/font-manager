@@ -30,10 +30,10 @@ test('clicking a block jumps the glyph map to that block', async ({ page }) => {
   const { panel, coverage } = await openCoverage(page, 1);
   const blocks = coverage.getByRole('list', { name: 'Unicode blocks' }).getByRole('button');
   await expect(blocks).toHaveText([
-    /Basic Latin\s*95\/128/,
-    /Latin-1 Supplement\s*96\/128/,
-    /Latin Extended-A\s*128\/128/,
-    /Cyrillic\s*60\/256/,
+    /Basic Latin\s*95 of 128/,
+    /Latin-1 Supplement\s*96 of 128/,
+    /Latin Extended-A\s*128 of 128/,
+    /Cyrillic\s*60 of 256/,
   ]);
   await coverage.getByRole('button', { name: /^Cyrillic: 60 of 256 characters/ }).click();
   await expect(panel.getByRole('rowheader')).toHaveCount(1);
@@ -49,8 +49,8 @@ test('every coverage row is keyboard-reachable with a label; a partial language 
   const languages = coverage.getByRole('list', { name: 'Languages' }).getByRole('button');
   await expect(languages).toHaveText([
     /English\s*complete/,
-    /Serbian \(Latin\)\s*22\/27/,
-    /Polish\s*24\/32/,
+    /Serbian \(Latin\)\s*22 of 27/,
+    /Polish\s*24 of 32/,
   ]);
 
   // Tab from the first row through every row: each gets focus and has a label.

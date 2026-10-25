@@ -8,7 +8,7 @@
 // numbers and its `locl` support.
 import { computed, ref } from 'vue';
 import type { BlockCoverage, FaceLanguageCoverage } from '../api/types';
-import { errorMessage, formatNumber, t } from '../i18n';
+import { errorMessage, t } from '../i18n';
 import { useCoverageStore } from '../stores/coverage';
 
 const emit = defineEmits<{
@@ -22,7 +22,9 @@ const open = ref(new Set<string>());
 const blocks = computed(() => store.coverage?.blocks ?? []);
 const languages = computed(() => store.coverage?.languages ?? []);
 
-const fmt = (n: number) => formatNumber(n);
+// The visible counts read as words ("95 of 128"), so each row's label starts with
+// what the row shows (WCAG 2.5.3, label in name).
+const ofCount = (covered: number, count: number) => t('coverage.ofCount', { covered, count });
 const isComplete = (l: FaceLanguageCoverage) => l.covered === l.total;
 
 function blockLabel(b: BlockCoverage): string {
@@ -72,8 +74,9 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
             :title="t('coverage.showInMap', { name: b.name })"
             @click="emit('block', b.name)"
           >
-            <span class="name">{{ b.name }}</span>
-            <span class="count">{{ fmt(b.covered) }}/{{ fmt(b.assigned) }}</span>
+            <span class="name">{{ b.name }}</span
+            >{{ ' ' }}
+            <span class="count">{{ ofCount(b.covered, b.assigned) }}</span>
           </button>
         </li>
       </ul>
@@ -89,13 +92,17 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
             :aria-controls="panelId(l)"
             @click="toggle(l)"
           >
-            <span class="name">{{ l.name }}</span>
-            <span v-if="l.hasLocl" class="badge" :title="t('coverage.hasLocl')">{{
-              t('coverage.locl')
-            }}</span>
+            <span class="name">{{ l.name }}</span
+            >{{ ' ' }}
             <span class="count">{{
-              isComplete(l) ? t('coverage.complete') : `${fmt(l.covered)}/${fmt(l.total)}`
+              isComplete(l) ? t('coverage.complete') : ofCount(l.covered, l.total)
             }}</span>
+            <template v-if="l.hasLocl"
+              >{{ ' '
+              }}<span class="badge" :title="t('coverage.hasLocl')">{{
+                t('coverage.locl')
+              }}</span></template
+            >
           </button>
           <div v-if="open.has(l.code)" :id="panelId(l)" class="panel">
             <p v-if="isComplete(l)" class="muted">

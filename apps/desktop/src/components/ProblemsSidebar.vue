@@ -52,10 +52,13 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
   padding: 0;
   list-style: none;
 }
+/* At least 24 px tall whatever the OS font's line height (WCAG 2.5.8). */
 .link {
   display: flex;
   align-items: center;
   gap: 6px;
+  box-sizing: border-box;
+  min-height: 24px;
   padding: 4px 8px;
   border-radius: 6px;
   color: inherit;
