@@ -8,8 +8,8 @@ use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
 use fm_api::library::{
-    FamilyActivation, FamilySort, GlyphRequest, GlyphsRequest, LicenseType, OpenLicense,
-    ProblemKind, TrashMoveStatus,
+    FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest, LicenseType,
+    OpenLicense, ProblemKind, TrashMoveStatus,
 };
 use fm_api::search::{Filters, Supports};
 use fm_platform::{MockActivator, MockTrash};
@@ -4192,4 +4192,90 @@ fn the_local_api_needs_a_data_folder_and_then_publishes_and_regenerates() {
     assert_eq!(api.endpoint_info().expect("info"), next);
     api.unpublish_endpoint().expect("unpublish");
     assert!(!file.exists());
+}
+
+// --- font arguments (E26.1) --------------------------------------------
+
+fn resolved(api: &CoreApi, font: &str) -> ApiResult<(FontMatchKind, Vec<String>)> {
+    api.resolve_font(ResolveFontRequest { font: font.into() })
+        .map(|m| {
+            let names = m.faces.iter().map(|f| f.postscript_name.clone()).collect();
+            (m.matched_by, names)
+        })
+}
+
+#[test]
+fn a_font_argument_names_faces_by_id_postscript_full_or_family_name() {
+    let (lib, source, _) = Lib::scanned("api-resolve-font");
+    let api = &lib.api;
+    let barlow = api
+        .resolve_font(ResolveFontRequest {
+            font: "barlow-bolditalic".into(),
+        })
+        .expect("by PostScript name");
+    assert_eq!(barlow.matched_by, FontMatchKind::PostscriptName);
+    let face = barlow.faces[0].face;
+    assert_eq!(
+        barlow.faces[0].full_name.as_deref(),
+        Some("Barlow Bold Italic")
+    );
+    let by_id = api
+        .resolve_font(ResolveFontRequest {
+            font: face.0.to_string(),
+        })
+        .expect("by id");
+    assert_eq!(
+        (by_id.matched_by, by_id.faces[0].face),
+        (FontMatchKind::Id, face)
+    );
+    // Archivo SemiBold's name ID 1 is "Archivo SemiBold": its full name
+    // matches before its family does.
+    assert_eq!(
+        resolved(api, "Archivo SemiBold"),
+        Ok((FontMatchKind::FullName, vec!["Archivo-SemiBold".to_owned()]))
+    );
+    assert_eq!(
+        resolved(api, "asap sharp regular"),
+        Ok((
+            FontMatchKind::FullName,
+            vec!["AsapSharp-Regular".to_owned()]
+        ))
+    );
+    assert_eq!(
+        resolved(api, "Bebas Neue"),
+        Ok((
+            FontMatchKind::FamilyStyle,
+            vec!["BebasNeue-Regular".to_owned()]
+        ))
+    );
+    // A family of two faces in a TTC is ambiguous; the truncated copy has
+    // no names and is not "Agdasima".
+    let both = api
+        .resolve_font(ResolveFontRequest {
+            font: "Agdasima".into(),
+        })
+        .expect("two faces");
+    assert_eq!(both.faces.len(), 2);
+    let err = both.single("Agdasima").expect_err("ambiguous");
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    let detail = err.detail.unwrap_or_default();
+    assert!(detail.contains("Agdasima-Bold	Agdasima Bold"), "{detail}");
+    assert!(
+        detail.contains("Agdasima-Regular	Agdasima Regular"),
+        "{detail}"
+    );
+    assert_eq!(
+        resolved(api, "Inter").expect_err("unknown").code,
+        ErrorCode::NotFound
+    );
+    // A paused source's faces are not in the library the user sees.
+    api.set_source_paused(SetSourcePausedRequest {
+        source: source.id,
+        paused: true,
+    })
+    .expect("pause");
+    assert_eq!(
+        resolved(api, "Bebas Neue").expect_err("paused").code,
+        ErrorCode::NotFound
+    );
 }

@@ -58,6 +58,7 @@ service!(LibraryService {
     undo_resolution(resolution: ResolutionId) -> Resolution;
     list_glyphs(req: GlyphsRequest) -> GlyphPage;
     get_glyph(req: GlyphRequest) -> GlyphDetail;
+    resolve_font(req: ResolveFontRequest) -> FontMatches;
 });
 
 service!(SearchService {

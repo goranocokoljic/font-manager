@@ -30,6 +30,7 @@ mod faces;
 mod family_license;
 mod family_notes;
 mod files;
+mod font_names;
 mod languages;
 mod license_inventory;
 mod problems;

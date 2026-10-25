@@ -67,6 +67,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; undo_resolution, json!(1));
     same!(seen, d, c; list_glyphs, json!({ "face": 1 }));
     same!(seen, d, c; get_glyph, json!({ "face": 1, "codePoint": 65 }));
+    same!(seen, d, c; resolve_font, json!({ "font": "1" }));
     // search
     same!(seen, d, c; search, json!({ "query": "sans" }));
     same!(seen, d, c; check_coverage, json!({ "face": 1, "target": { "kind": "text", "text": "Ab" } }));
