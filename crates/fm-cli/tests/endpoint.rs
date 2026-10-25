@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::net::{SocketAddr, TcpListener};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -64,9 +64,15 @@ impl Home {
     }
 
     fn fm(&self, args: &[&str]) -> Output {
+        self.fm_in(&self.0, args)
+    }
+
+    /// `fm <args>` with `cwd` as its working folder.
+    fn fm_in(&self, cwd: &Path, args: &[&str]) -> Output {
         Command::new(env!("CARGO_BIN_EXE_fm"))
             .args(args)
             .env("FM_HOME", &self.0)
+            .current_dir(cwd)
             .output()
             .expect("fm runs")
     }
@@ -349,4 +355,61 @@ fn a_wrong_token_exits_4_and_points_to_settings_local_api() {
     );
     // A wrong token is not a stale file: no fallback to the index.
     assert!(!home.index_file().exists());
+}
+
+/// `path` names `name` in the folder `dir` (both canonical, so a temp
+/// folder behind a symlink, as on macOS, compares equal).
+fn is_in(path: &str, dir: &Path, name: &str) -> bool {
+    let path = Path::new(path);
+    path.is_absolute()
+        && path.file_name().is_some_and(|n| n == name)
+        && path
+            .parent()
+            .and_then(|p| std::fs::canonicalize(p).ok())
+            .is_some_and(|p| p == std::fs::canonicalize(dir).expect("dir"))
+}
+
+#[test]
+fn relative_out_paths_are_fm_s_own_not_the_app_s_in_endpoint_mode() {
+    // The app writes the file in endpoint mode: the path it gets must be
+    // the one the user meant, in fm's working folder.
+    let home = Home::new("relative-out");
+    let _app = App::running(&home);
+    let work = home.0.join("work");
+    std::fs::create_dir_all(work.join("web")).expect("work folder");
+
+    let out = home.fm_in(
+        &work,
+        &["--json", "specimen", "Inter", "--out", "inter.html"],
+    );
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let path = json(&out)["path"].as_str().expect("path").to_owned();
+    assert!(is_in(&path, &work, "inter.html"), "{path}");
+
+    let out = home.fm_in(
+        &work,
+        &["--json", "export", "Inter", "--woff2", "--out", "web"],
+    );
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let v = json(&out);
+    let files = v["files"].as_array().expect("files");
+    assert!(!files.is_empty(), "{v}");
+    for file in files {
+        let path = file.as_str().expect("a path");
+        let name = Path::new(path)
+            .file_name()
+            .expect("name")
+            .to_str()
+            .expect("utf-8");
+        assert!(is_in(path, &work.join("web"), name), "{path}");
+    }
+
+    // A file of that name in fm's working folder is refused without --force.
+    std::fs::write(work.join("taken.html"), b"keep").expect("write");
+    let out = home.fm_in(&work, &["specimen", "Inter", "--out", "taken.html"]);
+    assert_eq!(code(&out), 2, "{}", text(&out.stderr));
+    assert_eq!(
+        std::fs::read(work.join("taken.html")).expect("read"),
+        b"keep"
+    );
 }
