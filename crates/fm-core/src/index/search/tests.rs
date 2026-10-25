@@ -1028,7 +1028,7 @@ const FEATURES: [&str; 30] = [
 ];
 
 /// `n` families of five styles each, with made-up distinct names.
-fn synthetic(families: usize) -> Vec<IndexedFile> {
+pub(super) fn synthetic(families: usize) -> Vec<IndexedFile> {
     const SYLLABLES: [&str; 16] = [
         "ka", "ro", "mi", "ten", "sa", "lu", "vor", "ne", "di", "ga", "pel", "zu", "fi", "ber",
         "ox", "an",

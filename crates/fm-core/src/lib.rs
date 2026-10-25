@@ -45,6 +45,7 @@ pub mod scanner;
 mod search;
 pub mod settings;
 pub mod sidecar;
+pub mod similar;
 pub mod specimen;
 pub mod startup;
 pub mod subset;
