@@ -9,7 +9,8 @@ use crate::common::{
 };
 use crate::search::WeightRange;
 use crate::{
-    ApiError, ApiResult, ApiVersion, ErrorCode, FaceId, FamilyId, JobId, ResolutionId, SourceId,
+    ApiError, ApiResult, ApiVersion, CollectionId, ErrorCode, FaceId, FamilyId, JobId,
+    ResolutionId, SourceId,
 };
 
 /// The operating system the app runs on.
@@ -142,6 +143,10 @@ pub struct ListFamiliesRequest {
     /// Order by any column of the detail list; when set, it replaces `sort`.
     #[serde(default)]
     pub order: Option<FamilyOrder>,
+    /// Only families with a face in this collection (a smart one applies
+    /// its rule); an unknown collection is `NotFound`.
+    #[serde(default)]
+    pub collection: Option<CollectionId>,
 }
 
 /// What the family list can be ordered by: the columns of the detail list.
@@ -1165,7 +1170,8 @@ pub trait LibraryService {
     /// collections, sets and activation state are kept. `Busy` when a scan is
     /// running.
     fn rebuild_index(&self) -> ApiResult<JobId>;
-    /// One page of families.
+    /// One page of families. A `collection` that does not exist is
+    /// `NotFound`.
     fn list_families(&self, req: ListFamiliesRequest) -> ApiResult<Paged<FamilySummary>>;
     /// One family with its faces.
     fn get_family(&self, family: FamilyId) -> ApiResult<Family>;

@@ -307,9 +307,12 @@ impl Index {
     }
 
     /// One page of families: every visible family, or those with a face in
-    /// `req.source`, sorted by `req.order` when set, else by `req.sort`
-    /// (name A to Z, newest first, most styles first); ties go by id.
+    /// `req.source` and in `req.collection` (a smart one applies its rule;
+    /// an unknown one is `NotFound`), sorted by `req.order` when set, else
+    /// by `req.sort` (name A to Z, newest first, most styles first); ties go
+    /// by id.
     pub fn list_families(&self, req: &ListFamiliesRequest) -> FmResult<Paged<FamilySummary>> {
+        let member = self.collection_member(req.collection)?;
         self.refresh_search_cache()?;
         let cache = self.search_cache.borrow();
         let mut order: Vec<&str> = Vec::new();
@@ -327,8 +330,10 @@ impl Index {
             .iter()
             .filter_map(|key| members.get(key))
             .filter(|faces| {
-                req.source
-                    .is_none_or(|s| faces.iter().any(|f| f.facts.source == s))
+                faces.iter().any(|f| {
+                    req.source.is_none_or(|s| f.facts.source == s)
+                        && member.as_ref().is_none_or(|m| m.holds(f, &[]))
+                })
             })
             .map(|faces| summary(faces, &cache))
             .collect();

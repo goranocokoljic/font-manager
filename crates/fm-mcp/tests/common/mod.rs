@@ -6,7 +6,10 @@
 use fm_api::ApiError;
 use fm_mcp::McpServer;
 use rmcp::ServiceExt as _;
-use rmcp::model::{CallToolRequestParams, CallToolResult, Tool};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResult, GetPromptRequestParams, GetPromptResult, Prompt,
+    ReadResourceRequestParams, ReadResourceResult, ResourceTemplate, Tool,
+};
 use rmcp::service::{RoleClient, RunningService, ServiceError};
 use serde_json::Value;
 
@@ -27,6 +30,33 @@ pub async fn connect(server: McpServer) -> Client {
 impl Client {
     pub async fn list_all_tools(&self) -> Result<Vec<Tool>, ServiceError> {
         self.0.list_all_tools().await
+    }
+
+    pub async fn list_all_resource_templates(&self) -> Result<Vec<ResourceTemplate>, ServiceError> {
+        self.0.list_all_resource_templates().await
+    }
+
+    pub async fn read_resource(&self, uri: &str) -> Result<ReadResourceResult, ServiceError> {
+        self.0
+            .read_resource(ReadResourceRequestParams::new(uri))
+            .await
+    }
+
+    pub async fn list_all_prompts(&self) -> Result<Vec<Prompt>, ServiceError> {
+        self.0.list_all_prompts().await
+    }
+
+    pub async fn get_prompt(
+        &self,
+        name: &str,
+        args: Value,
+    ) -> Result<GetPromptResult, ServiceError> {
+        let Value::Object(args) = args else {
+            panic!("arguments are an object");
+        };
+        self.0
+            .get_prompt(GetPromptRequestParams::new(name).with_arguments(args))
+            .await
     }
 
     pub async fn call(&self, tool: &str, args: Value) -> Result<CallToolResult, ServiceError> {

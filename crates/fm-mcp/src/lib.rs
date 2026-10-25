@@ -13,8 +13,11 @@
 //!
 //! The tools (E27.2) are in [`tools`]: one `fm-api` call each. The ones that
 //! change something ask a [`ToolGate`] first, which refuses them by default.
+//! The resources and prompts (E27.5) are in [`resources`] and [`prompts`].
 
 pub mod gate;
+pub mod prompts;
+pub mod resources;
 pub mod tools;
 
 use std::sync::{Arc, OnceLock};
@@ -22,8 +25,10 @@ use std::sync::{Arc, OnceLock};
 use fm_api::settings::MCP_SERVER_NAME;
 use fm_api::{API_VERSION, Api};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, Implementation, ListToolsResult,
-    PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+    CallToolRequestParams, CallToolResponse, GetPromptRequestParams, GetPromptResponse,
+    Implementation, ListPromptsResult, ListResourceTemplatesResult, ListToolsResult,
+    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ServerCapabilities,
+    ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
@@ -70,11 +75,18 @@ impl McpServer {
 }
 
 impl ServerHandler for McpServer {
-    /// `font-manager` at the `fm-api` contract version, with tools.
+    /// `font-manager` at the `fm-api` contract version, with tools,
+    /// resources and prompts.
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
-            Implementation::new(MCP_SERVER_NAME, API_VERSION.to_string()),
-        )
+        let capabilities = ServerCapabilities::builder()
+            .enable_tools()
+            .enable_resources()
+            .enable_prompts()
+            .build();
+        ServerConfig::new(capabilities).with_server_info(Implementation::new(
+            MCP_SERVER_NAME,
+            API_VERSION.to_string(),
+        ))
     }
 
     async fn list_tools(
@@ -110,6 +122,47 @@ impl ServerHandler for McpServer {
         result
             .map(CallToolResponse::from)
             .ok_or_else(|| ErrorData::invalid_params(unknown, None))
+    }
+
+    async fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourceTemplatesResult, ErrorData> {
+        Ok(ListResourceTemplatesResult::with_all_items(
+            resources::templates(),
+        ))
+    }
+
+    /// Reads the resource on a blocking thread, like a tool call. An
+    /// unknown id is resource-not-found.
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, ErrorData> {
+        let api = Arc::clone(&self.api);
+        let uri = request.uri;
+        tokio::task::spawn_blocking(move || resources::read(api.as_ref(), &uri))
+            .await
+            .map_err(|e| ErrorData::internal_error(format!("The read stopped: {e}"), None))?
+            .map(ReadResourceResponse::from)
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListPromptsResult, ErrorData> {
+        Ok(ListPromptsResult::with_all_items(prompts::list()))
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<GetPromptResponse, ErrorData> {
+        prompts::get(&request.name, request.arguments).map(GetPromptResponse::from)
     }
 }
 
@@ -202,11 +255,13 @@ mod tests {
     }
 
     #[test]
-    fn the_server_is_font_manager_at_the_api_version_with_tools() {
+    fn the_server_is_font_manager_at_the_api_version_with_tools_resources_and_prompts() {
         let info = McpServer::new(Arc::new(MockApi::new())).get_info();
         assert_eq!(info.server_info.name, "font-manager");
         assert_eq!(info.server_info.version, API_VERSION.to_string());
         assert!(info.capabilities.tools.is_some());
+        assert!(info.capabilities.resources.is_some());
+        assert!(info.capabilities.prompts.is_some());
     }
 
     #[test]

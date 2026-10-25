@@ -533,6 +533,42 @@ fn collections_nest_reorder_and_take_families() {
 }
 
 #[test]
+fn families_filter_by_a_collection_and_an_unknown_one_is_not_found() {
+    let api = api();
+    let manual = api
+        .create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Clients".into(),
+            parent: None,
+            rules: None,
+        })
+        .unwrap();
+    let families = |collection| {
+        api.list_families(ListFamiliesRequest {
+            collection,
+            ..Default::default()
+        })
+    };
+    assert_eq!(families(Some(manual.id)).unwrap().total, 0);
+    api.add_to_collection(CollectionFacesRequest {
+        collection: manual.id,
+        faces: vec![FaceId(1), FaceId(6)],
+        families: vec![],
+    })
+    .unwrap();
+    let held = families(Some(manual.id)).unwrap();
+    let ids: Vec<FamilyId> = held.items.iter().map(|f| f.id).collect();
+    assert_eq!(held.total, 2);
+    for id in [FaceId(1), FaceId(6)] {
+        let family = api.get_face(id).unwrap().face.family;
+        assert!(ids.contains(&family), "{id:?}'s family is listed");
+    }
+    assert!(families(None).unwrap().total > held.total);
+    let unknown = families(Some(CollectionId(manual.id.0 + 100))).unwrap_err();
+    assert_eq!(unknown.code, ErrorCode::NotFound);
+}
+
+#[test]
 fn collections_tags_meta_and_sets() {
     let api = api();
     let manual = api
