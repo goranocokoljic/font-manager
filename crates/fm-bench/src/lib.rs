@@ -55,13 +55,7 @@ const FIRST_PAGE: u32 = 100;
 
 /// The app folders of a bench home: `<home>/{data,config,cache,logs}`.
 pub fn home_paths(home: &Path) -> AppPaths {
-    AppPaths {
-        data: home.join("data"),
-        config: home.join("config"),
-        cache: home.join("cache"),
-        logs: home.join("logs"),
-        library: home.join("Fonts"),
-    }
+    AppPaths::under(home)
 }
 
 /// What a start served.

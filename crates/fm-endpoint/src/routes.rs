@@ -62,6 +62,7 @@ routes! {
     undo_resolution(resolution),
     list_glyphs(req),
     get_glyph(req),
+    resolve_font(req),
     // search
     search(req),
     check_coverage(req),

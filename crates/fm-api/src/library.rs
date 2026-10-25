@@ -990,6 +990,162 @@ pub struct GlyphDetail {
     pub health: Health,
 }
 
+/// A `<font>` argument to look up (E26.1): a face id or a name.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveFontRequest {
+    /// A face id (`42`) or a name: a PostScript name, a full name, or a
+    /// family with or without its style.
+    pub font: String,
+}
+
+/// Which name a font argument matched, in the order they are tried.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum FontMatchKind {
+    /// The argument is the id of a face in the library.
+    Id,
+    /// The PostScript name (name ID 6).
+    PostscriptName,
+    /// The full name (name ID 4).
+    FullName,
+    /// The family (name ID 1 or 16), alone or followed by the style (name
+    /// ID 2 or 17).
+    FamilyStyle,
+}
+
+/// One face a font argument matched.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FontMatch {
+    /// The face.
+    pub face: FaceId,
+    /// Its family as the library shows it.
+    pub family: String,
+    /// Its style as the library shows it.
+    pub style: String,
+    /// Its PostScript name; empty when the font has none.
+    pub postscript_name: String,
+    /// Its full name, when the font has one and was scanned since E26.1.
+    pub full_name: Option<String>,
+}
+
+/// The faces a font argument names: every match of the first kind of name
+/// that matched, by face id. Never empty; more than one is ambiguous.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FontMatches {
+    /// The kind of name that matched.
+    pub matched_by: FontMatchKind,
+    /// The faces it matched.
+    pub faces: Vec<FontMatch>,
+}
+
+/// A face's names as [`ResolveFontRequest::resolve`] compares them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FontNames {
+    /// The face, as a match returns it.
+    pub face: FontMatch,
+    /// The family and style pairs the face is known by: name IDs 1 and 2,
+    /// and 16 and 17 when the font has them.
+    pub families: Vec<(String, String)>,
+}
+
+impl ResolveFontRequest {
+    /// The faces among `faces` this argument names: the face whose id it
+    /// is, else every face whose PostScript name, else full name, else
+    /// family (alone or followed by the style) equals it, ignoring case and
+    /// surrounding space. `NotFound` when none does; `InvalidRequest` for an
+    /// empty argument.
+    pub fn resolve(&self, faces: impl IntoIterator<Item = FontNames>) -> ApiResult<FontMatches> {
+        let font = self.font.trim();
+        if font.is_empty() {
+            return Err(ApiError::new(
+                ErrorCode::InvalidRequest,
+                "Name a font: a face id or a font name.",
+            ));
+        }
+        let faces: Vec<FontNames> = faces.into_iter().collect();
+        let wanted = font.to_lowercase();
+        let same = |name: &str| name.trim().to_lowercase() == wanted;
+        let id = font.parse::<u32>().ok().map(FaceId);
+        let matches = |kind: FontMatchKind, f: &FontNames| match kind {
+            FontMatchKind::Id => Some(f.face.face) == id,
+            FontMatchKind::PostscriptName => {
+                !f.face.postscript_name.is_empty() && same(&f.face.postscript_name)
+            }
+            FontMatchKind::FullName => f.face.full_name.as_deref().is_some_and(same),
+            FontMatchKind::FamilyStyle => f.families.iter().any(|(family, style)| {
+                !family.trim().is_empty()
+                    && (same(family) || same(&format!("{} {}", family.trim(), style.trim())))
+            }),
+        };
+        let tiers = [
+            FontMatchKind::Id,
+            FontMatchKind::PostscriptName,
+            FontMatchKind::FullName,
+            FontMatchKind::FamilyStyle,
+        ];
+        for kind in tiers {
+            let mut hits: Vec<FontMatch> = faces
+                .iter()
+                .filter(|f| matches(kind, f))
+                .map(|f| f.face.clone())
+                .collect();
+            if !hits.is_empty() {
+                hits.sort_by_key(|f| f.face);
+                hits.dedup_by_key(|f| f.face);
+                return Ok(FontMatches {
+                    matched_by: kind,
+                    faces: hits,
+                });
+            }
+        }
+        Err(not_called(font))
+    }
+}
+
+/// No face in the library is called `font`.
+fn not_called(font: &str) -> ApiError {
+    ApiError::new(
+        ErrorCode::NotFound,
+        format!("No font in the library is called \"{font}\"."),
+    )
+}
+
+impl FontMatches {
+    /// The one face `font` names; `InvalidRequest` listing the candidates,
+    /// one `id<TAB>PostScript name<TAB>family style` line each in the
+    /// detail, when it names more than one.
+    pub fn single(self, font: &str) -> ApiResult<FontMatch> {
+        let count = self.faces.len();
+        let mut faces = self.faces.into_iter();
+        match (faces.next(), count) {
+            (Some(face), 1) => Ok(face),
+            (Some(first), _) => {
+                let lines: Vec<String> = std::iter::once(first)
+                    .chain(faces)
+                    .map(|f| {
+                        format!(
+                            "{}	{}	{} {}",
+                            f.face.0, f.postscript_name, f.family, f.style
+                        )
+                    })
+                    .collect();
+                Err(ApiError::new(
+                    ErrorCode::InvalidRequest,
+                    format!("\"{font}\" matches {count} fonts. Use one of their ids instead."),
+                )
+                .with_detail(lines.join(
+                    "
+",
+                )))
+            }
+            (None, _) => Err(not_called(font)),
+        }
+    }
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -1044,6 +1200,12 @@ pub trait LibraryService {
     /// `NotFound` for an unknown face or a character the face does not map;
     /// a malformed font is a detail with `Broken` health, never an error.
     fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail>;
+    /// The faces a `<font>` argument names (E26.1): a face id, else every
+    /// face whose PostScript name, else full name, else family (alone or
+    /// with the style) equals it, ignoring case. Only faces the library
+    /// shows match. `NotFound` when none does; `InvalidRequest` for an
+    /// empty argument.
+    fn resolve_font(&self, req: ResolveFontRequest) -> ApiResult<FontMatches>;
 }
 
 #[cfg(test)]
@@ -1298,5 +1460,112 @@ mod tests {
         let req: KeepCopyRequest =
             serde_json::from_str(r#"{"keep":"/a.ttf","trash":["/b.ttf"]}"#).expect("parses");
         assert!(!req.dry_run);
+    }
+
+    fn names(id: u32, ps: &str, full: Option<&str>, families: &[(&str, &str)]) -> FontNames {
+        let (family, style) = families[0];
+        FontNames {
+            face: FontMatch {
+                face: FaceId(id),
+                family: family.to_owned(),
+                style: style.to_owned(),
+                postscript_name: ps.to_owned(),
+                full_name: full.map(str::to_owned),
+            },
+            families: families
+                .iter()
+                .map(|(f, s)| ((*f).to_owned(), (*s).to_owned()))
+                .collect(),
+        }
+    }
+
+    /// Every name differs from the others, so a match proves which field
+    /// it came from: face 3's PostScript name is face 1's full name, face
+    /// 4's full name is "Sora Bold" (its family and style say otherwise).
+    fn library() -> Vec<FontNames> {
+        vec![
+            names(
+                1,
+                "Sora-Light",
+                Some("Sora Thin Display"),
+                &[("Sora", "Light")],
+            ),
+            names(2, "Sora-Italic", None, &[("Sora", "Italic")]),
+            names(3, "Sora Thin Display", None, &[("Teko", "Bold")]),
+            names(
+                4,
+                "Agdasima-B",
+                Some("Sora Bold"),
+                &[("Agdasima", "Bold"), ("Agdasima Pro", "Bold Wide")],
+            ),
+            names(1942, "", None, &[("1942 Report", "Regular")]),
+        ]
+    }
+
+    fn resolve(font: &str) -> ApiResult<(FontMatchKind, Vec<u32>)> {
+        ResolveFontRequest { font: font.into() }
+            .resolve(library())
+            .map(|m| (m.matched_by, m.faces.iter().map(|f| f.face.0).collect()))
+    }
+
+    #[test]
+    fn a_font_argument_is_an_id_then_a_postscript_full_or_family_name() {
+        use FontMatchKind::*;
+        assert_eq!(resolve("2"), Ok((Id, vec![2])));
+        assert_eq!(resolve("sora-light"), Ok((PostscriptName, vec![1])));
+        // The PostScript name wins over another face's full name.
+        assert_eq!(resolve("Sora Thin Display"), Ok((PostscriptName, vec![3])));
+        // The full name wins over another face's family and style.
+        assert_eq!(resolve("  SORA bold "), Ok((FullName, vec![4])));
+        assert_eq!(resolve("Sora Italic"), Ok((FamilyStyle, vec![2])));
+        assert_eq!(
+            resolve("Agdasima Pro Bold Wide"),
+            Ok((FamilyStyle, vec![4]))
+        );
+        assert_eq!(resolve("agdasima pro"), Ok((FamilyStyle, vec![4])));
+        // A family alone names every face of it.
+        assert_eq!(resolve("Sora"), Ok((FamilyStyle, vec![1, 2])));
+        // A number that is no face id is a name; an empty PostScript name
+        // matches nothing.
+        assert_eq!(resolve("1942 report"), Ok((FamilyStyle, vec![1942])));
+        assert_eq!(resolve("1942"), Ok((Id, vec![1942])));
+    }
+
+    #[test]
+    fn an_unknown_or_empty_font_argument_is_refused() {
+        let code = |font: &str| resolve(font).expect_err("refused").code;
+        assert_eq!(code("Inter"), ErrorCode::NotFound);
+        assert_eq!(code("99"), ErrorCode::NotFound);
+        assert_eq!(code("Sora Light Italic"), ErrorCode::NotFound);
+        assert_eq!(code("  "), ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn an_ambiguous_name_lists_every_candidate_with_its_id() {
+        let matches = ResolveFontRequest {
+            font: "Sora".into(),
+        }
+        .resolve(library())
+        .expect("matches");
+        let err = matches.single("Sora").expect_err("ambiguous");
+        assert_eq!(err.code, ErrorCode::InvalidRequest);
+        assert_eq!(
+            err.message,
+            "\"Sora\" matches 2 fonts. Use one of their ids instead."
+        );
+        assert_eq!(
+            err.detail.as_deref(),
+            Some(
+                "1	Sora-Light	Sora Light
+2	Sora-Italic	Sora Italic"
+            )
+        );
+        let one = ResolveFontRequest {
+            font: "Teko Bold".into(),
+        }
+        .resolve(library())
+        .and_then(|m| m.single("Teko Bold"))
+        .expect("one face");
+        assert_eq!(one.face, FaceId(3));
     }
 }

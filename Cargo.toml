@@ -23,6 +23,9 @@ hyper-util = { version = "0.1", default-features = false }
 tokio = { version = "1", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The fm command line (E26.1): named in the spec's library table and the story.
+clap = { version = "4", features = ["derive"] }
+comfy-table = "7"
 
 [workspace.lints.rust]
 unsafe_code = "deny"

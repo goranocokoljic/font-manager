@@ -40,11 +40,11 @@ use crate::layout::{
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
-    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, GlyphBlock, GlyphDetail,
-    GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo,
-    LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem, ProblemKind, Resolution,
-    ScanRequest, SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus,
-    WebUse,
+    FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
+    FontNames, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest,
+    ImportMode, KeepCopyRequest, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
+    Platform, Problem, ProblemKind, Resolution, ResolveFontRequest, ScanRequest,
+    SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -1845,6 +1845,30 @@ impl LibraryService for MockApi {
             },
             health: Health::Ok,
         })
+    }
+
+    /// Over the faces of unpaused sources; the full name is the family and
+    /// the style, as most fonts have it.
+    fn resolve_font(&self, req: ResolveFontRequest) -> ApiResult<FontMatches> {
+        let st = self.state();
+        let names = st
+            .faces
+            .iter()
+            .filter(|f| st.visible(f) && !st.trashed.contains(&f.detail.path))
+            .map(|f| {
+                let s = &f.detail.face;
+                FontNames {
+                    face: FontMatch {
+                        face: s.id,
+                        family: s.family_name.clone(),
+                        style: s.style.clone(),
+                        postscript_name: s.postscript_name.clone(),
+                        full_name: Some(format!("{} {}", s.family_name, s.style)),
+                    },
+                    families: vec![(s.family_name.clone(), s.style.clone())],
+                }
+            });
+        req.resolve(names.collect::<Vec<_>>())
     }
 
     fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution> {

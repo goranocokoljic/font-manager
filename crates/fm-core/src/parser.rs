@@ -83,6 +83,9 @@ pub struct ParsedFace {
     pub typographic_subfamily: Option<String>,
     /// PostScript name (name ID 6).
     pub postscript_name: Option<String>,
+    /// Full name (name ID 4). Absent from faces stored before E26.1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
     /// Version string (name ID 5).
     pub version: Option<String>,
     /// Foundry: the manufacturer name (name ID 8).
@@ -160,6 +163,7 @@ impl ParsedFace {
             typographic_family: None,
             typographic_subfamily: None,
             postscript_name: None,
+            full_name: None,
             version: None,
             foundry: None,
             vendor_id: None,
@@ -450,6 +454,7 @@ fn parse_face(font: &FontRef<'_>, index: u32) -> ParsedFace {
         face.typographic_family = string(StringId::TYPOGRAPHIC_FAMILY_NAME);
         face.typographic_subfamily = string(StringId::TYPOGRAPHIC_SUBFAMILY_NAME);
         face.postscript_name = string(StringId::POSTSCRIPT_NAME);
+        face.full_name = string(StringId::FULL_NAME);
         face.version = string(StringId::VERSION_STRING);
         face.foundry = string(StringId::MANUFACTURER);
         face.designer = string(StringId::DESIGNER);

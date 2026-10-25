@@ -10,7 +10,7 @@
 
 use std::ffi::OsString;
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The folder name under the per-user app-data roots (Windows, Linux).
 pub(crate) const APP_DIR: &str = "FontManager";
@@ -74,6 +74,18 @@ impl AppPaths {
             Os::Windows => crate::windows::paths::resolve(&env),
             Os::MacOs => crate::macos::paths::resolve(&env),
             Os::Linux => crate::linux::paths::resolve(&env),
+        }
+    }
+
+    /// Every folder under one `root`: `data`, `config`, `cache`, `logs` and
+    /// `Fonts`. For a scratch home (tests, the bench, `FM_HOME` of the CLI).
+    pub fn under(root: &Path) -> Self {
+        Self {
+            data: root.join("data"),
+            config: root.join("config"),
+            cache: root.join("cache"),
+            logs: root.join("logs"),
+            library: root.join(LIBRARY_DIR),
         }
     }
 
@@ -158,6 +170,17 @@ pub(crate) fn test_env(vars: &[(&str, &str)]) -> impl Fn(&str) -> Option<OsStrin
 mod tests {
     use super::test_env as env;
     use super::*;
+
+    #[test]
+    fn a_scratch_home_holds_every_folder() {
+        let root = Path::new("/tmp/fm-home");
+        let paths = AppPaths::under(root);
+        assert_eq!(paths.data, root.join("data"));
+        assert_eq!(paths.config, root.join("config"));
+        assert_eq!(paths.cache, root.join("cache"));
+        assert_eq!(paths.logs, root.join("logs"));
+        assert_eq!(paths.library, root.join("Fonts"));
+    }
 
     #[test]
     fn current_os_paths_are_absolute_and_distinct() {

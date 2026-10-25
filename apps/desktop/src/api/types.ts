@@ -1309,6 +1309,45 @@ export type FontFormat =
 /**  Bitmap-only font: detected, not activated. */
 "bitmap";
 
+/**  One face a font argument matched. */
+export type FontMatch = {
+	/**  The face. */
+	face: FaceId,
+	/**  Its family as the library shows it. */
+	family: string,
+	/**  Its style as the library shows it. */
+	style: string,
+	/**  Its PostScript name; empty when the font has none. */
+	postscriptName: string,
+	/**  Its full name, when the font has one and was scanned since E26.1. */
+	fullName: string | null,
+};
+
+/**  Which name a font argument matched, in the order they are tried. */
+export type FontMatchKind = 
+/**  The argument is the id of a face in the library. */
+"id" | 
+/**  The PostScript name (name ID 6). */
+"postscriptName" | 
+/**  The full name (name ID 4). */
+"fullName" | 
+/**
+ *  The family (name ID 1 or 16), alone or followed by the style (name
+ *  ID 2 or 17).
+ */
+"familyStyle";
+
+/**
+ *  The faces a font argument names: every match of the first kind of name
+ *  that matched, by face id. Never empty; more than one is ambiguous.
+ */
+export type FontMatches = {
+	/**  The kind of name that matched. */
+	matchedBy: FontMatchKind,
+	/**  The faces it matched. */
+	faces: FontMatch[],
+};
+
 /**  Where the webview loads a face from. */
 export type FontSource = {
 	/**  The face. */
@@ -2122,6 +2161,15 @@ export type Resolution = {
 
 /**  A "Keep this one" action of the Problems view, for undo. */
 export type ResolutionId = number;
+
+/**  A `<font>` argument to look up (E26.1): a face id or a name. */
+export type ResolveFontRequest = {
+	/**
+	 *  A face id (`42`) or a name: a PostScript name, a full name, or a
+	 *  family with or without its style.
+	 */
+	font: string,
+};
 
 /**  Makes an earlier version current again. */
 export type RestoreLayoutRequest = {

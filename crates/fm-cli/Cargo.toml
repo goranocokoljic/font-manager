@@ -8,13 +8,28 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[lib]
+name = "fm_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "fm"
 path = "src/main.rs"
 
 [dependencies]
 fm-api.workspace = true
+# The app's local API when the app is open (ADR 0015); E26.6 picks it, this
+# story links fm-core directly.
 fm-client.workspace = true
+fm-core.workspace = true
+fm-platform.workspace = true
+clap.workspace = true
+comfy-table.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+fm-core.workspace = true
 
 [lints]
 workspace = true

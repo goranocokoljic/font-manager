@@ -55,10 +55,10 @@ use fm_api::layout::{
     LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
-    GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest, LibraryService,
-    ListFamiliesRequest, Platform, Problem, Resolution, ScanRequest, SetSourcePausedRequest,
-    Source, SourceKind,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
+    GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest,
+    LibraryService, ListFamiliesRequest, Platform, Problem, Resolution, ResolveFontRequest,
+    ScanRequest, SetSourcePausedRequest, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -698,6 +698,12 @@ impl LibraryService for CoreApi {
             file.collection_index,
             req.code_point,
         )?)
+    }
+
+    /// Reads the names of the visible faces, then matches outside the lock.
+    fn resolve_font(&self, req: ResolveFontRequest) -> ApiResult<FontMatches> {
+        let names = self.lock().font_names()?;
+        req.resolve(names)
     }
 }
 
