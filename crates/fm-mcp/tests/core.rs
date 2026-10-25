@@ -1,7 +1,9 @@
 //! The MCP tools over the real core (E27.2): search_fonts, get_font and
 //! check_coverage on a library scanned from `fixtures/fonts/`; export_web
 //! writes real web fonts and answers with their paths and the CSS only; and
-//! deactivate_fonts only reaches faces the app registered (rule 3).
+//! deactivate_fonts only reaches faces the app registered (rule 3). The
+//! resources (E27.5) read a collection's families and a set's faces from the
+//! core.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -14,10 +16,15 @@ use std::time::{Duration, Instant};
 
 use fm_api::activation::{ActivateRequest, ActivationMode, ConflictPolicy, Target};
 use fm_api::library::{AddSourceRequest, ImportMode, ScanRequest};
-use fm_api::{ActivationService as _, Api, Event, EventSource as _, FaceId, LibraryService as _};
+use fm_api::organization::{CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest};
+use fm_api::{
+    ActivationService as _, Api, Event, EventSource as _, FaceId, LibraryService as _,
+    OrganizationService as _, SearchService as _,
+};
 use fm_core::{CoreApi, startup};
 use fm_mcp::{AllowAll, McpServer};
 use fm_platform::{AppPaths, MockActivator};
+use rmcp::model::ResourceContents;
 use serde_json::{Value, json};
 
 use common::{Client, assert_no_font_bytes, connect, png_size};
@@ -277,5 +284,78 @@ async fn deactivate_fonts_only_reaches_faces_the_app_registered_on_the_core() {
     assert_eq!(status(barlow), "done");
     assert_eq!(status(agdasima), "skipped", "the app never registered it");
     assert!(api.list_active().expect("active").is_empty());
+    client.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn collection_and_set_resources_read_the_core() {
+    let home = Home::new("resources");
+    let api = scanned_core(&home, &["derived/agdasima", "google-repo/barlow"]);
+    let client = client_over(&api).await;
+    let face_of = |name: &str| {
+        let found = api
+            .search(fm_api::search::SearchRequest {
+                query: name.to_owned(),
+                ..Default::default()
+            })
+            .expect("search");
+        found.families[0].faces[0]
+    };
+    let barlow = face_of("barlow");
+    let collection = api
+        .create_collection(CreateCollectionRequest {
+            name: "Picks".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+        })
+        .expect("collection");
+    api.add_to_collection(CollectionFacesRequest {
+        collection: collection.id,
+        faces: vec![barlow],
+        families: vec![],
+    })
+    .expect("added");
+    let set = api
+        .create_set(CreateSetRequest {
+            name: "Brand".into(),
+            faces: vec![barlow, face_of("agdasima")],
+        })
+        .expect("set");
+
+    let read = async |uri: String| -> Value {
+        let result = client.read_resource(&uri).await.expect("read");
+        let ResourceContents::TextResourceContents { text, .. } = &result.contents[0] else {
+            panic!("{uri}: text");
+        };
+        let value: Value = serde_json::from_str(text).expect("JSON");
+        assert_no_font_bytes(&value);
+        value
+    };
+    let held = read(format!("collection://{}", collection.id.0)).await;
+    let names: Vec<&str> = held["families"]
+        .as_array()
+        .expect("families")
+        .iter()
+        .map(|f| f["name"].as_str().expect("name"))
+        .collect();
+    assert_eq!(names, ["Barlow"], "only the family in the collection");
+    let brand = read(format!("set://{}", set.id.0)).await;
+    let rows = brand["faces"].as_array().expect("faces");
+    let row_ids: Vec<&Value> = rows.iter().map(|f| &f["id"]).collect();
+    let set_ids: Vec<&Value> = brand["set"]["faces"]
+        .as_array()
+        .expect("ids")
+        .iter()
+        .collect();
+    assert_eq!(row_ids, set_ids, "one row per face, in set order");
+    let mut families: Vec<&str> = rows
+        .iter()
+        .map(|f| f["familyName"].as_str().expect("family"))
+        .collect();
+    families.sort_unstable();
+    assert_eq!(families, ["Agdasima", "Barlow"]);
+    let face = read(format!("font://{}", barlow.0)).await;
+    assert_eq!(face["face"]["id"], json!(barlow.0));
     client.close().await;
 }

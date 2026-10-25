@@ -1819,6 +1819,11 @@ export type ListFamiliesRequest = {
 	page?: Page,
 	/**  Order by any column of the detail list; when set, it replaces `sort`. */
 	order?: FamilyOrder | null,
+	/**
+	 *  Only families with a face in this collection (a smart one applies
+	 *  its rule); an unknown collection is `NotFound`.
+	 */
+	collection?: CollectionId | null,
 };
 
 /**  The MCP clients the app writes a config snippet for. */

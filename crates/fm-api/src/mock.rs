@@ -1562,12 +1562,19 @@ impl LibraryService for MockApi {
 
     fn list_families(&self, req: ListFamiliesRequest) -> ApiResult<Paged<FamilySummary>> {
         let st = self.state();
+        if let Some(c) = req.collection {
+            st.collection(c)?;
+        }
         let mut rows: Vec<FamilySummary> = st
             .families
             .iter()
             .filter(|fam| {
-                st.family_faces(fam.id)
-                    .any(|f| req.source.is_none_or(|s| s == f.source))
+                st.family_faces(fam.id).any(|f| {
+                    req.source.is_none_or(|s| s == f.source)
+                        && req
+                            .collection
+                            .is_none_or(|c| st.in_collection(f, c, &[]).unwrap_or(false))
+                })
             })
             .map(|fam| st.family_summary(fam))
             .collect();

@@ -340,6 +340,93 @@ fn the_list_shows_the_real_families_of_the_folder() {
 }
 
 #[test]
+fn families_filter_by_a_manual_or_smart_collection_and_an_unknown_one_is_not_found() {
+    let (lib, _, _) = Lib::scanned("api-families-collection");
+    let in_collection = |id| -> Vec<String> {
+        let mut names: Vec<String> = lib
+            .api
+            .list_families(ListFamiliesRequest {
+                collection: Some(id),
+                page: Page {
+                    offset: 0,
+                    limit: 1000,
+                },
+                ..ListFamiliesRequest::default()
+            })
+            .expect("families")
+            .items
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        names.sort_by_key(|n| n.to_lowercase());
+        names
+    };
+    let manual = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Picks".into(),
+            parent: None,
+            rules: None,
+            rule_group: None,
+        })
+        .expect("manual");
+    assert!(in_collection(manual.id).is_empty(), "an empty collection");
+    // One face of each family is enough to list the family.
+    let barlow = lib.family("Barlow");
+    let archivo = lib.family("Archivo");
+    lib.api
+        .add_to_collection(CollectionFacesRequest {
+            collection: manual.id,
+            faces: vec![FaceId(barlow.id.0), FaceId(archivo.id.0)],
+            families: Vec::new(),
+        })
+        .expect("added");
+    assert_eq!(in_collection(manual.id), ["Archivo", "Barlow"]);
+
+    let smart = lib
+        .api
+        .create_collection(CreateCollectionRequest {
+            name: "Variable".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            rule_group: None,
+        })
+        .expect("smart");
+    let all = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..ListFamiliesRequest::default()
+        })
+        .expect("all");
+    let mut variable: Vec<String> = all
+        .items
+        .into_iter()
+        .filter(|f| f.is_variable)
+        .map(|f| f.name)
+        .collect();
+    variable.sort_by_key(|n| n.to_lowercase());
+    assert!(!variable.is_empty(), "the fixtures have a variable family");
+    assert_eq!(in_collection(smart.id), variable);
+    assert!(variable.len() < all.total as usize);
+
+    let unknown = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            collection: Some(CollectionId(smart.id.0 + 100)),
+            ..ListFamiliesRequest::default()
+        })
+        .expect_err("unknown collection");
+    assert_eq!(unknown.code, ErrorCode::NotFound);
+}
+
+#[test]
 fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     let (lib, _, _) = Lib::scanned("api-family");
     let archivo = lib.family("Archivo");
