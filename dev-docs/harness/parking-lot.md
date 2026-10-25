@@ -232,4 +232,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-10-25
 
+- [E19.1 #133] apps/desktop/src/components/FontTable.vue:642 — visually-hidden CSS is copied in three components (FontTable `.visually-hidden`, ProblemsView `.sr-only`, SourcesSidebar `.announce`); theme.css has no shared utility class.
+- [E19.1 #133] apps/desktop/src/components/UpdateDialog.vue:26 — the dialog focus-trap and return-focus pattern is hand-written in UpdateDialog, SmartRuleEditor and CompareSheet; only Compare and Quick look use `sheetReturnTarget`.
+- [E19.1 #133] apps/desktop/src/views/HomeView.vue — the "Inspector" toolbar button label spills past its border at 1280×800.
 - [E23.2 #153] apps/desktop/src/api/mock.ts:2357 — MockApi `find_similar` still answers "not available yet" (asserted by apps/desktop/e2e/similar.spec.ts:157 and SimilarPanel.test.ts:110), so browser-mode tests cover a behaviour the core no longer has.

@@ -165,6 +165,10 @@
       "opened": "Opened “{name}”."
     }
   },
+  "quickLook": {
+    "title": "Quick look: {name}",
+    "hint": "Space or Escape closes the quick look."
+  },
   "preview": {
     "settings": "Preview settings",
     "sample": "Sample",
@@ -293,7 +297,8 @@
       "showPreset": "Show the {preset} layout",
       "reopenComparison": "Open comparison: {name}",
       "findSimilar": "Find similar fonts",
-      "openStudio": "Open the layout in Pairing Studio"
+      "openStudio": "Open the layout in Pairing Studio",
+      "quickLook": "Quick look at the selected font"
     }
   },
   "views": {
@@ -729,8 +734,9 @@
       "one": "{covered} of {count} character",
       "other": "{covered} of {count} characters"
     },
+    "ofCount": "{covered} of {count}",
     "languageLabel": "{name}: {amount}",
-    "languageLabelLocl": "{name}: {amount}, has localized forms (locl)",
+    "languageLabelLocl": "{name}: {amount}, locl (has localized forms)",
     "hasLocl": "Has localized forms (locl)",
     "locl": "locl",
     "allCovered": {
@@ -1278,6 +1284,7 @@
     "scanningLibrary": "Scanning the library",
     "scanning": "Scanning {progress}",
     "scanningSource": "Scanning {name}",
+    "scanningSourceProgress": "Scanning {name}: {progress}",
     "progress": "{done} of {total}",
     "systemFonts": "System fonts",
     "readOnly": "Read-only",

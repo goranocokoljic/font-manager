@@ -2,7 +2,9 @@
 // The Sources group of the sidebar: add a folder with the native picker,
 // pause, resume, rescan or remove it, and see scan progress inline. The
 // System source is listed read-only: the app never pauses or removes it.
-import { onBeforeUnmount, onMounted } from 'vue';
+// A live region that is always in the page reads the scan progress to screen
+// readers (the progress bars come and go with the scan, too late to announce).
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import type { Source } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useSourcesStore, type ScanProgress } from '../stores/sources';
@@ -21,6 +23,20 @@ function folderName(source: Source): string {
 function progressText(p: ScanProgress): string {
   return t('sources.progress', { done: p.done, total: p.total });
 }
+
+/** What the live region says: the first running scan, or nothing. */
+const announcement = computed(() => {
+  for (const source of store.sources) {
+    const p = store.progressOf(source.id);
+    if (p)
+      return t('sources.scanningSourceProgress', {
+        name: folderName(source),
+        progress: progressText(p),
+      });
+  }
+  const other = store.otherScan;
+  return other ? t('sources.scanning', { progress: progressText(other) }) : '';
+});
 </script>
 
 <template>
@@ -32,6 +48,7 @@ function progressText(p: ScanProgress): string {
       </button>
     </header>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
+    <p class="announce" role="status" data-testid="scan-status">{{ announcement }}</p>
     <div v-if="store.otherScan" class="scan library-scan" data-testid="library-scan">
       <progress
         :value="store.otherScan.done"
@@ -189,6 +206,17 @@ function progressText(p: ScanProgress): string {
   display: flex;
   gap: 4px;
   padding-top: 4px;
+}
+/* Read by screen readers only; the progress bars show the same. */
+.announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .error {
   margin: 4px 8px;

@@ -30,7 +30,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `3` | Show the fonts as a grid of cards |
 | `4` | Show the fonts as a waterfall: the preview text at six sizes |
 | `5` | Show the selected font in a layout: a page of text, for example a book page |
-| `Space` | Quick look at the font (coming in a later version) |
+| `Space` | Quick look: the selected font in a large preview; `Space` or `Escape` closes it |
 | `C` | Pin the selected font to Compare (up to 4 fonts) |
 | `B` | Add the selected fonts to the Quick Collection, or remove them if they are in it |
 | `T` | Open the tagging panel for the selected fonts |
