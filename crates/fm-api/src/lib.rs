@@ -182,6 +182,7 @@ pub fn types() -> specta::Types {
         // preview
         preview::PreviewRequest,
         preview::PreviewImage,
+        preview::ComparePreviewRequest,
         preview::FontSource,
         preview::SampleTextRequest,
         preview::SampleText,

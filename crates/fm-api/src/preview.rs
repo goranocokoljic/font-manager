@@ -32,6 +32,51 @@ pub struct PreviewRequest {
     pub background: Option<String>,
 }
 
+/// The fewest and most faces one comparison renders.
+pub const COMPARE_FACES: std::ops::RangeInclusive<usize> = 2..=4;
+/// The longest text a comparison (and the MCP preview tools) renders, in
+/// characters.
+pub const MAX_COMPARE_TEXT_CHARS: usize = 500;
+
+/// Render the same line of text in 2–4 faces, one row per face.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ComparePreviewRequest {
+    /// The faces, top to bottom (2–4).
+    pub faces: Vec<FaceId>,
+    /// The text (at most 500 characters).
+    pub text: String,
+    /// Size in pixels (8–300).
+    pub size_px: f32,
+    /// Variation coordinates, for every face that has the axis.
+    #[serde(default)]
+    pub variations: Vec<AxisValue>,
+    /// Features switched on or off.
+    #[serde(default)]
+    pub features: Vec<FeatureSetting>,
+    /// Text color, CSS hex (`#1a1a1a`); black when absent.
+    #[serde(default)]
+    pub foreground: Option<String>,
+    /// Background color, CSS hex; transparent when absent.
+    #[serde(default)]
+    pub background: Option<String>,
+}
+
+impl ComparePreviewRequest {
+    /// The single-face request for row `face`: the same text and settings.
+    pub fn row(&self, face: FaceId) -> PreviewRequest {
+        PreviewRequest {
+            face,
+            text: self.text.clone(),
+            size_px: self.size_px,
+            variations: self.variations.clone(),
+            features: self.features.clone(),
+            foreground: self.foreground.clone(),
+            background: self.background.clone(),
+        }
+    }
+}
+
 /// A rendered preview.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +204,11 @@ pub struct SizeFactor {
 pub trait PreviewService {
     /// Rasterize text in a face (cached by face hash and settings).
     fn render_preview(&self, req: PreviewRequest) -> ApiResult<PreviewImage>;
+    /// Rasterize the same text in 2–4 faces into one image, one row per face,
+    /// top to bottom in request order (cached like `render_preview`). Fewer
+    /// than 2 or more than 4 faces, or text over 500 characters, is
+    /// `InvalidRequest`.
+    fn compare_preview(&self, req: ComparePreviewRequest) -> ApiResult<PreviewImage>;
     /// The file behind a face, for `@font-face`.
     fn font_source(&self, face: FaceId) -> ApiResult<FontSource>;
     /// The text each face previews: the sample when the face covers it, else

@@ -260,3 +260,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E26.6 #169] crates/fm-client/src/lib.rs:59 — the stale-file check trusts `is_running(pid)`; a reused pid with the port held by another program gives a client, and the first call fails instead of falling back to direct-link.
 - [E27.1 #171] apps/desktop/src/components/LocalApiSettings.vue:66 — the token Show/Hide button changes its label and also sets `aria-pressed`, so screen readers announce an ambiguous state.
 - [E27.1 #171] apps/desktop/src/components/LocalApiSettings.vue:116 — `.status:empty { display: none }` on a `role="status"` live region may keep some screen readers from announcing it.
+- [E27.3 #173] docs/adr/0015-local-api-endpoint.md:225 — still says `fm_mcp::tools` "lists twelve tools" and does not mention `render_preview` / `compare_preview`.
+- [E27.3 #173] crates/fm-core/src/api.rs:751 — the uncached fallback of `render_preview` (face file with no hash yet) has no test; `compare_preview` mirrors that fallback.

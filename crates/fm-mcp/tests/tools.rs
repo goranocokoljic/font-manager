@@ -1,7 +1,8 @@
-//! The MCP tools (E27.2) over `MockApi`: an rmcp client, connected in
-//! process, lists the twelve tools and calls every one of them; results are
-//! the API's JSON without font bytes, API errors are tool errors, and the
-//! mutating tools are refused until a gate allows them.
+//! The MCP tools (E27.2, E27.3) over `MockApi`: an rmcp client, connected in
+//! process, lists the fourteen tools and calls every one of them; results are
+//! the API's JSON without font bytes (the preview tools: a PNG and a
+//! caption), API errors are tool errors, and the mutating tools are refused
+//! until a gate allows them.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -40,7 +41,7 @@ async fn face_of(client: &Client, query: &str) -> u32 {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_rmcp_client_lists_the_twelve_tools_with_object_schemas() {
+async fn an_rmcp_client_lists_the_fourteen_tools_with_object_schemas() {
     let (_api, client) = mock(Arc::new(AllowAll)).await;
     let tools = client.list_all_tools().await.expect("tools/list");
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
@@ -239,7 +240,22 @@ async fn every_tool_answers_over_mock_api_without_font_bytes() {
     assert_eq!(keys, ["css", "files"], "paths and CSS only");
     results.push(exported);
 
-    assert_eq!(results.len(), 13, "the 12 tools, check_coverage twice");
+    let (png, _) = client
+        .png(
+            "render_preview",
+            json!({ "face_id": inter, "text": "Ag", "size": 24 }),
+        )
+        .await;
+    assert!(!png.is_empty());
+    let other = face_of(&client, "source serif").await;
+    client
+        .png(
+            "compare_preview",
+            json!({ "face_ids": [inter, other], "text": "Ag", "size": 24 }),
+        )
+        .await;
+
+    assert_eq!(results.len(), 13, "the 12 JSON tools, check_coverage twice");
     for result in &results {
         assert_no_font_bytes(result);
     }
@@ -273,8 +289,118 @@ async fn mutating_tools_are_refused_by_default() {
         "nothing activated"
     );
     assert!(api.list_tags().expect("tags").is_empty(), "nothing tagged");
-    // Read tools still run.
+    // Read tools still run, the preview tools included: no grant needed.
     client.ok("get_font", json!({ "face_id": inter })).await;
+    let other = face_of(&client, "source serif").await;
+    client
+        .png(
+            "render_preview",
+            json!({ "face_id": inter, "text": "Ag", "size": 24 }),
+        )
+        .await;
+    client
+        .png(
+            "compare_preview",
+            json!({ "face_ids": [inter, other], "text": "Ag", "size": 24 }),
+        )
+        .await;
+    client.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn preview_tools_answer_a_png_and_the_faces_in_order() {
+    let (api, client) = mock(Arc::new(AllowAll)).await;
+    let inter = face_of(&client, "inter").await;
+    let serif = face_of(&client, "source serif").await;
+    let name = |face: u32| {
+        let f = api.get_face(FaceId(face)).expect("face").face;
+        format!("{} {} (face {face})", f.family_name, f.style)
+    };
+
+    let (_, caption) = client
+        .png(
+            "render_preview",
+            json!({
+                "face_id": inter,
+                "text": "Hamburg",
+                "size": 48,
+                "options": { "variations": { "wght": 700 }, "features": { "liga": false },
+                             "foreground": "#112233", "background": "#ffffff" }
+            }),
+        )
+        .await;
+    assert!(caption.starts_with(&name(inter)), "{caption}");
+
+    let (_, caption) = client
+        .png(
+            "compare_preview",
+            json!({ "face_ids": [serif, inter], "text": "Hamburg", "size": 48 }),
+        )
+        .await;
+    let first = caption.find(&name(serif)).expect("serif named");
+    let second = caption.find(&name(inter)).expect("inter named");
+    assert!(first < second, "row order: {caption}");
+    assert!(
+        caption.contains("1. ") && caption.contains("2. "),
+        "{caption}"
+    );
+    client.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn out_of_range_previews_are_tool_errors_not_panics() {
+    let (_api, client) = mock(Arc::new(AllowAll)).await;
+    let inter = face_of(&client, "inter").await;
+    let serif = face_of(&client, "source serif").await;
+    let long = "a".repeat(501);
+    let calls = [
+        (
+            "render_preview",
+            json!({ "face_id": inter, "text": "Ag", "size": 7.9 }),
+        ),
+        (
+            "render_preview",
+            json!({ "face_id": inter, "text": "Ag", "size": 300.5 }),
+        ),
+        (
+            "render_preview",
+            json!({ "face_id": inter, "text": long, "size": 24 }),
+        ),
+        (
+            "compare_preview",
+            json!({ "face_ids": [inter], "text": "Ag", "size": 24 }),
+        ),
+        (
+            "compare_preview",
+            json!({ "face_ids": [inter, serif, inter, serif, inter], "text": "Ag", "size": 24 }),
+        ),
+        (
+            "compare_preview",
+            json!({ "face_ids": [inter, serif], "text": "Ag", "size": 400 }),
+        ),
+        (
+            "compare_preview",
+            json!({ "face_ids": [inter, serif], "text": long, "size": 24 }),
+        ),
+    ];
+    for (tool, args) in calls {
+        let e = client.err(tool, args.clone()).await;
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{tool} {args}");
+    }
+    let e = client
+        .err(
+            "render_preview",
+            json!({ "face_id": 99_999, "text": "Ag", "size": 24 }),
+        )
+        .await;
+    assert_eq!(e.code, ErrorCode::NotFound);
+    // The server is still up.
+    client
+        .png(
+            "render_preview",
+            json!({ "face_id": inter, "text": "a".repeat(500), "size": 24 }),
+        )
+        .await;
     client.close().await;
 }
 

@@ -114,6 +114,10 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             "render_preview",
             r#"{"face":1,"text":"Ag","sizePx":24}"#.into(),
         ),
+        (
+            "compare_preview",
+            r#"{"faces":[1,3],"text":"Ag","sizePx":24}"#.into(),
+        ),
         ("font_source", "1".into()),
         ("sample_texts", r#"{"faces":[1],"text":"Ag"}"#.into()),
         ("css_values", r#"{"face":1}"#.into()),

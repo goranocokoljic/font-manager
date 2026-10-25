@@ -1051,6 +1051,39 @@ fn workflows_compose_the_other_services() {
 }
 
 #[test]
+fn compare_preview_takes_two_to_four_faces_and_short_text() {
+    let api = api();
+    let req = |faces: &[u32], text: &str| fm_api::preview::ComparePreviewRequest {
+        faces: faces.iter().copied().map(FaceId).collect(),
+        text: text.into(),
+        size_px: 32.0,
+        variations: vec![],
+        features: vec![],
+        foreground: None,
+        background: None,
+    };
+    let image = api.compare_preview(req(&[1, 3], "Ag")).unwrap();
+    assert_eq!(&image.png[1..4], b"PNG");
+    for faces in [&[1][..], &[1, 2, 3, 4, 5][..]] {
+        assert_eq!(
+            api.compare_preview(req(faces, "Ag")).unwrap_err().code,
+            ErrorCode::InvalidRequest,
+            "{faces:?}"
+        );
+    }
+    assert_eq!(
+        api.compare_preview(req(&[1, 3], &"x".repeat(501)))
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        api.compare_preview(req(&[1, 9999], "Ag")).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}
+
+#[test]
 fn previews_and_font_sources() {
     let api = api();
     let png = api

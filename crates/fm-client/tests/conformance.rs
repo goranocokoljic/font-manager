@@ -77,6 +77,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; suggest_pairings, json!({ "face": 1, "limit": 3 }));
     // preview
     same!(seen, d, c; render_preview, json!({ "face": 1, "text": "Ag", "sizePx": 24 }));
+    same!(seen, d, c; compare_preview, json!({ "faces": [1, 3], "text": "Ag", "sizePx": 24 }));
+    same!(seen, d, c; compare_preview, json!({ "faces": [1], "text": "Ag", "sizePx": 24 }));
     same!(seen, d, c; font_source, json!(1));
     same!(seen, d, c; sample_texts, json!({ "faces": [1], "text": "Ag" }));
     same!(seen, d, c; css_values, json!({ "face": 1 }));

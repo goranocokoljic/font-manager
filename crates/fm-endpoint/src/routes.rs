@@ -72,6 +72,7 @@ routes! {
     suggest_pairings(req),
     // preview
     render_preview(req),
+    compare_preview(req),
     font_source(face),
     sample_texts(req),
     css_values(req),

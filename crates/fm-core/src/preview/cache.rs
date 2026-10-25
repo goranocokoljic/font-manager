@@ -70,6 +70,22 @@ impl CacheKey {
         }
     }
 
+    /// The key of a comparison (E27.3): the faces, in row order, each the
+    /// file hash and collection index, plus the settings of one row
+    /// (`req.face` is not part of it). It never equals a single face's key.
+    pub fn compare(faces: &[(&FileHash, u32)], req: &PreviewRequest) -> Self {
+        let mut h = blake3::Hasher::new();
+        h.update(b"fm-preview-compare");
+        h.update(&(faces.len() as u64).to_le_bytes());
+        for (file, index) in faces {
+            h.update(&face_hash(file, *index));
+        }
+        Self {
+            face: truncate(h.finalize()),
+            settings: settings_hash(req),
+        }
+    }
+
     fn file_name(&self) -> String {
         format!("{}-{}.{EXTENSION}", hex(&self.face), hex(&self.settings))
     }

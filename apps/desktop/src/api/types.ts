@@ -509,6 +509,24 @@ export type CompareMode =
 /**  Two faces drawn on one baseline. */
 "overlay";
 
+/**  Render the same line of text in 2–4 faces, one row per face. */
+export type ComparePreviewRequest = {
+	/**  The faces, top to bottom (2–4). */
+	faces: FaceId[],
+	/**  The text (at most 500 characters). */
+	text: string,
+	/**  Size in pixels (8–300). */
+	sizePx: number | null,
+	/**  Variation coordinates, for every face that has the axis. */
+	variations?: AxisValue[],
+	/**  Features switched on or off. */
+	features?: FeatureSetting[],
+	/**  Text color, CSS hex (`#1a1a1a`); black when absent. */
+	foreground?: string | null,
+	/**  Background color, CSS hex; transparent when absent. */
+	background?: string | null,
+};
+
 /**  A saved comparison, ready to reopen. */
 export type Comparison = {
 	/**  Id. */

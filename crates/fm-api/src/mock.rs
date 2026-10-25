@@ -55,8 +55,9 @@ use crate::organization::{
     UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use crate::preview::{
-    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, SampleFallback,
-    SampleText, SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
+    COMPARE_FACES, ComparePreviewRequest, CssValues, CssValuesRequest, FontSource,
+    MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest, SampleFallback, SampleText,
+    SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
 };
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
@@ -2333,6 +2334,27 @@ impl PreviewService for MockApi {
             ));
         }
         self.state().face(req.face)?;
+        Ok(PreviewImage {
+            width: 1,
+            height: 1,
+            png: PNG_1X1.to_vec(),
+        })
+    }
+
+    /// The core's checks (face count, text length, size, faces exist), then
+    /// the same 1×1 transparent PNG as `render_preview`.
+    fn compare_preview(&self, req: ComparePreviewRequest) -> ApiResult<PreviewImage> {
+        if !COMPARE_FACES.contains(&req.faces.len()) {
+            return Err(ApiError::invalid("Compare 2 to 4 fonts."));
+        }
+        if req.text.chars().count() > MAX_COMPARE_TEXT_CHARS {
+            return Err(ApiError::invalid(
+                "Comparison text must be at most 500 characters.",
+            ));
+        }
+        for face in &req.faces {
+            self.render_preview(req.row(*face))?;
+        }
         Ok(PreviewImage {
             width: 1,
             height: 1,
