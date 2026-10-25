@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::activation::{ActivationMode, ConflictPolicy};
+use crate::activation::{ActivationMode, ConflictPolicy, Target};
 use crate::{ApiError, ApiResult, ErrorCode};
 
 /// The smallest preview cache, in megabytes.
@@ -270,6 +270,70 @@ pub struct McpStatus {
     /// while there is no URL.
     #[serde(default)]
     pub snippets: Vec<McpSnippet>,
+    /// One grant per tool that changes something (E27.6), in
+    /// [`MCP_MUTATING_TOOLS`] order; all off until the user turns one on.
+    /// The read-only tools need no grant.
+    #[serde(default)]
+    pub grants: Vec<McpGrant>,
+}
+
+/// The MCP tools that change something; each needs a grant (E27.6).
+pub const MCP_MUTATING_TOOLS: [&str; 4] = [
+    "activate_fonts",
+    "deactivate_fonts",
+    "tag_fonts",
+    "export_web",
+];
+
+/// The mutating MCP tools that also ask the user each time (E27.6).
+pub const MCP_CONFIRM_TOOLS: [&str; 1] = ["deactivate_fonts"];
+
+/// How long a call waits for the user's answer to a confirmation, in seconds.
+pub const MCP_CONFIRM_TIMEOUT_SECS: u32 = 60;
+
+/// Whether an MCP client may call one tool that changes something.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpGrant {
+    /// The tool's MCP name, e.g. `deactivate_fonts`.
+    pub tool: String,
+    /// Whether the user allowed the tool in Settings → AI assistants.
+    pub granted: bool,
+    /// Whether every call also asks the user (Allow / Deny) first.
+    #[serde(default)]
+    pub confirm: bool,
+}
+
+/// Turn the grant of one mutating MCP tool on or off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpGrantUpdate {
+    /// The tool's MCP name; one of [`MCP_MUTATING_TOOLS`].
+    pub tool: String,
+    /// On (true) or off (false).
+    pub granted: bool,
+}
+
+/// An MCP tool call that asks whether it may run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolCall {
+    /// The tool's MCP name.
+    pub tool: String,
+    /// The faces the call acts on, when it names them; the confirmation
+    /// says how many.
+    #[serde(default)]
+    pub target: Option<Target>,
+}
+
+/// The user's answer to an [`crate::Event::McpConfirmationRequested`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpConfirmationAnswer {
+    /// The confirmation.
+    pub id: u32,
+    /// Allow (true) or Deny (false).
+    pub allow: bool,
 }
 
 /// Turn the MCP server on or off.
@@ -305,6 +369,28 @@ pub trait SettingsService {
     /// Turns the MCP server on or off and saves the choice; it applies to
     /// the next request, without a restart.
     fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
+        let _ = req;
+        Err(mcp_unsupported())
+    }
+    /// Turns the grant of one mutating MCP tool on or off and saves it; the
+    /// next call sees it, without a restart. `InvalidRequest` for a tool
+    /// that needs no grant.
+    fn set_mcp_grant(&self, req: McpGrantUpdate) -> ApiResult<McpStatus> {
+        let _ = req;
+        Err(mcp_unsupported())
+    }
+    /// Whether an MCP tool call may run now. Read-only tools may; a mutating
+    /// tool needs its grant (`PermissionDenied` names the Settings switch),
+    /// and a tool in [`MCP_CONFIRM_TOOLS`] also waits up to
+    /// [`MCP_CONFIRM_TIMEOUT_SECS`] for the user's Allow. Deny and the
+    /// timeout are `PermissionDenied`.
+    fn authorize_mcp_tool(&self, req: McpToolCall) -> ApiResult<()> {
+        let _ = req;
+        Err(mcp_unsupported())
+    }
+    /// Answers a waiting confirmation. `NotFound` once it was answered or
+    /// timed out.
+    fn answer_mcp_confirmation(&self, req: McpConfirmationAnswer) -> ApiResult<()> {
         let _ = req;
         Err(mcp_unsupported())
     }
@@ -464,6 +550,48 @@ mod tests {
         let old: McpStatus = serde_json::from_str(r#"{"enabled":true}"#).expect("parse");
         assert_eq!(old.url, None);
         assert!(old.snippets.is_empty());
+        assert!(old.grants.is_empty(), "grants default to none");
+    }
+
+    #[test]
+    fn every_mutating_tool_has_a_grant_off_until_turned_on_in_the_mock() {
+        let api = crate::mock::MockApi::new();
+        let status = api.mcp_status().expect("status");
+        let json = serde_json::to_value(&status).expect("json");
+        assert_eq!(json["grants"][1]["tool"], "deactivate_fonts");
+        assert_eq!(json["grants"][1]["granted"], false);
+        assert_eq!(json["grants"][1]["confirm"], true);
+        let tools: Vec<&str> = status.grants.iter().map(|g| g.tool.as_str()).collect();
+        assert_eq!(tools, MCP_MUTATING_TOOLS);
+        assert!(status.grants.iter().all(|g| !g.granted));
+
+        let call = |tool: &str| McpToolCall {
+            tool: tool.into(),
+            target: None,
+        };
+        api.authorize_mcp_tool(call("get_font"))
+            .expect("read tools always run");
+        let e = api.authorize_mcp_tool(call("tag_fonts")).expect_err("off");
+        assert_eq!(e.code, ErrorCode::PermissionDenied);
+        let on = api
+            .set_mcp_grant(McpGrantUpdate {
+                tool: "tag_fonts".into(),
+                granted: true,
+            })
+            .expect("on");
+        assert!(on.grants.iter().any(|g| g.tool == "tag_fonts" && g.granted));
+        api.authorize_mcp_tool(call("tag_fonts")).expect("granted");
+        let e = api
+            .set_mcp_grant(McpGrantUpdate {
+                tool: "get_font".into(),
+                granted: true,
+            })
+            .expect_err("needs no grant");
+        assert_eq!(e.code, ErrorCode::InvalidRequest);
+        let e = api
+            .answer_mcp_confirmation(McpConfirmationAnswer { id: 1, allow: true })
+            .expect_err("nothing waits");
+        assert_eq!(e.code, ErrorCode::NotFound);
     }
 
     #[test]

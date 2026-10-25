@@ -163,6 +163,16 @@ settings of another assistant. The snippets contain the token, so keep them secr
 The address changes each time Font Manager starts. After a restart, copy the snippet
 again. Turn the switch off to stop all assistants at once.
 
+An assistant can always search the library, read font details and render previews. It
+cannot change anything until you allow it. Under **What AI assistants may change**, each
+tool has its own switch: **Activate fonts**, **Deactivate fonts**, **Tag fonts** and
+**Export web fonts**. All are off. A change applies to the next request. If an assistant
+uses a tool that is off, it gets a message that names the switch.
+
+**Deactivate fonts** also asks you every time. A message such as "An AI assistant wants to
+deactivate 3 fonts" shows at the bottom of the window. Click **Allow** or **Deny**. If you
+do not answer in 60 seconds, it counts as **Deny**, and nothing changes.
+
 ## Get updates
 
 Open Settings → About and click **Check for updates**. If a new version is out, Font

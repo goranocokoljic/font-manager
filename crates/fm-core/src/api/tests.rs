@@ -4419,6 +4419,191 @@ fn the_mcp_server_is_off_by_default_and_its_switch_applies_without_a_restart() {
     api.unpublish_endpoint().expect("unpublish");
 }
 
+// --- MCP grants and confirmations (E27.6) --------------------------------
+
+fn mcp_call(tool: &str, target: Option<Target>) -> fm_api::settings::McpToolCall {
+    fm_api::settings::McpToolCall {
+        tool: tool.into(),
+        target,
+    }
+}
+
+fn grant(api: &CoreApi, tool: &str, granted: bool) -> fm_api::settings::McpStatus {
+    api.set_mcp_grant(fm_api::settings::McpGrantUpdate {
+        tool: tool.into(),
+        granted,
+    })
+    .expect("grant saved")
+}
+
+#[test]
+fn mcp_grants_are_off_until_turned_on_and_apply_without_a_restart() {
+    let lib = Lib::new("mcp-grants");
+    let api = lib.api.with_endpoint_in(lib.paths.data.clone());
+    let status = api.mcp_status().expect("status");
+    let tools: Vec<&str> = status.grants.iter().map(|g| g.tool.as_str()).collect();
+    assert_eq!(tools, fm_api::settings::MCP_MUTATING_TOOLS);
+    assert!(status.grants.iter().all(|g| !g.granted), "all off");
+
+    for tool in fm_api::settings::MCP_MUTATING_TOOLS {
+        let e = api
+            .authorize_mcp_tool(mcp_call(tool, None))
+            .expect_err("not granted");
+        assert_eq!(e.code, ErrorCode::PermissionDenied, "{tool}");
+        assert!(
+            e.message.contains("Settings → AI assistants"),
+            "{}",
+            e.message
+        );
+    }
+    // Read-only tools need no grant.
+    api.authorize_mcp_tool(mcp_call("search_fonts", None))
+        .expect("read tools always run");
+
+    // On: the same API allows the next call, without a restart.
+    let on = grant(&api, "tag_fonts", true);
+    assert!(on.grants.iter().any(|g| g.tool == "tag_fonts" && g.granted));
+    assert_eq!(api.mcp_status().expect("status"), on);
+    api.authorize_mcp_tool(mcp_call("tag_fonts", None))
+        .expect("granted");
+    assert!(
+        SettingsStore::new(&lib.paths)
+            .mcp_grants()
+            .expect("grants")
+            .contains("tag_fonts"),
+        "the grant is saved in config.json"
+    );
+    let still = api
+        .authorize_mcp_tool(mcp_call("activate_fonts", None))
+        .expect_err("other grants stay off");
+    assert!(
+        still.message.contains("\"Activate fonts\""),
+        "{}",
+        still.message
+    );
+
+    // Off again: refused at once.
+    grant(&api, "tag_fonts", false);
+    let e = api
+        .authorize_mcp_tool(mcp_call("tag_fonts", None))
+        .expect_err("off again");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+
+    let e = api
+        .set_mcp_grant(fm_api::settings::McpGrantUpdate {
+            tool: "search_fonts".into(),
+            granted: true,
+        })
+        .expect_err("read tools have no grant");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+}
+
+#[test]
+fn a_destructive_mcp_call_waits_for_the_users_allow_and_deny_changes_nothing() {
+    let (lib, _, _) = Lib::scanned("mcp-confirm");
+    let family = lib.family("Bebas Neue");
+    let api = lib
+        .api
+        .with_endpoint_in(lib.paths.data.clone())
+        .with_mcp_confirm_timeout(Duration::from_secs(20));
+    let target = Target::Family { family: family.id };
+    api.activate(ActivateRequest {
+        target: target.clone(),
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::default(),
+    })
+    .expect("activate");
+    let active = api.list_active().expect("active");
+    assert!(!active.is_empty());
+
+    // Granted, but deactivate_fonts still asks every time.
+    grant(&api, "deactivate_fonts", true);
+    let rx = api.subscribe();
+    for allow in [false, true] {
+        let result = std::thread::scope(|s| {
+            let call = s.spawn(|| {
+                api.authorize_mcp_tool(mcp_call("deactivate_fonts", Some(target.clone())))
+            });
+            let id = loop {
+                match rx.recv_timeout(WAIT).expect("a confirmation") {
+                    Event::McpConfirmationRequested {
+                        id,
+                        tool,
+                        faces,
+                        timeout_secs,
+                    } => {
+                        assert_eq!(tool, "deactivate_fonts");
+                        assert_eq!(faces, Some(u32::try_from(active.len()).expect("small")));
+                        assert_eq!(timeout_secs, 20);
+                        break id;
+                    }
+                    _ => continue,
+                }
+            };
+            api.answer_mcp_confirmation(fm_api::settings::McpConfirmationAnswer { id, allow })
+                .expect("answered");
+            assert!(matches!(
+                rx.recv_timeout(WAIT),
+                Ok(Event::McpConfirmationClosed { id: closed, allowed }) if closed == id && allowed == allow
+            ));
+            call.join().expect("joined")
+        });
+        if allow {
+            result.expect("allowed");
+        } else {
+            let e = result.expect_err("denied");
+            assert_eq!(e.code, ErrorCode::PermissionDenied);
+            assert!(e.message.contains("Nothing was changed"), "{}", e.message);
+        }
+        assert_eq!(
+            api.list_active().expect("active"),
+            active,
+            "asking changes nothing"
+        );
+    }
+
+    // An unknown target is refused before the user is asked.
+    let e = api
+        .authorize_mcp_tool(mcp_call(
+            "deactivate_fonts",
+            Some(Target::Faces {
+                faces: vec![FaceId(999_999)],
+            }),
+        ))
+        .expect_err("unknown face");
+    assert_eq!(e.code, ErrorCode::NotFound);
+    assert!(rx.try_recv().is_err(), "nobody was asked");
+}
+
+#[test]
+fn an_unanswered_mcp_confirmation_times_out_as_a_deny() {
+    let lib = Lib::new("mcp-timeout");
+    let api = lib
+        .api
+        .with_endpoint_in(lib.paths.data.clone())
+        .with_mcp_confirm_timeout(Duration::from_millis(50));
+    grant(&api, "deactivate_fonts", true);
+    let rx = api.subscribe();
+    let started = Instant::now();
+    let e = api
+        .authorize_mcp_tool(mcp_call("deactivate_fonts", None))
+        .expect_err("timed out");
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert!(started.elapsed() >= Duration::from_millis(50));
+    let Ok(Event::McpConfirmationRequested { id, faces, .. }) = rx.recv_timeout(WAIT) else {
+        panic!("no confirmation asked");
+    };
+    assert_eq!(faces, Some(0), "no target: every face the app activated");
+    assert_eq!(
+        rx.recv_timeout(WAIT).expect("closed"),
+        Event::McpConfirmationClosed { id, allowed: false }
+    );
+    let late = api
+        .answer_mcp_confirmation(fm_api::settings::McpConfirmationAnswer { id, allow: true })
+        .expect_err("too late");
+    assert_eq!(late.code, ErrorCode::NotFound);
+}
+
 // --- font arguments (E26.1) --------------------------------------------
 
 fn resolved(api: &CoreApi, font: &str) -> ApiResult<(FontMatchKind, Vec<String>)> {

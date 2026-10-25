@@ -210,6 +210,15 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("regenerate_endpoint_token", String::new()),
         ("mcp_status", String::new()),
         ("set_mcp_enabled", r#"{"enabled":true}"#.into()),
+        (
+            "set_mcp_grant",
+            r#"{"tool":"tag_fonts","granted":true}"#.into(),
+        ),
+        ("authorize_mcp_tool", r#"{"tool":"get_font"}"#.into()),
+        (
+            "answer_mcp_confirmation",
+            r#"{"id":1,"allow":false}"#.into(),
+        ),
         // layout
         ("layout_presets", String::new()),
         ("clamp_layout", layout.to_string()),

@@ -77,7 +77,8 @@ use fm_api::search::{
     PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
 };
 use fm_api::settings::{
-    AppFolders, EndpointInfo, McpStatus, McpUpdate, Settings, SettingsService, SettingsUpdate,
+    AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
+    McpUpdate, Settings, SettingsService, SettingsUpdate,
 };
 use fm_api::workflows::{
     BriefRequest, PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
@@ -145,6 +146,8 @@ pub struct CoreApi {
     /// The local API token and discovery file (E25.1); `None` when the API
     /// has no data folder.
     endpoint: Option<EndpointKeys>,
+    /// The MCP calls waiting for the user's Allow or Deny (E27.6).
+    mcp_confirmations: crate::mcp::Confirmations,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -219,6 +222,7 @@ impl CoreApi {
             pdf: None,
             catalogs: None,
             endpoint: None,
+            mcp_confirmations: crate::mcp::Confirmations::default(),
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -264,6 +268,14 @@ impl CoreApi {
     #[must_use]
     pub fn with_endpoint_in(mut self, dir: PathBuf) -> Self {
         self.endpoint = Some(EndpointKeys::new(dir));
+        self
+    }
+
+    /// The same API, where an MCP call that needs the user's Allow waits up
+    /// to `timeout` (60 s by default; tests wait less).
+    #[must_use]
+    pub fn with_mcp_confirm_timeout(mut self, timeout: std::time::Duration) -> Self {
+        self.mcp_confirmations = crate::mcp::Confirmations::new(timeout);
         self
     }
 
@@ -1409,17 +1421,71 @@ impl SettingsService for CoreApi {
         Ok(self.endpoint_keys()?.regenerate()?)
     }
 
-    /// The switch from `config.json`, the URL and snippets from the endpoint.
+    /// The switch and grants from `config.json`, the URL and snippets from
+    /// the endpoint.
     fn mcp_status(&self) -> ApiResult<McpStatus> {
         let endpoint = self.endpoint_keys()?.info()?;
-        Ok(crate::mcp::status(self.settings.mcp_enabled()?, &endpoint))
+        Ok(crate::mcp::status(
+            self.settings.mcp_enabled()?,
+            &endpoint,
+            &self.settings.mcp_grants()?,
+        ))
     }
 
     /// Saves the switch; the endpoint reads it on the next `/mcp` request.
     fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
         let endpoint = self.endpoint_keys()?.info()?;
         self.settings.set_mcp_enabled(req.enabled)?;
-        Ok(crate::mcp::status(req.enabled, &endpoint))
+        Ok(crate::mcp::status(
+            req.enabled,
+            &endpoint,
+            &self.settings.mcp_grants()?,
+        ))
+    }
+
+    /// Saves the grant; the next tool call reads it from `config.json`.
+    fn set_mcp_grant(&self, req: McpGrantUpdate) -> ApiResult<McpStatus> {
+        if !crate::mcp::needs_grant(&req.tool) {
+            return Err(ApiError::invalid(format!(
+                "{} needs no grant: only the tools that change something do.",
+                req.tool
+            )));
+        }
+        self.settings.set_mcp_grant(&req.tool, req.granted)?;
+        self.mcp_status()
+    }
+
+    /// Read tools run; a mutating tool needs its grant, and a destructive
+    /// one the user's Allow too. Nothing is changed here either way.
+    fn authorize_mcp_tool(&self, req: McpToolCall) -> ApiResult<()> {
+        if !crate::mcp::needs_grant(&req.tool) {
+            return Ok(());
+        }
+        if !self.settings.mcp_grants()?.contains(&req.tool) {
+            return Err(crate::mcp::not_granted(&req.tool));
+        }
+        if !crate::mcp::needs_confirmation(&req.tool) {
+            return Ok(());
+        }
+        // An unknown target is refused before the user is asked. No target
+        // on deactivate_fonts means every face the app activated.
+        let count = |n: usize| Some(u32::try_from(n).unwrap_or(u32::MAX));
+        let faces = match &req.target {
+            Some(target) => count(self.lock().target_faces(target)?.len()),
+            None if req.tool == "deactivate_fonts" => count(self.list_active()?.len()),
+            None => None,
+        };
+        let emit = |e: &Event| self.events.send(e);
+        if self.mcp_confirmations.ask(&req.tool, faces, &emit) {
+            Ok(())
+        } else {
+            Err(crate::mcp::not_confirmed(&req.tool))
+        }
+    }
+
+    fn answer_mcp_confirmation(&self, req: McpConfirmationAnswer) -> ApiResult<()> {
+        let emit = |e: &Event| self.events.send(e);
+        self.mcp_confirmations.answer(req.id, req.allow, &emit)
     }
 }
 

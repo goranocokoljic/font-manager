@@ -73,6 +73,29 @@ pub enum Event {
         /// Now inactive.
         deactivated: Vec<FaceId>,
     },
+    /// An AI assistant (an MCP client) wants to run a tool that needs the
+    /// user's Allow (E27.6); the call waits for
+    /// `SettingsService::answer_mcp_confirmation` or the timeout.
+    #[serde(rename_all = "camelCase")]
+    McpConfirmationRequested {
+        /// The confirmation, for the answer.
+        id: u32,
+        /// The tool's MCP name, e.g. `deactivate_fonts`.
+        tool: String,
+        /// How many faces the call acts on, when it names them.
+        #[serde(default)]
+        faces: Option<u32>,
+        /// How long the call waits, in seconds; no answer is a Deny.
+        timeout_secs: u32,
+    },
+    /// A confirmation was answered or timed out; the UI takes its toast away.
+    #[serde(rename_all = "camelCase")]
+    McpConfirmationClosed {
+        /// The confirmation.
+        id: u32,
+        /// Whether the call may run.
+        allowed: bool,
+    },
 }
 
 /// The event stream.
@@ -142,5 +165,29 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn mcp_confirmations_are_camel_case() {
+        let e = Event::McpConfirmationRequested {
+            id: 2,
+            tool: "deactivate_fonts".into(),
+            faces: Some(3),
+            timeout_secs: 60,
+        };
+        let json = serde_json::to_string(&e).unwrap();
+        assert_eq!(
+            json,
+            r#"{"type":"mcpConfirmationRequested","id":2,"tool":"deactivate_fonts","faces":3,"timeoutSecs":60}"#
+        );
+        assert_eq!(serde_json::from_str::<Event>(&json).unwrap(), e);
+        let closed = Event::McpConfirmationClosed {
+            id: 2,
+            allowed: false,
+        };
+        assert_eq!(
+            serde_json::to_string(&closed).unwrap(),
+            r#"{"type":"mcpConfirmationClosed","id":2,"allowed":false}"#
+        );
     }
 }

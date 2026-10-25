@@ -196,6 +196,20 @@ impl SettingsService for Client {
     fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
         self.call("set_mcp_enabled", &req)
     }
+
+    fn set_mcp_grant(&self, req: McpGrantUpdate) -> ApiResult<McpStatus> {
+        self.call("set_mcp_grant", &req)
+    }
+
+    /// Waits as long as the app waits for the user's answer: the call has
+    /// no read timeout.
+    fn authorize_mcp_tool(&self, req: McpToolCall) -> ApiResult<()> {
+        self.call("authorize_mcp_tool", &req)
+    }
+
+    fn answer_mcp_confirmation(&self, req: McpConfirmationAnswer) -> ApiResult<()> {
+        self.call("answer_mcp_confirmation", &req)
+    }
 }
 
 impl EventSource for Client {

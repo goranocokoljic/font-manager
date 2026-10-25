@@ -66,7 +66,9 @@ use crate::search::{
     WeightRange, WidthRange,
 };
 use crate::settings::{
-    AppFolders, EndpointInfo, McpClient, McpSnippet, McpStatus, McpUpdate, Settings, SettingsUpdate,
+    AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
+    McpClient, McpConfirmationAnswer, McpGrant, McpGrantUpdate, McpSnippet, McpStatus, McpToolCall,
+    McpUpdate, Settings, SettingsUpdate,
 };
 use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
@@ -481,6 +483,13 @@ struct State {
     endpoint_tokens: u32,
     /// Whether the MCP server is on; off, as in a new install.
     mcp_enabled: bool,
+    /// The mutating MCP tools granted; none, as in a new install.
+    mcp_grants: BTreeSet<String>,
+    /// MCP confirmations waiting for an answer, by id.
+    mcp_pending: HashMap<u32, Sender<bool>>,
+    /// The calls that change something, by method name, oldest first: the
+    /// spy that shows a refused MCP tool never reached the API.
+    mutations: Vec<&'static str>,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
     trashed: BTreeSet<String>,
@@ -541,6 +550,12 @@ impl MockApi {
         // A panic while holding the lock cannot leave the sample data half-written
         // in a way that matters to a mock, so a poisoned lock is still used.
         self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// The calls that changed something (`activate`, `deactivate`,
+    /// `tag_faces`, `export_web`), oldest first, refused ones included.
+    pub fn mutations(&self) -> Vec<&'static str> {
+        self.state().mutations.clone()
     }
 
     /// Adds a copy of `face`'s file at `path`: the same hash under a new face
@@ -891,6 +906,9 @@ impl State {
             settings: Settings::default(),
             endpoint_tokens: 0,
             mcp_enabled: false,
+            mcp_grants: BTreeSet::new(),
+            mcp_pending: HashMap::new(),
+            mutations: Vec::new(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             layouts: mock_layout_files(),
@@ -2555,6 +2573,7 @@ fn mock_size_factor(m: &Metrics, basis: SizeBasis) -> f32 {
 impl ActivationService for MockApi {
     fn activate(&self, req: ActivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
         let mut st = self.state();
+        st.mutations.push("activate");
         let ids = st.target_faces(&req.target)?;
         let mut out = Vec::new();
         let mut activated = Vec::new();
@@ -2612,6 +2631,7 @@ impl ActivationService for MockApi {
 
     fn deactivate(&self, req: DeactivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
         let mut st = self.state();
+        st.mutations.push("deactivate");
         let mut ids = match &req.target {
             Some(t) => st.target_faces(t)?,
             None => {
@@ -2871,6 +2891,7 @@ impl OrganizationService for MockApi {
     }
 
     fn tag_faces(&self, req: TagFacesRequest) -> ApiResult<Vec<Tag>> {
+        self.state().mutations.push("tag_faces");
         if req.tags.iter().all(|n| n.trim().is_empty()) {
             return Err(ApiError::invalid("Give the tag a name."));
         }
@@ -3566,6 +3587,7 @@ fn tag_view(st: &State, t: &Tag) -> Tag {
 
 impl ExportService for MockApi {
     fn export_web(&self, req: ExportWebRequest) -> ApiResult<ExportWebResponse> {
+        self.state().mutations.push("export_web");
         if req.faces.is_empty() || req.formats.is_empty() {
             return Err(ApiError::invalid("Pick at least one font and one format."));
         }
@@ -3971,19 +3993,108 @@ impl SettingsService for MockApi {
 
     fn mcp_status(&self) -> ApiResult<McpStatus> {
         let st = self.state();
-        Ok(mock_mcp(st.mcp_enabled, &mock_endpoint(st.endpoint_tokens)))
+        Ok(mock_mcp(
+            st.mcp_enabled,
+            &mock_endpoint(st.endpoint_tokens),
+            &st.mcp_grants,
+        ))
     }
 
     fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
+        self.state().mcp_enabled = req.enabled;
+        self.mcp_status()
+    }
+
+    fn set_mcp_grant(&self, req: McpGrantUpdate) -> ApiResult<McpStatus> {
+        if !MCP_MUTATING_TOOLS.contains(&req.tool.as_str()) {
+            return Err(ApiError::invalid(format!(
+                "{} needs no grant: only the tools that change something do.",
+                req.tool
+            )));
+        }
+        {
+            let mut st = self.state();
+            if req.granted {
+                st.mcp_grants.insert(req.tool);
+            } else {
+                st.mcp_grants.remove(&req.tool);
+            }
+        }
+        self.mcp_status()
+    }
+
+    /// Like the core: a grant for every mutating tool, and the user's Allow
+    /// (answered through the event stream) for the destructive ones.
+    fn authorize_mcp_tool(&self, req: McpToolCall) -> ApiResult<()> {
+        let tool = req.tool.as_str();
+        if !MCP_MUTATING_TOOLS.contains(&tool) {
+            return Ok(());
+        }
+        let refused = |message: String| ApiError::new(ErrorCode::PermissionDenied, message);
+        let (id, rx) = {
+            let mut st = self.state();
+            if !st.mcp_grants.contains(tool) {
+                return Err(refused(format!(
+                    "AI assistants may not use {tool} yet. Turn it on in Settings → AI assistants to allow it."
+                )));
+            }
+            if !MCP_CONFIRM_TOOLS.contains(&tool) {
+                return Ok(());
+            }
+            let faces = match &req.target {
+                Some(t) => Some(u32::try_from(st.target_faces(t)?.len()).unwrap_or(u32::MAX)),
+                None => None,
+            };
+            let id = st.next();
+            let (tx, rx) = mpsc::channel();
+            st.mcp_pending.insert(id, tx);
+            st.emit(Event::McpConfirmationRequested {
+                id,
+                tool: req.tool.clone(),
+                faces,
+                timeout_secs: MCP_CONFIRM_TIMEOUT_SECS,
+            });
+            (id, rx)
+        };
+        let timeout = std::time::Duration::from_secs(u64::from(MCP_CONFIRM_TIMEOUT_SECS));
+        let allowed = rx.recv_timeout(timeout).unwrap_or_else(|_| {
+            let mut st = self.state();
+            if st.mcp_pending.remove(&id).is_some() {
+                st.emit(Event::McpConfirmationClosed { id, allowed: false });
+                false
+            } else {
+                rx.try_recv().unwrap_or(false)
+            }
+        });
+        if allowed {
+            Ok(())
+        } else {
+            Err(refused(format!(
+                "The user did not allow {tool}. Nothing was changed."
+            )))
+        }
+    }
+
+    fn answer_mcp_confirmation(&self, req: McpConfirmationAnswer) -> ApiResult<()> {
         let mut st = self.state();
-        st.mcp_enabled = req.enabled;
-        Ok(mock_mcp(st.mcp_enabled, &mock_endpoint(st.endpoint_tokens)))
+        let Some(tx) = st.mcp_pending.remove(&req.id) else {
+            return Err(ApiError::new(
+                ErrorCode::NotFound,
+                "This request from an AI assistant was already answered or timed out.",
+            ));
+        };
+        let _ = tx.send(req.allow);
+        st.emit(Event::McpConfirmationClosed {
+            id: req.id,
+            allowed: req.allow,
+        });
+        Ok(())
     }
 }
 
 /// The mock's MCP status: `/mcp` on the mock endpoint, with short snippets
 /// in the shape the core writes (`fm_core::mcp`).
-fn mock_mcp(enabled: bool, endpoint: &EndpointInfo) -> McpStatus {
+fn mock_mcp(enabled: bool, endpoint: &EndpointInfo, granted: &BTreeSet<String>) -> McpStatus {
     let url = endpoint.url.as_ref().map(|u| format!("{u}/mcp"));
     let snippets = url
         .iter()
@@ -4005,10 +4116,19 @@ fn mock_mcp(enabled: bool, endpoint: &EndpointInfo) -> McpStatus {
             ]
         })
         .collect();
+    let grants = MCP_MUTATING_TOOLS
+        .iter()
+        .map(|&tool| McpGrant {
+            tool: tool.to_owned(),
+            granted: granted.contains(tool),
+            confirm: MCP_CONFIRM_TOOLS.contains(&tool),
+        })
+        .collect();
     McpStatus {
         enabled,
         url,
         snippets,
+        grants,
     }
 }
 
