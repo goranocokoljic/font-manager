@@ -7,7 +7,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use fm_api::activation::{
-    ActivateRequest, ActivationMode, ActivationOutcome, ConflictPolicy, DeactivateRequest,
+    ActivateRequest, ActivationMode, ActivationOutcome, Clash, ConflictPolicy, DeactivateRequest,
     OutcomeStatus, Target,
 };
 use fm_api::common::Page;
@@ -16,8 +16,8 @@ use fm_api::export::{
     WebFormat,
 };
 use fm_api::library::{
-    AddSourceRequest, FaceDetail, FaceSummary, FamilySummary, FontMatchKind, ImportMode,
-    ListFamiliesRequest, ResolveFontRequest, ScanRequest, Source,
+    AddSourceRequest, DuplicateGroup, FaceDetail, FaceSummary, FamilySummary, FontMatchKind,
+    ImportMode, ListFamiliesRequest, Problem, ProblemKind, ResolveFontRequest, ScanRequest, Source,
 };
 use fm_api::organization::{ImportSetResponse, ProjectSet, SetExport};
 use fm_api::preview::PreviewRequest;
@@ -421,6 +421,56 @@ pub fn needs_the_app() -> Failure {
         "Font Manager must be running to activate fonts; start it and try again",
     )
     .into()
+}
+
+/// What `fm doctor` found, as the API answers it: the duplicate groups
+/// (`list_duplicates`), the problems of the files (`list_problems`) and the
+/// activation conflicts (`list_conflicts`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Doctor {
+    /// The duplicate groups, keeper first in each.
+    pub duplicates: Vec<DuplicateGroup>,
+    /// The problems that are not a duplicate or a conflict: broken and
+    /// unsupported files, missing folders, sidecar and index problems.
+    pub problems: Vec<Problem>,
+    /// Two active fonts with one PostScript name.
+    pub conflicts: Vec<Clash>,
+}
+
+impl Doctor {
+    /// The exit code: 0 when nothing was found, 5 when anything was.
+    pub fn exit(&self) -> Exit {
+        if self.duplicates.is_empty() && self.problems.is_empty() && self.conflicts.is_empty() {
+            Exit::Success
+        } else {
+            Exit::Problems
+        }
+    }
+}
+
+/// `fm doctor`: the three lists, read only; it resolves, moves and
+/// (de)activates nothing. `list_problems` also lists every duplicate copy
+/// and every conflict; those are left out of `problems`, as the other two
+/// lists report them, so a finding is counted once.
+pub fn doctor(api: &dyn Api) -> Result<Doctor, Failure> {
+    let duplicates = api.list_duplicates()?;
+    let conflicts = api.list_conflicts()?;
+    let mut problems = api.list_problems()?;
+    problems.retain(|p| {
+        !matches!(
+            p.kind,
+            ProblemKind::DuplicateFile
+                | ProblemKind::DuplicateFace
+                | ProblemKind::SystemConflict
+                | ProblemKind::ActiveConflict
+        )
+    });
+    Ok(Doctor {
+        duplicates,
+        problems,
+        conflicts,
+    })
 }
 
 /// `fm sets export <set>`: the set as portable JSON, also written to `out`

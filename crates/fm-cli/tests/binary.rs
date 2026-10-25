@@ -9,7 +9,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
-use fm_api::library::{AddSourceRequest, ImportMode, ResolveFontRequest, ScanRequest};
+use fm_api::library::{
+    AddSourceRequest, ImportMode, ListFamiliesRequest, ResolveFontRequest, ScanRequest,
+};
 use fm_api::organization::{CreateSetRequest, SetExport};
 use fm_api::search::{FamilyHit, Filters, SearchRequest, SimilarFace, Supports};
 use fm_api::{
@@ -38,7 +40,13 @@ impl Home {
     fn scanned(label: &str, folders: &[&str]) -> Self {
         let home = Self::new(label);
         let library = home.library(folders);
-        let api = home.api();
+        home.scan(&library);
+        home
+    }
+
+    /// Adds `library` as a source and waits for its scan.
+    fn scan(&self, library: &Path) {
+        let api = self.api();
         let source = api
             .add_source(AddSourceRequest {
                 path: library.display().to_string(),
@@ -62,7 +70,6 @@ impl Home {
                 _ => {}
             }
         }
-        home
     }
 
     /// The core over this home's index, as `fm` opens it.
@@ -694,4 +701,130 @@ fn preview_writes_a_png_file_or_the_bytes_to_stdout() {
     assert!(text(&out.stderr).contains("--force"));
     again.push("--force");
     assert_eq!(code(&home.fm(&again)), 0);
+}
+
+/// Every file under `dir` with its bytes, sorted by path.
+fn tree(dir: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    let mut files = Vec::new();
+    let mut todo = vec![dir.to_path_buf()];
+    while let Some(dir) = todo.pop() {
+        for entry in std::fs::read_dir(&dir).expect("read dir") {
+            let path = entry.expect("entry").path();
+            if path.is_dir() {
+                todo.push(path);
+            } else {
+                let bytes = std::fs::read(&path).expect("read file");
+                files.push((path, bytes));
+            }
+        }
+    }
+    files.sort();
+    files
+}
+
+/// What the index holds, as the API lists it: the families, the active
+/// faces, the duplicates and the problems.
+fn index_state(api: &CoreApi) -> String {
+    let families = api
+        .list_families(ListFamiliesRequest::default())
+        .expect("families");
+    let state = (
+        serde_json::to_value(families).expect("JSON"),
+        serde_json::to_value(api.list_active().expect("active")).expect("JSON"),
+        serde_json::to_value(api.list_duplicates().expect("duplicates")).expect("JSON"),
+        serde_json::to_value(api.list_problems().expect("problems")).expect("JSON"),
+    );
+    serde_json::to_string(&state).expect("JSON")
+}
+
+#[test]
+fn doctor_finds_exactly_the_copied_file_and_the_truncated_file_and_changes_nothing() {
+    let home = Home::new("doctor");
+    let library = home.library(&["google-repo/bebasneue"]);
+    let original = library.join("bebasneue").join("BebasNeue-Regular.ttf");
+    let copies = library.join("Copies");
+    std::fs::create_dir_all(&copies).expect("copies folder");
+    let copy = copies.join("BebasNeue-Regular.ttf");
+    std::fs::copy(&original, &copy).expect("copy");
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts");
+    let whole = std::fs::read(fixtures.join("google-repo/barlow/Barlow-BoldItalic.ttf"))
+        .expect("fixture font");
+    let truncated = copies.join("Barlow-Truncated.ttf");
+    std::fs::write(&truncated, &whole[..64]).expect("truncated font");
+    home.scan(&library);
+
+    let files_before = tree(&library);
+    let index_before = index_state(&home.api());
+
+    let out = home.fm(&["--json", "doctor"]);
+    assert_eq!(code(&out), 5, "{}", text(&out.stderr));
+    assert!(out.stderr.is_empty(), "{}", text(&out.stderr));
+    let v: Value = serde_json::from_slice(&out.stdout).expect("one JSON value");
+    let keys: Vec<&str> = v
+        .as_object()
+        .expect("object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(keys.len(), 3, "{v}");
+    for key in ["duplicates", "problems", "conflicts"] {
+        assert!(v[key].is_array(), "{key}: {v}");
+    }
+
+    let groups = v["duplicates"].as_array().expect("duplicates");
+    assert_eq!(groups.len(), 1, "{v}");
+    assert_eq!(groups[0]["kind"], "exact");
+    let mut paths: Vec<PathBuf> = groups[0]["copies"]
+        .as_array()
+        .expect("copies")
+        .iter()
+        .map(|c| PathBuf::from(c["path"].as_str().expect("path")))
+        .collect();
+    paths.sort();
+    let mut expected = vec![copy.clone(), original.clone()];
+    expected.sort();
+    assert_eq!(paths, expected);
+
+    let problems = v["problems"].as_array().expect("problems");
+    assert_eq!(problems.len(), 1, "{v}");
+    assert_eq!(problems[0]["kind"], "broken");
+    assert_eq!(
+        PathBuf::from(problems[0]["path"].as_str().expect("path")),
+        truncated
+    );
+    assert_eq!(v["conflicts"], Value::Array(Vec::new()));
+
+    // The text form: three sections, their counts and the files.
+    let out = home.fm(&["doctor"]);
+    assert_eq!(code(&out), 5, "{}", text(&out.stderr));
+    let printed = text(&out.stdout);
+    for line in ["Duplicates: 1", "Problems: 1", "Conflicts: 0"] {
+        assert!(printed.contains(line), "{line}: {printed}");
+    }
+    for path in [&original, &copy, &truncated] {
+        assert!(printed.contains(&path.display().to_string()), "{printed}");
+    }
+
+    // Read only: the files and the index are as they were.
+    assert_eq!(tree(&library), files_before, "the library folder changed");
+    assert_eq!(index_state(&home.api()), index_before, "the index changed");
+}
+
+#[test]
+fn doctor_exits_0_on_a_clean_library_and_an_empty_one() {
+    let home = Home::scanned("doctor-clean", &["google-repo/bebasneue"]);
+    let out = home.fm(&["--json", "doctor"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let v: Value = serde_json::from_slice(&out.stdout).expect("one JSON value");
+    assert_eq!(
+        v,
+        serde_json::json!({ "duplicates": [], "problems": [], "conflicts": [] })
+    );
+
+    let out = Home::new("doctor-empty").fm(&["doctor"]);
+    assert_eq!(code(&out), 0, "{}", text(&out.stderr));
+    let printed = text(&out.stdout);
+    for line in ["Duplicates: 0", "Problems: 0", "Conflicts: 0"] {
+        assert!(printed.contains(line), "{line}: {printed}");
+    }
 }
