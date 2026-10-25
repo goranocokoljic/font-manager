@@ -1021,3 +1021,78 @@ fn an_out_path_that_is_not_unicode_is_refused_and_nothing_is_written() {
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn doctor_prints_three_sections_with_counts_and_files_and_exits_5() {
+    use fm_api::activation::{ActivateRequest, ConflictPolicy, Target};
+    let api = MockApi::new();
+    // A duplicate of Inter Regular; JetBrains Mono active over the installed
+    // font of its name; LegacyGrotesk (Type 1) is in the sample library.
+    let copy = "/Users/me/Fonts/Copies/Inter-Regular-copy.ttf";
+    api.add_copy(FaceId(1), copy).expect("copy");
+    api.activate(ActivateRequest {
+        target: Target::Faces {
+            faces: vec![FaceId(6)],
+        },
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::Replace,
+    })
+    .expect("activate");
+    let duplicates = api.list_duplicates().expect("duplicates");
+    let conflicts = api.list_conflicts().expect("conflicts");
+    let unsupported = api.get_face(FaceId(7)).expect("LegacyGrotesk").path;
+    let (inter, mono) = (
+        api.get_face(FaceId(1)).expect("Inter").path,
+        api.get_face(FaceId(6)).expect("JetBrains Mono").path,
+    );
+    assert_eq!((duplicates.len(), conflicts.len()), (1, 1));
+
+    let (exit, out, err) = fm_on(&api, &["doctor"]);
+    assert_eq!((exit, err.as_str()), (Exit::Problems, ""));
+    for line in ["Duplicates: 1", "Problems: 1", "Conflicts: 1"] {
+        assert!(out.contains(line), "{line}: {out}");
+    }
+    let fm_api::activation::ConflictWith::System { path: installed } = &conflicts[0].with else {
+        panic!("a clash with an installed font: {conflicts:?}");
+    };
+    for path in [copy, &inter, &unsupported, &mono, installed] {
+        assert!(out.contains(path), "{path}: {out}");
+    }
+
+    let (exit, out, err) = fm_on(&api, &["--json", "doctor"]);
+    assert_eq!((exit, err.as_str()), (Exit::Problems, ""));
+    let v = json(&out);
+    assert_eq!(
+        v["duplicates"],
+        serde_json::to_value(&duplicates).expect("JSON")
+    );
+    assert_eq!(
+        v["conflicts"],
+        serde_json::to_value(&conflicts).expect("JSON")
+    );
+    // Duplicates and conflicts are not counted again among the problems.
+    let problems = v["problems"].as_array().expect("problems");
+    assert_eq!(problems.len(), 1, "{v}");
+    assert_eq!(problems[0]["kind"], "unsupported");
+    assert_eq!(problems[0]["path"], unsupported.as_str());
+    assert_eq!(v.as_object().expect("object").len(), 3, "{v}");
+}
+
+#[test]
+fn doctor_changes_nothing() {
+    let api = MockApi::new();
+    api.add_copy(FaceId(1), "/Users/me/Fonts/Copies/Inter-Regular-copy.ttf")
+        .expect("copy");
+    let state = |api: &MockApi| {
+        serde_json::to_string(&(
+            api.list_duplicates().expect("duplicates"),
+            api.list_problems().expect("problems"),
+            api.list_active().expect("active"),
+        ))
+        .expect("JSON")
+    };
+    let before = state(&api);
+    let (exit, _, _) = fm_on(&api, &["doctor"]);
+    assert_eq!(exit, Exit::Problems);
+    assert_eq!(state(&api), before);
+}

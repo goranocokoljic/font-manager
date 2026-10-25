@@ -16,7 +16,7 @@ use fm_api::library::{FontMatch, ResolveFontRequest};
 use fm_api::search::Supports;
 use fm_api::{Api, ApiError, ErrorCode};
 
-pub use commands::{PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
+pub use commands::{Doctor, PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
 pub use exit::{EXIT_CODES, Exit};
 pub use output::Output;
 
@@ -121,6 +121,10 @@ pub enum Command {
         #[command(flatten)]
         kind: KindFlags,
     },
+    /// Check the library: duplicates, broken files and activation
+    /// conflicts, with the files involved. Changes nothing. Exits 5 when it
+    /// finds anything, so a script can gate on it.
+    Doctor,
     /// Export or import project sets.
     Sets {
         /// What to do with sets.
@@ -320,6 +324,11 @@ pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut 
             commands::deactivate(api, kind.kind(), target),
             |r, o| output::outcomes(api, r, o),
             |r| commands::activation_exit(r),
+        ),
+        Command::Doctor => output.check(
+            commands::doctor(api),
+            |d, o| output::doctor(api, d, o),
+            Doctor::exit,
         ),
         Command::Sets {
             command: SetsCommand::Export { set, out },

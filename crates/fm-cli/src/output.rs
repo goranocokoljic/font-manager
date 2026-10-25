@@ -7,7 +7,7 @@ use std::io::{self, Write};
 use std::path::Path;
 
 use comfy_table::{Table, presets};
-use fm_api::activation::{ActivationOutcome, ConflictWith, OutcomeStatus};
+use fm_api::activation::{ActivationOutcome, Clash, ClashWinner, ConflictWith, OutcomeStatus};
 use fm_api::common::Health;
 use fm_api::export::{ExportWebResponse, SpecimenResponse};
 use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
@@ -17,7 +17,7 @@ use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
 use crate::Exit;
-use crate::commands::{Previewed, Scanned};
+use crate::commands::{Doctor, Previewed, Scanned};
 
 /// Why a command failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -451,6 +451,52 @@ fn face_name(api: &dyn Api, face: FaceId) -> String {
     api.get_face(face)
         .map(|d| format!("{} {}", d.face.family_name, d.face.style))
         .unwrap_or_default()
+}
+
+/// `fm doctor`: each section with its count and the files involved.
+pub fn doctor(api: &dyn Api, d: &Doctor, out: &mut dyn Write) -> io::Result<()> {
+    writeln!(out, "Duplicates: {}", d.duplicates.len())?;
+    for group in &d.duplicates {
+        let name = group.postscript_name.as_deref().unwrap_or("(no name)");
+        writeln!(out, "  {} {name}", json_name(&group.kind))?;
+        for copy in &group.copies {
+            let keep = if copy.keep { "keep" } else { "    " };
+            writeln!(out, "    {keep} {}", copy.path)?;
+        }
+    }
+    writeln!(out, "Problems: {}", d.problems.len())?;
+    for p in &d.problems {
+        writeln!(out, "  {} {}", json_name(&p.kind), p.path)?;
+        writeln!(out, "    {}", p.message)?;
+    }
+    writeln!(out, "Conflicts: {}", d.conflicts.len())?;
+    for c in &d.conflicts {
+        clash(api, c, out)?;
+    }
+    Ok(())
+}
+
+/// One activation conflict: the shared name and the two files, the winner
+/// marked.
+fn clash(api: &dyn Api, c: &Clash, out: &mut dyn Write) -> io::Result<()> {
+    let path = |face: FaceId| {
+        api.get_face(face)
+            .map(|d| d.path)
+            .unwrap_or_else(|_| format!("face {face}"))
+    };
+    let (with, kind) = match &c.with {
+        ConflictWith::System { path } => (path.clone(), "installed"),
+        ConflictWith::Active { face } => (path(*face), "active"),
+    };
+    let wins = |w: ClashWinner| if c.winner == w { "wins" } else { "    " };
+    writeln!(out, "  {}", c.postscript_name)?;
+    writeln!(
+        out,
+        "    {} active    {}",
+        wins(ClashWinner::Face),
+        path(c.face)
+    )?;
+    writeln!(out, "    {} {kind:<9} {with}", wins(ClashWinner::With))
 }
 
 /// `fm sets export` without `--out`: the export as the file holds it.
