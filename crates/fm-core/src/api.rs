@@ -458,9 +458,17 @@ impl Scan {
             return Err(fail(FmError::internal("the file index is not loaded")));
         };
         let before = lock(&self.index).faces_of_source(source.id).map_err(fail)?;
-        // `run` reports its own failure as `JobFailed`.
-        let rescan = ScanJob::new(job, Some(source.id), &source.path)
-            .run(files, &mut |e| self.events.send(&e))?;
+        // `run` reports its own failure as `JobFailed`. Its `ScanFinished`
+        // waits until the index holds the scan: a reader that sees it (the
+        // `fm scan` command, which exits on it) finds the faces written.
+        let mut finished = None;
+        let rescan = ScanJob::new(job, Some(source.id), &source.path).run(files, &mut |e| {
+            if matches!(e, Event::ScanFinished { .. }) {
+                finished = Some(e);
+            } else {
+                self.events.send(&e);
+            }
+        })?;
         let after = {
             let mut index = lock(&self.index);
             index
@@ -468,6 +476,9 @@ impl Scan {
                 .map_err(fail)?;
             index.faces_of_source(source.id).map_err(fail)?
         };
+        if let Some(event) = finished {
+            self.events.send(&event);
+        }
         if let Some(event) = changes(source.id, &before, &after, &rescan) {
             self.events.send(&event);
         }

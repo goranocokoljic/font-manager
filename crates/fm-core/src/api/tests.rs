@@ -250,6 +250,36 @@ fn a_scan_reports_progress_then_the_library_change() {
 }
 
 #[test]
+fn the_faces_of_a_scan_are_in_the_index_when_it_finishes() {
+    let lib = Lib::new("api-scan-written");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    let rx = lib.api.subscribe();
+    let job = lib
+        .api
+        .scan(ScanRequest {
+            source: Some(source.id),
+        })
+        .expect("scan");
+    // Stop at the finish: `fm scan` exits there, before `LibraryChanged`.
+    let added = loop {
+        match rx.recv_timeout(WAIT).expect("scan events") {
+            Event::ScanFinished { job: j, added, .. } if j == job => break added,
+            Event::JobFailed { job: j, error } if j == job => panic!("{error:?}"),
+            _ => {}
+        }
+    };
+    assert!(added >= 6, "{added}");
+    let sources = lib.api.list_sources().expect("sources");
+    assert_eq!(sources[0].face_count, added, "written before the finish");
+}
+
+#[test]
 fn the_list_shows_the_real_families_of_the_folder() {
     let (lib, source, _) = Lib::scanned("api-families");
     let names = lib.names();
@@ -3978,7 +4008,7 @@ fn provenance_survives_a_rescan_and_follows_a_moved_file_by_hash() {
             _ => {}
         }
     }
-    // The rescan writes after `ScanFinished`; a scan of its own waits for it.
+    // `ScanFinished` comes once the rescan is written.
     lib.scan(Some(source.id), false);
     assert_eq!(lib.api.list_catalog_downloads().expect("downloads"), listed);
 

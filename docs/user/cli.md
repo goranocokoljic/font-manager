@@ -9,6 +9,13 @@ folders, so the app does not have to run.
 |---------|--------------|
 | `fm version` | Show the app version and the API version |
 | `fm resolve <font>` | Show which font a name or id stands for |
+| `fm scan [folder]` | Add the folder to the library and scan it. Without a folder, scan every folder of the library. Progress goes to stderr. |
+| `fm list` | List the families |
+| `fm list --family <font>` | List the faces of a family |
+| `fm search [words] [--supports sr-Cyrl,sr-Latn] [--feature smcp] [--variable]` | Find families. With `--supports`, show the characters each family misses. |
+| `fm info <font>` | Show a font: names, styles, axes, features, scripts and license |
+| `fm coverage <font> --text "..."` | Check that a font has every character of the text. Exits with code 5 when a character is missing. `--supports <languages>` checks languages instead. |
+| `fm similar <font> [--limit 10]` | List the fonts that look most like this one |
 | `fm --help` | Show every command and the exit codes |
 
 ## Name a font

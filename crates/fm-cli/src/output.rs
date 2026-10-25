@@ -7,10 +7,13 @@ use std::io::{self, Write};
 
 use comfy_table::{Table, presets};
 use fm_api::ApiError;
-use fm_api::library::{AppInfo, FontMatch};
+use fm_api::common::Health;
+use fm_api::library::{AppInfo, FaceDetail, FaceSummary, FamilySummary, FontMatch};
+use fm_api::search::{CoverageReport, FamilyHit, SimilarFace};
 use serde::Serialize;
 
 use crate::Exit;
+use crate::commands::Scanned;
 
 /// Why a command failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,16 +67,44 @@ impl<'a> Output<'a> {
     pub fn print<T: Serialize, E: Into<Failure>>(
         self,
         answer: Result<T, E>,
-        human: fn(&T, &mut dyn Write) -> io::Result<()>,
+        human: impl FnOnce(&T, &mut dyn Write) -> io::Result<()>,
+    ) -> Exit {
+        self.check(answer, human, |_| true)
+    }
+
+    /// As [`Output::print`] for a check: an answer that is not `passed` is
+    /// printed the same way and exits 5.
+    pub fn check<T: Serialize, E: Into<Failure>>(
+        self,
+        answer: Result<T, E>,
+        human: impl FnOnce(&T, &mut dyn Write) -> io::Result<()>,
+        passed: fn(&T) -> bool,
     ) -> Exit {
         let written = match answer.map_err(Into::into) {
-            Ok(value) => self.answer(&value, human).map(|()| Exit::Success),
+            Ok(value) => {
+                let exit = if passed(&value) {
+                    Exit::Success
+                } else {
+                    Exit::Problems
+                };
+                self.answer(&value, human).map(|()| exit)
+            }
             Err(failure) => {
                 let exit = Exit::of(failure.error().code);
                 self.failure(&failure).map(|()| exit)
             }
         };
         written.unwrap_or(Exit::Unexpected)
+    }
+
+    /// Where a long command reports progress: stderr, or nowhere with
+    /// `--json` (stderr then carries only an error).
+    pub fn progress(&mut self) -> Option<&mut dyn Write> {
+        if self.json {
+            None
+        } else {
+            Some(&mut *self.err)
+        }
     }
 
     /// Prints a usage error clap found (`fm` with a bad argument); with
@@ -97,7 +128,7 @@ impl<'a> Output<'a> {
     fn answer<T: Serialize>(
         self,
         value: &T,
-        human: fn(&T, &mut dyn Write) -> io::Result<()>,
+        human: impl FnOnce(&T, &mut dyn Write) -> io::Result<()>,
     ) -> io::Result<()> {
         if self.json {
             serde_json::to_writer(&mut *self.out, value)?;
@@ -151,4 +182,218 @@ fn faces(faces: &[FontMatch]) -> Table {
         ]);
     }
     table
+}
+
+/// `fm scan`: per folder, what its scan found.
+pub fn scanned(scans: &[Scanned], out: &mut dyn Write) -> io::Result<()> {
+    if scans.is_empty() {
+        return writeln!(out, "No folder to scan. Add one with fm scan <folder>.");
+    }
+    let mut table = Table::new();
+    table
+        .load_preset(presets::NOTHING)
+        .set_header(["FOLDER", "ADDED", "CHANGED", "REMOVED", "PROBLEMS"]);
+    for s in scans {
+        table.add_row([
+            s.source.path.clone(),
+            s.added.to_string(),
+            s.changed.to_string(),
+            s.removed.to_string(),
+            s.problems.to_string(),
+        ]);
+    }
+    writeln!(out, "{table}")
+}
+
+/// `fm list`: the families.
+pub fn families(families: &[FamilySummary], out: &mut dyn Write) -> io::Result<()> {
+    let mut table = Table::new();
+    table
+        .load_preset(presets::NOTHING)
+        .set_header(["ID", "FAMILY", "STYLES", "VARIABLE", "FOUNDRY"]);
+    for f in families {
+        table.add_row([
+            f.id.to_string(),
+            f.name.clone(),
+            f.style_count.to_string(),
+            yes(f.is_variable).into(),
+            f.foundry.clone().unwrap_or_default(),
+        ]);
+    }
+    writeln!(out, "{table}")?;
+    writeln!(out, "{} families", families.len())
+}
+
+/// `fm list --family`: the faces.
+pub fn face_rows(faces: &[FaceSummary], out: &mut dyn Write) -> io::Result<()> {
+    let mut table = Table::new();
+    table.load_preset(presets::NOTHING).set_header([
+        "ID",
+        "POSTSCRIPT NAME",
+        "FAMILY",
+        "STYLE",
+        "WEIGHT",
+        "VARIABLE",
+    ]);
+    for f in faces {
+        table.add_row([
+            f.id.to_string(),
+            f.postscript_name.clone(),
+            f.family_name.clone(),
+            f.style.clone(),
+            f.weight.to_string(),
+            yes(f.is_variable).into(),
+        ]);
+    }
+    writeln!(out, "{table}")
+}
+
+/// `fm search`: the family hits; with `--supports`, what each misses.
+pub fn hits(hits: &[FamilyHit], out: &mut dyn Write) -> io::Result<()> {
+    let coverage = hits.iter().any(|h| h.missing.is_some());
+    let mut header = vec!["ID", "FAMILY", "STYLES", "MATCHING FACES"];
+    if coverage {
+        header.push("MISSING");
+    }
+    let mut table = Table::new();
+    table.load_preset(presets::NOTHING).set_header(header);
+    for h in hits {
+        let mut row = vec![
+            h.family.id.to_string(),
+            h.family.name.clone(),
+            h.family.style_count.to_string(),
+            h.faces.len().to_string(),
+        ];
+        if coverage {
+            row.push(
+                h.missing
+                    .as_ref()
+                    .map_or_else(String::new, |m| m.chars.join(" ")),
+            );
+        }
+        table.add_row(row);
+    }
+    writeln!(out, "{table}")?;
+    writeln!(out, "{} families", hits.len())
+}
+
+/// `fm info`: names, styles, axes, features, scripts and license bits.
+pub fn info(d: &FaceDetail, out: &mut dyn Write) -> io::Result<()> {
+    let f = &d.face;
+    let text = |v: &Option<String>| v.clone().unwrap_or_default();
+    let axes: Vec<String> = d
+        .axes
+        .iter()
+        .map(|a| format!("{} {}–{} (default {})", a.tag, a.min, a.max, a.default))
+        .collect();
+    let features: Vec<&str> = d.features.iter().map(|f| f.tag.as_str()).collect();
+    let l = &d.license;
+    let fields = [
+        ("ID", f.id.to_string()),
+        ("Family", f.family_name.clone()),
+        ("Style", f.style.clone()),
+        ("PostScript name", f.postscript_name.clone()),
+        ("Legacy family", text(&d.legacy_family)),
+        ("Legacy style", text(&d.legacy_style)),
+        ("Version", text(&d.version)),
+        ("Designer", text(&d.designer)),
+        ("Foundry", text(&d.foundry)),
+        ("Weight", f.weight.to_string()),
+        ("Width", f.width.to_string()),
+        ("Slant", json_name(&f.slant)),
+        ("Format", json_name(&f.format)),
+        ("Variable", yes(f.is_variable).into()),
+        (
+            "Health",
+            match &f.health {
+                Health::Ok => "ok".into(),
+                Health::Broken(why) => format!("broken: {why}"),
+                Health::Unsupported(why) => format!("unsupported: {why}"),
+            },
+        ),
+        ("File", d.path.clone()),
+        ("Axes", axes.join(", ")),
+        ("Features", features.join(" ")),
+        ("Scripts", d.scripts.join(" ")),
+        (
+            "Open license",
+            l.open_license.as_ref().map(json_name).unwrap_or_default(),
+        ),
+        ("Embedding", json_name(&l.embedding)),
+        (
+            "Declared license",
+            l.declared.as_ref().map(json_name).unwrap_or_default(),
+        ),
+        ("License", text(&l.description)),
+        ("License URL", text(&l.url)),
+    ];
+    for (label, value) in fields {
+        if !value.is_empty() {
+            writeln!(out, "{label:<18}{value}")?;
+        }
+    }
+    Ok(())
+}
+
+/// `fm coverage`: covered, or the characters missing, overall and per
+/// language.
+pub fn coverage(report: &CoverageReport, out: &mut dyn Write) -> io::Result<()> {
+    if report.complete {
+        writeln!(out, "Every character is covered.")?;
+    } else {
+        writeln!(
+            out,
+            "{} characters are missing: {}",
+            report.missing.len(),
+            report.missing.join(" ")
+        )?;
+    }
+    for l in &report.languages {
+        write!(out, "{}: {} of {}", l.code, l.covered, l.total)?;
+        if !l.missing.is_empty() {
+            write!(out, ", missing {}", l.missing.join(" "))?;
+        }
+        writeln!(out)?;
+    }
+    Ok(())
+}
+
+/// `fm similar`: the faces, closest first, with the reasons.
+pub fn similar(faces: &[SimilarFace], out: &mut dyn Write) -> io::Result<()> {
+    if faces.is_empty() {
+        return writeln!(out, "No similar fonts found.");
+    }
+    let mut table = Table::new();
+    table.load_preset(presets::NOTHING).set_header([
+        "SCORE",
+        "ID",
+        "POSTSCRIPT NAME",
+        "FAMILY",
+        "STYLE",
+        "REASONS",
+    ]);
+    for s in faces {
+        table.add_row([
+            format!("{:.2}", s.score),
+            s.face.id.to_string(),
+            s.face.postscript_name.clone(),
+            s.face.family_name.clone(),
+            s.face.style.clone(),
+            s.reasons.join(", "),
+        ]);
+    }
+    writeln!(out, "{table}")
+}
+
+fn yes(b: bool) -> &'static str {
+    if b { "yes" } else { "no" }
+}
+
+/// An enum value as the API names it in JSON (`italic`, `ofl`).
+fn json_name<T: Serialize>(value: &T) -> String {
+    match serde_json::to_value(value) {
+        Ok(serde_json::Value::String(s)) => s,
+        Ok(other) => other.to_string(),
+        Err(_) => String::new(),
+    }
 }
