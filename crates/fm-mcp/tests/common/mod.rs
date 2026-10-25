@@ -67,6 +67,20 @@ impl Client {
         (text, e)
     }
 
+    /// The PNG bytes and the caption of a preview call that must succeed:
+    /// image content first (`image/png`, base64), then one text block.
+    pub async fn png(&self, tool: &str, args: Value) -> (Vec<u8>, String) {
+        let result = self.call(tool, args).await.expect("tools/call");
+        assert_ne!(result.is_error, Some(true), "{tool}: {result:?}");
+        assert_eq!(result.content.len(), 2, "{tool}: image and text");
+        let image = result.content[0].as_image().expect("image content");
+        assert_eq!(image.mime_type, "image/png");
+        let png = unbase64(&image.data);
+        assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n", "PNG signature");
+        let text = result.content[1].as_text().expect("text").text.clone();
+        (png, text)
+    }
+
     pub async fn err(&self, tool: &str, args: Value) -> ApiError {
         self.err_text(tool, args).await.1
     }
@@ -74,6 +88,34 @@ impl Client {
     pub async fn close(self) {
         let _ = self.0.cancel().await;
     }
+}
+
+/// Decodes standard padded base64; panics on anything else.
+pub fn unbase64(s: &str) -> Vec<u8> {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    assert_eq!(s.len() % 4, 0, "padded base64");
+    let mut out = Vec::new();
+    for quad in s.as_bytes().chunks(4) {
+        let pad = quad.iter().filter(|&&c| c == b'=').count();
+        let mut n = 0u32;
+        for &c in quad {
+            let v = if c == b'=' {
+                0
+            } else {
+                ALPHABET.iter().position(|&a| a == c).expect("base64 digit") as u32
+            };
+            n = (n << 6) | v;
+        }
+        out.extend_from_slice(&n.to_be_bytes()[1..4 - pad]);
+    }
+    out
+}
+
+/// A PNG's width and height, from its IHDR chunk.
+pub fn png_size(png: &[u8]) -> (u32, u32) {
+    assert_eq!(&png[12..16], b"IHDR");
+    let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+    (be(&png[16..20]), be(&png[20..24]))
 }
 
 /// The first bytes of every font file format, raw and as base64.

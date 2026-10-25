@@ -69,8 +69,8 @@ use fm_api::organization::{
     UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
-    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
-    SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
+    ComparePreviewRequest, CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest,
+    PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
@@ -97,7 +97,7 @@ use crate::index::{DeclaredLicense, Index};
 use crate::layout::store::LayoutStore;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
-use crate::scanner::{FileIndex, Rescan, ScanJob};
+use crate::scanner::{FileHash, FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
 use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, specimen, subset, web_font};
 
@@ -755,6 +755,36 @@ impl PreviewService for CoreApi {
         let image = match (&self.previews, &file.hash) {
             (Some(previews), Some(hash)) => {
                 let key = CacheKey::new(hash, file.collection_index, &req);
+                previews.get_or_render(&key, render)?
+            }
+            _ => render()?,
+        };
+        Ok(image)
+    }
+
+    /// Checks the request, resolves every face to its file, and renders
+    /// through the preview cache when every file has been hashed.
+    fn compare_preview(&self, req: ComparePreviewRequest) -> ApiResult<PreviewImage> {
+        preview::check_compare(&req)?;
+        let files = {
+            let index = self.lock();
+            req.faces
+                .iter()
+                .map(|face| index.face_file(*face))
+                .collect::<FmResult<Vec<_>>>()?
+        };
+        let paths: Vec<(&Path, u32)> = files
+            .iter()
+            .map(|f| (f.path.as_path(), f.collection_index))
+            .collect();
+        let render = || preview::compare_preview_files(&paths, &req);
+        let hashes: Option<Vec<(&FileHash, u32)>> = files
+            .iter()
+            .map(|f| f.hash.as_ref().map(|h| (h, f.collection_index)))
+            .collect();
+        let image = match (&self.previews, hashes, req.faces.first()) {
+            (Some(previews), Some(hashes), Some(first)) => {
+                let key = CacheKey::compare(&hashes, &req.row(*first));
                 previews.get_or_render(&key, render)?
             }
             _ => render()?,

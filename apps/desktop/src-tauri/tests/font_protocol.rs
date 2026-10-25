@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 
 use fm_api::mock::MockApi;
 use fm_api::preview::{
-    CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest, PreviewService,
-    SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
+    ComparePreviewRequest, CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest,
+    PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId};
 use fm_app_lib::{catalog_font_response, font_response};
@@ -39,6 +39,10 @@ impl Drop for Files {
 
 impl PreviewService for Files {
     fn render_preview(&self, _: PreviewRequest) -> ApiResult<PreviewImage> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
+
+    fn compare_preview(&self, _: ComparePreviewRequest) -> ApiResult<PreviewImage> {
         Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }
 

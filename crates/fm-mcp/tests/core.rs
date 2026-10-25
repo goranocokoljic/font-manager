@@ -20,7 +20,7 @@ use fm_mcp::{AllowAll, McpServer};
 use fm_platform::{AppPaths, MockActivator};
 use serde_json::{Value, json};
 
-use common::{Client, assert_no_font_bytes, connect};
+use common::{Client, assert_no_font_bytes, connect, png_size};
 
 /// A scratch home under the temp folder, removed on drop.
 struct Home(PathBuf);
@@ -153,6 +153,43 @@ async fn search_get_font_and_coverage_run_on_the_core() {
         )
         .await;
     assert_eq!(polish["languages"][0]["code"], "pl");
+    client.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn preview_tools_render_real_pngs_on_the_core() {
+    let home = Home::new("preview");
+    let api = scanned_core(&home, &["derived/agdasima", "google-repo/barlow"]);
+    let client = client_over(&api).await;
+    let barlow = id(&client
+        .ok("search_fonts", json!({ "query": "barlow" }))
+        .await["families"][0]["faces"][0]);
+    let agdasima = id(&client
+        .ok("search_fonts", json!({ "query": "agdasima" }))
+        .await["families"][0]["faces"][0]);
+    let args = |face: u32| json!({ "face_id": face, "text": "Hamburg", "size": 40 });
+
+    let (one, caption) = client.png("render_preview", args(barlow)).await;
+    let (w1, h1) = png_size(&one);
+    assert!(w1 > 40 && h1 > 20, "{w1}x{h1}");
+    assert!(caption.contains("Barlow"), "{caption}");
+    let (two, _) = client.png("render_preview", args(agdasima)).await;
+    let (w2, h2) = png_size(&two);
+    let (again, _) = client.png("render_preview", args(barlow)).await;
+    assert_eq!(again, one, "the same request, the same (cached) PNG");
+
+    let (both, caption) = client
+        .png(
+            "compare_preview",
+            json!({ "face_ids": [agdasima, barlow], "text": "Hamburg", "size": 40 }),
+        )
+        .await;
+    assert_eq!(png_size(&both), (w1.max(w2), h1 + h2), "one row per face");
+    let rows = (
+        caption.find("Agdasima").expect("agdasima"),
+        caption.find("Barlow").expect("barlow"),
+    );
+    assert!(rows.0 < rows.1, "top to bottom in request order: {caption}");
     client.close().await;
 }
 

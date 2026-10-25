@@ -1139,6 +1139,75 @@ fn previews_render_from_the_file_and_are_cached() {
     }
 }
 
+#[test]
+fn a_comparison_renders_one_row_per_face_through_the_cache() {
+    let (lib, _, _) = Lib::scanned("api-compare");
+    let face = |name: &str| {
+        lib.api
+            .get_family(lib.family(name).id)
+            .expect("family")
+            .faces[0]
+            .id
+    };
+    let (barlow, bebas, archivo) = (face("Barlow"), face("Bebas Neue"), face("Archivo"));
+    let req = |faces: Vec<FaceId>| ComparePreviewRequest {
+        faces,
+        text: "Hamburg".into(),
+        size_px: 32.0,
+        variations: Vec::new(),
+        features: Vec::new(),
+        foreground: None,
+        background: None,
+    };
+    let image = lib
+        .api
+        .compare_preview(req(vec![barlow, bebas, archivo]))
+        .expect("comparison");
+    let rows: Vec<PreviewImage> = [barlow, bebas, archivo]
+        .into_iter()
+        .map(|f| lib.api.render_preview(req(vec![f]).row(f)).expect("row"))
+        .collect();
+    assert_eq!(image.height, rows.iter().map(|r| r.height).sum::<u32>());
+    assert_eq!(image.width, rows.iter().map(|r| r.width).max().unwrap_or(0));
+    let cached = lib.api.previews.as_ref().map(PreviewCache::len);
+    assert_eq!(cached, Some(4), "the comparison and its three rows");
+    assert_eq!(
+        lib.api
+            .compare_preview(req(vec![barlow, bebas, archivo]))
+            .expect("again"),
+        image
+    );
+    assert_eq!(lib.api.previews.as_ref().map(PreviewCache::len), Some(4));
+    let swapped = lib
+        .api
+        .compare_preview(req(vec![bebas, barlow, archivo]))
+        .expect("swapped");
+    assert_ne!(swapped.png, image.png, "row order is part of the image");
+
+    for faces in [vec![barlow], vec![barlow, bebas, archivo, barlow, bebas]] {
+        let n = faces.len();
+        let err = lib.api.compare_preview(req(faces)).expect_err("count");
+        assert_eq!(err.code, ErrorCode::InvalidRequest, "{n} faces");
+    }
+    let mut long = req(vec![barlow, bebas]);
+    long.text = "a".repeat(501);
+    assert_eq!(
+        lib.api.compare_preview(long).expect_err("long").code,
+        ErrorCode::InvalidRequest
+    );
+    let mut big = req(vec![barlow, bebas]);
+    big.size_px = 301.0;
+    assert_eq!(
+        lib.api.compare_preview(big).expect_err("size").code,
+        ErrorCode::InvalidRequest
+    );
+    let missing = lib
+        .api
+        .compare_preview(req(vec![barlow, FaceId(999_999)]))
+        .expect_err("missing face");
+    assert_eq!(missing.code, ErrorCode::NotFound);
+}
+
 // --- activation ----------------------------------------------------------
 
 #[test]

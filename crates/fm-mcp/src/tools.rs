@@ -1,4 +1,4 @@
-//! The MCP tools: one `fm-api` call each (E27.2).
+//! The MCP tools: one `fm-api` call each (E27.2, E27.3).
 //!
 //! Each tool has an input struct whose JSON schema (`rmcp::schemars`) is the
 //! tool's `inputSchema`. A call decodes its arguments into that struct,
@@ -7,16 +7,25 @@
 //! has no call that returns a font file, and `export_web` answers with the
 //! paths it wrote and the CSS.
 //!
+//! The two preview tools answer with a picture instead: the PNG the API
+//! rendered, as MCP image content (`image/png`, base64), then a text block
+//! naming the faces in row order (one `get_face` per face for the names).
+//!
 //! An [`ApiError`] becomes a tool error (`isError: true`) whose text is the
 //! error's user message and whose structured content is the error itself.
 //! The mutating tools ask the [`ToolGate`] first.
 
+use std::collections::BTreeMap;
+
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, Target,
 };
-use fm_api::common::{Classification, Page};
+use fm_api::common::{AxisValue, Classification, FeatureSetting, Page};
 use fm_api::export::{ExportWebRequest, Subset, WebFormat};
 use fm_api::organization::TagFacesRequest;
+use fm_api::preview::{
+    ComparePreviewRequest, MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest,
+};
 use fm_api::search::{
     CoverageRequest, Filters, PairingRequest, SearchRequest, SimilarRequest, Supports,
 };
@@ -54,9 +63,13 @@ pub const DEACTIVATE_FONTS: &str = "deactivate_fonts";
 pub const TAG_FONTS: &str = "tag_fonts";
 /// Export web fonts with CSS.
 pub const EXPORT_WEB: &str = "export_web";
+/// A line of text rendered in one face, as a PNG.
+pub const RENDER_PREVIEW: &str = "render_preview";
+/// The same line rendered in 2–4 faces, one row each, as one PNG.
+pub const COMPARE_PREVIEW: &str = "compare_preview";
 
 /// Every tool, in the order `tools/list` gives them.
-pub const NAMES: [&str; 12] = [
+pub const NAMES: [&str; 14] = [
     SEARCH_FONTS,
     GET_FONT,
     LIST_COLLECTIONS,
@@ -69,6 +82,8 @@ pub const NAMES: [&str; 12] = [
     DEACTIVATE_FONTS,
     TAG_FONTS,
     EXPORT_WEB,
+    RENDER_PREVIEW,
+    COMPARE_PREVIEW,
 ];
 
 /// The tools that change something; they go through the [`ToolGate`].
@@ -282,6 +297,77 @@ fn yes() -> bool {
     true
 }
 
+/// How a preview is drawn, beyond the text and size.
+#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct PreviewOptions {
+    /// Variation axis values by tag (`{"wght": 700, "wdth": 90}`); axes left
+    /// out stay at their default, axes a face lacks are ignored.
+    pub variations: BTreeMap<String, f32>,
+    /// OpenType features switched on (true) or off (false) by tag
+    /// (`{"liga": false, "smcp": true}`).
+    pub features: BTreeMap<String, bool>,
+    /// Text colour, CSS hex (`#1a1a1a`); black when absent.
+    pub foreground: Option<String>,
+    /// Background colour, CSS hex; transparent when absent.
+    pub background: Option<String>,
+}
+
+impl PreviewOptions {
+    fn variations(&self) -> Vec<AxisValue> {
+        self.variations
+            .iter()
+            .map(|(tag, value)| AxisValue {
+                tag: tag.clone(),
+                value: *value,
+            })
+            .collect()
+    }
+
+    fn features(&self) -> Vec<FeatureSetting> {
+        self.features
+            .iter()
+            .map(|(tag, on)| FeatureSetting {
+                tag: tag.clone(),
+                on: *on,
+            })
+            .collect()
+    }
+}
+
+/// `render_preview`: a line of text in one face.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct RenderPreviewInput {
+    /// The face id (from `search_fonts`).
+    pub face_id: u32,
+    /// The text, at most 500 characters.
+    pub text: String,
+    /// Size in pixels, 8 to 300.
+    pub size: f32,
+    /// Axis values, features and colours.
+    #[serde(default)]
+    pub options: PreviewOptions,
+}
+
+/// `compare_preview`: the same line of text in 2–4 faces.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct ComparePreviewInput {
+    /// The face ids, 2 to 4, top to bottom.
+    pub face_ids: Vec<u32>,
+    /// The text, at most 500 characters.
+    pub text: String,
+    /// Size in pixels, 8 to 300.
+    pub size: f32,
+    /// Axis values, features and colours, the same for every face.
+    #[serde(default)]
+    pub options: PreviewOptions,
+}
+
 /// Results per page when a tool is not told.
 const DEFAULT_SEARCH_LIMIT: u32 = 20;
 const DEFAULT_LIMIT: u32 = 10;
@@ -341,6 +427,14 @@ pub fn list() -> Vec<Tool> {
             EXPORT_WEB,
             "Write web fonts (WOFF2/WOFF) and @font-face CSS to a folder. Returns the paths written and the CSS.",
         ),
+        tool::<RenderPreviewInput>(
+            RENDER_PREVIEW,
+            "Render a line of text in one face. Returns a PNG image and the face's name.",
+        ),
+        tool::<ComparePreviewInput>(
+            COMPARE_PREVIEW,
+            "Render the same line of text in 2 to 4 faces, one row per face, top to bottom in the order given. Returns one PNG image and the faces' names in row order.",
+        ),
     ]
 }
 
@@ -357,11 +451,12 @@ pub fn call(
     if MUTATING.contains(&name) && !gate.allows(name) {
         return Some(api_error(&refused(name)));
     }
-    let answer = dispatch(api, name, Value::Object(arguments));
-    Some(match answer {
-        Ok(value) => CallToolResult::structured(value),
-        Err(e) => api_error(&e),
-    })
+    let arguments = Value::Object(arguments);
+    let answer = match name {
+        RENDER_PREVIEW | COMPARE_PREVIEW => preview(api, name, arguments),
+        _ => dispatch(api, name, arguments).map(CallToolResult::structured),
+    };
+    Some(answer.unwrap_or_else(|e| api_error(&e)))
 }
 
 /// A tool error for `e`: its user message as text, the error as
@@ -449,6 +544,96 @@ fn target(
         ));
     }
     Ok(named.pop())
+}
+
+/// Text over the tools' cap is refused here; the API checks the rest (size,
+/// colours, tags, face count) and its error becomes the tool error.
+fn short_text(text: &str) -> Result<(), ApiError> {
+    if text.chars().count() > MAX_COMPARE_TEXT_CHARS {
+        return Err(ApiError::invalid(format!(
+            "Preview text must be at most {MAX_COMPARE_TEXT_CHARS} characters."
+        )));
+    }
+    Ok(())
+}
+
+/// A preview tool: the image, then the faces in row order.
+fn preview(api: &dyn Api, name: &str, value: Value) -> Result<CallToolResult, ApiError> {
+    let (image, faces) = if name == RENDER_PREVIEW {
+        let a: RenderPreviewInput = args(name, value)?;
+        short_text(&a.text)?;
+        let face = FaceId(a.face_id);
+        let image = api.render_preview(PreviewRequest {
+            face,
+            text: a.text,
+            size_px: a.size,
+            variations: a.options.variations(),
+            features: a.options.features(),
+            foreground: a.options.foreground,
+            background: a.options.background,
+        })?;
+        (image, vec![face])
+    } else {
+        let a: ComparePreviewInput = args(name, value)?;
+        short_text(&a.text)?;
+        let faces = ids(&a.face_ids, FaceId);
+        let image = api.compare_preview(ComparePreviewRequest {
+            faces: faces.clone(),
+            text: a.text,
+            size_px: a.size,
+            variations: a.options.variations(),
+            features: a.options.features(),
+            foreground: a.options.foreground,
+            background: a.options.background,
+        })?;
+        (image, faces)
+    };
+    let names = faces
+        .iter()
+        .map(|face| {
+            let f = api.get_face(*face)?.face;
+            Ok(format!("{} {} (face {})", f.family_name, f.style, f.id.0))
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    Ok(CallToolResult::success(vec![
+        ContentBlock::image(base64(&image.png), "image/png"),
+        ContentBlock::text(caption(&image, &names)),
+    ]))
+}
+
+/// `Inter Regular (face 12), 640×58 px`; for several faces their names
+/// numbered top to bottom.
+fn caption(image: &PreviewImage, names: &[String]) -> String {
+    let size = format!("{}×{} px", image.width, image.height);
+    match names {
+        [one] => format!("{one}, {size}"),
+        _ => {
+            let rows: Vec<String> = names
+                .iter()
+                .enumerate()
+                .map(|(i, n)| format!("{}. {n}", i + 1))
+                .collect();
+            format!("Rows top to bottom: {}; {size}", rows.join("; "))
+        }
+    }
+}
+
+/// Standard base64 with padding (RFC 4648 §4), as MCP image content wants.
+fn base64(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let byte = |i: usize| u32::from(chunk.get(i).copied().unwrap_or(0));
+        let n = (byte(0) << 16) | (byte(1) << 8) | byte(2);
+        for i in 0..4 {
+            if i <= chunk.len() {
+                out.push(char::from(ALPHABET[((n >> (18 - 6 * i)) & 63) as usize]));
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
 }
 
 fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> {
@@ -600,7 +785,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn there_are_twelve_tools_in_order_with_object_schemas() {
+    fn there_are_fourteen_tools_in_order_with_object_schemas() {
         let tools = list();
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert_eq!(names, NAMES);
@@ -633,6 +818,53 @@ mod tests {
         );
         let back: ApiError = serde_json::from_value(result.structured_content.unwrap()).unwrap();
         assert_eq!(back, e);
+    }
+
+    #[test]
+    fn base64_matches_the_rfc_4648_vectors() {
+        let vectors = [
+            ("", ""),
+            ("f", "Zg=="),
+            ("fo", "Zm8="),
+            ("foo", "Zm9v"),
+            ("foob", "Zm9vYg=="),
+            ("fooba", "Zm9vYmE="),
+            ("foobar", "Zm9vYmFy"),
+        ];
+        for (raw, encoded) in vectors {
+            assert_eq!(base64(raw.as_bytes()), encoded, "{raw:?}");
+        }
+        assert_eq!(base64(&[0xFB, 0xFF, 0xBF]), "+/+/");
+        assert_eq!(base64(b"\x89PNG\r\n\x1a\n"), "iVBORw0KGgo=");
+    }
+
+    #[test]
+    fn preview_text_is_capped_at_500_characters() {
+        assert!(short_text(&"ž".repeat(500)).is_ok());
+        let e = short_text(&"ž".repeat(501)).unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn options_become_api_axis_values_and_features() {
+        let options: PreviewOptions = serde_json::from_value(
+            json!({ "variations": { "wght": 700.0 }, "features": { "liga": false } }),
+        )
+        .unwrap();
+        assert_eq!(
+            options.variations(),
+            vec![AxisValue {
+                tag: "wght".into(),
+                value: 700.0
+            }]
+        );
+        assert_eq!(
+            options.features(),
+            vec![FeatureSetting {
+                tag: "liga".into(),
+                on: false
+            }]
+        );
     }
 
     #[test]

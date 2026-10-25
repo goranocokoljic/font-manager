@@ -21,7 +21,9 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
 use fm_api::common::{FontFormat, Metrics};
-use fm_api::preview::{PreviewImage, PreviewRequest};
+use fm_api::preview::{
+    COMPARE_FACES, ComparePreviewRequest, MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest,
+};
 use read_fonts::types::Tag;
 use read_fonts::{FileRef, TableProvider};
 use swash::FontRef;
@@ -102,6 +104,77 @@ pub fn render_preview(
         width: raster.width,
         height: raster.height,
         png: raster.to_png(),
+    })
+}
+
+/// Checks the parts of a comparison that do not depend on the faces: 2–4
+/// faces and at most 500 characters. Size, colours and tags are checked per
+/// row by [`rasterize`].
+pub fn check_compare(req: &ComparePreviewRequest) -> FmResult<()> {
+    if !COMPARE_FACES.contains(&req.faces.len()) {
+        return Err(FmError::invalid("Compare 2 to 4 fonts.")
+            .with_detail(format!("{} faces", req.faces.len())));
+    }
+    if req.text.chars().count() > MAX_COMPARE_TEXT_CHARS {
+        return Err(FmError::invalid(
+            "Comparison text must be at most 500 characters.",
+        ));
+    }
+    Ok(())
+}
+
+/// Renders `req` from the font files of its faces, in order (path and
+/// collection index of each), and encodes it as a PNG. Reads the files;
+/// never writes them.
+pub fn compare_preview_files(
+    files: &[(&Path, u32)],
+    req: &ComparePreviewRequest,
+) -> FmResult<PreviewImage> {
+    check_compare(req)?;
+    let rows = files
+        .iter()
+        .zip(&req.faces)
+        .map(|((path, index), face)| {
+            let data = fs::read(path)
+                .map_err(|e| FmError::io("The font file could not be read.", path, &e))?;
+            rasterize(&data, *index, &req.row(*face)).map_err(|e| match e.detail() {
+                Some(_) => e,
+                None => e.with_detail(path.display().to_string()),
+            })
+        })
+        .collect::<FmResult<Vec<_>>>()?;
+    let image = stack(&rows, req)?;
+    Ok(PreviewImage {
+        width: image.width,
+        height: image.height,
+        png: image.to_png(),
+    })
+}
+
+/// The rows one under another, top to bottom, left-aligned; a row narrower
+/// than the widest is filled out with the background colour.
+fn stack(rows: &[Raster], req: &ComparePreviewRequest) -> FmResult<Raster> {
+    let background = match &req.background {
+        Some(hex) => color(hex)?,
+        None => [0.0; 4],
+    };
+    let fill = Canvas::new(1, 1, background).into_rgba();
+    let width = rows.iter().map(|r| r.width).max().unwrap_or(1).max(1);
+    let height = rows.iter().map(|r| r.height).sum::<u32>().max(1);
+    let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
+    for row in rows {
+        for line in row.rgba.chunks_exact((row.width as usize * 4).max(1)) {
+            rgba.extend_from_slice(line);
+            for _ in row.width..width {
+                rgba.extend_from_slice(&fill);
+            }
+        }
+    }
+    Ok(Raster {
+        width,
+        height,
+        baseline: rows.first().map_or(0, |r| r.baseline),
+        rgba,
     })
 }
 
@@ -723,6 +796,72 @@ mod tests {
 
     fn code(result: FmResult<Raster>) -> ErrorCode {
         result.unwrap_err().code()
+    }
+
+    fn compare_req(faces: usize, text: &str) -> ComparePreviewRequest {
+        ComparePreviewRequest {
+            faces: (1..=faces as u32).map(FaceId).collect(),
+            text: text.to_string(),
+            size_px: 40.0,
+            variations: Vec::new(),
+            features: Vec::new(),
+            foreground: None,
+            background: Some("#ffffff".into()),
+        }
+    }
+
+    #[test]
+    fn a_comparison_stacks_one_row_per_face_in_request_order() {
+        let files = [fixture(WOFF2), fixture(ASAP), fixture(TTC)];
+        let paths: Vec<(&Path, u32)> = files.iter().map(|p| (p.as_path(), 0)).collect();
+        let req = compare_req(3, "Hamburg");
+        let image = compare_preview_files(&paths, &req).unwrap();
+        let rows: Vec<Raster> = files
+            .iter()
+            .map(|p| rasterize(&fs::read(p).unwrap(), 0, &req.row(FaceId(1))).unwrap())
+            .collect();
+        let decoded = png::tests::decode(&image.png);
+        assert_eq!((decoded.width, decoded.height), (image.width, image.height));
+        assert_eq!(image.height, rows.iter().map(|r| r.height).sum::<u32>());
+        assert_eq!(image.width, rows.iter().map(|r| r.width).max().unwrap());
+        // Each band of the image is that face's own row, padded with white.
+        let mut top = 0;
+        for row in &rows {
+            for y in 0..row.height {
+                for x in 0..image.width {
+                    let at = ((top + y) * image.width + x) as usize * 4;
+                    let got = &decoded.rgba[at..at + 4];
+                    let want = row.pixel(x, y).unwrap_or([255, 255, 255, 255]);
+                    assert_eq!(got, want, "row at {top}, pixel {x},{y}");
+                }
+            }
+            top += row.height;
+        }
+    }
+
+    #[test]
+    fn a_comparison_takes_two_to_four_faces_and_short_text() {
+        let file = fixture(ASAP);
+        let five = [(file.as_path(), 0); 5];
+        for n in [0, 1, 5] {
+            let err = compare_preview_files(&five[..n], &compare_req(n, "Ag")).unwrap_err();
+            assert_eq!(err.code(), ErrorCode::InvalidRequest, "{n} faces");
+        }
+        let err = compare_preview_files(&five[..2], &compare_req(2, &"a".repeat(501))).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidRequest);
+        assert!(compare_preview_files(&five[..2], &compare_req(2, &"a".repeat(500))).is_ok());
+        let mut tiny = compare_req(2, "Ag");
+        tiny.size_px = 7.0;
+        let err = compare_preview_files(&five[..2], &tiny).unwrap_err();
+        assert_eq!(err.code(), ErrorCode::InvalidRequest);
+        let truncated = fixture(TRUNCATED);
+        let broken = [(file.as_path(), 0), (truncated.as_path(), 0)];
+        let err = compare_preview_files(&broken, &compare_req(2, "Ag")).unwrap_err();
+        assert_eq!(
+            err.code(),
+            ErrorCode::Unsupported,
+            "a bad font, not a panic"
+        );
     }
 
     #[test]

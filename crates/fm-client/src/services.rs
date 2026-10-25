@@ -72,6 +72,7 @@ service!(SearchService {
 
 service!(PreviewService {
     render_preview(req: PreviewRequest) -> PreviewImage;
+    compare_preview(req: ComparePreviewRequest) -> PreviewImage;
     font_source(face: FaceId) -> FontSource;
     sample_texts(req: SampleTextRequest) -> Vec<SampleText>;
     css_values(req: CssValuesRequest) -> CssValues;
