@@ -204,6 +204,8 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("app_folders", String::new()),
         ("endpoint_info", String::new()),
         ("regenerate_endpoint_token", String::new()),
+        ("mcp_status", String::new()),
+        ("set_mcp_enabled", r#"{"enabled":true}"#.into()),
         // layout
         ("layout_presets", String::new()),
         ("clamp_layout", layout.to_string()),

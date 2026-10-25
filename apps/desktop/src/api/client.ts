@@ -24,6 +24,8 @@ import type {
   Clash,
   AppFolders,
   EndpointInfo,
+  McpStatus,
+  McpUpdate,
   AppInfo,
   Collection,
   CollectionFacesRequest,
@@ -295,6 +297,10 @@ export interface FmClient {
   endpointInfo(): Promise<EndpointInfo>;
   /** Makes a new local API token; the old one fails at once. */
   regenerateEndpointToken(): Promise<EndpointInfo>;
+  /** The MCP server: whether it is on, its URL and the client config snippets (Settings → AI assistants). */
+  mcpStatus(): Promise<McpStatus>;
+  /** Turns the MCP server on or off; the next request sees it. */
+  setMcpEnabled(req: McpUpdate): Promise<McpStatus>;
   scan(req: ScanRequest): Promise<JobId>;
   /** Subscribes to the fm-api event stream; the UI subscribes, it does not poll. */
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
@@ -412,6 +418,8 @@ export const tauriClient: FmClient = {
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
   endpointInfo: () => invoke<EndpointInfo>('endpoint_info'),
   regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),
+  mcpStatus: () => invoke<McpStatus>('mcp_status'),
+  setMcpEnabled: (req) => invoke<McpStatus>('set_mcp_enabled', { req }),
   scan: (req) => invoke<JobId>('scan', { req }),
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {

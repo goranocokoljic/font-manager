@@ -1091,6 +1091,7 @@
       "catalogs": "Online catalogs",
       "advanced": "Advanced",
       "localApi": "Local API",
+      "mcp": "AI assistants",
       "about": "About"
     },
     "catalogs": {
@@ -1162,6 +1163,23 @@
       "regenerate": "Regenerate",
       "regenerateHint": "A new token replaces the old one at once. Programs that use the old token stop working until they get the new one.",
       "regenerated": "A new token was made. The old token no longer works."
+    },
+    "mcp": {
+      "note": "AI assistants such as Claude Code can use Font Manager through the Model Context Protocol (MCP). They reach it on this computer only, while the app runs, with the local API token.",
+      "enable": "Allow AI assistants (MCP server)",
+      "enableHint": "Off by default. When off, Font Manager does not answer MCP requests.",
+      "address": "Address",
+      "addressLabel": "MCP server address",
+      "addressHint": "The address changes each time the app starts. Copy the snippet again after a restart.",
+      "notRunning": "The local API is not running, so the MCP server has no address yet.",
+      "showSnippets": "Show snippets",
+      "hideSnippets": "Hide snippets",
+      "claudeCode": "Claude Code",
+      "http": "Other HTTP clients (JSON config)",
+      "copy": "Copy",
+      "copyClaudeCode": "Copy Claude Code command",
+      "copyHttp": "Copy HTTP client config",
+      "tokenHint": "The snippets contain the local API token. Keep them secret."
     },
     "about": {
       "platformNotes": "Platform notes",

@@ -152,6 +152,17 @@ token stops working at once.
 
 Only programs on this computer can connect. Web pages in your browser cannot.
 
+## Connect an AI assistant
+
+AI assistants such as Claude Code can use Font Manager through the Model Context Protocol
+(MCP). This is off until you turn it on. Open Settings → AI assistants and turn on
+**Allow AI assistants (MCP server)**. Then click **Copy Claude Code command** and run the
+command in a terminal, or click **Copy HTTP client config** and paste the block into the
+settings of another assistant. The snippets contain the token, so keep them secret.
+
+The address changes each time Font Manager starts. After a restart, copy the snippet
+again. Turn the switch off to stop all assistants at once.
+
 ## Get updates
 
 Open Settings → About and click **Check for updates**. If a new version is out, Font

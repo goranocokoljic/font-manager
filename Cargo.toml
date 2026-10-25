@@ -16,6 +16,7 @@ fm-api = { path = "crates/fm-api" }
 fm-platform = { path = "crates/fm-platform" }
 fm-endpoint = { path = "crates/fm-endpoint" }
 fm-client = { path = "crates/fm-client" }
+fm-mcp = { path = "crates/fm-mcp" }
 # The local API endpoint (E25.1, ADR 0015): approved 2026-10-21.
 getrandom = "0.3"
 hyper = { version = "1", default-features = false }
@@ -29,6 +30,9 @@ clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 clap_mangen = "0.3"
 comfy-table = "7"
+# The MCP server (E27.1): named in the spec's library table (rmcp) and the
+# story; only the server and its streamable HTTP transport.
+rmcp = { version = "3.7", default-features = false, features = ["server", "transport-streamable-http-server"] }
 
 [workspace.lints.rust]
 unsafe_code = "deny"

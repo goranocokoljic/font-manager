@@ -1,5 +1,5 @@
 //! The body helpers the endpoint needs: a whole-buffer response body, the
-//! [`Reply`] that is it or an event stream, and
+//! [`Reply`] that is it, an event stream or a mounted service's body, and
 //! a request body read up to a limit (no extra crate for any).
 
 use std::convert::Infallible;
@@ -9,6 +9,7 @@ use std::task::{Context, Poll};
 use hyper::body::{Body, Bytes, Frame, Incoming, SizeHint};
 
 use crate::events::EventBody;
+use crate::mount::Mounted;
 
 /// A response body sent in one frame.
 #[derive(Debug)]
@@ -40,13 +41,16 @@ impl Body for Full {
     }
 }
 
-/// Every response body: a whole answer, or an event stream.
+/// Every response body: a whole answer, an event stream, or the answer of
+/// a mounted service.
 #[derive(Debug)]
 pub enum Reply {
     /// A service answer or a refusal.
     Full(Full),
     /// `GET /v1/events`.
     Events(EventBody),
+    /// `/mcp` ([`crate::mount`]).
+    Mounted(Mounted),
 }
 
 impl Body for Reply {
@@ -60,6 +64,7 @@ impl Body for Reply {
         match self.get_mut() {
             Self::Full(full) => Pin::new(full).poll_frame(cx),
             Self::Events(events) => Pin::new(events).poll_frame(cx),
+            Self::Mounted(mounted) => Pin::new(mounted).poll_frame(cx),
         }
     }
 
@@ -67,6 +72,7 @@ impl Body for Reply {
         match self {
             Self::Full(full) => full.is_end_stream(),
             Self::Events(events) => events.is_end_stream(),
+            Self::Mounted(mounted) => mounted.is_end_stream(),
         }
     }
 
@@ -74,6 +80,7 @@ impl Body for Reply {
         match self {
             Self::Full(full) => full.size_hint(),
             Self::Events(events) => events.size_hint(),
+            Self::Mounted(mounted) => mounted.size_hint(),
         }
     }
 }

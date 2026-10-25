@@ -1091,6 +1091,7 @@
       "catalogs": "Online-Kataloge",
       "advanced": "Erweitert",
       "localApi": "Lokale API",
+      "mcp": "KI-Assistenten",
       "about": "Über"
     },
     "catalogs": {
@@ -1162,6 +1163,23 @@
       "regenerate": "Neu erzeugen",
       "regenerateHint": "Ein neues Token ersetzt das alte sofort. Programme mit dem alten Token funktionieren erst wieder, wenn sie das neue bekommen.",
       "regenerated": "Ein neues Token wurde erzeugt. Das alte Token gilt nicht mehr."
+    },
+    "mcp": {
+      "note": "KI-Assistenten wie Claude Code können Font Manager über das Model Context Protocol (MCP) nutzen. Sie erreichen die App nur auf diesem Computer, während sie läuft, und mit dem Token der lokalen API.",
+      "enable": "KI-Assistenten erlauben (MCP-Server)",
+      "enableHint": "Standardmäßig aus. Wenn aus, beantwortet Font Manager keine MCP-Anfragen.",
+      "address": "Adresse",
+      "addressLabel": "Adresse des MCP-Servers",
+      "addressHint": "Die Adresse ändert sich bei jedem Start der App. Kopieren Sie das Snippet nach einem Neustart erneut.",
+      "notRunning": "Die lokale API läuft nicht, daher hat der MCP-Server noch keine Adresse.",
+      "showSnippets": "Snippets zeigen",
+      "hideSnippets": "Snippets verbergen",
+      "claudeCode": "Claude Code",
+      "http": "Andere HTTP-Clients (JSON-Konfiguration)",
+      "copy": "Kopieren",
+      "copyClaudeCode": "Claude-Code-Befehl kopieren",
+      "copyHttp": "Konfiguration für HTTP-Clients kopieren",
+      "tokenHint": "Die Snippets enthalten das Token der lokalen API. Halten Sie sie geheim."
     },
     "about": {
       "platformNotes": "Hinweise zur Plattform",

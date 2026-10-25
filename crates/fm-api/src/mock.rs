@@ -64,7 +64,9 @@ use crate::search::{
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
     WeightRange, WidthRange,
 };
-use crate::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
+use crate::settings::{
+    AppFolders, EndpointInfo, McpClient, McpSnippet, McpStatus, McpUpdate, Settings, SettingsUpdate,
+};
 use crate::workflows::{
     BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
@@ -476,6 +478,8 @@ struct State {
     settings: Settings,
     /// How often the local API token was regenerated; the token is made from it.
     endpoint_tokens: u32,
+    /// Whether the MCP server is on; off, as in a new install.
+    mcp_enabled: bool,
     /// Paths "Keep this one" moved to the trash; their faces are no longer
     /// listed as duplicates.
     trashed: BTreeSet<String>,
@@ -885,6 +889,7 @@ impl State {
             comparisons: Vec::new(),
             settings: Settings::default(),
             endpoint_tokens: 0,
+            mcp_enabled: false,
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
             layouts: mock_layout_files(),
@@ -3933,6 +3938,48 @@ impl SettingsService for MockApi {
         let mut st = self.state();
         st.endpoint_tokens += 1;
         Ok(mock_endpoint(st.endpoint_tokens))
+    }
+
+    fn mcp_status(&self) -> ApiResult<McpStatus> {
+        let st = self.state();
+        Ok(mock_mcp(st.mcp_enabled, &mock_endpoint(st.endpoint_tokens)))
+    }
+
+    fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
+        let mut st = self.state();
+        st.mcp_enabled = req.enabled;
+        Ok(mock_mcp(st.mcp_enabled, &mock_endpoint(st.endpoint_tokens)))
+    }
+}
+
+/// The mock's MCP status: `/mcp` on the mock endpoint, with short snippets
+/// in the shape the core writes (`fm_core::mcp`).
+fn mock_mcp(enabled: bool, endpoint: &EndpointInfo) -> McpStatus {
+    let url = endpoint.url.as_ref().map(|u| format!("{u}/mcp"));
+    let snippets = url
+        .iter()
+        .flat_map(|url| {
+            let token = &endpoint.token;
+            [
+                McpSnippet {
+                    client: McpClient::ClaudeCode,
+                    text: format!(
+                        "claude mcp add --transport http font-manager {url} --header \"Authorization: Bearer {token}\""
+                    ),
+                },
+                McpSnippet {
+                    client: McpClient::Http,
+                    text: format!(
+                        "{{\"mcpServers\":{{\"font-manager\":{{\"type\":\"http\",\"url\":\"{url}\",\"headers\":{{\"Authorization\":\"Bearer {token}\"}}}}}}}}"
+                    ),
+                },
+            ]
+        })
+        .collect();
+    McpStatus {
+        enabled,
+        url,
+        snippets,
     }
 }
 

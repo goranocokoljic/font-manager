@@ -17,6 +17,7 @@ fm-api.workspace = true
 fm-core.workspace = true
 fm-platform.workspace = true
 fm-endpoint.workspace = true
+fm-mcp.workspace = true
 # The plugin config `generate_context!` embeds (tauri.conf.json `plugins`).
 serde_json.workspace = true
 tauri = { version = "2", features = ["tray-icon"] }

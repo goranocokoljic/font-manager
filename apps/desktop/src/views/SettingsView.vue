@@ -6,6 +6,7 @@ import type { Language, SettingsUpdate } from '../api/types';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
+import McpSettings from '../components/McpSettings.vue';
 import {
   CATALOGS,
   LOCALES,
@@ -40,6 +41,7 @@ const sections = [
   { id: 'catalogs' },
   { id: 'advanced' },
   { id: 'localApi' },
+  { id: 'mcp' },
   { id: 'about' },
 ] as const;
 type SectionId = (typeof sections)[number]['id'];
@@ -449,6 +451,8 @@ function chooseLanguage(e: Event): void {
         </template>
 
         <LocalApiSettings v-else-if="current === 'localApi'" />
+
+        <McpSettings v-else-if="current === 'mcp'" />
 
         <template v-else-if="current === 'about' && app.info">
           <h2 class="heading">{{ sectionTitle('about') }}</h2>

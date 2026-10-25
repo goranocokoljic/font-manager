@@ -44,7 +44,7 @@ use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
 };
-use fm_api::settings::{AppFolders, EndpointInfo, Settings, SettingsUpdate};
+use fm_api::settings::{AppFolders, EndpointInfo, McpStatus, McpUpdate, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
     SettingsService, SourceId, VirtualStyleId,
@@ -168,7 +168,9 @@ impl AppState {
     }
 
     /// Starts the local API endpoint (ADR 0015) on a thread of its own, so
-    /// the window never waits for it; it then writes `endpoint.json`. Only
+    /// the window never waits for it; it then writes `endpoint.json`. The
+    /// MCP server is mounted at `/mcp` and served while the user has it on
+    /// (E27.1); off, it builds nothing. Only
     /// the real library is served: without it there is no data folder.
     /// The handle is for tests, which wait for the start.
     pub fn start_endpoint(&self) -> Option<std::thread::JoinHandle<()>> {
@@ -178,8 +180,9 @@ impl AppState {
         let started = std::thread::Builder::new()
             .name("fm-endpoint-start".into())
             .spawn(move || {
-                let endpoint = match fm_endpoint::Endpoint::start(Arc::clone(&core) as Arc<dyn Api>)
-                {
+                let api = Arc::clone(&core) as Arc<dyn Api>;
+                let mcp = Arc::new(McpMount(fm_mcp::HttpServer::new(Arc::clone(&api))));
+                let endpoint = match fm_endpoint::Endpoint::start_with_mcp(api, mcp) {
                     Ok(endpoint) => endpoint,
                     Err(e) => {
                         tracing::warn!(error = %e, "the local API could not start");
@@ -273,6 +276,22 @@ impl AppState {
 impl std::fmt::Debug for AppState {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AppState").finish_non_exhaustive()
+    }
+}
+
+/// The MCP server (`fm-mcp`) as the endpoint's `/mcp` mount (E27.1): the
+/// glue between the two, so neither depends on the other.
+struct McpMount(fm_mcp::HttpServer);
+
+impl fm_endpoint::mount::Mount for McpMount {
+    fn call(&self, req: fm_endpoint::mount::MountRequest) -> fm_endpoint::mount::MountFuture {
+        let service = self.0.service();
+        Box::pin(async move {
+            service
+                .handle(req)
+                .await
+                .map(|body| Box::pin(body) as fm_endpoint::mount::MountBody)
+        })
     }
 }
 
@@ -1069,6 +1088,19 @@ async fn regenerate_endpoint_token(state: State<'_, AppState>) -> ApiResult<Endp
     call(&state, |api| api.regenerate_endpoint_token()).await
 }
 
+/// Whether the MCP server is on, its URL and the client config snippets
+/// (Settings → AI assistants).
+#[tauri::command]
+async fn mcp_status(state: State<'_, AppState>) -> ApiResult<McpStatus> {
+    call(&state, |api| api.mcp_status()).await
+}
+
+/// Turns the MCP server on or off; the next request sees it.
+#[tauri::command]
+async fn set_mcp_enabled(state: State<'_, AppState>, req: McpUpdate) -> ApiResult<McpStatus> {
+    call(&state, move |api| api.set_mcp_enabled(req)).await
+}
+
 /// Opens a page of the user docs in the help window (the palette's Help actions).
 #[tauri::command]
 async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()> {
@@ -1261,6 +1293,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_app_folders,
             endpoint_info,
             regenerate_endpoint_token,
+            mcp_status,
+            set_mcp_enabled,
             open_help,
             open_url,
             set_shell_locale,

@@ -187,6 +187,14 @@ impl SettingsService for Client {
         self.set_token(&info.token);
         Ok(info)
     }
+
+    fn mcp_status(&self) -> ApiResult<McpStatus> {
+        self.call("mcp_status", &())
+    }
+
+    fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
+        self.call("set_mcp_enabled", &req)
+    }
 }
 
 impl EventSource for Client {

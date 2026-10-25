@@ -11,6 +11,12 @@ publish.workspace = true
 [dependencies]
 fm-api.workspace = true
 fm-client.workspace = true
+rmcp.workspace = true
+
+[dev-dependencies]
+fm-endpoint.workspace = true
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [lints]
 workspace = true

@@ -126,6 +126,8 @@ routes! {
     app_folders(),
     endpoint_info(),
     regenerate_endpoint_token(),
+    mcp_status(),
+    set_mcp_enabled(req),
     // layout
     layout_presets(),
     clamp_layout(layout),

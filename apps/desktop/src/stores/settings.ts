@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { useClient, type FullSettings } from '../api/client';
-import type { ApiError, AppFolders, Density, EndpointInfo, SettingsUpdate } from '../api/types';
+import type {
+  ApiError,
+  AppFolders,
+  Density,
+  EndpointInfo,
+  McpStatus,
+  SettingsUpdate,
+} from '../api/types';
 import { DEFAULT_DENSITY } from '../list/density';
 
 /**
@@ -14,6 +21,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const folders = ref<AppFolders | null>(null);
   /** The local API endpoint (Settings → Local API); read when that section opens. */
   const endpoint = ref<EndpointInfo | null>(null);
+  /** The MCP server (Settings → AI assistants); read when that section opens. */
+  const mcp = ref<McpStatus | null>(null);
   /** The last request that failed, for the Settings window to show. */
   const error = ref<ApiError | null>(null);
 
@@ -66,6 +75,22 @@ export const useSettingsStore = defineStore('settings', () => {
     );
   }
 
+  /** Reads whether the MCP server is on, its URL and the client snippets. */
+  function loadMcp(): Promise<boolean> {
+    return attempt(async () => {
+      mcp.value = await useClient().mcpStatus();
+    });
+  }
+
+  /** Turns the MCP server on or off; false (and `error` set) when the API refused. */
+  function setMcpEnabled(enabled: boolean): Promise<boolean> {
+    return enqueue(() =>
+      attempt(async () => {
+        mcp.value = await useClient().setMcpEnabled({ enabled });
+      }),
+    );
+  }
+
   /** Changes some settings; false (and `error` set) when the API refused. */
   function update(patch: SettingsUpdate): Promise<boolean> {
     return enqueue(() =>
@@ -91,6 +116,7 @@ export const useSettingsStore = defineStore('settings', () => {
     settings,
     folders,
     endpoint,
+    mcp,
     error,
     activationMode,
     onConflict,
@@ -99,6 +125,8 @@ export const useSettingsStore = defineStore('settings', () => {
     loadWindow,
     loadEndpoint,
     regenerateEndpointToken,
+    loadMcp,
+    setMcpEnabled,
     update,
     setDensity,
   };

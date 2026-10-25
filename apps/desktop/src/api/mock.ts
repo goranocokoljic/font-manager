@@ -35,6 +35,7 @@ import {
   type FaceCoverage,
   type DuplicateGroup,
   type EndpointInfo,
+  type McpStatus,
   type Event,
   type FaceDetail,
   type FaceId,
@@ -1784,6 +1785,38 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     url: MOCK_ENDPOINT_URL,
     token: mockEndpointToken(endpointGeneration),
   });
+  // The MCP server: off, as in a new install; snippets in the shape the core writes.
+  let mcpEnabled = false;
+  const mcp = (): McpStatus => {
+    const url = `${MOCK_ENDPOINT_URL}/mcp`;
+    const token = mockEndpointToken(endpointGeneration);
+    return {
+      enabled: mcpEnabled,
+      url,
+      snippets: [
+        {
+          client: 'claudeCode',
+          text: `claude mcp add --transport http font-manager ${url} --header "Authorization: Bearer ${token}"`,
+        },
+        {
+          client: 'http',
+          text: JSON.stringify(
+            {
+              mcpServers: {
+                'font-manager': {
+                  type: 'http',
+                  url,
+                  headers: { Authorization: `Bearer ${token}` },
+                },
+              },
+            },
+            null,
+            2,
+          ),
+        },
+      ],
+    };
+  };
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
   const resolutions: Resolution[] = [];
@@ -3019,6 +3052,11 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     regenerateEndpointToken: async () => {
       endpointGeneration += 1;
       return endpoint();
+    },
+    mcpStatus: async () => mcp(),
+    setMcpEnabled: async (req) => {
+      mcpEnabled = req.enabled;
+      return mcp();
     },
     // Browser mode: the dev server serves the built pages from public/help/.
     openHelp: async (page) => {
