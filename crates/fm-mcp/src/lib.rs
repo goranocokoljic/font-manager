@@ -10,21 +10,34 @@
 //! token and whether the user turned the server on, then hands the request
 //! to rmcp's streamable HTTP service ([`HttpServer::service`]). This crate
 //! has no HTTP crate of its own (E25.4); the app holds the few lines of glue.
+//!
+//! The tools (E27.2) are in [`tools`]: one `fm-api` call each. The ones that
+//! change something ask a [`ToolGate`] first, which refuses them by default.
+
+pub mod gate;
+pub mod tools;
 
 use std::sync::{Arc, OnceLock};
 
 use fm_api::settings::MCP_SERVER_NAME;
 use fm_api::{API_VERSION, Api};
-use rmcp::ServerHandler;
-use rmcp::model::{Implementation, ServerCapabilities, ServerConfig};
+use rmcp::model::{
+    CallToolRequestParams, CallToolResponse, Implementation, ListToolsResult,
+    PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+};
+use rmcp::service::RequestContext;
 use rmcp::transport::streamable_http_server::session::never::NeverSessionManager;
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
+use rmcp::{ErrorData, RoleServer, ServerHandler};
+
+pub use gate::{AllowAll, RefuseMutations, ToolGate};
 
 /// The MCP server over one `fm-api`: the app's own when it hosts the
 /// server, or the running app's local API for the stdio shim.
 #[derive(Clone)]
 pub struct McpServer {
     api: Arc<dyn Api>,
+    gate: Arc<dyn ToolGate>,
 }
 
 impl std::fmt::Debug for McpServer {
@@ -34,9 +47,14 @@ impl std::fmt::Debug for McpServer {
 }
 
 impl McpServer {
-    /// A server over `api`.
+    /// A server over `api` whose gate refuses every mutating tool.
     pub fn new(api: Arc<dyn Api>) -> Self {
-        Self { api }
+        Self::with_gate(api, Arc::new(RefuseMutations))
+    }
+
+    /// A server over `api` whose mutating tools ask `gate`.
+    pub fn with_gate(api: Arc<dyn Api>, gate: Arc<dyn ToolGate>) -> Self {
+        Self { api, gate }
     }
 
     /// A server over the running app ([`fm_client::running_app`]), or `None`
@@ -52,12 +70,46 @@ impl McpServer {
 }
 
 impl ServerHandler for McpServer {
-    /// `font-manager` at the `fm-api` contract version, with tools (none
-    /// until E27.2).
+    /// `font-manager` at the `fm-api` contract version, with tools.
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_server_info(
             Implementation::new(MCP_SERVER_NAME, API_VERSION.to_string()),
         )
+    }
+
+    async fn list_tools(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListToolsResult, ErrorData> {
+        Ok(ListToolsResult::with_all_items(tools::list()))
+    }
+
+    fn get_tool(&self, name: &str) -> Option<Tool> {
+        tools::list().into_iter().find(|t| t.name == name)
+    }
+
+    /// Runs the tool on a blocking thread: the services are synchronous
+    /// (ADR 0006). An unknown tool is a protocol error; everything the API
+    /// says no to is a tool error.
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        let api = Arc::clone(&self.api);
+        let gate = Arc::clone(&self.gate);
+        let name = request.name.to_string();
+        let arguments = request.arguments.unwrap_or_default();
+        let unknown = format!("There is no tool named {name}.");
+        let result = tokio::task::spawn_blocking(move || {
+            tools::call(api.as_ref(), gate.as_ref(), &name, arguments)
+        })
+        .await
+        .map_err(|e| ErrorData::internal_error(format!("The tool stopped: {e}"), None))?;
+        result
+            .map(CallToolResponse::from)
+            .ok_or_else(|| ErrorData::invalid_params(unknown, None))
     }
 }
 
@@ -78,6 +130,7 @@ pub const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;
 /// builds nothing.
 pub struct HttpServer {
     api: Arc<dyn Api>,
+    gate: Arc<dyn ToolGate>,
     service: OnceLock<HttpService>,
 }
 
@@ -90,10 +143,17 @@ impl std::fmt::Debug for HttpServer {
 }
 
 impl HttpServer {
-    /// The server over `api`; nothing is built yet.
+    /// The server over `api` whose gate refuses every mutating tool;
+    /// nothing is built yet.
     pub fn new(api: Arc<dyn Api>) -> Self {
+        Self::with_gate(api, Arc::new(RefuseMutations))
+    }
+
+    /// The server over `api` whose mutating tools ask `gate`.
+    pub fn with_gate(api: Arc<dyn Api>, gate: Arc<dyn ToolGate>) -> Self {
         Self {
             api,
+            gate,
             service: OnceLock::new(),
         }
     }
@@ -108,13 +168,14 @@ impl HttpServer {
         self.service
             .get_or_init(|| {
                 let api = Arc::clone(&self.api);
+                let gate = Arc::clone(&self.gate);
                 let config = StreamableHttpServerConfig::default()
                     .with_legacy_session_mode(false)
                     .with_json_response(true)
                     .with_sse_keep_alive(None)
                     .with_max_request_body_bytes(MAX_REQUEST_BYTES);
                 StreamableHttpService::new(
-                    move || Ok(McpServer::new(Arc::clone(&api))),
+                    move || Ok(McpServer::with_gate(Arc::clone(&api), Arc::clone(&gate))),
                     Arc::new(NeverSessionManager::default()),
                     config,
                 )

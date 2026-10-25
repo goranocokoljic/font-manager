@@ -12,9 +12,15 @@ publish.workspace = true
 fm-api.workspace = true
 fm-client.workspace = true
 rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# The services are synchronous: tools run on `spawn_blocking` (ADR 0006).
+tokio = { workspace = true, features = ["rt"] }
 
 [dev-dependencies]
+fm-core.workspace = true
 fm-endpoint.workspace = true
+fm-platform.workspace = true
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 

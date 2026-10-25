@@ -116,7 +116,8 @@ async fn an_rmcp_client_with_the_token_initializes_and_lists_tools() {
     assert!(info.capabilities.tools.is_some());
 
     let tools = client.list_all_tools().await.expect("tools/list");
-    assert!(tools.is_empty(), "no tools until E27.2: {tools:?}");
+    let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+    assert_eq!(names, fm_mcp::tools::NAMES, "the E27.2 tools");
     client.cancel().await.expect("close");
 }
 
@@ -181,6 +182,6 @@ async fn the_switch_turns_mcp_on_and_off_without_a_restart() {
 
     served.set(true);
     let client = served.client(&token).await.expect("on again");
-    assert!(client.list_all_tools().await.expect("tools").is_empty());
+    assert_eq!(client.list_all_tools().await.expect("tools").len(), 12);
     client.cancel().await.expect("close");
 }
