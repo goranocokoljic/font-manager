@@ -30,7 +30,7 @@ test('preview controls apply to all rows live and persist after a reload', async
   await controls.getByLabel('Language').selectOption('de');
   await controls.getByLabel('Size in pixels').fill('72');
   await controls.getByLabel('Line height').fill('1.5');
-  await controls.getByLabel('Tracking').fill('0.1');
+  await controls.getByLabel('Tracking in em').fill('0.1');
   await controls.getByRole('button', { name: 'Center' }).click();
   await controls.getByLabel('Text color').fill('#aa0000');
   await controls.getByLabel('Background color').fill('#ffeecc');

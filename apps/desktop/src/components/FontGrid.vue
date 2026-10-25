@@ -7,8 +7,10 @@
 //
 // Lines are virtualized like the list's rows (`list/grid.ts`), cards keyed by
 // slot. A face whose family has a color palette chosen (E16.3) shows live text in
-// that palette instead, as a mask cannot show colors. The grid shares the list's cursor, selection and keyboard model; Up/Down
-// move by a line, Left/Right by a card, Enter expands a family or opens a style.
+// that palette instead, as a mask cannot show colors; so does every card while
+// outline or tracking is on (E16.1). The grid shares the list's cursor, selection
+// and keyboard model; Up/Down move by a line, Left/Right by a card, Enter expands a
+// family or opens a style.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
@@ -118,7 +120,14 @@ const { previewOf } = useRowPreviews(
   () => rendered.value,
   () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
   false,
+  false,
 );
+
+/**
+ * Cards draw live webview text instead of the thumbnail while outline or tracking is
+ * on (E16.1): the thumbnail is a one-color mask rendered without either.
+ */
+const liveText = computed(() => props.preview.outline || props.preview.trackingEm !== 0);
 
 const rowId = (row: ListRow) => `fm-card-${row.key.replace(':', '-')}`;
 
@@ -129,6 +138,7 @@ const visible = computed(() =>
     const text = cardText(p.text);
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
+    const live = !!palette || liveText.value;
     return {
       row,
       index,
@@ -138,8 +148,9 @@ const visible = computed(() =>
       text,
       fallback: p.fallback,
       palette,
-      thumb: face && !palette ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
-      failed: face && !palette ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
+      live,
+      thumb: face && !live ? thumbnails.get(face.id, text, THUMB_PX) : undefined,
+      failed: face && !live ? thumbnails.hasFailed(face.id, text, THUMB_PX) : false,
       name: row.kind === 'face' ? styleName(row) : row.family.name,
     };
   }),
@@ -148,7 +159,7 @@ const visible = computed(() =>
 // Ask for the thumbnails of the cards on screen.
 watchEffect(() => {
   for (const item of visible.value)
-    if (item.face && item.text && !item.palette) thumbnails.want(item.face.id, item.text, THUMB_PX);
+    if (item.face && item.text && !item.live) thumbnails.want(item.face.id, item.text, THUMB_PX);
 });
 
 function cardStyle(index: number) {
@@ -277,11 +288,13 @@ function onToggle(row: ListRow): void {
       >
         <div class="card">
           <CardLiveText
-            v-if="item.face && item.palette"
+            v-if="item.face && item.live"
             :face="item.face.id"
             :text="item.text"
             :palette="item.palette"
             :size-px="THUMB_PX"
+            :tracking-em="preview.trackingEm"
+            :outline="preview.outline"
             :color="preview.textColor"
             aria-hidden="true"
           />

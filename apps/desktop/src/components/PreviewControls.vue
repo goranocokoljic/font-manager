@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // The preview controls above a font list: sample text, size, auto size, line
-// height, tracking, alignment, colors and the preview surface. Every change goes to
+// height, tracking, the metrics lines and outline toggles, alignment, colors and the
+// preview surface. Every change goes to
 // the preview store for `view`, which every row of that list reads.
 import { computed, useId } from 'vue';
 import { t } from '../i18n';
@@ -163,11 +164,21 @@ function colorFrom(e: Event): string {
         @change="typed(KEY.lineHeight, $event, true)"
       />
     </label>
-    <label class="field">
-      <span>{{ t('preview.tracking') }}</span>
+    <div class="field" role="group" :aria-labelledby="`${uid}-tracking`">
+      <span :id="`${uid}-tracking`">{{ t('preview.tracking') }}</span>
+      <input
+        type="range"
+        :aria-label="t('preview.trackingSlider')"
+        :min="TRACKING.min"
+        :max="TRACKING.max"
+        :step="TRACKING.step"
+        :value="s.trackingEm"
+        @input="typed(KEY.tracking, $event, false)"
+      />
       <input
         type="number"
         class="number"
+        :aria-label="t('preview.trackingInEm')"
         :min="TRACKING.min"
         :max="TRACKING.max"
         :step="TRACKING.step"
@@ -175,6 +186,22 @@ function colorFrom(e: Event): string {
         @input="typed(KEY.tracking, $event, false)"
         @change="typed(KEY.tracking, $event, true)"
       />
+    </div>
+    <label class="field" :title="t('preview.metricsHint')">
+      <input
+        type="checkbox"
+        :checked="s.metrics"
+        @change="set({ metrics: ($event.target as HTMLInputElement).checked })"
+      />
+      <span>{{ t('preview.metrics') }}</span>
+    </label>
+    <label class="field">
+      <input
+        type="checkbox"
+        :checked="s.outline"
+        @change="set({ outline: ($event.target as HTMLInputElement).checked })"
+      />
+      <span>{{ t('preview.outline') }}</span>
     </label>
 
     <div class="field" role="group" :aria-label="t('preview.alignment')">
@@ -263,6 +290,10 @@ input[type='text'],
 }
 input[type='range'] {
   width: 96px;
+}
+input[type='checkbox'] {
+  margin: 0;
+  accent-color: var(--fm-accent);
 }
 input[type='color'] {
   width: 28px;

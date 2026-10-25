@@ -201,6 +201,11 @@
     },
     "lineHeight": "Zeilenabstand",
     "tracking": "Laufweite",
+    "trackingSlider": "Laufweite-Regler",
+    "trackingInEm": "Laufweite in em",
+    "metrics": "Metriken",
+    "metricsHint": "Grundlinie, x-Höhe und Versalhöhe jeder Zeile zeichnen",
+    "outline": "Kontur",
     "alignment": "Ausrichtung",
     "aligns": {
       "start": "Anfang",
