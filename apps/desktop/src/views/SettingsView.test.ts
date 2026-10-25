@@ -39,7 +39,7 @@ const radio = (wrapper: Awaited<ReturnType<typeof mountAt>>['wrapper'], label: s
     .get('input');
 
 describe('Settings window', () => {
-  it('has the seven sections as tabs and opens Sources first', async () => {
+  it('has the eight sections as tabs and opens Sources first', async () => {
     const { wrapper } = await mountAt('/settings');
     expect(wrapper.findAll('[role="tab"]').map((t) => t.text())).toEqual([
       'Sources',
@@ -48,6 +48,7 @@ describe('Settings window', () => {
       'Online catalogs',
       'Advanced',
       'Local API',
+      'AI assistants',
       'About',
     ]);
     expect(wrapper.get('[role="tab"][aria-selected="true"]').text()).toBe('Sources');

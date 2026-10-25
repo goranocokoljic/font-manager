@@ -4225,6 +4225,44 @@ fn the_local_api_needs_a_data_folder_and_then_publishes_and_regenerates() {
     assert!(!file.exists());
 }
 
+#[test]
+fn the_mcp_server_is_off_by_default_and_its_switch_applies_without_a_restart() {
+    let lib = Lib::new("mcp");
+    let e = lib.api.mcp_status().expect_err("no data folder");
+    assert_eq!(e.code, fm_api::ErrorCode::Unsupported);
+
+    let api = Lib::new("mcp-on")
+        .api
+        .with_endpoint_in(lib.paths.data.clone());
+    let off = api.mcp_status().expect("status");
+    assert!(!off.enabled, "off by default");
+    assert_eq!(off.url, None, "no URL before the endpoint runs");
+    assert!(off.snippets.is_empty());
+
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 40002));
+    let token = api.publish_endpoint(addr).expect("publish").token;
+    let on = api
+        .set_mcp_enabled(fm_api::settings::McpUpdate { enabled: true })
+        .expect("on");
+    assert!(on.enabled);
+    assert_eq!(on.url.as_deref(), Some("http://127.0.0.1:40002/mcp"));
+    assert_eq!(on.snippets.len(), 2);
+    assert!(on.snippets.iter().all(|s| s.text.contains(&token)));
+    assert_eq!(api.mcp_status().expect("status"), on);
+
+    // A new token reaches the snippets at once.
+    let next = api.regenerate_endpoint_token().expect("regenerate").token;
+    let status = api.mcp_status().expect("status");
+    assert!(status.snippets.iter().all(|s| s.text.contains(&next)));
+
+    let off = api
+        .set_mcp_enabled(fm_api::settings::McpUpdate { enabled: false })
+        .expect("off");
+    assert!(!off.enabled);
+    assert!(!api.mcp_status().expect("status").enabled);
+    api.unpublish_endpoint().expect("unpublish");
+}
+
 // --- font arguments (E26.1) --------------------------------------------
 
 fn resolved(api: &CoreApi, font: &str) -> ApiResult<(FontMatchKind, Vec<String>)> {

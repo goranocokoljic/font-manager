@@ -100,6 +100,26 @@ impl SettingsStore {
     }
 }
 
+impl SettingsStore {
+    /// Whether the user turned the MCP server on (E27.1); read from the file
+    /// on every call, like every setting.
+    pub fn mcp_enabled(&self) -> ApiResult<bool> {
+        Ok(Config::load(&self.file)?.mcp_enabled)
+    }
+
+    /// Turns the MCP server on or off and saves the choice; the other keys
+    /// of the file are kept.
+    pub fn set_mcp_enabled(&self, on: bool) -> ApiResult<()> {
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut config = Config::load(&self.file)?;
+        if config.mcp_enabled != on {
+            config.mcp_enabled = on;
+            config.save(&self.file)?;
+        }
+        Ok(())
+    }
+}
+
 impl SettingsService for SettingsStore {
     fn get_settings(&self) -> ApiResult<Settings> {
         Ok(Settings {
@@ -161,6 +181,42 @@ mod tests {
             logs: root.join("logs"),
             library: root.join("Fonts"),
         }
+    }
+
+    #[test]
+    fn the_mcp_switch_is_off_by_default_and_saved_with_the_other_keys() {
+        let dir = TempDir::new("settings-mcp");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        assert!(!store.mcp_enabled().expect("read"), "off by default");
+
+        store
+            .update_settings(SettingsUpdate {
+                theme: Some(Theme::Dark),
+                ..SettingsUpdate::default()
+            })
+            .expect("updated");
+        store.set_mcp_enabled(true).expect("on");
+        assert!(store.mcp_enabled().expect("read"));
+        // A second store (the next app start) sees it, and the theme stays.
+        let next = SettingsStore::new(&paths);
+        assert!(next.mcp_enabled().expect("read"));
+        assert_eq!(next.get_settings().expect("read").theme, Theme::Dark);
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(paths.config_file()).expect("file"))
+                .expect("json");
+        assert_eq!(json["mcpEnabled"], true);
+
+        // A settings update keeps the switch.
+        next.update_settings(SettingsUpdate {
+            density: Some(Density::Compact),
+            ..SettingsUpdate::default()
+        })
+        .expect("updated");
+        assert!(next.mcp_enabled().expect("read"));
+
+        next.set_mcp_enabled(false).expect("off");
+        assert!(!store.mcp_enabled().expect("read"));
     }
 
     #[test]

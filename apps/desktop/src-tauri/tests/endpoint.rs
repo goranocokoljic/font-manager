@@ -100,6 +100,65 @@ fn the_app_publishes_the_endpoint_and_removes_the_file_on_quit() -> TestResult {
     Ok(())
 }
 
+/// `POST /mcp` with an MCP `initialize` request and `token`; the status code.
+fn post_mcp(url: &str, token: &str) -> Result<u16, Box<dyn Error>> {
+    let host = url.strip_prefix("http://").ok_or("not an http url")?;
+    let body = r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"test","version":"1"}}}"#;
+    let mut stream = TcpStream::connect(host)?;
+    write!(
+        stream,
+        "POST /mcp HTTP/1.1
+Host: {host}
+Authorization: Bearer {token}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+Content-Length: {}
+Connection: close
+
+{body}",
+        body.len()
+    )?;
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer)?;
+    let status = answer.split(' ').nth(1).ok_or("no status line")?;
+    Ok(status.parse()?)
+}
+
+#[test]
+fn the_mcp_server_is_off_by_default_and_the_switch_applies_without_a_restart() -> TestResult {
+    let home = Home::new("endpoint-mcp")?;
+    let index = fm_core::startup::open_index(&home.paths);
+    let (state, core) = serve(&home.paths, index, Arc::new(MockActivator::new()));
+    let core = core.ok_or("no core")?;
+    state
+        .start_endpoint()
+        .ok_or("no start")?
+        .join()
+        .map_err(|_| "panicked")?;
+    let addr = state.endpoint_addr().ok_or("not running")?;
+    let base = format!("http://{addr}");
+    let token = core.endpoint_info()?.token;
+
+    let off = core.mcp_status()?;
+    assert!(!off.enabled, "off by default");
+    assert_eq!(off.url.as_deref(), Some(format!("{base}/mcp").as_str()));
+    assert!(off.snippets.iter().all(|s| s.text.contains(&token)));
+    assert_eq!(post_mcp(&base, &token)?, 404);
+
+    core.set_mcp_enabled(fm_api::settings::McpUpdate { enabled: true })?;
+    assert_eq!(post_mcp(&base, &token)?, 200);
+    assert_eq!(post_mcp(&base, &"0".repeat(64))?, 401);
+    // Saved in config.json, so the next start keeps it.
+    let config = fm_core::config::Config::load(&home.paths.config_file())?;
+    assert!(config.mcp_enabled);
+
+    core.set_mcp_enabled(fm_api::settings::McpUpdate { enabled: false })?;
+    assert_eq!(post_mcp(&base, &token)?, 404);
+    assert_eq!(state.endpoint_addr(), Some(addr), "the same endpoint");
+    state.run_quit_path();
+    Ok(())
+}
+
 #[test]
 fn an_update_that_did_not_install_serves_the_endpoint_again() -> TestResult {
     let home = Home::new("endpoint-resume")?;

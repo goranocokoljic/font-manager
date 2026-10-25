@@ -24,6 +24,9 @@ pub struct Config {
     pub log_level: LogLevel,
     /// Anonymous usage statistics. Off unless the user turns it on (rule 7).
     pub telemetry: bool,
+    /// The MCP server on the local API endpoint (E27.1). Off unless the
+    /// user turns it on in Settings → AI assistants.
+    pub mcp_enabled: bool,
     /// What the Settings window edits, stored at the top level of the file.
     #[serde(flatten)]
     pub settings: Settings,
@@ -34,6 +37,7 @@ impl Default for Config {
         Self {
             log_level: LogLevel::Info,
             telemetry: false,
+            mcp_enabled: false,
             settings: Settings::default(),
         }
     }
@@ -123,6 +127,7 @@ mod tests {
         let config = Config::load(&dir.path().join("config.json")).expect("defaults");
         assert_eq!(config, Config::default());
         assert!(!config.telemetry);
+        assert!(!config.mcp_enabled, "the MCP server is off by default");
         assert_eq!(config.log_level, LogLevel::Info);
         assert_eq!(config.settings.rescan_interval_minutes, 60);
     }
@@ -134,6 +139,7 @@ mod tests {
         let config = Config {
             log_level: LogLevel::Debug,
             telemetry: true,
+            mcp_enabled: true,
             settings: Settings {
                 cache_limit_mb: 256,
                 ..Settings::default()

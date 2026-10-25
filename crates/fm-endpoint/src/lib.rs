@@ -23,11 +23,18 @@
 //! ([`fm_api::check_client_version`]); an answer with a deprecated field
 //! carries an `Fm-Deprecation` header per field.
 //!
+//! The MCP server (E27.1) is a [`mount::Mount`] at
+//! [`fm_api::settings::MCP_PATH`], after the same checks as every route. It
+//! is served only while [`fm_api::SettingsService::mcp_status`] says the user
+//! turned it on, asked on every request (like the token): while off, `/mcp`
+//! is 404 and the mounted service is never called.
+//!
 //! The endpoint knows nothing about fonts and keeps no state but the socket
 //! and its open streams: the token and the discovery file belong to `fm-core`.
 
 mod body;
 pub mod events;
+pub mod mount;
 pub mod routes;
 
 use std::convert::Infallible;
@@ -40,6 +47,7 @@ use std::task::Poll;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use fm_api::settings::MCP_PATH;
 use fm_api::{
     API_VERSION, Api, ApiError, ApiVersion, DEPRECATION_HEADER, Deprecation, ErrorCode,
     VERSION_HEADER, VersionInfo,
@@ -52,6 +60,7 @@ use tokio::sync::{Notify, oneshot};
 
 use crate::body::{Full, Reply, read_limited};
 use crate::events::{EVENTS_ROUTE, StreamOptions};
+use crate::mount::{Mount, Mounted};
 
 /// The largest request body, in bytes.
 pub const MAX_BODY_BYTES: usize = 32 * 1024 * 1024;
@@ -78,9 +87,20 @@ impl Endpoint {
         Self::start_with(api, StreamOptions::default())
     }
 
+    /// [`Endpoint::start`], with the MCP server `mcp` at `/mcp` while the
+    /// user has it on ([`fm_api::SettingsService::mcp_status`]).
+    pub fn start_with_mcp(api: Arc<dyn Api>, mcp: Arc<dyn Mount>) -> io::Result<Self> {
+        Self::serve(
+            api,
+            StreamOptions::default(),
+            fm_api::deprecations(),
+            Some(mcp),
+        )
+    }
+
     /// [`Endpoint::start`] with other event-stream limits (tests).
     pub fn start_with(api: Arc<dyn Api>, options: StreamOptions) -> io::Result<Self> {
-        Self::serve(api, options, fm_api::deprecations())
+        Self::serve(api, options, fm_api::deprecations(), None)
     }
 
     /// [`Endpoint::start`] with another deprecation list (tests: the real
@@ -89,13 +109,14 @@ impl Endpoint {
         api: Arc<dyn Api>,
         deprecations: Vec<Deprecation>,
     ) -> io::Result<Self> {
-        Self::serve(api, StreamOptions::default(), deprecations)
+        Self::serve(api, StreamOptions::default(), deprecations, None)
     }
 
     fn serve(
         api: Arc<dyn Api>,
         options: StreamOptions,
         deprecations: Vec<Deprecation>,
+        mcp: Option<Arc<dyn Mount>>,
     ) -> io::Result<Self> {
         let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         listener.set_nonblocking(true)?;
@@ -113,6 +134,7 @@ impl Endpoint {
             streams: Arc::clone(&streams),
             deprecations: Arc::new(deprecations),
             version: version_header(),
+            mcp,
         };
         let thread = std::thread::Builder::new()
             .name("fm-endpoint".into())
@@ -184,6 +206,8 @@ struct Server {
     deprecations: Arc<Vec<Deprecation>>,
     /// `Fm-Api-Version` of every answer.
     version: HeaderValue,
+    /// The MCP server at `/mcp`, when the app mounted one.
+    mcp: Option<Arc<dyn Mount>>,
 }
 
 fn version_header() -> HeaderValue {
@@ -248,8 +272,8 @@ async fn handle(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> 
 }
 
 /// In this order: `Host` and `Origin` (403), `GET /v1/version`, the token
-/// (401), the client's `Fm-Api-Version` (400, 422), then the event stream or
-/// a service call.
+/// (401), the client's `Fm-Api-Version` (400, 422), then the event stream,
+/// the MCP server or a service call.
 async fn route(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> Response<Reply> {
     if let Err(refused) = check_origin(&req, server.port) {
         return refused.map(Reply::Full);
@@ -266,7 +290,31 @@ async fn route(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> R
     if req.uri().path() == EVENTS_ROUTE {
         return stream_events(server, close, &req).await;
     }
+    if req.uri().path() == MCP_PATH {
+        return mcp(server, req).await;
+    }
     call(server, req).await.map(Reply::Full)
+}
+
+/// `/mcp`: the mounted MCP server while the user has it on; 404 while off
+/// or when none is mounted, so an off server cannot be told from none.
+async fn mcp(server: &Server, req: Request<Incoming>) -> Response<Reply> {
+    let Some(mount) = &server.mcp else {
+        return mcp_off().map(Reply::Full);
+    };
+    let api = Arc::clone(&server.api);
+    match blocking(move || api.mcp_status()).await {
+        Ok(status) if status.enabled => mount.call(req).await.map(|b| Reply::Mounted(Mounted(b))),
+        Ok(_) => mcp_off().map(Reply::Full),
+        Err(e) => error(&e).map(Reply::Full),
+    }
+}
+
+fn mcp_off() -> Response<Full> {
+    error(&ApiError::new(
+        ErrorCode::NotFound,
+        "The MCP server is off. Turn it on in Settings > AI assistants.",
+    ))
 }
 
 /// The token (401).

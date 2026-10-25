@@ -1803,6 +1803,49 @@ export type ListFamiliesRequest = {
 	order?: FamilyOrder | null,
 };
 
+/**  The MCP clients the app writes a config snippet for. */
+export type McpClient = 
+/**  Claude Code: a `claude mcp add --transport http …` command. */
+"claudeCode" | 
+/**  Any client that reads a JSON `mcpServers` block with an HTTP server. */
+"http";
+
+/**  A config snippet that connects one MCP client to the app. */
+export type McpSnippet = {
+	/**  The client it is for. */
+	client: McpClient,
+	/**
+	 *  What to paste: a shell command or a JSON block, with the real URL and
+	 *  token in it.
+	 */
+	text: string,
+};
+
+/**
+ *  The MCP server the app hosts on the local API endpoint (E27.1). Off by
+ *  default; while off, `/mcp` is not served.
+ */
+export type McpStatus = {
+	/**  Whether the user turned the server on. */
+	enabled: boolean,
+	/**
+	 *  `http://127.0.0.1:<port>/mcp`; `None` while the local API endpoint is
+	 *  not running. The port changes from run to run (ADR 0015).
+	 */
+	url?: string | null,
+	/**
+	 *  One snippet per client, with the URL and the endpoint token; empty
+	 *  while there is no URL.
+	 */
+	snippets?: McpSnippet[],
+};
+
+/**  Turn the MCP server on or off. */
+export type McpUpdate = {
+	/**  On (true) or off (false). */
+	enabled: boolean,
+};
+
 /**  Vertical metrics in font units. */
 export type Metrics = {
 	/**  Units per em. */
@@ -2870,4 +2913,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 22, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 23, patch: 0 };

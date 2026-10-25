@@ -76,7 +76,9 @@ use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
     PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
 };
-use fm_api::settings::{AppFolders, EndpointInfo, Settings, SettingsService, SettingsUpdate};
+use fm_api::settings::{
+    AppFolders, EndpointInfo, McpStatus, McpUpdate, Settings, SettingsService, SettingsUpdate,
+};
 use fm_api::workflows::{
     BriefRequest, PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
 };
@@ -1375,6 +1377,19 @@ impl SettingsService for CoreApi {
 
     fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
         Ok(self.endpoint_keys()?.regenerate()?)
+    }
+
+    /// The switch from `config.json`, the URL and snippets from the endpoint.
+    fn mcp_status(&self) -> ApiResult<McpStatus> {
+        let endpoint = self.endpoint_keys()?.info()?;
+        Ok(crate::mcp::status(self.settings.mcp_enabled()?, &endpoint))
+    }
+
+    /// Saves the switch; the endpoint reads it on the next `/mcp` request.
+    fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
+        let endpoint = self.endpoint_keys()?.info()?;
+        self.settings.set_mcp_enabled(req.enabled)?;
+        Ok(crate::mcp::status(req.enabled, &endpoint))
     }
 }
 

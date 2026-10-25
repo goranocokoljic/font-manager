@@ -67,6 +67,7 @@ const SETTINGS_TABS = [
   'Online catalogs',
   'Advanced',
   'Local API',
+  'AI assistants',
   'About',
 ];
 

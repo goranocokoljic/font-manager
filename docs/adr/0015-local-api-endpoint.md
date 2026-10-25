@@ -202,12 +202,35 @@ names Settings > Local API, and `fm` exits 4 instead of falling back.
 `fm version --json` adds `mode` (`endpoint` or `direct`) to the `AppInfo`
 of the API it reached.
 
+**MCP server** (E27.1). `fm-mcp` serves the MCP server over streamable
+HTTP at `/mcp` on this endpoint, after the same checks as every route
+(`Origin`, `Host`, token, `Fm-Api-Version`). `fm-endpoint` stays free of
+rmcp: it has a `Mount` trait (`fm_endpoint::mount`) for that one path.
+`fm-mcp` keeps no HTTP crate of its own (E25.4): `fm_mcp::HttpServer`
+gives rmcp's service, and the app's `McpMount` (a few lines in `fm-app`)
+joins the two for `Endpoint::start_with_mcp`. The
+endpoint asks `SettingsService::mcp_status` on every `/mcp` request, as it
+asks for the token: while the user has the server off (the default, stored
+as `mcpEnabled` in `config.json`), `/mcp` is 404 and the mount is never
+called, so the switch applies at once and needs no restart. The mount
+builds rmcp's service on its first request and runs it stateless (no
+sessions, JSON answers; `GET` and `DELETE` get 405), so nothing runs while
+the server is off and nothing is left when it is turned off.
+`initialize` reports the server `font-manager` at `fm_api::API_VERSION`.
+Settings → AI assistants shows the switch and config snippets for Claude
+Code and generic HTTP clients, which `fm-core` writes with the real URL and
+token (`fm_core::mcp`); the port changes from run to run, so the snippets do
+too.
+
 ## Consequences
 
 - The CLI's endpoint mode (when the app is open), the MCP shim and the
   plugins read `endpoint.json` and send the token; none needs its own
   discovery.
 - A new service method needs a line in `routes.rs`, or CI fails.
+- An MCP client is a program of the same user with the token, so it is
+  inside the same trust boundary; the switch only decides whether `/mcp`
+  answers at all.
 - A program of the same user can do everything the UI can. That is the
   trust boundary: the same as the user's own files.
 - The endpoint is HTTP/1.1 without TLS: it never leaves the loopback

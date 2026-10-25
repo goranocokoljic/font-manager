@@ -258,3 +258,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E26.5 #168] crates/fm-core/src/activation.rs:549 — `list_conflicts` holds the index mutex across the platform `activator.conflicts` call; `fm doctor` makes that call twice (directly and through `list_problems`).
 - [E26.5 #168] crates/fm-core/src/activation.rs:559 — the conflict check is one batch OS query, so a DirectWrite/Core Text/fontconfig failure fails all of `list_conflicts` and with it `list_problems`.
 - [E26.6 #169] crates/fm-client/src/lib.rs:59 — the stale-file check trusts `is_running(pid)`; a reused pid with the port held by another program gives a client, and the first call fails instead of falling back to direct-link.
+- [E27.1 #171] apps/desktop/src/components/LocalApiSettings.vue:66 — the token Show/Hide button changes its label and also sets `aria-pressed`, so screen readers announce an ambiguous state.
+- [E27.1 #171] apps/desktop/src/components/LocalApiSettings.vue:116 — `.status:empty { display: none }` on a `role="status"` live region may keep some screen readers from announcing it.

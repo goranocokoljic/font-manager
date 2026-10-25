@@ -227,6 +227,59 @@ pub struct EndpointInfo {
     pub token: String,
 }
 
+/// The path of the MCP server on the local API endpoint (E27.1).
+pub const MCP_PATH: &str = "/mcp";
+
+/// The name the MCP server reports in `initialize`, and the name the config
+/// snippets register it under.
+pub const MCP_SERVER_NAME: &str = "font-manager";
+
+/// The MCP clients the app writes a config snippet for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum McpClient {
+    /// Claude Code: a `claude mcp add --transport http …` command.
+    ClaudeCode,
+    /// Any client that reads a JSON `mcpServers` block with an HTTP server.
+    Http,
+}
+
+/// A config snippet that connects one MCP client to the app.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSnippet {
+    /// The client it is for.
+    pub client: McpClient,
+    /// What to paste: a shell command or a JSON block, with the real URL and
+    /// token in it.
+    pub text: String,
+}
+
+/// The MCP server the app hosts on the local API endpoint (E27.1). Off by
+/// default; while off, `/mcp` is not served.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpStatus {
+    /// Whether the user turned the server on.
+    pub enabled: bool,
+    /// `http://127.0.0.1:<port>/mcp`; `None` while the local API endpoint is
+    /// not running. The port changes from run to run (ADR 0015).
+    #[serde(default)]
+    pub url: Option<String>,
+    /// One snippet per client, with the URL and the endpoint token; empty
+    /// while there is no URL.
+    #[serde(default)]
+    pub snippets: Vec<McpSnippet>,
+}
+
+/// Turn the MCP server on or off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct McpUpdate {
+    /// On (true) or off (false).
+    pub enabled: bool,
+}
+
 /// The user's settings, the app folders and the local API endpoint.
 pub trait SettingsService {
     /// The current settings.
@@ -244,6 +297,24 @@ pub trait SettingsService {
     fn regenerate_endpoint_token(&self) -> ApiResult<EndpointInfo> {
         Err(endpoint_unsupported())
     }
+    /// Whether the MCP server is on, its URL and the client config snippets.
+    /// `Unsupported` where there is no local API.
+    fn mcp_status(&self) -> ApiResult<McpStatus> {
+        Err(mcp_unsupported())
+    }
+    /// Turns the MCP server on or off and saves the choice; it applies to
+    /// the next request, without a restart.
+    fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
+        let _ = req;
+        Err(mcp_unsupported())
+    }
+}
+
+fn mcp_unsupported() -> ApiError {
+    ApiError::new(
+        ErrorCode::Unsupported,
+        "The MCP server is not available here.",
+    )
 }
 
 fn endpoint_unsupported() -> ApiError {
@@ -373,6 +444,26 @@ mod tests {
         assert_ne!(next.token, first.token);
         assert_eq!(next.token.len(), 64);
         assert_eq!(api.endpoint_info().expect("info"), next);
+    }
+
+    #[test]
+    fn mcp_status_is_camel_case_and_off_in_the_mock_until_turned_on() {
+        let api = crate::mock::MockApi::new();
+        let off = api.mcp_status().expect("status");
+        assert!(!off.enabled);
+        let json = serde_json::to_value(&off).expect("json");
+        assert_eq!(json["enabled"], false);
+        assert_eq!(json["url"], "http://127.0.0.1:47613/mcp");
+        assert_eq!(json["snippets"][0]["client"], "claudeCode");
+        assert_eq!(json["snippets"][1]["client"], "http");
+        let on = api
+            .set_mcp_enabled(McpUpdate { enabled: true })
+            .expect("on");
+        assert!(on.enabled);
+        assert_eq!(api.mcp_status().expect("status"), on);
+        let old: McpStatus = serde_json::from_str(r#"{"enabled":true}"#).expect("parse");
+        assert_eq!(old.url, None);
+        assert!(old.snippets.is_empty());
     }
 
     #[test]

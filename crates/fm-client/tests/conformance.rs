@@ -135,6 +135,9 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     // The client takes the new token, so the calls after this still get in.
     same!(seen, d, c; regenerate_endpoint_token);
     same!(seen, d, c; endpoint_info);
+    same!(seen, d, c; mcp_status);
+    same!(seen, d, c; set_mcp_enabled, json!({ "enabled": true }));
+    same!(seen, d, c; mcp_status);
     // layout
     same!(seen, d, c; layout_presets);
     same!(seen, d, c; clamp_layout, layout.clone());
