@@ -1224,8 +1224,12 @@ version = "0.1.0"
 dependencies = [
  "fm-api",
  "fm-client",
+ "fm-core",
  "fm-endpoint",
+ "fm-platform",
  "rmcp",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

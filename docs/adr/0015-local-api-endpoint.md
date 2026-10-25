@@ -222,6 +222,16 @@ Code and generic HTTP clients, which `fm-core` writes with the real URL and
 token (`fm_core::mcp`); the port changes from run to run, so the snippets do
 too.
 
+**MCP tools** (E27.2). `fm_mcp::tools` lists twelve tools, each one
+`fm-api` call: `search_fonts`, `get_font`, `list_collections`, `list_sets`,
+`check_coverage`, `find_similar`, `get_pairings`, `get_license`,
+`activate_fonts`, `deactivate_fonts`, `tag_fonts`, `export_web`. Results are
+the API's own JSON (lists wrapped in an object), never font bytes;
+`export_web` answers with the paths it wrote and the CSS. An `ApiError` is a
+tool error (`isError: true`) whose text is the user message. The four
+mutating tools ask a `ToolGate` first; the app's gate refuses them until the
+grants in Settings (E27.6).
+
 ## Consequences
 
 - The CLI's endpoint mode (when the app is open), the MCP shim and the
