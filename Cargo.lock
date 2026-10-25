@@ -1124,6 +1124,7 @@ dependencies = [
  "fm-api",
  "fm-client",
  "fm-core",
+ "fm-endpoint",
  "fm-platform",
  "serde",
  "serde_json",

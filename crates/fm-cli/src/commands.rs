@@ -553,17 +553,24 @@ fn one_family(api: &dyn Api, font: &str) -> Result<FamilyId, Failure> {
     }
 }
 
-/// The path the user gave, as the API takes it. A path that is not valid
-/// Unicode is refused: a lossy copy of it would be a path the user did not
-/// give.
-fn user_path(path: &Path) -> Result<String, ApiError> {
-    path.to_str().map(str::to_owned).ok_or_else(|| {
+/// The path the user gave, made absolute against `fm`'s own working
+/// folder, as the API takes it: in endpoint mode the app writes it, and a
+/// relative path would land in the app's working folder. A path that is not
+/// valid Unicode is refused: a lossy copy of it would be a path the user did
+/// not give.
+fn user_path(path: &Path) -> Result<(PathBuf, String), ApiError> {
+    let path = std::path::absolute(path).map_err(|e| {
+        ApiError::new(ErrorCode::Io, "The output path could not be found.")
+            .with_detail(e.to_string())
+    })?;
+    let text = path.to_str().map(str::to_owned).ok_or_else(|| {
         ApiError::new(
             ErrorCode::InvalidRequest,
             "The output path is not valid Unicode. Choose another path.",
         )
         .with_detail(path.to_string_lossy().into_owned())
-    })
+    })?;
+    Ok((path, text))
 }
 
 /// `InvalidRequest` when `path` exists and `force` is off: `fm` replaces a
@@ -597,7 +604,7 @@ pub fn export_web(
     out_dir: &Path,
     force: bool,
 ) -> Result<ExportWebResponse, Failure> {
-    let out_dir = user_path(out_dir)?;
+    let (_, out_dir) = user_path(out_dir)?;
     let faces = faces(api, family)?.into_iter().map(|f| f.id).collect();
     Ok(api.export_web(ExportWebRequest {
         faces,
@@ -618,9 +625,9 @@ pub fn specimen(
     out: &Path,
     force: bool,
 ) -> Result<SpecimenResponse, Failure> {
-    let out_path = user_path(out)?;
+    let (out, out_path) = user_path(out)?;
     let family = one_family(api, family)?;
-    refuse_existing(out, force)?;
+    refuse_existing(&out, force)?;
     Ok(api.export_specimen(SpecimenRequest {
         family,
         format,

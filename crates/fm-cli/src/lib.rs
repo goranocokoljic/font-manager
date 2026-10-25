@@ -5,6 +5,7 @@
 
 mod commands;
 mod exit;
+pub mod link;
 mod output;
 
 use std::io::Write;
@@ -18,7 +19,7 @@ use fm_api::{Api, ApiError, ErrorCode};
 
 pub use commands::{Doctor, PreviewFlags, PreviewOut, Previewed, Scanned, SearchFlags, TargetKind};
 pub use exit::{EXIT_CODES, Exit};
-pub use output::Output;
+pub use output::{Output, VersionReport};
 
 /// Font Manager on the command line.
 #[derive(Debug, Parser)]
@@ -27,6 +28,10 @@ pub struct Cli {
     /// Print one JSON value (the API's answer, or the error) and nothing else.
     #[arg(long, global = true)]
     pub json: bool,
+    /// Use the index directly, even when the app is running (activation
+    /// then needs the app and refuses).
+    #[arg(long, global = true)]
+    pub direct: bool,
     /// What to do.
     #[command(subcommand)]
     pub command: Command,
@@ -35,7 +40,8 @@ pub struct Cli {
 /// The commands.
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// Print the app and API versions.
+    /// Print the app and API versions, and how `fm` reaches the library:
+    /// `endpoint` (the running app) or `direct` (the index).
     Version,
     /// Show which face a font argument names: a face id, a PostScript name,
     /// a full name, or a family with or without its style.
@@ -237,8 +243,9 @@ pub enum SetsCommand {
     },
 }
 
-/// How `fm` reaches the library.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How `fm` reaches the library; `fm version --json` reports it as `mode`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Link {
     /// Through the index directly, with the app closed: a session
     /// activation would end with the `fm` process, so activation refuses.
@@ -252,7 +259,10 @@ pub enum Link {
 pub fn run(api: &dyn Api, link: Link, cli: &Cli, out: &mut dyn Write, err: &mut dyn Write) -> Exit {
     let mut output = Output::new(cli.json, out, err);
     match &cli.command {
-        Command::Version => output.print(api.app_info(), output::version),
+        Command::Version => {
+            let report = api.app_info().map(|app| VersionReport { app, mode: link });
+            output.print(report, output::version)
+        }
         Command::Resolve { font } => output.print(resolve(api, font), output::font),
         Command::Scan { path } => {
             let scanned = commands::scan(api, path.as_deref(), output.progress());

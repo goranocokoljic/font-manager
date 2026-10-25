@@ -16,8 +16,8 @@ use fm_api::search::{CoverageReport, FamilyHit, SimilarFace};
 use fm_api::{Api, ApiError, FaceId};
 use serde::Serialize;
 
-use crate::Exit;
 use crate::commands::{Doctor, Previewed, Scanned};
+use crate::{Exit, Link};
 
 /// Why a command failed.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -153,9 +153,26 @@ impl<'a> Output<'a> {
 }
 
 /// `fm version`: the app and the API it serves.
-pub fn version(info: &AppInfo, out: &mut dyn Write) -> io::Result<()> {
+pub fn version(report: &VersionReport, out: &mut dyn Write) -> io::Result<()> {
+    let info = &report.app;
     writeln!(out, "{} {}", info.name, info.version)?;
-    writeln!(out, "API {}", info.api_version)
+    writeln!(out, "API {}", info.api_version)?;
+    match report.mode {
+        Link::Endpoint => writeln!(out, "Mode: endpoint (the running app)"),
+        Link::Direct => writeln!(out, "Mode: direct (the index)"),
+    }
+}
+
+/// What `fm version` prints: the app's [`AppInfo`] (in endpoint mode the
+/// running app's, so `apiVersion` is the API it serves) and the mode.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VersionReport {
+    /// The app and the API version it serves.
+    #[serde(flatten)]
+    pub app: AppInfo,
+    /// How `fm` reached it: `endpoint` or `direct`.
+    pub mode: Link,
 }
 
 /// `fm resolve`: the face, as one row.

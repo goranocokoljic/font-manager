@@ -1,20 +1,20 @@
 //! `fm` — the Font Manager command-line tool.
 //!
-//! Links `fm-core` directly: [`CoreApi`] over the index in the app folders
-//! (or under `FM_HOME`, a scratch home with `data`, `config`, `cache` and
-//! `logs`), held as `Arc<dyn Api>`. Talking to the running app through
-//! `fm-client` instead comes with E26.6.
+//! On start it looks for the running app ([`fm_cli::link::reach`]): when
+//! the app's local API answers, every command goes through it (endpoint
+//! mode); otherwise `fm` links `fm-core` directly on the index in the app
+//! folders (direct-link mode). `--direct` forces direct-link. The app
+//! folders are the user's, or those under `FM_HOME` (a scratch home with
+//! `data`, `config`, `cache` and `logs`).
 
 use std::io;
 use std::path::PathBuf;
 use std::process::ExitCode;
-use std::sync::Arc;
 
 use clap::Parser;
 use clap::error::ErrorKind;
-use fm_api::{Api, ApiError, ApiResult, ErrorCode};
-use fm_cli::{Cli, Link, Output};
-use fm_core::{CoreApi, startup};
+use fm_api::{ApiError, ApiResult, ErrorCode};
+use fm_cli::{Cli, Output};
 use fm_platform::AppPaths;
 
 fn main() -> ExitCode {
@@ -32,8 +32,9 @@ fn main() -> ExitCode {
         }
     };
     let (mut out, mut err) = (io::stdout().lock(), io::stderr().lock());
-    let api = match open() {
-        Ok(api) => api,
+    let reached = app_paths().and_then(|paths| fm_cli::link::reach(&paths, cli.direct));
+    let (api, link) = match reached {
+        Ok(reached) => reached,
         Err(e) => {
             let failed: Result<(), ApiError> = Err(e);
             return Output::new(cli.json, &mut out, &mut err)
@@ -41,25 +42,13 @@ fn main() -> ExitCode {
                 .into();
         }
     };
-    // Always the index directly until E26.6 talks to the running app.
-    fm_cli::run(api.as_ref(), Link::Direct, &cli, &mut out, &mut err).into()
+    fm_cli::run(api.as_ref(), link, &cli, &mut out, &mut err).into()
 }
 
 /// A usage error clap found, printed as `fm` prints errors.
 fn usage(json: bool, text: &str) -> fm_cli::Exit {
     let (mut out, mut err) = (io::stdout().lock(), io::stderr().lock());
     Output::new(json, &mut out, &mut err).usage(text)
-}
-
-/// The API over the index in the app folders.
-fn open() -> ApiResult<Arc<dyn Api>> {
-    let paths = app_paths()?;
-    startup::prepare(&paths)?;
-    let index = startup::open_index(&paths)?.index;
-    let activator = fm_platform::activator::system(&paths).map_err(|e| {
-        ApiError::new(ErrorCode::Io, "Font activation is not available.").with_detail(e.to_string())
-    })?;
-    Ok(Arc::new(CoreApi::open(&paths, index, activator)))
 }
 
 /// `FM_HOME` when it is set to an absolute path, else the user's app folders.

@@ -1,13 +1,28 @@
 # The `fm` command line
 
-`fm` reads the same library as the app. It opens the index in the app
-folders, so the app does not have to run.
+`fm` reads the same library as the app. The app does not have to run.
+
+## When the app runs, and when it does not
+
+When `fm` starts, it looks for the running app. When the app runs, `fm`
+sends every command to the app (endpoint mode). Then `fm` and the app share
+the same activated fonts, and `fm scan` shows the progress of the app.
+
+When the app is closed, `fm` opens the index in the app folders itself
+(direct mode). `fm` waits at most half a second for an app that does not
+answer.
+
+- `fm --direct <command>` always opens the index itself, also when the app
+  runs.
+- `fm version` shows the mode: `endpoint` or `direct`.
+- When the app does not accept its own token, `fm` exits with code 4. Open
+  Settings > Local API in the app to see the token, or restart the app.
 
 ## Commands
 
 | Command | What it does |
 |---------|--------------|
-| `fm version` | Show the app version and the API version |
+| `fm version` | Show the app version, the API version that the app serves, and the mode (`endpoint` or `direct`) |
 | `fm resolve <font>` | Show which font a name or id stands for |
 | `fm scan [folder]` | Add the folder to the library and scan it. Without a folder, scan every folder of the library. Progress goes to stderr. A folder that fails to scan does not stop the others; `fm` then exits with the code of the first failure. |
 | `fm list` | List the families |
@@ -72,4 +87,5 @@ data, so `fm preview --out -` cannot be used with `--json`.
 ## A separate library for tests
 
 Set `FM_HOME` to an absolute folder. `fm` then keeps its index, settings,
-cache and logs in that folder, not in your app folders.
+cache and logs in that folder, not in your app folders. `fm` then looks for
+the app only in that folder (`data/endpoint.json`).
