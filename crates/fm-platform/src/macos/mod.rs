@@ -21,6 +21,8 @@ pub(crate) mod paths;
 #[allow(unsafe_code)] // AppKit and WebKit FFI; every block has a SAFETY note.
 mod pdf;
 #[cfg(target_os = "macos")]
+mod process;
+#[cfg(target_os = "macos")]
 #[allow(unsafe_code)] // Objective-C runtime and CoreFoundation FFI; every block has a SAFETY note.
 mod trash;
 mod tray;
@@ -36,6 +38,8 @@ pub(crate) use open_url::command as open_url_command;
 pub use pdf::MacosPdfPrinter;
 #[cfg(target_os = "macos")]
 pub(crate) use pdf::run_ui_loop;
+#[cfg(target_os = "macos")]
+pub(crate) use process::is_running;
 #[cfg(target_os = "macos")]
 pub(crate) use trash::FinderTrash;
 #[cfg_attr(not(target_os = "macos"), allow(unused_imports))]

@@ -15,6 +15,7 @@ mod linux;
 mod macos;
 pub mod paths;
 pub mod pdf;
+pub mod process;
 pub mod trash;
 pub mod tray;
 pub mod updater;

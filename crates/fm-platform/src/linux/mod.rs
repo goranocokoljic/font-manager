@@ -19,6 +19,8 @@ pub(crate) mod paths;
 #[cfg(target_os = "linux")]
 mod pdf;
 #[cfg(target_os = "linux")]
+mod process;
+#[cfg(target_os = "linux")]
 mod trash;
 mod tray;
 
@@ -33,6 +35,8 @@ pub(crate) use open_url::command as open_url_command;
 pub use pdf::LinuxPdfPrinter;
 #[cfg(target_os = "linux")]
 pub(crate) use pdf::run_ui_loop;
+#[cfg(target_os = "linux")]
+pub(crate) use process::is_running;
 #[cfg(target_os = "linux")]
 pub(crate) use trash::FreedesktopTrash;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]

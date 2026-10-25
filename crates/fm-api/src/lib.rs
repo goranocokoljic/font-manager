@@ -57,7 +57,7 @@ pub use search::SearchService;
 pub use settings::SettingsService;
 pub use version::{
     DEPRECATION_HEADER, Deprecation, NEGOTIATED_MAJOR, VERSION_HEADER, VersionInfo,
-    check_client_version, deprecations, deprecations_in,
+    check_client_version, check_server_version, deprecations, deprecations_in,
 };
 pub use workflows::WorkflowService;
 

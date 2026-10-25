@@ -113,6 +113,15 @@ pub fn check_client_version(client: ApiVersion) -> ApiResult<()> {
     negotiate(NEGOTIATED_MAJOR, API_VERSION, client)
 }
 
+/// The client side of [`check_client_version`]: a client built against
+/// [`API_VERSION`] talks to a server that serves `served` (its
+/// [`VERSION_HEADER`]), or refuses it with [`ErrorCode::Unsupported`] and the
+/// same sentence the server would send. So a client meets a major mismatch
+/// plainly even when the server does not check the header.
+pub fn check_server_version(served: ApiVersion) -> ApiResult<()> {
+    negotiate(served.major, served, API_VERSION)
+}
+
 /// [`check_client_version`] for a build that serves `major` as `served`.
 fn negotiate(major: u32, served: ApiVersion, client: ApiVersion) -> ApiResult<()> {
     if client.major == major {
@@ -260,6 +269,22 @@ mod tests {
             "The client speaks API 1.9.0 but Font Manager serves API 2.1.0: update the client to a version built for API 2.x."
         );
         assert!(negotiate(2, v(2, 1, 0), v(2, 0, 7)).is_ok());
+    }
+
+    #[test]
+    fn a_client_checks_the_server_by_the_same_rule() {
+        assert!(check_server_version(API_VERSION).is_ok());
+        assert!(check_server_version(v(API_VERSION.major, API_VERSION.minor + 3, 1)).is_ok());
+        let newer = v(API_VERSION.major + 1, 0, 0);
+        let e = check_server_version(newer).unwrap_err();
+        assert_eq!(e.code, ErrorCode::Unsupported);
+        assert_eq!(
+            e.message,
+            format!(
+                "The client speaks API {API_VERSION} but Font Manager serves API {newer}: update the client to a version built for API {}.x.",
+                newer.major
+            )
+        );
     }
 
     #[test]

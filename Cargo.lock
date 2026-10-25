@@ -981,6 +981,20 @@ name = "fm-cli"
 version = "0.1.0"
 dependencies = [
  "fm-api",
+ "fm-client",
+]
+
+[[package]]
+name = "fm-client"
+version = "0.1.0"
+dependencies = [
+ "fm-api",
+ "fm-core",
+ "fm-endpoint",
+ "fm-platform",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]
@@ -1028,6 +1042,10 @@ dependencies = [
 [[package]]
 name = "fm-mcp"
 version = "0.1.0"
+dependencies = [
+ "fm-api",
+ "fm-client",
+]
 
 [[package]]
 name = "fm-platform"

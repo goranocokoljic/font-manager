@@ -37,6 +37,16 @@ pub struct Discovery {
     pub api_version: String,
 }
 
+impl Discovery {
+    /// The discovery file in the data folder `dir`, or `None` when there is
+    /// none or it is not a discovery file (programs then act as if the app
+    /// were closed).
+    pub fn read(dir: &Path) -> Option<Self> {
+        let bytes = std::fs::read(dir.join(DISCOVERY_FILE)).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+}
+
 /// The token and, while the endpoint runs, its address.
 #[derive(Debug)]
 pub struct EndpointKeys {
@@ -106,10 +116,7 @@ impl EndpointKeys {
         let mut st = self.lock();
         st.url = None;
         let path = self.discovery_path();
-        let ours = std::fs::read(&path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<Discovery>(&bytes).ok())
-            .is_some_and(|d| d.pid == std::process::id());
+        let ours = Discovery::read(&self.dir).is_some_and(|d| d.pid == std::process::id());
         if ours {
             std::fs::remove_file(&path)
                 .map_err(|e| FmError::io("The local API file could not be removed.", &path, &e))?;
@@ -222,6 +229,21 @@ mod tests {
         assert!(fm_platform::fs::is_private_file(&keys.token_path()).expect("check"));
         // A restart: a new value over the same folder reads the same token.
         assert_eq!(keys.info().expect("info").token, first.token);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_discovery_file_reads_back_or_is_none() {
+        let dir = scratch("read");
+        assert_eq!(Discovery::read(&dir), None, "no folder");
+        let keys = EndpointKeys::new(&dir);
+        let info = keys.publish(addr()).expect("publish");
+        let read = Discovery::read(&dir).expect("published");
+        assert_eq!(read.url, "http://127.0.0.1:41234");
+        assert_eq!(read.token, info.token);
+        assert_eq!(read.pid, std::process::id());
+        std::fs::write(keys.discovery_path(), "{ not json").expect("write");
+        assert_eq!(Discovery::read(&dir), None, "not a discovery file");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
