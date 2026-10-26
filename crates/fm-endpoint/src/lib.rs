@@ -280,16 +280,16 @@ async fn handle(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> 
 /// the MCP server or a service call.
 async fn route(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> Response<Reply> {
     if let Err(refused) = check_origin(&req, server.port) {
-        return refused.map(Reply::Full);
+        return after_body(req, refused).await.map(Reply::Full);
     }
     if req.uri().path() == VERSION_ROUTE {
         return version(server, &req).await.map(Reply::Full);
     }
     if let Err(refused) = authorize(server, &req).await {
-        return refused.map(Reply::Full);
+        return after_body(req, refused).await.map(Reply::Full);
     }
     if let Err(refused) = check_client_version(&req) {
-        return refused.map(Reply::Full);
+        return after_body(req, refused).await.map(Reply::Full);
     }
     if req.uri().path() == EVENTS_ROUTE {
         return stream_events(server, close, &req).await;
@@ -304,14 +304,23 @@ async fn route(server: &Server, close: Arc<Notify>, req: Request<Incoming>) -> R
 /// or when none is mounted, so an off server cannot be told from none.
 async fn mcp(server: &Server, req: Request<Incoming>) -> Response<Reply> {
     let Some(mount) = &server.mcp else {
-        return mcp_off().map(Reply::Full);
+        return after_body(req, mcp_off()).await.map(Reply::Full);
     };
     let api = Arc::clone(&server.api);
     match blocking(move || api.mcp_status()).await {
         Ok(status) if status.enabled => mount.call(req).await.map(|b| Reply::Mounted(Mounted(b))),
-        Ok(_) => mcp_off().map(Reply::Full),
-        Err(e) => error(&e).map(Reply::Full),
+        Ok(_) => after_body(req, mcp_off()).await.map(Reply::Full),
+        Err(e) => after_body(req, error(&e)).await.map(Reply::Full),
     }
+}
+
+/// `response`, sent after the request's body is read (up to
+/// [`MAX_BODY_BYTES`]) and dropped. A refusal sent while the body is still
+/// unread ends with the socket closed on unread bytes, which the OS answers
+/// with a reset (macOS does it at once), so the client loses the answer.
+async fn after_body(req: Request<Incoming>, response: Response<Full>) -> Response<Full> {
+    let _ = read_limited(req.into_body(), MAX_BODY_BYTES).await;
+    response
 }
 
 fn mcp_off() -> Response<Full> {
@@ -448,17 +457,18 @@ async fn call(server: &Server, req: Request<Incoming>) -> Response<Full> {
         .filter(|m| routes::ROUTES.contains(m))
         .map(str::to_owned)
     else {
-        return error(&ApiError::not_found(format!(
+        let not_found = error(&ApiError::not_found(format!(
             "The route {}",
             req.uri().path()
         )));
+        return after_body(req, not_found).await;
     };
     if req.method() != Method::POST {
         let mut response = refuse(StatusCode::METHOD_NOT_ALLOWED, "Every route takes POST.");
         response
             .headers_mut()
             .insert(header::ALLOW, HeaderValue::from_static("POST"));
-        return response;
+        return after_body(req, response).await;
     }
     let body = match read_limited(req.into_body(), MAX_BODY_BYTES).await {
         Ok(body) => body,

@@ -193,3 +193,29 @@ fn stopping_the_endpoint_closes_the_socket() {
         "{addr} still accepts"
     );
 }
+
+/// A refusal sent before the body is read still reaches the client: the
+/// server reads the body first. Closed on unread bytes, the socket is reset
+/// (at once on macOS) and the client loses the answer, or its write fails.
+#[test]
+fn a_refused_request_with_a_large_body_still_gets_its_answer() {
+    let served = Served::new();
+    let addr = served.endpoint.addr();
+    let host = format!("127.0.0.1:{}", addr.port());
+    let body = format!("{{\"padding\":\"{}\"}}", "x".repeat(512 * 1024));
+    let wrong = format!("Bearer {}", "0".repeat(64));
+    let token = format!("Bearer {}", served.token());
+    let (host, wrong, token) = (host.as_str(), wrong.as_str(), token.as_str());
+    // Path, Host, Authorization, the expected status.
+    let cases = [
+        ("/v1/list_sources", host, wrong, 401),
+        ("/v1/list_sources", "evil.example", token, 403),
+        ("/v1/no_such_route", host, token, 404),
+        ("/mcp", host, token, 404),
+    ];
+    for (path, host, auth, status) in cases {
+        let headers = [("Host", host), ("Authorization", auth)];
+        let reply = common::send(addr, "POST", path, &headers, &body);
+        assert_eq!(reply.status, status, "{path}: {}", reply.body);
+    }
+}
