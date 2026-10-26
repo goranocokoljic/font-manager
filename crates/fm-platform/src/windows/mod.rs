@@ -14,6 +14,9 @@ mod dwrite;
 #[cfg(windows)]
 #[allow(unsafe_code)] // IFileOperation and a hand-written COM sink; every block has a SAFETY note.
 mod file_op;
+#[cfg(windows)]
+#[allow(unsafe_code)] // Security descriptor FFI for the pipe; every block has a SAFETY note.
+pub(crate) mod ipc;
 mod open_url;
 pub(crate) mod paths;
 #[cfg(windows)]

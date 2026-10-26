@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[dependencies]
+# The IPC transport (E29.1, ADR 0016): named pipes on Windows, Unix domain
+# sockets on macOS and Linux.
+interprocess = "2.4"
+
 [lints]
 workspace = true
 

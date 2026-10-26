@@ -29,11 +29,15 @@
 //! turned it on, asked on every request (like the token): while off, `/mcp`
 //! is 404 and the mounted service is never called.
 //!
+//! The IPC endpoint (E29.1, [`ipc`]) serves the same method table as
+//! newline-delimited JSON over the user's named pipe or Unix socket.
+//!
 //! The endpoint knows nothing about fonts and keeps no state but the socket
 //! and its open streams: the token and the discovery file belong to `fm-core`.
 
 mod body;
 pub mod events;
+pub mod ipc;
 pub mod mount;
 pub mod routes;
 

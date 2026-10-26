@@ -54,7 +54,7 @@ use fm_api::{
 use fm_core::index::Opened;
 use fm_core::lifecycle::{self, LaunchWindow};
 use fm_core::{CoreApi, SettingsStore};
-use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
+use fm_platform::{AppPaths, FontActivator, IpcName, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, Webview, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
@@ -97,12 +97,15 @@ pub struct AppState {
     quit_ran: AtomicBool,
     /// The local API endpoint (ADR 0015); shared with the thread that starts it.
     endpoint: Arc<Mutex<EndpointSlot>>,
+    /// Where the IPC endpoint listens (ADR 0016); without a name it does not start.
+    ipc: Option<IpcName>,
 }
 
 /// The local API endpoint while it runs, and whether the quit path stopped it.
 #[derive(Debug, Default)]
 struct EndpointSlot {
     running: Option<fm_endpoint::Endpoint>,
+    ipc: Option<fm_endpoint::ipc::IpcEndpoint>,
     stopped: bool,
 }
 
@@ -117,6 +120,7 @@ impl AppState {
             tray: None,
             quit_ran: AtomicBool::new(false),
             endpoint: Arc::default(),
+            ipc: None,
         }
     }
 
@@ -130,7 +134,16 @@ impl AppState {
             tray: None,
             quit_ran: AtomicBool::new(false),
             endpoint: Arc::default(),
+            ipc: None,
         }
+    }
+
+    /// Also serves the API over the user's named pipe or Unix socket at
+    /// `name` (E29.1, ADR 0016) while the local API endpoint runs.
+    #[must_use]
+    pub fn with_ipc(mut self, name: IpcName) -> Self {
+        self.ipc = Some(name);
+        self
     }
 
     /// Shows a tray item from `tray` when the app starts ([`tray::install`]).
@@ -174,44 +187,55 @@ impl AppState {
     /// MCP server is mounted at `/mcp` and served while the user has it on
     /// (E27.1); off, it builds nothing. Only
     /// the real library is served: without it there is no data folder.
+    /// With [`AppState::with_ipc`], the IPC endpoint starts beside it.
     /// The handle is for tests, which wait for the start.
     pub fn start_endpoint(&self) -> Option<std::thread::JoinHandle<()>> {
         let core = Arc::clone(self.core.as_ref()?);
         let slot = Arc::clone(&self.endpoint);
+        let ipc_name = self.ipc.clone();
         lock_slot(&slot).stopped = false;
         let started = std::thread::Builder::new()
             .name("fm-endpoint-start".into())
             .spawn(move || {
                 let api = Arc::clone(&core) as Arc<dyn Api>;
+                let ipc = ipc_name.and_then(|name| {
+                    fm_endpoint::ipc::IpcEndpoint::start(Arc::clone(&api), &name)
+                        .inspect_err(|e| tracing::warn!(error = %e, %name, "the IPC endpoint could not start"))
+                        .ok()
+                });
                 let mcp = Arc::new(McpMount(fm_mcp::HttpServer::new(Arc::clone(&api))));
-                let endpoint = match fm_endpoint::Endpoint::start_with_mcp(api, mcp) {
-                    Ok(endpoint) => endpoint,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "the local API could not start");
-                        return;
-                    }
-                };
+                let endpoint = fm_endpoint::Endpoint::start_with_mcp(api, mcp)
+                    .inspect_err(|e| tracing::warn!(error = %e, "the local API could not start"))
+                    .ok();
                 let mut slot = lock_slot(&slot);
-                // The app began to quit meanwhile: no discovery file.
-                if slot.stopped || slot.running.is_some() {
+                // The app began to quit meanwhile: no discovery file, and
+                // both endpoints drop here.
+                if slot.stopped || slot.running.is_some() || slot.ipc.is_some() {
                     return;
                 }
-                if let Err(e) = core.publish_endpoint(endpoint.addr()) {
-                    tracing::warn!(error = %e, "endpoint.json not written");
+                if let Some(endpoint) = endpoint {
+                    if let Err(e) = core.publish_endpoint(endpoint.addr()) {
+                        tracing::warn!(error = %e, "endpoint.json not written");
+                    }
+                    slot.running = Some(endpoint);
                 }
-                slot.running = Some(endpoint);
+                slot.ipc = ipc;
             });
         started
             .inspect_err(|e| tracing::warn!(error = %e, "the local API could not start"))
             .ok()
     }
 
-    /// Stops the local API endpoint and removes `endpoint.json`.
+    /// Stops the local API endpoint and removes `endpoint.json`; stops the
+    /// IPC endpoint, which removes its socket.
     pub fn stop_endpoint(&self) {
         let mut slot = lock_slot(&self.endpoint);
         slot.stopped = true;
         if let Some(endpoint) = slot.running.take() {
             endpoint.stop();
+        }
+        if let Some(ipc) = slot.ipc.take() {
+            ipc.stop();
         }
         if let Some(core) = &self.core
             && let Err(e) = core.unpublish_endpoint()
@@ -1484,6 +1508,11 @@ pub fn run() {
             .plugin(tauri_plugin_updater::Builder::new().build()),
     );
     let state = state.with_tray(fm_platform::tray::system());
+    // The pipe or socket other programs of this user reach the app on (ADR 0016).
+    let state = match &startup {
+        Some(startup) => state.with_ipc(startup.paths.ipc_name()),
+        None => state,
+    };
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(e) => {
