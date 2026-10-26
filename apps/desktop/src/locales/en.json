@@ -1322,8 +1322,8 @@
       "theirs": "Other computer",
       "keepMine": "Keep mine",
       "useTheirs": "Use theirs",
-      "keepMineLabel": "Keep this computer's {field} of {family}: {value}",
-      "useTheirsLabel": "Use the other computer's {field} of {family}: {value}",
+      "keepMineLabel": "Keep mine: {field} of {family} on this computer, {value}",
+      "useTheirsLabel": "Use theirs: {field} of {family} on the other computer, {value}",
       "fields": {
         "favorite": "Favorite",
         "rating": "Rating",

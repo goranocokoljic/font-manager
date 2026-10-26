@@ -169,9 +169,9 @@ test('a sidecar conflict shows both values and is resolved by keyboard', async (
   await expect(conflict).toContainText('4 stars');
   await expect(conflict).toContainText('2 stars');
   const useTheirs = conflict.getByRole('button', {
-    name: "Use the other computer's Rating of Inter: 2 stars",
+    name: 'Use theirs: Rating of Inter on the other computer, 2 stars',
   });
-  await conflict.getByRole('button', { name: /^Keep this computer's Rating of Inter/ }).focus();
+  await conflict.getByRole('button', { name: /^Keep mine: Rating of Inter/ }).focus();
   await page.keyboard.press('Tab');
   await expect(useTheirs).toBeFocused();
   await page.keyboard.press('Enter');
