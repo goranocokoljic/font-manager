@@ -16,7 +16,8 @@ the files stay on your disk.
 3. Font Manager reads the folder. A progress bar shows how many files it has read.
 
 The fonts on your system are always in the list too. They show as **System fonts**.
-Read [Sources](sources.md) to learn more about folders.
+Read [Sources](sources.md) to learn more about folders. To share a folder of fonts with
+your team, read [Shared libraries](shared-libraries.md).
 
 ## Find a font
 

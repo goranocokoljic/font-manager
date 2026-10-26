@@ -993,7 +993,13 @@ fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
     .unwrap();
     assert_eq!(
         labels(),
-        ["Erste Schritte", "Quellen", "Aktivierung", "Tastenkürzel"]
+        [
+            "Erste Schritte",
+            "Quellen",
+            "Aktivierung",
+            "Tastenkürzel",
+            "Geteilte Bibliotheken"
+        ]
     );
     assert_eq!(
         chrome(),

@@ -39,6 +39,10 @@ pub const HELP_PAGES: &[HelpPage] = &[
         slug: "keyboard-shortcuts",
         title: "Keyboard shortcuts",
     },
+    HelpPage {
+        slug: "shared-libraries",
+        title: "Shared libraries",
+    },
 ];
 
 /// The label of the one help window; opening another page reuses it.
@@ -209,7 +213,7 @@ mod tests {
     }
 
     #[test]
-    fn the_menu_lists_the_four_required_pages() {
+    fn the_menu_lists_the_required_pages() {
         let slugs: Vec<_> = HELP_PAGES.iter().map(|p| p.slug).collect();
         assert_eq!(
             slugs,
@@ -217,7 +221,8 @@ mod tests {
                 "getting-started",
                 "sources",
                 "activation",
-                "keyboard-shortcuts"
+                "keyboard-shortcuts",
+                "shared-libraries"
             ]
         );
     }
