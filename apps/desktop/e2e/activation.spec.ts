@@ -147,7 +147,7 @@ test('"Deactivate everything not in the current set" keeps the set picked in the
   await page.keyboard.press('Escape');
 
   const sets = page.getByRole('region', { name: 'Project sets' });
-  const set = sets.getByRole('button', { name: /Client brand/ });
+  const set = sets.getByRole('button', { name: /^Client brand/ });
   await set.click();
   await expect(set).toHaveAttribute('aria-pressed', 'true');
 

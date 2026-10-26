@@ -108,6 +108,8 @@ service!(OrganizationService {
     delete_set(set: SetId) -> ();
     export_set(set: SetId) -> SetExport;
     import_set(export: SetExport) -> ImportSetResponse;
+    save_set_file(req: SaveSetFileRequest) -> SavedSetFile;
+    load_set_file(req: LoadSetFileRequest) -> ImportSetResponse;
     pin_instance(req: PinInstanceRequest) -> VirtualStyle;
     list_virtual_styles(req: VirtualStylesRequest) -> Vec<VirtualStyle>;
     delete_virtual_style(style: VirtualStyleId) -> ();

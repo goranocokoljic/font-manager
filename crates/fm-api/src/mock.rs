@@ -49,9 +49,10 @@ use crate::library::{
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
-    PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest, ReceiptChange,
-    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SelectionTag, SelectionTags,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
+    MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp,
+    SET_FILE_EXTENSION, SaveSetFileRequest, SavedSetFile, SelectionTag, SelectionTags,
     SelectionTagsRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
     UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
@@ -3130,6 +3131,39 @@ impl OrganizationService for MockApi {
         };
         st.sets.push(set.clone());
         Ok(ImportSetResponse { set, missing })
+    }
+
+    fn save_set_file(&self, req: SaveSetFileRequest) -> ApiResult<SavedSetFile> {
+        let export = self.export_set(req.set)?;
+        let mut path = std::path::PathBuf::from(&req.path);
+        if path.extension().is_none() {
+            path.as_mut_os_string()
+                .push(format!(".{SET_FILE_EXTENSION}"));
+        }
+        let json = serde_json::to_string_pretty(&export)
+            .map_err(|e| ApiError::new(ErrorCode::Internal, e.to_string()))?;
+        std::fs::write(&path, json).map_err(|e| {
+            ApiError::new(ErrorCode::Io, "The set could not be saved there.")
+                .with_detail(e.to_string())
+        })?;
+        Ok(SavedSetFile {
+            path: path.display().to_string(),
+            fonts: u32::try_from(export.fonts.len()).unwrap_or(u32::MAX),
+        })
+    }
+
+    fn load_set_file(&self, req: LoadSetFileRequest) -> ApiResult<ImportSetResponse> {
+        let text = std::fs::read_to_string(&req.path).map_err(|e| {
+            ApiError::not_found(format!("The set file {}", req.path)).with_detail(e.to_string())
+        })?;
+        let export: SetExport = serde_json::from_str(&text).map_err(|e| {
+            ApiError::new(
+                ErrorCode::InvalidRequest,
+                "This file is not a Font Manager set file.",
+            )
+            .with_detail(e.to_string())
+        })?;
+        self.import_set(export)
     }
 
     fn pin_instance(&self, req: PinInstanceRequest) -> ApiResult<VirtualStyle> {

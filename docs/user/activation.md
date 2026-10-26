@@ -42,6 +42,18 @@ Press `Ctrl+K` and choose **Deactivate everything not in the current set**. All 
 Font Manager activated stop being active, but the fonts of the current set stay active.
 The command is dimmed when no set is current.
 
+## Share a set with a teammate
+
+To give a set to a teammate, point to the set under **Project sets** and click
+**Export set…**. Choose where to save the set file. Its name ends in `.fmset.json`.
+The file names each font by the content of its file. It holds no fonts, so your teammate
+must have the same font files.
+
+To use a set file, click **Import set…** next to **Project sets** and choose the file.
+Font Manager finds each font by its content, so a renamed or moved copy still matches.
+The new set holds the fonts that your library has. A note lists the fonts that your
+library does not have, by family and style.
+
 ## Undo
 
 When you activate or deactivate many fonts at once (several rows, a family,

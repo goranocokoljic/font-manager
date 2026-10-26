@@ -1080,7 +1080,23 @@
     "heading": "Project sets",
     "currentTitle": "The current set (press to clear)",
     "makeCurrentTitle": "Make current set",
-    "empty": "No sets yet."
+    "empty": "No sets yet.",
+    "import": "Import set…",
+    "importTitle": "Add a set from a set file; its fonts are found in this library by file content",
+    "export": "Export set…",
+    "exportLabel": "Export the set {name}",
+    "exportTitle": "Save a set file to share; it names each font by its file content",
+    "saved": {
+      "one": "Saved the set: {count} font.",
+      "other": "Saved the set: {count} fonts."
+    },
+    "imported": "Imported the set “{name}”.",
+    "importedAll": "Imported the set “{name}”. Every font is in this library.",
+    "missing": {
+      "one": "{count} font not in this library",
+      "other": "{count} fonts not in this library"
+    },
+    "dismissLabel": "Close the import note"
   },
   "settings": {
     "title": "Settings",

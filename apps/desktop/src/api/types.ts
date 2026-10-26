@@ -1833,6 +1833,12 @@ export type ListFamiliesRequest = {
 	collection?: CollectionId | null,
 };
 
+/**  Import a set file (E28.2). */
+export type LoadSetFileRequest = {
+	/**  Absolute path of the set file. */
+	path: string,
+};
+
 /**  The MCP clients the app writes a config snippet for. */
 export type McpClient = 
 /**  Claude Code: a `claude mcp add --transport http …` command. */
@@ -2368,12 +2374,34 @@ export type SaveLayoutRequest = {
 	layout: Layout,
 };
 
+/**
+ *  Save a project set as a set file (E28.2): its [`SetExport`] JSON, at a
+ *  path the user picked.
+ */
+export type SaveSetFileRequest = {
+	/**  The set. */
+	set: SetId,
+	/**
+	 *  Absolute file path. A file name with no extension gets
+	 *  [`SET_FILE_EXTENSION`].
+	 */
+	path: string,
+};
+
 /**  A layout as it is saved in its template file. */
 export type SavedLayout = {
 	/**  The template file's id. */
 	id: string,
 	/**  The saved layout, clamped into the block ranges. */
 	layout: Layout,
+};
+
+/**  A set file that was written. */
+export type SavedSetFile = {
+	/**  The path written, its extension added when it had none. */
+	path: string,
+	/**  The number of fonts in it. */
+	fonts: number,
 };
 
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */

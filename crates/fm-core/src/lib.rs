@@ -45,6 +45,7 @@ pub mod resolve;
 pub mod sample;
 pub mod scanner;
 mod search;
+pub mod set_file;
 pub mod settings;
 pub mod sidecar;
 pub mod similar;
