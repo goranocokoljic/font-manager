@@ -16,6 +16,12 @@
 //! - A paused source is not watched and not rescanned. Resuming watches it
 //!   again and rescans it at once, so changes made while it was paused land.
 //!
+//! - A sidecar in the source's `.fontlibrary` folder that changed (a sync
+//!   client brought another machine's edits, E28.1) is not a font: it is
+//!   reported in [`WatchUpdate::sidecars`] after the same debounce, so the
+//!   caller merges it ([`crate::index::Index::apply_rescan`] with the update's
+//!   rescan) without a full rescan.
+//!
 //! The watcher only reads (ADR 0004). Every change it makes to the index is
 //! reported to the caller as a [`WatchUpdate`].
 
@@ -32,6 +38,7 @@ use fm_api::ErrorCode;
 use notify::{EventKind, RecommendedWatcher, RecursiveMode};
 
 use crate::scanner::{FileIndex, Rescan, discover};
+use crate::sidecar::SIDECAR_DIR;
 use crate::{Config, FmError, FmResult};
 
 /// How the watcher batches events and how often it rescans.
@@ -145,6 +152,8 @@ pub struct WatchUpdate {
     /// What changed, or why the source folder could not be scanned. A source
     /// that cannot be scanned keeps its entries (a drive may be unplugged).
     pub result: FmResult<Rescan>,
+    /// Sidecar files of the source that changed on disk, to merge.
+    pub sidecars: Vec<PathBuf>,
 }
 
 /// Watches source folders and keeps a shared [`FileIndex`] current. Dropping
@@ -487,12 +496,20 @@ impl<W: notify::Watcher> Worker<W> {
             }
         }
         for (root, paths) in by_source {
-            let rescan = lock(&self.index).refresh(&root, &paths);
-            if !rescan.is_quiet() {
+            let dir = root.join(SIDECAR_DIR);
+            let (sidecars, fonts): (Vec<PathBuf>, Vec<PathBuf>) =
+                paths.into_iter().partition(|p| p.starts_with(&dir));
+            let sidecars: Vec<PathBuf> = sidecars
+                .into_iter()
+                .filter(|p| is_sidecar(&dir, p))
+                .collect();
+            let rescan = lock(&self.index).refresh(&root, &fonts);
+            if !rescan.is_quiet() || !sidecars.is_empty() {
                 (self.on_update)(WatchUpdate {
                     source: root,
                     trigger: Trigger::Events,
                     result: Ok(rescan),
+                    sidecars,
                 });
             }
         }
@@ -512,8 +529,19 @@ impl<W: notify::Watcher> Worker<W> {
             source: root.to_path_buf(),
             trigger,
             result,
+            sidecars: Vec::new(),
         });
     }
+}
+
+/// Whether `path` is a sidecar file in the sidecar folder `dir`: a `.json`
+/// file right in it, not a temporary file being written (`.name.tmp`).
+fn is_sidecar(dir: &Path, path: &Path) -> bool {
+    path.parent() == Some(dir)
+        && path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.ends_with(".json") && !n.starts_with('.'))
 }
 
 /// The index, even after a panic elsewhere left the lock poisoned: every

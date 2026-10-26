@@ -96,6 +96,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ),
         ("list_resolutions", String::new()),
         ("undo_resolution", "1".into()),
+        ("list_sidecar_conflicts", String::new()),
+        (
+            "resolve_sidecar_conflict",
+            r#"{"id":1,"keep":"mine"}"#.into(),
+        ),
         ("list_glyphs", r#"{"face":1}"#.into()),
         ("get_glyph", r#"{"face":1,"codePoint":65}"#.into()),
         ("resolve_font", r#"{"font":"1"}"#.into()),

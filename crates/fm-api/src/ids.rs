@@ -42,4 +42,6 @@ id!(
     VirtualStyleId,
     /// A named comparison saved from the Compare sheet.
     ComparisonId,
+    /// A sidecar value another machine set that differs from this one's.
+    SidecarConflictId,
 );

@@ -457,10 +457,11 @@ fn a_change_of_the_family_notes_is_a_new_file_version() {
     theirs.history = next_file_history(&theirs, Some(&ours));
     assert_ne!(theirs.history, before);
     assert!(descends(&ours, &theirs));
-    // A file without family notes keeps the version ids it had before E13.5.
+    // A version id is unique to its version (E28.1): the same content
+    // written apart is two versions.
     let mut plain = Sidecar::new("A");
     plain.faces = ours.faces.clone();
-    assert_eq!(next_file_history(&plain, None), before);
+    assert_ne!(next_file_history(&plain, None), before);
 }
 
 fn license(kind: LicenseType, seats: Option<u32>) -> License {

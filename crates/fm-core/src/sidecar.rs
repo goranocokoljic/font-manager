@@ -39,7 +39,17 @@
 //!
 //! Without a last-known sidecar (a new machine, a rebuilt index) the base is
 //! empty: whatever either side has set is kept, and two different values are
-//! a conflict.
+//! a conflict. When both machines changed an entry independently
+//! ([`independent`]), an unset value is a value too (a favorite one machine
+//! took away): every field on which they differ is a conflict
+//! ([`merge_independent`]), so no value is lost to a default.
+//!
+//! Sync clients that cannot merge two versions of a file keep both: the
+//! second under a name of their own ([`original_name`]). Such a conflicted
+//! copy is merged as one more version of the family's sidecar (E28.1). When
+//! the user resolves a conflict, the version ids of the value set aside are
+//! taken into the history of the next write ([`absorb`]), so the machine that
+//! wrote it sees that its version was read and takes the result.
 
 use std::collections::BTreeMap;
 
@@ -509,6 +519,11 @@ pub fn ancestor(base: Option<&FaceEntry>, disk: Option<&FaceEntry>, file_descend
     let Some(base) = base else {
         return Meta::default();
     };
+    // An entry this machine has taken in and changed since (a conflicted
+    // copy of an older version) holds nothing new.
+    if let Some(disk) = disk.filter(|d| older(&base.history, &d.history)) {
+        return disk.meta.clone();
+    }
     let disk = disk.map(|d| (&d.meta, d.history.as_slice()));
     if entry_descends((&base.meta, &base.history), disk, file_descends) {
         base.meta.clone()
@@ -528,9 +543,11 @@ pub fn family_ancestor(
     file_descends: bool,
 ) -> Option<String> {
     let base = base?;
-    let disk = disk
-        .filter(|d| d.notes.is_some())
-        .map(|d| (&d.notes, d.history.as_slice()));
+    let disk = disk.filter(|d| d.notes.is_some());
+    if let Some(disk) = disk.filter(|d| older(&base.history, &d.history)) {
+        return disk.notes.clone();
+    }
+    let disk = disk.map(|d| (&d.notes, d.history.as_slice()));
     if entry_descends((&base.notes, &base.history), disk, file_descends) {
         base.notes.clone()
     } else {
@@ -547,9 +564,11 @@ pub fn license_ancestor(
     file_descends: bool,
 ) -> Option<License> {
     let base = base?.license.as_ref()?;
-    let disk = disk
-        .and_then(|d| d.license.as_ref())
-        .map(|d| (&d.license, d.history.as_slice()));
+    let disk = disk.and_then(|d| d.license.as_ref());
+    if let Some(disk) = disk.filter(|d| older(&base.history, &d.history)) {
+        return Some(disk.license.clone());
+    }
+    let disk = disk.map(|d| (&d.license, d.history.as_slice()));
     entry_descends((&base.license, &base.history), disk, file_descends)
         .then(|| base.license.clone())
 }
@@ -568,6 +587,118 @@ fn entry_descends<T: PartialEq>(
             content == base.0 || base.1.first().is_some_and(|rev| history.contains(rev))
         }
     }
+}
+
+/// Whether the version on disk, by its history, is one this machine's base
+/// already holds in its own history: an older version, taken in before.
+fn older(base: &[String], disk: &[String]) -> bool {
+    disk.first()
+        .is_some_and(|rev| base.first() != Some(rev) && base.contains(rev))
+}
+
+/// `history` of a version holding `content` that has also taken in `revs`,
+/// the version ids of values another machine wrote (a resolved conflict):
+/// a new version id first, then `revs`, then `history`. The other machine
+/// finds its version in it, so it takes the content without a conflict.
+pub fn absorb<T: Serialize + ?Sized>(
+    content: &T,
+    history: &[String],
+    revs: &[String],
+) -> Vec<String> {
+    let mut taken: Vec<String> = Vec::new();
+    for rev in revs.iter().chain(history) {
+        if !taken.contains(rev) {
+            taken.push(rev.clone());
+        }
+    }
+    // The new id hashes the history it extends, so `revs` go after it.
+    let mut out = extend(content, history);
+    out.truncate(1);
+    out.extend(taken);
+    out.truncate(HISTORY);
+    out
+}
+
+/// The name of the family sidecar a sync client's conflicted copy `name` is
+/// a version of, or `None` when `name` is no conflicted copy. A sidecar is
+/// named by 16 hex digits; the copies are:
+///
+/// - Dropbox: `<hex> (Name's conflicted copy 2026-10-26).json`
+/// - OneDrive: `<hex>-<COMPUTERNAME>.json`
+/// - Google Drive: `<hex> (1).json`
+/// - iCloud Drive: `<hex> 2.json`
+pub fn original_name(name: &str) -> Option<String> {
+    let stem = name.strip_suffix(".json")?;
+    let hex = stem.get(..HASH_DIGITS)?;
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let rest = &stem[HASH_DIGITS..];
+    let number = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    let copy = if let Some(inner) = rest.strip_prefix(" (").and_then(|r| r.strip_suffix(')')) {
+        // Dropbox, Google Drive.
+        inner.contains("conflicted copy") || number(inner)
+    } else if let Some(n) = rest.strip_prefix(' ') {
+        // iCloud Drive.
+        number(n)
+    } else if let Some(computer) = rest.strip_prefix('-') {
+        // OneDrive: a computer name (letters, digits, `-` and `_`).
+        !computer.is_empty()
+            && computer
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    } else {
+        false
+    };
+    copy.then(|| format!("{hex}.json"))
+}
+
+/// Whether this machine's entry (`base`, as it last wrote or read it) and
+/// the one on disk changed independently: both exist, with histories, and
+/// neither holds the other's version. Then [`ancestor`] knows nothing in
+/// common, and the entry merges with [`merge_independent`].
+pub fn independent(base: Option<&FaceEntry>, disk: Option<&FaceEntry>) -> bool {
+    match (base, disk) {
+        (Some(base), Some(disk)) => apart((&base.meta, &base.history), (&disk.meta, &disk.history)),
+        _ => false,
+    }
+}
+
+/// [`independent`] for the family's notes ([`merge_family_independent`]).
+pub fn family_independent(base: Option<&FamilyEntry>, disk: Option<&FamilyEntry>) -> bool {
+    match (base, disk.filter(|d| d.notes.is_some())) {
+        (Some(base), Some(disk)) => {
+            apart((&base.notes, &base.history), (&disk.notes, &disk.history))
+        }
+        _ => false,
+    }
+}
+
+/// [`independent`] for the family's declared license
+/// ([`merge_license_independent`]).
+pub fn license_independent(base: Option<&FamilyEntry>, disk: Option<&FamilyEntry>) -> bool {
+    let base = base.and_then(|b| b.license.as_ref());
+    let disk = disk.and_then(|d| d.license.as_ref());
+    match (base, disk) {
+        (Some(base), Some(disk)) => apart(
+            (&base.license, &base.history),
+            (&disk.license, &disk.history),
+        ),
+        _ => false,
+    }
+}
+
+/// Two versions of an entry, each as content and history, neither of which
+/// descends from the other. A base without a history was never written as
+/// an entry: there is nothing to be apart from.
+fn apart<T: PartialEq>(base: (&T, &[String]), disk: (&T, &[String])) -> bool {
+    !base.1.is_empty()
+        && !older(base.1, disk.1)
+        && !entry_descends(base, Some(disk), false)
+        && !disk
+            .1
+            .first()
+            .is_some_and(|rev| base.1.first() == Some(rev))
 }
 
 /// The history of an entry with `meta` written over `prior`, the entry it
@@ -615,7 +746,7 @@ pub fn next_file_history(next: &Sidecar, prior: Option<&Sidecar>) -> Vec<String>
         return prior.history.clone();
     }
     let history = prior.map(|p| p.history.as_slice()).unwrap_or_default();
-    // A file without family notes hashes as it did before E13.5.
+    // A file without family notes hashes its faces alone, as before E13.5.
     match &next.family_meta {
         None => extend(&next.faces, history),
         Some(family) => extend(&(&next.faces, family), history),
@@ -636,8 +767,19 @@ fn same_entries(a: &Sidecar, b: &Sidecar) -> bool {
     a.faces == b.faces && a.family_meta == b.family_meta
 }
 
-/// `history` with the id of a new version holding `content` first.
+/// `history` with the id of a new version holding `content` first. The id
+/// is unique to this version (E28.1): two machines that make the same change
+/// apart get two ids, so a later change on one of them is never taken for a
+/// change on top of the other's.
 fn extend<T: Serialize + ?Sized>(content: &T, history: &[String]) -> Vec<String> {
+    let mut nonce = [0u8; 16];
+    if getrandom::fill(&mut nonce).is_err() {
+        // Without the OS random source, the clock tells versions apart.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        nonce = now.to_le_bytes();
+    }
     let mut hasher = blake3::Hasher::new();
     hasher.update(
         serde_json::to_string(content)
@@ -646,6 +788,7 @@ fn extend<T: Serialize + ?Sized>(content: &T, history: &[String]) -> Vec<String>
     );
     hasher.update(b"\n");
     hasher.update(history.first().map_or("", String::as_str).as_bytes());
+    hasher.update(&nonce);
     let rev = hasher.finalize().to_hex()[..HASH_DIGITS].to_owned();
     std::iter::once(rev)
         .chain(history.iter().cloned())
@@ -701,6 +844,28 @@ pub fn merge(base: &Meta, local: &Meta, disk: &Meta) -> Merged {
     }
 }
 
+/// Merges this machine's metadata (`local`) with the sidecar's (`disk`)
+/// when they changed independently ([`independent`]): tags, collections and
+/// pins merge as sets that both added to; every scalar field on which they
+/// differ is a conflict, this machine's value kept, an unset value included.
+pub fn merge_independent(local: &Meta, disk: &Meta) -> Merged {
+    let mut merged = merge(&Meta::default(), local, disk);
+    let (mut local, mut disk) = (local.clone(), disk.clone());
+    local.normalize();
+    disk.normalize();
+    let mut conflicts = Vec::new();
+    merged.meta.favorite = strict(
+        Field::Favorite,
+        local.favorite,
+        disk.favorite,
+        &mut conflicts,
+    );
+    merged.meta.rating = strict(Field::Rating, local.rating, disk.rating, &mut conflicts);
+    merged.meta.notes = strict(Field::Notes, local.notes, disk.notes, &mut conflicts);
+    merged.conflicts = conflicts;
+    merged
+}
+
 /// What [`merge_family`] keeps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergedFamily {
@@ -724,6 +889,19 @@ pub fn merge_family(base: Option<&str>, local: Option<&str>, disk: Option<&str>)
         norm(disk),
         &mut conflicts,
     );
+    MergedFamily {
+        notes,
+        conflict: conflicts.pop(),
+    }
+}
+
+/// [`merge_family`] when the notes changed independently
+/// ([`family_independent`]): different notes are a conflict, no notes
+/// included.
+pub fn merge_family_independent(local: Option<&str>, disk: Option<&str>) -> MergedFamily {
+    let norm = |n: Option<&str>| n.filter(|n| !n.is_empty()).map(str::to_owned);
+    let mut conflicts = Vec::new();
+    let notes = strict(Field::FamilyNotes, norm(local), norm(disk), &mut conflicts);
     MergedFamily {
         notes,
         conflict: conflicts.pop(),
@@ -761,6 +939,41 @@ pub fn merge_license(
         license,
         conflict: conflicts.pop(),
     }
+}
+
+/// [`merge_license`] when the licenses changed independently
+/// ([`license_independent`]): different licenses are a conflict, none
+/// included.
+pub fn merge_license_independent(local: Option<&License>, disk: Option<&License>) -> MergedLicense {
+    let norm = |l: Option<&License>| l.filter(|l| !l.is_empty()).cloned();
+    let mut conflicts = Vec::new();
+    let license = strict(
+        Field::FamilyLicense,
+        norm(local),
+        norm(disk),
+        &mut conflicts,
+    );
+    MergedLicense {
+        license,
+        conflict: conflicts.pop(),
+    }
+}
+
+/// The local value; a different one on disk is a conflict.
+fn strict<T: PartialEq + Serialize>(
+    field: Field,
+    local: T,
+    disk: T,
+    conflicts: &mut Vec<Conflict>,
+) -> T {
+    if local != disk {
+        conflicts.push(Conflict {
+            field,
+            local: serde_json::to_string(&local).unwrap_or_default(),
+            disk: serde_json::to_string(&disk).unwrap_or_default(),
+        });
+    }
+    local
 }
 
 /// The side that changed; on two different changes the local value, with a

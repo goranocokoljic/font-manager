@@ -26,7 +26,8 @@ use fm_api::layout::{
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
-    Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source,
+    Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
+    SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -760,6 +761,21 @@ async fn undo_resolution(
     call(&state, move |api| api.undo_resolution(resolution)).await
 }
 
+/// Sidecar values another machine set differently (Problems view, E28.1).
+#[tauri::command]
+async fn list_sidecar_conflicts(state: State<'_, AppState>) -> ApiResult<Vec<SidecarConflict>> {
+    call(&state, |api| api.list_sidecar_conflicts()).await
+}
+
+/// Keeps one value of a sidecar conflict.
+#[tauri::command]
+async fn resolve_sidecar_conflict(
+    state: State<'_, AppState>,
+    req: ResolveSidecarConflictRequest,
+) -> ApiResult<()> {
+    call(&state, move |api| api.resolve_sidecar_conflict(req)).await
+}
+
 /// Searches the library: free text and filters, grouped by family, with filter counts.
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -1283,6 +1299,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             keep_copy,
             list_resolutions,
             undo_resolution,
+            list_sidecar_conflicts,
+            resolve_sidecar_conflict,
             list_sources,
             add_source,
             remove_source,

@@ -65,6 +65,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; keep_copy, json!({ "keep": "/a.ttf", "trash": [], "dryRun": true }));
     same!(seen, d, c; list_resolutions);
     same!(seen, d, c; undo_resolution, json!(1));
+    same!(seen, d, c; list_sidecar_conflicts);
+    same!(seen, d, c; resolve_sidecar_conflict, json!({ "id": 1, "keep": "mine" }));
     same!(seen, d, c; list_glyphs, json!({ "face": 1 }));
     same!(seen, d, c; get_glyph, json!({ "face": 1, "codePoint": 65 }));
     same!(seen, d, c; resolve_font, json!({ "font": "1" }));

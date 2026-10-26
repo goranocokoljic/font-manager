@@ -1314,6 +1314,23 @@
       "willMove": "Will move to the trash",
       "willStay": "Will stay",
       "confirm": "Move to trash"
+    },
+    "sidecar": {
+      "title": "Resolve sidecar conflicts",
+      "note": "Another computer that syncs the same folder set these values differently. Pick the value to keep; the other computer takes it at its next sync.",
+      "mine": "This computer",
+      "theirs": "Other computer",
+      "keepMine": "Keep mine",
+      "useTheirs": "Use theirs",
+      "keepMineLabel": "Keep mine: {field} of {family} on this computer, {value}",
+      "useTheirsLabel": "Use theirs: {field} of {family} on the other computer, {value}",
+      "fields": {
+        "favorite": "Favorite",
+        "rating": "Rating",
+        "notes": "Notes",
+        "familyNotes": "Family notes",
+        "familyLicense": "License"
+      }
     }
   },
   "sources": {

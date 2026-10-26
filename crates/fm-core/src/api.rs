@@ -58,7 +58,8 @@ use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
     GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest,
     LibraryService, ListFamiliesRequest, Platform, Problem, Resolution, ResolveFontRequest,
-    ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -704,6 +705,16 @@ impl LibraryService for CoreApi {
         let resolution = self.resolver()?.undo_resolution(resolution)?;
         self.forget_files();
         Ok(resolution)
+    }
+
+    fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {
+        Ok(self.lock().sidecar_conflicts()?)
+    }
+
+    fn resolve_sidecar_conflict(&self, req: ResolveSidecarConflictRequest) -> ApiResult<()> {
+        let face = self.lock().resolve_sidecar_conflict(req.id, req.keep)?;
+        self.updated(&[face]);
+        Ok(())
     }
 
     /// Reads the face's file outside the index lock: a CJK font is large.

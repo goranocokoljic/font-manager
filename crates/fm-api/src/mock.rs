@@ -43,8 +43,9 @@ use crate::library::{
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
     FontNames, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest,
     ImportMode, KeepCopyRequest, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
-    Platform, Problem, ProblemKind, Resolution, ResolveFontRequest, ScanRequest,
-    SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    Platform, Problem, ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest,
+    ScanRequest, SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
+    TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -75,7 +76,7 @@ use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ComparisonId, ErrorCode,
     Event, EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
     OrganizationService, PreviewService, ResolutionId, SearchService, SetId, SettingsService,
-    SourceId, TagId, VirtualStyleId, WorkflowService,
+    SidecarConflictId, SourceId, TagId, VirtualStyleId, WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
@@ -486,6 +487,8 @@ struct State {
     trashed: BTreeSet<String>,
     /// "Keep this one" actions, oldest first.
     resolutions: Vec<Resolution>,
+    /// Sidecar conflicts waiting for the user, oldest first (E28.1).
+    sidecar_conflicts: Vec<SidecarConflict>,
     /// The layout template files, in the order they were made.
     layouts: Vec<MockLayoutFile>,
     /// The catalogs turned on.
@@ -541,6 +544,34 @@ impl MockApi {
         // A panic while holding the lock cannot leave the sample data half-written
         // in a way that matters to a mock, so a poisoned lock is still used.
         self.state.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Adds a sidecar conflict on `face` (E28.1), as a merge with another
+    /// machine's sidecar would find it; `NotFound` for an unknown face.
+    pub fn add_sidecar_conflict(
+        &self,
+        face: FaceId,
+        field: crate::library::SidecarField,
+        mine: &str,
+        theirs: &str,
+    ) -> ApiResult<SidecarConflictId> {
+        let mut st = self.state();
+        let detail = st.face(face)?.detail.clone();
+        let id = SidecarConflictId(st.next());
+        let dir = detail
+            .path
+            .rsplit_once('/')
+            .map_or(String::new(), |(dir, _)| dir.to_owned());
+        st.sidecar_conflicts.push(SidecarConflict {
+            id,
+            face,
+            family: detail.face.family_name.clone(),
+            field,
+            mine: mine.into(),
+            theirs: theirs.into(),
+            sidecar_path: format!("{dir}/.fontlibrary/{}.json", detail.face.family_name),
+        });
+        Ok(id)
     }
 
     /// Adds a copy of `face`'s file at `path`: the same hash under a new face
@@ -893,6 +924,7 @@ impl State {
             mcp_enabled: false,
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
+            sidecar_conflicts: Vec::new(),
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
             catalog_cache: BTreeMap::new(),
@@ -1641,6 +1673,18 @@ impl LibraryService for MockApi {
             }
         }
         out.extend(duplicates.iter().flat_map(DuplicateGroup::problems));
+        for c in &st.sidecar_conflicts {
+            out.push(Problem {
+                kind: ProblemKind::SidecarConflict,
+                face: Some(c.face),
+                path: st.face(c.face)?.detail.path.clone(),
+                other: Some(c.sidecar_path.clone()),
+                message: format!(
+                    "Another machine set a different value ({}); this machine's value ({}) is kept.",
+                    c.theirs, c.mine
+                ),
+            });
+        }
         // System clashes are listed above for every face, active or not.
         for clash in &clashes {
             if let ConflictWith::Active { face: other } = clash.with {
@@ -1916,6 +1960,27 @@ impl LibraryService for MockApi {
             });
         }
         Ok(r)
+    }
+
+    fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {
+        Ok(self.state().sidecar_conflicts.clone())
+    }
+
+    fn resolve_sidecar_conflict(&self, req: ResolveSidecarConflictRequest) -> ApiResult<()> {
+        let mut st = self.state();
+        let i = st
+            .sidecar_conflicts
+            .iter()
+            .position(|c| c.id == req.id)
+            .ok_or_else(|| ApiError::not_found(format!("Sidecar conflict {}", req.id)))?;
+        let c = st.sidecar_conflicts.remove(i);
+        st.emit(Event::LibraryChanged {
+            source: None,
+            added: Vec::new(),
+            removed: Vec::new(),
+            updated: vec![c.face],
+        });
+        Ok(())
     }
 }
 

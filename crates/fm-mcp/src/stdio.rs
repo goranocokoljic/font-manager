@@ -11,7 +11,9 @@
 //! stdout carries JSON-RPC only; everything the shim says goes to stderr.
 //! When the app is not there, the MCP server is off, or the app goes away
 //! mid-session, the client gets a JSON-RPC error with [`UNAVAILABLE`] and
-//! the shim exits non-zero.
+//! the shim exits non-zero. After the app went away, requests the client
+//! still sends get the error too, until it closes stdin or is quiet for
+//! [`FIRST_MESSAGE_WAIT`].
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -215,16 +217,32 @@ pub async fn forward<T: Transport<RoleServer>>(target: &Target, mut client: T) -
             }
         }
     };
+    sends.abort_all();
+    let _ = app.close().await;
     if end == End::AppGone {
         for id in open.drain() {
             let error = ServerJsonRpcMessage::error(unavailable(), Some(id));
             let _ = client.send(error).await;
         }
+        refuse_rest(&mut client).await;
     }
-    sends.abort_all();
-    let _ = app.close().await;
     let _ = client.close().await;
     end
+}
+
+/// After the app went away: answers every request the client still sends
+/// with the [`UNAVAILABLE`] error, until it closes stdin or is quiet for
+/// [`FIRST_MESSAGE_WAIT`]. A request already on its way when the shim saw
+/// the connection close gets its answer instead of a closed stdout.
+async fn refuse_rest<T: Transport<RoleServer>>(client: &mut T) {
+    while let Ok(Some(message)) = tokio::time::timeout(FIRST_MESSAGE_WAIT, client.receive()).await {
+        if let JsonRpcMessage::Request(request) = message {
+            let error = ServerJsonRpcMessage::error(unavailable(), Some(request.id));
+            if client.send(error).await.is_err() {
+                return;
+            }
+        }
+    }
 }
 
 fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
