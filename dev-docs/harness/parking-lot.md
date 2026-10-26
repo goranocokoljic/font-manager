@@ -267,3 +267,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-26
 
 - [E27.7 #177] apps/desktop/src/components/McpSettings.vue:117 — the shared role="status" announces only "Copied", so a screen-reader user does not hear which snippet was copied.
+- [E28.1 #179] crates/fm-core/src/scanner/watch.rs:636 — no production code starts a `Watcher`, so sidecar merges after the watcher debounce (E28.1 criterion 4) hold at the fm-core layer only until the app runs it.
+- [E28.1 #179] docs/user/sources.md:50 — the Problems table row says another computer can conflict on a tag, which was wrong before E28.1 too.
+- [E28.1 #179] apps/desktop/src/views/ProblemsView.vue:293 — Cancel or Confirm on the "Keep this one" dialog unmounts the focused button without returning focus, so focus falls to body and Escape stops closing the view.
+- [E28.1 #179] apps/desktop/src/views/ProblemsView.vue:375 — `.path` sets overflow-wrap only inside `.table`, so a long path outside the table can overflow at narrow widths.
