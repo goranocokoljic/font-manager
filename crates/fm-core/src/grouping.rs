@@ -27,7 +27,7 @@ const DEFAULT_WEIGHT: u16 = 400;
 /// Width used when a face declares none: OS/2 "Medium (normal)".
 const DEFAULT_WIDTH: u16 = 5;
 /// Style name used when a face or instance has none.
-const DEFAULT_STYLE: &str = "Regular";
+pub(crate) const DEFAULT_STYLE: &str = "Regular";
 
 /// One family and its styles.
 #[derive(Debug, Clone, PartialEq)]

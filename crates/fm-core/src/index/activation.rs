@@ -295,6 +295,29 @@ impl Index {
         tx.commit().map_err(|e| db_error(&e))
     }
 
+    /// Records the document that asked for these active faces (E29.2), in
+    /// one transaction. A face that is not active is left alone.
+    pub(crate) fn set_activation_document(
+        &mut self,
+        faces: &[FaceId],
+        document: &str,
+    ) -> FmResult<()> {
+        if faces.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        {
+            let mut stmt = tx
+                .prepare_cached("UPDATE activation SET document = ?2 WHERE face_id = ?1")
+                .map_err(|e| db_error(&e))?;
+            for face in faces {
+                stmt.execute(params![face.0, document])
+                    .map_err(|e| db_error(&e))?;
+            }
+        }
+        tx.commit().map_err(|e| db_error(&e))
+    }
+
     /// Forgets that these faces are active, in one transaction.
     pub(crate) fn remove_activations(&mut self, faces: &[FaceId]) -> FmResult<()> {
         if faces.is_empty() {

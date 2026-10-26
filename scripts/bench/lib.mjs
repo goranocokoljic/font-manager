@@ -28,6 +28,8 @@ export const BUDGETS = {
   search: { unit: 'ms', target: 50 },
   // macOS: one CoreText session registration per file (ADR 0008, Budget on macOS).
   activation_100: { unit: 'ms', target: 500, byOs: { macos: 1000 } },
+  // E29.2: the 100-face activation behind a name lookup; the same budget (ADR 0008).
+  fonts_needed_100: { unit: 'ms', target: 500, byOs: { macos: 1000 } },
   idle_memory: { unit: 'MB', target: 350 },
   preview_cache_hit: { unit: 'ms', target: 2 },
   smart_collections: { unit: 'ms', target: 50 },
@@ -61,6 +63,22 @@ export function activation100(a, os = osName()) {
   const other = a.faces - a.done - a.conflicts;
   if (other <= 0) return metric('activation_100', a.ms, undefined, os);
   return { ...metric('activation_100', a.ms, `${other} of ${a.faces} faces were not activated`, os), pass: false };
+}
+
+/**
+ * The fonts-needed metric (E29.2): the time of the one `fonts_needed` request
+ * for 100 fonts, failed when a font was not matched or its face neither
+ * activated nor clashed with an installed font.
+ */
+export function fontsNeeded100(n, os = osName()) {
+  const missed = n.fonts - n.matched;
+  if (missed > 0) {
+    return { ...metric('fonts_needed_100', n.ms, `${missed} of ${n.fonts} fonts were not matched`, os), pass: false };
+  }
+  if (n.other > 0) {
+    return { ...metric('fonts_needed_100', n.ms, `${n.other} of ${n.fonts} faces were not activated`, os), pass: false };
+  }
+  return metric('fonts_needed_100', n.ms, undefined, os);
 }
 
 /** The target of metric `name` on `os`. */

@@ -353,3 +353,28 @@ fn activation_needs_a_scanned_index_with_enough_faces() {
     let err = activate(home.path()).expect_err("too few faces");
     assert!(err.to_string().contains("1 activatable faces"), "{err}");
 }
+
+#[test]
+fn fonts_needed_matches_and_activates_100_fonts_in_one_request() {
+    let home = TempDir::new("fonts-needed");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = fonts_needed_with(home.path(), Arc::new(MockActivator::new())).expect("round");
+    assert_eq!(res.fonts, ACTIVATION_FACES as usize, "{res:?}");
+    assert_eq!(res.matched, res.fonts, "{res:?}");
+    assert_eq!(
+        res.done, res.fonts,
+        "every font activates its own face: {res:?}"
+    );
+    assert!(res.ms > 0.0, "{res:?}");
+}
+
+#[test]
+fn fonts_needed_needs_a_scanned_index_with_enough_faces() {
+    let library = TempDir::new("fonts-needed-library");
+    fs::copy(fixtures().join(FONT), library.path().join("One.ttf")).expect("copy");
+    let home = TempDir::new("fonts-needed-one");
+    first_scan(library.path(), home.path()).expect("scan");
+    let err =
+        fonts_needed_with(home.path(), Arc::new(MockActivator::new())).expect_err("too few faces");
+    assert!(err.to_string().contains("1 fonts that name"), "{err}");
+}

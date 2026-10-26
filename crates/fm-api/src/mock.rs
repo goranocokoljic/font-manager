@@ -12,7 +12,8 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
-    ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
+    ConflictPolicy, ConflictWith, DeactivateRequest, FontsNeededRequest, FontsNeededResponse,
+    NeededFont, NeededFontMatch, NeededFontRule, OutcomeStatus, Target,
 };
 use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
@@ -2772,6 +2773,114 @@ impl ActivationService for MockApi {
         }
         Ok(out)
     }
+
+    /// The core's rules (`fm_core::needed`) over the mock faces: the mock's
+    /// full name is "family style" and it has no legacy names apart from
+    /// the family it shows.
+    fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
+        let (matched, unmatched) = {
+            let st = self.state();
+            let usable: Vec<&FaceSummary> = st
+                .faces
+                .iter()
+                .filter(|f| st.visible(f) && !st.trashed.contains(&f.detail.path))
+                .map(|f| &f.detail.face)
+                .filter(|s| !matches!(s.health, Health::Broken(_)))
+                .collect();
+            let mut matched = Vec::new();
+            let mut unmatched = Vec::new();
+            for font in req.fonts {
+                match mock_needed_face(&font, &usable, |id| st.active.contains_key(&id)) {
+                    Some((face, matched_by)) => matched.push(NeededFontMatch {
+                        font,
+                        face,
+                        matched_by,
+                    }),
+                    None => unmatched.push(font),
+                }
+            }
+            (matched, unmatched)
+        };
+        let mut outcomes = Vec::new();
+        if req.activate && !matched.is_empty() {
+            // A face already active keeps its mode (the core's rule).
+            let mut faces: Vec<FaceId> = Vec::new();
+            for m in &matched {
+                if !faces.contains(&m.face) {
+                    faces.push(m.face);
+                }
+            }
+            let active: BTreeSet<FaceId> = self.state().active.keys().copied().collect();
+            let wanted: Vec<FaceId> = faces
+                .iter()
+                .copied()
+                .filter(|f| !active.contains(f))
+                .collect();
+            let mut done: BTreeMap<FaceId, OutcomeStatus> = BTreeMap::new();
+            if !wanted.is_empty() {
+                for o in self.activate(ActivateRequest {
+                    target: Target::Faces { faces: wanted },
+                    mode: ActivationMode::Session,
+                    on_conflict: ConflictPolicy::KeepExisting,
+                })? {
+                    done.insert(o.face, o.outcome);
+                }
+            }
+            outcomes = faces
+                .into_iter()
+                .map(|face| ActivationOutcome {
+                    face,
+                    outcome: done.remove(&face).unwrap_or(OutcomeStatus::Unchanged),
+                })
+                .collect();
+            let mut st = self.state();
+            for o in outcomes.iter().filter(|o| o.outcome == OutcomeStatus::Done) {
+                if let Some(a) = st.active.get_mut(&o.face) {
+                    a.document.clone_from(&req.document);
+                }
+            }
+        }
+        Ok(FontsNeededResponse {
+            missing: u32::try_from(unmatched.len()).unwrap_or(u32::MAX),
+            matched,
+            unmatched,
+            outcomes,
+        })
+    }
+}
+
+/// The mock face a needed font names, and the rule that found it.
+fn mock_needed_face(
+    font: &NeededFont,
+    faces: &[&FaceSummary],
+    active: impl Fn(FaceId) -> bool,
+) -> Option<(FaceId, NeededFontRule)> {
+    let norm = |s: &str| s.trim().to_lowercase();
+    let wanted = |name: &Option<String>| name.as_deref().map(norm).filter(|n| !n.is_empty());
+    let style = wanted(&font.style).unwrap_or_else(|| "regular".to_owned());
+    let tiers: [(NeededFontRule, Option<String>); 3] = [
+        (
+            NeededFontRule::PostscriptName,
+            wanted(&font.postscript_name),
+        ),
+        (NeededFontRule::FullName, wanted(&font.full_name)),
+        (NeededFontRule::Family, wanted(&font.family)),
+    ];
+    for (rule, name) in tiers {
+        let Some(name) = name else { continue };
+        let best = faces
+            .iter()
+            .filter(|s| match rule {
+                NeededFontRule::PostscriptName => norm(&s.postscript_name) == name,
+                NeededFontRule::FullName => norm(&format!("{} {}", s.family_name, s.style)) == name,
+                _ => norm(&s.family_name) == name && norm(&s.style) == style,
+            })
+            .min_by_key(|s| (!active(s.id), s.health != Health::Ok, s.id));
+        if let Some(s) = best {
+            return Some((s.id, rule));
+        }
+    }
+    None
 }
 
 impl OrganizationService for MockApi {
