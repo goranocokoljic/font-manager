@@ -604,13 +604,38 @@ UPDATE font_file SET mtime = NULL
 WHERE id IN (SELECT file_id FROM face WHERE full_name IS NULL);
 ";
 
+/// Document-scoped activation (E29.3, `index/activation.rs`).
+///
+/// - `activation.document` is set only for a session face a document
+///   activated (`fonts_needed`) and the user did not: the open document that
+///   asked for it last. It stays when its documents close, so the face is
+///   still known as document-scoped (never restored at launch).
+/// - `activation_document`: every open document that needs the face, one
+///   row each; `seq` orders them, the last to ask highest. A row goes with
+///   its activation.
+/// - Faces E29.2 activated for a document take that document as their tag.
+const V21: &str = r"
+CREATE TABLE activation_document (
+    face_id   INTEGER NOT NULL REFERENCES activation (face_id) ON DELETE CASCADE,
+    document  TEXT    NOT NULL,
+    seq       INTEGER NOT NULL,
+    PRIMARY KEY (face_id, document)
+) WITHOUT ROWID;
+CREATE INDEX activation_document_document ON activation_document (document);
+
+INSERT INTO activation_document (face_id, document, seq)
+SELECT face_id, document, face_id FROM activation
+WHERE document IS NOT NULL AND mode = 'session';
+UPDATE activation SET document = NULL WHERE mode = 'permanent';
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
 ];
 
 /// The schema version this build writes.
@@ -620,6 +645,7 @@ pub const SCHEMA_VERSION: u32 = MIGRATIONS.len() as u32;
 #[cfg(test)]
 pub(crate) const TABLES: &[&str] = &[
     "activation",
+    "activation_document",
     "activation_registration",
     "catalog_download",
     "catalog_download_file",

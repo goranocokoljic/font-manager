@@ -256,3 +256,52 @@ fn a_version_13_index_takes_the_time_of_faces_active_now() {
     );
     assert_eq!(last_activated(&index, FaceId(2)), None);
 }
+
+/// E29.3: a face E29.2 activated for a document takes it as its tag; a
+/// permanent face loses a document it should never have had.
+#[test]
+fn a_version_20_index_tags_the_faces_documents_activated() {
+    let dir = crate::test_support::TempDir::new("activation-document-migrate-v20");
+    let path = dir.path().join(crate::index::INDEX_FILE);
+    {
+        let conn = rusqlite::Connection::open(&path).expect("open");
+        for sql in &crate::index::schema::MIGRATIONS[..20] {
+            conn.execute_batch(sql).expect("old schema");
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 20;
+             INSERT INTO source (id, path, kind) VALUES (1, '/fonts', 'watched');
+             INSERT INTO font_file (id, source_id, path, format, size, health)
+                 VALUES (1, 1, '/fonts/a.ttf', 'ttf', 1, 'ok');
+             INSERT INTO face (id, file_id, collection_index, family, subfamily,
+                               postscript_name, weight, width, slant)
+                 VALUES (1, 1, 0, 'A', 'Regular', 'A-Regular', 400, 5, 'upright'),
+                        (2, 1, 1, 'A', 'Bold', 'A-Bold', 700, 5, 'upright'),
+                        (3, 1, 2, 'A', 'Black', 'A-Black', 900, 5, 'upright');
+             INSERT INTO activation (face_id, mode, document, since)
+                 VALUES (1, 'session', 'poster.indd', '2026-10-01T08:30:15.250Z'),
+                        (2, 'session', NULL, '2026-10-01T08:30:15.250Z'),
+                        (3, 'permanent', 'poster.indd', '2026-10-01T08:30:15.250Z');",
+        )
+        .expect("old rows");
+    }
+    let mut index = Index::open(&path).expect("open").index;
+    let docs: Vec<(FaceId, Option<String>)> = index
+        .active_rows()
+        .expect("rows")
+        .into_iter()
+        .map(|r| (r.face, r.document))
+        .collect();
+    assert_eq!(
+        docs,
+        vec![
+            (FaceId(1), Some("poster.indd".into())),
+            (FaceId(2), None),
+            (FaceId(3), None),
+        ]
+    );
+    assert_eq!(
+        index.close_document("poster.indd").expect("close"),
+        vec![FaceId(1)]
+    );
+}

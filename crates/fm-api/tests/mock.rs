@@ -6,7 +6,8 @@ use std::sync::Arc;
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
-    DeactivateRequest, FontsNeededRequest, NeededFont, NeededFontRule, OutcomeStatus, Target,
+    DeactivateRequest, DocumentClosedRequest, FontsNeededRequest, NeededFont, NeededFontRule,
+    OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
@@ -261,6 +262,59 @@ fn fonts_needed_leaves_a_permanently_active_face_permanent() {
     let active = api.list_active().unwrap();
     assert_eq!(active[0].mode, ActivationMode::Permanent);
     assert_eq!(active[0].document, None);
+}
+
+/// E29.3: the mock tags document faces, offers on close only the faces no
+/// open document needs and never the user's, and deactivates nothing.
+#[test]
+fn a_closed_document_offers_its_faces_no_other_document_needs() {
+    let api = api();
+    let need = |document: &str, names: &[&str]| {
+        api.fonts_needed(FontsNeededRequest {
+            fonts: names
+                .iter()
+                .map(|n| NeededFont {
+                    postscript_name: Some((*n).into()),
+                    ..NeededFont::default()
+                })
+                .collect(),
+            document: Some(document.into()),
+            activate: true,
+        })
+        .unwrap()
+    };
+    let close = |document: &str| {
+        api.document_closed(DocumentClosedRequest {
+            document: document.into(),
+        })
+        .unwrap()
+        .offer
+    };
+    need("poster.indd", &["Inter-Regular", "Inter-Italic"]);
+    need("flyer.indd", &["Inter-Italic"]);
+    need("flyer.indd", &["Inter-Italic"]);
+    let shows = |face: u32| {
+        api.list_active()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.face == FaceId(face))
+            .and_then(|a| a.document)
+    };
+    assert_eq!(shows(2).as_deref(), Some("flyer.indd"), "the last to ask");
+    // The user takes Inter Regular: it is no document's any more.
+    api.activate(acts(
+        &[1],
+        ActivationMode::Session,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    assert_eq!(shows(1), None);
+
+    assert_eq!(close("poster.indd"), [], "the flyer needs Italic");
+    assert_eq!(shows(2).as_deref(), Some("flyer.indd"));
+    assert_eq!(close("flyer.indd"), [FaceId(2)]);
+    assert_eq!(close("flyer.indd"), []);
+    assert_eq!(api.list_active().unwrap().len(), 2, "nothing deactivated");
 }
 
 #[test]

@@ -133,3 +133,27 @@ per file is most of that time; no other macOS call registers a font for every ap
   same budget and the same macOS override (`BUDGETS.fonts_needed_100.byOs`).
 - The mechanism above stays. A faster CoreText path (for example one call with many
   URLs) may bring macOS back to 500 ms later; that change removes the override.
+
+## Document-scoped activation (2026-10-26)
+
+E29.3 (#184) adds a scope to session activation for the plugins' auto-activation
+(E29). The OS mechanisms above do not change; this is bookkeeping in the index.
+
+- **Document-scoped faces.** A face `fonts_needed` activates for a `document` is a
+  session face tagged with that document (table `activation_document`, one row per
+  face and document). Another open document that asks for the face adds its own tag;
+  a document that asks again adds none. `ActiveFace.document` shows the document
+  that asked last.
+- **The user's faces stay the user's.** A face that was active before a document
+  asked (session or permanent) takes no tag. A face the user activates through
+  `activate` after a document asked loses its tags and is the user's from then on.
+- **The offer.** `document_closed(document)` drops the document's tags and returns
+  the faces no open document needs any more. It deactivates nothing: the app asks
+  the user, and on "yes" deactivates exactly those faces with `deactivate`
+  (`Target::Faces`), which sends the usual `Event::ActivationChanged`. A face the user
+  activated and a permanent face are never in the offer. A declined offer leaves the
+  face active and still document-scoped.
+- **Quit and launch.** Quit deregisters document-scoped faces like any session face.
+  "Reactivate on launch", the cleanup after a crash and the resume after an update
+  that did not install bring back only the session faces the user activated; a
+  document that is still open asks for its fonts again.
