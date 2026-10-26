@@ -60,6 +60,8 @@ routes! {
     keep_copy(req),
     list_resolutions(),
     undo_resolution(resolution),
+    list_sidecar_conflicts(),
+    resolve_sidecar_conflict(req),
     list_glyphs(req),
     get_glyph(req),
     resolve_font(req),

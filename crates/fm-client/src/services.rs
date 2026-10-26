@@ -56,6 +56,8 @@ service!(LibraryService {
     keep_copy(req: KeepCopyRequest) -> Resolution;
     list_resolutions() -> Vec<Resolution>;
     undo_resolution(resolution: ResolutionId) -> Resolution;
+    list_sidecar_conflicts() -> Vec<SidecarConflict>;
+    resolve_sidecar_conflict(req: ResolveSidecarConflictRequest) -> ();
     list_glyphs(req: GlyphsRequest) -> GlyphPage;
     get_glyph(req: GlyphRequest) -> GlyphDetail;
     resolve_font(req: ResolveFontRequest) -> FontMatches;

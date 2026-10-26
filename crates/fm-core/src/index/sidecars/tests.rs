@@ -1704,3 +1704,667 @@ fn a_license_changed_on_both_machines_keeps_this_one_and_reports_the_other() {
     m.declare("Inter-Regular", &mine);
     assert!(m.index.sidecar_problems().expect("problems").is_empty());
 }
+
+// E28.1: conflicts the user resolves, conflicted copies, concurrent edits.
+
+/// A machine over its own copy of the source folder (same fonts, same
+/// relative paths), as a second computer that syncs the folder sees it.
+fn machine(label: &str) -> (TempDir, Machine) {
+    let tmp = TempDir::new(label);
+    let m = Machine::new(tmp.path());
+    (tmp, m)
+}
+
+/// The `.json` file names in a machine's sidecar folder.
+fn sidecar_files(m: &Machine) -> Vec<String> {
+    list_sidecars(&m.root.join(SIDECAR_DIR))
+}
+
+/// Writes `text` to the sidecar folder of `m` as `name`, as a sync client
+/// would; a file with that text already is left alone.
+fn put(m: &Machine, name: &str, text: &str) {
+    let dir = m.root.join(SIDECAR_DIR);
+    std::fs::create_dir_all(&dir).expect("dir");
+    let path = dir.join(name);
+    if std::fs::read_to_string(&path).ok().as_deref() == Some(text) {
+        return;
+    }
+    write_changed(&path, text);
+}
+
+fn text(m: &Machine, name: &str) -> String {
+    std::fs::read_to_string(m.root.join(SIDECAR_DIR).join(name)).expect("sidecar text")
+}
+
+/// A sync client that could merge: every sidecar of `from`, conflicted
+/// copies included, replaces the one of `to`.
+fn sync(from: &Machine, to: &Machine) {
+    for name in sidecar_files(from) {
+        put(to, &name, &text(from, &name));
+    }
+}
+
+/// The name of a sync client's conflicted copy of the sidecar of `family`.
+fn copy_name(family: &str, pattern: &str) -> String {
+    let stem = file_name(family).trim_end_matches(".json").to_owned();
+    match pattern {
+        "dropbox" => format!("{stem} (Goran's conflicted copy 2026-10-26).json"),
+        "onedrive" => format!("{stem}-DESKTOP-4F2K9.json"),
+        "gdrive" => format!("{stem} (1).json"),
+        "icloud" => format!("{stem} 2.json"),
+        other => format!("{stem} ({other} conflicted copy).json"),
+    }
+}
+
+fn conflicts(m: &Machine) -> Vec<fm_api::library::SidecarConflict> {
+    m.index.sidecar_conflicts().expect("conflicts")
+}
+
+fn rate(m: &mut Machine, postscript: &str, rating: u8) {
+    m.meta(
+        postscript,
+        UserMetaUpdate {
+            rating: Some(rating),
+            ..UserMetaUpdate::default()
+        },
+    );
+}
+
+/// The newest version id of the entry of `file` in the sidecar of `family`.
+fn entry_head(m: &Machine, family: &str, file: &str) -> String {
+    m.sidecar(family)
+        .faces
+        .iter()
+        .find(|f| f.file == file)
+        .and_then(|f| f.history.first().cloned())
+        .expect("entry history")
+}
+
+#[test]
+fn a_resolved_conflict_is_taken_by_the_other_machine_without_a_new_one() {
+    use fm_api::library::{ConflictSide, SidecarField};
+    for keep in [ConflictSide::Mine, ConflictSide::Theirs] {
+        let (_ta, mut a) = machine("e28-resolve-a");
+        let (_tb, mut b) = machine("e28-resolve-b");
+        rate(&mut a, "Lora-Regular", 4);
+        sync(&a, &b);
+        b.scan();
+        assert_eq!(b.local("Lora-Regular").rating, Some(4));
+
+        // Both change the rating before they sync; the sync client keeps A's.
+        rate(&mut a, "Lora-Regular", 5);
+        rate(&mut b, "Lora-Regular", 2);
+        sync(&a, &b);
+        b.scan();
+        let listed = conflicts(&b);
+        assert_eq!(listed.len(), 1, "{keep:?}");
+        let c = &listed[0];
+        assert_eq!(c.field, SidecarField::Rating);
+        assert_eq!(c.face, b.face("Lora-Regular"));
+        assert_eq!(c.family, "Lora");
+        assert_eq!((c.mine.as_str(), c.theirs.as_str()), ("2 stars", "5 stars"));
+        assert_eq!(Path::new(&c.sidecar_path), b.sidecar_path("Lora"));
+        let before = entry_head(&b, "Lora", "Lora-Regular.ttf");
+
+        b.index
+            .resolve_sidecar_conflict(c.id, keep)
+            .expect("resolve");
+        let kept = if keep == ConflictSide::Mine { 2 } else { 5 };
+        assert_eq!(b.local("Lora-Regular").rating, Some(kept));
+        assert!(conflicts(&b).is_empty());
+        assert!(b.index.sidecar_problems().expect("problems").is_empty());
+        assert_eq!(
+            b.entry("Lora", "Lora-Regular.ttf").expect("entry").rating,
+            Some(kept)
+        );
+        assert_ne!(
+            entry_head(&b, "Lora", "Lora-Regular.ttf"),
+            before,
+            "resolving writes a new version"
+        );
+
+        // The other machine takes the kept value, and nothing comes back.
+        sync(&b, &a);
+        a.scan();
+        assert_eq!(a.local("Lora-Regular").rating, Some(kept), "{keep:?}");
+        assert!(conflicts(&a).is_empty(), "{keep:?}");
+        sync(&a, &b);
+        b.scan();
+        assert!(conflicts(&b).is_empty());
+        assert_eq!(b.local("Lora-Regular").rating, Some(kept));
+
+        // A resolved conflict is gone.
+        let again = b.index.resolve_sidecar_conflict(c.id, keep).unwrap_err();
+        assert_eq!(again.code(), fm_api::ErrorCode::NotFound);
+    }
+}
+
+#[test]
+fn a_conflict_from_a_conflicted_copy_resolves_on_both_machines() {
+    use fm_api::library::ConflictSide;
+    for keep in [ConflictSide::Mine, ConflictSide::Theirs] {
+        let (_ta, mut a) = machine("e28-copy-resolve-a");
+        let (_tb, mut b) = machine("e28-copy-resolve-b");
+        m_notes(&mut a, "Inter-Bold", "first");
+        sync(&a, &b);
+        b.scan();
+
+        // Both change the notes at the same time. The sync client keeps A's
+        // file under its name and B's as a conflicted copy, in both folders.
+        m_notes(&mut a, "Inter-Bold", "from A");
+        m_notes(&mut b, "Inter-Bold", "from B");
+        let copy = copy_name("Inter", "dropbox");
+        let theirs = text(&b, &file_name("Inter"));
+        put(&a, &copy, &theirs);
+        put(&b, &copy, &theirs);
+        sync(&a, &b);
+
+        a.scan();
+        let listed = conflicts(&a);
+        assert_eq!(listed.len(), 1, "{keep:?}");
+        assert_eq!(
+            (listed[0].mine.as_str(), listed[0].theirs.as_str()),
+            ("\"from A\"", "\"from B\"")
+        );
+        assert!(listed[0].sidecar_path.ends_with(&copy));
+        a.index
+            .resolve_sidecar_conflict(listed[0].id, keep)
+            .expect("resolve");
+        let kept = if keep == ConflictSide::Mine {
+            "from A"
+        } else {
+            "from B"
+        };
+        assert_eq!(a.local("Inter-Bold").notes.as_deref(), Some(kept));
+
+        // B wrote "from B" and never saw A's version; A's file now holds B's
+        // version in its history, so B takes the result without a conflict.
+        sync(&a, &b);
+        b.scan();
+        assert_eq!(
+            b.local("Inter-Bold").notes.as_deref(),
+            Some(kept),
+            "{keep:?}"
+        );
+        assert!(conflicts(&b).is_empty(), "{keep:?}");
+        assert!(conflicts(&a).is_empty(), "{keep:?}");
+        // The copy is never rewritten.
+        assert_eq!(text(&a, &copy), theirs);
+        assert_eq!(text(&b, &copy), theirs);
+    }
+}
+
+fn m_notes(m: &mut Machine, postscript: &str, notes: &str) {
+    m.meta(
+        postscript,
+        UserMetaUpdate {
+            notes: Some(notes.into()),
+            ..UserMetaUpdate::default()
+        },
+    );
+}
+
+#[test]
+fn family_notes_and_licenses_resolve_like_face_fields() {
+    use fm_api::library::{ConflictSide, SidecarField};
+    let (_ta, mut a) = machine("e28-family-a");
+    let (_tb, mut b) = machine("e28-family-b");
+    a.family_notes("Lora-Regular", "shared");
+    sync(&a, &b);
+    b.scan();
+    a.family_notes("Lora-Regular", "A's notes");
+    b.family_notes("Lora-Regular", "B's notes");
+    sync(&a, &b);
+    b.scan();
+    let listed = conflicts(&b);
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].field, SidecarField::FamilyNotes);
+    assert_eq!(listed[0].theirs, "\"A's notes\"");
+    b.index
+        .resolve_sidecar_conflict(listed[0].id, ConflictSide::Theirs)
+        .expect("resolve");
+    assert_eq!(b.local_family_notes("Lora").as_deref(), Some("A's notes"));
+    sync(&b, &a);
+    a.scan();
+    assert_eq!(a.local_family_notes("Lora").as_deref(), Some("A's notes"));
+    assert!(conflicts(&a).is_empty());
+    assert!(conflicts(&b).is_empty());
+}
+
+#[test]
+fn a_conflict_this_machine_comes_to_agree_with_is_settled() {
+    let (_ta, mut a) = machine("e28-settle-a");
+    let (_tb, mut b) = machine("e28-settle-b");
+    rate(&mut a, "Lora-Regular", 3);
+    sync(&a, &b);
+    b.scan();
+    rate(&mut a, "Lora-Regular", 5);
+    rate(&mut b, "Lora-Regular", 1);
+    sync(&a, &b);
+    b.scan();
+    assert_eq!(conflicts(&b).len(), 1);
+    // B's user picks the other machine's value by hand: nothing is left to
+    // choose, on either machine.
+    rate(&mut b, "Lora-Regular", 5);
+    assert!(conflicts(&b).is_empty());
+    sync(&b, &a);
+    a.scan();
+    assert!(conflicts(&a).is_empty());
+    assert_eq!(a.local("Lora-Regular").rating, Some(5));
+}
+
+#[test]
+fn only_value_conflicts_are_listed_to_resolve() {
+    let tmp = TempDir::new("e28-value-only");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Lora-Regular", &["a"]);
+    // A sidecar that cannot be read is a Problems entry, not a conflict to
+    // resolve.
+    write_changed(&m.root.join(SIDECAR_DIR).join(file_name("Inter")), "{");
+    m.scan();
+    assert_eq!(m.index.sidecar_problems().expect("problems").len(), 1);
+    assert!(conflicts(&m).is_empty());
+}
+
+#[test]
+fn every_sync_clients_conflicted_copy_is_merged_and_left_alone() {
+    for pattern in ["dropbox", "onedrive", "gdrive", "icloud"] {
+        let tmp = TempDir::new(&format!("e28-copy-{pattern}"));
+        let mut m = Machine::new(tmp.path());
+        m.tag("Lora-Regular", &["a"]);
+        let copy = other_machine_edit(m.sidecar("Lora"), |s| {
+            entry_mut(s, "Lora-Regular.ttf").tags = names(&["a", "from-copy"]);
+            s.family_meta = Some(family_entry("notes from the copy"));
+        });
+        let name = copy_name("Lora", pattern);
+        assert_eq!(
+            sidecar::original_name(&name).as_deref(),
+            Some(file_name("Lora").as_str()),
+            "{pattern}"
+        );
+        put(&m, &name, &copy.to_json());
+
+        m.scan();
+        assert_eq!(
+            m.local("Lora-Regular").tags,
+            ["a", "from-copy"],
+            "{pattern}"
+        );
+        assert_eq!(
+            m.local_family_notes("Lora").as_deref(),
+            Some("notes from the copy"),
+            "{pattern}: the family's notes in a copy are merged too"
+        );
+        // The result goes to the family's sidecar; the copy is left alone.
+        let main = m.sidecar("Lora");
+        assert_eq!(
+            main.family_notes(),
+            Some("notes from the copy"),
+            "{pattern}"
+        );
+        assert_eq!(
+            m.entry("Lora", "Lora-Regular.ttf").expect("entry").tags,
+            ["a", "from-copy"]
+        );
+        assert_eq!(text(&m, &name), copy.to_json(), "{pattern}");
+        assert!(
+            conflicts(&m).is_empty(),
+            "{pattern}: a copy that descends is no conflict"
+        );
+    }
+}
+
+#[test]
+fn an_old_conflicted_copy_brings_nothing_back() {
+    let tmp = TempDir::new("e28-old-copy");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Lora-Regular", &["a"]);
+    rate(&mut m, "Lora-Regular", 2);
+    let old = text(&m, &file_name("Lora"));
+    rate(&mut m, "Lora-Regular", 4);
+    // A copy of a version this machine wrote before and changed since.
+    put(&m, &copy_name("Lora", "gdrive"), &old);
+    m.scan();
+    assert_eq!(m.local("Lora-Regular").rating, Some(4));
+    assert!(conflicts(&m).is_empty());
+}
+
+#[test]
+fn a_half_written_sidecar_or_copy_is_reported_and_never_rewritten() {
+    let tmp = TempDir::new("e28-half");
+    let mut m = Machine::new(tmp.path());
+    m.tag("Lora-Regular", &["a"]);
+    m.tag("Inter-Regular", &["b"]);
+    let main = m.sidecar_path("Lora");
+    let full = std::fs::read_to_string(&main).expect("read");
+    let half = &full[..full.len() / 2];
+    write_changed(&main, half);
+    let copy = copy_name("Inter", "icloud");
+    let inter = text(&m, &file_name("Inter"));
+    put(&m, &copy, &inter[..inter.len() / 2]);
+
+    m.scan();
+    m.tag("Lora-Regular", &["c"]);
+    let problems = m.index.sidecar_problems().expect("problems");
+    let mut paths: Vec<PathBuf> = problems.iter().map(|p| PathBuf::from(&p.path)).collect();
+    paths.sort();
+    let mut want = vec![main.clone(), m.root.join(SIDECAR_DIR).join(&copy)];
+    want.sort();
+    assert_eq!(paths, want);
+    assert!(problems.iter().all(|p| p.face.is_none()));
+    assert_eq!(std::fs::read_to_string(&main).expect("read"), half);
+    assert_eq!(text(&m, &copy), &inter[..inter.len() / 2]);
+    assert_eq!(m.local("Lora-Regular").tags, ["a", "c"]);
+}
+
+#[test]
+fn copy_names_are_recognized_only_for_sidecar_names() {
+    let stem = file_name("Lora").trim_end_matches(".json").to_owned();
+    for name in [
+        "Lora (conflicted copy).json".to_owned(),
+        file_name("Lora"),
+        format!("{stem}-.json"),
+        format!("{stem} (copy).json"),
+        format!("{stem} 2.txt"),
+        format!("{stem}-DESK TOP.json"),
+    ] {
+        assert_eq!(sidecar::original_name(&name), None, "{name}");
+    }
+}
+
+/// A small deterministic generator, so a failing seed can be run again.
+struct Lcg(u64);
+
+impl Lcg {
+    fn below(&mut self, n: u64) -> u64 {
+        self.0 = self
+            .0
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        (self.0 >> 33) % n
+    }
+}
+
+const FACES: [&str; 3] = ["Inter-Regular", "Inter-Bold", "Lora-Regular"];
+
+/// What a machine holds for a scalar field of a face, as a conflict stores it.
+fn value_json(m: &Machine, postscript: &str, field: &str) -> String {
+    let meta = m.local(postscript);
+    match field {
+        "favorite" => serde_json::to_string(&meta.favorite),
+        "rating" => serde_json::to_string(&meta.rating),
+        _ => serde_json::to_string(&meta.notes),
+    }
+    .expect("json")
+}
+
+/// Every value a machine set aside or kept in a conflict: (face, field, value).
+fn conflict_values(m: &Machine) -> Vec<(u32, String, String)> {
+    let mut stmt = m
+        .index
+        .conn
+        .prepare(
+            "SELECT face_id, field, local, disk FROM sidecar_conflict WHERE face_id IS NOT NULL",
+        )
+        .expect("prepare");
+    let rows: Vec<(u32, String, Option<String>, String)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)))
+        .expect("query")
+        .collect::<Result<_, _>>()
+        .expect("rows");
+    rows.into_iter()
+        .flat_map(|(face, field, local, disk)| {
+            let mut out = vec![(face, field.clone(), disk)];
+            out.extend(local.map(|l| (face, field, l)));
+            out
+        })
+        .collect()
+}
+
+#[test]
+fn interleaved_edits_and_syncs_of_two_machines_lose_no_value() {
+    for seed in 0..24_u64 {
+        let (_ta, a) = machine(&format!("e28-seed-{seed}-a"));
+        let (_tb, b) = machine(&format!("e28-seed-{seed}-b"));
+        let mut ms = [a, b];
+        let mut rng = Lcg(seed);
+        // The last value each machine set, by face and field, unless the
+        // other machine's user replaced it knowingly afterwards.
+        let mut last: Vec<std::collections::HashMap<(usize, &str), String>> =
+            vec![Default::default(), Default::default()];
+        let mut tags: Vec<String> = Vec::new();
+        let mut collections: Vec<(usize, String)> = Vec::new();
+        let mut n = 0;
+        // What happened, for the message of a failing seed.
+        let mut log: Vec<String> = Vec::new();
+        for _ in 0..40 {
+            n += 1;
+            let x = usize::try_from(rng.below(2)).expect("machine");
+            let y = 1 - x;
+            match rng.below(6) {
+                0..=2 => {
+                    let face = usize::try_from(rng.below(3)).expect("face");
+                    let ps = FACES[face];
+                    let field = ["favorite", "rating", "notes"]
+                        [usize::try_from(rng.below(3)).expect("field")];
+                    // The user sees this machine's value and its conflicts:
+                    // the other machine's values among them are replaced
+                    // knowingly.
+                    let face_id = ms[x].face(ps).0;
+                    let seen: Vec<String> = std::iter::once(value_json(&ms[x], ps, field))
+                        .chain(
+                            conflict_values(&ms[x])
+                                .into_iter()
+                                .filter(|(f, fld, _)| *f == face_id && fld == field)
+                                .map(|(_, _, v)| v),
+                        )
+                        .collect();
+                    if last[y]
+                        .get(&(face, field))
+                        .is_some_and(|v| seen.contains(v))
+                    {
+                        last[y].remove(&(face, field));
+                    }
+                    let mut update = UserMetaUpdate::default();
+                    let value = match field {
+                        "favorite" => {
+                            let v = !ms[x].local(ps).favorite;
+                            update.favorite = Some(v);
+                            serde_json::to_string(&v)
+                        }
+                        "rating" => {
+                            // An edit changes the value: setting the rating it
+                            // has is no edit and makes no version.
+                            let now = ms[x].local(ps).rating.unwrap_or(0);
+                            let mut v = u8::try_from(rng.below(5) + 1).expect("rating");
+                            if v == now {
+                                v = v % 5 + 1;
+                            }
+                            update.rating = Some(v);
+                            serde_json::to_string(&Some(v))
+                        }
+                        _ => {
+                            let v = format!("m{x} n{n}");
+                            update.notes = Some(v.clone());
+                            serde_json::to_string(&Some(v))
+                        }
+                    }
+                    .expect("json");
+                    ms[x].meta(ps, update);
+                    log.push(format!("{x}: {ps} {field} = {value}"));
+                    last[x].insert((face, field), value);
+                }
+                3 => {
+                    let face = usize::try_from(rng.below(3)).expect("face");
+                    let tag = format!("t{x}-{n}");
+                    ms[x].tag(FACES[face], &[tag.as_str()]);
+                    log.push(format!("{x}: {} tag {tag}", FACES[face]));
+                    tags.push(tag);
+                    if rng.below(2) == 0 {
+                        let name = format!("c{x}-{n}");
+                        let c = ms[x]
+                            .index
+                            .create_collection(&CreateCollectionRequest {
+                                rule_group: None,
+                                name: name.clone(),
+                                parent: None,
+                                rules: None,
+                            })
+                            .expect("collection");
+                        let face_id = ms[x].face(FACES[face]);
+                        ms[x]
+                            .index
+                            .add_to_collection(&CollectionFacesRequest {
+                                collection: c.id,
+                                faces: vec![face_id],
+                                families: Vec::new(),
+                            })
+                            .expect("add");
+                        collections.push((face, name));
+                    }
+                }
+                4 => {
+                    // The sync client merges, or keeps both as a conflicted
+                    // copy when the target changed too.
+                    let (from, to) = (&ms[x], &ms[y]);
+                    let as_copy = rng.below(3) == 0;
+                    log.push(format!(
+                        "sync {x} -> {y}{}",
+                        if as_copy { " as copies" } else { "" }
+                    ));
+                    if as_copy {
+                        for name in sidecar_files(from)
+                            .into_iter()
+                            .filter(|n| sidecar::original_name(n).is_none())
+                        {
+                            let family = if name == file_name("Inter") {
+                                "Inter"
+                            } else {
+                                "Lora"
+                            };
+                            let copy = copy_name(family, &format!("seed{seed}-{n}"));
+                            put(to, &copy, &text(from, &name));
+                        }
+                    } else {
+                        sync(from, to);
+                    }
+                }
+                _ => {
+                    log.push(format!("{x}: scan"));
+                    ms[x].scan();
+                }
+            }
+        }
+        // Let the sync client and both machines catch up.
+        for _ in 0..3 {
+            sync(&ms[0], &ms[1]);
+            ms[1].scan();
+            sync(&ms[1], &ms[0]);
+            ms[0].scan();
+        }
+
+        for (x, values) in last.iter().enumerate() {
+            for ((face, field), value) in values {
+                let ps = FACES[*face];
+                let held = ms.iter().any(|m| value_json(m, ps, field) == *value);
+                let set_aside = ms.iter().any(|m| {
+                    let id = m.face(ps).0;
+                    conflict_values(m)
+                        .iter()
+                        .any(|(f, fld, v)| *f == id && fld == field && v == value)
+                });
+                assert!(
+                    held || set_aside,
+                    "seed {seed}: machine {x}'s {field} {value} of {ps} was lost:
+{}",
+                    log.join(
+                        "
+"
+                    )
+                );
+            }
+        }
+        for m in &ms {
+            for tag in &tags {
+                assert!(
+                    FACES.iter().any(|ps| m.local(ps).tags.contains(tag)),
+                    "seed {seed}: tag {tag} was lost"
+                );
+            }
+            for (face, name) in &collections {
+                assert!(
+                    m.local(FACES[*face])
+                        .collections
+                        .contains(&vec![name.clone()]),
+                    "seed {seed}: membership of {name} was lost"
+                );
+            }
+            let fields: std::collections::BTreeSet<String> = conflict_values(m)
+                .into_iter()
+                .map(|(_, field, _)| field)
+                .collect();
+            assert!(
+                fields
+                    .iter()
+                    .all(|f| ["favorite", "rating", "notes"].contains(&f.as_str())),
+                "seed {seed}: tags and collections never conflict: {fields:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_sidecar_a_sync_client_changes_is_merged_after_the_watcher_debounce() {
+    use std::sync::{Arc, Mutex, mpsc};
+    use std::time::Duration;
+
+    use crate::scanner::{Trigger, WatchSettings, Watcher};
+
+    let (_ta, mut a) = machine("e28-watch-a");
+    let tmp = TempDir::new("e28-watch-b");
+    let mut b = Machine::new(tmp.path());
+    a.tag("Lora-Regular", &["a"]);
+    sync(&a, &b);
+    b.scan();
+
+    let files = Arc::new(Mutex::new(b.index.load_files().expect("files")));
+    let (tx, updates) = mpsc::channel();
+    let settings = WatchSettings {
+        quiet: Duration::from_millis(100),
+        max_wait: Duration::from_millis(400),
+        rescan_interval: Duration::from_secs(3600),
+    };
+    let watcher = Watcher::start(files.clone(), settings, move |u| {
+        let _ = tx.send(u);
+    })
+    .expect("watcher");
+    watcher.add_source(&b.root).expect("add");
+    let first = updates
+        .recv_timeout(Duration::from_secs(10))
+        .expect("first scan");
+    assert_eq!(first.trigger, Trigger::Added);
+    while updates.recv_timeout(Duration::from_millis(600)).is_ok() {}
+
+    // Another machine's edit arrives through the sync client.
+    a.tag("Lora-Regular", &["from-a"]);
+    sync(&a, &b);
+    let update = loop {
+        let u = updates
+            .recv_timeout(Duration::from_secs(10))
+            .expect("the watcher reports the sidecar");
+        if !u.sidecars.is_empty() {
+            break u;
+        }
+    };
+    assert_eq!(update.trigger, Trigger::Events, "no full rescan");
+    assert_eq!(update.sidecars, [b.sidecar_path("Lora")]);
+    let rescan = update.result.expect("rescan");
+    assert!(rescan.is_quiet(), "no font was read again");
+    assert!(rescan.unchanged.is_empty(), "no font was looked at");
+    let found = b
+        .index
+        .apply_rescan(b.source, &files.lock().expect("files"), &rescan);
+    found.expect("apply");
+    assert_eq!(b.local("Lora-Regular").tags, ["a", "from-a"]);
+    drop(watcher);
+}

@@ -590,6 +590,13 @@ export type ConflictPolicy =
  */
 "replace";
 
+/**  Which value of a sidecar conflict to keep. */
+export type ConflictSide = 
+/**  This machine's value. */
+"mine" | 
+/**  The other machine's value. */
+"theirs";
+
 /**  The other side of a conflict. */
 export type ConflictWith = 
 /**  A system font. */
@@ -2250,6 +2257,14 @@ export type ResolveFontRequest = {
 	font: string,
 };
 
+/**  Resolves one sidecar conflict. */
+export type ResolveSidecarConflictRequest = {
+	/**  The conflict. */
+	id: SidecarConflictId,
+	/**  The value to keep. */
+	keep: ConflictSide,
+};
+
 /**  Makes an earlier version current again. */
 export type RestoreLayoutRequest = {
 	/**  The template file's id. */
@@ -2555,6 +2570,44 @@ export type Shortlist = {
 	/**  Best first. */
 	candidates: Candidate[],
 };
+
+/**
+ *  A field this machine and another machine that syncs the same folder set
+ *  to different values (E28.1). The index keeps this machine's value until
+ *  the user resolves it.
+ */
+export type SidecarConflict = {
+	/**  Pass to `resolve_sidecar_conflict`. */
+	id: SidecarConflictId,
+	/**  The face; for a family field, the family's first face. */
+	face: FaceId,
+	/**  The face's family. */
+	family: string,
+	/**  Which field. */
+	field: SidecarField,
+	/**  This machine's value, in words ("4 stars", "a favorite"). */
+	mine: string,
+	/**  The other machine's value, in words. */
+	theirs: string,
+	/**  The sidecar file the other value came from. */
+	sidecarPath: string,
+};
+
+/**  A sidecar value another machine set that differs from this one's. */
+export type SidecarConflictId = number;
+
+/**  The field of a sidecar conflict (E28.1). */
+export type SidecarField = 
+/**  The face is a favorite. */
+"favorite" | 
+/**  The face's rating. */
+"rating" | 
+/**  The face's notes. */
+"notes" | 
+/**  The family's notes. */
+"familyNotes" | 
+/**  The family's declared license. */
+"familyLicense";
 
 /**  A similar face and why. */
 export type SimilarFace = {

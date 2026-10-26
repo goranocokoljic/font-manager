@@ -1,8 +1,13 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockDuplicates, mockExtraProblems } from '../api/mock';
-import type { ApiError, Problem, ProblemKind } from '../api/types';
+import {
+  createMockClient,
+  mockDuplicates,
+  mockExtraProblems,
+  mockSidecarConflicts,
+} from '../api/mock';
+import type { ApiError, Problem, ProblemKind, SidecarConflict } from '../api/types';
 import { PROBLEM_GROUPS, groupOf, problemGroup, useProblemsStore } from './problems';
 import { TOAST_MS, useToastStore } from './toast';
 
@@ -14,7 +19,11 @@ let client: FmClient;
 
 beforeEach(() => {
   setActivePinia(createPinia());
-  client = createMockClient({ extraProblems: mockExtraProblems, duplicates: mockDuplicates });
+  client = createMockClient({
+    extraProblems: mockExtraProblems,
+    duplicates: mockDuplicates,
+    sidecarConflicts: mockSidecarConflicts,
+  });
   setClient(client);
 });
 
@@ -242,5 +251,58 @@ describe('keep this one', () => {
     );
     expect(store.plan).toBeNull();
     expect(store.actionError?.code).toBe('invalidRequest');
+  });
+});
+
+describe('sidecar conflicts', () => {
+  const notes: SidecarConflict = {
+    id: 2,
+    face: 3,
+    family: 'Source Serif 4',
+    field: 'notes',
+    mine: '"for the annual report"',
+    theirs: '"print only"',
+    sidecarPath: '/Users/demo/Fonts/.fontlibrary/0123456789abcdef.json',
+  };
+
+  it('are listed with both values and leave the list and Problems when resolved', async () => {
+    setClient(createMockClient({ sidecarConflicts: [...mockSidecarConflicts, notes] }));
+    const store = useProblemsStore();
+    await store.load();
+    expect(store.sidecarConflicts.map((c) => [c.mine, c.theirs])).toEqual([
+      ['4 stars', '2 stars'],
+      ['"for the annual report"', '"print only"'],
+    ]);
+    expect(store.counts.sidecar).toBe(2);
+
+    await store.resolveConflict(2, 'theirs');
+    expect(store.sidecarConflicts.map((c) => c.id)).toEqual([1]);
+    expect(store.counts.sidecar).toBe(1);
+    await store.resolveConflict(1, 'mine');
+    expect(store.sidecarConflicts).toEqual([]);
+    expect(store.counts.sidecar).toBe(0);
+    expect(store.actionError).toBeNull();
+  });
+
+  it('shows the error of a conflict that is gone', async () => {
+    const store = useProblemsStore();
+    await store.load();
+    await store.resolveConflict(99, 'mine');
+    expect(store.actionError?.code).toBe('notFound');
+    expect(store.sidecarConflicts).toHaveLength(1);
+  });
+
+  it('calls the sidecar conflict Tauri commands', async () => {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const { tauriClient } = await import('../api/client');
+    const mocked = vi.mocked(invoke);
+    mocked.mockReset();
+    mocked.mockResolvedValue([]);
+    await tauriClient.listSidecarConflicts();
+    await tauriClient.resolveSidecarConflict({ id: 1, keep: 'theirs' });
+    expect(mocked.mock.calls).toEqual([
+      ['list_sidecar_conflicts'],
+      ['resolve_sidecar_conflict', { req: { id: 1, keep: 'theirs' } }],
+    ]);
   });
 });

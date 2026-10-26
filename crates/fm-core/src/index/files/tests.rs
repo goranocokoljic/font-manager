@@ -1215,11 +1215,15 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
     let ids_before: Vec<i64> = face_ids(&index.conn);
     drop(index);
     {
-        // The schema as it was one version back.
+        // The schema as it was before fingerprints (V18), and so before the
+        // sidecar conflict versions (V19) too.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(&format!(
-            "DROP TABLE face_fingerprint; PRAGMA user_version = {};",
-            SCHEMA_VERSION - 1
+            "DROP TABLE sidecar_absorb;
+             ALTER TABLE sidecar_conflict DROP COLUMN disk_rev;
+             ALTER TABLE sidecar_conflict DROP COLUMN file_rev;
+             DROP TABLE face_fingerprint; PRAGMA user_version = {};",
+            SCHEMA_VERSION - 2
         ))
         .expect("downgrade");
     }

@@ -2919,3 +2919,46 @@ fn the_mock_update_check_follows_the_rules_of_the_core() {
     );
     assert_eq!(updates[0].available_version.as_deref(), Some("2026-09-01"));
 }
+
+#[test]
+fn sidecar_conflicts_are_listed_with_a_problem_and_resolved_once() {
+    use fm_api::LibraryService;
+    use fm_api::library::{ConflictSide, ProblemKind, ResolveSidecarConflictRequest, SidecarField};
+    let api = MockApi::new();
+    assert!(api.list_sidecar_conflicts().unwrap().is_empty());
+    let id = api
+        .add_sidecar_conflict(FaceId(1), SidecarField::Notes, "\"mine\"", "\"theirs\"")
+        .unwrap();
+    let listed = api.list_sidecar_conflicts().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(
+        (listed[0].mine.as_str(), listed[0].theirs.as_str()),
+        ("\"mine\"", "\"theirs\"")
+    );
+    let sidecar_problems = |api: &MockApi| {
+        api.list_problems()
+            .unwrap()
+            .into_iter()
+            .filter(|p| p.kind == ProblemKind::SidecarConflict)
+            .count()
+    };
+    assert_eq!(sidecar_problems(&api), 1);
+
+    let req = ResolveSidecarConflictRequest {
+        id,
+        keep: ConflictSide::Theirs,
+    };
+    api.resolve_sidecar_conflict(req.clone()).unwrap();
+    assert!(api.list_sidecar_conflicts().unwrap().is_empty());
+    assert_eq!(sidecar_problems(&api), 0);
+    assert_eq!(
+        api.resolve_sidecar_conflict(req).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        api.add_sidecar_conflict(FaceId(999), SidecarField::Rating, "", "")
+            .unwrap_err()
+            .code,
+        ErrorCode::NotFound
+    );
+}

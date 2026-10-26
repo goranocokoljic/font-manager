@@ -162,3 +162,19 @@ test('the undo toast stays after leaving the Problems view and while the pointer
   await page.goto('/#/problems?kind=duplicates');
   await expect(filter(page, /^Duplicates/)).toHaveText(/Duplicates\s*1/);
 });
+
+test('a sidecar conflict shows both values and is resolved by keyboard', async ({ page }) => {
+  await page.goto('/#/problems?kind=sidecar');
+  const conflict = page.getByRole('group', { name: 'Inter: Rating' });
+  await expect(conflict).toContainText('4 stars');
+  await expect(conflict).toContainText('2 stars');
+  const useTheirs = conflict.getByRole('button', {
+    name: "Use the other computer's Rating of Inter: 2 stars",
+  });
+  await conflict.getByRole('button', { name: /^Keep this computer's Rating of Inter/ }).focus();
+  await page.keyboard.press('Tab');
+  await expect(useTheirs).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(conflict).toBeHidden();
+  await expect(filter(page, /^Sidecar/)).toHaveText(/Sidecar\D*0/);
+});

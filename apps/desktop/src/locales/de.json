@@ -1314,6 +1314,23 @@
       "willMove": "Wird in den Papierkorb verschoben",
       "willStay": "Bleibt",
       "confirm": "In den Papierkorb"
+    },
+    "sidecar": {
+      "title": "Sidecar-Konflikte lösen",
+      "note": "Ein anderer Computer, der denselben Ordner synchronisiert, hat diese Werte anders gesetzt. Wähle den Wert, der bleiben soll; der andere Computer übernimmt ihn bei der nächsten Synchronisierung.",
+      "mine": "Dieser Computer",
+      "theirs": "Anderer Computer",
+      "keepMine": "Meinen behalten",
+      "useTheirs": "Den anderen nehmen",
+      "keepMineLabel": "{field} von {family} dieses Computers behalten: {value}",
+      "useTheirsLabel": "{field} von {family} des anderen Computers nehmen: {value}",
+      "fields": {
+        "favorite": "Favorit",
+        "rating": "Bewertung",
+        "notes": "Notizen",
+        "familyNotes": "Familiennotizen",
+        "familyLicense": "Lizenz"
+      }
     }
   },
   "sources": {

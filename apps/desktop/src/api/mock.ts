@@ -70,6 +70,7 @@ import {
   type Problem,
   type Resolution,
   type RuleGroup,
+  type SidecarConflict,
   type ProjectSet,
   type QuickCollection,
   type SearchResponse,
@@ -721,6 +722,8 @@ export interface MockOptions {
   extraProblems?: Problem[];
   /** Duplicate groups (files the mock has no face for), keeper first. */
   duplicates?: DuplicateGroup[];
+  /** Sidecar conflicts waiting for the user (none by default); each is a Problems entry too. */
+  sidecarConflicts?: SidecarConflict[];
   /** Project sets (none by default). */
   sets?: ProjectSet[];
   /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
@@ -832,8 +835,8 @@ export const mockSets: ProjectSet[] = [{ id: 1, name: 'Client brand', faces: [1,
 
 /**
  * Problems of files outside the sample faces, for browser mode: one of each kind the
- * sample library lacks (a broken file, a duplicate copy, a sidecar conflict), so the
- * Problems view shows every group.
+ * sample library lacks (a broken file, a duplicate copy), so with `mockSidecarConflicts`
+ * the Problems view shows every group.
  */
 export const mockExtraProblems: Problem[] = [
   {
@@ -850,12 +853,21 @@ export const mockExtraProblems: Problem[] = [
     other: '/Users/demo/Fonts/Quarto-Regular.otf',
     message: 'The same file is also at /Users/demo/Fonts/Quarto-Regular.otf.',
   },
+];
+
+/**
+ * A sidecar conflict for browser mode (E28.1): another computer rated Inter Regular
+ * differently. Its two values appear nowhere else on the Problems view.
+ */
+export const mockSidecarConflicts: SidecarConflict[] = [
   {
-    kind: 'sidecarConflict',
-    face: null,
-    path: '/Users/demo/Fonts/.fontlibrary/meta.json',
-    other: null,
-    message: 'Another computer set a different rating for Inter Regular.',
+    id: 1,
+    face: 1,
+    family: 'Inter',
+    field: 'rating',
+    mine: '4 stars',
+    theirs: '2 stars',
+    sidecarPath: '/Users/demo/Fonts/.fontlibrary/5d1c0a7e9b3f2468.json',
   },
 ];
 
@@ -1830,6 +1842,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
   const resolutions: Resolution[] = [];
+  // Sidecar conflicts (E28.1): each is listed in Problems until resolved.
+  const sidecarConflicts: SidecarConflict[] = structuredClone(options.sidecarConflicts ?? []);
   const duplicates = (): DuplicateGroup[] =>
     structuredClone(options.duplicates ?? [])
       .map((g) => ({ ...g, copies: g.copies.filter((c) => !trashed.has(c.path)) }))
@@ -2926,6 +2940,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       ...structuredClone(options.extraProblems ?? []).filter(
         (p) => !trashed.has(p.path) && !(p.other !== null && trashed.has(p.other)),
       ),
+      ...sidecarConflicts.map((c): Problem => ({
+        kind: 'sidecarConflict',
+        face: c.face,
+        path: faces.find((f) => f.face.id === c.face)?.path ?? c.sidecarPath,
+        other: c.sidecarPath,
+        message: `Another machine set a different value (${c.theirs}); this machine's value (${c.mine}) is kept.`,
+      })),
     ],
     listDuplicates: async () => duplicates(),
     keepCopy: async (req) => {
@@ -2957,6 +2978,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return structuredClone(resolution);
     },
     listResolutions: async () => structuredClone(resolutions),
+    listSidecarConflicts: async () => structuredClone(sidecarConflicts),
+    resolveSidecarConflict: async (req) => {
+      const c = sidecarConflicts.find((c) => c.id === req.id);
+      if (!c)
+        throw {
+          code: 'notFound' as const,
+          message: `Sidecar conflict ${req.id} was not found.`,
+          detail: null,
+        };
+      sidecarConflicts.splice(sidecarConflicts.indexOf(c), 1);
+      emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [c.face] });
+    },
     undoResolution: async (id) => {
       const r = resolutions.find((r) => r.id === id);
       if (!r)
@@ -3132,6 +3165,7 @@ export const mockClient: FmClient = createMockClient({
   settingsStorage: sessionStorageOf(),
   extraProblems: mockExtraProblems,
   duplicates: mockDuplicates,
+  sidecarConflicts: mockSidecarConflicts,
   sets: mockSets,
   // `?mockComparisons=1` starts with a saved comparison that names a missing font.
   comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],

@@ -82,6 +82,7 @@ import type {
   RenameComparisonRequest,
   Resolution,
   ResolutionId,
+  ResolveSidecarConflictRequest,
   SampleText,
   SampleTextRequest,
   SaveComparisonRequest,
@@ -93,6 +94,7 @@ import type {
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
+  SidecarConflict,
   SimilarFace,
   SimilarRequest,
   PairingRequest,
@@ -278,6 +280,10 @@ export interface FmClient {
   listResolutions(): Promise<Resolution[]>;
   /** Puts the copies of an action back from the trash. */
   undoResolution(resolution: ResolutionId): Promise<Resolution>;
+  /** Sidecar values another computer set differently, oldest first (E28.1). */
+  listSidecarConflicts(): Promise<SidecarConflict[]>;
+  /** Keeps one value of a sidecar conflict; the other computer takes it. */
+  resolveSidecarConflict(req: ResolveSidecarConflictRequest): Promise<void>;
   /** Every project set: named groups of faces activated together. */
   listSets(): Promise<ProjectSet[]>;
   /** Pins an instance of a variable face as a virtual style of a manual collection or a set. */
@@ -405,6 +411,8 @@ export const tauriClient: FmClient = {
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
+  listSidecarConflicts: () => invoke<SidecarConflict[]>('list_sidecar_conflicts'),
+  resolveSidecarConflict: (req) => invoke<void>('resolve_sidecar_conflict', { req }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),
   pinInstance: (req) => invoke<VirtualStyle>('pin_instance', { req }),
   listVirtualStyles: (req) => invoke<VirtualStyle[]>('list_virtual_styles', { req }),

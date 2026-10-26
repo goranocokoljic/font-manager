@@ -571,13 +571,31 @@ CREATE TABLE face_fingerprint (
 );
 ";
 
+/// Resolving sidecar conflicts (E28.1). `sidecar_conflict.disk_rev` and
+/// `file_rev` are the version ids of the entry and the file the value set
+/// aside came from. `sidecar_absorb` holds the version ids a resolution took
+/// in, by face and by `scope` (`face`, `familyNotes`, `familyLicense` or
+/// `file`): the next write of the face's sidecar puts them in the history,
+/// so the machine that wrote them takes the result without a new conflict.
+const V19: &str = r"
+ALTER TABLE sidecar_conflict ADD COLUMN disk_rev TEXT;
+ALTER TABLE sidecar_conflict ADD COLUMN file_rev TEXT;
+
+CREATE TABLE sidecar_absorb (
+    face_id  INTEGER NOT NULL REFERENCES face (id) ON DELETE CASCADE,
+    scope    TEXT    NOT NULL,
+    rev      TEXT    NOT NULL,
+    PRIMARY KEY (face_id, scope, rev)
+) WITHOUT ROWID;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18,
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19,
 ];
 
 /// The schema version this build writes.
@@ -611,6 +629,7 @@ pub(crate) const TABLES: &[&str] = &[
     "resolution",
     "resolution_move",
     "set_face",
+    "sidecar_absorb",
     "sidecar_base",
     "sidecar_conflict",
     "sidecar_dirty",
