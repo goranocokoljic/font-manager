@@ -202,6 +202,8 @@ pub fn types() -> specta::Types {
         activation::ActiveFace,
         activation::Conflict,
         activation::Clash,
+        activation::FontsNeededRequest,
+        activation::FontsNeededResponse,
         // organization
         organization::Collection,
         organization::CreateCollectionRequest,

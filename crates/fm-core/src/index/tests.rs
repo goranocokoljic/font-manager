@@ -112,6 +112,7 @@ fn fresh_database_has_every_table_of_the_data_model() {
                 "languages",
                 "open_license",
                 "last_activated",
+                "full_name",
             ][..],
         ),
         (

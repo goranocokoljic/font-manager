@@ -10,7 +10,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, gate, median, merge, metric, target,
+  BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, target,
   nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
@@ -47,8 +47,8 @@ describe('metric', () => {
 
   test('every budget of CLAUDE.md rule 8 is in the report', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
-      'activation_100', 'cold_start', 'first_scan', 'idle_memory', 'incremental_update', 'pairings',
-      'preview_cache_hit', 'search', 'similar', 'smart_collections',
+      'activation_100', 'cold_start', 'first_scan', 'fonts_needed_100', 'idle_memory', 'incremental_update',
+      'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
     ]);
     assert.equal(BUDGETS.preview_cache_hit.target, 2);
     assert.equal(BUDGETS.first_scan.target, 10000);
@@ -63,6 +63,21 @@ describe('metric', () => {
     assert.equal(metric('activation_100', 800, undefined, 'macos').pass, true);
     assert.equal(metric('activation_100', 800, undefined, 'windows').pass, false);
     assert.equal(metric('activation_100', 800, undefined, 'macos').target, 1000);
+  });
+
+  test('fonts needed has the activation budget and fails on a missed font (E29.2)', () => {
+    assert.equal(target('fonts_needed_100', 'macos'), 1000);
+    assert.equal(target('fonts_needed_100', 'linux'), 500);
+    const round = { ms: 120, fonts: 100, matched: 100, done: 98, conflicts: 2, other: 0 };
+    assert.equal(fontsNeeded100(round, 'windows').pass, true);
+    const missed = fontsNeeded100({ ...round, matched: 97 }, 'windows');
+    assert.equal(missed.pass, false);
+    assert.match(missed.note, /3 of 100 fonts were not matched/);
+    const skipped = fontsNeeded100({ ...round, done: 95, other: 3 }, 'windows');
+    assert.equal(skipped.pass, false);
+    assert.match(skipped.note, /3 of 100 faces were not activated/);
+    assert.equal(fontsNeeded100({ ...round, ms: 800 }, 'macos').pass, true);
+    assert.equal(fontsNeeded100({ ...round, ms: 800 }, 'linux').pass, false);
   });
 
   test('an unknown metric is an error', () => {

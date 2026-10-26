@@ -1391,6 +1391,34 @@ export type FontSource = {
 	hash: string,
 };
 
+/**
+ *  The fonts a document needs, to find in the library and activate (the
+ *  plugins' auto-activation, E29).
+ */
+export type FontsNeededRequest = {
+	/**  The fonts, in the document's order. */
+	fonts: NeededFont[],
+	/**  The document that needs them, recorded with the faces it activates. */
+	document?: string | null,
+	/**  Session-activate the matched faces; when false, only match. */
+	activate?: boolean,
+};
+
+/**  What [`ActivationService::fonts_needed`] found and did. */
+export type FontsNeededResponse = {
+	/**  The fonts the library has, in request order. */
+	matched: NeededFontMatch[],
+	/**  The fonts it does not have, in request order. */
+	unmatched: NeededFont[],
+	/**  How many fonts are unmatched. */
+	missing: number,
+	/**
+	 *  One outcome per matched face (a face two fonts matched comes once);
+	 *  empty when the request did not activate.
+	 */
+	outcomes: ActivationOutcome[],
+};
+
 /**  A front-end framework a snippet is written for (E20.5). */
 export type Framework = 
 /**  A `theme.extend.fontFamily` entry for `tailwind.config.js`. */
@@ -1945,6 +1973,52 @@ export type NamedInstance = {
 	/**  Its axis coordinates. */
 	coordinates: AxisValue[],
 };
+
+/**
+ *  A font a document uses, as a design app names it (E29.2). Every name is
+ *  optional; the names given are tried in the order of [`NeededFontRule`].
+ */
+export type NeededFont = {
+	/**  The PostScript name (name ID 6). */
+	postscriptName?: string | null,
+	/**  The full name (name ID 4). */
+	fullName?: string | null,
+	/**  The family name. */
+	family?: string | null,
+	/**  The style within the family; "Regular" when a family comes without one. */
+	style?: string | null,
+};
+
+/**  A needed font the library has. */
+export type NeededFontMatch = {
+	/**  The needed font, as asked. */
+	font: NeededFont,
+	/**
+	 *  The face that stands for it. Of several faces that match, an active
+	 *  face wins, then a healthy one, then the lowest face id; a broken face
+	 *  is never matched.
+	 */
+	face: FaceId,
+	/**  The name that found it. */
+	matchedBy: NeededFontRule,
+};
+
+/**
+ *  Which name found a needed font, in the order the names are tried. Names
+ *  compare ignoring case and surrounding space.
+ */
+export type NeededFontRule = 
+/**  The PostScript name (name ID 6). */
+"postscriptName" | 
+/**  The full name (name ID 4). */
+"fullName" | 
+/**
+ *  The typographic family and subfamily (name IDs 16 and 17; 17 is 2
+ *  when the font has no 17).
+ */
+"typographicFamily" | 
+/**  The legacy family and subfamily (name IDs 1 and 2). */
+"family";
 
 /**  An open-source license recognized from the license text. */
 export type OpenLicense = 

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
-    DeactivateRequest, OutcomeStatus, Target,
+    DeactivateRequest, FontsNeededRequest, NeededFont, NeededFontRule, OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
@@ -163,6 +163,77 @@ fn activation_reports_per_face() {
     assert_eq!(
         api.get_face(FaceId(1)).unwrap().face.active,
         Some(ActivationMode::Session)
+    );
+}
+
+#[test]
+fn fonts_needed_matches_by_name_reports_the_missing_and_activates_the_rest() {
+    let api = api();
+    let ps = |name: &str| NeededFont {
+        postscript_name: Some(name.into()),
+        ..NeededFont::default()
+    };
+    let fonts = vec![
+        ps("inter-italic"),
+        ps("Helvetica-Bold"),
+        NeededFont {
+            family: Some("JetBrains Mono".into()),
+            ..NeededFont::default()
+        },
+        NeededFont {
+            full_name: Some("Inter Regular".into()),
+            ..NeededFont::default()
+        },
+    ];
+    let dry = api
+        .fonts_needed(FontsNeededRequest {
+            fonts: fonts.clone(),
+            document: None,
+            activate: false,
+        })
+        .unwrap();
+    let hits: Vec<_> = dry.matched.iter().map(|m| (m.face, m.matched_by)).collect();
+    assert_eq!(
+        hits,
+        [
+            (FaceId(2), NeededFontRule::PostscriptName),
+            (FaceId(6), NeededFontRule::Family),
+            (FaceId(1), NeededFontRule::FullName),
+        ]
+    );
+    assert_eq!(dry.unmatched, [ps("Helvetica-Bold")]);
+    assert_eq!(dry.missing, 1);
+    assert!(dry.outcomes.is_empty());
+    assert!(api.list_active().unwrap().is_empty());
+
+    let res = api
+        .fonts_needed(FontsNeededRequest {
+            fonts,
+            document: Some("poster.indd".into()),
+            activate: true,
+        })
+        .unwrap();
+    assert_eq!(res.matched, dry.matched);
+    // 6 JetBrains Mono clashes with a system font and stays inactive.
+    let outcomes: Vec<_> = res.outcomes.iter().map(|o| o.face).collect();
+    assert_eq!(outcomes, [FaceId(2), FaceId(6), FaceId(1)]);
+    assert!(matches!(
+        res.outcomes[1].outcome,
+        OutcomeStatus::Conflict { .. }
+    ));
+    let active: Vec<_> = api
+        .list_active()
+        .unwrap()
+        .into_iter()
+        .map(|a| (a.face, a.mode, a.document))
+        .collect();
+    let doc = Some("poster.indd".to_owned());
+    assert_eq!(
+        active,
+        [
+            (FaceId(1), ActivationMode::Session, doc.clone()),
+            (FaceId(2), ActivationMode::Session, doc),
+        ]
     );
 }
 

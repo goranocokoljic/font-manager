@@ -87,6 +87,7 @@ service!(ActivationService {
     list_active() -> Vec<ActiveFace>;
     conflicts(target: Target) -> Vec<Conflict>;
     list_conflicts() -> Vec<Clash>;
+    fonts_needed(req: FontsNeededRequest) -> FontsNeededResponse;
 });
 
 service!(OrganizationService {

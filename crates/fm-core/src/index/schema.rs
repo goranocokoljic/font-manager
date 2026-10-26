@@ -589,13 +589,28 @@ CREATE TABLE sidecar_absorb (
 ) WITHOUT ROWID;
 ";
 
+/// Full names (E29.2): `face.full_name` is the face's full name (name ID 4),
+/// `NULL` when the font has none, written with the face so that
+/// `fonts_needed` matches it without reading `face.parsed`. Rows whose
+/// `face.parsed` has a `fullName` take it now; the files of the others
+/// (faces stored before E26.1, or fonts without one) lose their read stamp,
+/// so the next scan reads them again and writes the column. Nothing else of
+/// the face changes: a file read again keeps its face ids and user data.
+const V20: &str = r"
+ALTER TABLE face ADD COLUMN full_name TEXT;
+UPDATE face SET full_name = json_extract(parsed, '$.fullName')
+WHERE json_valid(parsed) AND json_type(parsed, '$.fullName') = 'text';
+UPDATE font_file SET mtime = NULL
+WHERE id IN (SELECT file_id FROM face WHERE full_name IS NULL);
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
-    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19,
+    V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20,
 ];
 
 /// The schema version this build writes.

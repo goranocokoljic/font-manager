@@ -85,6 +85,7 @@ routes! {
     list_active(),
     conflicts(target),
     list_conflicts(),
+    fonts_needed(req),
     // organization
     list_collections(),
     create_collection(req),

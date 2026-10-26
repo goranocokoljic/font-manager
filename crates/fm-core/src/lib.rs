@@ -34,6 +34,7 @@ pub mod lifecycle;
 pub mod logging;
 pub mod mcp;
 pub mod metrics;
+mod needed;
 pub mod pairing;
 pub mod palettes;
 pub mod pangrams;

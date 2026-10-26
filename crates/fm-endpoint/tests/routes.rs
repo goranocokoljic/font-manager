@@ -135,6 +135,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("list_active", String::new()),
         ("conflicts", faces.into()),
         ("list_conflicts", String::new()),
+        (
+            "fonts_needed",
+            r#"{"fonts":[{"postscriptName":"Inter-Regular"},{"family":"Nope"}],"activate":false}"#
+                .into(),
+        ),
         // organization
         ("list_collections", String::new()),
         ("create_collection", r#"{"name":"Over HTTP"}"#.into()),

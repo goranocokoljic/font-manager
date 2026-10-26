@@ -21,7 +21,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace, Clash,
-    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
+    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, FontsNeededRequest,
+    FontsNeededResponse, OutcomeStatus, Target,
 };
 use fm_api::common::FontFormat;
 use fm_api::event::Event;
@@ -34,6 +35,7 @@ use fm_platform::{
 
 use crate::error::{FmError, FmResult};
 use crate::index::{ActiveRow, FaceRow, Index, platform_mode};
+use crate::needed;
 
 /// Where activation changes go: the app's event stream.
 pub type Emit = Arc<dyn Fn(Event) + Send + Sync>;
@@ -582,6 +584,37 @@ impl ActivationService for ActivationManager {
             }
         }
         Ok(out)
+    }
+
+    fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
+        let mut index = self.lock();
+        let (matched, unmatched) = needed::match_fonts(req.fonts, &index.needed_faces()?);
+        let mut outcomes = Vec::new();
+        if req.activate && !matched.is_empty() {
+            // The Activate button's path: session mode, clashes reported.
+            let act = ActivateRequest {
+                target: Target::Faces {
+                    faces: matched.iter().map(|m| m.face).collect(),
+                },
+                mode: ActivationMode::Session,
+                on_conflict: ConflictPolicy::KeepExisting,
+            };
+            outcomes = self.activate_locked(&mut index, &act)?;
+            if let Some(document) = &req.document {
+                let done: Vec<FaceId> = outcomes
+                    .iter()
+                    .filter(|o| o.outcome == OutcomeStatus::Done)
+                    .map(|o| o.face)
+                    .collect();
+                index.set_activation_document(&done, document)?;
+            }
+        }
+        Ok(FontsNeededResponse {
+            missing: u32::try_from(unmatched.len()).unwrap_or(u32::MAX),
+            matched,
+            unmatched,
+            outcomes,
+        })
     }
 }
 
