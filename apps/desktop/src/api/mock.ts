@@ -72,6 +72,10 @@ import {
   type RuleGroup,
   type SidecarConflict,
   type ProjectSet,
+  type ImportSetResponse,
+  type SavedSetFile,
+  type SetEntry,
+  type SetExport,
   type QuickCollection,
   type SearchResponse,
   type SampleText,
@@ -1213,6 +1217,25 @@ export const mockPickedFiles: (string | null)[] = [];
 
 /** Where the mock save dialog saves, one per call; `null` is a cancel. */
 export const mockPickedSaves: (string | null)[] = [];
+
+/**
+ * The set files of the mock file system (E28.2), by path: "Export set…" writes here and
+ * "Import set…" reads from here. It starts with a teammate's file naming one face of the
+ * sample library (by its hash) and two fonts it does not have.
+ */
+export const mockSetFiles = new Map<string, SetExport>([
+  [
+    '/Users/demo/Shared/Team brand.fmset.json',
+    {
+      name: 'Team brand',
+      fonts: [
+        { family: 'Inter', style: 'Regular', hash: '1'.padStart(64, '0') },
+        { family: 'Quarto', style: 'Bold', hash: 'q'.repeat(64) },
+        { family: 'Gotham Rounded', style: 'Medium', hash: 'g'.repeat(64) },
+      ],
+    },
+  ],
+]);
 
 /** What the mock "Export license inventory…" saved, oldest first. */
 export const mockSavedInventories: {
@@ -2847,6 +2870,51 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // Like the Rust mock: per face its health and system clash, then the active pairs
     // (none: no two sample faces share a PostScript name), then the extra entries.
     listSets: async () => structuredClone(sets),
+    // Like the Rust mock, over `mockSetFiles` instead of the disk: the save dialog's path
+    // gets ".fmset.json" when it has no extension; the open dialog is `mockPickedFiles`,
+    // the teammate's file when nothing is queued.
+    saveSetFile: async (id, fileName) => {
+      const set = sets.find((s) => s.id === id);
+      if (!set)
+        throw { code: 'notFound' as const, message: `Set ${id} was not found.`, detail: null };
+      const picked = mockPickedSaves.length
+        ? mockPickedSaves.shift()!
+        : `/Users/demo/Documents/${fileName}`;
+      if (picked === null) return null;
+      const path = /\.[^./\\]+$/.test(picked) ? picked : `${picked}.fmset.json`;
+      const fonts: SetEntry[] = set.faces.flatMap((face) => {
+        const f = find(face);
+        return f ? [{ family: f.face.familyName, style: f.face.style, hash: f.hash }] : [];
+      });
+      mockSetFiles.set(path, { name: set.name, fonts });
+      return { path, fonts: fonts.length } satisfies SavedSetFile;
+    },
+    loadSetFile: async () => {
+      const path = mockPickedFiles.length
+        ? mockPickedFiles.shift()!
+        : '/Users/demo/Shared/Team brand.fmset.json';
+      if (path === null) return null;
+      const file = mockSetFiles.get(path);
+      if (!file)
+        throw {
+          code: 'notFound' as const,
+          message: `The set file ${path} was not found.`,
+          detail: null,
+        };
+      const matched: FaceId[] = [];
+      const missing: SetEntry[] = [];
+      for (const entry of file.fonts) {
+        const f = faces.find((d) => d.hash === entry.hash);
+        if (!f) missing.push(structuredClone(entry));
+        else if (!matched.includes(f.face.id)) matched.push(f.face.id);
+      }
+      const taken = (name: string) => sets.some((s) => sameName(s.name, name));
+      let name = file.name.trim();
+      for (let n = 2; taken(name); n++) name = `${file.name.trim()} (${n})`;
+      const set: ProjectSet = { id: ++nextId, name, faces: matched.sort((a, b) => a - b) };
+      sets.push(set);
+      return structuredClone({ set, missing }) satisfies ImportSetResponse;
+    },
     pinInstance: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the style a name.');

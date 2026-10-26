@@ -63,11 +63,12 @@ use fm_api::library::{
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
-    OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
-    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SelectionTags, SelectionTagsRequest,
-    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
+    MoveCollectionRequest, OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection,
+    QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest,
+    SaveSetFileRequest, SavedSetFile, SelectionTags, SelectionTagsRequest, SetExport, Tag,
+    TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
     ComparePreviewRequest, CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest,
@@ -551,6 +552,17 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// The answer to a PDF specimen without a printer (the CLI's direct link).
 pub const PDF_NEEDS_APP: &str = "PDF export needs the Font Manager app running.";
 
+/// The path of a set file request: it must be absolute, so a set file is
+/// never written relative to wherever the app happens to run.
+fn set_file_path(path: &str) -> FmResult<&Path> {
+    let path = Path::new(path);
+    if !path.is_absolute() {
+        return Err(FmError::invalid("Choose where the set file is.")
+            .with_detail(format!("not an absolute path: {}", path.display())));
+    }
+    Ok(path)
+}
+
 fn not_available(what: &str) -> ApiError {
     ApiError::new(
         ErrorCode::Unsupported,
@@ -942,6 +954,21 @@ impl OrganizationService for CoreApi {
     }
 
     fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse> {
+        Ok(self.lock().import_set(&export)?)
+    }
+
+    fn save_set_file(&self, req: SaveSetFileRequest) -> ApiResult<SavedSetFile> {
+        let path = set_file_path(&req.path)?;
+        let export = self.lock().export_set(req.set)?;
+        let written = crate::set_file::save(path, &export)?;
+        Ok(SavedSetFile {
+            path: written.display().to_string(),
+            fonts: u32::try_from(export.fonts.len()).unwrap_or(u32::MAX),
+        })
+    }
+
+    fn load_set_file(&self, req: LoadSetFileRequest) -> ApiResult<ImportSetResponse> {
+        let export = crate::set_file::load(set_file_path(&req.path)?)?;
         Ok(self.lock().import_set(&export)?)
     }
 

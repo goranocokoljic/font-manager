@@ -1080,7 +1080,23 @@
     "heading": "Projektsets",
     "currentTitle": "Das aktuelle Set (drücken zum Aufheben)",
     "makeCurrentTitle": "Zum aktuellen Set machen",
-    "empty": "Noch keine Sets."
+    "empty": "Noch keine Sets.",
+    "import": "Set importieren…",
+    "importTitle": "Ein Set aus einer Set-Datei hinzufügen; seine Schriften werden in dieser Bibliothek am Dateiinhalt erkannt",
+    "export": "Set exportieren…",
+    "exportLabel": "Das Set {name} exportieren",
+    "exportTitle": "Eine Set-Datei zum Teilen speichern; sie benennt jede Schrift nach ihrem Dateiinhalt",
+    "saved": {
+      "one": "Set gespeichert: {count} Schrift.",
+      "other": "Set gespeichert: {count} Schriften."
+    },
+    "imported": "Das Set „{name}“ wurde importiert.",
+    "importedAll": "Das Set „{name}“ wurde importiert. Alle Schriften sind in dieser Bibliothek.",
+    "missing": {
+      "one": "{count} Schrift nicht in dieser Bibliothek",
+      "other": "{count} Schriften nicht in dieser Bibliothek"
+    },
+    "dismissLabel": "Den Importhinweis schließen"
   },
   "settings": {
     "title": "Einstellungen",

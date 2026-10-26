@@ -32,10 +32,11 @@ use fm_api::library::{
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
-    LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection,
-    QuickCollectionRequest, RenameCollectionRequest, SelectionTags, SelectionTagsRequest, Tag,
-    TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
-    VirtualStylesRequest,
+    ImportSetResponse, LicenseDeclaration, LoadSetFileRequest, MoveCollectionRequest,
+    PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
+    RenameCollectionRequest, SaveSetFileRequest, SavedSetFile, SelectionTags, SelectionTagsRequest,
+    Tag, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate,
+    VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -48,7 +49,7 @@ use fm_api::search::{
 use fm_api::settings::{AppFolders, EndpointInfo, McpStatus, McpUpdate, Settings, SettingsUpdate};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
-    SettingsService, SourceId, VirtualStyleId,
+    SetId, SettingsService, SourceId, VirtualStyleId,
 };
 use fm_core::index::Opened;
 use fm_core::lifecycle::{self, LaunchWindow};
@@ -1029,6 +1030,75 @@ async fn save_license_inventory<R: Runtime>(
         .map(Some)
 }
 
+/// Asks where to save a project set (E28.2) with the native save dialog,
+/// suggesting `file_name`, then writes its set file there. The path comes
+/// from the dialog, never from the webview. `None` when the user cancels.
+#[tauri::command]
+async fn save_set_file<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    set: SetId,
+    file_name: String,
+) -> ApiResult<Option<SavedSetFile>> {
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Export set")
+        .set_file_name(file_name)
+        .add_filter("Font Manager set", &["json"]);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
+        .await
+        .map_err(join_error)?;
+    let Some(path) = picked.map(local_path).transpose()? else {
+        return Ok(None);
+    };
+    call(&state, move |api| {
+        api.save_set_file(SaveSetFileRequest { set, path })
+    })
+    .await
+    .map(Some)
+}
+
+/// Asks for a set file (E28.2) with the native open dialog and imports it,
+/// matching its fonts by file hash. `None` when the user cancels.
+#[tauri::command]
+async fn load_set_file<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> ApiResult<Option<ImportSetResponse>> {
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Import set")
+        .add_filter("Font Manager set", &["json"]);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_file())
+        .await
+        .map_err(join_error)?;
+    let Some(path) = picked.map(local_path).transpose()? else {
+        return Ok(None);
+    };
+    call(&state, move |api| {
+        api.load_set_file(LoadSetFileRequest { path })
+    })
+    .await
+    .map(Some)
+}
+
+/// A dialog's blocking task that did not finish.
+fn join_error(e: tauri::Error) -> ApiError {
+    ApiError::new(ErrorCode::Internal, "The app could not finish the request.")
+        .with_detail(e.to_string())
+}
+
+/// The local path of a file the dialog picked.
+fn local_path(picked: tauri_plugin_dialog::FilePath) -> ApiResult<String> {
+    let path = picked.into_path().map_err(|e| {
+        ApiError::new(ErrorCode::InvalidRequest, "Choose a file on this computer.")
+            .with_detail(e.to_string())
+    })?;
+    Ok(path.display().to_string())
+}
+
 /// Writes the license inventory of `req` to `path`, the file the user
 /// picked; resolves to the number of families written.
 pub fn write_license_inventory(
@@ -1259,6 +1329,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             clear_quick_collection,
             save_license_inventory,
             list_sets,
+            save_set_file,
+            load_set_file,
             pin_instance,
             list_virtual_styles,
             delete_virtual_style,

@@ -4531,3 +4531,204 @@ fn the_app_offers_claude_desktop_its_stdio_shim() {
     );
     api.unpublish_endpoint().expect("unpublish");
 }
+
+// --- set files across machines (E28.2) ----------------------------------
+
+/// Every face of the library but those in a truncated file.
+fn healthy_faces(lib: &Lib) -> Vec<FaceId> {
+    let mut faces = Vec::new();
+    for name in lib.names() {
+        let family = lib.api.get_family(lib.family(&name).id).expect("family");
+        for face in family.faces {
+            let path = lib.api.get_face(face.id).expect("detail").path;
+            if !path.contains("truncated") {
+                faces.push(face.id);
+            }
+        }
+    }
+    faces
+}
+
+/// `(family, style, hash)` of each face, sorted.
+fn entries(lib: &Lib, faces: &[FaceId]) -> Vec<(String, String, String)> {
+    let mut out: Vec<_> = faces
+        .iter()
+        .map(|f| {
+            let d = lib.api.get_face(*f).expect("detail");
+            (d.face.family_name, d.face.style, d.hash)
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The second machine: the same fixture copies, but Barlow renamed, the
+/// collection file (.ttc) in another source and Bebas Neue not there.
+fn second_machine() -> Lib {
+    let lib = Lib::new("api-set-file-b");
+    let barlow = lib.root.join("barlow");
+    std::fs::rename(
+        barlow.join("Barlow-BoldItalic.ttf"),
+        barlow.join("my-barlow-copy.ttf"),
+    )
+    .expect("rename");
+    let other = lib.dir.path().join("Elsewhere");
+    std::fs::create_dir_all(&other).expect("folder");
+    std::fs::rename(lib.root.join("agdasima"), other.join("agdasima")).expect("move");
+    std::fs::remove_dir_all(lib.root.join("bebasneue")).expect("remove");
+    for folder in [&lib.root, &other] {
+        let source = lib
+            .api
+            .add_source(AddSourceRequest {
+                path: folder.display().to_string(),
+                mode: ImportMode::IndexInPlace,
+            })
+            .expect("source");
+        lib.scan(Some(source.id), true);
+    }
+    lib
+}
+
+#[test]
+fn save_set_file_writes_the_set_export_and_nothing_else() {
+    let (lib, _, _) = Lib::scanned("api-set-file-save");
+    let faces = healthy_faces(&lib);
+    let set = lib
+        .api
+        .create_set(CreateSetRequest {
+            name: "Brochure".into(),
+            faces: faces.clone(),
+        })
+        .expect("set");
+    let out = lib.dir.path().join("Out");
+    std::fs::create_dir_all(&out).expect("folder");
+    let saved = lib
+        .api
+        .save_set_file(SaveSetFileRequest {
+            set: set.id,
+            path: out.join("Brochure").display().to_string(),
+        })
+        .expect("saved");
+    assert_eq!(PathBuf::from(&saved.path), out.join("Brochure.fmset.json"));
+    assert_eq!(saved.fonts as usize, faces.len());
+    let written: Vec<_> = std::fs::read_dir(&out)
+        .expect("dir")
+        .map(|e| e.expect("entry").file_name())
+        .collect();
+    assert_eq!(written, ["Brochure.fmset.json"]);
+    let text = std::fs::read_to_string(&saved.path).expect("read");
+    let parsed: SetExport = serde_json::from_str(&text).expect("SetExport JSON");
+    assert_eq!(parsed, lib.api.export_set(set.id).expect("export"));
+
+    let relative = lib.api.save_set_file(SaveSetFileRequest {
+        set: set.id,
+        path: "Brochure.fmset.json".into(),
+    });
+    assert_eq!(
+        relative.expect_err("relative").code,
+        ErrorCode::InvalidRequest
+    );
+    let unknown = lib.api.save_set_file(SaveSetFileRequest {
+        set: SetId(9_999),
+        path: out.join("x").display().to_string(),
+    });
+    assert_eq!(unknown.expect_err("unknown").code, ErrorCode::NotFound);
+    assert_eq!(std::fs::read_dir(&out).expect("dir").count(), 1);
+}
+
+#[test]
+fn a_set_file_matches_by_hash_on_a_second_machine_and_activates_the_same_files() {
+    let (a, _, _) = Lib::scanned("api-set-file-a");
+    let faces = healthy_faces(&a);
+    let set = a
+        .api
+        .create_set(CreateSetRequest {
+            name: "Brochure".into(),
+            faces: faces.clone(),
+        })
+        .expect("set");
+    let file = a.dir.path().join("Brochure.fmset.json");
+    a.api
+        .save_set_file(SaveSetFileRequest {
+            set: set.id,
+            path: file.display().to_string(),
+        })
+        .expect("saved");
+    let on_a = entries(&a, &faces);
+    let ttc_on_a: Vec<_> = on_a
+        .iter()
+        .filter(|(family, ..)| family == "Agdasima")
+        .cloned()
+        .collect();
+    assert_eq!(ttc_on_a.len(), 2, "both faces of the .ttc: {on_a:?}");
+    assert_eq!(ttc_on_a[0].2, ttc_on_a[1].2, "one file, one hash");
+
+    let b = second_machine();
+    let imported = b
+        .api
+        .load_set_file(LoadSetFileRequest {
+            path: file.display().to_string(),
+        })
+        .expect("imported");
+
+    // Bebas Neue is not on B: it is listed with its family and style.
+    let missing: Vec<_> = imported
+        .missing
+        .iter()
+        .map(|m| (m.family.as_str(), m.style.as_str()))
+        .collect();
+    assert_eq!(missing, [("Bebas Neue", "Regular")]);
+    // Every other font matched by hash, renamed, moved to another source,
+    // and each face of the .ttc by family and style.
+    let expected: Vec<_> = on_a
+        .iter()
+        .filter(|(family, ..)| family != "Bebas Neue")
+        .cloned()
+        .collect();
+    assert_eq!(entries(&b, &imported.set.faces), expected);
+    let paths: Vec<String> = imported
+        .set
+        .faces
+        .iter()
+        .map(|f| b.api.get_face(*f).expect("detail").path)
+        .collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("my-barlow-copy.ttf")),
+        "{paths:?}"
+    );
+    assert!(paths.iter().any(|p| p.contains("Elsewhere")), "{paths:?}");
+
+    // Activating the set activates the same files, by hash, on A and on B
+    // (less the font B does not have; web fonts are skipped on both).
+    let active_on_a = activate_set(&a, set.id);
+    assert!(active_on_a.len() >= 3, "{active_on_a:?}");
+    let expected_active: Vec<_> = active_on_a
+        .into_iter()
+        .filter(|(family, ..)| family != "Bebas Neue")
+        .collect();
+    assert!(
+        expected_active
+            .iter()
+            .any(|(family, ..)| family == "Agdasima")
+    );
+    assert_eq!(activate_set(&b, imported.set.id), expected_active);
+}
+
+/// Activates a set for the session; `(family, style, hash)` of what is active.
+fn activate_set(lib: &Lib, set: SetId) -> Vec<(String, String, String)> {
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Set { set },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::default(),
+        })
+        .expect("activate");
+    let active: Vec<FaceId> = lib
+        .api
+        .list_active()
+        .expect("active")
+        .into_iter()
+        .map(|a| a.face)
+        .collect();
+    entries(lib, &active)
+}

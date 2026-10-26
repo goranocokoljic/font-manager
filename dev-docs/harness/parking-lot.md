@@ -271,3 +271,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E28.1 #179] docs/user/sources.md:50 — the Problems table row says another computer can conflict on a tag, which was wrong before E28.1 too.
 - [E28.1 #179] apps/desktop/src/views/ProblemsView.vue:293 — Cancel or Confirm on the "Keep this one" dialog unmounts the focused button without returning focus, so focus falls to body and Escape stops closing the view.
 - [E28.1 #179] apps/desktop/src/views/ProblemsView.vue:375 — `.path` sets overflow-wrap only inside `.table`, so a long path outside the table can overflow at narrow widths.
+- [E28.2 #180] crates/fm-core/src/api.rs:944 — create_set / import_set / delete_set emit no Event, so other windows see a new set only after their next load().
+- [E28.2 #180] crates/fm-client/tests/conformance.rs:47 — fixed-name temp files (also crates/fm-endpoint/tests/routes.rs:75) are never deleted, like the existing `out` pattern.
+- [E28.2 #180] crates/fm-core/src/api.rs:970 — the absolute-path check of set files is tested only through save_set_file, not load_set_file.
+- [E28.2 #180] crates/fm-endpoint/src/routes.rs:107 — save_set_file lets an authenticated endpoint client write any absolute path, like the existing export_* routes.

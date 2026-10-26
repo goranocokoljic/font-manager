@@ -104,6 +104,8 @@ routes! {
     delete_set(set),
     export_set(set),
     import_set(export),
+    save_set_file(req),
+    load_set_file(req),
     pin_instance(req),
     list_virtual_styles(req),
     delete_virtual_style(style),

@@ -72,6 +72,8 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
     let export = served.call("export_set", "1").body;
     let out = std::env::temp_dir().join("fm-endpoint-routes");
     let out = serde_json::to_string(&out.to_string_lossy()).expect("path");
+    let set_file = std::env::temp_dir().join("fm-endpoint-routes.fmset.json");
+    let set_file = serde_json::to_string(&set_file.to_string_lossy()).expect("path");
     let faces = r#"{"kind":"faces","faces":[1]}"#;
     let pairs: Vec<(&'static str, String)> = vec![
         // library
@@ -167,6 +169,8 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("delete_set", "999".into()),
         ("export_set", "1".into()),
         ("import_set", export.to_string()),
+        ("save_set_file", format!(r#"{{"set":1,"path":{set_file}}}"#)),
+        ("load_set_file", format!(r#"{{"path":{set_file}}}"#)),
         ("pin_instance", r#"{"face":1,"name":"Pinned"}"#.into()),
         ("list_virtual_styles", "{}".into()),
         ("delete_virtual_style", "999".into()),
