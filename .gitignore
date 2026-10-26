@@ -8,6 +8,9 @@ target/
 node_modules/
 dist/
 
+# The fm-mcp-stdio sidecar copied by scripts/release/sidecar.mjs (Tauri externalBin)
+apps/desktop/src-tauri/binaries/
+
 # Dev builds gathered by scripts/release/dev-build.mjs
 nightly-assets/
 

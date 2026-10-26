@@ -1176,9 +1176,11 @@
       "hideSnippets": "Snippets verbergen",
       "claudeCode": "Claude Code",
       "http": "Andere HTTP-Clients (JSON-Konfiguration)",
+      "claudeDesktop": "Claude Desktop (startet das mitgelieferte fm-mcp-stdio)",
       "copy": "Kopieren",
       "copyClaudeCode": "Claude-Code-Befehl kopieren",
       "copyHttp": "Konfiguration für HTTP-Clients kopieren",
+      "copyClaudeDesktop": "Konfiguration für Claude Desktop kopieren",
       "tokenHint": "Die Snippets enthalten das Token der lokalen API. Halten Sie sie geheim."
     },
     "about": {

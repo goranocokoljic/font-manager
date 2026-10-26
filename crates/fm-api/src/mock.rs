@@ -3981,6 +3981,10 @@ impl SettingsService for MockApi {
     }
 }
 
+/// Where the mock's app keeps the stdio shim: a fixed path (the mock touches
+/// no OS).
+pub const MOCK_MCP_SHIM: &str = "/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio";
+
 /// The mock's MCP status: `/mcp` on the mock endpoint, with short snippets
 /// in the shape the core writes (`fm_core::mcp`).
 fn mock_mcp(enabled: bool, endpoint: &EndpointInfo) -> McpStatus {
@@ -4000,6 +4004,12 @@ fn mock_mcp(enabled: bool, endpoint: &EndpointInfo) -> McpStatus {
                     client: McpClient::Http,
                     text: format!(
                         "{{\"mcpServers\":{{\"font-manager\":{{\"type\":\"http\",\"url\":\"{url}\",\"headers\":{{\"Authorization\":\"Bearer {token}\"}}}}}}}}"
+                    ),
+                },
+                McpSnippet {
+                    client: McpClient::ClaudeDesktop,
+                    text: format!(
+                        "{{\"mcpServers\":{{\"font-manager\":{{\"command\":\"{MOCK_MCP_SHIM}\"}}}}}}"
                     ),
                 },
             ]

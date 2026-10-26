@@ -47,6 +47,25 @@ sudo apt-get install -y --no-install-recommends build-essential pkg-config file 
 `node scripts/release/build.mjs packages --os linux` prints the Linux list. CI installs
 exactly that list.
 
+## The stdio shim sidecar
+
+The desktop bundle ships `fm-mcp-stdio`, the MCP stdio shim, as a Tauri sidecar
+(`externalBin` in `apps/desktop/src-tauri/tauri.conf.json`). Tauri's build script fails
+every build of the app crate (`cargo build`, `cargo clippy`, the tests) when the file is
+missing, so `scripts/release/sidecar.mjs` builds it and copies it to
+`apps/desktop/src-tauri/binaries/fm-mcp-stdio-<target-triple>` (`.exe` on Windows). Git
+ignores that folder.
+
+The script runs on its own wherever a build needs it:
+
+- `pnpm lint` and the CI job (`ci.yml`, before Lint, on Windows, macOS and Linux);
+- Tauri's `beforeDevCommand` and `beforeBuildCommand` (`pnpm tauri dev`, `pnpm tauri build`),
+  in the profile and for the target triple Tauri builds;
+- the release build below (`--release --locked`).
+
+After a fresh checkout, `node scripts/release/sidecar.mjs` once is enough for a plain
+`cargo build` or `cargo nextest run --workspace`.
+
 ## Build the installers from a tag
 
 Check out the tag, then run the script for your OS:
@@ -68,6 +87,7 @@ script runs these commands. `$PWD` is the checkout, `$CARGO_HOME` is your cargo 
 ```sh
 pnpm install --frozen-lockfile
 SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" cargo build --release --locked -p fm-cli
+SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" node scripts/release/sidecar.mjs --release --locked
 SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" pnpm --filter @fm/desktop exec tauri build --ci --bundles msi,nsis -- --locked
 ```
 
@@ -76,6 +96,7 @@ SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--
 ```sh
 pnpm install --frozen-lockfile
 SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" cargo build --release --locked -p fm-cli
+SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" node scripts/release/sidecar.mjs --release --locked
 SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" pnpm --filter @fm/desktop exec tauri build --ci --bundles dmg -- --locked
 ```
 
@@ -84,6 +105,7 @@ SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--
 ```sh
 pnpm install --frozen-lockfile
 SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" cargo build --release --locked -p fm-cli
+SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" node scripts/release/sidecar.mjs --release --locked
 SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" CARGO_INCREMENTAL=0 RUSTFLAGS="--remap-path-prefix=$PWD=/build --remap-path-prefix=$CARGO_HOME=/cargo" APPIMAGE_EXTRACT_AND_RUN=1 NO_STRIP=true pnpm --filter @fm/desktop exec tauri build --ci --bundles appimage -- --locked
 ```
 

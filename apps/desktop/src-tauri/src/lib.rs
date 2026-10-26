@@ -1320,6 +1320,15 @@ pub fn serve(
     match index {
         Ok(opened) => {
             let core = CoreApi::open(paths, opened.index, activator);
+            // The bundle installs the stdio shim beside this executable
+            // (Tauri `externalBin`, E27.7); Settings offers it to Claude Desktop.
+            let core = match std::env::current_exe()
+                .ok()
+                .and_then(|exe| fm_core::mcp::shim_beside(&exe))
+            {
+                Some(shim) => core.with_mcp_shim(shim),
+                None => core,
+            };
             // PDF specimens print through an offscreen webview on this
             // app's UI thread (ADR 0013); the CLI's direct link has none.
             let core = match fm_platform::pdf::system(paths) {

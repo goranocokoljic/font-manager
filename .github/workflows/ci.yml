@@ -71,6 +71,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # tauri-build needs the externalBin sidecar for every build of fm-app (E27.7).
+      - name: Stdio shim sidecar (fm-mcp-stdio for externalBin)
+        run: node scripts/release/sidecar.mjs
+
       - name: Lint (rustfmt, clippy -D warnings, cargo-deny, ESLint, Prettier, vue-tsc)
         run: pnpm lint
 

@@ -31,7 +31,8 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
     }),
   ).toBeVisible();
 
-  // Tab order: switch → address → Show snippets → Copy Claude Code → Copy HTTP config.
+  // Tab order: switch → address → Show snippets → Copy Claude Code → Copy HTTP config
+  // → Copy Claude Desktop config.
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: /^Copy MCP server address/ })).toBeFocused();
   await page.keyboard.press('Tab');
@@ -43,7 +44,7 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('pre')).toHaveCount(2);
+  await expect(page.locator('pre')).toHaveCount(3);
 
   await page.keyboard.press('Tab');
   const claude = page.getByRole('button', { name: 'Copy Claude Code command' });
@@ -64,6 +65,24 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
     type: 'http',
     url: 'http://127.0.0.1:47613/mcp',
   });
+
+  // Claude Desktop (E27.7): the bundled stdio shim by its absolute path, shown and copyable.
+  await page.keyboard.press('Tab');
+  const desktop = page.getByRole('button', { name: 'Copy Claude Desktop config' });
+  await expect(desktop).toBeFocused();
+  const desktopSnippet = page.getByLabel('Claude Desktop (starts the bundled fm-mcp-stdio)');
+  await expect(desktopSnippet).toBeVisible();
+  await expect(desktopSnippet).toContainText(
+    '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio',
+  );
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(async () => JSON.parse(await page.evaluate(() => navigator.clipboard.readText())))
+    .toMatchObject({
+      mcpServers: {
+        'font-manager': { command: '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio' },
+      },
+    });
 
   // Off again: the snippets go away.
   await toggle.focus();

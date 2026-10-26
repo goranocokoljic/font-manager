@@ -8,21 +8,26 @@ license.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[[bin]]
+# The stdio shim (E27.7): forwards stdin/stdout to the running app's `/mcp`.
+name = "fm-mcp-stdio"
+path = "src/bin/fm-mcp-stdio.rs"
+
 [dependencies]
 fm-api.workspace = true
 fm-client.workspace = true
-rmcp.workspace = true
+fm-platform.workspace = true
+# The shim uses rmcp's stdio transport and its streamable HTTP client
+# transport, nothing else (E27.7).
+rmcp = { workspace = true, features = ["client", "transport-io", "transport-streamable-http-client-reqwest"] }
 serde.workspace = true
 serde_json.workspace = true
 # The services are synchronous: tools run on `spawn_blocking` (ADR 0006).
-tokio = { workspace = true, features = ["rt"] }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros", "time"] }
 
 [dev-dependencies]
 fm-core.workspace = true
 fm-endpoint.workspace = true
-fm-platform.workspace = true
-rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 
 [lints]
 workspace = true

@@ -2,7 +2,8 @@
 // Settings → AI assistants (E27.1): the opt-in switch for the MCP server on the
 // local API endpoint, and copyable config snippets that fm-core writes with the
 // real address and token. The snippets carry the token, so they stay hidden
-// until the user asks to see them; Copy works either way.
+// until the user asks to see them; Copy works either way. The Claude Desktop
+// snippet (E27.7) starts the bundled stdio shim by its absolute path.
 import { computed, onMounted, ref } from 'vue';
 import type { McpClient } from '../api/types';
 import { t } from '../i18n';
@@ -21,13 +22,21 @@ onMounted(() => {
 
 const status = computed(() => store.mcp);
 
-const titles: Record<McpClient, 'settings.mcp.claudeCode' | 'settings.mcp.http'> = {
+const titles: Record<
+  McpClient,
+  'settings.mcp.claudeCode' | 'settings.mcp.http' | 'settings.mcp.claudeDesktop'
+> = {
   claudeCode: 'settings.mcp.claudeCode',
   http: 'settings.mcp.http',
+  claudeDesktop: 'settings.mcp.claudeDesktop',
 };
-const copyLabels: Record<McpClient, 'settings.mcp.copyClaudeCode' | 'settings.mcp.copyHttp'> = {
+const copyLabels: Record<
+  McpClient,
+  'settings.mcp.copyClaudeCode' | 'settings.mcp.copyHttp' | 'settings.mcp.copyClaudeDesktop'
+> = {
   claudeCode: 'settings.mcp.copyClaudeCode',
   http: 'settings.mcp.copyHttp',
+  claudeDesktop: 'settings.mcp.copyClaudeDesktop',
 };
 
 async function toggle(event: globalThis.Event): Promise<void> {
