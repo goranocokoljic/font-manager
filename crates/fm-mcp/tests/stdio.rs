@@ -295,3 +295,21 @@ fn when_the_app_goes_away_mid_session_open_requests_get_the_error() {
     shim.send(TOOLS_LIST);
     assert_unavailable(&shim.next(ANSWER), Some(2));
 }
+
+#[test]
+fn a_request_after_the_shim_saw_the_app_go_gets_the_error() {
+    let home = Home::new("gone-first");
+    let app = App::start(&home, true);
+    let mut shim = home.shim();
+    shim.send(INITIALIZE);
+    assert_eq!(shim.next(ANSWER)["id"], 1);
+    shim.send(INITIALIZED);
+
+    app.endpoint.stop();
+    // The shim sees the connection close before the next request comes.
+    std::thread::sleep(Duration::from_secs(1));
+    shim.send(TOOLS_LIST);
+    assert_unavailable(&shim.next(ANSWER), Some(2));
+    shim.close_stdin();
+    assert!(!shim.exit(ANSWER).success());
+}
