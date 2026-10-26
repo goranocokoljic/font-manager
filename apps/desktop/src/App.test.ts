@@ -119,6 +119,7 @@ describe('help', () => {
       'Help: Sources',
       'Help: Activation',
       'Help: Keyboard shortcuts',
+      'Help: Shared libraries',
     ]);
     expect(commands.run('help.keyboard-shortcuts')).toBe(true);
     expect(opened).toEqual(['keyboard-shortcuts']);

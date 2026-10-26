@@ -48,7 +48,8 @@
       "getting-started": "Getting started",
       "sources": "Sources",
       "activation": "Activation",
-      "keyboard-shortcuts": "Keyboard shortcuts"
+      "keyboard-shortcuts": "Keyboard shortcuts",
+      "shared-libraries": "Shared libraries"
     },
     "tray": {
       "tooltip": "Font Manager",

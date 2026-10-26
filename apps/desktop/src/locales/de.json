@@ -48,7 +48,8 @@
       "getting-started": "Erste Schritte",
       "sources": "Quellen",
       "activation": "Aktivierung",
-      "keyboard-shortcuts": "Tastenkürzel"
+      "keyboard-shortcuts": "Tastenkürzel",
+      "shared-libraries": "Geteilte Bibliotheken"
     },
     "tray": {
       "tooltip": "Font Manager",

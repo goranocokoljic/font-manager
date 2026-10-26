@@ -10,6 +10,9 @@ Select **Add folder** under **Sources** in the sidebar, or open the settings and
 
 The files stay where they are. Font Manager does not copy, move or change them.
 
+To share fonts with a team through Dropbox, iCloud Drive, OneDrive, Google Drive or a
+network share, read [Shared libraries](shared-libraries.md).
+
 ## The System fonts source
 
 The fonts that your operating system installed are always in the list. This source
@@ -47,7 +50,7 @@ shows the same number. Select it to open the **Problems** view. The view lists:
 | **Duplicates** | The same font is in two or more files. The list names the copy to keep. |
 | **Broken files** | The file is damaged or has no Unicode character map. |
 | **Legacy formats** | Font Manager can read the font but cannot activate it, for example a Type 1 font. |
-| **Sidecar conflicts** | Another computer changed the same tag, rating or note to a different value. |
+| **Sidecar conflicts** | Another computer changed the same rating, note or license to a different value. See [Shared libraries](shared-libraries.md#conflicts). |
 | **Activation conflicts** | An active font has the same PostScript name as an installed font or another active font. |
 | **Folders and index** | A source folder is missing, or the library index was damaged and replaced. |
 

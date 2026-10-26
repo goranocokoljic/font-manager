@@ -1,0 +1,19 @@
+{
+  "id": "a-link-presence-test-must-look-at-the-page-body-not-the-whol",
+  "title": "A link-presence test must look at the page body, not the whole page",
+  "category": "testing",
+  "rule": "When a test proves that one docs page links to another (a criterion like 'the page is linked from X'), check the body of X (the <main> element, or the Markdown source) for the link, not the whole built page. The Help site's nav links every page from every page, so a whole-page includes() passes even when the body link is gone. Prove the test by removing the link and seeing it fail.",
+  "rationale": "E28.3 (#181): the site test checked href=\"<page>.html\" over the whole built page; the nav satisfied it, so removing the in-body links from sources.md and getting-started.md left the suite green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    181
+  ],
+  "file_globs": [
+    "scripts/docs/**",
+    "docs/user/**"
+  ],
+  "first_seen": "2026-10-26T07:03:40.251Z",
+  "last_seen": "2026-10-26T07:03:40.251Z"
+}
