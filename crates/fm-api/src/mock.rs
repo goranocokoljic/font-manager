@@ -2803,13 +2803,36 @@ impl ActivationService for MockApi {
         };
         let mut outcomes = Vec::new();
         if req.activate && !matched.is_empty() {
-            outcomes = self.activate(ActivateRequest {
-                target: Target::Faces {
-                    faces: matched.iter().map(|m| m.face).collect(),
-                },
-                mode: ActivationMode::Session,
-                on_conflict: ConflictPolicy::KeepExisting,
-            })?;
+            // A face already active keeps its mode (the core's rule).
+            let mut faces: Vec<FaceId> = Vec::new();
+            for m in &matched {
+                if !faces.contains(&m.face) {
+                    faces.push(m.face);
+                }
+            }
+            let active: BTreeSet<FaceId> = self.state().active.keys().copied().collect();
+            let wanted: Vec<FaceId> = faces
+                .iter()
+                .copied()
+                .filter(|f| !active.contains(f))
+                .collect();
+            let mut done: BTreeMap<FaceId, OutcomeStatus> = BTreeMap::new();
+            if !wanted.is_empty() {
+                for o in self.activate(ActivateRequest {
+                    target: Target::Faces { faces: wanted },
+                    mode: ActivationMode::Session,
+                    on_conflict: ConflictPolicy::KeepExisting,
+                })? {
+                    done.insert(o.face, o.outcome);
+                }
+            }
+            outcomes = faces
+                .into_iter()
+                .map(|face| ActivationOutcome {
+                    face,
+                    outcome: done.remove(&face).unwrap_or(OutcomeStatus::Unchanged),
+                })
+                .collect();
             let mut st = self.state();
             for o in outcomes.iter().filter(|o| o.outcome == OutcomeStatus::Done) {
                 if let Some(a) = st.active.get_mut(&o.face) {

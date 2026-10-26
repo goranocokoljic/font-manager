@@ -591,22 +591,46 @@ impl ActivationService for ActivationManager {
         let (matched, unmatched) = needed::match_fonts(req.fonts, &index.needed_faces()?);
         let mut outcomes = Vec::new();
         if req.activate && !matched.is_empty() {
-            // The Activate button's path: session mode, clashes reported.
-            let act = ActivateRequest {
-                target: Target::Faces {
-                    faces: matched.iter().map(|m| m.face).collect(),
-                },
-                mode: ActivationMode::Session,
-                on_conflict: ConflictPolicy::KeepExisting,
-            };
-            outcomes = self.activate_locked(&mut index, &act)?;
+            // A face already active stays as it is, in its mode: a session
+            // request would turn a permanent activation into a session one.
+            let active: HashSet<FaceId> = index.active_rows()?.iter().map(|r| r.face).collect();
+            let mut seen = HashSet::new();
+            let faces: Vec<FaceId> = matched
+                .iter()
+                .map(|m| m.face)
+                .filter(|f| seen.insert(*f))
+                .collect();
+            let wanted: Vec<FaceId> = faces
+                .iter()
+                .copied()
+                .filter(|f| !active.contains(f))
+                .collect();
+            let mut done: HashMap<FaceId, OutcomeStatus> = HashMap::new();
+            if !wanted.is_empty() {
+                // The Activate button's path: session mode, clashes reported.
+                let act = ActivateRequest {
+                    target: Target::Faces { faces: wanted },
+                    mode: ActivationMode::Session,
+                    on_conflict: ConflictPolicy::KeepExisting,
+                };
+                for o in self.activate_locked(&mut index, &act)? {
+                    done.insert(o.face, o.outcome);
+                }
+            }
+            outcomes = faces
+                .into_iter()
+                .map(|face| ActivationOutcome {
+                    face,
+                    outcome: done.remove(&face).unwrap_or(OutcomeStatus::Unchanged),
+                })
+                .collect();
             if let Some(document) = &req.document {
-                let done: Vec<FaceId> = outcomes
+                let fresh: Vec<FaceId> = outcomes
                     .iter()
                     .filter(|o| o.outcome == OutcomeStatus::Done)
                     .map(|o| o.face)
                     .collect();
-                index.set_activation_document(&done, document)?;
+                index.set_activation_document(&fresh, document)?;
             }
         }
         Ok(FontsNeededResponse {

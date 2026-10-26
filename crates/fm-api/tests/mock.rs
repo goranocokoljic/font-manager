@@ -238,6 +238,32 @@ fn fonts_needed_matches_by_name_reports_the_missing_and_activates_the_rest() {
 }
 
 #[test]
+fn fonts_needed_leaves_a_permanently_active_face_permanent() {
+    let api = api();
+    api.activate(acts(
+        &[1],
+        ActivationMode::Permanent,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    let res = api
+        .fonts_needed(FontsNeededRequest {
+            fonts: vec![NeededFont {
+                postscript_name: Some("Inter-Regular".into()),
+                ..NeededFont::default()
+            }],
+            document: Some("poster.indd".into()),
+            activate: true,
+        })
+        .unwrap();
+    assert_eq!(res.outcomes[0].face, FaceId(1));
+    assert_eq!(res.outcomes[0].outcome, OutcomeStatus::Unchanged);
+    let active = api.list_active().unwrap();
+    assert_eq!(active[0].mode, ActivationMode::Permanent);
+    assert_eq!(active[0].document, None);
+}
+
+#[test]
 fn replace_is_for_the_session_and_the_clash_is_listed_with_its_winner() {
     let api = api();
     assert_eq!(api.list_conflicts().unwrap(), []);
