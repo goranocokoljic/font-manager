@@ -5,16 +5,20 @@
   "rule": "When a UI action activates a selection for the session (A on several rows, a family row), send only the faces that are not active yet. fm-core treats an active face in the other mode as a mode switch and releases its permanent registration, so resending a permanently active face makes it session-only and it is gone after a restart. For a partly active family, read its faces fresh (getFamily) and send only the inactive ones; leave the family out when they cannot be read. Test it with a selection that mixes a permanent face and an inactive one and assert the permanent face stays permanent.",
   "rationale": "E6.8 (#81): pressing A on a mixed selection sent every row as one session activate, so fm-core switched permanently active fonts to session-only.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
-    81
+    81,
+    183
   ],
   "file_globs": [
     "apps/desktop/src/list/**",
     "apps/desktop/src/stores/activation*.ts",
-    "apps/desktop/src/stores/selection*.ts"
+    "apps/desktop/src/stores/selection*.ts",
+    "crates/fm-core/src/**",
+    "crates/fm-api/src/mock.rs",
+    "apps/desktop/src/**"
   ],
   "first_seen": "2026-10-19T23:47:09.957Z",
-  "last_seen": "2026-10-19T23:47:09.957Z"
+  "last_seen": "2026-10-26T20:48:25.673Z"
 }
