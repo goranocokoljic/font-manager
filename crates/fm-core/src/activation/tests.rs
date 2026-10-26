@@ -1498,13 +1498,7 @@ fn document_faces_end_at_quit_and_are_not_restored() {
     );
     assert_eq!(tags(&fx), vec![]);
 
-    let out =
-        crate::lifecycle::restore_session(&fx.service, resumable, ConflictPolicy::KeepExisting)
-            .expect("resume");
-    assert_eq!(statuses(&out), vec![Status::Done]);
-    assert_eq!(fx.active(), vec![(regular, ActivationMode::Session)]);
-    fx.service.shutdown().expect("quit again");
-
+    // "Reactivate on launch" straight after that quit: only the user's.
     let next = fx.restart();
     let out = next
         .service
@@ -1516,6 +1510,36 @@ fn document_faces_end_at_quit_and_are_not_restored() {
         next.registered(),
         vec![(PathBuf::from("/fonts/Roboto-Regular.ttf"), Mode::Session)]
     );
+
+    // The resume after a quit (an update that did not install) on the same
+    // run: the document asks again, the quit ends it, the resume skips it.
+    need(&next, "poster.indd", &["Roboto-Bold"]);
+    assert_eq!(resumable, vec![regular]);
+    let again = crate::lifecycle::resumable_faces(&next.service.list_active().expect("list"));
+    assert_eq!(again, vec![regular]);
+    next.service.shutdown().expect("quit");
+    let out = crate::lifecycle::restore_session(&next.service, again, ConflictPolicy::KeepExisting)
+        .expect("resume");
+    assert_eq!(statuses(&out), vec![Status::Done]);
+    assert_eq!(next.active(), vec![(regular, ActivationMode::Session)]);
+    assert!(!next.active().iter().any(|(f, _)| *f == bold));
+}
+
+/// The last session a quit records holds the user's session faces only.
+#[test]
+fn a_quit_remembers_only_the_users_session_faces() {
+    let fx = Fixture::new();
+    let regular = fx.regular();
+    fx.activate(vec![regular], ActivationMode::Session);
+    need(&fx, "poster.indd", &["Roboto-Bold", "Inter-Regular"]);
+    fx.service.shutdown().expect("quit");
+    let last = fx
+        .index
+        .lock()
+        .expect("index")
+        .last_session()
+        .expect("last");
+    assert_eq!(last, vec![regular]);
 }
 
 /// E29.3 criterion 4 after a crash: the next start cleans up the document
