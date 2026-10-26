@@ -10,6 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use fm_api::SettingsService;
+use fm_api::settings::McpClient;
 use fm_app_lib::serve;
 use fm_core::endpoint::{DISCOVERY_FILE, Discovery};
 use fm_platform::{AppPaths, MockActivator};
@@ -142,7 +143,23 @@ fn the_mcp_server_is_off_by_default_and_the_switch_applies_without_a_restart() -
     let off = core.mcp_status()?;
     assert!(!off.enabled, "off by default");
     assert_eq!(off.url.as_deref(), Some(format!("{base}/mcp").as_str()));
-    assert!(off.snippets.iter().all(|s| s.text.contains(&token)));
+    let (desktop, http): (Vec<_>, Vec<_>) = off
+        .snippets
+        .iter()
+        .partition(|s| s.client == McpClient::ClaudeDesktop);
+    assert_eq!(http.len(), 2);
+    assert!(http.iter().all(|s| s.text.contains(&token)));
+    // The stdio shim beside the app's executable (E27.7), without the token.
+    let shim = fm_platform::mcp_shim::current().ok_or("no folder")?;
+    let [desktop] = desktop.as_slice() else {
+        return Err("one Claude Desktop snippet".into());
+    };
+    let json: serde_json::Value = serde_json::from_str(&desktop.text)?;
+    assert_eq!(
+        json["mcpServers"]["font-manager"]["command"],
+        shim.program.to_string_lossy().as_ref()
+    );
+    assert!(!desktop.text.contains(&token));
     assert_eq!(post_mcp(&base, &token)?, 404);
 
     core.set_mcp_enabled(fm_api::settings::McpUpdate { enabled: true })?;

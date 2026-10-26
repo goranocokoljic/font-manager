@@ -13,6 +13,7 @@ pub mod browser;
 pub mod fs;
 mod linux;
 mod macos;
+pub mod mcp_shim;
 pub mod paths;
 pub mod pdf;
 pub mod process;

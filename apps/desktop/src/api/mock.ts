@@ -365,6 +365,8 @@ export const mockUpdates = {
 /** The app folders of the Rust mock. */
 /** The mock's local API address (the Rust mock reports the same). */
 export const MOCK_ENDPOINT_URL = 'http://127.0.0.1:47613';
+/** Where the mock app keeps the stdio shim (the Rust mock's `MOCK_MCP_SHIM`). */
+export const MOCK_MCP_SHIM = '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio';
 
 /** A 64-hex-digit token for the `generation`th regeneration; distinct for each. */
 export function mockEndpointToken(generation: number): string {
@@ -1810,6 +1812,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
                 },
               },
             },
+            null,
+            2,
+          ),
+        },
+        {
+          client: 'claudeDesktop',
+          text: JSON.stringify(
+            { mcpServers: { 'font-manager': { command: MOCK_MCP_SHIM, args: [] } } },
             null,
             2,
           ),

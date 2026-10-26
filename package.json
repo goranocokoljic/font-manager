@@ -9,7 +9,7 @@
   },
   "scripts": {
     "lint": "pnpm lint:rust && pnpm lint:js",
-    "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo deny check",
+    "lint:rust": "node scripts/release/sidecar.mjs && cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo deny check",
     "lint:js": "eslint . && prettier --check . && pnpm -r --if-present typecheck",
     "format": "cargo fmt --all && prettier --write .",
     "test": "pnpm -r --if-present test && node --test \"scripts/harness/**/*.test.mjs\" \"scripts/reference-library/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\" \"scripts/docs/*.test.mjs\"",

@@ -242,6 +242,11 @@ pub enum McpClient {
     ClaudeCode,
     /// Any client that reads a JSON `mcpServers` block with an HTTP server.
     Http,
+    /// Claude Desktop: a JSON `mcpServers` block that starts the stdio shim
+    /// (`fm-mcp-stdio`, E27.7) by an absolute path that lasts while the app
+    /// is closed. The shim reads the address and token itself, so the block
+    /// holds neither.
+    ClaudeDesktop,
 }
 
 /// A config snippet that connects one MCP client to the app.
@@ -456,6 +461,7 @@ mod tests {
         assert_eq!(json["url"], "http://127.0.0.1:47613/mcp");
         assert_eq!(json["snippets"][0]["client"], "claudeCode");
         assert_eq!(json["snippets"][1]["client"], "http");
+        assert_eq!(json["snippets"][2]["client"], "claudeDesktop");
         let on = api
             .set_mcp_enabled(McpUpdate { enabled: true })
             .expect("on");

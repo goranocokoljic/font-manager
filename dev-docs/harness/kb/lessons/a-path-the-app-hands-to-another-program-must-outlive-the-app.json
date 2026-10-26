@@ -1,0 +1,20 @@
+{
+  "id": "a-path-the-app-hands-to-another-program-must-outlive-the-app",
+  "title": "A path the app hands to another program must outlive the app process",
+  "category": "platform-parity",
+  "rule": "When the app writes a path of its own executable or of a bundled helper into something another program keeps (a client config snippet, a login entry, a shortcut, a file association), do not derive it from current_exe() alone. On Linux inside an AppImage, current_exe() is under /tmp/.mount_*, which exists only while the app runs and is renamed at every start: use $APPIMAGE (absolute, non-empty), and when the target is a bundled helper, start the AppImage with an argument that makes the app's executable run that helper. Put the per-OS choice in fm-platform (one pure function over os, exe and env), record it in the ADR, and test it with APPIMAGE set to an absolute, an empty and a relative value, plus a test that the app's binary started with the argument does the helper's work.",
+  "rationale": "E27.7 (#177): the Claude Desktop snippet named shim_beside(current_exe), so on the Linux AppImage it pointed into the temporary mount and broke when the app quit or restarted.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    177
+  ],
+  "file_globs": [
+    "apps/desktop/src-tauri/src/**",
+    "crates/fm-platform/src/**",
+    "crates/fm-core/src/**"
+  ],
+  "first_seen": "2026-10-26T01:11:42.597Z",
+  "last_seen": "2026-10-26T01:11:42.597Z"
+}

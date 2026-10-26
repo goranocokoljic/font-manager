@@ -4504,3 +4504,30 @@ fn a_font_argument_names_faces_by_id_postscript_full_or_family_name() {
         ErrorCode::NotFound
     );
 }
+
+#[test]
+fn the_app_offers_claude_desktop_its_stdio_shim() {
+    let lib = Lib::new("mcp-shim");
+    let shim = lib.paths.data.join("Font Manager").join("fm-mcp-stdio");
+    let api = Lib::new("mcp-shim-on")
+        .api
+        .with_endpoint_in(lib.paths.data.clone())
+        .with_mcp_shim(fm_platform::mcp_shim::ShimCommand {
+            program: shim.clone(),
+            args: Vec::new(),
+        });
+    api.publish_endpoint(std::net::SocketAddr::from(([127, 0, 0, 1], 40003)))
+        .expect("publish");
+    let status = api.mcp_status().expect("status");
+    let desktop = status
+        .snippets
+        .iter()
+        .find(|s| s.client == fm_api::settings::McpClient::ClaudeDesktop)
+        .expect("a Claude Desktop snippet");
+    let json: serde_json::Value = serde_json::from_str(&desktop.text).expect("JSON");
+    assert_eq!(
+        json["mcpServers"]["font-manager"]["command"],
+        shim.to_string_lossy().as_ref()
+    );
+    api.unpublish_endpoint().expect("unpublish");
+}

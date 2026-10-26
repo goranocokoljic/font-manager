@@ -145,6 +145,9 @@ pub struct CoreApi {
     /// The local API token and discovery file (E25.1); `None` when the API
     /// has no data folder.
     endpoint: Option<EndpointKeys>,
+    /// The command that starts the stdio shim, for the Claude Desktop
+    /// snippet (E27.7); `None` without the app.
+    mcp_shim: Option<fm_platform::mcp_shim::ShimCommand>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -219,6 +222,7 @@ impl CoreApi {
             pdf: None,
             catalogs: None,
             endpoint: None,
+            mcp_shim: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -264,6 +268,15 @@ impl CoreApi {
     #[must_use]
     pub fn with_endpoint_in(mut self, dir: PathBuf) -> Self {
         self.endpoint = Some(EndpointKeys::new(dir));
+        self
+    }
+
+    /// The same API, offering Claude Desktop the stdio shim started by
+    /// `command` in the MCP snippets (the app passes
+    /// [`fm_platform::mcp_shim::current`]).
+    #[must_use]
+    pub fn with_mcp_shim(mut self, command: fm_platform::mcp_shim::ShimCommand) -> Self {
+        self.mcp_shim = Some(command);
         self
     }
 
@@ -1412,14 +1425,22 @@ impl SettingsService for CoreApi {
     /// The switch from `config.json`, the URL and snippets from the endpoint.
     fn mcp_status(&self) -> ApiResult<McpStatus> {
         let endpoint = self.endpoint_keys()?.info()?;
-        Ok(crate::mcp::status(self.settings.mcp_enabled()?, &endpoint))
+        Ok(crate::mcp::status(
+            self.settings.mcp_enabled()?,
+            &endpoint,
+            self.mcp_shim.as_ref(),
+        ))
     }
 
     /// Saves the switch; the endpoint reads it on the next `/mcp` request.
     fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
         let endpoint = self.endpoint_keys()?.info()?;
         self.settings.set_mcp_enabled(req.enabled)?;
-        Ok(crate::mcp::status(req.enabled, &endpoint))
+        Ok(crate::mcp::status(
+            req.enabled,
+            &endpoint,
+            self.mcp_shim.as_ref(),
+        ))
     }
 }
 
