@@ -14,6 +14,7 @@
 //! the shim exits non-zero.
 
 use std::collections::HashSet;
+use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::Duration;
 
@@ -81,6 +82,39 @@ pub enum End {
     ClientClosed,
     /// The app went away; every open request got the [`UNAVAILABLE`] error.
     AppGone,
+}
+
+/// The shim as a program: `fm-mcp-stdio`, and the app's executable started
+/// with [`fm_platform::mcp_shim::SHIM_ARG`] (the AppImage command). The app
+/// folders are the user's, or those under `FM_HOME` (a scratch home, as for
+/// `fm`).
+pub fn main() -> ExitCode {
+    let target = app_paths().and_then(|paths| find(&paths));
+    let runtime = match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime,
+        Err(e) => {
+            log(&format!("no async runtime: {e}"));
+            return ExitCode::FAILURE;
+        }
+    };
+    let code = runtime.block_on(run(target));
+    // The stdin reader sits on a blocking thread that only a new line or EOF
+    // wakes: do not wait for it.
+    runtime.shutdown_background();
+    code
+}
+
+/// `FM_HOME` when it is set to an absolute path, else the user's app folders.
+fn app_paths() -> Result<AppPaths, String> {
+    if let Some(home) = std::env::var_os("FM_HOME").map(PathBuf::from)
+        && home.is_absolute()
+    {
+        return Ok(AppPaths::under(&home));
+    }
+    AppPaths::current().map_err(|e| format!("The app folders could not be found: {e}"))
 }
 
 /// The shim's whole run on the process's stdin/stdout: `target` is what

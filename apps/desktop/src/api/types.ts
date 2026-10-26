@@ -1834,8 +1834,9 @@ export type McpClient =
 "http" | 
 /**
  *  Claude Desktop: a JSON `mcpServers` block that starts the stdio shim
- *  (`fm-mcp-stdio`, E27.7) by its absolute path. The shim reads the
- *  address and token itself, so the block holds neither.
+ *  (`fm-mcp-stdio`, E27.7) by an absolute path that lasts while the app
+ *  is closed. The shim reads the address and token itself, so the block
+ *  holds neither.
  */
 "claudeDesktop";
 

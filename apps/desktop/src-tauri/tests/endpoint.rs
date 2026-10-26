@@ -150,14 +150,14 @@ fn the_mcp_server_is_off_by_default_and_the_switch_applies_without_a_restart() -
     assert_eq!(http.len(), 2);
     assert!(http.iter().all(|s| s.text.contains(&token)));
     // The stdio shim beside the app's executable (E27.7), without the token.
-    let shim = fm_core::mcp::shim_beside(&std::env::current_exe()?).ok_or("no folder")?;
+    let shim = fm_platform::mcp_shim::current().ok_or("no folder")?;
     let [desktop] = desktop.as_slice() else {
         return Err("one Claude Desktop snippet".into());
     };
     let json: serde_json::Value = serde_json::from_str(&desktop.text)?;
     assert_eq!(
         json["mcpServers"]["font-manager"]["command"],
-        shim.to_string_lossy().as_ref()
+        shim.program.to_string_lossy().as_ref()
     );
     assert!(!desktop.text.contains(&token));
     assert_eq!(post_mcp(&base, &token)?, 404);

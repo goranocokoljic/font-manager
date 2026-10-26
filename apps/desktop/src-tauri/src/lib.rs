@@ -1321,11 +1321,9 @@ pub fn serve(
         Ok(opened) => {
             let core = CoreApi::open(paths, opened.index, activator);
             // The bundle installs the stdio shim beside this executable
-            // (Tauri `externalBin`, E27.7); Settings offers it to Claude Desktop.
-            let core = match std::env::current_exe()
-                .ok()
-                .and_then(|exe| fm_core::mcp::shim_beside(&exe))
-            {
+            // (Tauri `externalBin`, E27.7; inside an AppImage the AppImage
+            // runs it); Settings offers it to Claude Desktop.
+            let core = match fm_platform::mcp_shim::current() {
                 Some(shim) => core.with_mcp_shim(shim),
                 None => core,
             };

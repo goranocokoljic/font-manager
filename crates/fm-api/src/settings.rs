@@ -234,10 +234,6 @@ pub const MCP_PATH: &str = "/mcp";
 /// snippets register it under.
 pub const MCP_SERVER_NAME: &str = "font-manager";
 
-/// The file name of the stdio shim (E27.7) without the OS's executable
-/// suffix: the bundle installs it beside the app's executable.
-pub const MCP_SHIM_NAME: &str = "fm-mcp-stdio";
-
 /// The MCP clients the app writes a config snippet for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -247,8 +243,9 @@ pub enum McpClient {
     /// Any client that reads a JSON `mcpServers` block with an HTTP server.
     Http,
     /// Claude Desktop: a JSON `mcpServers` block that starts the stdio shim
-    /// (`fm-mcp-stdio`, E27.7) by its absolute path. The shim reads the
-    /// address and token itself, so the block holds neither.
+    /// (`fm-mcp-stdio`, E27.7) by an absolute path that lasts while the app
+    /// is closed. The shim reads the address and token itself, so the block
+    /// holds neither.
     ClaudeDesktop,
 }
 

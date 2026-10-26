@@ -145,9 +145,9 @@ pub struct CoreApi {
     /// The local API token and discovery file (E25.1); `None` when the API
     /// has no data folder.
     endpoint: Option<EndpointKeys>,
-    /// The stdio shim's absolute path for the Claude Desktop snippet
-    /// (E27.7); `None` without the app.
-    mcp_shim: Option<PathBuf>,
+    /// The command that starts the stdio shim, for the Claude Desktop
+    /// snippet (E27.7); `None` without the app.
+    mcp_shim: Option<fm_platform::mcp_shim::ShimCommand>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -271,12 +271,12 @@ impl CoreApi {
         self
     }
 
-    /// The same API, offering the stdio shim at `path` to Claude Desktop in
-    /// the MCP snippets (the app passes [`crate::mcp::shim_beside`] its
-    /// executable).
+    /// The same API, offering Claude Desktop the stdio shim started by
+    /// `command` in the MCP snippets (the app passes
+    /// [`fm_platform::mcp_shim::current`]).
     #[must_use]
-    pub fn with_mcp_shim(mut self, path: PathBuf) -> Self {
-        self.mcp_shim = Some(path);
+    pub fn with_mcp_shim(mut self, command: fm_platform::mcp_shim::ShimCommand) -> Self {
+        self.mcp_shim = Some(command);
         self
     }
 
@@ -1428,7 +1428,7 @@ impl SettingsService for CoreApi {
         Ok(crate::mcp::status(
             self.settings.mcp_enabled()?,
             &endpoint,
-            self.mcp_shim.as_deref(),
+            self.mcp_shim.as_ref(),
         ))
     }
 
@@ -1439,7 +1439,7 @@ impl SettingsService for CoreApi {
         Ok(crate::mcp::status(
             req.enabled,
             &endpoint,
-            self.mcp_shim.as_deref(),
+            self.mcp_shim.as_ref(),
         ))
     }
 }

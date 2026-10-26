@@ -4512,7 +4512,10 @@ fn the_app_offers_claude_desktop_its_stdio_shim() {
     let api = Lib::new("mcp-shim-on")
         .api
         .with_endpoint_in(lib.paths.data.clone())
-        .with_mcp_shim(shim.clone());
+        .with_mcp_shim(fm_platform::mcp_shim::ShimCommand {
+            program: shim.clone(),
+            args: Vec::new(),
+        });
     api.publish_endpoint(std::net::SocketAddr::from(([127, 0, 0, 1], 40003)))
         .expect("publish");
     let status = api.mcp_status().expect("status");
