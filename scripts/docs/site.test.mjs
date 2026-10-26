@@ -46,6 +46,13 @@ test('every page links to every other page, and every link resolves', () => {
   }
 });
 
+test('the text of Sources and Getting started links to Shared libraries', () => {
+  for (const slug of ['sources', 'getting-started']) {
+    const main = /<main>([\s\S]*)<\/main>/.exec(page(slug))?.[1] ?? '';
+    assert.ok(main.includes('href="shared-libraries.html'), slug);
+  }
+});
+
 test('the current page is marked in the navigation', () => {
   assert.match(page('sources'), /<a href="sources.html" aria-current="page">Sources<\/a>/);
 });
