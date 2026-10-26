@@ -113,7 +113,8 @@ pub fn deactivate_session(api: &dyn ActivationService) -> ApiResult<Vec<Activati
 
 /// Activates `faces` for the session again: the session fonts a quit ended
 /// when the app goes on running after all (an update that did not install,
-/// E18.2), as [`resumable_faces`] lists them before the quit. Nothing is asked of `api` when `faces` is empty.
+/// E18.2), as [`resumable_faces`] lists them before the quit. Nothing is
+/// asked of `api` when `faces` is empty.
 pub fn restore_session(
     api: &dyn ActivationService,
     faces: Vec<FaceId>,
