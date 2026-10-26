@@ -33,6 +33,7 @@ mod files;
 mod font_names;
 mod languages;
 mod license_inventory;
+mod needed;
 mod problems;
 mod quick_collection;
 mod resolutions;

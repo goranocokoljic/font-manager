@@ -23,7 +23,13 @@ export const DEFAULT_OUT = join(ROOT, 'apps', 'desktop', 'public', 'help');
  * apps/desktop/src-tauri/src/help.rs) and the palette's Help actions
  * (apps/desktop/src/help.ts) list the same slugs; site.test.mjs checks it.
  */
-export const PAGES = ['getting-started', 'sources', 'activation', 'keyboard-shortcuts'];
+export const PAGES = [
+  'getting-started',
+  'sources',
+  'activation',
+  'keyboard-shortcuts',
+  'shared-libraries',
+];
 
 const STYLE = `:root { color-scheme: light dark; --fg: #1d1d1f; --muted: #55555a; --bg: #ffffff;
   --rule: #d2d2d7; --link: #0a58ca; --code: #f2f2f5; }

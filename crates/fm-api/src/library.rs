@@ -10,7 +10,7 @@ use crate::common::{
 use crate::search::WeightRange;
 use crate::{
     ApiError, ApiResult, ApiVersion, CollectionId, ErrorCode, FaceId, FamilyId, JobId,
-    ResolutionId, SourceId,
+    ResolutionId, SidecarConflictId, SourceId,
 };
 
 /// The operating system the app runs on.
@@ -666,6 +666,64 @@ pub struct Problem {
     pub message: String,
 }
 
+/// The field of a sidecar conflict (E28.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum SidecarField {
+    /// The face is a favorite.
+    Favorite,
+    /// The face's rating.
+    Rating,
+    /// The face's notes.
+    Notes,
+    /// The family's notes.
+    FamilyNotes,
+    /// The family's declared license.
+    FamilyLicense,
+}
+
+/// A field this machine and another machine that syncs the same folder set
+/// to different values (E28.1). The index keeps this machine's value until
+/// the user resolves it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SidecarConflict {
+    /// Pass to `resolve_sidecar_conflict`.
+    pub id: SidecarConflictId,
+    /// The face; for a family field, the family's first face.
+    pub face: FaceId,
+    /// The face's family.
+    pub family: String,
+    /// Which field.
+    pub field: SidecarField,
+    /// This machine's value, in words ("4 stars", "a favorite").
+    pub mine: String,
+    /// The other machine's value, in words.
+    pub theirs: String,
+    /// The sidecar file the other value came from.
+    pub sidecar_path: String,
+}
+
+/// Which value of a sidecar conflict to keep.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum ConflictSide {
+    /// This machine's value.
+    Mine,
+    /// The other machine's value.
+    Theirs,
+}
+
+/// Resolves one sidecar conflict.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolveSidecarConflictRequest {
+    /// The conflict.
+    pub id: SidecarConflictId,
+    /// The value to keep.
+    pub keep: ConflictSide,
+}
+
 /// Why files are listed together as duplicates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -1196,6 +1254,13 @@ pub trait LibraryService {
     /// cannot come back (another file is at its path, the trash was emptied)
     /// is `Failed` and the others still come back; calling again retries it.
     fn undo_resolution(&self, resolution: ResolutionId) -> ApiResult<Resolution>;
+    /// The sidecar conflicts that wait for the user (E28.1): fields this
+    /// machine and another set to different values, oldest first.
+    fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>>;
+    /// Keeps one value of a conflict: it is written to the index and to the
+    /// sidecar with a new version, so the other machine takes it without a
+    /// new conflict. `NotFound` for a conflict that is not listed (any more).
+    fn resolve_sidecar_conflict(&self, req: ResolveSidecarConflictRequest) -> ApiResult<()>;
     /// One page of a face's glyph map (E11.1): the characters its `cmap`
     /// maps, by code point and grouped by Unicode block, with glyph ids and
     /// names. `NotFound` for an unknown face; a malformed font is a page with

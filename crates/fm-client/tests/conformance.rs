@@ -44,6 +44,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     let mut seen: Vec<&str> = Vec::new();
     let out = std::env::temp_dir().join("fm-client-conformance");
     let out = out.to_string_lossy().into_owned();
+    let set_file = std::env::temp_dir().join("fm-client-conformance-set");
+    let set_file = set_file.to_string_lossy().into_owned();
     let faces = json!({ "kind": "faces", "faces": [1] });
     let layout = serde_json::to_value(&d.layout_presets().unwrap()[0]).unwrap();
     let export = serde_json::to_value(d.export_set(SetId(1)).unwrap()).unwrap();
@@ -65,6 +67,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; keep_copy, json!({ "keep": "/a.ttf", "trash": [], "dryRun": true }));
     same!(seen, d, c; list_resolutions);
     same!(seen, d, c; undo_resolution, json!(1));
+    same!(seen, d, c; list_sidecar_conflicts);
+    same!(seen, d, c; resolve_sidecar_conflict, json!({ "id": 1, "keep": "mine" }));
     same!(seen, d, c; list_glyphs, json!({ "face": 1 }));
     same!(seen, d, c; get_glyph, json!({ "face": 1, "codePoint": 65 }));
     same!(seen, d, c; resolve_font, json!({ "font": "1" }));
@@ -88,6 +92,10 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; list_active);
     same!(seen, d, c; conflicts, faces.clone());
     same!(seen, d, c; list_conflicts);
+    same!(seen, d, c; fonts_needed, json!({
+        "fonts": [{ "postscriptName": "Inter-Italic" }, { "fullName": "Nope" }],
+        "document": "poster.indd",
+    }));
     same!(seen, d, c; deactivate, json!({ "target": faces }));
     // organization
     same!(seen, d, c; list_collections);
@@ -109,6 +117,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; delete_set, json!(999));
     same!(seen, d, c; export_set, json!(1));
     same!(seen, d, c; import_set, export);
+    same!(seen, d, c; save_set_file, json!({ "set": 1, "path": set_file }));
+    same!(seen, d, c; load_set_file, json!({ "path": format!("{set_file}.fmset.json") }));
     same!(seen, d, c; pin_instance, json!({ "face": 1, "name": "Pinned" }));
     same!(seen, d, c; list_virtual_styles, json!({}));
     same!(seen, d, c; delete_virtual_style, json!(999));

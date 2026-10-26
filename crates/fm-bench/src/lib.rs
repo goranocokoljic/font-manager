@@ -15,7 +15,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use fm_api::activation::{
-    ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, OutcomeStatus, Target,
+    ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, FontsNeededRequest,
+    NeededFont, OutcomeStatus, Target,
 };
 use fm_api::common::Page;
 use fm_api::ids::FaceId;
@@ -645,6 +646,127 @@ pub fn activate(home: &Path) -> BenchResult<Activated> {
     let begin = Instant::now();
     service.deactivate(DeactivateRequest {
         target: Some(Target::Faces { faces }),
+        except: None,
+    })?;
+    report.deactivate_ms = ms(begin.elapsed());
+    Ok(report)
+}
+
+/// What a `fonts_needed` round did (E29.2).
+#[derive(Debug, Default, Serialize)]
+pub struct NeededTimed {
+    /// Milliseconds for the one request that matches the fonts and
+    /// activates their faces, conflict check included.
+    pub ms: f64,
+    /// Milliseconds to deactivate them again (not budgeted).
+    pub deactivate_ms: f64,
+    /// Fonts in the request: a third by PostScript name, a third by full
+    /// name, a third by family and style.
+    pub fonts: usize,
+    /// Fonts the library had.
+    pub matched: usize,
+    /// Faces activated.
+    pub done: usize,
+    /// Faces left inactive because they clash with an installed font.
+    pub conflicts: usize,
+    /// Faces skipped or failed.
+    pub other: usize,
+}
+
+/// Times one `fonts_needed` request for [`ACTIVATION_FACES`] fonts of the
+/// index in `home`, matched and session-activated through this OS's
+/// activator, as a design-app plugin asks; then deactivates them. The fonts
+/// stay where they are (rule 2).
+pub fn fonts_needed(home: &Path) -> BenchResult<NeededTimed> {
+    let paths = home_paths(home);
+    fonts_needed_with(home, fm_platform::activator::system(&paths)?)
+}
+
+/// [`fonts_needed`] through `activator`.
+pub fn fonts_needed_with(
+    home: &Path,
+    activator: Arc<dyn FontActivator>,
+) -> BenchResult<NeededTimed> {
+    let paths = home_paths(home);
+    let index = startup::open_index(&paths)?.index;
+    // Names of activatable faces, each asked by one rule in turn; a name
+    // another face answers first (a copy in another format) is left out, so
+    // every font of the round stands for a face that can be activated.
+    let ids: HashSet<FaceId> = index
+        .activatable_faces(ACTIVATION_FACES * 4)?
+        .into_iter()
+        .collect();
+    let mut asked: Vec<(FaceId, NeededFont)> = index
+        .font_names()?
+        .into_iter()
+        .filter(|n| ids.contains(&n.face.face))
+        .enumerate()
+        .map(|(i, n)| {
+            let f = n.face;
+            let font = match i % 3 {
+                0 => NeededFont {
+                    postscript_name: Some(f.postscript_name),
+                    ..NeededFont::default()
+                },
+                1 if f.full_name.is_some() => NeededFont {
+                    full_name: f.full_name,
+                    ..NeededFont::default()
+                },
+                _ => NeededFont {
+                    family: Some(f.family),
+                    style: Some(f.style),
+                    ..NeededFont::default()
+                },
+            };
+            (f.face, font)
+        })
+        .collect();
+    let service = ActivationManager::new(Arc::new(Mutex::new(index)), activator, |_| {});
+    let dry = service.fonts_needed(FontsNeededRequest {
+        fonts: asked.iter().map(|(_, f)| f.clone()).collect(),
+        document: None,
+        activate: false,
+    })?;
+    let mut seen = HashSet::new();
+    asked.retain(|(face, font)| {
+        dry.matched
+            .iter()
+            .any(|m| m.face == *face && m.font == *font)
+            && seen.insert(*face)
+    });
+    asked.truncate(ACTIVATION_FACES as usize);
+    if asked.len() < ACTIVATION_FACES as usize {
+        return Err(format!(
+            "the index has {} fonts that name an activatable face, {ACTIVATION_FACES} needed: run the scan first",
+            asked.len()
+        )
+        .into());
+    }
+    let fonts: Vec<NeededFont> = asked.into_iter().map(|(_, f)| f).collect();
+    let begin = Instant::now();
+    let res = service.fonts_needed(FontsNeededRequest {
+        fonts: fonts.clone(),
+        document: Some("fm-bench".into()),
+        activate: true,
+    })?;
+    let mut report = NeededTimed {
+        ms: ms(begin.elapsed()),
+        fonts: fonts.len(),
+        matched: res.matched.len(),
+        ..NeededTimed::default()
+    };
+    for o in &res.outcomes {
+        match o.outcome {
+            OutcomeStatus::Done => report.done += 1,
+            OutcomeStatus::Conflict { .. } => report.conflicts += 1,
+            _ => report.other += 1,
+        }
+    }
+    let begin = Instant::now();
+    service.deactivate(DeactivateRequest {
+        target: Some(Target::Faces {
+            faces: res.outcomes.iter().map(|o| o.face).collect(),
+        }),
         except: None,
     })?;
     report.deactivate_ms = ms(begin.elapsed());

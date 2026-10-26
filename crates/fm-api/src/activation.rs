@@ -232,6 +232,89 @@ impl Clash {
     }
 }
 
+/// A font a document uses, as a design app names it (E29.2). Every name is
+/// optional; the names given are tried in the order of [`NeededFontRule`].
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NeededFont {
+    /// The PostScript name (name ID 6).
+    #[serde(default)]
+    pub postscript_name: Option<String>,
+    /// The full name (name ID 4).
+    #[serde(default)]
+    pub full_name: Option<String>,
+    /// The family name.
+    #[serde(default)]
+    pub family: Option<String>,
+    /// The style within the family; "Regular" when a family comes without one.
+    #[serde(default)]
+    pub style: Option<String>,
+}
+
+/// The fonts a document needs, to find in the library and activate (the
+/// plugins' auto-activation, E29).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FontsNeededRequest {
+    /// The fonts, in the document's order.
+    pub fonts: Vec<NeededFont>,
+    /// The document that needs them, recorded with the faces it activates.
+    #[serde(default)]
+    pub document: Option<String>,
+    /// Session-activate the matched faces; when false, only match.
+    #[serde(default = "yes")]
+    pub activate: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+/// Which name found a needed font, in the order the names are tried. Names
+/// compare ignoring case and surrounding space.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum NeededFontRule {
+    /// The PostScript name (name ID 6).
+    PostscriptName,
+    /// The full name (name ID 4).
+    FullName,
+    /// The typographic family and subfamily (name IDs 16 and 17; 17 is 2
+    /// when the font has no 17).
+    TypographicFamily,
+    /// The legacy family and subfamily (name IDs 1 and 2).
+    Family,
+}
+
+/// A needed font the library has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct NeededFontMatch {
+    /// The needed font, as asked.
+    pub font: NeededFont,
+    /// The face that stands for it. Of several faces that match, an active
+    /// face wins, then a healthy one, then the lowest face id; a broken face
+    /// is never matched.
+    pub face: FaceId,
+    /// The name that found it.
+    pub matched_by: NeededFontRule,
+}
+
+/// What [`ActivationService::fonts_needed`] found and did.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FontsNeededResponse {
+    /// The fonts the library has, in request order.
+    pub matched: Vec<NeededFontMatch>,
+    /// The fonts it does not have, in request order.
+    pub unmatched: Vec<NeededFont>,
+    /// How many fonts are unmatched.
+    pub missing: u32,
+    /// One outcome per matched face (a face two fonts matched comes once);
+    /// empty when the request did not activate.
+    pub outcomes: Vec<ActivationOutcome>,
+}
+
 /// Activation and deactivation.
 pub trait ActivationService {
     /// Activate; one outcome per face.
@@ -245,11 +328,39 @@ pub trait ActivationService {
     /// Every clash of a face the app has active, with its winner (the
     /// Conflicts view). Changes nothing.
     fn list_conflicts(&self) -> ApiResult<Vec<Clash>>;
+    /// Finds the fonts a document needs and, unless the request says not
+    /// to, session-activates them (E29.2). Fonts the library does not have
+    /// are reported, not an error.
+    fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse>;
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_fonts_needed_request_activates_unless_it_says_not_to() {
+        let req: FontsNeededRequest =
+            serde_json::from_str(r#"{"fonts":[{"postscriptName":"Inter-Bold"}]}"#).expect("json");
+        assert!(req.activate);
+        assert_eq!(req.document, None);
+        assert_eq!(
+            req.fonts,
+            [NeededFont {
+                postscript_name: Some("Inter-Bold".into()),
+                ..NeededFont::default()
+            }]
+        );
+        let req: FontsNeededRequest = serde_json::from_str(
+            r#"{"fonts":[{"family":"Inter","style":"Bold","fullName":"Inter Bold"}],
+                "document":"poster.indd","activate":false}"#,
+        )
+        .expect("json");
+        assert!(!req.activate);
+        assert_eq!(req.document.as_deref(), Some("poster.indd"));
+        assert_eq!(req.fonts[0].full_name.as_deref(), Some("Inter Bold"));
+        assert_eq!(req.fonts[0].style.as_deref(), Some("Bold"));
+    }
 
     #[test]
     fn a_system_clash_is_a_system_conflict_with_the_installed_file() {

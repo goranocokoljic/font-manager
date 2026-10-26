@@ -2,8 +2,9 @@
 //!
 //! A thin adapter: maps MCP tool calls to `fm-api` requests and nothing more.
 //! Hosted by the running app over streamable HTTP on localhost, with a stdio
-//! shim for clients that need it. The shim reaches the app through
-//! `fm-client` (the local API, ADR 0015), so it has no HTTP code of its own.
+//! shim for clients that need it ([`stdio`], the `fm-mcp-stdio` binary,
+//! E27.7). The shim finds the app through `fm-client` (the local API, ADR
+//! 0015) and forwards to `/mcp` with rmcp's streamable HTTP client.
 //!
 //! The app serves [`HttpServer`] at `/mcp` on its local API endpoint
 //! (`fm_endpoint::Endpoint::start_with_mcp`, E27.1): the endpoint checks the
@@ -19,6 +20,7 @@
 pub mod gate;
 pub mod prompts;
 pub mod resources;
+pub mod stdio;
 pub mod tools;
 
 use std::sync::{Arc, OnceLock};

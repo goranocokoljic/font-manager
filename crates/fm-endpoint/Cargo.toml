@@ -1,6 +1,6 @@
 [package]
 name = "fm-endpoint"
-description = "Font Manager local API endpoint: every fm-api service method over localhost HTTP with a bearer token (ADR 0015)."
+description = "Font Manager local API endpoint: every fm-api service method over localhost HTTP with a bearer token (ADR 0015) and over the user's named pipe or Unix socket (ADR 0016)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,8 @@ publish.workspace = true
 
 [dependencies]
 fm-api.workspace = true
+# The per-user pipe or socket of the IPC endpoint (E29.1, ADR 0016).
+fm-platform.workspace = true
 hyper = { workspace = true, features = ["http1", "server"] }
 hyper-util = { workspace = true, features = ["tokio"] }
 serde.workspace = true
@@ -23,4 +25,3 @@ workspace = true
 
 [dev-dependencies]
 fm-core.workspace = true
-fm-platform.workspace = true

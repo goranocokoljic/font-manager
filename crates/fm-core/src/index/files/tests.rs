@@ -1215,12 +1215,16 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
     let ids_before: Vec<i64> = face_ids(&index.conn);
     drop(index);
     {
-        // The schema as it was one version back.
+        // The schema as it was before fingerprints (V18), and so before the
+        // sidecar conflict versions (V19) and full names (V20) too.
         let conn = Connection::open(&path).expect("open");
-        conn.execute_batch(&format!(
-            "DROP TABLE face_fingerprint; PRAGMA user_version = {};",
-            SCHEMA_VERSION - 1
-        ))
+        conn.execute_batch(
+            "ALTER TABLE face DROP COLUMN full_name;
+             DROP TABLE sidecar_absorb;
+             ALTER TABLE sidecar_conflict DROP COLUMN disk_rev;
+             ALTER TABLE sidecar_conflict DROP COLUMN file_rev;
+             DROP TABLE face_fingerprint; PRAGMA user_version = 17;",
+        )
         .expect("downgrade");
     }
 
@@ -1250,6 +1254,97 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
     let mut loaded = index.load_files().expect("load");
     let after = rescan(&mut loaded, &fonts);
     assert_eq!(after.unchanged.len(), 2, "filled in once: {after:?}");
+}
+
+/// Criterion 3 of E29.2: an index from before `face.full_name` (V19)
+/// gets the column; a face whose `face.parsed` has a full name takes it at
+/// once, the file of one stored without (before E26.1) is read again by the
+/// next scan, which fills it, keeps the face ids and the user data, and is
+/// not repeated.
+#[test]
+fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
+    let dir = TempDir::new("files-full-name-migration");
+    let fonts = dir.path().join("fonts");
+    copy_fixture(&fonts, STATIC, "static.ttf");
+    copy_fixture(&fonts, COLLECTION, "collection.ttc");
+    let (scanned, _) = scan(&fonts);
+    let (mut index, source, path) = open_db(&dir);
+    index
+        .persist_files(source, scanned.files())
+        .expect("persist");
+    let ids_before = face_ids(&index.conn);
+    let full_names = |conn: &Connection| -> Vec<(String, Option<String>)> {
+        let mut stmt = conn
+            .prepare("SELECT postscript_name, full_name FROM face ORDER BY id")
+            .expect("prepare");
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))
+            .expect("query")
+            .collect::<Result<_, _>>()
+            .expect("rows")
+    };
+    let written = full_names(&index.conn);
+    assert_eq!(written.len(), 3);
+    assert!(
+        written.iter().all(|(_, full)| full.is_some()),
+        "a scan writes the full name: {written:?}"
+    );
+    let static_face = face_id(&index, &fonts.join("static.ttf").to_string_lossy());
+    drop(index);
+    {
+        // V19: no `full_name` column; the collection's faces were stored
+        // before E26.1 (no `fullName` in `face.parsed`); a tag and a rating
+        // on one of them.
+        let conn = Connection::open(&path).expect("open");
+        conn.execute_batch(&format!(
+            "ALTER TABLE face DROP COLUMN full_name;
+             UPDATE face SET parsed = json_remove(parsed, '$.fullName')
+             WHERE file_id = (SELECT id FROM font_file WHERE path LIKE '%collection.ttc');
+             INSERT INTO tag (id, name) VALUES (1, 'display');
+             INSERT INTO face_tag VALUES ({last}, 1);
+             INSERT INTO user_meta (face_id, rating) VALUES ({last}, 4);
+             PRAGMA user_version = 19;",
+            last = ids_before[2]
+        ))
+        .expect("downgrade");
+    }
+
+    let mut index = Index::open(&path).expect("open").index;
+    assert_eq!(index.schema_version().expect("version"), SCHEMA_VERSION);
+    let migrated = full_names(&index.conn);
+    let filled: Vec<bool> = migrated.iter().map(|(_, f)| f.is_some()).collect();
+    let static_at = ids_before
+        .iter()
+        .position(|&id| id == i64::from(static_face.0))
+        .expect("static face");
+    assert!(filled[static_at], "copied from face.parsed: {migrated:?}");
+    assert_eq!(filled.iter().filter(|&&f| f).count(), 1, "{migrated:?}");
+
+    let mut loaded = index.load_files().expect("load");
+    let next = rescan(&mut loaded, &fonts);
+    assert_eq!(
+        next.changed,
+        [fonts.join("collection.ttc")],
+        "only the file without full names is read again: {next:?}"
+    );
+    index.apply_rescan(source, &loaded, &next).expect("apply");
+    assert_eq!(full_names(&index.conn), written, "filled in by the scan");
+    assert_eq!(
+        face_ids(&index.conn),
+        ids_before,
+        "the faces keep their ids"
+    );
+    assert_eq!(count(&index.conn, "SELECT COUNT(*) FROM face_tag"), 1);
+    assert_eq!(
+        count(
+            &index.conn,
+            "SELECT COUNT(*) FROM user_meta WHERE rating = 4"
+        ),
+        1
+    );
+
+    let mut loaded = index.load_files().expect("load");
+    let after = rescan(&mut loaded, &fonts);
+    assert_eq!(after.unchanged.len(), 2, "read again once: {after:?}");
 }
 
 fn face_ids(conn: &Connection) -> Vec<i64> {

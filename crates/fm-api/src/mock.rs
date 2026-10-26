@@ -12,7 +12,8 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
-    ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
+    ConflictPolicy, ConflictWith, DeactivateRequest, FontsNeededRequest, FontsNeededResponse,
+    NeededFont, NeededFontMatch, NeededFontRule, OutcomeStatus, Target,
 };
 use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
@@ -43,14 +44,16 @@ use crate::library::{
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
     FontNames, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest,
     ImportMode, KeepCopyRequest, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
-    Platform, Problem, ProblemKind, Resolution, ResolveFontRequest, ScanRequest,
-    SetSourcePausedRequest, Source, SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    Platform, Problem, ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest,
+    ScanRequest, SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
+    TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
-    PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest, ReceiptChange,
-    ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp, SelectionTag, SelectionTags,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
+    MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
+    ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp,
+    SET_FILE_EXTENSION, SaveSetFileRequest, SavedSetFile, SelectionTag, SelectionTags,
     SelectionTagsRequest, SetEntry, SetExport, Tag, TagFacesRequest, UntagFacesRequest,
     UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
 };
@@ -77,7 +80,7 @@ use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ComparisonId, ErrorCode,
     Event, EventSource, ExportService, FaceId, FamilyId, JobId, LayoutService, LibraryService,
     OrganizationService, PreviewService, ResolutionId, SearchService, SetId, SettingsService,
-    SourceId, TagId, VirtualStyleId, WorkflowService,
+    SidecarConflictId, SourceId, TagId, VirtualStyleId, WorkflowService,
 };
 
 /// The mock's clock: every timestamp it makes.
@@ -495,6 +498,8 @@ struct State {
     trashed: BTreeSet<String>,
     /// "Keep this one" actions, oldest first.
     resolutions: Vec<Resolution>,
+    /// Sidecar conflicts waiting for the user, oldest first (E28.1).
+    sidecar_conflicts: Vec<SidecarConflict>,
     /// The layout template files, in the order they were made.
     layouts: Vec<MockLayoutFile>,
     /// The catalogs turned on.
@@ -556,6 +561,34 @@ impl MockApi {
     /// `tag_faces`, `export_web`), oldest first, refused ones included.
     pub fn mutations(&self) -> Vec<&'static str> {
         self.state().mutations.clone()
+    }
+
+    /// Adds a sidecar conflict on `face` (E28.1), as a merge with another
+    /// machine's sidecar would find it; `NotFound` for an unknown face.
+    pub fn add_sidecar_conflict(
+        &self,
+        face: FaceId,
+        field: crate::library::SidecarField,
+        mine: &str,
+        theirs: &str,
+    ) -> ApiResult<SidecarConflictId> {
+        let mut st = self.state();
+        let detail = st.face(face)?.detail.clone();
+        let id = SidecarConflictId(st.next());
+        let dir = detail
+            .path
+            .rsplit_once('/')
+            .map_or(String::new(), |(dir, _)| dir.to_owned());
+        st.sidecar_conflicts.push(SidecarConflict {
+            id,
+            face,
+            family: detail.face.family_name.clone(),
+            field,
+            mine: mine.into(),
+            theirs: theirs.into(),
+            sidecar_path: format!("{dir}/.fontlibrary/{}.json", detail.face.family_name),
+        });
+        Ok(id)
     }
 
     /// Adds a copy of `face`'s file at `path`: the same hash under a new face
@@ -911,6 +944,7 @@ impl State {
             mutations: Vec::new(),
             trashed: BTreeSet::new(),
             resolutions: Vec::new(),
+            sidecar_conflicts: Vec::new(),
             layouts: mock_layout_files(),
             catalogs_on: BTreeSet::new(),
             catalog_cache: BTreeMap::new(),
@@ -1659,6 +1693,18 @@ impl LibraryService for MockApi {
             }
         }
         out.extend(duplicates.iter().flat_map(DuplicateGroup::problems));
+        for c in &st.sidecar_conflicts {
+            out.push(Problem {
+                kind: ProblemKind::SidecarConflict,
+                face: Some(c.face),
+                path: st.face(c.face)?.detail.path.clone(),
+                other: Some(c.sidecar_path.clone()),
+                message: format!(
+                    "Another machine set a different value ({}); this machine's value ({}) is kept.",
+                    c.theirs, c.mine
+                ),
+            });
+        }
         // System clashes are listed above for every face, active or not.
         for clash in &clashes {
             if let ConflictWith::Active { face: other } = clash.with {
@@ -1934,6 +1980,27 @@ impl LibraryService for MockApi {
             });
         }
         Ok(r)
+    }
+
+    fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {
+        Ok(self.state().sidecar_conflicts.clone())
+    }
+
+    fn resolve_sidecar_conflict(&self, req: ResolveSidecarConflictRequest) -> ApiResult<()> {
+        let mut st = self.state();
+        let i = st
+            .sidecar_conflicts
+            .iter()
+            .position(|c| c.id == req.id)
+            .ok_or_else(|| ApiError::not_found(format!("Sidecar conflict {}", req.id)))?;
+        let c = st.sidecar_conflicts.remove(i);
+        st.emit(Event::LibraryChanged {
+            source: None,
+            added: Vec::new(),
+            removed: Vec::new(),
+            updated: vec![c.face],
+        });
+        Ok(())
     }
 }
 
@@ -2726,6 +2793,114 @@ impl ActivationService for MockApi {
         }
         Ok(out)
     }
+
+    /// The core's rules (`fm_core::needed`) over the mock faces: the mock's
+    /// full name is "family style" and it has no legacy names apart from
+    /// the family it shows.
+    fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
+        let (matched, unmatched) = {
+            let st = self.state();
+            let usable: Vec<&FaceSummary> = st
+                .faces
+                .iter()
+                .filter(|f| st.visible(f) && !st.trashed.contains(&f.detail.path))
+                .map(|f| &f.detail.face)
+                .filter(|s| !matches!(s.health, Health::Broken(_)))
+                .collect();
+            let mut matched = Vec::new();
+            let mut unmatched = Vec::new();
+            for font in req.fonts {
+                match mock_needed_face(&font, &usable, |id| st.active.contains_key(&id)) {
+                    Some((face, matched_by)) => matched.push(NeededFontMatch {
+                        font,
+                        face,
+                        matched_by,
+                    }),
+                    None => unmatched.push(font),
+                }
+            }
+            (matched, unmatched)
+        };
+        let mut outcomes = Vec::new();
+        if req.activate && !matched.is_empty() {
+            // A face already active keeps its mode (the core's rule).
+            let mut faces: Vec<FaceId> = Vec::new();
+            for m in &matched {
+                if !faces.contains(&m.face) {
+                    faces.push(m.face);
+                }
+            }
+            let active: BTreeSet<FaceId> = self.state().active.keys().copied().collect();
+            let wanted: Vec<FaceId> = faces
+                .iter()
+                .copied()
+                .filter(|f| !active.contains(f))
+                .collect();
+            let mut done: BTreeMap<FaceId, OutcomeStatus> = BTreeMap::new();
+            if !wanted.is_empty() {
+                for o in self.activate(ActivateRequest {
+                    target: Target::Faces { faces: wanted },
+                    mode: ActivationMode::Session,
+                    on_conflict: ConflictPolicy::KeepExisting,
+                })? {
+                    done.insert(o.face, o.outcome);
+                }
+            }
+            outcomes = faces
+                .into_iter()
+                .map(|face| ActivationOutcome {
+                    face,
+                    outcome: done.remove(&face).unwrap_or(OutcomeStatus::Unchanged),
+                })
+                .collect();
+            let mut st = self.state();
+            for o in outcomes.iter().filter(|o| o.outcome == OutcomeStatus::Done) {
+                if let Some(a) = st.active.get_mut(&o.face) {
+                    a.document.clone_from(&req.document);
+                }
+            }
+        }
+        Ok(FontsNeededResponse {
+            missing: u32::try_from(unmatched.len()).unwrap_or(u32::MAX),
+            matched,
+            unmatched,
+            outcomes,
+        })
+    }
+}
+
+/// The mock face a needed font names, and the rule that found it.
+fn mock_needed_face(
+    font: &NeededFont,
+    faces: &[&FaceSummary],
+    active: impl Fn(FaceId) -> bool,
+) -> Option<(FaceId, NeededFontRule)> {
+    let norm = |s: &str| s.trim().to_lowercase();
+    let wanted = |name: &Option<String>| name.as_deref().map(norm).filter(|n| !n.is_empty());
+    let style = wanted(&font.style).unwrap_or_else(|| "regular".to_owned());
+    let tiers: [(NeededFontRule, Option<String>); 3] = [
+        (
+            NeededFontRule::PostscriptName,
+            wanted(&font.postscript_name),
+        ),
+        (NeededFontRule::FullName, wanted(&font.full_name)),
+        (NeededFontRule::Family, wanted(&font.family)),
+    ];
+    for (rule, name) in tiers {
+        let Some(name) = name else { continue };
+        let best = faces
+            .iter()
+            .filter(|s| match rule {
+                NeededFontRule::PostscriptName => norm(&s.postscript_name) == name,
+                NeededFontRule::FullName => norm(&format!("{} {}", s.family_name, s.style)) == name,
+                _ => norm(&s.family_name) == name && norm(&s.style) == style,
+            })
+            .min_by_key(|s| (!active(s.id), s.health != Health::Ok, s.id));
+        if let Some(s) = best {
+            return Some((s.id, rule));
+        }
+    }
+    None
 }
 
 impl OrganizationService for MockApi {
@@ -3086,6 +3261,39 @@ impl OrganizationService for MockApi {
         };
         st.sets.push(set.clone());
         Ok(ImportSetResponse { set, missing })
+    }
+
+    fn save_set_file(&self, req: SaveSetFileRequest) -> ApiResult<SavedSetFile> {
+        let export = self.export_set(req.set)?;
+        let mut path = std::path::PathBuf::from(&req.path);
+        if path.extension().is_none() {
+            path.as_mut_os_string()
+                .push(format!(".{SET_FILE_EXTENSION}"));
+        }
+        let json = serde_json::to_string_pretty(&export)
+            .map_err(|e| ApiError::new(ErrorCode::Internal, e.to_string()))?;
+        std::fs::write(&path, json).map_err(|e| {
+            ApiError::new(ErrorCode::Io, "The set could not be saved there.")
+                .with_detail(e.to_string())
+        })?;
+        Ok(SavedSetFile {
+            path: path.display().to_string(),
+            fonts: u32::try_from(export.fonts.len()).unwrap_or(u32::MAX),
+        })
+    }
+
+    fn load_set_file(&self, req: LoadSetFileRequest) -> ApiResult<ImportSetResponse> {
+        let text = std::fs::read_to_string(&req.path).map_err(|e| {
+            ApiError::not_found(format!("The set file {}", req.path)).with_detail(e.to_string())
+        })?;
+        let export: SetExport = serde_json::from_str(&text).map_err(|e| {
+            ApiError::new(
+                ErrorCode::InvalidRequest,
+                "This file is not a Font Manager set file.",
+            )
+            .with_detail(e.to_string())
+        })?;
+        self.import_set(export)
     }
 
     fn pin_instance(&self, req: PinInstanceRequest) -> ApiResult<VirtualStyle> {
@@ -4092,6 +4300,10 @@ impl SettingsService for MockApi {
     }
 }
 
+/// Where the mock's app keeps the stdio shim: a fixed path (the mock touches
+/// no OS).
+pub const MOCK_MCP_SHIM: &str = "/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio";
+
 /// The mock's MCP status: `/mcp` on the mock endpoint, with short snippets
 /// in the shape the core writes (`fm_core::mcp`).
 fn mock_mcp(enabled: bool, endpoint: &EndpointInfo, granted: &BTreeSet<String>) -> McpStatus {
@@ -4111,6 +4323,12 @@ fn mock_mcp(enabled: bool, endpoint: &EndpointInfo, granted: &BTreeSet<String>) 
                     client: McpClient::Http,
                     text: format!(
                         "{{\"mcpServers\":{{\"font-manager\":{{\"type\":\"http\",\"url\":\"{url}\",\"headers\":{{\"Authorization\":\"Bearer {token}\"}}}}}}}}"
+                    ),
+                },
+                McpSnippet {
+                    client: McpClient::ClaudeDesktop,
+                    text: format!(
+                        "{{\"mcpServers\":{{\"font-manager\":{{\"command\":\"{MOCK_MCP_SHIM}\"}}}}}}"
                     ),
                 },
             ]

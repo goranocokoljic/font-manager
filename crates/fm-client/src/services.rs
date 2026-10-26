@@ -56,6 +56,8 @@ service!(LibraryService {
     keep_copy(req: KeepCopyRequest) -> Resolution;
     list_resolutions() -> Vec<Resolution>;
     undo_resolution(resolution: ResolutionId) -> Resolution;
+    list_sidecar_conflicts() -> Vec<SidecarConflict>;
+    resolve_sidecar_conflict(req: ResolveSidecarConflictRequest) -> ();
     list_glyphs(req: GlyphsRequest) -> GlyphPage;
     get_glyph(req: GlyphRequest) -> GlyphDetail;
     resolve_font(req: ResolveFontRequest) -> FontMatches;
@@ -85,6 +87,7 @@ service!(ActivationService {
     list_active() -> Vec<ActiveFace>;
     conflicts(target: Target) -> Vec<Conflict>;
     list_conflicts() -> Vec<Clash>;
+    fonts_needed(req: FontsNeededRequest) -> FontsNeededResponse;
 });
 
 service!(OrganizationService {
@@ -106,6 +109,8 @@ service!(OrganizationService {
     delete_set(set: SetId) -> ();
     export_set(set: SetId) -> SetExport;
     import_set(export: SetExport) -> ImportSetResponse;
+    save_set_file(req: SaveSetFileRequest) -> SavedSetFile;
+    load_set_file(req: LoadSetFileRequest) -> ImportSetResponse;
     pin_instance(req: PinInstanceRequest) -> VirtualStyle;
     list_virtual_styles(req: VirtualStylesRequest) -> Vec<VirtualStyle>;
     delete_virtual_style(style: VirtualStyleId) -> ();

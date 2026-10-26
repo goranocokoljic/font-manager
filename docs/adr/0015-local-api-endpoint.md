@@ -232,6 +232,26 @@ tool error (`isError: true`) whose text is the user message. The four
 mutating tools ask a `ToolGate` first; the app's gate refuses them until the
 grants in Settings (E27.6).
 
+**The stdio shim** (E27.7). `fm-mcp-stdio` is for MCP clients that only
+start a process (Claude Desktop). It reads `endpoint.json` as the CLI does,
+asks the app for the token and the switch, and forwards JSON-RPC unchanged
+between stdin/stdout and `/mcp` with rmcp's stdio and streamable HTTP client
+transports. When the app is not running or the switch is off, it answers one
+JSON-RPC error ("Open Font Manager and turn on AI assistants in Settings.")
+and exits non-zero. The bundle ships it as a Tauri `externalBin` beside the
+app's executable. Settings adds a Claude Desktop snippet with a command that
+must still work while the app is closed (`fm_platform::mcp_shim`):
+
+| OS | Command in the snippet |
+|----|------------------------|
+| Windows | `<install dir>\fm-mcp-stdio.exe` |
+| macOS | `Font Manager.app/Contents/MacOS/fm-mcp-stdio` |
+| Linux, AppImage | `$APPIMAGE --mcp-stdio`: the executable's folder is a mount that exists only while the app runs and is renamed at every start (as for the login entry, ADR 0011), so the AppImage starts the app's executable, which runs the shim and no window |
+| Linux, other | `fm-mcp-stdio` beside the executable |
+
+The snippet holds no token: the shim reads it at start, so a new port or
+token needs no new snippet.
+
 ## Consequences
 
 - The CLI's endpoint mode (when the app is open), the MCP shim and the

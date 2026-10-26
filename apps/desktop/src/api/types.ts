@@ -590,6 +590,13 @@ export type ConflictPolicy =
  */
 "replace";
 
+/**  Which value of a sidecar conflict to keep. */
+export type ConflictSide = 
+/**  This machine's value. */
+"mine" | 
+/**  The other machine's value. */
+"theirs";
+
 /**  The other side of a conflict. */
 export type ConflictWith = 
 /**  A system font. */
@@ -1404,6 +1411,34 @@ export type FontSource = {
 	hash: string,
 };
 
+/**
+ *  The fonts a document needs, to find in the library and activate (the
+ *  plugins' auto-activation, E29).
+ */
+export type FontsNeededRequest = {
+	/**  The fonts, in the document's order. */
+	fonts: NeededFont[],
+	/**  The document that needs them, recorded with the faces it activates. */
+	document?: string | null,
+	/**  Session-activate the matched faces; when false, only match. */
+	activate?: boolean,
+};
+
+/**  What [`ActivationService::fonts_needed`] found and did. */
+export type FontsNeededResponse = {
+	/**  The fonts the library has, in request order. */
+	matched: NeededFontMatch[],
+	/**  The fonts it does not have, in request order. */
+	unmatched: NeededFont[],
+	/**  How many fonts are unmatched. */
+	missing: number,
+	/**
+	 *  One outcome per matched face (a face two fonts matched comes once);
+	 *  empty when the request did not activate.
+	 */
+	outcomes: ActivationOutcome[],
+};
+
 /**  A front-end framework a snippet is written for (E20.5). */
 export type Framework = 
 /**  A `theme.extend.fontFamily` entry for `tailwind.config.js`. */
@@ -1846,12 +1881,25 @@ export type ListFamiliesRequest = {
 	collection?: CollectionId | null,
 };
 
+/**  Import a set file (E28.2). */
+export type LoadSetFileRequest = {
+	/**  Absolute path of the set file. */
+	path: string,
+};
+
 /**  The MCP clients the app writes a config snippet for. */
 export type McpClient = 
 /**  Claude Code: a `claude mcp add --transport http …` command. */
 "claudeCode" | 
 /**  Any client that reads a JSON `mcpServers` block with an HTTP server. */
-"http";
+"http" | 
+/**
+ *  Claude Desktop: a JSON `mcpServers` block that starts the stdio shim
+ *  (`fm-mcp-stdio`, E27.7) by an absolute path that lasts while the app
+ *  is closed. The shim reads the address and token itself, so the block
+ *  holds neither.
+ */
+"claudeDesktop";
 
 /**  The user's answer to an [`crate::Event::McpConfirmationRequested`]. */
 export type McpConfirmationAnswer = {
@@ -1988,6 +2036,52 @@ export type NamedInstance = {
 	/**  Its axis coordinates. */
 	coordinates: AxisValue[],
 };
+
+/**
+ *  A font a document uses, as a design app names it (E29.2). Every name is
+ *  optional; the names given are tried in the order of [`NeededFontRule`].
+ */
+export type NeededFont = {
+	/**  The PostScript name (name ID 6). */
+	postscriptName?: string | null,
+	/**  The full name (name ID 4). */
+	fullName?: string | null,
+	/**  The family name. */
+	family?: string | null,
+	/**  The style within the family; "Regular" when a family comes without one. */
+	style?: string | null,
+};
+
+/**  A needed font the library has. */
+export type NeededFontMatch = {
+	/**  The needed font, as asked. */
+	font: NeededFont,
+	/**
+	 *  The face that stands for it. Of several faces that match, an active
+	 *  face wins, then a healthy one, then the lowest face id; a broken face
+	 *  is never matched.
+	 */
+	face: FaceId,
+	/**  The name that found it. */
+	matchedBy: NeededFontRule,
+};
+
+/**
+ *  Which name found a needed font, in the order the names are tried. Names
+ *  compare ignoring case and surrounding space.
+ */
+export type NeededFontRule = 
+/**  The PostScript name (name ID 6). */
+"postscriptName" | 
+/**  The full name (name ID 4). */
+"fullName" | 
+/**
+ *  The typographic family and subfamily (name IDs 16 and 17; 17 is 2
+ *  when the font has no 17).
+ */
+"typographicFamily" | 
+/**  The legacy family and subfamily (name IDs 1 and 2). */
+"family";
 
 /**  An open-source license recognized from the license text. */
 export type OpenLicense = 
@@ -2306,6 +2400,14 @@ export type ResolveFontRequest = {
 	font: string,
 };
 
+/**  Resolves one sidecar conflict. */
+export type ResolveSidecarConflictRequest = {
+	/**  The conflict. */
+	id: SidecarConflictId,
+	/**  The value to keep. */
+	keep: ConflictSide,
+};
+
 /**  Makes an earlier version current again. */
 export type RestoreLayoutRequest = {
 	/**  The template file's id. */
@@ -2409,12 +2511,34 @@ export type SaveLayoutRequest = {
 	layout: Layout,
 };
 
+/**
+ *  Save a project set as a set file (E28.2): its [`SetExport`] JSON, at a
+ *  path the user picked.
+ */
+export type SaveSetFileRequest = {
+	/**  The set. */
+	set: SetId,
+	/**
+	 *  Absolute file path. A file name with no extension gets
+	 *  [`SET_FILE_EXTENSION`].
+	 */
+	path: string,
+};
+
 /**  A layout as it is saved in its template file. */
 export type SavedLayout = {
 	/**  The template file's id. */
 	id: string,
 	/**  The saved layout, clamped into the block ranges. */
 	layout: Layout,
+};
+
+/**  A set file that was written. */
+export type SavedSetFile = {
+	/**  The path written, its extension added when it had none. */
+	path: string,
+	/**  The number of fonts in it. */
+	fonts: number,
 };
 
 /**  Start a scan. Returns at once; progress arrives as `Event::ScanProgress`. */
@@ -2611,6 +2735,44 @@ export type Shortlist = {
 	/**  Best first. */
 	candidates: Candidate[],
 };
+
+/**
+ *  A field this machine and another machine that syncs the same folder set
+ *  to different values (E28.1). The index keeps this machine's value until
+ *  the user resolves it.
+ */
+export type SidecarConflict = {
+	/**  Pass to `resolve_sidecar_conflict`. */
+	id: SidecarConflictId,
+	/**  The face; for a family field, the family's first face. */
+	face: FaceId,
+	/**  The face's family. */
+	family: string,
+	/**  Which field. */
+	field: SidecarField,
+	/**  This machine's value, in words ("4 stars", "a favorite"). */
+	mine: string,
+	/**  The other machine's value, in words. */
+	theirs: string,
+	/**  The sidecar file the other value came from. */
+	sidecarPath: string,
+};
+
+/**  A sidecar value another machine set that differs from this one's. */
+export type SidecarConflictId = number;
+
+/**  The field of a sidecar conflict (E28.1). */
+export type SidecarField = 
+/**  The face is a favorite. */
+"favorite" | 
+/**  The face's rating. */
+"rating" | 
+/**  The face's notes. */
+"notes" | 
+/**  The family's notes. */
+"familyNotes" | 
+/**  The family's declared license. */
+"familyLicense";
 
 /**  A similar face and why. */
 export type SimilarFace = {

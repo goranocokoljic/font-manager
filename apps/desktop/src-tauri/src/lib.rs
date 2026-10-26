@@ -26,15 +26,17 @@ use fm_api::layout::{
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
     GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
-    Problem, Resolution, ScanRequest, SetSourcePausedRequest, Source,
+    Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
+    SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, FamilyNotesUpdate,
-    LicenseDeclaration, MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection,
-    QuickCollectionRequest, RenameCollectionRequest, SelectionTags, SelectionTagsRequest, Tag,
-    TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
-    VirtualStylesRequest,
+    ImportSetResponse, LicenseDeclaration, LoadSetFileRequest, MoveCollectionRequest,
+    PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
+    RenameCollectionRequest, SaveSetFileRequest, SavedSetFile, SelectionTags, SelectionTagsRequest,
+    Tag, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate,
+    VirtualStyle, VirtualStylesRequest,
 };
 use fm_api::preview::{
     CssValues, CssValuesRequest, PreviewImage, PreviewRequest, PreviewService, SampleText,
@@ -50,12 +52,12 @@ use fm_api::settings::{
 };
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
-    SettingsService, SourceId, VirtualStyleId,
+    SetId, SettingsService, SourceId, VirtualStyleId,
 };
 use fm_core::index::Opened;
 use fm_core::lifecycle::{self, LaunchWindow};
 use fm_core::{CoreApi, SettingsStore};
-use fm_platform::{AppPaths, FontActivator, MockActivator, Tray, TraySupport};
+use fm_platform::{AppPaths, FontActivator, IpcName, MockActivator, Tray, TraySupport};
 use tauri::http::{Response, StatusCode, header};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, Webview, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
@@ -98,12 +100,15 @@ pub struct AppState {
     quit_ran: AtomicBool,
     /// The local API endpoint (ADR 0015); shared with the thread that starts it.
     endpoint: Arc<Mutex<EndpointSlot>>,
+    /// Where the IPC endpoint listens (ADR 0016); without a name it does not start.
+    ipc: Option<IpcName>,
 }
 
 /// The local API endpoint while it runs, and whether the quit path stopped it.
 #[derive(Debug, Default)]
 struct EndpointSlot {
     running: Option<fm_endpoint::Endpoint>,
+    ipc: Option<fm_endpoint::ipc::IpcEndpoint>,
     stopped: bool,
 }
 
@@ -118,6 +123,7 @@ impl AppState {
             tray: None,
             quit_ran: AtomicBool::new(false),
             endpoint: Arc::default(),
+            ipc: None,
         }
     }
 
@@ -131,7 +137,16 @@ impl AppState {
             tray: None,
             quit_ran: AtomicBool::new(false),
             endpoint: Arc::default(),
+            ipc: None,
         }
+    }
+
+    /// Also serves the API over the user's named pipe or Unix socket at
+    /// `name` (E29.1, ADR 0016) while the local API endpoint runs.
+    #[must_use]
+    pub fn with_ipc(mut self, name: IpcName) -> Self {
+        self.ipc = Some(name);
+        self
     }
 
     /// Shows a tray item from `tray` when the app starts ([`tray::install`]).
@@ -175,44 +190,55 @@ impl AppState {
     /// MCP server is mounted at `/mcp` and served while the user has it on
     /// (E27.1); off, it builds nothing. Only
     /// the real library is served: without it there is no data folder.
+    /// With [`AppState::with_ipc`], the IPC endpoint starts beside it.
     /// The handle is for tests, which wait for the start.
     pub fn start_endpoint(&self) -> Option<std::thread::JoinHandle<()>> {
         let core = Arc::clone(self.core.as_ref()?);
         let slot = Arc::clone(&self.endpoint);
+        let ipc_name = self.ipc.clone();
         lock_slot(&slot).stopped = false;
         let started = std::thread::Builder::new()
             .name("fm-endpoint-start".into())
             .spawn(move || {
                 let api = Arc::clone(&core) as Arc<dyn Api>;
+                let ipc = ipc_name.and_then(|name| {
+                    fm_endpoint::ipc::IpcEndpoint::start(Arc::clone(&api), &name)
+                        .inspect_err(|e| tracing::warn!(error = %e, %name, "the IPC endpoint could not start"))
+                        .ok()
+                });
                 let mcp = Arc::new(McpMount(fm_mcp::HttpServer::new(Arc::clone(&api))));
-                let endpoint = match fm_endpoint::Endpoint::start_with_mcp(api, mcp) {
-                    Ok(endpoint) => endpoint,
-                    Err(e) => {
-                        tracing::warn!(error = %e, "the local API could not start");
-                        return;
-                    }
-                };
+                let endpoint = fm_endpoint::Endpoint::start_with_mcp(api, mcp)
+                    .inspect_err(|e| tracing::warn!(error = %e, "the local API could not start"))
+                    .ok();
                 let mut slot = lock_slot(&slot);
-                // The app began to quit meanwhile: no discovery file.
-                if slot.stopped || slot.running.is_some() {
+                // The app began to quit meanwhile: no discovery file, and
+                // both endpoints drop here.
+                if slot.stopped || slot.running.is_some() || slot.ipc.is_some() {
                     return;
                 }
-                if let Err(e) = core.publish_endpoint(endpoint.addr()) {
-                    tracing::warn!(error = %e, "endpoint.json not written");
+                if let Some(endpoint) = endpoint {
+                    if let Err(e) = core.publish_endpoint(endpoint.addr()) {
+                        tracing::warn!(error = %e, "endpoint.json not written");
+                    }
+                    slot.running = Some(endpoint);
                 }
-                slot.running = Some(endpoint);
+                slot.ipc = ipc;
             });
         started
             .inspect_err(|e| tracing::warn!(error = %e, "the local API could not start"))
             .ok()
     }
 
-    /// Stops the local API endpoint and removes `endpoint.json`.
+    /// Stops the local API endpoint and removes `endpoint.json`; stops the
+    /// IPC endpoint, which removes its socket.
     pub fn stop_endpoint(&self) {
         let mut slot = lock_slot(&self.endpoint);
         slot.stopped = true;
         if let Some(endpoint) = slot.running.take() {
             endpoint.stop();
+        }
+        if let Some(ipc) = slot.ipc.take() {
+            ipc.stop();
         }
         if let Some(core) = &self.core
             && let Err(e) = core.unpublish_endpoint()
@@ -763,6 +789,21 @@ async fn undo_resolution(
     call(&state, move |api| api.undo_resolution(resolution)).await
 }
 
+/// Sidecar values another machine set differently (Problems view, E28.1).
+#[tauri::command]
+async fn list_sidecar_conflicts(state: State<'_, AppState>) -> ApiResult<Vec<SidecarConflict>> {
+    call(&state, |api| api.list_sidecar_conflicts()).await
+}
+
+/// Keeps one value of a sidecar conflict.
+#[tauri::command]
+async fn resolve_sidecar_conflict(
+    state: State<'_, AppState>,
+    req: ResolveSidecarConflictRequest,
+) -> ApiResult<()> {
+    call(&state, move |api| api.resolve_sidecar_conflict(req)).await
+}
+
 /// Searches the library: free text and filters, grouped by family, with filter counts.
 #[tauri::command]
 async fn search(state: State<'_, AppState>, req: SearchRequest) -> ApiResult<SearchResponse> {
@@ -1016,6 +1057,75 @@ async fn save_license_inventory<R: Runtime>(
         .map(Some)
 }
 
+/// Asks where to save a project set (E28.2) with the native save dialog,
+/// suggesting `file_name`, then writes its set file there. The path comes
+/// from the dialog, never from the webview. `None` when the user cancels.
+#[tauri::command]
+async fn save_set_file<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+    set: SetId,
+    file_name: String,
+) -> ApiResult<Option<SavedSetFile>> {
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Export set")
+        .set_file_name(file_name)
+        .add_filter("Font Manager set", &["json"]);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file())
+        .await
+        .map_err(join_error)?;
+    let Some(path) = picked.map(local_path).transpose()? else {
+        return Ok(None);
+    };
+    call(&state, move |api| {
+        api.save_set_file(SaveSetFileRequest { set, path })
+    })
+    .await
+    .map(Some)
+}
+
+/// Asks for a set file (E28.2) with the native open dialog and imports it,
+/// matching its fonts by file hash. `None` when the user cancels.
+#[tauri::command]
+async fn load_set_file<R: Runtime>(
+    app: AppHandle<R>,
+    state: State<'_, AppState>,
+) -> ApiResult<Option<ImportSetResponse>> {
+    let dialog = app
+        .dialog()
+        .file()
+        .set_title("Import set")
+        .add_filter("Font Manager set", &["json"]);
+    let picked = tauri::async_runtime::spawn_blocking(move || dialog.blocking_pick_file())
+        .await
+        .map_err(join_error)?;
+    let Some(path) = picked.map(local_path).transpose()? else {
+        return Ok(None);
+    };
+    call(&state, move |api| {
+        api.load_set_file(LoadSetFileRequest { path })
+    })
+    .await
+    .map(Some)
+}
+
+/// A dialog's blocking task that did not finish.
+fn join_error(e: tauri::Error) -> ApiError {
+    ApiError::new(ErrorCode::Internal, "The app could not finish the request.")
+        .with_detail(e.to_string())
+}
+
+/// The local path of a file the dialog picked.
+fn local_path(picked: tauri_plugin_dialog::FilePath) -> ApiResult<String> {
+    let path = picked.into_path().map_err(|e| {
+        ApiError::new(ErrorCode::InvalidRequest, "Choose a file on this computer.")
+            .with_detail(e.to_string())
+    })?;
+    Ok(path.display().to_string())
+}
+
 /// Writes the license inventory of `req` to `path`, the file the user
 /// picked; resolves to the number of families written.
 pub fn write_license_inventory(
@@ -1261,6 +1371,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             clear_quick_collection,
             save_license_inventory,
             list_sets,
+            save_set_file,
+            load_set_file,
             pin_instance,
             list_virtual_styles,
             delete_virtual_style,
@@ -1301,6 +1413,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             keep_copy,
             list_resolutions,
             undo_resolution,
+            list_sidecar_conflicts,
+            resolve_sidecar_conflict,
             list_sources,
             add_source,
             remove_source,
@@ -1340,6 +1454,13 @@ pub fn serve(
     match index {
         Ok(opened) => {
             let core = CoreApi::open(paths, opened.index, activator);
+            // The bundle installs the stdio shim beside this executable
+            // (Tauri `externalBin`, E27.7; inside an AppImage the AppImage
+            // runs it); Settings offers it to Claude Desktop.
+            let core = match fm_platform::mcp_shim::current() {
+                Some(shim) => core.with_mcp_shim(shim),
+                None => core,
+            };
             // PDF specimens print through an offscreen webview on this
             // app's UI thread (ADR 0013); the CLI's direct link has none.
             let core = match fm_platform::pdf::system(paths) {
@@ -1407,6 +1528,11 @@ pub fn run() {
             .plugin(tauri_plugin_updater::Builder::new().build()),
     );
     let state = state.with_tray(fm_platform::tray::system());
+    // The pipe or socket other programs of this user reach the app on (ADR 0016).
+    let state = match &startup {
+        Some(startup) => state.with_ipc(startup.paths.ipc_name()),
+        None => state,
+    };
     let app = match setup_state(builder, state).build(tauri::generate_context!()) {
         Ok(app) => app,
         Err(e) => {

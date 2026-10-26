@@ -73,7 +73,7 @@ pub(crate) fn is_private(path: &Path) -> io::Result<bool> {
 /// The DACL [`write`] sets, as Windows writes it back. Windows writes some
 /// SIDs as aliases (the built-in Administrator account, RID 500, is `LA`),
 /// so the expected text goes through the same conversion as the file's.
-fn expected_dacl_text() -> io::Result<String> {
+pub(crate) fn expected_dacl_text() -> io::Result<String> {
     let sd = parse_sddl(&only_user_sddl()?)?;
     let text = dacl_text(sd);
     // SAFETY: `sd` was allocated by the conversion in `parse_sddl`; freed once.
@@ -82,7 +82,7 @@ fn expected_dacl_text() -> io::Result<String> {
 }
 
 /// The DACL of `sd` as SDDL text (`D:<flags>(<ace>)...`).
-fn dacl_text(sd: PSECURITY_DESCRIPTOR) -> io::Result<String> {
+pub(crate) fn dacl_text(sd: PSECURITY_DESCRIPTOR) -> io::Result<String> {
     let mut text = PWSTR::null();
     // SAFETY: `sd` is a valid descriptor (the caller's); `text` receives a
     // LocalAlloc'd string, freed below.
@@ -105,14 +105,14 @@ fn dacl_text(sd: PSECURITY_DESCRIPTOR) -> io::Result<String> {
 }
 
 /// The ACE list of a DACL in SDDL text: everything from the first `(`.
-fn aces_of(sddl: &str) -> &str {
+pub(crate) fn aces_of(sddl: &str) -> &str {
     sddl.find('(').map_or("", |at| &sddl[at..])
 }
 
 /// Whether the DACL in `sddl` (`D:<flags>(<ace>)...`) is protected (`P`)
 /// and holds exactly the entries `aces`. Windows adds the `AI`
 /// (auto-inherited) flag on its own, so the other flags do not matter.
-fn only_user(sddl: &str, aces: &str) -> bool {
+pub(crate) fn only_user(sddl: &str, aces: &str) -> bool {
     let Some(dacl) = sddl.strip_prefix("D:") else {
         return false;
     };
@@ -122,12 +122,12 @@ fn only_user(sddl: &str, aces: &str) -> bool {
 }
 
 /// `D:P(A;;FA;;;<user SID>)`: a protected DACL, full access for the user.
-fn only_user_sddl() -> io::Result<String> {
+pub(crate) fn only_user_sddl() -> io::Result<String> {
     Ok(format!("D:P(A;;FA;;;{})", user_sid()?))
 }
 
 /// A LocalAlloc'd security descriptor from SDDL text; the caller frees it.
-fn parse_sddl(sddl: &str) -> io::Result<PSECURITY_DESCRIPTOR> {
+pub(crate) fn parse_sddl(sddl: &str) -> io::Result<PSECURITY_DESCRIPTOR> {
     let text = wide(OsStr::new(sddl));
     let mut sd = PSECURITY_DESCRIPTOR::default();
     // SAFETY: `text` is NUL-terminated and outlives the call; `sd` receives a

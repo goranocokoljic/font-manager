@@ -121,6 +121,8 @@ export function installerSteps(os, ctx, { updater = false } = {}) {
   return [
     { env: {}, cmd: ['pnpm', 'install', '--frozen-lockfile'] },
     { env, cmd: ['cargo', 'build', '--release', '--locked', '-p', 'fm-cli'] },
+    // The stdio shim the bundle ships as a sidecar (externalBin, E27.7).
+    { env, cmd: ['node', 'scripts/release/sidecar.mjs', '--release', '--locked'] },
     {
       env: { ...env, ...bundleEnv },
       cmd: [

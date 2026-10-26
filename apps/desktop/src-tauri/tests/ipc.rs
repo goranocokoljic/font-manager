@@ -584,6 +584,54 @@ fn keep_this_one_round_trips_dry_run_keep_history_and_undo() {
 }
 
 #[test]
+fn sidecar_conflicts_are_listed_and_resolved_over_ipc() {
+    let mock = MockApi::new();
+    mock.add_sidecar_conflict(
+        FaceId(1),
+        fm_api::library::SidecarField::Rating,
+        "4 stars",
+        "2 stars",
+    )
+    .unwrap();
+    let (_app, webview) = app_on(setup(mock_builder(), Arc::new(mock))).unwrap();
+    let call = |cmd: &str, args: serde_json::Value| -> serde_json::Value {
+        send(&webview, cmd, args)
+            .unwrap()
+            .unwrap()
+            .deserialize()
+            .unwrap()
+    };
+
+    let listed = call("list_sidecar_conflicts", serde_json::json!({}));
+    assert_eq!(listed[0]["field"], "rating");
+    assert_eq!(listed[0]["mine"], "4 stars");
+    assert_eq!(listed[0]["theirs"], "2 stars");
+    assert!(
+        listed[0]["sidecarPath"]
+            .as_str()
+            .unwrap()
+            .contains(".fontlibrary")
+    );
+    let id = listed[0]["id"].clone();
+
+    call(
+        "resolve_sidecar_conflict",
+        serde_json::json!({ "req": { "id": id, "keep": "theirs" } }),
+    );
+    assert_eq!(
+        call("list_sidecar_conflicts", serde_json::json!({})),
+        serde_json::json!([])
+    );
+    let again = send(
+        &webview,
+        "resolve_sidecar_conflict",
+        serde_json::json!({ "req": { "id": id, "keep": "mine" } }),
+    )
+    .unwrap();
+    assert!(again.is_err());
+}
+
+#[test]
 fn update_settings_returns_every_setting_in_camel_case() {
     let json: serde_json::Value = invoke_with(
         "update_settings",
@@ -945,7 +993,13 @@ fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
     .unwrap();
     assert_eq!(
         labels(),
-        ["Erste Schritte", "Quellen", "Aktivierung", "Tastenkürzel"]
+        [
+            "Erste Schritte",
+            "Quellen",
+            "Aktivierung",
+            "Tastenkürzel",
+            "Geteilte Bibliotheken"
+        ]
     );
     assert_eq!(
         chrome(),

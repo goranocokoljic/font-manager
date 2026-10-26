@@ -16,12 +16,21 @@
 //!   the result. A sidecar is always merged before it is written, so a
 //!   change another machine made is never overwritten unread.
 //! - **Nothing is lost.** A value that loses a conflict is kept in
-//!   `sidecar_conflict` and listed by [`Index::sidecar_problems`] until the
-//!   user sets the field again. A sidecar that does not parse, or that a
+//!   `sidecar_conflict` and listed by [`Index::sidecar_problems`] and
+//!   [`Index::sidecar_conflicts`] until the user resolves it
+//!   ([`Index::resolve_sidecar_conflict`]), sets the field again, or a merge
+//!   brings this machine to the same value. A sidecar that does not parse, or that a
 //!   newer Font Manager wrote, is reported and never rewritten. Entries for
 //!   faces this machine has not indexed are written back unchanged, and a
 //!   deleted sidecar file is written again from the index, not taken as the
 //!   other machine clearing everything.
+//! - **Conflicted copies** (E28.1). A sync client's copy of a family's
+//!   sidecar ([`sidecar::original_name`]) is merged as one more version of
+//!   it, against the base of the family's sidecar, and is never written: the
+//!   result goes to the family's own sidecar.
+//! - **Resolving** (E28.1) keeps one value of a conflict and takes in the
+//!   version ids of the other (`sidecar_absorb`), so the next write puts them
+//!   in the sidecar's history and the other machine takes the result.
 //!
 //! Only the `.fontlibrary` folder inside an existing source folder is ever
 //! created; font files are never touched (rule 2). System sources get no
@@ -33,8 +42,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
-use fm_api::library::{Problem, ProblemKind};
-use fm_api::{FaceId, SourceId};
+use fm_api::library::{ConflictSide, Problem, ProblemKind, SidecarConflict, SidecarField};
+use fm_api::{FaceId, SidecarConflictId, SourceId};
 use rusqlite::{OptionalExtension, Transaction, params};
 
 use super::family_license::{self, DeclaredLicense};
@@ -54,6 +63,12 @@ const FILE_FIELD: &str = "file";
 const COLLECTION_FIELD: &str = "collection";
 /// The `sidecar_conflict.field` of a virtual style that could not be joined.
 const PIN_FIELD: &str = "pin";
+/// The `sidecar_absorb.scope` of a face entry's version ids.
+const FACE_SCOPE: &str = "face";
+/// The `sidecar_absorb.scope` of a sidecar file's version ids.
+const FILE_SCOPE: &str = "file";
+/// The fields a user resolves by keeping one value ([`Index::sidecar_conflicts`]).
+const VALUE_FIELDS: &str = "('favorite', 'rating', 'notes', 'familyNotes', 'familyLicense')";
 /// Deeper than any collection tree a person makes; stops a damaged parent
 /// loop.
 const MAX_DEPTH: usize = 64;
@@ -240,6 +255,137 @@ impl Index {
         Ok(out)
     }
 
+    /// The value conflicts that wait for the user (E28.1), oldest first:
+    /// fields this machine and another set to different values. A
+    /// collection or virtual style that cannot be joined here, and a sidecar
+    /// that cannot be read, are Problems entries only.
+    pub fn sidecar_conflicts(&self) -> FmResult<Vec<SidecarConflict>> {
+        type Row = (u32, u32, String, String, String, String, String);
+        let mut stmt = self
+            .conn
+            .prepare(&format!(
+                "SELECT c.id, c.face_id, c.field, c.disk, c.file, s.path, face.family
+                 FROM sidecar_conflict AS c
+                 JOIN source AS s ON s.id = c.source_id
+                 JOIN face ON face.id = c.face_id
+                 WHERE c.field IN {VALUE_FIELDS}
+                 ORDER BY c.id"
+            ))
+            .map_err(|e| db_error(&e))?;
+        let rows: Vec<Row> = stmt
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                    row.get(5)?,
+                    row.get(6)?,
+                ))
+            })
+            .map_err(|e| db_error(&e))?
+            .collect::<Result<_, _>>()
+            .map_err(|e| db_error(&e))?;
+        let mut out = Vec::with_capacity(rows.len());
+        for (id, face, field_name, disk, file, root, family) in rows {
+            let Some(field) = Field::from_name(&field_name) else {
+                continue;
+            };
+            let root = PathBuf::from(root);
+            let mine = current_value(&self.conn, face, &family, field, &root)?;
+            out.push(SidecarConflict {
+                id: SidecarConflictId(id),
+                face: FaceId(face),
+                family,
+                field: api_field(field),
+                mine: describe_value(field, Some(&mine)),
+                theirs: describe_value(field, Some(&disk)),
+                sidecar_path: root.join(SIDECAR_DIR).join(&file).display().to_string(),
+            });
+        }
+        Ok(out)
+    }
+
+    /// Keeps one value of a conflict (E28.1): this machine's, or the other
+    /// machine's, which is written to the index. Either way the sidecar is
+    /// written again with a new version that has taken in the other one's,
+    /// so the other machine takes the value without a new conflict. Other
+    /// conflicts of the field stay. `NotFound` for a conflict not listed by
+    /// [`Index::sidecar_conflicts`]. Returns the face the conflict was on.
+    pub fn resolve_sidecar_conflict(
+        &mut self,
+        id: SidecarConflictId,
+        keep: ConflictSide,
+    ) -> FmResult<FaceId> {
+        type Row = (
+            u32,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            String,
+            String,
+        );
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        let row: Option<Row> = tx
+            .query_row(
+                &format!(
+                    "SELECT c.face_id, c.field, c.disk, c.disk_rev, c.file_rev, s.path, face.family
+                     FROM sidecar_conflict AS c
+                     JOIN source AS s ON s.id = c.source_id
+                     JOIN face ON face.id = c.face_id
+                     WHERE c.id = ?1 AND c.field IN {VALUE_FIELDS}"
+                ),
+                [id.0],
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                        row.get(6)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|e| db_error(&e))?;
+        let not_found = || FmError::not_found(format!("Sidecar conflict {id}"));
+        let (face, field, disk, disk_rev, file_rev, root, family) = row.ok_or_else(not_found)?;
+        let field = Field::from_name(&field).ok_or_else(not_found)?;
+        if keep == ConflictSide::Theirs {
+            set_value(&tx, face, &family, field, &disk, Path::new(&root))?;
+        }
+        // An empty id asks for a new version even when the other machine's
+        // had no history to take in.
+        let scope = match field {
+            Field::FamilyNotes | Field::FamilyLicense => field.as_str(),
+            Field::Favorite | Field::Rating | Field::Notes => FACE_SCOPE,
+        };
+        let revs = [(scope, disk_rev.unwrap_or_default())]
+            .into_iter()
+            .chain(file_rev.map(|rev| (FILE_SCOPE, rev)));
+        for (scope, rev) in revs {
+            tx.execute(
+                "INSERT OR IGNORE INTO sidecar_absorb (face_id, scope, rev) VALUES (?1, ?2, ?3)",
+                params![face, scope, rev],
+            )
+            .map_err(|e| db_error(&e))?;
+        }
+        tx.execute("DELETE FROM sidecar_conflict WHERE id = ?1", [id.0])
+            .map_err(|e| db_error(&e))?;
+        tx.execute(
+            "INSERT OR IGNORE INTO sidecar_dirty (face_id) VALUES (?1)",
+            [face],
+        )
+        .map_err(|e| db_error(&e))?;
+        tx.commit().map_err(|e| db_error(&e))?;
+        self.mirror_sidecars();
+        Ok(FaceId(face))
+    }
+
     /// Syncs the sidecars of one source: those changed on disk (unless
     /// `dirty_only`) and those of families with dirty faces.
     fn sync_source(&mut self, source: SourceId, dirty_only: bool) -> FmResult<SidecarSync> {
@@ -266,6 +412,14 @@ impl Index {
             .into_iter()
             .chain(dirty_files.iter().cloned())
             .collect();
+        // A family's own sidecar merges before its conflicted copies, so a
+        // copy meets the base of the latest version: an older copy brings
+        // nothing back, and a newer one is a change on top of it.
+        let mut names: Vec<String> = names.into_iter().collect();
+        names.sort_by_cached_key(|n| match sidecar::original_name(n) {
+            Some(original) => (original, true, n.clone()),
+            None => (n.clone(), false, String::new()),
+        });
         let mut out = SidecarSync::default();
         for name in names {
             let is_dirty = dirty_files.contains(&name);
@@ -281,7 +435,7 @@ impl Index {
         self.clear_dirty(&unmirrored)?;
         // A merge can change faces of another family (an entry in a sync
         // client's conflicted copy): write their sidecars too.
-        if !dirty_only && out.faces_changed > 0 {
+        if !dirty_only && (out.faces_changed > 0 || out.families_changed > 0) {
             out.add(self.sync_source(source, true)?);
         }
         Ok(out)
@@ -392,7 +546,14 @@ impl Index {
     ) -> FmResult<SidecarSync> {
         let mut out = SidecarSync::default();
         let path = src.dir().join(name);
-        let (base, stamp) = self.base(src.id, name)?;
+        // A sync client's conflicted copy is a version of the family's
+        // sidecar: it merges against that file's base and is never written.
+        let original = sidecar::original_name(name);
+        let family_file = original.as_deref().unwrap_or(name);
+        let (base, stamp) = match &original {
+            Some(original) => (self.base(src.id, original)?.0, self.base(src.id, name)?.1),
+            None => self.base(src.id, name)?,
+        };
         let on_disk = match read_file(&path) {
             Ok(on_disk) => on_disk,
             Err(e) => {
@@ -436,7 +597,8 @@ impl Index {
         if disk.is_some() {
             out.read += 1;
         }
-        let family: Vec<&SourceFace> = faces.of_file(name).collect();
+        let family: Vec<&SourceFace> = faces.of_file(family_file).collect();
+        let file_rev = disk.as_ref().and_then(|d| d.history.first().cloned());
         let base_entries = base.entries();
         // A missing file is not another machine clearing everything: the
         // index writes it again.
@@ -450,6 +612,11 @@ impl Index {
         // Merge every indexed face the file or the base mentions.
         let keys: BTreeSet<&FaceKey> = disk_entries.keys().chain(base_entries.keys()).collect();
         let empty = Meta::default();
+        // Faces this machine changed since it last wrote or read the file
+        // (or holds metadata for that the file never had from it):
+        // their entry gets a new version even when it matches the one on
+        // disk, so a machine that changed it meanwhile sees two changes.
+        let mut edited: BTreeSet<FaceKey> = BTreeSet::new();
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         let mut collections = Collections::load(&tx)?;
         // Collections a face is in on another machine that cannot be joined
@@ -470,11 +637,21 @@ impl Index {
             local.normalize();
             let base_entry = base_entries.get(key).copied();
             let disk_entry = disk_entries.get(key).copied();
-            let merged = sidecar::merge(
-                &sidecar::ancestor(base_entry, disk_entry, file_descends),
-                &local,
-                disk_entry.map_or(&empty, |e| &e.meta),
-            );
+            // Without a base entry, metadata held here was never written to
+            // or read from the file: it is this machine's change too.
+            if base_entry.map_or(!local.is_empty(), |b| b.meta != local) {
+                edited.insert((*key).clone());
+            }
+            let disk_meta = disk_entry.map_or(&empty, |e| &e.meta);
+            let merged = if sidecar::independent(base_entry, disk_entry) {
+                sidecar::merge_independent(&local, disk_meta)
+            } else {
+                sidecar::merge(
+                    &sidecar::ancestor(base_entry, disk_entry, file_descends),
+                    &local,
+                    disk_meta,
+                )
+            };
             // A carried path the other machines no longer have is let go.
             for path in carried
                 .iter()
@@ -503,6 +680,10 @@ impl Index {
                     out.faces_changed += 1;
                 }
             }
+            let revs = Revs {
+                entry: disk_entry.and_then(|e| e.history.first().map(String::as_str)),
+                file: file_rev.as_deref(),
+            };
             for c in &merged.conflicts {
                 out.conflicts += insert_conflict(
                     &tx,
@@ -512,8 +693,13 @@ impl Index {
                     c.field.as_str(),
                     Some(&c.local),
                     &c.disk,
+                    revs,
                 )?;
             }
+            // A value set aside that this machine now holds too is settled.
+            settle(&tx, face.id, Field::Favorite, &merged.meta.favorite)?;
+            settle(&tx, face.id, Field::Rating, &merged.meta.rating)?;
+            settle(&tx, face.id, Field::Notes, &merged.meta.notes)?;
         }
 
         // The family's own notes merge by the same rule, when the family is
@@ -525,12 +711,17 @@ impl Index {
         if let Some(first) = family.first() {
             let key = family_key(&first.family);
             let local = family_notes::family_notes_by_key(&tx, &key)?;
-            let merged = sidecar::merge_family(
-                sidecar::family_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
-                    .as_deref(),
-                local.as_deref(),
-                disk_family.and_then(|f| f.notes.as_deref()),
-            );
+            let disk_notes = disk_family.and_then(|f| f.notes.as_deref());
+            let merged = if sidecar::family_independent(base.family_meta.as_ref(), disk_family) {
+                sidecar::merge_family_independent(local.as_deref(), disk_notes)
+            } else {
+                sidecar::merge_family(
+                    sidecar::family_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
+                        .as_deref(),
+                    local.as_deref(),
+                    disk_notes,
+                )
+            };
             let mut changed = false;
             if merged.notes != local {
                 family_notes::set_family_notes(&tx, &key, merged.notes.as_deref())?;
@@ -541,14 +732,24 @@ impl Index {
             let local_license = family_license::license_by_key(&tx, &key)?
                 .map(|l| l.to_sidecar(&src.root))
                 .filter(|l| !l.is_empty());
-            let merged_license = sidecar::merge_license(
-                sidecar::license_ancestor(base.family_meta.as_ref(), disk_family, file_descends)
-                    .as_ref(),
-                local_license.as_ref(),
-                disk_family
-                    .and_then(|f| f.license.as_ref())
-                    .map(|l| &l.license),
-            );
+            let disk_license = disk_family
+                .and_then(|f| f.license.as_ref())
+                .map(|l| &l.license);
+            let merged_license =
+                if sidecar::license_independent(base.family_meta.as_ref(), disk_family) {
+                    sidecar::merge_license_independent(local_license.as_ref(), disk_license)
+                } else {
+                    sidecar::merge_license(
+                        sidecar::license_ancestor(
+                            base.family_meta.as_ref(),
+                            disk_family,
+                            file_descends,
+                        )
+                        .as_ref(),
+                        local_license.as_ref(),
+                        disk_license,
+                    )
+                };
             if merged_license.license != local_license {
                 let license = merged_license
                     .license
@@ -560,7 +761,20 @@ impl Index {
             if changed {
                 out.families_changed += 1;
             }
-            for c in merged.conflict.iter().chain(&merged_license.conflict) {
+            let notes_rev = disk_family.and_then(|f| f.history.first().map(String::as_str));
+            let license_rev = disk_family
+                .and_then(|f| f.license.as_ref())
+                .and_then(|l| l.history.first().map(String::as_str));
+            let found = merged
+                .conflict
+                .iter()
+                .map(|c| (c, notes_rev))
+                .chain(merged_license.conflict.iter().map(|c| (c, license_rev)));
+            for (c, entry) in found {
+                let revs = Revs {
+                    entry,
+                    file: file_rev.as_deref(),
+                };
                 out.conflicts += insert_conflict(
                     &tx,
                     src.id,
@@ -569,13 +783,18 @@ impl Index {
                     c.field.as_str(),
                     Some(&c.local),
                     &c.disk,
+                    revs,
                 )?;
             }
+            settle(&tx, first.id, Field::FamilyNotes, &merged.notes)?;
+            settle(&tx, first.id, Field::FamilyLicense, &merged_license.license)?;
         }
 
         // The sidecar of a family here is written with what the index holds
         // now, plus the entries of faces this machine has not indexed.
-        let new_base = if let Some(first) = family.first() {
+        let new_base = if let Some(first) = family.first().filter(|_| original.is_none()) {
+            let ids: Vec<u32> = family.iter().map(|f| f.id).collect();
+            let absorbed = absorbed(&tx, &ids)?;
             let mut next = Sidecar::new(first.family.clone());
             let key = family_key(&first.family);
             let notes = family_notes::family_notes_by_key(&tx, &key)?;
@@ -583,9 +802,13 @@ impl Index {
                 .map(|l| l.to_sidecar(&src.root))
                 .filter(|l| !l.is_empty())
                 .map(|license| sidecar::LicenseEntry {
-                    history: sidecar::next_license_history(
+                    history: absorbed.history(
                         &license,
-                        disk_family.and_then(|f| f.license.as_ref()),
+                        sidecar::next_license_history(
+                            &license,
+                            disk_family.and_then(|f| f.license.as_ref()),
+                        ),
+                        &absorbed.revs(None, Field::FamilyLicense.as_str()),
                     ),
                     license,
                 });
@@ -593,21 +816,53 @@ impl Index {
                 (notes.is_some() || license.is_some()).then(|| sidecar::FamilyEntry {
                     history: notes
                         .as_deref()
-                        .map(|n| sidecar::next_family_history(Some(n), disk_family))
+                        .map(|n| {
+                            absorbed.history(
+                                &Some(n),
+                                sidecar::next_family_history(Some(n), disk_family),
+                                &absorbed.revs(None, Field::FamilyNotes.as_str()),
+                            )
+                        })
                         .unwrap_or_default(),
                     notes,
                     license,
                 });
+            // Entries this machine cleared: the file drops them, the base keeps
+            // them empty with their history, so a change another machine made
+            // to the entry meanwhile is seen as independent of the clearing
+            // ([`sidecar::independent`]), not as new.
+            let mut cleared = Vec::new();
             for face in &family {
                 let mut meta = local_meta(&tx, face.id, &collections)?;
                 meta.collections.extend(carried_paths(&tx, face.id)?);
                 meta.pins.extend(carried_pins(&tx, face.id)?);
                 meta.normalize();
-                if !meta.is_empty() {
+                if meta.is_empty() {
+                    let prior = disk_entries
+                        .get(&face.key)
+                        .or_else(|| base_entries.get(&face.key))
+                        .copied();
+                    if let Some(prior) = prior {
+                        cleared.push(FaceEntry {
+                            history: sidecar::next_history(&meta, Some(prior)),
+                            meta,
+                            ..prior.clone()
+                        });
+                    }
+                } else {
                     // The entry replaces the one on disk, which the merge
                     // has taken in: it descends from it.
+                    let prior = disk_entries.get(&face.key).copied();
+                    let mut revs = absorbed.revs(Some(face.id), FACE_SCOPE);
+                    if edited.contains(&face.key) {
+                        revs.push(String::new());
+                    }
+                    revs.extend(lineage(
+                        base_entries.get(&face.key).map(|b| b.history.as_slice()),
+                        prior.map(|p| p.history.as_slice()),
+                    ));
                     let history =
-                        sidecar::next_history(&meta, disk_entries.get(&face.key).copied());
+                        absorbed.history(&meta, sidecar::next_history(&meta, prior), &revs);
                     next.faces.push(FaceEntry {
                         file: face.key.file.clone(),
                         index: face.key.index,
@@ -626,7 +881,16 @@ impl Index {
                 );
             }
             next.normalize();
-            next.history = sidecar::next_file_history(&next, Some(disk.as_ref().unwrap_or(&base)));
+            let mut revs = absorbed.revs(None, FILE_SCOPE);
+            revs.extend(lineage(
+                Some(base.history.as_slice()),
+                disk.as_ref().map(|d| d.history.as_slice()),
+            ));
+            next.history = absorbed.history(
+                &(&next.faces, &next.family_meta),
+                sidecar::next_file_history(&next, Some(disk.as_ref().unwrap_or(&base))),
+                &revs,
+            );
             tx.commit().map_err(|e| db_error(&e))?;
             let mut stamp = disk_stamp;
             let nothing = next.faces.is_empty() && next.family_meta.is_none();
@@ -643,10 +907,23 @@ impl Index {
                 }
                 out.written += 1;
             }
-            let ids: Vec<u32> = family.iter().map(|f| f.id).collect();
             self.clear_dirty(&ids)?;
-            (next, stamp)
+            clear_absorbed(&self.conn, &ids)?;
+            let mut known = next;
+            known.faces.extend(cleared);
+            known.faces.sort_by_key(FaceEntry::key);
+            (known, stamp)
         } else {
+            // What a conflicted copy changed goes to the family's sidecar.
+            if original.is_some() && (out.faces_changed > 0 || out.families_changed > 0) {
+                for face in &family {
+                    tx.execute(
+                        "INSERT OR IGNORE INTO sidecar_dirty (face_id) VALUES (?1)",
+                        [face.id],
+                    )
+                    .map_err(|e| db_error(&e))?;
+                }
+            }
             tx.commit().map_err(|e| db_error(&e))?;
             let Some(disk) = disk else {
                 return Ok(out);
@@ -989,8 +1266,16 @@ fn apply(
             Ok(None) => {}
             Err(()) => {
                 let disk = serde_json::to_string(path).unwrap_or_default();
-                conflicts +=
-                    insert_conflict(tx, source, file, Some(face), COLLECTION_FIELD, None, &disk)?;
+                conflicts += insert_conflict(
+                    tx,
+                    source,
+                    file,
+                    Some(face),
+                    COLLECTION_FIELD,
+                    None,
+                    &disk,
+                    Revs::default(),
+                )?;
             }
         }
     }
@@ -1022,8 +1307,16 @@ fn apply(
                 Ok(None) => continue,
                 Err(()) => {
                     let disk = serde_json::to_string(pin).unwrap_or_default();
-                    conflicts +=
-                        insert_conflict(tx, source, file, Some(face), PIN_FIELD, None, &disk)?;
+                    conflicts += insert_conflict(
+                        tx,
+                        source,
+                        file,
+                        Some(face),
+                        PIN_FIELD,
+                        None,
+                        &disk,
+                        Revs::default(),
+                    )?;
                     continue;
                 }
             },
@@ -1120,7 +1413,16 @@ fn drop_carried_pin(tx: &Transaction<'_>, face: u32, pin: &Pin) -> FmResult<()> 
     Ok(())
 }
 
-/// Keeps a value that lost a conflict; 1 when it was not known yet.
+/// The version ids a value set aside came from: its entry's and its file's.
+#[derive(Debug, Clone, Copy, Default)]
+struct Revs<'a> {
+    entry: Option<&'a str>,
+    file: Option<&'a str>,
+}
+
+/// Keeps a value that lost a conflict, with the versions it came from (the
+/// latest, when it was known before); 1 when it was not known yet.
+#[allow(clippy::too_many_arguments)]
 fn insert_conflict(
     tx: &Transaction<'_>,
     source: SourceId,
@@ -1129,13 +1431,221 @@ fn insert_conflict(
     field: &str,
     local: Option<&str>,
     disk: &str,
+    revs: Revs<'_>,
 ) -> FmResult<usize> {
+    let added = tx
+        .prepare_cached(
+            "INSERT OR IGNORE INTO sidecar_conflict
+                 (source_id, file, face_id, field, local, disk, disk_rev, file_rev)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        )
+        .and_then(|mut s| {
+            s.execute(params![
+                source.0, file, face, field, local, disk, revs.entry, revs.file
+            ])
+        })
+        .map_err(|e| db_error(&e))?;
+    if added == 0 && (revs.entry.is_some() || revs.file.is_some()) {
+        tx.prepare_cached(
+            "UPDATE sidecar_conflict SET disk_rev = ?6, file_rev = ?7
+             WHERE source_id = ?1 AND file = ?2 AND face_id IS ?3 AND field = ?4 AND disk = ?5",
+        )
+        .and_then(|mut s| {
+            s.execute(params![
+                source.0, file, face, field, disk, revs.entry, revs.file
+            ])
+        })
+        .map_err(|e| db_error(&e))?;
+    }
+    Ok(added)
+}
+
+/// Forgets the values of `field` on `face` set aside that equal `value`,
+/// what this machine holds now: there is nothing left to choose.
+fn settle<T: serde::Serialize>(
+    tx: &Transaction<'_>,
+    face: u32,
+    field: Field,
+    value: &T,
+) -> FmResult<()> {
+    let json = serde_json::to_string(value).unwrap_or_default();
     tx.prepare_cached(
-        "INSERT OR IGNORE INTO sidecar_conflict (source_id, file, face_id, field, local, disk)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        "DELETE FROM sidecar_conflict WHERE face_id = ?1 AND field = ?2 AND disk = ?3",
     )
-    .and_then(|mut s| s.execute(params![source.0, file, face, field, local, disk]))
-    .map_err(|e| db_error(&e))
+    .and_then(|mut s| s.execute(params![face, field.as_str(), json]))
+    .map_err(|e| db_error(&e))?;
+    Ok(())
+}
+
+/// The version ids of this machine's base that the version on disk does not
+/// hold (it is older, or another machine's change apart): the version
+/// written over it descends from both, so it takes them in too.
+fn lineage(base: Option<&[String]>, disk: Option<&[String]>) -> Vec<String> {
+    match (base, disk) {
+        (Some(base), Some(disk)) if base.first().is_some_and(|head| !disk.contains(head)) => {
+            base.to_vec()
+        }
+        _ => Vec::new(),
+    }
+}
+
+/// Version ids resolutions took in, for the faces of one family's sidecar:
+/// (face, scope, id).
+struct Absorbed {
+    rows: Vec<(u32, String, String)>,
+}
+
+impl Absorbed {
+    /// The ids of `scope`: of `face`, or of any face of the family.
+    fn revs(&self, face: Option<u32>, scope: &str) -> Vec<String> {
+        self.rows
+            .iter()
+            .filter(|(f, s, _)| s == scope && face.is_none_or(|face| face == *f))
+            .map(|(_, _, rev)| rev.clone())
+            .collect()
+    }
+
+    /// `history` as it is, or, with ids to take in, a new version of
+    /// `content` that holds them ([`sidecar::absorb`]). An empty id only
+    /// asks for the new version.
+    fn history<T: serde::Serialize + ?Sized>(
+        &self,
+        content: &T,
+        history: Vec<String>,
+        revs: &[String],
+    ) -> Vec<String> {
+        if revs.is_empty() {
+            return history;
+        }
+        let revs: Vec<String> = revs.iter().filter(|r| !r.is_empty()).cloned().collect();
+        sidecar::absorb(content, &history, &revs)
+    }
+}
+
+fn absorbed(tx: &Transaction<'_>, faces: &[u32]) -> FmResult<Absorbed> {
+    let mut stmt = tx
+        .prepare_cached("SELECT face_id, scope, rev FROM sidecar_absorb WHERE face_id = ?1")
+        .map_err(|e| db_error(&e))?;
+    let mut rows = Vec::new();
+    for face in faces {
+        let found = stmt
+            .query_map([face], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .map_err(|e| db_error(&e))?;
+        for row in found {
+            rows.push(row.map_err(|e| db_error(&e))?);
+        }
+    }
+    Ok(Absorbed { rows })
+}
+
+/// Forgets the version ids taken in for `faces`: their sidecar is written.
+fn clear_absorbed(conn: &rusqlite::Connection, faces: &[u32]) -> FmResult<()> {
+    let mut stmt = conn
+        .prepare_cached("DELETE FROM sidecar_absorb WHERE face_id = ?1")
+        .map_err(|e| db_error(&e))?;
+    for face in faces {
+        stmt.execute([face]).map_err(|e| db_error(&e))?;
+    }
+    Ok(())
+}
+
+/// The value of `field` this machine holds now, as JSON (as a conflict
+/// stores it).
+fn current_value(
+    conn: &rusqlite::Connection,
+    face: u32,
+    family: &str,
+    field: Field,
+    root: &Path,
+) -> FmResult<String> {
+    let key = family_key(family);
+    let json = match field {
+        Field::Favorite | Field::Rating | Field::Notes => {
+            let (favorite, rating, notes): (bool, Option<u8>, Option<String>) = conn
+                .query_row(
+                    "SELECT favorite, rating, notes FROM user_meta WHERE face_id = ?1",
+                    [face],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
+                .optional()
+                .map_err(|e| db_error(&e))?
+                .unwrap_or_default();
+            match field {
+                Field::Favorite => serde_json::to_string(&favorite),
+                Field::Rating => serde_json::to_string(&rating),
+                _ => serde_json::to_string(&notes.filter(|n| !n.is_empty())),
+            }
+        }
+        Field::FamilyNotes => {
+            serde_json::to_string(&family_notes::family_notes_by_key(conn, &key)?)
+        }
+        Field::FamilyLicense => serde_json::to_string(
+            &family_license::license_by_key(conn, &key)?
+                .map(|l| l.to_sidecar(root))
+                .filter(|l| !l.is_empty()),
+        ),
+    };
+    Ok(json.unwrap_or_default())
+}
+
+/// Writes `value` (JSON, as a conflict stores it) to `field` in the index.
+fn set_value(
+    tx: &Transaction<'_>,
+    face: u32,
+    family: &str,
+    field: Field,
+    value: &str,
+    root: &Path,
+) -> FmResult<()> {
+    let bad = || FmError::internal(format!("a sidecar conflict holds a bad value: {value}"));
+    let key = family_key(family);
+    let upsert = |column: &str, v: &dyn rusqlite::ToSql| {
+        tx.execute(
+            &format!(
+                "INSERT INTO user_meta (face_id, {column}) VALUES (?1, ?2)
+                 ON CONFLICT (face_id) DO UPDATE SET {column} = excluded.{column}"
+            ),
+            params![face, v],
+        )
+        .map_err(|e| db_error(&e))
+    };
+    match field {
+        Field::Favorite => {
+            let v: bool = serde_json::from_str(value).map_err(|_| bad())?;
+            upsert("favorite", &v)?;
+        }
+        Field::Rating => {
+            let v: Option<u8> = serde_json::from_str(value).map_err(|_| bad())?;
+            upsert("rating", &v.filter(|r| (1..=5).contains(r)))?;
+        }
+        Field::Notes => {
+            let v: Option<String> = serde_json::from_str(value).map_err(|_| bad())?;
+            upsert("notes", &v.filter(|n| !n.is_empty()))?;
+        }
+        Field::FamilyNotes => {
+            let v: Option<String> = serde_json::from_str(value).map_err(|_| bad())?;
+            family_notes::set_family_notes(tx, &key, v.as_deref().filter(|n| !n.is_empty()))?;
+        }
+        Field::FamilyLicense => {
+            let v: Option<sidecar::License> = serde_json::from_str(value).map_err(|_| bad())?;
+            let license = v
+                .filter(|l| !l.is_empty())
+                .map(|l| DeclaredLicense::from_sidecar(&l, root));
+            family_license::set_license(tx, &key, license.as_ref())?;
+        }
+    }
+    Ok(())
+}
+
+/// The fm-api name of a field.
+fn api_field(field: Field) -> SidecarField {
+    match field {
+        Field::Favorite => SidecarField::Favorite,
+        Field::Rating => SidecarField::Rating,
+        Field::Notes => SidecarField::Notes,
+        Field::FamilyNotes => SidecarField::FamilyNotes,
+        Field::FamilyLicense => SidecarField::FamilyLicense,
+    }
 }
 
 /// The sidecar restricted to the faces the source has indexed: the base of
@@ -1236,23 +1746,8 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
             path.join(" / ")
         );
     }
-    let show = |json: Option<&str>| -> String {
-        let value: serde_json::Value = json
-            .and_then(|j| serde_json::from_str(j).ok())
-            .unwrap_or(serde_json::Value::Null);
-        match (Field::from_name(field), value) {
-            (Some(Field::Favorite), serde_json::Value::Bool(true)) => "a favorite".into(),
-            (Some(Field::Favorite), _) => "not a favorite".into(),
-            (Some(Field::Rating), serde_json::Value::Number(n)) => format!("{n} stars"),
-            (Some(Field::Rating), _) => "no rating".into(),
-            (Some(Field::FamilyLicense), serde_json::Value::Object(_)) => json
-                .and_then(|j| serde_json::from_str::<sidecar::License>(j).ok())
-                .map_or_else(|| "a license".into(), |l| describe_license(&l)),
-            (Some(Field::FamilyLicense), _) => "no license".into(),
-            (_, serde_json::Value::String(s)) => format!("\"{s}\""),
-            _ => "empty".into(),
-        }
-    };
+    let show =
+        |json: Option<&str>| describe_value(Field::from_name(field).unwrap_or(Field::Notes), json);
     let what = match Field::from_name(field) {
         Some(Field::Favorite) => "marked this font",
         Some(Field::Rating) => "rated this font",
@@ -1265,6 +1760,25 @@ fn conflict_message(field: &str, local: Option<&str>, disk: &str) -> String {
         show(Some(disk)),
         show(local)
     )
+}
+
+/// A value of `field` (JSON, as a conflict stores it) in a few words.
+fn describe_value(field: Field, json: Option<&str>) -> String {
+    let value: serde_json::Value = json
+        .and_then(|j| serde_json::from_str(j).ok())
+        .unwrap_or(serde_json::Value::Null);
+    match (field, value) {
+        (Field::Favorite, serde_json::Value::Bool(true)) => "a favorite".into(),
+        (Field::Favorite, _) => "not a favorite".into(),
+        (Field::Rating, serde_json::Value::Number(n)) => format!("{n} stars"),
+        (Field::Rating, _) => "no rating".into(),
+        (Field::FamilyLicense, serde_json::Value::Object(_)) => json
+            .and_then(|j| serde_json::from_str::<sidecar::License>(j).ok())
+            .map_or_else(|| "a license".into(), |l| describe_license(&l)),
+        (Field::FamilyLicense, _) => "no license".into(),
+        (_, serde_json::Value::String(s)) => format!("\"{s}\""),
+        _ => "empty".into(),
+    }
 }
 
 /// A declared license in a few words: "desktop, 5 seats, bought 2026-03-01,

@@ -13,6 +13,8 @@ mod autostart;
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)] // CoreText / CoreFoundation FFI; every block has a SAFETY note.
 mod coretext;
+#[cfg(target_os = "macos")]
+pub(crate) mod ipc;
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 mod ledger;
 mod open_url;

@@ -389,6 +389,39 @@ pub struct ImportSetResponse {
     pub missing: Vec<SetEntry>,
 }
 
+/// Save a project set as a set file (E28.2): its [`SetExport`] JSON, at a
+/// path the user picked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveSetFileRequest {
+    /// The set.
+    pub set: SetId,
+    /// Absolute file path. A file name with no extension gets
+    /// [`SET_FILE_EXTENSION`].
+    pub path: String,
+}
+
+/// A set file that was written.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct SavedSetFile {
+    /// The path written, its extension added when it had none.
+    pub path: String,
+    /// The number of fonts in it.
+    pub fonts: u32,
+}
+
+/// Import a set file (E28.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadSetFileRequest {
+    /// Absolute path of the set file.
+    pub path: String,
+}
+
+/// The default extension of a set file, without the leading dot.
+pub const SET_FILE_EXTENSION: &str = "fmset.json";
+
 /// Pin an instance of a variable face as a virtual style of a manual
 /// collection or a project set: exactly one of `collection` and `set`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
@@ -507,6 +540,14 @@ pub trait OrganizationService {
     fn export_set(&self, set: SetId) -> ApiResult<SetExport>;
     /// Create a set from portable JSON, matching fonts by hash.
     fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse>;
+    /// Write a set's export JSON to the file the user picked (E28.2), and
+    /// nothing else. A face not read yet is `Conflict`, as in `export_set`;
+    /// a file that cannot be written is `PermissionDenied` or `Io`.
+    fn save_set_file(&self, req: SaveSetFileRequest) -> ApiResult<SavedSetFile>;
+    /// Read a set file and import it as `import_set` does: fonts match by
+    /// file hash, wherever the file sits. A missing file is `NotFound`; a
+    /// file that is not a set file is `InvalidRequest`.
+    fn load_set_file(&self, req: LoadSetFileRequest) -> ApiResult<ImportSetResponse>;
     /// Pin an instance of a variable face as a virtual style of a manual
     /// collection or a set. A static face, an unknown axis or a coordinate
     /// outside its axis is `InvalidRequest`.

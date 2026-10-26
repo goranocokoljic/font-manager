@@ -7,7 +7,10 @@
 //! | cache   | `~/Library/Caches/org.fontmanager.app` |
 //! | logs    | `~/Library/Logs/org.fontmanager.app` |
 //! | library | `~/Fonts` (not `~/Library/Fonts`, which the OS activates) |
+//!
+//! The IPC socket (ADR 0016) is `fm.sock` in the data folder.
 
+use crate::ipc::{IpcName, SOCKET_FILE};
 use crate::paths::{AppPaths, BUNDLE_ID, Env, LIBRARY_DIR, PathError};
 
 pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
@@ -21,6 +24,10 @@ pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
         logs: library.join("Logs").join(BUNDLE_ID),
         library: home.join(LIBRARY_DIR),
     })
+}
+
+pub(crate) fn ipc_name(paths: &AppPaths) -> IpcName {
+    IpcName::Socket(paths.data.join(SOCKET_FILE))
 }
 
 #[cfg(test)]
@@ -48,5 +55,12 @@ mod tests {
             p.library,
             PathBuf::from("/Users/ada").join("Library").join("Fonts")
         );
+    }
+
+    #[test]
+    fn the_ipc_socket_is_in_the_data_folder() {
+        let paths = AppPaths::resolve(Os::MacOs, env(&[("HOME", "/Users/ada")])).expect("resolves");
+        let name = paths.ipc_name_for(Os::MacOs, env(&[("XDG_RUNTIME_DIR", "/run/user/501")]));
+        assert_eq!(name, crate::IpcName::Socket(paths.data.join("fm.sock")));
     }
 }

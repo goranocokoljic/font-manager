@@ -32,7 +32,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActivationService, ActiveFace, Clash, Conflict,
-    DeactivateRequest, Target,
+    DeactivateRequest, FontsNeededRequest, FontsNeededResponse, Target,
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
@@ -58,15 +58,17 @@ use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
     GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest,
     LibraryService, ListFamiliesRequest, Platform, Problem, Resolution, ResolveFontRequest,
-    ScanRequest, SetSourcePausedRequest, Source, SourceKind,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, MoveCollectionRequest,
-    OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
-    ReceiptChange, ReceiptPlace, RenameCollectionRequest, SelectionTags, SelectionTagsRequest,
-    SetExport, Tag, TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest,
-    UserMetaUpdate, VirtualStyle, VirtualStylesRequest,
+    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
+    MoveCollectionRequest, OrganizationService, PinInstanceRequest, ProjectSet, QuickCollection,
+    QuickCollectionRequest, ReceiptChange, ReceiptPlace, RenameCollectionRequest,
+    SaveSetFileRequest, SavedSetFile, SelectionTags, SelectionTagsRequest, SetExport, Tag,
+    TagFacesRequest, UntagFacesRequest, UpdateCollectionRulesRequest, UserMetaUpdate, VirtualStyle,
+    VirtualStylesRequest,
 };
 use fm_api::preview::{
     ComparePreviewRequest, CssValues, CssValuesRequest, FontSource, PreviewImage, PreviewRequest,
@@ -148,6 +150,9 @@ pub struct CoreApi {
     endpoint: Option<EndpointKeys>,
     /// The MCP calls waiting for the user's Allow or Deny (E27.6).
     mcp_confirmations: crate::mcp::Confirmations,
+    /// The command that starts the stdio shim, for the Claude Desktop
+    /// snippet (E27.7); `None` without the app.
+    mcp_shim: Option<fm_platform::mcp_shim::ShimCommand>,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -223,6 +228,7 @@ impl CoreApi {
             catalogs: None,
             endpoint: None,
             mcp_confirmations: crate::mcp::Confirmations::default(),
+            mcp_shim: None,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -276,6 +282,15 @@ impl CoreApi {
     #[must_use]
     pub fn with_mcp_confirm_timeout(mut self, timeout: std::time::Duration) -> Self {
         self.mcp_confirmations = crate::mcp::Confirmations::new(timeout);
+        self
+    }
+
+    /// The same API, offering Claude Desktop the stdio shim started by
+    /// `command` in the MCP snippets (the app passes
+    /// [`fm_platform::mcp_shim::current`]).
+    #[must_use]
+    pub fn with_mcp_shim(mut self, command: fm_platform::mcp_shim::ShimCommand) -> Self {
+        self.mcp_shim = Some(command);
         self
     }
 
@@ -549,6 +564,17 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 /// The answer to a PDF specimen without a printer (the CLI's direct link).
 pub const PDF_NEEDS_APP: &str = "PDF export needs the Font Manager app running.";
 
+/// The path of a set file request: it must be absolute, so a set file is
+/// never written relative to wherever the app happens to run.
+fn set_file_path(path: &str) -> FmResult<&Path> {
+    let path = Path::new(path);
+    if !path.is_absolute() {
+        return Err(FmError::invalid("Choose where the set file is.")
+            .with_detail(format!("not an absolute path: {}", path.display())));
+    }
+    Ok(path)
+}
+
 fn not_available(what: &str) -> ApiError {
     ApiError::new(
         ErrorCode::Unsupported,
@@ -705,6 +731,16 @@ impl LibraryService for CoreApi {
         Ok(resolution)
     }
 
+    fn list_sidecar_conflicts(&self) -> ApiResult<Vec<SidecarConflict>> {
+        Ok(self.lock().sidecar_conflicts()?)
+    }
+
+    fn resolve_sidecar_conflict(&self, req: ResolveSidecarConflictRequest) -> ApiResult<()> {
+        let face = self.lock().resolve_sidecar_conflict(req.id, req.keep)?;
+        self.updated(&[face]);
+        Ok(())
+    }
+
     /// Reads the face's file outside the index lock: a CJK font is large.
     fn list_glyphs(&self, req: GlyphsRequest) -> ApiResult<GlyphPage> {
         let file = self.lock().face_file(req.face)?;
@@ -848,6 +884,10 @@ impl ActivationService for CoreApi {
     fn list_conflicts(&self) -> ApiResult<Vec<Clash>> {
         self.activation.list_conflicts()
     }
+
+    fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
+        self.activation.fonts_needed(req)
+    }
 }
 
 impl OrganizationService for CoreApi {
@@ -930,6 +970,21 @@ impl OrganizationService for CoreApi {
     }
 
     fn import_set(&self, export: SetExport) -> ApiResult<ImportSetResponse> {
+        Ok(self.lock().import_set(&export)?)
+    }
+
+    fn save_set_file(&self, req: SaveSetFileRequest) -> ApiResult<SavedSetFile> {
+        let path = set_file_path(&req.path)?;
+        let export = self.lock().export_set(req.set)?;
+        let written = crate::set_file::save(path, &export)?;
+        Ok(SavedSetFile {
+            path: written.display().to_string(),
+            fonts: u32::try_from(export.fonts.len()).unwrap_or(u32::MAX),
+        })
+    }
+
+    fn load_set_file(&self, req: LoadSetFileRequest) -> ApiResult<ImportSetResponse> {
+        let export = crate::set_file::load(set_file_path(&req.path)?)?;
         Ok(self.lock().import_set(&export)?)
     }
 
@@ -1428,6 +1483,7 @@ impl SettingsService for CoreApi {
         Ok(crate::mcp::status(
             self.settings.mcp_enabled()?,
             &endpoint,
+            self.mcp_shim.as_ref(),
             &self.settings.mcp_grants()?,
         ))
     }
@@ -1439,6 +1495,7 @@ impl SettingsService for CoreApi {
         Ok(crate::mcp::status(
             req.enabled,
             &endpoint,
+            self.mcp_shim.as_ref(),
             &self.settings.mcp_grants()?,
         ))
     }

@@ -2,7 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
-import { MOCK_ENDPOINT_URL, createMockClient, mockEndpointToken } from '../api/mock';
+import { MOCK_ENDPOINT_URL, MOCK_MCP_SHIM, createMockClient, mockEndpointToken } from '../api/mock';
 import { setLocale } from '../i18n';
 import McpSettings from './McpSettings.vue';
 
@@ -82,6 +82,22 @@ describe('Settings → AI assistants', () => {
     w.unmount();
   });
 
+  it('offers Claude Desktop the stdio shim by its absolute path, without the token', async () => {
+    const { copyText } = await import('../api/clipboard');
+    const w = await mountIt();
+    await turnOn(w);
+    const desktop = (await client.mcpStatus()).snippets?.find((s) => s.client === 'claudeDesktop');
+    expect(desktop).toBeDefined();
+    expect(w.text()).toContain('Claude Desktop (starts the bundled fm-mcp-stdio)');
+    await button(w, 'Copy Claude Desktop config')!.trigger('click');
+    await flushPromises();
+    expect(copyText).toHaveBeenLastCalledWith(desktop!.text);
+    const config = JSON.parse(desktop!.text);
+    expect(config.mcpServers['font-manager'].command).toBe(MOCK_MCP_SHIM);
+    expect(desktop!.text).not.toContain(mockEndpointToken(0));
+    w.unmount();
+  });
+
   it('hides the snippet text until Show snippets is pressed', async () => {
     const w = await mountIt();
     await turnOn(w);
@@ -90,7 +106,7 @@ describe('Settings → AI assistants', () => {
     const show = button(w, 'Show snippets')!;
     expect(show.attributes('aria-pressed')).toBe('false');
     await show.trigger('click');
-    expect(w.findAll('pre')).toHaveLength(2);
+    expect(w.findAll('pre')).toHaveLength(3);
     expect(w.text()).toContain(token);
     await button(w, 'Hide snippets')!.trigger('click');
     expect(w.text()).not.toContain(token);

@@ -14,12 +14,13 @@ const out = join(tmp, 'site');
 const built = buildSite({ out });
 const page = (slug) => readFileSync(join(out, `${slug}.html`), 'utf8');
 
-test('the site has the four required pages, in reading order', () => {
+test('the site has the required pages, in reading order', () => {
   assert.deepEqual(built, [
     { slug: 'getting-started', title: 'Getting started' },
     { slug: 'sources', title: 'Sources' },
     { slug: 'activation', title: 'Activation' },
     { slug: 'keyboard-shortcuts', title: 'Keyboard shortcuts' },
+    { slug: 'shared-libraries', title: 'Shared libraries' },
   ]);
   for (const { slug, title } of built) {
     const html = page(slug);
@@ -35,9 +36,20 @@ test('every page links to every other page, and every link resolves', () => {
     const html = page(slug);
     for (const other of PAGES) assert.ok(html.includes(`href="${other}.html"`), `${slug} -> ${other}`);
     for (const [, href] of html.matchAll(/href="([^"]+)"/g)) {
-      const file = href.split('#')[0];
+      const [file, anchor] = href.split('#');
       assert.ok(existsSync(join(out, file)), `${slug}.html links to missing ${href}`);
+      if (anchor) {
+        const target = file ? readFileSync(join(out, file), 'utf8') : html;
+        assert.ok(target.includes(`id="${anchor}"`), `${slug}.html links to missing ${href}`);
+      }
     }
+  }
+});
+
+test('the text of Sources and Getting started links to Shared libraries', () => {
+  for (const slug of ['sources', 'getting-started']) {
+    const main = /<main>([\s\S]*)<\/main>/.exec(page(slug))?.[1] ?? '';
+    assert.ok(main.includes('href="shared-libraries.html'), slug);
   }
 });
 

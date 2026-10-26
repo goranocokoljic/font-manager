@@ -48,7 +48,8 @@
       "getting-started": "Erste Schritte",
       "sources": "Quellen",
       "activation": "Aktivierung",
-      "keyboard-shortcuts": "Tastenkürzel"
+      "keyboard-shortcuts": "Tastenkürzel",
+      "shared-libraries": "Geteilte Bibliotheken"
     },
     "tray": {
       "tooltip": "Font Manager",
@@ -1080,7 +1081,23 @@
     "heading": "Projektsets",
     "currentTitle": "Das aktuelle Set (drücken zum Aufheben)",
     "makeCurrentTitle": "Zum aktuellen Set machen",
-    "empty": "Noch keine Sets."
+    "empty": "Noch keine Sets.",
+    "import": "Set importieren…",
+    "importTitle": "Ein Set aus einer Set-Datei hinzufügen; seine Schriften werden in dieser Bibliothek am Dateiinhalt erkannt",
+    "export": "Set exportieren…",
+    "exportLabel": "Das Set {name} exportieren",
+    "exportTitle": "Eine Set-Datei zum Teilen speichern; sie benennt jede Schrift nach ihrem Dateiinhalt",
+    "saved": {
+      "one": "Set gespeichert: {count} Schrift.",
+      "other": "Set gespeichert: {count} Schriften."
+    },
+    "imported": "Das Set „{name}“ wurde importiert.",
+    "importedAll": "Das Set „{name}“ wurde importiert. Alle Schriften sind in dieser Bibliothek.",
+    "missing": {
+      "one": "{count} Schrift nicht in dieser Bibliothek",
+      "other": "{count} Schriften nicht in dieser Bibliothek"
+    },
+    "dismissLabel": "Den Importhinweis schließen"
   },
   "settings": {
     "title": "Einstellungen",
@@ -1176,9 +1193,11 @@
       "hideSnippets": "Snippets verbergen",
       "claudeCode": "Claude Code",
       "http": "Andere HTTP-Clients (JSON-Konfiguration)",
+      "claudeDesktop": "Claude Desktop (startet das mitgelieferte fm-mcp-stdio)",
       "copy": "Kopieren",
       "copyClaudeCode": "Claude-Code-Befehl kopieren",
       "copyHttp": "Konfiguration für HTTP-Clients kopieren",
+      "copyClaudeDesktop": "Konfiguration für Claude Desktop kopieren",
       "tokenHint": "Die Snippets enthalten das Token der lokalen API. Halten Sie sie geheim.",
       "grantsTitle": "Was KI-Assistenten ändern dürfen",
       "grantsNote": "Suchen, Schriftdetails lesen und Vorschauen sind immer erlaubt. Jedes Werkzeug, das etwas ändert, braucht einen eigenen Schalter. Alle sind standardmäßig aus; eine Änderung gilt für die nächste Anfrage.",
@@ -1321,6 +1340,23 @@
       "willMove": "Wird in den Papierkorb verschoben",
       "willStay": "Bleibt",
       "confirm": "In den Papierkorb"
+    },
+    "sidecar": {
+      "title": "Sidecar-Konflikte lösen",
+      "note": "Ein anderer Computer, der denselben Ordner synchronisiert, hat diese Werte anders gesetzt. Wähle den Wert, der bleiben soll; der andere Computer übernimmt ihn bei der nächsten Synchronisierung.",
+      "mine": "Dieser Computer",
+      "theirs": "Anderer Computer",
+      "keepMine": "Meinen behalten",
+      "useTheirs": "Den anderen nehmen",
+      "keepMineLabel": "Meinen behalten: {field} von {family} auf diesem Computer, {value}",
+      "useTheirsLabel": "Den anderen nehmen: {field} von {family} auf dem anderen Computer, {value}",
+      "fields": {
+        "favorite": "Favorit",
+        "rating": "Bewertung",
+        "notes": "Notizen",
+        "familyNotes": "Familiennotizen",
+        "familyLicense": "Lizenz"
+      }
     }
   },
   "sources": {

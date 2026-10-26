@@ -128,5 +128,8 @@ per file is most of that time; no other macOS call registers a font for every ap
 - The `activation_100` budget on **macOS is 1000 ms**. Windows and Linux keep 500 ms.
 - The override lives in `scripts/bench/lib.mjs` (`BUDGETS.activation_100.byOs`), and
   the bench job measures each OS against its own target.
+- `fonts_needed_100` (E29.2: 100 fonts matched by name and activated in one
+  `fonts_needed` request) is the same activation behind a name lookup, so it has the
+  same budget and the same macOS override (`BUDGETS.fonts_needed_100.byOs`).
 - The mechanism above stays. A faster CoreText path (for example one call with many
   URLs) may bring macOS back to 500 ms later; that change removes the override.

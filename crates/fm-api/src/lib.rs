@@ -46,8 +46,8 @@ pub use error::{ApiError, ApiResult, ErrorCode};
 pub use event::{Event, EventSource};
 pub use export::ExportService;
 pub use ids::{
-    CollectionId, ComparisonId, FaceId, FamilyId, JobId, ResolutionId, SetId, SourceId, TagId,
-    VirtualStyleId,
+    CollectionId, ComparisonId, FaceId, FamilyId, JobId, ResolutionId, SetId, SidecarConflictId,
+    SourceId, TagId, VirtualStyleId,
 };
 pub use layout::LayoutService;
 pub use library::LibraryService;
@@ -158,6 +158,10 @@ pub fn types() -> specta::Types {
         library::DuplicateGroup,
         library::KeepCopyRequest,
         library::Resolution,
+        library::SidecarConflict,
+        library::SidecarField,
+        library::ConflictSide,
+        library::ResolveSidecarConflictRequest,
         library::GlyphsRequest,
         library::GlyphPage,
         library::GlyphInfo,
@@ -198,6 +202,8 @@ pub fn types() -> specta::Types {
         activation::ActiveFace,
         activation::Conflict,
         activation::Clash,
+        activation::FontsNeededRequest,
+        activation::FontsNeededResponse,
         // organization
         organization::Collection,
         organization::CreateCollectionRequest,
@@ -220,6 +226,9 @@ pub fn types() -> specta::Types {
         organization::CreateSetRequest,
         organization::SetExport,
         organization::ImportSetResponse,
+        organization::SaveSetFileRequest,
+        organization::SavedSetFile,
+        organization::LoadSetFileRequest,
         organization::PinInstanceRequest,
         organization::VirtualStyle,
         organization::VirtualStylesRequest,

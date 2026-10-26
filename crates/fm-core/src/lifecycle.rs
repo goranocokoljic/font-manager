@@ -277,6 +277,17 @@ mod tests {
         fn list_conflicts(&self) -> ApiResult<Vec<Clash>> {
             Ok(Vec::new())
         }
+        fn fonts_needed(
+            &self,
+            _: fm_api::activation::FontsNeededRequest,
+        ) -> ApiResult<fm_api::activation::FontsNeededResponse> {
+            Ok(fm_api::activation::FontsNeededResponse {
+                matched: Vec::new(),
+                unmatched: Vec::new(),
+                missing: 0,
+                outcomes: Vec::new(),
+            })
+        }
     }
 
     #[test]

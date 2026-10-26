@@ -1,0 +1,19 @@
+{
+  "id": "a-test-of-an-exclusion-filter-must-not-let-a-ranking-hide-th",
+  "title": "A test of an exclusion filter must not let a ranking hide the excluded item",
+  "category": "testing",
+  "rule": "When code both excludes items (broken faces, gone files, paused sources) and ranks the rest (active, healthy, lowest id), test the exclusion with data where the excluded item is the only candidate, and assert it is not returned. A fixture that always has a better-ranked valid item next to the excluded one passes even when the exclusion is gone, because the ranking already puts the excluded item last. Run the test through the real data path (SQL, index), not only on hand-built structs.",
+  "rationale": "E29.2 (#183): the broken-face exclusion of fonts_needed was only tested with a healthy copy beside the broken one, so a regression in the index's broken flag would have passed every test.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    183
+  ],
+  "file_globs": [
+    "crates/**/tests.rs",
+    "crates/**/tests/**"
+  ],
+  "first_seen": "2026-10-26T20:48:25.673Z",
+  "last_seen": "2026-10-26T20:48:25.673Z"
+}

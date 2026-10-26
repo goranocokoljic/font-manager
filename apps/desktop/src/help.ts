@@ -12,4 +12,5 @@ export const HELP_PAGES: readonly HelpPage[] = [
   { slug: 'sources', title: 'Sources' },
   { slug: 'activation', title: 'Activation' },
   { slug: 'keyboard-shortcuts', title: 'Keyboard shortcuts' },
+  { slug: 'shared-libraries', title: 'Shared libraries' },
 ];

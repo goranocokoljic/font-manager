@@ -4,9 +4,11 @@
 // (`#/problems?kind=duplicates`), so the sidebar links open it filtered.
 // Duplicates are resolved here (E8.3): "Keep this one" shows the dry run, asks
 // once, moves the other copies to the trash and offers undo in the app toast; the
-// history below the list undoes any earlier action.
+// history below the list undoes any earlier action. Sidecar conflicts (E28.1) are
+// resolved here too: each shows both values with "Keep mine" and "Use theirs".
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import type { SidecarField } from '../api/types';
 import { errorMessage, formatDate, t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import {
@@ -28,6 +30,10 @@ const rows = computed(() => store.inGroup(filter.value));
 const showDuplicates = computed(
   () =>
     (filter.value === undefined || filter.value === 'duplicates') && store.duplicates.length > 0,
+);
+const showSidecar = computed(
+  () =>
+    (filter.value === undefined || filter.value === 'sidecar') && store.sidecarConflicts.length > 0,
 );
 const planned = computed(() => store.plan?.moves.filter((m) => m.status === 'planned') ?? []);
 const notMoving = computed(() => store.plan?.moves.filter((m) => m.status !== 'planned') ?? []);
@@ -66,6 +72,11 @@ onMounted(() => {
   return store.load();
 });
 onBeforeUnmount(() => store.stop());
+
+/** The name of a sidecar conflict's field, in the UI's language. */
+function fieldName(field: SidecarField): string {
+  return t(`problems.sidecar.fields.${field}`);
+}
 
 /** When an action happened, in the UI's locale; the API's text if it is not a date. */
 function when(at: string): string {
@@ -127,6 +138,63 @@ function when(at: string): string {
           </tr>
         </tbody>
       </table>
+
+      <section v-if="showSidecar" aria-labelledby="sidecar-title" class="section">
+        <h2 id="sidecar-title" class="h2">{{ t('problems.sidecar.title') }}</h2>
+        <p class="note">{{ t('problems.sidecar.note') }}</p>
+        <p v-if="store.actionError && !showDuplicates" role="alert" class="error">
+          {{ errorMessage(store.actionError) }}
+        </p>
+        <div
+          v-for="c in store.sidecarConflicts"
+          :key="c.id"
+          role="group"
+          :aria-label="`${c.family}: ${fieldName(c.field)}`"
+          class="group"
+          data-testid="sidecar-conflict"
+        >
+          <h3 class="h3">
+            {{ c.family }} <span class="muted">{{ fieldName(c.field) }}</span>
+          </h3>
+          <dl class="values">
+            <dt>{{ t('problems.sidecar.mine') }}</dt>
+            <dd>{{ c.mine }}</dd>
+            <dt>{{ t('problems.sidecar.theirs') }}</dt>
+            <dd>{{ c.theirs }}</dd>
+          </dl>
+          <p class="path">{{ c.sidecarPath }}</p>
+          <div class="actions start">
+            <button
+              type="button"
+              class="button"
+              :aria-label="
+                t('problems.sidecar.keepMineLabel', {
+                  field: fieldName(c.field),
+                  family: c.family,
+                  value: c.mine,
+                })
+              "
+              @click="store.resolveConflict(c.id, 'mine')"
+            >
+              {{ t('problems.sidecar.keepMine') }}
+            </button>
+            <button
+              type="button"
+              class="button"
+              :aria-label="
+                t('problems.sidecar.useTheirsLabel', {
+                  field: fieldName(c.field),
+                  family: c.family,
+                  value: c.theirs,
+                })
+              "
+              @click="store.resolveConflict(c.id, 'theirs')"
+            >
+              {{ t('problems.sidecar.useTheirs') }}
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section v-if="showDuplicates" aria-labelledby="duplicates-title" class="section">
         <h2 id="duplicates-title" class="h2">{{ t('problems.duplicates.title') }}</h2>
@@ -368,6 +436,21 @@ function when(at: string): string {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+.actions.start {
+  justify-content: flex-start;
+}
+.values {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 12px;
+  margin: 0 0 4px;
+}
+.values dt {
+  color: var(--fm-muted);
+}
+.values dd {
+  margin: 0;
 }
 .primary {
   border-color: var(--fm-accent);

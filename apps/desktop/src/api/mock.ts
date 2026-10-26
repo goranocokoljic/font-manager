@@ -70,7 +70,12 @@ import {
   type Problem,
   type Resolution,
   type RuleGroup,
+  type SidecarConflict,
   type ProjectSet,
+  type ImportSetResponse,
+  type SavedSetFile,
+  type SetEntry,
+  type SetExport,
   type QuickCollection,
   type SearchResponse,
   type SampleText,
@@ -365,6 +370,8 @@ export const mockUpdates = {
 /** The app folders of the Rust mock. */
 /** The mock's local API address (the Rust mock reports the same). */
 export const MOCK_ENDPOINT_URL = 'http://127.0.0.1:47613';
+/** Where the mock app keeps the stdio shim (the Rust mock's `MOCK_MCP_SHIM`). */
+export const MOCK_MCP_SHIM = '/Applications/Font Manager.app/Contents/MacOS/fm-mcp-stdio';
 
 /** A 64-hex-digit token for the `generation`th regeneration; distinct for each. */
 export function mockEndpointToken(generation: number): string {
@@ -719,6 +726,8 @@ export interface MockOptions {
   extraProblems?: Problem[];
   /** Duplicate groups (files the mock has no face for), keeper first. */
   duplicates?: DuplicateGroup[];
+  /** Sidecar conflicts waiting for the user (none by default); each is a Problems entry too. */
+  sidecarConflicts?: SidecarConflict[];
   /** Project sets (none by default). */
   sets?: ProjectSet[];
   /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
@@ -835,8 +844,8 @@ export const mockSets: ProjectSet[] = [{ id: 1, name: 'Client brand', faces: [1,
 
 /**
  * Problems of files outside the sample faces, for browser mode: one of each kind the
- * sample library lacks (a broken file, a duplicate copy, a sidecar conflict), so the
- * Problems view shows every group.
+ * sample library lacks (a broken file, a duplicate copy), so with `mockSidecarConflicts`
+ * the Problems view shows every group.
  */
 export const mockExtraProblems: Problem[] = [
   {
@@ -853,12 +862,21 @@ export const mockExtraProblems: Problem[] = [
     other: '/Users/demo/Fonts/Quarto-Regular.otf',
     message: 'The same file is also at /Users/demo/Fonts/Quarto-Regular.otf.',
   },
+];
+
+/**
+ * A sidecar conflict for browser mode (E28.1): another computer rated Inter Regular
+ * differently. Its two values appear nowhere else on the Problems view.
+ */
+export const mockSidecarConflicts: SidecarConflict[] = [
   {
-    kind: 'sidecarConflict',
-    face: null,
-    path: '/Users/demo/Fonts/.fontlibrary/meta.json',
-    other: null,
-    message: 'Another computer set a different rating for Inter Regular.',
+    id: 1,
+    face: 1,
+    family: 'Inter',
+    field: 'rating',
+    mine: '4 stars',
+    theirs: '2 stars',
+    sidecarPath: '/Users/demo/Fonts/.fontlibrary/5d1c0a7e9b3f2468.json',
   },
 ];
 
@@ -1204,6 +1222,25 @@ export const mockPickedFiles: (string | null)[] = [];
 
 /** Where the mock save dialog saves, one per call; `null` is a cancel. */
 export const mockPickedSaves: (string | null)[] = [];
+
+/**
+ * The set files of the mock file system (E28.2), by path: "Export set…" writes here and
+ * "Import set…" reads from here. It starts with a teammate's file naming one face of the
+ * sample library (by its hash) and two fonts it does not have.
+ */
+export const mockSetFiles = new Map<string, SetExport>([
+  [
+    '/Users/demo/Shared/Team brand.fmset.json',
+    {
+      name: 'Team brand',
+      fonts: [
+        { family: 'Inter', style: 'Regular', hash: '1'.padStart(64, '0') },
+        { family: 'Quarto', style: 'Bold', hash: 'q'.repeat(64) },
+        { family: 'Gotham Rounded', style: 'Medium', hash: 'g'.repeat(64) },
+      ],
+    },
+  ],
+]);
 
 /** What the mock "Export license inventory…" saved, oldest first. */
 export const mockSavedInventories: {
@@ -1829,12 +1866,22 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             2,
           ),
         },
+        {
+          client: 'claudeDesktop',
+          text: JSON.stringify(
+            { mcpServers: { 'font-manager': { command: MOCK_MCP_SHIM, args: [] } } },
+            null,
+            2,
+          ),
+        },
       ],
     };
   };
   // "Keep this one": like the Rust mock, trashed paths leave the duplicate groups.
   const trashed = new Set<string>();
   const resolutions: Resolution[] = [];
+  // Sidecar conflicts (E28.1): each is listed in Problems until resolved.
+  const sidecarConflicts: SidecarConflict[] = structuredClone(options.sidecarConflicts ?? []);
   const duplicates = (): DuplicateGroup[] =>
     structuredClone(options.duplicates ?? [])
       .map((g) => ({ ...g, copies: g.copies.filter((c) => !trashed.has(c.path)) }))
@@ -2838,6 +2885,51 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // Like the Rust mock: per face its health and system clash, then the active pairs
     // (none: no two sample faces share a PostScript name), then the extra entries.
     listSets: async () => structuredClone(sets),
+    // Like the Rust mock, over `mockSetFiles` instead of the disk: the save dialog's path
+    // gets ".fmset.json" when it has no extension; the open dialog is `mockPickedFiles`,
+    // the teammate's file when nothing is queued.
+    saveSetFile: async (id, fileName) => {
+      const set = sets.find((s) => s.id === id);
+      if (!set)
+        throw { code: 'notFound' as const, message: `Set ${id} was not found.`, detail: null };
+      const picked = mockPickedSaves.length
+        ? mockPickedSaves.shift()!
+        : `/Users/demo/Documents/${fileName}`;
+      if (picked === null) return null;
+      const path = /\.[^./\\]+$/.test(picked) ? picked : `${picked}.fmset.json`;
+      const fonts: SetEntry[] = set.faces.flatMap((face) => {
+        const f = find(face);
+        return f ? [{ family: f.face.familyName, style: f.face.style, hash: f.hash }] : [];
+      });
+      mockSetFiles.set(path, { name: set.name, fonts });
+      return { path, fonts: fonts.length } satisfies SavedSetFile;
+    },
+    loadSetFile: async () => {
+      const path = mockPickedFiles.length
+        ? mockPickedFiles.shift()!
+        : '/Users/demo/Shared/Team brand.fmset.json';
+      if (path === null) return null;
+      const file = mockSetFiles.get(path);
+      if (!file)
+        throw {
+          code: 'notFound' as const,
+          message: `The set file ${path} was not found.`,
+          detail: null,
+        };
+      const matched: FaceId[] = [];
+      const missing: SetEntry[] = [];
+      for (const entry of file.fonts) {
+        const f = faces.find((d) => d.hash === entry.hash);
+        if (!f) missing.push(structuredClone(entry));
+        else if (!matched.includes(f.face.id)) matched.push(f.face.id);
+      }
+      const taken = (name: string) => sets.some((s) => sameName(s.name, name));
+      let name = file.name.trim();
+      for (let n = 2; taken(name); n++) name = `${file.name.trim()} (${n})`;
+      const set: ProjectSet = { id: ++nextId, name, faces: matched.sort((a, b) => a - b) };
+      sets.push(set);
+      return structuredClone({ set, missing }) satisfies ImportSetResponse;
+    },
     pinInstance: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the style a name.');
@@ -2931,6 +3023,13 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       ...structuredClone(options.extraProblems ?? []).filter(
         (p) => !trashed.has(p.path) && !(p.other !== null && trashed.has(p.other)),
       ),
+      ...sidecarConflicts.map((c): Problem => ({
+        kind: 'sidecarConflict',
+        face: c.face,
+        path: faces.find((f) => f.face.id === c.face)?.path ?? c.sidecarPath,
+        other: c.sidecarPath,
+        message: `Another machine set a different value (${c.theirs}); this machine's value (${c.mine}) is kept.`,
+      })),
     ],
     listDuplicates: async () => duplicates(),
     keepCopy: async (req) => {
@@ -2962,6 +3061,18 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return structuredClone(resolution);
     },
     listResolutions: async () => structuredClone(resolutions),
+    listSidecarConflicts: async () => structuredClone(sidecarConflicts),
+    resolveSidecarConflict: async (req) => {
+      const c = sidecarConflicts.find((c) => c.id === req.id);
+      if (!c)
+        throw {
+          code: 'notFound' as const,
+          message: `Sidecar conflict ${req.id} was not found.`,
+          detail: null,
+        };
+      sidecarConflicts.splice(sidecarConflicts.indexOf(c), 1);
+      emit({ type: 'libraryChanged', source: null, added: [], removed: [], updated: [c.face] });
+    },
     undoResolution: async (id) => {
       const r = resolutions.find((r) => r.id === id);
       if (!r)
@@ -3170,6 +3281,7 @@ export const mockClient: FmClient = createMockClient({
   settingsStorage: sessionStorageOf(),
   extraProblems: mockExtraProblems,
   duplicates: mockDuplicates,
+  sidecarConflicts: mockSidecarConflicts,
   sets: mockSets,
   // `?mockComparisons=1` starts with a saved comparison that names a missing font.
   comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],

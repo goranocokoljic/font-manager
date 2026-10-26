@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
-    DeactivateRequest, OutcomeStatus, Target,
+    DeactivateRequest, FontsNeededRequest, NeededFont, NeededFontRule, OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
@@ -164,6 +164,103 @@ fn activation_reports_per_face() {
         api.get_face(FaceId(1)).unwrap().face.active,
         Some(ActivationMode::Session)
     );
+}
+
+#[test]
+fn fonts_needed_matches_by_name_reports_the_missing_and_activates_the_rest() {
+    let api = api();
+    let ps = |name: &str| NeededFont {
+        postscript_name: Some(name.into()),
+        ..NeededFont::default()
+    };
+    let fonts = vec![
+        ps("inter-italic"),
+        ps("Helvetica-Bold"),
+        NeededFont {
+            family: Some("JetBrains Mono".into()),
+            ..NeededFont::default()
+        },
+        NeededFont {
+            full_name: Some("Inter Regular".into()),
+            ..NeededFont::default()
+        },
+    ];
+    let dry = api
+        .fonts_needed(FontsNeededRequest {
+            fonts: fonts.clone(),
+            document: None,
+            activate: false,
+        })
+        .unwrap();
+    let hits: Vec<_> = dry.matched.iter().map(|m| (m.face, m.matched_by)).collect();
+    assert_eq!(
+        hits,
+        [
+            (FaceId(2), NeededFontRule::PostscriptName),
+            (FaceId(6), NeededFontRule::Family),
+            (FaceId(1), NeededFontRule::FullName),
+        ]
+    );
+    assert_eq!(dry.unmatched, [ps("Helvetica-Bold")]);
+    assert_eq!(dry.missing, 1);
+    assert!(dry.outcomes.is_empty());
+    assert!(api.list_active().unwrap().is_empty());
+
+    let res = api
+        .fonts_needed(FontsNeededRequest {
+            fonts,
+            document: Some("poster.indd".into()),
+            activate: true,
+        })
+        .unwrap();
+    assert_eq!(res.matched, dry.matched);
+    // 6 JetBrains Mono clashes with a system font and stays inactive.
+    let outcomes: Vec<_> = res.outcomes.iter().map(|o| o.face).collect();
+    assert_eq!(outcomes, [FaceId(2), FaceId(6), FaceId(1)]);
+    assert!(matches!(
+        res.outcomes[1].outcome,
+        OutcomeStatus::Conflict { .. }
+    ));
+    let active: Vec<_> = api
+        .list_active()
+        .unwrap()
+        .into_iter()
+        .map(|a| (a.face, a.mode, a.document))
+        .collect();
+    let doc = Some("poster.indd".to_owned());
+    assert_eq!(
+        active,
+        [
+            (FaceId(1), ActivationMode::Session, doc.clone()),
+            (FaceId(2), ActivationMode::Session, doc),
+        ]
+    );
+}
+
+#[test]
+fn fonts_needed_leaves_a_permanently_active_face_permanent() {
+    let api = api();
+    api.activate(acts(
+        &[1],
+        ActivationMode::Permanent,
+        ConflictPolicy::KeepExisting,
+    ))
+    .unwrap();
+    let res = api
+        .fonts_needed(FontsNeededRequest {
+            fonts: vec![NeededFont {
+                postscript_name: Some("Inter-Regular".into()),
+                ..NeededFont::default()
+            }],
+            document: Some("poster.indd".into()),
+            activate: true,
+        })
+        .unwrap();
+    assert_eq!(res.outcomes[0].face, FaceId(1));
+    assert_eq!(res.outcomes[0].outcome, OutcomeStatus::Unchanged);
+    let active = api.list_active().unwrap();
+    assert_eq!(active[0].mode, ActivationMode::Permanent);
+    assert_eq!(active[0].document, None);
 }
 
 #[test]
@@ -2918,4 +3015,47 @@ fn the_mock_update_check_follows_the_rules_of_the_core() {
         ]
     );
     assert_eq!(updates[0].available_version.as_deref(), Some("2026-09-01"));
+}
+
+#[test]
+fn sidecar_conflicts_are_listed_with_a_problem_and_resolved_once() {
+    use fm_api::LibraryService;
+    use fm_api::library::{ConflictSide, ProblemKind, ResolveSidecarConflictRequest, SidecarField};
+    let api = MockApi::new();
+    assert!(api.list_sidecar_conflicts().unwrap().is_empty());
+    let id = api
+        .add_sidecar_conflict(FaceId(1), SidecarField::Notes, "\"mine\"", "\"theirs\"")
+        .unwrap();
+    let listed = api.list_sidecar_conflicts().unwrap();
+    assert_eq!(listed.len(), 1);
+    assert_eq!(
+        (listed[0].mine.as_str(), listed[0].theirs.as_str()),
+        ("\"mine\"", "\"theirs\"")
+    );
+    let sidecar_problems = |api: &MockApi| {
+        api.list_problems()
+            .unwrap()
+            .into_iter()
+            .filter(|p| p.kind == ProblemKind::SidecarConflict)
+            .count()
+    };
+    assert_eq!(sidecar_problems(&api), 1);
+
+    let req = ResolveSidecarConflictRequest {
+        id,
+        keep: ConflictSide::Theirs,
+    };
+    api.resolve_sidecar_conflict(req.clone()).unwrap();
+    assert!(api.list_sidecar_conflicts().unwrap().is_empty());
+    assert_eq!(sidecar_problems(&api), 0);
+    assert_eq!(
+        api.resolve_sidecar_conflict(req).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        api.add_sidecar_conflict(FaceId(999), SidecarField::Rating, "", "")
+            .unwrap_err()
+            .code,
+        ErrorCode::NotFound
+    );
 }

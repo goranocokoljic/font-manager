@@ -7,8 +7,11 @@ import type {
   Event,
   Problem,
   ProblemKind,
+  ConflictSide,
   Resolution,
   ResolutionId,
+  SidecarConflict,
+  SidecarConflictId,
   TrashMoveStatus,
 } from '../api/types';
 import { t } from '../i18n';
@@ -83,6 +86,9 @@ export function groupOf(kind: ProblemKind): ProblemGroup | undefined {
  * the undo in the app toast (`useToastStore`, gone after `TOAST_MS` unless the pointer
  * or focus is on it, and kept across routes), and the `history` of actions, each
  * undoable from there for as long as it is listed.
+ *
+ * Sidecar conflicts (E28.1): the values another computer set differently, each resolved
+ * by keeping this computer's value or the other one; a resolved conflict leaves the list.
  */
 export const useProblemsStore = defineStore('problems', () => {
   const problems = ref<Problem[]>([]);
@@ -90,6 +96,7 @@ export const useProblemsStore = defineStore('problems', () => {
   const loaded = ref(false);
   const duplicates = ref<DuplicateGroup[]>([]);
   const history = ref<Resolution[]>([]);
+  const sidecarConflicts = ref<SidecarConflict[]>([]);
   /** The dry run of a "Keep this one", waiting for the user to confirm. */
   const plan = ref<Resolution | null>(null);
   /** The error of the last keep or undo. */
@@ -124,15 +131,17 @@ export const useProblemsStore = defineStore('problems', () => {
     const mine = ++round;
     try {
       const client = useClient();
-      const [list, groups, actions] = await Promise.all([
+      const [list, groups, actions, conflicts] = await Promise.all([
         client.listProblems(),
         client.listDuplicates(),
         client.listResolutions(),
+        client.listSidecarConflicts(),
       ]);
       if (mine !== round) return;
       problems.value = list;
       duplicates.value = groups;
       history.value = actions;
+      sidecarConflicts.value = conflicts;
       error.value = null;
     } catch (e) {
       if (mine === round) error.value = e as ApiError;
@@ -231,6 +240,17 @@ export const useProblemsStore = defineStore('problems', () => {
     }
   }
 
+  /** Keeps one value of a sidecar conflict, then reads the lists again. */
+  async function resolveConflict(id: SidecarConflictId, keep: ConflictSide): Promise<void> {
+    actionError.value = null;
+    try {
+      await useClient().resolveSidecarConflict({ id, keep });
+    } catch (e) {
+      actionError.value = e as ApiError;
+    }
+    await refresh();
+  }
+
   /** Subscribes to the events that change the list (once) and reads it. */
   async function load(): Promise<void> {
     unsubscribe ??= useClient().onEvent(onEvent);
@@ -263,5 +283,7 @@ export const useProblemsStore = defineStore('problems', () => {
     cancelPlan,
     confirmPlan,
     undo,
+    sidecarConflicts,
+    resolveConflict,
   };
 });

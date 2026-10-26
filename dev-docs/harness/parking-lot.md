@@ -264,3 +264,15 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E27.3 #173] crates/fm-core/src/api.rs:751 — the uncached fallback of `render_preview` (face file with no hash yet) has no test; `compare_preview` mirrors that fallback.
 - [E27.5 #175] apps/desktop/src/api/mock.ts:2339 — the TS mock `listFamilies` ignores the new `collection` filter (as it ignores `source`), while the Rust `MockApi` honors it, so the two mocks differ on that field.
 - [E27.6 #176] apps/desktop/src/styles/logical.test.ts:118 — the physical left/right check misses `margin: 2px 0 0 24px` in a .vue <style> block on Windows but catches it on Linux CI, so a Windows-only preflight passes RTL-breaking CSS.
+
+## 2026-10-26
+
+- [E27.7 #177] apps/desktop/src/components/McpSettings.vue:117 — the shared role="status" announces only "Copied", so a screen-reader user does not hear which snippet was copied.
+- [E28.1 #179] crates/fm-core/src/scanner/watch.rs:636 — no production code starts a `Watcher`, so sidecar merges after the watcher debounce (E28.1 criterion 4) hold at the fm-core layer only until the app runs it.
+- [E28.1 #179] docs/user/sources.md:50 — the Problems table row says another computer can conflict on a tag, which was wrong before E28.1 too.
+- [E28.1 #179] apps/desktop/src/views/ProblemsView.vue:293 — Cancel or Confirm on the "Keep this one" dialog unmounts the focused button without returning focus, so focus falls to body and Escape stops closing the view.
+- [E28.1 #179] apps/desktop/src/views/ProblemsView.vue:375 — `.path` sets overflow-wrap only inside `.table`, so a long path outside the table can overflow at narrow widths.
+- [E28.2 #180] crates/fm-core/src/api.rs:944 — create_set / import_set / delete_set emit no Event, so other windows see a new set only after their next load().
+- [E28.2 #180] crates/fm-client/tests/conformance.rs:47 — fixed-name temp files (also crates/fm-endpoint/tests/routes.rs:75) are never deleted, like the existing `out` pattern.
+- [E28.2 #180] crates/fm-core/src/api.rs:970 — the absolute-path check of set files is tested only through save_set_file, not load_set_file.
+- [E28.2 #180] crates/fm-endpoint/src/routes.rs:107 — save_set_file lets an authenticated endpoint client write any absolute path, like the existing export_* routes.

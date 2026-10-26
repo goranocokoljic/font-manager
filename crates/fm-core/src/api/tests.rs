@@ -4,7 +4,9 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
-use fm_api::activation::{ActivationMode, ConflictPolicy, OutcomeStatus};
+use fm_api::activation::{
+    ActivationMode, ConflictPolicy, NeededFont, NeededFontRule, OutcomeStatus,
+};
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
 use fm_api::library::{
@@ -4688,4 +4690,622 @@ fn a_font_argument_names_faces_by_id_postscript_full_or_family_name() {
         resolved(api, "Bebas Neue").expect_err("paused").code,
         ErrorCode::NotFound
     );
+}
+
+#[test]
+fn the_app_offers_claude_desktop_its_stdio_shim() {
+    let lib = Lib::new("mcp-shim");
+    let shim = lib.paths.data.join("Font Manager").join("fm-mcp-stdio");
+    let api = Lib::new("mcp-shim-on")
+        .api
+        .with_endpoint_in(lib.paths.data.clone())
+        .with_mcp_shim(fm_platform::mcp_shim::ShimCommand {
+            program: shim.clone(),
+            args: Vec::new(),
+        });
+    api.publish_endpoint(std::net::SocketAddr::from(([127, 0, 0, 1], 40003)))
+        .expect("publish");
+    let status = api.mcp_status().expect("status");
+    let desktop = status
+        .snippets
+        .iter()
+        .find(|s| s.client == fm_api::settings::McpClient::ClaudeDesktop)
+        .expect("a Claude Desktop snippet");
+    let json: serde_json::Value = serde_json::from_str(&desktop.text).expect("JSON");
+    assert_eq!(
+        json["mcpServers"]["font-manager"]["command"],
+        shim.to_string_lossy().as_ref()
+    );
+    api.unpublish_endpoint().expect("unpublish");
+}
+
+// --- set files across machines (E28.2) ----------------------------------
+
+/// Every face of the library but those in a truncated file.
+fn healthy_faces(lib: &Lib) -> Vec<FaceId> {
+    let mut faces = Vec::new();
+    for name in lib.names() {
+        let family = lib.api.get_family(lib.family(&name).id).expect("family");
+        for face in family.faces {
+            let path = lib.api.get_face(face.id).expect("detail").path;
+            if !path.contains("truncated") {
+                faces.push(face.id);
+            }
+        }
+    }
+    faces
+}
+
+/// `(family, style, hash)` of each face, sorted.
+fn entries(lib: &Lib, faces: &[FaceId]) -> Vec<(String, String, String)> {
+    let mut out: Vec<_> = faces
+        .iter()
+        .map(|f| {
+            let d = lib.api.get_face(*f).expect("detail");
+            (d.face.family_name, d.face.style, d.hash)
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+/// The second machine: the same fixture copies, but Barlow renamed, the
+/// collection file (.ttc) in another source and Bebas Neue not there.
+fn second_machine() -> Lib {
+    let lib = Lib::new("api-set-file-b");
+    let barlow = lib.root.join("barlow");
+    std::fs::rename(
+        barlow.join("Barlow-BoldItalic.ttf"),
+        barlow.join("my-barlow-copy.ttf"),
+    )
+    .expect("rename");
+    let other = lib.dir.path().join("Elsewhere");
+    std::fs::create_dir_all(&other).expect("folder");
+    std::fs::rename(lib.root.join("agdasima"), other.join("agdasima")).expect("move");
+    std::fs::remove_dir_all(lib.root.join("bebasneue")).expect("remove");
+    for folder in [&lib.root, &other] {
+        let source = lib
+            .api
+            .add_source(AddSourceRequest {
+                path: folder.display().to_string(),
+                mode: ImportMode::IndexInPlace,
+            })
+            .expect("source");
+        lib.scan(Some(source.id), true);
+    }
+    lib
+}
+
+#[test]
+fn save_set_file_writes_the_set_export_and_nothing_else() {
+    let (lib, _, _) = Lib::scanned("api-set-file-save");
+    let faces = healthy_faces(&lib);
+    let set = lib
+        .api
+        .create_set(CreateSetRequest {
+            name: "Brochure".into(),
+            faces: faces.clone(),
+        })
+        .expect("set");
+    let out = lib.dir.path().join("Out");
+    std::fs::create_dir_all(&out).expect("folder");
+    let saved = lib
+        .api
+        .save_set_file(SaveSetFileRequest {
+            set: set.id,
+            path: out.join("Brochure").display().to_string(),
+        })
+        .expect("saved");
+    assert_eq!(PathBuf::from(&saved.path), out.join("Brochure.fmset.json"));
+    assert_eq!(saved.fonts as usize, faces.len());
+    let written: Vec<_> = std::fs::read_dir(&out)
+        .expect("dir")
+        .map(|e| e.expect("entry").file_name())
+        .collect();
+    assert_eq!(written, ["Brochure.fmset.json"]);
+    let text = std::fs::read_to_string(&saved.path).expect("read");
+    let parsed: SetExport = serde_json::from_str(&text).expect("SetExport JSON");
+    assert_eq!(parsed, lib.api.export_set(set.id).expect("export"));
+
+    let relative = lib.api.save_set_file(SaveSetFileRequest {
+        set: set.id,
+        path: "Brochure.fmset.json".into(),
+    });
+    assert_eq!(
+        relative.expect_err("relative").code,
+        ErrorCode::InvalidRequest
+    );
+    let unknown = lib.api.save_set_file(SaveSetFileRequest {
+        set: SetId(9_999),
+        path: out.join("x").display().to_string(),
+    });
+    assert_eq!(unknown.expect_err("unknown").code, ErrorCode::NotFound);
+    assert_eq!(std::fs::read_dir(&out).expect("dir").count(), 1);
+}
+
+#[test]
+fn a_set_file_matches_by_hash_on_a_second_machine_and_activates_the_same_files() {
+    let (a, _, _) = Lib::scanned("api-set-file-a");
+    let faces = healthy_faces(&a);
+    let set = a
+        .api
+        .create_set(CreateSetRequest {
+            name: "Brochure".into(),
+            faces: faces.clone(),
+        })
+        .expect("set");
+    let file = a.dir.path().join("Brochure.fmset.json");
+    a.api
+        .save_set_file(SaveSetFileRequest {
+            set: set.id,
+            path: file.display().to_string(),
+        })
+        .expect("saved");
+    let on_a = entries(&a, &faces);
+    let ttc_on_a: Vec<_> = on_a
+        .iter()
+        .filter(|(family, ..)| family == "Agdasima")
+        .cloned()
+        .collect();
+    assert_eq!(ttc_on_a.len(), 2, "both faces of the .ttc: {on_a:?}");
+    assert_eq!(ttc_on_a[0].2, ttc_on_a[1].2, "one file, one hash");
+
+    let b = second_machine();
+    let imported = b
+        .api
+        .load_set_file(LoadSetFileRequest {
+            path: file.display().to_string(),
+        })
+        .expect("imported");
+
+    // Bebas Neue is not on B: it is listed with its family and style.
+    let missing: Vec<_> = imported
+        .missing
+        .iter()
+        .map(|m| (m.family.as_str(), m.style.as_str()))
+        .collect();
+    assert_eq!(missing, [("Bebas Neue", "Regular")]);
+    // Every other font matched by hash, renamed, moved to another source,
+    // and each face of the .ttc by family and style.
+    let expected: Vec<_> = on_a
+        .iter()
+        .filter(|(family, ..)| family != "Bebas Neue")
+        .cloned()
+        .collect();
+    assert_eq!(entries(&b, &imported.set.faces), expected);
+    let paths: Vec<String> = imported
+        .set
+        .faces
+        .iter()
+        .map(|f| b.api.get_face(*f).expect("detail").path)
+        .collect();
+    assert!(
+        paths.iter().any(|p| p.ends_with("my-barlow-copy.ttf")),
+        "{paths:?}"
+    );
+    assert!(paths.iter().any(|p| p.contains("Elsewhere")), "{paths:?}");
+
+    // Activating the set activates the same files, by hash, on A and on B
+    // (less the font B does not have; web fonts are skipped on both).
+    let active_on_a = activate_set(&a, set.id);
+    assert!(active_on_a.len() >= 3, "{active_on_a:?}");
+    let expected_active: Vec<_> = active_on_a
+        .into_iter()
+        .filter(|(family, ..)| family != "Bebas Neue")
+        .collect();
+    assert!(
+        expected_active
+            .iter()
+            .any(|(family, ..)| family == "Agdasima")
+    );
+    assert_eq!(activate_set(&b, imported.set.id), expected_active);
+}
+
+/// Activates a set for the session; `(family, style, hash)` of what is active.
+fn activate_set(lib: &Lib, set: SetId) -> Vec<(String, String, String)> {
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Set { set },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::default(),
+        })
+        .expect("activate");
+    let active: Vec<FaceId> = lib
+        .api
+        .list_active()
+        .expect("active")
+        .into_iter()
+        .map(|a| a.face)
+        .collect();
+    entries(lib, &active)
+}
+
+// --- fonts needed (E29.2) ----------------------------------------------
+
+fn needed_ps(name: &str) -> NeededFont {
+    NeededFont {
+        postscript_name: Some(name.into()),
+        ..NeededFont::default()
+    }
+}
+
+fn needed_family(family: &str, style: Option<&str>) -> NeededFont {
+    NeededFont {
+        family: Some(family.into()),
+        style: style.map(str::to_owned),
+        ..NeededFont::default()
+    }
+}
+
+fn needed(fonts: Vec<NeededFont>, activate: bool) -> FontsNeededRequest {
+    FontsNeededRequest {
+        fonts,
+        document: None,
+        activate,
+    }
+}
+
+/// The first face of the file `relative` under the library folder.
+fn face_at(lib: &Lib, relative: &str) -> FaceId {
+    let path = lib.root.join(relative);
+    (1..1000)
+        .map(FaceId)
+        .find(|&id| {
+            lib.api
+                .get_face(id)
+                .is_ok_and(|f| Path::new(&f.path) == path)
+        })
+        .unwrap_or_else(|| panic!("no face at {relative}"))
+}
+
+/// The face and rule of each match.
+fn hits(res: &FontsNeededResponse) -> Vec<(FaceId, NeededFontRule)> {
+    res.matched.iter().map(|m| (m.face, m.matched_by)).collect()
+}
+
+/// Criterion 2: every rule on real names. Archivo SemiBold has a typographic
+/// family ("Archivo" / "SemiBold") that differs from its legacy one
+/// ("Archivo SemiBold" / "Regular") and from its full name.
+#[test]
+fn fonts_needed_matches_each_rule_on_the_fixtures_and_reports_the_rest() {
+    let (lib, _, _) = Lib::scanned("api-needed-rules");
+    let barlow = face_at(&lib, "barlow/Barlow-BoldItalic.ttf");
+    let semibold = face_at(&lib, "archivo/Archivo-SemiBold.woff2");
+    let bebas = face_at(&lib, "bebasneue/BebasNeue-Regular.ttf");
+    let asap = face_at(&lib, "asapsharp/AsapSharp[wdth,wght].ttf");
+    let full = NeededFont {
+        postscript_name: Some("NotInTheLibrary".into()),
+        full_name: Some(" BEBAS NEUE regular ".into()),
+        family: Some("Barlow".into()),
+        style: Some("Bold Italic".into()),
+    };
+    let res = lib
+        .api
+        .fonts_needed(needed(
+            vec![
+                needed_ps("Helvetica-Bold"),
+                needed_ps("barlow-bolditalic"),
+                full.clone(),
+                needed_family("archivo", Some("SEMIBOLD")),
+                needed_family("Archivo SemiBold", None),
+                needed_family("Inter", Some("Bold")),
+                needed_family("Asap Sharp", Some("Regular")),
+                needed_family("Archivo", Some("Black")),
+            ],
+            false,
+        ))
+        .expect("fonts needed");
+    assert_eq!(
+        hits(&res),
+        [
+            (barlow, NeededFontRule::PostscriptName),
+            // The PostScript name is not there: the full name decides
+            // before the family does.
+            (bebas, NeededFontRule::FullName),
+            (semibold, NeededFontRule::TypographicFamily),
+            (semibold, NeededFontRule::Family),
+            (asap, NeededFontRule::Family),
+        ]
+    );
+    assert_eq!(res.matched[1].font, full, "the font as asked");
+    assert_eq!(
+        res.unmatched,
+        [
+            needed_ps("Helvetica-Bold"),
+            needed_family("Inter", Some("Bold")),
+            needed_family("Archivo", Some("Black")),
+        ]
+    );
+    assert_eq!(res.missing, 3);
+    assert!(res.outcomes.is_empty(), "activate false activates nothing");
+    assert!(lib.api.list_active().expect("active").is_empty());
+    assert!(lib.activator.list_active().expect("os list").is_empty());
+}
+
+/// A library with the fixtures, a healthy copy of Bebas Neue in `extra/`
+/// (a higher face id) and a broken one (the file cut short, its names
+/// intact) in `0-cut/` (a lower id than both).
+fn bebas_copies(label: &str) -> (Lib, [FaceId; 3]) {
+    let lib = Lib::new(label);
+    let bytes = std::fs::read(fixtures().join("google-repo/bebasneue/BebasNeue-Regular.ttf"))
+        .expect("fixture");
+    for (folder, data) in [
+        ("extra", &bytes[..]),
+        ("0-cut", &bytes[..bytes.len() * 99 / 100]),
+    ] {
+        let to = lib.root.join(folder);
+        std::fs::create_dir_all(&to).expect("folder");
+        std::fs::write(to.join("BebasNeue-Regular.ttf"), data).expect("copy");
+    }
+    lib.api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(None, true);
+    let ids = [
+        face_at(&lib, "0-cut/BebasNeue-Regular.ttf"),
+        face_at(&lib, "bebasneue/BebasNeue-Regular.ttf"),
+        face_at(&lib, "extra/BebasNeue-Regular.ttf"),
+    ];
+    (lib, ids)
+}
+
+/// Criterion 4: of several faces with the name, an active one wins, then a
+/// healthy one, then the lowest id; the broken copy never does.
+#[test]
+fn of_duplicate_faces_the_active_then_the_lowest_healthy_one_is_matched() {
+    let (lib, [broken, first, copy]) = bebas_copies("api-needed-dups");
+    assert!(broken < first && first < copy, "{broken} {first} {copy}");
+    let detail = lib.api.get_face(broken).expect("broken face");
+    assert!(matches!(detail.face.health, Health::Broken(_)));
+    let ask = || {
+        lib.api
+            .fonts_needed(needed(
+                vec![
+                    needed_ps("BebasNeue-Regular"),
+                    needed_family("Bebas Neue", None),
+                ],
+                false,
+            ))
+            .expect("fonts needed")
+    };
+    assert_eq!(
+        hits(&ask()),
+        [
+            (first, NeededFontRule::PostscriptName),
+            (first, NeededFontRule::Family)
+        ]
+    );
+
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces { faces: vec![copy] },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::default(),
+        })
+        .expect("activate the copy");
+    assert_eq!(
+        hits(&ask()),
+        [
+            (copy, NeededFontRule::PostscriptName),
+            (copy, NeededFontRule::Family)
+        ]
+    );
+}
+
+/// Criterion 5: with `activate` the matched faces are session-activated
+/// through the activator, one outcome per face, a clash included, and the
+/// document is recorded; the match report is the one without `activate`.
+#[test]
+fn fonts_needed_activates_the_matched_faces_for_the_session() {
+    let (lib, _, _) = Lib::scanned("api-needed-activate");
+    let barlow = face_at(&lib, "barlow/Barlow-BoldItalic.ttf");
+    let bebas = face_at(&lib, "bebasneue/BebasNeue-Regular.ttf");
+    lib.activator.install(
+        "Agdasima-Regular",
+        "/System/Fonts/Agdasima.ttf",
+        fm_platform::ConflictKind::System,
+    );
+    let fonts = vec![
+        needed_ps("Barlow-BoldItalic"),
+        needed_ps("Missing-Font"),
+        needed_family("Bebas Neue", Some("Regular")),
+        needed_ps("Agdasima-Regular"),
+        // The same face again, by another name: one outcome.
+        NeededFont {
+            full_name: Some("Barlow Bold Italic".into()),
+            ..NeededFont::default()
+        },
+    ];
+    let dry = lib
+        .api
+        .fonts_needed(needed(fonts.clone(), false))
+        .expect("match only");
+    let agdasima = dry.matched[2].face;
+    assert_eq!(dry.missing, 1);
+    let rx = lib.api.subscribe();
+    let res = lib
+        .api
+        .fonts_needed(FontsNeededRequest {
+            fonts,
+            document: Some("poster.indd".into()),
+            activate: true,
+        })
+        .expect("activate");
+    assert_eq!(
+        (&res.matched, &res.unmatched, res.missing),
+        (&dry.matched, &dry.unmatched, dry.missing),
+        "the same report either way"
+    );
+    assert_eq!(
+        res.outcomes,
+        [
+            ActivationOutcome {
+                face: barlow,
+                outcome: OutcomeStatus::Done
+            },
+            ActivationOutcome {
+                face: bebas,
+                outcome: OutcomeStatus::Done
+            },
+            ActivationOutcome {
+                face: agdasima,
+                outcome: OutcomeStatus::Conflict {
+                    with: fm_api::activation::ConflictWith::System {
+                        path: "/System/Fonts/Agdasima.ttf".into()
+                    }
+                }
+            },
+        ]
+    );
+    assert!(matches!(
+        rx.recv_timeout(WAIT),
+        Ok(Event::ActivationChanged { activated, .. }) if activated == [barlow, bebas]
+    ));
+    assert_eq!(lib.activator.list_active().expect("os list").len(), 2);
+    let active = lib.api.list_active().expect("active");
+    assert_eq!(
+        active
+            .iter()
+            .map(|a| (a.face, a.mode, a.document.as_deref()))
+            .collect::<Vec<_>>(),
+        [
+            (barlow, ActivationMode::Session, Some("poster.indd")),
+            (bebas, ActivationMode::Session, Some("poster.indd")),
+        ]
+    );
+
+    // Asked again: nothing new, and the first document stays.
+    let again = lib
+        .api
+        .fonts_needed(FontsNeededRequest {
+            fonts: vec![needed_ps("Barlow-BoldItalic")],
+            document: Some("other.indd".into()),
+            activate: true,
+        })
+        .expect("again");
+    assert_eq!(again.outcomes[0].outcome, OutcomeStatus::Unchanged);
+    assert_eq!(
+        lib.api.list_active().expect("active")[0]
+            .document
+            .as_deref(),
+        Some("poster.indd")
+    );
+}
+
+/// Review cycle 1 (COR-1): a face the user activated permanently stays
+/// permanent when a document asks for it; it is reported unchanged and
+/// does not take the document.
+#[test]
+fn fonts_needed_leaves_a_permanently_active_face_permanent() {
+    let (lib, _, _) = Lib::scanned("api-needed-permanent");
+    let barlow = face_at(&lib, "barlow/Barlow-BoldItalic.ttf");
+    let bebas = face_at(&lib, "bebasneue/BebasNeue-Regular.ttf");
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces {
+                faces: vec![barlow],
+            },
+            mode: ActivationMode::Permanent,
+            on_conflict: ConflictPolicy::default(),
+        })
+        .expect("activate permanently");
+    let res = lib
+        .api
+        .fonts_needed(FontsNeededRequest {
+            fonts: vec![
+                needed_ps("Barlow-BoldItalic"),
+                needed_ps("BebasNeue-Regular"),
+                needed_family("Barlow", Some("Bold Italic")),
+            ],
+            document: Some("poster.indd".into()),
+            activate: true,
+        })
+        .expect("fonts needed");
+    assert_eq!(
+        res.outcomes,
+        [
+            ActivationOutcome {
+                face: barlow,
+                outcome: OutcomeStatus::Unchanged
+            },
+            ActivationOutcome {
+                face: bebas,
+                outcome: OutcomeStatus::Done
+            },
+        ]
+    );
+    let active: Vec<_> = lib
+        .api
+        .list_active()
+        .expect("active")
+        .into_iter()
+        .map(|a| (a.face, a.mode, a.document))
+        .collect();
+    assert_eq!(
+        active,
+        [
+            (barlow, ActivationMode::Permanent, None),
+            (
+                bebas,
+                ActivationMode::Session,
+                Some("poster.indd".to_owned())
+            ),
+        ]
+    );
+    let os = lib.activator.list_active().expect("os list");
+    assert!(
+        os.iter()
+            .any(|r| r.mode == fm_platform::Mode::Permanent
+                && r.path.ends_with("Barlow-BoldItalic.ttf")),
+        "the permanent registration is kept: {os:?}"
+    );
+}
+
+/// Review cycle 1 (TST-1): a broken face (the file cut short, its names
+/// intact) is never matched, also when it is the only face with the name.
+#[test]
+fn a_broken_face_alone_is_not_matched() {
+    let lib = Lib::new("api-needed-broken");
+    let bytes =
+        std::fs::read(fixtures().join("google-static/asap/Asap_Condensed-ExtraLightItalic.ttf"))
+            .expect("fixture");
+    let to = lib.root.join("0-cut");
+    std::fs::create_dir_all(&to).expect("folder");
+    std::fs::write(to.join("Cut.ttf"), &bytes[..bytes.len() * 99 / 100]).expect("cut copy");
+    lib.api
+        .add_source(AddSourceRequest {
+            path: lib.root.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(None, true);
+    let cut = lib
+        .api
+        .get_face(face_at(&lib, "0-cut/Cut.ttf"))
+        .expect("cut face");
+    assert!(
+        matches!(cut.face.health, Health::Broken(_)),
+        "{:?}",
+        cut.face.health
+    );
+    let ps = cut.face.postscript_name.clone();
+    assert!(!ps.is_empty(), "the cut copy keeps its names");
+    let font = NeededFont {
+        postscript_name: Some(ps),
+        family: Some(cut.face.family_name.clone()),
+        style: Some(cut.face.style.clone()),
+        ..NeededFont::default()
+    };
+    let res = lib
+        .api
+        .fonts_needed(needed(vec![font.clone()], true))
+        .expect("fonts needed");
+    assert!(res.matched.is_empty(), "{:?}", res.matched);
+    assert_eq!(res.unmatched, [font]);
+    assert_eq!(res.missing, 1);
+    assert!(res.outcomes.is_empty());
+    assert!(lib.activator.list_active().expect("os list").is_empty());
 }

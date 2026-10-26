@@ -78,12 +78,16 @@ import type {
   PreviewRequest,
   Problem,
   ProjectSet,
+  ImportSetResponse,
+  SavedSetFile,
+  SetId,
   QuickCollection,
   QuickCollectionRequest,
   RenameCollectionRequest,
   RenameComparisonRequest,
   Resolution,
   ResolutionId,
+  ResolveSidecarConflictRequest,
   SampleText,
   SampleTextRequest,
   SaveComparisonRequest,
@@ -95,6 +99,7 @@ import type {
   SetSourcePausedRequest,
   Settings,
   SettingsUpdate,
+  SidecarConflict,
   SimilarFace,
   SimilarRequest,
   PairingRequest,
@@ -280,8 +285,22 @@ export interface FmClient {
   listResolutions(): Promise<Resolution[]>;
   /** Puts the copies of an action back from the trash. */
   undoResolution(resolution: ResolutionId): Promise<Resolution>;
+  /** Sidecar values another computer set differently, oldest first (E28.1). */
+  listSidecarConflicts(): Promise<SidecarConflict[]>;
+  /** Keeps one value of a sidecar conflict; the other computer takes it. */
+  resolveSidecarConflict(req: ResolveSidecarConflictRequest): Promise<void>;
   /** Every project set: named groups of faces activated together. */
   listSets(): Promise<ProjectSet[]>;
+  /**
+   * "Export set…" (E28.2): asks where to save with the native save dialog, suggesting
+   * `fileName`, and writes the set file there. `null` when the user cancels.
+   */
+  saveSetFile(set: SetId, fileName: string): Promise<SavedSetFile | null>;
+  /**
+   * "Import set…" (E28.2): asks for a set file with the native open dialog and imports
+   * it, matching fonts by file hash. `null` when the user cancels.
+   */
+  loadSetFile(): Promise<ImportSetResponse | null>;
   /** Pins an instance of a variable face as a virtual style of a manual collection or a set. */
   pinInstance(req: PinInstanceRequest): Promise<VirtualStyle>;
   /** The virtual styles of one manual collection or one set, A to Z. */
@@ -411,7 +430,11 @@ export const tauriClient: FmClient = {
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
   listResolutions: () => invoke<Resolution[]>('list_resolutions'),
   undoResolution: (resolution) => invoke<Resolution>('undo_resolution', { resolution }),
+  listSidecarConflicts: () => invoke<SidecarConflict[]>('list_sidecar_conflicts'),
+  resolveSidecarConflict: (req) => invoke<void>('resolve_sidecar_conflict', { req }),
   listSets: () => invoke<ProjectSet[]>('list_sets'),
+  saveSetFile: (set, fileName) => invoke<SavedSetFile | null>('save_set_file', { set, fileName }),
+  loadSetFile: () => invoke<ImportSetResponse | null>('load_set_file'),
   pinInstance: (req) => invoke<VirtualStyle>('pin_instance', { req }),
   listVirtualStyles: (req) => invoke<VirtualStyle[]>('list_virtual_styles', { req }),
   deleteVirtualStyle: (style) => invoke<void>('delete_virtual_style', { style }),

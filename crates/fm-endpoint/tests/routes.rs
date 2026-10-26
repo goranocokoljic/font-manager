@@ -72,6 +72,8 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
     let export = served.call("export_set", "1").body;
     let out = std::env::temp_dir().join("fm-endpoint-routes");
     let out = serde_json::to_string(&out.to_string_lossy()).expect("path");
+    let set_file = std::env::temp_dir().join("fm-endpoint-routes.fmset.json");
+    let set_file = serde_json::to_string(&set_file.to_string_lossy()).expect("path");
     let faces = r#"{"kind":"faces","faces":[1]}"#;
     let pairs: Vec<(&'static str, String)> = vec![
         // library
@@ -96,6 +98,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ),
         ("list_resolutions", String::new()),
         ("undo_resolution", "1".into()),
+        ("list_sidecar_conflicts", String::new()),
+        (
+            "resolve_sidecar_conflict",
+            r#"{"id":1,"keep":"mine"}"#.into(),
+        ),
         ("list_glyphs", r#"{"face":1}"#.into()),
         ("get_glyph", r#"{"face":1,"codePoint":65}"#.into()),
         ("resolve_font", r#"{"font":"1"}"#.into()),
@@ -128,6 +135,11 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("list_active", String::new()),
         ("conflicts", faces.into()),
         ("list_conflicts", String::new()),
+        (
+            "fonts_needed",
+            r#"{"fonts":[{"postscriptName":"Inter-Regular"},{"family":"Nope"}],"activate":false}"#
+                .into(),
+        ),
         // organization
         ("list_collections", String::new()),
         ("create_collection", r#"{"name":"Over HTTP"}"#.into()),
@@ -162,6 +174,8 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("delete_set", "999".into()),
         ("export_set", "1".into()),
         ("import_set", export.to_string()),
+        ("save_set_file", format!(r#"{{"set":1,"path":{set_file}}}"#)),
+        ("load_set_file", format!(r#"{{"path":{set_file}}}"#)),
         ("pin_instance", r#"{"face":1,"name":"Pinned"}"#.into()),
         ("list_virtual_styles", "{}".into()),
         ("delete_virtual_style", "999".into()),

@@ -21,7 +21,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace, Clash,
-    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, OutcomeStatus, Target,
+    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, FontsNeededRequest,
+    FontsNeededResponse, OutcomeStatus, Target,
 };
 use fm_api::common::FontFormat;
 use fm_api::event::Event;
@@ -34,6 +35,7 @@ use fm_platform::{
 
 use crate::error::{FmError, FmResult};
 use crate::index::{ActiveRow, FaceRow, Index, platform_mode};
+use crate::needed;
 
 /// Where activation changes go: the app's event stream.
 pub type Emit = Arc<dyn Fn(Event) + Send + Sync>;
@@ -582,6 +584,61 @@ impl ActivationService for ActivationManager {
             }
         }
         Ok(out)
+    }
+
+    fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
+        let mut index = self.lock();
+        let (matched, unmatched) = needed::match_fonts(req.fonts, &index.needed_faces()?);
+        let mut outcomes = Vec::new();
+        if req.activate && !matched.is_empty() {
+            // A face already active stays as it is, in its mode: a session
+            // request would turn a permanent activation into a session one.
+            let active: HashSet<FaceId> = index.active_rows()?.iter().map(|r| r.face).collect();
+            let mut seen = HashSet::new();
+            let faces: Vec<FaceId> = matched
+                .iter()
+                .map(|m| m.face)
+                .filter(|f| seen.insert(*f))
+                .collect();
+            let wanted: Vec<FaceId> = faces
+                .iter()
+                .copied()
+                .filter(|f| !active.contains(f))
+                .collect();
+            let mut done: HashMap<FaceId, OutcomeStatus> = HashMap::new();
+            if !wanted.is_empty() {
+                // The Activate button's path: session mode, clashes reported.
+                let act = ActivateRequest {
+                    target: Target::Faces { faces: wanted },
+                    mode: ActivationMode::Session,
+                    on_conflict: ConflictPolicy::KeepExisting,
+                };
+                for o in self.activate_locked(&mut index, &act)? {
+                    done.insert(o.face, o.outcome);
+                }
+            }
+            outcomes = faces
+                .into_iter()
+                .map(|face| ActivationOutcome {
+                    face,
+                    outcome: done.remove(&face).unwrap_or(OutcomeStatus::Unchanged),
+                })
+                .collect();
+            if let Some(document) = &req.document {
+                let fresh: Vec<FaceId> = outcomes
+                    .iter()
+                    .filter(|o| o.outcome == OutcomeStatus::Done)
+                    .map(|o| o.face)
+                    .collect();
+                index.set_activation_document(&fresh, document)?;
+            }
+        }
+        Ok(FontsNeededResponse {
+            missing: u32::try_from(unmatched.len()).unwrap_or(u32::MAX),
+            matched,
+            unmatched,
+            outcomes,
+        })
     }
 }
 
