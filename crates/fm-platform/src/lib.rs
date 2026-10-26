@@ -11,6 +11,7 @@ pub mod activator;
 pub mod autostart;
 pub mod browser;
 pub mod fs;
+pub mod ipc;
 mod linux;
 mod macos;
 pub mod mcp_shim;
@@ -28,6 +29,7 @@ pub use activator::{
 };
 pub use autostart::{AUTOSTART_ARG, Autostart, MockAutostart};
 pub use browser::{OpenCommand, OpenUrlError, open_url};
+pub use ipc::{IpcCloser, IpcListener, IpcName, IpcStream};
 #[cfg(target_os = "linux")]
 pub use linux::{LinuxActivator, LinuxAutostart};
 #[cfg(target_os = "macos")]

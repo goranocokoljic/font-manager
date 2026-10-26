@@ -1,0 +1,21 @@
+{
+  "id": "stopping-a-server-must-end-its-open-connections-before-the-q",
+  "title": "Stopping a server must end its open connections before the quit path runs",
+  "category": "correctness",
+  "rule": "When a transport serves the API on a thread per connection (IPC pipe or socket, a raw TCP server), its stop must end every open connection and serve no request after it returns: record each connection with a handle that can close it from another thread (a dup'ed socket to shutdown, a duplicated pipe handle to DisconnectNamedPipe), refuse new connections and check the stop flag before every dispatch, and wait (bounded) for a request already running. Joining only the accept thread leaves detached connection threads dispatching after the quit path ended the session fonts, and on Windows a still-open server instance makes the next FILE_FLAG_FIRST_PIPE_INSTANCE bind fail. Test it with a client that stays connected across the stop: a request it sends afterwards gets no reply and changes nothing, and the same name binds again at once.",
+  "rationale": "E29.1 (#182): IpcEndpoint::stop joined only the accept thread, so a plugin that kept its connection open could still activate a session font after CoreApi::shutdown, leaving an HKCU Fonts value after exit, and the Windows pipe could not be bound again after a cancelled update.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    182
+  ],
+  "file_globs": [
+    "crates/fm-endpoint/**",
+    "crates/fm-platform/src/**/ipc.rs",
+    "crates/fm-mcp/**",
+    "apps/desktop/src-tauri/src/**"
+  ],
+  "first_seen": "2026-10-26T17:06:21.448Z",
+  "last_seen": "2026-10-26T17:06:21.448Z"
+}

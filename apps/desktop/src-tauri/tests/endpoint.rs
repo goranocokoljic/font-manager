@@ -208,3 +208,44 @@ fn without_the_real_library_there_is_no_endpoint() {
     assert!(state.start_endpoint().is_none());
     assert_eq!(state.endpoint_addr(), None);
 }
+
+/// The IPC endpoint (E29.1) starts with the local API and the quit path
+/// stops it; a `hello` over it answers the API version.
+#[test]
+fn the_app_serves_the_ipc_endpoint_until_quit() -> TestResult {
+    use std::io::BufRead;
+
+    let home = Home::new("ipc")?;
+    let index = fm_core::startup::open_index(&home.paths);
+    let (state, _core) = serve(&home.paths, index, Arc::new(MockActivator::new()));
+    // Not the user's real pipe or socket: a name of this test's own.
+    let name = if cfg!(windows) {
+        fm_platform::IpcName::Pipe(format!(r"\\.\pipe\fm-app-ipc-{}", std::process::id()))
+    } else {
+        fm_platform::IpcName::Socket(home.root.join("run").join("fm.sock"))
+    };
+    let state = state.with_ipc(name.clone());
+    let started = state.start_endpoint().ok_or("the endpoint did not start")?;
+    started.join().map_err(|_| "start thread panicked")?;
+
+    let mut client = std::io::BufReader::new(fm_platform::ipc::connect(&name)?);
+    client
+        .get_mut()
+        .write_all(b"{\"v\":1,\"id\":1,\"method\":\"hello\"}\n")?;
+    client.get_mut().flush()?;
+    let mut reply = String::new();
+    client.read_line(&mut reply)?;
+    let reply: serde_json::Value = serde_json::from_str(&reply)?;
+    assert_eq!(reply["result"], serde_json::to_value(fm_api::API_VERSION)?);
+    drop(client);
+
+    state.run_quit_path();
+    assert!(
+        fm_platform::ipc::connect(&name).is_err(),
+        "{name} still accepts after quit"
+    );
+    if let fm_platform::IpcName::Socket(path) = &name {
+        assert!(!path.exists(), "the socket is left after quit");
+    }
+    Ok(())
+}

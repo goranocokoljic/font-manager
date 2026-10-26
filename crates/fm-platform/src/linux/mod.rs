@@ -14,6 +14,9 @@ mod autostart;
 #[cfg(unix)]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod fontconfig;
+// Shared with macOS, which sets the socket's mode its own way.
+#[cfg(unix)]
+pub(crate) mod ipc;
 mod open_url;
 pub(crate) mod paths;
 #[cfg(target_os = "linux")]

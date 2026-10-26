@@ -9,9 +9,13 @@
 //! | library | `~/Fonts` (not `~/.local/share/fonts`, which fontconfig activates) |
 //!
 //! Relative `XDG_*` values are ignored, as the specification requires.
+//!
+//! The IPC socket (ADR 0016) is `$XDG_RUNTIME_DIR/font-manager/fm.sock`, or
+//! `fm.sock` in the data folder when `XDG_RUNTIME_DIR` is unset or relative.
 
 use std::path::PathBuf;
 
+use crate::ipc::{IpcName, SOCKET_FILE};
 use crate::paths::{AppPaths, Env, LIBRARY_DIR, PathError, XDG_DIR};
 
 pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
@@ -28,6 +32,13 @@ pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
         logs: xdg("XDG_STATE_HOME", &[".local", "state"]).join("logs"),
         library: home.join(LIBRARY_DIR),
     })
+}
+
+pub(crate) fn ipc_name(env: &Env<'_>, paths: &AppPaths) -> IpcName {
+    let dir = env
+        .dir("XDG_RUNTIME_DIR")
+        .map_or_else(|| paths.data.clone(), |run| run.join(XDG_DIR));
+    IpcName::Socket(dir.join(SOCKET_FILE))
 }
 
 #[cfg(test)]
@@ -78,5 +89,29 @@ mod tests {
         let home = PathBuf::from("/home/ada");
         assert_ne!(p.library, home.join(".local").join("share").join("fonts"));
         assert_ne!(p.library, home.join(".fonts"));
+    }
+
+    #[test]
+    fn the_ipc_socket_is_in_the_runtime_folder_or_the_data_folder() {
+        let paths = AppPaths::resolve(Os::Linux, env(&[("HOME", "/home/ada")])).expect("resolves");
+        let run = paths.ipc_name_for(
+            Os::Linux,
+            env(&[("HOME", "/home/ada"), ("XDG_RUNTIME_DIR", "/run/user/1000")]),
+        );
+        assert_eq!(
+            run,
+            crate::IpcName::Socket(
+                PathBuf::from("/run/user/1000")
+                    .join("font-manager")
+                    .join("fm.sock")
+            )
+        );
+        for vars in [&[("HOME", "/home/ada")][..], &[("XDG_RUNTIME_DIR", "run")]] {
+            assert_eq!(
+                paths.ipc_name_for(Os::Linux, env(vars)),
+                crate::IpcName::Socket(paths.data.join("fm.sock")),
+                "{vars:?}"
+            );
+        }
     }
 }

@@ -8,6 +8,10 @@
 //! | logs    | `%LOCALAPPDATA%\FontManager\logs` |
 //! | library | `%USERPROFILE%\Fonts` (not the OS per-user font folder) |
 
+//!
+//! The IPC pipe (ADR 0016) is `\\.\pipe\org.fontmanager.app-<%USERNAME%>`.
+
+use crate::ipc::{IpcName, pipe_name};
 use crate::paths::{APP_DIR, AppPaths, Env, LIBRARY_DIR, PathError};
 
 pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
@@ -26,6 +30,11 @@ pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
         logs: local.join("logs"),
         library: profile.join(LIBRARY_DIR),
     })
+}
+
+pub(crate) fn ipc_name(env: &Env<'_>) -> IpcName {
+    let user = (env.0)("USERNAME").unwrap_or_default();
+    IpcName::Pipe(pipe_name(&user.to_string_lossy()))
 }
 
 #[cfg(test)]
@@ -85,5 +94,20 @@ mod tests {
             .replace('/', "\\");
         assert!(!lib.contains(r"microsoft\windows\fonts"));
         assert!(!lib.starts_with(r"c:\windows"));
+    }
+
+    #[test]
+    fn the_ipc_pipe_is_named_after_the_user() {
+        let paths = AppPaths::under(std::path::Path::new(r"C:\x"));
+        let name = paths.ipc_name_for(Os::Windows, env(&[("USERNAME", "ada")]));
+        assert_eq!(
+            name,
+            crate::IpcName::Pipe(r"\\.\pipe\org.fontmanager.app-ada".into())
+        );
+        let nobody = paths.ipc_name_for(Os::Windows, env(&[]));
+        assert_eq!(
+            nobody,
+            crate::IpcName::Pipe(r"\\.\pipe\org.fontmanager.app-user".into())
+        );
     }
 }

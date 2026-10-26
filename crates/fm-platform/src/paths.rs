@@ -12,6 +12,8 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use crate::ipc::IpcName;
+
 /// The folder name under the per-user app-data roots (Windows, Linux).
 pub(crate) const APP_DIR: &str = "FontManager";
 /// The folder name under `~/Library/*` on macOS: the bundle identifier.
@@ -98,6 +100,24 @@ impl AppPaths {
     /// inside [`AppPaths::config`] so it roams with the settings on Windows.
     pub fn layouts_dir(&self) -> PathBuf {
         self.config.join("layouts")
+    }
+
+    /// Where the app's IPC listener is on the host OS (E29.1, ADR 0016).
+    pub fn ipc_name(&self) -> IpcName {
+        self.ipc_name_for(Os::current(), |name| std::env::var_os(name))
+    }
+
+    /// Where the IPC listener is on `os`: the named pipe
+    /// `\\.\pipe\org.fontmanager.app-<user>` on Windows; the socket
+    /// `fm.sock` in `$XDG_RUNTIME_DIR/font-manager/` on Linux (in the data
+    /// folder without one) and in the data folder on macOS.
+    pub fn ipc_name_for(&self, os: Os, env: impl Fn(&str) -> Option<OsString>) -> IpcName {
+        let env = Env(&env);
+        match os {
+            Os::Windows => crate::windows::paths::ipc_name(&env),
+            Os::MacOs => crate::macos::paths::ipc_name(self),
+            Os::Linux => crate::linux::paths::ipc_name(&env, self),
+        }
     }
 }
 
