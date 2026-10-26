@@ -29,7 +29,7 @@ pub use activator::{
 };
 pub use autostart::{AUTOSTART_ARG, Autostart, MockAutostart};
 pub use browser::{OpenCommand, OpenUrlError, open_url};
-pub use ipc::{IpcListener, IpcName, IpcStream};
+pub use ipc::{IpcCloser, IpcListener, IpcName, IpcStream};
 #[cfg(target_os = "linux")]
 pub use linux::{LinuxActivator, LinuxAutostart};
 #[cfg(target_os = "macos")]

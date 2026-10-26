@@ -10,7 +10,7 @@
 //! its last handle; there is no stale pipe to clean up.
 
 use std::io;
-use std::os::windows::io::AsRawHandle;
+use std::os::windows::io::{AsHandle as _, AsRawHandle, OwnedHandle};
 use std::time::Duration;
 
 use interprocess::ConnectWaitMode;
@@ -23,11 +23,16 @@ use interprocess::os::windows::security_descriptor::{
 use windows::Win32::Foundation::{HANDLE, HLOCAL, LocalFree};
 use windows::Win32::Security::Authorization::{GetSecurityInfo, SE_KERNEL_OBJECT};
 use windows::Win32::Security::{DACL_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR};
+use windows::Win32::System::Pipes::DisconnectNamedPipe;
 
 use super::private_file;
 use crate::ipc::{IpcName, wrong_kind};
 
 pub(crate) type Stream = DuplexPipeStream<pipe_mode::Bytes>;
+
+/// A duplicate of the server end's handle: disconnecting it ends the pipe
+/// instance for every copy.
+pub(crate) type Closer = OwnedHandle;
 
 /// How long a client waits while every pipe instance is busy.
 const CONNECT_WAIT: Duration = Duration::from_secs(2);
@@ -86,6 +91,17 @@ pub(crate) fn connect(name: &IpcName) -> io::Result<Stream> {
         return Err(wrong_kind(name));
     };
     Stream::connect_by_path_with_wait_mode(path.as_str(), ConnectWaitMode::Timeout(CONNECT_WAIT))
+}
+
+pub(crate) fn closer(stream: &Stream) -> io::Result<Closer> {
+    stream.as_handle().try_clone_to_owned()
+}
+
+pub(crate) fn close(closer: &Closer) {
+    // SAFETY: `closer` is an open handle this process owns (a duplicate of
+    // the pipe instance's handle), valid for the call. On a client end or an
+    // instance already disconnected the call fails, which ends nothing.
+    let _ = unsafe { DisconnectNamedPipe(HANDLE(closer.as_raw_handle())) };
 }
 
 /// `D:P(A;;FA;;;<user SID>)` as a security descriptor interprocess owns.

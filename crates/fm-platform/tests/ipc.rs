@@ -199,3 +199,28 @@ mod unix {
         );
     }
 }
+
+#[test]
+fn a_closer_ends_a_read_waiting_on_another_thread() {
+    let scratch = Scratch::new();
+    let listener = IpcListener::bind(&scratch.name).expect("bind");
+    let name = scratch.name.clone();
+    let client = std::thread::spawn(move || connect(&name).expect("connect"));
+    let mut server_end = listener.accept().expect("accept");
+    let mut client_end = client.join().expect("client");
+    let closer = server_end.closer().expect("closer");
+    let reader = std::thread::spawn(move || {
+        let mut buf = [0u8; 8];
+        // Nothing is ever sent: only the closer ends this read.
+        let read = server_end.read(&mut buf);
+        assert!(matches!(read, Ok(0) | Err(_)), "{read:?}");
+    });
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    closer.close();
+    reader.join().expect("the read returned");
+    // The client sees the connection closed.
+    let mut buf = [0u8; 1];
+    assert!(matches!(client_end.read(&mut buf), Ok(0) | Err(_)));
+    // Closing again does nothing.
+    closer.close();
+}

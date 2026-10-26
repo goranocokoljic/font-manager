@@ -16,18 +16,19 @@
 //! token: the OS lets only this user connect.
 //!
 //! One thread waits for clients and one thread serves each connection, so a
-//! slow client never holds up another. Services run on the connection's
+//! slow client never holds up another. A stop ends every open connection
+//! and serves no request after it returns. Services run on the connection's
 //! thread; a service that panics is an `internal` error, not a lost app.
 
+use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
 use fm_api::{API_VERSION, Api, ApiError, ErrorCode};
-use fm_platform::{IpcListener, IpcName, IpcStream};
+use fm_platform::{IpcCloser, IpcListener, IpcName, IpcStream};
 use serde_json::Value;
 
 use crate::routes;
@@ -42,28 +43,30 @@ pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 pub const HELLO: &str = "hello";
 
 /// A listening IPC endpoint. Dropping it (or [`IpcEndpoint::stop`]) stops
-/// taking clients and removes the socket; open connections end with
-/// their client.
+/// taking clients, ends every open connection and removes the socket.
 #[derive(Debug)]
 pub struct IpcEndpoint {
     name: IpcName,
-    stopping: Arc<AtomicBool>,
+    connections: Arc<Connections>,
     thread: Option<JoinHandle<()>>,
 }
+
+/// How long [`IpcEndpoint::stop`] waits for a request still running.
+const STOP_WAIT: Duration = Duration::from_secs(2);
 
 impl IpcEndpoint {
     /// Listens at `name` ([`fm_platform::AppPaths::ipc_name`] in the app)
     /// and serves `api` there. Returns once the pipe or socket exists.
     pub fn start(api: Arc<dyn Api>, name: &IpcName) -> io::Result<Self> {
         let listener = IpcListener::bind(name)?;
-        let stopping = Arc::new(AtomicBool::new(false));
-        let flag = Arc::clone(&stopping);
+        let connections = Arc::new(Connections::default());
+        let open = Arc::clone(&connections);
         let thread = std::thread::Builder::new()
             .name("fm-ipc".into())
-            .spawn(move || accept_loop(&listener, &api, &flag))?;
+            .spawn(move || accept_loop(&listener, &api, &open))?;
         Ok(Self {
             name: name.clone(),
-            stopping,
+            connections,
             thread: Some(thread),
         })
     }
@@ -73,7 +76,10 @@ impl IpcEndpoint {
         &self.name
     }
 
-    /// Stops listening and waits until the pipe or socket is gone.
+    /// Stops listening, ends every open connection, and waits until the
+    /// pipe or socket is gone and no request runs any more (at most
+    /// [`STOP_WAIT`] for one still running). No request is served after it
+    /// returns, so the quit path can end the session fonts after it.
     pub fn stop(mut self) {
         self.shut_down();
     }
@@ -82,11 +88,14 @@ impl IpcEndpoint {
         let Some(thread) = self.thread.take() else {
             return;
         };
-        self.stopping.store(true, Ordering::SeqCst);
-        // Wakes the waiting `accept`; the loop sees the flag and ends.
+        self.connections.stop();
+        // Wakes the waiting `accept`; the loop sees the stop and ends.
         drop(fm_platform::ipc::connect(&self.name));
         if thread.join().is_err() {
             tracing::warn!("the IPC listener thread panicked");
+        }
+        if !self.connections.wait_until_ended(STOP_WAIT) {
+            tracing::warn!("an IPC request was still running when the endpoint stopped");
         }
     }
 }
@@ -97,36 +106,118 @@ impl Drop for IpcEndpoint {
     }
 }
 
-fn accept_loop(listener: &IpcListener, api: &Arc<dyn Api>, stopping: &AtomicBool) {
+/// The open connections, so a stop can end them.
+#[derive(Debug, Default)]
+struct Connections {
+    state: Mutex<Open>,
+    ended: Condvar,
+}
+
+#[derive(Debug, Default)]
+struct Open {
+    stopping: bool,
+    next: u64,
+    closers: HashMap<u64, IpcCloser>,
+}
+
+impl Connections {
+    fn lock(&self) -> MutexGuard<'_, Open> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Records a new connection; `None` once the endpoint is stopping.
+    fn add(&self, closer: IpcCloser) -> Option<u64> {
+        let mut open = self.lock();
+        if open.stopping {
+            return None;
+        }
+        let id = open.next;
+        open.next += 1;
+        open.closers.insert(id, closer);
+        Some(id)
+    }
+
+    fn remove(&self, id: u64) {
+        self.lock().closers.remove(&id);
+        self.ended.notify_all();
+    }
+
+    fn is_stopping(&self) -> bool {
+        self.lock().stopping
+    }
+
+    /// No new connection or request from now on; every open one is closed.
+    fn stop(&self) {
+        let mut open = self.lock();
+        open.stopping = true;
+        for closer in open.closers.values() {
+            closer.close();
+        }
+    }
+
+    /// Whether every connection ended within `wait`.
+    fn wait_until_ended(&self, wait: Duration) -> bool {
+        let open = self.lock();
+        let (open, _) = self
+            .ended
+            .wait_timeout_while(open, wait, |open| !open.closers.is_empty())
+            .unwrap_or_else(PoisonError::into_inner);
+        open.closers.is_empty()
+    }
+}
+
+fn accept_loop(listener: &IpcListener, api: &Arc<dyn Api>, connections: &Arc<Connections>) {
     loop {
         let accepted = listener.accept();
-        if stopping.load(Ordering::SeqCst) {
+        if connections.is_stopping() {
             return;
         }
-        match accepted {
-            Ok(stream) => {
-                let api = Arc::clone(api);
-                let spawned = std::thread::Builder::new()
-                    .name("fm-ipc-client".into())
-                    .spawn(move || serve(&*api, stream));
-                if let Err(e) = spawned {
-                    tracing::warn!(error = %e, "an IPC client was not served");
-                }
-            }
+        let stream = match accepted {
+            Ok(stream) => stream,
             Err(e) => {
                 tracing::warn!(error = %e, "IPC accept failed");
                 // Not a busy loop when the error repeats.
                 std::thread::sleep(Duration::from_millis(50));
+                continue;
             }
+        };
+        // A connection a stop could not end is not served.
+        let closer = match stream.closer() {
+            Ok(closer) => closer,
+            Err(e) => {
+                tracing::warn!(error = %e, "an IPC client was not served");
+                continue;
+            }
+        };
+        let Some(id) = connections.add(closer) else {
+            return;
+        };
+        let api = Arc::clone(api);
+        let open = Arc::clone(connections);
+        let spawned = std::thread::Builder::new()
+            .name("fm-ipc-client".into())
+            .spawn(move || {
+                serve(&*api, stream, &open);
+                open.remove(id);
+            });
+        if let Err(e) = spawned {
+            tracing::warn!(error = %e, "an IPC client was not served");
+            connections.remove(id);
         }
     }
 }
 
-/// Answers every line of one connection until the client closes it.
-fn serve(api: &dyn Api, mut stream: IpcStream) {
+/// Answers every line of one connection until the client closes it or the
+/// endpoint stops.
+fn serve(api: &dyn Api, mut stream: IpcStream, connections: &Connections) {
     let mut frames = Frames::default();
     loop {
-        let reply = match frames.next(&mut stream) {
+        let frame = frames.next(&mut stream);
+        // A line that arrived while the endpoint stopped is not served.
+        if connections.is_stopping() {
+            return;
+        }
+        let reply = match frame {
             Ok(Frame::Line(line)) => {
                 if line.trim_ascii().is_empty() {
                     continue;

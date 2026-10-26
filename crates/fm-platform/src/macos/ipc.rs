@@ -11,8 +11,8 @@ use std::io;
 use std::os::unix::fs::PermissionsExt as _;
 
 use crate::ipc::IpcName;
+pub(crate) use crate::linux::ipc::{Closer, Stream, close, closer, connect};
 use crate::linux::ipc::{Listener as UnixListener, SOCKET_MODE, bind_with};
-pub(crate) use crate::linux::ipc::{Stream, connect};
 
 #[derive(Debug)]
 pub(crate) struct Listener(UnixListener);

@@ -103,6 +103,26 @@ impl IpcListener {
 #[derive(Debug)]
 pub struct IpcStream(imp::Stream);
 
+impl IpcStream {
+    /// A handle that ends this connection from another thread: a read
+    /// waiting on the stream returns at once, and the client sees the
+    /// connection closed. It stays valid after the stream drops.
+    pub fn closer(&self) -> io::Result<IpcCloser> {
+        imp::closer(&self.0).map(IpcCloser)
+    }
+}
+
+/// Ends one connection ([`IpcStream::closer`]).
+#[derive(Debug)]
+pub struct IpcCloser(imp::Closer);
+
+impl IpcCloser {
+    /// Closes the connection; closing one already closed does nothing.
+    pub fn close(&self) {
+        imp::close(&self.0);
+    }
+}
+
 impl Read for IpcStream {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.0.read(buf)

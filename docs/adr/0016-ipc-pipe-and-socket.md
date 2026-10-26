@@ -73,6 +73,12 @@ directions:
 
 A connection carries any number of requests, answered in order. Each
 connection has a thread of its own, so a slow client never holds up another.
+A stop (the quit path, before it ends the session fonts) closes every open
+connection: `IpcStream::closer` shuts the socket down or disconnects the
+pipe instance, so a waiting read returns at once. No request is served
+after the stop returns (it waits up to 2 s for one still running), and the
+name is free again at once: on Windows a pipe instance left open would make
+the next `FILE_FLAG_FIRST_PIPE_INSTANCE` bind fail.
 
 **Refusals** (the connection stays open after each, and the next line is
 served):

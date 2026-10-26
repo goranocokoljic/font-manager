@@ -312,3 +312,46 @@ fn stopping_closes_the_pipe_or_socket() {
     }
     drop(served.name);
 }
+
+/// A client that stays connected is cut off by the stop: a request it
+/// sends after it is never served (the quit path ends the session fonts
+/// right after the stop), and the same name binds again at once (Windows
+/// refuses a first pipe instance while an old one is open).
+#[test]
+fn stopping_ends_open_connections_and_the_name_binds_again() {
+    use fm_api::ActivationService as _;
+
+    let served = Served::new();
+    let mut open = served.client();
+    open.hello_works();
+    let before = served.api.list_active().unwrap();
+    let name = served.endpoint.name().clone();
+    served.endpoint.stop();
+
+    // The request may not even be written: the connection is gone.
+    let request = json!({
+        "v": 1, "id": "late", "method": "activate",
+        "params": {"target": {"kind": "faces", "faces": [1]}, "mode": "session"},
+    });
+    let mut line = serde_json::to_vec(&request).unwrap();
+    line.push(b'\n');
+    let _ = open.0.get_mut().write_all(&line);
+    let _ = open.0.get_mut().flush();
+    let mut reply = String::new();
+    let read = open.0.read_line(&mut reply);
+    assert!(
+        matches!(read, Ok(0) | Err(_)),
+        "a request after the stop was answered: {reply}"
+    );
+    assert_eq!(
+        served.api.list_active().unwrap(),
+        before,
+        "activated after the stop"
+    );
+
+    let again = IpcEndpoint::start(Arc::clone(&served.api) as Arc<dyn Api>, &name)
+        .expect("the name binds again after the stop");
+    Client::connect(&name).hello_works();
+    again.stop();
+    drop(served.name);
+}

@@ -15,12 +15,20 @@ use std::io;
 use std::os::unix::fs::{FileTypeExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
+
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{GenericFilePath, ListenerOptions};
+use interprocess::os::unix::uds_local_socket as uds;
 
 use crate::ipc::{IpcName, wrong_kind};
 
-pub(crate) type Stream = interprocess::local_socket::Stream;
+pub(crate) type Stream = uds::Stream;
+
+/// A duplicate of the connection's socket: shutting it down ends the
+/// connection for every copy.
+pub(crate) type Closer = UnixStream;
 
 /// The socket file's mode.
 pub(crate) const SOCKET_MODE: u32 = 0o600;
@@ -29,7 +37,7 @@ pub(crate) const FOLDER_MODE: u32 = 0o700;
 
 #[derive(Debug)]
 pub(crate) struct Listener {
-    inner: interprocess::local_socket::Listener,
+    inner: uds::Listener,
     path: PathBuf,
 }
 
@@ -49,7 +57,8 @@ pub(crate) fn bind_with(
     fs::set_permissions(dir, fs::Permissions::from_mode(FOLDER_MODE))?;
     clear_stale(path)?;
     let fs_name = path.as_path().to_fs_name::<GenericFilePath>()?;
-    let inner = options(ListenerOptions::new().name(fs_name).reclaim_name(true)).create_sync()?;
+    let inner = options(ListenerOptions::new().name(fs_name).reclaim_name(true))
+        .create_sync_as::<uds::Listener>()?;
     let listener = Listener {
         inner,
         path: path.clone(),
@@ -121,5 +130,16 @@ pub(crate) fn connect(name: &IpcName) -> io::Result<Stream> {
 }
 
 fn connect_path(path: &Path) -> io::Result<Stream> {
-    Stream::connect(path.to_fs_name::<GenericFilePath>()?)
+    <Stream as interprocess::local_socket::traits::Stream>::connect(
+        path.to_fs_name::<GenericFilePath>()?,
+    )
+}
+
+pub(crate) fn closer(stream: &Stream) -> io::Result<Closer> {
+    stream.inner().try_clone()
+}
+
+pub(crate) fn close(closer: &Closer) {
+    // Not connected any more: nothing to end.
+    let _ = closer.shutdown(Shutdown::Both);
 }
