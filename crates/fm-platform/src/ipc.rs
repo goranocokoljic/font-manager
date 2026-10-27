@@ -139,9 +139,28 @@ impl Write for IpcStream {
     }
 }
 
-/// Connects to the listener at `name`; an error when nothing listens there.
+/// The message of the [`connect`] error when nothing listens at the name.
+pub const NOT_RUNNING: &str = "Font Manager is not running";
+
+/// Connects to the listener at `name`. When nothing listens there (the app
+/// quit: the pipe is gone, the socket file removed or not answering), the
+/// error says [`NOT_RUNNING`] at once and keeps the OS error's kind; a pipe
+/// whose instances all stay busy gives up after a short wait.
 pub fn connect(name: &IpcName) -> io::Result<IpcStream> {
-    imp::connect(name).map(IpcStream)
+    imp::connect(name)
+        .map(IpcStream)
+        .map_err(|e| not_running(name, e))
+}
+
+/// `e` with the plain message when it means that nothing listens at `name`.
+fn not_running(name: &IpcName, e: io::Error) -> io::Error {
+    match e.kind() {
+        io::ErrorKind::NotFound | io::ErrorKind::ConnectionRefused => io::Error::new(
+            e.kind(),
+            format!("{NOT_RUNNING} (nothing listens at {name}: {e})"),
+        ),
+        _ => e,
+    }
 }
 
 /// The error for a name of the other OS family.
@@ -169,5 +188,18 @@ mod tests {
             r"\\.\pipe\org.fontmanager.app-j.doe-2_x"
         );
         assert_eq!(pipe_name(""), r"\\.\pipe\org.fontmanager.app-user");
+    }
+
+    #[test]
+    fn nothing_listening_reads_as_not_running_and_other_errors_stay() {
+        let name = IpcName::Socket(PathBuf::from("/tmp/fm.sock"));
+        for kind in [io::ErrorKind::NotFound, io::ErrorKind::ConnectionRefused] {
+            let e = not_running(&name, io::Error::from(kind));
+            assert_eq!(e.kind(), kind);
+            assert!(e.to_string().starts_with(NOT_RUNNING), "{e}");
+            assert!(e.to_string().contains("fm.sock"), "{e}");
+        }
+        let denied = not_running(&name, io::Error::from(io::ErrorKind::PermissionDenied));
+        assert!(!denied.to_string().contains(NOT_RUNNING), "{denied}");
     }
 }

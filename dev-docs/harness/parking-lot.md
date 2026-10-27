@@ -282,3 +282,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E27.4 #174] crates/fm-core/src/index/faces.rs:131 — `face_detail` reads the font file of color faces (or faces without stored metrics) while the index lock is held; `pick_fonts_for_brief` now calls it once per candidate family under one lock.
 - [E27.4 #174] crates/fm-mcp/src/tools.rs:112 — `MUTATING` repeats `fm_api::settings::MCP_MUTATING_TOOLS` instead of reusing it.
 - [E27.4 #174] crates/fm-core/src/license.rs:223 — a third private `open_license_label` with short labels ("OFL") besides `inventory::open_license_label`.
+- [E29.4 #185] apps/desktop/src-tauri/src/lib.rs:216 — `start_endpoint` drops a newly started IPC endpoint without a log line when `slot.running` is already set.
+- [E29.4 #185] crates/fm-client/src/http.rs:304 — the HTTP client's "Font Manager is not running, …" wording differs from `fm_platform::ipc::NOT_RUNNING`.
+- [E29.4 #185] crates/fm-platform/src/linux/ipc.rs:133 — the Unix IPC client `connect` has no timeout, so a live app with a full listen backlog blocks a client (Windows gives up after 2 s).

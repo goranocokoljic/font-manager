@@ -153,6 +153,12 @@ token stops working at once.
 
 Only programs on this computer can connect. Web pages in your browser cannot.
 
+Plugins keep working when you close the window, because Font Manager keeps running in the
+tray. This also applies when Font Manager starts at login. When you quit Font Manager,
+plugins tell you that it is not running. If closing the window quits Font Manager (the
+tray setting is off, or your desktop has no tray), keep the window open while you use
+plugins. Settings → About → Platform notes tells you when this applies.
+
 ## Connect an AI assistant
 
 AI assistants such as Claude Code can use Font Manager through the Model Context Protocol

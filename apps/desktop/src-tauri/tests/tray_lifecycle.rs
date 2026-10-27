@@ -13,10 +13,17 @@
 //! indexed in place; no runner image ships them, so "before" is a real
 //! negative. The fm-platform activation tests use other families, so the two
 //! test binaries can run at the same time.
+//!
+//! E29.4: the plugin IPC endpoint (ADR 0016) goes on serving after the close
+//! handler hid the window, and in a start at login before the window was
+//! ever shown; after Quit a client is told "Font Manager is not running" at
+//! once. The IPC client is this test binary again, running only `ipc_child`.
+//! Font: Caesar Dressing (session), activated by that second process.
 // The probes are FFI. The whole file is test code: its helpers fail the test
 // by panicking, which clippy's in-test allowance only sees inside `#[test]`.
 #![allow(unsafe_code, clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
@@ -27,10 +34,10 @@ use fm_api::library::{AddSourceRequest, ImportMode, ListFamiliesRequest, ScanReq
 use fm_api::settings::SettingsUpdate;
 use fm_api::{ActivationService, Event, EventSource, FamilyId, LibraryService, SettingsService};
 use fm_app_lib::tray::{TrayState, on_close_requested};
-use fm_app_lib::{AppState, on_exit, serve, setup_state};
+use fm_app_lib::{AppState, launch, on_exit, serve, setup_state};
 use fm_core::CoreApi;
-use fm_core::lifecycle::CloseAction;
-use fm_platform::{AppPaths, FontActivator, MockActivator, TraySupport};
+use fm_core::lifecycle::{CloseAction, LaunchWindow};
+use fm_platform::{AppPaths, FontActivator, IpcName, MockActivator, TraySupport};
 use tauri::Manager;
 use tauri::test::{mock_builder, mock_context, noop_assets};
 
@@ -42,6 +49,15 @@ const SCAN_WAIT: Duration = Duration::from_secs(60);
 
 const SESSION_FAMILY: &str = "Nosifer";
 const PERMANENT_FAMILY: &str = "Cagliostro";
+/// Activated over IPC by a second process (E29.4).
+const IPC_FAMILY: &str = "Caesar Dressing";
+
+/// The IPC child's environment: the pipe or socket, and the family to
+/// activate (none: connect only and report the error).
+const IPC_NAME_ENV: &str = "FM_IPC_CHILD_NAME";
+const IPC_FAMILY_ENV: &str = "FM_IPC_CHILD_FAMILY";
+const IPC_REPLY_TAG: &str = "FM_IPC_REPLY=";
+const IPC_ERROR_TAG: &str = "FM_IPC_ERROR=";
 
 fn fixtures() -> PathBuf {
     // The repository root without `..`: `absolute` removes it on Windows only,
@@ -455,4 +471,213 @@ fn closing_quits_when_the_setting_is_off_or_there_is_no_tray() {
         (CloseAction::Quit, false),
         "the window stayed open with \"Keep running in the tray\" off"
     );
+}
+
+/// Not the user's real pipe or socket: a name of this test's own. Short on
+/// purpose: a socket path must fit in 104 bytes on macOS.
+fn ipc_name(home: &Home, label: &str) -> IpcName {
+    if cfg!(windows) {
+        IpcName::Pipe(format!(r"\\.\pipe\fm-tray-{label}-{}", std::process::id()))
+    } else {
+        IpcName::Socket(home.root.join("run").join("fm.sock"))
+    }
+}
+
+/// Waits until the endpoint the app starts on a thread of its own accepts.
+fn wait_for_ipc(name: &IpcName) {
+    let start = Instant::now();
+    while fm_platform::ipc::connect(name).is_err() {
+        assert!(start.elapsed() < WAIT, "{name} never started serving");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// One request over a new connection; the reply object.
+fn ipc_call(name: &IpcName, request: &serde_json::Value) -> serde_json::Value {
+    let mut stream = BufReader::new(fm_platform::ipc::connect(name).expect("connect"));
+    let mut line = serde_json::to_vec(request).expect("json");
+    line.push(b'\n');
+    stream.get_mut().write_all(&line).expect("send");
+    stream.get_mut().flush().expect("flush");
+    let mut reply = String::new();
+    stream.read_line(&mut reply).expect("reply");
+    serde_json::from_str(&reply).expect("reply JSON")
+}
+
+/// Not a check of its own: the IPC client half of the E29.4 tests. With a
+/// family it activates that family for the session and prints the reply;
+/// without one it only connects and prints the error.
+#[test]
+fn ipc_child() {
+    let Some(name) = std::env::var_os(IPC_NAME_ENV) else {
+        return;
+    };
+    let name = if cfg!(windows) {
+        IpcName::Pipe(name.to_string_lossy().into_owned())
+    } else {
+        IpcName::Socket(PathBuf::from(name))
+    };
+    let Ok(family) = std::env::var(IPC_FAMILY_ENV) else {
+        match fm_platform::ipc::connect(&name) {
+            Ok(_) => println!("{IPC_ERROR_TAG}connected"),
+            Err(e) => println!("{IPC_ERROR_TAG}{e}"),
+        }
+        return;
+    };
+    let family: serde_json::Value = serde_json::from_str(&family).expect("family id");
+    let reply = ipc_call(
+        &name,
+        &serde_json::json!({
+            "v": 1,
+            "id": "activate-1",
+            "method": "activate",
+            "params": {"target": {"kind": "family", "family": family}, "mode": "session"},
+        }),
+    );
+    println!("{IPC_REPLY_TAG}{reply}");
+}
+
+/// Runs [`ipc_child`] in a new process and returns the rest of its `tag` line.
+fn second_process_ipc(name: &IpcName, family: Option<FamilyId>, tag: &str) -> String {
+    let mut cmd = Command::new(std::env::current_exe().expect("test binary"));
+    cmd.args(["ipc_child", "--exact", "--nocapture", "--test-threads=1"])
+        .env(IPC_NAME_ENV, name.to_string());
+    if let Some(family) = family {
+        cmd.env(
+            IPC_FAMILY_ENV,
+            serde_json::to_string(&family).expect("family id"),
+        );
+    }
+    let out = cmd.output().expect("second process runs");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "the IPC client failed: {stdout}\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    stdout
+        .lines()
+        .find_map(|l| l.split_once(tag).map(|(_, rest)| rest.trim().to_owned()))
+        .unwrap_or_else(|| panic!("the IPC client gave no {tag} line: {stdout}"))
+}
+
+/// E29.4 criteria 1 and 3: with the window hidden to the tray, a second
+/// process activates a font over the IPC endpoint and the OS font list has
+/// it; after Quit the endpoint is gone and a client is told at once that
+/// Font Manager is not running.
+#[test]
+fn closing_the_window_keeps_the_ipc_endpoint_serving_and_quit_ends_it() {
+    assert!(
+        !seen_by_second_process(Path::new("."), IPC_FAMILY),
+        "{IPC_FAMILY} is installed on this machine already; the test cannot prove anything"
+    );
+    let home = Home::new("ipc");
+    let index = fm_core::startup::open_index(&home.paths);
+    let (state, core) = serve(&home.paths, index, Arc::clone(&home.activator));
+    let core = core.expect("the real library");
+    let family = index_family(&core, "google-repo/caesardressing", IPC_FAMILY);
+    let name = ipc_name(&home, "close");
+
+    // A normal start: `launch` is what the setup hook runs once the event
+    // loop is up (the mock app has none). Then the window closes.
+    let (app, window) = app(state.with_ipc(name.clone()), TraySupport::Available);
+    let no_args: [&str; 0] = [];
+    assert_eq!(
+        launch(app.handle(), &TraySupport::Available, no_args),
+        LaunchWindow::Show
+    );
+    wait_for_ipc(&name);
+    assert_eq!(
+        close_is_stopped(&window),
+        (CloseAction::HideToTray, true),
+        "the close request was not stopped; the app would quit"
+    );
+
+    let reply = second_process_ipc(&name, Some(family), IPC_REPLY_TAG);
+    let reply: serde_json::Value = serde_json::from_str(&reply).expect("reply JSON");
+    assert_eq!(reply["id"], "activate-1", "{reply}");
+    let outcomes = reply["result"].as_array().expect("outcomes");
+    assert!(
+        !outcomes.is_empty() && outcomes.iter().all(|o| o["outcome"]["status"] == "done"),
+        "{reply}"
+    );
+    assert!(
+        second_process_agrees(&home.root, IPC_FAMILY, true),
+        "a second process does not see the font activated over IPC"
+    );
+
+    // Quit: the quit path every quit ends in stops the endpoint first.
+    app.state::<AppState>().run_quit_path();
+    let start = Instant::now();
+    let e = fm_platform::ipc::connect(&name).expect_err("the endpoint is gone after Quit");
+    assert!(
+        start.elapsed() < Duration::from_secs(3),
+        "connect waited {:?}",
+        start.elapsed()
+    );
+    assert!(
+        e.to_string().starts_with(fm_platform::ipc::NOT_RUNNING),
+        "{e}"
+    );
+    if let IpcName::Socket(path) = &name {
+        assert!(!path.exists(), "the socket file is left after Quit");
+    }
+    // Another process is told the same, within its timeout.
+    let start = Instant::now();
+    let told = second_process_ipc(&name, None, IPC_ERROR_TAG);
+    assert!(
+        told.starts_with(fm_platform::ipc::NOT_RUNNING),
+        "the client was told: {told}"
+    );
+    assert!(
+        start.elapsed() < WAIT,
+        "the client waited {:?}",
+        start.elapsed()
+    );
+    assert!(
+        second_process_agrees(&home.root, IPC_FAMILY, false),
+        "the session font activated over IPC outlived Quit"
+    );
+}
+
+/// E29.4 criterion 2: a start at login (`--autostart`) keeps the window
+/// hidden and serves the IPC endpoint: a client connects and is answered
+/// while the window was never shown.
+#[test]
+fn a_start_at_login_serves_ipc_with_the_window_hidden() {
+    let home = Home::new("autostart");
+    let index = fm_core::startup::open_index(&home.paths);
+    let (state, core) = serve(&home.paths, index, Arc::new(MockActivator::new()));
+    let _core = core.expect("the real library");
+    let name = ipc_name(&home, "autostart");
+    // Only `launch` starts anything here: the mock app runs no setup hook.
+    let app = mock_builder()
+        .manage(state.with_ipc(name.clone()))
+        .build(mock_context(noop_assets()))
+        .expect("app builds");
+    let _window = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .visible(false)
+        .build()
+        .expect("main window");
+    assert!(
+        fm_platform::ipc::connect(&name).is_err(),
+        "{name} serves before the launch"
+    );
+
+    assert_eq!(
+        launch(app.handle(), &TraySupport::Available, ["--autostart"]),
+        LaunchWindow::StayInTray,
+        "a start at login showed the window"
+    );
+    wait_for_ipc(&name);
+    let reply = ipc_call(
+        &name,
+        &serde_json::json!({"v": 1, "id": 7, "method": "hello"}),
+    );
+    assert_eq!(
+        reply["result"],
+        serde_json::to_value(fm_api::API_VERSION).expect("version"),
+        "{reply}"
+    );
+    app.state::<AppState>().run_quit_path();
 }
