@@ -27,7 +27,9 @@ jobs:
   check:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
+    # 60, not 45: the Windows job alone needs ~25 min on a fast runner and
+    # ~48 on a slow one since the stdio shim sidecar build (E27.7) joined it.
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
