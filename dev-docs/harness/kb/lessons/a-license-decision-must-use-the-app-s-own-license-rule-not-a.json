@@ -1,0 +1,19 @@
+{
+  "id": "a-license-decision-must-use-the-app-s-own-license-rule-not-a",
+  "title": "A license decision must use the app's own license rule, not a new one",
+  "category": "correctness",
+  "rule": "When code decides whether a face may be used for web, desktop or app (a shortlist, a filter, an export guard, an MCP tool), call the existing rule in crates/fm-core/src/license.rs (`license::web_use` for web; its precedence for other uses) instead of writing a new check. The user's declared license type comes first: a declared Desktop, Trial or Personal-only type is not OK for web even when the file names an open license, and a declared type allows only its own use. Test it with a face that has an open license and a conflicting declared type, and assert the new code agrees with `LicenseInfo.web_use`.",
+  "rationale": "E27.4 (#174): pick_fonts_for_brief let a recognized open license beat the user's declared Desktop type, so it shortlisted for web a font the license panel and the web-OK filter call not OK for web.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    174
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**",
+    "crates/fm-mcp/src/**"
+  ],
+  "first_seen": "2026-10-27T01:46:07.373Z",
+  "last_seen": "2026-10-27T01:46:07.373Z"
+}
