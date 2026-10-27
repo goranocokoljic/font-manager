@@ -6,7 +6,7 @@
 import type { ConflictPolicy, FaceId, NeededFont } from './api';
 import { FmApiError, type FmClient, NotRunningError } from './client';
 import { PANEL_STRINGS, type PanelStrings } from './panel-strings';
-import type { HostDocument } from './session';
+import { type HostDocument, fontLabel } from './session';
 
 /** The active document and the fonts the host reports missing in it. */
 export interface PanelDocument {
@@ -266,10 +266,7 @@ export class MissingFontsPanel {
   }
 
   private label(font: NeededFont): string {
-    const named = font.postscriptName ?? font.fullName;
-    if (named) return named;
-    const family = [font.family, font.style].filter(Boolean).join(' ');
-    return family || this.strings.unknownFont;
+    return fontLabel(font, this.strings.unknownFont);
   }
 
   private errorText(e: unknown): string {

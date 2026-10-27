@@ -4,6 +4,7 @@
 
 import type { NeededFont } from './api';
 import { FmApiError, type FmClient, NOT_RUNNING, NotRunningError } from './client';
+import { PANEL_STRINGS } from './panel-strings';
 
 /** An open document as a host adapter names it. */
 export interface HostDocument {
@@ -27,6 +28,29 @@ export function deactivateQuestion(count: number, document: string): string {
   return `Deactivate ${fonts} used only by ${document}?`;
 }
 
+/** The name a plugin shows for a font: its PostScript or full name, else family and style. */
+export function fontLabel(font: NeededFont, unknown: string = PANEL_STRINGS.unknownFont): string {
+  const named = font.postscriptName ?? font.fullName;
+  if (named) return named;
+  const family = [font.family, font.style].filter(Boolean).join(' ');
+  return family || unknown;
+}
+
+/** The one message for the fonts the app does not have: "N fonts missing: A, B". */
+export function missingFontsMessage(fonts: NeededFont[]): string {
+  const names = [...new Set(fonts.map((f) => fontLabel(f)))];
+  return `${PANEL_STRINGS.missing(names.length)}: ${names.join(', ')}`;
+}
+
+/** How a `DocumentWatcher` behaves beyond the calls every plugin makes. */
+export interface WatcherOptions {
+  /**
+   * Say `missingFontsMessage` when the app does not have every font of an
+   * opened document; for hosts without a missing-fonts panel.
+   */
+  reportMissing?: boolean;
+}
+
 function fontKey(font: NeededFont): string {
   return JSON.stringify([font.postscriptName, font.fullName, font.family, font.style]);
 }
@@ -42,6 +66,7 @@ export class DocumentWatcher {
   constructor(
     private readonly client: FmClient,
     private readonly ui: PluginUi,
+    private readonly options: WatcherOptions = {},
   ) {}
 
   /** A document opened: one `fonts_needed` with all of its fonts. */
@@ -49,7 +74,12 @@ export class DocumentWatcher {
     return this.run(async () => {
       this.lastMissing.set(doc.key, '');
       if (fonts.length === 0) return;
-      await this.reached(this.client.fontsNeeded({ fonts, document: doc.key }));
+      const { unmatched } = await this.reached(
+        this.client.fontsNeeded({ fonts, document: doc.key }),
+      );
+      if (this.options.reportMissing && unmatched.length > 0) {
+        this.ui.notify(missingFontsMessage(unmatched));
+      }
     });
   }
 
