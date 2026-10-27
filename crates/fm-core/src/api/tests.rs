@@ -5683,3 +5683,41 @@ fn prepare_for_web_deactivates_what_it_activated_when_the_export_fails() {
     assert!(lib.api.list_active().expect("active").is_empty());
     assert!(lib.activator.list_active().expect("os list").is_empty());
 }
+
+/// E32.1: `document_fonts` through the core API reads the fixture document
+/// (and only reads it); an unreadable one is the plain-message error.
+#[test]
+fn document_fonts_lists_a_documents_fonts_and_leaves_it_alone() {
+    use fm_api::workflows::{DocumentFontsRequest, DocumentFormat};
+    let lib = Lib::new("api-document-fonts");
+    let docs = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/documents");
+    let path = lib.dir.path().join("Brand deck.pptx");
+    std::fs::copy(docs.join("sample.pptx"), &path).expect("copy");
+    let before = std::fs::read(&path).expect("bytes");
+    let res = lib
+        .api
+        .document_fonts(DocumentFontsRequest {
+            path: path.to_string_lossy().into_owned(),
+        })
+        .expect("fonts");
+    assert_eq!(res.format, DocumentFormat::Pptx);
+    let families: Vec<_> = res
+        .fonts
+        .iter()
+        .filter_map(|f| f.family.as_deref())
+        .collect();
+    assert_eq!(
+        families,
+        ["Montserrat", "Noto Sans KR", "Open Sans", "Roboto"]
+    );
+    assert_eq!(std::fs::read(&path).expect("bytes"), before);
+
+    let e = lib
+        .api
+        .document_fonts(DocumentFontsRequest {
+            path: docs.join("zstd.fig").to_string_lossy().into_owned(),
+        })
+        .expect_err("zstd");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "This document's fonts could not be read.");
+}
