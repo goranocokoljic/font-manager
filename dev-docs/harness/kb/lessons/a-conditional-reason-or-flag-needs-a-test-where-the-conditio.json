@@ -1,0 +1,18 @@
+{
+  "id": "a-conditional-reason-or-flag-needs-a-test-where-the-conditio",
+  "title": "A conditional reason or flag needs a test where the condition is false",
+  "category": "testing",
+  "rule": "When code adds a reason, label or flag only under a condition (a score at or above a threshold, a model that weighs in, a rule that holds), test both sides on the same code path: one item that gets it and one item that passes every filter but must not get it. Build the input so the condition is clearly false (a hand-made model or fixture, not a lucky corpus value), and check the mutation `if true` fails the test. A test that only checks presence, or checks absence on a different path (the feature turned off), still passes when the guard is removed.",
+  "rationale": "E33.2 (#197): the 'often paired in curated pairings' reason was tested only on a partner that should get it and on the rules-only path; replacing the probability guard with `if true` left every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    197
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-27T23:11:03.440Z",
+  "last_seen": "2026-10-27T23:11:03.440Z"
+}
