@@ -7,7 +7,9 @@ use fm_api::library::SourceKind;
 use fm_api::search::{PairingRequest, PairingSuggestion};
 use fm_api::{ErrorCode, FaceId};
 
+use crate::grouping::family_key;
 use crate::index::Index;
+use crate::pairing::model::{self, Curated, MODEL_REASON};
 use crate::parser::{ParsedFace, ParsedFile};
 use crate::scanner::{FileHash, IndexedFile, discover, hash_and_parse};
 
@@ -234,7 +236,12 @@ fn the_index_feeds_designer_and_x_height_to_the_rules() {
         plain_sans(4, "Damson", "Ada Lovelace", 700),
         plain_sans(5, "Elm", "Bob", 700),
     ]);
-    let got = pairings(&index, face_of(&index, "Alder"), 10);
+    // The rules alone: the model reorders and adds a reason of its own.
+    let req = PairingRequest {
+        face: face_of(&index, "Alder"),
+        limit: 10,
+    };
+    let got = index.suggest_with(&req, None).expect("pairings");
     let reasons: Vec<(&str, Vec<&str>)> = got
         .iter()
         .map(|s| {
@@ -320,7 +327,8 @@ fn time_pairings(index: &Index, label: &str) {
     }
 }
 
-/// Criterion 5 without the reference library: 10,000 faces. Timed in
+/// Criterion 5 (E23.4; E33.2 with the model on, as `suggest_pairings`
+/// runs it) without the reference library: 10,000 faces. Timed in
 /// release builds only; a debug build checks the answers.
 #[test]
 fn ten_thousand_faces_pair_in_under_50_ms() {
@@ -335,7 +343,8 @@ fn ten_thousand_faces_pair_in_under_50_ms() {
     time_pairings(&index, "synthetic 10k");
 }
 
-/// Criterion 5 on the reference library (10k fonts): skipped without it.
+/// Criterion 5 (E23.4; E33.2 with the model on) on the reference library
+/// (10k fonts): skipped without it.
 #[test]
 fn the_reference_library_pairs_in_under_50_ms() {
     let Some(library) = std::env::var_os("FM_REFERENCE_LIBRARY") else {
@@ -354,4 +363,158 @@ fn the_reference_library_pairs_in_under_50_ms() {
         .apply_rescan(source, &scanned, &report)
         .expect("persist");
     time_pairings(&index, "reference library");
+}
+
+/// The fixture corpus's folder.
+fn fixtures() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts")
+}
+
+/// Weights match when they differ by less than this: `model.json` rounds
+/// them to six decimals.
+const WEIGHT_TOLERANCE: f64 = 1e-5;
+
+fn same_weights(a: &model::Model, b: &model::Model) -> bool {
+    a.weights
+        .iter()
+        .zip(&b.weights)
+        .all(|(x, y)| (x - y).abs() < WEIGHT_TOLERANCE)
+}
+
+#[test]
+fn the_committed_model_is_not_stale() {
+    let committed = model::embedded().expect("model.json loads");
+    let trained = model::train_on_folder(&fixtures()).expect("train");
+    assert_eq!(trained.seed, model::SEED);
+    assert!(
+        same_weights(&trained, committed),
+        "data/pairings/model.json is stale: run `cargo run -p fm-core --example train_pairings`\n\
+         committed {:?}\ntrained   {:?}",
+        committed.weights,
+        trained.weights
+    );
+    // Retraining is deterministic, and one pairing less is a different
+    // model: the check above sees a stale file.
+    let index = indexed(corpus());
+    let curated = model::curated().expect("curated");
+    let again = index
+        .train_pairing_model(&curated, model::SEED)
+        .expect("train");
+    assert_eq!(
+        again,
+        index
+            .train_pairing_model(&curated, model::SEED)
+            .expect("train")
+    );
+    assert!(same_weights(&again, committed));
+    let fewer = index
+        .train_pairing_model(&curated[1..], model::SEED)
+        .expect("train");
+    assert!(!same_weights(&fewer, committed));
+}
+
+#[test]
+fn every_curated_family_is_in_the_fixtures() {
+    let index = indexed(corpus());
+    for c in model::curated().expect("curated") {
+        for family in &c.families {
+            assert!(
+                index.regular_face(family).expect("face").is_some(),
+                "{family} is not in fixtures/fonts"
+            );
+        }
+    }
+}
+
+/// The reciprocal rank of family `to` in `got`; `0.0` when it is not there.
+fn reciprocal_rank(got: &[PairingSuggestion], to: &str) -> f64 {
+    got.iter()
+        .position(|s| family_key(&s.face.family_name) == family_key(to))
+        .map_or(0.0, |i| 1.0 / (i + 1) as f64)
+}
+
+/// Criterion 4: fixed folds over the curated pairs; a model trained without
+/// a fold ranks that fold's true partners higher on average than the rules
+/// alone.
+#[test]
+fn the_model_ranks_held_out_partners_higher_than_the_rules() {
+    const FOLDS: usize = 5;
+    let index = indexed(corpus());
+    let curated = model::curated().expect("curated");
+    let (mut rules, mut learned) = (Vec::new(), Vec::new());
+    for fold in 0..FOLDS {
+        let in_fold = |i: &usize| i % FOLDS == fold;
+        let held: Vec<&Curated> = curated
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| in_fold(i))
+            .map(|(_, c)| c)
+            .collect();
+        let train: Vec<Curated> = curated
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !in_fold(i))
+            .map(|(_, c)| c.clone())
+            .collect();
+        let m = index
+            .train_pairing_model(&train, model::SEED)
+            .expect("train");
+        for c in held {
+            let [a, b] = &c.families;
+            for (from, to) in [(a, b), (b, a)] {
+                let face = index
+                    .regular_face(from)
+                    .expect("face")
+                    .unwrap_or_else(|| panic!("no face of {from}"));
+                let req = PairingRequest {
+                    face,
+                    limit: u32::MAX,
+                };
+                let got = index.suggest_with(&req, None).expect("rules");
+                rules.push(reciprocal_rank(&got, to));
+                let got = index.suggest_with(&req, Some(&m)).expect("model");
+                learned.push(reciprocal_rank(&got, to));
+            }
+        }
+    }
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+    let (rules, learned) = (mean(&rules), mean(&learned));
+    eprintln!("held-out mean reciprocal rank: rules {rules:.3}, model {learned:.3}");
+    assert!(learned > rules, "model {learned:.3} <= rules {rules:.3}");
+}
+
+#[test]
+fn a_curated_partner_gains_the_model_reason() {
+    let index = indexed(corpus());
+    let face = index
+        .regular_face("Libre Baskerville")
+        .expect("face")
+        .expect("Libre Baskerville");
+    let got = pairings(&index, face, 1000);
+    let franklin = got
+        .iter()
+        .find(|s| s.face.family_name == "Libre Franklin")
+        .unwrap_or_else(|| panic!("no Libre Franklin in {got:#?}"));
+    assert_eq!(
+        franklin.reasons.last().map(String::as_str),
+        Some(MODEL_REASON)
+    );
+    // The rules' reasons come first, and the score stays in range.
+    assert_eq!(franklin.reasons[0], "contrast: serif with sans serif");
+    assert!(got.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+    // Without the model nobody gets the reason.
+    let rules = index
+        .suggest_with(&PairingRequest { face, limit: 1000 }, None)
+        .expect("rules");
+    assert!(
+        rules
+            .iter()
+            .all(|s| !s.reasons.iter().any(|r| r == MODEL_REASON))
+    );
+    // The model only reorders what the rules let through.
+    let mut a: Vec<u32> = got.iter().map(|s| s.face.id.0).collect();
+    let mut b: Vec<u32> = rules.iter().map(|s| s.face.id.0).collect();
+    a.sort_unstable();
+    b.sort_unstable();
+    assert_eq!(a, b);
 }

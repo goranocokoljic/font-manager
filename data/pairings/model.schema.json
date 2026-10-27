@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/pairings/model.schema.json",
+  "title": "Font Manager pairing model",
+  "description": "The logistic pairing model that `cargo run -p fm-core --example train_pairings` writes from pairings.json and fixtures/fonts. Generated: do not edit by hand.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "version", "seed", "features", "weights"],
+  "properties": {
+    "$schema": { "const": "./model.schema.json" },
+    "version": { "const": 1 },
+    "seed": {
+      "description": "The seed of the negative sampling.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "features": {
+      "description": "The pair features, in the order the core computes them.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "pattern": "^[a-z_]+$" }
+    },
+    "weights": {
+      "description": "One weight per feature, same order.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "number" }
+    }
+  }
+}

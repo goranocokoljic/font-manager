@@ -1,0 +1,7 @@
+{
+  "$schema": "./model.schema.json",
+  "version": 1,
+  "seed": 58162,
+  "features": ["bias", "text_contrast", "accent_contrast", "same_class", "x_height_closeness", "weight_gap", "width_gap", "same_designer", "same_superfamily", "fingerprint_closeness", "fingerprints"],
+  "weights": [-1.890724, 0.872117, 0.208599, -1.061597, -0.660574, 0.055103, -1.282612, 3.745767, 1.101104, -0.325613, -0.096244]
+}
