@@ -165,19 +165,19 @@ fn every_prefix_of_every_fixture_gives_a_result_and_never_panics() {
 fn a_truncated_document_is_an_error_with_a_plain_message() {
     for name in SAMPLES {
         let data = bytes(name);
-        // InDesign has no end marker: cut inside its XMP packet instead.
-        let cuts = if name.ends_with(".indd") {
-            let at = data.windows(10).position(|w| w == b"<x:xmpmeta").unwrap();
-            vec![at + 40, at + 400]
-        } else {
-            vec![
-                0,
-                data.len() / 4,
-                data.len() / 2,
-                data.len() * 3 / 4,
-                data.len() - 4,
-            ]
-        };
+        let mut cuts = vec![
+            0,
+            data.len() / 4,
+            data.len() / 2,
+            data.len() * 3 / 4,
+            data.len() - 4,
+        ];
+        if name.ends_with(".indd") {
+            // Inside the XMP object, and right after the database pages
+            // (the XMP object is gone, nothing else is incomplete).
+            let xmp = data.windows(10).position(|w| w == b"<x:xmpmeta").unwrap();
+            cuts.extend([xmp + 40, 3 * 4096]);
+        }
         for cut in cuts {
             let e = read(format(name), &mut Cursor::new(&data[..cut]))
                 .expect_err(&format!("{name} cut at {cut}"));
@@ -185,6 +185,25 @@ fn a_truncated_document_is_an_error_with_a_plain_message() {
             assert_eq!(e.code(), ErrorCode::InvalidRequest, "{name} cut at {cut}");
         }
     }
+}
+
+#[test]
+fn an_indd_whose_page_count_exceeds_the_file_is_truncated() {
+    let mut data = bytes("sample.indd");
+    // The current master page (higher sequence number) is the second one.
+    data[4096 + 280..4096 + 284].copy_from_slice(&99u32.to_le_bytes());
+    let e = read(DocumentFormat::Indd, &mut Cursor::new(&data)).unwrap_err();
+    assert_eq!(e.code(), ErrorCode::InvalidRequest);
+    assert!(e.detail().unwrap().contains("truncated"), "{e:?}");
+    // The older master page's count is ignored.
+    let mut data = bytes("sample.indd");
+    data[280..284].copy_from_slice(&99u32.to_le_bytes());
+    assert_eq!(
+        read(DocumentFormat::Indd, &mut Cursor::new(&data))
+            .unwrap()
+            .len(),
+        3
+    );
 }
 
 #[test]

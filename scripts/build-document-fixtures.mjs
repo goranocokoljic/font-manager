@@ -245,17 +245,39 @@ const liElements = (ps, family, face) => `     <rdf:li rdf:parseType="Resource">
 const liAttrs = (ps, family, face) =>
   `     <rdf:li stFnt:fontName="${ps}" stFnt:fontFamily="${family}" stFnt:fontFace="${face}" stFnt:fontType="TrueType"/>`;
 
-// --- .indd (database header GUID, then pages; XMP stored in plain) --------
+// --- .indd (Adobe XMP Toolkit InDesign_Handler: two 4 KB master pages, the
+// database pages, then contiguous objects between a header and a trailer;
+// the XMP packet is one object, its stream a 4-byte length and the packet) -
 
 const inddGuid = Buffer.from([0x06, 0x06, 0xed, 0xf5, 0xd8, 0x1d, 0x46, 0xe5, 0xbd, 0x31, 0xef, 0xe7, 0xfe, 0x74, 0xb7, 0x1d]);
+const objHeaderGuid = Buffer.from([0xde, 0x39, 0x39, 0x79, 0x51, 0x88, 0x4b, 0x6c, 0x8e, 0x63, 0xee, 0xf8, 0xee, 0xe0, 0xdf, 0xd3]);
+const objTrailerGuid = Buffer.from([0xfd, 0xce, 0xdb, 0x70, 0xf7, 0x86, 0x4b, 0x4f, 0xa4, 0xd3, 0xc7, 0x28, 0xb3, 0x41, 0x71, 0x31]);
+const INDD_PAGE = 4096;
+const INDD_PAGES = 3; // two master pages and one database page
+const masterPage = (sequence) => {
+  const page = Buffer.alloc(INDD_PAGE, 0xa5);
+  inddGuid.copy(page, 0);
+  page.write('DOCUMENT', 16, 'latin1');
+  page[24] = 1; // object streams are little-endian
+  page.writeBigUInt64LE(BigInt(sequence), 264);
+  page.writeUInt32LE(INDD_PAGES, 280);
+  return page;
+};
+const contiguousObject = (uid, stream) => Buffer.concat([
+  objHeaderGuid, u32le(uid), u32le(0x7a), u32le(stream.length), u32le(0),
+  stream,
+  objTrailerGuid, u32le(uid), u32le(0x7a), u32le(0), u32le(stream.length),
+]);
+const inddXmp = Buffer.from(xmp([
+  liElements('MinionPro-Regular', 'Minion Pro', 'Regular'),
+  liAttrs('MyriadPro-Bold', 'Myriad Pro', 'Bold'),
+  liAttrs('Brand&amp;Co-Sans', 'Brand&amp;Co Sans', 'Book'),
+].join('\n')), 'utf8');
 write('sample.indd', Buffer.concat([
-  inddGuid, Buffer.from('DOCUMENT'), Buffer.alloc(4072, 0xa5),
-  Buffer.from(xmp([
-    liElements('MinionPro-Regular', 'Minion Pro', 'Regular'),
-    liAttrs('MyriadPro-Bold', 'Myriad Pro', 'Bold'),
-    liAttrs('Brand&amp;Co-Sans', 'Brand&amp;Co Sans', 'Book'),
-  ].join('\n')), 'utf8'),
-  Buffer.alloc(2048, 0x5a),
+  // The second master page has the higher sequence number: it is current.
+  masterPage(7), masterPage(8), Buffer.alloc(INDD_PAGE, 0x5a),
+  contiguousObject(101, Buffer.concat([u32le(inddXmp.length), inddXmp])),
+  contiguousObject(102, Buffer.alloc(300, 0x3c)),
 ]));
 
 // --- .ai (PDF 1.6 with XMP metadata, font dictionaries, an object stream) -

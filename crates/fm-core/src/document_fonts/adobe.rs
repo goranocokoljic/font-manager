@@ -7,6 +7,12 @@
 //! inside Flate-compressed object streams (`/Type /ObjStm`). An encrypted
 //! PDF (`/Encrypt`) is refused.
 //!
+//! An InDesign file is two 4 KB master pages, the database pages, then
+//! contiguous objects (the XMP packet is one), each between a 32-byte header
+//! and trailer with fixed GUIDs (Adobe XMP Toolkit, `InDesign_Handler`). The
+//! master page with the higher sequence number gives the database page count;
+//! a file shorter than its pages, or that ends inside an object, is truncated.
+//!
 //! The file is scanned in chunks for the markers; only bounded windows around
 //! them are kept in memory.
 
@@ -17,10 +23,18 @@ use flate2::read::ZlibDecoder;
 use super::xml::{self, Event, attr, local};
 use super::{Bad, Fonts, Res, read_capped, xml_text};
 
-/// InDesign's database header GUID, the first 16 bytes of every .indd.
+/// InDesign's master page GUID, the first 16 bytes of every .indd.
 const INDD_GUID: [u8; 16] = [
     0x06, 0x06, 0xED, 0xF5, 0xD8, 0x1D, 0x46, 0xE5, 0xBD, 0x31, 0xEF, 0xE7, 0xFE, 0x74, 0xB7, 0x1D,
 ];
+/// The GUIDs that open and close an InDesign contiguous object.
+const INDD_OBJECT_HEADER: [u8; 16] = [
+    0xDE, 0x39, 0x39, 0x79, 0x51, 0x88, 0x4B, 0x6C, 0x8E, 0x63, 0xEE, 0xF8, 0xEE, 0xE0, 0xDF, 0xD3,
+];
+const INDD_OBJECT_TRAILER: [u8; 16] = [
+    0xFD, 0xCE, 0xDB, 0x70, 0xF7, 0x86, 0x4B, 0x4F, 0xA4, 0xD3, 0xC7, 0x28, 0xB3, 0x41, 0x71, 0x31,
+];
+const INDD_PAGE: u64 = 4096;
 const XMP_OPEN: &[u8] = b"<x:xmpmeta";
 const XMP_OPEN_OLD: &[u8] = b"<x:xapmeta";
 const BASE_FONT: &[u8] = b"/BaseFont";
@@ -35,14 +49,80 @@ const MAX_MATCHES: usize = 100_000;
 const CHUNK: usize = 1 << 20;
 
 pub(super) fn indd<R: Read + Seek>(src: &mut R, fonts: &mut Fonts) -> Res<()> {
-    let mut head = [0u8; 16];
-    src.read_exact(&mut head)?;
-    if head != INDD_GUID {
-        return Err(Bad::malformed("not an InDesign document (header GUID)"));
-    }
+    indd_structure(src)?;
     let hits = scan(src, &[XMP_OPEN, XMP_OPEN_OLD])?;
+    // InDesign always stores its metadata: without it the document was cut
+    // where an object ended.
+    if hits.is_empty() {
+        return Err(Bad::malformed(
+            "the InDesign document has no XMP packet (truncated)",
+        ));
+    }
     for (_, at) in hits {
         xmp_at(src, at, fonts)?;
+    }
+    Ok(())
+}
+
+/// Checks the master pages and walks the contiguous objects to the end of
+/// the file: a truncated document is an error, not an empty font list.
+fn indd_structure<R: Read + Seek>(src: &mut R) -> Res<()> {
+    let len = src.seek(SeekFrom::End(0))?;
+    src.seek(SeekFrom::Start(0))?;
+    let mut masters = [0u8; 2 * INDD_PAGE as usize];
+    src.read_exact(&mut masters)?;
+    let (first, second) = masters.split_at(INDD_PAGE as usize);
+    let mut best: Option<(u64, u64)> = None; // (sequence, pages)
+    for page in [first, second] {
+        if page.get(..16) != Some(&INDD_GUID[..]) || page.get(16..24) != Some(&b"DOCUMENT"[..]) {
+            continue;
+        }
+        // Master page fields are little-endian whatever the object streams use.
+        let le = |at: usize, n: usize| {
+            page.get(at..at + n)
+                .map(|b| b.iter().rev().fold(0u64, |v, &x| v << 8 | u64::from(x)))
+                .unwrap_or_default()
+        };
+        let (sequence, pages) = (le(264, 8), le(280, 4));
+        if best.is_none_or(|(s, _)| sequence > s) {
+            best = Some((sequence, pages));
+        }
+    }
+    let (_, pages) =
+        best.ok_or_else(|| Bad::malformed("not an InDesign document (no master page)"))?;
+    let mut at = pages
+        .checked_mul(INDD_PAGE)
+        .filter(|end| *end >= 2 * INDD_PAGE)
+        .ok_or_else(|| Bad::malformed("InDesign page count out of range"))?;
+    if at > len {
+        return Err(Bad::malformed("the document ends early (truncated)"));
+    }
+    while at < len {
+        src.seek(SeekFrom::Start(at))?;
+        let mut header = [0u8; 32];
+        let got = read_up_to(src, &mut header)?;
+        let n = got.min(16);
+        if header[..n] != INDD_OBJECT_HEADER[..n] {
+            // Not an object: padding after the last one, as the toolkit allows.
+            break;
+        }
+        if got < 32 {
+            return Err(Bad::malformed("the document ends early (truncated)"));
+        }
+        let stream = u64::from(u32::from_le_bytes([
+            header[24], header[25], header[26], header[27],
+        ]));
+        let trailer_at = at + 32 + stream;
+        if trailer_at + 32 > len {
+            return Err(Bad::malformed("the document ends early (truncated)"));
+        }
+        src.seek(SeekFrom::Start(trailer_at))?;
+        let mut trailer = [0u8; 16];
+        src.read_exact(&mut trailer)?;
+        if trailer != INDD_OBJECT_TRAILER {
+            return Err(Bad::malformed("InDesign object trailer"));
+        }
+        at = trailer_at + 32;
     }
     Ok(())
 }
