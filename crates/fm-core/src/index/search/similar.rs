@@ -15,11 +15,15 @@ use fm_api::FaceId;
 use fm_api::common::{Classification, Metrics};
 use fm_api::search::{SimilarFace, SimilarRequest};
 
-use super::{Index, db_error, name_of};
+use super::{Index, Row, db_error, name_of};
 use crate::error::{FmError, FmResult};
 use crate::fingerprint::{self, Fingerprint};
 use crate::grouping::family_key;
+use crate::image_match::ImageFingerprint;
 use crate::similar::{self, Profile, Similarity};
+
+/// Which candidates a ranking keeps.
+type Keep<'a> = Box<dyn Fn(&Row, &Profile) -> bool + 'a>;
 
 /// What a profile needs of every face.
 const PROFILES: &str = "
@@ -38,6 +42,47 @@ impl Index {
     pub fn find_similar(&self, req: &SimilarRequest) -> FmResult<Vec<SimilarFace>> {
         let me = self.face_summary(req.face)?;
         let mine = family_key(&me.family_name);
+        self.rank(req.limit, |profiles| {
+            let target = profiles
+                .get(&req.face.0)
+                .ok_or_else(|| FmError::not_found(format!("Face {}", req.face)))?;
+            Ok((
+                target.clone(),
+                Box::new(move |r: &Row, _: &Profile| r.id != req.face.0 && r.family_key != mine),
+            ))
+        })
+    }
+
+    /// The visible faces that look most like the text of an image, reduced
+    /// to `print` (E33.1, [`crate::image_match`]), closest first, at most
+    /// `limit`. Only faces with a fingerprint are candidates: the image has
+    /// no weight or width class for the metrics-only comparison.
+    pub fn find_by_image(
+        &self,
+        print: &ImageFingerprint,
+        limit: u32,
+    ) -> FmResult<Vec<SimilarFace>> {
+        let target = Profile {
+            fingerprint: Some(print.fingerprint.clone()),
+            shapes_only: print.shapes_only,
+            ..Profile::default()
+        };
+        self.rank(limit, move |_| {
+            Ok((
+                target,
+                Box::new(|_: &Row, p: &Profile| p.fingerprint.is_some()),
+            ))
+        })
+    }
+
+    /// The searchable faces `keep` accepts, scored against the target
+    /// `pick` chooses from the profiles, best `limit` first; equal scores
+    /// in face-id order.
+    fn rank<'a>(
+        &self,
+        limit: u32,
+        pick: impl FnOnce(&HashMap<u32, Profile>) -> FmResult<(Profile, Keep<'a>)>,
+    ) -> FmResult<Vec<SimilarFace>> {
         self.refresh_search_cache()?;
         if self.search_cache.borrow().profiles.is_none() {
             let profiles = self.profiles()?;
@@ -49,17 +94,17 @@ impl Index {
                 .profiles
                 .as_ref()
                 .ok_or_else(|| FmError::internal("similar-font profiles were not read"))?;
-            let target = profiles
-                .get(&req.face.0)
-                .ok_or_else(|| FmError::not_found(format!("Face {}", req.face)))?;
+            let (target, keep) = pick(profiles)?;
             let mut ranked: Vec<(u32, Similarity)> = cache
                 .rows
                 .iter()
-                .filter(|r| r.id != req.face.0 && r.family_key != mine)
-                .filter_map(|r| Some((r.id, similar::compare(target, profiles.get(&r.id)?))))
+                .filter_map(|r| {
+                    let profile = profiles.get(&r.id)?;
+                    keep(r, profile).then(|| (r.id, similar::compare(&target, profile)))
+                })
                 .collect();
             ranked.sort_by(|a, b| b.1.score.total_cmp(&a.1.score).then(a.0.cmp(&b.0)));
-            ranked.truncate(req.limit as usize);
+            ranked.truncate(limit as usize);
             ranked
         };
         ranked

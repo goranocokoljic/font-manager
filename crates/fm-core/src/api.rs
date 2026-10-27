@@ -76,9 +76,9 @@ use fm_api::preview::{
     PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, Filters, LanguagePreset, PairingRequest,
-    PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
-    Supports,
+    CoverageReport, CoverageRequest, FaceCoverage, Filters, ImageMatchRequest, LanguagePreset,
+    PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace,
+    SimilarRequest, Supports,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
@@ -820,6 +820,13 @@ impl SearchService for CoreApi {
 
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
         Ok(self.lock().find_similar(&req)?)
+    }
+
+    /// Reads and reduces the image before taking the lock; the file is
+    /// only read.
+    fn find_by_image(&self, req: ImageMatchRequest) -> ApiResult<Vec<SimilarFace>> {
+        let print = crate::image_match::fingerprint_file(Path::new(&req.path))?;
+        Ok(self.lock().find_by_image(&print, req.limit)?)
     }
 
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {

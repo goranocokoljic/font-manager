@@ -371,3 +371,98 @@ fn the_reference_library_finds_20_similar_in_under_50_ms() {
         assert!(elapsed < BUDGET, "face {id} took {elapsed:?}");
     }
 }
+
+/// `google-repo` and Roboto Slab (`google-static/robotoslab`) in one index.
+fn image_library() -> Index {
+    let mut index = library();
+    let root = fixtures().join("google-static/robotoslab");
+    let mut scanned = FileIndex::new();
+    let report = scanned.rescan(&root, &discover(&root).expect("discover"));
+    let source = index
+        .add_source(&root.to_string_lossy(), SourceKind::Watched)
+        .expect("source")
+        .id;
+    index
+        .apply_rescan(source, &scanned, &report)
+        .expect("persist");
+    index
+}
+
+/// E33.1 criterion 4: the sample line rendered from each face at 48 px, at
+/// 2x and as white on black, reduced to a fingerprint, puts its own family
+/// in the top 5 of the library.
+#[test]
+fn an_image_of_each_family_ranks_it_in_the_top_5() {
+    use crate::image_match::{fingerprint_png, tests::render};
+    let index = image_library();
+    let faces = [
+        ("google-repo/barlow/Barlow-BoldItalic.ttf", "Barlow"),
+        (
+            "google-repo/librebaskerville/LibreBaskerville[wght].ttf",
+            "Libre Baskerville",
+        ),
+        ("google-repo/crimsonpro/CrimsonPro[wght].ttf", "Crimson Pro"),
+        (
+            "google-repo/clickerscript/ClickerScript-Regular.ttf",
+            "Clicker Script",
+        ),
+        (
+            "google-static/robotoslab/RobotoSlab-ExtraBold.ttf",
+            "Roboto Slab",
+        ),
+    ];
+    let looks = [
+        (48.0, "#000000", "#ffffff"),
+        (96.0, "#000000", "#ffffff"),
+        (48.0, "#ffffff", "#000000"),
+    ];
+    let mut misses = Vec::new();
+    for (rel, family) in faces {
+        for (size, fg, bg) in looks {
+            let png = render(rel, crate::fingerprint::SAMPLE, size, fg, bg).to_png();
+            let print = fingerprint_png(&png).expect("fingerprint");
+            let top = index.find_by_image(&print, 5).expect("rank");
+            let all = show(&top);
+            eprintln!("{family} {size} {fg}:\n{all}\n");
+            assert_eq!(top.len(), 5);
+            assert!(top.windows(2).all(|p| p[0].score >= p[1].score));
+            assert!(top.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+            if !top.iter().any(|s| s.face.family_name == family) {
+                misses.push(format!("{family} at {size} px, {fg} on {bg}:\n{all}"));
+            }
+        }
+    }
+    assert!(misses.is_empty(), "{}", misses.join("\n\n"));
+}
+
+/// E33.1: faces without a fingerprint are not candidates for an image, and
+/// the limit holds.
+#[test]
+fn an_image_ranks_only_fingerprinted_faces() {
+    use crate::image_match::{fingerprint_png, tests::render};
+    let index = library();
+    let png = render(
+        "google-repo/crimsonpro/CrimsonPro[wght].ttf",
+        crate::fingerprint::SAMPLE,
+        48.0,
+        "#000000",
+        "#ffffff",
+    )
+    .to_png();
+    let print = fingerprint_png(&png).expect("fingerprint");
+    let all = index.find_by_image(&print, u32::MAX).expect("rank");
+    let fingerprinted: u32 = index
+        .conn
+        .query_row(
+            "SELECT COUNT(*) FROM face_fingerprint WHERE vector IS NOT NULL",
+            [],
+            |r| r.get(0),
+        )
+        .expect("count");
+    assert_eq!(all.len() as u32, fingerprinted);
+    assert!(
+        all.iter()
+            .all(|s| !s.reasons.iter().any(|r| r == METRICS_ONLY))
+    );
+    assert_eq!(index.find_by_image(&print, 3).expect("rank").len(), 3);
+}

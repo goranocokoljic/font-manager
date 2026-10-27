@@ -115,6 +115,10 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("face_coverage", "1".into()),
         ("list_languages", String::new()),
         ("find_similar", r#"{"face":1,"limit":3}"#.into()),
+        (
+            "find_by_image",
+            r#"{"path":"no-such-image.png","limit":3}"#.into(),
+        ),
         ("suggest_pairings", r#"{"face":1,"limit":3}"#.into()),
         // preview
         (

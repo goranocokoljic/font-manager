@@ -28,6 +28,7 @@ pub mod glyph_features;
 pub mod glyph_svg;
 pub mod glyphs;
 pub mod grouping;
+pub mod image_match;
 pub mod index;
 pub mod inventory;
 pub mod layout;

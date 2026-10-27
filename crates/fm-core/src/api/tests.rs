@@ -5721,3 +5721,67 @@ fn document_fonts_lists_a_documents_fonts_and_leaves_it_alone() {
     assert_eq!(e.code, ErrorCode::Unsupported);
     assert_eq!(e.message, "This document's fonts could not be read.");
 }
+
+/// E33.1: `find_by_image` through the core API reads the screenshot (and
+/// only reads it) and ranks the library's faces against it; a file that is
+/// not a PNG and an image without text are plain errors.
+#[test]
+fn find_by_image_ranks_the_faces_like_the_screenshot() {
+    use fm_api::search::ImageMatchRequest;
+    let (lib, _, _) = Lib::scanned_with(
+        "api-find-by-image",
+        &[
+            "google-repo/crimsonpro/CrimsonPro[wght].ttf",
+            "google-repo/clickerscript/ClickerScript-Regular.ttf",
+            "google-repo/barlow/Barlow-BoldItalic.ttf",
+        ],
+    );
+    let shot = lib.dir.path().join("Screenshot 1.png");
+    let png = crate::image_match::tests::render(
+        "google-repo/crimsonpro/CrimsonPro[wght].ttf",
+        crate::fingerprint::SAMPLE,
+        48.0,
+        "#000000",
+        "#ffffff",
+    )
+    .to_png();
+    std::fs::write(&shot, &png).expect("write");
+    let req = |path: &Path, limit| ImageMatchRequest {
+        path: path.to_string_lossy().into_owned(),
+        limit,
+    };
+    let found = lib.api.find_by_image(req(&shot, 2)).expect("found");
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(found[0].face.family_name, "Crimson Pro", "{found:?}");
+    assert!(found[0].score >= found[1].score);
+    assert!(
+        found[0]
+            .reasons
+            .iter()
+            .any(|r| r == "similar letter shapes")
+    );
+    assert_eq!(std::fs::read(&shot).expect("bytes"), png);
+
+    let text = lib.dir.path().join("notes.png");
+    std::fs::write(&text, b"not an image").expect("write");
+    let e = lib.api.find_by_image(req(&text, 2)).expect_err("not a png");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "Only PNG images can be read.");
+
+    let blank = crate::preview::Raster {
+        width: 64,
+        height: 32,
+        baseline: 0,
+        rgba: [255, 255, 255, 255].repeat(64 * 32),
+    };
+    std::fs::write(&text, blank.to_png()).expect("write");
+    let e = lib.api.find_by_image(req(&text, 2)).expect_err("blank");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert_eq!(e.message, "No text was found in this image.");
+
+    let e = lib
+        .api
+        .find_by_image(req(&lib.dir.path().join("gone.png"), 2))
+        .expect_err("missing");
+    assert_eq!(e.code, ErrorCode::NotFound);
+}

@@ -71,6 +71,7 @@ routes! {
     face_coverage(face),
     list_languages(),
     find_similar(req),
+    find_by_image(req),
     suggest_pairings(req),
     // preview
     render_preview(req),

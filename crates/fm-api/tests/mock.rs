@@ -3148,3 +3148,29 @@ fn sidecar_conflicts_are_listed_with_a_problem_and_resolved_once() {
         ErrorCode::NotFound
     );
 }
+
+#[test]
+fn find_by_image_checks_the_png_signature_and_leaves_the_file_alone() {
+    use fm_api::search::ImageMatchRequest;
+    let api = api();
+    let dir = std::env::temp_dir().join(format!("fm-mock-image-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let req = |name: &str, limit| ImageMatchRequest {
+        path: dir.join(name).to_string_lossy().into_owned(),
+        limit,
+    };
+    let png = b"\x89PNG\r\n\x1a\nrest of the image";
+    std::fs::write(dir.join("shot.png"), png).unwrap();
+    let found = api.find_by_image(req("shot.png", 3)).unwrap();
+    assert_eq!(found.len(), 3);
+    assert!(found.windows(2).all(|p| p[0].score > p[1].score));
+    assert!(found.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+    assert_eq!(std::fs::read(dir.join("shot.png")).unwrap(), png);
+    std::fs::write(dir.join("shot.jpg"), b"\xff\xd8\xff\xe0 jpeg").unwrap();
+    let e = api.find_by_image(req("shot.jpg", 3)).unwrap_err();
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert_eq!(e.message, "This image could not be read.");
+    let e = api.find_by_image(req("gone.png", 3)).unwrap_err();
+    assert_eq!(e.code, ErrorCode::NotFound);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
