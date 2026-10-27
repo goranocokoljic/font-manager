@@ -1,8 +1,9 @@
 # Releases from a tag (E18.2). Builds the installers with the documented release build
 # (scripts/release/build.mjs, docs/building.md) plus the signed updater artifacts, then
 # publishes one GitHub release with every installer, every updater artifact and its
-# .sig, the Sketch plugin zip, SHA256SUMS, and the update manifest latest.json that the in-app updater reads
-# from https://github.com/<repo>/releases/latest/download/latest.json (ADR 0012).
+# .sig, the Sketch plugin zip, SHA256SUMS, and the update manifest latest.json that the
+# in-app updater reads from https://github.com/<repo>/releases/latest/download/latest.json
+# (ADR 0012).
 #
 # Secrets (repository settings → Secrets → Actions):
 #   TAURI_SIGNING_PRIVATE_KEY           the updater private key (`tauri signer generate`);
