@@ -518,3 +518,57 @@ fn a_curated_partner_gains_the_model_reason() {
     b.sort_unstable();
     assert_eq!(a, b);
 }
+
+/// A model that says "pairing" for a shared designer and nothing else.
+fn designer_model() -> model::Model {
+    let mut weights = [0.0; model::FEATURES.len()];
+    let at = |name: &str| {
+        model::FEATURES
+            .iter()
+            .position(|f| *f == name)
+            .expect("feature")
+    };
+    weights[at("bias")] = -6.0;
+    weights[at("same_designer")] = 12.0;
+    model::Model { seed: 0, weights }
+}
+
+#[test]
+fn the_model_reason_comes_only_when_the_model_says_pair() {
+    let index = indexed(&[
+        plain_sans(1, "Alder", "Ada Lovelace", 500),
+        plain_sans(2, "Birch", "ada lovelace", 510),
+        plain_sans(3, "Cedar", "Bob", 505),
+        plain_sans(4, "Damson", "Ada Lovelace", 700),
+    ]);
+    let req = PairingRequest {
+        face: face_of(&index, "Alder"),
+        limit: 10,
+    };
+    let m = designer_model();
+    let got = index.suggest_with(&req, Some(&m)).expect("pairings");
+    let flagged: Vec<(&str, bool)> = got
+        .iter()
+        .map(|s| {
+            let says = s.reasons.iter().any(|r| r == MODEL_REASON);
+            (s.face.family_name.as_str(), says)
+        })
+        .collect();
+    // Cedar passes the rules (similar x-height) but the model scores it
+    // low: it keeps the rules' reasons only, and ranks last.
+    assert_eq!(
+        flagged,
+        [("Birch", true), ("Damson", true), ("Cedar", false)],
+        "{got:#?}"
+    );
+    let cedar = &got[2];
+    assert_eq!(cedar.reasons, ["similar x-height"]);
+    // The blend: half the rules' score, half the model's probability.
+    let chance = 1.0 / (1.0 + (6.0_f32).exp());
+    let want = 0.5 * crate::pairing::X_HEIGHT + 0.5 * chance;
+    assert!(
+        (cedar.score - want).abs() < 1e-4,
+        "{} vs {want}",
+        cedar.score
+    );
+}
