@@ -139,6 +139,8 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     // workflows
     same!(seen, d, c; pick_fonts_for_brief, json!({ "brief": "a friendly sans" }));
     same!(seen, d, c; prepare_for_web, json!({ "family": 1, "outDir": out }));
+    same!(seen, d, c; document_fonts, json!({ "path": out }));
+    same!(seen, d, c; document_fonts, json!({ "path": format!("{out}-missing.docx") }));
     // settings
     same!(seen, d, c; get_settings);
     same!(seen, d, c; update_settings, json!({ "theme": "dark" }));

@@ -1242,6 +1242,37 @@ fn workflows_compose_the_other_services() {
 }
 
 #[test]
+fn document_fonts_reads_the_extension_and_leaves_the_file_alone() {
+    use fm_api::workflows::{DocumentFontsRequest, DocumentFormat};
+    let api = api();
+    let dir = std::env::temp_dir().join(format!("fm-mock-docfonts-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let req = |name: &str| DocumentFontsRequest {
+        path: dir.join(name).to_string_lossy().into_owned(),
+    };
+    for (name, format) in [
+        ("a.DOCX", DocumentFormat::Docx),
+        ("b.psd", DocumentFormat::Psd),
+    ] {
+        std::fs::write(dir.join(name), b"bytes").unwrap();
+        let fonts = api.document_fonts(req(name)).unwrap();
+        assert_eq!(fonts.format, format);
+        assert_eq!(fonts.fonts.len(), 2);
+        assert_eq!(std::fs::read(dir.join(name)).unwrap(), b"bytes");
+    }
+    let office = api.document_fonts(req("a.DOCX")).unwrap();
+    assert_eq!(office.fonts[1].family.as_deref(), Some("Inter"));
+    assert_eq!(office.fonts[1].postscript_name, None);
+    std::fs::write(dir.join("c.txt"), b"x").unwrap();
+    let unknown = api.document_fonts(req("c.txt")).unwrap_err();
+    assert_eq!(unknown.code, ErrorCode::Unsupported);
+    assert_eq!(unknown.message, "This document's fonts could not be read.");
+    let missing = api.document_fonts(req("gone.ai")).unwrap_err();
+    assert_eq!(missing.code, ErrorCode::NotFound);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn compare_preview_takes_two_to_four_faces_and_short_text() {
     let api = api();
     let req = |faces: &[u32], text: &str| fm_api::preview::ComparePreviewRequest {

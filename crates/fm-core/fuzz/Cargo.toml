@@ -1,5 +1,6 @@
 # cargo-fuzz targets for the parser path (ADR 0002). Not a workspace member:
-# it builds on nightly with `cargo +nightly fuzz`, see fuzz_targets/parse.rs.
+# it builds on nightly with `cargo +nightly fuzz`, see fuzz_targets/parse.rs and
+# fuzz_targets/document_fonts.rs (E32.1).
 [package]
 name = "fm-core-fuzz"
 version = "0.0.0"
@@ -11,12 +12,20 @@ publish = false
 cargo-fuzz = true
 
 [dependencies]
+fm-api = { path = "../../fm-api" }
 fm-core = { path = ".." }
 libfuzzer-sys = "0.4"
 
 [[bin]]
 name = "parse"
 path = "fuzz_targets/parse.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "document_fonts"
+path = "fuzz_targets/document_fonts.rs"
 test = false
 doc = false
 bench = false

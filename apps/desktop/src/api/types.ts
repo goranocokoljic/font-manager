@@ -727,6 +727,50 @@ export type DocumentClosedResponse = {
 	offer: FaceId[],
 };
 
+/**
+ *  One font a document names. Each format stores a different part of the
+ *  name, so every part is optional; at least one is present.
+ */
+export type DocumentFontRef = {
+	/**  The PostScript name ("Inter-Bold"). */
+	postscriptName?: string | null,
+	/**  The family name ("Inter"). */
+	family?: string | null,
+	/**  The style name ("Bold"). */
+	style?: string | null,
+};
+
+/**  The fonts a document uses. */
+export type DocumentFonts = {
+	/**  What kind of document it is. */
+	format: DocumentFormat,
+	/**  Every distinct font reference, sorted. */
+	fonts: DocumentFontRef[],
+};
+
+/**  Read the fonts a design document uses. */
+export type DocumentFontsRequest = {
+	/**  The document. It is only read, never written or moved. */
+	path: string,
+};
+
+/**  The kind of document, from its extension. */
+export type DocumentFormat = 
+/**  Microsoft Word (.docx). */
+"docx" | 
+/**  Microsoft PowerPoint (.pptx). */
+"pptx" | 
+/**  Sketch (.sketch). */
+"sketch" | 
+/**  Figma local copy (.fig). */
+"fig" | 
+/**  Adobe InDesign (.indd). */
+"indd" | 
+/**  Adobe Illustrator (.ai). */
+"ai" | 
+/**  Adobe Photoshop (.psd, .psb). */
+"psd";
+
 /**  Downloads a family of a catalog into a watched source (E22.3). */
 export type DownloadFamilyRequest = {
 	/**  The catalog. */

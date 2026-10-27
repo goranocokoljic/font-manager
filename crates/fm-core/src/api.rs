@@ -85,8 +85,8 @@ use fm_api::settings::{
     McpUpdate, Settings, SettingsService, SettingsUpdate,
 };
 use fm_api::workflows::{
-    BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
-    WorkflowService,
+    BriefRequest, Candidate, DocumentFonts, DocumentFontsRequest, PrepareForWebRequest,
+    PrepareForWebResponse, Shortlist, WorkflowService,
 };
 use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
@@ -1454,6 +1454,12 @@ impl WorkflowService for CoreApi {
             }
         }
         Ok(PrepareForWebResponse { activated, export })
+    }
+
+    /// [`document_fonts::document_fonts`]: no index, no lock; the file is
+    /// only opened for reading.
+    fn document_fonts(&self, req: DocumentFontsRequest) -> ApiResult<DocumentFonts> {
+        Ok(crate::document_fonts::document_fonts(Path::new(&req.path))?)
     }
 }
 

@@ -11,6 +11,9 @@
 # libFuzzer writes the inputs it finds to the first corpus folder, a scratch folder,
 # so the committed seeds only change when a human adds to them.
 #
+# The `document_fonts` target (E32.1) fuzzes the design-document readers the same
+# way, seeded with fixtures/documents (made by scripts/build-document-fixtures.mjs).
+#
 # Linux only: cargo-fuzz (libFuzzer + AddressSanitizer) needs nightly and is best
 # supported there, and the parser is platform-free Rust. On a pull request that
 # touches the parser or the fuzz crate, a short run proves the target still builds.
@@ -29,6 +32,9 @@ on:
       - .github/workflows/fuzz.yml
       - crates/fm-core/fuzz/**
       - crates/fm-core/src/parser.rs
+      - crates/fm-core/src/document_fonts.rs
+      - crates/fm-core/src/document_fonts/**
+      - fixtures/documents/**
       - .gitattributes
 
 concurrency:
@@ -82,10 +88,24 @@ jobs:
             -max_total_time="$SECONDS_TO_RUN" -max_len=1048576 -rss_limit_mb=4096 -timeout=30
           echo "corpus inputs found this run: $(ls "$scratch" | wc -l)"
 
+      # E32.1: the document readers (zip, XML, kiwi, XMP/PDF, Photoshop),
+      # seeded with the generated document fixtures.
+      - name: Fuzz the document font readers
+        env:
+          SECONDS_TO_RUN: ${{ github.event_name == 'pull_request' && '60' || inputs.seconds || '1800' }}
+        run: |
+          scratch="$RUNNER_TEMP/corpus-document-fonts"
+          mkdir -p "$scratch"
+          cargo +nightly fuzz run document_fonts "$scratch" ../../fixtures/documents -- \
+            -max_total_time="$SECONDS_TO_RUN" -max_len=262144 -rss_limit_mb=4096 -timeout=30
+          echo "corpus inputs found this run: $(ls "$scratch" | wc -l)"
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: fuzz-artifacts-parse
-          path: crates/fm-core/fuzz/artifacts/parse/
+          path: |
+            crates/fm-core/fuzz/artifacts/parse/
+            crates/fm-core/fuzz/artifacts/document_fonts/
           if-no-files-found: ignore
           retention-days: 30

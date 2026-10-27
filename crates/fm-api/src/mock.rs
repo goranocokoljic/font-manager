@@ -75,7 +75,8 @@ use crate::settings::{
     McpUpdate, Settings, SettingsUpdate,
 };
 use crate::workflows::{
-    BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
+    BriefRequest, Candidate, DocumentFontRef, DocumentFonts, DocumentFontsRequest, DocumentFormat,
+    PrepareForWebRequest, PrepareForWebResponse, Shortlist,
 };
 use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ComparisonId, ErrorCode,
@@ -4231,6 +4232,45 @@ impl WorkflowService for MockApi {
             on_conflict: ConflictPolicy::KeepExisting,
         })?;
         Ok(PrepareForWebResponse { activated, export })
+    }
+
+    /// The format from the extension and a fixed list, one face the mock
+    /// library has and one it lacks; the file must exist and is only looked at.
+    fn document_fonts(&self, req: DocumentFontsRequest) -> ApiResult<DocumentFonts> {
+        let unreadable = "This document's fonts could not be read.";
+        let path = std::path::Path::new(&req.path);
+        if !path.is_file() {
+            return Err(ApiError::new(ErrorCode::NotFound, unreadable)
+                .with_detail(format!("{}: no such file", req.path)));
+        }
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase();
+        let format = match ext.as_str() {
+            "docx" => DocumentFormat::Docx,
+            "pptx" => DocumentFormat::Pptx,
+            "sketch" => DocumentFormat::Sketch,
+            "fig" => DocumentFormat::Fig,
+            "indd" => DocumentFormat::Indd,
+            "ai" => DocumentFormat::Ai,
+            "psd" | "psb" => DocumentFormat::Psd,
+            _ => {
+                return Err(ApiError::new(ErrorCode::Unsupported, unreadable)
+                    .with_detail(format!("{}: unknown document type", req.path)));
+            }
+        };
+        let office = matches!(format, DocumentFormat::Docx | DocumentFormat::Pptx);
+        let fonts = [("Futura", "Futura-Medium"), ("Inter", "Inter-Regular")]
+            .into_iter()
+            .map(|(family, postscript)| DocumentFontRef {
+                postscript_name: (!office).then(|| postscript.to_owned()),
+                family: office.then(|| family.to_owned()),
+                style: None,
+            })
+            .collect();
+        Ok(DocumentFonts { format, fonts })
     }
 }
 

@@ -217,6 +217,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             "prepare_for_web",
             format!(r#"{{"family":1,"outDir":{out}}}"#),
         ),
+        ("document_fonts", format!(r#"{{"path":{out}}}"#)),
         // settings
         ("get_settings", String::new()),
         ("update_settings", r#"{"theme":"dark"}"#.into()),

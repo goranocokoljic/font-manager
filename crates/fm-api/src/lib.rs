@@ -254,6 +254,8 @@ pub fn types() -> specta::Types {
         workflows::Shortlist,
         workflows::PrepareForWebRequest,
         workflows::PrepareForWebResponse,
+        workflows::DocumentFontsRequest,
+        workflows::DocumentFonts,
         // settings
         settings::Settings,
         settings::SettingsUpdate,

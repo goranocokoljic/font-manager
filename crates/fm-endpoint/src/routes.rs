@@ -127,6 +127,7 @@ routes! {
     // workflows
     pick_fonts_for_brief(req),
     prepare_for_web(req),
+    document_fonts(req),
     // settings
     get_settings(),
     update_settings(req),

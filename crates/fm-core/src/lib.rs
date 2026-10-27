@@ -16,6 +16,7 @@ pub mod config;
 pub mod coverage;
 pub mod crash;
 pub mod css;
+pub mod document_fonts;
 pub mod endpoint;
 pub mod error;
 pub mod features;

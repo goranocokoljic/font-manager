@@ -15,3 +15,6 @@
 crates/*/fuzz/seeds/** binary
 # The updater test package is signed byte for byte.
 apps/desktop/src-tauri/tests/fixtures/updater/** binary
+# The E32.1 document fixtures are raw bytes from scripts/build-document-fixtures.mjs.
+fixtures/documents/** binary
+fixtures/documents/README.md text eol=lf diff merge
