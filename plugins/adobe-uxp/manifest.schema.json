@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "manifest.schema.json",
+  "title": "Font Manager UXP plugin manifest",
+  "description": "The rules the plugin's manifest.json keeps: manifest v5, InDesign and Photoshop with minimum versions, and the network only to 127.0.0.1.",
+  "type": "object",
+  "required": [
+    "manifestVersion",
+    "id",
+    "name",
+    "version",
+    "main",
+    "host",
+    "entrypoints",
+    "requiredPermissions"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "manifestVersion": { "const": 5 },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9.]+$" },
+    "name": { "type": "string", "minLength": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" },
+    "main": { "type": "string", "minLength": 1 },
+    "host": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "required": ["app"],
+            "properties": { "app": { "const": "ID" } }
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "required": ["app"],
+            "properties": { "app": { "const": "PS" } }
+          }
+        }
+      ],
+      "items": {
+        "type": "object",
+        "required": ["app", "minVersion"],
+        "additionalProperties": false,
+        "properties": {
+          "app": { "enum": ["ID", "PS"] },
+          "minVersion": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" }
+        }
+      }
+    },
+    "entrypoints": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type", "id", "label"],
+        "properties": {
+          "type": { "enum": ["panel", "command"] },
+          "id": { "type": "string", "minLength": 1 },
+          "label": {
+            "type": "object",
+            "required": ["default"],
+            "properties": { "default": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
+    },
+    "requiredPermissions": {
+      "type": "object",
+      "required": ["network"],
+      "additionalProperties": false,
+      "properties": {
+        "network": {
+          "type": "object",
+          "required": ["domains"],
+          "additionalProperties": false,
+          "properties": {
+            "domains": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": { "const": "http://127.0.0.1" }
+            }
+          }
+        },
+        "localFileSystem": { "const": "fullAccess" }
+      }
+    }
+  }
+}
