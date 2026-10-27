@@ -1,5 +1,5 @@
 {
-  "name": "@fm/sketch",
+  "name": "@fm/sketch-plugin",
   "private": true,
   "type": "module",
   "description": "Font Manager's Sketch plugin.",

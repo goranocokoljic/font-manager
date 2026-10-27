@@ -285,3 +285,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E29.4 #185] apps/desktop/src-tauri/src/lib.rs:216 — `start_endpoint` drops a newly started IPC endpoint without a log line when `slot.running` is already set.
 - [E29.4 #185] crates/fm-client/src/http.rs:304 — the HTTP client's "Font Manager is not running, …" wording differs from `fm_platform::ipc::NOT_RUNNING`.
 - [E29.4 #185] crates/fm-platform/src/linux/ipc.rs:133 — the Unix IPC client `connect` has no timeout, so a live app with a full listen backlog blocks a client (Windows gives up after 2 s).
+- [E31.2 #192] plugins/adobe-uxp/manifest.json:6 — hard-codes "version": "0.1.0" while the Sketch bundle takes the workspace version, so the plugin versions will drift.

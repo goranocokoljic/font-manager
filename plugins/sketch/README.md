@@ -30,15 +30,29 @@ the layer.
 ## Build and install
 
 ```
-pnpm --filter @fm/sketch build
+pnpm --filter @fm/sketch-plugin build
 ```
 
-The plugin is `dist/FontManager.sketchplugin`. Double-click it to install it
-into Sketch.
+Vite builds the bundle (`build/bundle.ts`, `build/zip.ts`):
+
+- `dist/font-manager.sketchplugin/Contents/Sketch/manifest.json`: `manifest.json`
+  with the workspace version (`[workspace.package]` of the root `Cargo.toml`),
+  checked against `manifest.schema.json`;
+- `dist/font-manager.sketchplugin/Contents/Sketch/plugin.js`: the one script;
+- `dist/font-manager.sketchplugin/Contents/Resources/`: the licences;
+- `dist/font-manager.sketchplugin.zip`: the bundle as a zip. Two builds give the
+  same bytes (sorted entries, fixed time stamps and permissions).
+
+CI builds it on all three platforms; the release workflow attaches the zip as
+`font-manager_<version>_sketch-plugin.zip`. The manifest has no `appcast`, so
+the plugin has no update feed and Sketch never calls the network for it.
+Double-click the `.sketchplugin` to install it. The user page is
+[`docs/sketch-plugin.md`](../../docs/sketch-plugin.md).
 
 ## Tests
 
-`pnpm --filter @fm/sketch test` runs the plugin against a fake `sketch`
+`pnpm --filter @fm/sketch-plugin test` runs the plugin against a fake `sketch`
 module (`test/mock-sketch.ts`) and a fake app endpoint
-(`@fm/plugin-shared/testing`). They run in `pnpm test` on all three CI
+(`@fm/plugin-shared/testing`); `test/bundle.test.ts` runs the real build
+twice. They run in `pnpm test` on all three CI
 platforms.

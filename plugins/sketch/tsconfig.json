@@ -12,7 +12,9 @@
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": [],
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "build/**/*.ts", "vite.config.ts"]
 }

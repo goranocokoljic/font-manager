@@ -1,4 +1,4 @@
-// A JSON Schema checker for the keywords `manifest.schema.json` uses, so
+// A JSON Schema checker for the keywords the plugin manifest schemas use, so
 // the test needs no validator package. A keyword it does not know is an
 // error: the schema cannot pass by using one this file ignores.
 

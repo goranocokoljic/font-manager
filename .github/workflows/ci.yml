@@ -119,6 +119,14 @@ jobs:
       - name: Frontend and harness tests
         run: pnpm test
 
+      # E31.2: the Sketch plugin bundle and the zip the release attaches.
+      - name: Sketch plugin bundle (font-manager.sketchplugin and its zip)
+        shell: bash
+        run: |
+          pnpm --filter @fm/sketch-plugin build
+          test -f plugins/sketch/dist/font-manager.sketchplugin/Contents/Sketch/manifest.json
+          test -f plugins/sketch/dist/font-manager.sketchplugin.zip
+
       - name: Playwright browser
         run: pnpm --filter @fm/desktop exec playwright install --with-deps chromium
 
