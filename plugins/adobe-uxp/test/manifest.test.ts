@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import manifestFile from '../manifest.json';
 import schemaFile from '../manifest.schema.json';
-import { validate } from './json-schema';
+import { validate } from '@fm/plugin-shared/json-schema';
 
 const schema = schemaFile as Record<string, unknown>;
 const manifest = manifestFile as Record<string, unknown>;

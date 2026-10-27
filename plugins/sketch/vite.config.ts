@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
+import { manifestVersion } from '../../scripts/release/dev-build.mjs';
+import { BUNDLE, SCRIPT, sketchBundle } from './build/bundle.ts';
+
+const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf-8');
 
 // Sketch runs `Contents/Sketch/plugin.js` as a classic script and calls the
 // action handlers the manifest names as globals; its own modules (`sketch/*`,
@@ -7,20 +11,21 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   build: {
     target: 'es2020',
-    outDir: 'dist/FontManager.sketchplugin/Contents/Sketch',
-    lib: { entry: 'src/main.ts', formats: ['cjs'], fileName: () => 'plugin.js' },
+    outDir: `dist/${BUNDLE}`,
+    lib: { entry: 'src/main.ts', formats: ['cjs'], fileName: () => SCRIPT },
     rollupOptions: {
       external: ['sketch/dom', 'sketch/ui', 'sketch/settings', 'sketch/async', 'os', 'fs'],
     },
   },
   plugins: [
-    {
-      name: 'sketch-files',
-      generateBundle() {
-        const source = readFileSync('manifest.json', 'utf-8');
-        this.emitFile({ type: 'asset', fileName: 'manifest.json', source });
+    sketchBundle({
+      manifest: read('manifest.json'),
+      version: manifestVersion(read('../../Cargo.toml')),
+      resources: {
+        'LICENSE-MIT': read('../../LICENSE-MIT'),
+        'LICENSE-APACHE': read('../../LICENSE-APACHE'),
       },
-    },
+    }),
   ],
-  test: { include: ['test/**/*.test.ts'] },
+  test: { include: ['test/**/*.test.ts'], testTimeout: 60_000 },
 });

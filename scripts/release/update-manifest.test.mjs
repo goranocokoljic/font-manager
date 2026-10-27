@@ -220,6 +220,10 @@ describe('the release build', () => {
     assert.match(yml, /update-manifest\.mjs manifest /);
     assert.match(yml, /update-manifest\.mjs check --file release-assets\/latest\.json/);
     assert.match(yml, /gh release create "\$TAG" release-assets\/\*/);
+    // E31.2: the Sketch plugin zip is built once and attached with the installers.
+    assert.match(yml, /pnpm --filter @fm\/sketch-plugin build/);
+    assert.match(yml, /release-assets\/font-manager_\$\{\{ needs\.plan\.outputs\.version \}\}_sketch-plugin\.zip/);
+    assert.match(yml, /needs: \[plan, installer, sketch-plugin\]/);
   });
 
   test('the endpoint in tauri.conf.json is the latest.json the workflow publishes', () => {
@@ -237,6 +241,8 @@ describe('the CLI', () => {
       writeFileSync(join(dir, `${name}.sig`), `${SIG}\n`);
     }
     writeFileSync(join(dir, `font-manager_${V}_macos_arm64.dmg`), 'dmg');
+    // The Sketch plugin zip (E31.2) is attached unsigned: it is not an updater artifact.
+    writeFileSync(join(dir, `font-manager_${V}_sketch-plugin.zip`), 'zip');
     writeFileSync(join(dir, 'SHA256SUMS'), 'sums');
     const notes = join(tmp(), 'notes.md');
     writeFileSync(notes, '- Faster scans.\n');
