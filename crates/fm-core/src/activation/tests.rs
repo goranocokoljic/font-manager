@@ -1244,3 +1244,322 @@ fn a_virtual_style_activates_its_face_once_with_the_collection_or_set() {
         assert_eq!(fx.registered(), vec![]);
     }
 }
+
+/// E29.3: `fonts_needed` for `document` by PostScript name.
+fn need(fx: &Fixture, document: &str, names: &[&str]) -> Vec<ActivationOutcome> {
+    fx.service
+        .fonts_needed(FontsNeededRequest {
+            fonts: names
+                .iter()
+                .map(|n| fm_api::activation::NeededFont {
+                    postscript_name: Some((*n).to_owned()),
+                    ..Default::default()
+                })
+                .collect(),
+            document: Some(document.to_owned()),
+            activate: true,
+        })
+        .expect("fonts needed")
+        .outcomes
+}
+
+fn closed(fx: &Fixture, document: &str) -> Vec<FaceId> {
+    fx.service
+        .document_closed(DocumentClosedRequest {
+            document: document.to_owned(),
+        })
+        .expect("document closed")
+        .offer
+}
+
+/// Each face with its mode and the document it shows.
+fn documents(fx: &Fixture) -> Vec<(FaceId, ActivationMode, Option<String>)> {
+    fx.service
+        .list_active()
+        .expect("list")
+        .into_iter()
+        .map(|a| (a.face, a.mode, a.document))
+        .collect()
+}
+
+/// The face-to-document table, by face then document.
+fn tags(fx: &Fixture) -> Vec<(FaceId, String)> {
+    let index = fx.index.lock().expect("index");
+    let mut stmt = index
+        .conn()
+        .prepare("SELECT face_id, document FROM activation_document ORDER BY face_id, document")
+        .expect("prepare");
+    stmt.query_map([], |r| Ok((FaceId(r.get(0)?), r.get(1)?)))
+        .expect("query")
+        .collect::<Result<_, _>>()
+        .expect("rows")
+}
+
+/// E29.3 criterion 1: a document's faces are session faces tagged with it;
+/// a face belongs to every open document that asks for it, shows the one
+/// that asked last, and a repeated request adds no tag.
+#[test]
+fn a_document_tags_its_session_faces_once_each() {
+    let fx = Fixture::new();
+    let (regular, bold) = (fx.regular(), fx.bold());
+    let out = need(&fx, "poster.indd", &["Roboto-Regular", "Roboto-Bold"]);
+    assert_eq!(statuses(&out), vec![Status::Done, Status::Done]);
+    let poster = Some("poster.indd".to_owned());
+    assert_eq!(
+        documents(&fx),
+        vec![
+            (regular, ActivationMode::Session, poster.clone()),
+            (bold, ActivationMode::Session, poster.clone()),
+        ]
+    );
+
+    let again = need(&fx, "poster.indd", &["Roboto-Regular", "Roboto-Bold"]);
+    assert_eq!(statuses(&again), vec![Status::Unchanged, Status::Unchanged]);
+    need(&fx, "flyer.indd", &["Roboto-Bold"]);
+    assert_eq!(
+        tags(&fx),
+        vec![
+            (regular, "poster.indd".to_owned()),
+            (bold, "flyer.indd".to_owned()),
+            (bold, "poster.indd".to_owned()),
+        ],
+        "no duplicate tag"
+    );
+    assert_eq!(
+        documents(&fx),
+        vec![
+            (regular, ActivationMode::Session, poster.clone()),
+            (bold, ActivationMode::Session, Some("flyer.indd".to_owned())),
+        ],
+        "the document that asked last"
+    );
+    // The poster asks again: it is the last again, still one tag.
+    need(&fx, "poster.indd", &["Roboto-Bold"]);
+    assert_eq!(documents(&fx)[1].2, poster);
+    assert_eq!(tags(&fx).len(), 3);
+    assert_eq!(
+        fx.registered(),
+        vec![
+            (PathBuf::from("/fonts/Roboto-Bold.ttf"), Mode::Session),
+            (PathBuf::from("/fonts/Roboto-Regular.ttf"), Mode::Session),
+        ]
+    );
+}
+
+/// E29.3 criterion 2: closing a document drops its tags and offers exactly
+/// the faces no other open document needs; it deactivates nothing.
+#[test]
+fn closing_a_document_offers_the_faces_no_open_document_needs() {
+    let fx = Fixture::new();
+    let (regular, bold, inter) = (fx.regular(), fx.bold(), fx.inter());
+    need(&fx, "poster.indd", &["Roboto-Regular", "Roboto-Bold"]);
+    need(&fx, "flyer.indd", &["Roboto-Bold", "Inter-Regular"]);
+    let registered = fx.registered();
+    fx.events();
+
+    assert_eq!(closed(&fx, "poster.indd"), vec![regular]);
+    assert_eq!(fx.registered(), registered, "nothing is deregistered");
+    assert_eq!(fx.events(), vec![], "nothing changed");
+    assert_eq!(
+        tags(&fx),
+        vec![
+            (bold, "flyer.indd".to_owned()),
+            (inter, "flyer.indd".to_owned()),
+        ]
+    );
+    assert_eq!(
+        documents(&fx),
+        vec![
+            (regular, ActivationMode::Session, Some("poster.indd".into())),
+            (bold, ActivationMode::Session, Some("flyer.indd".into())),
+            (inter, ActivationMode::Session, Some("flyer.indd".into())),
+        ],
+        "a face with an open document shows it"
+    );
+    // Closed again, or never open: nothing to offer.
+    assert_eq!(closed(&fx, "poster.indd"), vec![]);
+    assert_eq!(closed(&fx, "unknown.indd"), vec![]);
+
+    assert_eq!(closed(&fx, "flyer.indd"), vec![bold, inter]);
+    assert_eq!(tags(&fx), vec![]);
+    assert_eq!(fx.registered(), registered);
+}
+
+/// E29.3 criterion 3: a face the user activated, before or after the
+/// document asked, and a permanent face are never offered; deactivating the
+/// offer deregisters only those faces, with one event. Two documents share
+/// a face.
+#[test]
+fn the_users_and_permanent_faces_are_never_offered() {
+    let fx = Fixture::new();
+    let (regular, bold, inter) = (fx.regular(), fx.bold(), fx.inter());
+    let light = fx.face("Pair-Light", "/fonts/Pair.ttc");
+    // Before the documents ask: Inter for the session, Pair-Light for good.
+    fx.activate(vec![inter], ActivationMode::Session);
+    fx.activate(vec![light], ActivationMode::Permanent);
+    let all = [
+        "Roboto-Regular",
+        "Roboto-Bold",
+        "Inter-Regular",
+        "Pair-Light",
+    ];
+    let out = need(&fx, "poster.indd", &all);
+    assert_eq!(
+        statuses(&out),
+        vec![
+            Status::Done,
+            Status::Done,
+            Status::Unchanged,
+            Status::Unchanged
+        ]
+    );
+    need(&fx, "flyer.indd", &["Roboto-Regular", "Roboto-Bold"]);
+    // After they asked: the user activates Bold (already active) directly.
+    let out = fx.activate(vec![bold], ActivationMode::Session);
+    assert_eq!(statuses(&out), vec![Status::Unchanged]);
+    assert_eq!(
+        documents(&fx),
+        vec![
+            (regular, ActivationMode::Session, Some("flyer.indd".into())),
+            (bold, ActivationMode::Session, None),
+            (inter, ActivationMode::Session, None),
+            (light, ActivationMode::Permanent, None),
+        ],
+        "only the document-scoped face shows a document"
+    );
+
+    assert_eq!(
+        closed(&fx, "poster.indd"),
+        vec![],
+        "the flyer needs Regular"
+    );
+    let offer = closed(&fx, "flyer.indd");
+    assert_eq!(offer, vec![regular]);
+    fx.events();
+
+    let out = fx.deactivate(offer);
+    assert_eq!(statuses(&out), vec![Status::Done]);
+    assert_eq!(
+        fx.events(),
+        vec![changed(vec![], vec![regular])],
+        "one event for the offered face"
+    );
+    assert_eq!(
+        fx.active(),
+        vec![
+            (bold, ActivationMode::Session),
+            (inter, ActivationMode::Session),
+            (light, ActivationMode::Permanent),
+        ]
+    );
+    assert_eq!(
+        fx.registered(),
+        vec![
+            (PathBuf::from("/fonts/Inter.otf"), Mode::Session),
+            (PathBuf::from("/fonts/Pair.ttc"), Mode::Permanent),
+            (PathBuf::from("/fonts/Roboto-Bold.ttf"), Mode::Session),
+        ]
+    );
+
+    // A document face the user makes permanent is never offered either.
+    need(&fx, "menu.indd", &["Roboto-Regular"]);
+    fx.activate(vec![regular], ActivationMode::Permanent);
+    assert_eq!(closed(&fx, "menu.indd"), vec![]);
+    assert_eq!(tags(&fx), vec![]);
+}
+
+/// E29.3 criterion 4: quitting deregisters document-scoped faces like any
+/// session face, and neither "reactivate on launch" nor the resume after a
+/// quit brings them back; the user's session faces come back.
+#[test]
+fn document_faces_end_at_quit_and_are_not_restored() {
+    let fx = Fixture::new();
+    let (regular, bold, inter) = (fx.regular(), fx.bold(), fx.inter());
+    fx.activate(vec![regular], ActivationMode::Session);
+    need(&fx, "poster.indd", &["Roboto-Bold", "Inter-Regular"]);
+    // The poster closed and the offer was declined: Inter stays scoped.
+    need(&fx, "flyer.indd", &["Roboto-Bold"]);
+    assert_eq!(closed(&fx, "poster.indd"), vec![inter]);
+    fx.events();
+
+    // The update path: what it will resume, then the quit.
+    let resumable = crate::lifecycle::resumable_faces(&fx.service.list_active().expect("list"));
+    assert_eq!(resumable, vec![regular]);
+    let out = fx.service.shutdown().expect("quit");
+    assert_eq!(statuses(&out), vec![Status::Done; 3]);
+    assert_eq!(
+        fx.registered(),
+        vec![],
+        "every session face is deregistered"
+    );
+    assert_eq!(
+        fx.events(),
+        vec![changed(vec![], vec![regular, bold, inter])]
+    );
+    assert_eq!(tags(&fx), vec![]);
+
+    // "Reactivate on launch" straight after that quit: only the user's.
+    let next = fx.restart();
+    let out = next
+        .service
+        .start(true, ConflictPolicy::KeepExisting)
+        .expect("start");
+    assert_eq!(statuses(&out), vec![Status::Done]);
+    assert_eq!(next.active(), vec![(regular, ActivationMode::Session)]);
+    assert_eq!(
+        next.registered(),
+        vec![(PathBuf::from("/fonts/Roboto-Regular.ttf"), Mode::Session)]
+    );
+
+    // The resume after a quit (an update that did not install) on the same
+    // run: the document asks again, the quit ends it, the resume skips it.
+    need(&next, "poster.indd", &["Roboto-Bold"]);
+    assert_eq!(resumable, vec![regular]);
+    let again = crate::lifecycle::resumable_faces(&next.service.list_active().expect("list"));
+    assert_eq!(again, vec![regular]);
+    next.service.shutdown().expect("quit");
+    let out = crate::lifecycle::restore_session(&next.service, again, ConflictPolicy::KeepExisting)
+        .expect("resume");
+    assert_eq!(statuses(&out), vec![Status::Done]);
+    assert_eq!(next.active(), vec![(regular, ActivationMode::Session)]);
+    assert!(!next.active().iter().any(|(f, _)| *f == bold));
+}
+
+/// The last session a quit records holds the user's session faces only.
+#[test]
+fn a_quit_remembers_only_the_users_session_faces() {
+    let fx = Fixture::new();
+    let regular = fx.regular();
+    fx.activate(vec![regular], ActivationMode::Session);
+    need(&fx, "poster.indd", &["Roboto-Bold", "Inter-Regular"]);
+    fx.service.shutdown().expect("quit");
+    let last = fx
+        .index
+        .lock()
+        .expect("index")
+        .last_session()
+        .expect("last");
+    assert_eq!(last, vec![regular]);
+}
+
+/// E29.3 criterion 4 after a crash: the next start cleans up the document
+/// faces too and restores only the user's.
+#[test]
+fn a_crash_does_not_bring_document_faces_back() {
+    let fx = Fixture::new();
+    let regular = fx.regular();
+    fx.activate(vec![regular], ActivationMode::Session);
+    need(&fx, "poster.indd", &["Roboto-Bold"]);
+    assert_eq!(fx.active().len(), 2);
+    // No shutdown: the app crashed.
+    let next = fx.restart();
+    next.service
+        .start(true, ConflictPolicy::KeepExisting)
+        .expect("start");
+    assert_eq!(next.active(), vec![(regular, ActivationMode::Session)]);
+    assert_eq!(
+        next.registered(),
+        vec![(PathBuf::from("/fonts/Roboto-Regular.ttf"), Mode::Session)]
+    );
+    assert_eq!(tags(&next), vec![]);
+}

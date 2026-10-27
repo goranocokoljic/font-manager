@@ -140,6 +140,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             r#"{"fonts":[{"postscriptName":"Inter-Regular"},{"family":"Nope"}],"activate":false}"#
                 .into(),
         ),
+        ("document_closed", r#"{"document":"poster.indd"}"#.into()),
         // organization
         ("list_collections", String::new()),
         ("create_collection", r#"{"name":"Over HTTP"}"#.into()),

@@ -204,6 +204,8 @@ pub fn types() -> specta::Types {
         activation::Clash,
         activation::FontsNeededRequest,
         activation::FontsNeededResponse,
+        activation::DocumentClosedRequest,
+        activation::DocumentClosedResponse,
         // organization
         organization::Collection,
         organization::CreateCollectionRequest,
