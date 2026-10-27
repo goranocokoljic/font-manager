@@ -1,0 +1,18 @@
+{
+  "id": "a-told-once-message-may-be-re-armed-only-by-a-call-that-reac",
+  "title": "A told-once message may be re-armed only by a call that reached the app",
+  "category": "correctness",
+  "rule": "When a plugin or client shows a message once per outage (\"Font Manager is not running\") and clears the told-once flag when the app is back, clear it only where a call to the app actually answered (a wrapper around each client call, or on an ApiError reply), never after any event handler that did not throw. Handlers that return early without calling (a document with no fonts, an unchanged missing set) are not proof the app is up. Test it with two documents: one that makes a call and one that makes none, switch between them several times with the app down, and assert the message was shown once.",
+  "rationale": "E30.1 (#187): DocumentWatcher.run reset toldNotRunning after every non-throwing event, so a Photoshop select on a document with nothing missing re-armed the message and every document switch showed it again.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    187
+  ],
+  "file_globs": [
+    "plugins/**/*.ts"
+  ],
+  "first_seen": "2026-10-27T04:48:17.277Z",
+  "last_seen": "2026-10-27T04:48:17.277Z"
+}

@@ -1,0 +1,27 @@
+{
+  "$schema": "./manifest.schema.json",
+  "manifestVersion": 5,
+  "id": "org.fontmanager.uxp",
+  "name": "Font Manager",
+  "version": "0.1.0",
+  "main": "index.html",
+  "host": [
+    { "app": "ID", "minVersion": "18.5.0" },
+    { "app": "PS", "minVersion": "24.1.0" }
+  ],
+  "entrypoints": [
+    {
+      "type": "panel",
+      "id": "fmPanel",
+      "label": { "default": "Font Manager" },
+      "minimumSize": { "width": 230, "height": 120 },
+      "maximumSize": { "width": 2000, "height": 2000 },
+      "preferredDockedSize": { "width": 230, "height": 120 },
+      "preferredFloatingSize": { "width": 300, "height": 160 }
+    }
+  ],
+  "requiredPermissions": {
+    "network": { "domains": ["http://127.0.0.1"] },
+    "localFileSystem": "fullAccess"
+  }
+}
