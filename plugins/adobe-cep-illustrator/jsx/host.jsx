@@ -70,7 +70,7 @@ function fmDocumentFonts(key) {
           fmQuote(font.family || '') +
           ',"style":' +
           fmQuote(font.style || '') +
-          '}',
+          '}'
       );
     }
   }
