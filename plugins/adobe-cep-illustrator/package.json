@@ -1,0 +1,20 @@
+{
+  "name": "@fm/adobe-cep-illustrator",
+  "private": true,
+  "type": "module",
+  "description": "Font Manager's CEP extension for Illustrator.",
+  "scripts": {
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fm/plugin-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.3",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
+  }
+}

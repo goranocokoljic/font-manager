@@ -1,0 +1,19 @@
+{
+  "id": "extendscript-files-must-stay-es3-guard-them-against-the-form",
+  "title": "ExtendScript files must stay ES3: guard them against the formatter and test their syntax",
+  "category": "correctness",
+  "rule": "A file that Adobe's ExtendScript engine loads (a CEP `jsx/*.jsx` ScriptPath) is ES3: no trailing commas, let/const, arrows, template literals, classes, JSON, spread, ES5 array methods or trim. The repo's Prettier formats plugins/ with trailingComma \"all\", so keep the `**/*.jsx` override (`trailingComma: none`) in .prettierrc.json, and give every such file a test that blanks comments and strings and rejects those forms. Tests that run the file in V8 (new Function) do not prove it loads in ExtendScript.",
+  "rationale": "E30.2 (#188): Prettier added a trailing comma to a multi-line call in host.jsx; ES3 ExtendScript cannot parse it, so no host function would load in Illustrator and the extension would silently do nothing, while every V8-based test stayed green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    188
+  ],
+  "file_globs": [
+    "plugins/**/*.jsx",
+    ".prettierrc.json"
+  ],
+  "first_seen": "2026-10-27T06:04:39.194Z",
+  "last_seen": "2026-10-27T06:04:39.194Z"
+}
