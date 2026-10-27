@@ -13,3 +13,4 @@ extension has Node and uses the pipe or socket first.
 - `adobe-uxp/` (`@fm/adobe-uxp`): the UXP plugin for InDesign and Photoshop (E30.1).
 - `adobe-cep-illustrator/` (`@fm/adobe-cep-illustrator`): the CEP extension for
   Illustrator (E30.2); its README says why CEP and when to move to UXP.
+- `sketch/` (`@fm/sketch`): the Sketch plugin (E31.1), over the local API.

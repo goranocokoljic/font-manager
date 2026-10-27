@@ -1,0 +1,22 @@
+{
+  "name": "Font Manager",
+  "identifier": "org.fontmanager.sketch",
+  "description": "Activates the fonts of a document from your Font Manager library when it opens.",
+  "author": "Font Manager",
+  "version": "0.1.0",
+  "compatibleVersion": "70",
+  "bundleVersion": 1,
+  "commands": [
+    {
+      "name": "Font Manager document events",
+      "identifier": "org.fontmanager.sketch.documents",
+      "script": "plugin.js",
+      "handlers": {
+        "actions": {
+          "OpenDocument": "onOpenDocument",
+          "CloseDocument": "onCloseDocument"
+        }
+      }
+    }
+  ]
+}

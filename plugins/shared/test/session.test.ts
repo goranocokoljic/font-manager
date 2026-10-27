@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FmClient, NOT_RUNNING } from '../src/client';
-import { DocumentWatcher, type PluginUi, deactivateQuestion } from '../src/session';
+import {
+  DocumentWatcher,
+  type PluginUi,
+  deactivateQuestion,
+  fontLabel,
+  missingFontsMessage,
+} from '../src/session';
 import { FAKE_URL, fakeEndpoint } from '../src/testing';
 
 const doc = { key: 'InDesign: Poster.indd #7', name: 'Poster.indd' };
@@ -154,5 +160,44 @@ describe('deactivateQuestion', () => {
   it('counts the fonts', () => {
     expect(deactivateQuestion(1, 'A.psd')).toBe('Deactivate 1 font used only by A.psd?');
     expect(deactivateQuestion(3, 'A.psd')).toBe('Deactivate 3 fonts used only by A.psd?');
+  });
+});
+
+describe('missing fonts message', () => {
+  const unmatchedLora = () => ({ matched: [], unmatched: [lora], missing: 1, outcomes: [] });
+
+  it('says one "N fonts missing" message with the names when the option is on', async () => {
+    const fake = fakeEndpoint({
+      fonts_needed: () => ({
+        matched: [],
+        unmatched: [lora, { family: 'Roboto Slab', style: 'Light' }, lora],
+        missing: 3,
+        outcomes: [],
+      }),
+    });
+    const ui: PluginUi = { notify: vi.fn(), confirm: vi.fn(async () => true) };
+    const watcher = new DocumentWatcher(new FmClient(fake), ui, { reportMissing: true });
+    await watcher.opened(doc, [inter, lora]);
+    expect(ui.notify).toHaveBeenCalledTimes(1);
+    expect(ui.notify).toHaveBeenCalledWith('2 fonts missing: Lora-Bold, Roboto Slab Light');
+  });
+
+  it('says nothing when every font matched, or when the option is off', async () => {
+    const all = fakeEndpoint({
+      fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [] }),
+    });
+    const ui: PluginUi = { notify: vi.fn(), confirm: vi.fn(async () => true) };
+    await new DocumentWatcher(new FmClient(all), ui, { reportMissing: true }).opened(doc, [inter]);
+    const some = fakeEndpoint({ fonts_needed: unmatchedLora });
+    await new DocumentWatcher(new FmClient(some), ui).opened(doc, [lora]);
+    expect(ui.notify).not.toHaveBeenCalled();
+  });
+
+  it('names a font by PostScript name, then full name, then family and style', () => {
+    expect(fontLabel({ postscriptName: 'A-B', fullName: 'A B' })).toBe('A-B');
+    expect(fontLabel({ fullName: 'A B', family: 'A' })).toBe('A B');
+    expect(fontLabel({ family: 'A', style: 'Bold' })).toBe('A Bold');
+    expect(fontLabel({})).toBe('Unnamed font');
+    expect(missingFontsMessage([{ family: 'A' }])).toBe('1 font missing: A');
   });
 });
