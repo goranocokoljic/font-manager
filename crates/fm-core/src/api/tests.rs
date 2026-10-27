@@ -5423,7 +5423,7 @@ fn brief_words_rank_by_class_tags_and_names_with_license_reasons() {
     assert_eq!(top.family.id, barlow.id);
     assert_eq!(top.reasons[0], "No languages asked");
     assert!(
-        top.reasons[1].starts_with("Allows web use: open license"),
+        top.reasons[1].starts_with("Allows web use: Open license"),
         "{top:?}"
     );
     assert!(top.reasons.contains(&"Tagged \"Wayfinding\"".to_owned()));
@@ -5438,6 +5438,43 @@ fn brief_words_rank_by_class_tags_and_names_with_license_reasons() {
         res.candidates[0]
             .reasons
             .contains(&"Name \"Archivo\" matches \"archivo\"".to_owned())
+    );
+
+    // The user's declaration beats the open license in the file, as in the
+    // license panel's web rule: declared desktop is not OK for web.
+    let archivo = lib.family("Archivo");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: archivo.id,
+            license_type: Some(LicenseType::Desktop),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("declare");
+    let pick = |license: LicenseType| {
+        lib.api
+            .pick_fonts_for_brief(BriefRequest {
+                license: Some(license),
+                ..brief("archivo", &[], Some(50))
+            })
+            .expect("brief")
+            .candidates
+    };
+    let web = pick(LicenseType::Web);
+    assert!(!web.is_empty());
+    assert!(web.iter().all(|c| c.family.id != archivo.id), "{web:?}");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let info = lib.api.get_face(face).expect("face").license;
+    assert_eq!(info.web_use.map(|w| w.ok), Some(false), "the panel agrees");
+    let desktop = pick(LicenseType::Desktop);
+    let ours = desktop
+        .iter()
+        .find(|c| c.family.id == archivo.id)
+        .expect("declared desktop allows desktop");
+    assert_eq!(
+        ours.reasons[1],
+        "Allows desktop use: declared desktop license"
     );
 }
 

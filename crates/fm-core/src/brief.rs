@@ -11,6 +11,8 @@
 use fm_api::common::Classification;
 use fm_api::library::{LicenseInfo, LicenseType, OpenLicense};
 
+use crate::license;
+
 /// Families a shortlist has when the caller does not say.
 pub const DEFAULT_LIMIT: u32 = 5;
 /// The longest shortlist.
@@ -96,31 +98,40 @@ fn tokens(text: &str) -> impl Iterator<Item = &str> {
         .filter(|w| !w.is_empty())
 }
 
-/// The reason a face allows `want`, or `None` when it does not: a
-/// recognized open license allows every use, a declared license allows
-/// its own. Without `want` every face passes and the reason names what is
+/// The reason a face allows `want`, or `None` when it does not.
+///
+/// Web use is the app's own web rule ([`license::web_use`]), so the
+/// shortlist agrees with the license panel, the "OK for web" filter and
+/// `prepare_for_web`. For any other use the user's declaration comes first,
+/// as in that rule: a declared type allows its own use and no other, and
+/// only without one (or with `Unknown`) does a recognized open license
+/// allow it. Without `want` every face passes and the reason names what is
 /// known of its license.
 pub fn license_check(info: &LicenseInfo, want: Option<LicenseType>) -> Option<String> {
     let open = info.open_license.map(open_name);
-    match want {
-        None => Some(match (open, info.declared) {
-            (Some(open), _) => format!("No license use asked; it has an open license ({open})"),
-            (None, Some(declared)) => format!(
+    let declared = info.declared.filter(|d| *d != LicenseType::Unknown);
+    let Some(want) = want else {
+        return Some(match (declared, open) {
+            (Some(declared), _) => format!(
                 "No license use asked; its declared license is {}",
                 use_name(declared)
             ),
+            (None, Some(open)) => format!("No license use asked; it has an open license ({open})"),
             (None, None) => "No license use asked; its license is not known".to_owned(),
-        }),
-        Some(want) => {
-            let what = use_name(want);
-            if let Some(open) = open {
-                Some(format!("Allows {what} use: open license ({open})"))
-            } else if info.declared == Some(want) {
-                Some(format!("Allows {what} use: declared {what} license"))
-            } else {
-                None
-            }
+        });
+    };
+    let what = use_name(want);
+    if want == LicenseType::Web {
+        let web = license::web_use(info.embedding, info.open_license, info.declared);
+        return web.ok().then(|| format!("Allows web use: {}", web.text()));
+    }
+    match (declared, open) {
+        (Some(declared), _) if declared == want => {
+            Some(format!("Allows {what} use: declared {what} license"))
         }
+        (Some(_), _) => None,
+        (None, Some(open)) => Some(format!("Allows {what} use: open license ({open})")),
+        (None, None) => None,
     }
 }
 
@@ -321,20 +332,76 @@ mod tests {
         }
         assert_eq!(
             license_check(&ofl, Some(LicenseType::Web)).as_deref(),
-            Some("Allows web use: open license (SIL Open Font License)")
+            Some("Allows web use: Open license (OFL)")
+        );
+        assert_eq!(
+            license_check(&ofl, Some(LicenseType::App)).as_deref(),
+            Some("Allows app use: open license (SIL Open Font License)")
         );
         let web = license(None, Some(LicenseType::Web));
         assert_eq!(
             license_check(&web, Some(LicenseType::Web)).as_deref(),
-            Some("Allows web use: declared web license")
+            Some("Allows web use: Declared web license")
         );
         assert_eq!(license_check(&web, Some(LicenseType::App)), None);
         let unknown = license(None, None);
         assert_eq!(license_check(&unknown, Some(LicenseType::Desktop)), None);
+        assert_eq!(license_check(&unknown, Some(LicenseType::Web)), None);
         assert_eq!(
             license_check(&unknown, None).as_deref(),
             Some("No license use asked; its license is not known")
         );
+    }
+
+    /// REUSE-1 (E27.4 review): the user's declaration beats an open
+    /// license, as in `license::web_use`.
+    #[test]
+    fn a_declared_type_beats_an_open_license() {
+        for declared in [
+            LicenseType::Desktop,
+            LicenseType::Trial,
+            LicenseType::PersonalOnly,
+        ] {
+            let info = license(Some(OpenLicense::Ofl), Some(declared));
+            assert_eq!(
+                license_check(&info, Some(LicenseType::Web)),
+                None,
+                "{declared:?}"
+            );
+            assert_eq!(license_check(&info, Some(LicenseType::App)), None);
+        }
+        let desktop = license(Some(OpenLicense::Ofl), Some(LicenseType::Desktop));
+        assert_eq!(
+            license_check(&desktop, Some(LicenseType::Desktop)).as_deref(),
+            Some("Allows desktop use: declared desktop license")
+        );
+        assert_eq!(
+            license_check(&desktop, None).as_deref(),
+            Some("No license use asked; its declared license is desktop")
+        );
+        // A declared Unknown type is no declaration: the open license counts.
+        let unknown = license(Some(OpenLicense::Ofl), Some(LicenseType::Unknown));
+        assert!(license_check(&unknown, Some(LicenseType::App)).is_some());
+        // The web answer is the app's own: restricted embedding blocks an
+        // open license unless a web license is declared.
+        let restricted = LicenseInfo {
+            embedding: Embedding::Restricted,
+            ..license(Some(OpenLicense::Ofl), None)
+        };
+        assert_eq!(license_check(&restricted, Some(LicenseType::Web)), None);
+        for info in [
+            license(Some(OpenLicense::Ofl), Some(LicenseType::Desktop)),
+            license(Some(OpenLicense::Ofl), None),
+            restricted,
+            license(None, Some(LicenseType::Web)),
+        ] {
+            let web = license::web_use(info.embedding, info.open_license, info.declared);
+            assert_eq!(
+                license_check(&info, Some(LicenseType::Web)).is_some(),
+                web.ok(),
+                "{info:?}"
+            );
+        }
     }
 
     #[test]
