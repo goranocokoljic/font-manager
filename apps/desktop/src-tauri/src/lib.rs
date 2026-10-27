@@ -46,7 +46,10 @@ use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
     PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
 };
-use fm_api::settings::{AppFolders, EndpointInfo, McpStatus, McpUpdate, Settings, SettingsUpdate};
+use fm_api::settings::{
+    AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
+    Settings, SettingsUpdate,
+};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
     SetId, SettingsService, SourceId, VirtualStyleId,
@@ -1212,6 +1215,21 @@ async fn set_mcp_enabled(state: State<'_, AppState>, req: McpUpdate) -> ApiResul
     call(&state, move |api| api.set_mcp_enabled(req)).await
 }
 
+/// Allows or refuses one mutating MCP tool; the next tool call sees it.
+#[tauri::command]
+async fn set_mcp_grant(state: State<'_, AppState>, req: McpGrantUpdate) -> ApiResult<McpStatus> {
+    call(&state, move |api| api.set_mcp_grant(req)).await
+}
+
+/// The user's Allow or Deny for an AI assistant's waiting call (the toast).
+#[tauri::command]
+async fn answer_mcp_confirmation(
+    state: State<'_, AppState>,
+    req: McpConfirmationAnswer,
+) -> ApiResult<()> {
+    call(&state, move |api| api.answer_mcp_confirmation(req)).await
+}
+
 /// Opens a page of the user docs in the help window (the palette's Help actions).
 #[tauri::command]
 async fn open_help<R: Runtime>(app: AppHandle<R>, page: String) -> ApiResult<()> {
@@ -1410,6 +1428,8 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             regenerate_endpoint_token,
             mcp_status,
             set_mcp_enabled,
+            set_mcp_grant,
+            answer_mcp_confirmation,
             open_help,
             open_url,
             set_shell_locale,

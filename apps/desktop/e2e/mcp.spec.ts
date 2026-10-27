@@ -90,3 +90,62 @@ test('the switch and the copy buttons work from the keyboard', async ({ page }) 
   await expect(toggle).not.toBeChecked();
   await expect(page.getByRole('button', { name: 'Copy Claude Code command' })).toHaveCount(0);
 });
+
+// E27.6: one switch per mutating tool, and the Allow / Deny toast of a destructive
+// call. `?mockMcpConfirm=1`: turning "Deactivate fonts" on makes a mock AI
+// assistant ask to deactivate 3 fonts.
+test.describe('tool grants and confirmations', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/?mockMcpConfirm=1#/settings?section=mcp');
+    const server = page.getByRole('switch', { name: 'Allow AI assistants (MCP server)' });
+    await server.focus();
+    await page.keyboard.press('Space');
+    await expect(server).toBeChecked();
+  });
+
+  test('every mutating tool has a labelled switch, all off', async ({ page }) => {
+    const group = page.getByRole('group', { name: 'What AI assistants may change' });
+    for (const name of ['Activate fonts', 'Deactivate fonts', 'Tag fonts', 'Export web fonts']) {
+      await expect(group.getByRole('switch', { name, exact: true })).not.toBeChecked();
+    }
+    await expect(
+      group.getByRole('switch', { name: 'Deactivate fonts' }),
+    ).toHaveAccessibleDescription('Asks you every time (Allow / Deny)');
+    // Turned on from the keyboard; the grant is saved and stays on.
+    const tag = group.getByRole('switch', { name: 'Tag fonts' });
+    await tag.focus();
+    await page.keyboard.press('Space');
+    await expect(tag).toBeChecked();
+    await expect(page.getByTestId('mcp-confirm')).toHaveCount(0);
+  });
+
+  test('a confirmation is answered from the keyboard, Deny then Allow', async ({ page }) => {
+    const deactivate = page.getByRole('switch', { name: 'Deactivate fonts' });
+    const request = page.getByRole('region', { name: 'Request from an AI assistant' });
+
+    await deactivate.focus();
+    await page.keyboard.press('Space');
+    await expect(deactivate).toBeChecked();
+    await expect(request).toContainText('An AI assistant wants to deactivate 3 fonts.');
+    await expect(request).toHaveAccessibleDescription(/No answer in 60 seconds counts as Deny/);
+    const deny = request.getByRole('button', { name: 'Deny' });
+    await deny.focus();
+    await page.keyboard.press('Enter');
+    await expect(request).toHaveCount(0);
+    await expect(page.getByTestId('toast')).toContainText('Denied. Nothing was changed.');
+
+    // Off and on again: the mock assistant asks a second time.
+    await deactivate.focus();
+    await page.keyboard.press('Space');
+    await expect(deactivate).not.toBeChecked();
+    await page.keyboard.press('Space');
+    await expect(request).toBeVisible();
+    const allow = request.getByRole('button', { name: 'Allow' });
+    await allow.focus();
+    await page.keyboard.press('Enter');
+    await expect(request).toHaveCount(0);
+    await expect(page.getByTestId('toast')).toContainText(
+      "Allowed. The AI assistant's request runs now.",
+    );
+  });
+});

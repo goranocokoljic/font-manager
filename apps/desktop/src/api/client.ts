@@ -24,6 +24,8 @@ import type {
   Clash,
   AppFolders,
   EndpointInfo,
+  McpConfirmationAnswer,
+  McpGrantUpdate,
   McpStatus,
   McpUpdate,
   AppInfo,
@@ -320,6 +322,10 @@ export interface FmClient {
   mcpStatus(): Promise<McpStatus>;
   /** Turns the MCP server on or off; the next request sees it. */
   setMcpEnabled(req: McpUpdate): Promise<McpStatus>;
+  /** Allows or refuses one MCP tool that changes something; the next call sees it. */
+  setMcpGrant(req: McpGrantUpdate): Promise<McpStatus>;
+  /** The user's Allow or Deny for an AI assistant's waiting call (the confirmation toast). */
+  answerMcpConfirmation(req: McpConfirmationAnswer): Promise<void>;
   scan(req: ScanRequest): Promise<JobId>;
   /** Subscribes to the fm-api event stream; the UI subscribes, it does not poll. */
   onEvent(handler: (event: Event) => void): Promise<Unsubscribe>;
@@ -443,6 +449,8 @@ export const tauriClient: FmClient = {
   regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),
   mcpStatus: () => invoke<McpStatus>('mcp_status'),
   setMcpEnabled: (req) => invoke<McpStatus>('set_mcp_enabled', { req }),
+  setMcpGrant: (req) => invoke<McpStatus>('set_mcp_grant', { req }),
+  answerMcpConfirmation: (req) => invoke<void>('answer_mcp_confirmation', { req }),
   scan: (req) => invoke<JobId>('scan', { req }),
   onEvent: (handler) => listen<Event>(EVENT_CHANNEL, (e) => handler(e.payload)),
   pickFolder: async (title) => {

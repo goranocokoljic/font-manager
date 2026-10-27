@@ -789,6 +789,11 @@ export interface MockOptions {
    * lists.
    */
   catalogUpdates?: boolean;
+  /**
+   * Turning the deactivate_fonts grant on makes a mock AI assistant ask to deactivate
+   * 3 fonts (E27.6): a confirmation the UI answers with Allow or Deny.
+   */
+  mcpConfirm?: boolean;
 }
 
 /** The key of the mock's saved settings in `MockOptions.settingsStorage`. */
@@ -1824,11 +1829,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   });
   // The MCP server: off, as in a new install; snippets in the shape the core writes.
   let mcpEnabled = false;
+  // The mutating tools and their grants, as fm-core reports them: all off.
+  const mcpTools = ['activate_fonts', 'deactivate_fonts', 'tag_fonts', 'export_web'];
+  const mcpGranted = new Set<string>();
+  const mcpWaiting = new Set<number>();
+  let mcpNextConfirmation = 1;
   const mcp = (): McpStatus => {
     const url = `${MOCK_ENDPOINT_URL}/mcp`;
     const token = mockEndpointToken(endpointGeneration);
     return {
       enabled: mcpEnabled,
+      grants: mcpTools.map((tool) => ({
+        tool,
+        granted: mcpGranted.has(tool),
+        confirm: tool === 'deactivate_fonts',
+      })),
       url,
       snippets: [
         {
@@ -3169,6 +3184,39 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       mcpEnabled = req.enabled;
       return mcp();
     },
+    setMcpGrant: async (req) => {
+      if (!mcpTools.includes(req.tool))
+        throw {
+          code: 'invalidRequest' as const,
+          message: `${req.tool} needs no grant: only the tools that change something do.`,
+          detail: null,
+        };
+      if (req.granted) mcpGranted.add(req.tool);
+      else mcpGranted.delete(req.tool);
+      if (options.mcpConfirm && req.granted && req.tool === 'deactivate_fonts') {
+        const id = mcpNextConfirmation++;
+        mcpWaiting.add(id);
+        setTimeout(() =>
+          emit({
+            type: 'mcpConfirmationRequested',
+            id,
+            tool: 'deactivate_fonts',
+            faces: 3,
+            timeoutSecs: 60,
+          }),
+        );
+      }
+      return mcp();
+    },
+    answerMcpConfirmation: async (req) => {
+      if (!mcpWaiting.delete(req.id))
+        throw {
+          code: 'notFound' as const,
+          message: 'This request from an AI assistant was already answered or timed out.',
+          detail: null,
+        };
+      emit({ type: 'mcpConfirmationClosed', id: req.id, allowed: req.allow });
+    },
     // Browser mode: the dev server serves the built pages from public/help/.
     openHelp: async (page) => {
       if (!HELP_PAGES.some((p) => p.slug === page))
@@ -3267,4 +3315,6 @@ export const mockClient: FmClient = createMockClient({
   catalogDownloadMs: countFromUrl('mockDownloadMs', 10_000),
   // `?mockCatalogUpdates=1` starts with three families downloaded from Google Fonts before.
   catalogUpdates: countFromUrl('mockCatalogUpdates', 1) > 0,
+  // `?mockMcpConfirm=1`: turning the deactivate_fonts grant on asks a confirmation.
+  mcpConfirm: countFromUrl('mockMcpConfirm', 1) > 0,
 });

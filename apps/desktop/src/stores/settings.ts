@@ -91,6 +91,15 @@ export const useSettingsStore = defineStore('settings', () => {
     );
   }
 
+  /** Allows or refuses one MCP tool that changes something; false (and `error` set) when refused. */
+  function setMcpGrant(tool: string, granted: boolean): Promise<boolean> {
+    return enqueue(() =>
+      attempt(async () => {
+        mcp.value = await useClient().setMcpGrant({ tool, granted });
+      }),
+    );
+  }
+
   /** Changes some settings; false (and `error` set) when the API refused. */
   function update(patch: SettingsUpdate): Promise<boolean> {
     return enqueue(() =>
@@ -127,6 +136,7 @@ export const useSettingsStore = defineStore('settings', () => {
     regenerateEndpointToken,
     loadMcp,
     setMcpEnabled,
+    setMcpGrant,
     update,
     setDensity,
   };

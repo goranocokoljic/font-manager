@@ -13,7 +13,8 @@
 //!
 //! An [`ApiError`] becomes a tool error (`isError: true`) whose text is the
 //! error's user message and whose structured content is the error itself.
-//! The mutating tools ask the [`ToolGate`] first.
+//! The mutating tools ask the [`ToolGate`] first, after their arguments are
+//! read: a call with bad arguments is refused before the user is asked.
 
 use std::collections::BTreeMap;
 
@@ -29,6 +30,7 @@ use fm_api::preview::{
 use fm_api::search::{
     CoverageRequest, Filters, PairingRequest, SearchRequest, SimilarRequest, Supports,
 };
+use fm_api::settings::McpToolCall;
 use fm_api::{Api, ApiError, CollectionId, ErrorCode, FaceId, FamilyId, SetId};
 use rmcp::handler::server::common::schema_for_type;
 use rmcp::model::{CallToolResult, ContentBlock, JsonObject, Tool, ToolAnnotations};
@@ -448,10 +450,12 @@ pub fn call(
     if !NAMES.contains(&name) {
         return None;
     }
-    if MUTATING.contains(&name) && !gate.allows(name) {
-        return Some(api_error(&refused(name)));
-    }
     let arguments = Value::Object(arguments);
+    if MUTATING.contains(&name)
+        && let Err(e) = tool_call(name, &arguments).and_then(|c| gate.check(api, &c))
+    {
+        return Some(api_error(&e));
+    }
     let answer = match name {
         RENDER_PREVIEW | COMPARE_PREVIEW => preview(api, name, arguments),
         _ => dispatch(api, name, arguments).map(CallToolResult::structured),
@@ -467,13 +471,24 @@ pub fn api_error(e: &ApiError) -> CallToolResult {
     result
 }
 
-/// The error a mutating tool gets while the gate refuses it.
-fn refused(name: &str) -> ApiError {
-    ApiError::new(
-        ErrorCode::PermissionDenied,
-        "Font Manager does not allow AI assistants to change fonts yet.",
-    )
-    .with_detail(format!("tool {name} refused by the tool gate"))
+/// What the gate is asked for mutating tool `name`: the faces the call acts
+/// on, read from the arguments as the call reads them.
+fn tool_call(name: &str, arguments: &Value) -> Result<McpToolCall, ApiError> {
+    let target = match name {
+        ACTIVATE_FONTS => {
+            let a: ActivateFontsInput = args(name, arguments.clone())?;
+            target(&a.face_ids, a.family_id, a.collection_id, a.set_id)?
+        }
+        DEACTIVATE_FONTS => {
+            let a: DeactivateFontsInput = args(name, arguments.clone())?;
+            target(&a.face_ids, a.family_id, a.collection_id, a.set_id)?
+        }
+        _ => None,
+    };
+    Ok(McpToolCall {
+        tool: name.to_owned(),
+        target,
+    })
 }
 
 fn args<T: DeserializeOwned>(name: &str, value: Value) -> Result<T, ApiError> {
@@ -783,6 +798,32 @@ mod tests {
     #![allow(clippy::unwrap_used)]
 
     use super::*;
+
+    #[test]
+    fn the_mutating_tools_are_the_ones_fm_core_grants() {
+        assert_eq!(MUTATING, fm_api::settings::MCP_MUTATING_TOOLS);
+        for tool in fm_api::settings::MCP_CONFIRM_TOOLS {
+            assert!(MUTATING.contains(&tool), "{tool}");
+        }
+    }
+
+    #[test]
+    fn the_gate_is_asked_about_the_faces_the_call_names() {
+        let call = tool_call(DEACTIVATE_FONTS, &json!({ "family_id": 7 })).unwrap();
+        assert_eq!(call.tool, DEACTIVATE_FONTS);
+        assert_eq!(
+            call.target,
+            Some(Target::Family {
+                family: FamilyId(7)
+            })
+        );
+        let all = tool_call(DEACTIVATE_FONTS, &json!({})).unwrap();
+        assert_eq!(all.target, None);
+        let tag = tool_call(TAG_FONTS, &json!({ "face_ids": [1], "tags": ["x"] })).unwrap();
+        assert_eq!(tag.target, None);
+        let bad = tool_call(DEACTIVATE_FONTS, &json!({ "face_ids": [1], "set_id": 2 }));
+        assert_eq!(bad.unwrap_err().code, ErrorCode::InvalidRequest);
+    }
 
     #[test]
     fn there_are_fourteen_tools_in_order_with_object_schemas() {

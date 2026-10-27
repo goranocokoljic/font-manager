@@ -13,7 +13,8 @@
 //! has no HTTP crate of its own (E25.4); the app holds the few lines of glue.
 //!
 //! The tools (E27.2) are in [`tools`]: one `fm-api` call each. The ones that
-//! change something ask a [`ToolGate`] first, which refuses them by default.
+//! change something ask a [`ToolGate`] first: by default [`Grants`], the
+//! user's per-tool grants and confirmations in `fm-core` (E27.6).
 //! The resources and prompts (E27.5) are in [`resources`] and [`prompts`].
 
 pub mod gate;
@@ -37,7 +38,7 @@ use rmcp::transport::streamable_http_server::session::never::NeverSessionManager
 use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use rmcp::{ErrorData, RoleServer, ServerHandler};
 
-pub use gate::{AllowAll, RefuseMutations, ToolGate};
+pub use gate::{AllowAll, Grants, RefuseMutations, ToolGate};
 
 /// The MCP server over one `fm-api`: the app's own when it hosts the
 /// server, or the running app's local API for the stdio shim.
@@ -54,9 +55,10 @@ impl std::fmt::Debug for McpServer {
 }
 
 impl McpServer {
-    /// A server over `api` whose gate refuses every mutating tool.
+    /// A server over `api` whose mutating tools ask the user's grants
+    /// ([`Grants`]).
     pub fn new(api: Arc<dyn Api>) -> Self {
-        Self::with_gate(api, Arc::new(RefuseMutations))
+        Self::with_gate(api, Arc::new(Grants))
     }
 
     /// A server over `api` whose mutating tools ask `gate`.
@@ -198,10 +200,10 @@ impl std::fmt::Debug for HttpServer {
 }
 
 impl HttpServer {
-    /// The server over `api` whose gate refuses every mutating tool;
-    /// nothing is built yet.
+    /// The server over `api` whose mutating tools ask the user's grants
+    /// ([`Grants`]); nothing is built yet.
     pub fn new(api: Arc<dyn Api>) -> Self {
-        Self::with_gate(api, Arc::new(RefuseMutations))
+        Self::with_gate(api, Arc::new(Grants))
     }
 
     /// The server over `api` whose mutating tools ask `gate`.

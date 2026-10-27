@@ -1198,7 +1198,16 @@
       "copyClaudeCode": "Claude-Code-Befehl kopieren",
       "copyHttp": "Konfiguration für HTTP-Clients kopieren",
       "copyClaudeDesktop": "Konfiguration für Claude Desktop kopieren",
-      "tokenHint": "Die Snippets enthalten das Token der lokalen API. Halten Sie sie geheim."
+      "tokenHint": "Die Snippets enthalten das Token der lokalen API. Halten Sie sie geheim.",
+      "grantsTitle": "Was KI-Assistenten ändern dürfen",
+      "grantsNote": "Suchen, Schriftdetails lesen und Vorschauen sind immer erlaubt. Jedes Werkzeug, das etwas ändert, braucht einen eigenen Schalter. Alle sind standardmäßig aus; eine Änderung gilt für die nächste Anfrage.",
+      "tools": {
+        "activate_fonts": "Schriften aktivieren",
+        "deactivate_fonts": "Schriften deaktivieren",
+        "tag_fonts": "Schriften taggen",
+        "export_web": "Webfonts exportieren"
+      },
+      "asksEachTime": "Fragt Sie jedes Mal (Erlauben / Ablehnen)"
     },
     "about": {
       "platformNotes": "Hinweise zur Plattform",
@@ -1455,5 +1464,19 @@
     "resultLabel": "{name}, {score}",
     "reasons": "Warum: {reasons}",
     "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet sie aus. Der Inspektor zeigt sie."
+  },
+  "mcpConfirm": {
+    "label": "Anfrage eines KI-Assistenten",
+    "deactivate": {
+      "one": "Ein KI-Assistent möchte {count} Schrift deaktivieren.",
+      "other": "Ein KI-Assistent möchte {count} Schriften deaktivieren."
+    },
+    "deactivateUnknown": "Ein KI-Assistent möchte Schriften deaktivieren.",
+    "generic": "Ein KI-Assistent möchte {tool} verwenden.",
+    "timeout": "Ohne Antwort in {seconds} Sekunden gilt die Anfrage als abgelehnt.",
+    "allow": "Erlauben",
+    "deny": "Ablehnen",
+    "allowed": "Erlaubt. Die Anfrage des KI-Assistenten wird jetzt ausgeführt.",
+    "denied": "Abgelehnt. Es wurde nichts geändert."
   }
 }

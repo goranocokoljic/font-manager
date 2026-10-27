@@ -5,6 +5,7 @@
 //! or newer app can read the file. A file that is not valid JSON is reported,
 //! never overwritten: the user may have edited it by hand.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -27,6 +28,9 @@ pub struct Config {
     /// The MCP server on the local API endpoint (E27.1). Off unless the
     /// user turns it on in Settings → AI assistants.
     pub mcp_enabled: bool,
+    /// The mutating MCP tools the user allowed (E27.6), by MCP name. None
+    /// until the user turns one on in Settings → AI assistants.
+    pub mcp_grants: BTreeSet<String>,
     /// What the Settings window edits, stored at the top level of the file.
     #[serde(flatten)]
     pub settings: Settings,
@@ -38,6 +42,7 @@ impl Default for Config {
             log_level: LogLevel::Info,
             telemetry: false,
             mcp_enabled: false,
+            mcp_grants: BTreeSet::new(),
             settings: Settings::default(),
         }
     }
@@ -128,6 +133,10 @@ mod tests {
         assert_eq!(config, Config::default());
         assert!(!config.telemetry);
         assert!(!config.mcp_enabled, "the MCP server is off by default");
+        assert!(
+            config.mcp_grants.is_empty(),
+            "no MCP tool is granted by default"
+        );
         assert_eq!(config.log_level, LogLevel::Info);
         assert_eq!(config.settings.rescan_interval_minutes, 60);
     }
@@ -140,6 +149,7 @@ mod tests {
             log_level: LogLevel::Debug,
             telemetry: true,
             mcp_enabled: true,
+            mcp_grants: BTreeSet::from(["tag_fonts".to_owned()]),
             settings: Settings {
                 cache_limit_mb: 256,
                 ..Settings::default()

@@ -150,6 +150,10 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; endpoint_info);
     same!(seen, d, c; mcp_status);
     same!(seen, d, c; set_mcp_enabled, json!({ "enabled": true }));
+    same!(seen, d, c; authorize_mcp_tool, json!({ "tool": "tag_fonts" }));
+    same!(seen, d, c; set_mcp_grant, json!({ "tool": "tag_fonts", "granted": true }));
+    same!(seen, d, c; authorize_mcp_tool, json!({ "tool": "tag_fonts" }));
+    same!(seen, d, c; answer_mcp_confirmation, json!({ "id": 1, "allow": true }));
     same!(seen, d, c; mcp_status);
     // layout
     same!(seen, d, c; layout_presets);

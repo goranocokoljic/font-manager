@@ -2,21 +2,24 @@
 //! process, lists the fourteen tools and calls every one of them; results are
 //! the API's JSON without font bytes (the preview tools: a PNG and a
 //! caption), API errors are tool errors, and the mutating tools are refused
-//! until a gate allows them.
+//! until the user grants them (E27.6); a refused call never reaches the API.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 mod common;
 
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
+use std::time::Duration;
 
 use fm_api::activation::{ActivateRequest, ActivationMode, ConflictPolicy, Target};
 use fm_api::mock::MockApi;
 use fm_api::organization::CreateCollectionRequest;
 use fm_api::search::{PairingRequest, SimilarRequest};
+use fm_api::settings::{McpConfirmationAnswer, McpGrantUpdate};
 use fm_api::{
-    ActivationService as _, Api, ApiError, ErrorCode, FaceId, LibraryService as _,
-    OrganizationService as _, SearchService as _,
+    ActivationService as _, Api, ApiError, ErrorCode, Event, EventSource as _, FaceId,
+    LibraryService as _, OrganizationService as _, SearchService as _, SettingsService as _,
 };
 use fm_mcp::tools::{MUTATING, NAMES};
 use fm_mcp::{AllowAll, McpServer, ToolGate};
@@ -283,7 +286,18 @@ async fn mutating_tools_are_refused_by_default() {
     for (tool, args) in calls {
         let e = client.err(tool, args).await;
         assert_eq!(e.code, ErrorCode::PermissionDenied, "{tool}");
+        assert!(
+            e.message.contains("Settings → AI assistants"),
+            "{tool}: the error names the switch: {}",
+            e.message
+        );
     }
+    // The spy: no mutating API call was made.
+    assert_eq!(
+        api.mutations(),
+        Vec::<&str>::new(),
+        "the API was not called"
+    );
     assert!(
         api.list_active().expect("active").is_empty(),
         "nothing activated"
@@ -471,4 +485,108 @@ fn an_unsupported_api_error_round_trips_as_tool_error_data() {
     assert_eq!(result.is_error, Some(true));
     let back: ApiError = serde_json::from_value(result.structured_content.expect("data")).unwrap();
     assert_eq!(back.code, ErrorCode::Unsupported);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_grant_applies_to_the_next_call_and_only_to_its_tool() {
+    let api = Arc::new(MockApi::new());
+    let dyn_api: Arc<dyn Api> = api.clone();
+    let client = connect(McpServer::new(dyn_api)).await;
+    let inter = face_of(&client, "inter").await;
+    let tag = json!({ "face_ids": [inter], "tags": ["granted"] });
+    assert_eq!(
+        client.err("tag_fonts", tag.clone()).await.code,
+        ErrorCode::PermissionDenied
+    );
+
+    api.set_mcp_grant(McpGrantUpdate {
+        tool: "tag_fonts".into(),
+        granted: true,
+    })
+    .expect("granted");
+    client.ok("tag_fonts", tag.clone()).await;
+    assert_eq!(api.mutations(), ["tag_faces"]);
+    let e = client
+        .err("activate_fonts", json!({ "face_ids": [inter] }))
+        .await;
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "other tools stay off");
+    assert_eq!(api.mutations(), ["tag_faces"], "activate was not called");
+
+    api.set_mcp_grant(McpGrantUpdate {
+        tool: "tag_fonts".into(),
+        granted: false,
+    })
+    .expect("refused again");
+    assert_eq!(
+        client.err("tag_fonts", tag).await.code,
+        ErrorCode::PermissionDenied
+    );
+    assert_eq!(api.mutations(), ["tag_faces"]);
+    client.close().await;
+}
+
+/// Answers the next confirmation on `events` with `allow`; the faces it
+/// names.
+fn answer_next(api: &MockApi, events: &Receiver<Event>, allow: bool) -> Option<u32> {
+    loop {
+        let event = events
+            .recv_timeout(Duration::from_secs(10))
+            .expect("a confirmation");
+        if let Event::McpConfirmationRequested {
+            id, tool, faces, ..
+        } = event
+        {
+            assert_eq!(tool, "deactivate_fonts");
+            api.answer_mcp_confirmation(McpConfirmationAnswer { id, allow })
+                .expect("answered");
+            return faces;
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn deactivate_fonts_waits_for_the_users_allow_and_deny_changes_nothing() {
+    let api = Arc::new(MockApi::new());
+    let dyn_api: Arc<dyn Api> = api.clone();
+    let client = connect(McpServer::new(dyn_api)).await;
+    let inter = face_of(&client, "inter").await;
+    api.activate(ActivateRequest {
+        target: Target::Faces {
+            faces: vec![FaceId(inter)],
+        },
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::default(),
+    })
+    .expect("activated");
+    api.set_mcp_grant(McpGrantUpdate {
+        tool: "deactivate_fonts".into(),
+        granted: true,
+    })
+    .expect("granted");
+    let before = api.mutations();
+
+    // Deny: a tool error, and deactivate is never called.
+    let events = api.subscribe();
+    let answerer = {
+        let api = Arc::clone(&api);
+        std::thread::spawn(move || answer_next(&api, &events, false))
+    };
+    let args = json!({ "face_ids": [inter] });
+    let e = client.err("deactivate_fonts", args.clone()).await;
+    assert_eq!(answerer.join().expect("answered"), Some(1));
+    assert_eq!(e.code, ErrorCode::PermissionDenied);
+    assert_eq!(api.mutations(), before, "deactivate was not called");
+    assert_eq!(api.list_active().expect("active").len(), 1);
+
+    // Allow: the call runs.
+    let events = api.subscribe();
+    let answerer = {
+        let api = Arc::clone(&api);
+        std::thread::spawn(move || answer_next(&api, &events, true))
+    };
+    client.ok("deactivate_fonts", args).await;
+    assert_eq!(answerer.join().expect("answered"), Some(1));
+    assert!(api.list_active().expect("active").is_empty());
+    assert_eq!(api.mutations().last(), Some(&"deactivate"));
+    client.close().await;
 }

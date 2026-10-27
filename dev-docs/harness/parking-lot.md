@@ -263,6 +263,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E27.3 #173] docs/adr/0015-local-api-endpoint.md:225 — still says `fm_mcp::tools` "lists twelve tools" and does not mention `render_preview` / `compare_preview`.
 - [E27.3 #173] crates/fm-core/src/api.rs:751 — the uncached fallback of `render_preview` (face file with no hash yet) has no test; `compare_preview` mirrors that fallback.
 - [E27.5 #175] apps/desktop/src/api/mock.ts:2339 — the TS mock `listFamilies` ignores the new `collection` filter (as it ignores `source`), while the Rust `MockApi` honors it, so the two mocks differ on that field.
+- [E27.6 #176] apps/desktop/src/styles/logical.test.ts:118 — the physical left/right check misses `margin: 2px 0 0 24px` in a .vue <style> block on Windows but catches it on Linux CI, so a Windows-only preflight passes RTL-breaking CSS.
 
 ## 2026-10-26
 

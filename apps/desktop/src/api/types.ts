@@ -915,7 +915,27 @@ updated: FaceId[] } |
 /**  Now active. */
 activated: FaceId[]; 
 /**  Now inactive. */
-deactivated: FaceId[] };
+deactivated: FaceId[] } | 
+/**
+ *  An AI assistant (an MCP client) wants to run a tool that needs the
+ *  user's Allow (E27.6); the call waits for
+ *  `SettingsService::answer_mcp_confirmation` or the timeout.
+ */
+{ type: "mcpConfirmationRequested"; 
+/**  The confirmation, for the answer. */
+id: number; 
+/**  The tool's MCP name, e.g. `deactivate_fonts`. */
+tool: string; 
+/**  How many faces the call acts on, when it names them. */
+faces?: number | null; 
+/**  How long the call waits, in seconds; no answer is a Deny. */
+timeoutSecs: number } | 
+/**  A confirmation was answered or timed out; the UI takes its toast away. */
+{ type: "mcpConfirmationClosed"; 
+/**  The confirmation. */
+id: number; 
+/**  Whether the call may run. */
+allowed: boolean };
 
 /**
  *  Convert faces to web fonts. Refused with `PermissionDenied` when the
@@ -1900,6 +1920,32 @@ export type McpClient =
  */
 "claudeDesktop";
 
+/**  The user's answer to an [`crate::Event::McpConfirmationRequested`]. */
+export type McpConfirmationAnswer = {
+	/**  The confirmation. */
+	id: number,
+	/**  Allow (true) or Deny (false). */
+	allow: boolean,
+};
+
+/**  Whether an MCP client may call one tool that changes something. */
+export type McpGrant = {
+	/**  The tool's MCP name, e.g. `deactivate_fonts`. */
+	tool: string,
+	/**  Whether the user allowed the tool in Settings → AI assistants. */
+	granted: boolean,
+	/**  Whether every call also asks the user (Allow / Deny) first. */
+	confirm?: boolean,
+};
+
+/**  Turn the grant of one mutating MCP tool on or off. */
+export type McpGrantUpdate = {
+	/**  The tool's MCP name; one of [`MCP_MUTATING_TOOLS`]. */
+	tool: string,
+	/**  On (true) or off (false). */
+	granted: boolean,
+};
+
 /**  A config snippet that connects one MCP client to the app. */
 export type McpSnippet = {
 	/**  The client it is for. */
@@ -1928,6 +1974,23 @@ export type McpStatus = {
 	 *  while there is no URL.
 	 */
 	snippets?: McpSnippet[],
+	/**
+	 *  One grant per tool that changes something (E27.6), in
+	 *  [`MCP_MUTATING_TOOLS`] order; all off until the user turns one on.
+	 *  The read-only tools need no grant.
+	 */
+	grants?: McpGrant[],
+};
+
+/**  An MCP tool call that asks whether it may run. */
+export type McpToolCall = {
+	/**  The tool's MCP name. */
+	tool: string,
+	/**
+	 *  The faces the call acts on, when it names them; the confirmation
+	 *  says how many.
+	 */
+	target?: Target | null,
 };
 
 /**  Turn the MCP server on or off. */

@@ -7,6 +7,7 @@
 //! "Start at login" is not in the file: its state is the OS's login entry
 //! ([`fm_platform::Autostart`], ADR 0011), read on every request.
 
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -114,6 +115,30 @@ impl SettingsStore {
         let mut config = Config::load(&self.file)?;
         if config.mcp_enabled != on {
             config.mcp_enabled = on;
+            config.save(&self.file)?;
+        }
+        Ok(())
+    }
+}
+
+impl SettingsStore {
+    /// The mutating MCP tools the user allowed (E27.6); read from the file
+    /// on every call, so a change applies to the next tool call.
+    pub fn mcp_grants(&self) -> ApiResult<BTreeSet<String>> {
+        Ok(Config::load(&self.file)?.mcp_grants)
+    }
+
+    /// Allows or refuses the mutating MCP tool `tool` and saves the choice;
+    /// the other keys of the file are kept.
+    pub fn set_mcp_grant(&self, tool: &str, on: bool) -> ApiResult<()> {
+        let _guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+        let mut config = Config::load(&self.file)?;
+        let changed = if on {
+            config.mcp_grants.insert(tool.to_owned())
+        } else {
+            config.mcp_grants.remove(tool)
+        };
+        if changed {
             config.save(&self.file)?;
         }
         Ok(())

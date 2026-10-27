@@ -135,6 +135,9 @@ routes! {
     regenerate_endpoint_token(),
     mcp_status(),
     set_mcp_enabled(req),
+    set_mcp_grant(req),
+    authorize_mcp_tool(req),
+    answer_mcp_confirmation(req),
     // layout
     layout_presets(),
     clamp_layout(layout),

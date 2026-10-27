@@ -263,6 +263,10 @@ pub fn types() -> specta::Types {
         settings::McpSnippet,
         settings::McpStatus,
         settings::McpUpdate,
+        settings::McpGrant,
+        settings::McpGrantUpdate,
+        settings::McpToolCall,
+        settings::McpConfirmationAnswer,
         // updates
         update::UpdateKind,
         update::AvailableUpdate,

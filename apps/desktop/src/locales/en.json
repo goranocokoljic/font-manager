@@ -1198,7 +1198,16 @@
       "copyClaudeCode": "Copy Claude Code command",
       "copyHttp": "Copy HTTP client config",
       "copyClaudeDesktop": "Copy Claude Desktop config",
-      "tokenHint": "The snippets contain the local API token. Keep them secret."
+      "tokenHint": "The snippets contain the local API token. Keep them secret.",
+      "grantsTitle": "What AI assistants may change",
+      "grantsNote": "Searching, reading font details and previews are always allowed. Each tool that changes something needs its own switch. All are off by default, and a change applies to the next request.",
+      "tools": {
+        "activate_fonts": "Activate fonts",
+        "deactivate_fonts": "Deactivate fonts",
+        "tag_fonts": "Tag fonts",
+        "export_web": "Export web fonts"
+      },
+      "asksEachTime": "Asks you every time (Allow / Deny)"
     },
     "about": {
       "platformNotes": "Platform notes",
@@ -1455,5 +1464,19 @@
     "resultLabel": "{name}, {score}",
     "reasons": "Why: {reasons}",
     "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
+  },
+  "mcpConfirm": {
+    "label": "Request from an AI assistant",
+    "deactivate": {
+      "one": "An AI assistant wants to deactivate {count} font.",
+      "other": "An AI assistant wants to deactivate {count} fonts."
+    },
+    "deactivateUnknown": "An AI assistant wants to deactivate fonts.",
+    "generic": "An AI assistant wants to use {tool}.",
+    "timeout": "No answer in {seconds} seconds counts as Deny.",
+    "allow": "Allow",
+    "deny": "Deny",
+    "allowed": "Allowed. The AI assistant's request runs now.",
+    "denied": "Denied. Nothing was changed."
   }
 }

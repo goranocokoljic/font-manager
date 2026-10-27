@@ -142,4 +142,57 @@ describe('Settings → AI assistants', () => {
     expect(button(w, 'Show snippets')).toBeUndefined();
     w.unmount();
   });
+
+  it('shows one switch per mutating tool, all off, and saves a grant through the API', async () => {
+    const w = await mountIt();
+    await turnOn(w);
+    const grants = w.findAll('input[name^="mcp-grant-"]');
+    expect(grants.map((g) => g.attributes('name'))).toEqual([
+      'mcp-grant-activate_fonts',
+      'mcp-grant-deactivate_fonts',
+      'mcp-grant-tag_fonts',
+      'mcp-grant-export_web',
+    ]);
+    expect(grants.map((g) => g.element.closest('label')?.textContent?.trim())).toEqual([
+      'Activate fonts',
+      'Deactivate fonts',
+      'Tag fonts',
+      'Export web fonts',
+    ]);
+    expect(grants.every((g) => !(g.element as HTMLInputElement).checked)).toBe(true);
+    // Only deactivate_fonts asks every time; its switch says so.
+    const deactivate = w.get('input[name="mcp-grant-deactivate_fonts"]');
+    expect(deactivate.attributes('aria-describedby')).toBe('mcp-grant-deactivate_fonts-hint');
+    expect(w.get('#mcp-grant-deactivate_fonts-hint').text()).toBe(
+      'Asks you every time (Allow / Deny)',
+    );
+    expect(w.get('input[name="mcp-grant-tag_fonts"]').attributes('aria-describedby')).toBe(
+      undefined,
+    );
+
+    const tag = w.get('input[name="mcp-grant-tag_fonts"]');
+    (tag.element as HTMLInputElement).checked = true;
+    await tag.trigger('change');
+    await flushPromises();
+    const granted = (await client.mcpStatus()).grants?.filter((g) => g.granted);
+    expect(granted?.map((g) => g.tool)).toEqual(['tag_fonts']);
+    expect(w.get('input[name="mcp-grant-tag_fonts"]').attributes('aria-checked')).toBe('true');
+    w.unmount();
+  });
+
+  it('puts a refused grant back where the API has it', async () => {
+    const w = await mountIt();
+    await turnOn(w);
+    vi.spyOn(client, 'setMcpGrant').mockRejectedValueOnce({
+      code: 'io',
+      message: 'The settings could not be saved.',
+      detail: null,
+    });
+    const tag = w.get('input[name="mcp-grant-tag_fonts"]');
+    (tag.element as HTMLInputElement).checked = true;
+    await tag.trigger('change');
+    await flushPromises();
+    expect((tag.element as HTMLInputElement).checked).toBe(false);
+    w.unmount();
+  });
 });
