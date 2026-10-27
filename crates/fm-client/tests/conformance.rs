@@ -96,6 +96,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
         "fonts": [{ "postscriptName": "Inter-Italic" }, { "fullName": "Nope" }],
         "document": "poster.indd",
     }));
+    same!(seen, d, c; document_closed, json!({ "document": "poster.indd" }));
     same!(seen, d, c; deactivate, json!({ "target": faces }));
     // organization
     same!(seen, d, c; list_collections);

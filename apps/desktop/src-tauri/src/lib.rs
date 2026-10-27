@@ -255,14 +255,15 @@ impl AppState {
             .map(fm_endpoint::Endpoint::addr)
     }
 
-    /// The faces active for this session now: the ones the quit path ends.
-    /// Empty without the real library.
-    pub fn session_faces(&self) -> Vec<FaceId> {
+    /// The session faces the user activated: of the ones the quit path
+    /// ends, those [`AppState::resume_after_quit`] brings back (a face only
+    /// documents activated is not, E29.3). Empty without the real library.
+    pub fn resumable_faces(&self) -> Vec<FaceId> {
         let Some(core) = &self.core else {
             return Vec::new();
         };
         match fm_api::ActivationService::list_active(core.as_ref()) {
-            Ok(active) => lifecycle::session_faces(&active),
+            Ok(active) => lifecycle::resumable_faces(&active),
             Err(e) => {
                 tracing::warn!(error = %e, "session fonts not read");
                 Vec::new()

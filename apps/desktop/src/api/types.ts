@@ -34,7 +34,10 @@ export type ActiveFace = {
 	mode: ActivationMode,
 	/**  Since when. */
 	since: string,
-	/**  The document that asked for it (auto-activation), if any. */
+	/**
+	 *  The document that asked for it (auto-activation), if any: of the
+	 *  open documents that need the face, the one that asked last (E29.3).
+	 */
 	document: string | null,
 };
 
@@ -706,6 +709,22 @@ export type Deprecation = {
 	since: ApiVersion,
 	/**  One plain sentence: what to use instead. */
 	note: string,
+};
+
+/**  A design app closed a document (E29.3). */
+export type DocumentClosedRequest = {
+	/**  The document, as [`FontsNeededRequest::document`] named it. */
+	document: string,
+};
+
+/**  What [`ActivationService::document_closed`] offers to deactivate. */
+export type DocumentClosedResponse = {
+	/**
+	 *  The session faces only documents activated and no open document
+	 *  needs any more, in id order. Deactivate them with
+	 *  [`ActivationService::deactivate`] when the user accepts.
+	 */
+	offer: FaceId[],
 };
 
 /**  Downloads a family of a catalog into a watched source (E22.3). */

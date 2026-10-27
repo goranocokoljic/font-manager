@@ -1,5 +1,6 @@
-//! Activation state (E6.6): the `activation`, `activation_registration` and
-//! `last_session` tables, and what an activation target stands for.
+//! Activation state (E6.6): the `activation`, `activation_registration`,
+//! `activation_document` (E29.3) and `last_session` tables, and what an
+//! activation target stands for.
 //!
 //! The activation table is the list of what the app registered with the OS
 //! (rule 3): `crate::activation` writes a row only after the OS call worked
@@ -48,7 +49,8 @@ pub(crate) struct ActiveRow {
     pub mode: ActivationMode,
     /// Since when.
     pub since: Timestamp,
-    /// The document that asked for it, if any.
+    /// The open document that asked for it last, when only documents
+    /// activated it (E29.3); `None` for a face the user activated.
     pub document: Option<String>,
     /// What the OS holds for it; `None` when nothing was recorded.
     pub registration: Option<Registration>,
@@ -73,6 +75,13 @@ const UPSERT_ACTIVATION: &str = "
 INSERT INTO activation (face_id, mode, document, since)
 VALUES (?1, ?2, NULL, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 ON CONFLICT (face_id) DO UPDATE SET mode = excluded.mode, since = excluded.since";
+
+/// Tags a face with a document; asked again, the document becomes the
+/// face's last (highest `seq`) without a second row.
+const TAG_DOCUMENT: &str = "
+INSERT INTO activation_document (face_id, document, seq)
+VALUES (?1, ?2, (SELECT coalesce(max(seq), 0) + 1 FROM activation_document))
+ON CONFLICT (face_id, document) DO UPDATE SET seq = excluded.seq";
 
 const UPSERT_REGISTRATION: &str = "
 INSERT INTO activation_registration (face_id, path, handle) VALUES (?1, ?2, ?3)
@@ -295,27 +304,116 @@ impl Index {
         tx.commit().map_err(|e| db_error(&e))
     }
 
-    /// Records the document that asked for these active faces (E29.2), in
-    /// one transaction. A face that is not active is left alone.
-    pub(crate) fn set_activation_document(
-        &mut self,
-        faces: &[FaceId],
-        document: &str,
-    ) -> FmResult<()> {
+    /// Tags each active face with `document`, the open document that asks
+    /// for it (E29.3), in one transaction: the face's `document` becomes it,
+    /// and a document that asks again moves to the front instead of being
+    /// added twice. A face that is not active is left alone.
+    pub(crate) fn tag_document(&mut self, faces: &[FaceId], document: &str) -> FmResult<()> {
         if faces.is_empty() {
             return Ok(());
         }
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         {
-            let mut stmt = tx
+            let mut set = tx
                 .prepare_cached("UPDATE activation SET document = ?2 WHERE face_id = ?1")
                 .map_err(|e| db_error(&e))?;
+            let mut tag = tx.prepare_cached(TAG_DOCUMENT).map_err(|e| db_error(&e))?;
             for face in faces {
-                stmt.execute(params![face.0, document])
-                    .map_err(|e| db_error(&e))?;
+                if set
+                    .execute(params![face.0, document])
+                    .map_err(|e| db_error(&e))?
+                    > 0
+                {
+                    tag.execute(params![face.0, document])
+                        .map_err(|e| db_error(&e))?;
+                }
             }
         }
         tx.commit().map_err(|e| db_error(&e))
+    }
+
+    /// The user activated these faces: no document scopes them any more
+    /// (E29.3), in one transaction.
+    pub(crate) fn clear_documents(&mut self, faces: &[FaceId]) -> FmResult<()> {
+        if faces.is_empty() {
+            return Ok(());
+        }
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        {
+            let mut set = tx
+                .prepare_cached("UPDATE activation SET document = NULL WHERE face_id = ?1")
+                .map_err(|e| db_error(&e))?;
+            let mut untag = tx
+                .prepare_cached("DELETE FROM activation_document WHERE face_id = ?1")
+                .map_err(|e| db_error(&e))?;
+            for face in faces {
+                set.execute([face.0]).map_err(|e| db_error(&e))?;
+                untag.execute([face.0]).map_err(|e| db_error(&e))?;
+            }
+        }
+        tx.commit().map_err(|e| db_error(&e))
+    }
+
+    /// `document` closed (E29.3): drops its tags, in one transaction, and
+    /// returns the faces no open document needs any more, in id order — the
+    /// session faces only documents activated. A face another document
+    /// still needs shows the one of those that asked last.
+    pub(crate) fn close_document(&mut self, document: &str) -> FmResult<Vec<FaceId>> {
+        let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        let mut offer = Vec::new();
+        {
+            let mut tagged = tx
+                .prepare_cached(
+                    "SELECT face_id FROM activation_document WHERE document = ?1 ORDER BY face_id",
+                )
+                .map_err(|e| db_error(&e))?;
+            let faces: Vec<FaceId> = tagged
+                .query_map([document], |row| row.get::<_, u32>(0).map(FaceId))
+                .map_err(|e| db_error(&e))?
+                .collect::<Result<_, _>>()
+                .map_err(|e| db_error(&e))?;
+            tx.execute(
+                "DELETE FROM activation_document WHERE document = ?1",
+                [document],
+            )
+            .map_err(|e| db_error(&e))?;
+            let mut last = tx
+                .prepare_cached(
+                    "SELECT document FROM activation_document WHERE face_id = ?1
+                     ORDER BY seq DESC LIMIT 1",
+                )
+                .map_err(|e| db_error(&e))?;
+            let mut set = tx
+                .prepare_cached("UPDATE activation SET document = ?2 WHERE face_id = ?1")
+                .map_err(|e| db_error(&e))?;
+            let mut scoped = tx
+                .prepare_cached(
+                    "SELECT 1 FROM activation WHERE face_id = ?1
+                     AND mode = 'session' AND document IS NOT NULL",
+                )
+                .map_err(|e| db_error(&e))?;
+            for face in faces {
+                let other: Option<String> = last
+                    .query_row([face.0], |row| row.get(0))
+                    .optional()
+                    .map_err(|e| db_error(&e))?;
+                match other {
+                    Some(other) => {
+                        set.execute(params![face.0, other])
+                            .map_err(|e| db_error(&e))?;
+                    }
+                    // The face keeps the closed document's name, so it is
+                    // still known as document-scoped.
+                    None => {
+                        if scoped.exists([face.0]).map_err(|e| db_error(&e))? {
+                            offer.push(face);
+                        }
+                    }
+                }
+            }
+        }
+        tx.commit().map_err(|e| db_error(&e))?;
+        Ok(offer)
     }
 
     /// Forgets that these faces are active, in one transaction.

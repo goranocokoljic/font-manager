@@ -12,6 +12,11 @@
 //!   faces at quit and remembers them; [`ActivationManager::start`] cleans up
 //!   what a crash left and, with "reactivate on launch", activates the last
 //!   session's faces again.
+//! - **Documents (E29.3).** A face `fonts_needed` activates for a document
+//!   is document-scoped: tagged with every open document that asks for it,
+//!   offered for deactivation by [`ActivationService::document_closed`] when
+//!   none is left, and never restored at launch. A face the user activates
+//!   is the user's again, whoever activated it first.
 //! - **Events.** Every change is sent as one [`Event::ActivationChanged`].
 
 use std::collections::{HashMap, HashSet};
@@ -21,8 +26,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace, Clash,
-    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, FontsNeededRequest,
-    FontsNeededResponse, OutcomeStatus, Target,
+    ClashWinner, Conflict, ConflictPolicy, ConflictWith, DeactivateRequest, DocumentClosedRequest,
+    DocumentClosedResponse, FontsNeededRequest, FontsNeededResponse, OutcomeStatus, Target,
 };
 use fm_api::common::FontFormat;
 use fm_api::event::Event;
@@ -73,8 +78,8 @@ impl ActivationManager {
 
     /// What the app does at start, before anything else touches activation
     /// (ADR 0008): removes the session registrations an earlier run left
-    /// (a crash skips [`ActivationManager::shutdown`]) and remembers their
-    /// faces as the last session; then, when `reactivate` is set ("reactivate
+    /// (a crash skips [`ActivationManager::shutdown`]) and remembers the
+    /// faces the user activated of them as the last session; then, when `reactivate` is set ("reactivate
     /// on launch"), activates the last session's faces again for this session.
     /// Returns the outcomes of that reactivation (empty when off).
     pub fn start(
@@ -89,19 +94,19 @@ impl ActivationManager {
             // does not claim fonts this run did not register.
             Err(e) => tracing::warn!(error = %e, detail = %e.detail, "session cleanup failed"),
         }
-        let left: Vec<FaceId> = index
+        let left: Vec<ActiveRow> = index
             .active_rows()?
             .into_iter()
             .filter(|r| r.mode == ActivationMode::Session)
-            .map(|r| r.face)
             .collect();
         if !left.is_empty() {
             tracing::info!(
                 faces = left.len(),
                 "cleaned up session fonts of a crashed run"
             );
-            index.set_last_session(&left)?;
-            index.remove_activations(&left)?;
+            index.set_last_session(&users(&left))?;
+            let faces: Vec<FaceId> = left.iter().map(|r| r.face).collect();
+            index.remove_activations(&faces)?;
         }
         if !reactivate {
             return Ok(Vec::new());
@@ -118,18 +123,18 @@ impl ActivationManager {
         self.activate_locked(&mut index, &req)
     }
 
-    /// What the app does at quit: remembers the session-active faces for
-    /// "reactivate on launch" and deregisters them. Permanent ones stay.
+    /// What the app does at quit: remembers the session faces the user
+    /// activated for "reactivate on launch" and deregisters every session
+    /// face, the document-scoped ones too. Permanent ones stay.
     pub fn shutdown(&self) -> FmResult<Vec<ActivationOutcome>> {
         let mut index = self.lock();
-        let session: Vec<FaceId> = index
+        let session: Vec<ActiveRow> = index
             .active_rows()?
             .into_iter()
             .filter(|r| r.mode == ActivationMode::Session)
-            .map(|r| r.face)
             .collect();
-        index.set_last_session(&session)?;
-        self.deactivate_locked(&mut index, session)
+        index.set_last_session(&users(&session))?;
+        self.deactivate_locked(&mut index, session.into_iter().map(|r| r.face).collect())
     }
 
     fn lock(&self) -> MutexGuard<'_, Index> {
@@ -498,10 +503,22 @@ impl ActivationManager {
 impl ActivationService for ActivationManager {
     fn activate(&self, req: ActivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
         let mut index = self.lock();
-        if req.on_conflict == ConflictPolicy::Replace && req.mode == ActivationMode::Permanent {
-            return Ok(self.replace_for_session(&mut index, &req)?);
-        }
-        Ok(self.activate_locked(&mut index, &req)?)
+        let outcomes = if req.on_conflict == ConflictPolicy::Replace
+            && req.mode == ActivationMode::Permanent
+        {
+            self.replace_for_session(&mut index, &req)?
+        } else {
+            self.activate_locked(&mut index, &req)?
+        };
+        // The user activated these: they are the user's now, also when a
+        // document activated them first (E29.3).
+        let took: Vec<FaceId> = outcomes
+            .iter()
+            .filter(|o| matches!(o.outcome, OutcomeStatus::Done | OutcomeStatus::Unchanged))
+            .map(|o| o.face)
+            .collect();
+        index.clear_documents(&took)?;
+        Ok(outcomes)
     }
 
     fn deactivate(&self, req: DeactivateRequest) -> ApiResult<Vec<ActivationOutcome>> {
@@ -625,12 +642,21 @@ impl ActivationService for ActivationManager {
                 })
                 .collect();
             if let Some(document) = &req.document {
-                let fresh: Vec<FaceId> = outcomes
+                // The faces this request activated, and the document-scoped
+                // ones it asks for again (E29.3). A face the user activated,
+                // or a permanent one, stays the user's and takes no tag.
+                let active = by_face(index.active_rows()?);
+                let tagged: Vec<FaceId> = outcomes
                     .iter()
-                    .filter(|o| o.outcome == OutcomeStatus::Done)
+                    .filter(|o| {
+                        active.get(&o.face).is_some_and(|a| {
+                            a.mode == ActivationMode::Session
+                                && (o.outcome == OutcomeStatus::Done || a.document.is_some())
+                        })
+                    })
                     .map(|o| o.face)
                     .collect();
-                index.set_activation_document(&fresh, document)?;
+                index.tag_document(&tagged, document)?;
             }
         }
         Ok(FontsNeededResponse {
@@ -640,6 +666,20 @@ impl ActivationService for ActivationManager {
             outcomes,
         })
     }
+
+    fn document_closed(&self, req: DocumentClosedRequest) -> ApiResult<DocumentClosedResponse> {
+        let offer = self.lock().close_document(&req.document)?;
+        Ok(DocumentClosedResponse { offer })
+    }
+}
+
+/// The faces of `rows` the user activated (not only documents, E29.3): the
+/// ones "reactivate on launch" brings back.
+fn users(rows: &[ActiveRow]) -> Vec<FaceId> {
+    rows.iter()
+        .filter(|r| r.document.is_none())
+        .map(|r| r.face)
+        .collect()
 }
 
 /// `a` was activated after `b`: the later `since`, then the higher id

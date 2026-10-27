@@ -86,6 +86,17 @@ pub fn session_faces(active: &[ActiveFace]) -> Vec<FaceId> {
         .collect()
 }
 
+/// The session faces of `active` the user activated: the ones
+/// [`restore_session`] brings back after a quit. A face only documents
+/// activated (E29.3) is left out; the plugin asks for it again.
+pub fn resumable_faces(active: &[ActiveFace]) -> Vec<FaceId> {
+    active
+        .iter()
+        .filter(|a| a.mode == ActivationMode::Session && a.document.is_none())
+        .map(|a| a.face)
+        .collect()
+}
+
 /// "Deactivate session fonts": deactivates every session-active face and
 /// leaves permanent ones. Nothing is asked of `api` when no session font is
 /// active (a request without a target would deactivate everything).
@@ -102,7 +113,8 @@ pub fn deactivate_session(api: &dyn ActivationService) -> ApiResult<Vec<Activati
 
 /// Activates `faces` for the session again: the session fonts a quit ended
 /// when the app goes on running after all (an update that did not install,
-/// E18.2). Nothing is asked of `api` when `faces` is empty.
+/// E18.2), as [`resumable_faces`] lists them before the quit. Nothing is
+/// asked of `api` when `faces` is empty.
 pub fn restore_session(
     api: &dyn ActivationService,
     faces: Vec<FaceId>,
@@ -288,6 +300,27 @@ mod tests {
                 outcomes: Vec::new(),
             })
         }
+        fn document_closed(
+            &self,
+            _: fm_api::activation::DocumentClosedRequest,
+        ) -> ApiResult<fm_api::activation::DocumentClosedResponse> {
+            Ok(fm_api::activation::DocumentClosedResponse { offer: Vec::new() })
+        }
+    }
+
+    /// E29.3 criterion 4: the tray's "Deactivate session fonts" ends the
+    /// document-scoped faces too; the resume after a quit leaves them out.
+    #[test]
+    fn document_scoped_faces_are_session_faces_but_not_resumed() {
+        let mut from_doc = active(4, ActivationMode::Session);
+        from_doc.document = Some("poster.indd".into());
+        let list = vec![
+            active(1, ActivationMode::Session),
+            active(2, ActivationMode::Permanent),
+            from_doc,
+        ];
+        assert_eq!(session_faces(&list), [FaceId(1), FaceId(4)]);
+        assert_eq!(resumable_faces(&list), [FaceId(1)]);
     }
 
     #[test]

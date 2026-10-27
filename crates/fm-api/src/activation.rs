@@ -158,7 +158,8 @@ pub struct ActiveFace {
     pub mode: ActivationMode,
     /// Since when.
     pub since: Timestamp,
-    /// The document that asked for it (auto-activation), if any.
+    /// The document that asked for it (auto-activation), if any: of the
+    /// open documents that need the face, the one that asked last (E29.3).
     pub document: Option<String>,
 }
 
@@ -315,6 +316,24 @@ pub struct FontsNeededResponse {
     pub outcomes: Vec<ActivationOutcome>,
 }
 
+/// A design app closed a document (E29.3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentClosedRequest {
+    /// The document, as [`FontsNeededRequest::document`] named it.
+    pub document: String,
+}
+
+/// What [`ActivationService::document_closed`] offers to deactivate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentClosedResponse {
+    /// The session faces only documents activated and no open document
+    /// needs any more, in id order. Deactivate them with
+    /// [`ActivationService::deactivate`] when the user accepts.
+    pub offer: Vec<FaceId>,
+}
+
 /// Activation and deactivation.
 pub trait ActivationService {
     /// Activate; one outcome per face.
@@ -332,6 +351,11 @@ pub trait ActivationService {
     /// to, session-activates them (E29.2). Fonts the library does not have
     /// are reported, not an error.
     fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse>;
+    /// A document closed (E29.3): forgets that it needs its faces and
+    /// offers the faces no other open document needs. A face the user
+    /// activated, or one active permanently, is never offered. Deactivates
+    /// nothing.
+    fn document_closed(&self, req: DocumentClosedRequest) -> ApiResult<DocumentClosedResponse>;
 }
 
 #[cfg(test)]

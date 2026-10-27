@@ -86,6 +86,7 @@ routes! {
     conflicts(target),
     list_conflicts(),
     fonts_needed(req),
+    document_closed(req),
     // organization
     list_collections(),
     create_collection(req),

@@ -1216,10 +1216,12 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
     drop(index);
     {
         // The schema as it was before fingerprints (V18), and so before the
-        // sidecar conflict versions (V19) and full names (V20) too.
+        // sidecar conflict versions (V19), full names (V20) and document
+        // tags (V21) too.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(
-            "ALTER TABLE face DROP COLUMN full_name;
+            "DROP TABLE activation_document;
+             ALTER TABLE face DROP COLUMN full_name;
              DROP TABLE sidecar_absorb;
              ALTER TABLE sidecar_conflict DROP COLUMN disk_rev;
              ALTER TABLE sidecar_conflict DROP COLUMN file_rev;
@@ -1291,12 +1293,13 @@ fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
     let static_face = face_id(&index, &fonts.join("static.ttf").to_string_lossy());
     drop(index);
     {
-        // V19: no `full_name` column; the collection's faces were stored
-        // before E26.1 (no `fullName` in `face.parsed`); a tag and a rating
-        // on one of them.
+        // V19: no `full_name` column (and no `activation_document`, V21);
+        // the collection's faces were stored before E26.1 (no `fullName` in
+        // `face.parsed`); a tag and a rating on one of them.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(&format!(
-            "ALTER TABLE face DROP COLUMN full_name;
+            "DROP TABLE activation_document;
+             ALTER TABLE face DROP COLUMN full_name;
              UPDATE face SET parsed = json_remove(parsed, '$.fullName')
              WHERE file_id = (SELECT id FROM font_file WHERE path LIKE '%collection.ttc');
              INSERT INTO tag (id, name) VALUES (1, 'display');

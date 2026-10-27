@@ -5,7 +5,8 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::time::{Duration, Instant};
 
 use fm_api::activation::{
-    ActivationMode, ConflictPolicy, NeededFont, NeededFontRule, OutcomeStatus,
+    ActivationMode, ConflictPolicy, DocumentClosedRequest, NeededFont, NeededFontRule,
+    OutcomeStatus,
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
@@ -5177,7 +5178,8 @@ fn fonts_needed_activates_the_matched_faces_for_the_session() {
         ]
     );
 
-    // Asked again: nothing new, and the first document stays.
+    // Asked again by another document: nothing new, and the face shows the
+    // document that asked last (E29.3).
     let again = lib
         .api
         .fonts_needed(FontsNeededRequest {
@@ -5191,8 +5193,19 @@ fn fonts_needed_activates_the_matched_faces_for_the_session() {
         lib.api.list_active().expect("active")[0]
             .document
             .as_deref(),
-        Some("poster.indd")
+        Some("other.indd")
     );
+    // Through the API: closing one document offers only Bebas Neue, which
+    // the other does not need.
+    let offer = lib
+        .api
+        .document_closed(DocumentClosedRequest {
+            document: "poster.indd".into(),
+        })
+        .expect("closed")
+        .offer;
+    assert_eq!(offer, [bebas]);
+    assert_eq!(lib.activator.list_active().expect("os list").len(), 2);
 }
 
 /// Review cycle 1 (COR-1): a face the user activated permanently stays

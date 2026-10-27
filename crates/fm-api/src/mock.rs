@@ -12,8 +12,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use crate::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
-    ConflictPolicy, ConflictWith, DeactivateRequest, FontsNeededRequest, FontsNeededResponse,
-    NeededFont, NeededFontMatch, NeededFontRule, OutcomeStatus, Target,
+    ConflictPolicy, ConflictWith, DeactivateRequest, DocumentClosedRequest, DocumentClosedResponse,
+    FontsNeededRequest, FontsNeededResponse, NeededFont, NeededFontMatch, NeededFontRule,
+    OutcomeStatus, Target,
 };
 use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
@@ -468,6 +469,9 @@ struct State {
     /// (the mock's clock is fixed, so `since` cannot order them).
     activations: u64,
     activation_order: HashMap<FaceId, u64>,
+    /// The open documents that need each document-scoped face, the one
+    /// that asked last at the end (E29.3).
+    documents: HashMap<FaceId, Vec<String>>,
     collections: Vec<Collection>,
     members: HashMap<CollectionId, BTreeSet<FaceId>>,
     tags: Vec<Tag>,
@@ -922,6 +926,7 @@ impl State {
             active: HashMap::new(),
             activations: 0,
             activation_order: HashMap::new(),
+            documents: HashMap::new(),
             collections: Vec::new(),
             members: HashMap::new(),
             tags: Vec::new(),
@@ -2687,6 +2692,16 @@ impl ActivationService for MockApi {
                 },
             );
         }
+        // The user activated these: no document scopes them any more.
+        let took = |o: &&ActivationOutcome| {
+            matches!(o.outcome, OutcomeStatus::Done | OutcomeStatus::Unchanged)
+        };
+        for o in out.iter().filter(took) {
+            if let Some(a) = st.active.get_mut(&o.face) {
+                a.document = None;
+                st.documents.remove(&o.face);
+            }
+        }
         if !activated.is_empty() {
             st.emit(Event::ActivationChanged {
                 activated: activated.into_iter().map(|(id, _)| id).collect(),
@@ -2715,6 +2730,7 @@ impl ActivationService for MockApi {
         let mut deactivated = Vec::new();
         for id in ids {
             let outcome = if st.active.remove(&id).is_some() {
+                st.documents.remove(&id);
                 deactivated.push(id);
                 OutcomeStatus::Done
             } else {
@@ -2853,10 +2869,22 @@ impl ActivationService for MockApi {
                     outcome: done.remove(&face).unwrap_or(OutcomeStatus::Unchanged),
                 })
                 .collect();
-            let mut st = self.state();
-            for o in outcomes.iter().filter(|o| o.outcome == OutcomeStatus::Done) {
-                if let Some(a) = st.active.get_mut(&o.face) {
-                    a.document.clone_from(&req.document);
+            if let Some(document) = &req.document {
+                // The faces it activated and the document-scoped ones it
+                // asks for again; the user's and permanent ones stay theirs.
+                let mut st = self.state();
+                for o in &outcomes {
+                    let fresh = o.outcome == OutcomeStatus::Done;
+                    let Some(a) = st.active.get_mut(&o.face) else {
+                        continue;
+                    };
+                    if a.mode != ActivationMode::Session || !(fresh || a.document.is_some()) {
+                        continue;
+                    }
+                    a.document = Some(document.clone());
+                    let tags = st.documents.entry(o.face).or_default();
+                    tags.retain(|d| d != document);
+                    tags.push(document.clone());
                 }
             }
         }
@@ -2866,6 +2894,43 @@ impl ActivationService for MockApi {
             unmatched,
             outcomes,
         })
+    }
+
+    fn document_closed(&self, req: DocumentClosedRequest) -> ApiResult<DocumentClosedResponse> {
+        let mut st = self.state();
+        let mut faces: Vec<FaceId> = st
+            .documents
+            .iter()
+            .filter(|(_, docs)| docs.contains(&req.document))
+            .map(|(face, _)| *face)
+            .collect();
+        faces.sort();
+        let mut offer = Vec::new();
+        for face in faces {
+            let left = st.documents.get_mut(&face).map(|docs| {
+                docs.retain(|d| *d != req.document);
+                docs.last().cloned()
+            });
+            match left.flatten() {
+                // Another open document needs it; the last one to ask shows.
+                Some(last) => {
+                    if let Some(a) = st.active.get_mut(&face) {
+                        a.document = Some(last);
+                    }
+                }
+                None => {
+                    st.documents.remove(&face);
+                    if st
+                        .active
+                        .get(&face)
+                        .is_some_and(|a| a.mode == ActivationMode::Session && a.document.is_some())
+                    {
+                        offer.push(face);
+                    }
+                }
+            }
+        }
+        Ok(DocumentClosedResponse { offer })
     }
 }
 

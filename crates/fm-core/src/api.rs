@@ -32,7 +32,8 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
     ActivateRequest, ActivationOutcome, ActivationService, ActiveFace, Clash, Conflict,
-    DeactivateRequest, FontsNeededRequest, FontsNeededResponse, Target,
+    DeactivateRequest, DocumentClosedRequest, DocumentClosedResponse, FontsNeededRequest,
+    FontsNeededResponse, Target,
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
@@ -887,6 +888,10 @@ impl ActivationService for CoreApi {
 
     fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
         self.activation.fonts_needed(req)
+    }
+
+    fn document_closed(&self, req: DocumentClosedRequest) -> ApiResult<DocumentClosedResponse> {
+        self.activation.document_closed(req)
     }
 }
 

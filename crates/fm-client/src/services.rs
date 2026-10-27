@@ -88,6 +88,7 @@ service!(ActivationService {
     conflicts(target: Target) -> Vec<Conflict>;
     list_conflicts() -> Vec<Clash>;
     fonts_needed(req: FontsNeededRequest) -> FontsNeededResponse;
+    document_closed(req: DocumentClosedRequest) -> DocumentClosedResponse;
 });
 
 service!(OrganizationService {

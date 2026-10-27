@@ -127,7 +127,7 @@ pub fn install_after_quit(
     state: &AppState,
     install: impl FnOnce() -> ApiResult<()>,
 ) -> ApiResult<()> {
-    let session = state.session_faces();
+    let session = state.resumable_faces();
     state.run_quit_path();
     let installed = install();
     if installed.is_err() {
