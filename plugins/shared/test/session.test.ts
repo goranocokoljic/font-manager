@@ -104,6 +104,22 @@ describe('DocumentWatcher', () => {
     expect(ui.notify).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps "not running" said once while the host switches between documents', async () => {
+    const { fake, ui, watcher } = setup([4]);
+    fake.listening = false;
+    const other = { key: 'InDesign: Other.indd #8', name: 'Other.indd' };
+    await watcher.opened(doc, [lora]);
+    await watcher.opened(other, []);
+    for (let i = 0; i < 3; i++) {
+      // Nothing missing in Other: no call, which must not count as the app answering.
+      await watcher.missing(other, []);
+      await watcher.missing(doc, [lora]);
+    }
+    await watcher.closed(other);
+    expect(ui.notify).toHaveBeenCalledOnce();
+    expect(ui.notify).toHaveBeenCalledWith(NOT_RUNNING);
+  });
+
   it('retries a missing report whose call failed', async () => {
     const { fake, watcher } = setup();
     fake.listening = false;

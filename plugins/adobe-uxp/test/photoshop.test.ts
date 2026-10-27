@@ -161,4 +161,23 @@ describe('watchPhotoshop', () => {
     expect(ui.notify).toHaveBeenCalledOnce();
     expect(ui.confirm).not.toHaveBeenCalled();
   });
+
+  it('says "not running" once while the user switches between two documents', async () => {
+    const other: PhotoshopDocument = { id: 13, name: 'Other.psd', layers: [] };
+    const { fake, app, fire, ui } = setup();
+    fake.listening = false;
+    openDoc(app, poster);
+    fire('open', { documentID: 12 });
+    openDoc(app, other);
+    fire('open', { documentID: 13 });
+    for (let i = 0; i < 3; i++) {
+      app.activeDocument = other;
+      fire('select');
+      app.activeDocument = poster;
+      fire('select');
+    }
+    await vi.waitFor(() => expect(ui.notify).toHaveBeenCalledWith(NOT_RUNNING));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(ui.notify).toHaveBeenCalledOnce();
+  });
 });

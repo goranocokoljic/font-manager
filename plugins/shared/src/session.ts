@@ -49,7 +49,7 @@ export class DocumentWatcher {
     return this.run(async () => {
       this.lastMissing.set(doc.key, '');
       if (fonts.length === 0) return;
-      await this.client.fontsNeeded({ fonts, document: doc.key });
+      await this.reached(this.client.fontsNeeded({ fonts, document: doc.key }));
     });
   }
 
@@ -62,7 +62,9 @@ export class DocumentWatcher {
       const keys = [...new Set(fonts.map(fontKey))].sort().join('\n');
       if (keys === (this.lastMissing.get(doc.key) ?? '')) return;
       // Recorded only once sent, so a call that failed is tried again.
-      if (fonts.length > 0) await this.client.fontsNeeded({ fonts, document: doc.key });
+      if (fonts.length > 0) {
+        await this.reached(this.client.fontsNeeded({ fonts, document: doc.key }));
+      }
       this.lastMissing.set(doc.key, keys);
     });
   }
@@ -71,10 +73,10 @@ export class DocumentWatcher {
   closed(doc: HostDocument): Promise<void> {
     return this.run(async () => {
       this.lastMissing.delete(doc.key);
-      const { offer } = await this.client.documentClosed({ document: doc.key });
+      const { offer } = await this.reached(this.client.documentClosed({ document: doc.key }));
       if (offer.length === 0) return;
       if (!(await this.ui.confirm(deactivateQuestion(offer.length, doc.name)))) return;
-      await this.client.deactivate({ target: { kind: 'faces', faces: offer } });
+      await this.reached(this.client.deactivate({ target: { kind: 'faces', faces: offer } }));
     });
   }
 
@@ -82,13 +84,20 @@ export class DocumentWatcher {
     const next = this.queue.then(async () => {
       try {
         await work();
-        this.toldNotRunning = false;
       } catch (e) {
         this.report(e);
       }
     });
     this.queue = next;
     return next;
+  }
+
+  // The app answered: the next "not running" is news again. Only a call
+  // that got through counts; an event that made no call changes nothing.
+  private async reached<T>(call: Promise<T>): Promise<T> {
+    const answer = await call;
+    this.toldNotRunning = false;
+    return answer;
   }
 
   // Never throws into the host's event loop. "Not running" is said once,
@@ -99,6 +108,7 @@ export class DocumentWatcher {
       this.toldNotRunning = true;
       this.ui.notify(NOT_RUNNING);
     } else if (e instanceof FmApiError) {
+      this.toldNotRunning = false;
       this.ui.notify(e.message);
     } else {
       this.ui.notify(`Font Manager: ${String(e)}`);
