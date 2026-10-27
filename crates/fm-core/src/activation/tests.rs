@@ -716,6 +716,48 @@ fn a_clash_keeps_the_face_inactive_unless_replace_is_asked() {
     assert_eq!(statuses(&out), vec![Status::Done]);
 }
 
+/// E30.4: `fonts_needed` keeps a clashing face inactive by default and
+/// activates it, tagged with the document, when the user chose replace.
+#[test]
+fn fonts_needed_replaces_a_clash_only_when_asked() {
+    let fx = Fixture::new();
+    let inter = fx.inter();
+    fx.os.install(
+        "Inter-Regular",
+        "/System/Library/Fonts/Inter.otf",
+        ConflictKind::System,
+    );
+    let ask = |on_conflict| {
+        fx.service
+            .fonts_needed(FontsNeededRequest {
+                fonts: vec![fm_api::activation::NeededFont {
+                    postscript_name: Some("Inter-Regular".into()),
+                    ..Default::default()
+                }],
+                document: Some("poster.indd".into()),
+                activate: true,
+                on_conflict,
+            })
+            .expect("fonts needed")
+            .outcomes
+    };
+    let kept = ask(ConflictPolicy::KeepExisting);
+    assert!(matches!(
+        kept[0].outcome,
+        Status::Conflict {
+            with: ConflictWith::System { .. }
+        }
+    ));
+    assert_eq!(fx.active(), vec![]);
+
+    let replaced = ask(ConflictPolicy::Replace);
+    assert_eq!(statuses(&replaced), vec![Status::Done]);
+    assert_eq!(
+        documents(&fx),
+        vec![(inter, ActivationMode::Session, Some("poster.indd".into()))]
+    );
+}
+
 #[test]
 fn a_clash_with_a_face_the_app_activated_names_that_face() {
     let fx = Fixture::new();
@@ -1258,6 +1300,7 @@ fn need(fx: &Fixture, document: &str, names: &[&str]) -> Vec<ActivationOutcome> 
                 .collect(),
             document: Some(document.to_owned()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .expect("fonts needed")
         .outcomes

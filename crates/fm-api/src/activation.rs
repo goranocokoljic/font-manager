@@ -265,6 +265,11 @@ pub struct FontsNeededRequest {
     /// Session-activate the matched faces; when false, only match.
     #[serde(default = "yes")]
     pub activate: bool,
+    /// Conflict handling when activating; a face that clashes is left
+    /// inactive and reported unless this is `Replace` (the user chose to
+    /// replace the installed font, E30.4).
+    #[serde(default)]
+    pub on_conflict: ConflictPolicy,
 }
 
 fn yes() -> bool {

@@ -726,6 +726,7 @@ pub fn fonts_needed_with(
         fonts: asked.iter().map(|(_, f)| f.clone()).collect(),
         document: None,
         activate: false,
+        on_conflict: Default::default(),
     })?;
     let mut seen = HashSet::new();
     asked.retain(|(face, font)| {
@@ -748,6 +749,7 @@ pub fn fonts_needed_with(
         fonts: fonts.clone(),
         document: Some("fm-bench".into()),
         activate: true,
+        on_conflict: Default::default(),
     })?;
     let mut report = NeededTimed {
         ms: ms(begin.elapsed()),

@@ -13,6 +13,16 @@ app finds and activates them (E29.2).
   the app offers fonts only that document used, it asks "Deactivate N fonts
   used only by <document>?"; Deactivate calls `deactivate` with those faces,
   Keep them leaves them active.
+- **Missing fonts panel (E30.4).** The panel shows "N fonts missing" for the
+  active document and lists each font the host reports missing as "In your
+  library" (with an Activate button), "Conflicts with an installed font" or
+  "Not in your library" (`fonts_needed` with `activate: false`, then
+  `conflicts`). Activate all, or a row's Activate, calls `fonts_needed` to
+  activate them; a conflict first asks Keep installed or Replace (Replace
+  sends `onConflict: "replace"`). It refreshes when the active document
+  changes or closes and says "No document is open." when there is none. The
+  view is `MissingFontsPanel` in `plugins/shared/`; its texts are in
+  `plugins/shared/src/panel-strings.ts`.
 - **App not running.** When the app does not answer or refuses the token,
   the plugin shows "Font Manager is not running" once and does nothing else.
 

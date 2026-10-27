@@ -191,6 +191,7 @@ fn fonts_needed_matches_by_name_reports_the_missing_and_activates_the_rest() {
             fonts: fonts.clone(),
             document: None,
             activate: false,
+            on_conflict: Default::default(),
         })
         .unwrap();
     let hits: Vec<_> = dry.matched.iter().map(|m| (m.face, m.matched_by)).collect();
@@ -212,6 +213,7 @@ fn fonts_needed_matches_by_name_reports_the_missing_and_activates_the_rest() {
             fonts,
             document: Some("poster.indd".into()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .unwrap();
     assert_eq!(res.matched, dry.matched);
@@ -255,6 +257,7 @@ fn fonts_needed_leaves_a_permanently_active_face_permanent() {
             }],
             document: Some("poster.indd".into()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .unwrap();
     assert_eq!(res.outcomes[0].face, FaceId(1));
@@ -280,6 +283,7 @@ fn a_closed_document_offers_its_faces_no_other_document_needs() {
                 .collect(),
             document: Some(document.into()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .unwrap()
     };

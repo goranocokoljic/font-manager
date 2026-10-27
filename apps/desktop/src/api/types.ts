@@ -1441,6 +1441,12 @@ export type FontsNeededRequest = {
 	document?: string | null,
 	/**  Session-activate the matched faces; when false, only match. */
 	activate?: boolean,
+	/**
+	 *  Conflict handling when activating; a face that clashes is left
+	 *  inactive and reported unless this is `Replace` (the user chose to
+	 *  replace the installed font, E30.4).
+	 */
+	onConflict?: ConflictPolicy,
 };
 
 /**  What [`ActivationService::fonts_needed`] found and did. */
