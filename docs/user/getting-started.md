@@ -170,6 +170,20 @@ tool has its own switch: **Activate fonts**, **Deactivate fonts**, **Tag fonts**
 **Export web fonts**. All are off. A change applies to the next request. If an assistant
 uses a tool that is off, it gets a message that names the switch.
 
+Three tools do a whole job in one step:
+
+- **Pick fonts for a brief** reads a brief such as "a calm bilingual brand, sans serif"
+  and suggests up to 5 families. Each family covers the languages the assistant asks for
+  and has a license that allows the use it asks for. Each suggestion says why it fits. It
+  needs no switch, because it changes nothing.
+- **Prepare for web** checks that the family's license allows the web, activates the
+  family for this session, and writes WOFF2 files and `fonts.css` to a folder. It needs
+  both **Activate fonts** and **Export web fonts**. If the license does not allow the web,
+  nothing is activated and nothing is written.
+- **Build specimen** writes an HTML specimen of a family into a folder, as
+  `specimen-<number>.html`. It needs **Export web fonts**. It does not replace a file
+  that is already there unless the assistant asks for that.
+
 **Deactivate fonts** also asks you every time. A message such as "An AI assistant wants to
 deactivate 3 fonts" shows at the bottom of the window. Click **Allow** or **Deny**. If you
 do not answer in 60 seconds, it counts as **Deny**, and nothing changes.

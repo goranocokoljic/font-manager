@@ -1452,22 +1452,6 @@ fn settings_live_in_the_config_file() {
 }
 
 #[test]
-fn services_not_built_yet_answer_unsupported() {
-    let lib = Lib::new("api-not-built");
-    is_unsupported(lib.api.pick_fonts_for_brief(BriefRequest {
-        brief: "a poster".into(),
-        languages: Vec::new(),
-        license: None,
-        limit: None,
-    }));
-    is_unsupported(lib.api.prepare_for_web(PrepareForWebRequest {
-        family: FamilyId(1),
-        subset: None,
-        out_dir: "out".into(),
-    }));
-}
-
-#[test]
 fn every_subscriber_sees_every_event_and_a_dropped_one_is_forgotten() {
     let events = Broadcast::default();
     let a = events.subscribe();
@@ -5320,5 +5304,341 @@ fn a_broken_face_alone_is_not_matched() {
     assert_eq!(res.unmatched, [font]);
     assert_eq!(res.missing, 1);
     assert!(res.outcomes.is_empty());
+    assert!(lib.activator.list_active().expect("os list").is_empty());
+}
+
+// --- workflows (E27.4) ---------------------------------------------------
+
+fn brief(text: &str, languages: &[&str], limit: Option<u32>) -> BriefRequest {
+    BriefRequest {
+        brief: text.into(),
+        languages: languages.iter().map(|l| (*l).to_owned()).collect(),
+        license: None,
+        limit,
+    }
+}
+
+/// The families with a usable face that covers every language in `codes`.
+fn families_covering(lib: &Lib, codes: &[&str]) -> Vec<String> {
+    let families = lib
+        .api
+        .list_families(ListFamiliesRequest {
+            page: Page {
+                offset: 0,
+                limit: 1000,
+            },
+            ..ListFamiliesRequest::default()
+        })
+        .expect("families")
+        .items;
+    let mut out = Vec::new();
+    for fam in families {
+        let faces = lib.api.get_family(fam.id).expect("family").faces;
+        let covers = faces.iter().filter(|f| f.health == Health::Ok).any(|f| {
+            lib.api
+                .check_coverage(CoverageRequest {
+                    face: f.id,
+                    target: Supports::Languages {
+                        codes: codes.iter().map(|c| (*c).to_owned()).collect(),
+                    },
+                })
+                .expect("coverage")
+                .complete
+        });
+        if covers {
+            out.push(fam.name);
+        }
+    }
+    out.sort();
+    out
+}
+
+#[test]
+fn a_serbian_brief_returns_only_families_covering_sr_cyrl_and_sr_latn() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-brief-serbian",
+        &[
+            "google-repo/comfortaa/Comfortaa[wght].ttf",
+            "fontshare/montserrat/Montserrat-LightItalic.woff2",
+        ],
+    );
+    let serbian = ["sr-Cyrl", "sr-Latn"];
+    let expected = families_covering(&lib, &serbian);
+    assert!(!expected.is_empty(), "a fixture covers Serbian");
+    let all = lib.names();
+    assert!(
+        expected.len() < all.len(),
+        "a Latin-only family is left out"
+    );
+
+    let res = lib
+        .api
+        .pick_fonts_for_brief(brief("a calm bilingual brand", &serbian, Some(50)))
+        .expect("brief");
+    let mut names: Vec<String> = res
+        .candidates
+        .iter()
+        .map(|c| c.family.name.clone())
+        .collect();
+    names.sort();
+    assert_eq!(names, expected);
+    for c in &res.candidates {
+        assert_eq!(c.reasons[0], "Covers sr-Cyrl and sr-Latn", "{c:?}");
+        assert!(c.reasons[1].starts_with("No license use asked"), "{c:?}");
+    }
+    // Deterministic, and `limit` defaults to 5.
+    let again = lib
+        .api
+        .pick_fonts_for_brief(brief("a calm bilingual brand", &serbian, Some(50)))
+        .expect("again");
+    assert_eq!(again, res);
+    let five = lib
+        .api
+        .pick_fonts_for_brief(brief("anything", &[], None))
+        .expect("default limit");
+    assert_eq!(five.candidates.len(), all.len().min(5));
+    assert_eq!(lib.fetcher.calls(), 0, "no network");
+}
+
+#[test]
+fn brief_words_rank_by_class_tags_and_names_with_license_reasons() {
+    let (lib, _, _) = Lib::scanned("api-brief-rank");
+    let barlow = lib.family("Barlow");
+    lib.api
+        .tag_faces(TagFacesRequest {
+            families: vec![barlow.id],
+            faces: Vec::new(),
+            tags: vec!["Wayfinding".into()],
+        })
+        .expect("tagged");
+    let res = lib
+        .api
+        .pick_fonts_for_brief(BriefRequest {
+            license: Some(LicenseType::Web),
+            ..brief("signage for wayfinding", &[], Some(3))
+        })
+        .expect("brief");
+    assert_eq!(res.candidates.len(), 3);
+    let top = &res.candidates[0];
+    assert_eq!(top.family.id, barlow.id);
+    assert_eq!(top.reasons[0], "No languages asked");
+    assert!(
+        top.reasons[1].starts_with("Allows web use: Open license"),
+        "{top:?}"
+    );
+    assert!(top.reasons.contains(&"Tagged \"Wayfinding\"".to_owned()));
+
+    // A name word ranks that family first.
+    let res = lib
+        .api
+        .pick_fonts_for_brief(brief("something like archivo", &[], Some(1)))
+        .expect("name");
+    assert_eq!(res.candidates[0].family.name, "Archivo");
+    assert!(
+        res.candidates[0]
+            .reasons
+            .contains(&"Name \"Archivo\" matches \"archivo\"".to_owned())
+    );
+
+    // The user's declaration beats the open license in the file, as in the
+    // license panel's web rule: declared desktop is not OK for web.
+    let archivo = lib.family("Archivo");
+    lib.api
+        .declare_license(LicenseDeclaration {
+            family: archivo.id,
+            license_type: Some(LicenseType::Desktop),
+            seats: None,
+            purchase_date: None,
+            receipt: ReceiptChange::Keep,
+        })
+        .expect("declare");
+    let pick = |license: LicenseType| {
+        lib.api
+            .pick_fonts_for_brief(BriefRequest {
+                license: Some(license),
+                ..brief("archivo", &[], Some(50))
+            })
+            .expect("brief")
+            .candidates
+    };
+    let web = pick(LicenseType::Web);
+    assert!(!web.is_empty());
+    assert!(web.iter().all(|c| c.family.id != archivo.id), "{web:?}");
+    let face = lib.api.get_family(archivo.id).expect("family").faces[0].id;
+    let info = lib.api.get_face(face).expect("face").license;
+    assert_eq!(info.web_use.map(|w| w.ok), Some(false), "the panel agrees");
+    let desktop = pick(LicenseType::Desktop);
+    let ours = desktop
+        .iter()
+        .find(|c| c.family.id == archivo.id)
+        .expect("declared desktop allows desktop");
+    assert_eq!(
+        ours.reasons[1],
+        "Allows desktop use: declared desktop license"
+    );
+}
+
+#[test]
+fn a_brief_refuses_an_unknown_language_and_a_bad_limit() {
+    let (lib, _, _) = Lib::scanned("api-brief-refusals");
+    let e = lib
+        .api
+        .pick_fonts_for_brief(brief("x", &["xx-Nope"], None))
+        .expect_err("unknown preset");
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    for limit in [0, 51] {
+        let e = lib
+            .api
+            .pick_fonts_for_brief(brief("x", &[], Some(limit)))
+            .expect_err("limit");
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{limit}");
+    }
+}
+
+#[test]
+fn prepare_for_web_activates_the_family_and_writes_woff2_with_css() {
+    let (lib, _, _) = Lib::scanned_with(
+        "api-prepare-web",
+        &[
+            "google-static/glory/Glory-Bold.ttf",
+            "google-static/glory/Glory-ExtraBoldItalic.ttf",
+        ],
+    );
+    let family = lib.api.get_family(lib.family("Glory").id).expect("family");
+    let faces: Vec<FaceId> = family
+        .faces
+        .iter()
+        .filter(|f| f.health == Health::Ok)
+        .map(|f| f.id)
+        .collect();
+    assert!(faces.len() > 1);
+    // A face already active for good stays so (it is not resent).
+    let permanent = faces[0];
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces {
+                faces: vec![permanent],
+            },
+            mode: ActivationMode::Permanent,
+            on_conflict: ConflictPolicy::KeepExisting,
+        })
+        .expect("permanent");
+    let out = lib.dir.path().join("web");
+    std::fs::create_dir_all(&out).expect("out");
+    let res = lib
+        .api
+        .prepare_for_web(PrepareForWebRequest {
+            family: family.summary.id,
+            subset: Some(Subset::Presets {
+                names: vec!["latin".into()],
+            }),
+            out_dir: out.display().to_string(),
+        })
+        .expect("prepare");
+    assert_eq!(
+        res.activated.iter().map(|o| o.face).collect::<Vec<_>>(),
+        faces
+    );
+    assert_eq!(res.activated[0].outcome, OutcomeStatus::Unchanged);
+    assert!(
+        res.activated[1..]
+            .iter()
+            .all(|o| o.outcome == OutcomeStatus::Done),
+        "{:?}",
+        res.activated
+    );
+    let active = lib.api.list_active().expect("active");
+    assert_eq!(active.len(), faces.len());
+    for a in &active {
+        let want = if a.face == permanent {
+            ActivationMode::Permanent
+        } else {
+            ActivationMode::Session
+        };
+        assert_eq!(a.mode, want, "{a:?}");
+    }
+    let written = files_under(&out);
+    assert_eq!(written.len(), faces.len() + 1, "{written:?}");
+    assert!(written.iter().any(|p| p == Path::new("fonts.css")));
+    assert!(
+        written
+            .iter()
+            .filter(|p| *p != Path::new("fonts.css"))
+            .all(|p| p.extension().is_some_and(|e| e == "woff2")),
+        "{written:?}"
+    );
+    assert!(
+        res.export
+            .css
+            .as_deref()
+            .is_some_and(|c| c.contains("@font-face"))
+    );
+}
+
+#[test]
+fn prepare_for_web_checks_the_license_first_and_activates_nothing_when_refused() {
+    let lib = Lib::new("api-prepare-web-guard");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    let out = lib.dir.path().join("web");
+    std::fs::create_dir_all(&out).expect("out");
+    let e = lib
+        .api
+        .prepare_for_web(PrepareForWebRequest {
+            family: lib.family("Bebas Neue").id,
+            subset: None,
+            out_dir: out.display().to_string(),
+        })
+        .expect_err("refused");
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert!(lib.api.list_active().expect("active").is_empty());
+    assert!(lib.activator.list_active().expect("os list").is_empty());
+    assert!(files_under(&out).is_empty());
+
+    let e = lib
+        .api
+        .prepare_for_web(PrepareForWebRequest {
+            family: FamilyId(999_999),
+            subset: None,
+            out_dir: out.display().to_string(),
+        })
+        .expect_err("unknown");
+    assert_eq!(e.code, ErrorCode::NotFound);
+}
+
+#[test]
+fn prepare_for_web_deactivates_what_it_activated_when_the_export_fails() {
+    let (lib, _, _) = Lib::scanned("api-prepare-web-rollback");
+    let archivo = lib.family("Archivo").id;
+    let out = lib.dir.path().join("web");
+    std::fs::create_dir_all(&out).expect("out");
+    let req = PrepareForWebRequest {
+        family: archivo,
+        subset: None,
+        out_dir: out.display().to_string(),
+    };
+    lib.api.prepare_for_web(req.clone()).expect("first");
+    lib.api
+        .deactivate(DeactivateRequest {
+            target: None,
+            except: None,
+        })
+        .expect("deactivate");
+    // The files are there now: the export refuses to replace them.
+    let e = lib.api.prepare_for_web(req).expect_err("exists");
+    assert_ne!(e.code, ErrorCode::PermissionDenied, "{e:?}");
+    assert!(lib.api.list_active().expect("active").is_empty());
     assert!(lib.activator.list_active().expect("os list").is_empty());
 }

@@ -8,6 +8,7 @@
 pub mod activation;
 pub mod api;
 pub mod blocks;
+mod brief;
 pub mod catalog;
 pub mod charsets;
 pub mod classify;

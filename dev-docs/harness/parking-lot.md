@@ -276,3 +276,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E28.2 #180] crates/fm-client/tests/conformance.rs:47 — fixed-name temp files (also crates/fm-endpoint/tests/routes.rs:75) are never deleted, like the existing `out` pattern.
 - [E28.2 #180] crates/fm-core/src/api.rs:970 — the absolute-path check of set files is tested only through save_set_file, not load_set_file.
 - [E28.2 #180] crates/fm-endpoint/src/routes.rs:107 — save_set_file lets an authenticated endpoint client write any absolute path, like the existing export_* routes.
+
+## 2026-10-27
+
+- [E27.4 #174] crates/fm-core/src/index/faces.rs:131 — `face_detail` reads the font file of color faces (or faces without stored metrics) while the index lock is held; `pick_fonts_for_brief` now calls it once per candidate family under one lock.
+- [E27.4 #174] crates/fm-mcp/src/tools.rs:112 — `MUTATING` repeats `fm_api::settings::MCP_MUTATING_TOOLS` instead of reusing it.
+- [E27.4 #174] crates/fm-core/src/license.rs:223 — a third private `open_license_label` with short labels ("OFL") besides `inventory::open_license_label`.

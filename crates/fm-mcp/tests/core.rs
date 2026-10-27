@@ -3,7 +3,8 @@
 //! writes real web fonts and answers with their paths and the CSS only; and
 //! deactivate_fonts only reaches faces the app registered (rule 3). The
 //! resources (E27.5) read a collection's families and a set's faces from the
-//! core.
+//! core. The workflow tools (E27.4) shortlist, prepare and write a specimen
+//! on the core, and the app's gate refuses them until they are granted.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -357,5 +358,100 @@ async fn collection_and_set_resources_read_the_core() {
     assert_eq!(families, ["Agdasima", "Barlow"]);
     let face = read(format!("font://{}", barlow.0)).await;
     assert_eq!(face["face"]["id"], json!(barlow.0));
+    client.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn workflow_tools_run_on_the_core_and_are_refused_until_granted() {
+    let home = Home::new("workflows");
+    let api = scanned_core(&home, &["google-repo/barlow", "google-static/glory"]);
+    let web = home.0.join("web");
+    let specimens = home.0.join("Specimens ü");
+    std::fs::create_dir_all(&web).expect("web");
+    std::fs::create_dir_all(&specimens).expect("specimens");
+
+    // The app's own gate, no grants given: the read-only shortlist runs.
+    let dyn_api: Arc<dyn Api> = api.clone();
+    let gated = connect(McpServer::new(dyn_api)).await;
+    let picked = gated
+        .ok(
+            "pick_fonts_for_brief",
+            json!({ "brief": "glory", "license": "web", "limit": 5 }),
+        )
+        .await;
+    let top = &picked["candidates"][0];
+    assert_eq!(top["family"]["name"], "Glory", "{picked}");
+    let reasons: Vec<&str> = top["reasons"]
+        .as_array()
+        .expect("reasons")
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(reasons[0], "No languages asked");
+    assert!(reasons[1].starts_with("Allows web use"), "{reasons:?}");
+    let glory = id(&top["family"]["id"]);
+    let prepare = json!({
+        "family_id": glory,
+        "out_dir": web.display().to_string(),
+        "subset_presets": ["latin"],
+    });
+    let specimen = json!({ "family_id": glory, "out_dir": specimens.display().to_string() });
+    for (tool, args) in [
+        ("prepare_for_web", prepare.clone()),
+        ("build_specimen", specimen.clone()),
+    ] {
+        let e = gated.err(tool, args).await;
+        assert_eq!(e.code, fm_api::ErrorCode::PermissionDenied, "{tool}");
+    }
+    assert!(api.list_active().expect("active").is_empty());
+    assert_eq!(std::fs::read_dir(&web).expect("web").count(), 0);
+    assert_eq!(std::fs::read_dir(&specimens).expect("specimens").count(), 0);
+    gated.close().await;
+
+    // Granted (here: every grant): the family is activated and exported.
+    let client = client_over(&api).await;
+    let prepared = client.ok("prepare_for_web", prepare).await;
+    assert_no_font_bytes(&prepared);
+    let faces = api
+        .get_family(fm_api::FamilyId(glory))
+        .expect("glory")
+        .faces;
+    assert_eq!(
+        prepared["activated"].as_array().expect("activated").len(),
+        faces.len()
+    );
+    assert_eq!(api.list_active().expect("active").len(), faces.len());
+    let files: Vec<PathBuf> = prepared["export"]["files"]
+        .as_array()
+        .expect("files")
+        .iter()
+        .filter_map(Value::as_str)
+        .map(PathBuf::from)
+        .collect();
+    assert_eq!(files.len(), faces.len() + 1, "{prepared}");
+    for f in &files {
+        assert!(f.exists(), "{}", f.display());
+        assert!(
+            f.extension().is_some_and(|e| e == "woff2") || f.ends_with("fonts.css"),
+            "{}",
+            f.display()
+        );
+    }
+
+    // The specimen is written into the folder given, and its path returned.
+    let written = client.ok("build_specimen", specimen.clone()).await;
+    let path = PathBuf::from(written["path"].as_str().expect("path"));
+    assert_eq!(path, specimens.join(fm_mcp::tools::specimen_file(glory)));
+    let page = std::fs::read_to_string(&path).expect("the specimen");
+    assert!(page.contains("Glory"));
+    let e = client.err("build_specimen", specimen.clone()).await;
+    assert_eq!(
+        e.code,
+        fm_api::ErrorCode::Conflict,
+        "an existing file is kept"
+    );
+    let mut again = specimen;
+    again["overwrite"] = json!(true);
+    client.ok("build_specimen", again).await;
     client.close().await;
 }
