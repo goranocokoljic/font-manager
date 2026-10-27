@@ -2857,7 +2857,7 @@ impl ActivationService for MockApi {
                 for o in self.activate(ActivateRequest {
                     target: Target::Faces { faces: wanted },
                     mode: ActivationMode::Session,
-                    on_conflict: ConflictPolicy::KeepExisting,
+                    on_conflict: req.on_conflict,
                 })? {
                     done.insert(o.face, o.outcome);
                 }

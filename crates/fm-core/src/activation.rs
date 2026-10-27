@@ -624,11 +624,12 @@ impl ActivationService for ActivationManager {
                 .collect();
             let mut done: HashMap<FaceId, OutcomeStatus> = HashMap::new();
             if !wanted.is_empty() {
-                // The Activate button's path: session mode, clashes reported.
+                // The Activate button's path: session mode, clashes reported
+                // unless the user chose to replace (E30.4).
                 let act = ActivateRequest {
                     target: Target::Faces { faces: wanted },
                     mode: ActivationMode::Session,
-                    on_conflict: ConflictPolicy::KeepExisting,
+                    on_conflict: req.on_conflict,
                 };
                 for o in self.activate_locked(&mut index, &act)? {
                     done.insert(o.face, o.outcome);

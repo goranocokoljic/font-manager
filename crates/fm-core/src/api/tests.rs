@@ -4964,6 +4964,7 @@ fn needed(fonts: Vec<NeededFont>, activate: bool) -> FontsNeededRequest {
         fonts,
         document: None,
         activate,
+        on_conflict: Default::default(),
     }
 }
 
@@ -5154,6 +5155,7 @@ fn fonts_needed_activates_the_matched_faces_for_the_session() {
             fonts,
             document: Some("poster.indd".into()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .expect("activate");
     assert_eq!(
@@ -5207,6 +5209,7 @@ fn fonts_needed_activates_the_matched_faces_for_the_session() {
             fonts: vec![needed_ps("Barlow-BoldItalic")],
             document: Some("other.indd".into()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .expect("again");
     assert_eq!(again.outcomes[0].outcome, OutcomeStatus::Unchanged);
@@ -5256,6 +5259,7 @@ fn fonts_needed_leaves_a_permanently_active_face_permanent() {
             ],
             document: Some("poster.indd".into()),
             activate: true,
+            on_conflict: Default::default(),
         })
         .expect("fonts needed");
     assert_eq!(

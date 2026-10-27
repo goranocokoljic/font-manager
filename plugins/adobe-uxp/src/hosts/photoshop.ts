@@ -1,7 +1,8 @@
 // The Photoshop side: the `open`, `select` and `close` notifications of the
-// UXP `photoshop` module, turned into DocumentWatcher calls.
+// UXP `photoshop` module, turned into DocumentWatcher calls; each of them
+// also tells the missing-fonts panel the active document changed.
 
-import type { DocumentWatcher, HostDocument, NeededFont } from '@fm/plugin-shared';
+import type { DocumentWatcher, HostDocument, NeededFont, PanelDocument } from '@fm/plugin-shared';
 import { text } from './collection';
 
 export interface PhotoshopLayer {
@@ -66,44 +67,71 @@ export function photoshopMissingFonts(
   return photoshopFonts(doc).filter((f) => !have.has(f.postscriptName ?? ''));
 }
 
-/** Follows Photoshop's documents until the plugin unloads. */
-export function watchPhotoshop(photoshop: PhotoshopModule, watcher: DocumentWatcher): void {
+/** The document as the plugin names it to the app. */
+export function photoshopHostDocument(doc: PhotoshopDocument): HostDocument {
+  return { key: `Photoshop: ${doc.name} #${doc.id}`, name: doc.name };
+}
+
+/** The active document and its missing fonts, for the panel. */
+export function photoshopActive(photoshop: PhotoshopModule): PanelDocument | null {
+  const { app } = photoshop;
+  if (app.documents.length === 0) return null;
+  const doc = app.activeDocument;
+  if (!doc) return null;
+  return { doc: photoshopHostDocument(doc), missing: photoshopMissingFonts(doc, app.fonts) };
+}
+
+/**
+ * Follows Photoshop's documents until the plugin unloads. `changed` runs
+ * after every notification, once the watcher has handled it.
+ */
+export function watchPhotoshop(
+  photoshop: PhotoshopModule,
+  watcher: DocumentWatcher,
+  changed: () => void = () => {},
+): void {
   const { app, action } = photoshop;
   const open = new Map<number, HostDocument>();
   const byId = (id: number | undefined) => app.documents.find((d) => d.id === id);
+  const work: Promise<void>[] = [];
 
   const opened = (doc: PhotoshopDocument) => {
     if (open.has(doc.id)) return;
-    const host = { key: `Photoshop: ${doc.name} #${doc.id}`, name: doc.name };
+    const host = photoshopHostDocument(doc);
     open.set(doc.id, host);
-    void watcher.opened(host, photoshopFonts(doc));
+    work.push(watcher.opened(host, photoshopFonts(doc)));
   };
   const closed = (id: number) => {
     const host = open.get(id);
     if (!host) return;
     open.delete(id);
-    void watcher.closed(host);
+    work.push(watcher.closed(host));
   };
 
   action.addNotificationListener(
     [{ event: 'open' }, { event: 'select' }, { event: 'close' }],
     (event, descriptor) => {
-      if (event === 'open') {
-        const doc = byId(descriptor?.documentID) ?? app.activeDocument;
-        if (doc) opened(doc);
-      } else if (event === 'select') {
-        const doc = app.activeDocument;
-        const host = doc && open.get(doc.id);
-        if (doc && host) void watcher.missing(host, photoshopMissingFonts(doc, app.fonts));
-      } else if (event === 'close') {
-        // The descriptor names the document when Photoshop knows it; else
-        // the closed ones are those no longer in `app.documents`.
-        if (descriptor?.documentID !== undefined) return closed(descriptor.documentID);
-        const still = new Set(app.documents.map((d) => d.id));
-        for (const id of [...open.keys()]) if (!still.has(id)) closed(id);
-      }
+      handle(event, descriptor);
+      void Promise.all(work.splice(0)).then(changed);
     },
   );
+
+  function handle(event: string, descriptor: PhotoshopDescriptor): void {
+    if (event === 'open') {
+      const doc = byId(descriptor?.documentID) ?? app.activeDocument;
+      if (doc) opened(doc);
+    } else if (event === 'select') {
+      const doc = app.activeDocument;
+      const host = doc && open.get(doc.id);
+      if (doc && host) work.push(watcher.missing(host, photoshopMissingFonts(doc, app.fonts)));
+    } else if (event === 'close') {
+      // The descriptor names the document when Photoshop knows it; else
+      // the closed ones are those no longer in `app.documents`.
+      if (descriptor?.documentID !== undefined) return closed(descriptor.documentID);
+      const still = new Set(app.documents.map((d) => d.id));
+      for (const id of [...open.keys()]) if (!still.has(id)) closed(id);
+    }
+  }
 
   // Documents open before the plugin loaded.
   for (const doc of app.documents) opened(doc);

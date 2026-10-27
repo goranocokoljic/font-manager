@@ -61,9 +61,14 @@ function setup(offer: number[] = [], answer = true, open: InDesignDocument[] = [
 }
 
 describe('watchInDesign', () => {
-  it('listens to afterOpen, afterActivate and beforeClose', () => {
+  it('listens to afterOpen, afterActivate, beforeClose and afterClose', () => {
     const { listeners } = setup();
-    expect([...listeners.keys()].sort()).toEqual(['afterActivate', 'afterOpen', 'beforeClose']);
+    expect([...listeners.keys()].sort()).toEqual([
+      'afterActivate',
+      'afterClose',
+      'afterOpen',
+      'beforeClose',
+    ]);
   });
 
   it("sends one fonts_needed with the document's PostScript, family and style names on open", async () => {

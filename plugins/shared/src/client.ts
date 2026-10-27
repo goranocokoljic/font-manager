@@ -8,11 +8,13 @@ import {
   API_VERSION,
   type ActivationOutcome,
   type ApiError,
+  type Conflict,
   type DeactivateRequest,
   type DocumentClosedRequest,
   type DocumentClosedResponse,
   type FontsNeededRequest,
   type FontsNeededResponse,
+  type Target,
 } from './api';
 
 /** The one message a plugin shows when it cannot reach the app. */
@@ -184,6 +186,11 @@ export class FmClient {
 
   deactivate(req: DeactivateRequest): Promise<ActivationOutcome[]> {
     return this.call('deactivate', req);
+  }
+
+  /** The clashes activating `target` would cause; activates nothing. */
+  conflicts(target: Target): Promise<Conflict[]> {
+    return this.call('conflicts', target);
   }
 
   private call<T>(method: string, params: unknown): Promise<T> {

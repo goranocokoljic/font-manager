@@ -5,6 +5,9 @@ export type {
   ActivationOutcome,
   ApiError,
   ApiVersion,
+  Conflict,
+  ConflictPolicy,
+  ConflictWith,
   DeactivateRequest,
   DocumentClosedRequest,
   DocumentClosedResponse,
@@ -13,4 +16,7 @@ export type {
   FontsNeededRequest,
   FontsNeededResponse,
   NeededFont,
+  NeededFontMatch,
+  OutcomeStatus,
+  Target,
 } from '../../../apps/desktop/src/api/types';
