@@ -117,7 +117,11 @@ async fn an_rmcp_client_with_the_token_initializes_and_lists_tools() {
 
     let tools = client.list_all_tools().await.expect("tools/list");
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
-    assert_eq!(names, fm_mcp::tools::NAMES, "the E27.2 and E27.3 tools");
+    assert_eq!(
+        names,
+        fm_mcp::tools::NAMES,
+        "the E27.2, E27.3 and E27.4 tools"
+    );
     client.cancel().await.expect("close");
 }
 

@@ -1,8 +1,9 @@
-//! The MCP tools (E27.2, E27.3) over `MockApi`: an rmcp client, connected in
-//! process, lists the fourteen tools and calls every one of them; results are
-//! the API's JSON without font bytes (the preview tools: a PNG and a
-//! caption), API errors are tool errors, and the mutating tools are refused
-//! until the user grants them (E27.6); a refused call never reaches the API.
+//! The MCP tools (E27.2, E27.3, E27.4) over `MockApi`: an rmcp client,
+//! connected in process, lists the seventeen tools and calls every one of
+//! them; results are the API's JSON without font bytes (the preview tools: a
+//! PNG and a caption), API errors are tool errors, and the mutating tools are
+//! refused until the user grants them (E27.6), a workflow until every grant
+//! it needs is given; a refused call never reaches the API.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -17,11 +18,13 @@ use fm_api::mock::MockApi;
 use fm_api::organization::CreateCollectionRequest;
 use fm_api::search::{PairingRequest, SimilarRequest};
 use fm_api::settings::{McpConfirmationAnswer, McpGrantUpdate};
+use fm_api::workflows::BriefRequest;
 use fm_api::{
     ActivationService as _, Api, ApiError, ErrorCode, Event, EventSource as _, FaceId,
     LibraryService as _, OrganizationService as _, SearchService as _, SettingsService as _,
+    WorkflowService as _,
 };
-use fm_mcp::tools::{MUTATING, NAMES};
+use fm_mcp::tools::{NAMES, grants};
 use fm_mcp::{AllowAll, McpServer, ToolGate};
 use serde_json::{Value, json};
 
@@ -44,7 +47,7 @@ async fn face_of(client: &Client, query: &str) -> u32 {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn an_rmcp_client_lists_the_fourteen_tools_with_object_schemas() {
+async fn an_rmcp_client_lists_the_seventeen_tools_with_object_schemas() {
     let (_api, client) = mock(Arc::new(AllowAll)).await;
     let tools = client.list_all_tools().await.expect("tools/list");
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
@@ -68,7 +71,7 @@ async fn an_rmcp_client_lists_the_fourteen_tools_with_object_schemas() {
             .expect("annotated");
         assert_eq!(
             read_only,
-            !MUTATING.contains(&tool.name.as_ref()),
+            grants(tool.name.as_ref()).is_empty(),
             "{}",
             tool.name
         );
@@ -588,5 +591,87 @@ async fn deactivate_fonts_waits_for_the_users_allow_and_deny_changes_nothing() {
     assert_eq!(answerer.join().expect("answered"), Some(1));
     assert!(api.list_active().expect("active").is_empty());
     assert_eq!(api.mutations().last(), Some(&"deactivate"));
+    client.close().await;
+}
+
+fn grant(api: &MockApi, tool: &str) {
+    api.set_mcp_grant(McpGrantUpdate {
+        tool: tool.into(),
+        granted: true,
+    })
+    .expect("granted");
+}
+
+/// Criterion 4 over `MockApi`: pick_fonts_for_brief needs no grant;
+/// prepare_for_web needs activate_fonts and export_web, build_specimen
+/// export_web; refused calls reach no API call.
+#[tokio::test(flavor = "multi_thread")]
+async fn workflow_tools_map_to_the_api_and_need_their_grants() {
+    let api = Arc::new(MockApi::new());
+    let dyn_api: Arc<dyn Api> = api.clone();
+    let client = connect(McpServer::new(dyn_api)).await;
+
+    let picked = client
+        .ok(
+            "pick_fonts_for_brief",
+            json!({ "brief": "a friendly sans", "license": "web", "limit": 2 }),
+        )
+        .await;
+    let direct = api
+        .pick_fonts_for_brief(BriefRequest {
+            brief: "a friendly sans".into(),
+            languages: Vec::new(),
+            license: Some(fm_api::library::LicenseType::Web),
+            limit: Some(2),
+        })
+        .expect("direct");
+    assert_eq!(
+        picked,
+        serde_json::to_value(&direct).unwrap(),
+        "the API's JSON"
+    );
+    let family = picked["candidates"][0]["family"]["id"]
+        .as_u64()
+        .expect("a family");
+    let prepare = json!({ "family_id": family, "out_dir": "/web", "subset_presets": ["latin"] });
+    let specimen = json!({ "family_id": family, "out_dir": "/specimens" });
+
+    // No grant: both refused, nothing called.
+    for (tool, args) in [
+        ("prepare_for_web", prepare.clone()),
+        ("build_specimen", specimen.clone()),
+    ] {
+        let e = client.err(tool, args).await;
+        assert_eq!(e.code, ErrorCode::PermissionDenied, "{tool}");
+    }
+    assert_eq!(api.mutations(), Vec::<&str>::new());
+
+    // export_web alone: the specimen runs, prepare_for_web still does not.
+    grant(&api, "export_web");
+    let written = client.ok("build_specimen", specimen).await;
+    let path = written["path"].as_str().expect("path");
+    assert!(path.ends_with(&format!("specimen-{family}.html")), "{path}");
+    let e = client.err("prepare_for_web", prepare.clone()).await;
+    assert_eq!(e.code, ErrorCode::PermissionDenied, "activate_fonts is off");
+    assert_eq!(
+        api.mutations(),
+        Vec::<&str>::new(),
+        "prepare was not called"
+    );
+    assert!(api.list_active().expect("active").is_empty());
+
+    // Both grants: it runs.
+    grant(&api, "activate_fonts");
+    let prepared = client.ok("prepare_for_web", prepare).await;
+    assert!(
+        !prepared["activated"]
+            .as_array()
+            .expect("activated")
+            .is_empty()
+    );
+    assert!(prepared["export"]["files"].is_array(), "{prepared}");
+    assert_no_font_bytes(&prepared);
+    assert!(api.mutations().contains(&"export_web"));
+    assert!(api.mutations().contains(&"activate"));
     client.close().await;
 }

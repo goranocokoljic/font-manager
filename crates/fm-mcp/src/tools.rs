@@ -1,4 +1,4 @@
-//! The MCP tools: one `fm-api` call each (E27.2, E27.3).
+//! The MCP tools: one `fm-api` call each (E27.2, E27.3, E27.4).
 //!
 //! Each tool has an input struct whose JSON schema (`rmcp::schemars`) is the
 //! tool's `inputSchema`. A call decodes its arguments into that struct,
@@ -11,18 +11,26 @@
 //! rendered, as MCP image content (`image/png`, base64), then a text block
 //! naming the faces in row order (one `get_face` per face for the names).
 //!
+//! The workflow tools (E27.4) are one call too: `pick_fonts_for_brief` and
+//! `prepare_for_web` call the API's workflow service, `build_specimen` its
+//! specimen export. A workflow that changes something asks the gate for
+//! every grant it needs ([`grants`]): `prepare_for_web` activates and
+//! exports, `build_specimen` writes a file.
+//!
 //! An [`ApiError`] becomes a tool error (`isError: true`) whose text is the
 //! error's user message and whose structured content is the error itself.
 //! The mutating tools ask the [`ToolGate`] first, after their arguments are
 //! read: a call with bad arguments is refused before the user is asked.
 
 use std::collections::BTreeMap;
+use std::path::Path;
 
 use fm_api::activation::{
     ActivateRequest, ActivationMode, ConflictPolicy, DeactivateRequest, Target,
 };
 use fm_api::common::{AxisValue, Classification, FeatureSetting, Page};
-use fm_api::export::{ExportWebRequest, Subset, WebFormat};
+use fm_api::export::{ExportWebRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat};
+use fm_api::library::LicenseType;
 use fm_api::organization::TagFacesRequest;
 use fm_api::preview::{
     ComparePreviewRequest, MAX_COMPARE_TEXT_CHARS, PreviewImage, PreviewRequest,
@@ -31,6 +39,7 @@ use fm_api::search::{
     CoverageRequest, Filters, PairingRequest, SearchRequest, SimilarRequest, Supports,
 };
 use fm_api::settings::McpToolCall;
+use fm_api::workflows::{BriefRequest, PrepareForWebRequest};
 use fm_api::{Api, ApiError, CollectionId, ErrorCode, FaceId, FamilyId, SetId};
 use rmcp::handler::server::common::schema_for_type;
 use rmcp::model::{CallToolResult, ContentBlock, JsonObject, Tool, ToolAnnotations};
@@ -69,9 +78,15 @@ pub const EXPORT_WEB: &str = "export_web";
 pub const RENDER_PREVIEW: &str = "render_preview";
 /// The same line rendered in 2–4 faces, one row each, as one PNG.
 pub const COMPARE_PREVIEW: &str = "compare_preview";
+/// A shortlist of families for a design brief.
+pub const PICK_FONTS_FOR_BRIEF: &str = "pick_fonts_for_brief";
+/// Activate a family and export it as subset WOFF2 with CSS.
+pub const PREPARE_FOR_WEB: &str = "prepare_for_web";
+/// Write a family's HTML specimen into a folder.
+pub const BUILD_SPECIMEN: &str = "build_specimen";
 
 /// Every tool, in the order `tools/list` gives them.
-pub const NAMES: [&str; 14] = [
+pub const NAMES: [&str; 17] = [
     SEARCH_FONTS,
     GET_FONT,
     LIST_COLLECTIONS,
@@ -86,10 +101,34 @@ pub const NAMES: [&str; 14] = [
     EXPORT_WEB,
     RENDER_PREVIEW,
     COMPARE_PREVIEW,
+    PICK_FONTS_FOR_BRIEF,
+    PREPARE_FOR_WEB,
+    BUILD_SPECIMEN,
 ];
 
-/// The tools that change something; they go through the [`ToolGate`].
+/// The tools that change something and have a grant of their own; they go
+/// through the [`ToolGate`].
 pub const MUTATING: [&str; 4] = [ACTIVATE_FONTS, DEACTIVATE_FONTS, TAG_FONTS, EXPORT_WEB];
+
+/// The workflow tools that change something, with the grants of
+/// [`MUTATING`] each needs; every one must be given.
+pub const WORKFLOW_GRANTS: [(&str, &[&str]); 2] = [
+    (PREPARE_FOR_WEB, &[ACTIVATE_FONTS, EXPORT_WEB]),
+    (BUILD_SPECIMEN, &[EXPORT_WEB]),
+];
+
+/// The grants tool `name` needs: its own for a [`MUTATING`] tool, those of
+/// [`WORKFLOW_GRANTS`] for a workflow, none for a read tool.
+pub fn grants(name: &str) -> Vec<&'static str> {
+    if let Some(own) = MUTATING.iter().find(|t| **t == name) {
+        return vec![*own];
+    }
+    WORKFLOW_GRANTS
+        .iter()
+        .find(|(tool, _)| *tool == name)
+        .map(|(_, needs)| needs.to_vec())
+        .unwrap_or_default()
+}
 
 /// A font class.
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
@@ -135,6 +174,29 @@ pub enum WebFormatInput {
     Woff2,
     /// WOFF 1.
     Woff,
+}
+
+/// A license use.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+#[schemars(crate = "rmcp::schemars")]
+pub enum LicenseUseInput {
+    /// Desktop use.
+    Desktop,
+    /// Web embedding.
+    Web,
+    /// App embedding.
+    App,
+}
+
+impl From<LicenseUseInput> for LicenseType {
+    fn from(use_: LicenseUseInput) -> Self {
+        match use_ {
+            LicenseUseInput::Desktop => Self::Desktop,
+            LicenseUseInput::Web => Self::Web,
+            LicenseUseInput::App => Self::App,
+        }
+    }
 }
 
 impl From<WebFormatInput> for WebFormat {
@@ -299,6 +361,61 @@ fn yes() -> bool {
     true
 }
 
+/// `pick_fonts_for_brief`: a shortlist of families for a design brief.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct PickFontsForBriefInput {
+    /// The brief in plain words ("a calm bilingual brand, sans serif").
+    /// Words naming a design class, a tag or a name rank families higher.
+    pub brief: String,
+    /// Language preset codes every family must cover (`sr-Cyrl`, `pl`).
+    #[serde(default)]
+    pub languages: Vec<String>,
+    /// The use every family's license must allow: a recognized open
+    /// license or a declared license of this use.
+    #[serde(default)]
+    pub license: Option<LicenseUseInput>,
+    /// Families to return, 1 to 50 (default 5).
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// `prepare_for_web`: one family activated for the session and exported as
+/// WOFF2 with `fonts.css`.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct PrepareForWebInput {
+    /// The family id (from `search_fonts` or `pick_fonts_for_brief`).
+    pub family_id: u32,
+    /// The folder to write to, an absolute path.
+    pub out_dir: String,
+    /// Subset presets to keep (`latin`, `latin-ext`, `cyrillic`, `greek`,
+    /// `vietnamese`). Give these, `subset_text`, or neither for every
+    /// character.
+    #[serde(default)]
+    pub subset_presets: Vec<String>,
+    /// Keep only the characters of this text.
+    #[serde(default)]
+    pub subset_text: Option<String>,
+}
+
+/// `build_specimen`: a family's self-contained HTML specimen, written into
+/// a folder as `specimen-<family_id>.html`.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct BuildSpecimenInput {
+    /// The family id.
+    pub family_id: u32,
+    /// The folder to write to, an absolute path.
+    pub out_dir: String,
+    /// Replace a specimen of the same name in `out_dir` (default: refuse).
+    #[serde(default)]
+    pub overwrite: bool,
+}
+
 /// How a preview is drawn, beyond the text and size.
 #[derive(Debug, Default, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -375,11 +492,11 @@ const DEFAULT_SEARCH_LIMIT: u32 = 20;
 const DEFAULT_LIMIT: u32 = 10;
 
 fn tool<T: JsonSchema + 'static>(name: &'static str, description: &'static str) -> Tool {
-    let mutating = MUTATING.contains(&name);
+    let mutating = !grants(name).is_empty();
     let annotations = ToolAnnotations::new()
         .read_only(!mutating)
         .destructive(false)
-        .idempotent(name != EXPORT_WEB)
+        .idempotent(![EXPORT_WEB, PREPARE_FOR_WEB, BUILD_SPECIMEN].contains(&name))
         .open_world(false);
     // An argument-less tool still lists `properties`, as MCP clients expect.
     let mut schema = (*schema_for_type::<T>()).clone();
@@ -437,6 +554,18 @@ pub fn list() -> Vec<Tool> {
             COMPARE_PREVIEW,
             "Render the same line of text in 2 to 4 faces, one row per face, top to bottom in the order given. Returns one PNG image and the faces' names in row order.",
         ),
+        tool::<PickFontsForBriefInput>(
+            PICK_FONTS_FOR_BRIEF,
+            "A shortlist of font families for a design brief, best first. Every family covers the languages asked for and allows the license use asked for; each comes with plain-word reasons.",
+        ),
+        tool::<PrepareForWebInput>(
+            PREPARE_FOR_WEB,
+            "Check a family's web license, activate it for this session and export it as subset WOFF2 with fonts.css. Returns what was activated, the paths written and the CSS. A license that does not allow the web activates and writes nothing.",
+        ),
+        tool::<BuildSpecimenInput>(
+            BUILD_SPECIMEN,
+            "Write a self-contained HTML specimen of one family into a folder. Returns the file's path.",
+        ),
     ]
 }
 
@@ -451,8 +580,8 @@ pub fn call(
         return None;
     }
     let arguments = Value::Object(arguments);
-    if MUTATING.contains(&name)
-        && let Err(e) = tool_call(name, &arguments).and_then(|c| gate.check(api, &c))
+    if let Err(e) = tool_calls(name, &arguments)
+        .and_then(|calls| calls.iter().try_for_each(|c| gate.check(api, c)))
     {
         return Some(api_error(&e));
     }
@@ -471,9 +600,14 @@ pub fn api_error(e: &ApiError) -> CallToolResult {
     result
 }
 
-/// What the gate is asked for mutating tool `name`: the faces the call acts
-/// on, read from the arguments as the call reads them.
-fn tool_call(name: &str, arguments: &Value) -> Result<McpToolCall, ApiError> {
+/// What the gate is asked before tool `name` runs, one call per grant it
+/// needs ([`grants`]; none for a read tool): the faces the call acts on,
+/// read from the arguments as the call reads them.
+fn tool_calls(name: &str, arguments: &Value) -> Result<Vec<McpToolCall>, ApiError> {
+    let needs = grants(name);
+    if needs.is_empty() {
+        return Ok(Vec::new());
+    }
     let target = match name {
         ACTIVATE_FONTS => {
             let a: ActivateFontsInput = args(name, arguments.clone())?;
@@ -483,12 +617,29 @@ fn tool_call(name: &str, arguments: &Value) -> Result<McpToolCall, ApiError> {
             let a: DeactivateFontsInput = args(name, arguments.clone())?;
             target(&a.face_ids, a.family_id, a.collection_id, a.set_id)?
         }
+        PREPARE_FOR_WEB => {
+            let a: PrepareForWebInput = args(name, arguments.clone())?;
+            Some(Target::Family {
+                family: FamilyId(a.family_id),
+            })
+        }
+        BUILD_SPECIMEN => {
+            let _: BuildSpecimenInput = args(name, arguments.clone())?;
+            None
+        }
         _ => None,
     };
-    Ok(McpToolCall {
-        tool: name.to_owned(),
-        target,
-    })
+    // Only an activation grant is about faces; an export's is not.
+    Ok(needs
+        .into_iter()
+        .map(|tool| McpToolCall {
+            tool: tool.to_owned(),
+            target: [ACTIVATE_FONTS, DEACTIVATE_FONTS]
+                .contains(&tool)
+                .then(|| target.clone())
+                .flatten(),
+        })
+        .collect())
 }
 
 fn args<T: DeserializeOwned>(name: &str, value: Value) -> Result<T, ApiError> {
@@ -651,6 +802,24 @@ fn base64(bytes: &[u8]) -> String {
     out
 }
 
+/// What to subset to: presets or text, not both; neither keeps every
+/// character.
+fn subset(presets: Vec<String>, text: Option<String>) -> Result<Option<Subset>, ApiError> {
+    match (presets.is_empty(), text) {
+        (false, Some(_)) => Err(ApiError::invalid(
+            "Give either subset_presets or subset_text, not both.",
+        )),
+        (false, None) => Ok(Some(Subset::Presets { names: presets })),
+        (true, Some(text)) => Ok(Some(Subset::Text { text })),
+        (true, None) => Ok(None),
+    }
+}
+
+/// The file `build_specimen` writes for family `family`.
+pub fn specimen_file(family: u32) -> String {
+    format!("specimen-{family}.html")
+}
+
 fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> {
     match name {
         SEARCH_FONTS => {
@@ -763,18 +932,7 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
         }
         EXPORT_WEB => {
             let a: ExportWebInput = args(name, value)?;
-            let subset = match (a.subset_presets.is_empty(), a.subset_text) {
-                (false, Some(_)) => {
-                    return Err(ApiError::invalid(
-                        "Give either subset_presets or subset_text, not both.",
-                    ));
-                }
-                (false, None) => Some(Subset::Presets {
-                    names: a.subset_presets,
-                }),
-                (true, Some(text)) => Some(Subset::Text { text }),
-                (true, None) => None,
-            };
+            let subset = subset(a.subset_presets, a.subset_text)?;
             let formats = if a.formats.is_empty() {
                 vec![WebFormat::Woff2]
             } else {
@@ -787,6 +945,44 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                 out_dir: a.out_dir,
                 css: a.css,
                 overwrite: a.overwrite,
+            })?)
+        }
+        PICK_FONTS_FOR_BRIEF => {
+            let a: PickFontsForBriefInput = args(name, value)?;
+            to_json(&api.pick_fonts_for_brief(BriefRequest {
+                brief: a.brief,
+                languages: a.languages,
+                license: a.license.map(Into::into),
+                limit: a.limit,
+            })?)
+        }
+        PREPARE_FOR_WEB => {
+            let a: PrepareForWebInput = args(name, value)?;
+            to_json(&api.prepare_for_web(PrepareForWebRequest {
+                family: FamilyId(a.family_id),
+                subset: subset(a.subset_presets, a.subset_text)?,
+                out_dir: a.out_dir,
+            })?)
+        }
+        BUILD_SPECIMEN => {
+            let a: BuildSpecimenInput = args(name, value)?;
+            if a.out_dir.trim().is_empty() {
+                return Err(ApiError::invalid("Choose a folder for the specimen."));
+            }
+            let out = Path::new(&a.out_dir).join(specimen_file(a.family_id));
+            if !a.overwrite && out.exists() {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!(
+                        "{} is already there. Pass overwrite to replace it.",
+                        out.display()
+                    ),
+                ));
+            }
+            to_json(&api.export_specimen(SpecimenRequest {
+                family: FamilyId(a.family_id),
+                format: SpecimenFormat::Html,
+                out_path: out.display().to_string(),
             })?)
         }
         _ => Err(ApiError::not_found(format!("The tool {name}"))),
@@ -808,8 +1004,50 @@ mod tests {
     }
 
     #[test]
+    fn workflows_ask_for_every_grant_they_need() {
+        assert_eq!(grants(PICK_FONTS_FOR_BRIEF), Vec::<&str>::new());
+        assert_eq!(grants(TAG_FONTS), [TAG_FONTS]);
+        let calls = tool_calls(
+            PREPARE_FOR_WEB,
+            &json!({ "family_id": 4, "out_dir": "/web" }),
+        )
+        .unwrap();
+        let asked: Vec<(&str, Option<Target>)> = calls
+            .iter()
+            .map(|c| (c.tool.as_str(), c.target.clone()))
+            .collect();
+        assert_eq!(
+            asked,
+            [
+                (
+                    ACTIVATE_FONTS,
+                    Some(Target::Family {
+                        family: FamilyId(4)
+                    })
+                ),
+                (EXPORT_WEB, None)
+            ]
+        );
+        let specimen = tool_calls(BUILD_SPECIMEN, &json!({ "family_id": 4, "out_dir": "/s" }));
+        assert_eq!(specimen.unwrap().len(), 1);
+        let bad = tool_calls(PREPARE_FOR_WEB, &json!({ "out_dir": "/web" }));
+        assert_eq!(bad.unwrap_err().code, ErrorCode::InvalidRequest);
+        for (_, needs) in WORKFLOW_GRANTS {
+            assert!(needs.iter().all(|n| MUTATING.contains(n)));
+        }
+    }
+
+    #[test]
+    fn subsets_take_presets_or_text_not_both() {
+        assert!(subset(vec!["latin".into()], Some("x".into())).is_err());
+        assert_eq!(subset(Vec::new(), None).unwrap(), None);
+    }
+
+    #[test]
     fn the_gate_is_asked_about_the_faces_the_call_names() {
-        let call = tool_call(DEACTIVATE_FONTS, &json!({ "family_id": 7 })).unwrap();
+        let call = tool_calls(DEACTIVATE_FONTS, &json!({ "family_id": 7 }))
+            .unwrap()
+            .remove(0);
         assert_eq!(call.tool, DEACTIVATE_FONTS);
         assert_eq!(
             call.target,
@@ -817,16 +1055,18 @@ mod tests {
                 family: FamilyId(7)
             })
         );
-        let all = tool_call(DEACTIVATE_FONTS, &json!({})).unwrap();
+        let all = tool_calls(DEACTIVATE_FONTS, &json!({})).unwrap().remove(0);
         assert_eq!(all.target, None);
-        let tag = tool_call(TAG_FONTS, &json!({ "face_ids": [1], "tags": ["x"] })).unwrap();
+        let tag = tool_calls(TAG_FONTS, &json!({ "face_ids": [1], "tags": ["x"] }))
+            .unwrap()
+            .remove(0);
         assert_eq!(tag.target, None);
-        let bad = tool_call(DEACTIVATE_FONTS, &json!({ "face_ids": [1], "set_id": 2 }));
+        let bad = tool_calls(DEACTIVATE_FONTS, &json!({ "face_ids": [1], "set_id": 2 }));
         assert_eq!(bad.unwrap_err().code, ErrorCode::InvalidRequest);
     }
 
     #[test]
-    fn there_are_fourteen_tools_in_order_with_object_schemas() {
+    fn there_are_seventeen_tools_in_order_with_object_schemas() {
         let tools = list();
         let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
         assert_eq!(names, NAMES);
@@ -838,12 +1078,7 @@ mod tests {
                 t.name
             );
             let read_only = t.annotations.as_ref().unwrap().read_only_hint.unwrap();
-            assert_eq!(
-                read_only,
-                !MUTATING.contains(&t.name.as_ref()),
-                "{}",
-                t.name
-            );
+            assert_eq!(read_only, grants(t.name.as_ref()).is_empty(), "{}", t.name);
         }
     }
 

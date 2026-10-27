@@ -31,9 +31,9 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fm_api::activation::{
-    ActivateRequest, ActivationOutcome, ActivationService, ActiveFace, Clash, Conflict,
-    DeactivateRequest, DocumentClosedRequest, DocumentClosedResponse, FontsNeededRequest,
-    FontsNeededResponse, Target,
+    ActivateRequest, ActivationMode, ActivationOutcome, ActivationService, ActiveFace, Clash,
+    Conflict, ConflictPolicy, DeactivateRequest, DocumentClosedRequest, DocumentClosedResponse,
+    FontsNeededRequest, FontsNeededResponse, OutcomeStatus, Target,
 };
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
@@ -41,7 +41,7 @@ use fm_api::catalog::{
     DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
     SetCatalogEnabledRequest,
 };
-use fm_api::common::Paged;
+use fm_api::common::{Health, Page, Paged};
 use fm_api::comparison::{
     Comparison, ComparisonEntry, ComparisonRef, ComparisonService, RenameComparisonRequest,
     SaveComparisonRequest,
@@ -49,7 +49,7 @@ use fm_api::comparison::{
 use fm_api::export::{
     CollectionSpecimenRequest, ExportService, ExportWebRequest, ExportWebResponse,
     FrameworkSnippet, FrameworkSnippetRequest, GlyphSvgRequest, LicenseInventory,
-    LicenseInventoryRequest, SpecimenFormat, SpecimenRequest, SpecimenResponse,
+    LicenseInventoryRequest, SpecimenFormat, SpecimenRequest, SpecimenResponse, WebFormat,
 };
 use fm_api::layout::{
     DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
@@ -76,15 +76,17 @@ use fm_api::preview::{
     PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
+    CoverageReport, CoverageRequest, FaceCoverage, Filters, LanguagePreset, PairingRequest,
     PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest,
+    Supports,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
     McpUpdate, Settings, SettingsService, SettingsUpdate,
 };
 use fm_api::workflows::{
-    BriefRequest, PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
+    BriefRequest, Candidate, PrepareForWebRequest, PrepareForWebResponse, Shortlist,
+    WorkflowService,
 };
 use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
@@ -97,13 +99,13 @@ use crate::catalog::Catalogs;
 use crate::endpoint::EndpointKeys;
 use crate::error::{FmError, FmResult};
 use crate::framework_snippet::{self, SnippetFace};
-use crate::index::{DeclaredLicense, Index};
+use crate::index::{DeclaredLicense, Index, WebExportFace};
 use crate::layout::store::LayoutStore;
 use crate::preview::cache::{self, CacheKey, PreviewCache};
 use crate::resolve::DuplicateResolver;
 use crate::scanner::{FileHash, FileIndex, Rescan, ScanJob};
 use crate::settings::SettingsStore;
-use crate::{css, glyph_svg, glyphs, layout, pangrams, preview, specimen, subset, web_font};
+use crate::{brief, css, glyph_svg, glyphs, layout, pangrams, preview, specimen, subset, web_font};
 
 /// Every subscriber of the event stream.
 #[derive(Debug, Default)]
@@ -574,6 +576,33 @@ fn set_file_path(path: &str) -> FmResult<&Path> {
             .with_detail(format!("not an absolute path: {}", path.display())));
     }
     Ok(path)
+}
+
+/// The license guard of a web export (E20.6): one blocked face refuses the
+/// whole request before anything is written or activated, and the refusal
+/// names them all.
+fn web_guard(found: &[(FaceId, WebExportFace)]) -> ApiResult<()> {
+    let blocked: Vec<_> = found
+        .iter()
+        .filter_map(|(id, f)| f.blocked.map(|why| (*id, &f.face.label, why)))
+        .collect();
+    if blocked.is_empty() {
+        return Ok(());
+    }
+    let reasons: Vec<_> = blocked
+        .iter()
+        .map(|(_, label, why)| format!("{label}: {}", why.text()))
+        .collect();
+    let ids: Vec<_> = blocked.iter().map(|(id, ..)| id.0.to_string()).collect();
+    Err(FmError::new(
+        ErrorCode::PermissionDenied,
+        format!(
+            "{}. Declare a web license for the family to export it.",
+            reasons.join("; ")
+        ),
+    )
+    .with_detail(format!("blocked faces: {}", ids.join(", ")))
+    .into())
 }
 
 fn not_available(what: &str) -> ApiError {
@@ -1125,28 +1154,7 @@ impl ExportService for CoreApi {
                 .map(|id| Ok((id, index.web_export_face(id)?)))
                 .collect::<FmResult<Vec<_>>>()?
         };
-        // The license guard (E20.6): one blocked face refuses the whole
-        // request before anything is written, and the refusal names them all.
-        let blocked: Vec<_> = found
-            .iter()
-            .filter_map(|(id, f)| f.blocked.map(|why| (*id, &f.face.label, why)))
-            .collect();
-        if !blocked.is_empty() {
-            let reasons: Vec<_> = blocked
-                .iter()
-                .map(|(_, label, why)| format!("{label}: {}", why.text()))
-                .collect();
-            let ids: Vec<_> = blocked.iter().map(|(id, ..)| id.0.to_string()).collect();
-            return Err(FmError::new(
-                ErrorCode::PermissionDenied,
-                format!(
-                    "{}. Declare a web license for the family to export it.",
-                    reasons.join("; ")
-                ),
-            )
-            .with_detail(format!("blocked faces: {}", ids.join(", ")))
-            .into());
-        }
+        web_guard(&found)?;
         let (faces, styles): (Vec<_>, Vec<_>) =
             found.into_iter().map(|(_, f)| (f.face, f.style)).unzip();
         let existing = if req.overwrite {
@@ -1275,12 +1283,174 @@ impl CoreApi {
 }
 
 impl WorkflowService for CoreApi {
-    fn pick_fonts_for_brief(&self, _req: BriefRequest) -> ApiResult<Shortlist> {
-        Err(not_available("Picking fonts for a brief"))
+    /// From the index alone, under one lock: the families whose best face
+    /// covers every language completely (the search's `supports` filter,
+    /// near misses left out), whose first usable face allows the license
+    /// use asked for ([`brief::license_check`]), ranked by the brief words
+    /// ([`brief::rank`]), then by name and id. No network, no clock.
+    fn pick_fonts_for_brief(&self, req: BriefRequest) -> ApiResult<Shortlist> {
+        let limit = req.limit.unwrap_or(brief::DEFAULT_LIMIT);
+        if limit == 0 || limit > brief::MAX_LIMIT {
+            return Err(ApiError::invalid(format!(
+                "Ask for 1 to {} fonts.",
+                brief::MAX_LIMIT
+            )));
+        }
+        let words = brief::words(&req.brief);
+        let coverage = brief::coverage_reason(&req.languages);
+        let index = self.lock();
+        let found = index.search(&SearchRequest {
+            query: String::new(),
+            filters: Filters {
+                supports: (!req.languages.is_empty()).then(|| Supports::Languages {
+                    codes: req.languages.clone(),
+                }),
+                ..Filters::default()
+            },
+            rule: None,
+            page: Page {
+                offset: 0,
+                limit: u32::MAX,
+            },
+        })?;
+        let mut picks = Vec::new();
+        for hit in found.families {
+            if hit.missing.as_ref().is_some_and(|m| !m.chars.is_empty()) {
+                continue;
+            }
+            let mut usable = None;
+            for face in &hit.faces {
+                let detail = index.face_detail(*face)?;
+                if detail.face.health == Health::Ok {
+                    usable = Some(detail);
+                    break;
+                }
+            }
+            let Some(detail) = usable else {
+                continue;
+            };
+            let Some(license) = brief::license_check(&detail.license, req.license) else {
+                continue;
+            };
+            let makers: Vec<&str> = [detail.foundry.as_deref(), detail.designer.as_deref()]
+                .into_iter()
+                .flatten()
+                .collect();
+            let rank = brief::rank(
+                &words,
+                &brief::Facts {
+                    name: &hit.family.name,
+                    classification: hit.family.classification,
+                    tags: &detail.tags,
+                    makers: &makers,
+                },
+            );
+            let mut reasons = vec![coverage.clone(), license];
+            reasons.extend(rank.reasons);
+            picks.push((
+                rank.score,
+                hit.family.name.to_lowercase(),
+                hit.family,
+                reasons,
+            ));
+        }
+        picks.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| a.1.cmp(&b.1))
+                .then(a.2.id.cmp(&b.2.id))
+        });
+        Ok(Shortlist {
+            candidates: picks
+                .into_iter()
+                .take(limit as usize)
+                .map(|(_, _, family, reasons)| Candidate { family, reasons })
+                .collect(),
+        })
     }
 
-    fn prepare_for_web(&self, _req: PrepareForWebRequest) -> ApiResult<PrepareForWebResponse> {
-        Err(not_available("Preparing fonts for the web"))
+    /// The family's usable faces (a broken one is left out) are the ones
+    /// prepared. The license guard of [`web_guard`] runs on all of them
+    /// first: a refusal activates and writes nothing. Then the faces not
+    /// active yet are activated for the session (an active face keeps its
+    /// mode and is reported `Unchanged`) and the family is exported as WOFF2
+    /// with `fonts.css` through [`ExportService::export_web`]. When the
+    /// export fails, the faces this call activated are deactivated again.
+    fn prepare_for_web(&self, req: PrepareForWebRequest) -> ApiResult<PrepareForWebResponse> {
+        if req.out_dir.trim().is_empty() {
+            return Err(ApiError::invalid("Choose an output folder."));
+        }
+        req.subset.as_ref().map(subset::code_points).transpose()?;
+        let faces = {
+            let index = self.lock();
+            let faces: Vec<_> = index
+                .family(req.family)?
+                .faces
+                .into_iter()
+                .filter(|f| f.health == Health::Ok)
+                .collect();
+            let found = faces
+                .iter()
+                .map(|f| Ok((f.id, index.web_export_face(f.id)?)))
+                .collect::<FmResult<Vec<_>>>()?;
+            web_guard(&found)?;
+            faces
+        };
+        if faces.is_empty() {
+            return Err(ApiError::invalid("The family has no fonts to export."));
+        }
+        let inactive: Vec<FaceId> = faces
+            .iter()
+            .filter(|f| f.active.is_none())
+            .map(|f| f.id)
+            .collect();
+        let mut done = if inactive.is_empty() {
+            Vec::new()
+        } else {
+            self.activate(ActivateRequest {
+                target: Target::Faces {
+                    faces: inactive.clone(),
+                },
+                mode: ActivationMode::Session,
+                on_conflict: ConflictPolicy::KeepExisting,
+            })?
+        };
+        let export = self.export_web(ExportWebRequest {
+            faces: faces.iter().map(|f| f.id).collect(),
+            formats: vec![WebFormat::Woff2],
+            subset: req.subset,
+            out_dir: req.out_dir,
+            css: true,
+            overwrite: false,
+        });
+        let export = match export {
+            Ok(export) => export,
+            Err(e) => {
+                let ours: Vec<FaceId> = done
+                    .iter()
+                    .filter(|o| o.outcome == OutcomeStatus::Done)
+                    .map(|o| o.face)
+                    .collect();
+                if !ours.is_empty() {
+                    let _ = self.deactivate(DeactivateRequest {
+                        target: Some(Target::Faces { faces: ours }),
+                        except: None,
+                    });
+                }
+                return Err(e);
+            }
+        };
+        let mut activated = Vec::with_capacity(faces.len());
+        for f in &faces {
+            if let Some(i) = done.iter().position(|o| o.face == f.id) {
+                activated.push(done.swap_remove(i));
+            } else if !inactive.contains(&f.id) {
+                activated.push(ActivationOutcome {
+                    face: f.id,
+                    outcome: OutcomeStatus::Unchanged,
+                });
+            }
+        }
+        Ok(PrepareForWebResponse { activated, export })
     }
 }
 
