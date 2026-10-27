@@ -1,0 +1,18 @@
+{
+  "id": "a-file-reader-must-detect-truncation-from-the-format-s-own-s",
+  "title": "A file reader must detect truncation from the format's own structure, not only when a marker is found",
+  "category": "correctness",
+  "rule": "When fm-core reads a file format by searching for markers (an XMP packet, a font list, a chunk tag), also check the structure that says how long the file must be: a page count in the header, a directory at the end, an end marker (%%EOF), object headers and trailers. A file cut before the first marker must be an FmError, not an empty result, because an empty list reads as 'this document needs nothing'. Test every format with the same cut points (0, a quarter, a half, three quarters, len-4); a test that exempts one format from them hides exactly this gap.",
+  "rationale": "E32.1 (#193): a .indd cut before its XMP packet returned an empty font list; the reader only failed when it found an unclosed packet, and the truncation test cut .indd only inside the packet.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    193
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-10-27T18:49:23.822Z",
+  "last_seen": "2026-10-27T18:49:23.822Z"
+}
