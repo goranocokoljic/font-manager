@@ -115,3 +115,12 @@ major); a client compares `hello`'s major with its own as
   and the same `$XDG_RUNTIME_DIR` socket on Linux as the real app.
 - Deprecation notes (`Fm-Deprecation` over HTTP) are not carried in the
   envelope; a client reads them from the HTTP endpoint if it cares.
+- The endpoint lives as long as the app, not the window (E29.4): closing
+  the window to the tray leaves it serving, and a start at login
+  (ADR 0011) serves it with the window hidden (`fm_app_lib::launch`). Where
+  closing the window quits (no tray item, or "Keep running in the tray"
+  off), Settings → About → Platform notes says plugins need the window open
+  (`fm_core::lifecycle::platform_notes`). After Quit,
+  `fm_platform::ipc::connect` fails at once with an error that starts
+  "Font Manager is not running" (`ipc::NOT_RUNNING`) and keeps the OS
+  error's kind.

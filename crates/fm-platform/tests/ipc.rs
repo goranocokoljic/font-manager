@@ -108,6 +108,28 @@ fn the_name_is_free_again_after_the_listener_drops() {
     server.join().expect("server");
 }
 
+/// E29.4 criterion 3: a client of an app that quit (or never ran) gets a
+/// plain "not running" error at once, not a wait.
+#[test]
+fn connecting_where_nothing_listens_says_font_manager_is_not_running() {
+    let never = Scratch::new();
+    let quit = Scratch::new();
+    drop(IpcListener::bind(&quit.name).expect("bind"));
+    for name in [&never.name, &quit.name] {
+        let start = std::time::Instant::now();
+        let e = connect(name).expect_err("nothing listens");
+        assert!(
+            start.elapsed() < std::time::Duration::from_secs(3),
+            "{name}: waited {:?}",
+            start.elapsed()
+        );
+        assert!(
+            e.to_string().starts_with(fm_platform::ipc::NOT_RUNNING),
+            "{name}: {e}"
+        );
+    }
+}
+
 #[test]
 fn a_name_of_the_other_os_family_is_an_error() {
     #[cfg(windows)]

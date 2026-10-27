@@ -614,9 +614,12 @@ fn not_available(what: &str) -> ApiError {
 
 impl LibraryService for CoreApi {
     fn app_info(&self) -> ApiResult<AppInfo> {
+        // The defaults (on) when the settings cannot be read, as the close handler does.
+        let keep_in_tray = self.get_settings().map_or(true, |s| s.keep_in_tray);
         let mut platform_notes = crate::lifecycle::platform_notes(
             Os::current(),
             lock(&self.tray).as_ref(),
+            keep_in_tray,
             fm_platform::autostart::sandboxed(),
         );
         platform_notes.extend(crate::update::support(&fm_platform::updater::distribution()).reason);

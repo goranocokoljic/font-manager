@@ -836,6 +836,43 @@ fn app_info_says_when_closing_the_window_quits() {
     assert!(quits(&lib.api.app_info().expect("info").platform_notes));
 }
 
+/// E29.4 criterion 4: Settings → About says plugins need the window open
+/// where closing it quits, the "Keep running in the tray" setting included.
+#[test]
+fn app_info_says_plugins_need_the_window_where_closing_quits() {
+    use crate::lifecycle::PLUGINS_NEED_THE_WINDOW;
+    let lib = Lib::new("api-plugin-notes");
+    let says = |lib: &Lib| {
+        lib.api
+            .app_info()
+            .expect("info")
+            .platform_notes
+            .iter()
+            .any(|n| n == PLUGINS_NEED_THE_WINDOW)
+    };
+    lib.api.set_tray_support(TraySupport::Available);
+    assert!(
+        !says(&lib),
+        "a tray and the default setting keep the app serving"
+    );
+    lib.api
+        .update_settings(SettingsUpdate {
+            keep_in_tray: Some(false),
+            ..SettingsUpdate::default()
+        })
+        .expect("saved");
+    assert!(says(&lib), "the setting is off: closing the window quits");
+    lib.api
+        .update_settings(SettingsUpdate {
+            keep_in_tray: Some(true),
+            ..SettingsUpdate::default()
+        })
+        .expect("saved");
+    lib.api
+        .set_tray_support(TraySupport::Unavailable("no StatusNotifier host".into()));
+    assert!(says(&lib), "no tray item: closing the window quits");
+}
+
 const FLATPAK_CHILD: &str = "FM_FLATPAK_CHILD";
 
 /// Run by [`inside_a_flatpak_start_at_login_is_hidden_and_the_notes_say_why`]

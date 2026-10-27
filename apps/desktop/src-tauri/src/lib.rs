@@ -1318,14 +1318,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
                 }
                 None => TraySupport::Unavailable("no tray item".into()),
             };
-            // The window starts hidden (tauri.conf.json); a start at login
-            // (ADR 0011) leaves it so, every other launch shows it.
-            if lifecycle::launch_window(std::env::args_os().skip(1), &support) == LaunchWindow::Show
-            {
-                tray::show_main(app.handle());
-            }
-            // After the window: the local API never delays it (E25.1).
-            app.state::<AppState>().start_endpoint();
+            launch(app.handle(), &support, std::env::args_os().skip(1));
             let handle = app.handle().clone();
             std::thread::Builder::new()
                 .name("fm-events".into())
@@ -1438,6 +1431,26 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             updater::check_for_update,
             updater::install_update
         ])
+}
+
+/// What the app does once its tray item is made: the window starts hidden
+/// (tauri.conf.json); a start at login (`args` has `--autostart`, ADR 0011)
+/// leaves it so, every other launch shows it. Then the local API and the IPC
+/// endpoint start either way, on threads of their own, so a plugin reaches
+/// an app waiting in the tray (E29.4) and the window never waits for them
+/// (E25.1). Returns what the window does.
+pub fn launch<R, I, S>(app: &AppHandle<R>, support: &TraySupport, args: I) -> LaunchWindow
+where
+    R: Runtime,
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let window = lifecycle::launch_window(args, support);
+    if window == LaunchWindow::Show {
+        tray::show_main(app);
+    }
+    app.state::<AppState>().start_endpoint();
+    window
 }
 
 /// The state the app serves from the app folders `paths` and the index
