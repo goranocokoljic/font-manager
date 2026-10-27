@@ -64,7 +64,7 @@ fn zlib_stored(data: &[u8]) -> Vec<u8> {
     out
 }
 
-fn crc32(data: &[u8]) -> u32 {
+pub(super) fn crc32(data: &[u8]) -> u32 {
     const TABLE: [u32; 256] = {
         let mut table = [0u32; 256];
         let mut n = 0;

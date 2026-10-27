@@ -65,9 +65,9 @@ use crate::preview::{
 };
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
-    FilterCount, FilterCounts, Filters, LanguageCoverage, LanguagePreset, Missing, PairingRequest,
-    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
-    WeightRange, WidthRange,
+    FilterCount, FilterCounts, Filters, ImageMatchRequest, LanguageCoverage, LanguagePreset,
+    Missing, PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SimilarFace,
+    SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
@@ -2336,6 +2336,42 @@ impl SearchService for MockApi {
         out.sort_by(|a, b| b.score.total_cmp(&a.score));
         out.truncate(req.limit as usize);
         Ok(out)
+    }
+
+    /// The visible faces in id order, scores falling from 0.9; the file must
+    /// exist and start with the PNG signature, and only its first 8 bytes
+    /// are read.
+    fn find_by_image(&self, req: ImageMatchRequest) -> ApiResult<Vec<SimilarFace>> {
+        use std::io::Read as _;
+        let unreadable = "This image could not be read.";
+        let mut head = [0u8; 8];
+        std::fs::File::open(&req.path)
+            .and_then(|mut f| f.read_exact(&mut head))
+            .map_err(|e| {
+                let code = if e.kind() == std::io::ErrorKind::NotFound {
+                    ErrorCode::NotFound
+                } else {
+                    ErrorCode::Unsupported
+                };
+                ApiError::new(code, unreadable).with_detail(format!("{}: {e}", req.path))
+            })?;
+        if &head != b"\x89PNG\r\n\x1a\n" {
+            return Err(ApiError::new(ErrorCode::Unsupported, unreadable)
+                .with_detail(format!("{}: not a PNG image", req.path)));
+        }
+        let st = self.state();
+        Ok(st
+            .faces
+            .iter()
+            .filter(|f| st.visible(f))
+            .take(req.limit as usize)
+            .enumerate()
+            .map(|(i, f)| SimilarFace {
+                face: st.summary(f),
+                score: 0.9 - 0.05 * (i as f32).min(10.0),
+                reasons: vec!["similar letter shapes".to_string()],
+            })
+            .collect())
     }
 
     /// fm-core's rules on the sample families, without the superfamily one:

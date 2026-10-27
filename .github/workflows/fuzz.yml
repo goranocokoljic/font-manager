@@ -34,6 +34,8 @@ on:
       - crates/fm-core/src/parser.rs
       - crates/fm-core/src/document_fonts.rs
       - crates/fm-core/src/document_fonts/**
+      - crates/fm-core/src/preview/png_decode.rs
+      - crates/fm-core/src/image_match.rs
       - fixtures/documents/**
       - .gitattributes
 
@@ -100,6 +102,18 @@ jobs:
             -max_total_time="$SECONDS_TO_RUN" -max_len=262144 -rss_limit_mb=4096 -timeout=30
           echo "corpus inputs found this run: $(ls "$scratch" | wc -l)"
 
+      # E33.1: the PNG decoder and glyph isolation of find-by-image, seeded
+      # with small PNGs of every colour type and filter.
+      - name: Fuzz the PNG decoder
+        env:
+          SECONDS_TO_RUN: ${{ github.event_name == 'pull_request' && '60' || inputs.seconds || '1800' }}
+        run: |
+          scratch="$RUNNER_TEMP/corpus-png-decode"
+          mkdir -p "$scratch"
+          cargo +nightly fuzz run png_decode "$scratch" fuzz/seeds/png_decode -- \
+            -max_total_time="$SECONDS_TO_RUN" -max_len=65536 -rss_limit_mb=4096 -timeout=30
+          echo "corpus inputs found this run: $(ls "$scratch" | wc -l)"
+
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -107,5 +121,6 @@ jobs:
           path: |
             crates/fm-core/fuzz/artifacts/parse/
             crates/fm-core/fuzz/artifacts/document_fonts/
+            crates/fm-core/fuzz/artifacts/png_decode/
           if-no-files-found: ignore
           retention-days: 30

@@ -1672,6 +1672,20 @@ export type Health =
 /**  Recognized but not supported for activation (Type 1, bitmap). */
 { kind: "unsupported"; reason: string };
 
+/**
+ *  Faces that look like the text in an image (E33.1): a screenshot of a line
+ *  of text, matched against the glyph fingerprints of the library.
+ */
+export type ImageMatchRequest = {
+	/**
+	 *  The image: a PNG of at most 4096 px a side. It is only read, never
+	 *  written or moved. The sample text "Hamburgefonstiv" matches best.
+	 */
+	path: string,
+	/**  Results to return. */
+	limit: number,
+};
+
 /**  How dropped or added fonts join the library (ADR 0004). */
 export type ImportMode = 
 /**  Index the files where they are (the default). */

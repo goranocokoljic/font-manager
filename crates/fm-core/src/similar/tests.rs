@@ -21,6 +21,7 @@ fn profile(class: Classification, fingerprint: Option<Fingerprint>) -> Profile {
         width: 5,
         x_height_ratio: Some(0.70),
         fingerprint,
+        shapes_only: false,
     }
 }
 
@@ -226,4 +227,25 @@ fn not_a_number_is_not_close() {
     let found = compare(&a, &b);
     assert!(!found.reasons.contains(&SIMILAR_CONTRAST), "{found:?}");
     assert!((0.0..=1.0).contains(&found.score), "{found:?}");
+}
+
+/// E33.1: a shapes-only profile is compared on the drawing and the width;
+/// its other measures count as unknown and name no reason.
+#[test]
+fn a_shapes_only_profile_compares_drawing_and_width_only() {
+    let a = profile(Classification::Sans, Some(print(0.2)));
+    let mut b = a.clone();
+    b.classification = None;
+    let fp = b.fingerprint.as_mut().expect("fingerprint");
+    fp.x_height_ratio = 0.0;
+    fp.contrast = 0.0;
+    fp.stroke_width = 0.0;
+    let measured = compare(&a, &b);
+    b.shapes_only = true;
+    let found = compare(&a, &b);
+    assert_eq!(found.reasons, [SIMILAR_WIDTH, SIMILAR_SHAPES], "{found:?}");
+    assert!(found.score > measured.score, "{found:?} {measured:?}");
+    // Unknown counts as half alike: the same shapes-only pair is below a
+    // pair alike in everything.
+    assert!(found.score < compare(&a, &a).score);
 }

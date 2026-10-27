@@ -69,6 +69,7 @@ service!(SearchService {
     face_coverage(face: FaceId) -> FaceCoverage;
     list_languages() -> Vec<LanguagePreset>;
     find_similar(req: SimilarRequest) -> Vec<SimilarFace>;
+    find_by_image(req: ImageMatchRequest) -> Vec<SimilarFace>;
     suggest_pairings(req: PairingRequest) -> Vec<PairingSuggestion>;
 });
 

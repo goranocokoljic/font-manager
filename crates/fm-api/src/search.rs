@@ -350,6 +350,18 @@ pub struct SimilarFace {
     pub reasons: Vec<String>,
 }
 
+/// Faces that look like the text in an image (E33.1): a screenshot of a line
+/// of text, matched against the glyph fingerprints of the library.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageMatchRequest {
+    /// The image: a PNG of at most 4096 px a side. It is only read, never
+    /// written or moved. The sample text "Hamburgefonstiv" matches best.
+    pub path: String,
+    /// Results to return.
+    pub limit: u32,
+}
+
 /// Faces that pair well with this one (E23.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -385,6 +397,11 @@ pub trait SearchService {
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>>;
     /// Faces ranked by visual similarity.
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>>;
+    /// Faces ranked by how close they look to the text in an image, closest
+    /// first, at most `limit`; only faces with a glyph fingerprint are
+    /// candidates. An image that is not a readable PNG, or shows no text, is
+    /// an error.
+    fn find_by_image(&self, req: ImageMatchRequest) -> ApiResult<Vec<SimilarFace>>;
     /// Faces of other families that pair with this one by rule: contrasting
     /// classes, a matching x-height, the same designer or superfamily. Best
     /// first; a face no rule holds for is not suggested.

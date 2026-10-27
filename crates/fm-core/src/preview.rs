@@ -14,6 +14,7 @@
 
 pub mod cache;
 mod png;
+pub mod png_decode;
 
 use std::borrow::Cow;
 use std::fs;

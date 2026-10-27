@@ -1,6 +1,6 @@
 # cargo-fuzz targets for the parser path (ADR 0002). Not a workspace member:
 # it builds on nightly with `cargo +nightly fuzz`, see fuzz_targets/parse.rs and
-# fuzz_targets/document_fonts.rs (E32.1).
+# fuzz_targets/document_fonts.rs (E32.1) and fuzz_targets/png_decode.rs (E33.1).
 [package]
 name = "fm-core-fuzz"
 version = "0.0.0"
@@ -26,6 +26,13 @@ bench = false
 [[bin]]
 name = "document_fonts"
 path = "fuzz_targets/document_fonts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "png_decode"
+path = "fuzz_targets/png_decode.rs"
 test = false
 doc = false
 bench = false

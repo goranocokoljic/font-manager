@@ -20,6 +20,8 @@
 //! on everything. Each component close enough names itself in the reasons
 //! ("similar width"). When either face has no fingerprint the pair is
 //! compared by metrics and classification only, and the reasons say so.
+//! A profile with [`Profile::shapes_only`] (an image of text, E33.1) has
+//! its x-height, contrast and stroke weight unknown.
 //!
 //! Everything is plain `f32` arithmetic over stored values: the same index
 //! ranks the same way on every OS.
@@ -85,6 +87,10 @@ pub struct Profile {
     pub x_height_ratio: Option<f32>,
     /// The glyph fingerprint; `None` when the face has none.
     pub fingerprint: Option<Fingerprint>,
+    /// Only the fingerprint's drawing and width are known (an image of text
+    /// that is not the sample, E33.1): its x-height, contrast and stroke
+    /// count as unknown.
+    pub shapes_only: bool,
 }
 
 impl Profile {
@@ -106,6 +112,7 @@ impl Profile {
             width,
             x_height_ratio,
             fingerprint,
+            shapes_only: false,
         }
     }
 }
@@ -127,12 +134,13 @@ pub fn compare(a: &Profile, b: &Profile) -> Similarity {
         .zip(b.classification)
         .map(|(x, y)| if x == y { 1.0 } else { 0.0 });
     let both = a.fingerprint.as_ref().zip(b.fingerprint.as_ref());
+    let measured = !(a.shapes_only || b.shapes_only);
     let (x_height, width, contrast, stroke, shape) = match both {
         Some((x, y)) => (
-            Some(closeness(x.x_height_ratio, y.x_height_ratio, TOL_X_HEIGHT)),
+            measured.then(|| closeness(x.x_height_ratio, y.x_height_ratio, TOL_X_HEIGHT)),
             relative(x.advance_ratio, y.advance_ratio, TOL_WIDTH),
-            Some(closeness(x.contrast, y.contrast, TOL_CONTRAST)),
-            relative(x.stroke_width, y.stroke_width, TOL_STROKE),
+            measured.then(|| closeness(x.contrast, y.contrast, TOL_CONTRAST)),
+            measured.then(|| relative(x.stroke_width, y.stroke_width, TOL_STROKE)),
             Some(shapes(&x.vector, &y.vector)),
         ),
         None => (
@@ -141,7 +149,11 @@ pub fn compare(a: &Profile, b: &Profile) -> Similarity {
                 .map(|(x, y)| closeness(x, y, TOL_X_HEIGHT)),
             closeness(f32::from(a.width), f32::from(b.width), TOL_WIDTH_CLASS),
             None,
-            closeness(f32::from(a.weight), f32::from(b.weight), TOL_WEIGHT_CLASS),
+            Some(closeness(
+                f32::from(a.weight),
+                f32::from(b.weight),
+                TOL_WEIGHT_CLASS,
+            )),
             None,
         ),
     };
@@ -150,7 +162,7 @@ pub fn compare(a: &Profile, b: &Profile) -> Similarity {
         (W_X_HEIGHT, x_height, MATCHING_X_HEIGHT),
         (W_WIDTH, Some(width), SIMILAR_WIDTH),
         (W_CONTRAST, contrast, SIMILAR_CONTRAST),
-        (W_STROKE, Some(stroke), SIMILAR_STROKE_WEIGHT),
+        (W_STROKE, stroke, SIMILAR_STROKE_WEIGHT),
         (W_SHAPES, shape, SIMILAR_SHAPES),
     ];
     let total: f32 = parts.iter().map(|(w, _, _)| w).sum();
