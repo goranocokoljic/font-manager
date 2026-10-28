@@ -1,46 +1,9 @@
+import { ES5_PLUS, codeOnly } from '@fm/plugin-shared/testing';
 import { describe, expect, it } from 'vitest';
 import hostJsx from '../jsx/host.jsx?raw';
 
-// Illustrator runs `jsx/host.jsx` in ExtendScript, which is ES3: syntax V8
-// accepts (and so the other tests, which run the file in V8) does not load
-// there, and then no `fm*` function exists. These are the ES5+ forms a
-// formatter or a hand edit can bring in.
-
-/** The code with comments and string literals blanked out. */
-function codeOnly(source: string): string {
-  let out = '';
-  let i = 0;
-  while (i < source.length) {
-    const c = source[i];
-    const next = source[i + 1];
-    if (c === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') i++;
-    } else if (c === '/' && next === '*') {
-      i = source.indexOf('*/', i + 2) + 2;
-    } else if (c === '"' || c === "'") {
-      i++;
-      while (i < source.length && source[i] !== c) i += source[i] === '\\' ? 2 : 1;
-      i++;
-      out += '""';
-    } else {
-      out += c;
-      i++;
-    }
-  }
-  return out;
-}
-
-const ES5_PLUS: [string, RegExp][] = [
-  ['a trailing comma in a call, array or object', /,\s*[)\]}]/],
-  ['let or const', /\b(let|const)\s/],
-  ['an arrow function', /=>/],
-  ['a template literal', /`/],
-  ['a class', /\bclass\s/],
-  ['the JSON object', /\bJSON\./],
-  ['spread or rest', /\.\.\./],
-  ['ES5 array methods', /\.(forEach|map|filter|reduce|indexOf|some|every)\(/],
-  ['String.prototype.trim', /\.trim\(/],
-];
+// Illustrator runs `jsx/host.jsx` in ExtendScript, which is ES3 (`codeOnly`
+// and `ES5_PLUS` in `@fm/plugin-shared/testing` say what that rules out).
 
 describe('jsx/host.jsx', () => {
   const code = codeOnly(hostJsx);

@@ -25,6 +25,12 @@ app finds and activates them (E29.2).
   `plugins/shared/src/panel-strings.ts`.
 - **App not running.** When the app does not answer or refuses the token,
   the plugin shows "Font Manager is not running" once and does nothing else.
+- **Font Switch (E34).** A font dragged from Font Manager onto the panel is
+  applied to the selected text (InDesign) or the selected text layers
+  (Photoshop). With no text selected it says "Select some text first"; for a
+  font the app does not have, "<name> is not active". The adapters and the
+  drop handler are imported from `plugins/font-switch/` (`@fm/font-switch`),
+  not copied.
 
 It reaches the app through the local API (ADR 0015): `endpoint.json` in the
 app's data folder gives the address (always `http://127.0.0.1:<port>`) and

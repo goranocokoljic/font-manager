@@ -19,6 +19,13 @@ same `@fm/plugin-shared` code.
 - **App not running.** It says "Font Manager is not running" once and does
   nothing else, until the app answers again. Sketch runs every action in a
   fresh script, so that "once" is kept in a Sketch session variable.
+- **Font Switch (E34).** Plugins › Font Manager › Apply Copied Font applies
+  the font on the clipboard (what the app's "Copy for Font Switch" copies, or
+  a PostScript name) to the selected text layers. Sketch gives a plugin no
+  panel to drop a font on, so the clipboard is the way in. With no text layer
+  selected it says "Select some text first"; for a font the Mac does not
+  have, "<name> is not active". The Sketch adapter is imported from
+  `plugins/font-switch/` (`@fm/font-switch`), not copied.
 
 Sketch gives plugins no pipe or socket, so the plugin uses the local API
 (ADR 0015): it reads `endpoint.json` from the app's data folder on every

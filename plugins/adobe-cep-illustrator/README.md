@@ -26,6 +26,12 @@ unsaved, so Save As is a close and an open.
 It is a hidden extension (no panel): it starts with Illustrator, and its
 message and question are ExtendScript dialogs.
 
+**Font Switch (E34).** With no panel there is nothing to drop a font on, so
+Illustrator gets no Font Switch from this extension yet. Its adapter is
+`illustratorAdapter` in `plugins/font-switch/` (`@fm/font-switch`), which a
+panel imports (never copies) with this extension's `evalScript`; the
+ExtendScript call helpers both use are `@fm/plugin-shared`'s.
+
 ## Why CEP, not UXP
 
 Illustrator has no UXP plugin API that third parties can ship: there is no

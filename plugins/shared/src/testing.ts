@@ -3,6 +3,8 @@
 
 import type { ClientHost, HttpAnswer } from './client';
 
+export { ES5_PLUS, codeOnly } from './es3';
+
 export const FAKE_URL = 'http://127.0.0.1:49152';
 export const FAKE_TOKEN = 'a'.repeat(64);
 
