@@ -58,9 +58,13 @@ Through the app's IPC endpoint (ADR 0016) when the app listens on it: the
 named pipe `\\.\pipe\org.fontmanager.app-<user>` on Windows, the `fm.sock`
 socket on macOS. No token is needed. The manifest turns Node on
 (`--enable-nodejs`, `--mixed-context`) for this. When the pipe or socket
-cannot be opened, it uses the local API (ADR 0015) through `endpoint.json`.
+cannot be opened, it tries the local API (ADR 0015) through `endpoint.json`;
+that fails by design, because a `file://` page's `fetch` sends an `Origin`
+header and the endpoint refuses those (403). So the pipe or socket is the
+transport; without it the extension says "Font Manager is not running".
 The client and the document logic are in `plugins/shared/`; the types are
-the generated `apps/desktop/src/api/types.ts`.
+the generated `apps/desktop/src/api/types.ts`. ADR 0018 records what the
+real apps do.
 
 ## Build and load
 
@@ -76,8 +80,9 @@ CEP extensions folder:
 
 An unsigned extension loads only with debug mode on (`PlayerDebugMode` set to
 `1` for CSXS 11: `HKEY_CURRENT_USER\Software\Adobe\CSXS.11` on Windows,
-`defaults write com.adobe.CSXS.11 PlayerDebugMode 1` on macOS). Restart
-Illustrator.
+`defaults write com.adobe.CSXS.11 PlayerDebugMode 1` on macOS; Illustrator
+2025 also reads `CSXS.12`, so set both). Restart Illustrator. Verified in
+Illustrator 2025 (29.7.1) on Windows (E30.0).
 
 ## Tests
 

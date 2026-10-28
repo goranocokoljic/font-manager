@@ -85,6 +85,12 @@ export function validate(schema: Schema, value: unknown, at = '$'): string[] {
           errors.push(`${at}: more than ${rule} items`);
         }
         break;
+      case 'uniqueItems':
+        if (rule === true && Array.isArray(value)) {
+          const seen = new Set(value.map((v) => JSON.stringify(v)));
+          if (seen.size !== value.length) errors.push(`${at}: an item repeats`);
+        }
+        break;
       case 'contains':
         if (Array.isArray(value) && !value.some((v) => validate(rule as Schema, v).length === 0)) {
           errors.push(`${at}: no item fits ${JSON.stringify(rule)}`);

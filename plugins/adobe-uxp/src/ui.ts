@@ -13,14 +13,18 @@ function dialog(doc: Document, message: string, buttons: [string, string][]): Ux
   const p = doc.createElement('p');
   p.textContent = message;
   form.append(p);
+  // The buttons in a row of their own, so `index.html` can lay them out.
+  const row = doc.createElement('div');
+  row.className = 'fm-dialog-buttons';
   for (const [value, label] of buttons) {
     const b = doc.createElement('button');
     b.type = 'button';
     b.value = value;
     b.textContent = label;
     b.addEventListener('click', () => d.close(value));
-    form.append(b);
+    row.append(b);
   }
+  form.append(row);
   d.append(form);
   doc.body.append(d);
   d.addEventListener('close', () => d.remove());

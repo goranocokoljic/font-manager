@@ -6,22 +6,55 @@
   "version": "0.1.0",
   "main": "index.html",
   "host": [
-    { "app": "ID", "minVersion": "18.5.0" },
-    { "app": "PS", "minVersion": "24.1.0" }
+    {
+      "app": "ID",
+      "minVersion": "18.5.0"
+    },
+    {
+      "app": "PS",
+      "minVersion": "24.1.0"
+    }
   ],
   "entrypoints": [
     {
       "type": "panel",
       "id": "fmPanel",
-      "label": { "default": "Font Manager" },
-      "minimumSize": { "width": 230, "height": 120 },
-      "maximumSize": { "width": 2000, "height": 2000 },
-      "preferredDockedSize": { "width": 230, "height": 120 },
-      "preferredFloatingSize": { "width": 300, "height": 160 }
+      "label": {
+        "default": "Font Manager"
+      },
+      "minimumSize": {
+        "width": 230,
+        "height": 120
+      },
+      "maximumSize": {
+        "width": 2000,
+        "height": 2000
+      },
+      "preferredDockedSize": {
+        "width": 230,
+        "height": 120
+      },
+      "preferredFloatingSize": {
+        "width": 300,
+        "height": 160
+      }
     }
   ],
   "requiredPermissions": {
-    "network": { "domains": ["http://127.0.0.1"] },
+    "network": {
+      "domains": [
+        "http://127.0.0.1:27501",
+        "http://127.0.0.1:27502",
+        "http://127.0.0.1:27503",
+        "http://127.0.0.1:27504",
+        "http://127.0.0.1:27505",
+        "http://127.0.0.1:27506",
+        "http://127.0.0.1:27507",
+        "http://127.0.0.1:27508",
+        "http://127.0.0.1:27509",
+        "http://127.0.0.1:27510"
+      ]
+    },
     "localFileSystem": "fullAccess"
   }
 }

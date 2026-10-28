@@ -1,6 +1,6 @@
 # 0015 — The local API endpoint
 
-Status: Accepted (2026-10-24, E25.1)
+Status: Accepted (2026-10-24, E25.1); amended 2026-10-29 (E30.0: the port)
 
 ## Context
 
@@ -142,8 +142,23 @@ current token on every request, the old one fails from the next request on.
 `{ "url": "http://127.0.0.1:<port>", "token", "pid", "apiVersion" }`
 (`fm_core::endpoint::Discovery`). It is written after the socket is bound,
 rewritten on Regenerate, and removed by the quit path, only when its `pid` is
-this process. The port is the one the OS picked (bind to port 0), so it
-changes from run to run; programs read the file.
+this process. Programs read the file for the port: it is the first free one
+of `fm_endpoint::PREFERRED_PORTS` (27501 to 27510, tried in order), else one
+the OS picked (bind to port 0), so it can change from run to run.
+
+**Why a port list** (E30.0 amendment). The first version let the OS pick
+every time. A UXP plugin (ADR 0018) may call only the addresses its manifest
+names, and Photoshop matches them with the port, so a plugin can never name
+an address it does not know; the only other way is the manifest's "all"
+network permission, which says "talks to the whole internet" and contradicts
+rule 7 in spirit. Ten fixed ports keep the manifest exact: a second app of
+another user on the machine, or a socket a crashed run left behind, takes the
+next one. They sit below every OS's ephemeral range (Linux starts at 32768),
+so an outgoing connection rarely holds one. The fallback to an OS port stays,
+so the app always starts; a plugin then shows "Font Manager is not running"
+and the CLI and MCP shim, which read the file, still work. Only a bind
+refused for the port itself (in use, no permission) moves to the next port;
+any other error stops the endpoint, as before.
 
 **Private files, per OS** (`fm_platform::fs::write_private_file`, used for
 both files). The bytes go to a temporary sibling that is private before it
@@ -257,6 +272,9 @@ token needs no new snippet.
 - The CLI's endpoint mode (when the app is open), the MCP shim and the
   plugins read `endpoint.json` and send the token; none needs its own
   discovery.
+- The UXP manifests name the ten ports (`plugins/adobe-uxp/manifest.json`,
+  checked against `PREFERRED_PORTS` by its test). Changing the list is a
+  plugin release, not only an app release.
 - A new service method needs a line in `routes.rs`, or CI fails.
 - An MCP client is a program of the same user with the token, so it is
   inside the same trust boundary; the switch only decides whether `/mcp`

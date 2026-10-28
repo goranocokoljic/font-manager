@@ -34,19 +34,46 @@ app finds and activates them (E29.2).
 
 It reaches the app through the local API (ADR 0015): `endpoint.json` in the
 app's data folder gives the address (always `http://127.0.0.1:<port>`) and
-the token. The manifest allows the network to `http://127.0.0.1` only, and
-full file access to read that file. The client and the document logic are in
-`plugins/shared/`; the types are the generated `apps/desktop/src/api/types.ts`.
+the token. UXP lets a plugin call only the addresses its manifest names, port
+included, so the manifest allows exactly the ten ports the app tries first
+(27501 to 27510, `fm_endpoint::PREFERRED_PORTS`; the test keeps them equal)
+and full file access to read that file. When the app had to take another
+port, the plugin says "Font Manager is not running". The client and the
+document logic are in `plugins/shared/`; the types are the generated
+`apps/desktop/src/api/types.ts`. ADR 0018 records what the real apps do.
 
 ## Build and load
 
 ```
-pnpm --filter @fm/adobe-uxp build     # dist/: manifest.json, index.html, index.js
+pnpm --filter @fm/adobe-uxp build     # dist/photoshop/ and dist/indesign/: manifest.json, index.html, index.js
 ```
 
-Load `plugins/adobe-uxp/dist/manifest.json` with the Adobe UXP Developer
-Tool (Add Plugin, then Load) into InDesign or Photoshop. Font Manager must be
-running with its local API on (Settings → Local API).
+One folder per host: Photoshop refuses a third-party manifest with more than
+one host (`manifests.ts` splits the source `manifest.json`). The ids are
+`org.fontmanager.photoshop` and `org.fontmanager.indesign`.
+
+The Adobe UXP Developer Tool and the `uxp-devtools-cli` packages do not load
+a plugin into Photoshop 2025 ("Plugin rejected … due to invalid object"), and
+a `.ccx` needs the Creative Cloud desktop app. Load it from the folder the
+apps scan instead:
+
+1. Turn developer mode on, once, as an administrator:
+   `C:\Program Files\Common Files\Adobe\UXP\Developer\settings.json`
+   (macOS: `/Library/Application Support/Adobe/UXP/Developer/settings.json`)
+   with the content `{"developer": true}`.
+2. Copy `dist/photoshop/` to
+   `%APPDATA%\Adobe\UXP\Plugins\External\org.fontmanager.photoshop_0.1.0\`
+   (macOS: `~/Library/Application Support/Adobe/UXP/Plugins/External/`);
+   for InDesign, `dist/indesign/` to `org.fontmanager.indesign_0.1.0`. The
+   folder name is `<id>_<version>`.
+3. Start the app. The plugin is under Plugins → Font Manager. Font Manager
+   must be running with its local API on (Settings → Local API).
+
+When the panel does not appear, the manifest error is in
+`%APPDATA%\Adobe\Adobe Photoshop 2025\Logs\UXPLogs_*.log`.
+
+Verified in Photoshop 2025 (26.4.1) on Windows (E30.0). InDesign is checked
+by the tests only until someone runs `dist/indesign/` the same way (#358).
 
 ## Tests
 

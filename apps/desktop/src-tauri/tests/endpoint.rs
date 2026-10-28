@@ -91,9 +91,13 @@ fn the_app_publishes_the_endpoint_and_removes_the_file_on_quit() -> TestResult {
     state.run_quit_path();
     assert!(!file.exists(), "endpoint.json is left after quit");
     assert_eq!(state.endpoint_addr(), None);
-    assert!(
-        TcpStream::connect(addr).is_err(),
-        "{addr} still accepts after quit"
+    // The app tries the same ten ports first (ADR 0015), so a parallel
+    // test's endpoint may take the freed port at once: the proof is that
+    // nobody answers this app's token any more (a stranger refuses it, 401).
+    assert_ne!(
+        post(&discovery.url, &discovery.token, "list_sources").ok(),
+        Some(200),
+        "{addr} still serves this app after quit"
     );
     assert_eq!(core.endpoint_info()?.url, None);
     // The token is kept for the next start.

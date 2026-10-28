@@ -3,6 +3,82 @@
   <head>
     <meta charset="utf-8" />
     <title>Font Manager</title>
+    <style>
+      /* UXP gives a dialog no colors of its own: without these the text is
+         dark on a dark dialog in Photoshop's default theme (E30.0 spike).
+         The colors follow Adobe's dark UI, where the plugin is read most. */
+      body {
+        margin: 0;
+        padding: 8px;
+        font-size: 12px;
+        color: #e6e6e6;
+      }
+      p {
+        margin: 0 0 8px;
+      }
+      dialog {
+        min-width: 280px;
+        padding: 16px;
+        border: 1px solid #5a5a5a;
+        border-radius: 4px;
+        background: #323232;
+        color: #e6e6e6;
+      }
+      dialog form {
+        display: flex;
+        flex-direction: column;
+      }
+      dialog p {
+        margin: 0 0 16px;
+        line-height: 1.4;
+      }
+      .fm-dialog-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      button {
+        min-height: 24px;
+        padding: 2px 12px;
+        border: 1px solid #6e6e6e;
+        border-radius: 12px;
+        background: #4b4b4b;
+        color: #e6e6e6;
+      }
+      button:hover {
+        background: #5a5a5a;
+      }
+      .fm-missing-title {
+        margin: 0 0 4px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      .fm-missing-list {
+        margin: 8px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .fm-missing-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+        border-top: 1px solid #4b4b4b;
+      }
+      .fm-missing-name {
+        flex: 1;
+      }
+      .fm-missing-state {
+        color: #b3b3b3;
+      }
+      #font-switch {
+        margin-top: 12px;
+        padding: 8px;
+        border: 1px dashed #6e6e6e;
+        border-radius: 4px;
+        color: #b3b3b3;
+      }
+    </style>
   </head>
   <body>
     <p id="status">Font Manager activates the fonts of the documents you open.</p>

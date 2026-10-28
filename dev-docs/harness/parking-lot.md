@@ -295,3 +295,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E34.2 #199] plugins/adobe-uxp/src/hosts/collection.ts:7 — `text` and `name` in plugins/adobe-cep-illustrator/src/illustrator.ts:33 are two copies of the same string-name helper; one shared helper in `@fm/plugin-shared` would keep them alike.
 - [E36.5 #207] data/charsets/README.md:54 — the "new file → add to FILES" step also misses the `allowed()` script table in crates/fm-core/src/charsets.rs:353, so a new script fails `characters_belong_to_the_script`.
 - [E36.5 #207] scripts/community/check.mjs:64 — `formLabels` reads only indented `- item` lists; an unindented `labels:\n- type:story` passes the check.
+
+## 2026-10-29
+
+- [E30.0 #186] plugins/adobe-uxp/index.html:6 — the UXP panel's look (spacing, Spectrum colors and controls, light theme) is a design task, not a spike task; the stylesheet here only makes the dialog readable and the rows line up.
+- [E30.0 #186] plugins/adobe-cep-illustrator/src/main.ts:57 — the CEP extension's HTTP fallback can never work (a `file://` page's `fetch` sends `Origin`, which ADR 0015 refuses); keep it only while it costs nothing, or drop it with the Illustrator UXP switch.

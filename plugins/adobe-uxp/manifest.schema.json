@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "manifest.schema.json",
   "title": "Font Manager UXP plugin manifest",
-  "description": "The rules the plugin's manifest.json keeps: manifest v5, InDesign and Photoshop with minimum versions, and the network only to 127.0.0.1.",
+  "description": "The rules the plugin's source manifest.json keeps: manifest v5, InDesign and Photoshop with minimum versions (the build emits one manifest per host, host as an object), and the network only to 127.0.0.1 on the ten ports the app tries first (fm_endpoint::PREFERRED_PORTS, ADR 0015).",
   "type": "object",
   "required": [
     "manifestVersion",
@@ -15,12 +15,28 @@
     "requiredPermissions"
   ],
   "properties": {
-    "$schema": { "type": "string" },
-    "manifestVersion": { "const": 5 },
-    "id": { "type": "string", "pattern": "^[A-Za-z0-9.]+$" },
-    "name": { "type": "string", "minLength": 1 },
-    "version": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" },
-    "main": { "type": "string", "minLength": 1 },
+    "$schema": {
+      "type": "string"
+    },
+    "manifestVersion": {
+      "const": 5
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9.]+$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+    },
+    "main": {
+      "type": "string",
+      "minLength": 1
+    },
     "host": {
       "type": "array",
       "minItems": 2,
@@ -30,14 +46,22 @@
           "contains": {
             "type": "object",
             "required": ["app"],
-            "properties": { "app": { "const": "ID" } }
+            "properties": {
+              "app": {
+                "const": "ID"
+              }
+            }
           }
         },
         {
           "contains": {
             "type": "object",
             "required": ["app"],
-            "properties": { "app": { "const": "PS" } }
+            "properties": {
+              "app": {
+                "const": "PS"
+              }
+            }
           }
         }
       ],
@@ -46,8 +70,13 @@
         "required": ["app", "minVersion"],
         "additionalProperties": false,
         "properties": {
-          "app": { "enum": ["ID", "PS"] },
-          "minVersion": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" }
+          "app": {
+            "enum": ["ID", "PS"]
+          },
+          "minVersion": {
+            "type": "string",
+            "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+          }
         }
       }
     },
@@ -58,12 +87,22 @@
         "type": "object",
         "required": ["type", "id", "label"],
         "properties": {
-          "type": { "enum": ["panel", "command"] },
-          "id": { "type": "string", "minLength": 1 },
+          "type": {
+            "enum": ["panel", "command"]
+          },
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
           "label": {
             "type": "object",
             "required": ["default"],
-            "properties": { "default": { "type": "string", "minLength": 1 } }
+            "properties": {
+              "default": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         }
       }
@@ -80,13 +119,29 @@
           "properties": {
             "domains": {
               "type": "array",
-              "minItems": 1,
-              "maxItems": 1,
-              "items": { "const": "http://127.0.0.1" }
+              "minItems": 10,
+              "maxItems": 10,
+              "uniqueItems": true,
+              "items": {
+                "enum": [
+                  "http://127.0.0.1:27501",
+                  "http://127.0.0.1:27502",
+                  "http://127.0.0.1:27503",
+                  "http://127.0.0.1:27504",
+                  "http://127.0.0.1:27505",
+                  "http://127.0.0.1:27506",
+                  "http://127.0.0.1:27507",
+                  "http://127.0.0.1:27508",
+                  "http://127.0.0.1:27509",
+                  "http://127.0.0.1:27510"
+                ]
+              }
             }
           }
         },
-        "localFileSystem": { "const": "fullAccess" }
+        "localFileSystem": {
+          "const": "fullAccess"
+        }
       }
     }
   }
