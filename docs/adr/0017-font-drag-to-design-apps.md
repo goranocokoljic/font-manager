@@ -61,9 +61,16 @@ keeps its font. A failed or skipped activation shows a toast.
 **Keyboard.** The Developer tab of the inspector has "Copy for Font
 Switch", which puts the payload JSON on the clipboard for the selected face.
 
-**Tauri's drop handler.** `dragDropEnabled` only concerns drops *into* the
-window (files dropped from the OS); a drag that starts in the webview and
-leaves it is the webview's own and is not affected.
+**Tauri's drop handler is off.** The main window sets
+`"dragDropEnabled": false` in `tauri.conf.json`. With Tauri's handler on, wry
+replaces WebView2's drop target on Windows and passes on only drags that carry
+files, so the page gets no `dragenter`, `dragover` or `dragleave`. Leaving the
+window would then never be seen, and no face would be activated. Drops onto
+collections and tags would also fail. Chromium fires these events from its own
+drop target, even for a drag that starts in the page. macOS and Linux do not
+need the setting; it is the same setting on all three so that the behaviour is
+the same. The app uses no Tauri file-drop events, so nothing is lost. A test
+(`src-tauri/tests/window_config.rs`) keeps the setting in place.
 
 ## Consequences
 
