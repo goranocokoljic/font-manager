@@ -1,0 +1,21 @@
+{
+  "id": "html-drag-and-drop-in-the-tauri-app-needs-tauri-s-drag-drop-",
+  "title": "HTML drag and drop in the Tauri app needs Tauri's drag-drop handler off",
+  "category": "platform-parity",
+  "rule": "When a feature relies on HTML5 drag events in the desktop app (dragenter, dragover, dragleave, drop — a drag out of the window, a drop on a sidebar row), the window in apps/desktop/src-tauri/tauri.conf.json must set \"dragDropEnabled\": false. With Tauri's handler on, wry replaces WebView2's drop target on Windows and passes on only drags that carry files, so the page gets none of these events there while macOS and Linux work. Keep a src-tauri test that reads the shipped config and asserts the setting, because Playwright and Vitest run in a plain browser or jsdom and never go through the WebView2 drop target.",
+  "rationale": "E34.1 (#198): the drag-out activation listened for dragleave, which never fires on Windows with the default handler; the ADR claimed the handler only affects drops into the window.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    198
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/**/*.ts",
+    "apps/desktop/src-tauri/tauri.conf.json",
+    "docs/adr/*.md"
+  ],
+  "first_seen": "2026-10-28T02:03:22.160Z",
+  "last_seen": "2026-10-28T02:03:22.160Z"
+}
