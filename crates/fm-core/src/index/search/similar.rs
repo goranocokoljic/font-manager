@@ -84,10 +84,7 @@ impl Index {
         pick: impl FnOnce(&HashMap<u32, Profile>) -> FmResult<(Profile, Keep<'a>)>,
     ) -> FmResult<Vec<SimilarFace>> {
         self.refresh_search_cache()?;
-        if self.search_cache.borrow().profiles.is_none() {
-            let profiles = self.profiles()?;
-            self.search_cache.borrow_mut().profiles = Some(profiles);
-        }
+        self.read_profiles()?;
         let ranked: Vec<(u32, Similarity)> = {
             let cache = self.search_cache.borrow();
             let profiles = cache
@@ -117,6 +114,16 @@ impl Index {
                 })
             })
             .collect()
+    }
+
+    /// Reads every face's profile into the search cache, unless it holds
+    /// them already; call after [`Index::refresh_search_cache`].
+    pub(super) fn read_profiles(&self) -> FmResult<()> {
+        if self.search_cache.borrow().profiles.is_none() {
+            let profiles = self.profiles()?;
+            self.search_cache.borrow_mut().profiles = Some(profiles);
+        }
+        Ok(())
     }
 
     /// Every face's profile by id.

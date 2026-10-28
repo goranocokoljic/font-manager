@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/pairings/pairings.schema.json",
+  "title": "Font Manager curated pairings",
+  "description": "Pairs of font families that go well together; the pairing model (data/pairings/model.json) learns from them. pairings.json follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "pairings"],
+  "properties": {
+    "$schema": { "const": "./pairings.schema.json" },
+    "pairings": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/pairing" }
+    }
+  },
+  "$defs": {
+    "pairing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["families", "source"],
+      "properties": {
+        "families": {
+          "description": "The two family names, as the fonts state them (name ID 16 or 1). Two different families; no pair twice in the file, in either order.",
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "string", "minLength": 1, "pattern": "^\\S(.*\\S)?$" }
+        },
+        "source": {
+          "description": "A short note on where the pairing comes from: the designers' own companion families, or an editor's pick and why.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^\\S(.*\\S)?$"
+        }
+      }
+    }
+  }
+}

@@ -15,8 +15,13 @@
 //! A display or script face pairs only with a sans or a serif, never with
 //! another display or script face, whatever the other rules say. A face no
 //! rule holds for is not a pairing.
+//!
+//! [`model`] (E33.2) learns from curated pairings how much each fact
+//! matters; the index blends its score into the rules' ranking.
 
 use fm_api::common::Classification;
+
+pub mod model;
 
 /// Score of the contrast rule between text classes (serif or slab with a
 /// sans). It outweighs the designer and x-height rules together: a
