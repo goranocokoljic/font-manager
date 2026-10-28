@@ -68,8 +68,13 @@ CI runs it nightly on `main` on Windows, macOS and Linux and writes the trend ag
 the earlier nightly runs into the job summary of the `bench` workflow. A PR gets the
 same run when it carries the `bench` label.
 
-Contributors and coding agents: read [CLAUDE.md](CLAUDE.md) first. Decisions are in
-[docs/adr](docs/adr/).
+## Contributing
+
+Bug reports, feature requests, language presets and pull requests are welcome. Read
+[CONTRIBUTING.md](CONTRIBUTING.md) first: it covers the build, the rules every change
+keeps, and the branch and pull request conventions. Everyone who takes part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md). Coding agents: read [CLAUDE.md](CLAUDE.md).
+Decisions are in [docs/adr](docs/adr/).
 
 ## License
 

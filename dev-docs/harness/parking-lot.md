@@ -293,3 +293,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E34.1 #198] crates/fm-platform/src/pdf.rs:162 — `file_url` turns a `\?\` verbatim or UNC path into an invalid `file:////…` URL.
 - [E34.1 #198] apps/desktop/src/components/useCopy.ts:13 — `copy(promise)` writes the clipboard after an awaited IPC round-trip; a webview that needs transient user activation may reject it.
 - [E34.2 #199] plugins/adobe-uxp/src/hosts/collection.ts:7 — `text` and `name` in plugins/adobe-cep-illustrator/src/illustrator.ts:33 are two copies of the same string-name helper; one shared helper in `@fm/plugin-shared` would keep them alike.
+- [E36.5 #207] data/charsets/README.md:54 — the "new file → add to FILES" step also misses the `allowed()` script table in crates/fm-core/src/charsets.rs:353, so a new script fails `characters_belong_to_the_script`.
+- [E36.5 #207] scripts/community/check.mjs:64 — `formLabels` reads only indented `- item` lists; an unindented `labels:\n- type:story` passes the check.
