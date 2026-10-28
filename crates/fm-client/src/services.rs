@@ -61,6 +61,7 @@ service!(LibraryService {
     list_glyphs(req: GlyphsRequest) -> GlyphPage;
     get_glyph(req: GlyphRequest) -> GlyphDetail;
     resolve_font(req: ResolveFontRequest) -> FontMatches;
+    font_switch_payload(face: FaceId) -> FontSwitchPayload;
 });
 
 service!(SearchService {

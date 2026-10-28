@@ -15,13 +15,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
 import { rowActivation } from '../list/activation';
-import { dragKeys, startFontDrag } from '../list/drag';
+import { dragKeys } from '../list/drag';
 import { CARD, cardText, gridColumns, gridRange, lineCount } from '../list/grid';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow } from '../list/virtual';
 import { useFontListStore } from '../stores/fontList';
+import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
@@ -53,6 +54,7 @@ const FALLBACK_HEIGHT = 600;
 const FALLBACK_WIDTH = 800;
 
 const list = useFontListStore();
+const fontSwitch = useFontSwitchStore();
 const library = useLibraryStore();
 const thumbnails = useThumbnailsStore();
 const palettes = usePalettesStore();
@@ -232,7 +234,7 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /** Dragging a card onto a collection adds it, or the whole selection when the card is in it. */
 function onCardDrag(row: ListRow, e: DragEvent): void {
-  startFontDrag(e, dragKeys(list.selection.selected, row.key));
+  fontSwitch.startDrag(e, dragKeys(list.selection.selected, row.key), row);
 }
 
 function onCardClick(row: ListRow, e: MouseEvent): void {
@@ -284,6 +286,7 @@ function onToggle(row: ListRow): void {
         :style="cardStyle(item.index)"
         draggable="true"
         @click="onCardClick(item.row, $event)"
+        @pointerdown="fontSwitch.prime(item.row)"
         @dragstart="onCardDrag(item.row, $event)"
       >
         <div class="card">

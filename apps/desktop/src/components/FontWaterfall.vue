@@ -8,13 +8,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
 import { rowActivation } from '../list/activation';
-import { dragKeys, startFontDrag } from '../list/drag';
+import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { WATERFALL_SIZES, waterfallLinePx, waterfallRowPx } from '../list/waterfall';
 import { useFontListStore } from '../stores/fontList';
+import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { t } from '../i18n';
@@ -41,6 +42,7 @@ const emit = defineEmits<{
 const FALLBACK_HEIGHT = 600;
 
 const list = useFontListStore();
+const fontSwitch = useFontSwitchStore();
 const library = useLibraryStore();
 
 const rowPx = computed(() => waterfallRowPx(props.preview.lineHeight));
@@ -144,7 +146,7 @@ function onKeyDown(e: KeyboardEvent): void {
 }
 
 function onRowDrag(row: ListRow, e: DragEvent): void {
-  startFontDrag(e, dragKeys(list.selection.selected, row.key));
+  fontSwitch.startDrag(e, dragKeys(list.selection.selected, row.key), row);
 }
 
 function onRowClick(row: ListRow, e: MouseEvent): void {
@@ -195,6 +197,7 @@ function onToggle(row: ListRow): void {
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
         draggable="true"
         @click="onRowClick(item.row, $event)"
+        @pointerdown="fontSwitch.prime(item.row)"
         @dragstart="onRowDrag(item.row, $event)"
       >
         <header class="head">

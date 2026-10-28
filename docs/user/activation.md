@@ -61,6 +61,19 @@ When you activate or deactivate many fonts at once (several rows, a family,
 was, in the same kind of activation. The message goes away after 10 seconds. It stays
 while the pointer is on it.
 
+## Drag a font to a design app
+
+Drag a font or a family from the list, the grid or the table onto selected
+text in a design app. The drag gives the app the font's PostScript name and
+its file. When the pointer leaves the window, an inactive font is activated
+for this session, so the app can use it. The font stays active after the
+drop; the app does not deactivate it. If the font cannot be activated, a
+message tells you why.
+
+With the keyboard: select the font, open the **Developer** tab of the
+inspector and choose **Copy for Font Switch**. This copies the same data to
+the clipboard.
+
 ## Rules that keep your system safe
 
 - Font Manager never needs administrator rights.

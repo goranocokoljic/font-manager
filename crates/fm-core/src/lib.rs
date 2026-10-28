@@ -23,6 +23,7 @@ pub mod features;
 mod filter;
 pub mod fingerprint;
 pub mod font_file;
+pub mod font_switch;
 pub mod framework_snippet;
 pub mod glyph_features;
 pub mod glyph_svg;

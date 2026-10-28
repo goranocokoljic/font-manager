@@ -43,11 +43,11 @@ use crate::layout::{
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
-    FontNames, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest, GlyphsRequest,
-    ImportMode, KeepCopyRequest, LicenseInfo, LicenseType, ListFamiliesRequest, OpenLicense,
-    Platform, Problem, ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest,
-    ScanRequest, SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
-    TrashMoveStatus, WebUse,
+    FontNames, FontSwitchPayload, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest,
+    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicenseType, ListFamiliesRequest,
+    OpenLicense, Platform, Problem, ProblemKind, Resolution, ResolveFontRequest,
+    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
+    SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -1927,6 +1927,28 @@ impl LibraryService for MockApi {
                 _ => Vec::new(),
             },
             health: Health::Ok,
+        })
+    }
+
+    /// The face's names and its POSIX path as a `file://` URL (the mock's
+    /// paths are all POSIX; fm-core also handles Windows paths).
+    fn font_switch_payload(&self, face: FaceId) -> ApiResult<FontSwitchPayload> {
+        let st = self.state();
+        let f = st.face(face)?;
+        let s = &f.detail.face;
+        let mut file_url = String::from("file://");
+        for b in f.detail.path.bytes() {
+            if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~' | b'/' | b':') {
+                file_url.push(char::from(b));
+            } else {
+                file_url.push_str(&format!("%{b:02X}"));
+            }
+        }
+        Ok(FontSwitchPayload {
+            postscript_name: s.postscript_name.clone(),
+            family: s.family_name.clone(),
+            style: s.style.clone(),
+            file_url,
         })
     }
 

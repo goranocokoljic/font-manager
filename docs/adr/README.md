@@ -21,5 +21,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0014](0014-online-catalogs.md) | Online catalogs: adapter interface, Google Fonts endpoint, metadata cache | Accepted |
 | [0015](0015-local-api-endpoint.md) | The local API endpoint: routes, status mapping, token, discovery file | Accepted |
 | [0016](0016-ipc-pipe-and-socket.md) | The IPC endpoint: named pipe and Unix socket, versioned envelope | Accepted |
+| [0017](0017-font-drag-to-design-apps.md) | Dragging a font out of the window to a design app | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

@@ -359,6 +359,11 @@
     "hint": "Das CSS für die Achsen und Features aus den Tabs Achsen und Features.",
     "copyLabel": "CSS-Ausschnitt kopieren"
   },
+  "fontSwitch": {
+    "copy": "Für Font Switch kopieren",
+    "copyLabel": "{name} für Font Switch kopieren",
+    "activationFailed": "{name} konnte für das Ablegen nicht aktiviert werden: {reason}"
+  },
   "search": {
     "label": "Schriften suchen",
     "placeholder": "Suchen  /"

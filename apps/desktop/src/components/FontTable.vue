@@ -24,13 +24,14 @@ import {
   type ColumnId,
 } from '../list/columns';
 import { rowActivation } from '../list/activation';
-import { dragKeys, startFontDrag } from '../list/drag';
+import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { rowLabel, styleName, type ListRow } from '../list/rows';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { keepRowInView, tableRowHeight } from '../list/density';
 import { useFontListStore } from '../stores/fontList';
+import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { useSettingsStore } from '../stores/settings';
 import { useViewsStore } from '../stores/views';
@@ -58,6 +59,7 @@ const emit = defineEmits<{
 const FALLBACK_HEIGHT = 600;
 
 const list = useFontListStore();
+const fontSwitch = useFontSwitchStore();
 const library = useLibraryStore();
 const views = useViewsStore();
 const settings = useSettingsStore();
@@ -189,7 +191,7 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
 function onRowDrag(row: ListRow, e: DragEvent): void {
-  startFontDrag(e, dragKeys(list.selection.selected, row.key));
+  fontSwitch.startDrag(e, dragKeys(list.selection.selected, row.key), row);
 }
 
 function onRowClick(row: ListRow, e: MouseEvent): void {
@@ -400,6 +402,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           }"
           draggable="true"
           @click="onRowClick(item.row, $event)"
+          @pointerdown="fontSwitch.prime(item.row)"
           @dragstart="onRowDrag(item.row, $event)"
         >
           <div

@@ -3,11 +3,14 @@
 // font-feature-settings declarations for the selected face's current Axes and
 // Features state, as fm-core writes them (PreviewService::css_values). It
 // follows the sliders and switches live; "Copy" copies the whole snippet.
+// "Copy for Font Switch" (E34.1) puts on the clipboard what dragging the face
+// to a design app carries; it is the drag's keyboard route.
 import { computed, ref, watch } from 'vue';
 import { useClient } from '../api/client';
 import { errorMessage, t } from '../i18n';
 import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
+import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useSelectionStore } from '../stores/selection';
 import { useCopy } from './useCopy';
 
@@ -15,8 +18,18 @@ const selection = useSelectionStore();
 const axesSet = useAxesStore();
 const features = useFeaturesStore();
 const { status, copy } = useCopy();
+const fontSwitch = useFontSwitchStore();
+const { status: switchStatus, copy: copySwitch } = useCopy();
+const faceName = computed(() => {
+  const face = selection.detail?.face;
+  return face ? `${face.familyName} ${face.style}` : '';
+});
 
 const faceId = computed(() => selection.detail?.face.id ?? null);
+
+function copyForFontSwitch(): void {
+  if (faceId.value !== null) void copySwitch(fontSwitch.clipboardText(faceId.value));
+}
 /** What fm-core is asked for: the face, its moved axes and its switched features. */
 const request = computed(() =>
   faceId.value === null
@@ -77,6 +90,23 @@ watch(
           >
             {{ t('common.copy') }}
           </button>
+        </span>
+      </div>
+      <div class="head">
+        <span class="actions">
+          <button
+            type="button"
+            class="button"
+            data-testid="copy-font-switch"
+            :aria-label="t('fontSwitch.copyLabel', { name: faceName })"
+            @click="copyForFontSwitch"
+          >
+            {{ t('fontSwitch.copy') }}
+          </button>
+          <span class="status" aria-live="polite" data-testid="font-switch-status">
+            <template v-if="switchStatus === 'copied'">{{ t('common.copied') }}</template>
+            <template v-else-if="switchStatus === 'failed'">{{ t('copy.failed') }}</template>
+          </span>
         </span>
       </div>
       <p v-if="error" class="error" role="alert">{{ error }}</p>

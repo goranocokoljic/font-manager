@@ -65,6 +65,7 @@ routes! {
     list_glyphs(req),
     get_glyph(req),
     resolve_font(req),
+    font_switch_payload(face),
     // search
     search(req),
     check_coverage(req),

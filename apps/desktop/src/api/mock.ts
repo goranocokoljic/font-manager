@@ -1124,6 +1124,16 @@ const OPEN_LICENSE_LABELS: Record<OpenLicense, string> = {
   mit: 'MIT',
 };
 
+/** A POSIX path as fm-core's `file://` URL: unreserved bytes, `/` and `:` kept, the rest of the UTF-8 `%XX`. */
+export function mockFileUrl(path: string): string {
+  let out = 'file://';
+  for (const b of new TextEncoder().encode(path)) {
+    const c = String.fromCharCode(b);
+    out += /[A-Za-z0-9\-._~/:]/.test(c) ? c : `%${b.toString(16).toUpperCase().padStart(2, '0')}`;
+  }
+  return out;
+}
+
 /**
  * The mock's copy of `fm_core::license::web_use`, like the Rust mock: declared
  * Web allows; declared Desktop, Trial or Personal-only, then restricted or
@@ -2388,6 +2398,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const f = find(req.face);
       if (!f) throw notFound(req.face);
       return mockGlyphDetail(f, req, options.cjkFaces?.includes(req.face) ?? false);
+    },
+    fontSwitchPayload: async (id) => {
+      const f = find(id);
+      if (!f) throw notFound(id);
+      return {
+        postscriptName: f.face.postscriptName,
+        family: f.face.familyName,
+        style: f.face.style,
+        fileUrl: mockFileUrl(f.path),
+      };
     },
     getFace: async (id) => {
       const f = find(id);

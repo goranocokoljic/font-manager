@@ -238,3 +238,20 @@ describe('the Hebrew mock face (E19.3)', () => {
     expect(detail.path).toContain('/עברית/');
   });
 });
+
+describe('MockApi font switch payload (E34.1)', () => {
+  it('names the face and gives its file as fm-core writes the URL', async () => {
+    const client = createMockClient({ hebrewFace: true });
+    expect(await client.fontSwitchPayload(1)).toEqual({
+      postscriptName: (await client.getFace(1)).face.postscriptName,
+      family: 'Inter',
+      style: 'Regular',
+      fileUrl: 'file:///Users/demo/Fonts/Inter/Inter%5Bwght%5D.ttf',
+    });
+    const hebrew = await client.fontSwitchPayload(9);
+    expect(hebrew.fileUrl).toBe(
+      'file:///Users/demo/Fonts/%D7%A2%D7%91%D7%A8%D7%99%D7%AA/FrankRuhl-Regular.ttf',
+    );
+    await expect(client.fontSwitchPayload(999)).rejects.toMatchObject({ code: 'notFound' });
+  });
+});

@@ -24,10 +24,10 @@ use fm_api::layout::{
     RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
-    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, GlyphDetail,
-    GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest, LibraryService, ListFamiliesRequest,
-    Problem, Resolution, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
-    SidecarConflict, Source,
+    AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary,
+    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, KeepCopyRequest,
+    LibraryService, ListFamiliesRequest, Problem, Resolution, ResolveSidecarConflictRequest,
+    ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -500,6 +500,16 @@ async fn list_glyphs(state: State<'_, AppState>, req: GlyphsRequest) -> ApiResul
 #[tauri::command]
 async fn get_glyph(state: State<'_, AppState>, req: GlyphRequest) -> ApiResult<GlyphDetail> {
     call(&state, move |api| api.get_glyph(req)).await
+}
+
+/// What dragging a face to another app carries (E34.1), for the list's drag
+/// and "Copy for Font Switch".
+#[tauri::command]
+async fn font_switch_payload(
+    state: State<'_, AppState>,
+    face: FaceId,
+) -> ApiResult<FontSwitchPayload> {
+    call(&state, move |api| api.font_switch_payload(face)).await
 }
 
 /// One page of families.
@@ -1336,6 +1346,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             get_face,
             list_glyphs,
             get_glyph,
+            font_switch_payload,
             list_families,
             get_family,
             search,
