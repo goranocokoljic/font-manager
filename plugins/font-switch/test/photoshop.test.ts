@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type PhotoshopSelectedLayer, photoshopAdapter } from '../src/photoshop';
-import { HOST_FONTS, INTER, LORA_RENAMED, SELECT_TEXT_FIRST, UNKNOWN } from './fixtures';
+import {
+  HOST_FONTS,
+  INTER,
+  INTER_DISPLAY,
+  LORA_RENAMED,
+  SELECT_TEXT_FIRST,
+  UNKNOWN,
+} from './fixtures';
 
 const textLayer = (): PhotoshopSelectedLayer => ({
   kind: 'text',
@@ -60,6 +67,13 @@ describe('Photoshop adapter', () => {
     expect(fontOf(layer)).toBe('Inter-Bold');
     expect(await adapter.apply(LORA_RENAMED)).toEqual({ applied: true, font: 'Lora-BoldV2' });
     expect(fontOf(layer)).toBe('Lora-Bold');
+  });
+
+  it('takes the PostScript name before the family and style', async () => {
+    const layer = textLayer();
+    const { adapter } = mockPhotoshop([layer]);
+    expect((await adapter.apply(INTER_DISPLAY)).applied).toBe(true);
+    expect(fontOf(layer)).toBe('Inter-Display');
   });
 
   it('leaves the other layers of a mixed selection alone', async () => {

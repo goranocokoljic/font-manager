@@ -3,7 +3,14 @@ import { ES5_PLUS, codeOnly } from '@fm/plugin-shared/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { illustratorAdapter, illustratorFontList } from '../src/illustrator';
 import { ILLUSTRATOR_JSX } from '../src/illustrator-jsx';
-import { HOST_FONTS, INTER, LORA_RENAMED, SELECT_TEXT_FIRST, UNKNOWN } from './fixtures';
+import {
+  HOST_FONTS,
+  INTER,
+  INTER_DISPLAY,
+  LORA_RENAMED,
+  SELECT_TEXT_FIRST,
+  UNKNOWN,
+} from './fixtures';
 
 interface MockTextFont {
   name: string;
@@ -80,6 +87,13 @@ describe('Illustrator adapter', () => {
     expect((await adapter.apply('Inter-Bold')).applied).toBe(true);
     expect(a.textRange.characterAttributes.textFont).toBe(textFonts[1]);
     expect(b.textRange.characterAttributes.textFont).toBe(textFonts[1]);
+  });
+
+  it('takes the PostScript name before the family and style', async () => {
+    const selected = range();
+    const { adapter, textFonts } = mockIllustrator(selected);
+    expect((await adapter.apply(INTER_DISPLAY)).applied).toBe(true);
+    expect(selected.characterAttributes.textFont).toBe(textFonts[3]);
   });
 
   it('falls back to the family and style', async () => {

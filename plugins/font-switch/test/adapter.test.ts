@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { HOST_FONT_NAMES, findHostFont, hostFromName, notActive } from '../src/adapter';
-import { INTER, LORA_RENAMED } from './fixtures';
+import { INTER, INTER_DISPLAY, LORA_RENAMED } from './fixtures';
 
 const fonts = [
   { postscriptName: 'Inter-Regular', family: 'Inter', style: 'Regular' },
@@ -12,6 +12,10 @@ describe('findHostFont', () => {
   it('finds the PostScript name first', () => {
     expect(findHostFont(fonts, HOST_FONT_NAMES, INTER)).toBe(fonts[0]);
     expect(findHostFont(fonts, HOST_FONT_NAMES, 'Inter-Display')).toBe(fonts[2]);
+  });
+
+  it('takes the PostScript name over an earlier font with the same family and style', () => {
+    expect(findHostFont(fonts, HOST_FONT_NAMES, INTER_DISPLAY)).toBe(fonts[2]);
   });
 
   it('then the family and style of a payload', () => {

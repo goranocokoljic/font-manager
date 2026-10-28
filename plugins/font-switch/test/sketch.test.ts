@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { type SketchSelectedLayer, sketchAdapter } from '../src/sketch';
-import { HOST_FONTS, INTER, LORA_RENAMED, SELECT_TEXT_FIRST, UNKNOWN } from './fixtures';
+import {
+  HOST_FONTS,
+  INTER,
+  INTER_DISPLAY,
+  LORA_RENAMED,
+  SELECT_TEXT_FIRST,
+  UNKNOWN,
+} from './fixtures';
 
 const textLayer = () => {
   const setFontPostscriptName = vi.fn<(name: string) => void>();
@@ -35,6 +42,12 @@ describe('Sketch adapter', () => {
     expect((await adapter.apply('Inter-Bold')).applied).toBe(true);
     expect(await adapter.apply(LORA_RENAMED)).toEqual({ applied: true, font: 'Lora-BoldV2' });
     expect(a.setFontPostscriptName.mock.calls).toEqual([['Inter-Bold'], ['Lora-Bold']]);
+  });
+
+  it('takes the PostScript name before the family and style', async () => {
+    const a = textLayer();
+    expect((await mockSketch([a.layer]).apply(INTER_DISPLAY)).applied).toBe(true);
+    expect(a.setFontPostscriptName).toHaveBeenCalledWith('Inter-Display');
   });
 
   it.each<[string, SketchSelectedLayer[]]>([

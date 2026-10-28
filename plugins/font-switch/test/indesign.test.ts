@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { type InDesignFont, type InDesignSelected, inDesignAdapter } from '../src/indesign';
-import { HOST_FONTS, INTER, LORA_RENAMED, SELECT_TEXT_FIRST, UNKNOWN } from './fixtures';
+import {
+  HOST_FONTS,
+  INTER,
+  INTER_DISPLAY,
+  LORA_RENAMED,
+  SELECT_TEXT_FIRST,
+  UNKNOWN,
+} from './fixtures';
 
 // InDesign's collections are `length` plus `item(i)`, not arrays.
 function collection<T>(items: T[]) {
@@ -35,6 +42,13 @@ describe('InDesign adapter', () => {
     const { adapter, fonts } = mockInDesign([words]);
     expect(await adapter.apply('Inter-Bold')).toEqual({ applied: true, font: 'Inter-Bold' });
     expect(words.appliedFont).toBe(fonts[1]);
+  });
+
+  it('takes the PostScript name before the family and style', async () => {
+    const words = text();
+    const { adapter, fonts } = mockInDesign([words]);
+    expect((await adapter.apply(INTER_DISPLAY)).applied).toBe(true);
+    expect(words.appliedFont).toBe(fonts[3]);
   });
 
   it('falls back to the family and style', async () => {
