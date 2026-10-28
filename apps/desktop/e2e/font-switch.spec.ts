@@ -108,7 +108,7 @@ test('"Copy for Font Switch" is reached by the keyboard and copies the payload',
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await open(page, '#/?face=1');
   await page.getByRole('tab', { name: 'Developer' }).click();
-  const button = page.getByRole('button', { name: 'Copy Inter Regular for Font Switch' });
+  const button = page.getByRole('button', { name: 'Copy for Font Switch: Inter Regular' });
   await expect(button).toHaveText('Copy for Font Switch');
 
   // Tab from the tab: the panel, its Copy button, then this one.

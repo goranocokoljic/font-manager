@@ -361,7 +361,7 @@
   },
   "fontSwitch": {
     "copy": "Copy for Font Switch",
-    "copyLabel": "Copy {name} for Font Switch",
+    "copyLabel": "Copy for Font Switch: {name}",
     "activationFailed": "{name} could not be activated for the drop: {reason}"
   },
   "search": {
