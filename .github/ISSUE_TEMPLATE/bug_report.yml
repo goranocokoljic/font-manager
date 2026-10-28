@@ -1,0 +1,68 @@
+name: Bug report
+description: Something in Font Manager does not work as it should.
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. Please search the open issues first: your bug may be there already.
+        Do not put private file paths or font names in the report if you do not want them public.
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: OS version
+      description: For example "Windows 11 24H2", "macOS 15.1" or "Ubuntu 24.04 (GNOME, Wayland)".
+    validations:
+      required: true
+  - type: input
+    id: app-version
+    attributes:
+      label: Font Manager version
+      description: Settings → About shows it. For a nightly build, the full name, for example `0.1.0-1a2b3c4`.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, one step per line?
+      placeholder: |
+        1. Add the folder ...
+        2. Select the font ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Add a screenshot if it helps.
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log file
+      description: |
+        Settings → Advanced → Logs folder opens the folder with the logs. Attach the newest
+        `fm.YYYY-MM-DD.log` (drag the file into this field), or paste the lines around the error.
+        If there is a `crash-*.log` file, attach it too. Logs contain file paths: remove what you do not want public.
+      render: text
+    validations:
+      required: false

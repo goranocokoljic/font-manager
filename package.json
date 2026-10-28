@@ -10,9 +10,9 @@
   "scripts": {
     "lint": "pnpm lint:rust && pnpm lint:js",
     "lint:rust": "node scripts/release/sidecar.mjs && cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features -- -D warnings && cargo deny check",
-    "lint:js": "eslint . && prettier --check . && pnpm -r --if-present typecheck",
+    "lint:js": "eslint . && prettier --check . && node scripts/community/check.mjs && pnpm -r --if-present typecheck",
     "format": "cargo fmt --all && prettier --write .",
-    "test": "pnpm -r --if-present test && node --test \"scripts/harness/**/*.test.mjs\" \"scripts/reference-library/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\" \"scripts/docs/*.test.mjs\"",
+    "test": "pnpm -r --if-present test && node --test \"scripts/harness/**/*.test.mjs\" \"scripts/reference-library/*.test.mjs\" \"scripts/bench/*.test.mjs\" \"scripts/release/*.test.mjs\" \"scripts/docs/*.test.mjs\" \"scripts/community/*.test.mjs\"",
     "test:e2e": "pnpm --filter @fm/desktop test:e2e",
     "docs:build": "node scripts/docs/build-site.mjs",
     "dashboard": "node scripts/harness/dashboard/server.mjs",

@@ -1,0 +1,40 @@
+name: Feature request
+description: Suggest something new for Font Manager, or a change to something that exists.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please search the open issues first: someone may have asked for it already.
+        Font Manager works offline, has no accounts and never moves your font files without asking.
+        A request that needs one of these to change will probably be declined.
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What do you want to do that you cannot do now? Tell us about the work, not the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Your proposal
+      description: How could Font Manager help? A sketch or a screenshot of another app is welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do now
+      description: Other apps or workarounds you use for this today.
+    validations:
+      required: false
+  - type: checkboxes
+    id: platforms
+    attributes:
+      label: Operating systems
+      description: Font Manager ships a feature on all three systems or not at all. Which ones do you use?
+      options:
+        - label: Windows
+        - label: macOS
+        - label: Linux

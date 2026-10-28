@@ -1,0 +1,48 @@
+name: Missing language preset
+description: The "supports language" filter does not know a language you need.
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The language presets are JSON files in [`data/charsets/`](https://github.com/goranocokoljic/font-manager/tree/main/data/charsets).
+        Each language lists the characters a font must have to support it.
+        You can also add the language yourself: [`data/charsets/README.md`](https://github.com/goranocokoljic/font-manager/blob/main/data/charsets/README.md)
+        explains the format, and [CONTRIBUTING.md](https://github.com/goranocokoljic/font-manager/blob/main/CONTRIBUTING.md) explains the pull request.
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      description: The name of the language and, if you know it, its BCP 47 tag (for example "Serbian (Latin), sr-Latn").
+    validations:
+      required: true
+  - type: input
+    id: script
+    attributes:
+      label: Script
+      description: The writing system, for example "Latin", "Cyrillic", "Ethiopic". The ISO 15924 code helps (`Latn`, `Ethi`).
+    validations:
+      required: true
+  - type: textarea
+    id: characters
+    attributes:
+      label: Required characters
+      description: |
+        The characters a font must have for this language, if you know them. Paste them separated by spaces.
+        Characters for loanwords or names that are good to have but not required go in a second line.
+      render: text
+    validations:
+      required: false
+  - type: input
+    id: source
+    attributes:
+      label: Source
+      description: Where the character list comes from, for example Hyperglot, Google Fonts language data or a grammar.
+    validations:
+      required: false
+  - type: checkboxes
+    id: pull-request
+    attributes:
+      label: Pull request
+      options:
+        - label: I want to add the preset myself in a pull request.
