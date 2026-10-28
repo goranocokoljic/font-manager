@@ -39,10 +39,70 @@ function fmOpenDocuments() {
   return '[' + parts.join(',') + ']';
 }
 
+/** One font as `fonts_needed` takes it, once per name. */
+function fmAddFont(seen, parts, name, family, style) {
+  if (!name || seen['$' + name]) return;
+  seen['$' + name] = true;
+  parts.push(
+    '{"postscriptName":' +
+      fmQuote(name) +
+      ',"family":' +
+      fmQuote(family || '') +
+      ',"style":' +
+      fmQuote(style || '') +
+      '}'
+  );
+}
+
+function fmXmlDecode(s) {
+  return s
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+function fmXmpField(item, field) {
+  var m = new RegExp('<stFnt:' + field + '>([^<]*)</stFnt:' + field + '>').exec(item);
+  return m ? fmXmlDecode(m[1]) : '';
+}
+
 /**
- * The fonts of every text frame of the document with that key, once each:
- * [{"postscriptName","family","style"}] from `textFont`, or "null" when no
- * open document has the key.
+ * The fonts a saved document names in its XMP metadata (`xmpTPg:Fonts`):
+ * the only place Illustrator still names a font it does not have. For such
+ * a font a text run's `textFont` is an object whose every property throws
+ * UKFG ("unknown font"), so the runs cannot name it (E30.0 spike,
+ * Illustrator 29.7). [{name, family, style}]; [] for an unsaved document or
+ * one without the block.
+ */
+function fmXmpFonts(doc) {
+  var fonts = [];
+  var xmp = '';
+  try {
+    xmp = String(doc.XMPString);
+  } catch (e) {
+    return fonts;
+  }
+  var block = /<xmpTPg:Fonts>([\s\S]*?)<\/xmpTPg:Fonts>/.exec(xmp);
+  if (!block) return fonts;
+  var item = /<rdf:li[^>]*>([\s\S]*?)<\/rdf:li>/g;
+  var m;
+  while ((m = item.exec(block[1])) !== null) {
+    fonts.push({
+      name: fmXmpField(m[1], 'fontName'),
+      family: fmXmpField(m[1], 'fontFamily'),
+      style: fmXmpField(m[1], 'fontFace')
+    });
+  }
+  return fonts;
+}
+
+/**
+ * The fonts of the document with that key, once each:
+ * [{"postscriptName","family","style"}] from every text run's `textFont`,
+ * then from the XMP metadata (the fonts Illustrator does not have), or
+ * "null" when no open document has the key.
  */
 function fmDocumentFonts(key) {
   var doc = null;
@@ -56,23 +116,33 @@ function fmDocumentFonts(key) {
     var ranges = doc.textFrames[f].textRanges;
     for (var r = 0; r < ranges.length; r++) {
       var font = null;
+      var name = '';
       try {
         font = ranges[r].characterAttributes.textFont;
+        name = String(font.name);
       } catch (e) {
-        // A run Illustrator cannot describe has no font for us.
+        // A run Illustrator cannot describe, or a font it does not have
+        // (UKFG): the XMP list below names those.
+        continue;
       }
-      if (!font || !font.name || seen['$' + font.name]) continue;
-      seen['$' + font.name] = true;
-      parts.push(
-        '{"postscriptName":' +
-          fmQuote(font.name) +
-          ',"family":' +
-          fmQuote(font.family || '') +
-          ',"style":' +
-          fmQuote(font.style || '') +
-          '}'
-      );
+      var family = '';
+      var style = '';
+      try {
+        family = font.family;
+      } catch (e) {
+        family = '';
+      }
+      try {
+        style = font.style;
+      } catch (e) {
+        style = '';
+      }
+      fmAddFont(seen, parts, name, family, style);
     }
+  }
+  var xmp = fmXmpFonts(doc);
+  for (var x = 0; x < xmp.length; x++) {
+    fmAddFont(seen, parts, xmp[x].name, xmp[x].family, xmp[x].style);
   }
   return '[' + parts.join(',') + ']';
 }

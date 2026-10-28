@@ -9,7 +9,12 @@ app finds and activates them (E29.2). It does what the UXP plugin
   text frame through ExtendScript (`jsx/host.jsx`: each text run's
   `textFont`, its PostScript name, family and style) and sends them to
   `fonts_needed`, once per document. Activating the document again sends
-  nothing.
+  nothing. A font Illustrator does not have cannot be read from its runs:
+  their `textFont` is an object whose every property throws UKFG ("unknown
+  font"; Illustrator 29.7, E30.0 spike). Those come from the saved
+  document's XMP metadata (`xmpTPg:Fonts`: name, family, face), which
+  Illustrator writes on every save. An unsaved document with a missing font
+  therefore reports nothing for it.
 - **Close.** When a document closes, it calls `document_closed`. When the app
   offers fonts only that document used, it asks "Deactivate N fonts used only
   by <document>?"; Deactivate calls `deactivate` with those faces, Keep them
