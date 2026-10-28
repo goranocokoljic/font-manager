@@ -57,10 +57,10 @@ use fm_api::layout::{
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
-    GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode, KeepCopyRequest,
-    LibraryService, ListFamiliesRequest, Platform, Problem, Resolution, ResolveFontRequest,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
-    SourceKind,
+    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode,
+    KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem, Resolution,
+    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
+    SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -798,6 +798,10 @@ impl LibraryService for CoreApi {
     fn resolve_font(&self, req: ResolveFontRequest) -> ApiResult<FontMatches> {
         let names = self.lock().font_names()?;
         req.resolve(names)
+    }
+
+    fn font_switch_payload(&self, face: FaceId) -> ApiResult<FontSwitchPayload> {
+        Ok(self.lock().font_switch_payload(face)?)
     }
 }
 

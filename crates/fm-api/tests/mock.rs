@@ -3174,3 +3174,22 @@ fn find_by_image_checks_the_png_signature_and_leaves_the_file_alone() {
     assert_eq!(e.code, ErrorCode::NotFound);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+/// E34.1: the drag payload names the face and carries its file as a URL.
+#[test]
+fn font_switch_payload_names_the_face_and_its_file() {
+    let api = api();
+    let p = api.font_switch_payload(FaceId(1)).unwrap();
+    let face = api.get_face(FaceId(1)).unwrap();
+    assert_eq!(p.postscript_name, face.face.postscript_name);
+    assert_eq!(p.family, face.face.family_name);
+    assert_eq!(p.style, face.face.style);
+    assert_eq!(
+        p.file_url,
+        "file:///Users/demo/Fonts/Inter/Inter%5Bwght%5D.ttf"
+    );
+    assert_eq!(
+        api.font_switch_payload(FaceId(999)).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}

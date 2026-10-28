@@ -20,7 +20,7 @@ import type { FaceId, FaceSummary } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
 import { keepRowInView } from '../list/density';
-import { dragKeys, startFontDrag } from '../list/drag';
+import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { rowActivation } from '../list/activation';
@@ -29,6 +29,7 @@ import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useFontListStore } from '../stores/fontList';
+import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSettingsStore } from '../stores/settings';
@@ -57,6 +58,7 @@ const emit = defineEmits<{
 }>();
 
 const list = useFontListStore();
+const fontSwitch = useFontSwitchStore();
 const library = useLibraryStore();
 const catalogs = useCatalogsStore();
 
@@ -195,7 +197,7 @@ function onKeyDown(e: KeyboardEvent): void {
 
 /** Dragging a row onto a collection adds it, or the whole selection when the row is in it. */
 function onRowDrag(row: ListRow, e: DragEvent): void {
-  startFontDrag(e, dragKeys(list.selection.selected, row.key));
+  fontSwitch.startDrag(e, dragKeys(list.selection.selected, row.key), row);
 }
 
 function onRowClick(row: ListRow, e: MouseEvent): void {
@@ -264,6 +266,7 @@ function onToggle(row: ListRow): void {
         :style="{ height: `${rowPx}px`, transform: `translateY(${item.index * rowPx}px)` }"
         draggable="true"
         @click="onRowClick(item.row, $event)"
+        @pointerdown="fontSwitch.prime(item.row)"
         @dragstart="onRowDrag(item.row, $event)"
       >
         <span

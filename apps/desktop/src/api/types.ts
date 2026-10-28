@@ -1475,6 +1475,21 @@ export type FontSource = {
 };
 
 /**
+ *  What a font drag to another app carries (E34.1): enough for a design
+ *  app's "Font Switch" drop to pick the face, by name or by file.
+ */
+export type FontSwitchPayload = {
+	/**  PostScript name; design apps apply a font by it. */
+	postscriptName: string,
+	/**  Typographic family name. */
+	family: string,
+	/**  Style name. */
+	style: string,
+	/**  The font file as a `file://` URL (RFC 8089), percent-encoded UTF-8. */
+	fileUrl: string,
+};
+
+/**
  *  The fonts a document needs, to find in the library and activate (the
  *  plugins' auto-activation, E29).
  */

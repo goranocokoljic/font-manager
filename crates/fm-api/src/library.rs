@@ -1209,6 +1209,21 @@ impl FontMatches {
     }
 }
 
+/// What a font drag to another app carries (E34.1): enough for a design
+/// app's "Font Switch" drop to pick the face, by name or by file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FontSwitchPayload {
+    /// PostScript name; design apps apply a font by it.
+    pub postscript_name: String,
+    /// Typographic family name.
+    pub family: String,
+    /// Style name.
+    pub style: String,
+    /// The font file as a `file://` URL (RFC 8089), percent-encoded UTF-8.
+    pub file_url: String,
+}
+
 /// Sources, scans, families, faces and problems.
 pub trait LibraryService {
     /// What the running app is (E1.5 round-trips this).
@@ -1277,6 +1292,9 @@ pub trait LibraryService {
     /// shows match. `NotFound` when none does; `InvalidRequest` for an
     /// empty argument.
     fn resolve_font(&self, req: ResolveFontRequest) -> ApiResult<FontMatches>;
+    /// What dragging `face` to another app carries (E34.1): its PostScript
+    /// name, family, style and file URL. `NotFound` for an unknown face.
+    fn font_switch_payload(&self, face: FaceId) -> ApiResult<FontSwitchPayload>;
 }
 
 #[cfg(test)]

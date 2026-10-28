@@ -286,3 +286,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E29.4 #185] crates/fm-client/src/http.rs:304 — the HTTP client's "Font Manager is not running, …" wording differs from `fm_platform::ipc::NOT_RUNNING`.
 - [E29.4 #185] crates/fm-platform/src/linux/ipc.rs:133 — the Unix IPC client `connect` has no timeout, so a live app with a full listen backlog blocks a client (Windows gives up after 2 s).
 - [E31.2 #192] plugins/adobe-uxp/manifest.json:6 — hard-codes "version": "0.1.0" while the Sketch bundle takes the workspace version, so the plugin versions will drift.
+
+## 2026-10-28
+
+- [E34.1 #198] apps/desktop/src-tauri/tauri.conf.json:12 — the default `dragDropEnabled` probably broke the in-window HTML5 drops on Windows (CollectionsSidebar, TagsSidebar, FontTable column drag) before this story turned it off; check those drops on Windows.
+- [E34.1 #198] crates/fm-platform/src/pdf.rs:162 — `file_url` turns a `\?\` verbatim or UNC path into an invalid `file:////…` URL.
+- [E34.1 #198] apps/desktop/src/components/useCopy.ts:13 — `copy(promise)` writes the clipboard after an awaited IPC round-trip; a webview that needs transient user activation may reject it.

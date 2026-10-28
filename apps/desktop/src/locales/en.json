@@ -359,6 +359,11 @@
     "hint": "The CSS for the axes and features set in the Axes and Features tabs.",
     "copyLabel": "Copy the CSS snippet"
   },
+  "fontSwitch": {
+    "copy": "Copy for Font Switch",
+    "copyLabel": "Copy for Font Switch: {name}",
+    "activationFailed": "{name} could not be activated for the drop: {reason}"
+  },
   "search": {
     "label": "Search fonts",
     "placeholder": "Search  /"

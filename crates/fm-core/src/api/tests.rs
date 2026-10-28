@@ -486,6 +486,41 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+/// E34.1 criterion 1: the drag payload is the face's names and its file as a
+/// `file://` URL, read from the index (the file is gone when it is asked for).
+#[test]
+fn font_switch_payload_comes_from_the_index() {
+    let (lib, _, _) = Lib::scanned("api-font-switch");
+    let archivo = lib
+        .api
+        .get_family(lib.family("Archivo").id)
+        .expect("family");
+    let bold = &archivo.faces[1];
+    let detail = lib.api.get_face(bold.id).expect("detail");
+    std::fs::remove_file(&detail.path).expect("remove the file");
+
+    let p = lib.api.font_switch_payload(bold.id).expect("payload");
+    assert_eq!(p.postscript_name, bold.postscript_name);
+    assert_eq!(p.family, "Archivo");
+    assert_eq!(p.style, bold.style);
+    assert_eq!(
+        p.file_url,
+        crate::font_switch::file_url(Path::new(&detail.path))
+    );
+    assert!(p.file_url.starts_with("file://"), "{}", p.file_url);
+    assert!(
+        p.file_url.ends_with("/Archivo-Bold.woff2"),
+        "{}",
+        p.file_url
+    );
+
+    let err = lib
+        .api
+        .font_switch_payload(FaceId(99_999))
+        .expect_err("unknown face");
+    assert_eq!(err.code, ErrorCode::NotFound);
+}
+
 /// E10.4 criteria 1 and 2: `get_face` names stylistic sets and character
 /// variants with the font's own names, read from the index: the file is gone
 /// when `get_face` runs, so it cannot have been opened again.

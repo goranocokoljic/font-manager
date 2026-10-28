@@ -13,7 +13,9 @@ use std::path::PathBuf;
 
 use fm_api::activation::ActivationMode;
 use fm_api::common::{Classification, Health, Metrics, Page, Slant};
-use fm_api::library::{FaceDetail, FaceSummary, Family, LicenseInfo, LicenseType, OpenLicense};
+use fm_api::library::{
+    FaceDetail, FaceSummary, Family, FontSwitchPayload, LicenseInfo, LicenseType, OpenLicense,
+};
 use fm_api::preview::FontSource;
 use fm_api::search::{CoverageReport, CoverageRequest, FaceCoverage, Filters, SearchRequest};
 use fm_api::{CollectionId, FaceId, FamilyId, SourceId};
@@ -254,6 +256,14 @@ impl Index {
     /// The file of the face `face`. An unknown face is `NotFound`.
     pub fn face_file(&self, face: FaceId) -> FmResult<FaceLocation> {
         Ok(self.face_row(face)?.file)
+    }
+
+    /// What dragging the face `face` to another app carries (E34.1), from
+    /// the stored row alone; the file is not read. An unknown face is
+    /// `NotFound`.
+    pub fn font_switch_payload(&self, face: FaceId) -> FmResult<FontSwitchPayload> {
+        let row = self.face_row(face)?;
+        Ok(crate::font_switch::payload(&row.summary, &row.file.path))
     }
 
     /// What a web export needs about the face `face` (E20.1): its file, its

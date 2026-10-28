@@ -170,6 +170,7 @@ pub fn types() -> specta::Types {
         library::GlyphDetail,
         library::ResolveFontRequest,
         library::FontMatches,
+        library::FontSwitchPayload,
         // search
         search::SearchRequest,
         search::SearchResponse,
