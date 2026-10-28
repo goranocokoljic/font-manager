@@ -1,0 +1,20 @@
+{
+  "name": "@fm/font-switch",
+  "private": true,
+  "type": "module",
+  "description": "Font Switch: applies a font dragged from Font Manager to the text selection of a design app.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fm/plugin-shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "vitest": "5.0.5"
+  }
+}

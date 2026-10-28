@@ -292,3 +292,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E34.1 #198] apps/desktop/src-tauri/tauri.conf.json:12 — the default `dragDropEnabled` probably broke the in-window HTML5 drops on Windows (CollectionsSidebar, TagsSidebar, FontTable column drag) before this story turned it off; check those drops on Windows.
 - [E34.1 #198] crates/fm-platform/src/pdf.rs:162 — `file_url` turns a `\?\` verbatim or UNC path into an invalid `file:////…` URL.
 - [E34.1 #198] apps/desktop/src/components/useCopy.ts:13 — `copy(promise)` writes the clipboard after an awaited IPC round-trip; a webview that needs transient user activation may reject it.
+- [E34.2 #199] plugins/adobe-uxp/src/hosts/collection.ts:7 — `text` and `name` in plugins/adobe-cep-illustrator/src/illustrator.ts:33 are two copies of the same string-name helper; one shared helper in `@fm/plugin-shared` would keep them alike.

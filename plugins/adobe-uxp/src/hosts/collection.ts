@@ -1,14 +1,7 @@
-// UXP host collections: InDesign's are `length` plus `item(i)`, Photoshop's
-// are arrays.
+// UXP host collections (`@fm/plugin-shared`'s, which `@fm/font-switch`
+// shares) and the names the hosts give.
 
-export type HostCollection<T> = readonly T[] | { length: number; item(index: number): T };
-
-export function elements<T>(collection: HostCollection<T> | null | undefined): T[] {
-  if (!collection) return [];
-  if (Array.isArray(collection)) return [...collection];
-  const c = collection as { length: number; item(index: number): T };
-  return Array.from({ length: c.length }, (_, i) => c.item(i));
-}
+export { elements, type HostCollection } from '@fm/plugin-shared';
 
 /** A name the host gave, or nothing for an empty one. */
 export function text(value: unknown): string | undefined {

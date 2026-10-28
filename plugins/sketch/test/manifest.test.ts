@@ -4,11 +4,17 @@ import { bundleManifest } from '../build/bundle.ts';
 import source from '../manifest.json?raw';
 import schemaFile from '../manifest.schema.json';
 import main from '../src/main.ts?raw';
-import type { SketchHandlers } from '../src/sketch';
+import type { PluginHandlers } from '../src/plugin';
 
 const schema = schemaFile as Record<string, unknown>;
 const manifest = bundleManifest(source, '1.2.3');
-const command = (manifest.commands as { script: string; handlers: { actions: object } }[])[0];
+interface Command {
+  script: string;
+  identifier: string;
+  handlers?: { actions: object };
+  handler?: string;
+}
+const [command, fontSwitch] = manifest.commands as Command[];
 
 describe('the bundled manifest', () => {
   it('fits manifest.schema.json', () => {
@@ -16,17 +22,32 @@ describe('the bundled manifest', () => {
   });
 
   it('runs plugin.js on OpenDocument and CloseDocument', () => {
-    expect(manifest.commands).toHaveLength(1);
+    expect(manifest.commands).toHaveLength(2);
     expect(command.script).toBe('plugin.js');
-    expect(command.handlers.actions).toEqual({
+    expect(command.handlers?.actions).toEqual({
       OpenDocument: 'onOpenDocument',
       CloseDocument: 'onCloseDocument',
     });
   });
 
+  it('has the Font Switch command "Apply Copied Font" in the plugin menu', () => {
+    expect(fontSwitch).toEqual({
+      name: 'Apply Copied Font',
+      identifier: 'org.fontmanager.sketch.fontswitch',
+      script: 'plugin.js',
+      handler: 'onApplyCopiedFont',
+    });
+    expect(manifest.menu).toEqual({ title: 'Font Manager', items: [fontSwitch.identifier] });
+  });
+
   it('names the handlers main.ts makes global', () => {
-    const names: (keyof SketchHandlers)[] = ['onOpenDocument', 'onCloseDocument'];
-    expect(Object.values(command.handlers.actions).sort()).toEqual([...names].sort());
+    const names: (keyof PluginHandlers)[] = [
+      'onOpenDocument',
+      'onCloseDocument',
+      'onApplyCopiedFont',
+    ];
+    const named = [...Object.values(command.handlers?.actions ?? {}), fontSwitch.handler];
+    expect(named.sort()).toEqual([...names].sort());
     expect(main).toContain('Object.assign(globalThis, handlers)');
   });
 
@@ -59,10 +80,19 @@ describe('manifest.schema.json', () => {
     [
       'no CloseDocument handler',
       (m) =>
-        (m.commands = [{ ...command, handlers: { actions: { OpenDocument: 'onOpenDocument' } } }]),
+        (m.commands = [
+          { ...command, handlers: { actions: { OpenDocument: 'onOpenDocument' } } },
+          fontSwitch,
+        ]),
     ],
-    ['another script', (m) => (m.commands = [{ ...command, script: 'other.js' }])],
-    ['a second command', (m) => (m.commands = [command, command])],
+    ['another script', (m) => (m.commands = [{ ...command, script: 'other.js' }, fontSwitch])],
+    ['a third command', (m) => (m.commands = [command, fontSwitch, command])],
+    ['no Font Switch command', (m) => (m.commands = [command, command])],
+    [
+      'another Font Switch handler',
+      (m) => (m.commands = [command, { ...fontSwitch, handler: 'x' }]),
+    ],
+    ['no menu', (m) => delete m.menu],
   ])('refuses %s', (_, edit) => {
     expect(validate(schema, changed(edit))).not.toEqual([]);
   });

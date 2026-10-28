@@ -10,6 +10,9 @@ extension has Node and uses the pipe or socket first.
   local API with `endpoint.json` and the bearer token, ADR 0015, and the pipe
   or socket over Node's `net`, ADR 0016) and the document open/close logic
   every plugin uses, on the generated `apps/desktop/src/api/types.ts`.
+- `font-switch/` (`@fm/font-switch`): Font Switch (E34), one adapter per host
+  (InDesign, Illustrator, Photoshop, Sketch) that applies a dragged or copied
+  font to the text selection, and the drop handler the panels use.
 - `adobe-uxp/` (`@fm/adobe-uxp`): the UXP plugin for InDesign and Photoshop (E30.1).
 - `adobe-cep-illustrator/` (`@fm/adobe-cep-illustrator`): the CEP extension for
   Illustrator (E30.2); its README says why CEP and when to move to UXP.

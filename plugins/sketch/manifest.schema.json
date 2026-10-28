@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "manifest.schema.json",
   "title": "Font Manager Sketch plugin manifest",
-  "description": "The rules the bundled Contents/Sketch/manifest.json keeps: the org.fontmanager.sketch identifier, the workspace version, a minimum Sketch version, one command with the OpenDocument and CloseDocument handlers, and no other key (so no appcast: the plugin has no update feed and never calls the network).",
+  "description": "The rules the bundled Contents/Sketch/manifest.json keeps: the org.fontmanager.sketch identifier, the workspace version, a minimum Sketch version, two commands (one with the OpenDocument and CloseDocument handlers, Font Switch's \"Apply Copied Font\" in the plugin's menu), and no other key (so no appcast: the plugin has no update feed and never calls the network).",
   "type": "object",
   "required": [
     "name",
@@ -12,39 +12,129 @@
     "version",
     "compatibleVersion",
     "bundleVersion",
-    "commands"
+    "commands",
+    "menu"
   ],
   "additionalProperties": false,
   "properties": {
-    "$schema": { "type": "string" },
-    "name": { "type": "string", "minLength": 1 },
-    "identifier": { "const": "org.fontmanager.sketch" },
-    "description": { "type": "string", "minLength": 1 },
-    "author": { "type": "string", "minLength": 1 },
-    "version": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" },
-    "compatibleVersion": { "type": "string", "pattern": "^[0-9]+([.][0-9]+)*$" },
-    "bundleVersion": { "type": "integer" },
+    "$schema": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "identifier": {
+      "const": "org.fontmanager.sketch"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "author": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+    },
+    "compatibleVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+([.][0-9]+)*$"
+    },
+    "bundleVersion": {
+      "type": "integer"
+    },
     "commands": {
       "type": "array",
-      "minItems": 1,
-      "maxItems": 1,
+      "minItems": 2,
+      "maxItems": 2,
       "items": {
         "type": "object",
-        "required": ["name", "identifier", "script", "handlers"],
+        "required": ["name", "identifier", "script"],
         "additionalProperties": false,
         "properties": {
-          "name": { "type": "string", "minLength": 1 },
-          "identifier": { "type": "string", "pattern": "^org[.]fontmanager[.]sketch[.][a-z]+$" },
-          "script": { "const": "plugin.js" },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "identifier": {
+            "type": "string",
+            "pattern": "^org[.]fontmanager[.]sketch[.][a-z]+$"
+          },
+          "script": {
+            "const": "plugin.js"
+          },
           "handlers": {
             "type": "object",
             "required": ["actions"],
             "additionalProperties": false,
             "properties": {
               "actions": {
-                "const": { "OpenDocument": "onOpenDocument", "CloseDocument": "onCloseDocument" }
+                "const": {
+                  "OpenDocument": "onOpenDocument",
+                  "CloseDocument": "onCloseDocument"
+                }
               }
             }
+          },
+          "handler": {
+            "const": "onApplyCopiedFont"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "contains": {
+            "required": ["handlers"],
+            "properties": {
+              "handlers": {
+                "type": "object",
+                "required": ["actions"],
+                "additionalProperties": false,
+                "properties": {
+                  "actions": {
+                    "const": {
+                      "OpenDocument": "onOpenDocument",
+                      "CloseDocument": "onCloseDocument"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "contains": {
+            "required": ["handler"],
+            "properties": {
+              "identifier": {
+                "const": "org.fontmanager.sketch.fontswitch"
+              },
+              "handler": {
+                "const": "onApplyCopiedFont"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "menu": {
+      "type": "object",
+      "required": ["title", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "const": "org.fontmanager.sketch.fontswitch"
           }
         }
       }

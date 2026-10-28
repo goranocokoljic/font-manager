@@ -1,6 +1,8 @@
+import { COPY_A_FONT, type SketchFontSwitchHost } from '@fm/font-switch';
 import { NOT_RUNNING } from '@fm/plugin-shared';
 import { FAKE_TOKEN, FAKE_URL, type FakeEndpoint, fakeEndpoint } from '@fm/plugin-shared/testing';
 import { describe, expect, it, vi } from 'vitest';
+import { nativeFonts } from '../src/font-switch';
 import { createPlugin } from '../src/plugin';
 import {
   type MockDocument,
@@ -36,6 +38,8 @@ interface Options {
   docs?: MockDocument[];
   settings?: ReturnType<typeof mockSettings>;
   fake?: FakeEndpoint;
+  fontSwitch?: SketchFontSwitchHost;
+  clipboard?: string | null;
 }
 
 function setup(o: Options = {}) {
@@ -63,6 +67,8 @@ function setup(o: Options = {}) {
     newAlert: alerts.newAlert,
     endpoint: fake,
     keepAlive,
+    fontSwitch: o.fontSwitch ?? { selectedLayers: () => [], fonts: () => [] },
+    clipboardText: () => o.clipboard ?? null,
   });
   return { fake, ui, alerts, keepAlive, release, dom, plugin };
 }
@@ -212,5 +218,94 @@ describe('app not running', () => {
     await plugin.onOpenDocument(context(poster));
     expect(fetch).not.toHaveBeenCalled();
     expect(ui.message).toHaveBeenCalledWith(NOT_RUNNING);
+  });
+});
+
+describe('Apply Copied Font (Font Switch)', () => {
+  const payload = {
+    postscriptName: 'Inter-Regular',
+    family: 'Inter',
+    style: 'Regular',
+    fileUrl: 'file:///Users/ana/Fonts/Inter-Regular.otf',
+  };
+  const fonts = [{ postscriptName: 'Inter-Regular', family: 'Inter', style: 'Regular' }];
+  const selected = () => {
+    const setFontPostscriptName = vi.fn<(name: string) => void>();
+    return {
+      layer: { type: 'Text', sketchObject: { setFontPostscriptName } },
+      setFontPostscriptName,
+    };
+  };
+
+  it('gives the selected text layers the font copied in the app', async () => {
+    const text = selected();
+    const { ui, fake, plugin } = setup({
+      clipboard: JSON.stringify(payload),
+      fontSwitch: { selectedLayers: () => [text.layer], fonts: () => fonts },
+    });
+    await plugin.onApplyCopiedFont();
+    expect(text.setFontPostscriptName).toHaveBeenCalledWith('Inter-Regular');
+    expect(ui.message).toHaveBeenCalledWith('Inter-Regular applied');
+    // Font Switch applies; it does not call the app.
+    expect(fake.requests).toEqual([]);
+  });
+
+  it.each<[string, string | null, boolean, string]>([
+    ['no text is selected', 'Inter-Regular', false, 'Select some text first'],
+    ['the clipboard holds no font', 'two words', true, COPY_A_FONT],
+    ['the clipboard is empty', null, true, COPY_A_FONT],
+    ['the Mac does not have the font', 'Lora-Bold', true, 'Lora-Bold is not active'],
+  ])('says so when %s', async (_, clipboard, withText, message) => {
+    const text = selected();
+    const { ui, plugin } = setup({
+      clipboard,
+      fontSwitch: { selectedLayers: () => (withText ? [text.layer] : []), fonts: () => fonts },
+    });
+    await plugin.onApplyCopiedFont();
+    expect(text.setFontPostscriptName).not.toHaveBeenCalled();
+    expect(ui.message).toHaveBeenCalledWith(message);
+  });
+
+  it('says what went wrong when Sketch throws', async () => {
+    const { ui, plugin } = setup({
+      clipboard: 'Inter-Regular',
+      fontSwitch: {
+        selectedLayers: () => {
+          throw new Error('no document');
+        },
+        fonts: () => fonts,
+      },
+    });
+    await plugin.onApplyCopiedFont();
+    expect(ui.message).toHaveBeenCalledWith('Font Manager: Error: no document');
+  });
+});
+
+describe('nativeFonts', () => {
+  const array = <T>(items: T[]) => ({
+    count: () => items.length,
+    objectAtIndex: (i: number) => items[i],
+  });
+
+  it('lists every member of every family with its PostScript name and style', () => {
+    const members: Record<string, unknown[][]> = {
+      Inter: [
+        ['Inter-Regular', 'Regular', 5, 0],
+        ['Inter-Bold', 'Bold', 9, 2],
+      ],
+      Lora: [['Lora-Italic', 'Italic', 5, 1]],
+    };
+    const manager = {
+      availableFontFamilies: () => array(['Inter', 'Lora', 'Gone']),
+      availableMembersOfFontFamily: (family: unknown) => {
+        const list = members[String(family)];
+        return list ? array(list.map(array)) : null;
+      },
+    };
+    expect(nativeFonts(manager)).toEqual([
+      { postscriptName: 'Inter-Regular', family: 'Inter', style: 'Regular' },
+      { postscriptName: 'Inter-Bold', family: 'Inter', style: 'Bold' },
+      { postscriptName: 'Lora-Italic', family: 'Lora', style: 'Italic' },
+    ]);
   });
 });

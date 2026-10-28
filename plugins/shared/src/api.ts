@@ -13,6 +13,7 @@ export type {
   DocumentClosedResponse,
   ErrorCode,
   FaceId,
+  FontSwitchPayload,
   FontsNeededRequest,
   FontsNeededResponse,
   NeededFont,

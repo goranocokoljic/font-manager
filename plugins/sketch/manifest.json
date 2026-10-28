@@ -2,7 +2,7 @@
   "$schema": "./manifest.schema.json",
   "name": "Font Manager",
   "identifier": "org.fontmanager.sketch",
-  "description": "Activates the fonts of a document from your Font Manager library when it opens.",
+  "description": "Activates the fonts of a document from your Font Manager library when it opens, and applies a font copied in Font Manager to the selected text.",
   "author": "Font Manager",
   "compatibleVersion": "70",
   "bundleVersion": 1,
@@ -17,6 +17,16 @@
           "CloseDocument": "onCloseDocument"
         }
       }
+    },
+    {
+      "name": "Apply Copied Font",
+      "identifier": "org.fontmanager.sketch.fontswitch",
+      "script": "plugin.js",
+      "handler": "onApplyCopiedFont"
     }
-  ]
+  ],
+  "menu": {
+    "title": "Font Manager",
+    "items": ["org.fontmanager.sketch.fontswitch"]
+  }
 }

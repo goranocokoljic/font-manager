@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fm/font-switch": "workspace:*",
     "@fm/plugin-shared": "workspace:*"
   },
   "devDependencies": {

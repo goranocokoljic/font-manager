@@ -1,7 +1,16 @@
 // The plugin's entry in InDesign and Photoshop. Wiring only: the client, the
 // document logic and the missing-fonts panel are `@fm/plugin-shared`, the
-// host events are `hosts/`.
+// host events are `hosts/`, and a font dropped on the panel goes to
+// `@fm/font-switch`'s adapter for the host (E34).
 
+import {
+  type InDesignFontSwitchApp,
+  type PhotoshopFontSwitchModule,
+  fontSwitchDropTarget,
+  hostFromName,
+  inDesignAdapter,
+  photoshopAdapter,
+} from '@fm/font-switch';
 import {
   type ClientHost,
   DocumentWatcher,
@@ -39,10 +48,17 @@ const host: ClientHost = {
   fetch: (url, init) => fetch(url, init),
 };
 const client = new FmClient(host);
-const watcher = new DocumentWatcher(client, uxpUi(document));
+const ui = uxpUi(document);
+const watcher = new DocumentWatcher(client, ui);
 
-const indesign = uxp.host.name === 'InDesign' ? (require('indesign') as InDesignModule) : null;
-const photoshop = uxp.host.name === 'Photoshop' ? (require('photoshop') as PhotoshopModule) : null;
+const indesign =
+  uxp.host.name === 'InDesign'
+    ? (require('indesign') as InDesignModule & { app: InDesignFontSwitchApp })
+    : null;
+const photoshop =
+  uxp.host.name === 'Photoshop'
+    ? (require('photoshop') as PhotoshopModule & PhotoshopFontSwitchModule)
+    : null;
 const source: PanelSource = {
   activeDocument: () =>
     indesign ? inDesignActive(indesign) : photoshop ? photoshopActive(photoshop) : null,
@@ -56,3 +72,13 @@ uxp.entrypoints.setup({ panels: { fmPanel: { show: refresh } } });
 if (indesign) watchInDesign(indesign, watcher, refresh);
 else if (photoshop) watchPhotoshop(photoshop, watcher, refresh);
 refresh();
+
+fontSwitchDropTarget(
+  document,
+  () => hostFromName(uxp.host.name),
+  {
+    indesign: indesign && inDesignAdapter(indesign.app),
+    photoshop: photoshop && photoshopAdapter(photoshop),
+  },
+  (message) => ui.notify(message),
+);

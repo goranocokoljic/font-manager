@@ -2,7 +2,9 @@
 // logic are `@fm/plugin-shared`, the Sketch side is `sketch.ts`, and
 // `plugin.ts` puts them together.
 
+import type { SketchSelectedLayer } from '@fm/font-switch';
 import { endpointFilePath } from '@fm/plugin-shared';
+import { type NativeFontManager, nativeFonts } from './font-switch';
 import type { SessionStore } from './once';
 import { createPlugin } from './plugin';
 import type { SketchDom } from './sketch';
@@ -12,6 +14,13 @@ import type { NativeAlert, SketchUiModule } from './ui';
 declare const require: (id: string) => unknown;
 // Cocoa classes are globals in Sketch's script runtime.
 declare const NSAlert: { alloc(): { init(): NativeAlert } };
+declare const NSFontManager: { sharedFontManager(): NativeFontManager };
+declare const NSPasteboard: { generalPasteboard(): { stringForType(type: unknown): unknown } };
+declare const NSPasteboardTypeString: unknown;
+
+interface SelectionDom {
+  getSelectedDocument(): { selectedLayers?: { layers?: SketchSelectedLayer[] } } | undefined;
+}
 
 interface OsModule {
   platform(): string;
@@ -29,8 +38,10 @@ const fs = require('fs') as FsModule;
 const fibers = require('sketch/async') as AsyncModule;
 const endpointFile = endpointFilePath(os.platform(), os.homedir());
 
+const dom = require('sketch/dom') as SketchDom & SelectionDom;
+
 const handlers = createPlugin({
-  dom: require('sketch/dom') as SketchDom,
+  dom,
   ui: require('sketch/ui') as SketchUiModule,
   settings: require('sketch/settings') as SessionStore,
   newAlert: () => NSAlert.alloc().init(),
@@ -42,6 +53,15 @@ const handlers = createPlugin({
   keepAlive: () => {
     const fiber = fibers.createFiber();
     return () => fiber.cleanup();
+  },
+  fontSwitch: {
+    selectedLayers: () => dom.getSelectedDocument()?.selectedLayers?.layers ?? [],
+    fonts: () => nativeFonts(NSFontManager.sharedFontManager()),
+  },
+  clipboardText: () => {
+    // `nil` when the clipboard holds no text.
+    const text = NSPasteboard.generalPasteboard().stringForType(NSPasteboardTypeString);
+    return text === null || text === undefined ? null : String(text);
   },
 });
 
