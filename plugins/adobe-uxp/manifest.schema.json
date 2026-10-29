@@ -45,9 +45,7 @@
         {
           "contains": {
             "type": "object",
-            "required": [
-              "app"
-            ],
+            "required": ["app"],
             "properties": {
               "app": {
                 "const": "ID"
@@ -58,9 +56,7 @@
         {
           "contains": {
             "type": "object",
-            "required": [
-              "app"
-            ],
+            "required": ["app"],
             "properties": {
               "app": {
                 "const": "PS"
@@ -71,17 +67,11 @@
       ],
       "items": {
         "type": "object",
-        "required": [
-          "app",
-          "minVersion"
-        ],
+        "required": ["app", "minVersion"],
         "additionalProperties": false,
         "properties": {
           "app": {
-            "enum": [
-              "ID",
-              "PS"
-            ]
+            "enum": ["ID", "PS"]
           },
           "minVersion": {
             "type": "string",
@@ -95,17 +85,10 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": [
-          "type",
-          "id",
-          "label"
-        ],
+        "required": ["type", "id", "label"],
         "properties": {
           "type": {
-            "enum": [
-              "panel",
-              "command"
-            ]
+            "enum": ["panel", "command"]
           },
           "id": {
             "type": "string",
@@ -113,9 +96,7 @@
           },
           "label": {
             "type": "object",
-            "required": [
-              "default"
-            ],
+            "required": ["default"],
             "properties": {
               "default": {
                 "type": "string",
@@ -128,16 +109,12 @@
     },
     "requiredPermissions": {
       "type": "object",
-      "required": [
-        "network"
-      ],
+      "required": ["network"],
       "additionalProperties": false,
       "properties": {
         "network": {
           "type": "object",
-          "required": [
-            "domains"
-          ],
+          "required": ["domains"],
           "additionalProperties": false,
           "properties": {
             "domains": {

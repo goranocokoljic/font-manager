@@ -42,9 +42,7 @@
   ],
   "requiredPermissions": {
     "network": {
-      "domains": [
-        "http://localhost"
-      ]
+      "domains": ["http://localhost"]
     },
     "localFileSystem": "fullAccess"
   }
