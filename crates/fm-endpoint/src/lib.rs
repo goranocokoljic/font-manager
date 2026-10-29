@@ -1,11 +1,8 @@
 //! Font Manager local API endpoint (ADR 0015).
 //!
 //! A thin transport over `Arc<dyn Api>`: every service method is
-//! `POST /v1/<method>` on `127.0.0.1:<port>`, with the request as the JSON
-//! body and the answer as JSON. The port is the first free one of
-//! [`PREFERRED_PORTS`], else one the OS picks ([`bind_first`]): a UXP
-//! plugin's manifest must name each address it may call, port included, so
-//! the plugins list these ten; `endpoint.json` still tells the real one. An [`ApiError`] keeps its JSON
+//! `POST /v1/<method>` on `127.0.0.1:<port the OS picks>`, with the request
+//! as the JSON body and the answer as JSON. An [`ApiError`] keeps its JSON
 //! shape and gets a fixed HTTP status by its [`ErrorCode`]
 //! ([`status_for`]). Services run on `spawn_blocking` (ADR 0006).
 //!
@@ -78,32 +75,6 @@ pub const ROUTE_PREFIX: &str = "/v1/";
 /// What this app serves, without a token (`GET`).
 pub const VERSION_ROUTE: &str = "/v1/version";
 
-/// The ports the endpoint tries first, in this order, before it lets the OS
-/// pick one (ADR 0015). Below every OS's ephemeral range (Linux starts at
-/// 32768), so an outgoing connection rarely holds one; ten, so a second app
-/// of another user on the machine, or a stale socket, still leaves a
-/// listed port. A UXP manifest cannot name a port it does not know
-/// (ADR 0018), so the plugins allow exactly these ten.
-pub const PREFERRED_PORTS: std::ops::RangeInclusive<u16> = 27501..=27510;
-
-/// Binds `127.0.0.1` on the first of `ports` that is free, else on a port
-/// the OS picks. Only a bind refused for the port itself (in use, no
-/// permission) moves on to the next; another error is returned.
-pub fn bind_first(ports: impl IntoIterator<Item = u16>) -> io::Result<StdListener> {
-    for port in ports {
-        match StdListener::bind((Ipv4Addr::LOCALHOST, port)) {
-            Ok(listener) => return Ok(listener),
-            Err(e)
-                if matches!(
-                    e.kind(),
-                    io::ErrorKind::AddrInUse | io::ErrorKind::PermissionDenied
-                ) => {}
-            Err(e) => return Err(e),
-        }
-    }
-    StdListener::bind((Ipv4Addr::LOCALHOST, 0))
-}
-
 /// A running endpoint. Dropping it (or [`Endpoint::stop`]) closes the socket.
 #[derive(Debug)]
 pub struct Endpoint {
@@ -114,9 +85,8 @@ pub struct Endpoint {
 }
 
 impl Endpoint {
-    /// Binds `127.0.0.1` on the first free port of [`PREFERRED_PORTS`], else
-    /// on one the OS picks, and serves `api` on a thread of its own. Returns
-    /// once the socket is bound.
+    /// Binds `127.0.0.1` on a port the OS picks and serves `api` on a
+    /// thread of its own. Returns once the socket is bound.
     pub fn start(api: Arc<dyn Api>) -> io::Result<Self> {
         Self::start_with(api, StreamOptions::default())
     }
@@ -152,7 +122,7 @@ impl Endpoint {
         deprecations: Vec<Deprecation>,
         mcp: Option<Arc<dyn Mount>>,
     ) -> io::Result<Self> {
-        let listener = bind_first(PREFERRED_PORTS)?;
+        let listener = StdListener::bind((Ipv4Addr::LOCALHOST, 0))?;
         listener.set_nonblocking(true)?;
         let addr = listener.local_addr()?;
         let runtime = tokio::runtime::Builder::new_current_thread()
@@ -655,40 +625,6 @@ fn json_response(status: StatusCode, json: Vec<u8>) -> Response<Full> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn bind_first_takes_the_first_free_listed_port() {
-        // Two ports the OS gives, then given back: free a moment later with
-        // a chance a parallel test takes one, so the first found is enough.
-        let taken = StdListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind");
-        let busy = taken.local_addr().expect("addr").port();
-        let bound = bind_first([busy, 0]).expect("bind_first");
-        assert_ne!(bound.local_addr().expect("addr").port(), busy);
-        drop(taken);
-    }
-
-    #[test]
-    fn bind_first_falls_back_to_an_os_port_when_every_listed_port_is_taken() {
-        let taken = StdListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind");
-        let busy = taken.local_addr().expect("addr").port();
-        let bound = bind_first([busy, busy]).expect("bind_first");
-        let port = bound.local_addr().expect("addr").port();
-        assert_ne!(port, busy);
-        assert_ne!(port, 0);
-    }
-
-    #[test]
-    fn bind_first_without_a_list_lets_the_os_pick() {
-        let bound = bind_first([]).expect("bind_first");
-        assert_ne!(bound.local_addr().expect("addr").port(), 0);
-    }
-
-    #[test]
-    fn preferred_ports_are_ten_below_every_ephemeral_range() {
-        assert_eq!(PREFERRED_PORTS.clone().count(), 10);
-        assert!(*PREFERRED_PORTS.end() < 32768);
-        assert!(*PREFERRED_PORTS.start() > 1024);
-    }
 
     #[test]
     fn only_loopback_hosts_with_this_port_are_allowed() {

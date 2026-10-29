@@ -51,15 +51,24 @@ with a missing font reports nothing for that font, and this is accepted.
 
 | Runtime | Transport | Facts |
 |---------|-----------|-------|
-| UXP | local API (ADR 0015) over `fetch`, address from `endpoint.json` | A UXP `fetch` carries no `Origin`, so the endpoint takes it. The manifest must name every address the plugin may call, **port included**: Photoshop matches `network.domains` entries with the port, so `http://127.0.0.1` never matches and only `"all"` or exact `http://127.0.0.1:<port>` entries work. |
+| UXP | local API (ADR 0015) over `fetch`, to `http://localhost:<port>` | A UXP `fetch` carries no `Origin`, so the endpoint takes it. The manifest names `http://localhost` and nothing else; the plugin rewrites the `127.0.0.1` address from `endpoint.json` to `localhost` (`uxpUrl`), which the endpoint accepts as its Host. |
 | CEP | IPC pipe or socket (ADR 0016) first; local API second | A CEP page is `file://`, so its `fetch` carries an `Origin` header and the endpoint refuses it (403) by design; the pipe needs no token and is the transport that works. The HTTP fallback stays for a host without Node, where it will not work either; it is kept only so the client code is one. |
 
-Hence the ADR 0015 amendment: the app binds the first free port of ten
-(`fm_endpoint::PREFERRED_PORTS`, 27501 to 27510), else an OS port, and the
-UXP manifests allow exactly those ten addresses. "All" network access was
+**Why `localhost`, from Photoshop's own runtime** (the permissions module
+in `dynamic-torqnative.dll`, Photoshop 26.4). Before any matching, every
+`network.domains` entry goes through `parse-domain` with `localhost` as the
+one custom top-level domain, and an entry it returns `null` for is dropped
+from the list. `127.0.0.1` has no top-level domain, so every
+`http://127.0.0.1…` entry, with or without a port, is dropped: "Permission
+denied to the url … Manifest entry not found" even when the entry is
+there. `localhost` survives. The matcher then compares scheme (when the
+entry has one), host (with `*.` and `.*` wildcards) and port, and **an
+entry without a port matches any port**. So `http://localhost` alone
+allows `http://localhost:<port>` for whatever port the OS gave the app,
+and the port stays as ADR 0015 chose it. "All" network access was
 refused: it declares a plugin that talks to the whole internet, which
-Adobe's review flags and rule 7 forbids in spirit. With an OS port the UXP
-plugin shows "Font Manager is not running"; the CLI and MCP shim still work.
+Adobe's review flags and rule 7 forbids in spirit. A fixed port list was
+tried first and reverted: it bought nothing once the rule was known.
 
 **Manifests.** Photoshop 2025 refuses a third-party manifest whose `host` is
 an array: "Expected the host attribute to be an object for the 3P Plugin".
@@ -102,8 +111,9 @@ parked, not part of this spike.
   contract the host adapters implement, and `fmXmpFonts` is the only source
   of a missing Illustrator font.
 - A UXP release ships two plugins (Photoshop, InDesign) from one source; a
-  marketplace listing per app. The port list is in two places, the Rust
-  constant and the manifest, kept equal by the manifest test.
+  marketplace listing per app.
+- The endpoint must keep accepting `localhost:<port>` as its Host (ADR
+  0015 does); the UXP plugin has no other way in.
 - InDesign is verified only by the mocks until someone with InDesign runs
   `dist/indesign/` the same way; that check is part of the InDesign plugin
   story (#358), with the sideload folder above.

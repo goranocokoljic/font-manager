@@ -187,33 +187,10 @@ fn a_request_with_a_browser_origin_is_refused_with_403() {
 fn stopping_the_endpoint_closes_the_socket() {
     let served = Served::new();
     let addr = served.endpoint.addr();
-    // Every endpoint tries the same ten ports first (PREFERRED_PORTS), so a
-    // parallel test's endpoint may take the freed port at once, and every
-    // MockApi has the same token. A collection only this mock has tells
-    // this endpoint from a stranger on the port.
-    let name = format!(
-        "Stopped-{}",
-        std::time::UNIX_EPOCH.elapsed().unwrap().as_nanos()
-    );
-    let body = format!(r#"{{"name":"{name}"}}"#);
-    assert_eq!(served.call("create_collection", &body).status, 200);
-    let host = served.host();
-    let auth = format!("Bearer {}", served.token());
     served.endpoint.stop();
-    if std::net::TcpStream::connect(addr).is_err() {
-        return;
-    }
-    let reply = common::send(
-        addr,
-        "POST",
-        "/v1/list_collections",
-        &[("Host", &host), ("Authorization", &auth)],
-        "{}",
-    );
     assert!(
-        !reply.body.to_string().contains(&name),
-        "{addr} still serves this endpoint: {}",
-        reply.body
+        std::net::TcpStream::connect(addr).is_err(),
+        "{addr} still accepts"
     );
 }
 

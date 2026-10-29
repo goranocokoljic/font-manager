@@ -34,12 +34,13 @@ app finds and activates them (E29.2).
 
 It reaches the app through the local API (ADR 0015): `endpoint.json` in the
 app's data folder gives the address (always `http://127.0.0.1:<port>`) and
-the token. UXP lets a plugin call only the addresses its manifest names, port
-included, so the manifest allows exactly the ten ports the app tries first
-(27501 to 27510, `fm_endpoint::PREFERRED_PORTS`; the test keeps them equal)
-and full file access to read that file. When the app had to take another
-port, the plugin says "Font Manager is not running". The client and the
-document logic are in `plugins/shared/`; the types are the generated
+the token. The plugin calls `http://localhost:<port>` instead
+(`src/endpoint-url.ts`): UXP lets a plugin call only the hosts its manifest
+names, drops `127.0.0.1` from that list because it has no top-level domain,
+and takes `localhost` as the one special name; an entry without a port
+matches any port. So the manifest allows `http://localhost` only, and full
+file access to read `endpoint.json`. The client and the document logic are
+in `plugins/shared/`; the types are the generated
 `apps/desktop/src/api/types.ts`. ADR 0018 records what the real apps do.
 
 ## Build and load

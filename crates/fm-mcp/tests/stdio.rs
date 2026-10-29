@@ -62,12 +62,8 @@ impl Home {
 
     /// Writes `endpoint.json` as the app does, naming this (running) process.
     fn publish(&self, endpoint: &Endpoint, token: &str) {
-        self.publish_at(endpoint.addr(), token);
-    }
-
-    fn publish_at(&self, addr: std::net::SocketAddr, token: &str) {
         let discovery = Discovery {
-            url: format!("http://{addr}"),
+            url: format!("http://{}", endpoint.addr()),
             token: token.to_owned(),
             pid: std::process::id(),
             api_version: API_VERSION.to_string(),
@@ -256,17 +252,9 @@ fn without_the_app_the_shim_answers_the_error_and_exits_non_zero() {
 #[test]
 fn a_stale_endpoint_file_is_no_app() {
     let home = Home::new("stale");
-    // An app that published and stopped without removing the file. Every
-    // endpoint tries the same ten ports first (PREFERRED_PORTS), so a
-    // parallel test's endpoint may take the freed port at once; the stale
-    // file names a port the OS just gave back instead, which stays free.
+    // An app that published and stopped without removing the file.
     let app = App::start(&home, true);
-    let token = app.api.endpoint_info().expect("info").token;
     app.endpoint.stop();
-    let free = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
-    let addr = free.local_addr().expect("addr");
-    drop(free);
-    home.publish_at(addr, &token);
     let mut shim = home.shim();
     shim.send(INITIALIZE);
     assert_unavailable(&shim.next(ANSWER), Some(1));
