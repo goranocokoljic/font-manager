@@ -138,6 +138,7 @@ service!(WorkflowService {
     pick_fonts_for_brief(req: BriefRequest) -> Shortlist;
     prepare_for_web(req: PrepareForWebRequest) -> PrepareForWebResponse;
     document_fonts(req: DocumentFontsRequest) -> DocumentFonts;
+    check_document_fonts(req: DocumentFontsRequest) -> DocumentFontsCheck;
 });
 
 service!(LayoutService {

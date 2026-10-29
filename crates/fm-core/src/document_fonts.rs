@@ -20,18 +20,27 @@ mod zip;
 #[cfg(test)]
 mod tests;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::fs::File;
 use std::io::{self, BufReader, Read, Seek};
 use std::path::Path;
 
 use fm_api::ErrorCode;
-use fm_api::workflows::{DocumentFontRef, DocumentFonts, DocumentFormat};
+use fm_api::FaceId;
+use fm_api::activation::{NeededFont, NeededFontMatch};
+use fm_api::workflows::{
+    DocumentFontCheck, DocumentFontRef, DocumentFontStatus, DocumentFonts, DocumentFontsCheck,
+    DocumentFormat,
+};
 
 use crate::error::{FmError, FmResult};
 
 /// The sentence the user sees for any document that cannot be read.
 pub const UNREADABLE: &str = "This document's fonts could not be read.";
+
+/// The sentence the user sees for a file that is not a document this module
+/// reads.
+pub const UNSUPPORTED: &str = "Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.";
 
 /// The format of `path`, from its extension (any case); `None` when it is not
 /// a document this module reads.
@@ -53,7 +62,7 @@ pub fn format_of(path: &Path) -> Option<DocumentFormat> {
 /// file is opened read-only and never written, moved or renamed.
 pub fn document_fonts(path: &Path) -> FmResult<DocumentFonts> {
     let Some(format) = format_of(path) else {
-        return Err(FmError::unsupported(UNREADABLE).with_detail(format!(
+        return Err(FmError::unsupported(UNSUPPORTED).with_detail(format!(
             "{}: not a document type Font Manager reads",
             path.display()
         )));
@@ -64,6 +73,55 @@ pub fn document_fonts(path: &Path) -> FmResult<DocumentFonts> {
         e.with_detail(format!("{}: {why}", path.display()))
     })?;
     Ok(DocumentFonts { format, fonts })
+}
+
+/// The name `fonts_needed` matches a document's font reference by (E32.2):
+/// the PostScript name, the family and the style; documents name no full
+/// name.
+pub fn needed_font(font: &DocumentFontRef) -> NeededFont {
+    NeededFont {
+        postscript_name: font.postscript_name.clone(),
+        full_name: None,
+        family: font.family.clone(),
+        style: font.style.clone(),
+    }
+}
+
+/// Each font of `doc` with its status (E32.2): `matched` is what
+/// `fonts_needed` found for [`needed_font`] of the fonts, `active` the faces
+/// the app has active. A font without a match is missing; a matched one is
+/// active when its face is. `to_activate` lists the faces of the in-library
+/// fonts once each, in font order.
+pub fn check(
+    doc: DocumentFonts,
+    matched: &[NeededFontMatch],
+    active: &HashSet<FaceId>,
+) -> DocumentFontsCheck {
+    let mut to_activate = Vec::new();
+    let fonts = doc
+        .fonts
+        .into_iter()
+        .map(|font| {
+            let needed = needed_font(&font);
+            let face = matched.iter().find(|m| m.font == needed).map(|m| m.face);
+            let status = match face {
+                None => DocumentFontStatus::Missing,
+                Some(f) if active.contains(&f) => DocumentFontStatus::Active,
+                Some(f) => {
+                    if !to_activate.contains(&f) {
+                        to_activate.push(f);
+                    }
+                    DocumentFontStatus::InLibrary
+                }
+            };
+            DocumentFontCheck { font, status, face }
+        })
+        .collect();
+    DocumentFontsCheck {
+        format: doc.format,
+        fonts,
+        to_activate,
+    }
 }
 
 /// The fonts of a document of `format` in `src`, sorted. Public for the

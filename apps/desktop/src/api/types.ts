@@ -727,6 +727,19 @@ export type DocumentClosedResponse = {
 	offer: FaceId[],
 };
 
+/**  One font a document names, with its library face and status. */
+export type DocumentFontCheck = {
+	/**  The font, as the document names it. */
+	font: DocumentFontRef,
+	/**  Active, in the library, or missing. */
+	status: DocumentFontStatus,
+	/**
+	 *  The face that stands for it (the `fonts_needed` matcher); `None` when
+	 *  it is missing.
+	 */
+	face?: FaceId | null,
+};
+
 /**
  *  One font a document names. Each format stores a different part of the
  *  name, so every part is optional; at least one is present.
@@ -740,12 +753,37 @@ export type DocumentFontRef = {
 	style?: string | null,
 };
 
+/**  Where a font a document names stands in the library (E32.2). */
+export type DocumentFontStatus = 
+/**  The library has it and the app has its face active. */
+"active" | 
+/**  The library has it; its face is not active. */
+"inLibrary" | 
+/**  The library does not have it. */
+"missing";
+
 /**  The fonts a document uses. */
 export type DocumentFonts = {
 	/**  What kind of document it is. */
 	format: DocumentFormat,
 	/**  Every distinct font reference, sorted. */
 	fonts: DocumentFontRef[],
+};
+
+/**
+ *  The fonts a document uses and where each stands in the library (the
+ *  Document fonts panel, E32.2).
+ */
+export type DocumentFontsCheck = {
+	/**  What kind of document it is. */
+	format: DocumentFormat,
+	/**  Every distinct font reference, in [`DocumentFonts::fonts`] order. */
+	fonts: DocumentFontCheck[],
+	/**
+	 *  The faces of the in-library fonts, each once, in font order: what
+	 *  "Activate N fonts" session-activates.
+	 */
+	toActivate: FaceId[],
 };
 
 /**  Read the fonts a design document uses. */

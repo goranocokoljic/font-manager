@@ -41,6 +41,8 @@ const quickRows = Number(process.env.FM_SCREENS_QUICK ?? 0);
 // FM_SCREENS_TAGS=Display,Body makes those tags on the first list row with T, then opens the
 // multi-tagging panel for the first two rows (one mixed tag each).
 const tagNames = (process.env.FM_SCREENS_TAGS ?? '').split(',').filter(Boolean);
+// FM_SCREENS_COMMAND="Check a document's fonts" runs that command palette action before the shot.
+const command = process.env.FM_SCREENS_COMMAND;
 // FM_SCREENS_QUERY='?mockColor=1' sets MockApi options (the page URL before the hash).
 const query = process.env.FM_SCREENS_QUERY ?? '';
 // FM_SCREENS_LOCALE=ar-XB sets the browser's (the OS's) language: `ar-XB` shows the RTL chrome.
@@ -140,6 +142,12 @@ test.describe('@screens', () => {
             await page.keyboard.press('Shift+ArrowDown');
             await page.keyboard.press('t');
             await expect(panel).toBeVisible();
+          }
+          if (command) {
+            await page.keyboard.press('ControlOrMeta+k');
+            await page.keyboard.type(command);
+            await page.keyboard.press('Enter');
+            await expect(page.getByRole('dialog', { name: 'Command palette' })).toBeHidden();
           }
           if (click) {
             await page

@@ -89,6 +89,10 @@ import {
   type TextBlock,
   type VirtualStyle,
   type WebUse,
+  DocumentFontCheck,
+  DocumentFontRef,
+  DocumentFontsCheck,
+  DocumentFormat,
 } from './types';
 
 export const mockAppInfo: AppInfo = {
@@ -732,6 +736,8 @@ export interface MockOptions {
   sets?: ProjectSet[];
   /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
   cjkFaces?: FaceId[];
+  /** Faces active for the session from the start (none by default). */
+  activeFaces?: FaceId[];
   /** Saved comparisons (none by default); a face the mock lacks reopens as missing. */
   comparisons?: MockComparison[];
   /**
@@ -1229,6 +1235,34 @@ export const mockPickedFolders: (string | null)[] = [];
 
 /** Files the mock file picker returns, one per call; `null` is a cancel. */
 export const mockPickedFiles: (string | null)[] = [];
+
+/**
+ * Documents the mock "Check a document's fonts…" picker returns, one per call; `null` is
+ * a cancel. Empty: `?mockDocument=1` picks a text file, `=2` a damaged Photoshop file,
+ * `=3` cancels, else "Brand brochure.indd".
+ */
+export const mockPickedDocuments: (string | null)[] = [];
+
+/**
+ * The fonts every readable mock document names (E32.2): a face of the sample library
+ * (Inter), one with a system clash (JetBrains Mono) and one the library lacks.
+ */
+export const mockDocumentFonts: DocumentFontRef[] = [
+  { postscriptName: 'Futura-Medium', family: 'Futura', style: 'Medium' },
+  { postscriptName: 'Inter-Regular', family: 'Inter', style: 'Regular' },
+  { postscriptName: 'JetBrainsMono-Regular', family: 'JetBrains Mono', style: 'Regular' },
+];
+
+const DOCUMENT_FORMATS: Record<string, DocumentFormat> = {
+  docx: 'docx',
+  pptx: 'pptx',
+  sketch: 'sketch',
+  fig: 'fig',
+  indd: 'indd',
+  ai: 'ai',
+  psd: 'psd',
+  psb: 'psd',
+};
 
 /** Where the mock save dialog saves, one per call; `null` is a cancel. */
 export const mockPickedSaves: (string | null)[] = [];
@@ -1815,9 +1849,11 @@ function createMockLayouts(): Pick<
 }
 
 export function createMockClient(options: MockOptions = {}): FmClient {
-  const active = new Map<FaceId, ActivationMode>();
+  const active = new Map<FaceId, ActivationMode>(
+    (options.activeFaces ?? []).map((id) => [id, 'session']),
+  );
   /** Faces ever activated, active now or not. */
-  const everActivated = new Set<FaceId>();
+  const everActivated = new Set<FaceId>(active.keys());
   const sources = structuredClone(mockSources);
   const sets = structuredClone(options.sets ?? []);
   const handlers = new Set<(event: Event) => void>();
@@ -2885,6 +2921,44 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             ]
           : [];
       }),
+    // Like the Rust mock: the format from the extension, the fixed `mockDocumentFonts`,
+    // each matched by PostScript name, then family and style, among the usable faces.
+    checkDocumentFonts: async (req) => {
+      const unreadable = "This document's fonts could not be read.";
+      const ext = /\.([^./\\]+)$/.exec(req.path)?.[1]?.toLowerCase() ?? '';
+      const format = DOCUMENT_FORMATS[ext];
+      if (!format)
+        throw {
+          code: 'unsupported' as const,
+          message:
+            'Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.',
+          detail: `${req.path}: unknown document type`,
+        };
+      if (/damaged/i.test(req.path))
+        throw {
+          code: 'unsupported' as const,
+          message: unreadable,
+          detail: `${req.path}: truncated`,
+        };
+      const same = (a: string | null | undefined, b: string) =>
+        a != null && a.trim().toLowerCase() === b.toLowerCase();
+      const usable = faces.filter((f) => f.face.health.kind !== 'broken');
+      const toActivate: FaceId[] = [];
+      const fonts = mockDocumentFonts.map((font): DocumentFontCheck => {
+        const f =
+          usable.find((d) => same(font.postscriptName, d.face.postscriptName)) ??
+          usable.find(
+            (d) =>
+              same(font.family, d.face.familyName) && same(font.style ?? 'Regular', d.face.style),
+          );
+        if (!f) return { font: { ...font }, status: 'missing', face: null };
+        const id = f.face.id;
+        if (active.has(id)) return { font: { ...font }, status: 'active', face: id };
+        if (!toActivate.includes(id)) toActivate.push(id);
+        return { font: { ...font }, status: 'inLibrary', face: id };
+      });
+      return { format, fonts, toActivate } satisfies DocumentFontsCheck;
+    },
     listConflicts: async () =>
       [...active.keys()]
         .sort((a, b) => a - b)
@@ -3159,6 +3233,16 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       mockPickedFiles.length
         ? mockPickedFiles.shift()!
         : `/Users/demo/Downloads/receipt-${++picks}.pdf`,
+    pickDocument: async () => {
+      if (mockPickedDocuments.length) return mockPickedDocuments.shift()!;
+      const pick = countFromUrl('mockDocument', 3);
+      if (pick === 3) return null;
+      return [
+        '/Users/demo/Documents/Brand brochure.indd',
+        '/Users/demo/Documents/notes.txt',
+        '/Users/demo/Documents/Damaged poster.psd',
+      ][pick]!;
+    },
     getSettings: async () => ({ ...settings }),
     // The same ranges as `Settings::apply` in fm-api.
     updateSettings: async (req) => {
@@ -3307,6 +3391,8 @@ export const mockClient: FmClient = createMockClient({
   comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],
   extraFaces: countFromUrl('mockFaces', 100_000),
   stylesPerFamily: countFromUrl('mockStyles', EXTRA_STYLES.length) || 1,
+  // `?mockActive=1` starts with face 1 active, `=6` with face 6 (Document fonts, E32.2).
+  activeFaces: [countFromUrl('mockActive', 9)].filter((id) => id > 0),
   // `?mockCjk=1` gives face 1 a CJK-sized glyph map.
   cjkFaces: countFromUrl('mockCjk', 1) ? [1] : [],
   // "Start at login" is offered; `?mockStartAtLogin=2` refuses changes, `=3` hides it.

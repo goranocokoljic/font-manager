@@ -50,6 +50,7 @@ use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
     Settings, SettingsUpdate,
 };
+use fm_api::workflows::{DocumentFontsCheck, DocumentFontsRequest};
 use fm_api::{
     Api, ApiError, ApiResult, CollectionId, ErrorCode, FaceId, FamilyId, JobId, ResolutionId,
     SetId, SettingsService, SourceId, VirtualStyleId,
@@ -765,6 +766,16 @@ async fn list_conflicts(state: State<'_, AppState>) -> ApiResult<Vec<Clash>> {
     call(&state, |api| api.list_conflicts()).await
 }
 
+/// The fonts a design document names, each active, in the library or
+/// missing (the Document fonts panel, E32.2). The document is only read.
+#[tauri::command]
+async fn check_document_fonts(
+    state: State<'_, AppState>,
+    req: DocumentFontsRequest,
+) -> ApiResult<DocumentFontsCheck> {
+    call(&state, move |api| api.check_document_fonts(req)).await
+}
+
 /// Everything wrong with the library: duplicates, broken and legacy files,
 /// sidecar and activation conflicts (the Problems view).
 #[tauri::command]
@@ -1413,6 +1424,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             list_active,
             conflicts,
             list_conflicts,
+            check_document_fonts,
             list_problems,
             list_duplicates,
             keep_copy,

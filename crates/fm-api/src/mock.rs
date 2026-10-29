@@ -75,8 +75,9 @@ use crate::settings::{
     McpUpdate, Settings, SettingsUpdate,
 };
 use crate::workflows::{
-    BriefRequest, Candidate, DocumentFontRef, DocumentFonts, DocumentFontsRequest, DocumentFormat,
-    PrepareForWebRequest, PrepareForWebResponse, Shortlist,
+    BriefRequest, Candidate, DocumentFontCheck, DocumentFontRef, DocumentFontStatus, DocumentFonts,
+    DocumentFontsCheck, DocumentFontsRequest, DocumentFormat, PrepareForWebRequest,
+    PrepareForWebResponse, Shortlist,
 };
 use crate::{
     API_VERSION, ActivationService, ApiError, ApiResult, CollectionId, ComparisonId, ErrorCode,
@@ -4315,7 +4316,10 @@ impl WorkflowService for MockApi {
             "ai" => DocumentFormat::Ai,
             "psd" | "psb" => DocumentFormat::Psd,
             _ => {
-                return Err(ApiError::new(ErrorCode::Unsupported, unreadable)
+                return Err(ApiError::new(
+                    ErrorCode::Unsupported,
+                    "Font Manager reads the fonts of .indd, .ai, .psd, .sketch, .fig, .docx and .pptx documents only.",
+                )
                     .with_detail(format!("{}: unknown document type", req.path)));
             }
         };
@@ -4329,6 +4333,54 @@ impl WorkflowService for MockApi {
             })
             .collect();
         Ok(DocumentFonts { format, fonts })
+    }
+
+    /// The core's composition: `document_fonts`, `fonts_needed` without
+    /// activating, and the active faces.
+    fn check_document_fonts(&self, req: DocumentFontsRequest) -> ApiResult<DocumentFontsCheck> {
+        let doc = self.document_fonts(req)?;
+        let needed = |f: &DocumentFontRef| NeededFont {
+            postscript_name: f.postscript_name.clone(),
+            full_name: None,
+            family: f.family.clone(),
+            style: f.style.clone(),
+        };
+        let found = self.fonts_needed(FontsNeededRequest {
+            fonts: doc.fonts.iter().map(needed).collect(),
+            document: None,
+            activate: false,
+            on_conflict: ConflictPolicy::default(),
+        })?;
+        let active: BTreeSet<FaceId> = self.state().active.keys().copied().collect();
+        let mut to_activate = Vec::new();
+        let fonts = doc
+            .fonts
+            .into_iter()
+            .map(|font| {
+                let want = needed(&font);
+                let face = found
+                    .matched
+                    .iter()
+                    .find(|m| m.font == want)
+                    .map(|m| m.face);
+                let status = match face {
+                    None => DocumentFontStatus::Missing,
+                    Some(f) if active.contains(&f) => DocumentFontStatus::Active,
+                    Some(f) => {
+                        if !to_activate.contains(&f) {
+                            to_activate.push(f);
+                        }
+                        DocumentFontStatus::InLibrary
+                    }
+                };
+                DocumentFontCheck { font, status, face }
+            })
+            .collect();
+        Ok(DocumentFontsCheck {
+            format: doc.format,
+            fonts,
+            to_activate,
+        })
     }
 }
 

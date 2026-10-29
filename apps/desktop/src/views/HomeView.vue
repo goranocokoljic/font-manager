@@ -6,6 +6,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
+import DocumentFontsPanel from '../components/DocumentFontsPanel.vue';
 import FilterChips from '../components/FilterChips.vue';
 import FontGrid from '../components/FontGrid.vue';
 import FontLayout from '../components/FontLayout.vue';
@@ -575,6 +576,7 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
         </section>
       </template>
       <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />
+      <DocumentFontsPanel @select="openFace" />
       <CompareSheet v-if="compare.open" />
       <QuickLookSheet v-if="quickLook.face" :key="quickLook.face.id" :face="quickLook.face" />
       <TaggingPanel />

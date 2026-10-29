@@ -1470,6 +1470,29 @@
     "reasons": "Warum: {reasons}",
     "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet sie aus. Der Inspektor zeigt sie."
   },
+  "documentFonts": {
+    "action": "Schriften eines Dokuments prüfen …",
+    "pickTitle": "Schriften eines Dokuments prüfen",
+    "filter": "Design-Dokumente",
+    "title": "Dokumentschriften",
+    "document": "Dokument: {name}",
+    "close": "Dokumentschriften schließen",
+    "fonts": "Schriften, die das Dokument verwendet",
+    "hint": "Pfeil nach oben und unten wechselt die Schrift. Esc schließt.",
+    "status": {
+      "active": "Aktiv",
+      "inLibrary": "In der Bibliothek",
+      "missing": "Fehlt"
+    },
+    "rowLabel": "{name}: {status}",
+    "activate": {
+      "one": "{count} Schrift aktivieren",
+      "other": "{count} Schriften aktivieren"
+    },
+    "allActive": "Jede Schrift dieses Dokuments, die die Bibliothek hat, ist aktiv.",
+    "missingNote": "Fehlende Schriften sind nicht in der Bibliothek. Font Manager lädt sie nicht herunter.",
+    "empty": "Dieses Dokument nennt keine Schriften."
+  },
   "mcpConfirm": {
     "label": "Anfrage eines KI-Assistenten",
     "deactivate": {
