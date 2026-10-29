@@ -37,5 +37,8 @@ fn the_policy_lets_the_grid_show_blob_thumbnails() {
         .map(str::trim)
         .find(|d| d.starts_with("img-src "))
         .expect("img-src directive");
-    assert!(img_src.split_whitespace().any(|s| s == "blob:"), "{img_src}");
+    assert!(
+        img_src.split_whitespace().any(|s| s == "blob:"),
+        "{img_src}"
+    );
 }
