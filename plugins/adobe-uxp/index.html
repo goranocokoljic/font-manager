@@ -4,11 +4,10 @@
     <meta charset="utf-8" />
     <title>Font Manager</title>
     <style>
-      /* UXP gives a dialog no colors of its own: without these the text is
-         dark on a dark dialog in Photoshop's default theme (E30.0 spike).
-         The colors follow Adobe's dark UI, where the plugin is read most.
-         Plain properties only (background-color, margins, no gap): UXP
-         takes a subset of CSS. */
+      /* Layout only: the dialog's text and buttons are Spectrum elements
+         (`sp-body`, `sp-button`), which take the host's theme; a plain
+         `<p>` in a dialog is dark on dark (E30.0 spike). Plain properties
+         (background-color, margins, no gap): UXP takes a subset of CSS. */
       body {
         margin: 0;
         padding: 8px;
@@ -18,29 +17,21 @@
       p {
         margin: 0 0 8px;
       }
-      dialog {
-        min-width: 280px;
-        padding: 16px;
-        border: 1px solid #5a5a5a;
-        border-radius: 4px;
-        background-color: #323232;
-        color: #e6e6e6;
-      }
       dialog form {
         display: flex;
         flex-direction: column;
+        min-width: 280px;
+        padding: 8px;
       }
-      dialog p {
-        margin: 0 0 16px;
-        line-height: 1.4;
-        color: #e6e6e6;
+      dialog sp-body {
+        margin-bottom: 16px;
       }
       .fm-dialog-buttons {
         display: flex;
         flex-direction: row;
         justify-content: flex-end;
       }
-      .fm-dialog-buttons button {
+      .fm-dialog-buttons sp-button {
         margin-left: 8px;
       }
       button {
