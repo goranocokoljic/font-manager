@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vitest/config';
+import { type SourceManifest, hostManifests } from './manifests';
 
 // UXP loads `index.html` and a classic script; its own modules (`uxp`,
 // `indesign`, `photoshop`, `os`, `fs`) come from the host at run time.
+// The output is one folder per host (`dist/photoshop/`, `dist/indesign/`):
+// Photoshop takes a third-party manifest with one `host` object only.
 export default defineConfig({
   build: {
     target: 'es2020',
@@ -11,15 +14,20 @@ export default defineConfig({
   },
   plugins: [
     {
-      name: 'uxp-files',
-      generateBundle() {
-        // The `$schema` key is for the test and editors, not for the host.
-        const manifest = JSON.parse(readFileSync('manifest.json', 'utf-8'));
-        delete manifest.$schema;
-        const source = `${JSON.stringify(manifest, null, 2)}\n`;
-        this.emitFile({ type: 'asset', fileName: 'manifest.json', source });
+      name: 'uxp-host-folders',
+      generateBundle(_, bundle) {
+        const chunk = bundle['index.js'];
+        if (!chunk || chunk.type !== 'chunk') throw new Error('index.js was not built');
+        const script = chunk.code;
+        delete bundle['index.js'];
+        const source = JSON.parse(readFileSync('manifest.json', 'utf-8')) as SourceManifest;
         const html = readFileSync('index.html', 'utf-8');
-        this.emitFile({ type: 'asset', fileName: 'index.html', source: html });
+        for (const [folder, manifest] of hostManifests(source)) {
+          const json = `${JSON.stringify(manifest, null, 2)}\n`;
+          this.emitFile({ type: 'asset', fileName: `${folder}/manifest.json`, source: json });
+          this.emitFile({ type: 'asset', fileName: `${folder}/index.html`, source: html });
+          this.emitFile({ type: 'asset', fileName: `${folder}/index.js`, source: script });
+        }
       },
     },
   ],

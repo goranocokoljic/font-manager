@@ -1,5 +1,7 @@
 // The plugin's two UI pieces in a UXP host: a message that does not wait
-// for the user and a yes/no question. UXP dialogs are HTML `<dialog>`s.
+// for the user and a yes/no question. UXP dialogs are HTML `<dialog>`s;
+// inside, Adobe's Spectrum elements (`sp-body`, `sp-button`) take the
+// host's theme, where a plain `<p>` is dark on dark (E30.0 spike).
 
 import type { PluginUi } from '@fm/plugin-shared';
 
@@ -10,17 +12,22 @@ function dialog(doc: Document, message: string, buttons: [string, string][]): Ux
   const d = doc.createElement('dialog') as UxpDialog;
   const form = doc.createElement('form');
   form.method = 'dialog';
-  const p = doc.createElement('p');
+  const p = doc.createElement('sp-body');
   p.textContent = message;
   form.append(p);
-  for (const [value, label] of buttons) {
-    const b = doc.createElement('button');
-    b.type = 'button';
-    b.value = value;
+  // The buttons in a row of their own, so `index.html` can lay them out.
+  const row = doc.createElement('div');
+  row.className = 'fm-dialog-buttons';
+  const last = buttons.length - 1;
+  buttons.forEach(([value, label], i) => {
+    const b = doc.createElement('sp-button');
+    b.setAttribute('value', value);
+    b.setAttribute('variant', i === last ? 'cta' : 'secondary');
     b.textContent = label;
     b.addEventListener('click', () => d.close(value));
-    form.append(b);
-  }
+    row.append(b);
+  });
+  form.append(row);
   d.append(form);
   doc.body.append(d);
   d.addEventListener('close', () => d.remove());

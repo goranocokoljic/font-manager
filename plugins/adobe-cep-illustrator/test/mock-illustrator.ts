@@ -19,14 +19,72 @@ export interface MockDocument {
   path: string;
   fullName: { fsName: string };
   textFrames: { textRanges: { characterAttributes: { textFont: MockFont } }[] }[];
+  /** The XMP packet of a saved document, as Illustrator 29 writes it. */
+  XMPString?: string;
 }
 
-/** A document; `path` empty for an unsaved one. Each frame is a list of runs. */
-export function mockDocument(name: string, path: string, frames: MockRange[][]): MockDocument {
+/**
+ * The font of a run whose font Illustrator does not have: a `TextFont`
+ * whose every property throws UKFG, as Illustrator 29.7 answers.
+ */
+export function missingFont(): MockFont {
+  const ukfg = (): never => {
+    throw new Error("an Illustrator error occurred: 1430996551 ('UKFG')");
+  };
+  return {
+    get name(): string {
+      return ukfg();
+    },
+    get family(): string {
+      return ukfg();
+    },
+    get style(): string {
+      return ukfg();
+    },
+  };
+}
+
+const xml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** An XMP packet with the `xmpTPg:Fonts` bag Illustrator writes on save. */
+export function xmpPacket(fonts: MockFont[]): string {
+  const items = fonts.map(
+    (f) => `               <rdf:li rdf:parseType="Resource">
+                  <stFnt:fontName>${xml(f.name)}</stFnt:fontName>
+                  <stFnt:fontFamily>${xml(f.family ?? '')}</stFnt:fontFamily>
+                  <stFnt:fontFace>${xml(f.style ?? '')}</stFnt:fontFace>
+                  <stFnt:fontType>TrueType</stFnt:fontType>
+                  <stFnt:versionString>Version 1.003</stFnt:versionString>
+                  <stFnt:composite>False</stFnt:composite>
+                  <stFnt:fontFileName/>
+               </rdf:li>`,
+  );
+  return `<?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF><rdf:Description>
+         <xmpTPg:Fonts>
+            <rdf:Bag>
+${items.join('\n')}
+            </rdf:Bag>
+         </xmpTPg:Fonts>
+</rdf:Description></rdf:RDF></x:xmpmeta>`;
+}
+
+/**
+ * A document; `path` empty for an unsaved one. Each frame is a list of runs;
+ * `xmp` the fonts its XMP metadata names (a saved document).
+ */
+export function mockDocument(
+  name: string,
+  path: string,
+  frames: MockRange[][],
+  xmp?: MockFont[],
+): MockDocument {
   return {
     name,
     path,
     fullName: { fsName: path === '' ? '' : `${path}/${name}` },
+    ...(xmp ? { XMPString: xmpPacket(xmp) } : {}),
     textFrames: frames.map((ranges) => ({
       textRanges: ranges.map((r) =>
         typeof r === 'function'

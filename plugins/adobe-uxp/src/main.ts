@@ -21,6 +21,7 @@ import {
 } from '@fm/plugin-shared';
 import { type InDesignModule, inDesignActive, watchInDesign } from './hosts/indesign';
 import { type PhotoshopModule, photoshopActive, watchPhotoshop } from './hosts/photoshop';
+import { uxpUrl } from './endpoint-url';
 import { uxpUi } from './ui';
 
 // UXP's own modules, resolved by the host at run time.
@@ -45,7 +46,7 @@ const fs = require('fs') as FsModule;
 const endpointFile = endpointFilePath(os.platform(), os.homedir());
 const host: ClientHost = {
   readEndpointFile: () => fs.readFile(endpointFile, { encoding: 'utf-8' }),
-  fetch: (url, init) => fetch(url, init),
+  fetch: (url, init) => fetch(uxpUrl(url), init),
 };
 const client = new FmClient(host);
 const ui = uxpUi(document);

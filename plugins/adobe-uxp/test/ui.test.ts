@@ -12,7 +12,10 @@ describe('uxpUi', () => {
     uxpUi(document).notify('Font Manager is not running');
     expect(show).toHaveBeenCalledOnce();
     expect(document.getElementById('status')?.textContent).toBe('Font Manager is not running');
-    expect(document.querySelector('dialog p')?.textContent).toBe('Font Manager is not running');
+    expect(document.querySelector('dialog sp-body')?.textContent).toBe(
+      'Font Manager is not running',
+    );
+    expect(document.querySelector('dialog sp-button')?.textContent).toBe('OK');
   });
 
   it.each([
@@ -22,7 +25,7 @@ describe('uxpUi', () => {
     document.body.innerHTML = '';
     const proto = HTMLDialogElement.prototype as UxpDialog;
     proto.uxpShowModal = function (this: UxpDialog) {
-      const button = this.querySelector<HTMLButtonElement>(`button[value="${value}"]`);
+      const button = this.querySelector<HTMLElement>(`sp-button[value="${value}"]`);
       return new Promise<string>((resolve) => {
         this.addEventListener('close', () => resolve(this.returnValue));
         button?.click();

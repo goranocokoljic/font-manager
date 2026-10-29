@@ -9,7 +9,7 @@ import {
   watchIllustrator,
 } from '../src/illustrator';
 import { extendScriptUi } from '../src/ui';
-import { type MockDocument, mockDocument, mockIllustrator } from './mock-illustrator';
+import { type MockDocument, missingFont, mockDocument, mockIllustrator } from './mock-illustrator';
 
 const minion = { name: 'MinionPro-Regular', family: 'Minion Pro', style: 'Regular' };
 const lora = { name: 'Lora-Bold', family: 'Lora', style: 'Bold' };
@@ -158,6 +158,27 @@ describe('host.jsx', () => {
     expect(illustratorFonts(run(scriptCall('fmDocumentFonts', '/w/A.ai')))).toEqual([
       { postscriptName: 'Lora-Bold', family: 'Lora', style: 'Bold' },
     ]);
+  });
+
+  it('names a font Illustrator does not have from the XMP metadata (UKFG on the run)', () => {
+    const alegreya = { name: 'Alegreya-Regular', family: 'Alegreya', style: 'Regular' };
+    const doc = mockDocument('A.ai', '/w', [[missingFont(), lora]], [alegreya, lora]);
+    const { run } = mockIllustrator([doc]);
+    expect(illustratorFonts(run(scriptCall('fmDocumentFonts', '/w/A.ai')))).toEqual([
+      { postscriptName: 'Lora-Bold', family: 'Lora', style: 'Bold' },
+      { postscriptName: 'Alegreya-Regular', family: 'Alegreya', style: 'Regular' },
+    ]);
+  });
+
+  it('decodes XML entities in XMP font names and ignores a document without XMP', () => {
+    const odd = { name: 'A&B-Bold', family: 'A&B <"x">', style: 'Bold' };
+    const saved = mockDocument('A.ai', '/w', [[missingFont()]], [odd]);
+    const unsaved = mockDocument('Untitled-1', '', [[missingFont()]]);
+    const { run } = mockIllustrator([saved, unsaved]);
+    expect(illustratorFonts(run(scriptCall('fmDocumentFonts', '/w/A.ai')))).toEqual([
+      { postscriptName: 'A&B-Bold', family: 'A&B <"x">', style: 'Bold' },
+    ]);
+    expect(illustratorFonts(run(scriptCall('fmDocumentFonts', 'Untitled-1')))).toEqual([]);
   });
 
   it('answers null for a document that is no longer open', () => {
