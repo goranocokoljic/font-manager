@@ -5757,6 +5757,107 @@ fn document_fonts_lists_a_documents_fonts_and_leaves_it_alone() {
     assert_eq!(e.message, "This document's fonts could not be read.");
 }
 
+/// E32.2: `check_document_fonts` matches a document's fonts the way
+/// `fonts_needed` does and marks each active, in the library or missing;
+/// it activates nothing and only reads the document. Session-activating
+/// `to_activate` turns those rows active.
+#[test]
+fn check_document_fonts_marks_active_in_library_and_missing_fonts() {
+    use fm_api::workflows::{DocumentFontStatus, DocumentFontsRequest, DocumentFormat};
+    let (lib, _, _) = Lib::scanned("api-check-document-fonts");
+    let barlow = face_at(&lib, "barlow/Barlow-BoldItalic.ttf");
+    let bebas = face_at(&lib, "bebasneue/BebasNeue-Regular.ttf");
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces { faces: vec![bebas] },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::KeepExisting,
+        })
+        .expect("activate");
+    let path = lib.dir.path().join("Poster ü.ai");
+    let doc = b"%!PS-Adobe-3.0
+/BaseFont /Barlow-BoldItalic
+/BaseFont /BebasNeue-Regular
+/BaseFont /Missing-Font
+";
+    std::fs::write(&path, doc).expect("write");
+    let req = || DocumentFontsRequest {
+        path: path.to_string_lossy().into_owned(),
+    };
+    let res = lib.api.check_document_fonts(req()).expect("check");
+    assert_eq!(res.format, DocumentFormat::Ai);
+    let rows: Vec<_> = res
+        .fonts
+        .iter()
+        .map(|f| (f.font.postscript_name.as_deref(), f.status, f.face))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (
+                Some("Barlow-BoldItalic"),
+                DocumentFontStatus::InLibrary,
+                Some(barlow)
+            ),
+            (
+                Some("BebasNeue-Regular"),
+                DocumentFontStatus::Active,
+                Some(bebas)
+            ),
+            (Some("Missing-Font"), DocumentFontStatus::Missing, None),
+        ]
+    );
+    assert_eq!(res.to_activate, [barlow]);
+    assert_eq!(lib.api.list_active().expect("active").len(), 1);
+
+    let rx = lib.api.subscribe();
+    lib.api
+        .activate(ActivateRequest {
+            target: Target::Faces {
+                faces: res.to_activate.clone(),
+            },
+            mode: ActivationMode::Session,
+            on_conflict: ConflictPolicy::KeepExisting,
+        })
+        .expect("activate");
+    assert!(
+        rx.try_iter().any(|e| matches!(
+            e,
+            Event::ActivationChanged { ref activated, .. } if activated.contains(&barlow)
+        )),
+        "the activation event the panel follows"
+    );
+    let after = lib.api.check_document_fonts(req()).expect("again");
+    assert_eq!(after.fonts[0].status, DocumentFontStatus::Active);
+    assert_eq!(after.fonts[2].status, DocumentFontStatus::Missing);
+    assert!(after.to_activate.is_empty());
+    assert_eq!(std::fs::read(&path).expect("bytes"), doc);
+
+    let other = lib.dir.path().join("notes.txt");
+    std::fs::write(&other, b"x").expect("write");
+    let e = lib
+        .api
+        .check_document_fonts(DocumentFontsRequest {
+            path: other.to_string_lossy().into_owned(),
+        })
+        .expect_err("not a document");
+    assert_eq!(e.code, ErrorCode::Unsupported);
+    assert!(e.message.contains(".indd"), "{}", e.message);
+    let e = lib
+        .api
+        .check_document_fonts(DocumentFontsRequest {
+            path: lib
+                .dir
+                .path()
+                .join("gone.psd")
+                .to_string_lossy()
+                .into_owned(),
+        })
+        .expect_err("missing");
+    assert_eq!(e.message, "This document's fonts could not be read.");
+    assert_eq!(std::fs::read(&other).expect("bytes"), b"x");
+}
+
 /// E33.1: `find_by_image` through the core API reads the screenshot (and
 /// only reads it) and ranks the library's faces against it; a file that is
 /// not a PNG and an image without text are plain errors.

@@ -1470,6 +1470,29 @@
     "reasons": "Why: {reasons}",
     "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
   },
+  "documentFonts": {
+    "action": "Check a document's fonts…",
+    "pickTitle": "Check a document's fonts",
+    "filter": "Design documents",
+    "title": "Document fonts",
+    "document": "Document: {name}",
+    "close": "Close the document fonts",
+    "fonts": "Fonts the document uses",
+    "hint": "Up and Down move between fonts. Esc closes.",
+    "status": {
+      "active": "Active",
+      "inLibrary": "In library",
+      "missing": "Missing"
+    },
+    "rowLabel": "{name}: {status}",
+    "activate": {
+      "one": "Activate {count} font",
+      "other": "Activate {count} fonts"
+    },
+    "allActive": "Every font of this document that the library has is active.",
+    "missingNote": "Missing fonts are not in the library. Font Manager does not download them.",
+    "empty": "This document names no fonts."
+  },
   "mcpConfirm": {
     "label": "Request from an AI assistant",
     "deactivate": {

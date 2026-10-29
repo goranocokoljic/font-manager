@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use fm_api::ErrorCode;
 use fm_api::workflows::{DocumentFontRef, DocumentFormat};
 
-use super::{Fonts, UNREADABLE, document_fonts, format_of, read, xml};
+use super::{Fonts, UNREADABLE, UNSUPPORTED, check, document_fonts, format_of, read, xml};
 use crate::test_support::TempDir;
 
 fn fixture(name: &str) -> PathBuf {
@@ -259,7 +259,7 @@ fn a_zstd_compressed_fig_is_unsupported_with_a_plain_message() {
 fn an_unknown_extension_and_a_missing_file_are_errors() {
     let e = document_fonts(&fixture("README.md")).unwrap_err();
     assert_eq!(e.code(), ErrorCode::Unsupported);
-    assert_eq!(e.message(), UNREADABLE);
+    assert_eq!(e.message(), UNSUPPORTED);
     let e = document_fonts(&fixture("missing.psd")).unwrap_err();
     assert_eq!(e.code(), ErrorCode::NotFound);
     assert_eq!(e.message(), UNREADABLE);
@@ -358,4 +358,47 @@ fn mutated_fixtures_never_panic() {
             }
         }
     }
+}
+
+/// E32.2: a matched font is active or in the library by its face; one
+/// without a match is missing; two fonts on one inactive face activate it once.
+#[test]
+fn check_marks_each_font_active_in_library_or_missing() {
+    use std::collections::HashSet;
+
+    use fm_api::FaceId;
+    use fm_api::activation::{NeededFontMatch, NeededFontRule};
+    use fm_api::workflows::{DocumentFontStatus, DocumentFonts};
+
+    let fonts = vec![
+        ps("Active-Regular"),
+        ps("Inter-Bold"),
+        family("Inter"),
+        ps("Gone"),
+    ];
+    let doc = DocumentFonts {
+        format: DocumentFormat::Psd,
+        fonts: fonts.clone(),
+    };
+    let hit = |font: &DocumentFontRef, face: u32| NeededFontMatch {
+        font: super::needed_font(font),
+        face: FaceId(face),
+        matched_by: NeededFontRule::PostscriptName,
+    };
+    let matched = [hit(&fonts[0], 1), hit(&fonts[1], 2), hit(&fonts[2], 2)];
+    let active: HashSet<FaceId> = [FaceId(1)].into_iter().collect();
+    let got = check(doc, &matched, &active);
+    assert_eq!(got.format, DocumentFormat::Psd);
+    let statuses: Vec<_> = got.fonts.iter().map(|f| (f.status, f.face)).collect();
+    assert_eq!(
+        statuses,
+        [
+            (DocumentFontStatus::Active, Some(FaceId(1))),
+            (DocumentFontStatus::InLibrary, Some(FaceId(2))),
+            (DocumentFontStatus::InLibrary, Some(FaceId(2))),
+            (DocumentFontStatus::Missing, None),
+        ]
+    );
+    assert_eq!(got.fonts[3].font, fonts[3]);
+    assert_eq!(got.to_activate, [FaceId(2)]);
 }

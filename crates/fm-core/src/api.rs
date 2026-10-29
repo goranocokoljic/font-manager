@@ -85,8 +85,8 @@ use fm_api::settings::{
     McpUpdate, Settings, SettingsService, SettingsUpdate,
 };
 use fm_api::workflows::{
-    BriefRequest, Candidate, DocumentFonts, DocumentFontsRequest, PrepareForWebRequest,
-    PrepareForWebResponse, Shortlist, WorkflowService,
+    BriefRequest, Candidate, DocumentFonts, DocumentFontsCheck, DocumentFontsRequest,
+    PrepareForWebRequest, PrepareForWebResponse, Shortlist, WorkflowService,
 };
 use fm_api::{
     API_VERSION, ApiError, ApiResult, CollectionId, ErrorCode, Event, EventSource, FaceId,
@@ -1471,6 +1471,29 @@ impl WorkflowService for CoreApi {
     /// only opened for reading.
     fn document_fonts(&self, req: DocumentFontsRequest) -> ApiResult<DocumentFonts> {
         Ok(crate::document_fonts::document_fonts(Path::new(&req.path))?)
+    }
+
+    /// [`document_fonts::document_fonts`], then the `fonts_needed` matcher
+    /// without activating and the active faces: [`document_fonts::check`].
+    fn check_document_fonts(&self, req: DocumentFontsRequest) -> ApiResult<DocumentFontsCheck> {
+        let doc = crate::document_fonts::document_fonts(Path::new(&req.path))?;
+        let needed = self.activation.fonts_needed(FontsNeededRequest {
+            fonts: doc
+                .fonts
+                .iter()
+                .map(crate::document_fonts::needed_font)
+                .collect(),
+            document: None,
+            activate: false,
+            on_conflict: ConflictPolicy::default(),
+        })?;
+        let active: HashSet<FaceId> = self
+            .activation
+            .list_active()?
+            .into_iter()
+            .map(|a| a.face)
+            .collect();
+        Ok(crate::document_fonts::check(doc, &needed.matched, &active))
     }
 }
 

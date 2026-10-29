@@ -527,6 +527,41 @@ fn conflicts_and_the_conflicts_view_answer_in_camel_case() {
 }
 
 #[test]
+fn check_document_fonts_answers_each_font_with_its_status_in_camel_case() {
+    let dir = std::env::temp_dir().join(format!("fm-ipc-docfonts-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("poster.psd");
+    std::fs::write(&path, b"bytes").unwrap();
+    let json: serde_json::Value = invoke_with(
+        "check_document_fonts",
+        serde_json::json!({ "req": { "path": path.to_string_lossy() } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(json["format"], "psd");
+    assert!(json["toActivate"].is_array(), "{json}");
+    let statuses: Vec<_> = json["fonts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["status"].as_str().unwrap().to_owned())
+        .collect();
+    assert!(statuses.iter().any(|s| s == "missing"), "{json}");
+    assert!(statuses.iter().any(|s| s == "inLibrary"), "{json}");
+
+    let err = invoke_with(
+        "check_document_fonts",
+        serde_json::json!({ "req": { "path": dir.join("notes.txt").to_string_lossy() } }),
+    )
+    .unwrap()
+    .unwrap_err();
+    assert!(err["message"].is_string(), "{err}");
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+#[test]
 fn the_problems_view_answers_in_camel_case() {
     let json: serde_json::Value = invoke_with("list_problems", serde_json::json!({}))
         .unwrap()

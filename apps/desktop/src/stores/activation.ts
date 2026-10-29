@@ -6,6 +6,7 @@ import type {
   ActivationMode,
   ActivationOutcome,
   Event,
+  FaceId,
   FaceSummary,
   FamilyId,
   SetId,
@@ -138,6 +139,11 @@ export const useActivationStore = defineStore('activation', () => {
     if (plan) await bulk(plan.deactivate, plan.targets, mode);
   }
 
+  /** Activates `faces` in `mode` the way the bulk actions do: a toast with Undo after. */
+  function activateFaces(faces: readonly FaceId[], mode: ActivationMode): Promise<void> {
+    return bulk(false, [{ kind: 'faces', faces: [...faces] }], mode);
+  }
+
   /** Deactivates every face the app activated (never one it did not, rule 3). */
   function deactivateAll(): Promise<void> {
     return bulk(true, [undefined]);
@@ -148,5 +154,15 @@ export const useActivationStore = defineStore('activation', () => {
     return bulk(true, [undefined], undefined, { kind: 'set', set });
   }
 
-  return { count, busy, load, stop, refresh, toggleRows, deactivateAll, deactivateAllExcept };
+  return {
+    count,
+    busy,
+    load,
+    stop,
+    refresh,
+    toggleRows,
+    activateFaces,
+    deactivateAll,
+    deactivateAllExcept,
+  };
 });

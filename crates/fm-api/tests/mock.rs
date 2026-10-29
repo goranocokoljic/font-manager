@@ -1266,9 +1266,58 @@ fn document_fonts_reads_the_extension_and_leaves_the_file_alone() {
     std::fs::write(dir.join("c.txt"), b"x").unwrap();
     let unknown = api.document_fonts(req("c.txt")).unwrap_err();
     assert_eq!(unknown.code, ErrorCode::Unsupported);
-    assert_eq!(unknown.message, "This document's fonts could not be read.");
+    assert!(unknown.message.contains(".indd"), "{}", unknown.message);
     let missing = api.document_fonts(req("gone.ai")).unwrap_err();
     assert_eq!(missing.code, ErrorCode::NotFound);
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// E32.2: one of the mock document's fonts is in the library, one missing;
+/// activating the face turns its row active; nothing is activated by the check.
+#[test]
+fn check_document_fonts_marks_library_faces_and_missing_fonts() {
+    use fm_api::workflows::{DocumentFontStatus, DocumentFontsRequest};
+    let api = api();
+    let dir = std::env::temp_dir().join(format!("fm-mock-checkdoc-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("brochure.indd");
+    std::fs::write(&path, b"bytes").unwrap();
+    let req = || DocumentFontsRequest {
+        path: path.to_string_lossy().into_owned(),
+    };
+    let before = api.list_active().unwrap().len();
+    let got = api.check_document_fonts(req()).unwrap();
+    assert_eq!(api.list_active().unwrap().len(), before);
+    let statuses: Vec<_> = got.fonts.iter().map(|f| f.status).collect();
+    assert!(
+        statuses.contains(&DocumentFontStatus::Missing),
+        "{statuses:?}"
+    );
+    let in_library: Vec<_> = got
+        .fonts
+        .iter()
+        .filter(|f| f.status == DocumentFontStatus::InLibrary)
+        .filter_map(|f| f.face)
+        .collect();
+    assert_eq!(got.to_activate, in_library);
+    assert!(!got.to_activate.is_empty());
+    api.activate(ActivateRequest {
+        target: Target::Faces {
+            faces: got.to_activate.clone(),
+        },
+        mode: ActivationMode::Session,
+        on_conflict: ConflictPolicy::KeepExisting,
+    })
+    .unwrap();
+    let after = api.check_document_fonts(req()).unwrap();
+    assert!(after.to_activate.is_empty());
+    assert!(
+        after
+            .fonts
+            .iter()
+            .all(|f| f.status != DocumentFontStatus::InLibrary)
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), b"bytes");
     std::fs::remove_dir_all(&dir).unwrap();
 }
 

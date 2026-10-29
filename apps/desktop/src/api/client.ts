@@ -43,6 +43,8 @@ import type {
   ComparisonEntry,
   ComparisonRef,
   DeactivateRequest,
+  DocumentFontsCheck,
+  DocumentFontsRequest,
   DuplicateGroup,
   Event,
   FaceDetail,
@@ -131,6 +133,9 @@ export const EVENT_CHANNEL = 'fm://event';
 
 /** The URI scheme `fm_app_lib::FONT_SCHEME` serves font files on, by face id. */
 export const FONT_SCHEME = 'fmfont';
+
+/** The documents "Check a document's fonts…" offers in its picker (E32.2). */
+export const DOCUMENT_EXTENSIONS = ['indd', 'ai', 'psd', 'sketch', 'fig', 'docx', 'pptx'];
 
 /** Stops an event subscription. */
 export type Unsubscribe = () => void;
@@ -278,6 +283,11 @@ export interface FmClient {
   conflicts(target: Target): Promise<Conflict[]>;
   /** Every clash of an active face, with its winner (the Conflicts view). */
   listConflicts(): Promise<Clash[]>;
+  /**
+   * The fonts a design document names, each active, in the library or missing, and the
+   * faces "Activate N fonts" activates (E32.2). Activates nothing; the file is only read.
+   */
+  checkDocumentFonts(req: DocumentFontsRequest): Promise<DocumentFontsCheck>;
   /** Duplicates, broken and legacy files, sidecar and activation conflicts (the Problems view). */
   listProblems(): Promise<Problem[]>;
   /** Duplicate groups, each with its recommended keeper first. */
@@ -336,6 +346,11 @@ export interface FmClient {
   pickFolder(title: string): Promise<string | null>;
   /** The native file picker; `null` when the user cancels. */
   pickFile(title: string): Promise<string | null>;
+  /**
+   * The native file picker for "Check a document's fonts…" (E32.2), filtered to
+   * `DOCUMENT_EXTENSIONS` under `filterName`; `null` when the user cancels.
+   */
+  pickDocument(title: string, filterName: string): Promise<string | null>;
   /** Opens a page of the user docs (`HELP_PAGES` in src/help.ts) in the help window. */
   openHelp(page: string): Promise<void>;
   /** Opens an `https://` address in the default browser; other schemes are refused. */
@@ -429,6 +444,7 @@ export const tauriClient: FmClient = {
   listActive: () => invoke<ActiveFace[]>('list_active'),
   conflicts: (target) => invoke<Conflict[]>('conflicts', { target }),
   listConflicts: () => invoke<Clash[]>('list_conflicts'),
+  checkDocumentFonts: (req) => invoke<DocumentFontsCheck>('check_document_fonts', { req }),
   listProblems: () => invoke<Problem[]>('list_problems'),
   listDuplicates: () => invoke<DuplicateGroup[]>('list_duplicates'),
   keepCopy: (req) => invoke<Resolution>('keep_copy', { req }),
@@ -463,6 +479,15 @@ export const tauriClient: FmClient = {
   },
   pickFile: async (title) => {
     const path = await open({ directory: false, multiple: false, title });
+    return typeof path === 'string' ? path : null;
+  },
+  pickDocument: async (title, filterName) => {
+    const path = await open({
+      directory: false,
+      multiple: false,
+      title,
+      filters: [{ name: filterName, extensions: DOCUMENT_EXTENSIONS }],
+    });
     return typeof path === 'string' ? path : null;
   },
   openHelp: (page) => invoke<void>('open_help', { page }),
