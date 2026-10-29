@@ -1,0 +1,20 @@
+{
+  "id": "a-filter-or-option-the-src-api-client-passes-to-a-native-dia",
+  "title": "A filter or option the src/api client passes to a native dialog needs a test on tauriClient itself",
+  "category": "testing",
+  "rule": "When a criterion depends on what `tauriClient` in apps/desktop/src/api/client.ts passes to a Tauri plugin (dialog `filters`, `directory`, `multiple`, a command name or argument key), add a Vitest test that mocks the plugin module (`vi.mock('@tauri-apps/plugin-dialog', () => ({ open }))`, or `@tauri-apps/api/core` for `invoke`), calls the real `tauriClient` method, and asserts the exact arguments with the values written out (not imported from the constant under test). Store and e2e tests run on the MockApi, which ignores those arguments, so they cannot catch a dropped filter. Check that the test fails when the filter is removed.",
+  "rationale": "E32.2 (#194): criterion 1 asked for a picker filtered to seven document types; only the mock picker was tested, so deleting `filters` from `tauriClient.pickDocument` left every test green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    194
+  ],
+  "file_globs": [
+    "apps/desktop/src/api/client.ts",
+    "apps/desktop/src/api/**/*.test.ts",
+    "apps/desktop/src/stores/**/*.ts"
+  ],
+  "first_seen": "2026-10-29T21:08:57.710Z",
+  "last_seen": "2026-10-29T21:08:57.710Z"
+}
