@@ -303,3 +303,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E32.2 #194] docs/adr/0017-font-drag-to-design-apps.md:64 — drop-a-document-on-the-window was cut from #194: Tauri's drop handler stays off for Font Switch, and the page's own `drop` gives file bytes, not a path; a later story could read the bytes in `src/api/` and add an fm-api call that reads a document from bytes (`fm_core::document_fonts::read` already takes any `Read + Seek`).
 - [E30.0 #186] crates/fm-mcp/tests/stdio.rs:202 — `the_shim_forwards_initialize_and_tools_list_to_the_app` (20 s budget) and `ten_thousand_files_persist_in_under_ten_seconds` (crates/fm-core/src/index/files/tests.rs:871, 10 s budget; took 52.9 s) failed on the Windows runner twice on untouched code for the #402 merge (run 40795324077) and passed on the third try; a slow runner fails them, so either widen the budgets on CI or mark them as bench-only.
 - [E32.2 #194] apps/desktop/src/styles/theme.css:11 — the shared `--fm-border` (#d4d4d4 on #ffffff, about 1.5:1) is the only outline of transparent buttons such as a panel's × close button; under 3:1 as a component boundary (WCAG 1.4.11).
+
+## 2026-10-30
+
+- [E35.7 #411] crates/fm-core/src/api.rs:525 — if `apply_rescan` fails on a job that is not the last of a scan request, the in-memory `FileIndex` keeps that job's changes the database lacks for the later jobs of the same request (pre-existing; E35.7 drops the index at the end of the request).
