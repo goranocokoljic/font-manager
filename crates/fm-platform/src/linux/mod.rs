@@ -17,6 +17,9 @@ mod fontconfig;
 // Shared with macOS, which sets the socket's mode its own way.
 #[cfg(unix)]
 pub(crate) mod ipc;
+#[cfg(target_os = "linux")]
+#[allow(unsafe_code)] // malloc_trim; the block has a SAFETY note.
+mod memory;
 mod open_url;
 pub(crate) mod paths;
 #[cfg(target_os = "linux")]
@@ -33,6 +36,8 @@ pub use activator::LinuxActivator;
 pub use autostart::LinuxAutostart;
 #[cfg_attr(not(target_os = "linux"), allow(unused_imports))]
 pub(crate) use autostart::{FLATPAK_INFO, in_flatpak, system_entry};
+#[cfg(target_os = "linux")]
+pub(crate) use memory::release_free_memory;
 pub(crate) use open_url::command as open_url_command;
 #[cfg(target_os = "linux")]
 pub use pdf::LinuxPdfPrinter;

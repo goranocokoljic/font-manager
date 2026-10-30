@@ -15,6 +15,7 @@ pub mod ipc;
 mod linux;
 mod macos;
 pub mod mcp_shim;
+pub mod memory;
 pub mod paths;
 pub mod pdf;
 pub mod process;

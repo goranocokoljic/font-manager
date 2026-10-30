@@ -282,6 +282,86 @@ fn the_faces_of_a_scan_are_in_the_index_when_it_finishes() {
     assert_eq!(sources[0].face_count, added, "written before the finish");
 }
 
+/// Whether the API still holds the files its last scan read.
+fn holds_scan_files(lib: &Lib) -> bool {
+    lock(&lib.api.files).is_some()
+}
+
+#[test]
+fn a_finished_scan_lets_the_files_it_read_go() {
+    let (lib, source, events) = Lib::scanned("api-scan-release");
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, Event::ScanFinished { added, .. } if *added >= 6)),
+        "{events:?}"
+    );
+    assert!(!holds_scan_files(&lib), "released after the first scan");
+
+    // The next scan loads them back from the index: nothing is read again,
+    // nothing changes, and they are released again.
+    let quiet = lib.scan(Some(source.id), false);
+    let Some(Event::ScanFinished {
+        added,
+        changed,
+        removed,
+        ..
+    }) = quiet.last()
+    else {
+        panic!("{quiet:?}");
+    };
+    assert_eq!((*added, *changed, *removed), (0, 0, 0), "{quiet:?}");
+    assert!(!holds_scan_files(&lib), "released after the rescan");
+    assert!(lib.names().iter().any(|n| n == "Bebas Neue"));
+}
+
+#[test]
+fn a_scan_of_every_source_releases_the_files_after_its_last_job() {
+    let lib = Lib::new("api-scan-release-all");
+    let second = lib.root.join("second");
+    std::fs::create_dir_all(&second).expect("folder");
+    let from = fixtures().join("google-repo/bebasneue");
+    for entry in std::fs::read_dir(&from).expect("fixtures") {
+        let path = entry.expect("entry").path();
+        if path.is_file() {
+            std::fs::copy(&path, second.join(path.file_name().expect("name"))).expect("copy");
+        }
+    }
+    for path in [lib.root.join("barlow"), second] {
+        lib.api
+            .add_source(AddSourceRequest {
+                path: path.display().to_string(),
+                mode: ImportMode::IndexInPlace,
+            })
+            .expect("source");
+    }
+    let rx = lib.api.subscribe();
+    let first = lib.api.scan(ScanRequest { source: None }).expect("scan");
+    let last = JobId(first.0 + 1);
+    loop {
+        match rx.recv_timeout(WAIT).expect("scan events") {
+            Event::ScanFinished { job, .. } if job == last => break,
+            Event::JobFailed { error, .. } => panic!("{error:?}"),
+            _ => {}
+        }
+    }
+    assert!(!holds_scan_files(&lib));
+    assert!(lib.names().iter().any(|n| n == "Barlow"));
+    assert!(lib.names().iter().any(|n| n == "Bebas Neue"));
+}
+
+#[test]
+fn a_failed_scan_lets_the_files_it_loaded_go() {
+    let (lib, source, _) = Lib::scanned("api-scan-release-failed");
+    std::fs::remove_dir_all(&lib.root).expect("remove");
+    let events = lib.scan(Some(source.id), false);
+    assert!(
+        matches!(events.last(), Some(Event::JobFailed { .. })),
+        "{events:?}"
+    );
+    assert!(!holds_scan_files(&lib));
+}
+
 #[test]
 fn the_list_shows_the_real_families_of_the_folder() {
     let (lib, source, _) = Lib::scanned("api-families");
