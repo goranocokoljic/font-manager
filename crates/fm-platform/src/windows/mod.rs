@@ -17,6 +17,9 @@ mod file_op;
 #[cfg(windows)]
 #[allow(unsafe_code)] // Security descriptor FFI for the pipe; every block has a SAFETY note.
 pub(crate) mod ipc;
+#[cfg(windows)]
+#[allow(unsafe_code)] // HeapSetInformation; the block has a SAFETY note.
+mod memory;
 mod open_url;
 pub(crate) mod paths;
 #[cfg(windows)]
@@ -40,6 +43,8 @@ mod tray;
 pub use activator::{FONTS_KEY, LEDGER_KEY, WindowsActivator};
 #[cfg(windows)]
 pub use autostart::{RUN_KEY, WindowsAutostart};
+#[cfg(windows)]
+pub(crate) use memory::release_free_memory;
 pub(crate) use open_url::command as open_url_command;
 #[cfg(windows)]
 pub use pdf::WindowsPdfPrinter;

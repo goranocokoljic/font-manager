@@ -440,8 +440,9 @@ impl CoreApi {
         std::thread::Builder::new()
             .name("fm-scan".into())
             .spawn(move || {
-                for (job, source) in jobs.into_iter().zip(sources) {
-                    scan.run(job, &source);
+                let last = jobs.len() - 1;
+                for (i, (job, source)) in jobs.into_iter().zip(sources).enumerate() {
+                    scan.run(job, &source, i == last);
                 }
             })
             .map_err(|e| {
@@ -468,15 +469,33 @@ impl Scan {
     /// Scans one source as `job`: walks and reads it, writes what changed,
     /// then sends what the library gained and lost. Every failure is a
     /// [`Event::JobFailed`].
-    fn run(&self, job: JobId, source: &Source) {
-        if let Err(e) = self.try_run(job, source) {
+    ///
+    /// The `last` job of a request lets the files read go (E35.7): every
+    /// face of the library with its names, code points and fingerprint,
+    /// which nothing reads until the next scan loads them back from the
+    /// index. The database holds all of it. Then the allocator hands what the
+    /// scan's threads freed back to the OS. The job's last events wait for
+    /// the release: a reader that sees the scan end sees its memory go.
+    fn run(&self, job: JobId, source: &Source, last: bool) {
+        let mut end = Vec::new();
+        let result = self.try_run(job, source, &mut end);
+        if last {
+            *lock(&self.files) = None;
+            fm_platform::memory::release_free_memory();
+        }
+        for event in &end {
+            self.events.send(event);
+        }
+        if let Err(e) = result {
             tracing::warn!(%job, source = %source.path, error = %e, "scan failed");
         }
     }
 
-    fn try_run(&self, job: JobId, source: &Source) -> FmResult<()> {
-        let fail = |e: FmError| {
-            self.events.send(&Event::JobFailed {
+    /// The scan of `run`; the events that end it (`ScanFinished` and what
+    /// changed, or `JobFailed`) go to `end`, every other event out at once.
+    fn try_run(&self, job: JobId, source: &Source, end: &mut Vec<Event>) -> FmResult<()> {
+        let fail = |end: &mut Vec<Event>, e: FmError| {
+            end.push(Event::JobFailed {
                 job,
                 error: e.clone().into(),
             });
@@ -484,36 +503,39 @@ impl Scan {
         };
         let mut files = lock(&self.files);
         if files.is_none() {
-            *files = Some(lock(&self.index).load_files().map_err(fail)?);
+            *files = Some(lock(&self.index).load_files().map_err(|e| fail(end, e))?);
         }
         let Some(files) = files.as_mut() else {
-            return Err(fail(FmError::internal("the file index is not loaded")));
+            return Err(fail(end, FmError::internal("the file index is not loaded")));
         };
-        let before = lock(&self.index).faces_of_source(source.id).map_err(fail)?;
+        let before = lock(&self.index)
+            .faces_of_source(source.id)
+            .map_err(|e| fail(end, e))?;
         // `run` reports its own failure as `JobFailed`. Its `ScanFinished`
         // waits until the index holds the scan: a reader that sees it (the
         // `fm scan` command, which exits on it) finds the faces written.
-        let mut finished = None;
         let rescan = ScanJob::new(job, Some(source.id), &source.path).run(files, &mut |e| {
-            if matches!(e, Event::ScanFinished { .. }) {
-                finished = Some(e);
+            if matches!(e, Event::ScanFinished { .. } | Event::JobFailed { .. }) {
+                end.push(e);
             } else {
                 self.events.send(&e);
             }
         })?;
         let after = {
             let mut index = lock(&self.index);
-            index
+            let written = index
                 .apply_rescan(source.id, files, &rescan)
-                .map_err(fail)?;
-            index.faces_of_source(source.id).map_err(fail)?
+                .and_then(|_| index.faces_of_source(source.id));
+            match written {
+                Ok(after) => after,
+                Err(e) => {
+                    // The finish is not true when the write failed.
+                    end.clear();
+                    return Err(fail(end, e));
+                }
+            }
         };
-        if let Some(event) = finished {
-            self.events.send(&event);
-        }
-        if let Some(event) = changes(source.id, &before, &after, &rescan) {
-            self.events.send(&event);
-        }
+        end.extend(changes(source.id, &before, &after, &rescan));
         Ok(())
     }
 }
