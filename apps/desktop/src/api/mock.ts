@@ -4,6 +4,7 @@
 import { HELP_PAGES } from '../help';
 import { catalogFontPath } from './catalogFont';
 import type { FmClient, FullSettings } from './client';
+import type { PreviewBytes } from './preview';
 import {
   API_VERSION,
   type ActivationMode,
@@ -65,7 +66,6 @@ import {
   type LayoutVersion,
   type SavedLayout,
   type OpenLicense,
-  type PreviewImage,
   type PreviewRequest,
   type Problem,
   type Resolution,
@@ -692,26 +692,27 @@ const PNG_1X1 = [
 /**
  * A mock thumbnail: in a browser, the text drawn black on transparent in the
  * browser's sans-serif (so e2e screenshots show something); else the 1×1 PNG.
+ * Bytes, as the Tauri client decodes them (E35.5).
  */
-export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewImage> {
+export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewBytes> {
   const sizePx = req.sizePx ?? 0;
   if (typeof OffscreenCanvas === 'undefined' || sizePx <= 0)
-    return { width: 1, height: 1, png: [...PNG_1X1] };
+    return { width: 1, height: 1, png: Uint8Array.from(PNG_1X1) };
   const font = `${sizePx}px sans-serif`;
   const probe = new OffscreenCanvas(1, 1).getContext('2d');
-  if (!probe) return { width: 1, height: 1, png: [...PNG_1X1] };
+  if (!probe) return { width: 1, height: 1, png: Uint8Array.from(PNG_1X1) };
   probe.font = font;
   const width = Math.max(1, Math.ceil(probe.measureText(req.text).width));
   const height = Math.max(1, Math.ceil(sizePx * 1.3));
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d');
-  if (!ctx) return { width: 1, height: 1, png: [...PNG_1X1] };
+  if (!ctx) return { width: 1, height: 1, png: Uint8Array.from(PNG_1X1) };
   ctx.font = font;
   ctx.fillStyle = req.foreground ?? '#000000';
   ctx.textBaseline = 'middle';
   ctx.fillText(req.text, 0, height / 2);
   const blob = await canvas.convertToBlob({ type: 'image/png' });
-  return { width, height, png: [...new Uint8Array(await blob.arrayBuffer())] };
+  return { width, height, png: new Uint8Array(await blob.arrayBuffer()) };
 }
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });

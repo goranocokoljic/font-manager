@@ -5,6 +5,7 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { catalogFontPath } from './catalogFont';
 import { mockClient } from './mock';
+import { decodePreview, type PreviewBytes } from './preview';
 import type {
   Catalog,
   CatalogDownload,
@@ -77,7 +78,6 @@ import type {
   MoveCollectionRequest,
   Paged,
   PinInstanceRequest,
-  PreviewImage,
   PreviewRequest,
   Problem,
   ProjectSet,
@@ -208,8 +208,11 @@ export interface FmClient {
   saveLicenseInventory(req: LicenseInventoryRequest, fileName: string): Promise<number | null>;
   /** The URL the webview loads a face's font file from (for `@font-face`). */
   fontUrl(face: FaceId): string;
-  /** A thumbnail: text rasterized in one face, cached by face hash and settings (PNG). */
-  renderPreview(req: PreviewRequest): Promise<PreviewImage>;
+  /**
+   * A thumbnail: text rasterized in one face, cached by face hash and settings (PNG).
+   * The PNG arrives as bytes over the IPC (E35.5), not as fm-api's number array.
+   */
+  renderPreview(req: PreviewRequest): Promise<PreviewBytes>;
   /** The text each face previews for a sample: the sample, or a fallback from its coverage. */
   sampleTexts(req: SampleTextRequest): Promise<SampleText[]>;
   /** The auto size factor of each face for a basis (x-height or cap height), in order. */
@@ -411,7 +414,8 @@ export const tauriClient: FmClient = {
   saveLicenseInventory: (req, fileName) =>
     invoke<number | null>('save_license_inventory', { req, fileName }),
   fontUrl: (face) => convertFileSrc(String(face), FONT_SCHEME),
-  renderPreview: (req) => invoke<PreviewImage>('render_preview', { req }),
+  renderPreview: async (req) =>
+    decodePreview(await invoke<ArrayBuffer | number[]>('render_preview', { req })),
   sampleTexts: (req) => invoke<SampleText[]>('sample_texts', { req }),
   sizeFactors: (req) => invoke<SizeFactor[]>('size_factors', { req }),
   cssValues: (req) => invoke<CssValues>('css_values', { req }),

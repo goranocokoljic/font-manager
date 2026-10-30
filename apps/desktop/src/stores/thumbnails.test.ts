@@ -3,18 +3,19 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient } from '../api/mock';
-import type { PreviewImage, PreviewRequest } from '../api/types';
+import type { PreviewBytes } from '../api/preview';
+import type { PreviewRequest } from '../api/types';
 import { useLibraryStore } from './library';
 import { MAX_RENDERS, MAX_THUMBNAILS, useThumbnailsStore } from './thumbnails';
 
 let calls: PreviewRequest[];
-let pending: { req: PreviewRequest; done: (img: PreviewImage) => void; fail: () => void }[];
+let pending: { req: PreviewRequest; done: (img: PreviewBytes) => void; fail: () => void }[];
 let urls: number;
 let revoked: string[];
 
 /** Answers the oldest pending render: `w`×`h` device px. */
 function answer(w = 400, h = 80) {
-  pending.shift()!.done({ width: w, height: h, png: [137, 80, 78, 71] });
+  pending.shift()!.done({ width: w, height: h, png: Uint8Array.of(137, 80, 78, 71) });
 }
 
 beforeEach(() => {

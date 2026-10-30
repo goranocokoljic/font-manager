@@ -522,13 +522,34 @@ async fn list_families(
     call(&state, move |api| api.list_families(req)).await
 }
 
-/// A grid thumbnail: text rasterized in one face (cached by the API).
+/// Bytes before the PNG in `render_preview`'s answer: the width, then the
+/// height, each a little-endian `u32`. `src/api/preview.ts` reads the same.
+pub const PREVIEW_HEADER_LEN: usize = 8;
+
+/// A [`PreviewImage`] as one raw IPC answer: the size header, then the PNG.
+/// The webview gets it as an `ArrayBuffer`; as JSON every byte would be a
+/// number in an array, which left hundreds of KB of garbage per thumbnail in
+/// the page's heap (E35.5).
+pub fn preview_bytes(image: &PreviewImage) -> Vec<u8> {
+    let mut out = Vec::with_capacity(PREVIEW_HEADER_LEN + image.png.len());
+    out.extend_from_slice(&image.width.to_le_bytes());
+    out.extend_from_slice(&image.height.to_le_bytes());
+    out.extend_from_slice(&image.png);
+    out
+}
+
+/// A grid thumbnail: text rasterized in one face (cached by the API), as raw
+/// bytes ([`preview_bytes`]). The local endpoint and MCP keep the JSON shape.
 #[tauri::command]
 async fn render_preview(
     state: State<'_, AppState>,
     req: PreviewRequest,
-) -> ApiResult<PreviewImage> {
-    call(&state, move |api| api.render_preview(req)).await
+) -> ApiResult<tauri::ipc::Response> {
+    call(&state, move |api| {
+        api.render_preview(req)
+            .map(|image| tauri::ipc::Response::new(preview_bytes(&image)))
+    })
+    .await
 }
 
 /// One family with its faces.

@@ -13,7 +13,9 @@ use fm_api::library::{
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{Collection, Tag};
-use fm_api::preview::{PreviewImage, PreviewService, SampleText, SampleTextRequest};
+use fm_api::preview::{
+    PreviewImage, PreviewRequest, PreviewService, SampleText, SampleTextRequest,
+};
 use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
     Supports,
@@ -23,7 +25,7 @@ use fm_api::{
     API_VERSION, ActivationService, ApiResult, Event, FaceId, FamilyId, JobId, SearchService,
     SettingsService, SourceId,
 };
-use fm_app_lib::{AppState, EVENT_CHANNEL, setup, setup_state};
+use fm_app_lib::{AppState, EVENT_CHANNEL, PREVIEW_HEADER_LEN, preview_bytes, setup, setup_state};
 use tauri::ipc::{CallbackFn, InvokeBody, InvokeResponseBody};
 use tauri::test::{
     INVOKE_KEY, MockRuntime, get_ipc_response, mock_builder, mock_context, noop_assets,
@@ -439,17 +441,32 @@ fn sample_texts_round_trip_through_fm_api() {
 }
 
 #[test]
-fn render_preview_round_trips_through_fm_api() {
-    let got: PreviewImage = invoke_with(
+fn render_preview_answers_raw_bytes_with_a_size_header() {
+    let req = PreviewRequest {
+        face: FaceId(1),
+        text: "Aa".into(),
+        size_px: 36.0,
+        variations: Vec::new(),
+        features: Vec::new(),
+        foreground: None,
+        background: None,
+    };
+    let want = MockApi::new().render_preview(req).unwrap();
+    let got = invoke_with(
         "render_preview",
         serde_json::json!({ "req": { "face": 1, "text": "Aa", "sizePx": 36 } }),
     )
     .unwrap()
-    .unwrap()
-    .deserialize()
     .unwrap();
-    assert!(got.png.starts_with(&[0x89, b'P', b'N', b'G']), "{got:?}");
-    assert!(got.width > 0 && got.height > 0, "{got:?}");
+    // Raw bytes, not a JSON array of numbers.
+    let InvokeResponseBody::Raw(bytes) = got else {
+        panic!("render_preview answered JSON: {got:?}");
+    };
+    assert_eq!(bytes, preview_bytes(&want));
+    assert_eq!(bytes.len(), PREVIEW_HEADER_LEN + want.png.len());
+    assert_eq!(bytes[..4], want.width.to_le_bytes());
+    assert_eq!(bytes[4..8], want.height.to_le_bytes());
+    assert!(bytes[PREVIEW_HEADER_LEN..].starts_with(&[0x89, b'P', b'N', b'G']));
     let err = invoke_with(
         "render_preview",
         serde_json::json!({ "req": { "face": 1, "text": "Aa", "sizePx": 400 } }),
@@ -457,6 +474,19 @@ fn render_preview_round_trips_through_fm_api() {
     .unwrap()
     .unwrap_err();
     assert_eq!(err["code"], "invalidRequest", "{err}");
+}
+
+#[test]
+fn preview_bytes_puts_width_and_height_before_the_png() {
+    let image = PreviewImage {
+        width: 0x0102_0304,
+        height: 300,
+        png: vec![0x89, b'P', b'N', b'G', 9],
+    };
+    assert_eq!(
+        preview_bytes(&image),
+        [4, 3, 2, 1, 44, 1, 0, 0, 0x89, b'P', b'N', b'G', 9]
+    );
 }
 
 #[test]

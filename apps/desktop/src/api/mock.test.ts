@@ -255,3 +255,22 @@ describe('MockApi font switch payload (E34.1)', () => {
     await expect(client.fontSwitchPayload(999)).rejects.toMatchObject({ code: 'notFound' });
   });
 });
+
+describe('MockApi thumbnails (E35.5)', () => {
+  it('answers PNG bytes in the shape the Tauri client decodes, and refuses what fm-core refuses', async () => {
+    const client = createMockClient();
+    const img = await client.renderPreview({ face: 1, text: 'Ag', sizePx: 36 });
+    expect(img.png).toBeInstanceOf(Uint8Array);
+    expect([...img.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(img.width).toBeGreaterThan(0);
+    expect(img.height).toBeGreaterThan(0);
+    await expect(client.renderPreview({ face: 1, text: 'Ag', sizePx: 400 })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    await expect(client.renderPreview({ face: 999, text: 'Ag', sizePx: 36 })).rejects.toMatchObject(
+      {
+        code: 'notFound',
+      },
+    );
+  });
+});
