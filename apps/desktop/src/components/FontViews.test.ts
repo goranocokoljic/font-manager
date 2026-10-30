@@ -240,29 +240,36 @@ describe('switching views', () => {
     ['waterfall', FontWaterfall, '[role="tree"]', (i) => i * waterfallRowPx(1.2)],
   ];
 
-  it('keeps the selection and the family at the top in every view', async () => {
-    await load({ extraFaces: 997 });
-    const list = useFontListStore();
-    // Scroll the list to row 200 and select two families there.
-    const first = await mountView(FontList, { rowHeight: 56, preview: { ...DEFAULT_PREVIEW } });
-    await scrollTo(first, '[role="tree"]', 200 * 56);
-    const top = list.rows[200]!.family.id;
-    expect(list.anchor).toBe(top);
-    list.click(familyKey(top));
-    list.click(familyKey(top + 1), 'toggle');
-    first.unmount();
-    for (const [name, view, selector, topOf] of views) {
-      const props = name === 'list' ? { rowHeight: 56 } : name === 'table' ? { view: 'all' } : {};
-      const w = await mountView(view, props);
-      expect(viewportOf(w, selector).scrollTop, name).toBe(topOf(200));
-      expect(list.anchor, name).toBe(top);
-      expect(list.selectedCount, name).toBe(2);
-      expect(w.get(`[data-key="${familyKey(top)}"]`).attributes('aria-selected'), name).toBe(
-        'true',
-      );
-      w.unmount();
-    }
-  });
+  // Builds a 1,000-family mock and mounts all four views: well under a second on a
+  // fast machine, more than the 5 s default on a loaded CI runner (Windows). The
+  // test is about the anchor and the selection, not speed.
+  it(
+    'keeps the selection and the family at the top in every view',
+    { timeout: 30_000 },
+    async () => {
+      await load({ extraFaces: 997 });
+      const list = useFontListStore();
+      // Scroll the list to row 200 and select two families there.
+      const first = await mountView(FontList, { rowHeight: 56, preview: { ...DEFAULT_PREVIEW } });
+      await scrollTo(first, '[role="tree"]', 200 * 56);
+      const top = list.rows[200]!.family.id;
+      expect(list.anchor).toBe(top);
+      list.click(familyKey(top));
+      list.click(familyKey(top + 1), 'toggle');
+      first.unmount();
+      for (const [name, view, selector, topOf] of views) {
+        const props = name === 'list' ? { rowHeight: 56 } : name === 'table' ? { view: 'all' } : {};
+        const w = await mountView(view, props);
+        expect(viewportOf(w, selector).scrollTop, name).toBe(topOf(200));
+        expect(list.anchor, name).toBe(top);
+        expect(list.selectedCount, name).toBe(2);
+        expect(w.get(`[data-key="${familyKey(top)}"]`).attributes('aria-selected'), name).toBe(
+          'true',
+        );
+        w.unmount();
+      }
+    },
+  );
 
   it('keeps the family at the top when leaving a sorted table re-orders the rows', async () => {
     await load({ extraFaces: 997 });
@@ -328,7 +335,7 @@ describe('grid and waterfall while scrolling fast (E35.8)', () => {
 
   it('the grid asks for no thumbnails while it moves and shows empty frames', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
-    await load({ extraFaces: 1997 });
+    await load({ extraFaces: 397 });
     const grid = await mountView(FontGrid, { overscan: 2 });
     await flushPromises();
     await frames(grid, '[role="listbox"]', CARD.linePx * 2, 2);

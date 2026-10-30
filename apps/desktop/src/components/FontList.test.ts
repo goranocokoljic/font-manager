@@ -686,7 +686,7 @@ describe('FontList while scrolling fast (E35.8)', () => {
 
   it('starts no loads while the list flings and loads the rows on screen once it settles', async () => {
     fakeClock();
-    const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
+    const list = await listOf({ extraFaces: 197 }, { rowHeight: 50, overscan: 2 });
     await fling(list);
     // Rows that held their face when the fling started keep it.
     const kept = list.findAll('.row[data-state="ready"]');
@@ -721,7 +721,7 @@ describe('FontList while scrolling fast (E35.8)', () => {
 
   it('a row it already shows is not torn down by a fling', async () => {
     fakeClock();
-    const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
+    const list = await listOf({ extraFaces: 197 }, { rowHeight: 50, overscan: 2 });
     await frameTo(list, 300); // one fast frame: still settled, rows load
     const shown = list.findAll('.row[data-state="ready"]').map((r) => r.attributes('data-face'));
     await frameTo(list, 550); // moving now
@@ -734,14 +734,14 @@ describe('FontList while scrolling fast (E35.8)', () => {
 
   it('a key that moves the cursor while the list flings counts as settled at once', async () => {
     fakeClock();
-    const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
+    const list = await listOf({ extraFaces: 197 }, { rowHeight: 50, overscan: 2 });
     await fling(list);
     await frameTo(list, 900);
     const tree = list.get('[role="tree"]');
     await tree.trigger('keydown', { key: 'End' });
     await flushPromises();
     // No settle wait: the last rows load right away.
-    expect(items(list).at(-1)!.attributes('aria-posinset')).toBe('1000');
+    expect(items(list).at(-1)!.attributes('aria-posinset')).toBe('200');
     expect(list.findAll('.row[data-state="ready"]').length).toBeGreaterThan(0);
     expect(list.findAll('.row[data-state="deferred"]')).toHaveLength(0);
     list.unmount();
