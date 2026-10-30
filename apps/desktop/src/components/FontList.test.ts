@@ -1,8 +1,9 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, useClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
+import { FRAME_MS, SETTLE_MS } from '../list/settle';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { ALPHABET } from '../preview/sampleText';
 import { useSearchStore } from '../stores/search';
@@ -55,6 +56,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   setFaceLoader(undefined);
   setClient(undefined);
 });
@@ -75,6 +77,23 @@ async function scrollTo(list: VueWrapper, top: number) {
   const tree = list.get('[role="tree"]');
   (tree.element as HTMLElement).scrollTop = top;
   await tree.trigger('scroll');
+  await flushPromises();
+}
+
+/** Clock the scroll settle reads; tests move it by hand. */
+function fakeClock(): void {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+}
+
+/** One frame later, scrolls to `top`. */
+async function frameTo(list: VueWrapper, top: number) {
+  vi.advanceTimersByTime(FRAME_MS);
+  await scrollTo(list, top);
+}
+
+/** Lets the list rest until it counts as settled. */
+async function settle() {
+  vi.advanceTimersByTime(SETTLE_MS);
   await flushPromises();
 }
 
@@ -115,11 +134,13 @@ describe('FontList virtualization', () => {
   // 200 scroll steps over 1,000 families: about 4 s on a fast machine, more
   // than the 5 s default on the CI Mac. A leak fails the checks, not the clock.
   it('does not leak font faces while 1,000 families scroll past', { timeout: 30_000 }, async () => {
+    fakeClock();
     const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
     let most = 0;
     const seen = new Set<string>();
     for (let top = 0; top < 50_000; top += 250) {
-      await scrollTo(list, top);
+      await frameTo(list, top);
+      await settle();
       const rendered = list.findAll('.row').length;
       // Only the rows on screen hold a face; at most MAX_IDLE released ones stay loaded.
       expect(loader.inUse).toBe(rendered);
@@ -652,6 +673,77 @@ describe('FontList density', () => {
     // Only a window of rows, a few more than before.
     expect(items(list).length).toBeGreaterThan(comfortable);
     expect(items(list).length).toBeLessThanOrEqual(Math.ceil(600 / 54) + 1 + 4);
+    list.unmount();
+  });
+});
+
+describe('FontList while scrolling fast (E35.8)', () => {
+  /** Two fast frames: from here on the list is moving. */
+  async function fling(list: VueWrapper) {
+    await frameTo(list, 300);
+    await frameTo(list, 550);
+  }
+
+  it('starts no loads while the list flings and loads the rows on screen once it settles', async () => {
+    fakeClock();
+    const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
+    await fling(list);
+    // Rows that held their face when the fling started keep it.
+    const kept = list.findAll('.row[data-state="ready"]');
+    expect(kept.length).toBeGreaterThan(0);
+    const acquire = vi.spyOn(loader, 'acquire');
+    const client = useClient();
+    const asked = [
+      vi.spyOn(client, 'sampleTexts'),
+      vi.spyOn(client, 'sizeFactors'),
+      vi.spyOn(client, 'getFamily'),
+      vi.spyOn(client, 'getFace'),
+    ];
+    for (let top = 800; top <= 5000; top += 300) await frameTo(list, top);
+    await flushPromises();
+    expect(acquire).not.toHaveBeenCalled();
+    for (const spy of asked) expect(spy).not.toHaveBeenCalled();
+    // Rows still render and recycle: one pool, the labels of the rows on screen.
+    expect(items(list)).toHaveLength(17);
+    expect(items(list)[0]!.text()).toContain('Sample');
+    expect(list.findAll('.row[data-state="loading"]')).toHaveLength(0);
+    // Resting under SETTLE_MS is not enough.
+    vi.advanceTimersByTime(SETTLE_MS - 10);
+    await flushPromises();
+    expect(acquire).not.toHaveBeenCalled();
+    await settle();
+    await flushPromises();
+    expect(asked[2]).toHaveBeenCalled();
+    expect(asked[0]).toHaveBeenCalled();
+    expect(list.findAll('.row[data-state="ready"]')).toHaveLength(17);
+    list.unmount();
+  });
+
+  it('a row it already shows is not torn down by a fling', async () => {
+    fakeClock();
+    const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
+    await frameTo(list, 300); // one fast frame: still settled, rows load
+    const shown = list.findAll('.row[data-state="ready"]').map((r) => r.attributes('data-face'));
+    await frameTo(list, 550); // moving now
+    const after = list.findAll('.row[data-state="ready"]').map((r) => r.attributes('data-face'));
+    expect(after.length).toBeGreaterThan(0);
+    for (const face of after) expect(shown).toContain(face);
+    expect(list.findAll('.row[data-state="deferred"]').length).toBeGreaterThan(0);
+    list.unmount();
+  });
+
+  it('a key that moves the cursor while the list flings counts as settled at once', async () => {
+    fakeClock();
+    const list = await listOf({ extraFaces: 997 }, { rowHeight: 50, overscan: 2 });
+    await fling(list);
+    await frameTo(list, 900);
+    const tree = list.get('[role="tree"]');
+    await tree.trigger('keydown', { key: 'End' });
+    await flushPromises();
+    // No settle wait: the last rows load right away.
+    expect(items(list).at(-1)!.attributes('aria-posinset')).toBe('1000');
+    expect(list.findAll('.row[data-state="ready"]').length).toBeGreaterThan(0);
+    expect(list.findAll('.row[data-state="deferred"]')).toHaveLength(0);
     list.unmount();
   });
 });

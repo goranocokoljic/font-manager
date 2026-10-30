@@ -9,6 +9,7 @@ import type { PreviewRequest } from '../api/types';
 import { CARD } from '../list/grid';
 import { familyKey } from '../list/rows';
 import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
+import { FRAME_MS, SETTLE_MS } from '../list/settle';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { useSearchStore } from '../stores/search';
 import { clearFaceAxes } from '../preview/variations';
@@ -61,6 +62,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   setFaceLoader(undefined);
   setClient(undefined);
   vi.unstubAllGlobals();
@@ -305,5 +307,61 @@ describe('switching views', () => {
     await scrollTo(grid, '[role="listbox"]', 60 * CARD.linePx);
     expect(list.anchor).toBe(list.rows[240]!.family.id);
     expect(list.rows[0]!.family.id).toBeLessThan(EXTRA_ID_BASE);
+  });
+});
+
+describe('grid and waterfall while scrolling fast (E35.8)', () => {
+  /** Scrolls `steps` frames of `px` each: two fast frames make the view moving. */
+  async function frames(w: VueWrapper, selector: string, px: number, steps: number) {
+    let top = viewportOf(w, selector).scrollTop;
+    for (let i = 0; i < steps; i++) {
+      vi.advanceTimersByTime(FRAME_MS);
+      top += px;
+      await scrollTo(w, selector, top);
+    }
+  }
+
+  async function settle() {
+    vi.advanceTimersByTime(SETTLE_MS);
+    await flushPromises();
+  }
+
+  it('the grid asks for no thumbnails while it moves and shows empty frames', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    await load({ extraFaces: 1997 });
+    const grid = await mountView(FontGrid, { overscan: 2 });
+    await flushPromises();
+    await frames(grid, '[role="listbox"]', CARD.linePx * 2, 2);
+    const before = renders.length;
+    await frames(grid, '[role="listbox"]', CARD.linePx * 3, 10);
+    expect(renders).toHaveLength(before);
+    const states = grid.findAll('[data-testid="thumbnail"]').map((t) => t.attributes('data-state'));
+    expect(states).toHaveLength(40);
+    expect(states).not.toContain('loading');
+    expect(states).toContain('deferred');
+    await settle();
+    await flushPromises();
+    expect(renders.length).toBeGreaterThan(before);
+    const after = grid.findAll('[data-testid="thumbnail"]').map((t) => t.attributes('data-state'));
+    expect(after.every((s) => s === 'ready')).toBe(true);
+    grid.unmount();
+  });
+
+  it('the waterfall starts no face loads while it moves', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    await load({ extraFaces: 200 });
+    const fall = await mountView(FontWaterfall, { preview: { ...DEFAULT_PREVIEW } });
+    const rowPx = waterfallRowPx(1.2);
+    await frames(fall, '[role="tree"]', rowPx + 20, 4);
+    const lines = fall.findAll('[data-testid="waterfall-line"]');
+    expect(lines.length).toBeGreaterThan(0);
+    const states = lines.map((l) => l.attributes('data-state'));
+    expect(states).not.toContain('loading');
+    expect(states).toContain('deferred');
+    await settle();
+    await flushPromises();
+    const after = fall.findAll('[data-testid="waterfall-line"]');
+    expect(after.every((l) => l.attributes('data-state') === 'ready')).toBe(true);
+    fall.unmount();
   });
 });

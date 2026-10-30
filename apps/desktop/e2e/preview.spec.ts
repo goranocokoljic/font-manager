@@ -83,6 +83,8 @@ test('1,000 rows scrolled do not leak font faces', async ({ page }) => {
       return el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
     });
     await nextFrames(page);
+    // A step can be fast enough to defer the rows (E35.8): wait for them to settle.
+    await expect(list.locator('[data-state="deferred"]')).toHaveCount(0);
     await expect(list.locator('[data-state="loading"]')).toHaveCount(0);
     const faces = await previewFaces(page);
     // The rows on screen plus at most 48 released faces (DEFAULT_MAX_IDLE) stay registered.

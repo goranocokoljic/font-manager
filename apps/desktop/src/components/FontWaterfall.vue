@@ -3,10 +3,12 @@
 // expanded family) as a block that shows its face's preview text at six sizes
 // (`WATERFALL_SIZES`), smallest first, in the webview's own font rendering.
 // Blocks have a fixed height, so the view virtualizes like the list (keyed by
-// slot) and shares its cursor, selection and keyboard model.
+// slot) and shares its cursor, selection and keyboard model. While it moves fast
+// (E35.8, `list/settle.ts`) blocks start no loads; once it settles, they load.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
+import { useScrollSettle } from '../list/settle';
 import { rowActivation } from '../list/activation';
 import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
@@ -72,7 +74,13 @@ function measure(): void {
   if (el.clientHeight > 0) height.value = el.clientHeight;
 }
 
-const anchor = useScrollAnchor(viewport, () => rowPx.value);
+const motion = useScrollSettle(() => rowPx.value);
+const anchor = useScrollAnchor(
+  viewport,
+  () => rowPx.value,
+  () => 1,
+  motion.jumped,
+);
 
 onMounted(() => {
   measure();
@@ -87,6 +95,7 @@ onBeforeUnmount(() => observer?.disconnect());
 
 function onScroll(): void {
   measure();
+  motion.scrolled(scrollTop.value);
   anchor.track(scrollTop.value);
 }
 
@@ -102,6 +111,8 @@ const { previewOf } = useRowPreviews(
   () => rendered.value,
   () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
   false,
+  true,
+  () => motion.settled.value,
 );
 
 const rowId = (row: ListRow) => `fm-wrow-${row.key.replace(':', '-')}`;
@@ -132,7 +143,10 @@ async function revealCursor(): Promise<void> {
   const i = list.cursorIndex;
   if (!el || i < 0) return;
   const top = scrollToShow(i, rowPx.value, el.scrollTop, height.value);
-  if (top !== el.scrollTop) el.scrollTop = top;
+  if (top !== el.scrollTop) {
+    el.scrollTop = top;
+    motion.jumped(el.scrollTop);
+  }
   measure();
   await nextTick();
 }
@@ -239,6 +253,7 @@ function onToggle(row: ListRow): void {
             :fallback="k === 0 ? item.fallback : null"
             :missing="item.missing"
             :variations="item.variations"
+            :defer="!motion.settled.value"
           />
         </template>
         <p v-else class="placeholder">

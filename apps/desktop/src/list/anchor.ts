@@ -3,7 +3,8 @@
 // and a view that mounts scrolls the anchor family's line to the top. When the
 // rows change under the view (the families come back in another order, a family
 // above is expanded) and the anchor family moves to another row, the view
-// scrolls it back to the top.
+// scrolls it back to the top. `jumped` hears of every scroll the anchor makes, so a
+// view can count it as settled at once (E35.8).
 import { watch, type Ref } from 'vue';
 import { useFontListStore } from '../stores/fontList';
 
@@ -16,12 +17,14 @@ export interface ScrollAnchor {
 
 /**
  * `linePx` is the height of a line of the view; `perLine` how many rows a line
- * holds (1, or the grid's columns).
+ * holds (1, or the grid's columns); `jumped` is called with the new scrollTop after
+ * every scroll `restore` makes.
  */
 export function useScrollAnchor(
   viewport: Ref<HTMLElement | null>,
   linePx: () => number,
   perLine: () => number = () => 1,
+  jumped: (scrollTop: number) => void = () => undefined,
 ): ScrollAnchor {
   const list = useFontListStore();
   /** The scrollTop `restore` set; its scroll event does not move the anchor. */
@@ -35,6 +38,7 @@ export function useScrollAnchor(
     if (el.scrollTop === top) return;
     el.scrollTop = top;
     restored = el.scrollTop;
+    jumped(restored);
   }
 
   function track(scrollTop: number): void {

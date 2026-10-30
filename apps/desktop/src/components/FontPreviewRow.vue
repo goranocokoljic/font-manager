@@ -15,6 +15,10 @@
 // lines over the sample: a zero-size box inside the text sits on the webview's own
 // baseline, and each line is the metric's share of the em above it, so the lines
 // follow size and line height. With `outline` the sample is drawn as outlines.
+// With `defer` (the list moves fast, E35.8) a row that does not hold its face yet
+// starts no load: it shows its name in the UI font where the sample goes, at the
+// sample's size (`data-state="deferred"`), and loads once `defer` is off. A face it
+// already holds stays.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { Axis, AxisValue, FaceId, FaceSummary, Metrics, SampleFallback } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
@@ -49,6 +53,8 @@ const props = withDefaults(
     metrics?: Metrics | null;
     /** Draws the sample as outlines (stroke, no fill). */
     outline?: boolean;
+    /** Starts no load for a face not held yet (the list moves fast). */
+    defer?: boolean;
   }>(),
   {
     label: undefined,
@@ -64,10 +70,11 @@ const props = withDefaults(
     view: ALL_FONTS_VIEW,
     metrics: null,
     outline: false,
+    defer: false,
   },
 );
 
-type LoadState = 'loading' | 'ready' | 'failed';
+type LoadState = 'deferred' | 'loading' | 'ready' | 'failed';
 
 const loader = useFaceLoader();
 const features = useFeaturesStore();
@@ -76,6 +83,8 @@ const palettes = usePalettesStore();
 const state = ref<LoadState>('loading');
 const axes = ref<Axis[]>([]);
 let held: FaceId | null = null;
+/** The face `axes` were asked for. */
+let axesOf: FaceId | null = null;
 
 function hold(face: FaceId): void {
   if (held === face) return;
@@ -92,15 +101,29 @@ function hold(face: FaceId): void {
   );
 }
 
+/** Shows no face and starts no load until `defer` is off. */
+function wait(): void {
+  if (held !== null) loader.release(held);
+  held = null;
+  state.value = 'deferred';
+}
+
 watch(
-  () => props.face.id,
-  (id) => hold(id),
+  () => [props.face.id, props.defer] as const,
+  ([id, defer]) => {
+    if (held === id) return;
+    if (defer) wait();
+    else hold(id);
+  },
   { immediate: true },
 );
 
 watch(
-  () => [props.face.id, props.face.isVariable] as const,
-  ([id, isVariable]) => {
+  () => [props.face.id, props.face.isVariable, props.defer] as const,
+  ([id, isVariable, defer]) => {
+    // `defer` turning off for the face the axes are of keeps them.
+    if (defer || axesOf === id) return;
+    axesOf = id;
     axes.value = [];
     if (!isVariable) return;
     faceAxes(id).then(
@@ -162,6 +185,13 @@ const fallbackTitle = computed(() => {
 });
 
 const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
+
+/** While deferred, the sample slot shows the row's name in the UI font. */
+const deferredStyle = computed(() => ({
+  fontSize: `${props.sizePx}px`,
+  lineHeight: String(props.lineHeight),
+  textAlign: props.align,
+}));
 </script>
 
 <template>
@@ -182,6 +212,14 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
     </span>
     <span
+      v-if="state === 'deferred'"
+      class="sample deferred"
+      data-testid="deferred-sample"
+      :style="deferredStyle"
+      ><bdi>{{ name }}</bdi></span
+    >
+    <span
+      v-else
       class="sample"
       :class="{ outline }"
       dir="auto"
@@ -237,6 +275,9 @@ const name = computed(() => props.label ?? `${props.face.familyName} ${props.fac
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.sample.deferred {
+  color: var(--fm-muted);
 }
 .sample.outline {
   -webkit-text-fill-color: transparent;

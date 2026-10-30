@@ -257,3 +257,47 @@ describe('FontPreviewRow', () => {
     });
   });
 });
+
+describe('FontPreviewRow deferred while the list moves fast (E35.8)', () => {
+  const [a, b] = [inter, mono];
+
+  it('starts no load and shows its name in the UI font until defer is off', async () => {
+    const row = mount(FontPreviewRow, { props: { face: a, defer: true, label: 'Inter Regular' } });
+    await flushPromises();
+    expect(row.get('.row').attributes('data-state')).toBe('deferred');
+    expect(loader.loaded).toBe(0);
+    const sample = row.get('[data-testid="deferred-sample"]');
+    expect(sample.text()).toBe('Inter Regular');
+    // At the sample's size, so the row keeps its layout; no face family.
+    expect(sample.attributes('style')).toContain('font-size: 28px');
+    expect(sample.attributes('style')).not.toContain('fm-face-');
+    await row.setProps({ defer: false });
+    await flushPromises();
+    expect(row.get('.row').attributes('data-state')).toBe('ready');
+    expect(loader.inUse).toBe(1);
+    expect(row.find('[data-testid="deferred-sample"]').exists()).toBe(false);
+    row.unmount();
+  });
+
+  it('keeps a face it holds when defer turns on, and waits for a new face', async () => {
+    const row = mount(FontPreviewRow, { props: { face: a } });
+    await flushPromises();
+    expect(row.get('.row').attributes('data-state')).toBe('ready');
+    await row.setProps({ defer: true });
+    await flushPromises();
+    expect(row.get('.row').attributes('data-state')).toBe('ready');
+    expect(loader.inUse).toBe(1);
+    // Recycled for another face while moving: the old one is released, no new load.
+    await row.setProps({ face: b });
+    await flushPromises();
+    expect(row.get('.row').attributes('data-state')).toBe('deferred');
+    expect(loader.inUse).toBe(0);
+    expect(loader.loaded).toBe(1);
+    await row.setProps({ defer: false });
+    await flushPromises();
+    expect(row.get('.row').attributes('data-face')).toBe(String(b.id));
+    expect(row.get('.row').attributes('data-state')).toBe('ready');
+    row.unmount();
+    expect(loader.inUse).toBe(0);
+  });
+});
