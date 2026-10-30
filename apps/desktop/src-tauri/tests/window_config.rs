@@ -28,17 +28,40 @@ fn the_main_window_leaves_html_drag_and_drop_to_the_webview() {
 /// webview; Playwright runs without the policy and cannot catch it.
 #[test]
 fn the_policy_lets_the_grid_show_blob_thumbnails() {
-    let csp = config()["app"]["security"]["csp"]
-        .as_str()
-        .expect("csp string")
-        .to_owned();
-    let img_src = csp
-        .split(';')
-        .map(str::trim)
-        .find(|d| d.starts_with("img-src "))
-        .expect("img-src directive");
+    let img_src = directive("img-src");
     assert!(
         img_src.split_whitespace().any(|s| s == "blob:"),
         "{img_src}"
     );
+}
+
+/// E35.5: Tauri's IPC is a `fetch` to its own scheme (`ipc://localhost` on
+/// macOS and Linux, `http://ipc.localhost` on Windows), which the policy checks
+/// under `connect-src` (else `default-src 'self'`). Blocked, every command
+/// falls back to the message channel, which hands each answer to the page as
+/// script text to evaluate: raw bytes become a JSON number array again and the
+/// grid's thumbnails filled the JS heap with garbage. Playwright runs without
+/// the policy and cannot catch it.
+#[test]
+fn the_policy_lets_the_ipc_use_its_own_scheme() {
+    let connect_src = directive("connect-src");
+    for scheme in ["ipc:", "http://ipc.localhost"] {
+        assert!(
+            connect_src.split_whitespace().any(|s| s == scheme),
+            "{scheme} missing: {connect_src}"
+        );
+    }
+}
+
+/// One directive of the shipped content security policy, with its name.
+fn directive(name: &str) -> String {
+    let csp = config()["app"]["security"]["csp"]
+        .as_str()
+        .expect("csp string")
+        .to_owned();
+    csp.split(';')
+        .map(str::trim)
+        .find(|d| d.split_whitespace().next() == Some(name))
+        .unwrap_or_else(|| panic!("{name} directive missing: {csp}"))
+        .to_owned()
 }
