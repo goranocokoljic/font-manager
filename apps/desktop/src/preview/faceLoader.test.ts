@@ -140,3 +140,117 @@ describe('FaceLoader', () => {
     expect(fonts.families()).toEqual([faceFamily(1)]);
   });
 });
+
+/** A stand-in for `FontFace` made from bytes: records its family and buffer. */
+class FakeDataFace {
+  constructor(
+    readonly family: string,
+    readonly data: ArrayBuffer,
+  ) {}
+  load(): Promise<unknown> {
+    return this.data.byteLength === 0
+      ? Promise.reject(new Error('bad font'))
+      : Promise.resolve(this);
+  }
+}
+
+function setupBytes(maxIdle = 3, fetch?: (url: string) => Promise<ArrayBuffer>) {
+  const fonts = new FakeSet() as unknown as FontFaceSetLike<FakeDataFace> & {
+    faces: Set<FakeDataFace>;
+    added: number;
+    families(): string[];
+  };
+  const fetched: string[] = [];
+  const created: FakeDataFace[] = [];
+  const loader = new FaceLoader<FakeDataFace>({
+    fonts,
+    create: () => {
+      throw new Error('a face with bytes must not be made from a url() source');
+    },
+    bytes: {
+      fetch:
+        fetch ??
+        ((url) => {
+          fetched.push(url);
+          // Face 0's file is empty: it fetches but does not load.
+          return Promise.resolve(new ArrayBuffer(url.endsWith('/0') ? 0 : 8));
+        }),
+      create: (family, data) => {
+        const face = new FakeDataFace(family, data);
+        created.push(face);
+        return face;
+      },
+    },
+    url: (face) => `fmfont://localhost/${face}`,
+    maxIdle,
+  });
+  return { fonts, loader, fetched, created };
+}
+
+describe('FaceLoader from file bytes (E35.6)', () => {
+  it("fetches the face's file once and makes the face from its buffer", async () => {
+    const { fonts, loader, fetched, created } = setupBytes();
+    const first = loader.acquire(12);
+    const second = loader.acquire(12);
+    await expect(first).resolves.toBe('fm-face-12');
+    await expect(second).resolves.toBe('fm-face-12');
+    expect(fetched).toEqual(['fmfont://localhost/12']);
+    expect(fonts.added).toBe(1);
+    expect(created[0]!.family).toBe('fm-face-12');
+    expect(created[0]!.data).toBeInstanceOf(ArrayBuffer);
+    expect(fonts.families()).toEqual(['fm-face-12']);
+  });
+
+  it('reports a file that cannot be fetched the way a failed load is reported', async () => {
+    const { fonts, loader } = setupBytes(0, () => Promise.reject(new Error('HTTP 404')));
+    await expect(loader.acquire(5)).rejects.toThrow('HTTP 404');
+    expect(fonts.faces.size).toBe(0);
+    expect(loader.loaded).toBe(1);
+    loader.release(5);
+    expect(loader.loaded).toBe(0);
+  });
+
+  it('reports a fetched file that does not load and still unloads it', async () => {
+    const { fonts, loader } = setupBytes(0);
+    await expect(loader.acquire(0)).rejects.toThrow('bad font');
+    expect(fonts.families()).toEqual(['fm-face-0']);
+    loader.release(0);
+    expect(fonts.faces.size).toBe(0);
+  });
+
+  it('does not register a face that was unloaded while its bytes were on the way', async () => {
+    const { fonts, loader } = setupBytes(0);
+    const ready = loader.acquire(7);
+    loader.release(7);
+    await ready;
+    expect(fonts.added).toBe(0);
+    expect(loader.loaded).toBe(0);
+    // Asked for again, it is fetched and registered anew.
+    await loader.acquire(7);
+    expect(fonts.families()).toEqual(['fm-face-7']);
+  });
+
+  it('keeps the idle limit: no face leaks over 1,000 rows scrolled past', async () => {
+    const { fonts, loader } = setupBytes(48);
+    const visible = 12;
+    await Promise.all(Array.from({ length: visible }, (_, i) => loader.acquire(i + 1)));
+    for (let top = 1; top <= 1000; top++) {
+      await loader.acquire(top + visible);
+      loader.release(top);
+      expect(fonts.faces.size).toBeLessThanOrEqual(visible + 48);
+    }
+    expect(fonts.added).toBe(1000 + visible);
+    expect(loader.inUse).toBe(visible);
+    expect(fonts.faces.size).toBe(visible + 48);
+    loader.trim();
+    expect(fonts.faces.size).toBe(visible);
+  });
+
+  it('loads a catalog preview from the bytes of its own URL', async () => {
+    const { loader, fetched } = setupBytes(1);
+    const name = catalogFamily('googleFonts', 'Space Mono');
+    const url = () => '/fmfont/catalog-googleFonts-5370616365204d6f6e6f';
+    await expect(loader.acquireSource(name, url)).resolves.toBe(name);
+    expect(fetched).toEqual([url()]);
+  });
+});

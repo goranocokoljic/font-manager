@@ -4,6 +4,7 @@
 //
 //   node scripts/bench/webview.mjs [--bin EXE] [--library DIR] [--home DIR]
 //        [--fresh] [--out FILE] [--port N] [--settle-ms N] [--scroll-ms N]
+//        [--modes List,Table,Grid,Waterfall]
 //
 // What it does, in order:
 //   1. Makes a scratch home (default target/bench/webview-home) whose
@@ -74,6 +75,7 @@ function parseArgs(argv) {
     port: 9229,
     settleMs: 60_000,
     scrollMs: 5_000,
+    modes: MODES,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -86,11 +88,15 @@ function parseArgs(argv) {
     else if (a === '--port') opts.port = Number(next());
     else if (a === '--settle-ms') opts.settleMs = Number(next());
     else if (a === '--scroll-ms') opts.scrollMs = Number(next());
+    // E35.6: one view's cost alone (the List's font faces without the Grid's thumbnails).
+    else if (a === '--modes') opts.modes = next().split(',').map((m) => m.trim());
     else if (a === '--help' || a === '-h') {
       console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n\n')[0]);
       process.exit(0);
     } else usage(`unknown option ${a}`);
   }
+  const unknown = opts.modes.filter((m) => !MODES.includes(m));
+  if (unknown.length || !opts.modes.length) usage(`--modes takes some of ${MODES.join(',')}`);
   if (!opts.library) usage('--library DIR or FM_REFERENCE_LIBRARY is required');
   if (!fs.existsSync(opts.library)) usage(`no library at ${opts.library}`);
   if (!fs.existsSync(opts.bin)) usage(`no app at ${opts.bin} (pnpm tauri build --no-bundle)`);
@@ -497,7 +503,7 @@ async function main() {
     );
 
     const cdp = await page.context().newCDPSession(page);
-    for (const mode of MODES) {
+    for (const mode of opts.modes) {
       await selectMode(page, mode);
       report.scroll[mode] = {};
       for (const pace of Object.keys(PACES)) {

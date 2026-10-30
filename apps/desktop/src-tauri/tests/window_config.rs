@@ -42,3 +42,27 @@ fn the_policy_lets_the_grid_show_blob_thumbnails() {
         "{img_src}"
     );
 }
+
+/// E35.6: list rows fetch their face's file into an `ArrayBuffer` (so the
+/// collector can free the bytes of a face the list dropped), and `fetch` is
+/// checked under `connect-src`. Without the font scheme there it falls back
+/// to `default-src 'self'`, every fetch is refused and no row shows its face;
+/// Playwright runs without the policy and cannot catch it.
+#[test]
+fn the_policy_lets_the_list_fetch_font_files() {
+    let csp = config()["app"]["security"]["csp"]
+        .as_str()
+        .expect("csp string")
+        .to_owned();
+    let connect_src = csp
+        .split(';')
+        .map(str::trim)
+        .find(|d| d.starts_with("connect-src "))
+        .expect("connect-src directive");
+    for source in ["'self'", "fmfont:", "http://fmfont.localhost"] {
+        assert!(
+            connect_src.split_whitespace().any(|s| s == source),
+            "{source} missing from {connect_src}"
+        );
+    }
+}

@@ -6,8 +6,16 @@
 // `document.fonts` once more than `maxIdle` released faces pile up, so a long
 // scroll does not leak faces. A catalog family's preview (E22.2) goes through
 // the same loader by its own family name and URL (`acquireSource`).
+//
+// The app fetches each file into an `ArrayBuffer` and makes the face from
+// those bytes (`FaceLoaderDeps.bytes`, E35.6). A face made from a `url()`
+// source keeps its font data outside the JS heap, so the collector never
+// counts it and a dropped face's bytes stayed in the renderer (about 100 KB
+// per face scrolled past, `dev-docs/perf/webview-2026-10-29.md`); bytes in an
+// `ArrayBuffer` are on the heap and go with the face.
 import { catalogFontPath } from '../api/catalogFont';
 import { useClient } from '../api/client';
+import { fetchFontFile } from '../api/fontFile';
 import type { CatalogId, FaceId } from '../api/types';
 
 /** The parts of a `FontFace` the loader uses. */
@@ -25,12 +33,26 @@ export interface FontFaceSetLike<F extends FontFaceLike = FontFaceLike> {
 export interface FaceLoaderDeps<F extends FontFaceLike = FontFaceLike> {
   /** Where faces are registered (`document.fonts`). */
   fonts: FontFaceSetLike<F>;
-  /** Makes a face (`new FontFace(family, source)`). */
+  /** Makes a face from a CSS source (`new FontFace(family, 'url(...)')`). */
   create(family: string, source: string): F;
+  /**
+   * Loads faces from their file's bytes instead of a `url()` source: the
+   * loader fetches the file and makes the face from the buffer. The app
+   * always passes this; component tests that do not care leave it out.
+   */
+  bytes?: FaceBytesDeps<F>;
   /** The URL of a face's font file. */
   url(face: FaceId): string;
   /** Released faces kept loaded before the oldest is unloaded. */
   maxIdle?: number;
+}
+
+/** How a loader gets a face's bytes and makes a face from them. */
+export interface FaceBytesDeps<F extends FontFaceLike = FontFaceLike> {
+  /** The font file at `url` (`fetchFontFile`); rejects when it cannot be read. */
+  fetch(url: string): Promise<ArrayBuffer>;
+  /** Makes a face from the file's bytes (`new FontFace(family, data)`). */
+  create(family: string, data: ArrayBuffer): F;
 }
 
 /** Released faces kept loaded by default: about two screens of rows. */
@@ -42,7 +64,8 @@ export function faceFamily(face: FaceId): string {
 }
 
 interface Entry<F> {
-  font: F;
+  /** Unset while the file's bytes are on their way. */
+  font?: F;
   refs: number;
   ready: Promise<string>;
 }
@@ -86,11 +109,9 @@ export class FaceLoader<F extends FontFaceLike = FontFaceLike> {
   acquireSource(family: string, url: () => string): Promise<string> {
     let entry = this.entries.get(family);
     if (!entry) {
-      const font = this.deps.create(family, `url("${url()}")`);
-      this.deps.fonts.add(font);
-      entry = { font, refs: 0, ready: font.load().then(() => family) };
-      // A failed load is reported to the rows that asked; keep the rejection
-      // from surfacing as unhandled when none is waiting any more.
+      entry = this.register(family, url());
+      // A failed fetch or load is reported to the rows that asked; keep the
+      // rejection from surfacing as unhandled when none is waiting any more.
       entry.ready.catch(() => undefined);
       this.entries.set(family, entry);
     }
@@ -127,11 +148,32 @@ export class FaceLoader<F extends FontFaceLike = FontFaceLike> {
     return this.entries.size - this.idle.size;
   }
 
+  /** Makes and registers the face of the file at `url`. */
+  private register(family: string, url: string): Entry<F> {
+    const bytes = this.deps.bytes;
+    if (!bytes) {
+      const font = this.deps.create(family, `url("${url}")`);
+      this.deps.fonts.add(font);
+      return { font, refs: 0, ready: font.load().then(() => family) };
+    }
+    const entry: Entry<F> = { refs: 0, ready: Promise.resolve(family) };
+    entry.ready = bytes.fetch(url).then(async (data) => {
+      // Unloaded while the bytes were on their way: no row wants the face.
+      if (this.entries.get(family) !== entry) return family;
+      const font = bytes.create(family, data);
+      entry.font = font;
+      this.deps.fonts.add(font);
+      await font.load();
+      return family;
+    });
+    return entry;
+  }
+
   private unload(family: string): void {
     const entry = this.entries.get(family);
     this.idle.delete(family);
     if (!entry) return;
-    this.deps.fonts.delete(entry.font);
+    if (entry.font) this.deps.fonts.delete(entry.font);
     this.entries.delete(family);
   }
 }
@@ -147,6 +189,10 @@ export function useFaceLoader(): FaceLoader {
       ? new FaceLoader<FontFace>({
           fonts: document.fonts,
           create: (family, source) => new FontFace(family, source),
+          bytes: {
+            fetch: fetchFontFile,
+            create: (family, data) => new FontFace(family, data),
+          },
           url,
         })
       : // No CSS Font Loading API (jsdom): rows fall back to the UI font.
