@@ -10,10 +10,13 @@
 // that palette instead, as a mask cannot show colors; so does every card while
 // outline or tracking is on (E16.1). The grid shares the list's cursor, selection
 // and keyboard model; Up/Down move by a line, Left/Right by a card, Enter expands a
-// family or opens a style.
+// family or opens a style. While the grid moves fast (E35.8, `list/settle.ts`) cards
+// ask for no thumbnails or faces and show their empty frame; once it settles, the
+// cards on screen ask.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
+import { useScrollSettle } from '../list/settle';
 import { rowActivation } from '../list/activation';
 import { dragKeys } from '../list/drag';
 import { CARD, cardText, gridColumns, gridRange, lineCount } from '../list/grid';
@@ -87,10 +90,12 @@ const range = computed(() =>
 );
 const pool = computed(() => poolSize(height.value, CARD.linePx, props.overscan) * columns.value);
 
+const motion = useScrollSettle(() => CARD.linePx);
 const anchor = useScrollAnchor(
   viewport,
   () => CARD.linePx,
   () => columns.value,
+  motion.jumped,
 );
 
 onMounted(() => {
@@ -113,6 +118,7 @@ watch(columns, async () => {
 
 function onScroll(): void {
   measure();
+  motion.scrolled(scrollTop.value);
   anchor.track(scrollTop.value);
 }
 
@@ -123,6 +129,7 @@ const { previewOf } = useRowPreviews(
   () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
   false,
   false,
+  () => motion.settled.value,
 );
 
 /**
@@ -158,8 +165,9 @@ const visible = computed(() =>
   }),
 );
 
-// Ask for the thumbnails of the cards on screen.
+// Ask for the thumbnails of the cards on screen, once the grid has settled.
 watchEffect(() => {
+  if (!motion.settled.value) return;
   for (const item of visible.value)
     if (item.face && item.text && !item.live) thumbnails.want(item.face.id, item.text, THUMB_PX);
 });
@@ -192,7 +200,7 @@ function thumbStyle(thumb: Thumbnail | undefined) {
 }
 
 const thumbState = (item: { thumb?: Thumbnail; failed: boolean }) =>
-  item.thumb ? 'ready' : item.failed ? 'failed' : 'loading';
+  item.thumb ? 'ready' : item.failed ? 'failed' : motion.settled.value ? 'loading' : 'deferred';
 
 const activeId = computed(() => {
   const row = list.cursorRow;
@@ -214,7 +222,10 @@ async function revealCursor(): Promise<void> {
   if (!el || i < 0) return;
   const line = Math.floor(i / columns.value);
   const top = scrollToShow(line, CARD.linePx, el.scrollTop, height.value);
-  if (top !== el.scrollTop) el.scrollTop = top;
+  if (top !== el.scrollTop) {
+    el.scrollTop = top;
+    motion.jumped(el.scrollTop);
+  }
   measure();
   await nextTick();
 }
@@ -299,6 +310,7 @@ function onToggle(row: ListRow): void {
             :tracking-em="preview.trackingEm"
             :outline="preview.outline"
             :color="preview.textColor"
+            :defer="!motion.settled.value"
             aria-hidden="true"
           />
           <div

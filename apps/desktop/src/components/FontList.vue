@@ -2,7 +2,9 @@
 // The font list: families, each expandable to its styles inline, as a
 // virtualized tree. Only the rows in the viewport (plus `overscan` above and
 // below) exist, and they are keyed by slot, so scrolling reuses the same row
-// elements (row recycling) and only the faces on screen are loaded.
+// elements (row recycling) and only the faces on screen are loaded. While the list
+// moves fast (E35.8, `list/settle.ts`) rows start no loads; once it settles, the
+// rows on screen load. A scroll the app makes (a revealed row, the anchor) is settled.
 //
 // Focus stays on the tree; the cursor row is its `aria-activedescendant`, so
 // the list is one Tab stop. Keys: arrows, Home/End, PageUp/PageDown move;
@@ -19,6 +21,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { FaceId, FaceSummary } from '../api/types';
 import { poolSize, scrollToShow, windowRange } from '../list/virtual';
 import { useScrollAnchor } from '../list/anchor';
+import { useScrollSettle } from '../list/settle';
 import { keepRowInView } from '../list/density';
 import { dragKeys } from '../list/drag';
 import { handleListKey, modeOf } from '../list/keys';
@@ -100,7 +103,13 @@ function measure(): void {
   if (el.clientHeight > 0) height.value = el.clientHeight;
 }
 
-const anchor = useScrollAnchor(viewport, () => rowPx.value);
+const motion = useScrollSettle(() => rowPx.value);
+const anchor = useScrollAnchor(
+  viewport,
+  () => rowPx.value,
+  () => 1,
+  motion.jumped,
+);
 
 onMounted(() => {
   measure();
@@ -115,6 +124,7 @@ onBeforeUnmount(() => observer?.disconnect());
 
 function onScroll(): void {
   measure();
+  motion.scrolled(scrollTop.value);
   anchor.track(scrollTop.value);
 }
 
@@ -134,6 +144,9 @@ const { previewOf } = useRowPreviews(
   () => props.preview,
   () => rendered.value,
   () => list.rows.slice(Math.max(0, range.value.start - pool.value), range.value.end + pool.value),
+  true,
+  true,
+  () => motion.settled.value,
 );
 
 const visible = computed(() =>
@@ -162,7 +175,10 @@ async function revealCursor(): Promise<void> {
   const i = list.cursorIndex;
   if (!el || i < 0) return;
   const top = scrollToShow(i, rowPx.value, el.scrollTop, height.value);
-  if (top !== el.scrollTop) el.scrollTop = top;
+  if (top !== el.scrollTop) {
+    el.scrollTop = top;
+    motion.jumped(el.scrollTop);
+  }
   measure();
   await nextTick();
 }
@@ -180,7 +196,10 @@ watch(
       anchor.restore();
     } else {
       const top = keepRowInView(i, before, after, el.scrollTop, height.value);
-      if (top !== el.scrollTop) el.scrollTop = top;
+      if (top !== el.scrollTop) {
+        el.scrollTop = top;
+        motion.jumped(el.scrollTop);
+      }
     }
     measure();
   },
@@ -292,6 +311,7 @@ function onToggle(row: ListRow): void {
           :fallback="item.fallback"
           :missing="item.missing"
           :variations="item.variations"
+          :defer="!motion.settled.value"
         >
           <template #lead>
             <ActivationDot :state="rowActivation(item.row)" />
@@ -338,7 +358,11 @@ function onToggle(row: ListRow): void {
         >
           {{ t('list.findSimilar') }}
         </button>
-        <div v-else class="preview placeholder">
+        <div
+          v-else
+          class="preview placeholder"
+          :data-state="motion.settled.value ? undefined : 'deferred'"
+        >
           <span class="label"
             ><ActivationDot :state="rowActivation(item.row)" /><bdi>{{
               item.row.family.name

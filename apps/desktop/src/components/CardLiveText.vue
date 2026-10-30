@@ -2,7 +2,9 @@
 // A grid card's text as live webview text in the face itself, for a face drawn in a
 // chosen color palette (E16.3), or with tracking or as outlines (E16.1): the card's
 // thumbnail is a one-color mask, so it cannot show any of them. The face is held
-// through the shared face loader while the card shows it.
+// through the shared face loader while the card shows it. With `defer` (the grid
+// moves fast, E35.8) a card that does not hold its face yet starts no load and shows
+// its empty frame (`data-state="deferred"`) until `defer` is off.
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import type { FaceId } from '../api/types';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
@@ -18,10 +20,12 @@ const props = defineProps<{
   /** Draws the text as outlines (stroke, no fill). */
   outline?: boolean;
   color?: string | null;
+  /** Starts no load for a face not held yet (the grid moves fast). */
+  defer?: boolean;
 }>();
 
 const loader = useFaceLoader();
-const state = ref<'loading' | 'ready' | 'failed'>('loading');
+const state = ref<'deferred' | 'loading' | 'ready' | 'failed'>('loading');
 let held: FaceId | null = null;
 
 function hold(face: FaceId | null): void {
@@ -41,8 +45,13 @@ function hold(face: FaceId | null): void {
 }
 
 watch(
-  () => props.face,
-  (id) => hold(id),
+  () => [props.face, props.defer] as const,
+  ([id, defer]) => {
+    if (held === id) return;
+    if (!defer) return hold(id);
+    hold(null);
+    state.value = 'deferred';
+  },
   { immediate: true },
 );
 onBeforeUnmount(() => hold(null));
@@ -65,7 +74,7 @@ const style = computed(() => ({
     :data-state="state"
     :style="style"
   >
-    {{ text }}
+    <template v-if="state !== 'deferred'">{{ text }}</template>
   </div>
 </template>
 

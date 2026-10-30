@@ -4,7 +4,9 @@
 // virtual style's row previews its face at the style's coordinates. With auto size on
 // (E16.2), each row also carries its face's size factor; the factors of the rows on
 // screen are asked for in one call. With the metrics overlay on (E16.1), each row also
-// carries its face's vertical metrics, asked for the rows on screen only.
+// carries its face's vertical metrics, asked for the rows on screen only. While the
+// view moves fast (E35.8, `list/settle.ts`) nothing is asked for: the rows on screen
+// then are gone a few frames later. Once it settles, the rows on screen ask.
 import { watchEffect } from 'vue';
 import type { AxisValue, FaceSummary, Metrics, SampleFallback } from '../api/types';
 import { sampleText } from '../preview/sampleText';
@@ -40,6 +42,8 @@ export interface RowPreview {
  * for a view that keeps its own sizes (the grid's thumbnails, the waterfall's labelled
  * sizes): its rows keep factor 1 and no factor is asked for. `metrics` is false for a
  * view that draws no metrics lines (the grid's cards): no metrics are asked for.
+ * `settled` is false while the view moves fast: no text, factor, metrics or faces are
+ * asked for then; what has arrived is still shown.
  */
 export function useRowPreviews(
   preview: () => PreviewSettings,
@@ -47,6 +51,7 @@ export function useRowPreviews(
   around: () => readonly ListRow[],
   autoSize = true,
   metrics = true,
+  settled: () => boolean = () => true,
 ) {
   const list = useFontListStore();
   const library = useLibraryStore();
@@ -77,6 +82,7 @@ export function useRowPreviews(
   }
 
   watchEffect(() => {
+    if (!settled()) return;
     for (const row of rendered()) {
       const face = faceOf(row);
       if (face) samples.want(face.id, sampleText(preview(), face, previews.pangramText));
@@ -85,7 +91,7 @@ export function useRowPreviews(
 
   watchEffect(() => {
     const basis = autoSize ? preview().autoSize : 'off';
-    if (basis === 'off') return;
+    if (basis === 'off' || !settled()) return;
     for (const row of rendered()) {
       const face = faceOf(row);
       if (face) sizes.want(face.id, basis);
@@ -93,7 +99,7 @@ export function useRowPreviews(
   });
 
   watchEffect(() => {
-    if (!metrics || !preview().metrics) return;
+    if (!metrics || !preview().metrics || !settled()) return;
     for (const row of rendered()) {
       const face = faceOf(row);
       if (face) faceMetrics.want(face.id);
@@ -101,6 +107,7 @@ export function useRowPreviews(
   });
 
   watchEffect(() => {
+    if (!settled()) return;
     for (const row of around()) {
       const id = row.family.id;
       if (row.kind === 'family' && !library.faces.has(id) && !library.failed.has(id))
