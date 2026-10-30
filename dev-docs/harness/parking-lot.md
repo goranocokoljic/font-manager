@@ -307,3 +307,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-10-30
 
 - [E35.7 #411] crates/fm-core/src/api.rs:525 — if `apply_rescan` fails on a job that is not the last of a scan request, the in-memory `FileIndex` keeps that job's changes the database lacks for the later jobs of the same request (pre-existing; E35.7 drops the index at the end of the request).
+- [E35.8 #413] crates/fm-core/src/api/tests.rs:4320 — `provenance_survives_a_rescan_and_follows_a_moved_file_by_hash` fails now and then on untouched code ("followed by its hash": the moved bold file still reports its old path, so the old `font_file` row stayed `gone = 0`); seen on Linux in run 41091210683 (#414, a frontend-only diff) and in runs 40991245017, 40613076686, 40260948776, 40234093004, 40116031505; needs a look at the rebuild → rescan → move sequence in the scanner, not a retry.
