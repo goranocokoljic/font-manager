@@ -686,7 +686,9 @@ describe('FontList while scrolling fast (E35.8)', () => {
 
   it('starts no loads while the list flings and loads the rows on screen once it settles', async () => {
     fakeClock();
-    const list = await listOf({ extraFaces: 197 }, { rowHeight: 50, overscan: 2 });
+    // Auto size and the metrics overlay on, so their requests are asked for too.
+    const preview = { ...DEFAULT_PREVIEW, autoSize: 'xHeight' as const, metrics: true };
+    const list = await listOf({ extraFaces: 197 }, { rowHeight: 50, overscan: 2, preview });
     await fling(list);
     // Rows that held their face when the fling started keep it.
     const kept = list.findAll('.row[data-state="ready"]');
@@ -713,8 +715,9 @@ describe('FontList while scrolling fast (E35.8)', () => {
     expect(acquire).not.toHaveBeenCalled();
     await settle();
     await flushPromises();
-    expect(asked[2]).toHaveBeenCalled();
-    expect(asked[0]).toHaveBeenCalled();
+    // Settled: every kind of request starts for the rows on screen.
+    for (const spy of asked) expect(spy).toHaveBeenCalled();
+    expect(acquire).toHaveBeenCalled();
     expect(list.findAll('.row[data-state="ready"]')).toHaveLength(17);
     list.unmount();
   });
