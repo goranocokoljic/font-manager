@@ -29,6 +29,7 @@ export const PAGES = [
   'activation',
   'keyboard-shortcuts',
   'shared-libraries',
+  'mcp',
 ];
 
 const STYLE = `:root { color-scheme: light dark; --fg: #1d1d1f; --muted: #55555a; --bg: #ffffff;

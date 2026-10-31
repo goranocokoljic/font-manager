@@ -13,4 +13,5 @@ export const HELP_PAGES: readonly HelpPage[] = [
   { slug: 'activation', title: 'Activation' },
   { slug: 'keyboard-shortcuts', title: 'Keyboard shortcuts' },
   { slug: 'shared-libraries', title: 'Shared libraries' },
+  { slug: 'mcp', title: 'AI assistants' },
 ];

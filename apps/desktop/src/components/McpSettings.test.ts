@@ -51,6 +51,14 @@ describe('Settings → AI assistants', () => {
     w.unmount();
   });
 
+  it('opens the help page on AI assistants from the note', async () => {
+    const openHelp = vi.spyOn(client, 'openHelp').mockResolvedValue();
+    const w = await mountIt();
+    await button(w, 'How to connect Claude Code and Claude Desktop')!.trigger('click');
+    expect(openHelp).toHaveBeenCalledWith('mcp');
+    w.unmount();
+  });
+
   it('turns the server on through the API and offers both snippets', async () => {
     const w = await mountIt();
     await turnOn(w);

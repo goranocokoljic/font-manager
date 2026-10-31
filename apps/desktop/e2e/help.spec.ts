@@ -8,6 +8,7 @@ const PAGES = [
   ['Activation', 'activation'],
   ['Keyboard shortcuts', 'keyboard-shortcuts'],
   ['Shared libraries', 'shared-libraries'],
+  ['AI assistants', 'mcp'],
 ] as const;
 
 test('the palette lists a Help action per docs page and opens the page', async ({

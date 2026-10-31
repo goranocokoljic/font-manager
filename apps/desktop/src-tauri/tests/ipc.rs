@@ -1063,7 +1063,8 @@ fn set_shell_locale_relabels_the_help_menu_and_refuses_unknown_locales() {
             "Quellen",
             "Aktivierung",
             "Tastenkürzel",
-            "Geteilte Bibliotheken"
+            "Geteilte Bibliotheken",
+            "KI-Assistenten"
         ]
     );
     assert_eq!(

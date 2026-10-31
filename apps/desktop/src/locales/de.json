@@ -49,7 +49,8 @@
       "sources": "Quellen",
       "activation": "Aktivierung",
       "keyboard-shortcuts": "Tastenkürzel",
-      "shared-libraries": "Geteilte Bibliotheken"
+      "shared-libraries": "Geteilte Bibliotheken",
+      "mcp": "KI-Assistenten"
     },
     "tray": {
       "tooltip": "Font Manager",
@@ -1212,7 +1213,8 @@
         "tag_fonts": "Schriften taggen",
         "export_web": "Webfonts exportieren"
       },
-      "asksEachTime": "Fragt Sie jedes Mal (Erlauben / Ablehnen)"
+      "asksEachTime": "Fragt Sie jedes Mal (Erlauben / Ablehnen)",
+      "help": "So verbinden Sie Claude Code und Claude Desktop"
     },
     "about": {
       "platformNotes": "Hinweise zur Plattform",

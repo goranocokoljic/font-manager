@@ -194,6 +194,8 @@ Three tools do a whole job in one step:
 deactivate 3 fonts" shows at the bottom of the window. Click **Allow** or **Deny**. If you
 do not answer in 60 seconds, it counts as **Deny**, and nothing changes.
 
+Read [AI assistants](mcp.md) for the steps for Claude Code and Claude Desktop.
+
 ## Get updates
 
 Open Settings → About and click **Check for updates**. If a new version is out, Font
