@@ -544,7 +544,7 @@ pub fn list() -> Vec<Tool> {
         tool::<TagFontsInput>(TAG_FONTS, "Add tags to faces or whole families."),
         tool::<ExportWebInput>(
             EXPORT_WEB,
-            "Write web fonts (WOFF2/WOFF) and @font-face CSS to a folder. Returns the paths written and the CSS.",
+            "Write web fonts (WOFF2/WOFF) and @font-face CSS to a folder, created when missing. Returns the paths written and the CSS.",
         ),
         tool::<RenderPreviewInput>(
             RENDER_PREVIEW,
@@ -564,7 +564,7 @@ pub fn list() -> Vec<Tool> {
         ),
         tool::<BuildSpecimenInput>(
             BUILD_SPECIMEN,
-            "Write a self-contained HTML specimen of one family into a folder. Returns the file's path.",
+            "Write a self-contained HTML specimen of one family into a folder, created when missing. Returns the file's path.",
         ),
     ]
 }

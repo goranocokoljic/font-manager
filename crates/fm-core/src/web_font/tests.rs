@@ -338,11 +338,14 @@ fn two_faces_with_one_name_are_refused_before_writing() {
 }
 
 #[test]
-fn a_missing_or_file_output_folder_is_an_error() {
+fn a_missing_output_folder_is_created_and_a_file_is_an_error() {
     let out = TempDir::new("web-export-no-dir");
     let faces = [face(STATIC_TTF, 0, "BebasNeue-Regular")];
-    let err = export(&faces, &[WebFormat::Woff2], None, &out.path().join("nope")).unwrap_err();
-    assert_eq!(err.code(), ErrorCode::NotFound);
+    let fresh = out.path().join("site").join("fonts");
+    let written = export(&faces, &[WebFormat::Woff2], None, &fresh).unwrap();
+    assert!(fresh.is_dir(), "the folder is created, parents included");
+    assert_eq!(listing(&fresh), ["BebasNeue-Regular.woff2"]);
+    assert_eq!(written.len(), 1);
     let file = out.path().join("file");
     fs::write(&file, b"x").unwrap();
     let err = export(&faces, &[WebFormat::Woff2], None, &file).unwrap_err();

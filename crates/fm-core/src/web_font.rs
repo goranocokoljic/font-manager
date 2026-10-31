@@ -186,6 +186,9 @@ pub fn write(
 ) -> FmResult<Output> {
     let out_dir = std::path::absolute(out_dir)
         .map_err(|e| FmError::io("The output folder could not be opened.", out_dir, &e))?;
+    // The caller named the folder (a picker, a CLI flag or an AI assistant's
+    // argument), so a missing one is created; a file of that name is not
+    // replaced.
     match fs::metadata(&out_dir) {
         Ok(m) if m.is_dir() => {}
         Ok(_) => {
@@ -193,6 +196,11 @@ pub fn write(
                 FmError::invalid("The output folder is a file. Choose a folder.")
                     .with_detail(out_dir.display().to_string()),
             );
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(&out_dir).map_err(|e| {
+                FmError::io("The output folder could not be created.", &out_dir, &e)
+            })?;
         }
         Err(e) => {
             return Err(FmError::io(

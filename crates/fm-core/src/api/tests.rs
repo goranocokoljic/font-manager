@@ -3510,6 +3510,23 @@ fn a_family_exports_as_a_self_contained_html_specimen() {
 }
 
 #[test]
+fn a_specimen_creates_a_missing_output_folder() {
+    let (lib, _, _) = Lib::scanned("api-specimen-new-folder");
+    let out = lib
+        .dir
+        .path()
+        .join("specimens")
+        .join("archivo")
+        .join("out.html");
+    let archivo = lib.family("Archivo").id;
+    let got = lib
+        .api
+        .export_specimen(specimen_request(archivo, &out))
+        .expect("specimen into a new folder");
+    assert!(out.is_file(), "{}", got.path);
+}
+
+#[test]
 fn a_specimen_refuses_an_unknown_family_a_pdf_and_no_path() {
     let (lib, _, _) = Lib::scanned("api-specimen-refusals");
     let out = lib.dir.path().join("out.html");

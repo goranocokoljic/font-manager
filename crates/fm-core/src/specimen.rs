@@ -158,8 +158,10 @@ pub fn write_collection_pdf(
 }
 
 /// Writes the checked page `page` to `out` and returns its absolute path.
+/// The folder of `out` is created when it is missing: the caller named it.
 fn save(page: &str, out: &Path) -> FmResult<PathBuf> {
     let out = absolute(out)?;
+    ensure_folder(&out)?;
     std::fs::write(&out, page)
         .map_err(|e| FmError::io("The specimen could not be saved.", &out, &e))?;
     Ok(out)
@@ -176,9 +178,21 @@ pub fn write_pdf(spec: &Specimen, out: &Path, printer: &dyn PdfPrinter) -> FmRes
     print(&checked_page(spec)?, out, printer)
 }
 
+/// Creates the folder that holds `out` when it is missing.
+fn ensure_folder(out: &Path) -> FmResult<()> {
+    if let Some(folder) = out.parent()
+        && !folder.is_dir()
+    {
+        std::fs::create_dir_all(folder)
+            .map_err(|e| FmError::io("The output folder could not be created.", folder, &e))?;
+    }
+    Ok(())
+}
+
 /// Prints the checked page `page` to `out`, as [`write_pdf`] describes.
 fn print(page: &str, out: &Path, printer: &dyn PdfPrinter) -> FmResult<PathBuf> {
     let out = absolute(out)?;
+    ensure_folder(&out)?;
     let n = TEMP_SEQ.fetch_add(1, Ordering::Relaxed);
     let pid = std::process::id();
     let html = TempFile(std::env::temp_dir().join(format!("fm-specimen-{pid}-{n}.html")));
