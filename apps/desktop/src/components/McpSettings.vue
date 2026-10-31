@@ -5,8 +5,10 @@
 // until the user asks to see them; Copy works either way. The Claude Desktop
 // snippet (E27.7) starts the bundled stdio shim by its absolute path. Below
 // them, one switch per tool that changes something (E27.6): fm-core lists the
-// tools and their grants, all off by default.
+// tools and their grants, all off by default. The help link opens the user
+// docs page on AI assistants (E27.8) in the help window.
 import { computed, onMounted, ref } from 'vue';
+import { useClient } from '../api/client';
 import type { McpClient, McpGrant } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import { useSettingsStore } from '../stores/settings';
@@ -76,7 +78,12 @@ async function toggle(event: globalThis.Event): Promise<void> {
 <template>
   <section class="mcp" aria-labelledby="mcp-title">
     <h2 id="mcp-title" class="heading">{{ t('settings.sections.mcp') }}</h2>
-    <p class="note">{{ t('settings.mcp.note') }}</p>
+    <p class="note">
+      {{ t('settings.mcp.note') }}
+      <button type="button" class="link" @click="useClient().openHelp('mcp')">
+        {{ t('settings.mcp.help') }}
+      </button>
+    </p>
     <template v-if="status">
       <label class="choice">
         <input
@@ -249,5 +256,18 @@ async function toggle(event: globalThis.Event): Promise<void> {
 }
 .button:disabled {
   opacity: 0.5;
+}
+.link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fm-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.link:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 2px;
 }
 </style>

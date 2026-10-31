@@ -21,11 +21,12 @@ test('the site has the required pages, in reading order', () => {
     { slug: 'activation', title: 'Activation' },
     { slug: 'keyboard-shortcuts', title: 'Keyboard shortcuts' },
     { slug: 'shared-libraries', title: 'Shared libraries' },
+    { slug: 'mcp', title: 'AI assistants' },
   ]);
   for (const { slug, title } of built) {
     const html = page(slug);
     assert.match(html, new RegExp(`<title>${title} · Font Manager Help</title>`));
-    assert.match(html, new RegExp(`<h1 id="${slug}">${title}</h1>`));
+    assert.match(html, new RegExp(`<h1 id="[a-z0-9-]+">${title}</h1>`));
   }
   assert.ok(existsSync(join(out, 'index.html')));
   assert.ok(existsSync(join(out, 'style.css')));

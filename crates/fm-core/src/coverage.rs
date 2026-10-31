@@ -402,6 +402,32 @@ impl Fit {
     }
 }
 
+/// The error for a language code no preset has. An AI assistant or a CLI user
+/// often guesses a code (`sr`, `en-US`, `serbian`), so the message names the
+/// presets with the same language part (`sr` → `sr-Cyrl`, `sr-Latn`) and the
+/// detail lists every code, so the next guess is right.
+fn unknown_preset(all: &[Preset], code: &str) -> FmError {
+    let language = |c: &str| c.split('-').next().unwrap_or(c).to_ascii_lowercase();
+    let wanted = language(code);
+    let close: Vec<String> = all
+        .iter()
+        .filter(|p| language(&p.code) == wanted)
+        .map(|p| format!("\"{}\"", p.code))
+        .collect();
+    let message = if close.is_empty() {
+        format!(
+            "Unknown language preset \"{code}\". Use a preset code such as \"en\" or \"sr-Cyrl\"."
+        )
+    } else {
+        format!(
+            "Unknown language preset \"{code}\". Did you mean {}?",
+            close.join(" or ")
+        )
+    };
+    let known: Vec<&str> = all.iter().map(|p| p.code.as_str()).collect();
+    FmError::invalid(message).with_detail(format!("known presets: {}", known.join(", ")))
+}
+
 impl Need<'static> {
     /// Every base character of every preset in `codes` (AND). An unknown
     /// code is an `InvalidRequest` error.
@@ -417,7 +443,7 @@ impl<'a> Need<'a> {
             .map(|code| {
                 all.iter()
                     .find(|p| p.code == *code)
-                    .ok_or_else(|| FmError::invalid(format!("Unknown language preset \"{code}\".")))
+                    .ok_or_else(|| unknown_preset(all, code))
             })
             .collect::<FmResult<Vec<_>>>()?;
         let chars = CodePointSet::from_code_points(presets.iter().flat_map(|p| p.base.iter()));
@@ -527,9 +553,10 @@ fn report_of(
         }
         Supports::Languages { codes } => {
             for code in codes {
-                let preset = all.iter().find(|p| p.code == *code).ok_or_else(|| {
-                    FmError::invalid(format!("Unknown language preset \"{code}\"."))
-                })?;
+                let preset = all
+                    .iter()
+                    .find(|p| p.code == *code)
+                    .ok_or_else(|| unknown_preset(all, code))?;
                 let lacks: Vec<char> = preset
                     .base
                     .iter()
@@ -609,6 +636,34 @@ mod tests {
             codes: vec!["xx".into()],
         };
         let err = report_of(&[], FaceId(1), &set("a"), &[], &target).expect_err("unknown");
+        assert_eq!(err.code(), fm_api::ErrorCode::InvalidRequest);
+    }
+
+    #[test]
+    fn an_unknown_preset_names_the_close_codes_and_lists_them_all() {
+        let presets = [
+            preset("sr-Cyrl", "Cyrl", Some("SRB"), "\u{431}"),
+            preset("sr-Latn", "Latn", Some("SRB"), "ab"),
+            preset("en", "Latn", Some("ENG"), "ab"),
+        ];
+        let err = Need::languages_of(&presets, &["sr".into()]).expect_err("sr is no preset");
+        assert_eq!(
+            err.message(),
+            "Unknown language preset \"sr\". Did you mean \"sr-Cyrl\" or \"sr-Latn\"?"
+        );
+        assert_eq!(err.detail(), Some("known presets: sr-Cyrl, sr-Latn, en"));
+
+        let err = Need::languages_of(&presets, &["EN-us".into()]).expect_err("case and region");
+        assert_eq!(
+            err.message(),
+            "Unknown language preset \"EN-us\". Did you mean \"en\"?"
+        );
+
+        let err = Need::languages_of(&presets, &["serbian".into()]).expect_err("a name");
+        assert_eq!(
+            err.message(),
+            "Unknown language preset \"serbian\". Use a preset code such as \"en\" or \"sr-Cyrl\"."
+        );
         assert_eq!(err.code(), fm_api::ErrorCode::InvalidRequest);
     }
 

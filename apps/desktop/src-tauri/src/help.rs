@@ -43,6 +43,10 @@ pub const HELP_PAGES: &[HelpPage] = &[
         slug: "shared-libraries",
         title: "Shared libraries",
     },
+    HelpPage {
+        slug: "mcp",
+        title: "AI assistants",
+    },
 ];
 
 /// The label of the one help window; opening another page reuses it.
@@ -222,7 +226,8 @@ mod tests {
                 "sources",
                 "activation",
                 "keyboard-shortcuts",
-                "shared-libraries"
+                "shared-libraries",
+                "mcp"
             ]
         );
     }
