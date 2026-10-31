@@ -145,6 +145,21 @@ rewritten on Regenerate, and removed by the quit path, only when its `pid` is
 this process. The port is the one the OS picked (bind to port 0), so it
 changes from run to run; programs read the file.
 
+**Window-only methods** (E36.1, the security review). The token admits every
+program of the user, and an AI assistant's host (Claude Code, Claude Desktop
+through the shim) holds it. Four settings methods decide what such a program
+may do: `set_mcp_enabled`, `set_mcp_grant`, `authorize_mcp_tool` and
+`answer_mcp_confirmation`. A token must not reach them, or an assistant could
+turn the server on, grant itself a tool and answer its own confirmation. They
+stay in the route table (every service method has a route) and `routes::dispatch`
+refuses them with 403 `permissionDenied` over HTTP and the pipe alike
+(`fm_endpoint::routes::WINDOW_ONLY`); the window calls them through Tauri
+commands, which no token opens, and the app's MCP server asks the gate
+in-process. Reading `mcp_status` stays open. The review is in
+`dev-docs/security/local-endpoint-and-mcp-2026-10-31.md`; the switches guard
+tool calls from an assistant, not a program with the token or a shell, which
+can also run `fm` (ADR 0016's trust boundary is the user account).
+
 **Private files, per OS** (`fm_platform::fs::write_private_file`, used for
 both files). The bytes go to a temporary sibling that is private before it
 is written, then it is renamed over the target.

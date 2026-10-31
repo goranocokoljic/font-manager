@@ -115,8 +115,18 @@ result either way.
   on.
 - Every assistant on this computer shares the same switches. There is no switch per
   assistant.
+- Only you can change the switches and answer the Allow / Deny message, in the Font
+  Manager window. A program that has the token cannot do it through the local API, so an
+  assistant cannot allow itself a tool.
+- The switches guard what an assistant does through its Font Manager tools. They do not
+  guard a program that runs on your computer with your rights. An assistant that may run
+  commands on your computer can also run the `fm` command line, which does not ask for
+  the switches. Give such an assistant only the access you would give any program.
 - Font Manager never deactivates a font that it did not activate, also when an assistant
   asks for it.
+- **Export web fonts** and **Activate fonts** let an assistant write files into any folder
+  you name to it, and create the folder when it is missing. It never replaces a file
+  that is already there unless it asks for that.
 - A snippet with the token works until Font Manager makes a new token. To make a new
   token, open Settings → **Local API** and click **Regenerate**. Then copy the
   snippets again.

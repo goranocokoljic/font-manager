@@ -11,6 +11,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use fm_api::mock::MockApi;
 use fm_api::{API_VERSION, Api, LibraryService as _, SettingsService as _};
 use fm_endpoint::ipc::{IpcEndpoint, MAX_FRAME_BYTES};
+use fm_endpoint::routes::WINDOW_ONLY;
 use fm_platform::IpcName;
 use serde_json::{Value, json};
 
@@ -354,4 +355,31 @@ fn stopping_ends_open_connections_and_the_name_binds_again() {
     Client::connect(&name).hello_works();
     again.stop();
     drop(served.name);
+}
+
+/// E36.1: the window-only methods are refused over the pipe as over HTTP.
+#[test]
+fn window_only_methods_are_refused_over_the_pipe() {
+    let served = Served::new();
+    let mut client = served.client();
+    let before = served.api.mcp_status().unwrap();
+    for (i, method) in WINDOW_ONLY.iter().enumerate() {
+        let params = match *method {
+            "set_mcp_enabled" => json!({"enabled": true}),
+            "set_mcp_grant" => json!({"tool": "tag_fonts", "granted": true}),
+            "authorize_mcp_tool" => json!({"tool": "get_font"}),
+            _ => json!({"id": 1, "allow": true}),
+        };
+        let reply = client.call(&json!({"v": 1, "id": i, "method": method, "params": params}));
+        assert_eq!(reply["id"], i, "{method}: {reply}");
+        assert_eq!(
+            reply["error"]["code"], "permissionDenied",
+            "{method}: {reply}"
+        );
+        assert!(reply.get("result").is_none(), "{method}: {reply}");
+    }
+    assert_eq!(served.api.mcp_status().unwrap(), before);
+    // The connection stays, and an open method still answers.
+    let status = client.call(&json!({"v": 1, "id": "s", "method": "mcp_status"}));
+    assert!(status.get("result").is_some(), "{status}");
 }

@@ -203,6 +203,10 @@ impl SettingsService for Client {
         self.call("mcp_status", &())
     }
 
+    // The four methods below are window-only (E36.1,
+    // `fm_endpoint::routes::WINDOW_ONLY`): the endpoint answers
+    // `permissionDenied`, whoever holds the token. They stay here because a
+    // client implements the whole contract.
     fn set_mcp_enabled(&self, req: McpUpdate) -> ApiResult<McpStatus> {
         self.call("set_mcp_enabled", &req)
     }
