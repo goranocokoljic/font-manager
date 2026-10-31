@@ -6,14 +6,39 @@
 //! the service traits in `fm-api`, so a new method without a route fails CI.
 //! An answer that contains a deprecated field names it
 //! ([`Answer::deprecations`], [`fm_api::deprecations_in`]).
+//!
+//! A few settings methods are [`WINDOW_ONLY`]: they are in the table (every
+//! service method is), but [`dispatch`] refuses them with `permissionDenied`
+//! over HTTP and the pipe alike. The app window calls them through Tauri.
 
-use fm_api::{Api, ApiError, ApiResult, Deprecation};
+use fm_api::{Api, ApiError, ApiResult, Deprecation, ErrorCode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 /// Why a body was refused before any service ran; its detail starts with
 /// this, so a caller (and the route test) can tell it from a service error.
 pub const BODY_ERROR_DETAIL: &str = "request body: ";
+
+/// Methods only the app window may call (E36.1). The bearer token admits
+/// every program of the user, an AI assistant's host included; these
+/// methods decide what such a program may do, so a token must not reach
+/// them: over the transports they answer `permissionDenied`, and the window
+/// calls them through Tauri commands, which no token opens.
+pub const WINDOW_ONLY: &[&str] = &[
+    "set_mcp_enabled",
+    "set_mcp_grant",
+    "authorize_mcp_tool",
+    "answer_mcp_confirmation",
+];
+
+/// The refusal of a [`WINDOW_ONLY`] method.
+pub fn window_only(method: &str) -> ApiError {
+    ApiError::new(
+        ErrorCode::PermissionDenied,
+        "Only the Font Manager window can change what AI assistants may do.",
+    )
+    .with_detail(format!("{method} is not served to programs"))
+}
 
 macro_rules! routes {
     ($($name:ident($($arg:ident)?)),* $(,)?) => {
@@ -29,6 +54,9 @@ macro_rules! routes {
             body: &[u8],
             deprecated: &[Deprecation],
         ) -> Option<ApiResult<Answer>> {
+            if WINDOW_ONLY.contains(&method) && ROUTES.contains(&method) {
+                return Some(Err(window_only(method)));
+            }
             Some(match method {
                 $(stringify!($name) => routes!(@call api body deprecated $name $($arg)?),)*
                 _ => return None,
