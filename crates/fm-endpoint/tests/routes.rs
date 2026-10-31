@@ -9,7 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use common::Served;
-use fm_endpoint::routes::{BODY_ERROR_DETAIL, ROUTES};
+use fm_api::SettingsService as _;
+use fm_endpoint::routes::{BODY_ERROR_DETAIL, ROUTES, WINDOW_ONLY};
 
 /// The methods of every `pub trait <Name>Service` in `fm-api`'s sources.
 /// `EventSource` is not a service (ADR 0006, ADR 0015) and has no route.
@@ -292,7 +293,7 @@ fn every_route_reaches_its_service_over_http() {
     let routes: BTreeSet<&str> = ROUTES.iter().copied().collect();
     assert_eq!(names, routes, "the body table must name every route once");
     // `call` reads the token anew each time, so the regeneration is harmless.
-    for route in ROUTES {
+    for route in ROUTES.iter().filter(|r| !WINDOW_ONLY.contains(r)) {
         let reply = served.call(route, &bodies[route]);
         let refused_body = reply.body["detail"]
             .as_str()
@@ -411,4 +412,42 @@ fn a_body_over_the_limit_is_refused() {
         "",
     );
     assert_eq!(reply.status, 413);
+}
+
+/// E36.1: the methods that decide what AI assistants may do are not served
+/// to token holders, so an assistant's host cannot grant itself a tool or
+/// answer its own confirmation. They stay in the table (every service method
+/// has a route) and are refused in `dispatch`, so the pipe refuses them too.
+#[test]
+fn window_only_methods_are_refused_with_403_and_never_reach_the_service() {
+    let served = Served::new();
+    let bodies = bodies(&served);
+    assert_eq!(
+        WINDOW_ONLY,
+        [
+            "set_mcp_enabled",
+            "set_mcp_grant",
+            "authorize_mcp_tool",
+            "answer_mcp_confirmation"
+        ]
+    );
+    let before = served.api.mcp_status().unwrap();
+    for route in WINDOW_ONLY {
+        assert!(ROUTES.contains(route), "{route} is a service method");
+        let reply = served.call(route, &bodies[route]);
+        assert_eq!(reply.status, 403, "{route}: {}", reply.body);
+        assert_eq!(reply.body["code"], "permissionDenied", "{route}");
+        assert_eq!(
+            reply.body["message"],
+            "Only the Font Manager window can change what AI assistants may do.",
+            "{route}"
+        );
+        // Also with a body that would be refused: the method is refused first.
+        let reply = served.call(route, "not json");
+        assert_eq!(reply.status, 403, "{route}: {}", reply.body);
+    }
+    // Nothing changed: the switch and the grants are as they were.
+    assert_eq!(served.api.mcp_status().unwrap(), before);
+    // Reading the status stays open to a token holder.
+    assert_eq!(served.call("mcp_status", "").status, 200);
 }

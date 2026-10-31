@@ -36,6 +36,25 @@ macro_rules! same {
     }};
 }
 
+/// Calls `$m` through the client and expects the endpoint's own refusal of
+/// a window-only method ([`fm_endpoint::routes::WINDOW_ONLY`]).
+macro_rules! window_only {
+    ($seen:ident, $c:ident; $m:ident, $json:expr) => {{
+        $seen.push(stringify!($m));
+        assert!(fm_endpoint::routes::WINDOW_ONLY.contains(&stringify!($m)));
+        let req = serde_json::from_value($json)
+            .unwrap_or_else(|e| panic!("{} request: {e}", stringify!($m)));
+        let err = $c.$m(req).expect_err(stringify!($m));
+        assert_eq!(err.code, ErrorCode::PermissionDenied, "{}", stringify!($m));
+        assert_eq!(
+            err.message,
+            "Only the Font Manager window can change what AI assistants may do.",
+            "{}",
+            stringify!($m)
+        );
+    }};
+}
+
 #[test]
 fn every_route_gives_the_same_result_and_error_as_the_mock() {
     let d = MockApi::new();
@@ -155,11 +174,12 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; regenerate_endpoint_token);
     same!(seen, d, c; endpoint_info);
     same!(seen, d, c; mcp_status);
-    same!(seen, d, c; set_mcp_enabled, json!({ "enabled": true }));
-    same!(seen, d, c; authorize_mcp_tool, json!({ "tool": "tag_fonts" }));
-    same!(seen, d, c; set_mcp_grant, json!({ "tool": "tag_fonts", "granted": true }));
-    same!(seen, d, c; authorize_mcp_tool, json!({ "tool": "tag_fonts" }));
-    same!(seen, d, c; answer_mcp_confirmation, json!({ "id": 1, "allow": true }));
+    // E36.1: what AI assistants may do is the window's to decide; through
+    // the endpoint these four are refused, whatever the mock would answer.
+    window_only!(seen, c; set_mcp_enabled, json!({ "enabled": true }));
+    window_only!(seen, c; authorize_mcp_tool, json!({ "tool": "tag_fonts" }));
+    window_only!(seen, c; set_mcp_grant, json!({ "tool": "tag_fonts", "granted": true }));
+    window_only!(seen, c; answer_mcp_confirmation, json!({ "id": 1, "allow": true }));
     same!(seen, d, c; mcp_status);
     // layout
     same!(seen, d, c; layout_presets);
