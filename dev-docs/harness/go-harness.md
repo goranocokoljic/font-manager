@@ -52,6 +52,14 @@ Tests: `node --test "scripts/harness/**/*.test.mjs"` (part of `pnpm test`).
 ./go-harness.ps1 -GraduateOnly              # KB graduation review (interactive; run it when you are back)
 ```
 
+One process per lane. A lane writes `.harness/state/<lane>.lock` with its PID when it
+starts and removes it when it ends. A second start of the same lane exits with code 2
+and `lane ui already runs in PID n since t (close that terminal, or wait)`: two
+processes would share the worktree and the state file and undo each other's work. A
+lock whose process is gone (power failure, closed terminal) is stale; the next start
+logs `stale lock from PID n …, taking over` and goes on. To clear one by hand:
+`Remove-Item .harness/state/<lane>.lock`.
+
 | Parameter | Default | Meaning |
 |-----------|---------|---------|
 | `-Lane core\|ui` | — | required for a run |
