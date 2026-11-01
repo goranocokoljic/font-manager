@@ -11,7 +11,7 @@ use fm_api::activation::{
     ConflictPolicy, DeactivateRequest, Target,
 };
 use fm_api::settings::Settings;
-use fm_api::{ApiResult, FaceId};
+use fm_api::{ApiResult, Event, FaceId};
 use fm_platform::{AUTOSTART_ARG, Os, TraySupport};
 
 /// The tray menu item that shows the main window.
@@ -207,6 +207,75 @@ pub fn platform_notes(
         );
     }
     notes
+}
+
+/// What an event asks of the main window (E27.9).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowCall {
+    /// An AI assistant waits for the user's Allow or Deny: bring the window
+    /// to the front, so the toast is on screen while the call waits.
+    Raise,
+    /// A confirmation was answered or timed out: stop asking for attention.
+    ClearAttention,
+}
+
+/// What `event` asks of the main window; `None` for every event that leaves
+/// it alone. `queued` are the events that already wait behind `event`: a
+/// confirmation that is answered or timed out there is over before the
+/// window could show it, so it does not raise the window.
+pub fn window_call(event: &Event, queued: &[Event]) -> Option<WindowCall> {
+    match event {
+        Event::McpConfirmationRequested { id, .. } => {
+            let closed = queued.iter().any(
+                |later| matches!(later, Event::McpConfirmationClosed { id: done, .. } if done == id),
+            );
+            (!closed).then_some(WindowCall::Raise)
+        }
+        Event::McpConfirmationClosed { .. } => Some(WindowCall::ClearAttention),
+        _ => None,
+    }
+}
+
+/// How the main window is now, as the shell reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct WindowView {
+    /// Shown (not hidden to the tray).
+    pub visible: bool,
+    /// Minimized to the taskbar or the Dock.
+    pub minimized: bool,
+    /// The window has the keyboard focus: it is in front.
+    pub focused: bool,
+}
+
+/// The window calls that bring the main window to the front, in this order:
+/// unminimize, show, focus, then ask for attention.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RaiseSteps {
+    /// Restore a minimized window.
+    pub unminimize: bool,
+    /// Show a hidden window.
+    pub show: bool,
+    /// Ask the OS to give the window the focus.
+    pub focus: bool,
+    /// Flash the taskbar entry, bounce the Dock icon or mark the window
+    /// urgent. Windows and GNOME refuse focus to an app in the background;
+    /// then this is what the user sees. The OS stops it once the window is in
+    /// front.
+    pub request_attention: bool,
+}
+
+/// The steps that bring the window in `view` to the front: none when it is
+/// already shown, restored and focused.
+pub fn raise_steps(view: WindowView) -> RaiseSteps {
+    if view.visible && !view.minimized && view.focused {
+        return RaiseSteps::default();
+    }
+    RaiseSteps {
+        unminimize: view.minimized,
+        show: !view.visible,
+        focus: true,
+        request_attention: true,
+    }
 }
 
 #[cfg(test)]
@@ -470,6 +539,104 @@ mod tests {
         assert!(
             !plain.iter().any(|n| n.contains("Start at login")),
             "{plain:?}"
+        );
+    }
+
+    fn requested(id: u32) -> Event {
+        Event::McpConfirmationRequested {
+            id,
+            tool: "deactivate_fonts".into(),
+            faces: Some(1),
+            timeout_secs: 60,
+        }
+    }
+
+    fn closed(id: u32) -> Event {
+        Event::McpConfirmationClosed { id, allowed: false }
+    }
+
+    #[test]
+    fn only_a_waiting_confirmation_raises_the_window() {
+        assert_eq!(window_call(&requested(4), &[]), Some(WindowCall::Raise));
+        // Another confirmation closing behind it does not count.
+        assert_eq!(
+            window_call(&requested(4), &[closed(3)]),
+            Some(WindowCall::Raise)
+        );
+        // Answered or timed out before the window could show it.
+        assert_eq!(window_call(&requested(4), &[closed(4)]), None);
+        assert_eq!(window_call(&requested(4), &[requested(5), closed(4)]), None);
+        assert_eq!(
+            window_call(&closed(4), &[]),
+            Some(WindowCall::ClearAttention)
+        );
+        let others = [
+            Event::ActivationChanged {
+                activated: vec![FaceId(1)],
+                deactivated: vec![],
+            },
+            Event::ScanProgress {
+                job: fm_api::JobId(1),
+                done: 1,
+                total: 2,
+            },
+        ];
+        for other in &others {
+            assert_eq!(window_call(other, &[]), None, "{other:?}");
+        }
+    }
+
+    #[test]
+    fn raising_restores_shows_and_focuses_only_what_is_needed() {
+        let front = WindowView {
+            visible: true,
+            minimized: false,
+            focused: true,
+        };
+        assert_eq!(raise_steps(front), RaiseSteps::default());
+        let hidden = WindowView {
+            visible: false,
+            minimized: false,
+            focused: false,
+        };
+        assert_eq!(
+            raise_steps(hidden),
+            RaiseSteps {
+                unminimize: false,
+                show: true,
+                focus: true,
+                request_attention: true,
+            }
+        );
+        let minimized = WindowView {
+            visible: true,
+            minimized: true,
+            focused: false,
+        };
+        assert_eq!(
+            raise_steps(minimized),
+            RaiseSteps {
+                unminimize: true,
+                show: false,
+                focus: true,
+                request_attention: true,
+            }
+        );
+        // Shown but behind another app's window: focus, and ask for
+        // attention where the OS refuses the focus.
+        let behind = WindowView {
+            visible: true,
+            minimized: false,
+            focused: false,
+        };
+        assert_eq!(
+            raise_steps(behind),
+            RaiseSteps {
+                unminimize: false,
+                show: false,
+                focus: true,
+                request_attention: true,
+            }
         );
     }
 

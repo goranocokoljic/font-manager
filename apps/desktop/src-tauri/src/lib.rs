@@ -68,6 +68,7 @@ pub mod menu;
 pub mod shell_text;
 pub mod tray;
 pub mod updater;
+pub mod window_raise;
 
 /// The Tauri event every `fm_api::Event` is forwarded on.
 pub const EVENT_CHANNEL: &str = "fm://event";
@@ -1366,9 +1367,16 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             std::thread::Builder::new()
                 .name("fm-events".into())
                 .spawn(move || {
-                    for event in events {
-                        if let Err(e) = handle.emit(EVENT_CHANNEL, &event) {
-                            tracing::warn!(error = %e, "could not forward an event to the UI");
+                    // Each wake takes what is queued, so a confirmation that
+                    // closed behind its request does not raise the window (E27.9).
+                    while let Ok(first) = events.recv() {
+                        let batch: Vec<_> =
+                            std::iter::once(first).chain(events.try_iter()).collect();
+                        for (i, event) in batch.iter().enumerate() {
+                            if let Err(e) = handle.emit(EVENT_CHANNEL, event) {
+                                tracing::warn!(error = %e, "could not forward an event to the UI");
+                            }
+                            window_raise::on_app_event(&handle, event, &batch[i + 1..]);
                         }
                     }
                 })?;

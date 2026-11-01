@@ -100,14 +100,20 @@ on and tell the assistant to try again.
 ## Allow or deny a deactivation
 
 Deactivating a font can break a document that is open in another program. So
-**Deactivate fonts** asks you every time, also when its switch is on. A message shows at
-the bottom of the Font Manager window:
+**Deactivate fonts** asks you every time, also when its switch is on. The Font Manager
+window comes to the front, also when it is minimized or hidden in the tray, and a message
+shows at the bottom of it:
 
 > An AI assistant wants to deactivate 1 font. No answer in 60 seconds counts as Deny.
 
 Click **Allow** to deactivate the fonts, or **Deny** to keep them active. If you do not
 answer in 60 seconds, it counts as Deny, and nothing changes. The assistant gets the
 result either way.
+
+Windows and some Linux desktops (GNOME) do not let an app in the background take the
+focus. Then the Font Manager button on the taskbar flashes, or the desktop shows that Font
+Manager needs your attention. Click it to see the message. On macOS the Dock icon bounces
+if the window cannot come to the front.
 
 ## Keep it safe
 

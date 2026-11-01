@@ -312,6 +312,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 ## 2026-11-01
 
+- [E27.9 #417] crates/fm-mcp/src/stdio.rs:191 — `start_in_order` (the stdio shim's send-order fix for the `the_shim_forwards_initialize_and_tools_list_to_the_app` flake parked under E30.0 #186) shipped inside the E27.9 diff to get CI green; its owner story can close that flake note.
+- [E27.9 #417] apps/desktop/src-tauri/src/tray.rs:235 — `show_main` and `window_raise::raise` both bring the main window forward in slightly different ways; a later per-OS fix to raising the window must go into both.
+- [E27.9 #417] apps/desktop/src/components/McpConfirmToast.vue:31 — the Allow / Deny toast never takes keyboard focus, so after the window is raised a keyboard user must Tab to reach it.
+- [E27.9 #417] apps/desktop/src-tauri/src/lib.rs:1369 — the toast's `aria-live` text is emitted while the window may still be hidden, so a screen reader may never announce the question once the window is in front.
 - [E5.12 #420] apps/desktop/src-tauri/src/tray.rs:254 — `show_main` discards the errors of show, unminimize and set_focus without a log line, so a Settings… that cannot show the window leaves no trace.
 - [E5.12 #420] apps/desktop/src-tauri/src/tray.rs:252 — `show_main` has no test; Tauri's MockRuntime makes show/hide no-ops and `is_visible` always true, so only a real-window test could prove it.
 - [E5.12 #420] apps/desktop/src/views/HomeView.vue:607 — the Conflicts and problems status-bar links share the muted `.hint` style, so nothing shows they are links.

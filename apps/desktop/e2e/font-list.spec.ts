@@ -25,6 +25,10 @@ async function open(page: Page, query = '') {
 const SAMPLE_1 = 'Sample 1, 4 styles';
 
 test('10,000 families scroll with recycled rows at a steady frame rate', async ({ page }) => {
+  // The 600-frame scroll is bound by the frame rate: 10 s at 60 fps, but 20-30 s on the
+  // macOS CI runners (20-30 fps), which ran into the default 30 s test timeout. The
+  // frame-rate budget itself is still checked under FM_PERF below.
+  test.setTimeout(90_000);
   // Three sample families plus 9,997 extra ones.
   const tree = await open(page, '?mockFaces=9997');
   await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '10000');
