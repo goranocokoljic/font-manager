@@ -44,6 +44,8 @@
     "helpWindowTitle": "Font Manager Help",
     "helpMenu": "Help",
     "about": "About Font Manager",
+    "settings": "Settings…",
+    "fileMenu": "File",
     "helpPages": {
       "getting-started": "Getting started",
       "sources": "Sources",
@@ -276,6 +278,7 @@
     "empty": "No fonts yet. Add a folder to start your library.",
     "commands": "Commands",
     "settings": "Settings",
+    "settingsTitle": "Open Settings ({chord})",
     "conflicts": "Conflicts",
     "problems": {
       "one": "{count} problem",

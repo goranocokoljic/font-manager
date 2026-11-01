@@ -22,6 +22,7 @@ pub const TRAY_ID: &str = "fm-tray";
 pub const MAIN_WINDOW: &str = "main";
 
 const ID_OPEN: &str = "tray:open";
+const ID_SETTINGS: &str = "tray:settings";
 const ID_COUNT: &str = "tray:count";
 const ID_DEACTIVATE: &str = "tray:deactivate-session";
 const ID_QUIT: &str = "tray:quit";
@@ -76,6 +77,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>, tray: &dyn Tray, api: Arc<dyn Api
 /// state, so the labels can follow the language.
 struct TrayItems<R: Runtime> {
     open: MenuItem<R>,
+    settings: MenuItem<R>,
     count: MenuItem<R>,
     deactivate: MenuItem<R>,
     quit: MenuItem<R>,
@@ -86,6 +88,8 @@ impl<R: Runtime> TrayItems<R> {
     fn label(&self, locale: &str) -> tauri::Result<()> {
         self.open
             .set_text(shell_text::text(locale, "shell.tray.open"))?;
+        self.settings
+            .set_text(shell_text::text(locale, "shell.settings"))?;
         self.deactivate
             .set_text(shell_text::text(locale, "shell.tray.deactivateSession"))?;
         self.quit
@@ -111,6 +115,13 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>, api: Arc<dyn Api>) -> tauri::Result<
         true,
         None::<&str>,
     )?;
+    let settings = MenuItem::with_id(
+        app,
+        ID_SETTINGS,
+        shell_text::text(&locale, "shell.settings"),
+        true,
+        None::<&str>,
+    )?;
     let count = MenuItem::with_id(
         app,
         ID_COUNT,
@@ -133,9 +144,13 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>, api: Arc<dyn Api>) -> tauri::Result<
         None::<&str>,
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&open, &count, &separator, &deactivate, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&open, &settings, &count, &separator, &deactivate, &quit],
+    )?;
     app.manage(TrayItems {
         open,
+        settings,
         count,
         deactivate,
         quit,
@@ -201,9 +216,11 @@ fn active_count(api: &dyn Api) -> usize {
     })
 }
 
-fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent, api: &Arc<dyn Api>) {
+/// The tray menu's events: Open, Settings…, Deactivate session fonts, Quit.
+pub fn on_menu_event<R: Runtime>(app: &AppHandle<R>, event: &MenuEvent, api: &Arc<dyn Api>) {
     match event.id().as_ref() {
         ID_OPEN => show_main(app),
+        ID_SETTINGS => crate::menu::open_settings(app),
         ID_DEACTIVATE => {
             let api = Arc::clone(api);
             // An OS call per face: keep it off the event loop.

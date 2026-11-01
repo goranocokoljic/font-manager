@@ -220,3 +220,25 @@ test('"Start at login" shows an error toast when the system refuses the entry', 
   );
   await expect(login).not.toBeChecked();
 });
+
+test('the status-bar Settings link looks like a link and opens Settings', async ({ page }) => {
+  const link = page.getByTestId('status-settings');
+  await expect(link).toHaveAttribute('title', /^Open Settings \((Ctrl\+,|⌘,)\)$/);
+  const colors = await link.evaluate((el) => ({
+    link: getComputedStyle(el).color,
+    text: getComputedStyle(document.documentElement).getPropertyValue('--fm-fg').trim(),
+  }));
+  const probe = await page.evaluate((c) => {
+    const p = document.createElement('span');
+    p.style.color = c;
+    document.body.append(p);
+    const color = getComputedStyle(p).color;
+    p.remove();
+    return color;
+  }, colors.text);
+  expect(colors.link).toBe(probe);
+  await link.hover();
+  await expect(link).toHaveCSS('text-decoration-line', 'underline');
+  await link.click();
+  await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
+});

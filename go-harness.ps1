@@ -163,6 +163,7 @@ $script:ConsecFails = 0
 $script:HadFailures = $false
 $script:StopReason  = $null   # set by the merge gate when main is red
 $script:Work        = $PSScriptRoot  # the checkout claude runs in (lane worktree)
+$script:LaneLocked  = $false         # this process holds .harness/state/<lane>.lock
 
 $script:RunPhases = [ordered]@{}; $script:RunCycles = @(); $script:CurPhase = $null
 $script:CurCycle = $null; $script:CurSub = $null; $script:RunStartTs = $null; $script:RunEndTs = $null
@@ -1076,6 +1077,60 @@ function Reset-Worktree {
 }
 
 # --------------------------------------------------------------------------
+# Lane lock: one harness process per lane (#424). Two processes of one lane
+# share the worktree and .harness/state/<lane>.json and undo each other's
+# work (a reset under a running build). The lock is a file with the PID; a
+# lock whose process is gone (power failure, closed terminal) is stale and
+# is taken over. -DryRun, -GraduateOnly and -EpicSync never get here.
+# --------------------------------------------------------------------------
+function Get-LockPath { Join-Path $stateDir "$Lane.lock" }
+
+function Read-LaneLock {
+    try { Get-Content (Get-LockPath) -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null }
+}
+
+# $true when the lock's process is still a running PowerShell.
+function Test-LockAlive {
+    param($Lock)
+    if ($null -eq $Lock -or -not $Lock.pid) { return $false }
+    $p = Get-Process -Id ([int]$Lock.pid) -ErrorAction SilentlyContinue
+    return ($null -ne $p -and $p.ProcessName -match '^(pwsh|powershell)$')
+}
+
+# Create the lock file atomically (CreateNew fails when it exists). Exit 2
+# when another live process of this lane holds it. Plain Write-Host: the
+# panel is not up yet.
+function Lock-Lane {
+    $path = Get-LockPath
+    $me = [Text.Encoding]::UTF8.GetBytes((@{ pid = $PID; lane = $Lane; started = (Get-Date).ToString('o'); host = $env:COMPUTERNAME } | ConvertTo-Json -Compress))
+    foreach ($try in 1, 2) {
+        try {
+            $fs = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+            try { $fs.Write($me, 0, $me.Length) } finally { $fs.Dispose() }
+            $script:LaneLocked = $true
+            return
+        } catch [IO.IOException] { }
+        $other = Read-LaneLock
+        if (Test-LockAlive $other) {
+            Write-Host "lane $Lane already runs in PID $($other.pid) since $($other.started) (close that terminal, or wait)" -ForegroundColor Red
+            exit 2
+        }
+        Write-Host "    stale lock from PID $(if ($other.pid) { $other.pid } else { '?' }) (started $(if ($other.started) { $other.started } else { '?' })), taking over" -ForegroundColor Yellow
+        Remove-Item $path -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "lane ${Lane}: could not take the lock $path" -ForegroundColor Red
+    exit 2
+}
+
+# Remove the lock only when it is still ours (a takeover after our PID died
+# and came back is not ours).
+function Unlock-Lane {
+    if (-not $script:LaneLocked) { return }
+    $mine = Read-LaneLock
+    if ($mine -and [int]$mine.pid -eq $PID) { Remove-Item (Get-LockPath) -Force -ErrorAction SilentlyContinue }
+}
+
+# --------------------------------------------------------------------------
 # KB graduation review (human-gated; unchanged flow from tr-harness, new store)
 # --------------------------------------------------------------------------
 function Get-KbLessons {
@@ -1252,6 +1307,7 @@ if ($DryRun) {
 if (-not $Lane) { Write-Host 'Usage: ./go-harness.ps1 -Lane core|ui [options]   (or -DryRun, -GraduateOnly, -EpicSync)' -ForegroundColor Red; exit 2 }
 
 $ranAny = $false
+Lock-Lane   # one process per lane; a second start exits 2 before it touches anything
 try {
     Initialize-Panel
     Write-Log "=== go-harness: lane=$Lane | model=$Model | review-cycles=$ReviewCycles | merge=$($Cfg.merge) | budget base `$$BaseUsd | $(if ($script:PanelMode) { 'panel ON' } else { 'panel OFF' }) ===" 'Cyan'
@@ -1350,7 +1406,7 @@ try {
     $r = Invoke-Node 'epic-sync.mjs' @('--dir', $HarnessDir); if ($r.Out.Trim()) { Write-Log "    $($r.Out.Trim())" 'DarkGray' }
     Write-Log ("=== lane $Lane finished: {0} | `$$('{0:N2}' -f $script:RunCost) billed | summary: $summaryMd ===" -f (($script:Done.GetEnumerator() | ForEach-Object { "$($_.Key) $($_.Value)" }) -join ', ')) 'Cyan'
 }
-finally { Close-Panel }
+finally { Close-Panel; Unlock-Lane }
 
 if ($ranAny -and $Graduate -and -not $NoGraduate) { Invoke-GraduationReview }
 elseif ($ranAny) { Write-Host '    KB graduation skipped (unattended). Review lessons any time: ./go-harness.ps1 -GraduateOnly' -ForegroundColor DarkGray }

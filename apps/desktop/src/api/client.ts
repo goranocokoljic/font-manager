@@ -137,6 +137,13 @@ export const FONT_SCHEME = 'fmfont';
 /** The documents "Check a document's fonts…" offers in its picker (E32.2). */
 export const DOCUMENT_EXTENSIONS = ['indd', 'ai', 'psd', 'sketch', 'fig', 'docx', 'pptx'];
 
+/**
+ * The Tauri event the native shell (the Settings… item of the menu bar and the
+ * tray, E5.12) sends to go to a route; the payload is the route's name. It is a
+ * shell event, not an fm-api `Event` (`fm_app_lib::menu::SHELL_NAVIGATE`).
+ */
+export const SHELL_NAVIGATE = 'shell:navigate';
+
 /** Stops an event subscription. */
 export type Unsubscribe = () => void;
 
@@ -368,6 +375,8 @@ export interface FmClient {
    * its labels follow the Language setting.
    */
   setShellLocale(locale: string): Promise<void>;
+  /** Subscribes to the native shell's requests to go to a route (Settings… in the menu bar and the tray). */
+  onShellNavigate(handler: (route: string) => void): Promise<Unsubscribe>;
   /** Whether this copy updates itself; where not, Settings hides the update section. */
   updateSupport(): Promise<UpdateSupport>;
   /** Asks the release server once (a user action, or "Check automatically" at start). */
@@ -498,6 +507,7 @@ export const tauriClient: FmClient = {
   openUrl: (url) => invoke<void>('open_url', { url }),
   printPage: () => invoke<void>('print_page'),
   setShellLocale: (locale) => invoke<void>('set_shell_locale', { locale }),
+  onShellNavigate: (handler) => listen<string>(SHELL_NAVIGATE, (e) => handler(e.payload)),
   updateSupport: () => invoke<UpdateSupport>('update_support'),
   checkForUpdate: () => invoke<UpdateCheck>('check_for_update'),
   installUpdate: (req) => invoke<void>('install_update', { req }),

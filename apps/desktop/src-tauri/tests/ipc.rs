@@ -1115,6 +1115,7 @@ fn set_shell_locale_relabels_the_tray_menu() {
         labels(),
         [
             "Open Font Manager",
+            "Settings…",
             "No fonts active",
             "Deactivate session fonts",
             "Quit Font Manager",
@@ -1132,6 +1133,7 @@ fn set_shell_locale_relabels_the_tray_menu() {
         labels(),
         [
             "Font Manager öffnen",
+            "Einstellungen…",
             "Keine Schriften aktiv",
             "Sitzungsschriften deaktivieren",
             "Font Manager beenden",
@@ -1203,5 +1205,186 @@ fn install_update_without_a_checked_update_installs_nothing() {
             .as_str()
             .unwrap()
             .contains("Check for updates first")
+    );
+}
+
+/// The texts of a submenu's items, separators as "---".
+#[cfg(not(target_os = "macos"))]
+fn item_texts(submenu: &tauri::menu::Submenu<MockRuntime>) -> Vec<String> {
+    submenu
+        .items()
+        .unwrap_or_default()
+        .iter()
+        .map(|i| match i {
+            tauri::menu::MenuItemKind::MenuItem(m) => m.text().unwrap_or_default(),
+            tauri::menu::MenuItemKind::Predefined(p) => {
+                let text = p.text().unwrap_or_default();
+                if text.is_empty() {
+                    "---".to_owned()
+                } else {
+                    text
+                }
+            }
+            tauri::menu::MenuItemKind::Submenu(s) => s.text().unwrap_or_default(),
+            _ => String::new(),
+        })
+        .collect()
+}
+
+// The same main-thread limit as the Help menu test above. Tauri's default menu
+// is the host's, so each OS's placement is checked on the menu the host builds:
+// macOS's rule (above the last item, Quit, of the first menu) and the File-menu
+// rule (top of File, or a new File menu where there is none, as on Linux).
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn the_menu_bar_holds_settings_where_each_os_keeps_it() {
+    use fm_app_lib::menu::{self, FILE_SUBMENU_ID, MENU_ID_SETTINGS};
+    use fm_platform::Os;
+    use tauri::menu::Menu;
+
+    let (app, _webview) = app().unwrap();
+    let first = |m: &Menu<MockRuntime>| m.items().unwrap()[0].as_submenu().cloned().unwrap();
+
+    // macOS: the app menu, above Quit, a separator between them.
+    let mac = Menu::default(app.handle()).unwrap();
+    let before = item_texts(&first(&mac));
+    menu::add_settings_item(app.handle(), &mac, Os::MacOs, "en").unwrap();
+    let after = item_texts(&first(&mac));
+    assert_eq!(after.len(), before.len() + 2);
+    assert_eq!(after[after.len() - 3], "Settings…", "{after:?}");
+    assert_eq!(after[after.len() - 2], "---");
+    assert_eq!(after.last(), before.last(), "Quit stays last");
+
+    // Windows and Linux: the top of the File menu.
+    for os in [Os::Windows, Os::Linux] {
+        let bar = Menu::default(app.handle()).unwrap();
+        let had_file = bar
+            .items()
+            .unwrap()
+            .iter()
+            .any(|i| i.as_submenu().is_some_and(|s| s.text().unwrap() == "File"));
+        let menus = bar.items().unwrap().len();
+        menu::add_settings_item(app.handle(), &bar, os, "en").unwrap();
+        let file = menu::settings_submenu(&bar).expect("a menu holds Settings");
+        assert_eq!(file.text().unwrap(), "File", "{os:?}");
+        let texts = item_texts(&file);
+        assert_eq!(texts[0], "Settings…", "{os:?}: {texts:?}");
+        assert_eq!(
+            file.get(MENU_ID_SETTINGS).unwrap().id().as_ref(),
+            MENU_ID_SETTINGS
+        );
+        if had_file {
+            assert_eq!(texts[1], "---", "{os:?}");
+            assert_eq!(bar.items().unwrap().len(), menus, "no second File menu");
+        } else {
+            assert_eq!(file.id().as_ref(), FILE_SUBMENU_ID);
+            assert_eq!(bar.items().unwrap().len(), menus + 1);
+        }
+        assert_eq!(
+            bar.items().unwrap()[0].id(),
+            file.id(),
+            "{os:?}: File is the first menu"
+        );
+    }
+    // A menu bar without the default menus gets a File menu of its own.
+    let bare = Menu::new(app.handle()).unwrap();
+    menu::add_settings_item(app.handle(), &bare, Os::Linux, "en").unwrap();
+    let file = menu::settings_submenu(&bare).unwrap();
+    assert_eq!(file.id().as_ref(), FILE_SUBMENU_ID);
+    assert_eq!(item_texts(&file), ["Settings…"]);
+}
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn set_shell_locale_relabels_the_settings_menu_item() {
+    use fm_app_lib::help;
+    use fm_app_lib::menu::{self, MENU_ID_SETTINGS};
+
+    let (app, webview) = app_on(help::with_help_menu(setup(
+        mock_builder(),
+        Arc::new(MockApi::new()),
+    )))
+    .unwrap();
+    let texts = || {
+        let submenu =
+            menu::settings_submenu(&app.menu().unwrap()).expect("Settings is in the menu");
+        let item = submenu
+            .get(MENU_ID_SETTINGS)
+            .and_then(|i| i.as_menuitem().cloned())
+            .unwrap();
+        (submenu.text().unwrap(), item.text().unwrap())
+    };
+    assert_eq!(texts(), ("File".to_owned(), "Settings…".to_owned()));
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "de" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(texts(), ("Datei".to_owned(), "Einstellungen…".to_owned()));
+
+    send(
+        &webview,
+        "set_shell_locale",
+        serde_json::json!({ "locale": "en" }),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(texts(), ("File".to_owned(), "Settings…".to_owned()));
+}
+
+// The same main-thread limit as the Help menu test above.
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn settings_in_the_menu_bar_and_the_tray_ask_the_main_window_to_open_settings() {
+    use fm_app_lib::menu::{self, MENU_ID_SETTINGS, SETTINGS_ROUTE, SHELL_NAVIGATE};
+    use fm_app_lib::tray;
+    use tauri::menu::MenuEvent;
+
+    let (app, webview) = app().unwrap();
+    let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let sink = Arc::clone(&seen);
+    webview.listen(SHELL_NAVIGATE, move |e| {
+        sink.lock().unwrap().push(e.payload().to_owned());
+    });
+    let fm_events = Arc::new(std::sync::Mutex::new(0usize));
+    let count = Arc::clone(&fm_events);
+    webview.listen(EVENT_CHANNEL, move |_| *count.lock().unwrap() += 1);
+
+    // Another item changes nothing; Settings… does.
+    menu::on_menu_event(
+        app.handle(),
+        MenuEvent {
+            id: "__other__".into(),
+        },
+    );
+    assert!(seen.lock().unwrap().is_empty());
+    menu::on_menu_event(
+        app.handle(),
+        MenuEvent {
+            id: MENU_ID_SETTINGS.into(),
+        },
+    );
+    let expected = serde_json::to_string(SETTINGS_ROUTE).unwrap();
+    assert_eq!(*seen.lock().unwrap(), std::slice::from_ref(&expected));
+
+    // The tray's Settings… is the same request.
+    let api: Arc<dyn fm_api::Api> = Arc::new(MockApi::new());
+    let _menu = tray::menu(app.handle(), Arc::clone(&api)).unwrap();
+    tray::on_menu_event(
+        app.handle(),
+        &MenuEvent {
+            id: "tray:settings".into(),
+        },
+        &api,
+    );
+    assert_eq!(*seen.lock().unwrap(), [expected.clone(), expected]);
+    assert_eq!(
+        *fm_events.lock().unwrap(),
+        0,
+        "not the fm-api event channel"
     );
 }

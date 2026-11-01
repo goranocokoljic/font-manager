@@ -8,7 +8,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 |-----|--------------|
 | `Ctrl+K` | Open or close the command palette |
 | `/` | Go to the search box |
-| `Ctrl+,` | Open the settings |
+| `Ctrl+,` | Open the settings (also in the File menu, in the Font Manager menu on a Mac, in the tray menu and in the status bar) |
 | `Ctrl+I` | Show or hide the inspector |
 
 ## In the font list

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, watch, watchEffect } from 'vue';
+import { onMounted, onUnmounted, watch, watchEffect } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import { useClient } from './api/client';
 import CommandPalette from './components/CommandPalette.vue';
@@ -52,6 +52,19 @@ useActions([
     run: () => useClient().openHelp(page.slug),
   })),
 ]);
+
+// Settings… in the native menu bar and the tray: the shell has already shown the
+// window, the UI goes to the route. Unknown names are ignored.
+let stopShellNavigate: (() => void) | undefined;
+onMounted(() => {
+  useClient()
+    .onShellNavigate((route) => {
+      if (router.hasRoute(route)) void router.push({ name: route });
+    })
+    .then((stop) => (stopShellNavigate = stop))
+    .catch((e: unknown) => console.warn('the shell menu cannot open Settings', e));
+});
+onUnmounted(() => stopShellNavigate?.());
 
 // The one check without a click: only when the user turned "Check automatically" on.
 onMounted(async () => {
