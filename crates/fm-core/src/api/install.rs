@@ -18,7 +18,7 @@ use fm_api::library::{Source, SourceKind};
 use fm_api::settings::Settings;
 use fm_api::{ApiError, ApiResult, ErrorCode, FaceId, SettingsService};
 use fm_platform::Os;
-use fm_platform::paths::{is_within, system_font_folders};
+use fm_platform::paths::{is_within, resolve_links, system_font_folders};
 
 use super::CoreApi;
 use crate::catalog::{family_folder, now_rfc3339};
@@ -26,6 +26,11 @@ use crate::catalog::{family_folder, now_rfc3339};
 /// The answer to an install while no download folder is set.
 pub const NO_DOWNLOAD_FOLDER: &str =
     "Choose the folder for installed fonts first, under Settings → Online catalogs.";
+
+/// The answer to an install while the download folder has no full path for
+/// the host (on Windows: no drive or network share).
+pub const RELATIVE_DOWNLOAD_FOLDER: &str =
+    "Choose the folder for installed fonts with its full path, under Settings → Online catalogs.";
 
 /// The answer to an install into a system font folder (rule 4).
 pub const SYSTEM_DOWNLOAD_FOLDER: &str = "Fonts cannot be installed into a system font folder. \
@@ -45,6 +50,9 @@ impl CoreApi {
         let catalogs = self.catalogs()?;
         catalogs.ensure_enabled(req.id)?;
         let os = Os::current();
+        if !folder.is_absolute() {
+            return Err(ApiError::new(ErrorCode::Conflict, RELATIVE_DOWNLOAD_FOLDER));
+        }
         let sources = self.lock().sources()?;
         let system = system_font_folders().into_iter().chain(
             sources
@@ -52,31 +60,33 @@ impl CoreApi {
                 .filter(|s| s.kind == SourceKind::System)
                 .map(|s| PathBuf::from(&s.path)),
         );
-        if system.into_iter().any(|dir| is_within(os, &folder, &dir)) {
+        let real = resolve_links(&folder);
+        let inside =
+            |dir: &Path| is_within(os, &folder, dir) || is_within(os, &real, &resolve_links(dir));
+        if system.into_iter().any(|dir| inside(&dir)) {
             return Err(ApiError::new(ErrorCode::Conflict, SYSTEM_DOWNLOAD_FOLDER));
         }
 
-        if let Some((download, faces)) = self.installed_already(os, &req, &folder)? {
-            let outcomes = self.activate_inactive(&faces, &settings)?;
-            return Ok(InstallFamilyResponse {
-                download,
-                faces,
-                outcomes,
-                already_installed: true,
-                error: None,
-            });
+        if let Some(found) = self.installed_already(os, &req, &folder)? {
+            return self.activate_found(found, &settings);
         }
 
         let source = self.download_source(os, &folder, &sources)?;
+        let family_dir = family_folder(&folder, &req.family);
+        // Files already on disk in the family folder but not in the library
+        // (a removed source, a folder chosen with an earlier download): index
+        // them first, so they are activated, not fetched again.
+        if std::fs::read_dir(&family_dir).is_ok_and(|mut entries| entries.next().is_some()) {
+            self.scan_and_wait(&source)?;
+            if let Some(found) = self.installed_already(os, &req, &folder)? {
+                return self.activate_found(found, &settings);
+            }
+        }
         let saved = self.save_download(req.id, &req.family, req.kind, &source, &folder)?;
         self.scan_and_wait(&source)?;
-        let written: Vec<PathBuf> = saved
-            .download
-            .files
-            .iter()
-            .filter_map(|f| f.path.as_ref().map(PathBuf::from))
-            .collect();
-        let faces = self.faces_at(os, &written)?;
+        // Every face in the family folder: the files written and the ones the
+        // download skipped because they were already there.
+        let faces = self.faces_within(os, &family_dir)?;
         let outcomes = self.activate_inactive(&faces, &settings)?;
         Ok(InstallFamilyResponse {
             download: saved.download,
@@ -115,12 +125,7 @@ impl CoreApi {
             }
         }
         let family_dir = family_folder(folder, &req.family);
-        let found: Vec<(FaceId, PathBuf)> = self
-            .lock()
-            .live_faces_with_files()?
-            .into_iter()
-            .filter(|(_, path)| is_within(os, path, &family_dir))
-            .collect();
+        let found = self.faces_with_files_within(os, &family_dir)?;
         if found.is_empty() {
             return Ok(None);
         }
@@ -191,6 +196,44 @@ impl CoreApi {
         Ok(self
             .lock()
             .add_source(&folder.to_string_lossy(), SourceKind::Watched)?)
+    }
+
+    /// Activates what [`Self::installed_already`] found and says so.
+    fn activate_found(
+        &self,
+        (download, faces): (CatalogDownload, Vec<FaceId>),
+        settings: &Settings,
+    ) -> ApiResult<InstallFamilyResponse> {
+        let outcomes = self.activate_inactive(&faces, settings)?;
+        Ok(InstallFamilyResponse {
+            download,
+            faces,
+            outcomes,
+            already_installed: true,
+            error: None,
+        })
+    }
+
+    /// The live faces with their file, for files in `dir`.
+    fn faces_with_files_within(&self, os: Os, dir: &Path) -> ApiResult<Vec<(FaceId, PathBuf)>> {
+        Ok(self
+            .lock()
+            .live_faces_with_files()?
+            .into_iter()
+            .filter(|(_, path)| is_within(os, path, dir))
+            .collect())
+    }
+
+    /// The live faces of the files in `dir`, by id, once each.
+    fn faces_within(&self, os: Os, dir: &Path) -> ApiResult<Vec<FaceId>> {
+        let mut faces: Vec<FaceId> = self
+            .faces_with_files_within(os, dir)?
+            .into_iter()
+            .map(|(face, _)| face)
+            .collect();
+        faces.sort();
+        faces.dedup();
+        Ok(faces)
     }
 
     /// The live faces whose file is one of `paths`, by id.

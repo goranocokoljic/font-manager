@@ -146,23 +146,75 @@ pub fn system_font_folders_for(os: Os, env: impl Fn(&str) -> Option<OsString>) -
 
 /// `path` is `dir` or inside it, comparing as `os` does: without case on
 /// Windows and macOS (their default file systems), with case on Linux; on
-/// Windows `/` and `\` are the same. Both paths are taken as given: `..` is
-/// not resolved and links are not followed.
+/// Windows `/` and `\` are the same and the `\\?\` prefix is dropped. `.` and
+/// `..` are resolved by text; links are not followed (see [`resolve_links`]).
 pub fn is_within(os: Os, path: &Path, dir: &Path) -> bool {
     let parts = |p: &Path| -> Vec<String> {
         let text = p.to_string_lossy();
         let text = match os {
-            Os::Windows => text.replace('\\', "/").to_lowercase(),
+            Os::Windows => {
+                let text = text.replace('\\', "/").to_lowercase();
+                if let Some(rest) = text.strip_prefix("//?/unc/") {
+                    format!("//{rest}")
+                } else if let Some(rest) = text.strip_prefix("//?/") {
+                    rest.to_owned()
+                } else {
+                    text
+                }
+            }
             Os::MacOs => text.to_lowercase(),
             Os::Linux => text.into_owned(),
         };
-        text.split('/')
-            .filter(|part| !part.is_empty() && *part != ".")
-            .map(str::to_owned)
-            .collect()
+        let mut parts: Vec<String> = Vec::new();
+        for part in text.split('/') {
+            match part {
+                "" | "." => {}
+                ".." => {
+                    parts.pop();
+                }
+                part => parts.push(part.to_owned()),
+            }
+        }
+        parts
     };
     let (path, dir) = (parts(path), parts(dir));
     !dir.is_empty() && path.len() >= dir.len() && path[..dir.len()] == dir[..]
+}
+
+/// `path` with its links followed: its nearest existing ancestor as the OS
+/// resolves it (without the Windows `\\?\` prefix), then the parts that do
+/// not exist yet. `path` as given when no part of it exists.
+pub fn resolve_links(path: &Path) -> PathBuf {
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    let mut current = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(current) {
+            let mut out = strip_verbatim(real);
+            for part in rest.iter().rev() {
+                out.push(part);
+            }
+            return out;
+        }
+        let (Some(last), Some(parent)) = (current.components().next_back(), current.parent())
+        else {
+            return path.to_path_buf();
+        };
+        rest.push(last.as_os_str().to_owned());
+        current = parent;
+    }
+}
+
+/// `path` without the Windows verbatim prefix (`\\?\C:\…` → `C:\…`,
+/// `\\?\UNC\server\…` → `\\server\…`).
+fn strip_verbatim(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = text.strip_prefix(r"\\?\") {
+        PathBuf::from(rest)
+    } else {
+        path
+    }
 }
 
 /// An environment lookup that keeps only usable values: set, non-empty and absolute.
@@ -315,6 +367,68 @@ mod tests {
             Path::new(r"C:\Windows\FontsX"),
             Path::new(r"C:\Windows\Fonts"),
         ));
+    }
+
+    #[test]
+    fn is_within_resolves_dots_and_the_verbatim_prefix() {
+        let fonts = Path::new("/home/ada/.local/share/fonts");
+        assert!(is_within(
+            Os::Linux,
+            Path::new("/home/ada/Documents/../.local/share/fonts/Lato"),
+            fonts
+        ));
+        assert!(is_within(
+            Os::MacOs,
+            Path::new("/Users/ada/Documents/./../Library/Fonts"),
+            Path::new("/Users/ada/Library/Fonts")
+        ));
+        assert!(!is_within(
+            Os::Linux,
+            Path::new("/home/ada/.local/share/fonts/../Fonts Elsewhere"),
+            fonts
+        ));
+        let windows = Path::new(r"C:\Windows\Fonts");
+        assert!(is_within(
+            Os::Windows,
+            Path::new(r"C:\Users\ada\..\..\Windows\Fonts\Lato"),
+            windows
+        ));
+        assert!(is_within(
+            Os::Windows,
+            Path::new(r"\\?\C:\Windows\Fonts\Lato"),
+            windows
+        ));
+        assert!(is_within(
+            Os::Windows,
+            Path::new(r"\\server\share\fonts"),
+            Path::new(r"\\?\UNC\server\share")
+        ));
+    }
+
+    #[test]
+    fn resolve_links_follows_the_existing_part_and_keeps_the_rest() {
+        let tmp = std::env::temp_dir().join(format!("fm-resolve-links-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        std::fs::create_dir_all(&tmp).expect("temp dir");
+        let real = strip_verbatim(std::fs::canonicalize(&tmp).expect("canonical"));
+        let resolved = resolve_links(&tmp.join("Not").join("There"));
+        assert_eq!(resolved, real.join("Not").join("There"));
+        assert!(
+            !resolved.to_string_lossy().starts_with(r"\\?\"),
+            "no verbatim prefix: {resolved:?}"
+        );
+        #[cfg(unix)]
+        {
+            let target = tmp.join("fonts");
+            std::fs::create_dir(&target).expect("target");
+            let link = tmp.join("link");
+            std::os::unix::fs::symlink(&target, &link).expect("symlink");
+            assert_eq!(
+                resolve_links(&link.join("Lato")),
+                real.join("fonts").join("Lato")
+            );
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
     }
 
     #[test]

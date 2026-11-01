@@ -4579,6 +4579,45 @@ fn files_already_in_the_family_folder_are_activated_and_not_downloaded() {
 }
 
 #[test]
+fn family_files_on_disk_but_not_in_the_library_are_indexed_activated_and_not_fetched() {
+    // The download folder holds the family (an earlier download, or its
+    // source was removed), but no source has it: nothing in the library.
+    let (lib, _source, server) = downloading("catalog-install-on-disk");
+    let folder = lib.dir.path().join("Installed");
+    let family = folder.join("Lato");
+    std::fs::create_dir_all(&family).expect("folder");
+    for (name, which) in [("Lato-Bold.ttf", "bold"), ("Lato-Regular.ttf", "regular")] {
+        std::fs::write(family.join(name), crate::catalog::tests::lato_font(which)).expect("file");
+    }
+    set_download_folder(&lib, &folder);
+
+    let hits = server.hits();
+    let got = install_lato(&lib).expect("install");
+    assert_eq!(server.hits(), hits, "not fetched again");
+    assert!(got.already_installed);
+    assert_eq!(got.faces.len(), 2, "{got:?}");
+    assert_eq!(got.outcomes.len(), 2);
+    assert!(
+        got.outcomes
+            .iter()
+            .all(|o| o.outcome == OutcomeStatus::Done),
+        "{:?}",
+        got.outcomes
+    );
+    assert_eq!(lib.api.list_active().expect("active").len(), 2);
+    let watched = watched_paths(&lib);
+    assert!(
+        watched.contains(&folder.to_string_lossy().into_owned()),
+        "{watched:?}"
+    );
+    assert_eq!(
+        listing_of(&family),
+        ["Lato-Bold.ttf", "Lato-Regular.ttf"],
+        "nothing written"
+    );
+}
+
+#[test]
 fn a_download_folder_inside_a_watched_source_uses_that_source() {
     let (lib, source, _server) = downloading("catalog-install-nested");
     let folder = lib.root.join("Downloads");
@@ -4606,13 +4645,34 @@ fn an_install_is_refused_without_a_folder_while_off_or_into_system_fonts_before_
         .lock()
         .add_source(&system.to_string_lossy(), SourceKind::System)
         .expect("system source");
-    for folder in [os_fonts[0].clone(), os_fonts[0].join("Sub"), system.clone()] {
+    // The same folders written with `..` on the way, or through a folder
+    // that does not exist yet, are the same folders.
+    let parent = os_fonts[0].parent().expect("parent");
+    let name = os_fonts[0].file_name().expect("name");
+    let dotted = parent.join("Not There").join("..").join(name).join("Sub");
+    let system_dotted = lib.dir.path().join("Elsewhere").join("..").join("System");
+    for folder in [
+        os_fonts[0].clone(),
+        os_fonts[0].join("Sub"),
+        dotted,
+        system.clone(),
+        system_dotted,
+    ] {
         set_download_folder(&lib, &folder);
         let e = install_lato(&lib).expect_err("system fonts");
         assert_eq!(e.code, ErrorCode::Conflict, "{folder:?}");
         assert_eq!(e.message, crate::api::install::SYSTEM_DOWNLOAD_FOLDER);
     }
     assert!(!system.join("Lato").exists());
+    // On Windows a path with a root but no drive (`\Windows\Fonts`) is not a
+    // full path: refused before it is compared.
+    let text = os_fonts[0].to_string_lossy().into_owned();
+    if text.as_bytes().get(1) == Some(&b':') {
+        set_download_folder(&lib, Path::new(&text[2..]));
+        let e = install_lato(&lib).expect_err("no drive");
+        assert_eq!(e.code, ErrorCode::Conflict);
+        assert_eq!(e.message, crate::api::install::RELATIVE_DOWNLOAD_FOLDER);
+    }
 
     let folder = lib.dir.path().join("Installed");
     set_download_folder(&lib, &folder);
