@@ -164,6 +164,7 @@ onMounted(() => {
   void app.load();
   void library.load();
   void activation.load();
+  void selection.start();
   void problems.load();
   void search.loadLanguages();
   void sets.load();
@@ -173,6 +174,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   void library.stop();
   void activation.stop();
+  void selection.stop();
   void problems.stop();
 });
 

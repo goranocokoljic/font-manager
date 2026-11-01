@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
-import { useClient } from '../api/client';
+import { useClient, type Unsubscribe } from '../api/client';
 import type {
   ActivationMode,
   ActivationOutcome,
   ApiError,
   Conflict,
+  Event,
   FaceDetail,
   FaceId,
   LicenseDeclaration,
@@ -75,6 +76,33 @@ export const useSelectionStore = defineStore('selection', () => {
   /** Fetches the selected face's detail again, e.g. after a bulk activation changed it. */
   async function reload(): Promise<void> {
     if (faceId.value !== null) await load(faceId.value);
+  }
+
+  let unsubscribe: Promise<Unsubscribe> | undefined;
+
+  /**
+   * Another caller (a plugin, the CLI, MCP, a bulk action, the tray) activated or
+   * deactivated the selected face: fetches its detail again. Not while this
+   * store's own request is in flight: that one reloads when it ends.
+   */
+  function onEvent(event: Event): void {
+    if (event.type !== 'activationChanged' || busy.value) return;
+    const id = faceId.value;
+    if (id === null) return;
+    if (event.activated.includes(id) || event.deactivated.includes(id)) void load(id);
+  }
+
+  /** Subscribes to activation changes (once). */
+  async function start(): Promise<void> {
+    unsubscribe ??= useClient().onEvent(onEvent);
+    await unsubscribe.catch(() => undefined);
+  }
+
+  /** Stops listening to activation changes. */
+  async function stop(): Promise<void> {
+    const pending = unsubscribe;
+    unsubscribe = undefined;
+    (await pending?.catch(() => undefined))?.();
   }
 
   /** The selected face can be activated: it is loaded, healthy and no request is in flight. */
@@ -258,6 +286,8 @@ export const useSelectionStore = defineStore('selection', () => {
     canActivate,
     select,
     reload,
+    start,
+    stop,
     toggleActivation,
     pending,
     resolveConflict,
