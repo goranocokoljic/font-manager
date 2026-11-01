@@ -335,6 +335,9 @@ export const MOCK_NOW = '2026-10-16T09:00:00Z';
 /** The locale the app last told the (absent) native shell; browser mode and tests read it. */
 export const shellLocale = { value: '' };
 
+/** Browser mode has no native menu: tests call this to stand in for Settings… in it. */
+export const shellNavigateHandlers = new Set<(route: string) => void>();
+
 /** `Settings::default()` in fm-api. */
 export const defaultSettings: FullSettings = {
   activationMode: 'session',
@@ -3351,6 +3354,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     // so tests can see what the shell was told.
     setShellLocale: async (locale) => {
       shellLocale.value = locale;
+    },
+    onShellNavigate: async (handler) => {
+      shellNavigateHandlers.add(handler);
+      return () => shellNavigateHandlers.delete(handler);
     },
   };
 }

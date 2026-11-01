@@ -44,6 +44,8 @@
     "helpWindowTitle": "Font Manager – Hilfe",
     "helpMenu": "Hilfe",
     "about": "Über Font Manager",
+    "settings": "Einstellungen…",
+    "fileMenu": "Datei",
     "helpPages": {
       "getting-started": "Erste Schritte",
       "sources": "Quellen",
@@ -276,6 +278,7 @@
     "empty": "Noch keine Schriften. Füge einen Ordner hinzu, um deine Bibliothek anzulegen.",
     "commands": "Befehle",
     "settings": "Einstellungen",
+    "settingsTitle": "Einstellungen öffnen ({chord})",
     "conflicts": "Konflikte",
     "problems": {
       "one": "{count} Problem",

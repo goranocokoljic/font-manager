@@ -1,9 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App.vue';
-import { setClient, tauriClient, useClient, type FmClient } from './api/client';
-import { mockAppInfo, mockClient } from './api/mock';
+import { SHELL_NAVIGATE, setClient, tauriClient, useClient, type FmClient } from './api/client';
+import { mockAppInfo, mockClient, shellNavigateHandlers } from './api/mock';
 import type { ApiError } from './api/types';
 import { formatApiVersion } from './api/version';
 import { createAppRouter } from './router';
@@ -12,6 +12,8 @@ import { useCommandsStore } from './stores/commands';
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke, isTauri: () => false }));
+const listen = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/event', () => ({ listen }));
 
 async function mountApp() {
   const router = createAppRouter();
@@ -24,6 +26,7 @@ async function mountApp() {
 afterEach(() => {
   setClient(undefined);
   invoke.mockReset();
+  listen.mockReset();
 });
 
 describe('app shell', () => {
@@ -139,5 +142,50 @@ describe('help', () => {
     await expect(mockClient.openHelp('../secrets')).rejects.toMatchObject({ code: 'notFound' });
     expect(open).toHaveBeenCalledTimes(1);
     open.mockRestore();
+  });
+});
+
+describe('Settings from the native menu bar and the tray', () => {
+  // Earlier tests leave their App mounted, and the router keeps the page URL.
+  beforeEach(() => shellNavigateHandlers.clear());
+  async function mountWithRouter() {
+    const router = createAppRouter();
+    const wrapper = mount(App, { global: { plugins: [createPinia(), router] } });
+    await router.isReady();
+    await router.push({ name: 'home' });
+    await flushPromises();
+    return { router, wrapper };
+  }
+  const navigate = (route: string) => shellNavigateHandlers.forEach((h) => h(route));
+
+  it('opens Settings when the shell sends shell:navigate "settings"', async () => {
+    const { router, wrapper } = await mountWithRouter();
+    expect(router.currentRoute.value.name).toBe('home');
+    expect(shellNavigateHandlers.size).toBe(1);
+    navigate('settings');
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('settings');
+    wrapper.unmount();
+    expect(shellNavigateHandlers.size).toBe(0);
+  });
+
+  it('ignores a route the router does not know', async () => {
+    const { router, wrapper } = await mountWithRouter();
+    navigate('no-such-route');
+    await flushPromises();
+    expect(router.currentRoute.value.name).toBe('home');
+    wrapper.unmount();
+  });
+
+  it('listens for the shell event, not the fm-api event channel, in the app', async () => {
+    const stop = vi.fn();
+    listen.mockResolvedValue(stop);
+    const routes: string[] = [];
+    await expect(tauriClient.onShellNavigate((r) => routes.push(r))).resolves.toBe(stop);
+    expect(SHELL_NAVIGATE).toBe('shell:navigate');
+    expect(listen).toHaveBeenCalledTimes(1);
+    expect(listen.mock.calls[0][0]).toBe('shell:navigate');
+    listen.mock.calls[0][1]({ payload: 'settings' });
+    expect(routes).toEqual(['settings']);
   });
 });

@@ -139,8 +139,14 @@ what you want to do and press `Enter`. All keys are on the
 
 ## Settings
 
-Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. There you can choose the theme,
-the size of the rows, and how activation works.
+Press `Ctrl+,` (`Cmd+,` on a Mac) to open the settings. You can also open them in
+these places:
+
+- The **File** menu: choose **Settings…**. On a Mac, it is in the **Font Manager** menu.
+- The tray menu: choose **Settings…**.
+- The status bar at the bottom of the window: click **Settings**.
+
+There you can choose the theme, the size of the rows, and how activation works.
 
 ## Connect other programs
 
