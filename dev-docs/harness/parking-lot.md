@@ -309,3 +309,9 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E35.7 #411] crates/fm-core/src/api.rs:525 — if `apply_rescan` fails on a job that is not the last of a scan request, the in-memory `FileIndex` keeps that job's changes the database lacks for the later jobs of the same request (pre-existing; E35.7 drops the index at the end of the request).
 - [E35.8 #413] crates/fm-core/src/api/tests.rs:4320 — `provenance_survives_a_rescan_and_follows_a_moved_file_by_hash` fails now and then on untouched code ("followed by its hash": the moved bold file still reports its old path, so the old `font_file` row stayed `gone = 0`); seen on Linux in run 41091210683 (#414, a frontend-only diff) and in runs 40991245017, 40613076686, 40260948776, 40234093004, 40116031505; needs a look at the rebuild → rescan → move sequence in the scanner, not a retry.
 - [E35.8 #413] apps/desktop/src/components/FontList.vue:88 — a user-chosen preview background (e.g. #000000 with Surface "Follow theme" in light) puts the `--fm-muted` (#595959) row labels at about 3:1, under the 4.5:1 AA text minimum; the deferred fast-scroll sample inherits it for ~100 ms.
+
+## 2026-11-01
+
+- [E5.12 #420] apps/desktop/src-tauri/src/tray.rs:254 — `show_main` discards the errors of show, unminimize and set_focus without a log line, so a Settings… that cannot show the window leaves no trace.
+- [E5.12 #420] apps/desktop/src-tauri/src/tray.rs:252 — `show_main` has no test; Tauri's MockRuntime makes show/hide no-ops and `is_visible` always true, so only a real-window test could prove it.
+- [E5.12 #420] apps/desktop/src/views/HomeView.vue:607 — the Conflicts and problems status-bar links share the muted `.hint` style, so nothing shows they are links.
