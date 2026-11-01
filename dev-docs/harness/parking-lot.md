@@ -309,3 +309,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E35.7 #411] crates/fm-core/src/api.rs:525 — if `apply_rescan` fails on a job that is not the last of a scan request, the in-memory `FileIndex` keeps that job's changes the database lacks for the later jobs of the same request (pre-existing; E35.7 drops the index at the end of the request).
 - [E35.8 #413] crates/fm-core/src/api/tests.rs:4320 — `provenance_survives_a_rescan_and_follows_a_moved_file_by_hash` fails now and then on untouched code ("followed by its hash": the moved bold file still reports its old path, so the old `font_file` row stayed `gone = 0`); seen on Linux in run 41091210683 (#414, a frontend-only diff) and in runs 40991245017, 40613076686, 40260948776, 40234093004, 40116031505; needs a look at the rebuild → rescan → move sequence in the scanner, not a retry.
 - [E35.8 #413] apps/desktop/src/components/FontList.vue:88 — a user-chosen preview background (e.g. #000000 with Surface "Follow theme" in light) puts the `--fm-muted` (#595959) row labels at about 3:1, under the 4.5:1 AA text minimum; the deferred fast-scroll sample inherits it for ~100 ms.
+
+## 2026-11-01
+
+- [E27.9 #417] crates/fm-mcp/src/stdio.rs:191 — `start_in_order` (the stdio shim's send-order fix for the `the_shim_forwards_initialize_and_tools_list_to_the_app` flake parked under E30.0 #186) shipped inside the E27.9 diff to get CI green; its owner story can close that flake note.
+- [E27.9 #417] apps/desktop/src-tauri/src/tray.rs:235 — `show_main` and `window_raise::raise` both bring the main window forward in slightly different ways; a later per-OS fix to raising the window must go into both.
+- [E27.9 #417] apps/desktop/src/components/McpConfirmToast.vue:31 — the Allow / Deny toast never takes keyboard focus, so after the window is raised a keyboard user must Tab to reach it.
+- [E27.9 #417] apps/desktop/src-tauri/src/lib.rs:1369 — the toast's `aria-live` text is emitted while the window may still be hidden, so a screen reader may never announce the question once the window is in front.
