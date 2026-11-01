@@ -598,7 +598,9 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
       </button>
       <RouterLink
         :to="{ name: 'settings' }"
-        class="hint"
+        class="hint settings-link"
+        data-testid="status-settings"
+        :title="t('home.settingsTitle', { chord: formatChord(settingsChord) })"
         :aria-keyshortcuts="ariaShortcut(settingsChord)"
       >
         {{ t('home.settings') }} <kbd>{{ formatChord(settingsChord) }}</kbd>
@@ -711,6 +713,16 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 }
 .hint kbd {
   font: inherit;
+}
+/* Settings reads as a link: the full text colour (theme.css calls it --fm-fg), not
+   the muted status-bar colour, underlined on hover and focus. */
+.settings-link {
+  color: var(--fm-fg);
+  cursor: pointer;
+}
+.settings-link:hover,
+.settings-link:focus-visible {
+  text-decoration: underline;
 }
 .active-count {
   margin: 0;

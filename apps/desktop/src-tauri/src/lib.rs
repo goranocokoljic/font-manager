@@ -64,6 +64,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime, State, Webview, Wind
 use tauri_plugin_dialog::DialogExt;
 
 pub mod help;
+pub mod menu;
 pub mod shell_text;
 pub mod tray;
 pub mod updater;

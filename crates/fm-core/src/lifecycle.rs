@@ -21,6 +21,30 @@ pub const MENU_DEACTIVATE_SESSION: &str = "Deactivate session fonts";
 /// The tray menu item that quits the app.
 pub const MENU_QUIT: &str = "Quit Font Manager";
 
+/// The menu item that opens Settings, in the menu bar and the tray.
+pub const MENU_SETTINGS: &str = "Settings…";
+/// The accelerator of the menu bar's Settings item: Ctrl+, (⌘, on a Mac), the
+/// same chord the UI's keymap gives Settings.
+pub const SETTINGS_ACCELERATOR: &str = "CmdOrCtrl+,";
+
+/// Where the menu bar holds Settings… on an OS.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsMenu {
+    /// The app menu (the first menu), above Quit, where macOS puts Preferences.
+    AppMenuAboveQuit,
+    /// The File menu (the first menu on Windows; Linux has no default File
+    /// menu, so the shell makes one), at the top.
+    FileMenu,
+}
+
+/// Where Settings… goes in the menu bar of `os`.
+pub fn settings_menu(os: Os) -> SettingsMenu {
+    match os {
+        Os::MacOs => SettingsMenu::AppMenuAboveQuit,
+        Os::Windows | Os::Linux => SettingsMenu::FileMenu,
+    }
+}
+
 /// What closing the main window does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CloseAction {
@@ -447,5 +471,13 @@ mod tests {
             !plain.iter().any(|n| n.contains("Start at login")),
             "{plain:?}"
         );
+    }
+
+    #[test]
+    fn settings_sit_in_the_app_menu_on_a_mac_and_the_file_menu_elsewhere() {
+        assert_eq!(settings_menu(Os::MacOs), SettingsMenu::AppMenuAboveQuit);
+        assert_eq!(settings_menu(Os::Windows), SettingsMenu::FileMenu);
+        assert_eq!(settings_menu(Os::Linux), SettingsMenu::FileMenu);
+        assert_eq!(SETTINGS_ACCELERATOR, "CmdOrCtrl+,");
     }
 }

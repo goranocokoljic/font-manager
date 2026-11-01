@@ -1,4 +1,4 @@
-//! The native shell's labels (the Help menu, the help window's title, the tray)
+//! The native shell's labels (the Help menu, Settings…, the help window's title, the tray)
 //! in the language the UI shows (E19.2). They come from the UI's own message
 //! catalogs (`src/locales/<tag>.json`, the `shell` group), so a new locale needs
 //! no Rust change for its words; the UI tells the shell its locale through the
@@ -130,6 +130,7 @@ pub fn apply<R: Runtime>(app: &AppHandle<R>, tag: &str) -> ApiResult<()> {
         }
     }
     crate::help::relabel(app, tag);
+    crate::menu::relabel(app, tag);
     crate::tray::relabel(app, tag);
     Ok(())
 }
@@ -171,6 +172,8 @@ mod tests {
             lifecycle::MENU_DEACTIVATE_SESSION
         );
         assert_eq!(text("en", "shell.tray.quit"), lifecycle::MENU_QUIT);
+        assert_eq!(text("en", "shell.settings"), lifecycle::MENU_SETTINGS);
+        assert_eq!(text("de", "shell.settings"), "Einstellungen…");
         for n in [0, 1, 7] {
             assert_eq!(
                 count("en", "shell.tray.active", n),
@@ -191,6 +194,8 @@ mod tests {
             "shell.helpWindowTitle",
             "shell.helpMenu",
             "shell.about",
+            "shell.settings",
+            "shell.fileMenu",
             "shell.tray.tooltip",
             "shell.tray.open",
             "shell.tray.deactivateSession",

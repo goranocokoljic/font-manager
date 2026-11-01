@@ -118,10 +118,11 @@ pub fn open<R: Runtime>(app: &AppHandle<R>, slug: &str) -> ApiResult<()> {
 }
 
 /// The app menu: Tauri's default menus on every OS, with the help pages at the
-/// top of the Help menu.
+/// top of the Help menu and Settings… where the OS keeps it (`crate::menu`).
 pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::default(app)?;
     let locale = shell_text::current(app);
+    crate::menu::add_settings_item(app, &menu, fm_platform::Os::current(), &locale)?;
     if let Some(help) = menu
         .get(HELP_SUBMENU_ID)
         .and_then(|i| i.as_submenu().cloned())
@@ -182,10 +183,10 @@ pub fn relabel<R: Runtime>(app: &AppHandle<R>, locale: &str) {
     }
 }
 
-/// Sets the app menu with the Help pages on a builder and opens a page when its
-/// item is chosen.
+/// Sets the app menu with the Help pages and Settings… on a builder; a page
+/// opens when its item is chosen, Settings when Settings… is.
 pub fn with_help_menu<R: Runtime>(builder: tauri::Builder<R>) -> tauri::Builder<R> {
-    builder.menu(menu).on_menu_event(on_menu_event)
+    builder.menu(menu).on_menu_event(crate::menu::on_menu_event)
 }
 
 /// Opens the page of a Help menu item; ignores every other menu event.
