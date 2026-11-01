@@ -18,6 +18,7 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::task::Poll;
 use std::time::Duration;
 
 use fm_api::SettingsService as _;
@@ -185,8 +186,9 @@ pub async fn forward<T: Transport<RoleServer>>(target: &Target, mut client: T) -
                         open.insert(id.clone());
                     }
                     // Sent concurrently, as rmcp's own client does: a slow
-                    // tool call does not hold up the next request.
-                    let send = app.send(message);
+                    // tool call does not hold up the next request. But
+                    // queued in the order the client wrote them.
+                    let send = start_in_order(app.send(message)).await;
                     sends.spawn(async move { (id, send.await.map_err(|e| e.to_string())) });
                 }
                 None => break End::ClientClosed,
@@ -245,6 +247,29 @@ async fn refuse_rest<T: Transport<RoleServer>>(client: &mut T) {
     }
 }
 
+/// Polls `send` once, here, and returns the rest of it to finish elsewhere.
+/// rmcp's transport queues a message for its worker on the first poll, and
+/// the worker keeps that order on the wire. A task spawned with the bare
+/// future would queue it whenever the runtime first runs that task, and on a
+/// multi-thread runtime two tasks start in any order: a `tools/list` could
+/// overtake `notifications/initialized`, and the app would never answer it.
+/// The worker's queue is FIFO also when it is full, so one poll in order is
+/// enough.
+async fn start_in_order<F>(send: F) -> impl Future<Output = F::Output> + Send + 'static
+where
+    F: Future + Send + 'static,
+    F::Output: Send,
+{
+    let mut send = Box::pin(send);
+    let first = std::future::poll_fn(|cx| Poll::Ready(send.as_mut().poll(cx))).await;
+    async move {
+        match first {
+            Poll::Ready(output) => output,
+            Poll::Pending => send.await,
+        }
+    }
+}
+
 fn request_id(message: &ClientJsonRpcMessage) -> Option<RequestId> {
     match message {
         JsonRpcMessage::Request(request) => Some(request.id.clone()),
@@ -257,5 +282,39 @@ fn answered_id(message: &ServerJsonRpcMessage) -> Option<&RequestId> {
         JsonRpcMessage::Response(response) => Some(&response.id),
         JsonRpcMessage::Error(error) => error.id.as_ref(),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+
+    /// A send that records its message when first polled, as rmcp's
+    /// transport queues it then, and finishes later.
+    async fn recorded(queue: Arc<Mutex<Vec<u32>>>, n: u32) {
+        queue.lock().unwrap().push(n);
+        tokio::task::yield_now().await;
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn sends_are_queued_in_the_order_the_client_wrote_them() {
+        for _ in 0..50 {
+            let queue = Arc::new(Mutex::new(Vec::new()));
+            let mut sends = JoinSet::new();
+            for n in 0..64 {
+                let send = start_in_order(recorded(Arc::clone(&queue), n)).await;
+                sends.spawn(send);
+            }
+            while sends.join_next().await.is_some() {}
+            let order = queue.lock().unwrap().clone();
+            assert_eq!(order, (0..64).collect::<Vec<_>>());
+        }
+    }
+
+    #[tokio::test]
+    async fn a_send_that_finishes_at_once_keeps_its_result() {
+        let send = start_in_order(async { 7 }).await;
+        assert_eq!(send.await, 7);
     }
 }
