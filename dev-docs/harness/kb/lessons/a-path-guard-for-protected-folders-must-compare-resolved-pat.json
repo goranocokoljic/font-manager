@@ -1,0 +1,19 @@
+{
+  "id": "a-path-guard-for-protected-folders-must-compare-resolved-pat",
+  "title": "A path guard for protected folders must compare resolved paths, not raw text",
+  "category": "security",
+  "rule": "When a check refuses a user-given folder because it is or lies inside a protected folder (system font folders, the library folder, app data), compare resolved paths: refuse a path that is not absolute on the host (on Windows a root without a drive, `\\Windows\\Fonts`, is not), resolve `.` and `..`, drop the Windows `\\\\?\\` prefix, and follow links on both sides (canonicalize the nearest existing ancestor, then append the parts that do not exist yet; `fm_platform::paths::resolve_links`). Test it with `..` on the way, a drive-less path, the verbatim prefix and a symlink to the protected folder.",
+  "rationale": "E22.7 (#427): `is_within` compared path components as text, so a download folder `~/Documents/../.local/share/fonts`, `\\Users\\ada\\AppData\\Local\\Microsoft\\Windows\\Fonts` or `\\\\?\\C:\\...` passed the rule-4 guard and the install would write into a folder the OS reads fonts from.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    427
+  ],
+  "file_globs": [
+    "crates/fm-platform/src/paths.rs",
+    "crates/fm-core/src/**/*.rs"
+  ],
+  "first_seen": "2026-11-01T23:13:39.895Z",
+  "last_seen": "2026-11-01T23:13:39.895Z"
+}

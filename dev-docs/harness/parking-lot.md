@@ -319,3 +319,10 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.12 #420] apps/desktop/src-tauri/src/tray.rs:254 — `show_main` discards the errors of show, unminimize and set_focus without a log line, so a Settings… that cannot show the window leaves no trace.
 - [E5.12 #420] apps/desktop/src-tauri/src/tray.rs:252 — `show_main` has no test; Tauri's MockRuntime makes show/hide no-ops and `is_visible` always true, so only a real-window test could prove it.
 - [E5.12 #420] apps/desktop/src/views/HomeView.vue:607 — the Conflicts and problems status-bar links share the muted `.hint` style, so nothing shows they are links.
+
+## 2026-11-02
+
+- [E22.7 #427] crates/fm-platform/src/windows/activator.rs:379 — the private `system_fonts_dir`, `same_path` and `is_under` overlap the new `paths::system_font_folders` / `is_within` and compare case differently (ASCII only vs full lowercase); a later merge should keep one rule.
+- [E22.7 #427] crates/fm-core/src/index/faces.rs:411 — `faces_of_source` is close to the new `live_faces_with_files`; they differ on purpose (gone files, paused sources), so a later caller must pick the right one.
+- [E22.7 #427] crates/fm-core/src/api/install.rs:173 — a symlink at the family subfolder itself (`<download>/Lato` → a font folder) is not resolved by the rule-4 guard; it needs a link the user made.
+- [E22.7 #427] crates/fm-platform/src/paths.rs:151 — an admin-share UNC alias of the per-user font folder (`\localhost\c$\…`) is not matched by `is_within`.
