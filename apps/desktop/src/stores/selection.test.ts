@@ -299,3 +299,68 @@ describe('declared license', () => {
     expect(invoke.mock.calls).toEqual([['declare_license', { req }]]);
   });
 });
+
+describe('selection store, activation events (E6.9)', () => {
+  const faces = (ids: number[]): Target => ({ kind: 'faces', faces: ids });
+
+  afterEach(async () => {
+    await useSelectionStore().stop();
+  });
+
+  it('reloads the selected face when another caller activates or deactivates it', async () => {
+    const store = useSelectionStore();
+    await store.start();
+    await store.select(1);
+    expect(store.detail?.face.active).toBeNull();
+
+    await client.activate({ target: faces([1]), mode: 'session', onConflict: 'replace' });
+    await vi.waitFor(() => expect(store.detail?.face.active).toBe('session'));
+
+    await client.deactivate({ target: faces([1]) });
+    await vi.waitFor(() => expect(store.detail?.face.active).toBeNull());
+  });
+
+  it('does nothing for an event about other faces', async () => {
+    const store = useSelectionStore();
+    await store.start();
+    await store.select(1);
+    const getFace = vi.spyOn(client, 'getFace');
+
+    const [out] = await client.activate({
+      target: faces([6]),
+      mode: 'session',
+      onConflict: 'replace',
+    });
+    expect(out?.outcome.status).toBe('done');
+    await Promise.resolve();
+    expect(getFace).not.toHaveBeenCalled();
+  });
+
+  it('does not reload while its own activation is in flight', async () => {
+    const store = useSelectionStore();
+    await store.start();
+    await store.select(1);
+    const getFace = vi.spyOn(client, 'getFace');
+
+    store.busy = true;
+    await client.activate({ target: faces([1]), mode: 'session', onConflict: 'replace' });
+    await Promise.resolve();
+    expect(getFace).not.toHaveBeenCalled();
+  });
+
+  it('subscribes once and stops following events after stop', async () => {
+    const onEvent = vi.spyOn(client, 'onEvent');
+    const store = useSelectionStore();
+    await store.start();
+    await store.start();
+    expect(onEvent).toHaveBeenCalledTimes(1);
+    await store.select(1);
+    await store.stop();
+    const getFace = vi.spyOn(client, 'getFace');
+
+    await client.activate({ target: faces([1]), mode: 'session', onConflict: 'replace' });
+    await Promise.resolve();
+    expect(getFace).not.toHaveBeenCalled();
+    expect(store.detail?.face.active).toBeNull();
+  });
+});

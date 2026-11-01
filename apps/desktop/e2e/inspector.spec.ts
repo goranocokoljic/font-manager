@@ -71,3 +71,32 @@ test('nothing selected without a face in the URL', async ({ page }) => {
   await page.goto('/');
   await expect(info(page)).toContainText('Nothing selected');
 });
+
+test('an activation from outside the inspector shows there without a click (E6.9)', async ({
+  page,
+}) => {
+  await page.goto('/#/?face=1');
+  const panel = info(page);
+  await expect(panel.getByTestId('activation-state')).toHaveText('Not active');
+  await expect(panel.getByRole('button', { name: 'Activate' })).toBeVisible();
+
+  // Dragging Inter out of the window (Font Switch) activates face 1 through the
+  // API, not through the inspector; only the activationChanged event tells it.
+  const row = page
+    .getByRole('tree', { name: 'Font list' })
+    .getByRole('treeitem', { name: /^Inter,/ });
+  await row.dispatchEvent('pointerdown');
+  await expect
+    .poll(async () => {
+      const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
+      await row.dispatchEvent('dragstart', { dataTransfer });
+      return dataTransfer.evaluate((dt) => dt.types.includes('application/x-fm-font-switch'));
+    })
+    .toBe(true);
+  await page.evaluate(() =>
+    document.dispatchEvent(new DragEvent('dragleave', { clientX: -1, clientY: 40 })),
+  );
+
+  await expect(panel.getByTestId('activation-state')).toHaveText('Active for this session');
+  await expect(panel.getByRole('button', { name: 'Deactivate' })).toBeVisible();
+});
