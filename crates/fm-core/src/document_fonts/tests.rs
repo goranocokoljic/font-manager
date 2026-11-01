@@ -127,7 +127,9 @@ fn ai_reads_xmp_fonts_and_pdf_base_fonts_inside_object_streams() {
 #[test]
 fn psd_reads_the_font_set_of_every_text_layer() {
     // AdobeInvisFont is Photoshop's placeholder; "Normal RGB" is a style
-    // sheet name outside the FontSet.
+    // sheet name outside the FontSet. The global blocks after the layers
+    // have lengths of 77 and 10 bytes padded to 4 (Photoshop 2025, E36.6):
+    // the walk must not stop at them.
     assert_eq!(
         fonts_of("sample.psd"),
         ["ArialMT", "Georgia", "Inter-Bold"].map(ps)
