@@ -344,6 +344,10 @@ const block = (key, data) => {
   const body = padTo(data, 4);
   return Buffer.concat([Buffer.from('8BIM'), Buffer.from(key), u32be(body.length), body]);
 };
+// A block of the global list after the layer info, as Photoshop 2025 writes
+// it: the length is the data's own, the data is padded to 4 bytes (E36.6).
+const globalBlock = (key, data) =>
+  Buffer.concat([Buffer.from('8BIM'), Buffer.from(key), u32be(data.length), padTo(data, 4)]);
 const layerRecord = (name, blocks) => {
   const pascal = padTo(Buffer.concat([Buffer.from([name.length]), Buffer.from(name, 'latin1')]), 4);
   const extra = Buffer.concat([u32be(0), u32be(0), pascal, ...blocks]);
@@ -360,7 +364,14 @@ const layers = Buffer.concat([
   layerRecord('Photo', []),
 ]);
 const layerInfo = padTo(layers, 4);
-const layerAndMask = Buffer.concat([u32be(layerInfo.length), layerInfo, u32be(0)]);
+// After the layer info: an empty global layer mask, then global blocks with
+// lengths of 0, 77 and 10 bytes (77 and 10 are not multiples of 4).
+const globalBlocks = Buffer.concat([
+  globalBlock('Patt', Buffer.alloc(0)),
+  globalBlock('CAI ', Buffer.alloc(77, 0x41)),
+  globalBlock('cinf', Buffer.alloc(10, 0x42)),
+]);
+const layerAndMask = Buffer.concat([u32be(layerInfo.length), layerInfo, u32be(0), globalBlocks]);
 write('sample.psd', Buffer.concat([
   Buffer.from('8BPS'), u16be(1), Buffer.alloc(6), u16be(3), u32be(1), u32be(1), u16be(8), u16be(3),
   u32be(0), // colour mode data

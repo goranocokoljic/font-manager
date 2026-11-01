@@ -4,6 +4,12 @@
 //! documents). A text layer has a `TySh` block whose engine data lists the
 //! layer's fonts as `/FontSet [ << /Name (…) >> … ]` with PostScript names in
 //! UTF-16. Channel image data is seeked over, never read.
+//!
+//! Block lengths are the data's own; the data is padded to 2 bytes in a
+//! layer record (the specification) and to 4 in the global list after the
+//! layer info (what Photoshop 2025 writes, found on a real file in E36.6).
+//! The walk reads the length, then looks for the next signature at the
+//! 2-byte boundary and, when none is there, at the 4-byte one.
 
 use std::io::{Read, Seek, SeekFrom};
 
@@ -131,11 +137,35 @@ impl<R: Read + Seek> Psd<'_, R> {
                 b"Lr16" | b"Lr32" | b"Layr" if global => self.layer_info(block_end, fonts)?,
                 _ => {}
             }
-            // Lengths are even; an odd one is padded by one byte.
-            let next = (block_end + (len & 1)).min(end);
+            let next = self.next_block(block_end, len, end)?;
             self.src.seek(SeekFrom::Start(next))?;
         }
         Ok(())
+    }
+
+    /// Where the block after one of `len` bytes ending at `block_end`
+    /// starts: the data padded to 2 bytes, or to 4 when a signature sits
+    /// there and not at the 2-byte boundary (Photoshop pads the global
+    /// blocks to 4). `end` when the list is over either way.
+    fn next_block(&mut self, block_end: u64, len: u64, end: u64) -> Res<u64> {
+        let padded = |n: u64| block_end - len + len.div_ceil(n) * n;
+        let (two, four) = (padded(2).min(end), padded(4).min(end));
+        if two == four || two + 12 > end || self.signature_at(two)? {
+            return Ok(two);
+        }
+        if four + 12 <= end && self.signature_at(four)? {
+            return Ok(four);
+        }
+        Ok(two)
+    }
+
+    /// Whether a block signature is at `at`; the position is left alone.
+    fn signature_at(&mut self, at: u64) -> Res<bool> {
+        let here = self.pos()?;
+        self.src.seek(SeekFrom::Start(at))?;
+        let sig = self.bytes::<4>()?;
+        self.src.seek(SeekFrom::Start(here))?;
+        Ok(&sig == b"8BIM" || &sig == b"8B64")
     }
 }
 
