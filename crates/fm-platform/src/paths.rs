@@ -121,6 +121,50 @@ impl AppPaths {
     }
 }
 
+/// The folders the OS reads fonts from on its own on the host: the
+/// system-wide ones and the per-user one the OS activates. The app never
+/// writes into one (rule 4); a folder whose variable is unset is left out.
+pub fn system_font_folders() -> Vec<PathBuf> {
+    system_font_folders_for(Os::current(), |name| std::env::var_os(name))
+}
+
+/// [`system_font_folders`] for `os`, reading environment variables through `env`:
+///
+/// | OS | Folders |
+/// |----|---------|
+/// | Windows | `%WINDIR%\Fonts`, `%LOCALAPPDATA%\Microsoft\Windows\Fonts` |
+/// | macOS | `/System/Library/Fonts`, `/Library/Fonts`, `/Network/Library/Fonts`, `~/Library/Fonts` |
+/// | Linux | `/usr/share/fonts`, `/usr/local/share/fonts`, `$XDG_DATA_HOME/fonts` (`~/.local/share/fonts`), `~/.fonts` |
+pub fn system_font_folders_for(os: Os, env: impl Fn(&str) -> Option<OsString>) -> Vec<PathBuf> {
+    let env = Env(&env);
+    match os {
+        Os::Windows => crate::windows::paths::font_folders(&env),
+        Os::MacOs => crate::macos::paths::font_folders(&env),
+        Os::Linux => crate::linux::paths::font_folders(&env),
+    }
+}
+
+/// `path` is `dir` or inside it, comparing as `os` does: without case on
+/// Windows and macOS (their default file systems), with case on Linux; on
+/// Windows `/` and `\` are the same. Both paths are taken as given: `..` is
+/// not resolved and links are not followed.
+pub fn is_within(os: Os, path: &Path, dir: &Path) -> bool {
+    let parts = |p: &Path| -> Vec<String> {
+        let text = p.to_string_lossy();
+        let text = match os {
+            Os::Windows => text.replace('\\', "/").to_lowercase(),
+            Os::MacOs => text.to_lowercase(),
+            Os::Linux => text.into_owned(),
+        };
+        text.split('/')
+            .filter(|part| !part.is_empty() && *part != ".")
+            .map(str::to_owned)
+            .collect()
+    };
+    let (path, dir) = (parts(path), parts(dir));
+    !dir.is_empty() && path.len() >= dir.len() && path[..dir.len()] == dir[..]
+}
+
 /// An environment lookup that keeps only usable values: set, non-empty and absolute.
 pub(crate) struct Env<'a>(pub(crate) &'a dyn Fn(&str) -> Option<OsString>);
 
@@ -190,6 +234,88 @@ pub(crate) fn test_env(vars: &[(&str, &str)]) -> impl Fn(&str) -> Option<OsStrin
 mod tests {
     use super::test_env as env;
     use super::*;
+
+    #[test]
+    fn system_font_folders_name_the_folders_each_os_reads() {
+        let win = system_font_folders_for(
+            Os::Windows,
+            env(&[
+                ("WINDIR", r"C:\Windows"),
+                ("LOCALAPPDATA", r"C:\Users\ada\AppData\Local"),
+            ]),
+        );
+        assert_eq!(
+            win,
+            [
+                PathBuf::from(r"C:\Windows").join("Fonts"),
+                PathBuf::from(r"C:\Users\ada\AppData\Local")
+                    .join("Microsoft")
+                    .join("Windows")
+                    .join("Fonts"),
+            ]
+        );
+        let mac = system_font_folders_for(Os::MacOs, env(&[("HOME", "/Users/ada")]));
+        assert!(mac.contains(&PathBuf::from("/System/Library/Fonts")));
+        assert!(mac.contains(&PathBuf::from("/Library/Fonts")));
+        assert!(mac.contains(&PathBuf::from("/Users/ada").join("Library").join("Fonts")));
+        let linux = system_font_folders_for(Os::Linux, env(&[("HOME", "/home/ada")]));
+        assert!(linux.contains(&PathBuf::from("/usr/share/fonts")));
+        assert!(linux.contains(&PathBuf::from("/home/ada/.local/share").join("fonts")));
+        assert!(linux.contains(&PathBuf::from("/home/ada").join(".fonts")));
+        let xdg = system_font_folders_for(
+            Os::Linux,
+            env(&[("HOME", "/home/ada"), ("XDG_DATA_HOME", "/data/ada")]),
+        );
+        assert!(xdg.contains(&PathBuf::from("/data/ada").join("fonts")));
+        // No home: the system-wide folders only, never a relative one.
+        let bare = system_font_folders_for(Os::Linux, env(&[]));
+        assert_eq!(bare.len(), 2);
+        assert!(system_font_folders_for(Os::Windows, env(&[])).is_empty());
+        assert!(!system_font_folders().is_empty(), "the host has some");
+    }
+
+    #[test]
+    fn is_within_compares_as_the_os_does() {
+        let fonts = Path::new("/usr/share/fonts");
+        assert!(is_within(Os::Linux, fonts, fonts));
+        assert!(is_within(
+            Os::Linux,
+            Path::new("/usr/share/fonts/truetype"),
+            fonts
+        ));
+        assert!(is_within(Os::Linux, Path::new("/usr/share/fonts/"), fonts));
+        assert!(!is_within(
+            Os::Linux,
+            Path::new("/usr/share/fontsmore"),
+            fonts
+        ));
+        assert!(!is_within(Os::Linux, Path::new("/usr/share/Fonts"), fonts));
+        assert!(
+            !is_within(Os::Linux, Path::new("/usr/share"), fonts),
+            "a parent"
+        );
+        assert!(!is_within(Os::Linux, fonts, Path::new("")));
+        assert!(is_within(
+            Os::MacOs,
+            Path::new("/library/fonts/x"),
+            Path::new("/Library/Fonts")
+        ));
+        assert!(is_within(
+            Os::Windows,
+            Path::new(r"c:\windows\FONTS\x.ttf"),
+            Path::new(r"C:\Windows\Fonts"),
+        ));
+        assert!(is_within(
+            Os::Windows,
+            Path::new("C:/Windows/Fonts/x"),
+            Path::new(r"C:\Windows\Fonts"),
+        ));
+        assert!(!is_within(
+            Os::Windows,
+            Path::new(r"C:\Windows\FontsX"),
+            Path::new(r"C:\Windows\Fonts"),
+        ));
+    }
 
     #[test]
     fn a_scratch_home_holds_every_folder() {

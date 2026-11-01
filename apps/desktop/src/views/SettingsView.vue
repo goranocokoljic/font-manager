@@ -413,6 +413,30 @@ function chooseLanguage(e: Event): void {
             {{ t('catalogs.adobeFonts.name') }}
           </button>
           <AdobeFontsNote v-if="adobeFontsOpen" id="settings-adobe-fonts" :level="3" />
+          <div class="field" data-testid="settings-download-folder">
+            <span id="download-folder-label">{{ t('settings.catalogs.downloadFolder') }}</span>
+            <span class="folder-row">
+              <bdi
+                v-if="s?.downloadFolder"
+                class="folder"
+                data-testid="settings-download-folder-path"
+                >{{ s.downloadFolder }}</bdi
+              >
+              <span v-else class="note">{{ t('settings.catalogs.downloadFolderNone') }}</span>
+              <button
+                type="button"
+                class="button"
+                aria-describedby="download-folder-label download-folder-hint"
+                data-testid="settings-download-folder-change"
+                @click="catalogs.changeDownloadFolder()"
+              >
+                {{ t('settings.catalogs.change') }}
+              </button>
+            </span>
+          </div>
+          <p id="download-folder-hint" class="note hint">
+            {{ t('settings.catalogs.downloadFolderHint') }}
+          </p>
         </template>
 
         <template v-else-if="current === 'advanced' && s">
@@ -675,6 +699,15 @@ function chooseLanguage(e: Event): void {
 }
 .field > span:first-child {
   font-weight: 600;
+}
+.folder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.folder {
+  overflow-wrap: anywhere;
 }
 .input {
   padding: 4px 8px;

@@ -222,6 +222,12 @@ impl CatalogService for Previews {
     ) -> ApiResult<fm_api::catalog::DownloadFamilyResponse> {
         Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }
+    fn install_family(
+        &self,
+        _: fm_api::catalog::InstallFamilyRequest,
+    ) -> ApiResult<fm_api::catalog::InstallFamilyResponse> {
+        Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
+    }
     fn list_catalog_downloads(&self) -> ApiResult<Vec<fm_api::catalog::CatalogDownload>> {
         Err(ApiError::new(ErrorCode::Unsupported, "not in this test"))
     }

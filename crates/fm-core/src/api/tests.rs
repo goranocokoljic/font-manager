@@ -4416,6 +4416,221 @@ fn a_download_goes_only_into_a_watched_source() {
     let _ = source;
 }
 
+/// Sets the download folder of `lib` to `folder`.
+fn set_download_folder(lib: &Lib, folder: &Path) {
+    lib.api
+        .update_settings(SettingsUpdate {
+            download_folder: Some(folder.to_string_lossy().into_owned()),
+            ..SettingsUpdate::default()
+        })
+        .expect("download folder");
+}
+
+fn install_lato(lib: &Lib) -> ApiResult<InstallFamilyResponse> {
+    lib.api.install_family(InstallFamilyRequest {
+        id: fm_api::catalog::CatalogId::GoogleFonts,
+        family: "Lato".into(),
+        kind: fm_api::catalog::CatalogFileKind::Static,
+    })
+}
+
+/// The watched sources of `lib`, by path.
+fn watched_paths(lib: &Lib) -> Vec<String> {
+    lib.api
+        .list_sources()
+        .expect("sources")
+        .into_iter()
+        .filter(|s| s.kind == SourceKind::Watched)
+        .map(|s| s.path)
+        .collect()
+}
+
+/// The names in `dir`, sorted.
+fn listing_of(dir: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .expect("folder")
+        .map(|e| e.expect("entry").file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn an_install_downloads_into_the_download_folder_added_once_and_activates_its_faces() {
+    let (lib, _source, server) = downloading("catalog-install");
+    let folder = lib.dir.path().join("Font Manager Fonts");
+    set_download_folder(&lib, &folder);
+    assert!(!folder.exists(), "made only by the install");
+
+    let got = install_lato(&lib).expect("install");
+    assert!(!got.already_installed);
+    assert_eq!(got.error, None);
+    assert_eq!(
+        got.download.folder,
+        folder.join("Lato").to_string_lossy(),
+        "a subfolder named after the family"
+    );
+    let names: Vec<&str> = got.download.files.iter().map(|f| f.name.as_str()).collect();
+    assert_eq!(names, ["Lato-Bold.ttf", "Lato-Regular.ttf"]);
+    // The folder is a watched source now, indexed in place.
+    let watched = watched_paths(&lib);
+    assert_eq!(watched.len(), 2, "{watched:?}");
+    assert!(watched.contains(&folder.to_string_lossy().into_owned()));
+    // The rescan is done when the call returns: both faces are in the library and active.
+    assert_eq!(got.faces.len(), 2, "{got:?}");
+    let names = lib.names();
+    assert!(names.iter().any(|n| n == "Asul") && names.iter().any(|n| n == "Cagliostro"));
+    assert_eq!(got.outcomes.len(), 2);
+    assert!(
+        got.outcomes
+            .iter()
+            .all(|o| o.outcome == OutcomeStatus::Done),
+        "{:?}",
+        got.outcomes
+    );
+    let active = lib.api.list_active().expect("active");
+    for face in &got.faces {
+        let a = active.iter().find(|a| a.face == *face).expect("active");
+        assert_eq!(a.mode, ActivationMode::Session, "the mode of the settings");
+    }
+    // Provenance is recorded as for a download.
+    let listed = lib.api.list_catalog_downloads().expect("downloads");
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0], got.download);
+
+    // A second install downloads nothing, adds no source and leaves the
+    // active faces as they are.
+    let hits = server.hits();
+    let again = install_lato(&lib).expect("again");
+    assert!(again.already_installed);
+    assert_eq!(server.hits(), hits, "no request");
+    assert_eq!(watched_paths(&lib).len(), 2, "the source is added once");
+    assert_eq!(again.faces, got.faces);
+    assert!(again.outcomes.is_empty(), "nothing to activate: {again:?}");
+    assert_eq!(
+        lib.api.list_catalog_downloads().expect("downloads").len(),
+        1
+    );
+}
+
+#[test]
+fn an_install_of_a_family_in_the_library_activates_what_is_there_in_the_configured_mode() {
+    let (lib, _source, server) = downloading("catalog-install-present");
+    let folder = lib.dir.path().join("Installed");
+    set_download_folder(&lib, &folder);
+    let first = install_lato(&lib).expect("install");
+    lib.api
+        .deactivate(DeactivateRequest::default())
+        .expect("deactivate");
+    lib.api
+        .update_settings(SettingsUpdate {
+            activation_mode: Some(ActivationMode::Permanent),
+            ..SettingsUpdate::default()
+        })
+        .expect("permanent");
+    let hits = server.hits();
+    let again = install_lato(&lib).expect("again");
+    assert!(again.already_installed);
+    assert_eq!(server.hits(), hits, "nothing downloaded again");
+    assert_eq!(again.download, first.download, "the recorded provenance");
+    assert_eq!(again.outcomes.len(), 2);
+    let active = lib.api.list_active().expect("active");
+    assert_eq!(active.len(), 2);
+    assert!(active.iter().all(|a| a.mode == ActivationMode::Permanent));
+}
+
+#[test]
+fn files_already_in_the_family_folder_are_activated_and_not_downloaded() {
+    let (lib, _source, server) = downloading("catalog-install-by-hand");
+    let folder = lib.dir.path().join("Installed");
+    let family = folder.join("Lato");
+    std::fs::create_dir_all(&family).expect("folder");
+    std::fs::write(
+        family.join("Lato-Bold.ttf"),
+        crate::catalog::tests::lato_font("bold"),
+    )
+    .expect("file");
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.to_string_lossy().into_owned(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+    set_download_folder(&lib, &folder);
+
+    let hits = server.hits();
+    let got = install_lato(&lib).expect("install");
+    assert!(got.already_installed);
+    assert_eq!(server.hits(), hits, "no request");
+    assert_eq!(got.faces.len(), 1);
+    assert_eq!(got.download.source, source.id);
+    assert_eq!(got.download.files.len(), 1);
+    assert_eq!(got.download.files[0].name, "Lato-Bold.ttf");
+    assert_eq!(
+        got.download.files[0].hash,
+        blake3::hash(&crate::catalog::tests::lato_font("bold"))
+            .to_hex()
+            .to_string()
+    );
+    assert_eq!(got.outcomes.len(), 1);
+    assert_eq!(listing_of(&family), ["Lato-Bold.ttf"], "nothing written");
+}
+
+#[test]
+fn a_download_folder_inside_a_watched_source_uses_that_source() {
+    let (lib, source, _server) = downloading("catalog-install-nested");
+    let folder = lib.root.join("Downloads");
+    set_download_folder(&lib, &folder);
+    let got = install_lato(&lib).expect("install");
+    assert_eq!(got.download.source, source.id, "no nested source");
+    assert_eq!(watched_paths(&lib).len(), 1);
+    assert_eq!(got.faces.len(), 2);
+    assert!(folder.join("Lato").join("Lato-Regular.ttf").is_file());
+}
+
+#[test]
+fn an_install_is_refused_without_a_folder_while_off_or_into_system_fonts_before_any_request() {
+    let (lib, _source, server) = downloading("catalog-install-refused");
+    let hits = server.hits();
+    let e = install_lato(&lib).expect_err("no folder");
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert_eq!(e.message, crate::api::install::NO_DOWNLOAD_FOLDER);
+
+    // A system font folder: one the OS reads, and a system source of the library.
+    let os_fonts = fm_platform::paths::system_font_folders();
+    let system = lib.dir.path().join("System");
+    std::fs::create_dir_all(&system).expect("folder");
+    lib.api
+        .lock()
+        .add_source(&system.to_string_lossy(), SourceKind::System)
+        .expect("system source");
+    for folder in [os_fonts[0].clone(), os_fonts[0].join("Sub"), system.clone()] {
+        set_download_folder(&lib, &folder);
+        let e = install_lato(&lib).expect_err("system fonts");
+        assert_eq!(e.code, ErrorCode::Conflict, "{folder:?}");
+        assert_eq!(e.message, crate::api::install::SYSTEM_DOWNLOAD_FOLDER);
+    }
+    assert!(!system.join("Lato").exists());
+
+    let folder = lib.dir.path().join("Installed");
+    set_download_folder(&lib, &folder);
+    lib.api
+        .set_catalog_enabled(SetCatalogEnabledRequest {
+            id: fm_api::catalog::CatalogId::GoogleFonts,
+            enabled: false,
+        })
+        .expect("off");
+    let e = install_lato(&lib).expect_err("off");
+    assert_eq!(e.code, ErrorCode::Conflict);
+    assert!(e.message.contains("turned off"), "{e:?}");
+    assert_eq!(server.hits(), hits, "refused before any request");
+    assert!(!folder.exists(), "no folder made");
+    assert_eq!(watched_paths(&lib).len(), 1, "no source added");
+    assert!(lib.api.list_active().expect("active").is_empty());
+}
+
 #[test]
 fn the_update_check_compares_the_recorded_download_with_a_refreshed_list() {
     let (lib, source, server) = downloading("catalog-updates-api");

@@ -1757,6 +1757,47 @@ export type ImportSetResponse = {
 };
 
 /**
+ *  Installs a family of a catalog with one click (E22.7): downloads it into
+ *  the download folder of the settings and activates it.
+ */
+export type InstallFamilyRequest = {
+	/**  The catalog. */
+	id: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+	/**  Static or variable files, as for [`DownloadFamilyRequest::kind`]. */
+	kind: CatalogFileKind,
+};
+
+/**  What an install downloaded and activated. */
+export type InstallFamilyResponse = {
+	/**
+	 *  The provenance of the family's files: the one recorded now, or, for a
+	 *  family already in the library, the one recorded before (or what is in
+	 *  the family's folder when nothing was recorded).
+	 */
+	download: CatalogDownload,
+	/**  The faces of the family in the library, by id. */
+	faces: FaceId[],
+	/**
+	 *  What activating them did; a face that was already active is not
+	 *  activated again and has no outcome.
+	 */
+	outcomes: ActivationOutcome[],
+	/**
+	 *  The family was in the library already: nothing was downloaded, what
+	 *  was there was activated.
+	 */
+	alreadyInstalled?: boolean,
+	/**
+	 *  Why the download stopped after the files in `download` were written,
+	 *  as [`DownloadFamilyResponse::error`]; the files written were
+	 *  rescanned and activated. `None` when it finished.
+	 */
+	error?: ApiError | null,
+};
+
+/**
  *  Install the update a check found. The app quits as it does on Quit
  *  (session fonts are deregistered), installs and starts again.
  */
@@ -2835,6 +2876,12 @@ export type Settings = {
 	 *  default.
 	 */
 	language?: Language,
+	/**
+	 *  The folder catalog installs go into (E22.7): the one folder the app
+	 *  writes into without a choice per download, chosen once by the user.
+	 *  `None` until the user chooses it.
+	 */
+	downloadFolder?: string | null,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -2864,6 +2911,11 @@ export type SettingsUpdate = {
 	checkUpdatesAutomatically?: boolean | null,
 	/**  The language of the UI. */
 	language?: Language | null,
+	/**
+	 *  The folder catalog installs go into: an absolute path, or an empty
+	 *  string to forget it.
+	 */
+	downloadFolder?: string | null,
 };
 
 /**  The shortlist for a brief. */

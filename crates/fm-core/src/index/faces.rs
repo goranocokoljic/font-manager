@@ -427,6 +427,30 @@ impl Index {
         Ok(out)
     }
 
+    /// Every face whose file the last scan found, with its file, in every
+    /// source that is not paused, by face id (E22.7: the faces of a
+    /// catalog install, matched by file).
+    pub fn live_faces_with_files(&self) -> FmResult<Vec<(FaceId, PathBuf)>> {
+        let mut stmt = self
+            .conn
+            .prepare_cached(
+                "SELECT face.id, font_file.path FROM face
+                 JOIN font_file ON font_file.id = face.file_id
+                 JOIN source ON source.id = font_file.source_id
+                 WHERE font_file.gone = 0 AND source.paused = 0
+                 ORDER BY face.id",
+            )
+            .map_err(|e| db_error(&e))?;
+        let mut rows = stmt.query([]).map_err(|e| db_error(&e))?;
+        let mut out = Vec::new();
+        while let Some(row) = rows.next().map_err(|e| db_error(&e))? {
+            let id = FaceId(row.get(0).map_err(|e| db_error(&e))?);
+            let path = path_from_sql(row.get_ref(1).map_err(|e| db_error(&e))?)?;
+            out.push((id, path));
+        }
+        Ok(out)
+    }
+
     /// The list row of the face `face`, grouped into its family as search
     /// groups it. An unknown face is `NotFound`.
     pub(super) fn face_summary(&self, face: FaceId) -> FmResult<FaceSummary> {

@@ -15,8 +15,10 @@ import {
   type Catalog,
   type CatalogDownload,
   type CatalogUpdate,
+  type InstallFamilyResponse,
   type CatalogFamily,
   type DownloadFamilyResponse,
+  type ConflictPolicy,
   type CatalogId,
   type AvailableUpdate,
   type InstallUpdateRequest,
@@ -354,6 +356,8 @@ export const defaultSettings: FullSettings = {
   checkUpdatesAutomatically: false,
   // Follows the OS language until the user picks one.
   language: 'system',
+  // Chosen by the user at the first Install (E22.7).
+  downloadFolder: null,
 };
 
 /** The releases the mock's server can offer the mock app (0.1.0). */
@@ -1507,6 +1511,27 @@ export function mockCatalogFamilies(extra = 0): CatalogFamily[] {
   ];
 }
 
+/** The folder the mock's first Install proposes (`suggestedDownloadFolder`). */
+export const MOCK_SUGGESTED_DOWNLOAD_FOLDER = '/Users/demo/Documents/Font Manager Fonts';
+
+/** What the mock's `installFamily` needs from the rest of the mock client. */
+interface MockInstallHooks {
+  settings: () => FullSettings;
+  sources: () => Source[];
+  /** Adds `path` as a watched source; its id. */
+  addSource: (path: string) => SourceId;
+  /** The library faces of the family named `family`. */
+  familyFaces: (family: string) => FaceId[];
+  isActive: (face: FaceId) => boolean;
+  activate: (
+    faces: FaceId[],
+    mode: ActivationMode,
+    onConflict: ConflictPolicy,
+  ) => Promise<ActivationOutcome[]>;
+  /** Resolves when the scan `job` has finished. */
+  scanned: (job: JobId) => Promise<void>;
+}
+
 /**
  * The online catalogs of the mock (`CatalogService` of the Rust mock): off until turned on,
  * refreshing "fetches" four families and touches no network; an off catalog lists none.
@@ -1517,6 +1542,7 @@ function createMockCatalogs(
   rescan: (source: SourceId) => { path: string; job: JobId },
   download: { result: MockOptions['catalogDownload']; ms: number } = { result: 'ok', ms: 0 },
   seeded = false,
+  hooks: MockInstallHooks | null = null,
 ): Pick<
   FmClient,
   | 'listCatalogs'
@@ -1525,6 +1551,8 @@ function createMockCatalogs(
   | 'listCatalogFamilies'
   | 'catalogFontUrl'
   | 'downloadFamily'
+  | 'installFamily'
+  | 'suggestedDownloadFolder'
   | 'listCatalogDownloads'
   | 'checkUpdates'
 > {
@@ -1582,7 +1610,17 @@ function createMockCatalogs(
       familyCount: cache?.families.length ?? 0,
     };
   };
-  return {
+  const api: Pick<
+    FmClient,
+    | 'listCatalogs'
+    | 'setCatalogEnabled'
+    | 'refreshCatalog'
+    | 'listCatalogFamilies'
+    | 'catalogFontUrl'
+    | 'downloadFamily'
+    | 'listCatalogDownloads'
+    | 'checkUpdates'
+  > = {
     listCatalogs: async () => sites.map(([id]) => catalog(id)),
     setCatalogEnabled: async (req) => {
       site(req.id);
@@ -1712,6 +1750,76 @@ function createMockCatalogs(
           ? a.family.localeCompare(b.family)
           : sites.findIndex(([s]) => s === a.catalog) - sites.findIndex(([s]) => s === b.catalog),
       );
+    },
+  };
+  return {
+    ...api,
+    suggestedDownloadFolder: async () => MOCK_SUGGESTED_DOWNLOAD_FOLDER,
+    // The rules of the core (`install_family` of the Rust mock): no download folder, an off
+    // catalog or a system font folder is a conflict; a family already downloaded is not
+    // downloaded again. The folder becomes a watched source when none holds it; the faces are
+    // the mock library's faces of the family, and only those not active yet are activated.
+    installFamily: async (req) => {
+      if (!hooks) throw { code: 'unsupported', message: 'Not in this mock.', detail: null };
+      const settings = hooks.settings();
+      const folder = settings.downloadFolder?.trim();
+      if (!folder)
+        throw {
+          code: 'conflict',
+          message: 'Choose the folder for installed fonts first, under Settings → Online catalogs.',
+          detail: null,
+        };
+      const [, name] = site(req.id);
+      if (!enabled.has(req.id))
+        throw {
+          code: 'conflict',
+          message: `${name} is turned off. Turn it on to fetch its fonts.`,
+          detail: null,
+        };
+      const within = (dir: string) => {
+        const d = dir.replace(/\/$/, '');
+        return folder === d || folder.startsWith(`${d}/`);
+      };
+      const sources = hooks.sources();
+      if (sources.some((s) => s.kind === 'system' && within(s.path)))
+        throw {
+          code: 'conflict',
+          message:
+            'Fonts cannot be installed into a system font folder. Choose another folder under Settings → Online catalogs.',
+          detail: null,
+        };
+      const recorded = downloads.find((d) => d.catalog === req.id && d.family === req.family);
+      let record: CatalogDownload;
+      let error: InstallFamilyResponse['error'] = null;
+      if (recorded) record = structuredClone(recorded);
+      else {
+        const source =
+          sources.find((s) => s.kind === 'watched' && within(s.path))?.id ??
+          hooks.addSource(folder);
+        // Downloaded into the folder itself, as the core does, not the source's root.
+        const got = await api.downloadFamily({ ...req, source });
+        const into = `${folder}/${req.family}`;
+        record = {
+          ...got.download,
+          folder: into,
+          files: got.download.files.map((f) => ({ ...f, path: `${into}/${f.name}` })),
+        };
+        downloads[0] = structuredClone(record);
+        error = got.error ?? null;
+        await hooks.scanned(got.scan);
+      }
+      const faces = hooks.familyFaces(req.family);
+      const inactive = faces.filter((f) => !hooks.isActive(f));
+      const outcomes = inactive.length
+        ? await hooks.activate(inactive, settings.activationMode, settings.onConflict)
+        : [];
+      return {
+        download: record,
+        faces,
+        outcomes,
+        alreadyInstalled: !!recorded,
+        error,
+      };
     },
   };
 }
@@ -2336,7 +2444,9 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     'Flatpak installs the updates of this copy (flatpak update, or your software center), so Check for updates is not shown.';
   let pendingUpdate: AvailableUpdate | null = null;
 
-  return {
+  // The install hooks activate through the client's own `activate`, bound below.
+  let activateFaces: FmClient['activate'] = async () => [];
+  const client: FmClient = {
     getAppInfo: async () => {
       const info = options.platform ? { ...mockAppInfo, platform: options.platform } : mockAppInfo;
       return options.update === 'managed'
@@ -2411,6 +2521,36 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       },
       { result: options.catalogDownload ?? 'ok', ms: options.catalogDownloadMs ?? 0 },
       options.catalogUpdates ?? false,
+      {
+        settings: () => settings,
+        sources: () => sources,
+        addSource: (path) => {
+          const source: Source = {
+            id: ++nextId,
+            path,
+            kind: 'watched',
+            paused: false,
+            faceCount: 0,
+          };
+          sources.push(source);
+          return source.id;
+        },
+        familyFaces: (family) =>
+          faces.filter((f) => f.face.familyName === family).map((f) => f.face.id),
+        isActive: (face) => active.has(face),
+        activate: (list, mode, onConflict) =>
+          activateFaces({ target: { kind: 'faces', faces: list }, mode, onConflict }),
+        scanned: (job) =>
+          new Promise<void>((resolve) => {
+            const done = (e: Event) => {
+              if ((e.type === 'scanFinished' || e.type === 'jobFailed') && e.job === job) {
+                handlers.delete(done);
+                resolve();
+              }
+            };
+            handlers.add(done);
+          }),
+      },
     ),
     cssValues: async (req) => {
       const f = find(req.face);
@@ -3276,7 +3416,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
           detail: 'blocked by policy',
         };
       const next = { ...settings };
+      // The same rule as `Settings::apply`: a path with a root, or empty to forget it.
+      const folder = req.downloadFolder?.trim();
+      if (folder && !/^([\\/]|[A-Za-z]:[\\/])/.test(folder))
+        throw invalid('Choose the folder for installed fonts with its full path.');
       for (const [k, v] of Object.entries(req)) if (v != null) Object.assign(next, { [k]: v });
+      if (req.downloadFolder != null) next.downloadFolder = folder || null;
       settings = next;
       options.settingsStorage?.setItem(MOCK_SETTINGS_KEY, JSON.stringify(settings));
       return { ...settings };
@@ -3360,6 +3505,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       return () => shellNavigateHandlers.delete(handler);
     },
   };
+  activateFaces = client.activate;
+  return client;
 }
 
 /**

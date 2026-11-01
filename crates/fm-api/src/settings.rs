@@ -55,7 +55,7 @@ pub enum Language {
 ///
 /// The TypeScript type marks every field optional because of the defaults;
 /// a response always carries all of them.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
     /// What the Activate button does.
@@ -93,6 +93,11 @@ pub struct Settings {
     /// default.
     #[serde(default)]
     pub language: Language,
+    /// The folder catalog installs go into (E22.7): the one folder the app
+    /// writes into without a choice per download, chosen once by the user.
+    /// `None` until the user chooses it.
+    #[serde(default)]
+    pub download_folder: Option<String>,
 }
 
 impl Default for Settings {
@@ -109,12 +114,13 @@ impl Default for Settings {
             start_at_login: None,
             check_updates_automatically: false,
             language: Language::System,
+            download_folder: None,
         }
     }
 }
 
 /// Change some settings; absent fields keep their value.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsUpdate {
     /// What the Activate button does.
@@ -151,6 +157,10 @@ pub struct SettingsUpdate {
     /// The language of the UI.
     #[serde(default)]
     pub language: Option<Language>,
+    /// The folder catalog installs go into: an absolute path, or an empty
+    /// string to forget it.
+    #[serde(default)]
+    pub download_folder: Option<String>,
 }
 
 impl Settings {
@@ -172,6 +182,16 @@ impl Settings {
                 "The rescan interval must be between 0 (off) and {RESCAN_INTERVAL_MAX_MINUTES} minutes."
             )));
         }
+        let download_folder = match update.download_folder.as_deref().map(str::trim) {
+            None => self.download_folder.clone(),
+            Some("") => None,
+            Some(folder) if !std::path::Path::new(folder).has_root() => {
+                return Err(ApiError::invalid(
+                    "Choose the folder for installed fonts with its full path.",
+                ));
+            }
+            Some(folder) => Some(folder.to_owned()),
+        };
         if update.start_at_login.is_some() && self.start_at_login.is_none() {
             return Err(ApiError::new(
                 ErrorCode::Unsupported,
@@ -196,6 +216,7 @@ impl Settings {
                 .check_updates_automatically
                 .unwrap_or(self.check_updates_automatically),
             language: update.language.unwrap_or(self.language),
+            download_folder,
         })
     }
 }
@@ -464,7 +485,7 @@ mod tests {
             ..Settings::default()
         };
         assert_eq!(
-            serde_json::to_value(offered).expect("json")["startAtLogin"],
+            serde_json::to_value(&offered).expect("json")["startAtLogin"],
             false
         );
         assert_eq!(
@@ -486,7 +507,7 @@ mod tests {
         let de: SettingsUpdate = serde_json::from_str(r#"{"language":"de"}"#).expect("update");
         let next = Settings::default().apply(&de).expect("valid");
         assert_eq!(next.language, Language::De);
-        assert_eq!(serde_json::to_value(next).expect("json")["language"], "de");
+        assert_eq!(serde_json::to_value(&next).expect("json")["language"], "de");
         let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
         assert_eq!(unchanged.language, Language::De);
         let bad: Result<SettingsUpdate, _> = serde_json::from_str(r#"{"language":"xx"}"#);
@@ -638,6 +659,50 @@ mod tests {
             let err = s.apply(&update).expect_err("out of range");
             assert_eq!(err.code, ErrorCode::InvalidRequest);
         }
+    }
+
+    #[test]
+    fn the_download_folder_is_empty_by_default_set_once_and_kept_by_other_updates() {
+        assert_eq!(Settings::default().download_folder, None);
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old file");
+        assert_eq!(old.download_folder, None, "a config.json from before E22.7");
+        let folder = std::env::temp_dir().join("Font Manager Fonts");
+        let folder = folder.to_string_lossy().into_owned();
+        let set: SettingsUpdate =
+            serde_json::from_value(serde_json::json!({ "downloadFolder": folder }))
+                .expect("update");
+        let next = Settings::default().apply(&set).expect("valid");
+        assert_eq!(next.download_folder.as_deref(), Some(folder.as_str()));
+        let json = serde_json::to_value(&next).expect("json");
+        assert_eq!(json["downloadFolder"], folder.as_str());
+
+        // Another update keeps it; an empty string forgets it.
+        let other = next
+            .apply(&SettingsUpdate {
+                theme: Some(Theme::Light),
+                ..SettingsUpdate::default()
+            })
+            .expect("valid");
+        assert_eq!(other.download_folder.as_deref(), Some(folder.as_str()));
+        let cleared = other
+            .apply(&SettingsUpdate {
+                download_folder: Some("  ".into()),
+                ..SettingsUpdate::default()
+            })
+            .expect("valid");
+        assert_eq!(cleared.download_folder, None);
+    }
+
+    #[test]
+    fn a_relative_download_folder_is_refused_and_nothing_changes() {
+        let e = Settings::default()
+            .apply(&SettingsUpdate {
+                download_folder: Some("Fonts".into()),
+                theme: Some(Theme::Dark),
+                ..SettingsUpdate::default()
+            })
+            .expect_err("relative");
+        assert_eq!(e.code, ErrorCode::InvalidRequest);
     }
 
     #[test]

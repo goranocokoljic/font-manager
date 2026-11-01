@@ -20,7 +20,8 @@ use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
     CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogStyle,
     CatalogUpdate, CatalogUpdateStatus, CheckUpdatesRequest, DownloadFamilyRequest,
-    DownloadFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    DownloadFamilyResponse, InstallFamilyRequest, InstallFamilyResponse,
+    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use crate::common::{
     Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
@@ -4386,13 +4387,13 @@ impl WorkflowService for MockApi {
 
 impl SettingsService for MockApi {
     fn get_settings(&self) -> ApiResult<Settings> {
-        Ok(self.state().settings)
+        Ok(self.state().settings.clone())
     }
 
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
         let mut st = self.state();
         st.settings = st.settings.apply(&req)?;
-        Ok(st.settings)
+        Ok(st.settings.clone())
     }
 
     fn app_folders(&self) -> ApiResult<AppFolders> {
@@ -5239,6 +5240,10 @@ impl ComparisonService for MockApi {
     }
 }
 
+/// The answer to an install with no download folder set.
+const MOCK_NO_DOWNLOAD_FOLDER: &str =
+    "Choose the folder for installed fonts first, under Settings → Online catalogs.";
+
 /// The sample families a refreshed catalog of the mock holds.
 fn mock_catalog_families() -> Vec<CatalogFamily> {
     let family = |name: &str, category: &str, weights: &[u32], axes: Vec<Axis>| CatalogFamily {
@@ -5457,6 +5462,110 @@ impl CatalogService for MockApi {
             download,
             skipped: Vec::new(),
             scan,
+            error: None,
+        })
+    }
+
+    /// The rules of the core without a request or a file: no download
+    /// folder, an off catalog or a folder of system fonts is `Conflict`; a
+    /// family already downloaded is not downloaded again. The folder becomes
+    /// a watched source when no source holds it; the faces are the mock
+    /// library's faces of the family (the mock's scan finds no new file),
+    /// and only those not active yet are activated.
+    fn install_family(&self, req: InstallFamilyRequest) -> ApiResult<InstallFamilyResponse> {
+        let (settings, folder, recorded, source) = {
+            let st = self.state();
+            let settings = st.settings.clone();
+            let folder = settings
+                .download_folder
+                .clone()
+                .filter(|f| !f.trim().is_empty())
+                .ok_or_else(|| ApiError::new(ErrorCode::Conflict, MOCK_NO_DOWNLOAD_FOLDER))?;
+            if !st.catalogs_on.contains(&req.id) {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    format!("{} is turned off. Turn it on to fetch its fonts.", req.id),
+                ));
+            }
+            let within = |dir: &str| {
+                let dir = dir.trim_end_matches('/');
+                folder == dir || folder.starts_with(&format!("{dir}/"))
+            };
+            if st
+                .sources
+                .iter()
+                .any(|s| s.kind == SourceKind::System && within(&s.path))
+            {
+                return Err(ApiError::new(
+                    ErrorCode::Conflict,
+                    "Fonts cannot be installed into a system font folder. Choose another folder.",
+                ));
+            }
+            let recorded = st
+                .catalog_downloads
+                .iter()
+                .rev()
+                .find(|d| d.catalog == req.id && d.family == req.family)
+                .cloned();
+            let source = st
+                .sources
+                .iter()
+                .find(|s| s.kind == SourceKind::Watched && within(&s.path))
+                .map(|s| s.id);
+            (settings, folder, recorded, source)
+        };
+        let already_installed = recorded.is_some();
+        let download = match recorded {
+            Some(d) => d,
+            None => {
+                let source = match source {
+                    Some(id) => id,
+                    None => {
+                        self.add_source(AddSourceRequest {
+                            path: folder,
+                            mode: ImportMode::IndexInPlace,
+                        })?
+                        .id
+                    }
+                };
+                self.download_family(DownloadFamilyRequest {
+                    id: req.id,
+                    family: req.family.clone(),
+                    kind: req.kind,
+                    source,
+                })?
+                .download
+            }
+        };
+        let (faces, inactive) = {
+            let st = self.state();
+            let faces: Vec<FaceId> = st
+                .faces
+                .iter()
+                .filter(|f| f.detail.face.family_name == req.family)
+                .map(|f| f.detail.face.id)
+                .collect();
+            let inactive: Vec<FaceId> = faces
+                .iter()
+                .copied()
+                .filter(|id| !st.active.contains_key(id))
+                .collect();
+            (faces, inactive)
+        };
+        let outcomes = if inactive.is_empty() {
+            Vec::new()
+        } else {
+            self.activate(ActivateRequest {
+                target: Target::Faces { faces: inactive },
+                mode: settings.activation_mode,
+                on_conflict: settings.on_conflict,
+            })?
+        };
+        Ok(InstallFamilyResponse {
+            download,
+            faces,
+            outcomes,
+            already_installed,
             error: None,
         })
     }
