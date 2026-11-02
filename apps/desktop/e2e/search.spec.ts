@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
 import { selectOption } from './select';
+import { openFilters } from './filters';
 
 // Preview rows load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -55,24 +56,24 @@ test('a search with no result says so', async ({ page }) => {
 test('filter chips under the title show counts and filter the list', async ({ page }) => {
   await open(page, '?mockFaces=2&mockStyles=4');
   const chips = page.getByRole('region', { name: 'Filters' });
+  const facets = await openFilters(page);
   // Only the two extra families have italics.
-  const italic = chips
+  const italic = facets
     .getByRole('group', { name: 'Slant' })
     .getByRole('button', { name: /^Italic/ });
   await expect(italic).toHaveAccessibleName('Italic, 2 families');
   await expect(italic).toHaveAttribute('aria-pressed', 'false');
-  await expect(chips.getByRole('group', { name: 'Format' })).toContainText('Type 1');
+  await expect(facets.getByRole('group', { name: 'Format' })).toContainText('Type 1');
   await italic.click();
   await expect(italic).toHaveAttribute('aria-pressed', 'true');
   await expect.poll(() => names(page)).toEqual(['Sample 1', 'Sample 2']);
   // Counts follow the other filters: with italics, one Type 1 family is not left.
-  await expect(chips.getByRole('group', { name: 'Format' })).not.toContainText('Type 1');
+  await expect(facets.getByRole('group', { name: 'Format' })).not.toContainText('Type 1');
 
   // A language preset joins as a chip with the result count.
-  await selectOption(chips.getByRole('combobox', { name: 'Add a language' }), 'sr-Cyrl');
-  const serbian = chips.getByRole('button', { name: /^Serbian \(Cyrillic\)/ });
-  await expect(serbian).toHaveAttribute('aria-pressed', 'true');
-  await expect(serbian).toHaveAccessibleName('Serbian (Cyrillic), 2 families');
+  await selectOption(facets.getByRole('combobox', { name: 'Add a language' }), 'sr-Cyrl');
+  const serbian = chips.getByRole('button', { name: 'Remove filter Serbian (Cyrillic)' });
+  await expect(serbian).toBeVisible();
 
   await chips.getByRole('button', { name: 'Clear filters' }).click();
   await expect.poll(() => names(page)).toHaveLength(5);
@@ -83,7 +84,7 @@ test('open-license and embedding chips filter the list; open fonts show a green 
   page,
 }) => {
   const tree = await open(page);
-  const chips = page.getByRole('region', { name: 'Filters' });
+  const chips = await openFilters(page);
   const openGroup = chips.getByRole('group', { name: 'Open license' });
   await expect(openGroup.getByRole('button', { name: /^Open license/ })).toHaveAccessibleName(
     'Open license, 2 families',
@@ -148,7 +149,9 @@ test('a chip set is saved as a smart collection', async ({ page }) => {
   await open(page);
   const chips = page.getByRole('region', { name: 'Filters' });
   await expect(chips.getByRole('button', { name: 'Save as smart collection' })).toBeDisabled();
-  await chips
+  await (
+    await openFilters(page)
+  )
     .getByRole('group', { name: 'Variable' })
     .getByRole('button', { name: /^Static/ })
     .click();
@@ -180,13 +183,14 @@ test('two chips saved as a smart collection list the same families from the side
   await open(page, '?mockFaces=40');
   const chips = page.getByRole('region', { name: 'Filters' });
   const all = await familyCount(page);
-  await chips
+  const facets = await openFilters(page);
+  await facets
     .getByRole('group', { name: 'Variable' })
     .getByRole('button', { name: /^Static/ })
     .click();
   await expect.poll(() => familyCount(page)).toBeLessThan(all);
-  await chips.getByRole('group', { name: 'Format' }).getByRole('button').first().click();
-  await expect(chips.getByRole('button', { pressed: true })).toHaveCount(2);
+  await facets.getByRole('group', { name: 'Format' }).getByRole('button').first().click();
+  await expect(chips.getByRole('button', { name: /^Remove filter/ })).toHaveCount(2);
   const narrowed = await familyCount(page);
   const button = chips.getByRole('button', { name: 'Save as smart collection' });
   await button.click();

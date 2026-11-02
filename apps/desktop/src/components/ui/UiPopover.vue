@@ -95,7 +95,7 @@ onBeforeUnmount(() => listen(false));
 <template>
   <Teleport to="body">
     <Transition name="ui-pop">
-      <div v-if="open" ref="layer" class="ui-popover" :style="style">
+      <div v-if="open" ref="layer" class="ui-popover" data-ui-popover :style="style">
         <slot />
       </div>
     </Transition>

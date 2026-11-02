@@ -373,6 +373,9 @@
     "placeholder": "Search  /"
   },
   "chips": {
+    "options": "Filter options",
+    "remove": "Remove filter {name}",
+    "allFeatures": "All OpenType features",
     "filters": "Filters",
     "chipLabel": "{name}, {families}",
     "families": {

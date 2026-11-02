@@ -6,7 +6,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 ## Backlog status
 <!-- Keep this list in sync: mark an item [x] in the iteration that finishes it. -->
 - [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
-- [ ] 2 Filters panel instead of the wall (+ UiDrawer, UiChip)
+- [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names still open)
 - [ ] 3 Preview bar — sample text as the hero control (+ UiField, UiSlider, UiToggle)
 - [ ] 4 Dark by default + app shell (+ UiSegmentedControl)
 - [ ] 5 Sidebar redesign (+ UiIconButton)
@@ -392,3 +392,25 @@ covered by `UiSelect.test.ts`.
 
 **New dependencies:** none. The three icons (chevron, check, search) are inline SVG paths
 drawn to the Lucide grid (16 px, 1.5 stroke); the Lucide package comes with IconButton.
+
+## Iteration 4 — 2026-11-02 — Filters drawer instead of the chip wall
+
+**Critique (before):** the first thing seen is still the chip wall: four rows of outlined pills (~150 px) above the list, all the same weight, with raw OpenType tags (`ccmp`, `kern`, `ss01`) shown as if they were designer data. Under it sits the three-row preview bar. The specimens start below the fold's first third. Good: the specimens render well and the type system from iterations 2–3 holds together.
+
+**Why this change:** backlog item 2, the lowest open number. After it, the `list` shot shows one quiet row (`Filters` button, removable chips for what is chosen, `Save as smart collection`) and the specimens start ~100 px higher.
+
+**What changed:**
+- `components/ui/UiDrawer.vue` (new, first use here): left panel, teleported, slides in 200 ms, no scrim (the list changes live behind it), Esc / press outside / ✕ close it, focus goes in and back to the opener. `UiPopover` got a `data-ui-popover` marker so a select's menu inside the drawer does not count as "outside".
+- `FilterChips.vue`: facet groups moved into the drawer (`dialog` "Filter options"); the bar shows `Filters · N`, one removable chip per chosen filter and language, "Clear filters" and "Save as smart collection" as quiet links. Raw feature tags sit behind an "All OpenType features" expander. Smart-collection save flow unchanged.
+- `locales/en|de`: `chips.options`, `chips.remove`, `chips.allFeatures`.
+- e2e: `e2e/filters.ts` (`openFilters`); `search.spec.ts` and `tags.spec.ts` open the drawer for facets. `screens.spec.ts` waits 300 ms after a click for fades; the `filters` scene now clicks `Filters`.
+
+**Verified:** typecheck, lint, Vitest (906) and full Playwright (272 passed) green; no test deleted or skipped.
+
+**Backlog ticked:** 2 (drawer and removable chips). Not done from item 2: human names and grouping of OpenType features ("Small caps", "Tabular figures") — the `FmClient` gives only raw tags; a label table in the UI would be a lookup, so do it in a follow-up if allowed. Facet groups for weight/width and language-with-counts also still open.
+
+**Screenshots:** before `.harness/redesign/shots/4/`, after `.harness/redesign/shots/4-after/` (1440×900; `filters-*` shows the open drawer).
+
+**Follow-ups:** the drawer covers the sidebar and the left of the toolbar while open; a chip's count is dropped from the active row; the preview bar is now the loudest block (item 3); `Filters` could get a shortcut (item 13); `UiChip` is still inline CSS in FilterChips — extract when a second use appears.
+
+**New dependencies:** none.

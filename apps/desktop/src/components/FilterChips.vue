@@ -16,6 +16,7 @@ import { useCollectionsStore } from '../stores/collections';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
+import UiDrawer from './ui/UiDrawer.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const search = useSearchStore();
@@ -37,6 +38,16 @@ const addable = computed(() =>
     .map((l) => ({ value: l.code, label: l.name })),
 );
 const filtering = computed(() => hasFilters(search.filters));
+
+// The facets live in a drawer; the bar shows only what is chosen, as chips to remove.
+const drawerOpen = ref(false);
+const opener = ref<HTMLButtonElement | null>(null);
+const allFeatures = ref(false);
+/** Raw OpenType tags are developer data: they sit behind an expander. */
+const facetGroups = computed(() => groups.value.filter((g) => g.facet !== 'features'));
+const featureGroup = computed(() => groups.value.find((g) => g.facet === 'features') ?? null);
+const active = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
+const activeCount = computed(() => active.value.length + languages.value.length);
 /** A smart collection needs a chosen filter; the open collection alone is none. */
 const savable = computed(() => hasChosenFilters(search.filters));
 
@@ -95,46 +106,54 @@ async function save(): Promise<void> {
 
 <template>
   <section class="chips" :aria-label="t('chips.filters')">
-    <div v-for="g in groups" :key="g.facet" class="group" role="group" :aria-label="g.label">
-      <span class="label" aria-hidden="true">{{ g.label }}</span>
-      <button
-        v-for="chip in g.chips"
-        :key="String(chip.value)"
-        type="button"
-        class="chip"
-        :aria-pressed="chip.selected"
-        :aria-label="chipLabel(chip.label, chip.count)"
-        @click="toggle(chip)"
-      >
-        {{ chip.label }} <span class="n">{{ chip.count }}</span>
-      </button>
-    </div>
-    <div class="group" role="group" :aria-label="t('chips.languages')">
-      <span class="label" aria-hidden="true">{{ t('chips.language') }}</span>
-      <button
-        v-for="code in languages"
-        :key="code"
-        type="button"
-        class="chip"
-        aria-pressed="true"
-        :aria-label="chipLabel(languageName(search.languages, code), search.total)"
-        @click="search.setFilters(toggleLanguage(search.filters, code))"
-      >
-        {{ languageName(search.languages, code) }} <span class="n">{{ search.total }}</span>
-      </button>
-      <UiSelect
-        v-if="addable.length"
-        class="add"
-        :model-value="null"
-        :options="addable"
-        :placeholder="t('chips.add')"
-        :fit="false"
-        :aria-label="t('chips.addLanguage')"
-        @update:model-value="onLanguage"
-      />
-    </div>
+    <button
+      ref="opener"
+      type="button"
+      class="opener"
+      aria-haspopup="dialog"
+      :aria-expanded="drawerOpen"
+      :class="{ on: activeCount > 0 }"
+      @click="drawerOpen = !drawerOpen"
+    >
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+        <path
+          d="M2 4h12M4.5 8h7M7 12h2"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+        />
+      </svg>
+      {{ t('chips.filters') }}<span v-if="activeCount" class="count"> · {{ activeCount }}</span>
+    </button>
+    <button
+      v-for="chip in active"
+      :key="`${chip.facet}:${String(chip.value)}`"
+      type="button"
+      class="chip active"
+      :aria-label="t('chips.remove', { name: chip.label })"
+      @click="toggle(chip)"
+    >
+      {{ chip.label }}
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+      </svg>
+    </button>
+    <button
+      v-for="code in languages"
+      :key="`lang:${code}`"
+      type="button"
+      class="chip active"
+      :aria-label="t('chips.remove', { name: languageName(search.languages, code) })"
+      @click="onLanguage(code)"
+    >
+      {{ languageName(search.languages, code) }}
+      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+        <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+      </svg>
+    </button>
     <div class="group actions">
-      <button v-if="filtering" type="button" class="chip" @click="search.setFilters({})">
+      <button v-if="filtering" type="button" class="link" @click="search.setFilters({})">
         {{ t('chips.clear') }}
       </button>
       <form
@@ -164,7 +183,7 @@ async function save(): Promise<void> {
         v-else
         ref="saveButton"
         type="button"
-        class="chip"
+        class="link"
         :disabled="!savable"
         :title="savable ? undefined : t('chips.saveHint')"
         @click="startSave"
@@ -174,6 +193,77 @@ async function save(): Promise<void> {
     </div>
     <p v-if="search.error" role="alert" class="error">{{ errorMessage(search.error) }}</p>
     <p class="note" role="status">{{ saved ? t('chips.saved', { name: saved }) : '' }}</p>
+
+    <UiDrawer
+      :open="drawerOpen"
+      :label="t('chips.options')"
+      :anchor="opener"
+      @close="drawerOpen = false"
+    >
+      <div v-for="g in facetGroups" :key="g.facet" class="facet" role="group" :aria-label="g.label">
+        <h3 class="label" aria-hidden="true">{{ g.label }}</h3>
+        <div class="chipset">
+          <button
+            v-for="chip in g.chips"
+            :key="String(chip.value)"
+            type="button"
+            class="chip"
+            :aria-pressed="chip.selected"
+            :aria-label="chipLabel(chip.label, chip.count)"
+            @click="toggle(chip)"
+          >
+            {{ chip.label }} <span class="n">{{ chip.count }}</span>
+          </button>
+        </div>
+      </div>
+      <div class="facet" role="group" :aria-label="t('chips.languages')">
+        <h3 class="label" aria-hidden="true">{{ t('chips.language') }}</h3>
+        <div class="chipset">
+          <UiSelect
+            v-if="addable.length"
+            class="add"
+            :model-value="null"
+            :options="addable"
+            :placeholder="t('chips.add')"
+            :fit="false"
+            :aria-label="t('chips.addLanguage')"
+            @update:model-value="onLanguage"
+          />
+        </div>
+      </div>
+      <div v-if="featureGroup" class="facet" role="group" :aria-label="featureGroup.label">
+        <button
+          type="button"
+          class="expander"
+          :aria-expanded="allFeatures"
+          @click="allFeatures = !allFeatures"
+        >
+          <svg
+            viewBox="0 0 16 16"
+            width="12"
+            height="12"
+            aria-hidden="true"
+            :class="{ open: allFeatures }"
+          >
+            <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+          {{ t('chips.allFeatures') }}
+        </button>
+        <div v-if="allFeatures" class="chipset">
+          <button
+            v-for="chip in featureGroup.chips"
+            :key="String(chip.value)"
+            type="button"
+            class="chip"
+            :aria-pressed="chip.selected"
+            :aria-label="chipLabel(chip.label, chip.count)"
+            @click="toggle(chip)"
+          >
+            {{ chip.label }} <span class="n">{{ chip.count }}</span>
+          </button>
+        </div>
+      </div>
+    </UiDrawer>
   </section>
 </template>
 
@@ -182,22 +272,48 @@ async function save(): Promise<void> {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 12px;
-  max-height: 96px;
-  padding: 8px 16px;
-  overflow-y: auto;
+  gap: var(--fm-space-2);
+  padding: var(--fm-space-2) var(--fm-space-4);
   border-bottom: 1px solid var(--fm-border);
 }
 .group {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: var(--fm-space-2);
+}
+.actions {
+  margin-inline-start: auto;
+}
+.opener {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-2);
+  font-size: var(--fm-text-sm);
+}
+.opener.on,
+.opener[aria-expanded='true'] {
+  border-color: var(--fm-accent);
+  color: var(--fm-accent);
+}
+.count {
+  font-variant-numeric: tabular-nums;
 }
 .label {
+  margin: 0 0 var(--fm-space-2);
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.facet {
+  margin-bottom: var(--fm-space-4);
+}
+.chipset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fm-space-1);
 }
 .add {
   font-size: var(--fm-text-sm);
@@ -205,7 +321,7 @@ async function save(): Promise<void> {
 .chip,
 .name {
   padding: 2px 8px;
-  border: 1px solid var(--fm-control-border);
+  border: 1px solid var(--fm-border-strong);
   border-radius: var(--fm-radius-md);
   background-color: transparent;
   color: inherit;
@@ -215,19 +331,52 @@ async function save(): Promise<void> {
 .name {
   width: 140px;
   border-color: var(--fm-control-border);
-  border-radius: var(--fm-radius-md);
 }
-.chip[aria-pressed='true'] {
+.chip[aria-pressed='true'],
+.chip.active {
   border-color: var(--fm-accent);
   color: var(--fm-accent);
+}
+.chip.active {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+}
+.link {
+  padding: 2px 4px;
+  border-color: transparent;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.link:hover:not(:disabled) {
+  color: inherit;
+}
+.link:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.expander {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-2);
+  margin-bottom: var(--fm-space-2);
+  padding: 2px 4px;
+  border-color: transparent;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.expander svg {
+  transition: transform var(--fm-motion-fast) var(--fm-ease);
+}
+.expander svg.open {
+  transform: rotate(90deg);
 }
 .n {
   color: var(--fm-muted);
   font-variant-numeric: tabular-nums;
-}
-.chip:disabled {
-  color: var(--fm-muted);
-  cursor: default;
 }
 .chip[aria-pressed='true'] .n {
   color: inherit;

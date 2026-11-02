@@ -41,9 +41,8 @@ const scenes = {
   'inspector-features': { routes: '/?face=1', tab: 'Features' },
   'inspector-glyphs': { routes: '/?face=1', tab: 'Glyphs' },
   'inspector-developer': { routes: '/?face=1', tab: 'Developer' },
-  // Until the filters drawer exists (DESIGN.md item 4) there is no "Filters" button: this
-  // is the chip wall as it is. Add `click: 'Filters'` when the drawer lands.
-  filters: { routes: '/?face=1' },
+
+  filters: { routes: '/?face=1', click: 'Filters' },
   palette: { routes: '/?face=1@ControlOrMeta+k' },
   // The ui/ Select's menu on a long list (the Glyphs block picker), with its filter line.
   'select-open': { routes: '/?face=1', tab: 'Glyphs', open: 'Block' },

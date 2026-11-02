@@ -191,6 +191,7 @@ test.describe('@screens', () => {
               .getByRole('button', { name: new RegExp(`^${click}`) })
               .first()
               .click();
+            await page.waitForTimeout(300); // panels and popovers finish their fade
           }
           if (openSelect) {
             await page.getByRole('combobox', { name: openSelect, exact: true }).first().click();

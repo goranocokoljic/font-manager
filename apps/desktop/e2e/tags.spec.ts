@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openFilters } from './filters';
 
 // Browser mode runs on the mock client; no face has tags, stars or a favorite yet.
 const info = (page: Page) => page.getByRole('tabpanel', { name: 'Info' });
-const chips = (page: Page) => page.getByRole('region', { name: 'Filters' });
+const chips = (page: Page) => page.getByRole('dialog', { name: 'Filter options' });
 const names = (page: Page) =>
   page
     .getByRole('tree', { name: 'Font list' })
@@ -54,6 +55,7 @@ test('the Info tab tags, favorites and rates a face, and the chips filter by the
     ['Favorite', 'Favorites, 1 family'],
     ['Rating', '4+ stars, 1 family'],
   ]) {
+    await openFilters(page);
     const button = chips(page).getByRole('group', { name: group }).getByRole('button', {
       name: chip,
     });
@@ -67,5 +69,6 @@ test('the Info tab tags, favorites and rates a face, and the chips filter by the
   // Removing the last tag drops it from the chips.
   await page.evaluate(() => (location.hash = '#/?face=1'));
   await panel.getByRole('button', { name: 'Remove tag display' }).click();
+  await openFilters(page);
   await expect(chips(page).getByRole('group', { name: 'Tag' })).toBeHidden();
 });
