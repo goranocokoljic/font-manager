@@ -10,8 +10,10 @@ decision.
 
 1. Read `CLAUDE.md` (repo root) — its rules apply here unchanged — then
    `dev-docs/redesign/DESIGN.md` completely. It is the north star and the backlog.
-2. Read `dev-docs/redesign/ITERATIONS.md` completely. It is the log of every previous iteration. Do not
-   repeat, undo or re-litigate a previous iteration unless a review entry says to.
+2. Read `dev-docs/redesign/ITERATIONS.md` *selectively*: the backlog checklist at the top,
+   every `## Review` entry, and the last two `## Iteration` entries. Do not read the rest —
+   older entries are history, and the review entries carry what still matters from them.
+   Do not repeat, undo or re-litigate a previous iteration unless a review entry says to.
 3. Check the preconditions below. If either is missing, this iteration is a **setup
    iteration**: build it, commit it, log it, stop.
 
@@ -50,44 +52,67 @@ item. Do not fake it in the store.
 ## The iteration
 
 ### 1. Look
-Run the screenshot script. Open and actually look at every image. Write a 3–5 sentence
-critique in your own words: what a designer would notice first, what is worst, what is
-good. This critique goes into the log entry.
+Run `node scripts/redesign/shots.mjs <N>` (one viewport, both themes). Open **at most twelve
+images**: `list` and `inspector-info` in both themes, plus the scenes the backlog item you
+are about to pick touches. Do not open the rest; they exist for the review pass. Write a
+3–5 sentence critique in your own words: what a designer would notice first, what is worst,
+what is good. This critique goes into the log entry.
+
+### Token budget (read this — iterations have run out of usage mid-way)
+- Screenshots: twelve images per look, two looks per iteration (before, after).
+- Tests while working: only the Vitest files and Playwright specs for the area you touch
+  (`pnpm --filter @fm/desktop exec playwright test similar inspector`). Never run the full
+  suite "to see". Run it **once**, at the end of step 4, as
+  `pnpm --filter @fm/desktop exec playwright test --reporter=dot > .harness/redesign/e2e-<N>.log 2>&1`
+  and read only the failing tests from that file (`grep -n "✘\|Error\|failed" …`).
+- Do not cat large files or whole directories into the conversation; grep, then read the
+  lines you need.
+- If a change breaks more than ~10 Playwright specs, that is a sign the change is too wide
+  for one iteration: narrow it (one component family, one view) and log the rest as a
+  follow-up, rather than fixing selectors for hours.
 
 ### 2. Choose one bold change
 Pick exactly one change. Priority:
 - The lowest-numbered unfinished, unblocked item in the `DESIGN.md` backlog.
 - Or something not on the list, if it is clearly higher impact — then say why in the log.
 
+**The three-second test.** The foundation is done (iterations 2–3); from now on every
+iteration must change something a designer sees in the first three seconds of opening the
+app or feels in the first minute of using it. Before you start, say in one sentence what
+will look different in the `list` screenshot afterwards. If the answer is "nothing, but…",
+you have picked infrastructure — pick again. Build any `ui/` component the change needs on
+the way (Drawer, Chip, Slider, SegmentedControl…) and land it with its first use; never
+build components ahead of a visible use.
+
 A bold change is one a designer would notice in the first three seconds or feel in daily
 use. "Adjust padding" is not bold. "Replace the filter wall with a filters drawer" is.
-Prefer finishing one area completely over touching three areas lightly. The foundation
-items (1–3) are prerequisites: do not attempt visual work in other areas until item 1 has
-landed.
+Prefer finishing one area completely over touching three areas lightly.
 
 ### 3. Implement
 - Vue, CSS and TypeScript in `apps/desktop/src/` — views, components, stores. Nothing in
   `src/api/`, nothing in Rust, nothing in the mock (see the boundary above).
-- Use design tokens and the `ui/` components. If a component you need does not exist,
-  build it in `src/components/ui/` first, then use it. Never ship a native control.
+- Use design tokens and the `ui/` components (`UiPopover`, `UiSelect` exist). If a component
+  you need does not exist, build it in `src/components/ui/` as part of this change, with the
+  same keyboard and ARIA care as `UiSelect`, then use it. Never ship a native control.
 - Both themes, both densities. Keyboard reachable. Virtual-list performance intact.
 - No new dependencies without a one-line justification in the log.
 - Keep the diff reviewable: aim under ~800 changed lines, except for foundation iterations.
 
 ### 4. Verify
 `pnpm --filter @fm/desktop typecheck`, `pnpm lint:js`, `pnpm --filter @fm/desktop test`, then
-`pnpm test:e2e` — all green; update a Playwright test only where the UI it checks changed on
-purpose, never delete or skip one. Re-run the screenshot script. Open before and after side
+the full Playwright suite once, to a log file, as the token budget says — all green; update
+a Playwright test only where the UI it checks changed on purpose, never delete or skip one.
+Re-run the screenshot script and open only the touched scenes, before and after. Open before and after side
 by side and judge honestly against the principles in `DESIGN.md`. If it is not better,
 fix it or revert it — never ship something worse to satisfy "ship every time". If you
 revert, log why; that is still a shipped iteration.
 
 ### 5. Ship
 - Commit: `iter(N): <short title>` where N is this iteration's number.
-- Append an entry to `dev-docs/redesign/ITERATIONS.md` using the template there: number, date, title,
-  critique from step 1, why this change, what changed (components/files), backlog item(s)
-  ticked, before/after screenshot paths, follow-ups you noticed but did not do, any new
-  dependency and why.
+- Append an entry to `dev-docs/redesign/ITERATIONS.md` using the template there — **at most
+  25 lines**: number, date, title, critique, why this change, what changed (areas, not every
+  file — git has the files), backlog item(s) ticked, screenshot folder, follow-ups, new
+  dependencies. Tick finished items in the checklist at the top.
 - If you discovered a backlog item that should exist, add it to the follow-ups; the review
   pass moves it into `dev-docs/redesign/DESIGN.md`.
 

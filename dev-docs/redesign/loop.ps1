@@ -9,8 +9,11 @@
 param(
     [int]$Start = 1,
     [int]$Count = 10,
-    [int]$MaxTurns = 250,
-    [string]$Branch = "redesign"
+    [int]$MaxTurns = 120,
+    [string]$Branch = "redesign",
+    # Generator passes run on the cheaper model; the review pass (the critic) on the stronger one.
+    [string]$IterateModel = "sonnet",
+    [string]$ReviewModel = "opus"
 )
 
 $ErrorActionPreference = "Stop"
@@ -62,10 +65,14 @@ for ($i = $Start; $i -lt $Start + $Count; $i++) {
     # Non-interactive runs need to execute pnpm, node, Playwright and git without a human
     # to approve each call; acceptEdits only covers file edits (iteration 1 proved it).
     # This is the reason the loop is confined to its own branch.
-    claude -p $prompt --dangerously-skip-permissions --max-turns $MaxTurns
+    $model = if ($isReview) { $ReviewModel } else { $IterateModel }
+    # --max-turns is the hard cap on a runaway pass; there is no wall-clock cap because
+    # Start-Process cannot stream Claude Code's output and a .cmd shim resolves unreliably.
+    claude -p $prompt --model $model --dangerously-skip-permissions --max-turns $MaxTurns
+    $code = $LASTEXITCODE
 
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "$kind $i exited with code $LASTEXITCODE — stopping." -ForegroundColor Red
+    if ($code -ne 0) {
+        Write-Host "$kind $i exited with code $code — stopping." -ForegroundColor Red
         $stopped = $true
         break
     }

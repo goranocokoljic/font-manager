@@ -119,10 +119,13 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   Nothing else is coloured. Licence / format / variable badges are monochrome glyphs.
 - **Specimen area:** neutral background, no border; preview colour follows the theme unless
   the user overrides it; previews honour the `font-feature-settings` chosen in Features.
-- **Components** (`src/components/ui/`): Button, IconButton (with tooltip), Select (popover +
-  search), Toggle, SegmentedControl, Slider (with value field), Chip, Badge, Popover, Drawer,
-  Field, Tabs, EmptyState. Build once, reuse everywhere. Grep for native controls before
-  shipping; there should be none.
+- **Components** (`src/components/ui/`): `UiPopover` and `UiSelect` exist (iteration 3).
+  The rest — Button, IconButton (with tooltip), Toggle, SegmentedControl, Slider (with value
+  field), Chip, Badge, Drawer, Field, Tabs, EmptyState — are built **by the first visible
+  change that needs them**, not ahead of time: the Filters drawer brings the Drawer and the
+  Chip, the view switcher brings the SegmentedControl, the preview bar brings the Slider and
+  the Field. Build once, reuse everywhere; when a later change needs a component that exists,
+  it uses it and improves it in place. Grep for native controls before shipping.
 - **Icons:** one set (Lucide), 16 px, 1.5 stroke.
 - **Motion:** hover/active 120 ms, panel open/close 200 ms, easing `cubic-bezier(.2,0,0,1)`.
   Nothing bounces.
@@ -169,30 +172,42 @@ Items marked **(API?)** probably need something `FmClient` does not expose yet. 
 builds whatever part is possible with today's data and logs the rest as a follow-up —
 it does not extend the mock or the store to fake it.
 
-### Foundation
-1. **Design tokens + theme engine + bundled UI font.** Dark and light. Replace every
-   browser-default control with a `ui/` component. This is the largest single change and may
-   span two iterations; nothing visual should be attempted before it lands.
-2. **App shell.** Sidebar / main / inspector as three panes with hairline dividers,
-   collapsible and remembered. Status bar reduced to live state (active fonts, problems,
-   `Ctrl+K` hint); version strings move to About.
-3. **Sidebar redesign.** Sections with icons, counts right-aligned in tabular figures, smart
-   collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
-   actions as icon buttons in the section header, sections collapsible, collections as drop
-   targets.
+### Foundation — done enough (iterations 2–3)
+1. ~~Design tokens + theme engine + bundled UI font + ui/ Select.~~ Landed: the token file
+   (`theme.css`), Inter, drawn baselines for every native control, `UiPopover`, `UiSelect`
+   replacing all 22 native selects. **The gate is lifted.** The remaining `ui/` components
+   are folded into the items that first need them (see the design-system rules). Do not
+   spend another iteration on foundation work with no visible result.
 
-### Information architecture
-4. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
+### The three-second test (applies to every item from here on)
+Every iteration must change something a designer would see in the first three seconds of
+opening the app, or feel in the first minute of using it. If the iteration's "after"
+screenshot of `list` is not visibly different from its "before", the iteration picked the
+wrong thing. Items 2–9 are ordered by how much of the first screen they change.
+
+### First screen
+2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
    grouped facets: Classification, Weight / Width / Slant, Variable, Language & script,
    Format, Licence, OpenType features (human-named and grouped — "Small caps", "Tabular
    figures", "Ligatures", "Stylistic sets", "Case-sensitive forms"), Problems. Active filters
    appear as removable chips in one row above the list. Raw feature tags live only inside an
-   "All features" expander in the drawer.
-5. **Preview bar redesign.** The sample text is a real text field, front and centre, with
+   "All features" expander in the drawer. Brings `UiDrawer` and `UiChip`.
+3. **Preview bar redesign.** The sample text is a real text field, front and centre, with
    presets (Pangram, Alphabet, Numerals, Paragraph, saved texts) and per-language samples.
    Size slider plus the three or four most-used controls inline; everything else (tracking,
    line height, alignment, metrics, outline, colours) in a Preview options popover. State
-   remembered per view.
+   remembered per view. Brings `UiField`, `UiSlider`, `UiToggle`.
+4. **Dark by default + the app shell.** First launch opens dark (Settings keeps system /
+   light / dark). Sidebar / main / inspector as three panes with hairline dividers,
+   collapsible and remembered; the view switcher as a `UiSegmentedControl`; status bar
+   reduced to live state (active fonts, problems, `Ctrl+K` hint), version strings move to
+   About.
+5. **Sidebar redesign.** Sections with icons, counts right-aligned in tabular figures, smart
+   collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
+   actions as `UiIconButton`s in the section header, sections collapsible, collections as
+   drop targets. Brings `UiIconButton` with tooltip.
+
+### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
    format as monochrome glyph badges; row actions (Activate, Compare, Tag, Similar) appear on
    hover or focus, right-aligned; selection = accent bar + subtle tint; expanded family shows

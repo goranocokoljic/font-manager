@@ -60,9 +60,11 @@ const scenes = {
   },
   problems: { routes: '/problems' },
   settings: { routes: '/settings' },
+  'settings-activation': { routes: '/settings?section=activation' },
+  'settings-appearance': { routes: '/settings?section=appearance' },
 };
 
-const [iteration, ...only] = process.argv.slice(2);
+const [iteration, ...only] = process.argv.slice(2).filter((a) => a !== '--all');
 if (!iteration) {
   console.error('usage: node scripts/redesign/shots.mjs <iteration> [scene ...]');
   process.exit(2);
@@ -91,7 +93,11 @@ const envKey = {
   query: 'FM_SCREENS_QUERY',
 };
 
-const viewports = process.env.FM_SCREENS_VIEWPORTS || '1280x800,1000x700,1440x900';
+// One viewport by default: a designer judges one screen, and every image an iteration
+// opens costs tokens. `--all` (or FM_SCREENS_VIEWPORTS) adds the small and the large one.
+const all = process.argv.includes('--all');
+const viewports =
+  process.env.FM_SCREENS_VIEWPORTS || (all ? '1280x800,1000x700,1440x900' : '1440x900');
 
 let failed = 0;
 for (const name of wanted) {

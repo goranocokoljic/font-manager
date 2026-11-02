@@ -5,18 +5,18 @@ Backlog ticks live here, not in `DESIGN.md`.
 
 ## Backlog status
 <!-- Keep this list in sync: mark an item [x] in the iteration that finishes it. -->
-- [ ] 1 Design tokens + theme engine + UI font + ui/ components
-- [ ] 2 App shell
-- [ ] 3 Sidebar redesign
-- [ ] 4 Filters panel
-- [ ] 5 Preview bar
+- [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
+- [ ] 2 Filters panel instead of the wall (+ UiDrawer, UiChip)
+- [ ] 3 Preview bar — sample text as the hero control (+ UiField, UiSlider, UiToggle)
+- [ ] 4 Dark by default + app shell (+ UiSegmentedControl)
+- [ ] 5 Sidebar redesign (+ UiIconButton)
 - [ ] 6 List rows
 - [ ] 7 Grid cards
 - [ ] 8 Inspector
 - [ ] 9 Find similar as a mode
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
-- [ ] 12 Quick Look
+- [ ] 12 Quick Look, finished
 - [ ] 13 Keyboard model
 - [ ] 14 Weight scrubbing
 - [ ] 15 Context presets in Layout
@@ -32,6 +32,16 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 25 Overlay scrollbars
 - [ ] 26 Hover/focus/active audit
 - [ ] 27 Accessibility
+
+## Entry template (at most 25 lines per entry)
+
+```
+## Iteration N — <title>
+Date · Critique (before, 3–5 sentences) · Why this change · What changed (areas) ·
+Backlog ticked · Shots folder · Follow-ups · Dependencies added · Reverted (yes/no, why)
+```
+
+---
 
 ## Iteration 1 — 2026-11-02 — Setup: screenshot scenes fixed; loop blocked by permissions
 
