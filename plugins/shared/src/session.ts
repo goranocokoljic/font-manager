@@ -2,7 +2,7 @@
 // E29.3). The host adapters turn the app's events into these calls; the
 // matching, the activation and the offer are the app's.
 
-import type { NeededFont } from './api';
+import type { FetchedFont, FontsNeededResponse, NeededFont } from './api';
 import { FmApiError, type FmClient, NOT_RUNNING, NotRunningError } from './client';
 import { PANEL_STRINGS } from './panel-strings';
 
@@ -42,6 +42,29 @@ export function missingFontsMessage(fonts: NeededFont[]): string {
   return `${PANEL_STRINGS.missing(names.length)}: ${names.join(', ')}`;
 }
 
+/**
+ * What `fonts_needed` downloaded from the catalogs the user turned on (E29.5), one
+ * sentence per catalog: "Downloaded 1 family from Google Fonts: Alegreya". Empty when
+ * nothing was downloaded.
+ */
+export function downloadedFontsMessage(fetched: FetchedFont[]): string {
+  const byCatalog = new Map<string, string[]>();
+  for (const f of fetched) {
+    const families = byCatalog.get(f.catalog) ?? [];
+    if (!families.includes(f.family)) families.push(f.family);
+    byCatalog.set(f.catalog, families);
+  }
+  return [...byCatalog]
+    .map(([catalog, families]) =>
+      PANEL_STRINGS.downloaded(
+        families.length,
+        PANEL_STRINGS.catalogNames[catalog] ?? catalog,
+        families,
+      ),
+    )
+    .join('. ');
+}
+
 /** How a `DocumentWatcher` behaves beyond the calls every plugin makes. */
 export interface WatcherOptions {
   /**
@@ -74,9 +97,10 @@ export class DocumentWatcher {
     return this.run(async () => {
       this.lastMissing.set(doc.key, '');
       if (fonts.length === 0) return;
-      const { unmatched } = await this.reached(
-        this.client.fontsNeeded({ fonts, document: doc.key }),
-      );
+      const found = await this.reached(this.client.fontsNeeded({ fonts, document: doc.key }));
+      this.reportFetched(found);
+      // Only what is still unmatched: a font just downloaded is not missing.
+      const { unmatched } = found;
       if (this.options.reportMissing && unmatched.length > 0) {
         this.ui.notify(missingFontsMessage(unmatched));
       }
@@ -93,7 +117,9 @@ export class DocumentWatcher {
       if (keys === (this.lastMissing.get(doc.key) ?? '')) return;
       // Recorded only once sent, so a call that failed is tried again.
       if (fonts.length > 0) {
-        await this.reached(this.client.fontsNeeded({ fonts, document: doc.key }));
+        this.reportFetched(
+          await this.reached(this.client.fontsNeeded({ fonts, document: doc.key })),
+        );
       }
       this.lastMissing.set(doc.key, keys);
     });
@@ -108,6 +134,12 @@ export class DocumentWatcher {
       if (!(await this.ui.confirm(deactivateQuestion(offer.length, doc.name)))) return;
       await this.reached(this.client.deactivate({ target: { kind: 'faces', faces: offer } }));
     });
+  }
+
+  // Says what the app downloaded for the document, when it downloaded anything.
+  private reportFetched(found: FontsNeededResponse): void {
+    const message = downloadedFontsMessage(found.fetched ?? []);
+    if (message) this.ui.notify(message);
   }
 
   private run(work: () => Promise<void>): Promise<void> {

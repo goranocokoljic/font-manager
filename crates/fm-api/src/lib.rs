@@ -206,6 +206,7 @@ pub fn types() -> specta::Types {
         activation::Clash,
         activation::FontsNeededRequest,
         activation::FontsNeededResponse,
+        activation::FetchedFont,
         activation::DocumentClosedRequest,
         activation::DocumentClosedResponse,
         // organization

@@ -1126,6 +1126,9 @@
       "downloadFolder": "Ordner für installierte Schriften",
       "downloadFolderNone": "Noch nicht gewählt. Das erste Installieren fragt danach.",
       "downloadFolderHint": "Installieren legt die geladenen Schriften in diesen Ordner. In keinen anderen Ordner schreibt Font Manager, ohne zu fragen.",
+      "fetchMissing": "Schriften, die ein Dokument braucht, aus den eingeschalteten Katalogen laden",
+      "fetchMissingHint": "Öffnet ein Designprogramm ein Dokument mit einer Schrift, die deine Bibliothek nicht hat, sucht Font Manager sie in den bereits geladenen Schriftlisten und installiert die Familie in den Ordner oben. Geladen wird nur aus Katalogen, die du eingeschaltet hast.",
+      "fetchMissingNeeds": "Wähle zuerst den Ordner für installierte Schriften und schalte einen Katalog ein.",
       "change": "Ändern…"
     },
     "sources": {

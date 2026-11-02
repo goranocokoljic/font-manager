@@ -358,6 +358,8 @@ export const defaultSettings: FullSettings = {
   language: 'system',
   // Chosen by the user at the first Install (E22.7).
   downloadFolder: null,
+  // Off unless the user turns it on (E29.5, rule 7).
+  fetchMissingFonts: false,
 };
 
 /** The releases the mock's server can offer the mock app (0.1.0). */

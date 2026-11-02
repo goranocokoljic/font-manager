@@ -6293,3 +6293,296 @@ fn find_by_image_ranks_the_faces_like_the_screenshot() {
         .expect_err("missing");
     assert_eq!(e.code, ErrorCode::NotFound);
 }
+
+// --- fetch a missing document font (E29.5) ------------------------------
+
+/// Turns "Download fonts a document needs" on or off.
+fn set_fetch_missing(lib: &Lib, on: bool) {
+    lib.api
+        .update_settings(SettingsUpdate {
+            fetch_missing_fonts: Some(on),
+            ..SettingsUpdate::default()
+        })
+        .expect("fetch switch");
+}
+
+/// The Lato server's static fonts, as a document names them: the regular
+/// file is Cagliostro, the bold one Asul, both of the catalog family Lato.
+fn lato_fonts() -> Vec<NeededFont> {
+    vec![
+        NeededFont {
+            postscript_name: Some("Cagliostro-Regular".into()),
+            family: Some("Lato".into()),
+            ..NeededFont::default()
+        },
+        NeededFont {
+            postscript_name: Some("Asul-Bold".into()),
+            family: Some("Lato".into()),
+            ..NeededFont::default()
+        },
+    ]
+}
+
+fn lato_ok() -> crate::test_support::LocalServer {
+    crate::catalog::tests::lato_server((200, crate::catalog::tests::lato_font("bold")))
+}
+
+/// `lib` with Google Fonts on, refreshed from `server`, the download folder
+/// set and the fetch switch `on`.
+fn fetching(
+    label: &str,
+    server: crate::test_support::LocalServer,
+    on: bool,
+) -> (Lib, crate::test_support::LocalServer) {
+    let (lib, _source, server) = downloading_from(label, server);
+    set_download_folder(&lib, &lib.dir.path().join("Font Manager Fonts"));
+    set_fetch_missing(&lib, on);
+    (lib, server)
+}
+
+/// The same library with its catalogs over `fetcher`, on the cache the
+/// refresh wrote.
+fn with_fetcher(lib: Lib, fetcher: Arc<dyn Fetcher>) -> Lib {
+    let catalogs = Catalogs::new(
+        lib.paths.data.join(CATALOGS_DIR),
+        fetcher,
+        vec![Arc::new(GoogleFonts::with_base_url("http://127.0.0.1:9"))],
+    );
+    Lib {
+        api: lib.api.with_catalogs(catalogs),
+        ..lib
+    }
+}
+
+/// The names in `dir`, sorted; none when it is not there.
+fn listing_of_or_none(dir: &Path) -> Vec<String> {
+    if dir.is_dir() {
+        listing_of(dir)
+    } else {
+        Vec::new()
+    }
+}
+
+#[test]
+fn with_the_fetch_switch_off_a_missing_font_stays_unmatched_and_nothing_is_fetched() {
+    let (lib, server) = fetching("fetch-off", lato_ok(), false);
+    let hits = server.hits();
+    let res = lib
+        .api
+        .fonts_needed(needed(lato_fonts(), true))
+        .expect("needed");
+    assert_eq!(res.unmatched, lato_fonts());
+    assert!(res.fetched.is_empty());
+    assert_eq!(server.hits(), hits, "no request");
+    assert!(listing_of_or_none(&lib.dir.path().join("Font Manager Fonts").join("Lato")).is_empty());
+}
+
+#[test]
+fn a_missing_font_whose_family_is_cached_is_downloaded_once_activated_and_matched() {
+    let (lib, server) = fetching("fetch-on", lato_ok(), true);
+    let hits = server.hits();
+    let mut fonts = lato_fonts();
+    // A font the library has: matched as before, never looked up.
+    fonts.push(needed_family("Bebas Neue", None));
+    let res = lib
+        .api
+        .fonts_needed(FontsNeededRequest {
+            document: Some("doc-1".into()),
+            ..needed(fonts.clone(), true)
+        })
+        .expect("needed");
+
+    // One family, fetched once: its file list and its two static files.
+    assert_eq!(server.hits() - hits, 3, "one download of Lato");
+    assert!(res.unmatched.is_empty(), "{res:?}");
+    assert_eq!(res.missing, 0);
+    assert_eq!(res.matched.len(), 3);
+    for (m, font) in res.matched.iter().zip(&fonts) {
+        assert_eq!(&m.font, font);
+    }
+    // The normal rule found them: the PostScript name.
+    assert_eq!(res.matched[0].matched_by, NeededFontRule::PostscriptName);
+    assert_eq!(res.matched[1].matched_by, NeededFontRule::PostscriptName);
+
+    assert_eq!(
+        res.fetched.len(),
+        2,
+        "both fonts of the family: {:?}",
+        res.fetched
+    );
+    for (f, font) in res.fetched.iter().zip(&lato_fonts()) {
+        assert_eq!(&f.font, font);
+        assert_eq!(f.catalog, fm_api::catalog::CatalogId::GoogleFonts);
+        assert_eq!(f.family, "Lato");
+        assert_eq!(f.faces.len(), 2);
+    }
+    let fetched_faces = &res.fetched[0].faces;
+    assert!(fetched_faces.contains(&res.matched[0].face));
+    assert!(fetched_faces.contains(&res.matched[1].face));
+
+    // Activated by `fonts_needed` itself: session mode, for the document.
+    let active = lib.api.list_active().expect("active");
+    for m in &res.matched[..2] {
+        let a = active.iter().find(|a| a.face == m.face).expect("active");
+        assert_eq!(a.mode, ActivationMode::Session);
+        let o = res
+            .outcomes
+            .iter()
+            .find(|o| o.face == m.face)
+            .expect("outcome");
+        assert_eq!(o.outcome, OutcomeStatus::Done);
+    }
+    let offer = lib
+        .api
+        .document_closed(DocumentClosedRequest {
+            document: "doc-1".into(),
+        })
+        .expect("closed")
+        .offer;
+    assert!(offer.contains(&res.matched[0].face), "{offer:?}");
+    assert!(offer.contains(&res.matched[1].face), "{offer:?}");
+
+    // The files went into the download folder, recorded as a download.
+    let folder = lib.dir.path().join("Font Manager Fonts").join("Lato");
+    assert_eq!(listing_of(&folder), ["Lato-Bold.ttf", "Lato-Regular.ttf"]);
+    assert_eq!(
+        lib.api.list_catalog_downloads().expect("downloads").len(),
+        1
+    );
+
+    // Asked again: in the library now, so no request and nothing fetched.
+    let hits = server.hits();
+    let again = lib
+        .api
+        .fonts_needed(needed(lato_fonts(), true))
+        .expect("again");
+    assert_eq!(server.hits(), hits);
+    assert!(again.fetched.is_empty());
+    assert!(again.unmatched.is_empty());
+}
+
+#[test]
+fn a_font_whose_family_is_not_cached_stays_unmatched_and_makes_no_request() {
+    let (lib, _server) = fetching("fetch-not-cached", lato_ok(), true);
+    let offline = Arc::clone(&lib.fetcher);
+    let lib = with_fetcher(lib, Arc::clone(&offline) as Arc<dyn Fetcher>);
+    let calls = offline.calls();
+    let unknown = vec![
+        needed_family("Not In Any Catalog", Some("Bold")),
+        NeededFont {
+            full_name: Some("Lateral Bold".into()),
+            ..NeededFont::default()
+        },
+        needed_ps("Nobody-Regular"),
+    ];
+    let res = lib
+        .api
+        .fonts_needed(needed(unknown.clone(), true))
+        .expect("needed");
+    assert_eq!(res.unmatched, unknown);
+    assert!(res.fetched.is_empty());
+    assert_eq!(offline.calls(), calls, "the lookup reads only the cache");
+}
+
+#[test]
+fn a_dry_run_never_fetches() {
+    let (lib, _server) = fetching("fetch-dry", lato_ok(), true);
+    let offline = Arc::clone(&lib.fetcher);
+    let lib = with_fetcher(lib, Arc::clone(&offline) as Arc<dyn Fetcher>);
+    let calls = offline.calls();
+    let res = lib
+        .api
+        .fonts_needed(needed(lato_fonts(), false))
+        .expect("needed");
+    assert_eq!(res.unmatched, lato_fonts());
+    assert!(res.fetched.is_empty());
+    assert_eq!(offline.calls(), calls, "activate: false never fetches");
+    // With activate, the same cached family is fetched (and fails here).
+    let res = lib
+        .api
+        .fonts_needed(needed(lato_fonts(), true))
+        .expect("needed");
+    assert!(
+        offline.calls() > calls,
+        "the switch is on and Lato is cached"
+    );
+    assert_eq!(res.unmatched, lato_fonts());
+}
+
+#[test]
+fn a_failing_download_leaves_its_font_unmatched_and_the_others_are_fine() {
+    let lato = crate::catalog::tests::lato_server((500, Vec::new()));
+    let (lib, _server) = fetching("fetch-failing", lato, true);
+    let mut fonts = lato_fonts();
+    fonts.push(needed_family("Bebas Neue", None));
+    let res = lib
+        .api
+        .fonts_needed(needed(fonts, true))
+        .expect("no error for the others");
+    assert_eq!(res.unmatched, lato_fonts());
+    assert_eq!(res.missing, 2);
+    assert!(res.fetched.is_empty());
+    assert_eq!(res.matched.len(), 1);
+    assert_eq!(res.matched[0].font, needed_family("Bebas Neue", None));
+    assert_eq!(res.outcomes.len(), 1);
+    assert_eq!(res.outcomes[0].outcome, OutcomeStatus::Done);
+    assert!(
+        listing_of_or_none(&lib.dir.path().join("Font Manager Fonts").join("Lato")).is_empty(),
+        "a failed request writes nothing"
+    );
+}
+
+/// A fetcher whose every call takes `delay`, then fails.
+#[derive(Debug)]
+struct SlowFetcher {
+    delay: Duration,
+    calls: AtomicU32,
+}
+
+impl Fetcher for SlowFetcher {
+    fn get(&self, url: &str) -> FmResult<Vec<u8>> {
+        self.calls.fetch_add(1, Ordering::Relaxed);
+        std::thread::sleep(self.delay);
+        Err(FmError::new(ErrorCode::Io, "slow").with_detail(url.to_owned()))
+    }
+}
+
+#[test]
+fn the_fetch_work_of_one_request_ends_with_its_budget() {
+    let (lib, _server) = fetching("fetch-budget", lato_ok(), true);
+    let slow = Arc::new(SlowFetcher {
+        delay: Duration::from_secs(5),
+        calls: AtomicU32::new(0),
+    });
+    let lib = with_fetcher(lib, Arc::clone(&slow) as Arc<dyn Fetcher>);
+    let lib = Lib {
+        api: lib.api.with_fetch_budget(Duration::from_millis(200)),
+        ..lib
+    };
+    let started = Instant::now();
+    let res = lib
+        .api
+        .fonts_needed(needed(lato_fonts(), true))
+        .expect("needed");
+    let took = started.elapsed();
+    assert!(
+        took < Duration::from_secs(3),
+        "bounded by the budget: {took:?}"
+    );
+    assert_eq!(
+        res.unmatched,
+        lato_fonts(),
+        "what did not finish stays unmatched"
+    );
+    assert!(res.fetched.is_empty());
+    assert_eq!(
+        slow.calls.load(Ordering::Relaxed),
+        1,
+        "one request started, then out of time"
+    );
+}
+
+#[test]
+fn the_default_fetch_budget_is_sixty_seconds() {
+    assert_eq!(fetch_missing::FETCH_BUDGET, Duration::from_secs(60));
+}

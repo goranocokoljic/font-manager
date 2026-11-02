@@ -1324,6 +1324,21 @@ export type FeatureSetting = {
 	on: boolean,
 };
 
+/**
+ *  A needed font whose family `fonts_needed` downloaded from an online
+ *  catalog (E29.5), so a plugin can say what was downloaded.
+ */
+export type FetchedFont = {
+	/**  The needed font, as asked. */
+	font: NeededFont,
+	/**  The catalog the family came from. */
+	catalog: CatalogId,
+	/**  The family's name, as the catalog lists it. */
+	family: string,
+	/**  The faces of the family's files in the library, by id. */
+	faces: FaceId[],
+};
+
 /**  One filter value and how many family groups it would give. */
 export type FilterCount<T> = {
 	/**  The value. */
@@ -1559,6 +1574,13 @@ export type FontsNeededResponse = {
 	 *  empty when the request did not activate.
 	 */
 	outcomes: ActivationOutcome[],
+	/**
+	 *  The fonts the library did not have whose family this request
+	 *  downloaded from an online catalog the user turned on (E29.5), in
+	 *  request order; empty unless `Settings::fetch_missing_fonts` is on and
+	 *  the request activates.
+	 */
+	fetched?: FetchedFont[],
 };
 
 /**  A front-end framework a snippet is written for (E20.5). */
@@ -2882,6 +2904,13 @@ export type Settings = {
 	 *  `None` until the user chooses it.
 	 */
 	downloadFolder?: string | null,
+	/**
+	 *  Download fonts a document needs from the catalogs the user turned on
+	 *  (E29.5): `fonts_needed` with `activate` looks a font the library does
+	 *  not have up in the cached lists and installs its family into
+	 *  [`Self::download_folder`]. Off by default.
+	 */
+	fetchMissingFonts?: boolean,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -2916,6 +2945,8 @@ export type SettingsUpdate = {
 	 *  string to forget it.
 	 */
 	downloadFolder?: string | null,
+	/**  Download fonts a document needs from the catalogs the user turned on. */
+	fetchMissingFonts?: boolean | null,
 };
 
 /**  The shortlist for a brief. */

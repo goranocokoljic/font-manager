@@ -105,6 +105,13 @@ onMounted(async () => {
 onBeforeUnmount(() => sources.stop());
 
 const s = computed(() => store.settings);
+/**
+ * "Download fonts a document needs" (E29.5) has nothing to do without the download
+ * folder and a catalog that is on.
+ */
+const canFetchMissing = computed(
+  () => !!s.value?.downloadFolder && catalogs.catalogs.some((c) => c.enabled),
+);
 /** Online catalogs: the Adobe Fonts entry shows its note when opened. */
 const adobeFontsOpen = ref(false);
 /** The last failure of any store this window reads. */
@@ -436,6 +443,24 @@ function chooseLanguage(e: Event): void {
           </div>
           <p id="download-folder-hint" class="note hint">
             {{ t('settings.catalogs.downloadFolderHint') }}
+          </p>
+          <label class="choice">
+            <input
+              type="checkbox"
+              name="fetch-missing-fonts"
+              aria-describedby="fetch-missing-fonts-hint"
+              :checked="s?.fetchMissingFonts ?? false"
+              :disabled="!canFetchMissing"
+              @change="choose({ fetchMissingFonts: ($event.target as HTMLInputElement).checked })"
+            />
+            {{ t('settings.catalogs.fetchMissing') }}
+          </label>
+          <p id="fetch-missing-fonts-hint" class="note hint" data-testid="fetch-missing-fonts-hint">
+            {{
+              canFetchMissing
+                ? t('settings.catalogs.fetchMissingHint')
+                : t('settings.catalogs.fetchMissingNeeds')
+            }}
           </p>
         </template>
 

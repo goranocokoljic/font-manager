@@ -34,7 +34,7 @@ use std::fs;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use fm_api::ErrorCode;
 use fm_api::catalog::{
@@ -633,6 +633,36 @@ impl Catalogs {
         kind: CatalogFileKind,
         into: &Path,
     ) -> FmResult<Downloaded> {
+        self.download_with(self.fetcher.as_ref(), id, family, kind, into)
+    }
+
+    /// [`Self::download`] whose requests all end by `deadline` (E29.5): a
+    /// request still running then is left to finish on its own and its
+    /// answer dropped, so nothing it fetched is written; the download is a
+    /// `Io` error like any failed request.
+    pub fn download_until(
+        &self,
+        deadline: Instant,
+        id: CatalogId,
+        family: &str,
+        kind: CatalogFileKind,
+        into: &Path,
+    ) -> FmResult<Downloaded> {
+        let until = Until {
+            inner: Arc::clone(&self.fetcher),
+            deadline,
+        };
+        self.download_with(&until, id, family, kind, into)
+    }
+
+    fn download_with(
+        &self,
+        fetcher: &dyn Fetcher,
+        id: CatalogId,
+        family: &str,
+        kind: CatalogFileKind,
+        into: &Path,
+    ) -> FmResult<Downloaded> {
         let adapter = self.enabled_adapter(id)?;
         let listed = self
             .cache(id)?
@@ -656,9 +686,7 @@ impl Catalogs {
                 None => failed,
             }
         };
-        let files = adapter
-            .resolve_files(self.fetcher.as_ref(), family)
-            .map_err(failed)?;
+        let files = adapter.resolve_files(fetcher, family).map_err(failed)?;
         let (kind, chosen) = download_files(&files.files, kind).ok_or_else(|| {
             failed(malformed(
                 "a file list",
@@ -667,7 +695,7 @@ impl Catalogs {
         })?;
         let mut fetched = Vec::with_capacity(chosen.len());
         for (name, file) in chosen {
-            let bytes = self.fetcher.get(&file.url).map_err(failed)?;
+            let bytes = fetcher.get(&file.url).map_err(failed)?;
             if crate::font_file::font_mime(&bytes).is_none() {
                 return Err(failed(malformed(
                     "a file",
@@ -786,6 +814,63 @@ impl Catalogs {
             .ok_or_else(|| FmError::unsupported(format!("{id} is not available in this version.")))
     }
 
+    /// The cached family a document font names (E29.5), in the first
+    /// catalog that is on and has it: `family` compared ignoring case and
+    /// surrounding space; without a family, the longest listed name the
+    /// full name starts with, followed by a space or nothing ("Alegreya Bold
+    /// Italic" finds Alegreya). Reads only the cached lists, so it makes no
+    /// request: a catalog never refreshed finds nothing, and one whose cache
+    /// cannot be read is skipped with a warning.
+    pub fn find_cached_family(
+        &self,
+        family: Option<&str>,
+        full_name: Option<&str>,
+    ) -> Option<(CatalogId, String)> {
+        let clean = |s: Option<&str>| s.map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty());
+        let family = clean(family);
+        let full_name = clean(full_name);
+        if family.is_none() && full_name.is_none() {
+            return None;
+        }
+        let state = self.state();
+        for adapter in &self.adapters {
+            let id = adapter.id();
+            if !state.enabled.contains(&id) {
+                continue;
+            }
+            let cache = match self.cache(id) {
+                Ok(Some(cache)) => cache,
+                Ok(None) => continue,
+                Err(e) => {
+                    tracing::warn!(catalog = %id, error = %e, "catalog cache unreadable; skipped");
+                    continue;
+                }
+            };
+            let found = match (&family, &full_name) {
+                (Some(family), _) => cache
+                    .families
+                    .iter()
+                    .find(|f| f.name.trim().to_lowercase() == *family),
+                (None, Some(full)) => cache
+                    .families
+                    .iter()
+                    .filter(|f| {
+                        let name = f.name.trim().to_lowercase();
+                        !name.is_empty()
+                            && full
+                                .strip_prefix(&name)
+                                .is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+                    })
+                    .max_by_key(|f| f.name.trim().len()),
+                (None, None) => None,
+            };
+            if let Some(found) = found {
+                return Some((id, found.name.clone()));
+            }
+        }
+        None
+    }
+
     /// `Conflict` when the catalog `id` is off (or `Unsupported` when the app
     /// has no adapter for it); makes no request.
     pub fn ensure_enabled(&self, id: CatalogId) -> FmResult<()> {
@@ -865,6 +950,41 @@ impl Catalogs {
         };
         lock(&self.loaded).insert(id, cache.clone());
         Ok(cache)
+    }
+}
+
+/// A [`Fetcher`] whose every call ends by `deadline` (E29.5). The call runs
+/// on its own thread; when the deadline passes first it is left to finish
+/// (the inner fetcher's own timeouts end it) and its answer is dropped.
+struct Until {
+    inner: Arc<dyn Fetcher>,
+    deadline: Instant,
+}
+
+impl Fetcher for Until {
+    fn get(&self, url: &str) -> FmResult<Vec<u8>> {
+        let too_long = || {
+            FmError::new(
+                ErrorCode::Io,
+                "The catalog took too long to answer. Try again later.",
+            )
+            .with_detail(format!("GET {url}: past the deadline"))
+        };
+        let left = self.deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(too_long());
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let inner = Arc::clone(&self.inner);
+        let owned = url.to_owned();
+        std::thread::Builder::new()
+            .name("catalog-fetch".to_owned())
+            .spawn(move || {
+                // The receiver is gone when the deadline passed: nothing to do.
+                let _ = tx.send(inner.get(&owned));
+            })
+            .map_err(|e| FmError::internal(format!("catalog fetch thread: {e}")))?;
+        rx.recv_timeout(left).unwrap_or_else(|_| Err(too_long()))
     }
 }
 

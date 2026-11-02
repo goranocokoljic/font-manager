@@ -96,6 +96,38 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
+  it('offers to download fonts a document needs only with a download folder and a catalog on', async () => {
+    const box = (w: Awaited<ReturnType<typeof mountAt>>['wrapper']) =>
+      w.get('input[name="fetch-missing-fonts"]').element as HTMLInputElement;
+    const hint = (w: Awaited<ReturnType<typeof mountAt>>['wrapper']) =>
+      w.get('[data-testid="fetch-missing-fonts-hint"]').text();
+    // Neither: off and disabled, saying what it needs.
+    let { wrapper } = await mountAt('/settings?section=catalogs');
+    expect(box(wrapper).closest('label')?.textContent?.trim()).toBe(
+      'Download fonts a document needs from the catalogs you turned on',
+    );
+    expect(box(wrapper).checked).toBe(false);
+    expect(box(wrapper).disabled).toBe(true);
+    expect(hint(wrapper)).toBe(
+      'Choose the folder for installed fonts and turn a catalog on first.',
+    );
+    wrapper.unmount();
+
+    // A folder but no catalog on: still disabled.
+    await client.updateSettings({ downloadFolder: '/Users/demo/Installed fonts' });
+    ({ wrapper } = await mountAt('/settings?section=catalogs'));
+    expect(box(wrapper).disabled).toBe(true);
+    // A catalog turned on: enabled, saying it downloads only from those.
+    await wrapper.get('input[name="catalog-googleFonts"]').setValue(true);
+    await flushPromises();
+    expect(box(wrapper).disabled).toBe(false);
+    expect(hint(wrapper)).toContain('It downloads only from catalogs you turned on.');
+    await wrapper.get('input[name="fetch-missing-fonts"]').setValue(true);
+    await flushPromises();
+    expect((await client.getSettings()).fetchMissingFonts).toBe(true);
+    wrapper.unmount();
+  });
+
   it('turns Google Fonts on and off under Online catalogs, saying it connects', async () => {
     const { wrapper } = await mountAt('/settings?section=catalogs');
     const box = wrapper.get('input[name="catalog-googleFonts"]');

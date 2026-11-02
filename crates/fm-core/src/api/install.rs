@@ -9,6 +9,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 use fm_api::activation::{ActivateRequest, ActivationOutcome, ActivationService, Target};
 use fm_api::catalog::{
@@ -21,6 +22,30 @@ use fm_platform::Os;
 use fm_platform::paths::{is_within, resolve_links, system_font_folders};
 
 use super::CoreApi;
+
+/// A family [`CoreApi::place_family`] put into the library, or found there.
+pub(super) struct Placed {
+    /// Its provenance: recorded now, or before.
+    pub download: CatalogDownload,
+    /// The live faces of its files.
+    pub faces: Vec<FaceId>,
+    /// The library had it; nothing was downloaded.
+    pub already_installed: bool,
+    /// A download that stopped after some files were written.
+    pub error: Option<ApiError>,
+}
+
+impl Placed {
+    /// What [`CoreApi::installed_already`] found.
+    fn found((download, faces): (CatalogDownload, Vec<FaceId>)) -> Self {
+        Self {
+            download,
+            faces,
+            already_installed: true,
+            error: None,
+        }
+    }
+}
 use crate::catalog::{family_folder, now_rfc3339};
 
 /// The answer to an install while no download folder is set.
@@ -40,6 +65,27 @@ impl CoreApi {
     /// [`fm_api::CatalogService::install_family`].
     pub(super) fn install(&self, req: InstallFamilyRequest) -> ApiResult<InstallFamilyResponse> {
         let settings = self.settings.get_settings()?;
+        let placed = self.place_family(&req, &settings, None)?;
+        let outcomes = self.activate_inactive(&placed.faces, &settings)?;
+        Ok(InstallFamilyResponse {
+            download: placed.download,
+            faces: placed.faces,
+            outcomes,
+            already_installed: placed.already_installed,
+            error: placed.error,
+        })
+    }
+
+    /// An install without the activation: checks the download folder,
+    /// downloads the family into it unless the library has it already,
+    /// rescans and answers the family's faces. `fonts_needed` (E29.5)
+    /// activates them itself; with a `deadline`, every request ends by then.
+    pub(super) fn place_family(
+        &self,
+        req: &InstallFamilyRequest,
+        settings: &Settings,
+        deadline: Option<Instant>,
+    ) -> ApiResult<Placed> {
         let folder = settings
             .download_folder
             .as_deref()
@@ -67,8 +113,8 @@ impl CoreApi {
             return Err(ApiError::new(ErrorCode::Conflict, SYSTEM_DOWNLOAD_FOLDER));
         }
 
-        if let Some(found) = self.installed_already(os, &req, &folder)? {
-            return self.activate_found(found, &settings);
+        if let Some(found) = self.installed_already(os, req, &folder)? {
+            return Ok(Placed::found(found));
         }
 
         let source = self.download_source(os, &folder, &sources)?;
@@ -78,20 +124,19 @@ impl CoreApi {
         // them first, so they are activated, not fetched again.
         if std::fs::read_dir(&family_dir).is_ok_and(|mut entries| entries.next().is_some()) {
             self.scan_and_wait(&source)?;
-            if let Some(found) = self.installed_already(os, &req, &folder)? {
-                return self.activate_found(found, &settings);
+            if let Some(found) = self.installed_already(os, req, &folder)? {
+                return Ok(Placed::found(found));
             }
         }
-        let saved = self.save_download(req.id, &req.family, req.kind, &source, &folder)?;
+        let saved =
+            self.save_download(req.id, &req.family, req.kind, &source, &folder, deadline)?;
         self.scan_and_wait(&source)?;
         // Every face in the family folder: the files written and the ones the
         // download skipped because they were already there.
         let faces = self.faces_within(os, &family_dir)?;
-        let outcomes = self.activate_inactive(&faces, &settings)?;
-        Ok(InstallFamilyResponse {
+        Ok(Placed {
             download: saved.download,
             faces,
-            outcomes,
             already_installed: false,
             error: saved.error,
         })
@@ -196,22 +241,6 @@ impl CoreApi {
         Ok(self
             .lock()
             .add_source(&folder.to_string_lossy(), SourceKind::Watched)?)
-    }
-
-    /// Activates what [`Self::installed_already`] found and says so.
-    fn activate_found(
-        &self,
-        (download, faces): (CatalogDownload, Vec<FaceId>),
-        settings: &Settings,
-    ) -> ApiResult<InstallFamilyResponse> {
-        let outcomes = self.activate_inactive(&faces, settings)?;
-        Ok(InstallFamilyResponse {
-            download,
-            faces,
-            outcomes,
-            already_installed: true,
-            error: None,
-        })
     }
 
     /// The live faces with their file, for files in `dir`.

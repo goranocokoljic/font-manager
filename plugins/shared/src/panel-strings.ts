@@ -25,6 +25,9 @@ export const PANEL_STRINGS = {
   notActivated: (font: string, reason: string): string => `${font} was not activated: ${reason}`,
   stillConflicts: (font: string): string =>
     `${font} was not activated: it conflicts with an installed font.`,
+  downloaded: (count: number, catalog: string, families: string[]): string =>
+    `Downloaded ${count === 1 ? '1 family' : `${count} families`} from ${catalog}: ${families.join(', ')}`,
+  catalogNames: { googleFonts: 'Google Fonts', fontshare: 'Fontshare' } as Record<string, string>,
   notRunning: NOT_RUNNING,
   unknownFont: 'Unnamed font',
 };
