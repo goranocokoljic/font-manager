@@ -47,10 +47,25 @@ const command = process.env.FM_SCREENS_COMMAND;
 const query = process.env.FM_SCREENS_QUERY ?? '';
 // FM_SCREENS_LOCALE=ar-XB sets the browser's (the OS's) language: `ar-XB` shows the RTL chrome.
 const locale = process.env.FM_SCREENS_LOCALE;
-const viewports = [
+// FM_SCREENS_ROW=1 clicks that list row (1-based) after the page loads, before the route's key
+// is pressed, so a key meant for the list (ArrowRight expands the family) reaches it.
+const rowIndex = Number(process.env.FM_SCREENS_ROW ?? 0);
+// FM_SCREENS_COLLECTION=Empty makes a collection of that name in the sidebar and opens it
+// (browser mode starts without collections).
+const collectionName = process.env.FM_SCREENS_COLLECTION;
+// FM_SCREENS_PREFIX=list names the files `<prefix>-<theme>-<w>x<h>.png` instead of using the
+// route; only for a single-route run.
+const prefix = process.env.FM_SCREENS_PREFIX;
+// FM_SCREENS_VIEWPORTS=1280x800,1440x900 replaces the default viewports.
+const defaultViewports = [
   { width: 1280, height: 800 },
   { width: 1000, height: 700 },
 ];
+const viewports = (process.env.FM_SCREENS_VIEWPORTS ?? '')
+  .split(',')
+  .map((v) => v.trim().toLowerCase().match(/^(\d+)x(\d+)$/))
+  .flatMap((m) => (m ? [{ width: Number(m[1]), height: Number(m[2]) }] : []));
+if (!viewports.length) viewports.push(...defaultViewports);
 
 test.describe('@screens', () => {
   test.skip(!dir, 'FM_SCREENS_DIR is not set');
@@ -60,7 +75,9 @@ test.describe('@screens', () => {
     for (const scheme of ['light', 'dark'] as const) {
       for (const vp of viewports) {
         const [path, press] = route.split('@');
-        const name = `${route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home'}-${scheme}-${vp.width}x${vp.height}.png`;
+        const slug =
+          prefix ?? (route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home');
+        const name = `${slug}-${scheme}-${vp.width}x${vp.height}.png`;
         test(name, async ({ page }) => {
           await page.route('**/fmfont/*', (r) =>
             r.fulfill({ status: 200, contentType: 'font/ttf', body: font }),
@@ -75,6 +92,20 @@ test.describe('@screens', () => {
           await page.emulateMedia({ colorScheme: scheme });
           await page.goto(`/${query}#${path}`);
           await expect(page.locator('#app')).not.toBeEmpty();
+          if (collectionName) {
+            const sidebar = page.getByRole('region', { name: 'Collections' });
+            await sidebar.getByRole('button', { name: 'New', exact: true }).click();
+            const input = sidebar.getByRole('textbox', { name: 'New collection name' });
+            await input.fill(collectionName);
+            await input.press('Enter');
+            const item = sidebar.getByRole('listitem', { name: collectionName, exact: true });
+            await expect(item).toBeVisible();
+            await item.getByRole('button', { name: collectionName, exact: true }).click();
+          }
+          if (rowIndex) {
+            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
+            await rows.nth(rowIndex - 1).click();
+          }
           if (press) await page.keyboard.press(press);
           if (tab) {
             // Narrow windows hide the inspector until asked.
