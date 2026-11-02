@@ -14,12 +14,16 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$stopped = $false
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo = (git rev-parse --show-toplevel)
 Set-Location $repo
 
+# Untracked, machine-local files (.claude/settings.local.json) never block the loop.
+function Get-Dirty { git status --porcelain -- . ':(exclude).claude' }
+
 # --- Branch guard -------------------------------------------------------------------
-if (git status --porcelain) {
+if (Get-Dirty) {
     Write-Host "Working tree is not clean. Commit or stash before running the loop." -ForegroundColor Red
     exit 1
 }
@@ -43,6 +47,7 @@ for ($i = $Start; $i -lt $Start + $Count; $i++) {
     # Re-check every iteration: an iteration must never wander off the branch.
     if ((git rev-parse --abbrev-ref HEAD) -ne $Branch) {
         Write-Host "Not on '$Branch' any more — stopping." -ForegroundColor Red
+        $stopped = $true
         break
     }
 
@@ -54,13 +59,14 @@ for ($i = $Start; $i -lt $Start + $Count; $i++) {
     Write-Host ""
     Write-Host "=== $kind $i ($file) ===" -ForegroundColor Cyan
 
-    # --permission-mode acceptEdits lets Claude Code edit files and run the project's
-    # scripts without prompting. If your version needs more (installing a dependency,
-    # git commit), switch to --dangerously-skip-permissions — only on this branch.
-    claude -p $prompt --permission-mode acceptEdits --max-turns $MaxTurns
+    # Non-interactive runs need to execute pnpm, node, Playwright and git without a human
+    # to approve each call; acceptEdits only covers file edits (iteration 1 proved it).
+    # This is the reason the loop is confined to its own branch.
+    claude -p $prompt --dangerously-skip-permissions --max-turns $MaxTurns
 
     if ($LASTEXITCODE -ne 0) {
         Write-Host "$kind $i exited with code $LASTEXITCODE — stopping." -ForegroundColor Red
+        $stopped = $true
         break
     }
 
@@ -68,13 +74,19 @@ for ($i = $Start; $i -lt $Start + $Count; $i++) {
     $last = git log -1 --pretty=%s
     if ($last -notmatch "^(iter|review)\($i\)") {
         Write-Host "No commit found for $kind $i (last: '$last') — stopping so you can look." -ForegroundColor Yellow
+        $stopped = $true
         break
     }
-    if (git status --porcelain) {
+    if (Get-Dirty) {
         Write-Host "$kind $i left uncommitted changes — stopping so you can look." -ForegroundColor Yellow
+        $stopped = $true
         break
     }
 }
 
 Write-Host ""
+if ($stopped) {
+    Write-Host "Stopped early — see the message above. Fix, then re-run with -Start <that iteration>." -ForegroundColor Yellow
+    exit 1
+}
 Write-Host "Done. Read dev-docs/redesign/ITERATIONS.md, look at .harness/redesign/shots/, and 'git log --oneline main..$Branch'." -ForegroundColor Green
