@@ -1541,5 +1541,11 @@
     "deny": "Ablehnen",
     "allowed": "Erlaubt. Die Anfrage des KI-Assistenten wird jetzt ausgeführt.",
     "denied": "Abgelehnt. Es wurde nichts geändert."
+  },
+  "ui": {
+    "select": {
+      "search": "Tippen zum Filtern",
+      "noMatches": "Keine Treffer"
+    }
   }
 }

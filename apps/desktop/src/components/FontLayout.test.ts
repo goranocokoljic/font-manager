@@ -12,6 +12,7 @@ import {
 } from '../api/mock';
 import type { Layout, LayoutBounds, LayoutPreset } from '../api/types';
 import { useCommandsStore } from '../stores/commands';
+import { pickOption, selectOptions } from './ui/testing';
 import { useTextLayoutsStore } from '../stores/textLayouts';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import FontLayout from './FontLayout.vue';
@@ -285,9 +286,10 @@ describe('FontLayout block properties (E12.3)', () => {
 
   async function setField(w: W, name: string, value: string) {
     const f = w.get(`[data-testid="block-properties"] [name="${name}"]`);
-    await f.setValue(value);
+    if (f.attributes('role') === 'combobox') await pickOption(f, value);
+    else await f.setValue(value);
     await flushPromises();
-    return f.element as HTMLInputElement | HTMLSelectElement;
+    return f.element as HTMLInputElement;
   }
 
   it("shows a size badge beside each block that opens that block's editor", async () => {
@@ -347,7 +349,8 @@ describe('FontLayout block properties (E12.3)', () => {
     await badges(w)[0]!.trigger('click');
     const size = w.get('[data-testid="block-properties"] [name="sizePt"]');
     expect(size.attributes()).toMatchObject({ min: '10', max: '72', step: '2' });
-    expect(w.findAll('[name="columns"] option').map((o) => o.text())).toEqual(['1', '2']);
+    const columns = await selectOptions(w.get('[name="columns"]'));
+    expect(columns.map(([, label]) => label)).toEqual(['1', '2']);
     const field = await setField(w, 'sizePt', '500');
     expect(store.draft!.blocks[0]!.sizePt).toBe(72);
     expect(field.value).toBe('72');
@@ -380,7 +383,7 @@ describe('FontLayout block properties (E12.3)', () => {
     await badges(w)[0]!.trigger('click');
     await flushPromises();
     const dialog = w.get('[data-testid="block-properties"]');
-    for (const c of dialog.findAll('input, select')) {
+    for (const c of dialog.findAll('input, [role="combobox"]')) {
       const id = c.attributes('id');
       expect(id).toBeTruthy();
       expect(dialog.find(`label[for="${id}"]`).text()).not.toBe('');

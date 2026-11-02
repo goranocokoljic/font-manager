@@ -10,6 +10,7 @@ import type { ApiError, Axis, NamedInstance } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { axisStep, useAxesStore } from '../stores/axes';
 import CopyCss from './CopyCss.vue';
+import UiSelect from './ui/UiSelect.vue';
 import { useCollectionsStore } from '../stores/collections';
 import { useSelectionStore } from '../stores/selection';
 import { useSetsStore } from '../stores/sets';
@@ -94,6 +95,7 @@ const holders = computed<Holder[]>(() => [
     set: s.id,
   })),
 ]);
+const holderOptions = computed(() => holders.value.map((h) => ({ value: h.key, label: h.label })));
 const holderKey = ref('');
 const pinName = ref('');
 const pinError = ref<string | null>(null);
@@ -245,9 +247,7 @@ onMounted(() => {
             :placeholder="t('axes.styleNamePlaceholder')"
           />
           <label :for="`${uid}-pin-holder`">{{ t('axes.saveIn') }}</label>
-          <select :id="`${uid}-pin-holder`" v-model="holderKey" class="field">
-            <option v-for="h in holders" :key="h.key" :value="h.key">{{ h.label }}</option>
-          </select>
+          <UiSelect :id="`${uid}-pin-holder`" v-model="holderKey" :options="holderOptions" />
           <button type="button" class="pin-button" :disabled="!canPin" @click="pin">
             {{ t('axes.pin') }}
           </button>

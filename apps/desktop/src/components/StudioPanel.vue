@@ -16,6 +16,7 @@ import { LAYOUT_PRESETS, PRESET_LABELS } from '../stores/views';
 import BlockFontPicker from './BlockFontPicker.vue';
 import FontLayout from './FontLayout.vue';
 import LayoutActions from './LayoutActions.vue';
+import UiSelect from './ui/UiSelect.vue';
 
 const props = defineProps<{
   /** The panel's key in the studio store. */
@@ -54,6 +55,15 @@ const layoutOptions = computed(() =>
   layouts.entries.length
     ? layouts.entries
     : LAYOUT_PRESETS.map((p) => ({ id: p, name: PRESET_LABELS[p], preset: p, broken: null })),
+);
+/** The picker's options: an unreadable layout is listed, named so, and cannot be chosen. */
+const pickerOptions = computed(() =>
+  layoutOptions.value.map((e) => ({
+    value: e.id,
+    label: e.broken === null ? e.name : t('home.unreadable', { name: e.name }),
+    disabled: e.broken !== null,
+    title: e.broken ?? undefined,
+  })),
 );
 
 watch(
@@ -101,17 +111,7 @@ onMounted(() => {
       <h2 :id="headingId" ref="heading" class="name" tabindex="-1">{{ label }}</h2>
       <label class="picker">
         {{ t('studio.layout') }}
-        <select :value="selected" @change="pick(($event.target as HTMLSelectElement).value)">
-          <option
-            v-for="e in layoutOptions"
-            :key="e.id"
-            :value="e.id"
-            :disabled="e.broken !== null"
-            :title="e.broken ?? undefined"
-          >
-            {{ e.broken === null ? e.name : t('home.unreadable', { name: e.name }) }}
-          </option>
-        </select>
+        <UiSelect :model-value="selected" :options="pickerOptions" @update:model-value="pick" />
       </label>
       <button
         type="button"
@@ -192,14 +192,6 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
 }
-.picker select {
-  padding: 2px 4px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
-}
 .button {
   padding: 4px 8px;
   border: 1px solid var(--fm-border-strong);
@@ -214,7 +206,6 @@ onMounted(() => {
   color: var(--fm-danger);
 }
 .name:focus-visible,
-.picker select:focus-visible,
 .button:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: 1px;

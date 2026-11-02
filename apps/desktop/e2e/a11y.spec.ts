@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // The accessibility baseline (E5.10): every control has a name and a visible
 // focus ring, the list announces family, style and activation state, and the
@@ -294,13 +295,13 @@ test('every control of the smart-collection rule editor has a name', async ({ pa
   await page.getByRole('button', { name: 'New smart collection' }).click();
   const dialog = page.getByRole('dialog', { name: 'New smart collection' });
   await dialog.getByRole('button', { name: 'Add group' }).click();
-  await dialog
-    .getByRole('combobox', { name: 'Group 1, rule 1: what it tests' })
-    .selectOption({ label: 'Weight' });
+  await selectOption(dialog.getByRole('combobox', { name: 'Group 1, rule 1: what it tests' }), {
+    label: 'Weight',
+  });
   await dialog.getByRole('button', { name: 'Add rule', exact: true }).click();
-  await dialog
-    .getByRole('combobox', { name: 'Rule 2: what it tests', exact: true })
-    .selectOption({ label: 'Supports text' });
+  await selectOption(dialog.getByRole('combobox', { name: 'Rule 2: what it tests', exact: true }), {
+    label: 'Supports text',
+  });
   await expect(dialog.getByRole('textbox', { name: 'Rule 2: text' })).toBeVisible();
   expect(await unnamedControls(page)).toEqual([]);
 });

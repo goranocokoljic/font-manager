@@ -8,6 +8,7 @@ import type { LicenseType, ReceiptChange, ReceiptPlace } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useSelectionStore } from '../stores/selection';
 import CopyValue from './CopyValue.vue';
+import UiSelect from './ui/UiSelect.vue';
 
 const selection = useSelectionStore();
 const license = computed(() => selection.detail?.license);
@@ -18,6 +19,10 @@ const TYPES: LicenseType[] = ['desktop', 'web', 'app', 'trial', 'personalOnly', 
 // The values being edited; they follow the stored declaration when another
 // face is shown or a save comes back.
 const kind = ref<LicenseType | ''>('');
+const kindOptions = computed<{ value: LicenseType | ''; label: string }[]>(() => [
+  { value: '', label: t('license.notDeclared') },
+  ...TYPES.map((type) => ({ value: type, label: t(`license.types.${type}`) })),
+]);
 const seats = ref<number | ''>('');
 const date = ref('');
 const place = ref<ReceiptPlace>('nextToFont');
@@ -84,12 +89,7 @@ function clearAll(): void {
         <label for="fm-license-type">{{ t('license.type') }}</label>
       </dt>
       <dd>
-        <select id="fm-license-type" v-model="kind" class="field">
-          <option value="">{{ t('license.notDeclared') }}</option>
-          <option v-for="type in TYPES" :key="type" :value="type">
-            {{ t(`license.types.${type}`) }}
-          </option>
-        </select>
+        <UiSelect id="fm-license-type" v-model="kind" class="type" :options="kindOptions" />
       </dd>
       <dt>
         <label for="fm-license-seats">{{ t('license.seats') }}</label>
@@ -193,8 +193,8 @@ dd {
   color: inherit;
   font: inherit;
 }
-select.field option {
-  background-color: var(--fm-bg);
+.type {
+  width: 100%;
 }
 .place {
   display: grid;

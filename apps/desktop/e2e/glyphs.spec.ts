@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // A fixture with Cyrillic, so the webview draws the cells from a real font.
 const fixture = readFileSync(
@@ -44,7 +45,7 @@ test('the Glyphs tab draws the face under block headings, virtualized', async ({
 
 test('the block picker lists one block', async ({ page }) => {
   const panel = await openGlyphs(page);
-  await panel.getByRole('combobox', { name: 'Block' }).selectOption('Cyrillic');
+  await selectOption(panel.getByRole('combobox', { name: 'Block' }), 'Cyrillic');
   await expect(panel.getByRole('rowheader')).toHaveCount(1);
   await expect(panel.getByRole('rowheader')).toContainText('Cyrillic');
   await expect(panel.getByRole('gridcell', { name: 'U+0416 uni0416' })).toBeVisible();

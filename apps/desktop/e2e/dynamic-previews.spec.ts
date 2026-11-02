@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -32,7 +33,7 @@ test('a font that lacks characters of the sample previews its own letters with a
   await expect(row(7).locator('.sample')).toHaveText(/The quick brown fox/);
   await expect(page.getByTestId('fallback-hint')).toHaveCount(0);
 
-  await controls.getByLabel('Sample').selectOption('custom');
+  await selectOption(controls.getByLabel('Sample'), 'custom');
   await controls.getByLabel('Custom text').fill('Љубав');
   await expect(row(1).locator('.sample')).toHaveText('Љубав');
   await expect(row(6).locator('.sample')).toHaveText('Љубав');

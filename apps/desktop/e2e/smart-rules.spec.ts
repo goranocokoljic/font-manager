@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // The smart-collection rule editor (E14.1), in browser mode on the mock client:
 // Inter is sans serif with Latin and Cyrillic, Legacy Grotesk sans serif with Latin
@@ -23,33 +24,33 @@ test('"Sans serif AND (Cyrillic OR Greek)" is built, saved, and the sidebar coun
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Sans Cyrillic or Greek');
   await expect(
     dialog.getByRole('combobox', { name: 'Fonts match all or any of the rules' }),
-  ).toHaveValue('and');
-  await dialog
-    .getByRole('combobox', { name: 'Rule 1: what it tests', exact: true })
-    .selectOption({ label: 'Class' });
-  await dialog
-    .getByRole('combobox', { name: 'Rule 1: value', exact: true })
-    .selectOption({ label: 'Sans serif' });
+  ).toHaveAttribute('data-value', 'and');
+  await selectOption(dialog.getByRole('combobox', { name: 'Rule 1: what it tests', exact: true }), {
+    label: 'Class',
+  });
+  await selectOption(dialog.getByRole('combobox', { name: 'Rule 1: value', exact: true }), {
+    label: 'Sans serif',
+  });
   const status = dialog.getByRole('status');
   await expect(status).toHaveText('2 families match');
 
   await dialog.getByRole('button', { name: 'Add group' }).click();
   await expect(
     dialog.getByRole('combobox', { name: 'Group 1: fonts match all or any of its rules' }),
-  ).toHaveValue('or');
-  await dialog
-    .getByRole('combobox', { name: 'Group 1, rule 1: what it tests' })
-    .selectOption({ label: 'Supports language' });
-  await dialog
-    .getByRole('combobox', { name: 'Group 1, rule 1: value' })
-    .selectOption({ label: 'Serbian (Cyrillic)' });
+  ).toHaveAttribute('data-value', 'or');
+  await selectOption(dialog.getByRole('combobox', { name: 'Group 1, rule 1: what it tests' }), {
+    label: 'Supports language',
+  });
+  await selectOption(dialog.getByRole('combobox', { name: 'Group 1, rule 1: value' }), {
+    label: 'Serbian (Cyrillic)',
+  });
   await dialog.getByRole('button', { name: 'Add a rule to group 1' }).click();
-  await dialog
-    .getByRole('combobox', { name: 'Group 1, rule 2: what it tests' })
-    .selectOption({ label: 'Supports language' });
-  await dialog
-    .getByRole('combobox', { name: 'Group 1, rule 2: value' })
-    .selectOption({ label: 'Greek' });
+  await selectOption(dialog.getByRole('combobox', { name: 'Group 1, rule 2: what it tests' }), {
+    label: 'Supports language',
+  });
+  await selectOption(dialog.getByRole('combobox', { name: 'Group 1, rule 2: value' }), {
+    label: 'Greek',
+  });
   // The live count is the API's answer for the draft rule.
   await expect(status).toHaveText('1 family matches');
 
@@ -68,10 +69,13 @@ test('"Sans serif AND (Cyrillic OR Greek)" is built, saved, and the sidebar coun
   // Edit rules: the saved rule comes back, a change is saved through the new method.
   await saved.getByRole('button', { name: 'Edit rules of Sans Cyrillic or Greek' }).click();
   await expect(dialog.getByRole('heading')).toHaveText('Edit rules of “Sans Cyrillic or Greek”');
-  await expect(dialog.getByRole('combobox', { name: 'Rule 1: value', exact: true })).toHaveValue(
-    'sans',
+  await expect(
+    dialog.getByRole('combobox', { name: 'Rule 1: value', exact: true }),
+  ).toHaveAttribute('data-value', 'sans');
+  await expect(dialog.getByRole('combobox', { name: 'Group 1, rule 2: value' })).toHaveAttribute(
+    'data-value',
+    'el',
   );
-  await expect(dialog.getByRole('combobox', { name: 'Group 1, rule 2: value' })).toHaveValue('el');
   await dialog.getByRole('button', { name: 'Remove group 1', exact: true }).click();
   await expect(status).toHaveText('2 families match');
   await dialog.getByRole('button', { name: 'Save' }).click();
@@ -84,11 +88,11 @@ test('a rule fm-core refuses shows its message inline and nothing is saved', asy
   await openNew(page);
   const dialog = editor(page);
   await dialog.getByRole('textbox', { name: 'Name' }).fill('Upside down');
-  await dialog
-    .getByRole('combobox', { name: 'Rule 1: what it tests', exact: true })
-    .selectOption({ label: 'Weight' });
-  await dialog.getByRole('combobox', { name: 'Rule 1: from', exact: true }).selectOption('700');
-  await dialog.getByRole('combobox', { name: 'Rule 1: to', exact: true }).selectOption('300');
+  await selectOption(dialog.getByRole('combobox', { name: 'Rule 1: what it tests', exact: true }), {
+    label: 'Weight',
+  });
+  await selectOption(dialog.getByRole('combobox', { name: 'Rule 1: from', exact: true }), '700');
+  await selectOption(dialog.getByRole('combobox', { name: 'Rule 1: to', exact: true }), '300');
   await dialog.getByRole('button', { name: 'Save' }).click();
   await expect(dialog.getByRole('alert')).toHaveText(
     'The lowest weight of a rule is above its highest.',

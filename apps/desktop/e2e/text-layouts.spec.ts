@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // Layout blocks load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -52,7 +53,7 @@ test('the layout mode shows the selected family; switching presets keeps it and 
     ['characters', 'Characters'],
     ['waterfall', 'Waterfall'],
   ] as const) {
-    await picker(page).selectOption(value);
+    await selectOption(picker(page), value);
     const region = layout(page, name);
     await expect(region).toBeVisible();
     await expect(region).toContainText('JetBrains Mono');
@@ -67,7 +68,7 @@ test('the layout mode shows the selected family; switching presets keeps it and 
   );
   await page.reload();
   await modeButton(page, 'Layout').click();
-  await expect(picker(page)).toHaveValue('waterfall');
+  await expect(picker(page)).toHaveAttribute('data-value', 'waterfall');
   await expect(layout(page, 'Waterfall')).toContainText('JetBrains Mono');
 });
 
@@ -77,7 +78,7 @@ test('blocks are live text in the loaded face: columns balance, clip hides, wrap
   await open(page);
   await page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first().click();
   await modeButton(page, 'Layout').click();
-  await picker(page).selectOption('columns');
+  await selectOption(picker(page), 'columns');
   const columns = layout(page, 'Columns');
   await expect(columns).toHaveAttribute('data-state', 'ready');
   const body = blocks(columns).nth(1);
@@ -105,7 +106,7 @@ test('blocks are live text in the loaded face: columns balance, clip hides, wrap
   // Live text, not rasterized images.
   await expect(columns.locator('img, canvas')).toHaveCount(0);
 
-  await picker(page).selectOption('waterfall');
+  await selectOption(picker(page), 'waterfall');
   const fall = layout(page, 'Waterfall');
   await expect(blocks(fall)).toHaveCount(8);
   const top = blocks(fall).first();
@@ -161,7 +162,7 @@ test('the mode switch and the preset picker work from the keyboard and the palet
   await expect(palette.getByRole('option').first()).toContainText('Show the Quote layout');
   await page.keyboard.press('Enter');
   await expect(layout(page, 'Quote')).toBeVisible();
-  await expect(picker(page)).toHaveValue('quote');
+  await expect(picker(page)).toHaveAttribute('data-value', 'quote');
 });
 
 /** WCAG contrast ratio of the field's border against the page background. */
@@ -255,22 +256,26 @@ test('the layout view saves an edited block, reverts, duplicates and restores a 
   // Duplicate opens an independent copy that the picker lists and keeps.
   await action(page, 'Duplicate').click();
   await expect(fileBar(page)).toContainText('Duplicated as “Book copy”.');
-  await expect(picker(page)).toHaveValue('book-copy');
+  await expect(picker(page)).toHaveAttribute('data-value', 'book-copy');
   const copy = layout(page, 'Book copy');
   await blocks(copy).first().dblclick();
   await copy.getByRole('textbox', { name: 'Block 1 text' }).fill('Copy heading');
   await page.keyboard.press('ControlOrMeta+Enter');
   await action(page, 'Save').click();
-  await picker(page).selectOption('book');
+  await selectOption(picker(page), 'book');
   await expect(blocks(layout(page, 'Book')).first()).toHaveText('Chapter One');
-  await picker(page).selectOption('book-copy');
+  await selectOption(picker(page), 'book-copy');
   await expect(blocks(layout(page, 'Book copy')).first()).toHaveText('Copy heading');
 
   // Reset puts back the shipped preset; a broken file is listed but cannot be picked.
   await action(page, 'Reset to original').click();
   await expect(blocks(layout(page, 'Book copy')).first()).toHaveText('Chapter One');
-  const broken = picker(page).getByRole('option', { name: 'draft (cannot be read)' });
-  await expect(broken).toHaveAttribute('disabled', '');
+  await picker(page).click();
+  const broken = page
+    .locator('.ui-popover')
+    .getByRole('option', { name: 'draft (cannot be read)' });
+  await expect(broken).toHaveAttribute('aria-disabled', 'true');
+  await picker(page).press('Escape');
 });
 
 for (const scheme of ['light', 'dark'] as const) {
@@ -290,7 +295,7 @@ test('a size badge beside each block opens its properties editor; changes show a
   await open(page);
   await page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first().click();
   await modeButton(page, 'Layout').click();
-  await picker(page).selectOption('magazine');
+  await selectOption(picker(page), 'magazine');
   const mag = layout(page, 'Magazine');
   await expect(mag).toHaveAttribute('data-state', 'ready');
   const badges = mag.getByTestId('block-size-badge');
@@ -317,12 +322,12 @@ test('a size badge beside each block opens its properties editor; changes show a
   await size.fill('30');
   await size.press('Enter');
 
-  await editor.getByLabel('Columns').selectOption('3');
+  await selectOption(editor.getByLabel('Columns'), '3');
   await expect(blocks(mag).nth(1)).toHaveCSS('column-count', '3');
   await expect(blocks(mag).nth(1)).toHaveCSS('column-fill', 'balance');
-  await editor.getByLabel('Alignment').selectOption('end');
+  await selectOption(editor.getByLabel('Alignment'), 'end');
   await expect(blocks(mag).nth(1)).toHaveCSS('text-align', 'end');
-  await editor.getByLabel('Overflow').selectOption('clip');
+  await selectOption(editor.getByLabel('Overflow'), 'clip');
   await expect(blocks(mag).nth(1)).toHaveAttribute('data-overflow', 'clip');
   const lh = editor.getByLabel('Line height');
   await lh.fill('2');
@@ -538,7 +543,7 @@ async function quoteLayout(page: Page) {
   await open(page);
   await page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem').first().click();
   await modeButton(page, 'Layout').click();
-  await picker(page).selectOption('quote');
+  await selectOption(picker(page), 'quote');
   const quote = layout(page, 'Quote');
   await expect(quote).toHaveAttribute('data-state', 'ready');
   return quote;

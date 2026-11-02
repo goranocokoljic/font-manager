@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { optionLabels, selectOption } from './select';
 
 // E19.2: the Language setting relabels the UI without a reload, and "System"
 // follows the OS (here the browser's) language.
@@ -86,7 +87,7 @@ test('choosing Deutsch relabels the main window, Settings and the palette at onc
 }) => {
   await page.goto('/#/settings?section=appearance');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-  await page.getByRole('combobox', { name: 'Language' }).selectOption('de');
+  await selectOption(page.getByRole('combobox', { name: 'Language' }), 'de');
 
   // No reload: the same page relabels.
   await expect(page.getByRole('heading', { name: 'Einstellungen', level: 1 })).toBeVisible();
@@ -107,7 +108,7 @@ test('choosing Deutsch relabels the main window, Settings and the palette at onc
 
   // And back.
   await page.goto('/#/settings?section=appearance');
-  await page.getByRole('combobox', { name: 'Sprache' }).selectOption('en');
+  await selectOption(page.getByRole('combobox', { name: 'Sprache' }), 'en');
   await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
 });
 
@@ -121,9 +122,9 @@ test.describe('with a German OS', () => {
 
     await page.goto('/#/settings?section=appearance');
     const language = page.getByRole('combobox', { name: 'Sprache' });
-    await expect(language).toHaveValue('system');
-    await expect(language.locator('option[value="system"]')).toHaveText('System (Deutsch)');
-    await language.selectOption('en');
+    await expect(language).toHaveAttribute('data-value', 'system');
+    expect(await optionLabels(language)).toContain('System (Deutsch)');
+    await selectOption(language, 'en');
     await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
   });
 });

@@ -38,7 +38,10 @@ test('clicking a block jumps the glyph map to that block', async ({ page }) => {
   await coverage.getByRole('button', { name: /^Cyrillic: 60 of 256 characters/ }).click();
   await expect(panel.getByRole('rowheader')).toHaveCount(1);
   await expect(panel.getByRole('rowheader')).toContainText('Cyrillic');
-  await expect(panel.getByRole('combobox', { name: 'Block' })).toHaveValue('Cyrillic');
+  await expect(panel.getByRole('combobox', { name: 'Block' })).toHaveAttribute(
+    'data-value',
+    'Cyrillic',
+  );
   await expect(panel.getByRole('grid', { name: 'Glyphs' })).toBeFocused();
 });
 

@@ -7,6 +7,7 @@ import type { DownloadFamilyResponse } from '../api/types';
 import { FaceLoader, setFaceLoader } from '../preview/faceLoader';
 import { useCatalogsStore } from '../stores/catalogs';
 import CatalogBrowser from './CatalogBrowser.vue';
+import { selectOptions } from './ui/testing';
 
 let wrappers: VueWrapper[] = [];
 
@@ -67,7 +68,7 @@ describe('CatalogBrowser "Download..."', () => {
     expect(document.activeElement, 'the source picker takes the focus').toBe(select.element);
     expect(section.get('label.field').text()).toContain('Download into');
     // Only folders the user added, never the system fonts.
-    const options = select.findAll('option').map((o) => o.text());
+    const options = (await selectOptions(select)).map(([, label]) => label);
     expect(options).toEqual([mockSources[0]!.path]);
     expect(section.text()).toContain('The files go into a folder named Lato inside it.');
     expect(section.find('fieldset').exists(), 'Lato has no variable font').toBe(false);

@@ -8,6 +8,7 @@ import { useSearchStore } from '../stores/search';
 import { useCompareStore } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import CompareSheet from './CompareSheet.vue';
+import { pickOption, selectOptions } from './ui/testing';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
@@ -69,20 +70,20 @@ describe('compare sheet', () => {
     expect(styles[1]!.fontFamily).toContain(faceFamily(201));
     expect(texts[0]!.text()).toBe(pangramOf('en'));
     // Two pins: nothing to choose.
-    expect(wrapper.findAll('select')).toHaveLength(0);
+    expect(wrapper.findAll('[role="combobox"]')).toHaveLength(0);
   });
 
   it('with three or four pins lets the user choose the two overlaid faces', async () => {
     const { wrapper, s } = await mountWith(4, 'overlay');
-    const selects = wrapper.findAll('select');
+    const selects = wrapper.findAll('[role="combobox"]');
     expect(selects).toHaveLength(2);
-    expect(selects[0]!.findAll('option').map((o) => o.text())).toEqual(faces.map(name));
-    await selects[1]!.setValue('203');
+    expect((await selectOptions(selects[0]!)).map(([, label]) => label)).toEqual(faces.map(name));
+    await pickOption(selects[1]!, '203');
     await flushPromises();
     const ids = () => wrapper.findAll('text.overlay-text').map((t) => t.attributes('data-face'));
     expect(ids()).toEqual(['200', '203']);
     expect(s.overlayPair.map((f) => f?.id)).toEqual([200, 203]);
-    expect(wrapper.get('svg').attributes('aria-label')).toBe(
+    expect(wrapper.get('.stage svg').attributes('aria-label')).toBe(
       `Overlay of ${name(faces[0]!)} and ${name(faces[3]!)}, 28 px`,
     );
   });

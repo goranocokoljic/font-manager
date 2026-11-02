@@ -108,6 +108,8 @@ const TEXT_INPUT_TYPES = new Set([
 function isTextEntry(el: Element): boolean {
   if (el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) return true;
   if (el instanceof HTMLInputElement) return TEXT_INPUT_TYPES.has(el.type);
+  // The ui/ Select (a button with the combobox role) types ahead like the native control.
+  if (el.getAttribute('role') === 'combobox') return true;
   return el instanceof HTMLElement && el.isContentEditable;
 }
 

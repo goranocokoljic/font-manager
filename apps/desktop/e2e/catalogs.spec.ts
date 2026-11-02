@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { optionLabels, selectOption } from './select';
 
 // E22.6: Adobe Fonts is listed under Online catalogs as a note and a link. The
 // browser-mode mock opens the link in a new tab, standing in for the default
@@ -147,7 +148,7 @@ test('turn Google Fonts on, browse, search and change the sample text, by keyboa
   const controls = page.getByRole('group', { name: 'Preview settings' });
   const sample = controls.getByRole('combobox', { name: 'Sample' });
   await sample.focus();
-  await sample.selectOption('custom');
+  await selectOption(sample, 'custom');
   const text = controls.getByRole('textbox', { name: 'Custom text' });
   await text.focus();
   await page.keyboard.type('Hamburgefonstiv');
@@ -277,7 +278,7 @@ test('download a family into a chosen folder, by keyboard, with progress and the
   const into = panel.getByRole('combobox', { name: 'Download into' });
   await expect(into, 'the folder picker takes the focus').toBeFocused();
   // Only folders the user added: never the system fonts.
-  await expect(into.locator('option')).toHaveText(['/Users/demo/Fonts']);
+  expect(await optionLabels(into)).toEqual(['/Users/demo/Fonts']);
   await expect(panel).toContainText('The files go into a folder named Lato inside it.');
 
   await page.keyboard.press('Tab');

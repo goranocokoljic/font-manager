@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // Browser mode runs on the mock client; the Quick Collection starts empty.
 const fixture = readFileSync(
@@ -79,7 +80,7 @@ test('the review lists the fonts with the preview settings; each drops by key or
   // The Surface setting applies too: white text picked for a dark surface stays readable.
   await review(page).getByRole('button', { name: 'Back to fonts' }).click();
   const controls = page.getByRole('group', { name: 'Preview settings' });
-  await controls.getByLabel('Surface').selectOption('dark');
+  await selectOption(controls.getByLabel('Surface'), 'dark');
   await controls.getByLabel('Text color').fill('#ffffff');
   await page.getByTestId('quick-collection').click();
   const surface = page.locator('.review .viewport');

@@ -106,11 +106,19 @@ describe('keymap', () => {
 });
 
 describe('focus guard', () => {
+  /** The ui/ Select's button: a combobox that types ahead, so plain keys are its own. */
+  const combobox = () => {
+    const button = document.createElement('button');
+    button.setAttribute('role', 'combobox');
+    return button;
+  };
+
   it('lets a text field keep plain keys but not modified ones', () => {
     for (const el of [
       document.createElement('input'),
       document.createElement('textarea'),
       document.createElement('select'),
+      combobox(),
     ]) {
       expect(bindingFor(on(el, { key: 'a' }))).toBeUndefined();
       expect(bindingFor(on(el, { key: '/' }))).toBeUndefined();

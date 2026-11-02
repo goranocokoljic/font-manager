@@ -7,10 +7,11 @@
 // or leaving it), so typing "14" is not clamped at "1" on the way.
 //
 // Escape closes the editor; the parent returns focus to the block's size badge.
-import { nextTick, onMounted, ref, useId } from 'vue';
+import { computed, nextTick, onMounted, ref, useId } from 'vue';
 import type { BlockAlign, BlockOverflow, LayoutBounds, TextBlock } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import type { BlockProps } from '../stores/textLayouts';
+import UiSelect from './ui/UiSelect.vue';
 
 const props = defineProps<{
   block: TextBlock;
@@ -35,20 +36,28 @@ const numbers: { key: NumberKey; label: string; unit: string }[] = [
 ];
 
 const aligns: BlockAlign[] = ['start', 'center', 'end', 'justify'];
+const alignOptions = computed(() =>
+  aligns.map((value) => ({ value, label: t(`blocks.aligns.${value}`) })),
+);
 
 const overflows: BlockOverflow[] = ['wrap', 'clip'];
+const overflowOptions = computed(() =>
+  overflows.map((value) => ({ value, label: t(`blocks.overflows.${value}`) })),
+);
 
-const columnChoices = (): number[] => {
-  const out: number[] = [];
-  for (let c = props.bounds.columns.min; c <= props.bounds.columns.max; c++) out.push(c);
+const columnOptions = computed(() => {
+  const out: { value: number; label: string }[] = [];
+  for (let c = props.bounds.columns.min; c <= props.bounds.columns.max; c++) {
+    out.push({ value: c, label: String(c) });
+  }
   return out;
-};
+});
 
 const root = ref<HTMLElement | null>(null);
 const id = useId();
 
 onMounted(() => {
-  void nextTick(() => root.value?.querySelector<HTMLElement>('input, select')?.focus());
+  void nextTick(() => root.value?.querySelector<HTMLElement>('input, [role="combobox"]')?.focus());
 });
 
 async function setNumber(key: NumberKey, e: Event): Promise<void> {
@@ -90,38 +99,33 @@ async function setChoice(change: BlockProps): Promise<void> {
     </div>
     <div class="field">
       <label :for="`${id}-columns`">{{ t('blocks.fields.columns') }}</label>
-      <select
+      <UiSelect
         :id="`${id}-columns`"
         name="columns"
-        :value="block.columns"
-        @change="setChoice({ columns: Number(($event.target as HTMLSelectElement).value) })"
-      >
-        <option v-for="c in columnChoices()" :key="c" :value="c">{{ c }}</option>
-      </select>
+        :model-value="block.columns"
+        :options="columnOptions"
+        @update:model-value="setChoice({ columns: $event })"
+      />
     </div>
     <div class="field">
       <label :for="`${id}-align`">{{ t('blocks.fields.alignment') }}</label>
-      <select
+      <UiSelect
         :id="`${id}-align`"
         name="align"
-        :value="block.align"
-        @change="setChoice({ align: ($event.target as HTMLSelectElement).value as BlockAlign })"
-      >
-        <option v-for="a in aligns" :key="a" :value="a">{{ t(`blocks.aligns.${a}`) }}</option>
-      </select>
+        :model-value="block.align"
+        :options="alignOptions"
+        @update:model-value="setChoice({ align: $event })"
+      />
     </div>
     <div class="field">
       <label :for="`${id}-overflow`">{{ t('blocks.fields.overflow') }}</label>
-      <select
+      <UiSelect
         :id="`${id}-overflow`"
         name="overflow"
-        :value="block.overflow"
-        @change="
-          setChoice({ overflow: ($event.target as HTMLSelectElement).value as BlockOverflow })
-        "
-      >
-        <option v-for="o in overflows" :key="o" :value="o">{{ t(`blocks.overflows.${o}`) }}</option>
-      </select>
+        :model-value="block.overflow"
+        :options="overflowOptions"
+        @update:model-value="setChoice({ overflow: $event })"
+      />
     </div>
     <button type="button" class="close" @click="emit('close')">{{ t('common.close') }}</button>
   </div>
@@ -149,8 +153,7 @@ async function setChoice(change: BlockProps): Promise<void> {
 .field input {
   width: 6em;
 }
-.field input,
-.field select {
+.field input {
   border: 1px solid var(--fm-control-border);
   background-color: var(--fm-bg);
   color: var(--fm-fg);

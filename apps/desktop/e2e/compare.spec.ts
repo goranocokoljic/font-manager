@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // Preview rows and Compare load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -129,7 +130,7 @@ test('the sheet shows the pins in the sample text at one size, in three modes', 
   const fills = await texts.evaluateAll((els) => els.map((e) => getComputedStyle(e).fill));
   expect(fills[0]).not.toBe(fills[1]);
   await expect(overlay.getByRole('combobox')).toHaveCount(2);
-  await overlay.getByRole('combobox', { name: 'Second font' }).selectOption({ index: 2 });
+  await selectOption(overlay.getByRole('combobox', { name: 'Second font' }), { index: 2 });
   await expect(overlay.getByRole('list', { name: 'Legend' })).toContainText('Legacy Grotesk');
 });
 

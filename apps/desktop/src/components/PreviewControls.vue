@@ -6,6 +6,7 @@
 import { computed, useId } from 'vue';
 import { t } from '../i18n';
 import { SAMPLE_KINDS } from '../preview/sampleText';
+import UiSelect from './ui/UiSelect.vue';
 import {
   LINE_HEIGHT,
   SIZE,
@@ -48,11 +49,20 @@ function typed(key: NumberKey, e: Event, commit: boolean): void {
   if (commit) input.value = String(store.settingsFor(props.view)[key]);
 }
 
-// The labels are read where they are shown (`preview.aligns.*`, `preview.autoSizes.*`,
-// `preview.surfaces.*`).
+// The labels are read where they are shown (`preview.aligns.*`) or when the options are
+// built (`preview.autoSizes.*`, `preview.surfaces.*`), so they follow the language.
 const alignments: Alignment[] = ['start', 'center', 'end'];
 const autoSizes: AutoSize[] = ['off', 'xHeight', 'capHeight'];
 const surfaces: Surface[] = ['auto', 'light', 'dark'];
+const languageOptions = computed(() =>
+  store.pangramLanguages.map((lang) => ({ value: lang.code, label: lang.name })),
+);
+const autoSizeOptions = computed(() =>
+  autoSizes.map((value) => ({ value, label: t(`preview.autoSizes.${value}`) })),
+);
+const surfaceOptions = computed(() =>
+  surfaces.map((value) => ({ value, label: t(`preview.surfaces.${value}`) })),
+);
 
 /** What a color well shows while its setting is `null` (the surface's own color). */
 function isDarkSurface(): boolean {
@@ -75,33 +85,21 @@ function colorFrom(e: Event): string {
   <div class="controls" role="group" :aria-label="t('preview.settings')">
     <div class="field">
       <label :for="`${uid}-sample`">{{ t('preview.sample') }}</label>
-      <select
+      <UiSelect
         :id="`${uid}-sample`"
-        :value="s.sample"
-        @change="
-          set({ sample: ($event.target as HTMLSelectElement).value as PreviewSettings['sample'] })
-        "
-      >
-        <option v-for="kind in SAMPLE_KINDS" :key="kind.value" :value="kind.value">
-          {{ kind.label }}
-        </option>
-      </select>
+        :model-value="s.sample"
+        :options="SAMPLE_KINDS"
+        @update:model-value="set({ sample: $event })"
+      />
     </div>
     <div v-if="s.sample === 'pangram'" class="field">
       <label :for="`${uid}-language`">{{ t('preview.language') }}</label>
-      <select
+      <UiSelect
         :id="`${uid}-language`"
-        :value="s.language"
-        @change="
-          set({
-            language: ($event.target as HTMLSelectElement).value as PreviewSettings['language'],
-          })
-        "
-      >
-        <option v-for="lang in store.pangramLanguages" :key="lang.code" :value="lang.code">
-          {{ lang.name }}
-        </option>
-      </select>
+        :model-value="s.language"
+        :options="languageOptions"
+        @update:model-value="set({ language: $event })"
+      />
     </div>
     <label v-if="s.sample === 'custom'" class="field grow">
       <span>{{ t('preview.customText') }}</span>
@@ -141,15 +139,12 @@ function colorFrom(e: Event): string {
       <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
         t('preview.autoSize')
       }}</label>
-      <select
+      <UiSelect
         :id="`${uid}-auto-size`"
-        :value="s.autoSize"
-        @change="set({ autoSize: ($event.target as HTMLSelectElement).value as AutoSize })"
-      >
-        <option v-for="o in autoSizes" :key="o" :value="o">
-          {{ t(`preview.autoSizes.${o}`) }}
-        </option>
-      </select>
+        :model-value="s.autoSize"
+        :options="autoSizeOptions"
+        @update:model-value="set({ autoSize: $event })"
+      />
     </div>
     <label class="field">
       <span>{{ t('preview.lineHeight') }}</span>
@@ -237,13 +232,12 @@ function colorFrom(e: Event): string {
     </label>
     <div class="field">
       <label :for="`${uid}-surface`">{{ t('preview.surface') }}</label>
-      <select
+      <UiSelect
         :id="`${uid}-surface`"
-        :value="s.surface"
-        @change="set({ surface: ($event.target as HTMLSelectElement).value as Surface })"
-      >
-        <option v-for="o in surfaces" :key="o" :value="o">{{ t(`preview.surfaces.${o}`) }}</option>
-      </select>
+        :model-value="s.surface"
+        :options="surfaceOptions"
+        @update:model-value="set({ surface: $event })"
+      />
     </div>
     <button type="button" class="button" @click="store.reset(view)">{{ t('common.reset') }}</button>
   </div>
@@ -275,7 +269,6 @@ function colorFrom(e: Event): string {
   flex: 1;
   min-width: 0;
 }
-select,
 input[type='text'],
 .number {
   padding: 2px 4px;

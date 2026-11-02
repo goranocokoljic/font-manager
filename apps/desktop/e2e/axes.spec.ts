@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -209,7 +210,7 @@ test('"Pin this instance" saves a virtual style that shows as its own row in the
 
   await wghtSlider(panel).fill('620');
   await panel.getByRole('textbox', { name: 'Style name' }).fill('Semibold Pin');
-  await panel.getByRole('combobox', { name: 'Save in' }).selectOption({ label: 'Brand' });
+  await selectOption(panel.getByRole('combobox', { name: 'Save in' }), { label: 'Brand' });
   const pin = panel.getByRole('button', { name: 'Pin this instance' });
   await pin.focus();
   await page.keyboard.press('Enter');

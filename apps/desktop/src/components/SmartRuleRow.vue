@@ -3,6 +3,7 @@
 // from a menu the API filled (a range for weight and width, typed text for "supports
 // text", a number of days for "date added"), and Remove. A part of a saved rule the
 // editor has no row for shows as "Kept as saved" and is saved unchanged.
+import { computed } from 'vue';
 import { t } from '../i18n';
 import {
   DIMENSIONS,
@@ -11,11 +12,17 @@ import {
   type Dimension,
   type DraftRow,
 } from '../stores/ruleEditor';
+import UiSelect from './ui/UiSelect.vue';
 
 // `inline` is `label` inside a sentence ("Remove rule 2").
 const props = defineProps<{ row: DraftRow; label: string; inline: string }>();
 const emit = defineEmits<{ remove: [] }>();
 const editor = useRuleEditorStore();
+
+const dimensionOptions = computed(() => DIMENSIONS.map((d) => ({ value: d.id, label: d.label })));
+const choices = computed(() =>
+  props.row.dimension === 'kept' ? [] : (choicesFor(props.row.dimension, editor.choices) ?? []),
+);
 
 function keptText(): string {
   const rule = props.row.kept;
@@ -23,13 +30,16 @@ function keptText(): string {
   return rule.kind === 'group' ? t('rules.nestedGroup') : Object.keys(rule.filters).join(', ');
 }
 
-/** Sets the row's `field` to what a select or an input holds now. */
-function set(field: 'value' | 'min' | 'max', e: Event): void {
-  editor.update(props.row, { [field]: (e.target as HTMLInputElement | HTMLSelectElement).value });
+/** Sets the row's `field` to what a picker or an input holds now. */
+function set(field: 'value' | 'min' | 'max', value: string): void {
+  editor.update(props.row, { [field]: value });
+}
+function setFrom(field: 'value' | 'min' | 'max', e: Event): void {
+  set(field, (e.target as HTMLInputElement).value);
 }
 
-function onDimension(e: Event): void {
-  editor.setDimension(props.row, (e.target as HTMLSelectElement).value as Dimension);
+function onDimension(dimension: Dimension): void {
+  editor.setDimension(props.row, dimension);
 }
 </script>
 
@@ -39,42 +49,27 @@ function onDimension(e: Event): void {
       {{ t('rules.keptAsSaved', { what: keptText() }) }}
     </span>
     <template v-else>
-      <select
-        :value="row.dimension"
+      <UiSelect
+        :model-value="row.dimension"
+        :options="dimensionOptions"
         :data-focus="row.key"
         :aria-label="t('rules.whatItTests', { label })"
-        @change="onDimension"
-      >
-        <option v-for="d in DIMENSIONS" :key="d.id" :value="d.id">{{ d.label }}</option>
-      </select>
+        @update:model-value="onDimension"
+      />
       <template v-if="row.dimension === 'weight' || row.dimension === 'width'">
-        <select
-          :value="row.min"
+        <UiSelect
+          :model-value="row.min"
+          :options="choices"
           :aria-label="t('rules.fromLabel', { label })"
-          @change="set('min', $event)"
-        >
-          <option
-            v-for="c in choicesFor(row.dimension, editor.choices) ?? []"
-            :key="c.value"
-            :value="c.value"
-          >
-            {{ c.label }}
-          </option>
-        </select>
+          @update:model-value="set('min', $event)"
+        />
         <span aria-hidden="true">{{ t('rules.to') }}</span>
-        <select
-          :value="row.max"
+        <UiSelect
+          :model-value="row.max"
+          :options="choices"
           :aria-label="t('rules.toLabel', { label })"
-          @change="set('max', $event)"
-        >
-          <option
-            v-for="c in choicesFor(row.dimension, editor.choices) ?? []"
-            :key="c.value"
-            :value="c.value"
-          >
-            {{ c.label }}
-          </option>
-        </select>
+          @update:model-value="set('max', $event)"
+        />
       </template>
       <input
         v-else-if="row.dimension === 'text'"
@@ -82,7 +77,7 @@ function onDimension(e: Event): void {
         type="text"
         :placeholder="t('rules.textPlaceholder')"
         :aria-label="t('rules.textLabel', { label })"
-        @input="set('value', $event)"
+        @input="setFrom('value', $event)"
       />
       <span v-else-if="row.dimension === 'added'" class="days">
         <span aria-hidden="true">{{ t('rules.within') }}</span>
@@ -92,25 +87,18 @@ function onDimension(e: Event): void {
           min="0"
           step="1"
           :aria-label="t('rules.daysLabel', { label })"
-          @input="set('value', $event)"
+          @input="setFrom('value', $event)"
         />
         <span aria-hidden="true">{{ t('rules.days') }}</span>
       </span>
-      <select
+      <UiSelect
         v-else
-        :value="row.value"
+        :model-value="row.value"
+        :options="choices"
+        :placeholder="t('rules.choose')"
         :aria-label="t('rules.valueLabel', { label })"
-        @change="set('value', $event)"
-      >
-        <option value="" disabled>{{ t('rules.choose') }}</option>
-        <option
-          v-for="c in choicesFor(row.dimension, editor.choices) ?? []"
-          :key="c.value"
-          :value="c.value"
-        >
-          {{ c.label }}
-        </option>
-      </select>
+        @update:model-value="set('value', $event)"
+      />
     </template>
     <button
       type="button"
@@ -142,7 +130,6 @@ function onDimension(e: Event): void {
   flex: 1;
   color: var(--fm-muted);
 }
-select,
 input {
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
@@ -151,7 +138,6 @@ input {
   color: inherit;
   font: inherit;
 }
-select:focus-visible,
 input:focus-visible,
 .button:focus-visible {
   outline: 2px solid var(--fm-accent);

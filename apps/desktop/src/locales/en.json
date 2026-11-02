@@ -1541,5 +1541,11 @@
     "deny": "Deny",
     "allowed": "Allowed. The AI assistant's request runs now.",
     "denied": "Denied. Nothing was changed."
+  },
+  "ui": {
+    "select": {
+      "search": "Type to filter",
+      "noMatches": "No matches"
+    }
   }
 }

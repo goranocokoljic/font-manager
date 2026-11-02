@@ -12,6 +12,7 @@ import type { RuleOp } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useRuleEditorStore, type DraftGroup, type DraftItem } from '../stores/ruleEditor';
 import SmartRuleRow from './SmartRuleRow.vue';
+import UiSelect from './ui/UiSelect.vue';
 
 const editor = useRuleEditorStore();
 const panel = ref<HTMLElement | null>(null);
@@ -107,7 +108,7 @@ watch(
     if (open) {
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       await nextTick();
-      panel.value?.querySelector<HTMLElement>('input, select')?.focus();
+      panel.value?.querySelector<HTMLElement>('input, [role="combobox"]')?.focus();
     } else {
       const target = returnFocus;
       returnFocus = null;
@@ -189,9 +190,7 @@ function onFocusIn(e: FocusEvent): void {
         </label>
         <label class="field">
           <span>{{ t('rules.fontsMatch') }}</span>
-          <select v-model="editor.draft.op" :aria-label="t('rules.opLabel')">
-            <option v-for="op in OPS" :key="op.value" :value="op.value">{{ op.label }}</option>
-          </select>
+          <UiSelect v-model="editor.draft.op" :options="OPS" :aria-label="t('rules.opLabel')" />
           <span>{{ t('rules.theseRules') }}</span>
         </label>
 
@@ -207,14 +206,11 @@ function onFocusIn(e: FocusEvent): void {
             <fieldset v-else class="group" :data-group="labelOf(item)">
               <legend>
                 <span>{{ t('rules.groupFontsMatch', { label: labelOf(item) }) }}</span>
-                <select
+                <UiSelect
                   v-model="item.op"
+                  :options="OPS"
                   :aria-label="t('rules.groupOpLabel', { label: labelOf(item) })"
-                >
-                  <option v-for="op in OPS" :key="op.value" :value="op.value">
-                    {{ op.label }}
-                  </option>
-                </select>
+                />
               </legend>
               <ul class="rules" :aria-label="t('rules.groupRules', { label: labelOf(item) })">
                 <li v-for="row in item.rows" :key="row.key">
@@ -346,7 +342,6 @@ function onFocusIn(e: FocusEvent): void {
   gap: 6px;
   padding-top: 6px;
 }
-select,
 input {
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
@@ -355,7 +350,6 @@ input {
   color: inherit;
   font: inherit;
 }
-select:focus-visible,
 input:focus-visible,
 .button:focus-visible {
   outline: 2px solid var(--fm-accent);

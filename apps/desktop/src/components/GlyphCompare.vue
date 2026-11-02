@@ -16,6 +16,7 @@ import { errorMessage, t } from '../i18n';
 import { codePointLabel } from '../glyphs/layout';
 import { useFaceLoader } from '../preview/faceLoader';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
+import UiSelect from './ui/UiSelect.vue';
 
 const compare = useGlyphCompareStore();
 const loader = useFaceLoader();
@@ -121,8 +122,9 @@ async function choose(hit: FamilyHit | undefined): Promise<void> {
   listOpen.value = false;
   await compare.pickFamily(hit);
 }
-function onStyle(e: Event): void {
-  void compare.pickFace(Number((e.target as HTMLSelectElement).value));
+const styleOptions = computed(() => compare.styles.map((f) => ({ value: f.id, label: f.style })));
+function onStyle(id: FaceId): void {
+  void compare.pickFace(id);
 }
 function onSize(e: Event): void {
   compare.setSize(Number((e.target as HTMLInputElement).value));
@@ -247,15 +249,13 @@ function onKeyDown(e: KeyboardEvent): void {
             </li>
           </ul>
         </div>
-        <select
+        <UiSelect
           v-if="compare.other && compare.styles.length"
-          class="field"
           :aria-label="t('glyphCompare.style')"
-          :value="compare.other.face.id"
-          @change="onStyle"
-        >
-          <option v-for="f in compare.styles" :key="f.id" :value="f.id">{{ f.style }}</option>
-        </select>
+          :model-value="compare.other.face.id"
+          :options="styleOptions"
+          @update:model-value="onStyle"
+        />
         <div class="size">
           <span aria-hidden="true">{{ t('glyphCompare.size') }}</span>
           <input

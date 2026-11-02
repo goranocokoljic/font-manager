@@ -23,6 +23,7 @@ import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import PairingsPanel from './PairingsPanel.vue';
+import UiSelect from './ui/UiSelect.vue';
 
 const compare = useCompareStore();
 const preview = usePreviewStore();
@@ -152,9 +153,9 @@ const overlayLabel = computed(() =>
 function onMode(e: Event): void {
   compare.setMode((e.target as HTMLInputElement).value as CompareMode);
 }
-function onOverlay(slot: 0 | 1, e: Event): void {
-  compare.setOverlay(slot, Number((e.target as HTMLSelectElement).value));
-}
+const pinOptions = computed(() =>
+  compare.pins.map((p) => ({ value: p.id, label: fontNameSample(p) })),
+);
 
 /** Tab cycles inside the sheet; Escape closes it; plain keys stay out of the list's shortcuts. */
 function onKeyDown(e: KeyboardEvent): void {
@@ -307,16 +308,12 @@ function onFocusIn(e: FocusEvent): void {
           <label v-for="slot in SLOTS" :key="slot" class="pick">
             <span class="swatch" :class="`color-${slot}`" aria-hidden="true"></span>
             {{ slot === 0 ? t('compare.firstFont') : t('compare.secondFont') }}
-            <select
-              class="field"
+            <UiSelect
               :aria-label="slot === 0 ? t('compare.firstFont') : t('compare.secondFont')"
-              :value="compare.overlayPair[slot]?.id"
-              @change="onOverlay(slot, $event)"
-            >
-              <option v-for="p in compare.pins" :key="p.id" :value="p.id">
-                {{ fontNameSample(p) }}
-              </option>
-            </select>
+              :model-value="compare.overlayPair[slot]?.id"
+              :options="pinOptions"
+              @update:model-value="compare.setOverlay(slot, $event)"
+            />
           </label>
         </div>
         <div class="stage">

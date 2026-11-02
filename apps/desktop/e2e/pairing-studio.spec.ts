@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readPdf } from './pdf-text';
+import { optionLabels, selectOption } from './select';
 
 // Layout blocks load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -49,7 +50,7 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
   const mono = tree.getByRole('treeitem', { name: /^JetBrains Mono/ });
   await mono.click();
   await modeButton(page, 'Layout').click();
-  await presetPicker(page).selectOption('columns');
+  await selectOption(presetPicker(page), 'columns');
   await expect(layout(page, 'Columns')).toContainText('JetBrains Mono');
   // In Layout mode with a face shown, the button is there.
   await expect(openButton(page)).toBeEnabled();
@@ -72,10 +73,10 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
   expect(family).toMatch(/^"?fm-face-\d+/);
 
   // The picker lists the layout files; picking one shows it in the panel.
-  await expect(studioPicker(page)).toHaveValue('columns');
-  const names = await studioPicker(page).locator('option').allTextContents();
+  await expect(studioPicker(page)).toHaveAttribute('data-value', 'columns');
+  const names = await optionLabels(studioPicker(page));
   expect(names).toEqual(expect.arrayContaining(['Book', 'Columns', 'Quote']));
-  await studioPicker(page).selectOption('quote');
+  await selectOption(studioPicker(page), 'quote');
   await expect(page).toHaveURL(/layout=quote/);
   await expect(layout(panel, 'Quote')).toContainText('JetBrains Mono');
 
@@ -84,7 +85,7 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
   await expect(studio(page)).toBeHidden();
   expect(page.url()).toBe(libraryUrl);
   await expect(modeButton(page, 'Layout')).toHaveAttribute('aria-pressed', 'true');
-  await expect(presetPicker(page)).toHaveValue('columns');
+  await expect(presetPicker(page)).toHaveAttribute('data-value', 'columns');
   await expect(layout(page, 'Columns')).toContainText('JetBrains Mono');
   await modeButton(page, 'List').click();
   await expect(openButton(page)).toHaveCount(0);
@@ -154,9 +155,13 @@ test('a Pairing Studio opened by its URL closes to the library with its face sel
   await expect(layout(studio(page), 'Quote')).toBeVisible();
   // The picker lists the files from `list_layouts`, not only the presets: the mock's
   // unreadable `draft` file is there, and cannot be picked.
-  const broken = studioPicker(page).getByRole('option', { name: 'draft (cannot be read)' });
+  await studioPicker(page).click();
+  const broken = page
+    .locator('.ui-popover')
+    .getByRole('option', { name: 'draft (cannot be read)' });
   await expect(broken).toHaveCount(1);
-  await expect(broken).toHaveAttribute('disabled', '');
+  await expect(broken).toHaveAttribute('aria-disabled', 'true');
+  await studioPicker(page).press('Escape');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page).toHaveURL(/#\/\?face=1$/);
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();

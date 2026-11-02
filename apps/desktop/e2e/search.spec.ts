@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // Preview rows load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -68,7 +69,7 @@ test('filter chips under the title show counts and filter the list', async ({ pa
   await expect(chips.getByRole('group', { name: 'Format' })).not.toContainText('Type 1');
 
   // A language preset joins as a chip with the result count.
-  await chips.getByRole('combobox', { name: 'Add a language' }).selectOption('sr-Cyrl');
+  await selectOption(chips.getByRole('combobox', { name: 'Add a language' }), 'sr-Cyrl');
   const serbian = chips.getByRole('button', { name: /^Serbian \(Cyrillic\)/ });
   await expect(serbian).toHaveAttribute('aria-pressed', 'true');
   await expect(serbian).toHaveAccessibleName('Serbian (Cyrillic), 2 families');
@@ -120,10 +121,10 @@ for (const [scheme, surface] of [
   }) => {
     await page.emulateMedia({ colorScheme: scheme });
     const tree = await open(page);
-    await page
-      .getByRole('group', { name: 'Preview settings' })
-      .getByLabel('Surface')
-      .selectOption(surface);
+    await selectOption(
+      page.getByRole('group', { name: 'Preview settings' }).getByLabel('Surface'),
+      surface,
+    );
     await expect(tree).toHaveAttribute('data-surface', surface);
     const badge = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('open-license');
     const ratio = await badge.evaluate((el) => {

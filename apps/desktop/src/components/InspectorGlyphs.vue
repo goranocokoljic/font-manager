@@ -28,6 +28,7 @@ import { useFaceLoader } from '../preview/faceLoader';
 import CopyValue from './CopyValue.vue';
 import GlyphCompare from './GlyphCompare.vue';
 import GlyphCoverage from './GlyphCoverage.vue';
+import UiSelect from './ui/UiSelect.vue';
 import { useCoverageStore } from '../stores/coverage';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
 import { useGlyphsStore } from '../stores/glyphs';
@@ -244,8 +245,11 @@ function showBlock(name: string): void {
   el?.scrollIntoView?.({ block: 'nearest' });
   el?.focus();
 }
-function onBlock(e: Event): void {
-  const value = (e.target as HTMLSelectElement).value;
+const blockOptions = computed(() => [
+  { value: '', label: t('glyphs.allBlocks') },
+  ...glyphs.faceBlocks.map((b) => ({ value: b.name, label: `${b.name} (${b.count})` })),
+]);
+function onBlock(value: string): void {
   void glyphs.chooseBlock(value || null);
 }
 
@@ -303,17 +307,13 @@ const noResults = computed(
           :placeholder="t('glyphs.searchPlaceholder')"
           @input="onSearch"
         />
-        <select
-          class="field"
+        <UiSelect
+          class="blocks"
           :aria-label="t('glyphs.block')"
-          :value="glyphs.block ?? ''"
-          @change="onBlock"
-        >
-          <option value="">{{ t('glyphs.allBlocks') }}</option>
-          <option v-for="b in glyphs.faceBlocks" :key="b.name" :value="b.name">
-            {{ b.name }} ({{ b.count }})
-          </option>
-        </select>
+          :model-value="glyphs.block ?? ''"
+          :options="blockOptions"
+          @update:model-value="onBlock"
+        />
       </div>
       <p v-if="broken" class="placeholder" role="status">
         {{ t('glyphs.broken', { reason: broken }) }}
@@ -477,7 +477,7 @@ const noResults = computed(
 .search {
   flex: 1;
 }
-select.field {
+.blocks {
   flex: 0 1 45%;
 }
 .viewport {

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // E19.3: a right-to-left UI language mirrors the chrome; the preview text keeps
 // its own direction. No RTL catalog ships yet, so the check runs the CLDR bidi
@@ -40,7 +41,7 @@ const columns = (page: Page) => ({
 /** The Hebrew face's sample after typing `text` as the list's custom sample text. */
 async function sample(page: Page, text: string) {
   const controls = page.getByRole('group', { name: 'Preview settings' });
-  await controls.getByLabel('Sample').selectOption('custom');
+  await selectOption(controls.getByLabel('Sample'), 'custom');
   await controls.getByLabel('Custom text').fill(text);
   const shown = page.locator('[data-face="9"] .sample');
   await expect(shown).toHaveText(text);

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { mockLanguages } from '../api/mock';
 import { usePreviewStore } from '../stores/preview';
 import PreviewControls from './PreviewControls.vue';
+import { pickOption, selectOptions } from './ui/testing';
 
 beforeEach(() => {
   localStorage.clear();
@@ -17,18 +18,17 @@ function mountControls(view = 'all') {
 describe('PreviewControls', () => {
   it('chooses the sample kind, the pangram language and custom text', async () => {
     const { wrapper, store } = mountControls();
-    await wrapper.get('select').setValue('pangram');
+    await pickOption(wrapper.get('[role="combobox"]'), 'pangram');
     await flushPromises();
-    const language = wrapper.findAll('select')[1]!;
+    const language = wrapper.findAll('[role="combobox"]')[1]!;
     // The picker lists the API's languages that have a pangram, by name.
     const withPangram = mockLanguages.filter((l) => l.pangram);
-    expect(language.findAll('option').map((o) => [o.attributes('value'), o.text()])).toEqual(
-      withPangram.map((l) => [l.code, l.name]),
-    );
-    expect(language.findAll('option').some((o) => o.text() === 'Maltese')).toBe(false);
-    await language.setValue('sr-Cyrl');
+    const options = await selectOptions(language);
+    expect(options).toEqual(withPangram.map((l) => [l.code, l.name]));
+    expect(options.some(([, label]) => label === 'Maltese')).toBe(false);
+    await pickOption(language, 'sr-Cyrl');
     expect(store.settingsFor('all').language).toBe('sr-Cyrl');
-    await wrapper.get('select').setValue('custom');
+    await pickOption(wrapper.get('[role="combobox"]'), 'custom');
     await wrapper.get('input[type="text"]').setValue('Handgloves');
     expect(store.settingsFor('all')).toMatchObject({ sample: 'custom', customText: 'Handgloves' });
   });
@@ -58,7 +58,7 @@ describe('PreviewControls', () => {
     await wrapper.get('button[aria-pressed="false"]:nth-of-type(2)').trigger('click');
     await wrapper.get('input[aria-label="Text color"]').setValue('#123456');
     await wrapper.get('input[aria-label="Background color"]').setValue('#fedcba');
-    await wrapper.findAll('select').at(-1)!.setValue('dark');
+    await pickOption(wrapper.findAll('[role="combobox"]').at(-1)!, 'dark');
     expect(store.settingsFor('all')).toMatchObject({
       lineHeight: 1.6,
       trackingEm: 0.1,
@@ -82,16 +82,16 @@ describe('PreviewControls', () => {
   it('sets auto size from a labelled select (Off, x-height, Cap height)', async () => {
     const { wrapper, store } = mountControls('collection-3');
     const label = wrapper.findAll('label').find((l) => l.text() === 'Auto size')!;
-    const select = wrapper.get(`select#${label.attributes('for')}`);
-    expect(select.findAll('option').map((o) => o.text())).toEqual([
+    const select = wrapper.get(`[role="combobox"]#${label.attributes('for')}`);
+    expect((await selectOptions(select)).map(([, label]) => label)).toEqual([
       'Off',
       'x-height',
       'Cap height',
     ]);
-    expect((select.element as HTMLSelectElement).value).toBe('off');
-    await select.setValue('xHeight');
+    expect(select.attributes('data-value')).toBe('off');
+    await pickOption(select, 'xHeight');
     expect(store.settingsFor('collection-3').autoSize).toBe('xHeight');
-    await select.setValue('capHeight');
+    await pickOption(select, 'capHeight');
     expect(store.settingsFor('collection-3').autoSize).toBe('capHeight');
     expect(store.settingsFor('all').autoSize).toBe('off');
   });

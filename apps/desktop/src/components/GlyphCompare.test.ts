@@ -106,7 +106,7 @@ describe('glyph compare overlay', () => {
     await pickByKeyboard(wrapper, 'JetBrains Mono');
     expect(s.open).toBe(true);
     expect(wrapper.findAll('text.glyph').map((t) => t.attributes('data-face'))).toEqual(['1', '6']);
-    expect(wrapper.get('svg').attributes('aria-label')).toBe(
+    expect(wrapper.get('.stage svg').attributes('aria-label')).toBe(
       'U+0041 in Inter Regular and JetBrains Mono Regular, 320 px',
     );
   });

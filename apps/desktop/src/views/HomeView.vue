@@ -19,6 +19,7 @@ import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
+import UiSelect from '../components/ui/UiSelect.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
 import ProjectSetsSidebar from '../components/ProjectSetsSidebar.vue';
 import QuickLookSheet from '../components/QuickLookSheet.vue';
@@ -102,6 +103,15 @@ const layoutOptions = computed(() =>
   textLayouts.entries.length
     ? textLayouts.entries
     : LAYOUT_PRESETS.map((p) => ({ id: p, name: PRESET_LABELS[p], preset: p, broken: null })),
+);
+/** The picker's options: an unreadable layout is listed, named so, and cannot be chosen. */
+const presetOptions = computed(() =>
+  layoutOptions.value.map((e) => ({
+    value: e.id,
+    label: e.broken === null ? e.name : t('home.unreadable', { name: e.name }),
+    disabled: e.broken !== null,
+    title: e.broken ?? undefined,
+  })),
 );
 const layoutFace = computed(() => {
   const first = fontList.families[0];
@@ -478,20 +488,11 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
           <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
           <label v-if="mode === 'layout'" class="preset">
             {{ t('home.preset') }}
-            <select
-              :value="layoutId"
-              @change="views.setLayout(ALL_FONTS_VIEW, ($event.target as HTMLSelectElement).value)"
-            >
-              <option
-                v-for="e in layoutOptions"
-                :key="e.id"
-                :value="e.id"
-                :disabled="e.broken !== null"
-                :title="e.broken ?? undefined"
-              >
-                {{ e.broken === null ? e.name : t('home.unreadable', { name: e.name }) }}
-              </option>
-            </select>
+            <UiSelect
+              :model-value="layoutId"
+              :options="presetOptions"
+              @update:model-value="views.setLayout(ALL_FONTS_VIEW, $event)"
+            />
           </label>
           <!-- After the controls of the view mode, so Tab from the modes reaches those first. -->
           <button
@@ -683,14 +684,6 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
   display: flex;
   align-items: center;
   gap: 4px;
-}
-.preset select {
-  padding: 2px 4px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
 }
 .toggle:disabled {
   color: var(--fm-muted);

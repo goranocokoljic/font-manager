@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { selectOption } from './select';
 
 // Browser mode runs on the mock client; no family has a declared license yet.
 // The mock file picker returns `/Users/demo/Downloads/receipt-<n>.pdf`.
@@ -18,7 +19,7 @@ test('the License section declares, keeps and clears a family license from the k
   const type = form.getByLabel('License type');
   const seats = form.getByLabel('Seats');
   const date = form.getByLabel('Purchase date');
-  await expect(type).toHaveValue('');
+  await expect(type).toHaveAttribute('data-value', '');
   await expect(form.getByTestId('no-receipt')).toHaveText('None');
   await expect(form.getByRole('button', { name: 'Clear license' })).toBeDisabled();
 
@@ -45,16 +46,16 @@ test('the License section declares, keeps and clears a family license from the k
   await expect(form.getByRole('button', { name: 'Attach receipt…' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(form.getByRole('button', { name: 'Save license' })).toBeFocused();
-  await type.selectOption('web');
+  await selectOption(type, 'web');
   await form.getByRole('button', { name: 'Save license' }).focus();
   await page.keyboard.press('Enter');
   await expect(form.getByRole('button', { name: 'Clear license' })).toBeEnabled();
 
   // Another face and back: the declaration is stored.
   await page.evaluate(() => (location.hash = '#/?face=6'));
-  await expect(info(page).getByLabel('License type')).toHaveValue('');
+  await expect(info(page).getByLabel('License type')).toHaveAttribute('data-value', '');
   await page.evaluate(() => (location.hash = '#/?face=1'));
-  await expect(type).toHaveValue('web');
+  await expect(type).toHaveAttribute('data-value', 'web');
   await expect(seats).toHaveValue('5');
   await expect(date).toHaveValue('2026-03-01');
 
@@ -64,7 +65,7 @@ test('the License section declares, keeps and clears a family license from the k
   await expect(form.getByRole('button', { name: /Copy receipt/ })).toContainText(
     /\/app-data\/receipts\/receipt-\d+\.pdf/,
   );
-  await expect(type).toHaveValue('web');
+  await expect(type).toHaveAttribute('data-value', 'web');
   await form.getByRole('button', { name: 'Remove receipt' }).press('Enter');
   await expect(form.getByTestId('no-receipt')).toHaveText('None');
 
@@ -76,7 +77,7 @@ test('the License section declares, keeps and clears a family license from the k
 
   // Clearing empties every field.
   await form.getByRole('button', { name: 'Clear license' }).press('Enter');
-  await expect(type).toHaveValue('');
+  await expect(type).toHaveAttribute('data-value', '');
   await expect(seats).toHaveValue('');
   await expect(date).toHaveValue('');
   await expect(form.getByRole('alert')).toHaveCount(0);

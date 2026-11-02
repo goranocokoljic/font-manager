@@ -6,6 +6,7 @@ import { createMockClient } from '../api/mock';
 import { useGlyphsStore } from '../stores/glyphs';
 import { useSelectionStore } from '../stores/selection';
 import InspectorGlyphs from './InspectorGlyphs.vue';
+import { pickOption, selectOptions } from './ui/testing';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 const copyText = vi.hoisted(() => vi.fn());
@@ -47,14 +48,14 @@ describe('inspector glyphs tab', () => {
   it('shows block headings and offers every block in the picker', async () => {
     const w = await mountWith(1);
     expect(w.get('[role="rowheader"]').text()).toContain('Basic Latin');
-    const options = w.findAll('select option').map((o) => o.text());
+    const options = (await selectOptions(w.get('[role="combobox"]'))).map(([, label]) => label);
     expect(options[0]).toBe('All blocks');
     expect(options.some((o) => o.startsWith('Hangul Syllables'))).toBe(true);
   });
 
   it('a block from the picker lists that block only', async () => {
     const w = await mountWith(1);
-    await w.get('select').setValue('Cyrillic');
+    await pickOption(w.get('[role="combobox"]'), 'Cyrillic');
     await flushPromises();
     expect(w.findAll('[role="rowheader"]').map((h) => h.text())).toEqual([
       expect.stringContaining('Cyrillic'),

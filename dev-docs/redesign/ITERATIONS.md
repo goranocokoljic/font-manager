@@ -284,3 +284,101 @@ worst part of the screen — items 4 and 5.
 bundled neutral UI sans; the package ships Inter as subsetted variable woff2 with the
 `opsz` axis, so small sizes use the text optical size. Fonts under `fixtures/fonts/` are the
 test corpus and do not include Inter.
+
+## Iteration 3 — 2026-11-02 — The ui/ Select: every native select replaced (foundation 2 of 3)
+
+**Kind:** shipped. 22 scenes verified by eye before and after at 1280×800, 1000×700 and
+1440×900, light and dark, plus one new scene (`select-open`).
+
+**Critique (step 1):** after iteration 2 the chrome reads as one system — one font, one
+radius family, hairlines, real depth in dark — but the first thing a designer still sees is
+the chip wall, and the second is the preview bar: fourteen controls in three rows, the most
+important one (the sample text) a drop-down. Worst of all is what happens on the first click:
+every drop-down (Sample, Language, Auto size, Surface, the Glyphs block picker, the layout
+presets, the smart-rule editor, Settings › Language) still opened the operating system's
+own menu — Windows grey, Segoe UI, no theme — the one place where the app visibly stopped
+being designed. What is good: the specimens, the inspector structure, the palette, and
+the drawn check boxes, sliders and buttons from iteration 2 hold up.
+
+**Why this change:** backlog item 1 is half done; its second half is the `ui/` components,
+and the Select is the one native control whose *popup* no CSS can draw — so it is the
+component with the biggest visible payoff and the hardest keyboard contract. Doing it
+completely (every one of the 22 `<select>`s in 14 files, both themes, both densities,
+keyboard, tests) rather than building thirteen components lightly follows "finish one area
+completely". The remaining `ui/` components are the next iteration; the foundation is now
+"tokens + drawn controls + a designed popover and select", and the Popover is the piece the
+Preview options (item 5), the Filters drawer (item 4) and the column menu will reuse.
+
+**What changed:**
+- `src/components/ui/UiPopover.vue` — a floating layer teleported to `<body>` (no scrolling
+  pane clips it), placed under its anchor or above it when there is no room, clamped to the
+  window, at most 320 px tall, surface-2 with a hairline and `--fm-shadow-2`, a 120 ms fade.
+  A pointer press outside or a scroll elsewhere asks the owner to close; a resize moves it.
+  It never takes focus, so the dialogs' focus guards (Compare, rule editor, Update) never
+  see focus leave the dialog.
+- `src/components/ui/UiSelect.vue` (+ `types.ts`) — the "select-only combobox" of the ARIA
+  APG: a `<button role="combobox">` showing the chosen option, a listbox in the popover.
+  Focus stays on the button; Up/Down/Home/End/PageUp/PageDown move the active option
+  (`aria-activedescendant`), Enter or Space takes it, Escape closes, Tab closes and moves
+  on, typed letters jump (and the same letter cycles), closed typing changes the value as
+  the native control did. Nine or more options get a filter line: typing narrows the list,
+  Backspace edits, "No matches" when empty. Chosen option has a check glyph and weight 500,
+  active has the hover tint, disabled options are dimmed and carry their `title`. The button
+  is as wide as its longest option (hidden sizers), so a change of value never moves the
+  controls beside it; `fit=false` for a picker that only adds ("Add…" languages). Generic
+  in the value type, so no site casts. `id`, `name`, `aria-*`, `class` fall through to the
+  button, so `<label for>` keeps working. `focus()` is exposed.
+- 14 files, 22 selects replaced: `PreviewControls` (4), `SmartRuleRow` (4), `BlockProperties`
+  (3), `SmartRuleEditor` (2), `CatalogDownload`, `CompareSheet`, `FilterChips`, `GlyphCompare`,
+  `InspectorAxes`, `InspectorGlyphs`, `InspectorLicense`, `StudioPanel`, `HomeView`,
+  `SettingsView`. Each site builds its options as a computed (labels through `t()`, so they
+  follow the language) and drops its `select` CSS. The "first field" focus selectors in
+  `BlockProperties` and `SmartRuleEditor` include `[role="combobox"]`.
+- `src/keyboard/keymap.ts` — a focused combobox is text entry for the keymap, as the native
+  select was: plain keys type ahead instead of running list shortcuts.
+- `src/locales/en.json`, `de.json` — `ui.select.search`, `ui.select.noMatches`.
+- `src/components/ui/testing.ts` (`pickOption`, `selectOptions`) and `e2e/select.ts`
+  (`selectOption`, `optionLabels`) drive the Select the way a user does; 46 Playwright
+  `selectOption` calls, 14 `toHaveValue` checks (now `data-value`) and six option-list reads
+  were updated, none deleted or skipped. `e2e/screens.spec.ts` gets `FM_SCREENS_OPEN=<name>`
+  and waits for the popover's fade; `shots.mjs` gets the `select-open` scene.
+
+**Verified:** `pnpm --filter @fm/desktop typecheck`, `pnpm lint:js`, Vitest (906 tests, 7 new
+for the Select) and `pnpm test:e2e` (272 passed, 16 skipped) green. One e2e failure on the
+first run — `SmartRuleEditor` used the component without importing it, which vue-tsc does
+not report — fixed and re-run green.
+
+**Backlog ticked:** none. Item 1 is now two thirds done: tokens, font, drawn controls, Popover
+and Select. Still to do before ticking: `ui/` Button, IconButton (tooltip), Toggle,
+SegmentedControl, Slider (with value field), Chip, Badge, Drawer, Field, Tabs, EmptyState,
+and moving the check boxes, radios, ranges and colour wells (11 files) onto them.
+
+**Screenshots:** before `.harness/redesign/shots/3/`, after `.harness/redesign/shots/3-after/`.
+Judged side by side: the closed state is the same control as before with a rotating chevron
+and an accent border when open; the open state (`select-open-*.png`, the Glyphs block
+picker) is a themed, elevated menu that floats over the inspector instead of the OS popup.
+The Language select grew to the width of "Serbian (Cyrillic)" (it sizes to its longest
+option, as the native one did on macOS but not on Windows); the preview bar still wraps to
+three rows at 1280 px — item 5 rebuilds that bar. The mock's faces have four Unicode blocks
+and six languages, so no screenshot shows the filter line (needs nine options); it is
+covered by `UiSelect.test.ts`.
+
+**Follow-ups noticed, not done:**
+- The rest of item 1 (above). The Slider should pair the range and the number field that
+  `PreviewControls` and `InspectorAxes` already lay out by hand.
+- `SettingsView` keeps a `.select { align-self: flex-start }` rule and `InspectorLicense` a
+  `.type { width: 100% }` one — the Field component (item 1) should own those.
+- Option labels with counts ("Cyrillic (60)") should set the count in tabular figures and
+  muted colour inside the menu — needs a `SelectOption.detail` field; do it with Badge/Chip.
+- Running `prettier --write "src/**/*"` reformats the generated `src/api/types.ts` (2400
+  lines); it was reverted here. Format only the files touched, or add the file to the
+  Prettier ignore list in a non-UI task.
+- Two stashes from an earlier, interrupted run of this iteration (`iter3 interrupted by
+  usage limit`, `iter3 new files`) are still in `git stash list`; nothing here uses them and
+  they can be dropped.
+- From iteration 2, still open: dark by default (API), the Home toolbar clipping at 1280 px
+  (item 2), tabular figures set once (Badge/Chip), the four components with their own
+  `:focus-visible` offsets, `filters` scene click and `selected-row` vs `list`.
+
+**New dependencies:** none. The three icons (chevron, check, search) are inline SVG paths
+drawn to the Lucide grid (16 px, 1.5 stroke); the Lucide package comes with IconButton.

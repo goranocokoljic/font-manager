@@ -16,6 +16,7 @@ import { useCollectionsStore } from '../stores/collections';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
+import UiSelect from './ui/UiSelect.vue';
 
 const search = useSearchStore();
 const collections = useCollectionsStore();
@@ -30,7 +31,11 @@ function sourceName(id: SourceId): string {
 
 const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
 const languages = computed(() => chosenLanguages(search.filters));
-const addable = computed(() => search.languages.filter((l) => !languages.value.includes(l.code)));
+const addable = computed(() =>
+  search.languages
+    .filter((l) => !languages.value.includes(l.code))
+    .map((l) => ({ value: l.code, label: l.name })),
+);
 const filtering = computed(() => hasFilters(search.filters));
 /** A smart collection needs a chosen filter; the open collection alone is none. */
 const savable = computed(() => hasChosenFilters(search.filters));
@@ -43,10 +48,9 @@ function toggle(chip: Chip): void {
   search.setFilters(toggleChip(search.filters, chip.facet, chip.value));
 }
 
-function onLanguage(e: Event): void {
-  const select = e.target as HTMLSelectElement;
-  if (select.value) search.setFilters(toggleLanguage(search.filters, select.value));
-  select.value = '';
+/** The picker only adds: it shows "Add…" again once a language is chosen. */
+function onLanguage(code: string): void {
+  search.setFilters(toggleLanguage(search.filters, code));
 }
 
 // Saving the chosen filters as a smart collection (E14.4): the rules are the
@@ -118,15 +122,16 @@ async function save(): Promise<void> {
       >
         {{ languageName(search.languages, code) }} <span class="n">{{ search.total }}</span>
       </button>
-      <select
+      <UiSelect
         v-if="addable.length"
         class="add"
+        :model-value="null"
+        :options="addable"
+        :placeholder="t('chips.add')"
+        :fit="false"
         :aria-label="t('chips.addLanguage')"
-        @change="onLanguage"
-      >
-        <option value="">{{ t('chips.add') }}</option>
-        <option v-for="l in addable" :key="l.code" :value="l.code">{{ l.name }}</option>
-      </select>
+        @update:model-value="onLanguage"
+      />
     </div>
     <div class="group actions">
       <button v-if="filtering" type="button" class="chip" @click="search.setFilters({})">
@@ -194,8 +199,10 @@ async function save(): Promise<void> {
   font-size: var(--fm-text-xs);
   font-weight: 600;
 }
+.add {
+  font-size: var(--fm-text-sm);
+}
 .chip,
-.add,
 .name {
   padding: 2px 8px;
   border: 1px solid var(--fm-control-border);

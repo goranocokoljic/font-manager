@@ -7,6 +7,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
+import UiSelect from '../components/ui/UiSelect.vue';
 import {
   CATALOGS,
   LOCALES,
@@ -165,8 +166,12 @@ const systemLocaleName = computed(() => {
   return localeName(resolveLocale('system', preferred));
 });
 
-function chooseLanguage(e: Event): void {
-  choose({ language: (e.target as HTMLSelectElement).value as Language });
+const languageOptions = computed(() => [
+  { value: 'system', label: t('language.system', { name: systemLocaleName.value }) },
+  ...LOCALES.map((tag) => ({ value: tag, label: localeName(tag) })),
+]);
+function chooseLanguage(value: string): void {
+  choose({ language: value as Language });
 }
 </script>
 
@@ -372,18 +377,14 @@ function chooseLanguage(e: Event): void {
           </fieldset>
           <label class="field">
             <span>{{ t('language.label') }}</span>
-            <select
+            <UiSelect
               name="language"
-              class="input select"
+              class="select"
               aria-describedby="language-hint"
-              :value="s.language ?? 'system'"
-              @change="chooseLanguage"
-            >
-              <option value="system">
-                {{ t('language.system', { name: systemLocaleName }) }}
-              </option>
-              <option v-for="tag in LOCALES" :key="tag" :value="tag">{{ localeName(tag) }}</option>
-            </select>
+              :model-value="s.language ?? 'system'"
+              :options="languageOptions"
+              @update:model-value="chooseLanguage"
+            />
           </label>
           <p id="language-hint" class="note">{{ t('language.hint') }}</p>
         </template>

@@ -12,6 +12,7 @@ import {
 } from '../api/mock';
 import { setLocale } from '../i18n';
 import { createAppRouter } from '../router';
+import { pickOption, selectOptions } from '../components/ui/testing';
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: () => false }));
 
@@ -164,18 +165,15 @@ describe('Settings window', () => {
   it('offers the languages and relabels the window the moment one is chosen', async () => {
     const spy = vi.spyOn(client, 'updateSettings');
     const { wrapper } = await mountAt('/settings?section=appearance');
-    const select = wrapper.get('select[name="language"]');
+    const select = wrapper.get('[role="combobox"][name="language"]');
     expect(select.element.closest('label')!.textContent).toContain('Language');
-    expect(select.findAll('option').map((o) => o.element.value)).toEqual(['system', 'en', 'de']);
-    expect(select.findAll('option').map((o) => o.text())).toEqual([
-      'System (English)',
-      'English',
-      'Deutsch',
-    ]);
+    const options = await selectOptions(select);
+    expect(options.map(([value]) => value)).toEqual(['system', 'en', 'de']);
+    expect(options.map(([, label]) => label)).toEqual(['System (English)', 'English', 'Deutsch']);
     expect(wrapper.get('h2').text()).toBe('Appearance');
     expect(shellLocale.value, 'the native shell is told the locale at start').toBe('en');
     try {
-      await select.setValue('de');
+      await pickOption(select, 'de');
       await flushPromises();
       expect(spy).toHaveBeenCalledWith({ language: 'de' });
       expect((await client.getSettings()).language).toBe('de');

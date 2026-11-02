@@ -33,6 +33,8 @@ const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAG
 const session: Record<string, string> = JSON.parse(process.env.FM_SCREENS_SESSION ?? '{}');
 // FM_SCREENS_CLICK='Block 1 properties' clicks the first button whose name starts with it before the shot.
 const click = process.env.FM_SCREENS_CLICK;
+// FM_SCREENS_OPEN=Language opens the Select (a combobox) of that name, so its menu is in the shot.
+const openSelect = process.env.FM_SCREENS_OPEN;
 // FM_SCREENS_PIN=3 pins the first 3 list rows with C and opens Compare; FM_SCREENS_PIN_MODE=Overlay picks a mode.
 const pinRows = Number(process.env.FM_SCREENS_PIN ?? 0);
 const pinMode = process.env.FM_SCREENS_PIN_MODE;
@@ -189,6 +191,12 @@ test.describe('@screens', () => {
               .getByRole('button', { name: new RegExp(`^${click}`) })
               .first()
               .click();
+          }
+          if (openSelect) {
+            await page.getByRole('combobox', { name: openSelect, exact: true }).first().click();
+            await expect(page.getByRole('listbox').first()).toBeVisible();
+            // The menu fades in (120 ms); the shot waits for it to settle.
+            await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
           }
           await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });
         });

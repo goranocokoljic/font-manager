@@ -33,7 +33,7 @@ async function press(
 }
 
 const options = () => [...document.querySelectorAll('[role="option"]')];
-const input = () => document.querySelector<HTMLInputElement>('[role="combobox"]');
+const input = () => document.querySelector<HTMLInputElement>('input[role="combobox"]');
 
 beforeEach(() => {
   localStorage.clear(); // the layout store saves the inspector state
@@ -74,12 +74,12 @@ describe('command palette', () => {
     await mountApp();
     useCommandsStore().openPalette();
     await flushPromises();
-    await wrapper!.find('[role="combobox"]').setValue('gtsb');
+    await wrapper!.find('input[role="combobox"]').setValue('gtsb');
     expect(options()[0].textContent).toContain('Go to the sidebar');
     expect([...options()[0].querySelectorAll('mark')].map((m) => m.textContent).join('')).toBe(
       'Gtsb',
     );
-    await wrapper!.find('[role="combobox"]').setValue('qqq');
+    await wrapper!.find('input[role="combobox"]').setValue('qqq');
     expect(options()).toHaveLength(0);
     expect(document.body.textContent).toContain('No matching commands');
   });
@@ -96,7 +96,7 @@ describe('command palette', () => {
     await press({ key: 'ArrowUp' });
     await press({ key: 'ArrowUp' });
     expect(options().at(-1)!.getAttribute('aria-selected')).toBe('true');
-    await wrapper!.find('[role="combobox"]').setValue('hide insp');
+    await wrapper!.find('input[role="combobox"]').setValue('hide insp');
     expect(options()[0].getAttribute('aria-selected')).toBe('true');
     expect(options()[0].textContent).toContain('Show or hide the inspector');
     await press({ key: 'Enter' });
@@ -128,7 +128,7 @@ describe('command palette', () => {
     await mountApp(); // nothing selected: activation is disabled
     useCommandsStore().openPalette();
     await flushPromises();
-    await wrapper!.find('[role="combobox"]').setValue('for this session');
+    await wrapper!.find('input[role="combobox"]').setValue('for this session');
     expect(options()[0].getAttribute('aria-disabled')).toBe('true');
     const spy = vi.spyOn(useSelectionStore(), 'toggleActivation');
     await press({ key: 'Enter' });

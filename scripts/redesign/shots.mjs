@@ -15,6 +15,7 @@
 //   routes      FM_SCREENS_ROUTES      '/'  '/?face=1@ControlOrMeta+k' (press after load)  '/studio?layout=magazine&face=1'
 //   tab         FM_SCREENS_TAB         inspector tab name: Info | Axes | Features | Glyphs | Developer
 //   click       FM_SCREENS_CLICK       first button whose accessible name starts with this
+//   open        FM_SCREENS_OPEN        open the Select (combobox) of that accessible name
 //   row         FM_SCREENS_ROW         click that list row (1-based) before the route's key is pressed
 //   collection  FM_SCREENS_COLLECTION  make a collection of that name and open it
 //   storage     FM_SCREENS_STORAGE     localStorage JSON (fm.views.v1 holds the view mode)
@@ -44,6 +45,8 @@ const scenes = {
   // is the chip wall as it is. Add `click: 'Filters'` when the drawer lands.
   filters: { routes: '/?face=1' },
   palette: { routes: '/?face=1@ControlOrMeta+k' },
+  // The ui/ Select's menu on a long list (the Glyphs block picker), with its filter line.
+  'select-open': { routes: '/?face=1', tab: 'Glyphs', open: 'Block' },
   similar: { routes: '/?face=1', tab: 'Info', click: 'Find similar' },
   studio: { routes: '/studio?layout=magazine&face=1' },
   // ArrowRight expands the family only when the list has focus: click the row first.
@@ -79,6 +82,7 @@ const envKey = {
   routes: 'FM_SCREENS_ROUTES',
   tab: 'FM_SCREENS_TAB',
   click: 'FM_SCREENS_CLICK',
+  open: 'FM_SCREENS_OPEN',
   row: 'FM_SCREENS_ROW',
   collection: 'FM_SCREENS_COLLECTION',
   storage: 'FM_SCREENS_STORAGE',

@@ -8,6 +8,7 @@ import { useCollectionsStore } from '../stores/collections';
 import { useSelectionStore } from '../stores/selection';
 import { useVirtualStylesStore } from '../stores/virtualStyles';
 import InspectorAxes from './InspectorAxes.vue';
+import { selectOptions } from './ui/testing';
 
 const copyText = vi.hoisted(() => vi.fn());
 vi.mock('../api/clipboard', () => ({ copyText }));
@@ -103,10 +104,11 @@ describe('inspector axes tab', () => {
     const w = mount(InspectorAxes, { global: { plugins: [pinia] } });
     await flushPromises();
     // Only manual collections and sets can hold a virtual style.
-    const options = w.findAll('select option').map((o) => o.text());
+    const holder = w.get('[role="combobox"]');
+    const options = (await selectOptions(holder)).map(([, label]) => label);
     expect(options).toContain('Brand');
     expect(options).not.toContain('Smart');
-    expect((w.get('select').element as HTMLSelectElement).value).toBe(`c${made.id}`);
+    expect(holder.attributes('data-value')).toBe(`c${made.id}`);
 
     await slider(w).setValue('550');
     await w.get('input.field').setValue('Medium Plus');
@@ -133,7 +135,7 @@ describe('inspector axes tab', () => {
     const w = await mountWith(1);
     const name = () => (w.get('input.field').element as HTMLInputElement).value;
     expect(name()).toBe('Regular');
-    expect(w.get('select option').text()).toBe('Set: Poster');
+    expect(await selectOptions(w.get('[role="combobox"]'))).toEqual([['s9', 'Set: Poster']]);
     await w.get('[data-instance="Black"]').trigger('click');
     expect(name()).toBe('Black');
   });

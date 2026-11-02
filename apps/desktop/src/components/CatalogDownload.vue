@@ -9,6 +9,7 @@ import type { CatalogFileKind, SourceId } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useSourcesStore } from '../stores/sources';
+import UiSelect from './ui/UiSelect.vue';
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -19,6 +20,7 @@ const state = computed(() => store.download);
 const family = computed(() => state.value?.family ?? null);
 /** Only folders the user added: never the system fonts or the library folder. */
 const targets = computed(() => sourcesStore.sources.filter((s) => s.kind === 'watched'));
+const targetOptions = computed(() => targets.value.map((s) => ({ value: s.id, label: s.path })));
 const source = ref<SourceId | null>(null);
 const kind = ref<CatalogFileKind>('static');
 const hasVariable = computed(() => (family.value?.axes?.length ?? 0) > 0);
@@ -39,7 +41,7 @@ watch(
   { immediate: true },
 );
 
-const select = ref<HTMLSelectElement | null>(null);
+const select = ref<{ focus: () => void } | null>(null);
 const closeButton = ref<HTMLButtonElement | null>(null);
 onMounted(async () => {
   if (!sourcesStore.sources.length) await sourcesStore.load();
@@ -126,9 +128,12 @@ const folderName = computed(() => family.value?.name ?? '');
       <template v-if="targets.length">
         <label class="field">
           <span>{{ t('catalogs.download.into') }}</span>
-          <select ref="select" v-model="source" data-testid="catalog-download-source">
-            <option v-for="s in targets" :key="s.id" :value="s.id">{{ s.path }}</option>
-          </select>
+          <UiSelect
+            ref="select"
+            v-model="source"
+            :options="targetOptions"
+            data-testid="catalog-download-source"
+          />
         </label>
         <fieldset v-if="hasVariable" class="kinds">
           <legend>{{ t('catalogs.download.files') }}</legend>
