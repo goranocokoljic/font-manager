@@ -411,6 +411,7 @@ mod tests {
                 unmatched: Vec::new(),
                 missing: 0,
                 outcomes: Vec::new(),
+                fetched: Vec::new(),
             })
         }
         fn document_closed(

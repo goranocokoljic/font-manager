@@ -665,6 +665,8 @@ impl ActivationService for ActivationManager {
             matched,
             unmatched,
             outcomes,
+            // Filled by `CoreApi`, which owns the catalogs (E29.5).
+            fetched: Vec::new(),
         })
     }
 

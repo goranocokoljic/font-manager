@@ -319,6 +319,27 @@ pub struct FontsNeededResponse {
     /// One outcome per matched face (a face two fonts matched comes once);
     /// empty when the request did not activate.
     pub outcomes: Vec<ActivationOutcome>,
+    /// The fonts the library did not have whose family this request
+    /// downloaded from an online catalog the user turned on (E29.5), in
+    /// request order; empty unless `Settings::fetch_missing_fonts` is on and
+    /// the request activates.
+    #[serde(default)]
+    pub fetched: Vec<FetchedFont>,
+}
+
+/// A needed font whose family `fonts_needed` downloaded from an online
+/// catalog (E29.5), so a plugin can say what was downloaded.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct FetchedFont {
+    /// The needed font, as asked.
+    pub font: NeededFont,
+    /// The catalog the family came from.
+    pub catalog: crate::catalog::CatalogId,
+    /// The family's name, as the catalog lists it.
+    pub family: String,
+    /// The faces of the family's files in the library, by id.
+    pub faces: Vec<FaceId>,
 }
 
 /// A design app closed a document (E29.3).
@@ -389,6 +410,31 @@ mod tests {
         assert_eq!(req.document.as_deref(), Some("poster.indd"));
         assert_eq!(req.fonts[0].full_name.as_deref(), Some("Inter Bold"));
         assert_eq!(req.fonts[0].style.as_deref(), Some("Bold"));
+    }
+
+    #[test]
+    fn a_fonts_needed_answer_without_fetched_has_none() {
+        let res: FontsNeededResponse =
+            serde_json::from_str(r#"{"matched":[],"unmatched":[],"missing":0,"outcomes":[]}"#)
+                .expect("an answer from before E29.5");
+        assert!(res.fetched.is_empty());
+        let fetched = FetchedFont {
+            font: NeededFont {
+                family: Some("Alegreya".into()),
+                ..NeededFont::default()
+            },
+            catalog: crate::catalog::CatalogId::GoogleFonts,
+            family: "Alegreya".into(),
+            faces: vec![FaceId(7)],
+        };
+        let json = serde_json::to_value(FontsNeededResponse {
+            fetched: vec![fetched],
+            ..res
+        })
+        .expect("json");
+        assert_eq!(json["fetched"][0]["catalog"], "googleFonts");
+        assert_eq!(json["fetched"][0]["family"], "Alegreya");
+        assert_eq!(json["fetched"][0]["faces"][0], 7);
     }
 
     #[test]

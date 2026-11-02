@@ -114,6 +114,19 @@ activates the styles that are there, and the line tells you so.
 To change the folder, open **Settings** → **Online catalogs** and select
 **Change…** next to **Folder for installed fonts**.
 
+### Download the fonts a document needs
+
+Font Manager can install a family for you when a design app opens a document
+that needs a font your library does not have. Turn it on in **Settings** →
+**Online catalogs**: select **Download fonts a document needs from the catalogs
+you turned on**. The switch works only when the folder for installed fonts is
+chosen and at least one catalog is on.
+
+Font Manager downloads only from the catalogs you turned on. It looks for the
+family only in the font lists it already has; refresh a catalog to get its
+newest list. The family goes into the folder for installed fonts, the same as
+**Install**. See [Fonts a document needs](activation.md#fonts-a-document-needs).
+
 ### Download a family into a folder you choose
 
 **Download…** is the manual way. It puts the files into a folder that you

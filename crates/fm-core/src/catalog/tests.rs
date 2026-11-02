@@ -1083,3 +1083,86 @@ fn versions_compare_by_their_numbers() {
         assert!(!is_newer_version(now, had), "{now} is not newer than {had}");
     }
 }
+
+#[test]
+fn a_document_font_finds_its_cached_family_by_family_else_by_its_full_name() {
+    let dir = TempDir::new("catalog-find-family");
+    let (c, fetcher) = refreshed(&dir);
+    fetcher.set(Err(FmError::new(ErrorCode::Io, "offline")));
+    let calls = fetcher.calls();
+    let found = |family: Option<&str>, full: Option<&str>| c.find_cached_family(family, full);
+    let hit = |name: &str| Some((GOOGLE, name.to_owned()));
+    // The family, ignoring case and surrounding space.
+    assert_eq!(found(Some(" lato "), None), hit("Lato"));
+    assert_eq!(
+        found(Some("Playfair Display"), Some("Lato Bold")),
+        hit("Playfair Display")
+    );
+    // A family given is the only name looked up.
+    assert_eq!(found(Some("Lateral"), Some("Lato Bold")), None);
+    // Without a family: the listed name the full name starts with, then a
+    // space or nothing.
+    assert_eq!(
+        found(None, Some("Playfair Display Bold Italic")),
+        hit("Playfair Display")
+    );
+    assert_eq!(found(None, Some("noto sans jp")), hit("Noto Sans JP"));
+    assert_eq!(
+        found(None, Some("Lateral Bold")),
+        None,
+        "Lato is not a word of it"
+    );
+    assert_eq!(found(None, Some("Latoya")), None);
+    assert_eq!(found(None, None), None);
+    assert_eq!(found(Some("  "), Some("")), None);
+    assert_eq!(fetcher.calls(), calls, "only the cache is read");
+
+    // An off catalog finds nothing; on again, its cache is there.
+    c.set_enabled(GOOGLE, false).expect("off");
+    assert_eq!(found(Some("Lato"), None), None);
+    c.set_enabled(GOOGLE, true).expect("on");
+    assert_eq!(found(Some("Lato"), None), hit("Lato"));
+}
+
+#[test]
+fn a_catalog_never_refreshed_finds_no_document_font() {
+    let dir = TempDir::new("catalog-find-never");
+    let fetcher = Scripted::failing();
+    let c = catalogs(&dir, &fetcher);
+    c.set_enabled(GOOGLE, true).expect("on");
+    assert_eq!(c.find_cached_family(Some("Lato"), None), None);
+    assert_eq!(fetcher.calls(), 0);
+}
+
+#[test]
+fn a_download_with_a_deadline_gone_makes_no_request_and_writes_nothing() {
+    let dir = TempDir::new("catalog-download-deadline");
+    let server = lato_server((200, fixture(BOLD)));
+    let c = downloading(&dir, &server);
+    let source = dir.path().join("My Fonts");
+    fs::create_dir_all(&source).expect("source");
+    let hits = server.hits();
+    let e = c
+        .download_until(
+            std::time::Instant::now(),
+            GOOGLE,
+            "Lato",
+            CatalogFileKind::Static,
+            &source,
+        )
+        .expect_err("out of time");
+    assert_eq!(e.code(), ErrorCode::Io);
+    assert_eq!(server.hits(), hits, "no request");
+    assert!(listing(&source.join("Lato")).is_empty());
+    // With time left it downloads as usual.
+    let got = c
+        .download_until(
+            std::time::Instant::now() + Duration::from_secs(60),
+            GOOGLE,
+            "Lato",
+            CatalogFileKind::Static,
+            &source,
+        )
+        .expect("download");
+    assert_eq!(got.written.len(), 2);
+}

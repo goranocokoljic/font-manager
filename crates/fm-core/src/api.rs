@@ -156,6 +156,9 @@ pub struct CoreApi {
     /// The command that starts the stdio shim, for the Claude Desktop
     /// snippet (E27.7); `None` without the app.
     mcp_shim: Option<fm_platform::mcp_shim::ShimCommand>,
+    /// How long the catalog downloads of one `fonts_needed` may take in all
+    /// (E29.5): [`fetch_missing::FETCH_BUDGET`]; tests wait less.
+    fetch_budget: std::time::Duration,
     events: Arc<Broadcast>,
     /// The files read so far; loaded from the index by the first scan.
     files: Arc<Mutex<Option<FileIndex>>>,
@@ -232,6 +235,7 @@ impl CoreApi {
             endpoint: None,
             mcp_confirmations: crate::mcp::Confirmations::default(),
             mcp_shim: None,
+            fetch_budget: fetch_missing::FETCH_BUDGET,
             events,
             files: Arc::new(Mutex::new(None)),
             next_job: AtomicU32::new(1),
@@ -294,6 +298,14 @@ impl CoreApi {
     #[must_use]
     pub fn with_mcp_shim(mut self, command: fm_platform::mcp_shim::ShimCommand) -> Self {
         self.mcp_shim = Some(command);
+        self
+    }
+
+    /// The same API, where the catalog downloads of one `fonts_needed` may
+    /// take `budget` in all (60 s by default; tests wait less).
+    #[must_use]
+    pub fn with_fetch_budget(mut self, budget: std::time::Duration) -> Self {
+        self.fetch_budget = budget;
         self
     }
 
@@ -457,7 +469,8 @@ impl CoreApi {
     /// and records the provenance of the files written (none recorded when
     /// every file was already there). A download that stopped after some
     /// files were written answers them with its `error`, recorded like a
-    /// finished one; the caller rescans `source`.
+    /// finished one; the caller rescans `source`. With a `deadline`, every
+    /// request of the download ends by then (E29.5).
     fn save_download(
         &self,
         id: CatalogId,
@@ -465,8 +478,13 @@ impl CoreApi {
         kind: CatalogFileKind,
         source: &Source,
         into: &Path,
+        deadline: Option<std::time::Instant>,
     ) -> ApiResult<SavedDownload> {
-        let got = self.catalogs()?.download(id, family, kind, into)?;
+        let catalogs = self.catalogs()?;
+        let got = match deadline {
+            Some(deadline) => catalogs.download_until(deadline, id, family, kind, into)?,
+            None => catalogs.download(id, family, kind, into)?,
+        };
         let at = crate::catalog::now_rfc3339();
         let mut error = got.stopped.clone().map(ApiError::from);
         if !got.written.is_empty() {
@@ -1029,8 +1047,19 @@ impl ActivationService for CoreApi {
         self.activation.list_conflicts()
     }
 
+    /// Matches and activates; with `fetch_missing_fonts` on and `activate`,
+    /// first downloads the families of the fonts the library does not have
+    /// from the catalogs the user turned on (E29.5), so the matching finds
+    /// them.
     fn fonts_needed(&self, req: FontsNeededRequest) -> ApiResult<FontsNeededResponse> {
-        self.activation.fonts_needed(req)
+        let fetched = if req.activate {
+            self.fetch_missing(&req)?
+        } else {
+            Vec::new()
+        };
+        let mut res = self.activation.fonts_needed(req)?;
+        res.fetched = fetched;
+        Ok(res)
     }
 
     fn document_closed(&self, req: DocumentClosedRequest) -> ApiResult<DocumentClosedResponse> {
@@ -1713,7 +1742,7 @@ impl CatalogService for CoreApi {
             ));
         }
         let into = PathBuf::from(&source.path);
-        let saved = self.save_download(req.id, &req.family, req.kind, &source, &into)?;
+        let saved = self.save_download(req.id, &req.family, req.kind, &source, &into, None)?;
         let scan = self.start_scan(vec![source])?;
         Ok(DownloadFamilyResponse {
             download: saved.download,
@@ -1840,6 +1869,7 @@ impl EventSource for CoreApi {
     }
 }
 
+mod fetch_missing;
 mod install;
 #[cfg(test)]
 mod tests;

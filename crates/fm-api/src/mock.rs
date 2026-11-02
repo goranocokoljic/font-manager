@@ -2954,6 +2954,8 @@ impl ActivationService for MockApi {
             matched,
             unmatched,
             outcomes,
+            // The mock has no catalog files to download (E29.5).
+            fetched: Vec::new(),
         })
     }
 

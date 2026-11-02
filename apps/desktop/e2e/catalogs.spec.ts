@@ -202,6 +202,32 @@ test('Settings -> Online catalogs turns Google Fonts on with the same switch', a
   await expect(sidebar(page).getByRole('button', { name: 'Turn on Google Fonts' })).toHaveCount(0);
 });
 
+test('Settings -> Online catalogs offers to download fonts a document needs once a folder and a catalog are set', async ({
+  page,
+}) => {
+  await serveFonts(page);
+  await page.goto('/#/settings?section=catalogs');
+  const fetch = page.getByRole('checkbox', {
+    name: 'Download fonts a document needs from the catalogs you turned on',
+  });
+  await expect(fetch).not.toBeChecked();
+  await expect(fetch).toBeDisabled();
+  await expect(fetch).toHaveAccessibleDescription(
+    'Choose the folder for installed fonts and turn a catalog on first.',
+  );
+  await page.getByTestId('settings-download-folder-change').click();
+  await expect(page.getByTestId('settings-download-folder-path')).toBeVisible();
+  await expect(fetch, 'no catalog on yet').toBeDisabled();
+  await page.getByRole('checkbox', { name: 'Google Fonts' }).check();
+  await expect(fetch).toBeEnabled();
+  await expect(fetch).toHaveAccessibleDescription(/downloads only from catalogs you turned on/);
+  await fetch.focus();
+  await page.keyboard.press('Space');
+  await expect(fetch).toBeChecked();
+  await page.reload();
+  await expect(fetch, 'saved').toBeChecked();
+});
+
 for (const locale of ['en-US', 'de-DE']) {
   test.describe(`narrow window (${locale})`, () => {
     test.use({ locale, viewport: { width: 1100, height: 700 } });

@@ -116,6 +116,24 @@ part that differs per catalog needs one narrow seam.
   would turn into a session one). A family already in the library (a recorded download
   whose files the library still has, else faces in `<folder>/<family>/`) is not
   downloaded again: its faces are activated and the answer says `alreadyInstalled`.
+- **Fetch on demand (E29.5).** `Settings::fetch_missing_fonts` (off by default; Settings
+  → Online catalogs, under the download folder, disabled while there is no download
+  folder or no catalog is on) lets `fonts_needed` install a font a document needs and
+  the library does not have. It keeps rule 7: the user turns the switch on, and only
+  catalogs the user turned on are used. Only `fonts_needed` with `activate: true`
+  fetches (a design app opened a document); `activate: false` and
+  `check_document_fonts` never do. The lookup is cache-only: each unmatched font's
+  `family` (else the family part of its full name: the longest cached family name it
+  starts with, followed by a space or nothing) is compared with the cached list of each
+  catalog that is on, ignoring case, so the lookup makes no request and a catalog never
+  refreshed finds nothing. A hit runs the install path without its activation (static
+  files into `download_folder`, provenance, rescan); `fonts_needed` then matches again
+  and session-activates the new faces itself, tagged with the document (E29.3). Each
+  family is fetched once per request; a failure is logged and leaves its fonts
+  `unmatched`, never an error for the others. All requests of one `fonts_needed` end
+  within 60 s (a request still running then is abandoned and its answer dropped, so
+  nothing it fetched is written). The answer lists what was downloaded in `fetched`, so
+  the plugins can say "Downloaded 1 family from Google Fonts: Alegreya".
 
 ## Consequences
 

@@ -74,6 +74,35 @@ With the keyboard: select the font, open the **Developer** tab of the
 inspector and choose **Copy for Font Switch**. This copies the same data to
 the clipboard.
 
+## Fonts a document needs
+
+The Font Manager plugins for design apps (Photoshop, Illustrator, InDesign and
+Sketch) tell Font Manager which fonts a document uses when you open it. Font
+Manager finds them in your library and activates them for this session. When you
+close the document, the plugin asks if it can deactivate the fonts that only
+this document used. A font that your library does not have is listed as missing.
+
+### Download a missing font from a catalog
+
+Font Manager can also download a missing font from an online catalog. This is
+off until you turn it on:
+
+1. Open **Settings** → **Online catalogs**.
+2. Turn on a catalog, for example Google Fonts, and choose the **Folder for
+   installed fonts**.
+3. Select **Download fonts a document needs from the catalogs you turned on**.
+
+When a document needs a font that your library does not have, Font Manager looks
+for its family in the font lists of the catalogs you turned on. It looks only in
+the lists it already has, so the search itself does not use the internet. When it
+finds the family, it downloads it into the folder for installed fonts, adds it to
+your library and activates the font for the document. The plugin tells you, for
+example "Downloaded 1 family from Google Fonts: Alegreya".
+
+Font Manager downloads only from catalogs you turned on, and only when a design
+app opens a document. A download that fails, or that takes longer than one
+minute, leaves the font missing; the other fonts are not affected.
+
 ## Rules that keep your system safe
 
 - Font Manager never needs administrator rights.

@@ -4,6 +4,7 @@ import {
   DocumentWatcher,
   type PluginUi,
   deactivateQuestion,
+  downloadedFontsMessage,
   fontLabel,
   missingFontsMessage,
 } from '../src/session';
@@ -199,5 +200,62 @@ describe('missing fonts message', () => {
     expect(fontLabel({ family: 'A', style: 'Bold' })).toBe('A Bold');
     expect(fontLabel({})).toBe('Unnamed font');
     expect(missingFontsMessage([{ family: 'A' }])).toBe('1 font missing: A');
+  });
+  it('says what the app downloaded, then counts only what is still missing', async () => {
+    const alegreya = { family: 'Alegreya', style: 'Bold' };
+    const roboto = { fullName: 'Roboto Slab Light' };
+    const fake = fakeEndpoint({
+      fonts_needed: () => ({
+        matched: [{ font: alegreya, face: 12, matchedBy: 'family' }],
+        unmatched: [roboto],
+        missing: 1,
+        outcomes: [{ face: 12, outcome: 'done' }],
+        fetched: [{ font: alegreya, catalog: 'googleFonts', family: 'Alegreya', faces: [12, 13] }],
+      }),
+    });
+    const ui: PluginUi = { notify: vi.fn(), confirm: vi.fn(async () => true) };
+    const watcher = new DocumentWatcher(new FmClient(fake), ui, { reportMissing: true });
+    await watcher.opened(doc, [alegreya, roboto]);
+    expect(vi.mocked(ui.notify).mock.calls).toEqual([
+      ['Downloaded 1 family from Google Fonts: Alegreya'],
+      ['1 font missing: Roboto Slab Light'],
+    ]);
+    // Fonts the host reports missing later go the same way.
+    await watcher.missing(doc, [alegreya]);
+    expect(ui.notify).toHaveBeenCalledTimes(3);
+    expect(ui.notify).toHaveBeenLastCalledWith('Downloaded 1 family from Google Fonts: Alegreya');
+  });
+
+  it('says nothing about downloads when nothing was fetched, or the app sends no list', async () => {
+    const ui: PluginUi = { notify: vi.fn(), confirm: vi.fn(async () => true) };
+    const none = fakeEndpoint({
+      fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [], fetched: [] }),
+    });
+    await new DocumentWatcher(new FmClient(none), ui).opened(doc, [inter]);
+    const older = fakeEndpoint({
+      fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [] }),
+    });
+    await new DocumentWatcher(new FmClient(older), ui).opened(doc, [inter]);
+    expect(ui.notify).not.toHaveBeenCalled();
+  });
+
+  it('counts families once per catalog and names each catalog', () => {
+    const f = (family: string, catalog: 'googleFonts' | 'fontshare') => ({
+      font: { family },
+      catalog,
+      family,
+      faces: [1],
+    });
+    expect(downloadedFontsMessage([])).toBe('');
+    expect(
+      downloadedFontsMessage([
+        f('Alegreya', 'googleFonts'),
+        f('Alegreya', 'googleFonts'),
+        f('Lato', 'googleFonts'),
+        f('General Sans', 'fontshare'),
+      ]),
+    ).toBe(
+      'Downloaded 2 families from Google Fonts: Alegreya, Lato. Downloaded 1 family from Fontshare: General Sans',
+    );
   });
 });

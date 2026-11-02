@@ -1126,6 +1126,9 @@
       "downloadFolder": "Folder for installed fonts",
       "downloadFolderNone": "Not chosen yet. The first Install asks for it.",
       "downloadFolderHint": "Install puts the fonts it downloads into this folder. Font Manager writes into no other folder without asking.",
+      "fetchMissing": "Download fonts a document needs from the catalogs you turned on",
+      "fetchMissingHint": "When a design app opens a document with a font your library does not have, Font Manager looks it up in the font lists it already has and installs the family into the folder above. It downloads only from catalogs you turned on.",
+      "fetchMissingNeeds": "Choose the folder for installed fonts and turn a catalog on first.",
       "change": "Change…"
     },
     "sources": {

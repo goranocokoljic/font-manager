@@ -98,6 +98,12 @@ pub struct Settings {
     /// `None` until the user chooses it.
     #[serde(default)]
     pub download_folder: Option<String>,
+    /// Download fonts a document needs from the catalogs the user turned on
+    /// (E29.5): `fonts_needed` with `activate` looks a font the library does
+    /// not have up in the cached lists and installs its family into
+    /// [`Self::download_folder`]. Off by default.
+    #[serde(default)]
+    pub fetch_missing_fonts: bool,
 }
 
 impl Default for Settings {
@@ -115,6 +121,7 @@ impl Default for Settings {
             check_updates_automatically: false,
             language: Language::System,
             download_folder: None,
+            fetch_missing_fonts: false,
         }
     }
 }
@@ -161,6 +168,9 @@ pub struct SettingsUpdate {
     /// string to forget it.
     #[serde(default)]
     pub download_folder: Option<String>,
+    /// Download fonts a document needs from the catalogs the user turned on.
+    #[serde(default)]
+    pub fetch_missing_fonts: Option<bool>,
 }
 
 impl Settings {
@@ -217,6 +227,9 @@ impl Settings {
                 .unwrap_or(self.check_updates_automatically),
             language: update.language.unwrap_or(self.language),
             download_folder,
+            fetch_missing_fonts: update
+                .fetch_missing_fonts
+                .unwrap_or(self.fetch_missing_fonts),
         })
     }
 }
@@ -659,6 +672,36 @@ mod tests {
             let err = s.apply(&update).expect_err("out of range");
             assert_eq!(err.code, ErrorCode::InvalidRequest);
         }
+    }
+
+    #[test]
+    fn fetching_missing_fonts_is_off_by_default_turned_on_and_kept_by_other_updates() {
+        assert!(!Settings::default().fetch_missing_fonts);
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old file");
+        assert!(!old.fetch_missing_fonts, "a config.json from before E29.5");
+        let on: SettingsUpdate =
+            serde_json::from_value(serde_json::json!({ "fetchMissingFonts": true }))
+                .expect("update");
+        let next = Settings::default().apply(&on).expect("valid");
+        assert!(next.fetch_missing_fonts);
+        assert_eq!(
+            serde_json::to_value(&next).expect("json")["fetchMissingFonts"],
+            true
+        );
+        let other = next
+            .apply(&SettingsUpdate {
+                theme: Some(Theme::Light),
+                ..SettingsUpdate::default()
+            })
+            .expect("valid");
+        assert!(other.fetch_missing_fonts, "kept by another update");
+        let off = other
+            .apply(&SettingsUpdate {
+                fetch_missing_fonts: Some(false),
+                ..SettingsUpdate::default()
+            })
+            .expect("valid");
+        assert!(!off.fetch_missing_fonts);
     }
 
     #[test]
