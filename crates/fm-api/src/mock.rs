@@ -14,7 +14,7 @@ use crate::activation::{
     ActivateRequest, ActivationMode, ActivationOutcome, ActiveFace, Clash, ClashWinner, Conflict,
     ConflictPolicy, ConflictWith, DeactivateRequest, DocumentClosedRequest, DocumentClosedResponse,
     FontsNeededRequest, FontsNeededResponse, NeededFont, NeededFontMatch, NeededFontRule,
-    OutcomeStatus, Target,
+    OfferedFace, OutcomeStatus, Target,
 };
 use crate::catalog::{
     Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
@@ -2993,7 +2993,25 @@ impl ActivationService for MockApi {
                 }
             }
         }
-        Ok(DocumentClosedResponse { offer })
+        let offered = offer
+            .iter()
+            .map(|&face| {
+                let summary = st
+                    .faces
+                    .iter()
+                    .find(|f| f.detail.face.id == face)
+                    .map(|f| &f.detail.face);
+                OfferedFace {
+                    face,
+                    family: summary.map(|s| s.family_name.clone()).unwrap_or_default(),
+                    style: summary.map(|s| s.style.clone()).unwrap_or_default(),
+                    postscript_name: summary
+                        .map(|s| s.postscript_name.clone())
+                        .filter(|n| !n.is_empty()),
+                }
+            })
+            .collect();
+        Ok(DocumentClosedResponse { offer, offered })
     }
 }
 

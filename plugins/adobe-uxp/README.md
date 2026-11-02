@@ -11,7 +11,9 @@ app finds and activates them (E29.2).
   `select`) are sent again.
 - **Close.** When a document closes, the plugin calls `document_closed`. When
   the app offers fonts only that document used, it asks "Deactivate N fonts
-  used only by <document>?"; Deactivate calls `deactivate` with those faces,
+  used only by <document>? <font>, <font>, …" with the names of the fonts
+  (E30.5; the first 8, then "and N more"; the count only from an app older
+  than E30.5); Deactivate calls `deactivate` with those faces,
   Keep them leaves them active.
 - **Missing fonts panel (E30.4).** The panel shows "N fonts missing" for the
   active document and lists each font the host reports missing as "In your

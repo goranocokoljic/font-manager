@@ -2,7 +2,7 @@
 // E29.3). The host adapters turn the app's events into these calls; the
 // matching, the activation and the offer are the app's.
 
-import type { FetchedFont, FontsNeededResponse, NeededFont } from './api';
+import type { DocumentClosedResponse, FetchedFont, FontsNeededResponse, NeededFont } from './api';
 import { FmApiError, type FmClient, NOT_RUNNING, NotRunningError } from './client';
 import { PANEL_STRINGS } from './panel-strings';
 
@@ -22,10 +22,34 @@ export interface PluginUi {
   confirm(message: string): Promise<boolean>;
 }
 
-/** The question asked when a closed document leaves faces only it used. */
-export function deactivateQuestion(count: number, document: string): string {
+/** The most font names the deactivate question lists; the rest are counted. */
+export const QUESTION_NAMES = 8;
+
+/**
+ * The question asked when a closed document leaves faces only it used (E29.3), with
+ * the names of the fonts when the app sent them (E30.5): "Deactivate 3 fonts used only
+ * by brand.ai? Alegreya Bold, Alegreya Italic, Actor". More than eight names: the first
+ * eight, then "and N more". No names: the count only.
+ */
+export function deactivateQuestion(count: number, document: string, names: string[] = []): string {
   const fonts = count === 1 ? '1 font' : `${count} fonts`;
-  return `Deactivate ${fonts} used only by ${document}?`;
+  const question = `Deactivate ${fonts} used only by ${document}?`;
+  if (names.length === 0) return question;
+  const listed = names.slice(0, QUESTION_NAMES).join(', ');
+  const more = names.length - QUESTION_NAMES;
+  return more > 0 ? `${question} ${listed} and ${more} more` : `${question} ${listed}`;
+}
+
+/**
+ * The names of a `document_closed` offer, one per face by `fontLabel`'s rule. Empty when
+ * the app sent no names (older than E30.5) or names that do not match the offer.
+ */
+export function offeredNames(closed: DocumentClosedResponse): string[] {
+  const offered = closed.offered ?? [];
+  if (offered.length !== closed.offer.length) return [];
+  return offered.map((o) =>
+    fontLabel({ postscriptName: o.postscriptName, family: o.family, style: o.style }),
+  );
 }
 
 /** The name a plugin shows for a font: its PostScript or full name, else family and style. */
@@ -129,9 +153,11 @@ export class DocumentWatcher {
   closed(doc: HostDocument): Promise<void> {
     return this.run(async () => {
       this.lastMissing.delete(doc.key);
-      const { offer } = await this.reached(this.client.documentClosed({ document: doc.key }));
+      const closed = await this.reached(this.client.documentClosed({ document: doc.key }));
+      const { offer } = closed;
       if (offer.length === 0) return;
-      if (!(await this.ui.confirm(deactivateQuestion(offer.length, doc.name)))) return;
+      const question = deactivateQuestion(offer.length, doc.name, offeredNames(closed));
+      if (!(await this.ui.confirm(question))) return;
       await this.reached(this.client.deactivate({ target: { kind: 'faces', faces: offer } }));
     });
   }

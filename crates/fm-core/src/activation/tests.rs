@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use fm_api::activation::OfferedFace;
 use fm_api::activation::OutcomeStatus as Status;
 use fm_api::common::Health;
 use fm_api::library::{ProblemKind, SourceKind};
@@ -1426,6 +1427,49 @@ fn closing_a_document_offers_the_faces_no_open_document_needs() {
     assert_eq!(closed(&fx, "flyer.indd"), vec![bold, inter]);
     assert_eq!(tags(&fx), vec![]);
     assert_eq!(fx.registered(), registered);
+}
+
+/// E30.5: `offered` names every face of `offer`, in the same order, with the
+/// family, style and PostScript name the index holds for it.
+#[test]
+fn a_closed_document_names_the_faces_it_offers_from_the_index() {
+    let fx = Fixture::new();
+    let (bold, inter) = (fx.bold(), fx.inter());
+    need(&fx, "flyer.indd", &["Roboto-Bold", "Inter-Regular"]);
+    let res = fx
+        .service
+        .document_closed(DocumentClosedRequest {
+            document: "flyer.indd".to_owned(),
+        })
+        .expect("document closed");
+    assert_eq!(res.offer, vec![bold, inter]);
+    let offered: Vec<FaceId> = res.offered.iter().map(|o| o.face).collect();
+    assert_eq!(offered, res.offer, "one entry per face, same order");
+    assert_eq!(
+        res.offered,
+        vec![
+            OfferedFace {
+                face: bold,
+                family: "Roboto".into(),
+                style: "Bold".into(),
+                postscript_name: Some("Roboto-Bold".into()),
+            },
+            OfferedFace {
+                face: inter,
+                family: "Inter".into(),
+                style: "Regular".into(),
+                postscript_name: Some("Inter-Regular".into()),
+            },
+        ]
+    );
+    // Nothing offered, nothing named.
+    let again = fx
+        .service
+        .document_closed(DocumentClosedRequest {
+            document: "flyer.indd".to_owned(),
+        })
+        .expect("document closed");
+    assert!(again.offer.is_empty() && again.offered.is_empty());
 }
 
 /// E29.3 criterion 3: a face the user activated, before or after the

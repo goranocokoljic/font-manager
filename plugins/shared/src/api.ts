@@ -19,6 +19,7 @@ export type {
   FontsNeededResponse,
   NeededFont,
   NeededFontMatch,
+  OfferedFace,
   OutcomeStatus,
   Target,
 } from '../../../apps/desktop/src/api/types';

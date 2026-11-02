@@ -17,7 +17,9 @@ app finds and activates them (E29.2). It does what the UXP plugin
   therefore reports nothing for it.
 - **Close.** When a document closes, it calls `document_closed`. When the app
   offers fonts only that document used, it asks "Deactivate N fonts used only
-  by <document>?"; Deactivate calls `deactivate` with those faces, Keep them
+  by <document>? <font>, <font>, …" with the names of the fonts (E30.5; the
+  first 8, then "and N more"; the count only from an app older than E30.5);
+  Deactivate calls `deactivate` with those faces, Keep them
   leaves them active.
 - **App not running.** It says "Font Manager is not running" once and does
   nothing else.

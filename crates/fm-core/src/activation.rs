@@ -671,8 +671,11 @@ impl ActivationService for ActivationManager {
     }
 
     fn document_closed(&self, req: DocumentClosedRequest) -> ApiResult<DocumentClosedResponse> {
-        let offer = self.lock().close_document(&req.document)?;
-        Ok(DocumentClosedResponse { offer })
+        let mut index = self.lock();
+        let offer = index.close_document(&req.document)?;
+        // The names of the offer, so a plugin can list them (E30.5).
+        let offered = index.offered_faces(&offer)?;
+        Ok(DocumentClosedResponse { offer, offered })
     }
 }
 

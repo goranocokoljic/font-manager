@@ -358,6 +358,26 @@ pub struct DocumentClosedResponse {
     /// needs any more, in id order. Deactivate them with
     /// [`ActivationService::deactivate`] when the user accepts.
     pub offer: Vec<FaceId>,
+    /// The names of the faces in `offer`, one per face in the same order
+    /// (E30.5), so a plugin can name them in its question. Empty from an
+    /// app older than E30.5.
+    #[serde(default)]
+    pub offered: Vec<OfferedFace>,
+}
+
+/// A face [`ActivationService::document_closed`] offers, with the names a
+/// plugin shows for it (E30.5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct OfferedFace {
+    /// The face.
+    pub face: FaceId,
+    /// Its family name, as the library groups it.
+    pub family: String,
+    /// Its style name.
+    pub style: String,
+    /// Its PostScript name; `None` when the font declares none.
+    pub postscript_name: Option<String>,
 }
 
 /// Activation and deactivation.
@@ -435,6 +455,29 @@ mod tests {
         assert_eq!(json["fetched"][0]["catalog"], "googleFonts");
         assert_eq!(json["fetched"][0]["family"], "Alegreya");
         assert_eq!(json["fetched"][0]["faces"][0], 7);
+    }
+
+    #[test]
+    fn a_document_closed_answer_without_offered_has_none() {
+        let res: DocumentClosedResponse =
+            serde_json::from_str(r#"{"offer":[3]}"#).expect("an answer from before E30.5");
+        assert_eq!(res.offer, vec![FaceId(3)]);
+        assert!(res.offered.is_empty());
+        let json = serde_json::to_value(DocumentClosedResponse {
+            offered: vec![OfferedFace {
+                face: FaceId(3),
+                family: "Alegreya".into(),
+                style: "Bold Italic".into(),
+                postscript_name: Some("Alegreya-BoldItalic".into()),
+            }],
+            ..res
+        })
+        .expect("json");
+        assert_eq!(json["offer"][0], 3);
+        assert_eq!(json["offered"][0]["face"], 3);
+        assert_eq!(json["offered"][0]["family"], "Alegreya");
+        assert_eq!(json["offered"][0]["style"], "Bold Italic");
+        assert_eq!(json["offered"][0]["postscriptName"], "Alegreya-BoldItalic");
     }
 
     #[test]
