@@ -418,7 +418,10 @@ mod tests {
             &self,
             _: fm_api::activation::DocumentClosedRequest,
         ) -> ApiResult<fm_api::activation::DocumentClosedResponse> {
-            Ok(fm_api::activation::DocumentClosedResponse { offer: Vec::new() })
+            Ok(fm_api::activation::DocumentClosedResponse {
+                offer: Vec::new(),
+                offered: Vec::new(),
+            })
         }
     }
 

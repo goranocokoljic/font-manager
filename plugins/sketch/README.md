@@ -14,7 +14,9 @@ same `@fm/plugin-shared` code.
   message: "N fonts missing: <names>".
 - **Close.** On `CloseDocument` it calls `document_closed`. When the app
   offers fonts only that document used, it asks "Deactivate N fonts used only
-  by <document>?"; Deactivate calls `deactivate` with those faces, Keep
+  by <document>? <font>, <font>, …" with the names of the fonts (E30.5; the
+  first 8, then "and N more"; the count only from an app older than E30.5);
+  Deactivate calls `deactivate` with those faces, Keep
   leaves them active.
 - **App not running.** It says "Font Manager is not running" once and does
   nothing else, until the app answers again. Sketch runs every action in a

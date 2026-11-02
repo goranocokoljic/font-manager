@@ -17,10 +17,18 @@ const inter = { name: 'Inter-Italic', family: 'Inter', style: 'Italic' };
 
 const poster = () => mockDocument('Poster.ai', '/work', [[minion, lora, minion], [inter], []]);
 
+/** E30.5: the app names every face it offers; the PostScript name is what the question shows. */
+const named = (face: number) => ({
+  face,
+  family: `Family ${face}`,
+  style: 'Bold',
+  postscriptName: `Font${face}-Bold`,
+});
+
 function setup(open: MockDocument[] = [], offer: number[] = []) {
   const fake = fakeEndpoint({
     fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [] }),
-    document_closed: () => ({ offer }),
+    document_closed: () => ({ offer, offered: offer.map(named) }),
     deactivate: () => [],
   });
   const host = mockIllustrator(open);
@@ -117,7 +125,7 @@ describe('watchIllustrator', () => {
     expect(dialogs).toEqual([
       {
         title: 'Font Manager',
-        message: 'Deactivate 2 fonts used only by Poster.ai?',
+        message: 'Deactivate 2 fonts used only by Poster.ai? Font4-Bold, Font9-Bold',
         buttons: ['Keep them', 'Deactivate'],
       },
     ]);

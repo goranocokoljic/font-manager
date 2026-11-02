@@ -7,7 +7,7 @@ use std::sync::Arc;
 use fm_api::activation::{
     ActivateRequest, ActivationMode, Clash, ClashWinner, ConflictPolicy, ConflictWith,
     DeactivateRequest, DocumentClosedRequest, FontsNeededRequest, NeededFont, NeededFontRule,
-    OutcomeStatus, Target,
+    OfferedFace, OutcomeStatus, Target,
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Page, Slant};
 use fm_api::comparison::{
@@ -316,7 +316,28 @@ fn a_closed_document_offers_its_faces_no_other_document_needs() {
 
     assert_eq!(close("poster.indd"), [], "the flyer needs Italic");
     assert_eq!(shows(2).as_deref(), Some("flyer.indd"));
-    assert_eq!(close("flyer.indd"), [FaceId(2)]);
+    let last = api
+        .document_closed(DocumentClosedRequest {
+            document: "flyer.indd".into(),
+        })
+        .unwrap();
+    assert_eq!(last.offer, [FaceId(2)]);
+    // E30.5: one name per offered face, in the same order, from the library.
+    let italic = api.get_face(FaceId(2)).unwrap().face;
+    assert_eq!(
+        last.offered,
+        [OfferedFace {
+            face: FaceId(2),
+            family: italic.family_name,
+            style: italic.style,
+            postscript_name: Some(italic.postscript_name),
+        }]
+    );
+    assert_eq!(
+        last.offered[0].postscript_name.as_deref(),
+        Some("Inter-Italic")
+    );
+    assert_eq!(last.offered[0].style, "Italic");
     assert_eq!(close("flyer.indd"), []);
     assert_eq!(api.list_active().unwrap().len(), 2, "nothing deactivated");
 }

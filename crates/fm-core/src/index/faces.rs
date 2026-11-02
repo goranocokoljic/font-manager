@@ -11,7 +11,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use fm_api::activation::ActivationMode;
+use fm_api::activation::{ActivationMode, OfferedFace};
 use fm_api::common::{Classification, Health, Metrics, Page, Slant};
 use fm_api::library::{
     FaceDetail, FaceSummary, Family, FontSwitchPayload, LicenseInfo, LicenseType, OpenLicense,
@@ -455,6 +455,24 @@ impl Index {
     /// groups it. An unknown face is `NotFound`.
     pub(super) fn face_summary(&self, face: FaceId) -> FmResult<FaceSummary> {
         Ok(self.face_row(face)?.summary)
+    }
+
+    /// The names a plugin shows for each face of `faces`, in order (E30.5):
+    /// the family as search groups it, the style and the PostScript name. An
+    /// unknown face is `NotFound`.
+    pub(crate) fn offered_faces(&self, faces: &[FaceId]) -> FmResult<Vec<OfferedFace>> {
+        faces
+            .iter()
+            .map(|&face| {
+                let s = self.face_summary(face)?;
+                Ok(OfferedFace {
+                    face,
+                    family: s.family_name,
+                    style: s.style,
+                    postscript_name: Some(s.postscript_name).filter(|n| !n.is_empty()),
+                })
+            })
+            .collect()
     }
 
     fn face_row(&self, face: FaceId) -> FmResult<FaceRow> {

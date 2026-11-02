@@ -47,10 +47,18 @@ function mockPhotoshop(open: PhotoshopDocument[] = []) {
   return { module, app, fire, events: () => events };
 }
 
+/** E30.5: the app names every face it offers; the PostScript name is what the question shows. */
+const named = (face: number) => ({
+  face,
+  family: `Family ${face}`,
+  style: 'Bold',
+  postscriptName: `Font${face}-Bold`,
+});
+
 function setup(offer: number[] = [], answer = true, open: PhotoshopDocument[] = []) {
   const fake = fakeEndpoint({
     fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [] }),
-    document_closed: () => ({ offer }),
+    document_closed: () => ({ offer, offered: offer.map(named) }),
     deactivate: () => [],
   });
   const ui: PluginUi = { notify: vi.fn(), confirm: vi.fn(async () => answer) };
@@ -126,7 +134,9 @@ describe('watchPhotoshop', () => {
     fire('close', { documentID: 12 });
     await vi.waitFor(() => expect(fake.calls('deactivate')).toHaveLength(1));
     expect(fake.calls('document_closed')).toEqual([{ document: 'Photoshop: Poster.psd #12' }]);
-    expect(ui.confirm).toHaveBeenCalledWith('Deactivate 1 font used only by Poster.psd?');
+    expect(ui.confirm).toHaveBeenCalledWith(
+      'Deactivate 1 font used only by Poster.psd? Font5-Bold',
+    );
     expect(fake.calls('deactivate')).toEqual([{ target: { kind: 'faces', faces: [5] } }]);
   });
 

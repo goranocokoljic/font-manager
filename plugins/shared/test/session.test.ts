@@ -7,17 +7,19 @@ import {
   downloadedFontsMessage,
   fontLabel,
   missingFontsMessage,
+  offeredNames,
 } from '../src/session';
+import type { OfferedFace } from '../src/api';
 import { FAKE_URL, fakeEndpoint } from '../src/testing';
 
 const doc = { key: 'InDesign: Poster.indd #7', name: 'Poster.indd' };
 const inter = { postscriptName: 'Inter-Regular', family: 'Inter', style: 'Regular' };
 const lora = { postscriptName: 'Lora-Bold', family: 'Lora', style: 'Bold' };
 
-function setup(offer: number[] = [], answer = true) {
+function setup(offer: number[] = [], answer = true, offered?: OfferedFace[]) {
   const fake = fakeEndpoint({
     fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [] }),
-    document_closed: () => ({ offer }),
+    document_closed: () => (offered ? { offer, offered } : { offer }),
     deactivate: (body) =>
       (body as { target: { faces: number[] } }).target.faces.map((face) => ({
         face,
@@ -61,6 +63,31 @@ describe('DocumentWatcher', () => {
     expect(fake.calls('document_closed')).toEqual([{ document: doc.key }]);
     expect(ui.confirm).toHaveBeenCalledWith('Deactivate 2 fonts used only by Poster.indd?');
     expect(fake.calls('deactivate')).toEqual([{ target: { kind: 'faces', faces: [4, 9] } }]);
+  });
+
+  it('names the offered fonts in the question and deactivates them on yes', async () => {
+    const offered: OfferedFace[] = [
+      { face: 4, family: 'Alegreya', style: 'Bold', postscriptName: 'Alegreya-Bold' },
+      { face: 9, family: 'Actor', style: 'Regular', postscriptName: null },
+    ];
+    const { fake, ui, watcher } = setup([4, 9], true, offered);
+    await watcher.closed(doc);
+    expect(ui.confirm).toHaveBeenCalledWith(
+      'Deactivate 2 fonts used only by Poster.indd? Alegreya-Bold, Actor Regular',
+    );
+    expect(fake.calls('deactivate')).toEqual([{ target: { kind: 'faces', faces: [4, 9] } }]);
+  });
+
+  it('keeps the named fonts when the answer is no', async () => {
+    const offered: OfferedFace[] = [
+      { face: 4, family: 'Alegreya', style: 'Bold', postscriptName: 'Alegreya-Bold' },
+    ];
+    const { fake, ui, watcher } = setup([4], false, offered);
+    await watcher.closed(doc);
+    expect(ui.confirm).toHaveBeenCalledWith(
+      'Deactivate 1 font used only by Poster.indd? Alegreya-Bold',
+    );
+    expect(fake.calls('deactivate')).toEqual([]);
   });
 
   it('keeps the fonts when the answer is no', async () => {
@@ -161,6 +188,55 @@ describe('deactivateQuestion', () => {
   it('counts the fonts', () => {
     expect(deactivateQuestion(1, 'A.psd')).toBe('Deactivate 1 font used only by A.psd?');
     expect(deactivateQuestion(3, 'A.psd')).toBe('Deactivate 3 fonts used only by A.psd?');
+  });
+
+  it('counts only when there are no names (an app older than E30.5)', () => {
+    expect(deactivateQuestion(3, 'brand.ai', [])).toBe('Deactivate 3 fonts used only by brand.ai?');
+  });
+
+  it('names one font', () => {
+    expect(deactivateQuestion(1, 'brand.ai', ['Actor'])).toBe(
+      'Deactivate 1 font used only by brand.ai? Actor',
+    );
+  });
+
+  it('names three fonts', () => {
+    expect(deactivateQuestion(3, 'brand.ai', ['Alegreya Bold', 'Alegreya Italic', 'Actor'])).toBe(
+      'Deactivate 3 fonts used only by brand.ai? Alegreya Bold, Alegreya Italic, Actor',
+    );
+  });
+
+  it('names the first eight of nine fonts and counts the rest', () => {
+    const names = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9'];
+    expect(deactivateQuestion(9, 'brand.ai', names)).toBe(
+      'Deactivate 9 fonts used only by brand.ai? F1, F2, F3, F4, F5, F6, F7, F8 and 1 more',
+    );
+  });
+
+  it('names exactly eight fonts without "more"', () => {
+    const names = ['F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8'];
+    expect(deactivateQuestion(8, 'brand.ai', names)).toBe(
+      'Deactivate 8 fonts used only by brand.ai? F1, F2, F3, F4, F5, F6, F7, F8',
+    );
+  });
+});
+
+describe('offeredNames', () => {
+  it("labels each offered face by fontLabel's rule, in offer order", () => {
+    expect(
+      offeredNames({
+        offer: [2, 1],
+        offered: [
+          { face: 2, family: 'Alegreya', style: 'Italic', postscriptName: 'Alegreya-Italic' },
+          { face: 1, family: 'Actor', style: 'Regular', postscriptName: null },
+        ],
+      }),
+    ).toEqual(['Alegreya-Italic', 'Actor Regular']);
+  });
+
+  it('is empty without offered, or when offered does not match the offer', () => {
+    expect(offeredNames({ offer: [1] })).toEqual([]);
+    expect(offeredNames({ offer: [1, 2], offered: [] })).toEqual([]);
   });
 });
 

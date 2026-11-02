@@ -80,7 +80,16 @@ The Font Manager plugins for design apps (Photoshop, Illustrator, InDesign and
 Sketch) tell Font Manager which fonts a document uses when you open it. Font
 Manager finds them in your library and activates them for this session. When you
 close the document, the plugin asks if it can deactivate the fonts that only
-this document used. A font that your library does not have is listed as missing.
+this document used. The question names these fonts, for example:
+
+> Deactivate 3 fonts used only by brand.ai? Alegreya-Bold, Alegreya-Italic, Actor-Regular
+
+A font shows with its PostScript name, or with its family and style when it has
+no PostScript name. When more than 8 fonts are in the list, the question names
+the first 8 and then says "and N more". Select **Deactivate** to deactivate
+them, or **Keep** (**Keep them** in the Adobe apps) to keep them active.
+
+A font that your library does not have is listed as missing.
 
 ### Download a missing font from a catalog
 

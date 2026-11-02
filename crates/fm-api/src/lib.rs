@@ -209,6 +209,7 @@ pub fn types() -> specta::Types {
         activation::FetchedFont,
         activation::DocumentClosedRequest,
         activation::DocumentClosedResponse,
+        activation::OfferedFace,
         // organization
         organization::Collection,
         organization::CreateCollectionRequest,

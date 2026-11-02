@@ -48,10 +48,18 @@ function mockInDesign(open: InDesignDocument[] = []) {
   return { module, fire, listeners };
 }
 
+/** E30.5: the app names every face it offers; the PostScript name is what the question shows. */
+const named = (face: number) => ({
+  face,
+  family: `Family ${face}`,
+  style: 'Bold',
+  postscriptName: `Font${face}-Bold`,
+});
+
 function setup(offer: number[] = [], answer = true, open: InDesignDocument[] = []) {
   const fake = fakeEndpoint({
     fonts_needed: () => ({ matched: [], unmatched: [], missing: 0, outcomes: [] }),
-    document_closed: () => ({ offer }),
+    document_closed: () => ({ offer, offered: offer.map(named) }),
     deactivate: () => [],
   });
   const ui: PluginUi = { notify: vi.fn(), confirm: vi.fn(async () => answer) };
@@ -119,7 +127,9 @@ describe('watchInDesign', () => {
     fire('beforeClose', doc);
     await vi.waitFor(() => expect(fake.calls('deactivate')).toHaveLength(1));
     expect(fake.calls('document_closed')).toEqual([{ document: 'InDesign: Poster.indd #7' }]);
-    expect(ui.confirm).toHaveBeenCalledWith('Deactivate 2 fonts used only by Poster.indd?');
+    expect(ui.confirm).toHaveBeenCalledWith(
+      'Deactivate 2 fonts used only by Poster.indd? Font4-Bold, Font9-Bold',
+    );
     expect(fake.calls('deactivate')).toEqual([{ target: { kind: 'faces', faces: [4, 9] } }]);
   });
 

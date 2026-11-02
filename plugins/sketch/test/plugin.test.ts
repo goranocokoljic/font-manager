@@ -42,6 +42,14 @@ interface Options {
   clipboard?: string | null;
 }
 
+/** E30.5: the app names every face it offers; the PostScript name is what the question shows. */
+const named = (face: number) => ({
+  face,
+  family: `Family ${face}`,
+  style: 'Bold',
+  postscriptName: `Font${face}-Bold`,
+});
+
 function setup(o: Options = {}) {
   const fake =
     o.fake ??
@@ -52,7 +60,7 @@ function setup(o: Options = {}) {
         missing: (o.unmatched ?? []).length,
         outcomes: [],
       }),
-      document_closed: () => ({ offer: o.offer ?? [] }),
+      document_closed: () => ({ offer: o.offer ?? [], offered: (o.offer ?? []).map(named) }),
       deactivate: () => [],
     });
   const ui = mockUi();
@@ -146,7 +154,9 @@ describe('CloseDocument', () => {
     await plugin.onCloseDocument(context(poster));
     expect(fake.calls('document_closed')).toEqual([{ document: key }]);
     expect(alerts.shown).toHaveLength(1);
-    expect(alerts.shown[0].informative).toBe('Deactivate 2 fonts used only by Poster?');
+    expect(alerts.shown[0].informative).toBe(
+      'Deactivate 2 fonts used only by Poster? Font4-Bold, Font9-Bold',
+    );
     expect(alerts.shown[0].buttons).toEqual(['Deactivate', 'Keep']);
     expect(fake.calls('deactivate')).toEqual([{ target: { kind: 'faces', faces: [4, 9] } }]);
   });
@@ -154,7 +164,7 @@ describe('CloseDocument', () => {
   it('keeps the fonts when the answer is Keep', async () => {
     const { fake, alerts, plugin } = setup({ offer: [4], answer: 1 });
     await plugin.onCloseDocument(context(poster));
-    expect(alerts.shown[0].informative).toBe('Deactivate 1 font used only by Poster?');
+    expect(alerts.shown[0].informative).toBe('Deactivate 1 font used only by Poster? Font4-Bold');
     expect(fake.calls('deactivate')).toEqual([]);
   });
 
@@ -169,7 +179,9 @@ describe('CloseDocument', () => {
     const saved = mockDocument('S-1', null, [], '/Users/ana/Logo.sketch');
     const { alerts, plugin } = setup({ docs: [saved], offer: [1], answer: 1 });
     await plugin.onCloseDocument(context(saved));
-    expect(alerts.shown[0].informative).toBe('Deactivate 1 font used only by Logo.sketch?');
+    expect(alerts.shown[0].informative).toBe(
+      'Deactivate 1 font used only by Logo.sketch? Font1-Bold',
+    );
   });
 });
 

@@ -725,6 +725,12 @@ export type DocumentClosedResponse = {
 	 *  [`ActivationService::deactivate`] when the user accepts.
 	 */
 	offer: FaceId[],
+	/**
+	 *  The names of the faces in `offer`, one per face in the same order
+	 *  (E30.5), so a plugin can name them in its question. Empty from an
+	 *  app older than E30.5.
+	 */
+	offered?: OfferedFace[],
 };
 
 /**  One font a document names, with its library face and status. */
@@ -2281,6 +2287,21 @@ export type NeededFontRule =
 "typographicFamily" | 
 /**  The legacy family and subfamily (name IDs 1 and 2). */
 "family";
+
+/**
+ *  A face [`ActivationService::document_closed`] offers, with the names a
+ *  plugin shows for it (E30.5).
+ */
+export type OfferedFace = {
+	/**  The face. */
+	face: FaceId,
+	/**  Its family name, as the library groups it. */
+	family: string,
+	/**  Its style name. */
+	style: string,
+	/**  Its PostScript name; `None` when the font declares none. */
+	postscriptName: string | null,
+};
 
 /**  An open-source license recognized from the license text. */
 export type OpenLicense = 

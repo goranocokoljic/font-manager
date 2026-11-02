@@ -12,6 +12,7 @@ use std::sync::mpsc::Receiver;
 use std::time::Duration;
 
 use common::Served;
+use fm_api::activation::{DocumentClosedRequest, FontsNeededRequest};
 use fm_api::mock::MockApi;
 use fm_api::*;
 use fm_endpoint::routes::ROUTES;
@@ -275,4 +276,32 @@ fn a_stream_that_ends_disconnects_the_receiver() {
         events.recv_timeout(Duration::from_secs(10)),
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected)
     );
+}
+
+/// E30.5: a closed document's offer comes with the names of its faces, over
+/// the endpoint as directly, one per face in the same order.
+#[test]
+fn a_closed_document_names_its_offer_through_the_client() {
+    let d = MockApi::new();
+    let served = Served::new();
+    let c = &served.client;
+    let need: FontsNeededRequest = serde_json::from_value(json!({
+        "fonts": [{ "postscriptName": "Inter-Italic" }],
+        "document": "poster.indd",
+    }))
+    .unwrap();
+    assert_eq!(c.fonts_needed(need.clone()), d.fonts_needed(need));
+    let close: DocumentClosedRequest =
+        serde_json::from_value(json!({ "document": "poster.indd" })).unwrap();
+    let direct = d.document_closed(close.clone()).unwrap();
+    let through = c.document_closed(close).unwrap();
+    assert_eq!(through, direct);
+    assert_eq!(through.offer.len(), 1, "the poster leaves Inter Italic");
+    let named: Vec<FaceId> = through.offered.iter().map(|o| o.face).collect();
+    assert_eq!(named, through.offer, "one name per offered face");
+    assert_eq!(
+        through.offered[0].postscript_name.as_deref(),
+        Some("Inter-Italic")
+    );
+    assert_eq!(through.offered[0].style, "Italic");
 }
