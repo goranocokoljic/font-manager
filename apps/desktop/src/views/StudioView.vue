@@ -206,9 +206,4 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   min-height: 0;
   overflow-x: auto;
 }
-.title:focus-visible,
-.button:focus-visible {
-  outline: 2px solid var(--fm-accent);
-  outline-offset: 1px;
-}
 </style>

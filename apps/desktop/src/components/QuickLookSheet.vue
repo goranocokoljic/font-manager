@@ -112,7 +112,7 @@ function onFocusIn(e: FocusEvent): void {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background: rgb(0 0 0 / 20%);
+  background: var(--fm-scrim);
 }
 .sheet {
   display: flex;

@@ -93,18 +93,19 @@ test('open-license and embedding chips filter the list; open fonts show a green 
     chips.getByRole('group', { name: 'Embedding' }).getByRole('button', { name: /^Restricted/ }),
   ).toHaveAccessibleName('Restricted, 1 family');
 
-  // The badge on an open-licensed family is in the good (success) color.
+  // The badge on an open-licensed family is monochrome, in the muted color (DESIGN.md:
+  // licence badges are not coloured).
   const badge = tree.getByRole('treeitem', { name: /^Inter,/ }).getByTestId('open-license');
   await expect(badge).toHaveText('Open license');
-  const [color, success] = await badge.evaluate((el) => {
+  const [color, muted] = await badge.evaluate((el) => {
     const probe = document.createElement('span');
-    probe.style.color = 'var(--fm-success)';
+    probe.style.color = 'var(--fm-muted)';
     document.body.append(probe);
     const want = getComputedStyle(probe).color;
     probe.remove();
     return [getComputedStyle(el).color, want];
   });
-  expect(color).toBe(success);
+  expect(color).toBe(muted);
   await expect(
     tree.getByRole('treeitem', { name: /^Legacy Grotesk,/ }).getByTestId('open-license'),
   ).toHaveCount(0);

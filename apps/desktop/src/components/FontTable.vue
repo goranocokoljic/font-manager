@@ -639,8 +639,7 @@ span.sort {
   font-weight: 600;
 }
 .badge.good {
-  border-color: var(--fm-success);
-  color: var(--fm-success);
+  border-color: var(--fm-border-strong);
 }
 .visually-hidden {
   position: absolute;

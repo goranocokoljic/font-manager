@@ -117,6 +117,12 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   of surface, not more. Borders are hairlines at low alpha, not solid grey lines.
 - **One accent colour,** used only for selection, active state, focus and the primary action.
   Nothing else is coloured. Licence / format / variable badges are monochrome glyphs.
+  Status colours (`--fm-danger`, `--fm-warning`) mark problems only — a broken file, an
+  unsupported format, a conflict. A good state ("OK", "Open license") is neutral, never
+  green; `--fm-success` stays in the token file for the contrast tests but no badge uses
+  it. The one exception is Compare's overlay, which needs two data colours
+  (`--fm-compare-0/1`) to tell faces apart. (Amended in review 5.)
+- **Dialog scrim:** `--fm-scrim`, never a literal. (Added in review 5.)
 - **Specimen area:** neutral background, no border; preview colour follows the theme unless
   the user overrides it; previews honour the `font-feature-settings` chosen in Features.
 - **Components** (`src/components/ui/`): `UiPopover` and `UiSelect` exist (iteration 3).
@@ -197,7 +203,10 @@ wrong thing. Items 2–9 are ordered by how much of the first screen they change
    Size slider plus the three or four most-used controls inline; everything else (tracking,
    line height, alignment, metrics, outline, colours) in a Preview options popover. State
    remembered per view. Brings `UiField`, `UiSlider`, `UiToggle`.
-4. **Dark by default + the app shell.** First launch opens dark (Settings keeps system /
+4. **Dark by default + the app shell.** Fix first: at 1440 px the Home toolbar wraps
+   ("All fonts", "Compact rows", "Compare 0/4") and clips "Inspector" in Table and Layout
+   modes — the view modes as an icon `UiSegmentedControl` and the inspector toggle at the
+   pane edge free the room. First launch opens dark (Settings keeps system /
    light / dark). Sidebar / main / inspector as three panes with hairline dividers,
    collapsible and remembered; the view switcher as a `UiSegmentedControl`; status bar
    reduced to live state (active fonts, problems, `Ctrl+K` hint), version strings move to
@@ -211,13 +220,19 @@ wrong thing. Items 2–9 are ordered by how much of the first screen they change
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
    format as monochrome glyph badges; row actions (Activate, Compare, Tag, Similar) appear on
    hover or focus, right-aligned; selection = accent bar + subtle tint; expanded family shows
-   its styles as sub-rows.
+   its styles as sub-rows. Brings `UiBadge`: the badge CSS is copied in `FontList`,
+   `FontTable`, `FontPreviewRow`, `FontGrid` and `HealthBadge` — one component replaces all
+   five. The expand twisty (a 6 px triangle below the meta line) needs a real 16 px chevron.
 7. **Grid cards never truncate.** Fit the sample automatically (a short word at large size,
    or auto-size the pangram to the card width); footer with name and style count; hover
    reveals the weight range.
 8. **Inspector.** Info grouped and prioritised (Designer, Foundry, Licence, Styles first;
-   file, hash, IDs under a "Technical" expander). Glyphs grid without inner scrollbars.
-   Features with human names and a live preview of each switch.
+   file, hash, IDs under a "Technical" expander). Glyphs grid without inner scrollbars (its
+   last column is clipped today). Features with human names and a live preview of each
+   switch — the same human names and groups ("Small caps", "Tabular figures", "Stylistic
+   sets") replace the raw tags in the Filters drawer's features group (left open by item 2).
+   The labels are a static table of registered OpenType tags, which is presentation, not
+   font logic.
 9. **Find similar as a mode, not a split.** Results replace the list with a header
    ("Similar to ADLaM Display Regular · Esc to go back"), grouped by family with the closest
    face shown, score as a quiet bar, and the "Why" line showing only what *differs* from the

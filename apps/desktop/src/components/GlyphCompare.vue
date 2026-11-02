@@ -358,7 +358,7 @@ function onKeyDown(e: KeyboardEvent): void {
   justify-content: center;
   align-items: flex-start;
   padding-top: 6vh;
-  background: rgb(0 0 0 / 20%);
+  background: var(--fm-scrim);
 }
 .compare {
   /* Two colors that stay apart in both themes and for common color blindness. */

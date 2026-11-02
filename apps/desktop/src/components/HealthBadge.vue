@@ -34,7 +34,7 @@ const reason = computed(() => (props.health.kind === 'ok' ? null : props.health.
   line-height: 18px;
 }
 .ok {
-  color: var(--fm-success);
+  color: var(--fm-muted);
 }
 .broken {
   color: var(--fm-danger);

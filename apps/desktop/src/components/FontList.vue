@@ -466,9 +466,9 @@ function onToggle(row: ListRow): void {
 }
 .open-license {
   padding: 0 4px;
-  border: 1px solid var(--fm-success);
+  border: 1px solid var(--fm-border-strong);
   border-radius: var(--fm-radius-sm);
-  color: var(--fm-success);
+  color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   line-height: 14px;
 }

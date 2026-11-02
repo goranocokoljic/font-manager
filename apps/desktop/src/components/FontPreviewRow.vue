@@ -258,7 +258,7 @@ const deferredStyle = computed(() => ({
   font-size: var(--fm-text-xs);
 }
 .badge {
-  color: var(--fm-accent);
+  color: var(--fm-muted);
 }
 .note {
   color: var(--fm-warning);

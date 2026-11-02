@@ -181,7 +181,7 @@ function onFocusIn(e: FocusEvent): void {
   justify-content: center;
   align-items: flex-start;
   padding-top: 12vh;
-  background: rgb(0 0 0 / 20%);
+  background: var(--fm-scrim);
 }
 .panel {
   display: flex;

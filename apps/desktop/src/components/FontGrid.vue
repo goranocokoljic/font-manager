@@ -441,7 +441,7 @@ function onToggle(row: ListRow): void {
   cursor: pointer;
 }
 .badge {
-  color: var(--fm-accent);
+  color: var(--fm-muted);
 }
 .note {
   color: var(--fm-warning);

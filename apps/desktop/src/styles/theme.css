@@ -66,6 +66,8 @@
   --fm-warning: #8a4b00;
   --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 10%);
   --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 8%), 0 12px 40px rgb(0 0 0 / 18%);
+  /* The dimmed page behind a modal dialog; the same in both themes. */
+  --fm-scrim: rgb(0 0 0 / 20%);
 }
 
 /* The Settings theme (`data-theme` on the root, set by App.vue): `system` follows
@@ -162,13 +164,17 @@ body {
   outline: 2px solid var(--fm-accent);
   outline-offset: 2px;
 }
+/* A heading that takes focus only so a screen reader announces the view (tabindex -1)
+   is not a Tab stop: no ring on it. */
+:is(h1, h2)[tabindex='-1']:focus-visible {
+  outline: none;
+}
 
 /* ---- Controls: the baseline every native element starts from. Nothing on screen may
    look like a browser default; a component overrides what it needs. ---- */
 
 button,
 input,
-select,
 textarea {
   font: inherit;
   color: inherit;
@@ -176,8 +182,7 @@ textarea {
 }
 
 /* Pointer targets are at least 24×24 px (WCAG 2.5.8). */
-button,
-select {
+button {
   min-width: 24px;
   min-height: 24px;
 }
@@ -215,8 +220,7 @@ input[type='url'],
 input[type='email'],
 input[type='password'],
 input:not([type]),
-textarea,
-select {
+textarea {
   box-sizing: border-box;
   padding: 0 var(--fm-space-2);
   border: 1px solid var(--fm-control-border);
@@ -230,8 +234,7 @@ input[type='number'],
 input[type='url'],
 input[type='email'],
 input[type='password'],
-input:not([type]),
-select {
+input:not([type]) {
   height: var(--fm-control-height);
 }
 textarea {
@@ -253,27 +256,6 @@ input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button {
   -webkit-appearance: none;
   margin: 0;
-}
-
-/* Select: the native box with a drawn chevron; the popup stays the OS's until the
-   ui/ Select replaces it. */
-select {
-  appearance: none;
-  -webkit-appearance: none;
-  padding-inline-end: calc(var(--fm-space-2) + 18px);
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: calc(100% - 6px) center;
-  background-size: 16px;
-}
-[dir='rtl'] select {
-  background-position: 6px center;
-}
-select:disabled {
-  opacity: 0.55;
-}
-option {
-  font-family: var(--fm-font-ui);
 }
 
 /* Check boxes and radio buttons: drawn, 16 px, accent when on. */
