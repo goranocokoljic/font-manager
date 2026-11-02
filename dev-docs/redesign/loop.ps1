@@ -1,0 +1,80 @@
+# Font Manager UI/UX iteration loop (Windows / PowerShell).
+# Usage (from the repo root):  .\dev-docs\redesign\loop.ps1 -Start 1 -Count 10
+# Every 5th iteration runs REVIEW.md (the critic) instead of ITERATE.md (the generator);
+# both prompts live next to this script. Run it in its own terminal, not in a go-harness lane.
+# All work happens on the `redesign` branch: the script creates it from the current branch
+# if it does not exist, checks it out, and refuses to run if anything else is checked out.
+# Stop any time with Ctrl+C; every finished iteration is already a commit.
+
+param(
+    [int]$Start = 1,
+    [int]$Count = 10,
+    [int]$MaxTurns = 250,
+    [string]$Branch = "redesign"
+)
+
+$ErrorActionPreference = "Stop"
+$here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repo = (git rev-parse --show-toplevel)
+Set-Location $repo
+
+# --- Branch guard -------------------------------------------------------------------
+if (git status --porcelain) {
+    Write-Host "Working tree is not clean. Commit or stash before running the loop." -ForegroundColor Red
+    exit 1
+}
+
+$exists = git branch --list $Branch
+if (-not $exists) {
+    $base = git rev-parse --abbrev-ref HEAD
+    Write-Host "Creating branch '$Branch' from '$base'." -ForegroundColor Cyan
+    git checkout -b $Branch | Out-Null
+} else {
+    git checkout $Branch | Out-Null
+}
+
+if ((git rev-parse --abbrev-ref HEAD) -ne $Branch) {
+    Write-Host "Could not check out '$Branch'. Stopping." -ForegroundColor Red
+    exit 1
+}
+
+# --- Loop -----------------------------------------------------------------------------
+for ($i = $Start; $i -lt $Start + $Count; $i++) {
+    # Re-check every iteration: an iteration must never wander off the branch.
+    if ((git rev-parse --abbrev-ref HEAD) -ne $Branch) {
+        Write-Host "Not on '$Branch' any more — stopping." -ForegroundColor Red
+        break
+    }
+
+    $isReview = ($i % 5 -eq 0)
+    $file = Join-Path $here ($(if ($isReview) { "REVIEW.md" } else { "ITERATE.md" }))
+    $kind = if ($isReview) { "review" } else { "iteration" }
+    $prompt = "This is $kind $i. You are on branch '$Branch'.`n`n" + (Get-Content $file -Raw)
+
+    Write-Host ""
+    Write-Host "=== $kind $i ($file) ===" -ForegroundColor Cyan
+
+    # --permission-mode acceptEdits lets Claude Code edit files and run the project's
+    # scripts without prompting. If your version needs more (installing a dependency,
+    # git commit), switch to --dangerously-skip-permissions — only on this branch.
+    claude -p $prompt --permission-mode acceptEdits --max-turns $MaxTurns
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "$kind $i exited with code $LASTEXITCODE — stopping." -ForegroundColor Red
+        break
+    }
+
+    # Sanity check: the iteration must have left a commit behind, and the tree must be clean.
+    $last = git log -1 --pretty=%s
+    if ($last -notmatch "^(iter|review)\($i\)") {
+        Write-Host "No commit found for $kind $i (last: '$last') — stopping so you can look." -ForegroundColor Yellow
+        break
+    }
+    if (git status --porcelain) {
+        Write-Host "$kind $i left uncommitted changes — stopping so you can look." -ForegroundColor Yellow
+        break
+    }
+}
+
+Write-Host ""
+Write-Host "Done. Read dev-docs/redesign/ITERATIONS.md, look at .harness/redesign/shots/, and 'git log --oneline main..$Branch'." -ForegroundColor Green
