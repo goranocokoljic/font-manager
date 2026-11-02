@@ -281,7 +281,7 @@ function onFocusIn(e: FocusEvent): void {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -294,9 +294,9 @@ function onFocusIn(e: FocusEvent): void {
   width: min(640px, 92vw);
   max-height: 84vh;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
   overflow: hidden;
 }
 .panel:focus {
@@ -305,7 +305,7 @@ function onFocusIn(e: FocusEvent): void {
 .title {
   margin: 0;
   padding: 12px 16px 4px;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .body {
@@ -332,7 +332,7 @@ function onFocusIn(e: FocusEvent): void {
   margin: 0;
   padding: 6px 8px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .group legend {
   display: flex;
@@ -350,8 +350,8 @@ select,
 input {
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -368,7 +368,7 @@ input:focus-visible,
 .hint {
   margin: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .error {
   margin: 0;
@@ -383,13 +383,13 @@ input:focus-visible,
   margin: 4px -16px 0;
   padding: 8px 16px 12px;
   border-top: 1px solid var(--fm-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .button {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

@@ -96,7 +96,7 @@ function winner(c: Clash): string {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .panel {
@@ -124,9 +124,9 @@ function winner(c: Clash): string {
 }
 .button {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

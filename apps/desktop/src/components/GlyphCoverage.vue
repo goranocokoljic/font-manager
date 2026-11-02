@@ -132,12 +132,12 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
 }
 h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 h4 {
   margin: 6px 0 0;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
   font-weight: 600;
 }
 .muted {
@@ -158,14 +158,14 @@ h4 {
   width: 100%;
   padding: 2px 6px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--fm-radius-sm);
   background: none;
   color: var(--fm-fg);
   font: inherit;
   text-align: start;
 }
 .row:hover {
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
 }
 .row:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -183,10 +183,10 @@ h4 {
 }
 .badge {
   padding: 0 4px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  font-family: var(--fm-font-mono);
+  font-size: var(--fm-text-xs);
 }
 .panel {
   padding-block: 2px 6px;

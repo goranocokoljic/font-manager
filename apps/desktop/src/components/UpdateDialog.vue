@@ -176,7 +176,7 @@ function onFocusIn(e: FocusEvent): void {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -191,21 +191,21 @@ function onFocusIn(e: FocusEvent): void {
   max-height: 76vh;
   padding: 16px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
 }
 .panel:focus {
   outline: none;
 }
 .title {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
   font-weight: 600;
 }
 .subheading {
   margin: 4px 0 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
 }
 .lead {
   margin: 0;
@@ -217,7 +217,7 @@ function onFocusIn(e: FocusEvent): void {
   padding: 8px;
   overflow: auto;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
   white-space: pre-wrap;
 }
 .error {
@@ -232,9 +232,9 @@ function onFocusIn(e: FocusEvent): void {
 }
 .button {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

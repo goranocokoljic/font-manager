@@ -182,7 +182,7 @@ onMounted(() => {
   flex: 1;
   margin: 0;
   overflow: hidden;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -195,16 +195,16 @@ onMounted(() => {
 .picker select {
   padding: 2px 4px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
 }
 .button {
   padding: 4px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

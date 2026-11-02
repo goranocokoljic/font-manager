@@ -37,7 +37,7 @@ const chord = chordOf(ACTIONS.quickCollection)!;
   width: 100%;
   padding: 4px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
   background: none;
   color: inherit;
   font: inherit;
@@ -46,7 +46,7 @@ const chord = chordOf(ACTIONS.quickCollection)!;
 }
 .entry:hover,
 .entry:focus-visible {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .entry[aria-current='true'] {
   color: var(--fm-accent);

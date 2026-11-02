@@ -63,7 +63,12 @@ const defaultViewports = [
 ];
 const viewports = (process.env.FM_SCREENS_VIEWPORTS ?? '')
   .split(',')
-  .map((v) => v.trim().toLowerCase().match(/^(\d+)x(\d+)$/))
+  .map((v) =>
+    v
+      .trim()
+      .toLowerCase()
+      .match(/^(\d+)x(\d+)$/),
+  )
   .flatMap((m) => (m ? [{ width: Number(m[1]), height: Number(m[2]) }] : []));
 if (!viewports.length) viewports.push(...defaultViewports);
 
@@ -75,8 +80,7 @@ test.describe('@screens', () => {
     for (const scheme of ['light', 'dark'] as const) {
       for (const vp of viewports) {
         const [path, press] = route.split('@');
-        const slug =
-          prefix ?? (route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home');
+        const slug = prefix ?? (route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home');
         const name = `${slug}-${scheme}-${vp.width}x${vp.height}.png`;
         test(name, async ({ page }) => {
           await page.route('**/fmfont/*', (r) =>

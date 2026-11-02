@@ -284,9 +284,9 @@ onMounted(() => {
 .preset,
 .pin-button {
   padding: 2px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -303,7 +303,7 @@ onMounted(() => {
 h3 {
   margin: 16px 0 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -322,7 +322,7 @@ h3 {
 .tag {
   margin-inline-start: 4px;
   color: var(--fm-muted);
-  font-family: ui-monospace, monospace;
+  font-family: var(--fm-font-mono);
 }
 .controls {
   display: flex;
@@ -338,8 +338,8 @@ h3 {
   box-sizing: border-box;
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -352,7 +352,7 @@ h3 {
 .range {
   margin: 2px 0 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .default {
   font-weight: 600;

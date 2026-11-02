@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
 .inspector {
   flex: none;
   overflow: auto;
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
 }
 .list {
   display: flex;
@@ -190,8 +190,8 @@ onBeforeUnmount(() => {
   height: 24px;
   padding: 0 8px;
   border-top: 1px solid var(--fm-border);
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 </style>

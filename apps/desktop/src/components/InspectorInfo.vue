@@ -450,7 +450,7 @@ function clashText(c: Conflict): string {
   gap: 8px;
   padding: 8px 12px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-md);
 }
 .clash p {
   margin: 0;
@@ -465,9 +465,9 @@ function clashText(c: Conflict): string {
 }
 .choice {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -479,7 +479,7 @@ function clashText(c: Conflict): string {
 }
 .name {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
@@ -491,19 +491,19 @@ function clashText(c: Conflict): string {
 .activate {
   padding: 4px 16px;
   border: 1px solid var(--fm-accent);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-md);
   background: var(--fm-accent);
   color: var(--fm-bg);
   font: inherit;
   font-weight: 600;
 }
 .activate[aria-pressed='true'] {
-  background: transparent;
+  background-color: transparent;
   color: var(--fm-accent);
 }
 .activate:disabled {
   border-color: var(--fm-border);
-  background: transparent;
+  background-color: transparent;
   color: var(--fm-muted);
 }
 .state {
@@ -512,16 +512,16 @@ function clashText(c: Conflict): string {
 .similar {
   margin-inline-start: auto;
   padding: 4px 12px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
 h3 {
   margin: 16px 0 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -540,7 +540,7 @@ dd {
   overflow-wrap: anywhere;
 }
 .mono {
-  font-family: ui-monospace, monospace;
+  font-family: var(--fm-font-mono);
 }
 .cap {
   text-transform: capitalize;
@@ -565,13 +565,13 @@ dd {
   padding-block: 0;
   padding-inline: 8px 0;
   border: 1px solid var(--fm-border);
-  border-radius: 999px;
+  border-radius: var(--fm-radius-md);
 }
 .untag,
 .favorite,
 .star {
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
@@ -584,8 +584,8 @@ dd {
   width: 100%;
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -595,8 +595,8 @@ dd {
   width: 100%;
   padding: 4px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
   resize: vertical;

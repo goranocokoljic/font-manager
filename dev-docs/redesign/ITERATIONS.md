@@ -179,3 +179,108 @@ then start backlog item 1.
 scene click, `selected-row` vs `list`, the entry template).
 
 **New dependencies:** none.
+
+## Iteration 2 — 2026-11-02 — Design tokens, bundled Inter, drawn controls (foundation 1 of 2)
+
+**Kind:** shipped. First iteration with real screenshots: all 22 scenes verified by eye at
+1280×800, 1000×700 and 1440×900, light and dark.
+
+**Critique (step 1):** the first thing a designer sees is the chip wall: three to four rows
+of outlined pills above the list, every pill the same weight as every button, so the
+specimens below are the quietest thing on the screen instead of the loudest. The worst
+part is that nothing has hierarchy: the sidebar headings, the chips, the toolbar buttons,
+the inspector labels and the status bar all use the same 11.5–13 px system font (Segoe UI
+on this machine) inside the same solid grey 1 px boxes, and the selects, checkboxes and
+sliders are raw browser controls. The dark theme is a straight inversion of the light one
+with no surface depth. What is good: the specimens themselves render well, the
+inspector's Info/Axes/Features/Glyphs structure is right, the command palette already has
+the Raycast shape, and the Table view's weight-distribution glyph is a nice touch.
+
+**Why this change:** backlog item 1 is the prerequisite for everything else and the
+iteration prompt forbids visual work elsewhere until it lands. Item 1 spans two
+iterations by design; this is the first half — the token system, the UI font and a drawn
+baseline for every native control — so the second half (the `ui/` components that replace
+the 14 native selects and the rest) builds on tokens that already exist.
+
+**Screenshot fixes before the change (precondition):** the four view scenes (`table`,
+`grid`, `waterfall`, `layout`) rendered the list — the storage seed used `home` as the
+view key, the store uses `all` (`ALL_FONTS_VIEW`). Fixed in `scripts/redesign/shots.mjs`.
+The runner now passes `e2e/screens.spec.ts` to Playwright: three other specs carry the
+`@screens` tag and were writing stray `axes-*`, `features-*` and `developer-*` files into
+the iteration folder. `screens.spec.ts` from iteration 0 was not Prettier-formatted; it is
+now, and typecheck and lint pass on it.
+
+**What changed:**
+- `apps/desktop/src/styles/theme.css` — rewritten as the token file: three surfaces
+  (`--fm-bg`, `--fm-surface`, `--fm-surface-2`), hairline borders at low alpha
+  (`--fm-border` 9 %, `--fm-border-strong` 16 %), hover/active tints, a 4 px spacing scale
+  (`--fm-space-1…8`, swapped by `data-density`), two radii (`--fm-radius-sm` 4 px,
+  `--fm-radius-md` 8 px), the type scale (`--fm-text-xs…xl` = 11/12/13/15/20 px), two
+  shadows, motion (`--fm-motion-fast` 120 ms, `--fm-motion-panel` 200 ms, `--fm-ease`),
+  z-index (`--fm-z-raised/sticky/popover/toast`), `--fm-font-ui` / `--fm-font-mono`. Both
+  themes have every value; `data-theme`, `data-density` and the `.surface-light/.surface-dark`
+  overrides are kept. Focus ring is now 2 px accent with a 2 px offset.
+- Baseline for native controls in the same file: every `button` gets a hairline, a small
+  radius and a hover/press tint drawn as a `background-image` layer (so it works over
+  transparent, filled and accent buttons without touching components); `select` is
+  `appearance: none` with a drawn chevron (mirrored in RTL); check boxes and radio buttons
+  are drawn 16 px controls with an accent fill when on; `range` has a hairline track and a
+  round accent thumb; `color` is a plain swatch; text fields share one height
+  (`--fm-control-height`, 28 px / 24 px compact); `kbd` is a key cap. Nothing on screen
+  is a browser default any more, even where the `ui/` component does not exist yet.
+- `apps/desktop/src/main.ts` — imports Inter (variable, with the optical-size axis).
+- 63 components/views — a mechanical token sweep of the `<style>` blocks, same values,
+  one source: literal font sizes → `--fm-text-*` (11.5 px and 10.5 px became 11 px,
+  14 px became 13 px), literal radii → the two radius tokens (2/3/4/6 px → 4 px;
+  8/9/12/999 px → 8 px), the four ad-hoc dialog shadows → `--fm-shadow-1/2`, z-index
+  literals → tokens, `ui-monospace`/`system-ui` stacks → the font tokens, and
+  `background:` shorthands on `--fm-bg`/`--fm-surface`/`transparent` → `background-color:`
+  so they no longer wipe the select chevron and the hover layer. Rules for buttons, chips
+  and badges swap the 3:1 field outline (`--fm-control-border`) for the quiet
+  `--fm-border-strong`; text fields keep the 3:1 outline (WCAG 1.4.11).
+- `views/HomeView.vue` — toolbar gap and padding on the spacing tokens (4 / 12 px instead
+  of 8 / 16) and mode buttons 2 px narrower: Inter is wider than Segoe UI and the
+  "Compact rows" and "Compare" buttons overlapped in Table mode at 1280 px. (A first
+  attempt with `flex-shrink: 0` on the buttons collapsed the family-count status to zero
+  width and failed three Playwright tests; reverted.)
+- The dark background stays `#1c1c1e`: `app.spec.ts` and `a11y.spec.ts` pin it to prove
+  the page is in the dark theme, and the 2-step darker value I tried was not worth
+  editing seven test assertions for.
+- `styles/contrast.test.ts` — checks `--fm-surface-2` like the other surfaces and reads
+  token names with digits.
+
+**Verified:** `pnpm --filter @fm/desktop typecheck`, `pnpm lint:js`, Vitest (899 tests)
+and `pnpm test:e2e` (272 passed, 16 skipped) all green; no test deleted or skipped.
+
+**Backlog ticked:** none yet — item 1 is half done; the `ui/` components (Button,
+IconButton, Select with popover + search, Toggle, SegmentedControl, Slider, Chip, Badge,
+Popover, Drawer, Field, Tabs, EmptyState) and the replacement of the 14 native selects are
+iteration 3. Tick it then.
+
+**Screenshots:** before `.harness/redesign/shots/2/`, after `.harness/redesign/shots/2-after/`
+(same file names, e.g. `list-dark-1280x800.png`, `settings-light-1280x800.png`,
+`palette-dark-1280x800.png`). Judged side by side: the chrome is quieter and reads as one
+system (one font, one radius family, hairlines), the dark theme has depth, the controls look
+designed. The chip wall and the fourteen-control preview bar are untouched and still the
+worst part of the screen — items 4 and 5.
+
+**Follow-ups noticed, not done:**
+- Dark theme by default on first launch: the default comes from the settings the
+  `FmClient` returns (`theme: 'system'`), not from the UI — blocked, API task.
+- The Home toolbar does not fit at 1280 px: the "Inspector" toggle is clipped in every
+  mode and "Columns" pushes further in Table mode. Item 2 (app shell) should turn the view
+  modes into an icon segmented control and move the inspector toggle to the pane edge.
+- The title "All fonts" wraps to two lines in the toolbar (pre-existing); same fix.
+- Tabular figures are set per count (ten components already do it) rather than globally,
+  so a specimen never inherits a UI figure style; the `ui/` Badge/Chip should set it once.
+- `PreviewControls`, `SearchBox`, `CommandPalette` and `ToastMessage` carry their own
+  `:focus-visible` rules with 1 px / −1 px / −2 px offsets; unify when they move to `ui/`.
+- Remaining literal sizes (16 / 24 / 56 / 96 px) are glyph and specimen sizes, left alone
+  on purpose.
+- The `filters` scene still needs `click: 'Filters'` once item 4 ships a Filters button;
+  `selected-row` and `list` are still the same scene until item 6.
+
+**New dependencies:** `@fontsource-variable/inter` 5.3.0 (OFL-1.1) — DESIGN.md requires a
+bundled neutral UI sans; the package ships Inter as subsetted variable woff2 with the
+`opsz` axis, so small sizes use the text optical size. Fonts under `fixtures/fonts/` are the
+test corpus and do not include Inter.

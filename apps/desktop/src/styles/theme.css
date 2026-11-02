@@ -1,20 +1,71 @@
-/* Light and dark palettes. The webview reports the OS appearance through
+/* Design tokens and the baseline of every control (dev-docs/redesign/DESIGN.md).
+
+   Colour on three surface levels, spacing on a 4 px base, two radii, a type scale, shadows,
+   motion and z-index — all `--fm-*`, all with a light and a dark value. Components use
+   tokens, never literal values. The webview reports the OS appearance through
    prefers-color-scheme, so the `system` theme follows the OS with no code. */
 :root {
   color-scheme: light dark;
-  font-family: system-ui, sans-serif;
-  font-size: 13px;
+
+  /* Type: Inter (bundled, @fontsource-variable/inter, OFL) — never the system font.
+     UI scale 11 / 12 / 13 / 15 / 20 px. */
+  --fm-font-ui: 'Inter Variable', Inter, system-ui, sans-serif;
+  --fm-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --fm-text-xs: 11px;
+  --fm-text-sm: 12px;
+  --fm-text-md: 13px;
+  --fm-text-lg: 15px;
+  --fm-text-xl: 20px;
+  --fm-leading: 1.45;
+
+  /* Spacing: 4 px base. */
+  --fm-space-1: 4px;
+  --fm-space-2: 8px;
+  --fm-space-3: 12px;
+  --fm-space-4: 16px;
+  --fm-space-5: 20px;
+  --fm-space-6: 24px;
+  --fm-space-8: 32px;
+
+  /* Radii: small for controls and chips, medium for cards, panels and popovers. */
+  --fm-radius-sm: 4px;
+  --fm-radius-md: 8px;
+
+  /* Motion: hover/active fast, panels slower, nothing bounces. */
+  --fm-motion-fast: 120ms;
+  --fm-motion-panel: 200ms;
+  --fm-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Stacking order. */
+  --fm-z-raised: 1;
+  --fm-z-sticky: 2;
+  --fm-z-popover: 10;
+  --fm-z-toast: 20;
+
+  /* Controls. */
+  --fm-control-height: 28px;
+  --fm-icon-size: 16px;
+
+  /* Colour, light. Three surfaces: --fm-bg (level 0, the list and the specimens),
+     --fm-surface (level 1, side panes and bars), --fm-surface-2 (level 2, popovers,
+     dialogs, cards). Borders are hairlines at low alpha, not solid grey lines. */
   --fm-bg: #ffffff;
-  --fm-surface: #f6f6f6;
+  --fm-surface: #f6f6f7;
+  --fm-surface-2: #ffffff;
   --fm-fg: #1a1a1a;
-  --fm-muted: #595959;
-  --fm-border: #d4d4d4;
+  --fm-muted: #5c5c63;
+  --fm-border: rgb(0 0 0 / 9%);
+  --fm-border-strong: rgb(0 0 0 / 16%);
   /* Form-field outlines: at least 3:1 against --fm-bg (WCAG 1.4.11). */
   --fm-control-border: #8a8a8a;
+  --fm-hover: rgb(0 0 0 / 5%);
+  --fm-active: rgb(0 0 0 / 9%);
   --fm-danger: #b3261e;
   --fm-accent: #0a5fd6;
   --fm-success: #1b6e2d;
   --fm-warning: #8a4b00;
+  --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 10%);
+  --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 8%), 0 12px 40px rgb(0 0 0 / 18%);
 }
 
 /* The Settings theme (`data-theme` on the root, set by App.vue): `system` follows
@@ -27,14 +78,20 @@
   :root:not([data-theme='light']) {
     --fm-bg: #1c1c1e;
     --fm-surface: #242426;
+    --fm-surface-2: #2c2c2f;
     --fm-fg: #ececec;
-    --fm-muted: #a6a6a6;
-    --fm-border: #3a3a3c;
+    --fm-muted: #a3a3a8;
+    --fm-border: rgb(255 255 255 / 9%);
+    --fm-border-strong: rgb(255 255 255 / 16%);
     --fm-control-border: #7a7a7c;
+    --fm-hover: rgb(255 255 255 / 6%);
+    --fm-active: rgb(255 255 255 / 10%);
     --fm-danger: #ff8a80;
     --fm-accent: #6ea8ff;
     --fm-success: #7bd88f;
     --fm-warning: #ffb74d;
+    --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 35%);
+    --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 30%), 0 12px 40px rgb(0 0 0 / 50%);
   }
 }
 
@@ -42,26 +99,48 @@
   color-scheme: dark;
   --fm-bg: #1c1c1e;
   --fm-surface: #242426;
+  --fm-surface-2: #2c2c2f;
   --fm-fg: #ececec;
-  --fm-muted: #a6a6a6;
-  --fm-border: #3a3a3c;
+  --fm-muted: #a3a3a8;
+  --fm-border: rgb(255 255 255 / 9%);
+  --fm-border-strong: rgb(255 255 255 / 16%);
   --fm-control-border: #7a7a7c;
+  --fm-hover: rgb(255 255 255 / 6%);
+  --fm-active: rgb(255 255 255 / 10%);
   --fm-danger: #ff8a80;
   --fm-accent: #6ea8ff;
   --fm-success: #7bd88f;
   --fm-warning: #ffb74d;
+  --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 35%);
+  --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 30%), 0 12px 40px rgb(0 0 0 / 50%);
 }
 
-/* The Settings density (`data-density` on the root). */
+/* The Settings density (`data-density` on the root) swaps the spacing set. */
 :root {
   --fm-row-height: 32px;
   --fm-gap: 8px;
 }
 
 :root[data-density='compact'] {
-  font-size: 12px;
   --fm-row-height: 24px;
   --fm-gap: 4px;
+  --fm-control-height: 24px;
+  --fm-space-2: 6px;
+  --fm-space-3: 8px;
+  --fm-space-4: 12px;
+  --fm-space-5: 16px;
+  --fm-space-6: 20px;
+  --fm-space-8: 24px;
+  font-size: var(--fm-text-sm);
+}
+
+html {
+  font-family: var(--fm-font-ui);
+  font-size: var(--fm-text-md);
+  line-height: var(--fm-leading);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -77,26 +156,288 @@ body {
   opacity: 1;
 }
 
-/* Keyboard focus is always visible: a 2 px accent ring on every focusable
-   element (WCAG 2.4.7). Components may draw their own, never none. */
+/* Keyboard focus is always visible: a 2 px accent ring, 2 px out, on every focusable
+   element (WCAG 2.4.7), on :focus-visible only. Components may draw their own, never none. */
 :focus-visible {
   outline: 2px solid var(--fm-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-/* Pointer targets are at least 24×24 px (WCAG 2.5.8). Buttons and selects grow to
-   it; check boxes and radio buttons keep their native size and get the spacing
-   that makes up the rest. */
+/* ---- Controls: the baseline every native element starts from. Nothing on screen may
+   look like a browser default; a component overrides what it needs. ---- */
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+/* Pointer targets are at least 24×24 px (WCAG 2.5.8). */
 button,
 select {
   min-width: 24px;
   min-height: 24px;
 }
+
+button {
+  box-sizing: border-box;
+  padding: 0 var(--fm-space-2);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
+  cursor: default;
+  transition:
+    background-color var(--fm-motion-fast) var(--fm-ease),
+    border-color var(--fm-motion-fast) var(--fm-ease),
+    color var(--fm-motion-fast) var(--fm-ease),
+    opacity var(--fm-motion-fast) var(--fm-ease);
+}
+/* Hover and press are a tint over whatever the button draws (transparent, filled or
+   accent), so every button has a state and no component has to add one. */
+button:not(:disabled):hover {
+  background-image: linear-gradient(var(--fm-hover), var(--fm-hover));
+}
+button:not(:disabled):active {
+  background-image: linear-gradient(var(--fm-active), var(--fm-active));
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+input[type='text'],
+input[type='search'],
+input[type='number'],
+input[type='url'],
+input[type='email'],
+input[type='password'],
+input:not([type]),
+textarea,
+select {
+  box-sizing: border-box;
+  padding: 0 var(--fm-space-2);
+  border: 1px solid var(--fm-control-border);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
+  transition: border-color var(--fm-motion-fast) var(--fm-ease);
+}
+input[type='text'],
+input[type='search'],
+input[type='number'],
+input[type='url'],
+input[type='email'],
+input[type='password'],
+input:not([type]),
+select {
+  height: var(--fm-control-height);
+}
+textarea {
+  padding: var(--fm-space-1) var(--fm-space-2);
+}
+input[type='search'] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+input[type='search']::-webkit-search-decoration,
+input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Select: the native box with a drawn chevron; the popup stays the OS's until the
+   ui/ Select replaces it. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-inline-end: calc(var(--fm-space-2) + 18px);
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%238a8a8a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: calc(100% - 6px) center;
+  background-size: 16px;
+}
+[dir='rtl'] select {
+  background-position: 6px center;
+}
+select:disabled {
+  opacity: 0.55;
+}
+option {
+  font-family: var(--fm-font-ui);
+}
+
+/* Check boxes and radio buttons: drawn, 16 px, accent when on. */
 input[type='checkbox'],
 input[type='radio'] {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  box-sizing: border-box;
   width: 16px;
   height: 16px;
   margin: 4px;
+  border: 1px solid var(--fm-control-border);
+  background-color: var(--fm-bg);
+  vertical-align: middle;
+  transition:
+    background-color var(--fm-motion-fast) var(--fm-ease),
+    border-color var(--fm-motion-fast) var(--fm-ease);
+}
+input[type='checkbox'] {
+  border-radius: var(--fm-radius-sm);
+}
+input[type='radio'] {
+  border-radius: 50%;
+}
+input[type='checkbox']:checked,
+input[type='radio']:checked {
+  border-color: var(--fm-accent);
+  background-color: var(--fm-accent);
+}
+input[type='checkbox']::before,
+input[type='radio']::before {
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform var(--fm-motion-fast) var(--fm-ease);
+  content: '';
+}
+input[type='checkbox']::before {
+  background-color: var(--fm-bg);
+  mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 5.5l2.5 2.5 4.5-5'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 5.5l2.5 2.5 4.5-5'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+input[type='radio']::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--fm-bg);
+}
+input[type='checkbox']:checked::before,
+input[type='radio']:checked::before {
+  transform: scale(1);
+}
+input[type='checkbox']:disabled,
+input[type='radio']:disabled {
+  opacity: 0.55;
+}
+
+/* Range: a hairline track and a round accent thumb. */
+input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--fm-border-strong);
+}
+input[type='range']::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--fm-border-strong);
+}
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5.5px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fm-accent);
+  box-shadow: 0 0 0 1px var(--fm-bg);
+  transition: transform var(--fm-motion-fast) var(--fm-ease);
+}
+input[type='range']::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--fm-accent);
+  box-shadow: 0 0 0 1px var(--fm-bg);
+}
+input[type='range']:not(:disabled):hover::-webkit-slider-thumb,
+input[type='range']:not(:disabled):active::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+input[type='range']:disabled {
+  opacity: 0.55;
+}
+
+/* Colour: a plain swatch in a hairline. */
+input[type='color'] {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
+  width: 28px;
+  height: 22px;
+  padding: 2px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
+}
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+input[type='color']::-moz-color-swatch {
+  border: 0;
+  border-radius: 2px;
+}
+
+/* A key cap. A chord reads left to right in any chrome ("Ctrl+K", not "K+Ctrl"). */
+kbd {
+  direction: ltr;
+  unicode-bidi: isolate;
+  display: inline-block;
+  min-width: 1.2em;
+  padding: 0 var(--fm-space-1);
+  border: 1px solid var(--fm-border-strong);
+  border-bottom-width: 2px;
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-surface);
+  color: var(--fm-muted);
+  font-family: var(--fm-font-ui);
+  font-size: var(--fm-text-xs);
+  line-height: 16px;
+  text-align: center;
+}
+
+/* Code and raw data (tags, hashes, paths). */
+code,
+pre,
+.mono {
+  font-family: var(--fm-font-mono);
+}
+
+/* Separators are hairlines. */
+hr {
+  height: 0;
+  margin: var(--fm-space-2) 0;
+  border: 0;
+  border-top: 1px solid var(--fm-border);
 }
 
 /* The OS reduce-motion setting turns every animation and transition off. */
@@ -115,9 +456,14 @@ input[type='radio'] {
 .surface-light {
   color-scheme: light;
   --fm-bg: #ffffff;
+  --fm-surface: #f6f6f7;
+  --fm-surface-2: #ffffff;
   --fm-fg: #1a1a1a;
-  --fm-muted: #595959;
-  --fm-border: #d4d4d4;
+  --fm-muted: #5c5c63;
+  --fm-border: rgb(0 0 0 / 9%);
+  --fm-border-strong: rgb(0 0 0 / 16%);
+  --fm-hover: rgb(0 0 0 / 5%);
+  --fm-active: rgb(0 0 0 / 9%);
   --fm-accent: #0a5fd6;
   --fm-warning: #8a4b00;
   --fm-success: #1b6e2d;
@@ -125,9 +471,14 @@ input[type='radio'] {
 .surface-dark {
   color-scheme: dark;
   --fm-bg: #1c1c1e;
+  --fm-surface: #242426;
+  --fm-surface-2: #2c2c2f;
   --fm-fg: #ececec;
-  --fm-muted: #a6a6a6;
-  --fm-border: #3a3a3c;
+  --fm-muted: #a3a3a8;
+  --fm-border: rgb(255 255 255 / 9%);
+  --fm-border-strong: rgb(255 255 255 / 16%);
+  --fm-hover: rgb(255 255 255 / 6%);
+  --fm-active: rgb(255 255 255 / 10%);
   --fm-accent: #6ea8ff;
   --fm-warning: #ffb74d;
   --fm-success: #7bd88f;
@@ -138,10 +489,4 @@ input[type='radio'] {
 [dir='rtl'] .fm-directional {
   display: inline-block;
   transform: scaleX(-1);
-}
-
-/* A key chord reads left to right in any chrome ("Ctrl+K", not "K+Ctrl"). */
-kbd {
-  direction: ltr;
-  unicode-bidi: isolate;
 }

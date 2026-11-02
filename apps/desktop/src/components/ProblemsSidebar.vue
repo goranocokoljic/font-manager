@@ -41,7 +41,7 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
 .heading {
   margin: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .heading .link {
@@ -60,13 +60,13 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
   box-sizing: border-box;
   min-height: 24px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
   color: inherit;
   text-decoration: none;
 }
 .link:hover,
 .link:focus-visible {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .name {
   flex: 1;

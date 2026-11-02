@@ -69,7 +69,7 @@ function choose(p: Palette): void {
 h3 {
   margin: 16px 0 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
   text-transform: uppercase;
 }
@@ -84,7 +84,7 @@ h3 {
   gap: 8px;
   padding: 4px 6px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
   cursor: pointer;
 }
 .palette.chosen {
@@ -99,7 +99,7 @@ h3 {
   flex: none;
   overflow: hidden;
   border: 1px solid var(--fm-control-border);
-  border-radius: 3px;
+  border-radius: var(--fm-radius-sm);
 }
 .swatch {
   width: 14px;

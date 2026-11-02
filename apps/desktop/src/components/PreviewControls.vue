@@ -257,7 +257,7 @@ function colorFrom(e: Event): string {
   gap: var(--fm-gap) 16px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--fm-border);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .field {
   display: flex;
@@ -280,8 +280,8 @@ input[type='text'],
 .number {
   padding: 2px 4px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
 }
@@ -300,14 +300,14 @@ input[type='color'] {
   height: 22px;
   padding: 0;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
 }
 .button {
   padding: 2px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

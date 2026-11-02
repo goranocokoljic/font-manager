@@ -174,7 +174,7 @@ function onKeyDown(e: KeyboardEvent): void {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -187,19 +187,19 @@ function onKeyDown(e: KeyboardEvent): void {
   width: min(560px, 90vw);
   max-height: 60vh;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
   overflow: hidden;
 }
 .query {
   padding: 12px 16px;
   border: 0;
   border-bottom: 1px solid var(--fm-border);
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
 }
 .query:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -219,7 +219,7 @@ function onKeyDown(e: KeyboardEvent): void {
   cursor: default;
 }
 .item.active {
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
   box-shadow: inset 2px 0 0 var(--fm-accent);
 }
 .item[aria-disabled='true'] {
@@ -229,23 +229,23 @@ function onKeyDown(e: KeyboardEvent): void {
   flex: none;
   width: 88px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .title {
   flex: 1;
 }
 mark {
-  background: transparent;
+  background-color: transparent;
   color: var(--fm-accent);
   font-weight: 600;
 }
 .chord {
   padding: 0 4px;
   border: 1px solid var(--fm-border);
-  border-radius: 4px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-muted);
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .none {
   padding: 8px 16px;

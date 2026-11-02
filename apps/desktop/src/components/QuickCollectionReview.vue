@@ -238,7 +238,7 @@ async function tag(): Promise<void> {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .count {
@@ -249,8 +249,8 @@ async function tag(): Promise<void> {
 .toggle {
   padding: 4px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -273,8 +273,8 @@ async function tag(): Promise<void> {
   width: 160px;
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
 }
@@ -283,7 +283,7 @@ async function tag(): Promise<void> {
   min-height: 0;
   overflow-y: auto;
   contain: strict;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .spacer {

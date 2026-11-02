@@ -93,7 +93,7 @@ const store = useSetsStore();
   margin: 0;
   padding: 8px 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .list {
@@ -109,12 +109,12 @@ const store = useSetsStore();
 .action {
   flex: none;
   padding: 2px 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 /* A set's "Export set…" shows under the pointer and under keyboard focus. */
 .export {
@@ -128,7 +128,7 @@ const store = useSetsStore();
   margin: 0 8px 4px;
   padding: 6px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .imported-line {
   display: flex;
@@ -154,7 +154,7 @@ const store = useSetsStore();
   min-width: 0;
   padding: 4px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
   background: none;
   color: inherit;
   font: inherit;
@@ -163,7 +163,7 @@ const store = useSetsStore();
 }
 .set:hover,
 .set:focus-visible {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .set[aria-pressed='true'] {
   color: var(--fm-accent);

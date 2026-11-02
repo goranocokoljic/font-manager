@@ -410,18 +410,18 @@ function countLabel(n: number): string {
   margin: 0;
   padding: 8px 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .add,
 .actions button {
   padding: 2px 6px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .list {
   margin: 0;
@@ -430,14 +430,14 @@ function countLabel(n: number): string {
 }
 .item {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .item:hover,
 .item:focus-within {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .open {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .drop-inside {
   outline: 2px solid var(--fm-accent);
@@ -458,7 +458,7 @@ function countLabel(n: number): string {
   min-width: 0;
   padding: 0;
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
@@ -473,9 +473,9 @@ function countLabel(n: number): string {
 .badge {
   padding: 0 4px;
   border: 1px solid var(--fm-border);
-  border-radius: 4px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-muted);
-  font-size: 10.5px;
+  font-size: var(--fm-text-xs);
 }
 .count {
   color: var(--fm-muted);
@@ -498,8 +498,8 @@ function countLabel(n: number): string {
   width: 100%;
   padding: 2px 6px;
   border: 1px solid var(--fm-accent);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

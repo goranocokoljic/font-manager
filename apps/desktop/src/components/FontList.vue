@@ -383,7 +383,7 @@ function onToggle(row: ListRow): void {
   min-height: 0;
   overflow-y: auto;
   contain: strict;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .viewport:focus-visible {
@@ -430,7 +430,7 @@ function onToggle(row: ListRow): void {
   place-items: center;
   width: 24px;
   color: var(--fm-muted);
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   cursor: pointer;
 }
 .preview {
@@ -454,7 +454,7 @@ function onToggle(row: ListRow): void {
   box-sizing: border-box;
   padding-inline-end: 16px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .placeholder .label {
   display: flex;
@@ -467,17 +467,17 @@ function onToggle(row: ListRow): void {
 .open-license {
   padding: 0 4px;
   border: 1px solid var(--fm-success);
-  border-radius: 3px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-success);
-  font-size: 10.5px;
+  font-size: var(--fm-text-xs);
   line-height: 14px;
 }
 .update {
   padding: 0 4px;
   border: 1px solid var(--fm-accent);
-  border-radius: 3px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-accent);
-  font-size: 10.5px;
+  font-size: var(--fm-text-xs);
   line-height: 14px;
 }
 .note {
@@ -488,12 +488,12 @@ function onToggle(row: ListRow): void {
   align-self: center;
   margin-inline-end: 8px;
   padding: 2px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   visibility: hidden;
 }
 .slot:hover .row-action,
@@ -502,6 +502,6 @@ function onToggle(row: ListRow): void {
 }
 .quick-mark {
   color: var(--fm-accent);
-  font-size: 10px;
+  font-size: var(--fm-text-xs);
 }
 </style>

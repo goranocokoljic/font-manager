@@ -29,7 +29,7 @@ const copy = () => copyValue(props.value);
 .copy {
   padding: 0;
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
@@ -42,7 +42,7 @@ const copy = () => copyValue(props.value);
 .status {
   margin-inline-start: 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .status:empty {
   margin: 0;

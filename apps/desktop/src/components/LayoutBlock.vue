@@ -388,7 +388,7 @@ function onFieldKey(e: KeyboardEvent): void {
   column-gap: 2em;
   column-fill: balance;
   overflow-wrap: break-word;
-  border-radius: 2px;
+  border-radius: var(--fm-radius-sm);
 }
 .block.resizable {
   cursor: move;
@@ -417,11 +417,11 @@ function onFieldKey(e: KeyboardEvent): void {
   position: absolute;
   top: 0;
   inset-inline-end: 0;
-  z-index: 1;
+  z-index: var(--fm-z-raised);
   padding: 1px 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: var(--fm-surface);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-surface);
   color: var(--fm-fg);
   font:
     11px/1.4 system-ui,
@@ -443,7 +443,7 @@ function onFieldKey(e: KeyboardEvent): void {
   margin: 0 0 8px;
   padding: 4px;
   border: 1px solid var(--fm-control-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   letter-spacing: inherit;
   text-align: inherit;

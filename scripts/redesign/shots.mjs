@@ -25,7 +25,8 @@ import { spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const views = (mode) => JSON.stringify({ 'fm.views.v1': JSON.stringify({ home: { mode } }) });
+// The home view's key in fm.views.v1 is `all` (ALL_FONTS_VIEW in stores/preview.ts).
+const views = (mode) => JSON.stringify({ 'fm.views.v1': JSON.stringify({ all: { mode } }) });
 
 /** @type {Record<string, Record<string, string>>} */
 const scenes = {
@@ -102,7 +103,8 @@ for (const name of wanted) {
   process.stdout.write(`\n=== scene ${name} → ${outRoot}/${name}-*.png\n`);
   const r = spawnSync(
     'pnpm',
-    ['--filter', '@fm/desktop', 'exec', 'playwright', 'test', '--grep', '@screens'],
+    // Only this spec: other specs also carry the @screens tag and would write extra files.
+    ['--filter', '@fm/desktop', 'exec', 'playwright', 'test', 'e2e/screens.spec.ts', '--grep', '@screens'],
     { cwd: root, env, stdio: 'inherit', shell: process.platform === 'win32' },
   );
   if (r.status !== 0) failed++;

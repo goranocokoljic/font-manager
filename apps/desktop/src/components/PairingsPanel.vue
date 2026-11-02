@@ -125,14 +125,14 @@ function add(face: FaceSummary, pinned: boolean): void {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .hint {
   flex: 1;
   margin: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .message {
   margin: 0;
@@ -172,14 +172,14 @@ function add(face: FaceSummary, pinned: boolean): void {
 .why {
   flex-basis: 100%;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .button {
   flex: none;
   padding: 2px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
 }

@@ -181,7 +181,7 @@ function onKeyDown(e: KeyboardEvent): void {
   flex-direction: column;
   max-height: 45%;
   border-top: 1px solid var(--fm-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .docs:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -195,7 +195,7 @@ function onKeyDown(e: KeyboardEvent): void {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .file {
@@ -208,13 +208,13 @@ function onKeyDown(e: KeyboardEvent): void {
   flex: 1;
   margin: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .close {
   padding: 0 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -238,7 +238,7 @@ function onKeyDown(e: KeyboardEvent): void {
   padding: 6px 16px;
   border: 0;
   border-bottom: 1px solid var(--fm-border);
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
@@ -256,7 +256,7 @@ function onKeyDown(e: KeyboardEvent): void {
   white-space: nowrap;
 }
 .status {
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .status.active {
@@ -279,8 +279,8 @@ function onKeyDown(e: KeyboardEvent): void {
   margin-inline: 16px;
   padding: 2px 12px;
   border: 1px solid var(--fm-accent);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: var(--fm-accent);
   font: inherit;
   font-weight: 600;

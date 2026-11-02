@@ -28,8 +28,8 @@ const reason = computed(() => (props.health.kind === 'ok' ? null : props.health.
 .badge {
   padding: 0 8px;
   border: 1px solid currentColor;
-  border-radius: 8px;
-  font-size: 11.5px;
+  border-radius: var(--fm-radius-md);
+  font-size: var(--fm-text-xs);
   font-weight: 600;
   line-height: 18px;
 }

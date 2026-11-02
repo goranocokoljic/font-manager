@@ -119,7 +119,7 @@ function countLabel(n: number): string {
 .heading {
   margin: 0;
   padding: 8px 0;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .fold {
@@ -128,7 +128,7 @@ function countLabel(n: number): string {
   gap: 4px;
   padding: 0;
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: var(--fm-muted);
   font: inherit;
 }
@@ -145,10 +145,10 @@ function countLabel(n: number): string {
   align-items: center;
   gap: 6px;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .item:hover {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 /* A tag the dragged fonts already carry. */
 .carried {

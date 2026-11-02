@@ -191,7 +191,7 @@ async function save(): Promise<void> {
 }
 .label {
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .chip,
@@ -199,15 +199,16 @@ async function save(): Promise<void> {
 .name {
   padding: 2px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 12px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .name {
   width: 140px;
-  border-radius: 8px;
+  border-color: var(--fm-control-border);
+  border-radius: var(--fm-radius-md);
 }
 .chip[aria-pressed='true'] {
   border-color: var(--fm-accent);
@@ -234,7 +235,7 @@ async function save(): Promise<void> {
 .note,
 .error {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .note {
   color: var(--fm-muted);

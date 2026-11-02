@@ -49,7 +49,7 @@ async function openSite(): Promise<void> {
 }
 .name {
   margin: 0 0 8px;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
   font-weight: 600;
 }
 .text {

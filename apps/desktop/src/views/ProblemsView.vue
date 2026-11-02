@@ -323,7 +323,7 @@ function when(at: string): string {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .panel {
@@ -339,9 +339,9 @@ function when(at: string): string {
 }
 .toggle {
   padding: 4px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -373,20 +373,20 @@ function when(at: string): string {
   overflow-wrap: anywhere;
 }
 .path {
-  font-family: ui-monospace, monospace;
-  font-size: 11.5px;
+  font-family: var(--fm-font-mono);
+  font-size: var(--fm-text-xs);
 }
 .section {
   margin-top: 24px;
 }
 .h2 {
   margin: 0 0 8px;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .h3 {
   margin: 0 0 4px;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
   font-weight: 600;
 }
 .muted {
@@ -416,7 +416,7 @@ function when(at: string): string {
 .badge {
   padding: 0 6px;
   border: 1px solid var(--fm-accent);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-md);
   color: var(--fm-accent);
 }
 .dialog {
@@ -427,9 +427,9 @@ function when(at: string): string {
   margin: 0 auto;
   padding: 16px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
-  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
   overflow-wrap: anywhere;
 }
 .actions {
@@ -469,9 +469,9 @@ function when(at: string): string {
 }
 .button {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

@@ -356,7 +356,7 @@ function onToggle(row: ListRow): void {
   overflow-x: hidden;
   overflow-y: auto;
   contain: strict;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .viewport:focus-visible {
@@ -384,7 +384,7 @@ function onToggle(row: ListRow): void {
   height: 100%;
   padding: 8px 10px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-md);
   overflow: hidden;
 }
 .slot.face .card {
@@ -425,7 +425,7 @@ function onToggle(row: ListRow): void {
   gap: 6px;
   min-width: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .name {
   overflow: hidden;
@@ -445,13 +445,13 @@ function onToggle(row: ListRow): void {
 }
 .note {
   color: var(--fm-warning);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .fallback {
   padding: 0 4px;
   border: 1px solid var(--fm-border);
-  border-radius: 3px;
-  font-size: 10.5px;
+  border-radius: var(--fm-radius-sm);
+  font-size: var(--fm-text-xs);
   line-height: 14px;
 }
 </style>

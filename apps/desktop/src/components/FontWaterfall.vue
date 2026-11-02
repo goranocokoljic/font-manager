@@ -270,7 +270,7 @@ function onToggle(row: ListRow): void {
   min-height: 0;
   overflow-y: auto;
   contain: strict;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .viewport:focus-visible {
@@ -321,7 +321,7 @@ function onToggle(row: ListRow): void {
   height: 28px;
   padding-block: 0;
   padding-inline: 0 16px;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
   font-weight: 600;
 }
 .slot:not(.face) .head {
@@ -333,7 +333,7 @@ function onToggle(row: ListRow): void {
   place-items: center;
   width: 24px;
   color: var(--fm-muted);
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   cursor: pointer;
 }
 .slot.face .head .name {
@@ -353,6 +353,6 @@ function onToggle(row: ListRow): void {
   margin: 0;
   padding-inline-start: 40px;
   color: var(--fm-warning);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 </style>

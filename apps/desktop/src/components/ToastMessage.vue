@@ -42,7 +42,7 @@ const toasts = useToastStore();
   bottom: 40px;
   /* Centered in either direction: both insets 0, the box as wide as its toast. */
   inset-inline: 0;
-  z-index: 9;
+  z-index: var(--fm-z-toast);
   width: fit-content;
   margin-inline: auto;
 }
@@ -54,18 +54,18 @@ const toasts = useToastStore();
   padding-block: 8px;
   padding-inline: 16px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  box-shadow: var(--fm-shadow-2);
 }
 .message {
   flex: 1;
 }
 button {
   border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

@@ -318,7 +318,7 @@ const surfaceClass = computed(() =>
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .title,
@@ -332,8 +332,8 @@ const surfaceClass = computed(() =>
   min-width: 120px;
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -348,13 +348,13 @@ const surfaceClass = computed(() =>
 }
 .refreshed {
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .toggle {
   padding: 4px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -380,7 +380,7 @@ const surfaceClass = computed(() =>
   min-height: 0;
   overflow-y: auto;
   contain: strict;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .viewport:focus-visible {
@@ -416,6 +416,6 @@ const surfaceClass = computed(() =>
   margin: 0;
 }
 .hint {
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 </style>

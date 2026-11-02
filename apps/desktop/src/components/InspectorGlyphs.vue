@@ -469,8 +469,8 @@ const noResults = computed(
   min-width: 0;
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
 }
@@ -485,7 +485,7 @@ select.field {
   height: 384px;
   overflow-y: auto;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .viewport:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -552,9 +552,9 @@ select.field {
 }
 .action {
   padding: 2px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
   white-space: nowrap;
@@ -566,9 +566,9 @@ select.field {
 .close {
   align-self: flex-start;
   padding: 0 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
   font-size: 16px;
@@ -580,7 +580,7 @@ select.field {
 }
 .features h3 {
   margin: 0 0 2px;
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
   font-weight: 600;
 }
 .features ul {
@@ -597,7 +597,7 @@ select.field {
   align-items: baseline;
 }
 .features li :deep(.copy) {
-  font-family: ui-monospace, monospace;
+  font-family: var(--fm-font-mono);
 }
 .big {
   flex: none;
@@ -620,6 +620,6 @@ dd {
   overflow-wrap: anywhere;
 }
 .note {
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 </style>

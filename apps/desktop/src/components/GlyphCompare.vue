@@ -353,7 +353,7 @@ function onKeyDown(e: KeyboardEvent): void {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -371,10 +371,10 @@ function onKeyDown(e: KeyboardEvent): void {
   max-height: 88vh;
   padding: 16px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  box-shadow: var(--fm-shadow-2);
   overflow: auto;
 }
 .head {
@@ -384,7 +384,7 @@ function onKeyDown(e: KeyboardEvent): void {
 }
 h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
   font-weight: 600;
 }
 .controls {
@@ -403,8 +403,8 @@ h2 {
   min-width: 0;
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
 }
@@ -419,15 +419,15 @@ input[type='range']:focus-visible {
   top: 100%;
   inset-inline-start: 0;
   inset-inline-end: 0;
-  z-index: 1;
+  z-index: var(--fm-z-raised);
   max-height: 200px;
   margin: 2px 0 0;
   padding: 4px 0;
   overflow: auto;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
-  box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-1);
   list-style: none;
 }
 .option {
@@ -438,7 +438,7 @@ input[type='range']:focus-visible {
   cursor: default;
 }
 .option.active {
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
   box-shadow: inset 2px 0 0 var(--fm-accent);
 }
 .none {
@@ -462,9 +462,9 @@ input[type='range']:focus-visible {
 }
 .close {
   padding: 0 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
   font-size: 16px;
@@ -473,7 +473,7 @@ input[type='range']:focus-visible {
 .stage {
   overflow: auto;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .drawing {
   display: block;
@@ -521,7 +521,7 @@ input[type='range']:focus-visible {
   flex: none;
   width: 14px;
   height: 14px;
-  border-radius: 3px;
+  border-radius: var(--fm-radius-sm);
   opacity: 0.5;
 }
 .swatch.font-0 {

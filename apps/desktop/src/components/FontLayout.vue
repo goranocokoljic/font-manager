@@ -290,7 +290,7 @@ function blockFamily(i: number): string {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .layout:focus-visible {
@@ -303,7 +303,7 @@ function blockFamily(i: number): string {
   gap: 8px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--fm-border);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .name {
   font-weight: 600;
@@ -345,9 +345,9 @@ function blockFamily(i: number): string {
 .lock {
   margin-inline-start: auto;
   padding: 1px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 3px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font:
     11px/1.4 system-ui,
@@ -372,9 +372,9 @@ function blockFamily(i: number): string {
 }
 .badge {
   padding: 1px 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 3px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-muted);
   font:
     11px/1.4 system-ui,
@@ -394,7 +394,7 @@ function blockFamily(i: number): string {
   margin: 0;
   padding: 0 32px 16px;
   color: var(--fm-muted);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 @media print {
   .layout {

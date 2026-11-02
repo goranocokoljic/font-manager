@@ -159,8 +159,8 @@ function onKey(e: KeyboardEvent): void {
   width: 100%;
   padding: 1px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 3px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
 }
@@ -168,7 +168,7 @@ function onKey(e: KeyboardEvent): void {
   position: absolute;
   top: 100%;
   inset-inline-start: 0;
-  z-index: 2;
+  z-index: var(--fm-z-sticky);
   box-sizing: border-box;
   min-width: 100%;
   max-width: 20em;
@@ -178,8 +178,8 @@ function onKey(e: KeyboardEvent): void {
   overflow: auto;
   list-style: none;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
 }
 .option,
@@ -193,7 +193,7 @@ function onKey(e: KeyboardEvent): void {
   cursor: pointer;
 }
 .option.active {
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
   box-shadow: inset 2px 0 0 var(--fm-accent);
 }
 .muted {
@@ -201,9 +201,9 @@ function onKey(e: KeyboardEvent): void {
 }
 .reset {
   padding: 1px 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 3px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: var(--fm-fg);
   font: inherit;
   white-space: nowrap;

@@ -146,8 +146,8 @@ select,
 input {
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -159,9 +159,9 @@ input:focus-visible,
 }
 .button {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

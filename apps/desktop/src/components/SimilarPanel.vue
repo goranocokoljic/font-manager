@@ -200,7 +200,7 @@ function onKeyDown(e: KeyboardEvent): void {
   flex-direction: column;
   max-height: 45%;
   border-top: 1px solid var(--fm-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .similar:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -214,20 +214,20 @@ function onKeyDown(e: KeyboardEvent): void {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .hint {
   flex: 1;
   margin: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .close {
   padding: 0 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -252,7 +252,7 @@ function onKeyDown(e: KeyboardEvent): void {
   padding: 4px 0 6px;
   border: 0;
   border-bottom: 1px solid var(--fm-border);
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
@@ -275,6 +275,6 @@ function onKeyDown(e: KeyboardEvent): void {
 .why {
   padding: 0 16px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 </style>

@@ -475,9 +475,9 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .viewport:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -488,12 +488,12 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
 }
 .header {
   position: sticky;
-  z-index: 1;
+  z-index: var(--fm-z-raised);
   top: 0;
   display: grid;
   box-sizing: border-box;
   border-bottom: 1px solid var(--fm-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .th {
   display: flex;
@@ -514,7 +514,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
   gap: 4px;
   padding: 0 8px;
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: var(--fm-muted);
   font: inherit;
   font-weight: 600;
@@ -533,7 +533,7 @@ span.sort {
   color: var(--fm-fg);
 }
 .arrow {
-  font-size: 9px;
+  font-size: var(--fm-text-xs);
 }
 .spacer {
   position: relative;
@@ -612,7 +612,7 @@ span.sort {
   position: absolute;
   top: 3px;
   height: 4px;
-  border-radius: 2px;
+  border-radius: var(--fm-radius-sm);
   background: color-mix(in srgb, var(--fm-fg) 35%, transparent);
 }
 .mark {
@@ -627,15 +627,15 @@ span.sort {
   background: var(--fm-fg);
 }
 .mark.italic {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .badge {
   flex: none;
   padding: 1px 5px;
   border: 1px solid var(--fm-border);
-  border-radius: 4px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-muted);
-  font-size: 10.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .badge.good {

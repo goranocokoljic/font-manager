@@ -156,13 +156,13 @@ const when = (iso: string) => {
   gap: 6px;
   padding: 4px 16px;
   border-bottom: 1px solid var(--fm-border);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .toggle {
   padding: 2px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -181,7 +181,7 @@ const when = (iso: string) => {
   overflow: auto;
   padding: 4px 16px;
   border-bottom: 1px solid var(--fm-border);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
 }
 .history ol {
   margin: 0;

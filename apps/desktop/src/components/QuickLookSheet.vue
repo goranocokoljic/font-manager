@@ -108,7 +108,7 @@ function onFocusIn(e: FocusEvent): void {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   display: flex;
   justify-content: center;
   align-items: flex-start;
@@ -124,9 +124,9 @@ function onFocusIn(e: FocusEvent): void {
   border: 1px solid var(--fm-border);
   border-top: 0;
   border-radius: 0 0 8px 8px;
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  box-shadow: var(--fm-shadow-2);
   overflow: auto;
 }
 .sheet:focus {
@@ -140,7 +140,7 @@ function onFocusIn(e: FocusEvent): void {
 }
 h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
 }
 .sample {
   margin: 0;
@@ -151,7 +151,7 @@ h2 {
 .hint {
   margin: 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 @media (prefers-reduced-motion: no-preference) {
   .sheet {

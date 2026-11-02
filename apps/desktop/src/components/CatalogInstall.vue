@@ -113,7 +113,7 @@ const running = computed(
 .title {
   flex-basis: 100%;
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
 }
 .line {
   flex: 1 1 auto;
@@ -130,9 +130,9 @@ const running = computed(
 }
 .button {
   padding: 2px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: var(--fm-fg);
   font: inherit;
 }

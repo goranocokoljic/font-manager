@@ -255,7 +255,7 @@ const deferredStyle = computed(() => ({
   align-items: center;
   gap: 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .badge {
   color: var(--fm-accent);
@@ -266,9 +266,9 @@ const deferredStyle = computed(() => ({
 .fallback {
   padding: 0 4px;
   border: 1px solid var(--fm-border);
-  border-radius: 3px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-muted);
-  font-size: 10.5px;
+  font-size: var(--fm-text-xs);
   line-height: 14px;
 }
 .sample {

@@ -587,7 +587,7 @@ function chooseLanguage(e: Event): void {
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .body {
@@ -602,19 +602,19 @@ function chooseLanguage(e: Event): void {
   width: 180px;
   padding: 8px;
   border-inline-end: 1px solid var(--fm-border);
-  background: var(--fm-surface);
+  background-color: var(--fm-surface);
 }
 .tab {
   padding: var(--fm-gap) 8px;
   border: 0;
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
   text-align: start;
 }
 .tab[aria-selected='true'] {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-accent);
   font-weight: 600;
 }
@@ -626,7 +626,7 @@ function chooseLanguage(e: Event): void {
 }
 .heading {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
 }
 .note {
   margin: 0 0 12px;
@@ -650,7 +650,7 @@ function chooseLanguage(e: Event): void {
 }
 .subheading {
   margin: 16px 0 8px;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
 }
 .notes {
   margin: 0;
@@ -668,7 +668,7 @@ function chooseLanguage(e: Event): void {
   padding: 0;
   list-style: none;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
+  border-radius: var(--fm-radius-md);
 }
 .source {
   display: flex;
@@ -691,7 +691,7 @@ function chooseLanguage(e: Event): void {
 }
 .meta {
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .check,
 .choice {
@@ -737,8 +737,8 @@ function chooseLanguage(e: Event): void {
 .input {
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
 }
@@ -751,8 +751,8 @@ function chooseLanguage(e: Event): void {
 .button {
   padding: 4px 10px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

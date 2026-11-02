@@ -123,8 +123,8 @@ function onFocusOut(e: FocusEvent): void {
 .reset {
   padding: 4px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -134,15 +134,15 @@ function onFocusOut(e: FocusEvent): void {
 }
 .panel {
   position: absolute;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   top: calc(100% + 4px);
   inset-inline-end: 0;
   width: 240px;
   padding: 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 20%);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
+  box-shadow: var(--fm-shadow-2);
 }
 ul {
   margin: 0 0 8px;

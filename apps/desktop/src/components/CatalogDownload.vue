@@ -192,7 +192,7 @@ const folderName = computed(() => family.value?.name ?? '');
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .form {
@@ -210,8 +210,8 @@ const folderName = computed(() => family.value?.name ?? '');
   max-width: 100%;
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -235,7 +235,7 @@ const folderName = computed(() => family.value?.name ?? '');
 }
 .hint {
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .status:empty {
   display: none;
@@ -253,9 +253,9 @@ const folderName = computed(() => family.value?.name ?? '');
 }
 .button {
   padding: 4px 12px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

@@ -188,13 +188,13 @@ dd {
   width: 100%;
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
 select.field option {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .place {
   display: grid;
@@ -215,9 +215,9 @@ select.field option {
 }
 .choice {
   padding: 4px 10px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

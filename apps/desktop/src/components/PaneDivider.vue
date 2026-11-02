@@ -79,7 +79,7 @@ function onKeyDown(e: KeyboardEvent): void {
   flex: none;
   width: 1px;
   background: var(--fm-border);
-  z-index: 1;
+  z-index: var(--fm-z-raised);
   cursor: col-resize;
   touch-action: none;
 }

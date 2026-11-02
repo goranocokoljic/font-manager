@@ -117,7 +117,7 @@ async function onKey(e: KeyboardEvent): Promise<void> {
   padding: 8px 0;
   border: 0;
   border-bottom: 2px solid transparent;
-  background: transparent;
+  background-color: transparent;
   color: var(--fm-muted);
   font: inherit;
   font-weight: 600;

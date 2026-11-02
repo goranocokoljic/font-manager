@@ -101,7 +101,7 @@ async function regenerate(): Promise<void> {
 <style scoped>
 .heading {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
 }
 .note {
   margin: 0 0 12px;
@@ -135,21 +135,21 @@ async function regenerate(): Promise<void> {
 .input {
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
 }
 .token {
   flex: 1;
   min-width: 16em;
-  font-family: ui-monospace, monospace;
+  font-family: var(--fm-font-mono);
 }
 .button {
   padding: 4px 10px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

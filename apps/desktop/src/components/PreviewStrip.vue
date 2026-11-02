@@ -114,7 +114,7 @@ function onInput(e: Event): void {
   gap: 8px;
   padding: 6px 16px 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .controls input {
   width: 160px;
@@ -122,8 +122,8 @@ function onInput(e: Event): void {
 .reset {
   padding: 2px 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

@@ -179,7 +179,7 @@ async function toggle(event: globalThis.Event): Promise<void> {
 <style scoped>
 .heading {
   margin: 0 0 12px;
-  font-size: 15px;
+  font-size: var(--fm-text-lg);
 }
 .note {
   margin: 0 0 12px;
@@ -240,17 +240,17 @@ async function toggle(event: globalThis.Event): Promise<void> {
   margin: 0;
   padding: 8px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
-  font-family: ui-monospace, monospace;
-  font-size: 12px;
+  border-radius: var(--fm-radius-sm);
+  font-family: var(--fm-font-mono);
+  font-size: var(--fm-text-sm);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .button {
   padding: 4px 10px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

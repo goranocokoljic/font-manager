@@ -174,7 +174,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .font {
@@ -190,9 +190,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 }
 .button {
   padding: 4px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

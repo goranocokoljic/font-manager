@@ -55,8 +55,8 @@ function onEscape(): void {
   min-width: 120px;
   padding: 4px 8px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

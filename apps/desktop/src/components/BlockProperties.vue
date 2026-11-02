@@ -136,10 +136,10 @@ async function setChoice(change: BlockProps): Promise<void> {
   margin: 4px 0 12px;
   padding: 8px 12px;
   border: 1px solid var(--fm-control-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
-  font-family: system-ui, sans-serif;
-  font-size: 12px;
+  font-family: var(--fm-font-ui);
+  font-size: var(--fm-text-sm);
 }
 .field {
   display: flex;
@@ -152,7 +152,7 @@ async function setChoice(change: BlockProps): Promise<void> {
 .field input,
 .field select {
   border: 1px solid var(--fm-control-border);
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
   font: inherit;
 }

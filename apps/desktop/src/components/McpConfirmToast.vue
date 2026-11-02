@@ -67,7 +67,7 @@ const message = computed(() => {
   position: fixed;
   bottom: 96px;
   inset-inline: 0;
-  z-index: 10;
+  z-index: var(--fm-z-popover);
   width: fit-content;
   margin-inline: auto;
 }
@@ -77,11 +77,11 @@ const message = computed(() => {
   gap: 8px;
   max-width: min(480px, 90vw);
   padding: 12px 16px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 8px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
   color: var(--fm-fg);
-  box-shadow: 0 8px 32px rgb(0 0 0 / 24%);
+  box-shadow: var(--fm-shadow-2);
 }
 .message {
   margin: 0;
@@ -98,9 +98,9 @@ const message = computed(() => {
 }
 button {
   padding: 4px 14px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: transparent;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }

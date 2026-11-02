@@ -58,7 +58,7 @@ onMounted(() => void store.load());
   margin: 0;
   padding: 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .row {
@@ -76,7 +76,7 @@ onMounted(() => void store.load());
   width: 100%;
   padding: 4px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
   background: none;
   color: inherit;
   font: inherit;
@@ -85,7 +85,7 @@ onMounted(() => void store.load());
 }
 .entry:hover,
 .entry:focus-visible {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .entry[aria-current='true'] {
   color: var(--fm-accent);
@@ -93,17 +93,17 @@ onMounted(() => void store.load());
 }
 .turn-on {
   padding: 1px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: 6px;
-  background: var(--fm-bg);
+  border: 1px solid var(--fm-border-strong);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .connects {
   flex-basis: 100%;
   padding: 0 8px 4px;
   color: var(--fm-muted);
-  font-size: 11px;
+  font-size: var(--fm-text-xs);
 }
 </style>

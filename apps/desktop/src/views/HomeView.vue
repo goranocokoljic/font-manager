@@ -640,21 +640,21 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 .group {
   padding: 8px;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--fm-space-1);
   height: 48px;
-  padding: 0 16px;
+  padding: 0 var(--fm-space-3);
   border-bottom: 1px solid var(--fm-border);
 }
 .title {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--fm-text-md);
   font-weight: 600;
 }
 .count {
@@ -663,10 +663,10 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
   color: var(--fm-muted);
 }
 .toggle {
-  padding: 4px 8px;
+  padding: 4px 6px;
   border: 1px solid var(--fm-border);
-  border-radius: 8px;
-  background: transparent;
+  border-radius: var(--fm-radius-md);
+  background-color: transparent;
   color: inherit;
   font: inherit;
 }
@@ -687,8 +687,8 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 .preset select {
   padding: 2px 4px;
   border: 1px solid var(--fm-control-border);
-  border-radius: 4px;
-  background: var(--fm-bg);
+  border-radius: var(--fm-radius-sm);
+  background-color: var(--fm-bg);
   color: inherit;
   font: inherit;
 }
@@ -708,7 +708,7 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 .hint {
   padding: 0;
   border: 0;
-  background: transparent;
+  background-color: transparent;
   color: inherit;
   font: inherit;
   text-decoration: none;

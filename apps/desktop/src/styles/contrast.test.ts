@@ -15,7 +15,7 @@ function palette(css: string, selector: string): Palette {
   expect(start, selector).toBeGreaterThanOrEqual(0);
   const body = css.slice(start, css.indexOf('}', start));
   return Object.fromEntries(
-    [...body.matchAll(/--fm-([a-z-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [
+    [...body.matchAll(/--fm-([a-z0-9-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [
       m[1]!,
       m[2]!.toLowerCase(),
     ]),
@@ -50,14 +50,16 @@ describe.each([
   ['dark', dark],
 ])('%s theme', (_, p) => {
   it('has every color the checks need', () => {
-    for (const k of [...TEXT, 'bg', 'surface', 'control-border']) expect(p[k], k).toBeDefined();
+    for (const k of [...TEXT, 'bg', 'surface', 'surface-2', 'control-border'])
+      expect(p[k], k).toBeDefined();
   });
 
-  it.each(TEXT)('%s text is at least 4.5:1 on the background, surface and selected row', (k) => {
+  it.each(TEXT)('%s text is at least 4.5:1 on the three surfaces and the selected row', (k) => {
     const fg = rgb(p[k]!);
     const backgrounds = {
       bg: rgb(p.bg!),
       surface: rgb(p.surface!),
+      'surface-2': rgb(p['surface-2']!),
       selected: tint(p.accent!, 0.16, p.bg!),
     };
     for (const [name, bg] of Object.entries(backgrounds))
@@ -69,7 +71,7 @@ describe.each([
   });
 
   it('control outlines and the focus ring are at least 3:1', () => {
-    for (const bg of [p.bg!, p.surface!]) {
+    for (const bg of [p.bg!, p.surface!, p['surface-2']!]) {
       expect(contrast(rgb(p['control-border']!), rgb(bg))).toBeGreaterThanOrEqual(3);
       expect(contrast(rgb(p.accent!), rgb(bg))).toBeGreaterThanOrEqual(3);
     }
@@ -106,7 +108,7 @@ describe('palettes stay in step', () => {
 
 /** Colors with no contrast duty: row and panel separators (WCAG 1.4.11 exempts them). */
 const DECORATIVE = ['border'];
-const CHECKED = [...TEXT, 'bg', 'surface', 'control-border'];
+const CHECKED = [...TEXT, 'bg', 'surface', 'surface-2', 'control-border'];
 
 describe('every color token', () => {
   it.each([

@@ -131,18 +131,18 @@ const announcement = computed(() => {
   margin: 0;
   padding: 8px 0;
   color: var(--fm-muted);
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .add,
 .actions button {
   padding: 2px 6px;
   border: 1px solid var(--fm-border);
-  border-radius: 6px;
-  background: transparent;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
   color: inherit;
   font: inherit;
-  font-size: 11.5px;
+  font-size: var(--fm-text-xs);
 }
 .list {
   margin: 0;
@@ -151,11 +151,11 @@ const announcement = computed(() => {
 }
 .source {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--fm-radius-sm);
 }
 .source:hover,
 .source:focus-within {
-  background: var(--fm-bg);
+  background-color: var(--fm-bg);
 }
 .row {
   display: flex;
@@ -175,9 +175,9 @@ const announcement = computed(() => {
 .badge {
   padding: 0 4px;
   border: 1px solid var(--fm-border);
-  border-radius: 4px;
+  border-radius: var(--fm-radius-sm);
   color: var(--fm-muted);
-  font-size: 10.5px;
+  font-size: var(--fm-text-xs);
 }
 .count {
   color: var(--fm-muted);
@@ -189,7 +189,7 @@ const announcement = computed(() => {
   gap: 6px;
   padding: 4px 0;
   color: var(--fm-muted);
-  font-size: 11px;
+  font-size: var(--fm-text-xs);
 }
 .library-scan {
   padding: 4px 8px;
