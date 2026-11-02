@@ -365,3 +365,54 @@ test('Check for updates badges the families with a newer version, in the catalog
   await expect(row).toHaveText('Update available');
   await expect(tree.getByTestId('update-available')).toHaveCount(1);
 });
+
+// E22.7: Install downloads a family into the download folder and activates it in one click.
+// The first Install proposes the folder; later ones install at once. The browser-mode mock
+// writes nothing; `mockDownloadMs` makes the download take long enough to be seen.
+test('Install proposes the folder once, then shows the progress and the family active in the library', async ({
+  page,
+}) => {
+  await serveFonts(page);
+  await page.goto('/?mockCatalog=1&mockDownloadMs=600');
+  const interDot = page.getByRole('treeitem', { name: /^Inter,/ }).locator('[data-activation]');
+  await expect(interDot, 'not active before the install').not.toHaveAttribute(
+    'data-activation',
+    'active',
+  );
+  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const google = catalogs.getByRole('button', { name: 'Google Fonts', exact: true });
+  await google.click();
+  await expect(catalogRows(page)).toHaveCount(4);
+
+  const install = catalogRows(page)
+    .filter({ hasText: 'Inter' })
+    .getByRole('button', { name: 'Install Inter' });
+  await expect(install).toHaveText('Install');
+  await install.click();
+  const line = page.getByTestId('catalog-install');
+  await expect(
+    line.getByRole('heading', { name: 'Where should installed fonts go?' }),
+  ).toBeVisible();
+  await expect(line).toContainText('/Users/demo/Documents/Font Manager Fonts');
+  await expect(line.getByRole('button', { name: 'Choose…' })).toBeVisible();
+  await line.getByRole('button', { name: 'Use this folder' }).click();
+
+  const status = page.getByTestId('catalog-install-status');
+  await expect(status).toHaveText('Downloading Inter…');
+  await expect(install, 'one install at a time').toBeDisabled();
+  await expect(
+    catalogRows(page).filter({ hasText: 'Lato' }).getByRole('button', { name: 'Download Lato…' }),
+    'and no download meanwhile',
+  ).toBeDisabled();
+  await expect(status).toHaveText(/^Installed Inter: \d+ styles? active$/);
+  await expect(install).toBeEnabled();
+
+  await sidebar(page).getByRole('button', { name: 'All fonts' }).click();
+  await expect(interDot).toHaveAttribute('data-activation', 'active');
+
+  // Later: no proposal, and a family already installed is not downloaded again.
+  await google.click();
+  await install.click();
+  await expect(status).toContainText('Inter is already in your library, so nothing was downloaded');
+  await expect(line.getByRole('heading')).toHaveCount(0);
+});

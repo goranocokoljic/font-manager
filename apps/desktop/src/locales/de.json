@@ -1122,7 +1122,11 @@
     },
     "catalogs": {
       "note": "Schriftkataloge im Web. Öffnen Sie einen, um zu sehen, was die App damit tun kann.",
-      "connectsHint": "Wenn Sie {name} einschalten, verbindet sich die App mit dem Internet, um die Schriftliste zu laden. Vorschauen werden beim Durchsuchen geladen."
+      "connectsHint": "Wenn Sie {name} einschalten, verbindet sich die App mit dem Internet, um die Schriftliste zu laden. Vorschauen werden beim Durchsuchen geladen.",
+      "downloadFolder": "Ordner für installierte Schriften",
+      "downloadFolderNone": "Noch nicht gewählt. Das erste Installieren fragt danach.",
+      "downloadFolderHint": "Installieren legt die geladenen Schriften in diesen Ordner. In keinen anderen Ordner schreibt Font Manager, ohne zu fragen.",
+      "change": "Ändern…"
     },
     "sources": {
       "note": "Ordner, die die Bibliothek an Ort und Stelle indexiert. Wenn du eine Quelle entfernst, vergisst die Bibliothek ihre Schriften; die Dateien bleiben, wo sie sind.",
@@ -1446,6 +1450,29 @@
       "scanFailed": "Die Dateien sind geladen, aber der Ordner konnte nicht erneut gelesen werden: {message}",
       "retry": "Erneut versuchen",
       "stopped": "Der Download wurde vor dem Ende abgebrochen: {message} Nur die oben gezählten Dateien wurden geschrieben, und sie bleiben erhalten."
+    },
+    "install": {
+      "action": "Installieren",
+      "actionLabel": "{name} installieren",
+      "proposeTitle": "Wohin sollen installierte Schriften?",
+      "propose": "Font Manager legt die Schriften, die Sie installieren, in einen Ordner: {folder}. Der Ordner wird angelegt, wenn Sie Diesen Ordner verwenden wählen.",
+      "useFolder": "Diesen Ordner verwenden",
+      "choose": "Auswählen…",
+      "folderTitle": "Ordner für installierte Schriften auswählen",
+      "downloading": "{name} wird geladen…",
+      "scanning": "{name} wird zur Bibliothek hinzugefügt…",
+      "done": {
+        "one": "{name} installiert: {count} Schnitt aktiv",
+        "other": "{name} installiert: {count} Schnitte aktiv"
+      },
+      "already": {
+        "one": "{name} ist schon in Ihrer Bibliothek, es wurde nichts geladen: {count} Schnitt aktiv",
+        "other": "{name} ist schon in Ihrer Bibliothek, es wurde nichts geladen: {count} Schnitte aktiv"
+      },
+      "stopped": "Der Download wurde vor dem Ende abgebrochen: {message} Die geschriebenen Dateien bleiben erhalten.",
+      "failed": "{name} wurde nicht installiert. {message}",
+      "retry": "Erneut versuchen",
+      "close": "Schließen"
     },
     "updates": {
       "check": "Nach Updates suchen",

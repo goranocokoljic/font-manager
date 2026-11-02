@@ -34,6 +34,23 @@ pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
     })
 }
 
+/// The folders fontconfig reads by default: `/usr/share/fonts`,
+/// `/usr/local/share/fonts`, `$XDG_DATA_HOME/fonts` (`~/.local/share/fonts`)
+/// and the old `~/.fonts`.
+pub(crate) fn font_folders(env: &Env<'_>) -> Vec<PathBuf> {
+    let mut folders: Vec<PathBuf> = ["/usr/share/fonts", "/usr/local/share/fonts"]
+        .into_iter()
+        .map(PathBuf::from)
+        .collect();
+    let home = env.dir("HOME");
+    let data = env
+        .dir("XDG_DATA_HOME")
+        .or_else(|| home.as_ref().map(|h| h.join(".local").join("share")));
+    folders.extend(data.map(|d| d.join("fonts")));
+    folders.extend(home.map(|h| h.join(".fonts")));
+    folders
+}
+
 pub(crate) fn ipc_name(env: &Env<'_>, paths: &AppPaths) -> IpcName {
     let dir = env
         .dir("XDG_RUNTIME_DIR")

@@ -1122,7 +1122,11 @@
     },
     "catalogs": {
       "note": "Font catalogs on the web. Open one to see what the app can do with it.",
-      "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it."
+      "connectsHint": "Turning {name} on connects to the internet to fetch its list of fonts. Previews are fetched while you browse it.",
+      "downloadFolder": "Folder for installed fonts",
+      "downloadFolderNone": "Not chosen yet. The first Install asks for it.",
+      "downloadFolderHint": "Install puts the fonts it downloads into this folder. Font Manager writes into no other folder without asking.",
+      "change": "Change…"
     },
     "sources": {
       "note": "Folders the library indexes in place. Removing a source forgets its fonts; the files stay where they are.",
@@ -1446,6 +1450,29 @@
       "scanFailed": "The files are downloaded, but the folder could not be read again: {message}",
       "retry": "Try again",
       "stopped": "The download stopped before the end: {message} Only the files counted above were written, and they are kept."
+    },
+    "install": {
+      "action": "Install",
+      "actionLabel": "Install {name}",
+      "proposeTitle": "Where should installed fonts go?",
+      "propose": "Font Manager puts the fonts you install into one folder: {folder}. It makes the folder when you select Use this folder.",
+      "useFolder": "Use this folder",
+      "choose": "Choose…",
+      "folderTitle": "Choose the folder for installed fonts",
+      "downloading": "Downloading {name}…",
+      "scanning": "Adding {name} to the library…",
+      "done": {
+        "one": "Installed {name}: {count} style active",
+        "other": "Installed {name}: {count} styles active"
+      },
+      "already": {
+        "one": "{name} is already in your library, so nothing was downloaded: {count} style active",
+        "other": "{name} is already in your library, so nothing was downloaded: {count} styles active"
+      },
+      "stopped": "The download stopped before the end: {message} The files written are kept.",
+      "failed": "{name} was not installed. {message}",
+      "retry": "Try again",
+      "close": "Close"
     },
     "updates": {
       "check": "Check for updates",

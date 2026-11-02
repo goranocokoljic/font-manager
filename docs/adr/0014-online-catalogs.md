@@ -71,8 +71,8 @@ part that differs per catalog needs one narrow seam.
   made only when a row of an open catalog is on screen. Turning a never-refreshed
   catalog on fetches its list at once; the switch says it connects to the internet.
 - **Downloads (E22.3).** `CatalogService::download_family` (catalog, family, static or
-  variable, a source) is the only call that writes into the library, and only on the
-  user's "Download…". The target must be a `watched` source (never the system fonts or
+  variable, a source) and `install_family` (below) are the only calls that write into the
+  library, and only on the user's "Download…" or "Install". The target must be a `watched` source (never the system fonts or
   the library folder, rule 4); the files go into `<source>/<family>/`, the names made
   safe on every OS (`fm_core::catalog::safe_file_name`; a catalog's `static/` prefix or
   `../` never leaves the folder). Static vs variable: Google Fonts' file name names its
@@ -99,6 +99,23 @@ part that differs per catalog needs one narrow seam.
   dotted versions both work; only a newer one is an update. A family the list no longer
   has is `noLongerListed`, not an error. An off catalog is skipped. The UI badges the
   catalog row and the library family of the same name.
+- **Install (E22.7).** `CatalogService::install_family` (catalog, family, kind) is
+  "Download…" into one folder, then activation, in one call on the user's "Install". The
+  folder is `Settings::download_folder`: the one folder the app writes into without a
+  choice per download. The user chooses it once (rule 2): the first Install proposes
+  `<Documents>/Font Manager Fonts` and makes it only when the user takes it (or picks
+  another with the native picker); Settings → Online catalogs changes it. It is never a
+  system font folder (`fm_platform::paths::system_font_folders`, or a `system` source):
+  that is `Conflict` before any request (rule 4), as are no folder and an off catalog.
+  The folder becomes a `watched` source, indexed in place, when no watched source holds
+  it (one inside a watched source uses that source, so no file is indexed twice). The
+  call writes `<folder>/<family>/` as a download does, records the provenance, rescans
+  the source on the calling thread and returns when the index holds the faces; then it
+  activates the faces of the files written in `Settings::activation_mode` with
+  `Settings::on_conflict`, sending only faces not active yet (a permanent face sent again
+  would turn into a session one). A family already in the library (a recorded download
+  whose files the library still has, else faces in `<folder>/<family>/`) is not
+  downloaded again: its faces are activated and the answer says `alreadyInstalled`.
 
 ## Consequences
 

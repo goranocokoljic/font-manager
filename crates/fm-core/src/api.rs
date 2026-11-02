@@ -36,10 +36,10 @@ use fm_api::activation::{
     FontsNeededRequest, FontsNeededResponse, OutcomeStatus, Target,
 };
 use fm_api::catalog::{
-    Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFontRequest,
-    CatalogFontSource, CatalogRef, CatalogService, CatalogUpdate, CheckUpdatesRequest,
-    DownloadFamilyRequest, DownloadFamilyResponse, ListCatalogFamiliesRequest,
-    SetCatalogEnabledRequest,
+    Catalog, CatalogDownload, CatalogDownloadFile, CatalogFamily, CatalogFileKind,
+    CatalogFontRequest, CatalogFontSource, CatalogId, CatalogRef, CatalogService, CatalogUpdate,
+    CheckUpdatesRequest, DownloadFamilyRequest, DownloadFamilyResponse, InstallFamilyRequest,
+    InstallFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::{Health, Page, Paged};
 use fm_api::comparison::{
@@ -442,7 +442,8 @@ impl CoreApi {
             .spawn(move || {
                 let last = jobs.len() - 1;
                 for (i, (job, source)) in jobs.into_iter().zip(sources).enumerate() {
-                    scan.run(job, &source, i == last);
+                    // A failure is a `JobFailed` event and logged.
+                    let _ = scan.run(job, &source, i == last);
                 }
             })
             .map_err(|e| {
@@ -452,10 +453,86 @@ impl CoreApi {
         Ok(first)
     }
 
+    /// Downloads a family into `into` (the source's folder or one inside it)
+    /// and records the provenance of the files written (none recorded when
+    /// every file was already there). A download that stopped after some
+    /// files were written answers them with its `error`, recorded like a
+    /// finished one; the caller rescans `source`.
+    fn save_download(
+        &self,
+        id: CatalogId,
+        family: &str,
+        kind: CatalogFileKind,
+        source: &Source,
+        into: &Path,
+    ) -> ApiResult<SavedDownload> {
+        let got = self.catalogs()?.download(id, family, kind, into)?;
+        let at = crate::catalog::now_rfc3339();
+        let mut error = got.stopped.clone().map(ApiError::from);
+        if !got.written.is_empty() {
+            // The files are on disk either way: a provenance that cannot be
+            // recorded is reported with them, and they are still rescanned.
+            if let Err(e) = self
+                .lock()
+                .record_catalog_download(id, family, source.id, &at, &got)
+            {
+                tracing::warn!(error = %e, "catalog download provenance not recorded");
+                error.get_or_insert_with(|| e.into());
+            }
+        }
+        let mut files: Vec<CatalogDownloadFile> = got
+            .written
+            .iter()
+            .map(|f| CatalogDownloadFile {
+                name: f.name.clone(),
+                hash: blake3::Hash::from_bytes(f.hash).to_hex().to_string(),
+                path: Some(f.path.to_string_lossy().into_owned()),
+            })
+            .collect();
+        // By name, as `list_catalog_downloads` lists them.
+        files.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(SavedDownload {
+            download: CatalogDownload {
+                catalog: id,
+                family: family.to_owned(),
+                catalog_family_id: got.family_id,
+                version: got.version,
+                kind: got.kind,
+                downloaded_at: at,
+                source: source.id,
+                folder: got.folder.to_string_lossy().into_owned(),
+                files,
+            },
+            skipped: got.skipped,
+            error,
+        })
+    }
+
+    /// Scans `source` on the calling thread as one job and returns once the
+    /// index holds the scan; its events go out as from the scan thread. A
+    /// failed scan is an error (and a `JobFailed` event).
+    fn scan_and_wait(&self, source: &Source) -> ApiResult<JobId> {
+        let job = JobId(self.next_job.fetch_add(1, Ordering::Relaxed));
+        let scan = Scan {
+            index: Arc::clone(&self.index),
+            files: Arc::clone(&self.files),
+            events: Arc::clone(&self.events),
+        };
+        scan.run(job, source, true)?;
+        Ok(job)
+    }
+
     /// Forgets the files read so far; the next scan loads them again.
     fn forget_files(&self) {
         *lock(&self.files) = None;
     }
+}
+
+/// What [`CoreApi::save_download`] wrote and recorded.
+struct SavedDownload {
+    download: CatalogDownload,
+    skipped: Vec<String>,
+    error: Option<ApiError>,
 }
 
 /// What the scan thread needs.
@@ -476,7 +553,7 @@ impl Scan {
     /// index. The database holds all of it. Then the allocator hands what the
     /// scan's threads freed back to the OS. The job's last events wait for
     /// the release: a reader that sees the scan end sees its memory go.
-    fn run(&self, job: JobId, source: &Source, last: bool) {
+    fn run(&self, job: JobId, source: &Source, last: bool) -> FmResult<()> {
         let mut end = Vec::new();
         let result = self.try_run(job, source, &mut end);
         if last {
@@ -486,9 +563,10 @@ impl Scan {
         for event in &end {
             self.events.send(event);
         }
-        if let Err(e) = result {
+        if let Err(e) = &result {
             tracing::warn!(%job, source = %source.path, error = %e, "scan failed");
         }
+        result
     }
 
     /// The scan of `run`; the events that end it (`ScanFinished` and what
@@ -1622,7 +1700,7 @@ impl CatalogService for CoreApi {
     /// that stopped after some files were written answers them with its
     /// `error`, recorded and rescanned like a finished one.
     fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse> {
-        let catalogs = self.catalogs()?;
+        self.catalogs()?;
         let source = self
             .lock()
             .sources()?
@@ -1634,49 +1712,19 @@ impl CatalogService for CoreApi {
                 "Fonts can be downloaded only into a folder you added.",
             ));
         }
-        let got = catalogs.download(req.id, &req.family, req.kind, Path::new(&source.path))?;
-        let at = crate::catalog::now_rfc3339();
-        let mut error = got.stopped.clone().map(ApiError::from);
-        if !got.written.is_empty() {
-            // The files are on disk either way: a provenance that cannot be
-            // recorded is reported with them, and they are still rescanned.
-            if let Err(e) =
-                self.lock()
-                    .record_catalog_download(req.id, &req.family, source.id, &at, &got)
-            {
-                tracing::warn!(error = %e, "catalog download provenance not recorded");
-                error.get_or_insert_with(|| e.into());
-            }
-        }
-        let mut files: Vec<CatalogDownloadFile> = got
-            .written
-            .iter()
-            .map(|f| CatalogDownloadFile {
-                name: f.name.clone(),
-                hash: blake3::Hash::from_bytes(f.hash).to_hex().to_string(),
-                path: Some(f.path.to_string_lossy().into_owned()),
-            })
-            .collect();
-        // By name, as `list_catalog_downloads` lists them.
-        files.sort_by(|a, b| a.name.cmp(&b.name));
-        let download = CatalogDownload {
-            catalog: req.id,
-            family: req.family,
-            catalog_family_id: got.family_id,
-            version: got.version,
-            kind: got.kind,
-            downloaded_at: at,
-            source: source.id,
-            folder: got.folder.to_string_lossy().into_owned(),
-            files,
-        };
+        let into = PathBuf::from(&source.path);
+        let saved = self.save_download(req.id, &req.family, req.kind, &source, &into)?;
         let scan = self.start_scan(vec![source])?;
         Ok(DownloadFamilyResponse {
-            download,
-            skipped: got.skipped,
+            download: saved.download,
+            skipped: saved.skipped,
             scan,
-            error,
+            error: saved.error,
         })
+    }
+
+    fn install_family(&self, req: InstallFamilyRequest) -> ApiResult<InstallFamilyResponse> {
+        self.install(req)
     }
 
     fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>> {
@@ -1792,5 +1840,6 @@ impl EventSource for CoreApi {
     }
 }
 
+mod install;
 #[cfg(test)]
 mod tests;

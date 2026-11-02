@@ -32,6 +32,21 @@ pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
     })
 }
 
+/// The folders Windows reads fonts from: `%WINDIR%\Fonts` and the per-user
+/// `%LOCALAPPDATA%\Microsoft\Windows\Fonts`.
+pub(crate) fn font_folders(env: &Env<'_>) -> Vec<std::path::PathBuf> {
+    let windir = env.dir("WINDIR").or_else(|| env.dir("SystemRoot"));
+    let local = env.dir("LOCALAPPDATA").or_else(|| {
+        env.dir("USERPROFILE")
+            .map(|p| p.join("AppData").join("Local"))
+    });
+    windir
+        .map(|w| w.join("Fonts"))
+        .into_iter()
+        .chain(local.map(|l| l.join("Microsoft").join("Windows").join("Fonts")))
+        .collect()
+}
+
 pub(crate) fn ipc_name(env: &Env<'_>) -> IpcName {
     let user = (env.0)("USERNAME").unwrap_or_default();
     IpcName::Pipe(pipe_name(&user.to_string_lossy()))

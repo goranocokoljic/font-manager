@@ -11,9 +11,10 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::activation::ActivationOutcome;
 use crate::common::{Axis, Page, Paged, Slant};
 use crate::library::OpenLicense;
-use crate::{ApiError, ApiResult, JobId, SourceId};
+use crate::{ApiError, ApiResult, FaceId, JobId, SourceId};
 
 /// A catalog the app knows how to read.
 #[derive(
@@ -263,6 +264,43 @@ pub struct DownloadFamilyResponse {
     pub error: Option<ApiError>,
 }
 
+/// Installs a family of a catalog with one click (E22.7): downloads it into
+/// the download folder of the settings and activates it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallFamilyRequest {
+    /// The catalog.
+    pub id: CatalogId,
+    /// The family's name, as the catalog lists it.
+    pub family: String,
+    /// Static or variable files, as for [`DownloadFamilyRequest::kind`].
+    pub kind: CatalogFileKind,
+}
+
+/// What an install downloaded and activated.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct InstallFamilyResponse {
+    /// The provenance of the family's files: the one recorded now, or, for a
+    /// family already in the library, the one recorded before (or what is in
+    /// the family's folder when nothing was recorded).
+    pub download: CatalogDownload,
+    /// The faces of the family in the library, by id.
+    pub faces: Vec<FaceId>,
+    /// What activating them did; a face that was already active is not
+    /// activated again and has no outcome.
+    pub outcomes: Vec<ActivationOutcome>,
+    /// The family was in the library already: nothing was downloaded, what
+    /// was there was activated.
+    #[serde(default)]
+    pub already_installed: bool,
+    /// Why the download stopped after the files in `download` were written,
+    /// as [`DownloadFamilyResponse::error`]; the files written were
+    /// rescanned and activated. `None` when it finished.
+    #[serde(default)]
+    pub error: Option<ApiError>,
+}
+
 /// What the update check found for a downloaded family (E22.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -336,6 +374,17 @@ pub trait CatalogService {
     /// `Conflict` and a family not in the cached list `NotFound`, both before
     /// any request; a source that is not a watched folder is `InvalidRequest`.
     fn download_family(&self, req: DownloadFamilyRequest) -> ApiResult<DownloadFamilyResponse>;
+    /// Installs a family (E22.7): downloads it into
+    /// [`Settings::download_folder`](crate::settings::Settings::download_folder)
+    /// as [`CatalogService::download_family`] does into a source (the folder
+    /// is added as a watched source first when it is not in one yet, and
+    /// made when it is not there), waits for the rescan, then activates the
+    /// faces it brought in the mode and with the conflict policy of the
+    /// settings. A family already in the library (recorded as downloaded,
+    /// or in its folder) is not downloaded again: what is there is
+    /// activated. `Conflict` before any request when no download folder is
+    /// set, the catalog is off, or the folder is a system font folder.
+    fn install_family(&self, req: InstallFamilyRequest) -> ApiResult<InstallFamilyResponse>;
     /// Every family downloaded from a catalog, newest first, with where its
     /// files are now (matched by hash, so a moved file is followed).
     fn list_catalog_downloads(&self) -> ApiResult<Vec<CatalogDownload>>;

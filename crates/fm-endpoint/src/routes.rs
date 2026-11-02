@@ -195,6 +195,7 @@ routes! {
     list_catalog_families(req),
     catalog_font_source(req),
     download_family(req),
+    install_family(req),
     list_catalog_downloads(),
     check_updates(req),
 }

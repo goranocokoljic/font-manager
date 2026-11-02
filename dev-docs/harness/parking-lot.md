@@ -321,3 +321,11 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E5.12 #420] apps/desktop/src/views/HomeView.vue:607 — the Conflicts and problems status-bar links share the muted `.hint` style, so nothing shows they are links.
 - [E6.9 #429] crates/fm-cli/tests/binary.rs:680 — `preview_writes_a_png_file_or_the_bytes_to_stdout` failed on Windows with "database is locked" (24.6 s, `BUSY_TIMEOUT` 5 s at crates/fm-core/src/index/mod.rs:76) in run 41354238620, a frontend-only diff; `Home::scanned` drops its `CoreApi` while the `fm-scan` thread may still hold the index, so the next `fm` process can hit the lock on a slow runner; needs a look at when the scan thread lets the database go, not a retry.
 - [E6.9 #429] apps/desktop/src/views/HomeView.vue — at 1,000×700 the inspector is collapsed behind the "Inspector" toolbar toggle, so it is not visible at that width without a click (layout older than E6.9).
+
+## 2026-11-02
+
+- [E22.7 #427] crates/fm-platform/src/windows/activator.rs:379 — the private `system_fonts_dir`, `same_path` and `is_under` overlap the new `paths::system_font_folders` / `is_within` and compare case differently (ASCII only vs full lowercase); a later merge should keep one rule.
+- [E22.7 #427] crates/fm-core/src/index/faces.rs:411 — `faces_of_source` is close to the new `live_faces_with_files`; they differ on purpose (gone files, paused sources), so a later caller must pick the right one.
+- [E22.7 #427] crates/fm-core/src/api/install.rs:173 — a symlink at the family subfolder itself (`<download>/Lato` → a font folder) is not resolved by the rule-4 guard; it needs a link the user made.
+- [E22.7 #427] crates/fm-platform/src/paths.rs:151 — an admin-share UNC alias of the per-user font folder (`\\localhost\c$\…`) is not matched by `is_within`.
+- [E22.7 #427] apps/desktop/src/components/FontViews.test.ts:101 — `renders only the lines on screen…` and FontLayout.test.ts:74 `sets every block as live text…` (the first test of each file) timed out at 5000 ms on the Windows runner in run 41361356538 (local: 528 ms and 90 ms; the same job also logged install-action bash startup retries); a re-run of the job passed with no change; the first test of a heavy jsdom file may need its cold-start cost looked at, not a retry.

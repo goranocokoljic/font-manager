@@ -10,11 +10,15 @@ import type {
   CatalogUpdate,
   DownloadFamilyResponse,
   Event,
+  FaceId,
+  InstallFamilyResponse,
   JobId,
   SourceId,
 } from '../api/types';
+import { t } from '../i18n';
 import { useQuickCollectionStore } from './quickCollection';
 import { useSearchStore } from './search';
+import { useSettingsStore } from './settings';
 
 /**
  * The entries of the sidebar's "Online catalogs" group: each catalog of `list_catalogs`
@@ -46,6 +50,39 @@ export interface CatalogDownloadState {
   result: DownloadFamilyResponse | null;
   /** Why the download (or its rescan) failed. */
   error: ApiError | null;
+}
+
+/**
+ * Where an Install of a catalog family is (E22.7): `proposing` the download folder (the first
+ * Install, while none is set), `downloading` (the core fetches and writes the files),
+ * `scanning` (the rescan of the folder brings the faces in), `done` (the faces are active)
+ * or `failed`.
+ */
+export type InstallPhase = 'proposing' | 'downloading' | 'scanning' | 'done' | 'failed';
+
+/** The Install of the catalog browser: one at a time, shown in its progress line. */
+export interface CatalogInstallState {
+  catalog: CatalogId;
+  family: CatalogFamily;
+  phase: InstallPhase;
+  /** The folder the first Install proposes; set while `proposing`. */
+  proposed: string | null;
+  /** What the install did; set when `done`. */
+  result: InstallFamilyResponse | null;
+  /** Why the install failed. */
+  error: ApiError | null;
+}
+
+/**
+ * The faces of an install that are active now: those activated, those that already were
+ * (no outcome), not those that clashed, failed or were skipped.
+ */
+export function installedActive(result: InstallFamilyResponse): number {
+  const outcome = new Map<FaceId, string>(result.outcomes.map((o) => [o.face, o.outcome.status]));
+  return result.faces.filter((f) => {
+    const status = outcome.get(f);
+    return status === undefined || status === 'done' || status === 'unchanged';
+  }).length;
 }
 
 function toApiError(e: unknown): ApiError {
@@ -83,6 +120,8 @@ export const useCatalogsStore = defineStore('catalogs', () => {
   const online = ref(globalThis.navigator?.onLine ?? true);
   /** The "Download..." panel; `null` when it is closed. */
   const download = ref<CatalogDownloadState | null>(null);
+  /** The Install progress line; `null` when there is none. */
+  const install = ref<CatalogInstallState | null>(null);
   /** What the last update check found; `null` before the first one. */
   const updates = ref<CatalogUpdate[] | null>(null);
   const checking = ref(false);
@@ -171,6 +210,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     if (open.value === entry) return;
     open.value = entry;
     closeDownload();
+    closeInstall();
     query.value = '';
     refreshError.value = null;
     if (entry !== 'adobeFonts') void relist();
@@ -179,6 +219,7 @@ export const useCatalogsStore = defineStore('catalogs', () => {
   function close(): void {
     open.value = null;
     closeDownload();
+    closeInstall();
   }
 
   /** The search text of the open catalog; the core filters by it. */
@@ -284,9 +325,16 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     );
   }
 
-  /** A download is running: the panel stays open and no other one starts. */
+  /**
+   * A download or an install is running: the panel stays open, and no other download or
+   * install starts (both buttons of every family are off).
+   */
   const downloading = computed(
-    () => download.value?.phase === 'downloading' || download.value?.phase === 'scanning',
+    () =>
+      download.value?.phase === 'downloading' ||
+      download.value?.phase === 'scanning' ||
+      install.value?.phase === 'downloading' ||
+      install.value?.phase === 'scanning',
   );
 
   /** Opens the "Download..." panel for a family of the open catalog. */
@@ -362,6 +410,118 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     }
   }
 
+  /**
+   * The Install button of a family of the open catalog (E22.7). With a download folder set it
+   * installs at once; the first time it proposes `<Documents>/Font Manager Fonts` and waits
+   * for the user to use it or choose another folder.
+   */
+  async function askInstall(family: CatalogFamily): Promise<void> {
+    const id = current.value?.id;
+    if (!id || downloading.value) return;
+    const settings = useSettingsStore();
+    if (!settings.settings) await settings.load();
+    install.value = {
+      catalog: id,
+      family,
+      phase: 'proposing',
+      proposed: null,
+      result: null,
+      error: null,
+    };
+    if (settings.settings?.downloadFolder) {
+      await runInstall();
+      return;
+    }
+    const i = install.value;
+    try {
+      i.proposed = await client().suggestedDownloadFolder();
+    } catch (e) {
+      i.error = toApiError(e);
+      i.phase = 'failed';
+    }
+  }
+
+  /** Saves `folder` as the download folder; false (and the install failed) when refused. */
+  async function saveFolder(folder: string): Promise<boolean> {
+    const settings = useSettingsStore();
+    if (await settings.update({ downloadFolder: folder })) return true;
+    if (install.value) {
+      install.value.error = settings.error;
+      install.value.phase = 'failed';
+    }
+    return false;
+  }
+
+  /** "Use this folder" of the first Install: saves the proposed folder, then installs. */
+  async function useProposedFolder(): Promise<void> {
+    const i = install.value;
+    if (!i || i.phase !== 'proposing' || !i.proposed) return;
+    if (await saveFolder(i.proposed)) await runInstall();
+  }
+
+  /** "Choose…" of the first Install: the native folder picker, then the install. */
+  async function chooseInstallFolder(): Promise<void> {
+    const i = install.value;
+    if (!i || i.phase !== 'proposing') return;
+    let path: string | null;
+    try {
+      path = await client().pickFolder(t('catalogs.install.folderTitle'));
+    } catch (e) {
+      i.error = toApiError(e);
+      i.phase = 'failed';
+      return;
+    }
+    if (path && (await saveFolder(path))) await runInstall();
+  }
+
+  /** Settings → Online catalogs "Change…": picks another download folder and saves it. */
+  async function changeDownloadFolder(): Promise<boolean> {
+    const path = await client().pickFolder(t('catalogs.install.folderTitle'));
+    if (!path) return false;
+    return useSettingsStore().update({ downloadFolder: path });
+  }
+
+  /**
+   * Installs the progress line's family (a user action: the call goes to the network). The
+   * call returns once the rescan is done and the faces are active; its `scanStarted` event
+   * moves the line from downloading to scanning.
+   */
+  async function runInstall(): Promise<void> {
+    const i = install.value;
+    if (!i) return;
+    i.phase = 'downloading';
+    i.error = null;
+    let unsubscribe: (() => void) | null;
+    try {
+      unsubscribe = await client().onEvent((event) => {
+        if (event.type === 'scanStarted' && i.phase === 'downloading') i.phase = 'scanning';
+      });
+    } catch {
+      unsubscribe = null;
+    }
+    try {
+      i.result = await client().installFamily({
+        id: i.catalog,
+        family: i.family.name,
+        // One file per style, as design apps list them; a family with only a variable font
+        // gets that (the core picks the other kind).
+        kind: 'static',
+      });
+      i.phase = 'done';
+    } catch (e) {
+      i.error = toApiError(e);
+      i.phase = 'failed';
+    } finally {
+      unsubscribe?.();
+    }
+  }
+
+  /** Closes the progress line; a running install keeps it. */
+  function closeInstall(): void {
+    if (install.value?.phase !== 'downloading' && install.value?.phase !== 'scanning')
+      install.value = null;
+  }
+
   // The Quick Collection review, a collection or All fonts takes the center back.
   watch(
     () => quick.open,
@@ -398,6 +558,12 @@ export const useCatalogsStore = defineStore('catalogs', () => {
     askDownload,
     closeDownload,
     startDownload,
+    install,
+    askInstall,
+    useProposedFolder,
+    chooseInstallFolder,
+    changeDownloadFolder,
+    closeInstall,
     updates,
     checking,
     checkError,

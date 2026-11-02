@@ -84,8 +84,40 @@ then select **Undo** again. If you emptied the trash, the copy cannot come back.
 
 ## Download fonts from an online catalog
 
-You can download a free family from Google Fonts or Fontshare into one of your
-folders. Turn the catalog on first, under **Online catalogs** in the sidebar.
+You can get a free family from Google Fonts or Fontshare. Turn the catalog on
+first, under **Online catalogs** in the sidebar.
+
+### Install a family
+
+**Install** downloads a family and activates it in one step. Your design apps can
+use it at once.
+
+1. Open the catalog and find the family.
+2. Select **Install** next to the family.
+3. The first time, Font Manager asks where installed fonts go. It proposes the
+   folder **Font Manager Fonts** in your Documents folder.
+   - Select **Use this folder**. Font Manager makes the folder.
+   - Or select **Choose…** and select another folder.
+
+Font Manager remembers the folder. It is the one folder that Font Manager puts
+fonts into without asking each time. It is never a system font folder. Later,
+**Install** starts at once.
+
+A line above the list tells you what happens: downloading, adding to the
+library, then the result, for example "Installed Alegreya: 6 styles active".
+Font Manager adds the folder to your library if it is not there yet. It
+activates the styles in the mode that you set under **Settings** → **Activation**.
+
+If the family is already in your library, Font Manager downloads nothing. It
+activates the styles that are there, and the line tells you so.
+
+To change the folder, open **Settings** → **Online catalogs** and select
+**Change…** next to **Folder for installed fonts**.
+
+### Download a family into a folder you choose
+
+**Download…** is the manual way. It puts the files into a folder that you
+select each time, and it does not activate them.
 
 1. Open the catalog and find the family.
 2. Select **Download…** next to the family.

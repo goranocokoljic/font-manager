@@ -318,6 +318,8 @@ pub fn types() -> specta::Types {
         catalog::CatalogDownloadFile,
         catalog::CatalogDownload,
         catalog::DownloadFamilyResponse,
+        catalog::InstallFamilyRequest,
+        catalog::InstallFamilyResponse,
         catalog::CatalogUpdateStatus,
         catalog::CatalogUpdate,
         catalog::CheckUpdatesRequest,

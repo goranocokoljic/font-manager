@@ -3,8 +3,9 @@
 // font and the sample in the family itself, live text. The preview file is registered
 // by the shared face loader from the app's font scheme; the core fetches it into the
 // cache folder the first time a row shows it, only while the catalog is on. As a list
-// row, a grid card or a waterfall block (the six sizes). Its "Download..." button opens the
-// browser's download panel for the family (E22.3). A family the last update check found a
+// row, a grid card or a waterfall block (the six sizes). Its "Install" button downloads the
+// family into the download folder and activates it in one call (E22.7); its "Download..."
+// button opens the browser's download panel for the family (E22.3). A family the last update check found a
 // newer version of shows an "Update available" badge (E22.4).
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useClient } from '../api/client';
@@ -107,6 +108,16 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
       <button
         type="button"
+        class="get install"
+        data-testid="catalog-install-open"
+        :aria-label="t('catalogs.install.actionLabel', { name: family.name })"
+        :disabled="catalogs.downloading"
+        @click="catalogs.askInstall(family)"
+      >
+        {{ t('catalogs.install.action') }}
+      </button>
+      <button
+        type="button"
         class="get"
         data-testid="catalog-download-open"
         :aria-label="t('catalogs.download.actionLabel', { name: family.name })"
@@ -186,13 +197,15 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
 }
 .get {
   flex: none;
-  margin-inline-start: auto;
   padding: 1px 8px;
   border: 1px solid var(--fm-control-border);
   border-radius: 8px;
   background: transparent;
   color: var(--fm-fg);
   font: inherit;
+}
+.get.install {
+  margin-inline-start: auto;
 }
 .get:disabled {
   color: var(--fm-muted);

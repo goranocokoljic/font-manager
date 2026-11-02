@@ -2,14 +2,24 @@ import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
-import { createMockClient, MOCK_CATALOG_CACHED_AT, MOCK_NOW } from '../api/mock';
-import { useCatalogsStore } from './catalogs';
+import { watch } from 'vue';
+import type { CatalogDownload } from '../api/types';
+import {
+  createMockClient,
+  MOCK_CATALOG_CACHED_AT,
+  MOCK_NOW,
+  MOCK_SUGGESTED_DOWNLOAD_FOLDER,
+  mockPickedFolders,
+} from '../api/mock';
+import { installedActive, useCatalogsStore } from './catalogs';
 import { useQuickCollectionStore } from './quickCollection';
 import { useSearchStore } from './search';
+import { useSettingsStore } from './settings';
 
 beforeEach(() => {
   setActivePinia(createPinia());
   setClient(createMockClient());
+  mockPickedFolders.length = 0;
 });
 
 describe('catalogs store', () => {
@@ -255,5 +265,140 @@ describe('catalogs store: update check (E22.4)', () => {
     expect(store.checkError?.code).toBe('io');
     expect(store.updates).toBeNull();
     expect(store.checking).toBe(false);
+  });
+});
+
+describe('catalogs store: install (E22.7)', () => {
+  async function opened(options: Parameters<typeof createMockClient>[0] = {}) {
+    const client = createMockClient({ catalog: 'offline', scanStepMs: 2, ...options });
+    setClient(client);
+    const store = useCatalogsStore();
+    await store.load();
+    store.show('googleFonts');
+    await flushPromises();
+    const inter = store.families.find((f) => f?.name === 'Inter')!;
+    return { client, store, inter };
+  }
+
+  it('the first Install proposes the Documents folder, saves it when used, then installs', async () => {
+    const { client, store, inter } = await opened();
+    const settings = useSettingsStore();
+    await store.askInstall(inter);
+    expect(store.install?.phase).toBe('proposing');
+    expect(store.install?.proposed).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+    expect(settings.settings?.downloadFolder, 'not saved before the user says so').toBeNull();
+    expect((await client.listCatalogDownloads()).length, 'nothing downloaded yet').toBe(0);
+
+    const phases: string[] = [];
+    const stop = watch(
+      () => store.install?.phase,
+      (p) => p && phases.push(p),
+      { flush: 'sync' },
+    );
+    await store.useProposedFolder();
+    stop();
+    expect(phases).toEqual(['downloading', 'scanning', 'done']);
+    expect(settings.settings?.downloadFolder).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+    const result = store.install!.result!;
+    expect(result.alreadyInstalled).toBe(false);
+    expect(result.download.folder).toBe(`${MOCK_SUGGESTED_DOWNLOAD_FOLDER}/Inter`);
+    expect(result.faces.length).toBeGreaterThan(0);
+    expect(installedActive(result)).toBe(result.faces.length);
+    const active = (await client.listActive()).map((a) => a.face);
+    expect(result.faces.every((f) => active.includes(f))).toBe(true);
+    expect(
+      (await client.listSources()).some((s) => s.path === MOCK_SUGGESTED_DOWNLOAD_FOLDER),
+    ).toBe(true);
+  });
+
+  it('a later Install installs at once, and a family already there downloads nothing', async () => {
+    const { client, store, inter } = await opened();
+    await useSettingsStore().update({ downloadFolder: '/Users/demo/Installed' });
+    await store.askInstall(inter);
+    expect(store.install?.phase).toBe('done');
+    expect(store.install?.result?.download.folder).toBe('/Users/demo/Installed/Inter');
+    store.closeInstall();
+    expect(store.install).toBeNull();
+
+    await store.askInstall(inter);
+    const again = store.install!.result!;
+    expect(again.alreadyInstalled).toBe(true);
+    expect(again.outcomes, 'already active: nothing sent again').toEqual([]);
+    expect(installedActive(again)).toBe(again.faces.length);
+    expect((await client.listCatalogDownloads()).length).toBe(1);
+  });
+
+  it('Choose… installs into the folder picked; a cancelled picker keeps the proposal', async () => {
+    const { store, inter } = await opened();
+    await store.askInstall(inter);
+    mockPickedFolders.push(null);
+    await store.chooseInstallFolder();
+    expect(store.install?.phase).toBe('proposing');
+    expect(useSettingsStore().settings?.downloadFolder).toBeNull();
+
+    mockPickedFolders.push('/Users/demo/My fonts');
+    await store.chooseInstallFolder();
+    expect(store.install?.phase).toBe('done');
+    expect(useSettingsStore().settings?.downloadFolder).toBe('/Users/demo/My fonts');
+    expect(store.install?.result?.download.folder).toBe('/Users/demo/My fonts/Inter');
+  });
+
+  it('an install turns both buttons off while it runs and says why it failed', async () => {
+    const { store, inter } = await opened({ catalogDownloadMs: 20 });
+    await useSettingsStore().update({ downloadFolder: '/Users/demo/Installed' });
+    const running = store.askInstall(inter);
+    await flushPromises();
+    expect(store.install?.phase).toBe('downloading');
+    expect(store.downloading).toBe(true);
+    store.closeInstall();
+    expect(store.install, 'kept while it runs').not.toBeNull();
+    await running;
+    expect(store.downloading).toBe(false);
+
+    store.closeInstall();
+    await useSettingsStore().update({ downloadFolder: '/System/Library/Fonts/Mine' });
+    await store.askInstall(inter);
+    expect(store.install?.phase).toBe('failed');
+    expect(store.install?.error?.code).toBe('conflict');
+    expect(store.install?.error?.message).toContain('system font folder');
+  });
+
+  it('Settings "Change…" saves the folder picked and keeps it on a cancel', async () => {
+    await opened();
+    const store = useCatalogsStore();
+    mockPickedFolders.push('/Users/demo/Other');
+    expect(await store.changeDownloadFolder()).toBe(true);
+    expect(useSettingsStore().settings?.downloadFolder).toBe('/Users/demo/Other');
+    mockPickedFolders.push(null);
+    expect(await store.changeDownloadFolder()).toBe(false);
+    expect(useSettingsStore().settings?.downloadFolder).toBe('/Users/demo/Other');
+  });
+
+  it('counts as active only the faces that are active after the install', () => {
+    const download: CatalogDownload = {
+      catalog: 'googleFonts',
+      family: 'X',
+      catalogFamilyId: 'X',
+      version: null,
+      kind: 'static',
+      downloadedAt: MOCK_NOW,
+      source: 1,
+      folder: '/x',
+      files: [],
+    };
+    expect(
+      installedActive({
+        download,
+        faces: [1, 2, 3, 4],
+        outcomes: [
+          { face: 1, outcome: { status: 'done' } },
+          { face: 2, outcome: { status: 'conflict', with: { kind: 'system', path: '/a' } } },
+          { face: 3, outcome: { status: 'skipped', reason: 'broken' } },
+        ],
+        alreadyInstalled: false,
+        error: null,
+      }),
+      'face 4 was active already; 2 clashed and 3 was skipped',
+    ).toBe(2);
   });
 });

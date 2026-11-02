@@ -3,7 +3,13 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../App.vue';
 import { setClient, type FmClient } from '../api/client';
-import { createMockClient, mockAppInfo, mockFolders, shellLocale } from '../api/mock';
+import {
+  createMockClient,
+  mockAppInfo,
+  mockFolders,
+  mockPickedFolders,
+  shellLocale,
+} from '../api/mock';
 import { setLocale } from '../i18n';
 import { createAppRouter } from '../router';
 
@@ -69,6 +75,24 @@ describe('Settings window', () => {
     const note = wrapper.get('#settings-adobe-fonts');
     expect(note.text()).toContain('no third-party app can manage them');
     expect(note.get('a').text()).toBe('Open Adobe Fonts');
+    wrapper.unmount();
+  });
+
+  it('shows the folder for installed fonts under Online catalogs, with Change…', async () => {
+    mockPickedFolders.length = 0;
+    const { wrapper } = await mountAt('/settings?section=catalogs');
+    const field = wrapper.get('[data-testid="settings-download-folder"]');
+    expect(field.text()).toContain('Folder for installed fonts');
+    expect(field.text()).toContain('Not chosen yet. The first Install asks for it.');
+    const change = field.get('[data-testid="settings-download-folder-change"]');
+    expect(change.text()).toBe('Change…');
+    mockPickedFolders.push('/Users/demo/Installed fonts');
+    await change.trigger('click');
+    await flushPromises();
+    expect(field.get('[data-testid="settings-download-folder-path"]').text()).toBe(
+      '/Users/demo/Installed fonts',
+    );
+    expect((await client.getSettings()).downloadFolder).toBe('/Users/demo/Installed fonts');
     wrapper.unmount();
   });
 

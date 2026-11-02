@@ -206,6 +206,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; list_catalog_families, json!({ "id": "googleFonts" }));
     same!(seen, d, c; catalog_font_source, json!({ "id": "googleFonts", "family": "Inter" }));
     same!(seen, d, c; download_family, json!({ "id": "googleFonts", "family": "Inter", "kind": "static", "source": 1 }));
+    same!(seen, d, c; install_family, json!({ "id": "googleFonts", "family": "Inter", "kind": "static" }));
     same!(seen, d, c; list_catalog_downloads);
     same!(seen, d, c; check_updates, json!({ "cachedOnly": true }));
 
@@ -226,7 +227,7 @@ fn errors_come_back_equal_with_code_message_and_detail() {
         cache_limit_mb: Some(1),
         ..settings::SettingsUpdate::default()
     };
-    let direct = d.update_settings(bad).unwrap_err();
+    let direct = d.update_settings(bad.clone()).unwrap_err();
     assert_eq!(direct.code, ErrorCode::InvalidRequest);
     assert_eq!(c.update_settings(bad).unwrap_err(), direct);
 }

@@ -177,6 +177,12 @@ pub fn preview_file(files: &[CatalogFile]) -> Option<(&CatalogFile, &'static str
         .map(|(_, (f, ext, _))| (*f, *ext))
 }
 
+/// The folder [`Catalogs::download`] puts `family` into inside `into`: a
+/// subfolder named after the family.
+pub fn family_folder(into: &Path, family: &str) -> PathBuf {
+    into.join(safe_file_name(family).unwrap_or_else(|| "Font".to_owned()))
+}
+
 /// One file a download wrote.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DownloadedFile {
@@ -670,7 +676,7 @@ impl Catalogs {
             }
             fetched.push((name, bytes));
         }
-        let folder = into.join(safe_file_name(family).unwrap_or_else(|| "Font".to_owned()));
+        let folder = family_folder(into, family);
         let cannot = "The downloaded fonts could not be saved.";
         fs::create_dir_all(&folder).map_err(|e| FmError::io(cannot, &folder, &e))?;
         let mut written = Vec::new();
@@ -778,6 +784,12 @@ impl Catalogs {
             .find(|a| a.id() == id)
             .map(|a| a.as_ref())
             .ok_or_else(|| FmError::unsupported(format!("{id} is not available in this version.")))
+    }
+
+    /// `Conflict` when the catalog `id` is off (or `Unsupported` when the app
+    /// has no adapter for it); makes no request.
+    pub fn ensure_enabled(&self, id: CatalogId) -> FmResult<()> {
+        self.enabled_adapter(id).map(|_| ())
     }
 
     /// The adapter of a catalog that is on; `Conflict` when it is off.

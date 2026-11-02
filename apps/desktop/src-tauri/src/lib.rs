@@ -12,7 +12,8 @@ use fm_api::activation::{
 use fm_api::catalog::{
     Catalog, CatalogDownload, CatalogFamily, CatalogFontRequest, CatalogId, CatalogRef,
     CatalogService, CatalogUpdate, CheckUpdatesRequest, DownloadFamilyRequest,
-    DownloadFamilyResponse, ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
+    DownloadFamilyResponse, InstallFamilyRequest, InstallFamilyResponse,
+    ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use fm_api::common::Paged;
 use fm_api::comparison::{
@@ -694,6 +695,16 @@ async fn download_family(
     req: DownloadFamilyRequest,
 ) -> ApiResult<DownloadFamilyResponse> {
     call(&state, move |api| api.download_family(req)).await
+}
+
+/// Installs a family with one click (E22.7): downloads it into the download
+/// folder, waits for the rescan and activates it; off the async runtime.
+#[tauri::command]
+async fn install_family(
+    state: State<'_, AppState>,
+    req: InstallFamilyRequest,
+) -> ApiResult<InstallFamilyResponse> {
+    call(&state, move |api| api.install_family(req)).await
 }
 
 /// Every family downloaded from a catalog, with where its files are now.
@@ -1446,6 +1457,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             refresh_catalog,
             list_catalog_families,
             download_family,
+            install_family,
             list_catalog_downloads,
             check_updates,
             render_preview,

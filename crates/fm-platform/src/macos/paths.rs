@@ -26,6 +26,21 @@ pub(crate) fn resolve(env: &Env<'_>) -> Result<AppPaths, PathError> {
     })
 }
 
+/// The folders macOS reads fonts from: the system, local and network
+/// libraries and the user's `~/Library/Fonts`.
+pub(crate) fn font_folders(env: &Env<'_>) -> Vec<std::path::PathBuf> {
+    let mut folders: Vec<std::path::PathBuf> = [
+        "/System/Library/Fonts",
+        "/Library/Fonts",
+        "/Network/Library/Fonts",
+    ]
+    .into_iter()
+    .map(std::path::PathBuf::from)
+    .collect();
+    folders.extend(env.dir("HOME").map(|h| h.join("Library").join("Fonts")));
+    folders
+}
+
 pub(crate) fn ipc_name(paths: &AppPaths) -> IpcName {
     IpcName::Socket(paths.data.join(SOCKET_FILE))
 }

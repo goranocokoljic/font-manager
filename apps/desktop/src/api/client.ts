@@ -2,6 +2,7 @@
 // through here; components and stores never call `invoke` themselves.
 import { convertFileSrc, invoke, isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { documentDir, join } from '@tauri-apps/api/path';
 import { open } from '@tauri-apps/plugin-dialog';
 import { catalogFontPath } from './catalogFont';
 import { mockClient } from './mock';
@@ -16,6 +17,8 @@ import type {
   CheckUpdatesRequest,
   DownloadFamilyRequest,
   DownloadFamilyResponse,
+  InstallFamilyRequest,
+  InstallFamilyResponse,
   ListCatalogFamiliesRequest,
   SetCatalogEnabledRequest,
   ActivateRequest,
@@ -267,6 +270,14 @@ export interface FmClient {
    * job's scan events follow). The only other call besides a refresh that goes to the network.
    */
   downloadFamily(req: DownloadFamilyRequest): Promise<DownloadFamilyResponse>;
+  /**
+   * Installs a family with one click (E22.7): the core downloads it into the download folder
+   * of the settings (a request), waits for the rescan and activates its faces in the
+   * configured mode. A family already in the library is not downloaded again.
+   */
+  installFamily(req: InstallFamilyRequest): Promise<InstallFamilyResponse>;
+  /** The folder the first Install proposes: `Font Manager Fonts` in the user's Documents. */
+  suggestedDownloadFolder(): Promise<string>;
   /** Every family downloaded from a catalog, newest first, with where its files are now. */
   listCatalogDownloads(): Promise<CatalogDownload[]>;
   /**
@@ -386,6 +397,9 @@ export interface FmClient {
 }
 
 /** The client backed by the Tauri commands in `src-tauri`. */
+/** The name of the folder the first Install proposes inside the user's Documents. */
+export const SUGGESTED_DOWNLOAD_FOLDER = 'Font Manager Fonts';
+
 export const tauriClient: FmClient = {
   getAppInfo: () => invoke<AppInfo>('get_app_info'),
   getFace: (face) => invoke<FaceDetail>('get_face', { face }),
@@ -445,6 +459,8 @@ export const tauriClient: FmClient = {
   listCatalogFamilies: (req) => invoke<Paged<CatalogFamily>>('list_catalog_families', { req }),
   catalogFontUrl: (id, family) => convertFileSrc(catalogFontPath(id, family), FONT_SCHEME),
   downloadFamily: (req) => invoke<DownloadFamilyResponse>('download_family', { req }),
+  installFamily: (req) => invoke<InstallFamilyResponse>('install_family', { req }),
+  suggestedDownloadFolder: async () => join(await documentDir(), SUGGESTED_DOWNLOAD_FOLDER),
   listCatalogDownloads: () => invoke<CatalogDownload[]>('list_catalog_downloads'),
   checkUpdates: (req) => invoke<CatalogUpdate[]>('check_updates', { req }),
   listComparisons: () => invoke<ComparisonEntry[]>('list_comparisons'),

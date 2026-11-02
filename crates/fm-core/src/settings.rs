@@ -245,6 +245,35 @@ mod tests {
     }
 
     #[test]
+    fn the_download_folder_is_saved_in_the_file_and_read_by_the_next_start() {
+        let dir = TempDir::new("settings-download-folder");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        assert_eq!(store.get_settings().expect("read").download_folder, None);
+        let folder = dir.path().join("Font Manager Fonts");
+        let folder = folder.to_string_lossy().into_owned();
+        store
+            .update_settings(SettingsUpdate {
+                download_folder: Some(folder.clone()),
+                ..SettingsUpdate::default()
+            })
+            .expect("updated");
+        let next = SettingsStore::new(&paths);
+        assert_eq!(
+            next.get_settings()
+                .expect("read")
+                .download_folder
+                .as_deref(),
+            Some(folder.as_str())
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(paths.config_file()).expect("file"))
+                .expect("json");
+        assert_eq!(json["downloadFolder"], folder.as_str());
+        assert!(!dir.path().join("Font Manager Fonts").exists(), "not made");
+    }
+
+    #[test]
     fn a_missing_file_gives_the_defaults() {
         let dir = TempDir::new("settings-missing");
         let store = SettingsStore::new(&paths_in(&dir));

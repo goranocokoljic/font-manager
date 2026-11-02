@@ -3086,6 +3086,64 @@ fn a_mock_download_goes_into_a_watched_source_and_is_listed() {
 }
 
 #[test]
+fn a_mock_install_downloads_once_into_the_download_folder_and_activates_the_family() {
+    use fm_api::catalog::{
+        CatalogFileKind, CatalogId, CatalogRef, InstallFamilyRequest, SetCatalogEnabledRequest,
+    };
+    use fm_api::settings::SettingsUpdate;
+    let api: Arc<dyn Api> = Arc::new(MockApi::new());
+    let id = CatalogId::GoogleFonts;
+    let install = || {
+        api.install_family(InstallFamilyRequest {
+            id,
+            family: "Inter".into(),
+            kind: CatalogFileKind::Variable,
+        })
+    };
+    let folder = |path: &str| {
+        api.update_settings(SettingsUpdate {
+            download_folder: Some(path.into()),
+            ..SettingsUpdate::default()
+        })
+        .expect("folder");
+    };
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: true })
+        .expect("on");
+    api.refresh_catalog(CatalogRef { id }).expect("refresh");
+    assert_eq!(install().expect_err("no folder").code, ErrorCode::Conflict);
+    folder("/System/Library/Fonts/Mine");
+    assert_eq!(install().expect_err("system").code, ErrorCode::Conflict);
+
+    folder("/Users/demo/Documents/Font Manager Fonts");
+    let sources = api.list_sources().expect("sources").len();
+    let got = install().expect("install");
+    assert!(!got.already_installed);
+    assert_eq!(
+        got.download.folder,
+        "/Users/demo/Documents/Font Manager Fonts/Inter"
+    );
+    assert_eq!(api.list_sources().expect("sources").len(), sources + 1);
+    assert!(!got.faces.is_empty());
+    assert_eq!(got.outcomes.len(), got.faces.len());
+    let active = api.list_active().expect("active");
+    assert!(
+        got.faces
+            .iter()
+            .all(|f| active.iter().any(|a| a.face == *f))
+    );
+
+    let again = install().expect("again");
+    assert!(again.already_installed);
+    assert!(again.outcomes.is_empty(), "all active already");
+    assert_eq!(api.list_sources().expect("sources").len(), sources + 1);
+    assert_eq!(api.list_catalog_downloads().expect("downloads").len(), 1);
+
+    api.set_catalog_enabled(SetCatalogEnabledRequest { id, enabled: false })
+        .expect("off");
+    assert_eq!(install().expect_err("off").code, ErrorCode::Conflict);
+}
+
+#[test]
 fn a_catalog_font_source_needs_the_catalog_on_and_the_family_listed() {
     use fm_api::catalog::{CatalogFontRequest, CatalogId, CatalogRef, SetCatalogEnabledRequest};
     let api: Arc<dyn Api> = Arc::new(MockApi::new());

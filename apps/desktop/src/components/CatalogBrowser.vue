@@ -5,7 +5,9 @@
 // exist, keyed by slot. The search box filters through the core; "Refresh" fetches the
 // list again. Offline, or when a refresh fails, the cached list stays with a note. A row's
 // "Download..." opens the download panel above the list (E22.3). "Check for updates" asks the
-// core which downloaded families have a newer version (E22.4); a Refresh asks too.
+// core which downloaded families have a newer version (E22.4); a Refresh asks too. A row's
+// "Install" downloads and activates the family in one call; its progress line is above the
+// list too (E22.7).
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CatalogFamily } from '../api/types';
 import { errorMessage, formatDate, t } from '../i18n';
@@ -19,6 +21,7 @@ import { useSettingsStore } from '../stores/settings';
 import { useViewsStore, type ViewMode } from '../stores/views';
 import CatalogDownload from './CatalogDownload.vue';
 import CatalogFamilyItem from './CatalogFamilyItem.vue';
+import CatalogInstall from './CatalogInstall.vue';
 import PreviewControls from './PreviewControls.vue';
 
 const props = withDefaults(defineProps<{ overscan?: number }>(), { overscan: 2 });
@@ -235,6 +238,7 @@ const surfaceClass = computed(() =>
       v-if="store.download && store.download.catalog === catalog.id"
       @close="downloadClosed"
     />
+    <CatalogInstall v-if="store.install && store.install.catalog === catalog.id" />
     <PreviewControls :view="CATALOG_VIEW" />
 
     <div v-if="!catalog.enabled" class="empty" data-testid="catalog-off">

@@ -2,12 +2,13 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { setClient } from '../api/client';
-import { createMockClient } from '../api/mock';
+import { createMockClient, MOCK_SUGGESTED_DOWNLOAD_FOLDER } from '../api/mock';
 import { poolSize } from '../list/virtual';
 import { FaceLoader, catalogFamily, setFaceLoader } from '../preview/faceLoader';
 import { CATALOG_VIEW, useCatalogsStore } from '../stores/catalogs';
 import { previewRowHeight, usePreviewStore } from '../stores/preview';
 import { useSettingsStore } from '../stores/settings';
+import { useViewsStore } from '../stores/views';
 import CatalogBrowser from './CatalogBrowser.vue';
 import OnlineCatalogsSidebar from './OnlineCatalogsSidebar.vue';
 
@@ -217,5 +218,90 @@ describe('CatalogBrowser', () => {
     const row = slots().find((r) => r.attributes('aria-posinset') === '251');
     expect(row?.attributes('aria-label')).toBe('Zz Catalog 00247');
     expect(row?.find('[data-testid="catalog-family"]').exists()).toBe(true);
+  });
+});
+
+describe('CatalogBrowser: Install (E22.7)', () => {
+  async function opened(options: Parameters<typeof createMockClient>[0] = {}) {
+    setClient(createMockClient({ catalog: 'offline', scanStepMs: 2, ...options }));
+    const store = useCatalogsStore();
+    await store.load();
+    store.show('googleFonts');
+    const w = mountIt(CatalogBrowser);
+    await flushPromises();
+    return { store, w };
+  }
+  const row = (w: VueWrapper, family: string) => w.get(`[data-family="${family}"]`);
+  const status = (w: VueWrapper) => w.get('[data-testid="catalog-install-status"]').text();
+
+  it('every row, card and waterfall block has Install next to Download…', async () => {
+    const { w } = await opened();
+    for (const mode of ['list', 'grid', 'waterfall'] as const) {
+      useViewsStore().setMode(CATALOG_VIEW, mode);
+      await flushPromises();
+      const install = row(w, 'Lato').get('[data-testid="catalog-install-open"]');
+      expect(install.text(), mode).toBe('Install');
+      expect(install.attributes('aria-label')).toBe('Install Lato');
+      const next = install.element.nextElementSibling as HTMLElement;
+      expect(next.dataset.testid, 'Download… right after it').toBe('catalog-download-open');
+    }
+  });
+
+  it('installs at once with a folder set: the line follows it, both buttons off meanwhile', async () => {
+    const { store, w } = await opened({ catalogDownloadMs: 30 });
+    await useSettingsStore().update({ downloadFolder: '/Users/demo/Installed' });
+    await row(w, 'Inter').get('[data-testid="catalog-install-open"]').trigger('click');
+    await flushPromises();
+    expect(status(w)).toBe('Downloading Inter…');
+    expect(w.get('[data-testid="catalog-install-status"]').attributes('role')).toBe('status');
+    for (const b of w.findAll(
+      '[data-testid="catalog-install-open"], [data-testid="catalog-download-open"]',
+    ))
+      expect(b.attributes('disabled'), 'every button is off').toBeDefined();
+    expect(w.find('[data-testid="catalog-install-close"]').exists()).toBe(false);
+
+    await new Promise((r) => setTimeout(r, 120));
+    await flushPromises();
+    const count = store.install!.result!.faces.length;
+    expect(status(w)).toBe(
+      count === 1 ? 'Installed Inter: 1 style active' : `Installed Inter: ${count} styles active`,
+    );
+    expect(
+      row(w, 'Inter').get('[data-testid="catalog-install-open"]').attributes('disabled'),
+    ).toBeUndefined();
+    await w.get('[data-testid="catalog-install-close"]').trigger('click');
+    expect(w.find('[data-testid="catalog-install"]').exists()).toBe(false);
+
+    // Again: nothing is downloaded, and the line says so.
+    await row(w, 'Inter').get('[data-testid="catalog-install-open"]').trigger('click');
+    await flushPromises();
+    expect(status(w)).toContain('Inter is already in your library, so nothing was downloaded');
+  });
+
+  it('the first Install proposes the folder; Use this folder saves it and installs', async () => {
+    const { w } = await opened();
+    await row(w, 'Inter').get('[data-testid="catalog-install-open"]').trigger('click');
+    await flushPromises();
+    const line = w.get('[data-testid="catalog-install"]');
+    expect(line.get('h2').text()).toBe('Where should installed fonts go?');
+    expect(status(w)).toContain(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+    expect(line.get('[data-testid="catalog-install-choose"]').text()).toBe('Choose…');
+    await line.get('[data-testid="catalog-install-use"]').trigger('click');
+    await new Promise((r) => setTimeout(r, 60));
+    await flushPromises();
+    expect(useSettingsStore().settings?.downloadFolder).toBe(MOCK_SUGGESTED_DOWNLOAD_FOLDER);
+    expect(status(w)).toMatch(/^Installed Inter: \d+ styles? active$/);
+  });
+
+  it('a refused install says why in an alert', async () => {
+    const { w } = await opened();
+    await useSettingsStore().update({ downloadFolder: '/System/Library/Fonts/Mine' });
+    await row(w, 'Lato').get('[data-testid="catalog-install-open"]').trigger('click');
+    await flushPromises();
+    const s = w.get('[data-testid="catalog-install-status"]');
+    expect(s.attributes('role')).toBe('alert');
+    expect(s.text()).toBe(
+      'Lato was not installed. Fonts cannot be installed into a system font folder. Choose another folder under Settings → Online catalogs.',
+    );
   });
 });

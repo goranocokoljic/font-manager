@@ -279,6 +279,10 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
             "download_family",
             r#"{"id":"googleFonts","family":"Inter","kind":"static","source":1}"#.into(),
         ),
+        (
+            "install_family",
+            r#"{"id":"googleFonts","family":"Inter","kind":"static"}"#.into(),
+        ),
         ("list_catalog_downloads", String::new()),
         ("check_updates", r#"{"cachedOnly":true}"#.into()),
     ];
