@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use fm_api::ErrorCode;
 use fm_api::workflows::{DocumentFontRef, DocumentFormat};
 
-use super::{Fonts, UNREADABLE, UNSUPPORTED, check, document_fonts, format_of, read, xml};
+use super::{Fonts, UNREADABLE, UNSUPPORTED, check, document_fonts, format_of, psd, read, xml};
 use crate::test_support::TempDir;
 
 fn fixture(name: &str) -> PathBuf {
@@ -126,6 +126,11 @@ fn ai_reads_xmp_fonts_and_pdf_base_fonts_inside_object_streams() {
 
 #[test]
 fn psd_reads_the_font_set_of_every_text_layer() {
+    // E32.4: only the fonts the text runs use. Both font sets also hold
+    // MyriadPro-Regular (Photoshop's default), which no run uses: the Title
+    // layer's default sheet names it but every run has its own font, and the
+    // Body layer's font-less run takes the sheet `TheNormalStyleSheet 1`
+    // names (Georgia), not the first one (MyriadPro-Regular).
     // AdobeInvisFont is Photoshop's placeholder; "Normal RGB" is a style
     // sheet name outside the FontSet. The global blocks after the layers
     // have lengths of 77 and 10 bytes padded to 4 (Photoshop 2025, E36.6):
@@ -134,6 +139,146 @@ fn psd_reads_the_font_set_of_every_text_layer() {
         fonts_of("sample.psd"),
         ["ArialMT", "Georgia", "Inter-Bold"].map(ps)
     );
+}
+
+/// Engine data with a `FontSet` of `fonts`, `sheets` (the `/Font` of each
+/// style sheet, `None` for a sheet without one) and `runs` (the same for
+/// each run); `runs: None` leaves the run array out.
+fn engine(fonts: &[&str], sheets: &[Option<&str>], runs: Option<&[Option<&str>]>) -> Vec<u8> {
+    let data = |font: &Option<&str>| {
+        format!(
+            "<< /StyleSheetData << {} /FontSize 12 >> >>",
+            font.map(|f| format!("/Font {f}")).unwrap_or_default()
+        )
+    };
+    let runs = runs.map_or(String::new(), |runs| {
+        let runs: Vec<String> = runs
+            .iter()
+            .map(|r| format!("<< /StyleSheet {} >>", data(r)))
+            .collect();
+        format!("/StyleRun << /RunArray [ {} ] >>", runs.join(" "))
+    });
+    let sheets: Vec<String> = sheets
+        .iter()
+        .map(|s| {
+            let font = s.map(|f| format!("/Font {f}")).unwrap_or_default();
+            format!("<< /Name (Normal RGB) /StyleSheetData << {font} /FontSize 12 >> >>")
+        })
+        .collect();
+    let set: Vec<String> = fonts
+        .iter()
+        .map(|f| format!("<< /Name ({f}) /Script 0 >>"))
+        .collect();
+    format!(
+        "\n\n<< /EngineDict << /Editor << /Text (Hi) >> {runs} /AntiAlias 4 >> \
+         /ResourceDict << /StyleSheetSet [ {} ] /FontSet [ {} ] /SuperscriptSize .583 >> >>",
+        sheets.join(" "),
+        set.join(" ")
+    )
+    .into_bytes()
+}
+
+/// `engine` data inside a `TySh` block, as its text descriptor holds it.
+fn psd_text_fonts(engine: &[u8]) -> Vec<DocumentFontRef> {
+    let mut block = vec![0u8; 56];
+    block.extend(b"\0\0\0\nEngineDatatdta");
+    block.extend(u32::try_from(engine.len()).unwrap().to_be_bytes());
+    block.extend(engine);
+    block.extend(b"\0\0\0\x01warp");
+    let mut f = Fonts::default();
+    psd::text_fonts(&block, &mut f);
+    f.0.into_iter().collect()
+}
+
+const PSD_SET: [&str; 4] = [
+    "Actor-Regular",
+    "AdobeInvisFont",
+    "MyriadPro-Regular",
+    "Lato-Bold",
+];
+
+#[test]
+fn psd_lists_the_run_fonts_and_the_default_sheet_for_a_run_without_one() {
+    // A real Photoshop 2025 layer in Actor: Myriad Pro is in the FontSet and
+    // the default sheet, but every run has its own font.
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[Some("2")], Some(&[Some("0")]))),
+        [ps("Actor-Regular")]
+    );
+    // A run without a font takes the default (first) sheet's.
+    assert_eq!(
+        psd_text_fonts(&engine(
+            &PSD_SET,
+            &[Some("3"), Some("2")],
+            Some(&[Some("0"), None])
+        )),
+        [ps("Actor-Regular"), ps("Lato-Bold")]
+    );
+    // A run in AdobeInvisFont is still left out.
+    assert_eq!(
+        psd_text_fonts(&engine(
+            &PSD_SET,
+            &[Some("2")],
+            Some(&[Some("1"), Some("3")])
+        )),
+        [ps("Lato-Bold")]
+    );
+}
+
+#[test]
+fn psd_falls_back_to_every_font_set_name_when_the_runs_cannot_be_followed() {
+    let all = || ["Actor-Regular", "Lato-Bold", "MyriadPro-Regular"].map(ps);
+    // No run array.
+    assert_eq!(psd_text_fonts(&engine(&PSD_SET, &[Some("2")], None)), all());
+    // An empty run array.
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[Some("2")], Some(&[]))),
+        all()
+    );
+    // An index outside the FontSet, in a run or in the default sheet.
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[Some("2")], Some(&[Some("4")]))),
+        all()
+    );
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[Some("9")], Some(&[None]))),
+        all()
+    );
+    // A run without a font and no default sheet font; a font that is not an index.
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[None], Some(&[None]))),
+        all()
+    );
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[], Some(&[Some("-1")]))),
+        all()
+    );
+    assert_eq!(
+        psd_text_fonts(&engine(&PSD_SET, &[], Some(&[Some("0.5")]))),
+        all()
+    );
+    // Engine data that does not parse: cut short, or a stray closing bracket.
+    let good = engine(&PSD_SET, &[Some("2")], Some(&[Some("0")]));
+    let cut = &good[..good.len() - 3];
+    assert_eq!(psd_text_fonts(cut), all());
+    let mut stray = good.clone();
+    stray.splice(2..2, *b"] ");
+    assert_eq!(psd_text_fonts(&stray), all());
+    // A block without an `EngineData` item, or whose length runs past it.
+    let mut f = Fonts::default();
+    psd::text_fonts(&good, &mut f);
+    assert_eq!(f.0.into_iter().collect::<Vec<_>>(), all());
+    let mut f = Fonts::default();
+    let mut long = b"EngineDatatdta\xFF\xFF\xFF\xFF".to_vec();
+    long.extend(&good);
+    psd::text_fonts(&long, &mut f);
+    assert_eq!(f.0.into_iter().collect::<Vec<_>>(), all());
+    // Nesting deeper than the parser follows.
+    let mut deep = b"<< /EngineDict ".to_vec();
+    deep.extend(b"[ ".repeat(200));
+    deep.extend(b"] ".repeat(200));
+    deep.extend(b">> /ResourceDict << /FontSet [ << /Name (Lato-Bold) >> ] >> >>");
+    assert_eq!(psd_text_fonts(&deep), [ps("Lato-Bold")]);
 }
 
 const SAMPLES: [&str; 7] = [

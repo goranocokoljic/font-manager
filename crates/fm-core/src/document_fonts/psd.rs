@@ -1,9 +1,14 @@
 //! Photoshop (.psd, and .psb with its 64-bit lengths). The header, colour
 //! mode data and image resources are skipped; the layer records are walked
 //! (also those in the `Lr16` / `Lr32` / `Layr` blocks of 16- and 32-bit
-//! documents). A text layer has a `TySh` block whose engine data lists the
-//! layer's fonts as `/FontSet [ << /Name (…) >> … ]` with PostScript names in
-//! UTF-16. Channel image data is seeked over, never read.
+//! documents). A text layer has a `TySh` block whose engine data lists
+//! fonts as `/FontSet [ << /Name (…) >> … ]` with PostScript names in UTF-16.
+//! The `FontSet` also holds Photoshop's defaults (Myriad Pro, found on a real
+//! file in E32.4), so the reader lists only the fonts the text runs use:
+//! `/EngineDict /StyleRun /RunArray`, each run's `/StyleSheetData /Font <n>`
+//! or the default style sheet's, `n` indexing the `FontSet`. Engine data it
+//! cannot follow gives every `FontSet` name. Channel image data is seeked
+//! over, never read.
 //!
 //! Block lengths are the data's own; the data is padded to 2 bytes in a
 //! layer record (the specification) and to 4 in the global list after the
@@ -132,7 +137,7 @@ impl<R: Read + Seek> Psd<'_, R> {
             match &key {
                 b"TySh" => {
                     let data = read_exact_capped(self.src, len, MAX_TYPE_TOOL, "TySh block")?;
-                    font_set(&data, fonts);
+                    text_fonts(&data, fonts);
                 }
                 b"Lr16" | b"Lr32" | b"Layr" if global => self.layer_info(block_end, fonts)?,
                 _ => {}
@@ -223,6 +228,200 @@ pub(super) fn read<R: Read + Seek>(src: &mut R, fonts: &mut Fonts) -> Res<()> {
         p.tagged_blocks(section_end, true, fonts)?;
     }
     Ok(())
+}
+
+/// The fonts the text runs of one `TySh` block use; every `FontSet` name
+/// when the runs cannot be followed, so a malformed block loses none.
+pub(super) fn text_fonts(data: &[u8], fonts: &mut Fonts) {
+    match engine_data(data).and_then(run_fonts) {
+        Some(names) => {
+            for name in names.iter().filter(|n| *n != INVISIBLE) {
+                fonts.postscript(name);
+            }
+        }
+        None => font_set(data, fonts),
+    }
+}
+
+/// The engine data of a `TySh` block: the `EngineData` item of its text
+/// descriptor, a `tdta` of a 4-byte length and the raw text.
+fn engine_data(data: &[u8]) -> Option<&[u8]> {
+    const KEY: &[u8] = b"EngineDatatdta";
+    let at = data.windows(KEY.len()).position(|w| w == KEY)? + KEY.len();
+    let len = u32::from_be_bytes(data.get(at..at + 4)?.try_into().ok()?);
+    data.get(at + 4..)?.get(..usize::try_from(len).ok()?)
+}
+
+/// The `FontSet` names the runs use, or `None` when the engine data has no
+/// run array, a run without a font, or an index outside the `FontSet`.
+fn run_fonts(data: &[u8]) -> Option<Vec<String>> {
+    let root = Engine::parse(data)?;
+    let resources = root.get("ResourceDict")?;
+    let set: Vec<String> = resources
+        .get("FontSet")?
+        .array()?
+        .iter()
+        .map(|f| f.get("Name").and_then(Value::string).map(decode))
+        .collect::<Option<_>>()?;
+    let sheets = resources.get("StyleSheetSet").and_then(Value::array);
+    // `TheNormalStyleSheet` is the index of the default sheet; the first
+    // entry when it is absent.
+    let normal = resources
+        .get("TheNormalStyleSheet")
+        .and_then(Value::index)
+        .unwrap_or(0);
+    let default = sheets
+        .and_then(|s| s.get(normal))
+        .and_then(|s| s.get("StyleSheetData"))
+        .and_then(|d| d.get("Font"));
+    let runs = root
+        .get("EngineDict")?
+        .get("StyleRun")?
+        .get("RunArray")?
+        .array()?;
+    if runs.is_empty() {
+        return None;
+    }
+    let mut names = Vec::new();
+    for run in runs {
+        let own = run
+            .get("StyleSheet")
+            .and_then(|s| s.get("StyleSheetData"))
+            .and_then(|d| d.get("Font"));
+        let name = set.get(own.or(default)?.index()?)?;
+        if !names.contains(name) {
+            names.push(name.clone());
+        }
+    }
+    Some(names)
+}
+
+/// A value of engine data, Photoshop's PostScript-like text.
+#[derive(Debug)]
+enum Value {
+    Dict(Vec<(Vec<u8>, Value)>),
+    Array(Vec<Value>),
+    String(Vec<u8>),
+    /// A name, number or keyword, as written.
+    Atom(Vec<u8>),
+}
+
+impl Value {
+    fn get(&self, key: &str) -> Option<&Value> {
+        match self {
+            Value::Dict(entries) => entries
+                .iter()
+                .find(|(k, _)| k == key.as_bytes())
+                .map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
+    fn array(&self) -> Option<&[Value]> {
+        match self {
+            Value::Array(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    fn string(&self) -> Option<&[u8]> {
+        match self {
+            Value::String(s) => Some(s),
+            _ => None,
+        }
+    }
+
+    /// A non-negative integer.
+    fn index(&self) -> Option<usize> {
+        match self {
+            Value::Atom(a) => std::str::from_utf8(a).ok()?.parse().ok(),
+            _ => None,
+        }
+    }
+}
+
+/// The most nested dictionaries and arrays followed in engine data.
+const MAX_DEPTH: u32 = 64;
+
+struct Engine<'a> {
+    data: &'a [u8],
+    p: usize,
+}
+
+impl Engine<'_> {
+    /// The top-level dictionary, or `None` when the data is not well formed.
+    fn parse(data: &[u8]) -> Option<Value> {
+        let mut e = Engine { data, p: 0 };
+        let root = e.value(0)?;
+        matches!(root, Value::Dict(_)).then_some(root)
+    }
+
+    fn skip_space(&mut self) {
+        while self.data.get(self.p).is_some_and(u8::is_ascii_whitespace) {
+            self.p += 1;
+        }
+    }
+
+    fn at(&self, s: &[u8]) -> bool {
+        self.data[self.p.min(self.data.len())..].starts_with(s)
+    }
+
+    fn value(&mut self, depth: u32) -> Option<Value> {
+        if depth > MAX_DEPTH {
+            return None;
+        }
+        self.skip_space();
+        if self.at(b"<<") {
+            self.p += 2;
+            let mut entries = Vec::new();
+            loop {
+                self.skip_space();
+                if self.at(b">>") {
+                    self.p += 2;
+                    return Some(Value::Dict(entries));
+                }
+                let Value::Atom(key) = self.value(depth + 1)? else {
+                    return None;
+                };
+                let key = key.strip_prefix(b"/")?.to_vec();
+                let value = self.value(depth + 1)?;
+                entries.push((key, value));
+            }
+        }
+        match *self.data.get(self.p)? {
+            b'[' => {
+                self.p += 1;
+                let mut items = Vec::new();
+                loop {
+                    self.skip_space();
+                    if self.at(b"]") {
+                        self.p += 1;
+                        return Some(Value::Array(items));
+                    }
+                    items.push(self.value(depth + 1)?);
+                }
+            }
+            b'(' => {
+                // An unterminated string runs to the end of the data, so
+                // its dictionary never closes and the parse fails.
+                let (s, next) = ps_string(self.data, self.p + 1);
+                self.p = next;
+                Some(Value::String(s))
+            }
+            b']' | b'>' | b')' => None,
+            _ => {
+                let start = self.p;
+                self.p += 1;
+                while let Some(&c) = self.data.get(self.p) {
+                    if c.is_ascii_whitespace() || b"[]()<>/".contains(&c) {
+                        break;
+                    }
+                    self.p += 1;
+                }
+                Some(Value::Atom(self.data[start..self.p].to_vec()))
+            }
+        }
+    }
 }
 
 /// The names of every `/FontSet` array in engine data (the resource

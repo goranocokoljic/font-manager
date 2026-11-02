@@ -91,6 +91,10 @@ them, or **Keep** (**Keep them** in the Adobe apps) to keep them active.
 
 A font that your library does not have is listed as missing.
 
+The fonts of a Photoshop document are the fonts that its text uses. Photoshop
+also stores its default fonts, for example Myriad Pro, in every text layer.
+Font Manager does not list a default font that no text uses.
+
 ### Download a missing font from a catalog
 
 Font Manager can also download a missing font from an online catalog. This is
