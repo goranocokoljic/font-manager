@@ -322,16 +322,40 @@ const psString = (s) => {
   }
   return Buffer.concat([Buffer.from('('), Buffer.from(escaped), Buffer.from(')')]);
 };
-const engineData = (fonts) => Buffer.concat([
-  Buffer.from('\n\n<<\n\t/EngineDict\n\t<<\n\t\t/Editor\n\t\t<<\n\t\t\t/Text '), psString('Hi\r'),
-  Buffer.from('\n\t\t>>\n\t>>\n\t/ResourceDict\n\t<<\n\t\t/StyleSheetSet\n\t\t[\n\t\t<<\n\t\t\t/Name '), psString('Normal RGB'),
-  Buffer.from('\n\t\t>>\n\t\t]\n\t\t/FontSet\n\t\t[\n'),
-  ...fonts.flatMap((f) => [Buffer.from('\t\t<<\n\t\t\t/Name '), psString(f), Buffer.from('\n\t\t\t/Script 0\n\t\t\t/FontType 1\n\t\t\t/Synthetic 0\n\t\t>>\n')]),
-  Buffer.from('\t\t]\n\t\t/SuperscriptSize .583\n\t>>\n>>'),
+// `runs` are the `/Font` indexes of the text runs (`null`: a run without its
+// own font, which takes the default style sheet's); `sheets` the `/Font` of
+// each `/StyleSheetSet` entry; `normal` the `/TheNormalStyleSheet` index, if
+// any. Photoshop also repeats the font set in `/DocumentResources`.
+const styleSheetData = (font) =>
+  `/StyleSheetData\n<<\n${font === null ? '' : `/Font ${font}\n`}/FontSize 12\n>>\n`;
+const fontSet = (fonts) => Buffer.concat([
+  Buffer.from('/FontSet\n[\n'),
+  ...fonts.flatMap((f) => [
+    Buffer.from('<<\n/Name '), psString(f), Buffer.from('\n/Script 0\n/FontType 1\n/Synthetic 0\n>>\n'),
+  ]),
+  Buffer.from(']\n'),
+]);
+const engineData = (fonts, { runs, sheets, normal }) => Buffer.concat([
+  Buffer.from('\n\n<<\n/EngineDict\n<<\n/Editor\n<<\n/Text '), psString('Hi\r'),
+  Buffer.from('\n>>\n/StyleRun\n<<\n/DefaultRunData\n<<\n/StyleSheet\n<<\n/StyleSheetData\n<<\n>>\n>>\n>>\n/RunArray\n[\n'),
+  ...runs.map((r) => Buffer.from(`<<\n/StyleSheet\n<<\n${styleSheetData(r)}>>\n>>\n`)),
+  Buffer.from(`]\n/RunLengthArray [ ${runs.map(() => 1).join(' ')} ]\n/IsJoinable 1\n>>\n`),
+  Buffer.from('/AntiAlias 4\n/UseFractionalGlyphWidths true\n>>\n/ResourceDict\n<<\n'),
+  Buffer.from(normal === undefined ? '' : `/TheNormalStyleSheet ${normal}\n`),
+  Buffer.from('/StyleSheetSet\n[\n'),
+  ...sheets.flatMap((font, i) => [
+    Buffer.from('<<\n/Name '), psString(i === 0 ? 'Normal RGB' : `Sheet ${i}`),
+    Buffer.from(`\n${styleSheetData(font)}>>\n`),
+  ]),
+  Buffer.from(']\n'),
+  fontSet(fonts),
+  Buffer.from('/SuperscriptSize .583\n>>\n/DocumentResources\n<<\n'),
+  fontSet(fonts),
+  Buffer.from('>>\n>>'),
 ]);
 const padTo = (buf, n) => Buffer.concat([buf, Buffer.alloc((n - (buf.length % n)) % n)]);
-const typeTool = (fonts) => {
-  const engine = engineData(fonts);
+const typeTool = (fonts, style) => {
+  const engine = engineData(fonts, style);
   const descriptor = Buffer.concat([
     u32be(1), u16be(0), // name: one UTF-16 code unit, empty
     u32be(0), Buffer.from('TxLr'), // class id
@@ -359,8 +383,14 @@ const layerRecord = (name, blocks) => {
 const layers = Buffer.concat([
   u16be(3),
   layerRecord('Title', [block('luni', Buffer.concat([u32be(5), Buffer.from('\0T\0i\0t\0l\0e', 'latin1')])),
-    block('TySh', typeTool(['ArialMT', 'AdobeInvisFont', 'Inter-Bold']))]),
-  layerRecord('Body', [block('TySh', typeTool(['Inter-Bold', 'Georgia', 'AdobeInvisFont']))]),
+    // Runs: ArialMT, Inter-Bold. The default sheet names MyriadPro-Regular,
+    // which no run uses (every run has its own font).
+    block('TySh', typeTool(['ArialMT', 'AdobeInvisFont', 'Inter-Bold', 'MyriadPro-Regular'],
+      { runs: [0, 2, 0], sheets: [3] }))]),
+  // Runs: Inter-Bold and one without a font, which takes the default sheet:
+  // `TheNormalStyleSheet 1` (Georgia), not the first sheet (MyriadPro-Regular).
+  layerRecord('Body', [block('TySh', typeTool(['Inter-Bold', 'Georgia', 'AdobeInvisFont', 'MyriadPro-Regular'],
+    { runs: [0, null], sheets: [3, 1], normal: 1 }))]),
   layerRecord('Photo', []),
 ]);
 const layerInfo = padTo(layers, 4);
