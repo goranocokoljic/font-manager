@@ -5,6 +5,7 @@
 // license are edited here; the API stores them. A color face's palette picker
 // (E16.3) comes first. "Find similar" (E23.3) sits in the header.
 import { computed, nextTick, ref, watch } from 'vue';
+import UiButton from './ui/UiButton.vue';
 import type { Axis, Conflict, OutcomeStatus } from '../api/types';
 import { errorMessage, formatNumber, t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
@@ -147,15 +148,14 @@ function clashText(c: Conflict): string {
             {{ d.face.active ? t('info.deactivate') : t('info.activate') }}
           </button>
           <span class="state" data-testid="activation-state">{{ activationState }}</span>
-          <button
-            type="button"
+          <UiButton
             class="similar"
             :aria-keyshortcuts="ariaShortcut(similarChord)"
             :title="`${t('info.findSimilarTitle')} (${formatChord(similarChord)})`"
             @click="similar.openFor(d.face)"
           >
             {{ t('info.findSimilar') }}
-          </button>
+          </UiButton>
         </div>
         <p v-if="outcomeMessage" role="alert" class="outcome">{{ outcomeMessage }}</p>
         <div
@@ -538,12 +538,6 @@ function clashText(c: Conflict): string {
 }
 .similar {
   margin-inline-start: auto;
-  padding: 4px 12px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
 }
 .tech-toggle {
   display: flex;

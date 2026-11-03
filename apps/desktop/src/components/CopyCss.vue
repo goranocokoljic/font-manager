@@ -2,6 +2,7 @@
 // "Copy CSS" in the Axes and Features tabs: copies the declaration fm-core
 // builds for what the user changed, with CopyValue's inline feedback.
 import { t } from '../i18n';
+import UiButton from './ui/UiButton.vue';
 import { useCopy } from './useCopy';
 
 const props = defineProps<{
@@ -20,14 +21,9 @@ const { status, copy } = useCopy();
       <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
       <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
     </span>
-    <button
-      type="button"
-      class="button"
-      :aria-label="t('copy.cssFor', { label })"
-      @click="copy(props.css())"
-    >
+    <UiButton :aria-label="t('copy.cssFor', { label })" @click="copy(props.css())">
       {{ t('copy.css') }}
-    </button>
+    </UiButton>
   </span>
 </template>
 
@@ -36,14 +32,6 @@ const { status, copy } = useCopy();
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-.button {
-  padding: 2px 10px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
 }
 .status {
   color: var(--fm-muted);

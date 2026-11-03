@@ -30,7 +30,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
-- [ ] 26 Hover/focus/active audit
+- [ ] 26 Hover/focus/active audit (iteration 61: quiet UiButton on Options, Find similar, Columns, Copy CSS)
 - [ ] 27 Accessibility
 
 ## Entry template (at most 25 lines per entry)
@@ -368,3 +368,13 @@ Four iterations since review 55 (56–59); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-60.log`). Shots `review-60/` (before, 52) and `review-60-after/` (52, byte-identical — no scene shows Settings › Advanced): all 26 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** bordered text buttons (Options, Columns, Find similar, Copy CSS) beside quiet icons; Problems view chip row and accent "Recommended" pill; Settings nav focus ring on load; no `settings-advanced` or `license-open` scene.
 **Next five:** item 26 — a quiet `UiButton`, moved onto every bordered text button in the toolbar, Preview bar and inspector (first screen) → item 26 rest (last three `type="number"`, tags `datalist`) → item 21 (Tags empty in the sidebar on `UiEmptyState`) → item 7 (hover weight range, `grid-expanded` scene) → item 17 ("Lock width" beside the page). Every iteration takes before and after shots of a scene that shows its change; an iteration with no shots is graded 2 at most.
+
+## Iteration 61 — 2026-11-03 — One quiet UiButton for the bordered text buttons
+**Critique (before):** The `list` shot has one loud pattern left: bordered text buttons ("Options" in the Preview bar, "Find similar" in the inspector) sit next to borderless icon buttons. The boxes pull the eye away from the specimens. The rest (rows, sidebar, selection bar) is calm and consistent.
+**Why:** Item 26's first "left" entry, and the loudest chrome on the first screen. Principle 1: chrome is quiet.
+**What changed:** Built `ui/UiButton` (no border, muted text, `--fm-hover` tint, accent text while `aria-pressed` / `aria-expanded`). Moved Options (Preview bar), Find similar (Info header), Columns (Table) and Copy CSS (Axes, Features) onto it; the local border rules are gone. `TableColumnsMenu` reads the button via `$el`.
+**Backlog:** item 26 still open (more bordered buttons remain: Close in Settings/Problems, Preview options row buttons, Reset).
+**Shots:** `.harness/redesign/shots/61/` (before), `61-after/` (after): `list` and `inspector-info` changed, both themes.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-61.log`).
+**Follow-ups:** move the Preview options-row buttons (alignment, Reset), Settings/Problems Close, Problems chip row onto `UiButton`; then the last three `type="number"` inputs and tags `datalist`. Table shot not opened (Columns only changes the same way).
+**Dependencies:** none. **Reverted:** no.

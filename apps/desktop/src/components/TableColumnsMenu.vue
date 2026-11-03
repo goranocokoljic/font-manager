@@ -3,6 +3,7 @@
 // up or down, by keyboard as well as by pointer (header drag is the shortcut;
 // this is its single-pointer, keyboard-operable alternative).
 import { computed, nextTick, ref, useId } from 'vue';
+import UiButton from './ui/UiButton.vue';
 import { columnById, type ColumnId } from '../list/columns';
 import { t } from '../i18n';
 import { useViewsStore } from '../stores/views';
@@ -12,7 +13,7 @@ const props = defineProps<{ view: string }>();
 const views = useViewsStore();
 const uid = useId();
 const open = ref(false);
-const button = ref<HTMLButtonElement | null>(null);
+const button = ref<InstanceType<typeof UiButton> | null>(null);
 const panel = ref<HTMLElement | null>(null);
 
 const config = computed(() => views.tableFor(props.view));
@@ -34,7 +35,7 @@ async function toggle(): Promise<void> {
 
 function close(): void {
   open.value = false;
-  button.value?.focus();
+  (button.value?.$el as HTMLElement | undefined)?.focus();
 }
 
 /** Moves a column, keeping focus on the same button so repeated presses keep moving it. */
@@ -51,23 +52,16 @@ async function move(id: ColumnId, to: number, e: Event): Promise<void> {
 
 function onFocusOut(e: FocusEvent): void {
   const next = e.relatedTarget as Node | null;
-  if (next && (panel.value?.contains(next) || button.value?.contains(next))) return;
+  if (next && (panel.value?.contains(next) || button.value?.$el.contains(next))) return;
   open.value = false;
 }
 </script>
 
 <template>
   <div class="menu" @keydown.esc.stop="close">
-    <button
-      ref="button"
-      type="button"
-      class="toggle"
-      :aria-expanded="open"
-      :aria-controls="`${uid}-panel`"
-      @click="toggle"
-    >
+    <UiButton ref="button" :aria-expanded="open" :aria-controls="`${uid}-panel`" @click="toggle">
       {{ t('table.columnsMenu.button') }}
-    </button>
+    </UiButton>
     <div
       v-if="open"
       :id="`${uid}-panel`"
@@ -118,7 +112,6 @@ function onFocusOut(e: FocusEvent): void {
 .menu {
   position: relative;
 }
-.toggle,
 .move,
 .reset {
   padding: 4px 8px;
@@ -127,10 +120,6 @@ function onFocusOut(e: FocusEvent): void {
   background-color: transparent;
   color: inherit;
   font: inherit;
-}
-.toggle[aria-expanded='true'] {
-  border-color: var(--fm-accent);
-  color: var(--fm-accent);
 }
 .panel {
   position: absolute;

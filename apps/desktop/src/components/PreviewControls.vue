@@ -5,6 +5,7 @@
 // the preview store for `view`, which every row of that list reads.
 import { computed, ref, useId } from 'vue';
 import { t } from '../i18n';
+import UiButton from './ui/UiButton.vue';
 import { SAMPLE_KINDS } from '../preview/sampleText';
 import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
@@ -142,15 +143,14 @@ function colorFrom(e: Event): string {
           @commit="typed(KEY.size, $event, true)"
         />
       </div>
-      <button
-        type="button"
-        class="button options-toggle"
+      <UiButton
+        class="options-toggle"
         :aria-expanded="optionsOpen"
         :aria-controls="optionsId"
         @click="optionsOpen = !optionsOpen"
       >
         {{ t('preview.options') }}
-      </button>
+      </UiButton>
     </div>
     <div v-show="optionsOpen" :id="optionsId" class="more">
       <div class="field">
