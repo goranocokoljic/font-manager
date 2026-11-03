@@ -9,7 +9,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
-- [ ] 5 Sidebar redesign (iterations 8, 12, 13: UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Fonts row actions, Project sets counts, section icons, collapsible sections, Problems dedupe remain)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19: Fonts row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets counts, section icons, collapsible sections, Problems dedupe remain)
 - [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iteration 17: Info shows About + License + Your notes first, raw data behind "Technical details"; Glyphs clipped column, Features names remain)
@@ -144,3 +144,10 @@ Why: backlog item 9. Visible the moment a designer presses S.
 Changed: `SimilarPanel` fills the main area; `HomeView` hides the list (`v-show`, so state and focus survive) while it is open. The source face is pinned on top. Each result has a quiet score bar. "Why" shows only reasons that differ between results. Close is a `UiIconButton` (new `close` icon). Esc returns to the list at the picked face. `similar.spec` and `SimilarPanel.test` updated on purpose (list check after Esc; shared reasons dropped).
 Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed (`.harness/redesign/e2e-18.log`). Shots `18/`.
 Follow-ups: group results by family (closest face shown); the list `list` shot is unchanged (mode shows only in `similar`); inspector license form still tall.
+
+## Iteration 19 — 2026-11-03 — Sources: row actions sit on the row
+Critique: the first screen shows a floating strip of three icons under "Fonts", a line of chrome with no label. The list itself is calm; the right pane Info is still long (license form, wrapped URL). Sidebar rows have uneven heights because of that strip.
+Why: backlog item 5 rest; the only visible oddity in the `list` shot.
+Changed: `SourcesSidebar` puts Rescan / Pause / Remove inside the row, replacing the count on hover or keyboard focus (same grid cell, 120 ms fade). Rows keep one height; the sidebar is 21 px shorter. The local `.badge` became `UiBadge`.
+Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 3 failed on first run (invisible buttons had `pointer-events: none`; removed), then sources + a11y specs 36 passed. Full run before the fix: 269 passed (`.harness/redesign/e2e-19.log`). Shots `19/`, `19-after/`.
+Follow-ups: Project sets count not right-aligned; license URL wraps mid-word; fold the license form; Glyphs clipped column; Features human names.

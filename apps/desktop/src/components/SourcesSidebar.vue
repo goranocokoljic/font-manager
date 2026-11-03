@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiBadge from './ui/UiBadge.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 // The Sources group of the sidebar: add a folder with the native picker,
 // pause, resume, rescan or remove it, and see scan progress inline. The
@@ -74,11 +75,37 @@ const announcement = computed(() => {
       >
         <div class="row">
           <span class="name" :title="source.path">{{ folderName(source) }}</span>
-          <span v-if="source.kind === 'system'" class="badge">{{ t('sources.readOnly') }}</span>
-          <span v-else-if="source.paused" class="badge">{{ t('sources.paused') }}</span>
-          <span class="count" :aria-label="t('sources.fonts', { count: source.faceCount })">{{
-            source.faceCount
-          }}</span>
+          <UiBadge v-if="source.kind === 'system'">{{ t('sources.readOnly') }}</UiBadge>
+          <UiBadge v-else-if="source.paused">{{ t('sources.paused') }}</UiBadge>
+          <span class="trail">
+            <span class="count" :aria-label="t('sources.fonts', { count: source.faceCount })">{{
+              source.faceCount
+            }}</span>
+            <span v-if="source.kind !== 'system'" class="actions">
+              <UiIconButton
+                icon="rescan"
+                :label="t('sources.rescanLabel', { name: folderName(source) })"
+                :title="t('sources.rescan')"
+                @click="store.rescan(source.id)"
+              />
+              <UiIconButton
+                :icon="source.paused ? 'play' : 'pause'"
+                :label="
+                  source.paused
+                    ? t('sources.resumeLabel', { name: folderName(source) })
+                    : t('sources.pauseLabel', { name: folderName(source) })
+                "
+                :title="source.paused ? t('sources.resume') : t('sources.pause')"
+                @click="store.setPaused(source.id, !source.paused)"
+              />
+              <UiIconButton
+                icon="trash"
+                :label="t('sources.removeLabel', { name: folderName(source) })"
+                :title="t('sources.removeTitle')"
+                @click="store.remove(source.id)"
+              />
+            </span>
+          </span>
         </div>
         <div v-if="store.progressOf(source.id)" class="scan">
           <progress
@@ -87,30 +114,6 @@ const announcement = computed(() => {
             :aria-label="t('sources.scanningSource', { name: folderName(source) })"
           />
           <span class="scan-text">{{ progressText(store.progressOf(source.id)!) }}</span>
-        </div>
-        <div v-if="source.kind !== 'system'" class="actions">
-          <UiIconButton
-            icon="rescan"
-            :label="t('sources.rescanLabel', { name: folderName(source) })"
-            :title="t('sources.rescan')"
-            @click="store.rescan(source.id)"
-          />
-          <UiIconButton
-            :icon="source.paused ? 'play' : 'pause'"
-            :label="
-              source.paused
-                ? t('sources.resumeLabel', { name: folderName(source) })
-                : t('sources.pauseLabel', { name: folderName(source) })
-            "
-            :title="source.paused ? t('sources.resume') : t('sources.pause')"
-            @click="store.setPaused(source.id, !source.paused)"
-          />
-          <UiIconButton
-            icon="trash"
-            :label="t('sources.removeLabel', { name: folderName(source) })"
-            :title="t('sources.removeTitle')"
-            @click="store.remove(source.id)"
-          />
         </div>
       </li>
     </ul>
@@ -162,13 +165,6 @@ const announcement = computed(() => {
 .paused .name {
   color: var(--fm-muted);
 }
-.badge {
-  padding: 0 4px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-}
 .count {
   color: var(--fm-muted);
   font-variant-numeric: tabular-nums;
@@ -192,11 +188,28 @@ const announcement = computed(() => {
 .scan-text {
   font-variant-numeric: tabular-nums;
 }
+.trail {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  align-items: center;
+}
+.trail > * {
+  grid-area: 1 / 1;
+}
 .actions {
   display: flex;
   gap: 2px;
-  justify-content: flex-end;
-  padding-top: 2px;
+  opacity: 0;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.source:hover .actions,
+.source:focus-within .actions {
+  opacity: 1;
+}
+.source:hover .trail:has(.actions) .count,
+.source:focus-within .trail:has(.actions) .count {
+  visibility: hidden;
 }
 .error {
   margin: 4px 8px;
