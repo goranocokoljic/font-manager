@@ -130,7 +130,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   and `UiChevron` exist (review 10), plus `UiFoldButton` with `components/useFolded.ts`
   (review 35) and `UiEmptyState` (review 45); every inspector tab head is `InspectorTabHead`;
   a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
-  local acquire/release copy (review 50). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
+  local acquire/release copy (review 50). Every number field is `UiNumberField`; a caller that
+  saves listens to `commit` (Enter, blur, − / +), never to every keystroke or a timer (review 60). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
   ▸/▾ text glyph or a sidebar heading with its own fold markup is a bug. Text for screen readers only uses the
   global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider
   (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
@@ -201,11 +202,12 @@ screenshot of `list` is not visibly different from its "before", the iteration p
 wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 55
 one-style families have no chevron (6), the Studio is two bars with its help behind the info
 button (17), the Filters drawer names features (8) and Features shows each sample off and on (8).
-The `list` shot has not changed since iteration 51: the next five must move the first screen
-again. Next: item 26's license-form natives and Settings radios (the Info tab is on the first
-screen), item 6's repeated "Variable" badge on every sub-row (`expanded-family`), item 21's Tags /
-Quick Collection empties, item 7's hover weight range, item 17's "Lock width" (it floats at the
-window corner, far from the page). Every feature adds a scene to `shots.mjs` in the same
+Since review 60 every number field on the first screen is `UiNumberField` (26). The loudest chrome
+left on the first screen is the bordered text buttons — Options, Columns, Find similar, Copy CSS —
+next to quiet icon buttons: there is still no shared quiet `UiButton` (26). Next: that button, the
+last three `type="number"` inputs and the tags `datalist` (26), the Tags empty text in the sidebar
+(21), the hover weight range with a `grid-expanded` scene (7), "Lock width" beside the page (17).
+Every feature adds a scene to `shots.mjs` in the same
 iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
 ### First screen
@@ -246,8 +248,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
    The cursor row is a 2 px bar plus a hairline ring, rows tint on hover (iteration 29,
    review 30). `?face=` selects the list row (iteration 42); revealing a one-style family keeps
    it folded (iteration 46); a one-style family has no chevron and does not open in any view
-   (iteration 51, review 55: `aria-expanded` follows the same `single` flag). Left: sub-rows
-   repeat the family's "Variable" badge on every style (`expanded-family` scene).
+   (iteration 51, review 55: `aria-expanded` follows the same `single` flag); sub-rows no
+   longer repeat "Variable" (iteration 56). Nothing left but the row-action set (Activate,
+   Compare, Tag on hover).
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
    style cards are solid and every card tints on hover (iteration 47). Left: hover reveals the
    weight range; a `grid-expanded` scene so a style card is ever seen in a shot.
@@ -322,10 +325,12 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 ### Polish
 24. Motion pass: list transitions, panel collapse, selection changes.
 25. Custom overlay scrollbars on all platforms.
-26. Hover / focus / active audit across every control, and the native-input sweep:
-    the license form still draws a native date field (purchase date, with the browser's
-    calendar icon), a number field (seats) and a `datalist` (tags); Settings' radios and
-    Settings › Advanced draws two native number fields; the Problems view's "Recommended" pill
-    and its chip row. (Settings nav, legends and field captions done in iteration 38, review 40.) (Features knob and note fields done in
-    iterations 26, 28.)
+26. Hover / focus / active audit across every control, and the native-input sweep.
+    Done: Settings nav and captions (iteration 38), Features knob and note fields (26, 28),
+    `UiNumberField` in the license form, Settings › Advanced and the Preview bar (iterations
+    57–59, review 60: saves on `commit`). Left, in order: one quiet `UiButton` for the bordered
+    text buttons (Options, Columns, Find similar, Copy CSS, Close in Settings/Problems);
+    `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; a
+    designed date picker (purchase date is a plain text field with a `YYYY-MM-DD` hint); the
+    Problems view's bordered chip row and accent-outlined "Recommended" pill.
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.

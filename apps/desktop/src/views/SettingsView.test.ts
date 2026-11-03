@@ -298,34 +298,37 @@ describe('Settings window', () => {
     wrapper.unmount();
   });
 
-  it('saves a valid number, and puts the saved value back after a bad one', async () => {
-    vi.useFakeTimers();
+  it('saves a committed number, and puts the saved value back after a bad one', async () => {
     const { wrapper } = await mountAt('/settings?section=advanced');
     const field = (i: number) => wrapper.findAll('.number input')[i];
-    const settle = async () => {
-      await vi.advanceTimersByTimeAsync(500);
+    const commit = async (i: number, value: string) => {
+      await field(i).setValue(value); // fires input and change, as leaving the field does
       await flushPromises();
     };
-    await field(0).setValue('2048');
-    await settle();
+    // Typing alone sends nothing: "1" on the way to "1024" must not be refused.
+    // (`setValue` also fires `change`, so type through the element and `input` only.)
+    (field(0).element as HTMLInputElement).value = '1';
+    await field(0).trigger('input');
+    await flushPromises();
+    expect(wrapper.text()).not.toContain('between 64 and 16384');
+    expect((await client.getSettings()).cacheLimitMb).toBe(1024);
+
+    await commit(0, '2048');
     expect((await client.getSettings()).cacheLimitMb).toBe(2048);
 
-    await field(0).setValue('1');
-    await settle();
+    await commit(0, '1');
     expect(wrapper.get('[role="alert"]').text()).toContain('between 64 and 16384');
     expect((field(0).element as HTMLInputElement).value).toBe('2048');
 
-    await field(1).setValue('');
-    await settle();
+    await commit(1, '');
     expect((field(1).element as HTMLInputElement).value).toBe('60');
     expect((await client.getSettings()).rescanIntervalMinutes).toBe(60);
+    expect(field(1).attributes('aria-describedby')).toBe('rescan-hint');
 
-    await field(1).setValue('0');
-    await settle();
+    await commit(1, '0');
     expect((await client.getSettings()).rescanIntervalMinutes).toBe(0);
     expect(wrapper.text()).toContain(mockFolders.logs);
     wrapper.unmount();
-    vi.useRealTimers();
   });
 
   it('moves between sections with the arrow keys and closes on Escape', async () => {

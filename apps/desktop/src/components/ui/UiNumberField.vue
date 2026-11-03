@@ -14,8 +14,16 @@ const props = withDefaults(
     max?: number;
     step?: number;
     ariaLabel?: string;
+    ariaDescribedby?: string;
   }>(),
-  { id: undefined, min: undefined, max: undefined, step: 1, ariaLabel: undefined },
+  {
+    id: undefined,
+    min: undefined,
+    max: undefined,
+    step: 1,
+    ariaLabel: undefined,
+    ariaDescribedby: undefined,
+  },
 );
 const emit = defineEmits<{
   'update:modelValue': [value: number | ''];
@@ -81,6 +89,7 @@ function onKey(e: KeyboardEvent) {
       inputmode="decimal"
       autocomplete="off"
       :aria-label="ariaLabel"
+      :aria-describedby="ariaDescribedby"
       :value="text"
       @input="onInput"
       @change="onChange"

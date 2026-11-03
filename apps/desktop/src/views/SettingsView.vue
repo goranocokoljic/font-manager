@@ -139,17 +139,16 @@ async function saveStartAtLogin(e: Event): Promise<void> {
 
 type NumberKey = keyof Pick<FullSettings, 'cacheLimitMb' | 'rescanIntervalMinutes'>;
 
-/** A number field: whole numbers are sent after a short pause; a refused or empty one is put back. */
-const numberTimers: Partial<Record<NumberKey, ReturnType<typeof setTimeout>>> = {};
-const numberReset = ref(0);
-function saveNumber(key: NumberKey, value: number | ''): void {
-  clearTimeout(numberTimers[key]);
-  numberTimers[key] = setTimeout(() => {
-    const valid = value !== '' && value >= 0 && Number.isInteger(value);
-    void (valid ? store.update({ [key]: value }) : Promise.resolve(false)).then((ok) => {
-      if (!ok) numberReset.value += 1;
-    });
-  }, 400);
+/**
+ * A number field saves when the user commits it (Enter, leaving the field, − / +), not on
+ * every key, so "1" on the way to "1024" is never sent. A refused or empty value re-keys the
+ * field, which shows the saved number again.
+ */
+const numberReset = ref<Record<NumberKey, number>>({ cacheLimitMb: 0, rescanIntervalMinutes: 0 });
+async function saveNumber(key: NumberKey, value: number | ''): Promise<void> {
+  const valid = value !== '' && value >= 0 && Number.isInteger(value);
+  const ok = valid && (await store.update({ [key]: value }));
+  if (!ok) numberReset.value[key] += 1;
 }
 
 // Identifiers the template uses, kept here: the catalog check (src/i18n/templates.test.ts)
@@ -480,10 +479,10 @@ function chooseLanguage(value: string): void {
             <span>{{ t('settings.advanced.cacheSize') }}</span>
             <span class="number">
               <UiNumberField
-                :key="`cache-${numberReset}`"
+                :key="`cache-${numberReset.cacheLimitMb}`"
                 :model-value="s.cacheLimitMb"
                 :min="0"
-                @update:model-value="saveCacheLimit"
+                @commit="saveCacheLimit"
               />
             </span>
           </label>
@@ -491,10 +490,11 @@ function chooseLanguage(value: string): void {
             <span>{{ t('settings.advanced.rescanInterval') }}</span>
             <span class="number">
               <UiNumberField
-                :key="`rescan-${numberReset}`"
+                :key="`rescan-${numberReset.rescanIntervalMinutes}`"
                 :model-value="s.rescanIntervalMinutes"
                 :min="0"
-                @update:model-value="saveRescanInterval"
+                aria-describedby="rescan-hint"
+                @commit="saveRescanInterval"
               />
             </span>
           </label>

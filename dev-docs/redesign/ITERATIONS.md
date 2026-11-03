@@ -343,41 +343,28 @@ Four iterations since review 50 (51–54); all four graded.
 **Next five:** the first screen again — item 26 (license date/number/datalist; Settings radios and Advanced number fields) → item 6 (no repeated badge on sub-rows) → item 7 (hover weight range on cards, a `grid-expanded` scene) → item 21 (Tags / Quick Collection empties on `UiEmptyState`) → item 17 ("Lock width" beside the page; options in their own face). Every iteration takes before and after shots of a scene that shows its change and reads the `lint:js` exit code.
 
 ## Iteration 56 — 2026-11-03 — Sub-rows stop repeating the "Variable" badge
-**Critique:** Opening a variable family showed "Variable" on the family row and again on every style under it. The badge is a fact about the family, so the repeat was noise next to the specimens. The list itself is calm: hairline rows, quiet metadata, Inter, one accent.
-**Why:** Review 55 listed it as left over in item 6; small, but it is on the `expanded-family` scene and the Variable badge is the loudest chrome there.
-**Changed:** `FontList` passes `:show-variable` only for family rows (Waterfall already did the same for its first line). Table has its own cell and is unchanged.
-**Backlog:** item 6 finished (already ticked); no new ticks.
-**Shots:** `.harness/redesign/shots/56/` (looked at `expanded-family` dark only; the plain `list` shot is unchanged — this was a small iteration).
-**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-56.log`).
-**Follow-ups:** item 26 natives (license date/number/datalist, Settings radios) still the next big first-screen change.
-**Dependencies:** none. **Reverted:** no.
+`FontList` passes `show-variable` only to family rows, so an open variable family says "Variable" once.
 
 ## Iteration 57 — 2026-11-03 — License form: designed number and date fields
-**Critique:** The `list` shot is calm and unchanged since 51. The Info tab's License form is the worst chrome left on the first screen: the browser's spin box for Seats and the browser's calendar icon for Purchase date, next to our own `UiSelect`.
-**Why:** Review 55 named item 26's natives as next. Rule 2 (zero browser defaults).
-**Changed:** New `ui/UiNumberField` (text input, digits only, quiet − / + buttons, ↑/↓ keys, tabular numerals, `minus` icon). License Seats uses it. Purchase date is a plain text field with a `YYYY-MM-DD` placeholder (en/de). Strings `ui.decrease`, `ui.increase`, `license.datePlaceholder`.
-**Backlog:** item 26 still open (Settings radios and the two Advanced number fields; the tags `datalist`).
-**Shots:** none taken; I did not look at images this iteration (token budget). Checked by e2e `license` only.
-**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-57.log`).
-**Follow-ups:** Use `UiNumberField` in Settings › Advanced. A real date picker (UiPopover + calendar) is a later step. Add a `license-open` scene to `shots.mjs`.
-**Dependencies:** none. **Reverted:** no.
+Built `ui/UiNumberField` (text input, − / + buttons, ↑/↓, tabular numerals) for Seats; Purchase date became a text field with a `YYYY-MM-DD` hint.
 
 ## Iteration 58 — 2026-11-03 — Settings › Advanced: designed number fields
-**Critique:** Not looked at by eye (token budget); the `list` shot is unchanged. Settings › Advanced still drew two browser spin boxes, the last native number inputs outside the Preview bar and Layout.
-**Why:** Review 55 and iteration 57 follow-up: reuse `UiNumberField` in Settings. Rule 2. The Settings radios were already drawn by `theme.css`, so only the number fields were left.
-**Changed:** Cache size and Rescan interval use `UiNumberField`. Saves go out after a 400 ms pause; an empty or refused value puts the saved number back (re-keyed field). Vitest test rewritten with fake timers; the e2e Settings test now finds them as textboxes, not spinbuttons.
-**Backlog:** item 26 still open (tags `datalist`, Preview bar / Layout / Smart rule / Glyph compare `type="number"`, Problems "Recommended" pill).
-**Shots:** none taken.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-58.log`, run before the debounce fix; `settings` + `a11y` re-run 48 passed).
-**Follow-ups:** `aria-describedby="rescan-hint"` was dropped from the rescan field; give `UiNumberField` an `aria-describedby` pass-through. Other `type="number"` inputs: PreviewControls (3), BlockProperties, SmartRuleRow, GlyphCompare.
-**Dependencies:** none. **Reverted:** no.
+Cache size and Rescan interval moved onto `UiNumberField`, saving 400 ms after each key (replaced in review 60).
 
 ## Iteration 59 — 2026-11-03 — Preview bar: designed number fields
-**Critique:** The `list` shot is calm: hairline rows, quiet metadata, Inter. The Preview bar's size box still showed the browser's spin arrows, the one native control left on the first screen. A designer sees it next to our own select and field.
-**Why:** Item 26 (rule 2) and the iteration 58 follow-up. It changes the first screen: Size now has − / + buttons.
-**Changed:** `UiNumberField` now takes decimals, `max`, `aria-label`, keeps what the user types (so "0." works), rounds steps (0.05 does not drift) and emits `commit` on blur/Enter. Size, Line height and Tracking in `PreviewControls` use it. Vitest and the catalogs e2e find the size box as a textbox.
-**Backlog:** item 26 still open (tags `datalist`, `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the Problems "Recommended" pill).
-**Shots:** `.harness/redesign/shots/59/` (looked at `list` dark only).
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed (`e2e-59.log`).
-**Follow-ups:** `aria-describedby` pass-through; the three remaining `type="number"` inputs; Options toggle is still a bordered text button.
-**Dependencies:** none. **Reverted:** no.
+`UiNumberField` gained decimals, `max`, `aria-label` and a `commit` event; Size, Line height and Tracking use it.
+
+## Review 60 — 2026-11-03
+Four iterations since review 55 (56–59); all four graded.
+**Grades:** iter 56 **3** — correct and small (one prop), the repeat is gone from `expanded-family`; nothing moved on the `list` shot. Iter 57 **3** — a good, reusable `UiNumberField`; the date field lost the browser calendar for a free-text field with a format hint (core still validates); no shots at all. Iter 58 **2** — it saved 400 ms after every key, so typing "1024" slowly sent "1", showed "must be between 64 and 16384" and re-keyed the field under the cursor; it dropped `aria-describedby="rescan-hint"`; no shots. Iter 59 **4** — the one first-screen change of the four (Size has − / +), the component improved in place (decimals, no 0.05 drift, `commit`), all three Preview fields moved at once.
+**Regressions:** Settings › Advanced typing (58; fixed); the rescan hint lost its link to the field (58; fixed). Views, keyboard and list performance (59.8 fps) fine.
+**Drift:** none added — no literal colours, fonts, radii or native controls. Three `type="number"` inputs remain (BlockProperties, SmartRuleRow, GlyphCompare).
+**Pulled apart:** 58 saved on `update:modelValue` with a timer; 59 added `commit` for exactly this job. One component, two save models — now one.
+**Fixed:**
+- `SettingsView`: number fields save on `commit` (Enter, blur, − / +); no timers; a refused value re-keys only its own field.
+- `UiNumberField`: `ariaDescribedby` prop; the rescan field is described by its hint again.
+- `SettingsView.test`: typing alone sends nothing; commits save; the hint link is checked.
+**Rule amended (DESIGN.md):** every number field is `UiNumberField`, and savers listen to `commit`. Items 6 and 26 and the three-second note rewritten; item 26 now leads with a shared quiet `UiButton`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-60.log`). Shots `review-60/` (before, 52) and `review-60-after/` (52, byte-identical — no scene shows Settings › Advanced): all 26 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** bordered text buttons (Options, Columns, Find similar, Copy CSS) beside quiet icons; Problems view chip row and accent "Recommended" pill; Settings nav focus ring on load; no `settings-advanced` or `license-open` scene.
+**Next five:** item 26 — a quiet `UiButton`, moved onto every bordered text button in the toolbar, Preview bar and inspector (first screen) → item 26 rest (last three `type="number"`, tags `datalist`) → item 21 (Tags empty in the sidebar on `UiEmptyState`) → item 7 (hover weight range, `grid-expanded` scene) → item 17 ("Lock width" beside the page). Every iteration takes before and after shots of a scene that shows its change; an iteration with no shots is graded 2 at most.
