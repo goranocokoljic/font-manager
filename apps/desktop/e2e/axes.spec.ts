@@ -107,7 +107,7 @@ test('a typed value is clamped; a non-number is rejected without changing the pr
 
 test('choosing a named instance sets the slider to its coordinates', async ({ page }) => {
   const panel = await openAxes(page);
-  const presets = panel.getByRole('list', { name: 'Named instances' }).getByRole('button');
+  const presets = panel.getByRole('group', { name: 'Named instances' }).getByRole('button');
   await expect(presets).toHaveText(['Thin', 'Regular', 'Bold', 'Black']);
   await panel.getByRole('button', { name: 'Bold', exact: true }).click();
   await expect(wghtSlider(panel)).toHaveValue('700');

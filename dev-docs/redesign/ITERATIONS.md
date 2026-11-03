@@ -486,3 +486,13 @@ Shots: `.harness/redesign/shots/81/` (before) and `81-after/`; `hover-row` chang
 Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 270 passed on first run; the 3 failures (name clash) fixed and re-run green (a11y, settings).
 Follow-ups: Tag action on hover; the row actions do not show in compact density checks; no scene for keyboard focus on them (they are `tabindex=-1`, shortcuts cover keyboard).
 Dependencies: none.
+
+## Iteration 82 — 2026-11-03 — Axes: named instances become a text segmented control
+Critique (before): the first screen is mature; in the Axes tab the named instances were bare words, and the current one differed only by text colour, so the choice did not read as one exclusive set.
+Why: item 16, named by review 80 (one `UiSegmentedControl` text variant for instances and, next, Compare).
+Changed: `UiSegmentedControl` takes icon-less options (text segment) and a `wrap` flag, and sets `data-value`; `InspectorAxes` uses it for the instances (pressed = lifted segment, accent text). The old `.presets` CSS is gone. Tests: Vitest and `axes.spec.ts` now find a `group` named "Named instances".
+Backlog: 16 stays open (Compare size control and text/radio variant there remain).
+Shots: `.harness/redesign/shots/81-after/` (before) and `82/`; `inspector-axes` changed.
+Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 273 passed / 16 skipped.
+Follow-ups: Compare overlay controls onto the text variant; arrow-key roving inside the group (buttons are all tab stops today).
+Dependencies: none.

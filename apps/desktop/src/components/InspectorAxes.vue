@@ -12,6 +12,7 @@ import { axisStep, useAxesStore } from '../stores/axes';
 import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
 import UiButton from './ui/UiButton.vue';
+import UiSegmentedControl from './ui/UiSegmentedControl.vue';
 import UiSelect from './ui/UiSelect.vue';
 import { useCollectionsStore } from '../stores/collections';
 import { useSelectionStore } from '../stores/selection';
@@ -73,6 +74,10 @@ function reset(): void {
 
 const isAt = (i: NamedInstance) =>
   faceId.value !== null && axesSet.isAt(faceId.value, axes.value, i);
+function chooseByName(name: string): void {
+  const i = d.value?.instances.find((x) => x.name === name);
+  if (i) choose(i);
+}
 function choose(i: NamedInstance): void {
   if (faceId.value === null) return;
   axesSet.applyInstance(faceId.value, axes.value, i);
@@ -216,18 +221,13 @@ onMounted(() => {
       </ul>
       <section v-if="d.instances.length" :aria-labelledby="`${uid}-instances`">
         <h3 :id="`${uid}-instances`">{{ t('axes.instances') }}</h3>
-        <ul class="plain presets" :aria-labelledby="`${uid}-instances`">
-          <li v-for="i in d.instances" :key="i.name">
-            <UiButton
-              class="preset"
-              :aria-pressed="isAt(i)"
-              :data-instance="i.name"
-              @click="choose(i)"
-            >
-              {{ i.name }}
-            </UiButton>
-          </li>
-        </ul>
+        <UiSegmentedControl
+          wrap
+          :label="t('axes.instances')"
+          :model-value="atInstance"
+          :options="d.instances.map((i) => ({ value: i.name, label: i.name }))"
+          @update:model-value="chooseByName"
+        />
       </section>
       <section class="pin" :aria-labelledby="`${uid}-pin`">
         <h3 :id="`${uid}-pin`">{{ t('axes.pin') }}</h3>
@@ -323,14 +323,6 @@ h3 {
 }
 .error {
   color: var(--fm-warning);
-}
-/* Quiet buttons: pull the first label back by the button's own padding, so the text lines up
-   with the heading and the fields above it. */
-.presets {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--fm-space-1);
-  margin-inline-start: calc(-1 * var(--fm-space-2));
 }
 .pin {
   display: flex;

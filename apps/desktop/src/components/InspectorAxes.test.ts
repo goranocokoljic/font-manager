@@ -81,13 +81,13 @@ describe('inspector axes tab', () => {
 
   it('lists named instances as presets; choosing one sets the sliders; Reset goes back', async () => {
     const w = await mountWith(1);
-    const presets = w.findAll('button.preset');
+    const presets = w.findAll('.segmented button');
     expect(presets.map((p) => p.text())).toEqual(['Thin', 'Regular', 'Bold', 'Black']);
-    expect(w.get('[data-instance="Regular"]').attributes('aria-pressed')).toBe('true');
-    await w.get('[data-instance="Bold"]').trigger('click');
+    expect(w.get('[data-value="Regular"]').attributes('aria-pressed')).toBe('true');
+    await w.get('[data-value="Bold"]').trigger('click');
     expect(slider(w).element.value).toBe('700');
-    expect(w.get('[data-instance="Bold"]').attributes('aria-pressed')).toBe('true');
-    expect(w.get('[data-instance="Regular"]').attributes('aria-pressed')).toBe('false');
+    expect(w.get('[data-value="Bold"]').attributes('aria-pressed')).toBe('true');
+    expect(w.get('[data-value="Regular"]').attributes('aria-pressed')).toBe('false');
     await w.get('button.reset').trigger('click');
     expect(slider(w).element.value).toBe('400');
     expect(w.get('button.reset').attributes('disabled')).toBeDefined();
@@ -136,7 +136,7 @@ describe('inspector axes tab', () => {
     const name = () => (w.get('input.field').element as HTMLInputElement).value;
     expect(name()).toBe('Regular');
     expect(await selectOptions(w.get('[role="combobox"]'))).toEqual([['s9', 'Set: Poster']]);
-    await w.get('[data-instance="Black"]').trigger('click');
+    await w.get('[data-value="Black"]').trigger('click');
     expect(name()).toBe('Black');
   });
 

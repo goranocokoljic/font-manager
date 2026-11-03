@@ -6,26 +6,36 @@ export interface SegmentOption<V extends string> {
   value: V;
   /** Accessible name and tooltip. */
   label: string;
-  icon: IconName;
+  /** Icon segment. Omit it for a text segment that shows `label`. */
+  icon?: IconName;
 }
 
-defineProps<{ modelValue: T; options: readonly SegmentOption<T>[]; label: string }>();
+defineProps<{
+  modelValue: T;
+  options: readonly SegmentOption<T>[];
+  label: string;
+  /** Let text segments wrap onto more rows (many named choices). */
+  wrap?: boolean;
+}>();
 const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
 </script>
 
 <template>
-  <div class="segmented" role="group" :aria-label="label">
+  <div class="segmented" :class="{ wrap }" role="group" :aria-label="label">
     <button
       v-for="o in options"
       :key="o.value"
       type="button"
       class="seg"
+      :class="{ text: !o.icon }"
+      :data-value="o.value"
       :aria-label="o.label"
       :title="o.label"
       :aria-pressed="modelValue === o.value"
       @click="emit('update:modelValue', o.value)"
     >
-      <UiIcon :name="o.icon" />
+      <UiIcon v-if="o.icon" :name="o.icon" />
+      <template v-else>{{ o.label }}</template>
     </button>
   </div>
 </template>
@@ -52,6 +62,17 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
   transition:
     background-color var(--fm-motion-fast) var(--fm-ease),
     color var(--fm-motion-fast) var(--fm-ease);
+}
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+.seg.text {
+  width: auto;
+  min-width: 28px;
+  padding: 0 var(--fm-space-2);
+  font-size: 12px;
+  white-space: nowrap;
 }
 .seg:hover {
   color: var(--fm-fg);
