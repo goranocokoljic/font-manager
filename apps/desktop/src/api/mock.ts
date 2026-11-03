@@ -126,12 +126,48 @@ const ofl = {
 
 // Features as fm-core names them (crates/fm-core/src/features.rs).
 const FEATURES: Record<string, Omit<FeatureInfo, 'tag'>> = {
-  ccmp: { name: 'Glyph composition and decomposition', automatic: true, defaultOn: false },
-  kern: { name: 'Kerning', automatic: false, defaultOn: true },
-  liga: { name: 'Standard ligatures', automatic: false, defaultOn: true },
-  onum: { name: 'Oldstyle figures', automatic: false, defaultOn: false },
-  smcp: { name: 'Small capitals', automatic: false, defaultOn: false },
-  ss01: { name: 'Stylistic set 1', automatic: false, defaultOn: false },
+  ccmp: {
+    name: 'Glyph composition and decomposition',
+    automatic: true,
+    defaultOn: false,
+    group: 'automatic',
+    sample: 'é ñ ü',
+  },
+  kern: {
+    name: 'Kerning',
+    automatic: false,
+    defaultOn: true,
+    group: 'positioning',
+    sample: 'AVATAR Toy',
+  },
+  liga: {
+    name: 'Standard ligatures',
+    automatic: false,
+    defaultOn: true,
+    group: 'ligatures',
+    sample: 'fi fl ffi ffl',
+  },
+  onum: {
+    name: 'Oldstyle figures',
+    automatic: false,
+    defaultOn: false,
+    group: 'figures',
+    sample: '0123456789',
+  },
+  smcp: {
+    name: 'Small capitals',
+    automatic: false,
+    defaultOn: false,
+    group: 'capitals',
+    sample: 'Small Capitals',
+  },
+  ss01: {
+    name: 'Stylistic set 1',
+    automatic: false,
+    defaultOn: false,
+    group: 'stylistic',
+    sample: 'Rag Agy 0123',
+  },
 };
 const features = (...tags: string[]): FeatureInfo[] =>
   tags.map((tag) => ({ tag, ...(FEATURES[tag] ?? { name: null }) }));
@@ -595,7 +631,14 @@ function mockFeature(tag: string): FeatureInfo {
     onum: 'Oldstyle figures',
     ss01: 'Stylistic set 1',
   };
-  return { tag, name: names[tag] ?? null, automatic: false, defaultOn: tag === 'liga' };
+  return {
+    tag,
+    name: names[tag] ?? null,
+    automatic: false,
+    defaultOn: tag === 'liga',
+    group: FEATURES[tag]?.group ?? null,
+    sample: FEATURES[tag]?.sample ?? null,
+  };
 }
 
 /**

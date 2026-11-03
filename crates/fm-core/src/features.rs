@@ -1,11 +1,13 @@
-//! OpenType layout features by name (E10.3): the friendly name of every tag
-//! in the OpenType feature registry, which features the shaper applies by
-//! itself, and which are on in default text rendering.
+//! OpenType layout features by name (E10.3, E42.11): the friendly name, group
+//! and sample text of every tag in the OpenType feature registry, which
+//! features the shaper applies by itself, and which are on in default text
+//! rendering.
 //!
-//! [`REGISTRY`] is the registered tags, sorted, except the numbered ones:
-//! `ss01`–`ss20` are "Stylistic set N" and `cv01`–`cv99` "Character variant N",
-//! unless the font names them itself (E10.4, [`named_by_font`]). A tag that is
-//! not registered has no name; the UI shows the tag.
+//! The catalog is `data/features/features.json`, embedded at build time. It
+//! lists every registered tag, also `ss01`–`ss20` ("Stylistic set N") and
+//! `cv01`–`cv99` ("Character variant N"); a font's own name replaces those
+//! (E10.4, [`named_by_font`]). A tag that is not registered has no name, group
+//! or sample; the UI shows the tag.
 //!
 //! "Automatic" and "default on" follow what browsers do (HarfBuzz): the
 //! automatic features are required for correct text in some script (they
@@ -13,138 +15,107 @@
 //! lists them but does not offer a switch. The default-on features are on
 //! unless `font-feature-settings` turns them off.
 
-use fm_api::common::FeatureInfo;
+use std::collections::BTreeMap;
+use std::sync::LazyLock;
 
-/// Registered feature tags and their friendly names, sorted by tag.
-pub const REGISTRY: &[(&str, &str)] = &[
-    ("aalt", "Access all alternates"),
-    ("abvf", "Above-base forms"),
-    ("abvm", "Above-base mark positioning"),
-    ("abvs", "Above-base substitutions"),
-    ("afrc", "Alternative fractions"),
-    ("akhn", "Akhand"),
-    ("apkn", "Kerning for alternate proportional widths"),
-    ("blwf", "Below-base forms"),
-    ("blwm", "Below-base mark positioning"),
-    ("blws", "Below-base substitutions"),
-    ("c2pc", "Petite capitals from capitals"),
-    ("c2sc", "Small capitals from capitals"),
-    ("calt", "Contextual alternates"),
-    ("case", "Case-sensitive forms"),
-    ("ccmp", "Glyph composition and decomposition"),
-    ("cfar", "Conjunct form after Ro"),
-    ("chws", "Contextual half-width spacing"),
-    ("cjct", "Conjunct forms"),
-    ("clig", "Contextual ligatures"),
-    ("cpct", "Centered CJK punctuation"),
-    ("cpsp", "Capital spacing"),
-    ("cswh", "Contextual swash"),
-    ("curs", "Cursive positioning"),
-    ("dist", "Distances"),
-    ("dlig", "Discretionary ligatures"),
-    ("dnom", "Denominators"),
-    ("dtls", "Dotless forms"),
-    ("expt", "Expert forms"),
-    ("falt", "Final glyph on line alternates"),
-    ("fin2", "Terminal forms #2"),
-    ("fin3", "Terminal forms #3"),
-    ("fina", "Terminal forms"),
-    ("flac", "Flattened accent forms"),
-    ("frac", "Fractions"),
-    ("fwid", "Full widths"),
-    ("half", "Half forms"),
-    ("haln", "Halant forms"),
-    ("halt", "Alternate half widths"),
-    ("hist", "Historical forms"),
-    ("hkna", "Horizontal kana alternates"),
-    ("hlig", "Historical ligatures"),
-    ("hngl", "Hangul"),
-    ("hojo", "Hojo kanji forms"),
-    ("hwid", "Half widths"),
-    ("init", "Initial forms"),
-    ("isol", "Isolated forms"),
-    ("ital", "Italics"),
-    ("jalt", "Justification alternates"),
-    ("jp04", "JIS2004 forms"),
-    ("jp78", "JIS78 forms"),
-    ("jp83", "JIS83 forms"),
-    ("jp90", "JIS90 forms"),
-    ("kern", "Kerning"),
-    ("lfbd", "Left bounds"),
-    ("liga", "Standard ligatures"),
-    ("ljmo", "Leading jamo forms"),
-    ("lnum", "Lining figures"),
-    ("locl", "Localized forms"),
-    ("ltra", "Left-to-right alternates"),
-    ("ltrm", "Left-to-right mirrored forms"),
-    ("mark", "Mark positioning"),
-    ("med2", "Medial forms #2"),
-    ("medi", "Medial forms"),
-    ("mgrk", "Mathematical Greek"),
-    ("mkmk", "Mark to mark positioning"),
-    ("mset", "Mark positioning via substitution"),
-    ("nalt", "Alternate annotation forms"),
-    ("nlck", "NLC kanji forms"),
-    ("nukt", "Nukta forms"),
-    ("numr", "Numerators"),
-    ("onum", "Oldstyle figures"),
-    ("opbd", "Optical bounds"),
-    ("ordn", "Ordinals"),
-    ("ornm", "Ornaments"),
-    ("palt", "Proportional alternate widths"),
-    ("pcap", "Petite capitals"),
-    ("pkna", "Proportional kana"),
-    ("pnum", "Proportional figures"),
-    ("pref", "Pre-base forms"),
-    ("pres", "Pre-base substitutions"),
-    ("pstf", "Post-base forms"),
-    ("psts", "Post-base substitutions"),
-    ("pwid", "Proportional widths"),
-    ("qwid", "Quarter widths"),
-    ("rand", "Randomize"),
-    ("rclt", "Required contextual alternates"),
-    ("rkrf", "Rakar forms"),
-    ("rlig", "Required ligatures"),
-    ("rphf", "Reph form"),
-    ("rtbd", "Right bounds"),
-    ("rtla", "Right-to-left alternates"),
-    ("rtlm", "Right-to-left mirrored forms"),
-    ("ruby", "Ruby notation forms"),
-    ("rvrn", "Required variation alternates"),
-    ("salt", "Stylistic alternates"),
-    ("sinf", "Scientific inferiors"),
-    ("size", "Optical size"),
-    ("smcp", "Small capitals"),
-    ("smpl", "Simplified forms"),
-    ("ssty", "Math script-style alternates"),
-    ("stch", "Stretching glyph decomposition"),
-    ("subs", "Subscript"),
-    ("sups", "Superscript"),
-    ("swsh", "Swash"),
-    ("titl", "Titling"),
-    ("tjmo", "Trailing jamo forms"),
-    ("tnam", "Traditional name forms"),
-    ("tnum", "Tabular figures"),
-    ("trad", "Traditional forms"),
-    ("twid", "Third widths"),
-    ("unic", "Unicase"),
-    ("valt", "Alternate vertical metrics"),
-    (
-        "vapk",
-        "Kerning for alternate proportional vertical metrics",
-    ),
-    ("vatu", "Vattu variants"),
-    ("vchw", "Vertical contextual half-width spacing"),
-    ("vert", "Vertical alternates"),
-    ("vhal", "Alternate vertical half metrics"),
-    ("vjmo", "Vowel jamo forms"),
-    ("vkna", "Vertical kana alternates"),
-    ("vkrn", "Vertical kerning"),
-    ("vpal", "Proportional alternate vertical metrics"),
-    ("vrt2", "Vertical alternates and rotation"),
-    ("vrtr", "Vertical alternates for rotation"),
-    ("zero", "Slashed zero"),
-];
+use fm_api::common::{FeatureGroup, FeatureInfo};
+use serde::Deserialize;
+
+use crate::error::{FmError, FmResult};
+
+/// The value the data file has in `$schema`.
+const SCHEMA_REF: &str = "./features.schema.json";
+
+/// The data file, embedded at build time.
+const FILE: (&str, &str) = (
+    "features.json",
+    include_str!("../../../data/features/features.json"),
+);
+
+/// What the catalog says about one tag.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Entry {
+    name: String,
+    group: FeatureGroup,
+    sample: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawFile {
+    #[serde(rename = "$schema")]
+    schema: String,
+    features: Vec<RawFeature>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawFeature {
+    tag: String,
+    name: String,
+    group: FeatureGroup,
+    sample: String,
+}
+
+/// The catalog, loaded once. The data is embedded and its tests reject a broken
+/// file, so a load error is a build defect: it is logged and no tag has a name.
+static CATALOG: LazyLock<BTreeMap<String, Entry>> = LazyLock::new(|| match parse(FILE.0, FILE.1) {
+    Ok(catalog) => catalog,
+    Err(e) => {
+        tracing::error!(error = %e, "feature catalog could not be loaded");
+        BTreeMap::new()
+    }
+});
+
+/// Parses and checks the data file: every rule of `features.schema.json`, plus
+/// the sort order, which also rejects a tag listed twice.
+fn parse(file: &str, json: &str) -> FmResult<BTreeMap<String, Entry>> {
+    let raw: RawFile = serde_json::from_str(json).map_err(|e| damaged(file, &e.to_string()))?;
+    if raw.schema != SCHEMA_REF {
+        return Err(damaged(file, &format!("$schema must be \"{SCHEMA_REF}\"")));
+    }
+    if raw.features.is_empty() {
+        return Err(damaged(file, "features is empty"));
+    }
+    if let Some(w) = raw.features.windows(2).find(|w| w[0].tag >= w[1].tag) {
+        return Err(damaged(
+            file,
+            &format!("{}: tag is out of order or listed twice", w[1].tag),
+        ));
+    }
+    raw.features
+        .into_iter()
+        .map(|f| {
+            let valid_tag = f.tag.len() == 4
+                && f.tag
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit());
+            if !valid_tag {
+                return Err(damaged(file, &format!("{}: tag is not valid", f.tag)));
+            }
+            for (field, text) in [("name", &f.name), ("sample", &f.sample)] {
+                if text.trim().is_empty() || text.trim() != text {
+                    return Err(damaged(
+                        file,
+                        &format!("{}: {field} is empty or has white space at an end", f.tag),
+                    ));
+                }
+            }
+            Ok((
+                f.tag,
+                Entry {
+                    name: f.name,
+                    group: f.group,
+                    sample: f.sample,
+                },
+            ))
+        })
+        .collect()
+}
+
+fn damaged(file: &str, detail: &str) -> FmError {
+    FmError::internal(format!("data/features/{file}: {detail}"))
+}
 
 /// Features the shaper applies by itself where the script needs them, sorted.
 pub const AUTOMATIC: &[&str] = &[
@@ -176,13 +147,7 @@ pub fn named_by_font(tag: &str) -> bool {
 
 /// The friendly name of `tag`, or `None` when the tag is not registered.
 pub fn feature_name(tag: &str) -> Option<String> {
-    if let Ok(i) = REGISTRY.binary_search_by(|(t, _)| (*t).cmp(tag)) {
-        return Some(REGISTRY[i].1.to_owned());
-    }
-    if let Some(n) = numbered(tag, "ss", 20) {
-        return Some(format!("Stylistic set {n}"));
-    }
-    numbered(tag, "cv", 99).map(|n| format!("Character variant {n}"))
+    CATALOG.get(tag).map(|e| e.name.clone())
 }
 
 /// What the Features tab needs to know about `tag`.
@@ -193,9 +158,14 @@ pub fn feature_info(tag: &str) -> FeatureInfo {
 /// [`feature_info`] with the font's own name for `tag` ([`named_by_font`]),
 /// which replaces the generic "Stylistic set N" when there is one.
 pub fn feature_info_named(tag: &str, font_name: Option<&str>) -> FeatureInfo {
+    let entry = CATALOG.get(tag);
     FeatureInfo {
         tag: tag.to_owned(),
-        name: font_name.map(str::to_owned).or_else(|| feature_name(tag)),
+        name: font_name
+            .map(str::to_owned)
+            .or_else(|| entry.map(|e| e.name.clone())),
+        group: entry.map(|e| e.group),
+        sample: entry.map(|e| e.sample.clone()),
         automatic: AUTOMATIC.binary_search(&tag).is_ok(),
         default_on: DEFAULT_ON.binary_search(&tag).is_ok(),
     }
@@ -203,24 +173,265 @@ pub fn feature_info_named(tag: &str, font_name: Option<&str>) -> FeatureInfo {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+    use std::path::{Path, PathBuf};
+
+    use serde_json::Value;
+
     use super::*;
+    use crate::parser;
+
+    /// The OpenType feature registry without the numbered tags. A copy on
+    /// purpose: it fails the tests when an edit drops a tag from the data file.
+    const REGISTERED: &[&str] = &[
+        "aalt", "abvf", "abvm", "abvs", "afrc", "akhn", "apkn", "blwf", "blwm", "blws", "c2pc",
+        "c2sc", "calt", "case", "ccmp", "cfar", "chws", "cjct", "clig", "cpct", "cpsp", "cswh",
+        "curs", "dist", "dlig", "dnom", "dtls", "expt", "falt", "fin2", "fin3", "fina", "flac",
+        "frac", "fwid", "half", "haln", "halt", "hist", "hkna", "hlig", "hngl", "hojo", "hwid",
+        "init", "isol", "ital", "jalt", "jp04", "jp78", "jp83", "jp90", "kern", "lfbd", "liga",
+        "ljmo", "lnum", "locl", "ltra", "ltrm", "mark", "med2", "medi", "mgrk", "mkmk", "mset",
+        "nalt", "nlck", "nukt", "numr", "onum", "opbd", "ordn", "ornm", "palt", "pcap", "pkna",
+        "pnum", "pref", "pres", "pstf", "psts", "pwid", "qwid", "rand", "rclt", "rkrf", "rlig",
+        "rphf", "rtbd", "rtla", "rtlm", "ruby", "rvrn", "salt", "sinf", "size", "smcp", "smpl",
+        "ssty", "stch", "subs", "sups", "swsh", "titl", "tjmo", "tnam", "tnum", "trad", "twid",
+        "unic", "valt", "vapk", "vatu", "vchw", "vert", "vhal", "vjmo", "vkna", "vkrn", "vpal",
+        "vrt2", "vrtr", "zero",
+    ];
+
+    fn numbered_tags() -> Vec<String> {
+        let sets = (1..=20).map(|n| format!("ss{n:02}"));
+        sets.chain((1..=99).map(|n| format!("cv{n:02}"))).collect()
+    }
 
     fn sorted_unique(tags: &[&str]) -> bool {
         tags.windows(2).all(|w| w[0] < w[1])
     }
 
     #[test]
-    fn every_registry_tag_has_a_name() {
-        let tags: Vec<&str> = REGISTRY.iter().map(|(t, _)| *t).collect();
-        assert!(
-            sorted_unique(&tags),
-            "REGISTRY must be sorted for binary search"
+    fn the_data_file_lists_every_registered_tag() {
+        let expected: BTreeSet<String> = REGISTERED
+            .iter()
+            .map(|t| (*t).to_owned())
+            .chain(numbered_tags())
+            .collect();
+        let listed: BTreeSet<String> = parse(FILE.0, FILE.1)
+            .expect("embedded data loads")
+            .into_keys()
+            .collect();
+        assert_eq!(listed, expected);
+        for tag in &expected {
+            let info = feature_info(tag);
+            assert!(info.name.is_some_and(|n| !n.is_empty()), "{tag}");
+            assert!(info.group.is_some(), "{tag}");
+            assert!(info.sample.is_some_and(|s| !s.is_empty()), "{tag}");
+        }
+    }
+
+    #[test]
+    fn the_embedded_file_is_the_file_on_disk() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/features/features.json");
+        let disk = std::fs::read_to_string(path).expect("readable");
+        assert_eq!(disk.replace("\r\n", "\n"), FILE.1.replace("\r\n", "\n"));
+    }
+
+    /// Every file under `dir`, at any depth.
+    fn files_under(dir: &Path, out: &mut Vec<PathBuf>) {
+        for entry in std::fs::read_dir(dir).expect("read fixture dir") {
+            let path = entry.expect("dir entry").path();
+            if path.is_dir() {
+                files_under(&path, out);
+            } else {
+                out.push(path);
+            }
+        }
+    }
+
+    #[test]
+    fn every_tag_of_the_fixture_corpus_has_a_name() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/fonts");
+        let mut files = Vec::new();
+        files_under(&root, &mut files);
+        let mut seen = BTreeSet::new();
+        let mut missing = BTreeSet::new();
+        for path in &files {
+            let bytes = std::fs::read(path).expect("read fixture");
+            for face in parser::parse(&bytes).faces {
+                for tag in &face.features {
+                    seen.insert(tag.clone());
+                    let font_name = face.feature_names.get(tag).map(String::as_str);
+                    let info = feature_info_named(tag, font_name);
+                    if info.name.is_none() {
+                        missing.insert(tag.clone());
+                    }
+                    // A set or variant the font does not name gets the generic name.
+                    if font_name.is_none() && named_by_font(tag) {
+                        let name = info.name.as_deref().unwrap_or_default();
+                        assert!(
+                            name.starts_with("Stylistic set ")
+                                || name.starts_with("Character variant "),
+                            "{tag} in {path:?}: {name:?}"
+                        );
+                    }
+                }
+            }
+        }
+        assert_eq!(missing, BTreeSet::new(), "tags without a name");
+        // The walk reached the fonts: these tags are in many of them.
+        for tag in ["kern", "liga", "mark", "ss01"] {
+            assert!(
+                seen.contains(tag),
+                "{tag} not seen in {} files",
+                files.len()
+            );
+        }
+    }
+
+    #[test]
+    fn numbered_tags_without_a_font_name_fall_back() {
+        assert_eq!(
+            feature_info_named("cv03", None).name.as_deref(),
+            Some("Character variant 3")
         );
-        for (tag, name) in REGISTRY {
-            assert_eq!(tag.len(), 4, "{tag}");
-            assert!(!name.is_empty(), "{tag}");
-            assert_eq!(feature_name(tag).as_deref(), Some(*name), "{tag}");
-            assert_eq!(feature_info(tag).name.as_deref(), Some(*name), "{tag}");
+        assert_eq!(
+            feature_info_named("ss01", None).name.as_deref(),
+            Some("Stylistic set 1")
+        );
+    }
+
+    #[test]
+    fn groups_and_samples_from_the_story() {
+        let cases = [
+            ("liga", FeatureGroup::Ligatures, "fi fl ffi ffl"),
+            ("smcp", FeatureGroup::Capitals, "Small Capitals"),
+            ("onum", FeatureGroup::Figures, "0123456789"),
+            ("frac", FeatureGroup::Fractions, "1/2 3/4 7/8"),
+            ("kern", FeatureGroup::Positioning, "AVATAR Toy"),
+            ("swsh", FeatureGroup::Stylistic, "Hamburg"),
+            ("locl", FeatureGroup::Language, "şţ ij б"),
+            ("ccmp", FeatureGroup::Automatic, "é ñ ü"),
+        ];
+        for (tag, group, sample) in cases {
+            let info = feature_info(tag);
+            assert_eq!(info.group, Some(group), "{tag}");
+            assert_eq!(info.sample.as_deref(), Some(sample), "{tag}");
+        }
+    }
+
+    #[test]
+    fn numbered_tags_are_stylistic() {
+        for tag in numbered_tags() {
+            assert_eq!(
+                feature_info(&tag).group,
+                Some(FeatureGroup::Stylistic),
+                "{tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_automatic_group_is_the_automatic_list_except_locl() {
+        let catalog = parse(FILE.0, FILE.1).expect("embedded data loads");
+        for (tag, entry) in &catalog {
+            let in_group = entry.group == FeatureGroup::Automatic;
+            let in_list = AUTOMATIC.contains(&tag.as_str());
+            if tag == "locl" {
+                assert!(in_list && !in_group);
+            } else {
+                assert_eq!(in_group, in_list, "{tag}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_schema_and_the_loader_agree() {
+        let path =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/features/features.schema.json");
+        let text = std::fs::read_to_string(path).expect("schema");
+        let schema: Value = serde_json::from_str(&text).expect("schema is JSON");
+        let sorted = |v: &Value| -> Vec<String> {
+            let mut k: Vec<String> = v
+                .as_array()
+                .expect("array")
+                .iter()
+                .map(|s| s.as_str().expect("string").to_owned())
+                .collect();
+            k.sort();
+            k
+        };
+        assert_eq!(schema["properties"]["$schema"]["const"], SCHEMA_REF);
+        let entry = &schema["$defs"]["feature"];
+        assert_eq!(
+            sorted(&entry["required"]),
+            ["group", "name", "sample", "tag"]
+        );
+        assert_eq!(entry["additionalProperties"], false);
+        // The schema's groups are the API's groups.
+        for group in entry["properties"]["group"]["enum"]
+            .as_array()
+            .expect("enum")
+        {
+            let parsed: FeatureGroup =
+                serde_json::from_value(group.clone()).expect("group is in FeatureGroup");
+            assert_eq!(&serde_json::to_value(parsed).expect("json"), group);
+        }
+        let groups = sorted(&entry["properties"]["group"]["enum"]);
+        assert_eq!(groups.len(), 8, "{groups:?}");
+        let v: Value = serde_json::from_str(FILE.1).expect("JSON");
+        assert_eq!(v["$schema"], SCHEMA_REF);
+    }
+
+    #[test]
+    fn broken_data_is_rejected() {
+        let file = |features: &str| {
+            format!(r#"{{"$schema": "./features.schema.json", "features": [{features}]}}"#)
+        };
+        let good = |tag: &str| {
+            format!(r#"{{"tag": "{tag}", "name": "N", "group": "stylistic", "sample": "S"}}"#)
+        };
+        let cases = [
+            (
+                format!("{}, {}", good("aaaa"), good("aaaa")),
+                "aaaa: tag is out of order or listed twice",
+            ),
+            (
+                format!("{}, {}", good("bbbb"), good("aaaa")),
+                "aaaa: tag is out of order or listed twice",
+            ),
+            (good("TOOLONG"), "tag is not valid"),
+            (good("SMCP"), "tag is not valid"),
+            (
+                r#"{"tag": "aaaa", "name": " ", "group": "stylistic", "sample": "S"}"#.to_owned(),
+                "name is empty",
+            ),
+            (
+                r#"{"tag": "aaaa", "name": "N", "group": "stylistic", "sample": " S"}"#.to_owned(),
+                "sample is empty or has white space",
+            ),
+            (
+                r#"{"tag": "aaaa", "name": "N", "group": "nope", "sample": "S"}"#.to_owned(),
+                "unknown variant",
+            ),
+            (
+                r#"{"tag": "aaaa", "name": "N", "group": "stylistic", "sample": "S", "x": 1}"#
+                    .to_owned(),
+                "unknown field",
+            ),
+        ];
+        for (features, why) in cases {
+            let err = parse("t.json", &file(&features)).expect_err(&features);
+            let detail = err.detail().unwrap_or_default();
+            assert!(detail.contains(why), "{features}: {detail}");
+            assert!(detail.starts_with("data/features/t.json"), "{detail}");
+        }
+        for json in [
+            "{".to_owned(),
+            file(""),
+            format!(
+                r#"{{"$schema": "other.json", "features": [{}]}}"#,
+                good("aaaa")
+            ),
+        ] {
+            assert!(parse("t.json", &json).is_err(), "{json}");
         }
     }
 
@@ -265,6 +476,9 @@ mod tests {
         let named = feature_info_named("ss01", Some("Single-storey a"));
         assert_eq!(named.name.as_deref(), Some("Single-storey a"));
         assert!(!named.automatic && !named.default_on);
+        // Only the name is the font's; the group and the sample stay the catalog's.
+        assert_eq!(named.group, Some(FeatureGroup::Stylistic));
+        assert_eq!(named.sample, feature_info("ss01").sample);
         assert_eq!(feature_info_named("ss01", None), feature_info("ss01"));
         assert_eq!(
             feature_info("ss01").name.as_deref(),
@@ -280,6 +494,8 @@ mod tests {
         ] {
             let info = feature_info(tag);
             assert_eq!(info.name, None, "{tag:?}");
+            assert_eq!(info.group, None, "{tag:?}");
+            assert_eq!(info.sample, None, "{tag:?}");
             assert_eq!(info.tag, tag);
             assert!(!info.automatic && !info.default_on, "{tag:?}");
         }

@@ -151,6 +151,35 @@ pub struct FeatureInfo {
     /// On in default text rendering (`kern`, `liga`, `calt`).
     #[serde(default)]
     pub default_on: bool,
+    /// The group of a registered tag, from `data/features` (E42.11).
+    #[serde(default)]
+    pub group: Option<FeatureGroup>,
+    /// A short text that shows what a registered tag does, from `data/features`
+    /// (E42.11).
+    #[serde(default)]
+    pub sample: Option<String>,
+}
+
+/// The group a registered OpenType feature is listed under.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum FeatureGroup {
+    /// `liga`, `dlig`.
+    Ligatures,
+    /// `smcp`, `case`.
+    Capitals,
+    /// `onum`, `tnum`.
+    Figures,
+    /// `frac`, `numr`.
+    Fractions,
+    /// `kern`, `sups`.
+    Positioning,
+    /// `ss01`, `swsh`.
+    Stylistic,
+    /// `locl`, `jp78`.
+    Language,
+    /// What the shaper applies by itself (`ccmp`, `mark`).
+    Automatic,
 }
 
 /// A feature switched on or off for a preview or CSS output.
