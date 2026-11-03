@@ -70,6 +70,10 @@ const scenes = {
   // Row 2 is Inter Regular, selected by `?face=1` since iteration 42.
   'hover-row': { routes: '/?face=1', hover: '3' },
   // Browser mode starts without collections; the spec makes one and opens it.
+  // Three rows added to the Quick Collection with B, then its review opened (spec hook).
+  'quick-collection': { routes: '/?face=1', quick: '3' },
+  // The Google Fonts catalog browsed from the sidebar (mockCatalog=1 starts with it turned on).
+  catalog: { query: '?mockCatalog=1', routes: '/', click: 'Google Fonts' },
   'empty-collection': { routes: '/', collection: 'Empty' },
   compact: {
     routes: '/?face=1',
@@ -106,6 +110,7 @@ const envKey = {
   twisty: 'FM_SCREENS_TWISTY',
   hover: 'FM_SCREENS_HOVER',
   collection: 'FM_SCREENS_COLLECTION',
+  quick: 'FM_SCREENS_QUICK',
   storage: 'FM_SCREENS_STORAGE',
   session: 'FM_SCREENS_SESSION',
   command: 'FM_SCREENS_COMMAND',
