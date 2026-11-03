@@ -657,6 +657,13 @@ dd {
   resize: none;
   field-sizing: content;
 }
+/* WebKit (macOS, Linux) has no field-sizing yet: keep room for a few lines and a grip there. */
+@supports not (field-sizing: content) {
+  .notes {
+    min-height: 4.5em;
+    resize: vertical;
+  }
+}
 .favorite {
   display: inline-flex;
   align-items: center;

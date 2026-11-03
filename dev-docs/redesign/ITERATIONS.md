@@ -10,9 +10,9 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
-- [ ] 6 List rows (iterations 9, 14, 21 + reviews 10, 25: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line in both densities, sub-row guide, no pane ring; cursor-row ring and `?face=` list selection remain)
+- [ ] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; `?face=` list selection remains)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
-- [ ] 8 Inspector (iteration 17 + review 20: Info shows About + License + Your notes first, license form and raw data folded; Glyphs clipped column, Features names remain)
+- [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
@@ -177,37 +177,31 @@ Rating stars and the Favorite heart became `UiIcon`s and the favorite turned acc
 **Next five:** a hover scene in `screens.spec.ts` first (rows, sidebar) → item 26 (Features toggles, underline-style note fields, date/number/datalist) → item 8 rest (Glyphs clipped column, Features human names) → item 5 rest (section icons, collapsible sections, Problems dedupe) → item 12 or 13 (Quick Look or the keyboard model — the first real features). Every iteration takes before/after shots; no blind iterations.
 
 ## Iteration 26 — 2026-11-03 — Inspector Features: centred switches, stacked header, hairline rows
-**Critique (before):** The Features tab is the quietest corner of the inspector, but its switches look broken: the knob sits at the top of the track and the "Switches change this face's previews" hint is squeezed into four lines beside Copy CSS / Reset. Rows have no rhythm. Good: human names with a mono tag are already in place.
-**Why:** Review 25 named the off-centre knob (item 26) and item 8's Features tab; both are one component. Hover scene not added (no hover UI touched).
-**What changed:** `InspectorFeatures`: switch is border-box, knob centred with `translateY(-50%)` and travels symmetrically, track filled with `--fm-surface-2`, tokenised motion; header stacks (hint on one line, actions right); rows get 32 px height and hairline dividers.
-**Backlog:** item 8 and 26 partly (Features switches). Not ticked.
-**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-26.log`). Shots `26/` (before), `26-after/`.
-**Follow-ups:** live per-feature preview in Features; Glyphs clipped column; underline-style note fields; date/number/datalist natives; hover scene.
-**Dependencies:** none.
+The switch knob is centred and travels symmetrically, the hint sits on its own line above Copy CSS / Reset, and rows got 32 px height and hairlines.
 
 ## Iteration 27 — 2026-11-03 — Inspector Glyphs: no grid lines, hover tint, sixth column
-**Critique (before):** The Glyphs grid is a boxed table: a border round the pane and a hairline on every cell, so the characters look like spreadsheet data, and the last column touches the pane edge. Heading "Basic Latin 95" sits tight on the top border. Good: the Coverage lists below are calm and aligned.
-**Why:** Item 8's last open Glyphs point (clipped column) and item 26's hover audit; the grid is the loudest chrome left in the inspector.
-**What changed:** `InspectorGlyphs`: removed the pane border and per-cell borders; cells get a transparent 2 px border, `--fm-radius-sm`, and a `--fm-surface-2` hover tint (token motion); heading gets top padding. The grid now fits six columns, none clipped.
-**Backlog:** item 8 Glyphs part done; item 8 not ticked (Features live preview remains).
-**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-27.log`). Shots `27/` (before), `27-after/`.
-**Follow-ups:** hover scene in `screens.spec.ts` (still missing); underline-style note fields; date/number/datalist natives; live per-feature preview in Features.
-**Dependencies:** none.
+The glyph grid lost its pane border and cell lines, gained a rounded hover tint, and now fits six columns with none clipped.
 
 ## Iteration 28 — 2026-11-03 — Inspector notes: underline fields, no boxes, no resize grip
-**Critique (before):** The Info tab's "Your notes" block is the heaviest chrome left in the inspector: a full box round the tag field and two tall boxes for notes, each with a native resize grip in the corner. They outweigh the data above them. Good: About and License read calmly with quiet labels.
-**Why:** Item 26 names these fields; the tests need a 3:1 outline, so an underline keeps that and drops the weight. Hover scene still not added (this change has a hover state; follow-up).
-**What changed:** `InspectorInfo`: tag and notes fields are underline-style (bottom border only, strong on hover, accent on focus); notes auto-grow (`field-sizing: content`), no native grip. `tags.spec` now checks the bottom border (UI changed on purpose).
-**Backlog:** item 26 partly (note fields). Not ticked.
-**Verified:** typecheck, lint:js, Vitest 910, Playwright 272 after the one test update (`.harness/redesign/e2e-28.log` shows the one failure, then fixed and re-run). Shots `28/` (before), `28-after/`.
-**Follow-ups:** hover scene in `screens.spec.ts`; date/number/datalist natives in the license form; Features live preview; cursor-row ring in the list.
-**Dependencies:** none.
+The tag and notes fields became underline fields (3:1 bottom border kept), and notes auto-grow with `field-sizing: content`.
 
 ## Iteration 29 — 2026-11-03 — List: keyboard cursor row gets a hairline ring and a bar
-**Critique (before):** The list is calm, but the keyboard cursor row draws a heavy 2 px accent box that outweighs the specimen it frames. Review 25 named it twice. Good: selection bar and tint are clear.
-**Why:** Item 6's last visible open point. Hover scene still not added; no hover UI touched. Shots were taken without a cursor scene, so the cursor look was not seen by eye (follow-up).
-**What changed:** `FontList`: cursor row = 1 px accent ring at 60 % plus a 2 px accent start bar (when not selected; selected keeps its 4 px bar).
-**Backlog:** item 6 partly (cursor ring done; `?face=` list selection remains). Not ticked.
-**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-29.log`). Shots `29/`.
-**Follow-ups:** cursor scene + hover scene in `screens.spec.ts`; `?face=` list selection; license form natives; Features live preview.
-**Dependencies:** none.
+The cursor row's 2 px accent box became a 1 px ring at 60 % plus a 2 px start bar; taken without a cursor scene.
+
+## Review 30 — 2026-11-03
+**Grades:** iter 26 **3** — the knob is fixed and rows have rhythm, but it stacked only the Features head while the sibling Axes tab kept the old side-by-side head, and the track used a literal `9px` radius. Iter 27 **3** — the grid is calmer and the column is back, but its hover used `--fm-surface-2`, which is white in light theme, so the hover did nothing there; the heading sat 8 px off the pane edge; the coverage list below kept a different hover and a local `.badge`. Iter 28 **4** — the clearest change of the four (the notes block lost ~80 px of boxes); `field-sizing` is Chromium-only, so on WebKit (macOS, Linux) notes were a two-line field with no grip. Iter 29 **3** — right look, but not seen by eye (no cursor scene), and it pasted a second copy of the selection bar's `::before` block.
+**Regressions:** none in views, keyboard or tests. Light-theme glyph hover invisible (iter 27).
+**Drift:** literal radius (26); surface tokens as hover (27, and older in GlyphCoverage); local `.badge` (GlyphCoverage). No new colours, fonts or native controls.
+**Pulled apart:** iterations 26 and the untouched Axes tab — two inspector tabs with the same markup and two head layouts. Four inspector iterations in a row left the `list` shot unchanged (byte-identical 25→27).
+**Fixed:**
+- `InspectorAxes`: head stacked like Features (hint line, actions right).
+- `InspectorFeatures`: switch radius uses `--fm-radius-md`.
+- `InspectorGlyphs`: cell hover `--fm-hover`; heading flush with the pane edge.
+- `GlyphCoverage`: row hover `--fm-hover`; the local `.badge` became `UiBadge` (mono); unit test follows the class.
+- `InspectorInfo`: `@supports not (field-sizing)` fallback keeps notes 3 lines tall with a grip on WebKit.
+- `FontList`: one `::before` rule for the selection and cursor bars; rows tint with `--fm-hover` on hover (none before).
+- New `hover-row` scene (`FM_SCREENS_HOVER` in `screens.spec.ts`, `shots.mjs`) — asked for since review 15.
+**Rule amended (DESIGN.md):** hover tints use `--fm-hover`, never a surface token. Items 6, 8, 26 and the three-second note rewritten.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-30.log`). Shots `review-30/` (before, 46) and `review-30-after/` (48, with `hover-row`): all 24 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** Developer tab head; three copies of the tab-head CSS; "applied automatically" repeated per row; Settings nav 2 px box; Studio "Panel font" fields look empty; `?face=` list selection.
+**Next five:** item 13 (keyboard model: J/K, A, C, S, 1–5, `[` `]`, `?` sheet) → item 12 (Quick Look as the hero) → item 5 rest (section icons, collapsible sections, Problems dedupe) → item 8 rest (one shared inspector tab head; Developer stacked) → item 26 (Settings radios/checkboxes and nav focus). Inspector polish is done for now: every iteration must change the `list` shot or a scene a feature adds.

@@ -56,7 +56,7 @@ describe('GlyphCoverage', () => {
     expect(sr?.attributes('aria-label')).toBe(
       'Serbian (Cyrillic): complete, locl (has localized forms)',
     );
-    expect(sr?.find('.badge').text()).toBe('locl');
+    expect(sr?.find('.locl').text()).toBe('locl');
   });
 
   it('shows the missing characters of a partial language on demand', async () => {

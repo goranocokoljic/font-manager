@@ -168,7 +168,7 @@ h3 {
   height: 18px;
   padding: 0;
   border: 1px solid var(--fm-border-strong);
-  border-radius: 9px;
+  border-radius: var(--fm-radius-md);
   background-color: var(--fm-surface-2);
   transition:
     background-color var(--fm-motion-fast) var(--fm-ease),

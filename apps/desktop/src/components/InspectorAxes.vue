@@ -267,16 +267,18 @@ onMounted(() => {
   margin: 0;
   color: var(--fm-muted);
 }
+/* Same head as the Features tab: the hint on its own line, the actions right below it. */
 .head {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 12px;
 }
 .actions {
   display: flex;
   flex: none;
+  justify-content: flex-end;
   align-items: center;
   gap: 8px;
 }

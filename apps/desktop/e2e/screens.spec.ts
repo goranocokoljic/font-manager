@@ -52,6 +52,9 @@ const locale = process.env.FM_SCREENS_LOCALE;
 // FM_SCREENS_ROW=1 clicks that list row (1-based) after the page loads, before the route's key
 // is pressed, so a key meant for the list (ArrowRight expands the family) reaches it.
 const rowIndex = Number(process.env.FM_SCREENS_ROW ?? 0);
+// FM_SCREENS_HOVER=2 leaves the pointer over that list row (1-based) for the shot, so hover-only
+// row actions (Find similar) are in it.
+const hoverRow = Number(process.env.FM_SCREENS_HOVER ?? 0);
 // FM_SCREENS_COLLECTION=Empty makes a collection of that name in the sidebar and opens it
 // (browser mode starts without collections).
 const collectionName = process.env.FM_SCREENS_COLLECTION;
@@ -198,6 +201,14 @@ test.describe('@screens', () => {
             await expect(page.getByRole('listbox').first()).toBeVisible();
             // The menu fades in (120 ms); the shot waits for it to settle.
             await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
+          }
+          if (hoverRow) {
+            await page
+              .getByRole('tree', { name: 'Font list' })
+              .getByRole('treeitem')
+              .nth(hoverRow - 1)
+              .hover();
+            await page.waitForTimeout(200); // the row's actions fade in
           }
           await page.screenshot({ path: `${dir}/${name}`, fullPage: true, animations: 'disabled' });
         });

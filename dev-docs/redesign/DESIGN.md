@@ -138,6 +138,9 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
 - **Icons:** one set (Lucide), 16 px, 1.5 stroke.
 - **Motion:** hover/active 120 ms, panel open/close 200 ms, easing `cubic-bezier(.2,0,0,1)`.
   Nothing bounces.
+- **Hover:** every hover tint is `--fm-hover` (a low-alpha overlay that reads on any surface).
+  A surface token used as a hover is a bug — `--fm-surface-2` is white in light theme, so it
+  vanishes on a white pane (review 30).
 - **Focus:** a custom ring (accent, 2 px, 2 px offset) on `:focus-visible` only.
 - **Shell:** sidebar 240 px, main, inspector 320 px; both side panes collapsible, with
   keyboard shortcuts, widths and open state remembered.
@@ -192,13 +195,12 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 25 the
-list rows, the Project sets row and Find similar are in shape. The loudest chrome left is
-in the inspector: the bordered tag and notes boxes, the off-centre toggle knobs in Features,
-the Glyphs grid's clipped column. The next iterations take items 8 and 26, then item 5's
-section work, then the first features (12, 13). The shots scenes do not hover; three
-iterations in a row changed hover-only UI without a hover scene — the next iteration that
-touches hover adds one to `screens.spec.ts` before anything else.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 30 the
+list rows and the inspector (Info, Features, Glyphs) are in shape; four iterations in a row
+polished the inspector while the `list` shot stayed the same. The chrome is now quiet enough:
+the next iterations ship the first features designers will feel in the first minute — item
+13 (keyboard model), then 12 (Quick Look) — and then item 5's section work. A `hover-row`
+scene exists (review 30); hover work shows it in before/after.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -231,13 +233,15 @@ touches hover adds one to `screens.spec.ts` before anything else.
    its styles as sub-rows. `UiBadge`, `UiChevron` and the hover "Find similar" icon are done
    (iterations 9, 14, review 10); the chevron sits on the sample line in both densities,
    sub-rows hang off a hairline guide, the pane has no ring (iteration 21, review 25).
-   Left: the keyboard cursor row draws a heavy 2 px box — make it the accent bar plus a
-   1 px ring; `?face=` in the URL selects the face in the inspector but not in the list.
+   The cursor row is a 2 px bar plus a hairline ring, rows tint on hover (iteration 29,
+   review 30). Left: `?face=` in the URL selects the face in the inspector but not in the list.
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word).
    Left: hover reveals the weight range; style cards drop their dashed border.
-8. **Inspector.** Info is done (iteration 17; review 20 folded the license form and kept
-   the URL on one line). Left: Glyphs grid without inner scrollbars (its
-   last column is clipped today). Features with human names and a live preview of each
+8. **Inspector.** Info, Glyphs and the Features switches are done (iterations 17, 26–28,
+   reviews 20, 30). Left: the Developer tab still puts its hint beside the Copy button (Axes
+   and Features stack it); the three tab heads repeat the same `.head/.hint/.actions` CSS —
+   one shared component; Features rows repeat "applied automatically" under a heading that
+   already says it. Features with a live preview of each
    switch — the same human names and groups ("Small caps", "Tabular figures", "Stylistic
    sets") replace the raw tags in the Filters drawer's features group (left open by item 2).
    The labels are a static table of registered OpenType tags, which is presentation, not
@@ -295,9 +299,9 @@ touches hover adds one to `screens.spec.ts` before anything else.
 24. Motion pass: list transitions, panel collapse, selection changes.
 25. Custom overlay scrollbars on all platforms.
 26. Hover / focus / active audit across every control, and the native-input sweep:
-    the inspector still draws a native date field (license purchase date, with the
-    browser's calendar icon), a number field (seats) and a `datalist` (tags); the
-    Features toggles' knob sits off-centre in its track; the tag and notes boxes are heavy
-    bordered fields (tests demand a 3:1 outline — an underline style keeps it); the
-    Problems view's "Recommended" pill and the Settings nav focus box need the same pass.
+    the license form still draws a native date field (purchase date, with the browser's
+    calendar icon), a number field (seats) and a `datalist` (tags); Settings' radios and
+    checkboxes still read as browser defaults, and its active nav item has a heavy 2 px box; the Problems
+    view's "Recommended" pill and its chip row. (Features knob and note fields done in
+    iterations 26, 28.)
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.

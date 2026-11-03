@@ -17,6 +17,7 @@
 //   click       FM_SCREENS_CLICK       first button whose accessible name starts with this
 //   open        FM_SCREENS_OPEN        open the Select (combobox) of that accessible name
 //   row         FM_SCREENS_ROW         click that list row (1-based) before the route's key is pressed
+//   hover       FM_SCREENS_HOVER       leave the pointer over that list row (1-based) for the shot
 //   collection  FM_SCREENS_COLLECTION  make a collection of that name and open it
 //   storage     FM_SCREENS_STORAGE     localStorage JSON (fm.views.v1 holds the view mode)
 //   session     FM_SCREENS_SESSION     sessionStorage JSON (fm.mock.settings.v1 holds mock settings, e.g. density)
@@ -51,6 +52,8 @@ const scenes = {
   // ArrowRight expands the family only when the list has focus: click the row first.
   'expanded-family': { routes: '/?face=1@ArrowRight', row: '1' },
   'selected-row': { routes: '/?face=1' },
+  // The pointer over the second row: hover-only row actions and the hover tint.
+  'hover-row': { routes: '/?face=1', hover: '2' },
   // Browser mode starts without collections; the spec makes one and opens it.
   'empty-collection': { routes: '/', collection: 'Empty' },
   compact: {
@@ -85,6 +88,7 @@ const envKey = {
   click: 'FM_SCREENS_CLICK',
   open: 'FM_SCREENS_OPEN',
   row: 'FM_SCREENS_ROW',
+  hover: 'FM_SCREENS_HOVER',
   collection: 'FM_SCREENS_COLLECTION',
   storage: 'FM_SCREENS_STORAGE',
   session: 'FM_SCREENS_SESSION',

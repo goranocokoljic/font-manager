@@ -505,7 +505,7 @@ const noResults = computed(
   align-items: flex-end;
   gap: 6px;
   width: 100%;
-  padding: 8px 8px 6px;
+  padding: 8px 0 6px;
   font-weight: 600;
 }
 .cell {
@@ -522,7 +522,7 @@ const noResults = computed(
   transition: background-color var(--fm-motion-fast) var(--fm-ease);
 }
 .cell:hover {
-  background-color: var(--fm-surface-2);
+  background-color: var(--fm-hover);
 }
 .cell[aria-selected='true'] {
   background: var(--fm-accent);

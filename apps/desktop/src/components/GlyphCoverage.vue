@@ -10,6 +10,7 @@ import { computed, ref } from 'vue';
 import type { BlockCoverage, FaceLanguageCoverage } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useCoverageStore } from '../stores/coverage';
+import UiBadge from './ui/UiBadge.vue';
 
 const emit = defineEmits<{
   /** The user chose a block: jump the glyph map to it. */
@@ -99,9 +100,9 @@ const missingOf = (l: FaceLanguageCoverage) => store.missing.get(l.code);
             }}</span>
             <template v-if="l.hasLocl"
               >{{ ' '
-              }}<span class="badge" :title="t('coverage.hasLocl')">{{
+              }}<UiBadge class="locl" :title="t('coverage.hasLocl')">{{
                 t('coverage.locl')
-              }}</span></template
+              }}</UiBadge></template
             >
           </button>
           <div v-if="open.has(l.code)" :id="panelId(l)" class="panel">
@@ -165,7 +166,7 @@ h4 {
   text-align: start;
 }
 .row:hover {
-  background-color: var(--fm-surface);
+  background-color: var(--fm-hover);
 }
 .row:focus-visible {
   outline: 2px solid var(--fm-accent);
@@ -181,12 +182,8 @@ h4 {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.badge {
-  padding: 0 4px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
+.locl {
   font-family: var(--fm-font-mono);
-  font-size: var(--fm-text-xs);
 }
 .panel {
   padding-block: 2px 6px;

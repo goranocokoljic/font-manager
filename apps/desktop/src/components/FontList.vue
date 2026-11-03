@@ -419,11 +419,16 @@ function onToggle(row: ListRow): void {
   background: var(--fm-border);
   content: '';
 }
+.slot:not(.selected):hover {
+  background-color: var(--fm-hover);
+}
 .slot.selected {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
 }
-/* The tint alone is under 3:1; a solid accent bar marks every selected row (WCAG 1.4.11). */
-.slot.selected::before {
+/* The tint alone is under 3:1; a solid accent bar marks every selected row (WCAG 1.4.11).
+   The keyboard cursor gets a thinner bar plus a hairline ring, not a heavy box. */
+.slot.selected::before,
+.viewport:focus .slot.cursor::before {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -432,18 +437,11 @@ function onToggle(row: ListRow): void {
   background: var(--fm-accent);
   content: '';
 }
-/* The keyboard cursor: the accent bar plus a hairline ring, not a heavy box. */
+.viewport:focus .slot.cursor:not(.selected)::before {
+  width: 2px;
+}
 .viewport:focus .slot.cursor {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fm-accent) 60%, transparent);
-}
-.viewport:focus .slot.cursor:not(.selected)::before {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  inset-inline-start: 0;
-  width: 2px;
-  background: var(--fm-accent);
-  content: '';
 }
 .twisty {
   display: grid;
