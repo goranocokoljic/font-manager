@@ -20,6 +20,7 @@ import {
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSamplesStore } from '../stores/samples';
 import FontPreviewRow from './FontPreviewRow.vue';
+import UiButton from './ui/UiButton.vue';
 
 const props = withDefaults(defineProps<{ preview?: PreviewSettings; overscan?: number }>(), {
   preview: () => ({ ...DEFAULT_PREVIEW }),
@@ -143,27 +144,27 @@ async function tag(): Promise<void> {
       <p class="count" role="status">
         {{ t('quickCollection.fonts', { count }) }}
       </p>
-      <button type="button" class="toggle" :disabled="!count" @click="store.clear">
+      <UiButton :disabled="!count" @click="store.clear">
         {{ t('quickCollection.clear') }}
-      </button>
-      <button type="button" class="toggle" @click="store.close">
+      </UiButton>
+      <UiButton @click="store.close">
         {{ t('quickCollection.back') }}
-      </button>
+      </UiButton>
     </header>
     <div class="actions">
       <form class="action" @submit.prevent="save">
         <label for="fm-quick-collection-name">{{ t('quickCollection.collectionName') }}</label>
         <input id="fm-quick-collection-name" v-model="collectionName" type="text" />
-        <button type="submit" class="toggle" :disabled="!count || !collectionName.trim() || busy">
+        <UiButton type="submit" :disabled="!count || !collectionName.trim() || busy">
           {{ t('quickCollection.saveAsCollection') }}
-        </button>
+        </UiButton>
       </form>
       <form class="action" @submit.prevent="tag">
         <label for="fm-quick-tag">{{ t('quickCollection.tag') }}</label>
         <input id="fm-quick-tag" v-model="tagName" type="text" />
-        <button type="submit" class="toggle" :disabled="!count || !tagName.trim() || busy">
+        <UiButton type="submit" :disabled="!count || !tagName.trim() || busy">
           {{ t('quickCollection.tagAll') }}
-        </button>
+        </UiButton>
       </form>
     </div>
     <div
@@ -202,16 +203,15 @@ async function tag(): Promise<void> {
             :fallback="item.fallback"
             :missing="item.missing"
           />
-          <button
-            type="button"
-            class="drop toggle"
+          <UiButton
+            class="drop"
             :aria-label="t('quickCollection.dropLabel', { name: item.name })"
             aria-keyshortcuts="Delete Backspace"
             :title="t('quickCollection.dropTitle')"
             @click="drop(item.face.id, item.index, false)"
           >
             {{ t('quickCollection.drop') }}
-          </button>
+          </UiButton>
         </li>
       </ul>
     </div>
@@ -244,17 +244,6 @@ async function tag(): Promise<void> {
 .count {
   flex: 1;
   margin: 0;
-  color: var(--fm-muted);
-}
-.toggle {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.toggle:disabled {
   color: var(--fm-muted);
 }
 .actions {

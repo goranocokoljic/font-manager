@@ -23,6 +23,7 @@ import CatalogDownload from './CatalogDownload.vue';
 import CatalogFamilyItem from './CatalogFamilyItem.vue';
 import CatalogInstall from './CatalogInstall.vue';
 import PreviewControls from './PreviewControls.vue';
+import UiButton from './ui/UiButton.vue';
 
 const props = withDefaults(defineProps<{ overscan?: number }>(), { overscan: 2 });
 
@@ -187,42 +188,36 @@ const surfaceClass = computed(() =>
         }}</template>
       </p>
       <div class="modes" role="group" :aria-label="t('home.viewMode')">
-        <button
+        <UiButton
           v-for="m in MODES"
           :key="m"
-          type="button"
-          class="toggle"
           :aria-pressed="mode === m"
           @click="views.setMode(CATALOG_VIEW, m)"
         >
           {{ t(`home.modes.${m}`) }}
-        </button>
+        </UiButton>
       </div>
       <span class="refreshed" data-testid="catalog-refreshed">{{
         refreshedAt
           ? t('catalogs.refreshedAt', { date: refreshedAt })
           : t('catalogs.neverRefreshed')
       }}</span>
-      <button
-        type="button"
-        class="toggle"
+      <UiButton
         data-testid="catalog-refresh"
         :title="t('catalogs.refreshTitle', { name: catalog.name })"
         :disabled="!catalog.enabled || store.refreshing"
         @click="store.refresh()"
       >
         {{ store.refreshing ? t('catalogs.refreshing') : t('catalogs.refresh') }}
-      </button>
-      <button
-        type="button"
-        class="toggle"
+      </UiButton>
+      <UiButton
         data-testid="catalog-check-updates"
         :title="t('catalogs.updates.checkTitle')"
         :disabled="!catalog.enabled || store.checking || store.refreshing"
         @click="store.checkUpdates()"
       >
         {{ store.checking ? t('catalogs.updates.checking') : t('catalogs.updates.check') }}
-      </button>
+      </UiButton>
     </header>
     <p v-if="store.checkError" class="banner error" role="alert" data-testid="catalog-updates">
       {{ errorMessage(store.checkError) }}
@@ -243,16 +238,14 @@ const surfaceClass = computed(() =>
 
     <div v-if="!catalog.enabled" class="empty" data-testid="catalog-off">
       <p>{{ t('catalogs.off', { name: catalog.name }) }}</p>
-      <button
-        type="button"
-        class="toggle"
+      <UiButton
         :aria-label="t('catalogs.turnOnLabel', { name: catalog.name })"
         aria-describedby="catalog-off-connects"
         :disabled="store.busy === catalog.id"
         @click="store.setEnabled(catalog.id, true)"
       >
         {{ t('catalogs.turnOn') }}
-      </button>
+      </UiButton>
       <p id="catalog-off-connects" class="hint">{{ t('catalogs.connects') }}</p>
     </div>
     <div
@@ -349,21 +342,6 @@ const surfaceClass = computed(() =>
 .refreshed {
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
-}
-.toggle {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.toggle:disabled {
-  color: var(--fm-muted);
-}
-.toggle[aria-pressed='true'] {
-  border-color: var(--fm-accent);
-  color: var(--fm-accent);
 }
 .banner {
   margin: 0;

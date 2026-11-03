@@ -424,3 +424,12 @@ Ticked: item 26 stays `[ ]` (Settings nav focus ring on load, three `type="numbe
 Shots: `.harness/redesign/shots/68/` (before), `68b/` (after); opened list in both themes. Playwright 273 passed / 16 skipped (`e2e-68.log`); typecheck, lint:js green; Vitest: one 10k-search timing test flaked at 50.8 ms in the full run, passed on re-run.
 Follow-ups: `QuickCollectionReview`, `CatalogBrowser` and `InspectorLicense` still use bordered `.toggle` text buttons — move to `UiButton`.
 Dependencies: none.
+
+## Iteration 69 — 2026-11-03 — Quick Collection and Catalog buttons become `UiButton`
+Critique: not looked at in a screenshot — no scene shows these two screens (`shots.mjs` has none), and the `list` shot is unaffected by them. From iteration 68's follow-up: both screens still drew bordered `.toggle` text buttons beside the quiet ones everywhere else.
+Why: backlog item 26 (hover/focus/active audit), the follow-up from iteration 68. This is a consistency change, not a first-three-seconds change; picked over the grid keyboard expand because it was already scoped.
+Changed: `QuickCollectionReview` (Clear, Back, Save as collection, Tag all, per-row Drop) and `CatalogBrowser` (view-mode buttons keep `aria-pressed`, Refresh, Check updates, Turn on) use `UiButton`; both local `.toggle` rules are deleted. Test ids, labels and `type="submit"` unchanged.
+Ticked: item 26 stays `[ ]` (`InspectorLicense` toggles, dialog buttons, tags `datalist`, Settings nav focus ring remain).
+Shots: `.harness/redesign/shots/69/` exist but none shows the touched screens; not opened. Playwright 273 passed / 16 skipped (`e2e-69.log`), Vitest 910 passed, typecheck and lint:js green.
+Follow-ups: add `quick-collection` and `catalog` scenes to `shots.mjs`; `InspectorLicense` toggles (it had no `.toggle` in the file this time — recheck the name); grid keyboard expand.
+Dependencies: none.
