@@ -25,6 +25,8 @@ export interface FamilyRow {
   /** 1-based position among the families. */
   position: number;
   expanded: boolean;
+  /** One style and nothing pinned: the row already shows it, so there is nothing to open. */
+  single?: boolean;
 }
 
 export interface FaceRow {
@@ -63,16 +65,17 @@ export function flattenRows(
   const rows: ListRow[] = [];
   families.forEach((family, i) => {
     const open = expanded.has(family.id);
+    const pinned = virtualOf(family.id);
     rows.push({
       kind: 'family',
       key: familyKey(family.id),
       family,
       position: i + 1,
       expanded: open,
+      single: family.styleCount === 1 && pinned.length === 0,
     });
     if (!open) return;
     const faces = facesOf(family.id) ?? [];
-    const pinned = virtualOf(family.id);
     const count = faces.length + pinned.length;
     faces.forEach((face, k) =>
       rows.push({

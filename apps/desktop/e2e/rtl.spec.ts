@@ -21,7 +21,7 @@ async function open(page: Page) {
     route.fulfill({ status: 200, contentType: 'font/ttf', body: font }),
   );
   // `?mockHebrew=1`: a Latin + Hebrew face (9), "Frank רוחל", in a folder named in Hebrew.
-  await page.goto('/?mockHebrew=1#/');
+  await page.goto('/?mockHebrew=1&mockFaces=3&mockStyles=2#/');
   await expect(page.locator('[data-face="9"]')).toHaveAttribute('data-state', 'ready');
 }
 
@@ -115,7 +115,7 @@ test.describe('in right-to-left chrome', () => {
     await expect(row.locator('.label')).toHaveCSS('direction', 'rtl');
 
     // A closed family's chevron points left (toward the row's end).
-    const twisty = page.locator('.twisty').first();
+    const twisty = page.locator('.twisty:has(svg)').first();
     await expect(twisty.locator('svg')).toHaveCount(1);
     await expect(twisty).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
 

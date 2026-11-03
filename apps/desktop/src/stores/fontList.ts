@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { computed, shallowReactive, shallowRef, watch } from 'vue';
 import type { FaceSummary, FamilyId, FamilySummary } from '../api/types';
-import { faceKey, familyKey, flattenRows, type ListRow, type RowKey } from '../list/rows';
+import {
+  faceKey,
+  familyKey,
+  flattenRows,
+  type FamilyRow,
+  type ListRow,
+  type RowKey,
+} from '../list/rows';
 import {
   EMPTY_SELECTION,
   moveTo,
@@ -117,7 +124,11 @@ export const useFontListStore = defineStore('fontList', () => {
     expanded.delete(id);
   }
 
+  const rowOf = (id: FamilyId) =>
+    rows.value.find((r): r is FamilyRow => r.kind === 'family' && r.family.id === id);
+
   function toggleExpanded(id: FamilyId): void {
+    if (rowOf(id)?.single) return;
     if (expanded.has(id)) collapse(id);
     else expand(id);
   }
@@ -155,6 +166,7 @@ export const useFontListStore = defineStore('fontList', () => {
   function expandOrEnter(): void {
     const row = cursorRow.value;
     if (row?.kind !== 'family') return;
+    if (row.single) return;
     if (!row.expanded) expand(row.family.id);
     else if (rows.value[cursorIndex.value + 1]?.kind === 'face') moveBy(1);
   }

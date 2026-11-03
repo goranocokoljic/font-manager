@@ -392,7 +392,11 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           :data-key="item.row.key"
           :aria-rowindex="item.index + 2"
           :aria-level="item.row.kind === 'face' ? 2 : 1"
-          :aria-expanded="item.row.kind === 'family' ? item.row.expanded : undefined"
+          :aria-expanded="
+            item.row.kind === 'family' && item.row.family.styleCount > 1
+              ? item.row.expanded
+              : undefined
+          "
           :aria-selected="list.isSelected(item.row.key)"
           :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
           :aria-posinset="item.row.position"
@@ -426,7 +430,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 class="twisty fm-directional"
                 aria-hidden="true"
                 @click.stop="onToggle(item.row)"
-                ><UiChevron :open="item.row.expanded"
+                ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
               /></span>
               <bdi class="text" :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text

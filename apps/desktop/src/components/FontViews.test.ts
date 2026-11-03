@@ -118,7 +118,7 @@ describe('FontGrid', () => {
   });
 
   it('places cards in lines and moves the cursor a line with Up/Down', async () => {
-    await load({ extraFaces: 17 });
+    await load({ extraFaces: 17, stylesPerFamily: 3 });
     const grid = await mountView(FontGrid);
     const list = useFontListStore();
     const cards = grid.findAll('[role="option"]');
@@ -133,6 +133,7 @@ describe('FontGrid', () => {
       `fm-card-family-${list.rows[5]!.family.id}`,
     );
     // Enter on a family card expands it: its styles follow as cards.
+    list.moveCursor(list.rows.findIndex((r) => r.kind === 'family' && r.family.styleCount > 1));
     await box.trigger('keydown', { key: 'Enter' });
     await flushPromises();
     expect(list.expanded.size).toBe(1);

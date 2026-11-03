@@ -11,11 +11,17 @@ const key = (k: string, init: KeyboardEventInit = {}) =>
   new KeyboardEvent('keydown', { key: k, ...init });
 
 async function setup() {
-  setClient(createMockClient({ extraFaces: 17 }));
+  setClient(createMockClient({ extraFaces: 17, stylesPerFamily: 3 }));
   await useLibraryStore().load();
   const list = useFontListStore();
   list.moveCursor(0);
   return list;
+}
+
+/** Puts the cursor on a family with several styles; a one-style family has nothing to open. */
+function onFoldable(list: ReturnType<typeof useFontListStore>): void {
+  const at = list.rows.findIndex((r) => r.kind === 'family' && r.family.styleCount > 1);
+  list.moveCursor(at);
 }
 
 beforeEach(() => setActivePinia(createPinia()));
@@ -36,6 +42,7 @@ describe('list keys', () => {
     expect(list.cursorIndex).toBe(1);
     handleListKey(key('ArrowRight'), list, grid);
     expect(list.cursorIndex).toBe(0);
+    onFoldable(list);
     // A tree row: ArrowLeft (toward the row's end) expands, ArrowRight collapses.
     handleListKey(key('ArrowLeft'), list, { page: 5, count: 20, open });
     expect(list.expanded.size).toBe(1);
@@ -47,8 +54,13 @@ describe('list keys', () => {
     const list = await setup();
     expect(handleListKey(key('ArrowDown'), list, { page: 5, count: 20, open })).toBe(true);
     expect(list.cursorIndex).toBe(1);
+    // A one-style family does not expand.
     handleListKey(key('ArrowRight'), list, { page: 5, count: 20, open });
-    expect(list.cursorIndex).toBe(1);
+    expect(list.expanded.size).toBe(0);
+    onFoldable(list);
+    const at = list.cursorIndex;
+    handleListKey(key('ArrowRight'), list, { page: 5, count: 20, open });
+    expect(list.cursorIndex).toBe(at);
     expect(list.expanded.size).toBe(1);
   });
 

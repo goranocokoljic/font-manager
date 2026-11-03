@@ -17,11 +17,11 @@ const fixture = readFileSync(
   ),
 );
 
-async function open(page: Page, route = '/') {
+async function open(page: Page, route = '/', query = '') {
   await page.route('**/fmfont/*', (r) =>
     r.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto(`/#${route}`);
+  await page.goto(`/${query}#${route}`);
   await expect(page.locator('#app')).not.toBeEmpty();
 }
 
@@ -204,18 +204,22 @@ test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) =
 });
 
 test('the list announces family, style and activation state', async ({ page }) => {
-  await open(page);
+  await open(page, '/', '?mockFaces=3&mockStyles=2');
   const tree = page.getByRole('tree', { name: 'Font list' });
-  const family = tree.getByRole('treeitem', { name: 'Inter, 1 style', exact: false });
-  await expect(family).toHaveAccessibleName('Inter, 1 style, not active');
+  // A one-style family has nothing to open, so it announces no expanded state.
+  await expect(tree.getByRole('treeitem', { name: /^Inter, 1 style/ })).not.toHaveAttribute(
+    'aria-expanded',
+  );
+  const family = tree.getByRole('treeitem', { name: 'Sample 1, 2 styles', exact: false });
+  await expect(family).toHaveAccessibleName('Sample 1, 2 styles, not active');
   await family.locator('.twisty').click();
   const style = tree.getByRole('treeitem', { level: 2 }).first();
-  await expect(style).toHaveAccessibleName(/^Inter \S.*, not active$/);
+  await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, not active$/);
   await style.click();
   await page.keyboard.press('Enter'); // open it in the inspector
   await page.getByRole('button', { name: 'Activate' }).click();
-  await expect(style).toHaveAccessibleName(/^Inter \S.*, active for this session$/);
-  await expect(family).toHaveAccessibleName('Inter, 1 style, active');
+  await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, active for this session$/);
+  await expect(family).toHaveAccessibleName('Sample 1, 2 styles, partly active');
 });
 
 /** Elements that animate or transition for longer than 1 ms. */
@@ -513,7 +517,7 @@ test('Tab moves between the columns and wraps around: the focus is never trapped
 });
 
 test('every action of the keyboard model works without a mouse', async ({ page }) => {
-  await open(page);
+  await open(page, '/', '?mockFaces=3&mockStyles=2');
   const tree = page.getByRole('tree', { name: 'Font list' });
   await expect(tree.getByRole('treeitem').first()).toBeVisible();
 
@@ -539,7 +543,11 @@ test('every action of the keyboard model works without a mouse', async ({ page }
   await page.keyboard.press('ArrowDown');
   await expect(tree).toBeFocused();
   await page.keyboard.press('ArrowDown');
-  const family = tree.getByRole('treeitem', { level: 1 }).first();
+  // The three sample families have one style each; "Sample 1" is the first that opens.
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('ArrowDown');
+  const family = tree.getByRole('treeitem', { name: /^Sample 1,/ });
   await expect(tree).toHaveAttribute('aria-activedescendant', (await family.getAttribute('id'))!);
   await page.keyboard.press('Enter');
   await expect(family).toHaveAttribute('aria-expanded', 'true');
@@ -549,7 +557,7 @@ test('every action of the keyboard model works without a mouse', async ({ page }
 
   // Space: quick look; Space again closes it and the focus is back on the list.
   await page.keyboard.press('Space');
-  const look = page.getByRole('dialog', { name: /^Quick look: Inter / });
+  const look = page.getByRole('dialog', { name: /^Quick look: Sample 1 / });
   await expect(look).toBeVisible();
   const close = look.getByRole('button', { name: 'Close' });
   await expect(close).toBeFocused();

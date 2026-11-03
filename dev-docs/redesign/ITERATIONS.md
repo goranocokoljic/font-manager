@@ -313,3 +313,13 @@ Only four iterations since review 45 (46–49); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-50.log`; edits landed during that run, so features/glyphs/layout/studio/text-layouts/a11y re-run after: 91 passed / 4 skipped, `e2e-review-50-recheck.log`). Shots `review-50/` (before, 52) and `review-50-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** "Lock width" pressed state is an accent outline in a quiet bar; the Studio help sentence under the page; Grid pangram at 28 px shows two words only.
 **Next five:** item 6 (no chevron / expand for one-style families in all four views, ArrowRight too) → item 17 (Studio: font line and panel bar into one row; Print/Close as icon buttons; help behind `?`) → item 8 (Features sample off/on side by side; human names in the Filters drawer) → item 26 (license date/number/datalist, Advanced number fields) → item 21 (Tags / Quick Collection empties on `UiEmptyState`). Every iteration takes before and after shots of a scene that shows its change.
+
+## Iteration 51 — 2026-11-03 — One-style families lose their chevron
+**Critique (before):** the `list` shot opens on three one-style families (Inter, JetBrains Mono, Legacy Grotesk), each with a chevron that promises something and opens onto the same sample twice. The samples are good and big; the chevron is noise. The chrome is otherwise quiet and consistent.
+**Why:** DESIGN item 6 "Left", named by review 50 as the next pick. Visible in `list`: three chevrons gone.
+**What changed:** `FamilyRow.single` (one style, nothing pinned; `list/rows.ts`); List, Table, Grid and Waterfall draw no chevron and no `aria-expanded` for it; `toggleExpanded` and ArrowRight do nothing on it. A family with a pinned (virtual) style still opens. The empty twisty keeps its width, so samples stay aligned. Tests moved to multi-style mock families (`stylesPerFamily: 3`, `?mockStyles=2`); the a11y test asserts Inter has no `aria-expanded`.
+**Ticked:** none (item 6 already ticked; its "Left" is now done).
+**Shots:** `.harness/redesign/shots/51` (before), `51-after`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-51.log`).
+**Follow-ups:** the `expanded-family` scene opens row 3 (one-style) so it now shows no expansion — point it at a multi-style family (`?mockStyles=`) next time shots are touched. Item 7 hover weight range; item 17 Studio bars.
+**Dependencies:** none.

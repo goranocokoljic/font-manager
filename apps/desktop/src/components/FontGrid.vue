@@ -335,7 +335,7 @@ function onToggle(row: ListRow): void {
               class="twisty fm-directional"
               aria-hidden="true"
               @click.stop="onToggle(item.row)"
-              ><UiChevron :open="item.row.expanded"
+              ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
             /></span>
             <ActivationDot :state="rowActivation(item.row)" />
             <bdi class="name">{{ item.name }}</bdi>
