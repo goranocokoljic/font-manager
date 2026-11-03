@@ -1,16 +1,17 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
+import { wallFixtures } from '../src/api/mockWall';
 
-// Preview rows load face files from `/fmfont/<id>`; serve one fixture for all.
-const font = readFileSync(
-  fileURLToPath(
-    new URL(
-      '../../../fixtures/fonts/google-repo/asapsharp/AsapSharp[wdth,wght].ttf',
-      import.meta.url,
-    ),
-  ),
-);
+const fixture = (path: string) =>
+  readFileSync(fileURLToPath(new URL(`../../../fixtures/fonts/${path}`, import.meta.url)));
+// Preview rows load face files from `/fmfont/<id>`. The wall library (the default here)
+// serves each face its own fixture; other faces and libraries get one fixture for all.
+const font = fixture('google-repo/asapsharp/AsapSharp[wdth,wght].ttf');
+const wallFiles = wallFixtures();
+const fontFiles = new Map<string, Buffer>();
+const contentType = (path: string) => `font/${path.split('.').pop()}`;
 
 // Screenshots for UI reviews (page.screenshot creates the folder): FM_SCREENS_DIR=<dir> FM_SCREENS_ROUTES=/,/other pnpm test:e2e --grep @screens
 // A route may end in `@<key>` (e.g. `/?face=1@ControlOrMeta+k`): the key is pressed before the shot.
@@ -50,7 +51,17 @@ const command = process.env.FM_SCREENS_COMMAND;
 const listRows = (page: import('@playwright/test').Page) =>
   page.locator('[role="tree"][aria-label="Font list"] [role="treeitem"], .slot[role="option"]');
 
-const query = process.env.FM_SCREENS_QUERY ?? '';
+// The wall library (60 families, E40.2) unless the query names one: `?mockLibrary=small`
+// keeps the three sample families.
+const query = withWall(process.env.FM_SCREENS_QUERY ?? '');
+const wall = new URLSearchParams(query).get('mockLibrary') === 'wall';
+
+/** `query` with `mockLibrary=wall` added when it names no library. */
+function withWall(q: string): string {
+  const params = new URLSearchParams(q);
+  if (!params.has('mockLibrary')) params.set('mockLibrary', 'wall');
+  return `?${params.toString()}`;
+}
 // FM_SCREENS_LOCALE=ar-XB sets the browser's (the OS's) language: `ar-XB` shows the RTL chrome.
 const locale = process.env.FM_SCREENS_LOCALE;
 // FM_SCREENS_ROW=1 clicks that list row (1-based) after the page loads, before the route's key
@@ -83,6 +94,50 @@ const viewports = (process.env.FM_SCREENS_VIEWPORTS ?? '')
   .flatMap((m) => (m ? [{ width: Number(m[1]), height: Number(m[2]) }] : []));
 if (!viewports.length) viewports.push(...defaultViewports);
 
+/** Serves `/fmfont/<id>`: on the wall each face's own fixture, else one fixture for all. */
+async function serveFonts(page: import('@playwright/test').Page) {
+  await page.route('**/fmfont/*', (r) => {
+    const id = Number(new URL(r.request().url()).pathname.split('/').pop());
+    const path = wall ? wallFiles.get(id) : undefined;
+    if (!path) return r.fulfill({ status: 200, contentType: 'font/ttf', body: font });
+    if (!fontFiles.has(path)) fontFiles.set(path, fixture(path));
+    return r.fulfill({ status: 200, contentType: contentType(path), body: fontFiles.get(path)! });
+  });
+}
+
+// CI sets no FM_SCREENS_* and skips the shots below: these prove what the shots rely on.
+test.describe('the screenshots default (E40.2)', () => {
+  test.skip(!!process.env.FM_SCREENS_QUERY, 'FM_SCREENS_QUERY chooses another library');
+
+  test('uses the wall and serves each face its own fixture', async ({ page }) => {
+    await serveFonts(page);
+    await page.goto(`/${query}#/`);
+    const rows = page.getByRole('tree', { name: 'Font list' }).locator('[aria-level="1"]');
+    await expect(rows.first()).toHaveAttribute('aria-label', /^Asap Sharp,/);
+    await expect(rows.nth(1)).toHaveAttribute('aria-label', /^Crimson Pro,/);
+    const digest = (id: number) =>
+      page.evaluate(async (url) => {
+        const res = await fetch(url);
+        const hash = await crypto.subtle.digest('SHA-256', await res.arrayBuffer());
+        const hex = [...new Uint8Array(hash)].map((b) => b.toString(16).padStart(2, '0'));
+        return { type: res.headers.get('content-type'), hash: hex.join('') };
+      }, `/fmfont/${id}`);
+    const woff2 = [...wallFiles].find(([, path]) => path.endsWith('.woff2'))!;
+    for (const [id, path] of [[1, wallFiles.get(1)!], woff2] as const) {
+      expect(await digest(id)).toEqual({
+        type: contentType(path),
+        hash: createHash('sha256').update(fixture(path)).digest('hex'),
+      });
+    }
+  });
+
+  test('a query keeps its options and may name another library', () => {
+    expect(withWall('')).toBe('?mockLibrary=wall');
+    expect(withWall('?mockColor=1')).toBe('?mockColor=1&mockLibrary=wall');
+    expect(withWall('?mockLibrary=small')).toBe('?mockLibrary=small');
+  });
+});
+
 test.describe('@screens', () => {
   test.skip(!dir, 'FM_SCREENS_DIR is not set');
   if (locale) test.use({ locale });
@@ -94,9 +149,7 @@ test.describe('@screens', () => {
         const slug = prefix ?? (route.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '') || 'home');
         const name = `${slug}-${scheme}-${vp.width}x${vp.height}.png`;
         test(name, async ({ page }) => {
-          await page.route('**/fmfont/*', (r) =>
-            r.fulfill({ status: 200, contentType: 'font/ttf', body: font }),
-          );
+          await serveFonts(page);
           await page.addInitScript((entries) => {
             for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v);
           }, storage);

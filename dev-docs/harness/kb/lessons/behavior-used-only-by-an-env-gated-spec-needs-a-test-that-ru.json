@@ -1,0 +1,19 @@
+{
+  "id": "behavior-used-only-by-an-env-gated-spec-needs-a-test-that-ru",
+  "title": "Behavior used only by an env-gated spec needs a test that runs in CI",
+  "category": "testing",
+  "rule": "When a Playwright describe is skipped without an env var (FM_SCREENS_DIR and the @screens spec), anything a criterion asks of it (a default, a route handler) is untested in CI. Add a test outside the skipped describe that uses the same constant and the same handler, and keep one implementation of the default rather than a copy in a script that no test can reach.",
+  "rationale": "E40.2 (#444): the wall default and per-face fixture routing lived only in the skipped @screens describe and in a private copy in shots.mjs, so removing them left CI green.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    444
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**",
+    "scripts/redesign/**"
+  ],
+  "first_seen": "2026-11-03T21:09:55.600Z",
+  "last_seen": "2026-11-03T21:09:55.600Z"
+}
