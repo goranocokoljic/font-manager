@@ -6,6 +6,13 @@ import { catalogFontPath } from './catalogFont';
 import type { FmClient, FullSettings } from './client';
 import type { PreviewBytes } from './preview';
 import {
+  WALL_VIETNAMESE,
+  wallDuplicates,
+  wallLibrary,
+  wallProblems,
+  type WallLibrary,
+} from './mockWall';
+import {
   API_VERSION,
   type ActivationMode,
   type ActivationOutcome,
@@ -131,6 +138,14 @@ const features = (...tags: string[]): FeatureInfo[] =>
 const metrics = { unitsPerEm: 1000, ascender: 900, descender: -250, xHeight: 520, capHeight: 720 };
 
 const user = { tags: [], favorite: false, rating: null, notes: null };
+
+/**
+ * The 60-family "wall" library (E40.2, `?mockLibrary=wall`), built once; its family
+ * ids (500+) appear in no other mock library, so its characters and classes are
+ * looked up by family.
+ */
+let wall: WallLibrary | undefined;
+export const mockWall = (): WallLibrary => (wall ??= wallLibrary(features));
 
 /** Faces 1, 6 and 7 of the Rust mock: variable, system clash, unsupported. */
 export const mockFaces: FaceDetail[] = [
@@ -424,6 +439,8 @@ const MOCK_LANGUAGES: [string, string][] = [
 ];
 
 function mockChars(f: FaceDetail): Set<string> {
+  const own = mockWall().chars.get(f.face.family);
+  if (own) return own;
   const latin = f.scripts.includes('cyrl') ? LATIN + LATIN_EXT_A + CYRILLIC : LATIN;
   return new Set(f.scripts.includes('hebr') ? latin + HEBREW : latin);
 }
@@ -436,7 +453,10 @@ const MOCK_BLOCKS: [string, number, number, number][] = [
   ['Basic Latin', 0x0000, 0x007f, 128],
   ['Latin-1 Supplement', 0x0080, 0x00ff, 128],
   ['Latin Extended-A', 0x0100, 0x017f, 128],
+  ['Latin Extended-B', 0x0180, 0x024f, 208],
+  ['Greek and Coptic', 0x0370, 0x03ff, 135],
   ['Cyrillic', 0x0400, 0x04ff, 256],
+  ['Latin Extended Additional', 0x1e00, 0x1eff, 256],
   ['CJK Unified Ideographs', 0x4e00, 0x9fff, 20992],
   ['Hangul Syllables', 0xac00, 0xd7af, 11172],
 ];
@@ -728,6 +748,11 @@ const invalid = (message: string): ApiError => ({ code: 'invalidRequest', messag
 
 /** Options of a mock client. */
 export interface MockOptions {
+  /**
+   * The sample library: `small` (the default: Inter, JetBrains Mono, Legacy Grotesk,
+   * like the Rust mock) or `wall` (60 families from fixtures/fonts/, E40.2).
+   */
+  library?: 'small' | 'wall';
   /** Delay between the steps of a scan, in ms, so progress is visible (e2e). */
   scanStepMs?: number;
   /** Extra families after the sample ones, for long lists (e2e). */
@@ -1183,6 +1208,8 @@ export function mockWebUse(l: LicenseInfo): WebUse {
  */
 export function mockClassification(d: FaceDetail): Classification {
   const family = d.face.family;
+  const own = mockWall().classes.get(family);
+  if (own) return own;
   const model = family >= EXTRA_ID_BASE ? ((family - EXTRA_ID_BASE) % 2 === 0 ? 1 : 3) : family;
   return model === 3 ? 'mono' : 'sans';
 }
@@ -2065,10 +2092,19 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       steps.length * step,
     );
   };
+  // The wall's JetBrains Mono clashes with the system copy, as face 6 does in the small library.
+  const clashes: Partial<Record<FaceId, string>> =
+    options.library === 'wall'
+      ? Object.fromEntries(
+          mockWall()
+            .faces.filter((d) => d.face.postscriptName === 'JetBrainsMono-Regular')
+            .map((d) => [d.face.id, '/System/Library/Fonts/JetBrainsMono-Regular.ttf']),
+        )
+      : systemClash;
   const styles = Math.min(EXTRA_STYLES.length, Math.max(1, options.stylesPerFamily ?? 1));
   // The sample faces are copied: tagging and rating edit this client's faces only.
   const faces = [
-    ...mockFaces.map((f) => structuredClone(f)),
+    ...(options.library === 'wall' ? mockWall().faces : mockFaces).map((f) => structuredClone(f)),
     ...(options.colorFace ? [structuredClone(mockColorFace)] : []),
     ...(options.hebrewFace ? [structuredClone(mockHebrewFace)] : []),
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
@@ -2076,6 +2112,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     const tags = options.faceTags?.[f.face.id];
     return tags ? { ...f, tags: [...tags] } : f;
   });
+  // The wall's watched folder holds its own faces.
+  if (options.library === 'wall') sources[0]!.faceCount = faces.length;
   // Tags by id; a face holds their names (`FaceDetail.tags`), like the Rust mock.
   const tags: { id: TagId; name: string }[] = [];
   // Like fm-core's `COLLATE NOCASE`: only A–Z case is folded ("Äb" and "äb" are two tags).
@@ -2643,7 +2681,10 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!f) throw notFound(face);
       return mockFaceCoverage(f, options.cjkFaces?.includes(face) ?? false);
     },
-    listLanguages: async () => structuredClone(mockLanguages),
+    listLanguages: async () =>
+      structuredClone(
+        options.library === 'wall' ? [...mockLanguages, WALL_VIETNAMESE] : mockLanguages,
+      ),
     // The Rust mock's ranking: 0.2, +0.5 same classification, +0.2 same weight,
     // +0.1 same x-height; closest first, `limit` of them.
     findSimilar: async (req) => {
@@ -3013,7 +3054,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         const health = f.face.health;
         if (health.kind !== 'ok')
           return { face: id, outcome: { status: 'skipped', reason: health.reason } };
-        const clash = systemClash[id];
+        const clash = clashes[id];
         const replace = req.onConflict === 'replace';
         // "Replace" is for this session only.
         const mode = clash && replace ? 'session' : (req.mode ?? 'session');
@@ -3056,7 +3097,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       ids(target).flatMap((id): Conflict[] => {
         const f = find(id);
         if (!f) throw notFound(id);
-        const clash = systemClash[id];
+        const clash = clashes[id];
         return clash
           ? [
               {
@@ -3109,7 +3150,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       [...active.keys()]
         .sort((a, b) => a - b)
         .flatMap((id): Clash[] => {
-          const clash = systemClash[id];
+          const clash = clashes[id];
           const f = find(id);
           return clash && f
             ? [
@@ -3249,7 +3290,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
             other: null,
             message: health.reason,
           });
-        const clash = systemClash[f.face.id];
+        const clash = clashes[f.face.id];
         if (clash)
           out.push({
             kind: 'systemConflict',
@@ -3536,14 +3577,53 @@ function platformFromUrl(): AppInfo['platform'] | undefined {
   return p === 'windows' || p === 'macos' || p === 'linux' ? p : undefined;
 }
 
+/**
+ * `?mockLibrary=wall` serves the 60-family wall (E40.2; the @screens default),
+ * `?mockLibrary=small` (or nothing) the three sample families the row-counting specs use.
+ */
+function libraryFromUrl(): 'small' | 'wall' {
+  if (typeof location === 'undefined') return 'small';
+  return new URLSearchParams(location.search).get('mockLibrary') === 'wall' ? 'wall' : 'small';
+}
+
+/**
+ * The wall's Problems, duplicates, sidecar conflict and project set: the same kinds as
+ * the small library's, about the wall's own faces.
+ */
+function wallExtras(): Pick<
+  MockOptions,
+  'extraProblems' | 'duplicates' | 'sidecarConflicts' | 'sets'
+> {
+  const lib = mockWall();
+  const first = lib.faces[0]!;
+  const mono = lib.faces.find((d) => d.face.postscriptName === 'JetBrainsMono-Regular')!;
+  return {
+    extraProblems: wallProblems(lib),
+    duplicates: wallDuplicates(lib),
+    sidecarConflicts: mockSidecarConflicts.map((c) => ({
+      ...c,
+      face: first.face.id,
+      family: first.face.familyName,
+    })),
+    sets: [{ id: 1, name: 'Client brand', faces: [first.face.id, mono.face.id] }],
+  };
+}
+
+const library = libraryFromUrl();
+
 // Browser mode (e2e) steps scans slowly enough to see the inline progress.
 export const mockClient: FmClient = createMockClient({
   scanStepMs: 150,
   settingsStorage: sessionStorageOf(),
-  extraProblems: mockExtraProblems,
-  duplicates: mockDuplicates,
-  sidecarConflicts: mockSidecarConflicts,
-  sets: mockSets,
+  library,
+  ...(library === 'wall'
+    ? wallExtras()
+    : {
+        extraProblems: mockExtraProblems,
+        duplicates: mockDuplicates,
+        sidecarConflicts: mockSidecarConflicts,
+        sets: mockSets,
+      }),
   // `?mockComparisons=1` starts with a saved comparison that names a missing font.
   comparisons: countFromUrl('mockComparisons', 1) ? mockComparisons : [],
   extraFaces: countFromUrl('mockFaces', 100_000),
