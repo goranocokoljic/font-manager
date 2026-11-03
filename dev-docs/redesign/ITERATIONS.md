@@ -175,3 +175,12 @@ Rating stars and the Favorite heart became `UiIcon`s and the favorite turned acc
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-25.log`). Shots `25/` (before) and `25-after/`: all 23 scenes render in light and dark, comfortable and compact (46 images).
 **Not fixed, noted:** the cursor row's 2 px box; `?face=` does not select the list row; Studio "Panel font" fields look empty; Features toggle knob off-centre.
 **Next five:** a hover scene in `screens.spec.ts` first (rows, sidebar) → item 26 (Features toggles, underline-style note fields, date/number/datalist) → item 8 rest (Glyphs clipped column, Features human names) → item 5 rest (section icons, collapsible sections, Problems dedupe) → item 12 or 13 (Quick Look or the keyboard model — the first real features). Every iteration takes before/after shots; no blind iterations.
+
+## Iteration 26 — 2026-11-03 — Inspector Features: centred switches, stacked header, hairline rows
+**Critique (before):** The Features tab is the quietest corner of the inspector, but its switches look broken: the knob sits at the top of the track and the "Switches change this face's previews" hint is squeezed into four lines beside Copy CSS / Reset. Rows have no rhythm. Good: human names with a mono tag are already in place.
+**Why:** Review 25 named the off-centre knob (item 26) and item 8's Features tab; both are one component. Hover scene not added (no hover UI touched).
+**What changed:** `InspectorFeatures`: switch is border-box, knob centred with `translateY(-50%)` and travels symmetrically, track filled with `--fm-surface-2`, tokenised motion; header stacks (hint on one line, actions right); rows get 32 px height and hairline dividers.
+**Backlog:** item 8 and 26 partly (Features switches). Not ticked.
+**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-26.log`). Shots `26/` (before), `26-after/`.
+**Follow-ups:** live per-feature preview in Features; Glyphs clipped column; underline-style note fields; date/number/datalist natives; hover scene.
+**Dependencies:** none.
