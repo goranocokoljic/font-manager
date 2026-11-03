@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiFoldButton from './ui/UiFoldButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiPopover from './ui/UiPopover.vue';
@@ -14,6 +15,7 @@ import UiPopover from './ui/UiPopover.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { CollectionId } from '../api/types';
 import { errorMessage, t } from '../i18n';
+import { useFolded } from './useFolded';
 import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
 import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
@@ -254,12 +256,18 @@ function onMenuKey(e: KeyboardEvent): void {
 function countLabel(n: number): string {
   return t('collections.fontCount', { count: n });
 }
+
+const { folded, toggle } = useFolded('collections');
 </script>
 
 <template>
   <section class="collections" aria-labelledby="fm-collections-heading">
     <header class="head">
-      <h2 id="fm-collections-heading" class="heading">{{ t('collections.heading') }}</h2>
+      <h2 id="fm-collections-heading" class="heading">
+        <UiFoldButton :folded="folded" controls="fm-collections-list" @toggle="toggle">{{
+          t('collections.heading')
+        }}</UiFoldButton>
+      </h2>
       <span class="head-actions">
         <UiIconButton
           icon="plus"
@@ -276,7 +284,12 @@ function countLabel(n: number): string {
       </span>
     </header>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
-    <ul class="list" aria-labelledby="fm-collections-heading">
+    <ul
+      v-show="!folded"
+      id="fm-collections-list"
+      class="list"
+      aria-labelledby="fm-collections-heading"
+    >
       <li class="item">
         <div class="row">
           <button

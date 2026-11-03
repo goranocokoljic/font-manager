@@ -242,3 +242,16 @@ Backlog: item 5 partly. Shots: `.harness/redesign/shots/33-after/` (`list-dark` 
 Verified: typecheck, lint:js, Vitest 910, Playwright 271 passed + 2 timeouts that pass alone (`.harness/redesign/e2e-33.log`).
 Follow-ups: Tags still has its own fold markup (move to `UiFoldButton`); Sources and Collections do not fold; no section icons; Problems heading still doubles the Problems view link.
 Dependencies: none.
+
+## Iteration 34 — 2026-11-03 — Every sidebar group folds the same way
+Critique (before): the `list` shot is calm, but the sidebar has two kinds of heading: Sources and Collections are bare labels, Tags/Problems/Project sets/Catalogs carry a chevron. Worst: the top two groups look unfoldable and the rest do not line up with them. Good: counts at the edge, hairline type.
+Why: item 5 rest (collapsible sections), follow-up of 33. Feels different in the first minute: all six headings share one chevron and fold, remembered.
+What changed:
+- `SourcesSidebar`, `CollectionsSidebar`: heading is a `UiFoldButton`, list folds (`useFolded`, remembered).
+- `TagsSidebar`: its own fold markup/CSS replaced by `UiFoldButton` (drag-unfold state kept in the tagging store).
+- `palette.spec`: keyboard path now Tabs through the Sources fold button before Add folder (UI changed on purpose).
+Backlog: item 5 partly (left: section icons, Problems heading doubles the Problems link).
+Shots: `.harness/redesign/shots/34-after/` (`list-dark` by eye).
+Verified: typecheck, lint:js, Vitest 910, Playwright 272 passed + 1 fixed spec (`.harness/redesign/e2e-34.log`).
+Follow-ups: folded Collections hides "All fonts"; maybe keep it visible. No collapsed-sidebar rail or toolbar toggle.
+Dependencies: none.

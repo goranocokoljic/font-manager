@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import UiBadge from './ui/UiBadge.vue';
+import UiFoldButton from './ui/UiFoldButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 // The Sources group of the sidebar: add a folder with the native picker,
 // pause, resume, rescan or remove it, and see scan progress inline. The
@@ -9,6 +10,7 @@ import UiIconButton from './ui/UiIconButton.vue';
 import { computed, onBeforeUnmount, onMounted } from 'vue';
 import type { Source } from '../api/types';
 import { errorMessage, t } from '../i18n';
+import { useFolded } from './useFolded';
 import { useSourcesStore, type ScanProgress } from '../stores/sources';
 
 const store = useSourcesStore();
@@ -39,12 +41,18 @@ const announcement = computed(() => {
   const other = store.otherScan;
   return other ? t('sources.scanning', { progress: progressText(other) }) : '';
 });
+
+const { folded, toggle } = useFolded('sources');
 </script>
 
 <template>
   <section class="sources" aria-labelledby="fm-sources-heading">
     <header class="head">
-      <h2 id="fm-sources-heading" class="heading">{{ t('sources.title') }}</h2>
+      <h2 id="fm-sources-heading" class="heading">
+        <UiFoldButton :folded="folded" controls="fm-sources-list" @toggle="toggle">{{
+          t('sources.title')
+        }}</UiFoldButton>
+      </h2>
       <UiIconButton
         icon="plus"
         :label="t('sources.addFolder')"
@@ -64,7 +72,7 @@ const announcement = computed(() => {
         t('sources.scanning', { progress: progressText(store.otherScan) })
       }}</span>
     </div>
-    <ul class="list" aria-labelledby="fm-sources-heading">
+    <ul v-show="!folded" id="fm-sources-list" class="list" aria-labelledby="fm-sources-heading">
       <li
         v-for="source in store.sources"
         :key="source.id"

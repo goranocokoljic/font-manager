@@ -10,7 +10,7 @@ import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
 import { isFontDrag, readFontDrop } from '../list/drag';
 import { useTaggingStore } from '../stores/tagging';
 import { useTagsStore } from '../stores/tags';
-import UiChevron from './ui/UiChevron.vue';
+import UiFoldButton from './ui/UiFoldButton.vue';
 
 const tags = useTagsStore();
 const tagging = useTaggingStore();
@@ -62,18 +62,12 @@ function countLabel(n: number): string {
   <section class="tags" aria-labelledby="fm-tags-heading">
     <header class="head">
       <h2 id="fm-tags-heading" class="heading">
-        <button
-          type="button"
-          class="fold"
-          :aria-expanded="!tagging.folded"
-          aria-controls="fm-tags-list"
-          @click="tagging.folded = !tagging.folded"
+        <UiFoldButton
+          :folded="tagging.folded"
+          controls="fm-tags-list"
+          @toggle="tagging.folded = !tagging.folded"
+          >{{ t('tags.heading') }}</UiFoldButton
         >
-          <span class="chevron fm-directional" aria-hidden="true"
-            ><UiChevron :open="!tagging.folded"
-          /></span>
-          {{ t('tags.heading') }}
-        </button>
       </h2>
       <span class="count" :aria-label="t('tags.tagCount', { count: tags.tags.length })">{{
         formatNumber(tags.tags.length)
@@ -120,26 +114,11 @@ function countLabel(n: number): string {
 .heading {
   margin: 0;
   padding: 8px 0;
+  color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   font-weight: 600;
 }
-.fold {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0;
-  border: 0;
-  background-color: transparent;
-  color: var(--fm-muted);
-  font: inherit;
-}
-.chevron {
-  display: inline-flex;
-}
-.chevron :deep(svg) {
-  width: 12px;
-  height: 12px;
-}
+
 .list {
   margin: 0;
   padding: 0;
