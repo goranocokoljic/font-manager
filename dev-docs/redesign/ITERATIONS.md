@@ -9,7 +9,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
-- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; iteration 33: Problems / Project sets / Online catalogs fold with a chevron, remembered; section icons, Sources/Collections folding, Problems dedupe remain)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; iterations 33–34 + review 35: every group folds with UiFoldButton, remembered; section icons, "All fonts" visible when folded, Problems fold+link remain)
 - [ ] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; `?face=` list selection remains)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
@@ -207,51 +207,29 @@ The cursor row's 2 px accent box became a 1 px ring at 60 % plus a 2 px start ba
 **Next five:** item 13 (keyboard model: J/K, A, C, S, 1–5, `[` `]`, `?` sheet) → item 12 (Quick Look as the hero) → item 5 rest (section icons, collapsible sections, Problems dedupe) → item 8 rest (one shared inspector tab head; Developer stacked) → item 26 (Settings radios/checkboxes and nav focus). Inspector polish is done for now: every iteration must change the `list` shot or a scene a feature adds.
 
 ## Iteration 31 — 2026-11-03 — Keyboard model: `?` shortcut sheet, `[` / `]` panes, J/K
-Critique (before): the `list` shot is calm, but nothing tells a designer the app is keyboard-first: shortcuts exist (A, C, S, T, 1–5) yet none is discoverable, and the sidebar cannot be hidden. Worst: the rows' beauty is boxed in by a fixed 240 px sidebar. Good: hairlines, quiet chrome.
-Why: backlog item 13 is next after review 30. Feels different in the first minute: `?` opens a sheet, `[` hides the sidebar so the list gets 240 px more width.
-What changed:
-- `ShortcutSheet.vue` (new, mounted in `App.vue`): modal, three columns (Move / Fonts / View), chords read from `KEYMAP`, `?` or Esc closes, focus returns.
-- `keymap.ts`: bindings `[` (sidebar), `]` (inspector, next to Ctrl+I), `?` (sheet).
-- `layout.ts` + `MainLayout.vue`: `sidebarOpen` (remembered), `toggleSidebar`, palette action.
-- `list/keys.ts`: `J` / `K` move the cursor down / up.
-- `screens.spec` scene table: new `shortcuts` scene (`shots.mjs`). en + de strings.
-Backlog: item 13 mostly done (left: `/` already bound; tooltips with shortcuts on more controls).
-Shots: `.harness/redesign/shots/31/` (`shortcuts-*` checked by eye, both themes). Verified: typecheck, lint:js, Vitest 910, Playwright 272 passed / 16 skipped.
-Follow-ups: no collapsed-sidebar rail or toggle button in the toolbar (keyboard only); sheet is static text for list keys; no unit test for `ShortcutSheet` or J/K yet.
-Dependencies: none.
+Added `ShortcutSheet` on `?`, `[` / `]` to hide the sidebar and inspector (remembered), and J/K to move the list cursor.
 
 ## Iteration 32 — 2026-11-03 — Quick Look becomes a full-window specimen
-Critique (before): the `list` shot is calm and the rows read well, but Quick Look was a 1100 px card with one 96 px line and a Close text button: it hid the list and showed almost nothing new. Worst: no way to see the next font without closing it. Good: quiet chrome, hairlines.
-Why: backlog item 12, next after the keyboard model. Feels different in the first minute: Space fills the window with one specimen, and arrows flip through fonts.
-What changed:
-- `QuickLookSheet.vue`: full-window sheet on `--fm-bg`; hero sample up to 104 px, alphabet + numerals line, a 12–36 px size ladder (tabular size labels), a paragraph; close is a `UiIconButton`; the face loader swaps faces without a system-font flash.
-- Arrow keys (←↑ / →↓) move the list cursor; the sheet follows `fontList.cursorFace`. `HomeView` no longer remounts the sheet per face.
-- en + de hint; `a11y.spec` gets an arrows test.
-Backlog: item 12 ticked (core). Shots: `.harness/redesign/ql-dbg.png` (dark, by eye); no scene yet.
-Verified: typecheck, lint:js, Vitest 910, Playwright 273 passed (`.harness/redesign/e2e-32.log`).
-Follow-ups: add a `quicklook` scene to `shots.mjs`; glyph grid and variable-axis sliders in the sheet; sample text/size do not follow per-view settings; the keyboard-model test breaks if it moves the cursor and returns (activation `A` then misses) — worth a look.
-Dependencies: none.
+`QuickLookSheet` fills the window (hero sample, alphabet, size ladder, paragraph) and the arrow keys move to the next font without closing.
 
 ## Iteration 33 — 2026-11-03 — Sidebar groups fold
-Critique (before): the `list` shot is calm, but the sidebar is six headings of the same weight with only Tags able to fold; Problems alone lists five rows nobody needs every day. Worst: three headings look identical yet behave differently. Good: hairlines, counts at the edge.
-Why: item 5 rest (collapsible sections). Feels different in the first minute: a chevron on each group; folding Problems gives the sidebar 130 px back.
-What changed:
-- `ui/UiFoldButton.vue` (new) + `components/useFolded.ts` (remembered in localStorage `fm.sidebar.folded.v1`, a view preference).
-- Problems, Project sets, Online catalogs use them. Problems keeps its link and test id; the chevron is its own button.
-Backlog: item 5 partly. Shots: `.harness/redesign/shots/33-after/` (`list-dark` by eye).
-Verified: typecheck, lint:js, Vitest 910, Playwright 271 passed + 2 timeouts that pass alone (`.harness/redesign/e2e-33.log`).
-Follow-ups: Tags still has its own fold markup (move to `UiFoldButton`); Sources and Collections do not fold; no section icons; Problems heading still doubles the Problems view link.
-Dependencies: none.
+Built `UiFoldButton` + `useFolded` (remembered in localStorage); Problems, Project sets and Online catalogs fold.
 
 ## Iteration 34 — 2026-11-03 — Every sidebar group folds the same way
-Critique (before): the `list` shot is calm, but the sidebar has two kinds of heading: Sources and Collections are bare labels, Tags/Problems/Project sets/Catalogs carry a chevron. Worst: the top two groups look unfoldable and the rest do not line up with them. Good: counts at the edge, hairline type.
-Why: item 5 rest (collapsible sections), follow-up of 33. Feels different in the first minute: all six headings share one chevron and fold, remembered.
-What changed:
-- `SourcesSidebar`, `CollectionsSidebar`: heading is a `UiFoldButton`, list folds (`useFolded`, remembered).
-- `TagsSidebar`: its own fold markup/CSS replaced by `UiFoldButton` (drag-unfold state kept in the tagging store).
-- `palette.spec`: keyboard path now Tabs through the Sources fold button before Add folder (UI changed on purpose).
-Backlog: item 5 partly (left: section icons, Problems heading doubles the Problems link).
-Shots: `.harness/redesign/shots/34-after/` (`list-dark` by eye).
-Verified: typecheck, lint:js, Vitest 910, Playwright 272 passed + 1 fixed spec (`.harness/redesign/e2e-34.log`).
-Follow-ups: folded Collections hides "All fonts"; maybe keep it visible. No collapsed-sidebar rail or toolbar toggle.
-Dependencies: none.
+Sources, Collections and Tags moved onto `UiFoldButton`, so all six headings share one chevron.
+
+## Review 35 — 2026-11-03
+**Grades:** iter 31 **3** — the right feature and a calm sheet, but "Up and down" broke onto two lines beside four key caps, `[` has no mouse twin, and nothing showed in the `list` shot. Iter 32 **4** — the best change of the four: a real full-window specimen that flips with the arrows; taken without a scene, and its title said the style twice ("Inter Regular  Regular"). Iter 33 **3** — useful folding, but the Problems label sat 4 px right of every other heading (fold button + link padding). Iter 34 **3** — the right consolidation (Tags' own fold markup gone); it left `palette.spec.ts` failing Prettier, so `pnpm lint:js` exited 1 while its log said lint passed.
+**Regressions:** none in views, keyboard or Playwright. `lint:js` red since iteration 34 (now fixed).
+**Drift:** no literal colours, fonts, radii or native controls added. Dead: a stray blank rule gap in TagsSidebar CSS.
+**Pulled apart:** 33 built `UiFoldButton` but left Tags on its own fold markup; 34 reconciled it. Four iterations left the `list` shot unchanged or nearly so (31 = 32 byte-identical).
+**Fixed:**
+- `ProblemsSidebar`: link padding so the label lines up with the other five headings.
+- `QuickLookSheet`: title shows the face name once; the duplicate style span and its CSS deleted.
+- `ShortcutSheet`: move row uses `↑↓ J K` (three caps) and labels never wrap.
+- `palette.spec.ts` formatted; `lint:js` exits 0.
+- New `quicklook` scene in `shots.mjs` (Space on row 1) — asked for by iteration 32.
+**Rule amended (DESIGN.md):** `UiFoldButton`/`useFolded` join the component list; a sidebar heading with its own fold markup is a bug. Items 5, 12, 13 and the three-second note rewritten.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-35.log`). Shots `review-35/` (before, 52 with `quicklook`) and `review-35-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** folded Collections hides "All fonts"; Problems heading is fold + link with the same name; no toolbar toggle for the sidebar; QL sample/size follow All fonts only; Studio "Panel font" fields look empty; Settings radios and nav box.
+**Next five:** item 10 (language & script filter facet; choosing a language switches the pangram) → item 5 rest (section icons; keep "All fonts" visible when Collections folds) → item 26 (Settings radios/checkboxes, nav focus box) → item 8 rest (one shared inspector tab head; Developer stacked) → item 21 (designed empty states — "No fonts match" is still one grey sentence). Every iteration runs `pnpm lint:js` and reads the exit code; every feature adds a scene.

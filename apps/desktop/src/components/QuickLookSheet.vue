@@ -128,10 +128,7 @@ function onFocusIn(e: FocusEvent): void {
       @keydown="onKeyDown"
     >
       <header class="head">
-        <div class="title">
-          <h2 id="fm-quick-look-title">{{ t('quickLook.title', { name }) }}</h2>
-          <span class="meta">{{ face.style }}</span>
-        </div>
+        <h2 id="fm-quick-look-title">{{ t('quickLook.title', { name }) }}</h2>
         <UiIconButton
           ref="closeButton"
           icon="close"
@@ -183,20 +180,11 @@ function onFocusIn(e: FocusEvent): void {
   justify-content: space-between;
   gap: 12px;
 }
-.title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  min-width: 0;
-}
 h2 {
+  min-width: 0;
   margin: 0;
   font-size: var(--fm-text-md);
   font-weight: 500;
-}
-.meta {
-  color: var(--fm-muted);
-  font-size: var(--fm-text-sm);
 }
 .body {
   display: flex;

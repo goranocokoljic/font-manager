@@ -65,7 +65,7 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
 .heading .link {
   flex: 1;
   padding: 8px;
-  padding-inline-start: 4px;
+  padding-inline-start: 0;
 }
 .fold {
   padding: 8px 0;

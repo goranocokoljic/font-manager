@@ -127,8 +127,9 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   the user overrides it; previews honour the `font-feature-settings` chosen in Features.
 - **Components** (`src/components/ui/`): `UiPopover`, `UiSelect`, `UiDrawer`, `UiIcon` (+ `icons.ts`),
   `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
-  and `UiChevron` exist (review 10). Every badge and every expand/fold twisty uses them; a
-  local `.badge` class or a ▸/▾ text glyph is a bug. Text for screen readers only uses the
+  and `UiChevron` exist (review 10), plus `UiFoldButton` with `components/useFolded.ts`
+  (review 35). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
+  ▸/▾ text glyph or a sidebar heading with its own fold markup is a bug. Text for screen readers only uses the
   global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider
   (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
   change that needs them**, not ahead of time: the Filters drawer brings the Drawer and the
@@ -195,12 +196,13 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 30 the
-list rows and the inspector (Info, Features, Glyphs) are in shape; four iterations in a row
-polished the inspector while the `list` shot stayed the same. The chrome is now quiet enough:
-the next iterations ship the first features designers will feel in the first minute — item
-13 (keyboard model), then 12 (Quick Look) — and then item 5's section work. A `hover-row`
-scene exists (review 30); hover work shows it in before/after.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 35
+the keyboard model (13), Quick Look (12) and folding sidebar groups (5) are in; for four
+iterations the `list` shot barely moved (31 and 32 byte-identical). Next: item 10 (language &
+script filter — the first new *library* feature and visible in the Filters drawer), then item 5's
+section icons (the last first-screen sidebar change), item 8's shared tab head, and item 26
+(Settings radios/checkboxes and the heavy nav box — the worst native look left). Every feature
+adds a scene to `shots.mjs` in the same iteration (`quicklook` was added only in review 35).
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -223,8 +225,11 @@ scene exists (review 30); hover work shows it in before/after.
    actions as `UiIconButton`s in the section header, sections collapsible, collections as
    drop targets. Done: `UiIconButton`, header icons, the collection "…" menu, catalog power
    icons, the smart sparkle, Sources row actions on the row (iterations 8, 12, 13, 19).
-   Project sets rows export from a hover icon in the count's cell (iteration 22).
-   Left: section icons; collapsible sections; Problems header vs the smart "Problems".
+   Project sets rows export from a hover icon in the count's cell (iteration 22). Every group
+   folds with `UiFoldButton` + `useFolded`, remembered (iterations 33–34, review 35).
+   Left: section icons; folded Collections hides "All fonts" (keep it visible); the Problems
+   heading is both a fold and a link to the Problems view; a collapsed-sidebar rail or toolbar
+   toggle (today `[` is keyboard-only).
 
 ### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
@@ -260,14 +265,17 @@ scene exists (review 30); hover work shows it in before/after.
 11. **"Renders my text" filter (API?).** Type anything — a brand name, a Serbian sentence — and
     filter to fonts that cover every glyph. In every preview, render missing glyphs as a
     visible tofu marker in the accent colour instead of a silent fallback.
-12. **Quick Look, finished.** `QuickLookSheet` exists; make it the hero: Space opens a
+12. **Quick Look, finished.** Core done (iteration 32, review 35: full window, arrows move,
+    `quicklook` scene). Left: glyph grid and axis sliders in the sheet; size and sample follow
+    the current view, not only All fonts. Original brief: `QuickLookSheet` exists; make it the hero: Space opens a
     full-window specimen of the selected family (all styles, waterfall, paragraph, glyphs)
     on the specimen surface; Space or Esc closes; arrow keys move to the next family without
     closing; the sample text and size follow the list's.
 13. **Keyboard model.** `↑`/`↓` or `J`/`K` move through the list; Space quick look; `A`
     toggle activation; `C` add to compare; `T` tag; `S` find similar; `1`–`5` switch views;
     `/` or `F` focus search; `[` `]` toggle sidebar / inspector; `?` opens the shortcut
-    sheet. Shortcuts shown in tooltips.
+    sheet. Shortcuts shown in tooltips. Done (iteration 31, review 35). Left: shortcuts in the
+    tooltips of the toolbar buttons; a test for J/K and the sheet.
 14. **Weight scrubbing.** On variable fonts, drag horizontally on a preview to scrub the
     weight axis; axis value shown as a tooltip; release to keep.
 15. **Context presets in Layout.** Website hero, Mobile UI (iOS sizes), Instagram post,

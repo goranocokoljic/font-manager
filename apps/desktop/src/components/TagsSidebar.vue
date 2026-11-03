@@ -118,7 +118,6 @@ function countLabel(n: number): string {
   font-size: var(--fm-text-xs);
   font-weight: 600;
 }
-
 .list {
   margin: 0;
   padding: 0;
