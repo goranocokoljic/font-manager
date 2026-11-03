@@ -50,58 +50,17 @@ that is not a font is either neutral or gone.
 8. **Both densities.** A gallery mode (big specimens, few per screen) and a tool mode (tight
    rows, 30+ families visible) — switchable, remembered, and each one properly designed.
 
-## Current state — audit from screenshots and a first read of the code (1 Nov 2026)
+## Current state — the boards are the target (3 Nov 2026)
 
-### Keep (strong functional skeleton)
-Five views (List, Table, Grid, Waterfall, Layout), the inspector with Info / Axes /
-Features / Glyphs / Developer, the weight-distribution glyph in Table, the Layout studio with
-presets and drag-to-resize blocks, per-font Unicode-block and language coverage, Compare,
-Find similar, Collections and smart collections, Project sets, online catalogues, the
-command palette, Problems/Duplicates detection.
+The audit of the old UI (1 Nov 2026) is retired. The target is the concept canvas, exported
+as 18 PNGs in `dev-docs/design/redesign/` (see its README.md for the board-to-story table).
+A UI story is reviewed against its image, not against the previous screenshot.
 
-### Fix
-- **A seed of a design system, not a design system.** `styles/theme.css` has ten colour
-  tokens (`--fm-bg`, `--fm-surface`, `--fm-accent`…), a light/dark switch via `data-theme`
-  and a density switch via `data-density` — keep all three mechanisms. But there is no
-  spacing, radius, type, shadow or motion scale; the UI font is `system-ui`; fourteen
-  components still render a native `<select>`; buttons, checkboxes and sliders are browser
-  defaults; borders are solid grey lines. Every element has the same visual weight, so
-  nothing has hierarchy.
-- **The filter wall.** Three-plus rows of chips above the list, including ~70 raw OpenType
-  feature tags (`cv01`…`cv32`, `ss01`…). It eats ~150 px above the fold and is developer data
-  shown to designers.
-- **The preview toolbar.** Fourteen controls in one row (Sample, Language, Size, Auto size,
-  Line height, Tracking, Metrics, Outline, Start/Center/End, Text, Background, Surface,
-  Reset). The one control that matters most — the sample text itself — is not even a text
-  field.
-- **Grid cards truncate the pangram** ("The quick br"). A card must show something that
-  fits.
-- **List row metadata** (name, style count, licence badge) is tiny, and the badges look like
-  buttons. Row actions ("Similar") appear as a stray button.
-- **Sidebar** is a plain text list: no icons, no rhythm, "Smart" rendered as a pill after
-  the label, a "Smart collections" header with nothing under it, "Problems" appearing twice
-  (a smart collection with 0 and a section with 69), buttons (Rescan / Pause / Remove,
-  New / New smart, Import set…) inline in the list.
-- **Inspector › Info** is a raw key/value dump; the file hash and path sit at the same weight
-  as Designer and Foundry. **Features** tab is a single toggle. **Glyphs** tab has the right
-  content with a horizontal scrollbar inside the grid.
-- **Find similar** is a strong feature with a weak surface. Results open as a split pane
-  that halves the list; every result carries the same "Why:" sentence (same classification,
-  matching x-height, similar width…), so the explanation says nothing; results are
-  individual faces, so three Myriad Pro variants fill three rows; the score is a number
-  with no visual weight.
-- **Pairing Studio** opens as a separate full-window mode but uses a fraction of it: a
-  narrow magazine column floats in ~80 % empty white. It is a pairing tool showing one font,
-  with no suggestions and no second face in sight; the font choice per block is a small
-  "Panel font" dropdown in the gutter, which is the single most important control on the
-  screen and looks like a form field. Four stacked toolbar rows of text buttons (Add panel /
-  Close, Layout select / Print, Save / Revert / Duplicate / Reset / History, family name /
-  Lock width). Instructions live in a sentence at the bottom.
-- **Empty states** are a sentence of grey text.
-- **Status bar** permanently shows app, API and platform version strings.
-- **Language filtering is invisible.** Per-font language coverage exists (Glyphs tab) but
-  there is no way to filter the library by language or script. The "Language" selector in
-  the preview bar only changes the sample.
+What the boards leave open — decide from the rules below, not from the images:
+
+- The dark theme of every board (the boards show the light theme only).
+- Compact density.
+- Narrow windows (the boards are 1440 px wide).
 
 ## Design system rules
 

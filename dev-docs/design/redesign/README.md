@@ -41,4 +41,4 @@ A UI story is reviewed against its image, not against the previous screenshot. T
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: 2026-11-03 (17 of 18; `2-family-language.png` still to export — section = Styles, language = Serbian (Latin)).
+Export date: 2026-11-03 (18 of 18).
