@@ -1313,6 +1313,7 @@
     "noFont": "Keine Schrift",
     "layout": "Satzbild",
     "closeTitle": "Zurück zur Bibliothek (Escape)",
+    "help": "So bearbeitest du die Seite",
     "blockFont": "Schrift für {label}",
     "panelFont": "Schrift des Panels",
     "fonts": "Schriften",

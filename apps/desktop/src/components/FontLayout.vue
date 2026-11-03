@@ -48,6 +48,9 @@ const props = defineProps<{
   setWidthLock?: (locked: boolean, widthPx: number | null) => Promise<void>;
   /** A face of its own per block index; null (or no entry) sets the block in `face`. */
   blockFaces?: readonly (FaceSummary | null)[];
+  /** The parent already names the face and explains the gestures: no name line, the lock floats
+   *  on the page and the hint is for screen readers only. */
+  bare?: boolean;
 }>();
 defineSlots<{
   /** Controls for one block, beside its size badge. */
@@ -205,9 +208,11 @@ function blockFamily(i: number): string {
     :data-state="face ? state : undefined"
   >
     <template v-if="face && layout">
-      <header class="head">
-        <span class="name">{{ face.familyName }}</span>
-        <span class="style">{{ face.style }}</span>
+      <header class="head" :class="{ bare }">
+        <template v-if="!bare">
+          <span class="name">{{ face.familyName }}</span>
+          <span class="style">{{ face.style }}</span>
+        </template>
         <span v-if="state === 'failed'" class="failed" role="status">
           {{ t('textLayout.loadFailed') }}
         </span>
@@ -276,7 +281,7 @@ function blockFamily(i: number): string {
           </div>
         </div>
       </div>
-      <p v-if="hasEditor" :id="hintId" class="hint fm-no-print">
+      <p v-if="hasEditor" :id="hintId" class="hint fm-no-print" :class="{ 'sr-only': bare }">
         {{ t('textLayout.hint') }}
         <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
       </p>
@@ -304,6 +309,16 @@ function blockFamily(i: number): string {
   padding: 8px 16px;
   border-bottom: 1px solid var(--fm-border);
   font-size: var(--fm-text-sm);
+}
+.head.bare {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--fm-z-sticky);
+  justify-content: flex-end;
+  height: 0;
+  padding: var(--fm-space-2) var(--fm-space-4) 0;
+  border-bottom: 0;
+  overflow: visible;
 }
 .name {
   font-weight: 600;
@@ -344,16 +359,20 @@ function blockFamily(i: number): string {
 }
 .lock {
   margin-inline-start: auto;
-  padding: 1px 8px;
-  border: 1px solid var(--fm-border-strong);
+  padding: 2px var(--fm-space-2);
+  border: 0;
   border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: var(--fm-fg);
+  background-color: transparent;
+  color: var(--fm-muted);
   font: var(--fm-text-xs)/1.4 var(--fm-font-ui);
   cursor: pointer;
+  transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+.lock:hover {
+  background-color: var(--fm-hover);
+  color: var(--fm-fg);
 }
 .lock[aria-pressed='true'] {
-  border-color: var(--fm-accent);
   color: var(--fm-accent);
 }
 .lock:focus-visible {

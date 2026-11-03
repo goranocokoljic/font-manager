@@ -1313,6 +1313,7 @@
     "noFont": "No font",
     "layout": "Layout",
     "closeTitle": "Back to the library (Escape)",
+    "help": "How to edit the page",
     "blockFont": "Font for {label}",
     "panelFont": "Panel font",
     "fonts": "Fonts",

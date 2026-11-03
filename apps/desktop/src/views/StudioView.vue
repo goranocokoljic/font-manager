@@ -16,6 +16,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import StudioPanel from '../components/StudioPanel.vue';
+import UiIconButton from '../components/ui/UiIconButton.vue';
 import { t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import { ALL_FONTS_VIEW } from '../stores/preview';
@@ -118,6 +119,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         <span class="label">{{ t('studio.font') }}</span>
         <bdi>{{ fontName }}</bdi>
       </p>
+      <UiIconButton
+        icon="info"
+        :label="t('studio.help')"
+        :title="`${t('textLayout.hint')} ${t('textLayout.hintEdit')}`"
+      />
       <button
         ref="addButton"
         type="button"
@@ -130,15 +136,13 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       >
         {{ t('studio.addPanel') }}
       </button>
-      <button
-        type="button"
-        class="button"
-        aria-keyshortcuts="Escape"
+      <UiIconButton
+        icon="close"
+        :label="t('common.close')"
         :title="t('studio.closeTitle')"
+        aria-keyshortcuts="Escape"
         @click="close"
-      >
-        {{ t('common.close') }}
-      </button>
+      />
     </header>
     <div class="panels">
       <StudioPanel
@@ -189,12 +193,17 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
   color: var(--fm-muted);
 }
 .button {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
+  padding: 2px var(--fm-space-2);
+  border: 0;
+  border-radius: var(--fm-radius-sm);
   background-color: transparent;
-  color: inherit;
+  color: var(--fm-muted);
   font: inherit;
+  transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+.button:hover {
+  background-color: var(--fm-hover);
+  color: var(--fm-fg);
 }
 .button[aria-disabled='true'] {
   opacity: 0.5;

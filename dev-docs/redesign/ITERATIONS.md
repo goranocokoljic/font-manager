@@ -323,3 +323,13 @@ Only four iterations since review 45 (46–49); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-51.log`).
 **Follow-ups:** the `expanded-family` scene opens row 3 (one-style) so it now shows no expansion — point it at a multi-style family (`?mockStyles=`) next time shots are touched. Item 7 hover weight range; item 17 Studio bars.
 **Dependencies:** none.
+
+## Iteration 52 — 2026-11-03 — Studio: three bars become two, quiet icon buttons
+**Critique (before):** the `list` shot is calm and consistent. The Studio is the weakest screen: three stacked bars, bordered text buttons (Add panel, Close, Print…), the font name shown twice (top bar and again above the page), a boxed "Lock width", and a help sentence under the page.
+**Why:** DESIGN item 17 "Left", named by review 50. Visible in `studio`: one bar gone, the page starts 33 px higher, three bordered buttons gone.
+**What changed:** `FontLayout` got a `bare` prop (Studio only): no duplicate name line, "Lock width" floats quiet at the page corner, the hint stays for screen readers (`aria-describedby`). Studio top bar: Close is an icon, help is an info icon whose tooltip holds the gesture sentence, Add panel is a quiet text button. Panel bar: Print and close-panel are `UiIconButton`s. New `print` icon. `studio.help` string (en/de).
+**Ticked:** none (item 17 stays open).
+**Shots:** `.harness/redesign/shots/52` (before), `52-after`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 (two pairing-studio specs updated on purpose: font name now read from `studio-font`; Print is an icon, so title not text; `e2e-52.log`).
+**Follow-ups:** item 17 left: options in their own face, a tooltip that shows instantly for the info icon (native title is slow), fold Add panel into an icon. Item 6 `expanded-family` scene still points at a one-style row.
+**Dependencies:** none.

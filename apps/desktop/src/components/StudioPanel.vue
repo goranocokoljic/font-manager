@@ -16,6 +16,7 @@ import { LAYOUT_PRESETS, PRESET_LABELS } from '../stores/views';
 import BlockFontPicker from './BlockFontPicker.vue';
 import FontLayout from './FontLayout.vue';
 import LayoutActions from './LayoutActions.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const props = defineProps<{
@@ -114,24 +115,18 @@ onMounted(() => {
         {{ t('studio.layout') }}
         <UiSelect :model-value="selected" :options="pickerOptions" @update:model-value="pick" />
       </label>
-      <button
-        type="button"
-        class="button"
-        :aria-label="t('studio.printPanelFor', { number: String(number) })"
+      <UiIconButton
+        icon="print"
+        :label="t('studio.printPanelFor', { number: String(number) })"
         :title="t('studio.printTitle')"
         @click="studio.print(panel)"
-      >
-        {{ t('studio.printPanel') }}
-      </button>
-      <button
+      />
+      <UiIconButton
         v-if="closable"
-        type="button"
-        class="button"
-        :aria-label="t('studio.closePanelFor', { number: String(number) })"
+        icon="close"
+        :label="t('studio.closePanelFor', { number: String(number) })"
         @click="emit('close')"
-      >
-        {{ t('studio.closePanel') }}
-      </button>
+      />
     </header>
     <p v-if="printError" class="error fm-no-print" role="alert">{{ printError.message }}</p>
     <FontLayout
@@ -142,6 +137,7 @@ onMounted(() => {
       :set-props="layouts.setBlockProps"
       :width="layouts.width"
       :set-width-lock="layouts.setWidthLock"
+      bare
       :block-faces="blockFaces"
       @edit-text="layouts.setBlockText"
     >
@@ -172,7 +168,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--fm-space-2);
   min-height: 40px;
   padding: 0 16px;
   border-bottom: 1px solid var(--fm-border);
@@ -192,21 +188,12 @@ onMounted(() => {
   align-items: center;
   gap: 4px;
 }
-.button {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
 .error {
   margin: 0;
   padding: 4px 16px;
   color: var(--fm-danger);
 }
-.name:focus-visible,
-.button:focus-visible {
+.name:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: 1px;
 }

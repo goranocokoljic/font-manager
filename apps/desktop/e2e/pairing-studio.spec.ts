@@ -78,7 +78,7 @@ test('Layout mode opens the layout and face in Pairing Studio; Close returns to 
   expect(names).toEqual(expect.arrayContaining(['Book', 'Columns', 'Quote']));
   await selectOption(studioPicker(page), 'quote');
   await expect(page).toHaveURL(/layout=quote/);
-  await expect(layout(panel, 'Quote')).toContainText('JetBrains Mono');
+  await expect(panel.getByTestId('studio-font')).toContainText('JetBrains Mono');
 
   // Close goes back to the library: same URL, same mode, same preset and selection.
   await panel.getByRole('button', { name: 'Close', exact: true }).click();
@@ -434,7 +434,7 @@ test('"Print..." prints one panel alone, as live text in its fonts, and the PDF 
 
   // The button has a label and is on the Tab path right after the panel's layout picker.
   const print = second.getByRole('button', { name: 'Print panel 2', exact: true });
-  await expect(print).toHaveText('Print…');
+  await expect(print).toHaveAttribute('title', /Print/);
   await second.getByRole('combobox', { name: 'Layout' }).focus();
   await page.keyboard.press('Tab');
   await expect(print).toBeFocused();
