@@ -10,6 +10,7 @@ import { ACTIONS, chordOf, formatChord } from '../keyboard/keymap';
 import { isFontDrag, readFontDrop } from '../list/drag';
 import { useTaggingStore } from '../stores/tagging';
 import { useTagsStore } from '../stores/tags';
+import UiChevron from './ui/UiChevron.vue';
 
 const tags = useTagsStore();
 const tagging = useTaggingStore();
@@ -68,9 +69,9 @@ function countLabel(n: number): string {
           aria-controls="fm-tags-list"
           @click="tagging.folded = !tagging.folded"
         >
-          <span class="chevron fm-directional" aria-hidden="true">{{
-            tagging.folded ? '▸' : '▾'
-          }}</span>
+          <span class="chevron fm-directional" aria-hidden="true"
+            ><UiChevron :open="!tagging.folded"
+          /></span>
           {{ t('tags.heading') }}
         </button>
       </h2>
@@ -133,7 +134,11 @@ function countLabel(n: number): string {
   font: inherit;
 }
 .chevron {
-  width: 10px;
+  display: inline-flex;
+}
+.chevron :deep(svg) {
+  width: 12px;
+  height: 12px;
 }
 .list {
   margin: 0;

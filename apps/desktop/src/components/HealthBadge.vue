@@ -3,16 +3,24 @@
 import { computed } from 'vue';
 import type { Health } from '../api/types';
 import { t } from '../i18n';
+import UiBadge from './ui/UiBadge.vue';
 
 const props = defineProps<{ health: Health }>();
 
 const label = computed(() => t(`health.${props.health.kind}`));
+const tone = computed(() =>
+  props.health.kind === 'broken'
+    ? 'danger'
+    : props.health.kind === 'unsupported'
+      ? 'warning'
+      : 'quiet',
+);
 const reason = computed(() => (props.health.kind === 'ok' ? null : props.health.reason));
 </script>
 
 <template>
   <p class="health" data-testid="health-badge">
-    <span class="badge" :class="health.kind">{{ label }}</span>
+    <UiBadge class="badge" :class="health.kind" :tone="tone">{{ label }}</UiBadge>
     <span v-if="reason" class="reason">{{ reason }}</span>
   </p>
 </template>
@@ -24,23 +32,6 @@ const reason = computed(() => (props.health.kind === 'ok' ? null : props.health.
   align-items: baseline;
   gap: 8px;
   margin: 0;
-}
-.badge {
-  padding: 0 8px;
-  border: 1px solid currentColor;
-  border-radius: var(--fm-radius-md);
-  font-size: var(--fm-text-xs);
-  font-weight: 600;
-  line-height: 18px;
-}
-.ok {
-  color: var(--fm-muted);
-}
-.broken {
-  color: var(--fm-danger);
-}
-.unsupported {
-  color: var(--fm-warning);
 }
 .reason {
   color: var(--fm-muted);

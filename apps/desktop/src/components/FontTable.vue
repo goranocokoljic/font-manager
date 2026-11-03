@@ -7,7 +7,8 @@
 // Headers sort (ascending, descending, default) and can be dragged to reorder;
 // the Columns menu (TableColumnsMenu) hides and moves them by keyboard. The
 // order of the families comes from the API (`ListFamiliesRequest.order`).
-import UiIcon from './ui/UiIcon.vue';
+import UiBadge from './ui/UiBadge.vue';
+import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import {
@@ -425,7 +426,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 class="twisty fm-directional"
                 aria-hidden="true"
                 @click.stop="onToggle(item.row)"
-                ><UiIcon class="chevron" :class="{ open: item.row.expanded }" name="chevron"
+                ><UiChevron :open="item.row.expanded"
               /></span>
               <bdi class="text" :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
@@ -452,13 +453,13 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
               <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="cellOf(item.row, col.id).badges">
-              <span
+              <UiBadge
                 v-for="b in cellOf(item.row, col.id).badges"
                 :key="b"
                 class="badge"
                 :class="{ good: b === openLicenseBadge() }"
                 :title="b === openLicenseBadge() ? cellOf(item.row, col.id).openLicense : undefined"
-                >{{ b }}</span
+                >{{ b }}</UiBadge
               >
             </template>
             <bdi v-else class="text" :title="cellOf(item.row, col.id).text">{{
@@ -630,18 +631,6 @@ span.sort {
 .mark.italic {
   background-color: var(--fm-bg);
 }
-.badge {
-  flex: none;
-  padding: 1px 5px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  font-weight: 600;
-}
-.badge.good {
-  border-color: var(--fm-border-strong);
-}
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -649,11 +638,5 @@ span.sort {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
-}
-.chevron {
-  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-.chevron.open {
-  transform: rotate(90deg);
 }
 </style>

@@ -56,6 +56,8 @@ const props = withDefaults(
     outline?: boolean;
     /** Starts no load for a face not held yet (the list moves fast). */
     defer?: boolean;
+    /** Shows the "Variable" badge; Waterfall shows it on its first line only. */
+    showVariable?: boolean;
   }>(),
   {
     label: undefined,
@@ -72,6 +74,7 @@ const props = withDefaults(
     metrics: null,
     outline: false,
     defer: false,
+    showVariable: true,
   },
 );
 
@@ -201,7 +204,7 @@ const deferredStyle = computed(() => ({
       <slot name="lead" />
       <bdi>{{ name }}</bdi>
       <slot name="detail" />
-      <UiBadge v-if="face.isVariable">{{ t('list.variable') }}</UiBadge>
+      <UiBadge v-if="showVariable && face.isVariable">{{ t('list.variable') }}</UiBadge>
       <UiBadge
         v-if="fallback"
         data-testid="fallback-hint"

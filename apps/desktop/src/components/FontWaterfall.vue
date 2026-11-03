@@ -23,6 +23,7 @@ import { DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
+import UiChevron from './ui/UiChevron.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -220,8 +221,8 @@ function onToggle(row: ListRow): void {
             class="twisty fm-directional"
             aria-hidden="true"
             @click.stop="onToggle(item.row)"
-            >{{ item.row.expanded ? '▾' : '▸' }}</span
-          >
+            ><UiChevron :open="item.row.expanded"
+          /></span>
           <ActivationDot :state="rowActivation(item.row)" />
           <bdi class="name">{{
             item.row.kind === 'face'
@@ -251,6 +252,7 @@ function onToggle(row: ListRow): void {
             :align="preview.align"
             :color="preview.textColor"
             :fallback="k === 0 ? item.fallback : null"
+            :show-variable="k === 0"
             :missing="item.missing"
             :variations="item.variations"
             :defer="!motion.settled.value"
@@ -333,7 +335,6 @@ function onToggle(row: ListRow): void {
   place-items: center;
   width: 24px;
   color: var(--fm-muted);
-  font-size: var(--fm-text-md);
   cursor: pointer;
 }
 .slot.face .head .name {

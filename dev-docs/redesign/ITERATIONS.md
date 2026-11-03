@@ -10,7 +10,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iteration 7: toolbar icons + UiSegmentedControl done; status bar, dark-first, collapsible panes remain)
 - [ ] 5 Sidebar redesign (iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
-- [ ] 6 List rows (iteration 9: UiBadge + real chevron twisty done; row meta line, hover actions, sub-row styling remain)
+- [ ] 6 List rows (iteration 9 + review 10: UiBadge and UiChevron everywhere; hover actions, chevron alignment, sub-row styling remain)
 - [ ] 7 Grid cards
 - [ ] 8 Inspector
 - [ ] 9 Find similar as a mode
@@ -72,42 +72,27 @@ Built `UiDrawer`; the facets moved into it, the bar shows `Filters · N` plus re
 **Next five:** item 3 (preview bar: sample text as the hero; `UiField`, `UiSlider`, `UiToggle`) → item 4 (shell + toolbar overflow; `UiSegmentedControl`) → item 5 (sidebar; `UiIconButton`) → item 6 (rows; `UiBadge`) → item 7 (grid cards). Every one must change the `list` shot. Build each `ui/` component once and move existing copies onto it in the same iteration.
 
 ## Iteration 6 — 2026-11-03 — Preview bar: one row, sample text as the hero
-**Critique (before):** Three rows of form fields sit above the specimens. Labels, native-looking number boxes and checkboxes outweigh the fonts. The one control that matters, the sample text, is a dropdown. Good: the Filters button and chips are quiet now; Inter reads well.
-**Why:** backlog item 3, lowest unfinished and unblocked. The `list` shot changes at once: three rows become one.
-**What changed:** `PreviewControls.vue` — row 1 is sample preset, a real text field (typing switches to custom text), language (pangram only), size slider and number, and an `Options` toggle. Row 2 (line height, tracking, auto size, metrics, outline, align, colours, surface, reset) opens under it, closed by default. Specimens start ~90 px higher. New strings `preview.heroPlaceholder`, `preview.options` (en, de).
-**Tests:** e2e helper `showPreviewOptions` in `e2e/select.ts`; preview-controls, preview-overlays, quick-collection and search call it. Tab order in the auto-size test gained the Options button. Vitest 906, Playwright 272 (one run hit a dev-server refusal; palette re-ran green).
-**Backlog ticked:** 3 (partly).
-**Shots:** `.harness/redesign/shots/6` (before), `6b` (after).
-**Alternative not taken:** an options popover; `UiPopover` teleports to body and would break every `controls.getByLabel(...)` scope.
-**Follow-ups:** open state is not remembered per view; the text field shows only a placeholder for non-custom samples (showing the resolved sample needs the store, not logic); `UiSlider`, `UiToggle` and `UiField` still wait for their visible use; presets menu lacks saved texts.
-**Dependencies:** none.
+Preview controls became one row (preset, a real text field, language, size slider, `Options`) with the rest behind the Options toggle; specimens start ~90 px higher.
 
 ## Iteration 7 — 2026-11-03 — Toolbar: icon view switcher, quiet icon buttons
-**Critique (before):** The top bar is a row of eight bordered text buttons (List, Table, Grid, Waterfall, Layout, Compact rows, Compare 0/4, Inspector); it was one wrap away from overflowing at 1440 px. The sidebar is still a list of small buttons (Rescan/Pause/Remove, New/New smart) and the status bar shows version strings. Good: one-row preview bar, the Filters button, Inter.
-**Why:** backlog item 4, lowest unfinished. The `list` shot changes at once: the toolbar loses ~400 px of text.
-**What changed:** new `ui/UiSegmentedControl`, `ui/UiIcon` and `ui/icons.ts` (16 px, 1.5 stroke line icons, one markup map). View modes use the segmented control; Compact rows, Compare (icon + count) and Inspector are quiet icon toggles. Accessible names and `aria-pressed` are unchanged; names double as tooltips.
-**Tests:** `compare.spec.ts` checks the button's accessible name, not its text (UI changed on purpose). Vitest and Playwright green (270 + 2 fixed; log `.harness/redesign/e2e-7.log`).
-**Backlog ticked:** 4 (partly).
-**Shots:** `.harness/redesign/shots/7` (before), `7b` (after, `list` only).
-**Follow-ups:** status bar still shows App/API/Platform strings (move to About); first launch dark; pane collapse shortcuts; the sidebar's inline buttons (item 5, `UiIconButton`); the Compact-rows icon needs a clearer shape; `UiIcon` could replace the Filters icon.
-**Dependencies:** none (hand-drawn Lucide-shaped paths, no package).
+Built `UiSegmentedControl`, `UiIcon` and `icons.ts`; view modes, Compact rows, Compare and Inspector became quiet icons, freeing ~400 px of toolbar.
 
 ## Iteration 8 — 2026-11-03 — Sidebar: header and source actions become icon buttons
-**Critique (before):** The sidebar is the loudest chrome on screen: bordered text buttons (Add folder, Rescan, Pause, Remove, New, New smart, Import set…) sit between rows and out-shout the fonts. No icons, uneven rhythm, "Smart collections" header with nothing under it. Good: counts are right-aligned, the toolbar and preview bar are quiet now.
-**Why:** backlog item 5 (item 4's remaining parts are smaller). The `list` shot changes: seven bordered buttons become quiet 16 px icons.
-**What changed:** new `ui/UiIconButton` (24 px, tooltip = accessible name); eight icons added to `icons.ts`. Sources, Collections and Project sets headers use it; source rows show rescan/pause/remove as icons. Accessible names are unchanged, so tests needed no edits.
-**Tests:** typecheck, lint, Vitest green; Playwright green after the first try failed 3 specs (actions hidden until hover made them unclickable; kept them visible).
-**Backlog ticked:** 5 (partly).
-**Shots:** `.harness/redesign/shots/8` (before), `8b` (after).
-**Follow-ups:** section icons and collapsible sections; smart collections as a subtype (not a trailing pill); empty "Smart collections" header; Problems de-dupe; Online catalogs "Turn on" buttons; Tags/Quick Collection headers; source actions could show on hover once tests focus first.
-**Dependencies:** none.
+Built `UiIconButton`; Sources, Collections and Project sets headers and the source rows' rescan/pause/remove became 16 px icons.
 
 ## Iteration 9 — 2026-11-03 — List rows: one badge component, a real chevron
-**Critique (before):** The list is calmer, but row metadata is a mix of three badge looks (bordered "Open license", plain-text "Variable", bordered "Fallback") and the expand twisty is a 6 px text triangle that sits off the baseline. The sidebar still has "Turn on" buttons and an empty Smart collections header; the status bar still prints version strings. Good: one-row preview bar, quiet toolbar, Inter.
-**Why:** backlog item 6, lowest unfinished with a clear win on the list shot (item 4's leftovers are status-bar text only).
-**What changed:** new `ui/UiBadge` (quiet hairline label; `accent` tone for "Update"). FontList (licence, update) and FontPreviewRow (Variable, Fallback) use it; their copied badge CSS is gone. New `chevron` icon replaces the ▸/▾ twisty in List, Table and Grid; it rotates 90° with a 120 ms ease; RTL flip is kept.
-**Tests:** `rtl.spec.ts` checks the chevron svg, not the ▸ text (UI changed on purpose). A tinted badge failed axe contrast on a selected row, so the badge has no fill. Vitest green; full Playwright 268 passed, 4 failed (a11y contrast, fixed), then a11y/search/rtl/font-list re-run green (55).
-**Backlog ticked:** 6 (partly).
-**Shots:** `.harness/redesign/shots/9` (before), `9b` (after).
-**Follow-ups:** `FontTable`/`FontGrid`/`HealthBadge` still have their own badge CSS (move onto `UiBadge`); row actions as icon buttons on hover; name weight/size in the meta line; Waterfall repeats "Variable" per line; Table/Grid chevrons were not screenshot-checked.
-**Dependencies:** none.
+Built `UiBadge`; FontList and FontPreviewRow badges moved onto it and the ▸/▾ twisty became a rotating chevron in List, Table and Grid.
+
+## Review 10 — 2026-11-03
+**Grades:** iter 6 **3** — the right win (three rows → one), but the text field only shows a placeholder for presets and the slider and number box are still drawn natives, not `UiSlider`/`UiField`. Iter 7 **4** — the clearest first-screen change of the four; it used literal motion values in `UiSegmentedControl`, and the Compact-rows icon reads as "list". Iter 8 **3** — the headers are calm now, but a selected collection still opens six bordered text buttons, "Turn on" stays, and source actions float on their own line. Iter 9 **3** — good component, half-applied: Table, Grid, HealthBadge and catalog rows kept their own badge CSS, Waterfall and Tags kept ▸/▾ text, and the chevron CSS was pasted into three files with literal timings.
+**Regressions:** none in tests, keyboard or views. **Drift:** literal `120ms cubic-bezier` in four places; catalog rows showed an accent-coloured "Variable" (missed by review 5).
+**Pulled apart:** none head-on; iterations 7 and 9 both bypassed the motion tokens that iteration 2 set up.
+**Fixed:**
+- New `ui/UiChevron` (tokens; one rotate rule). List, Table, Grid, Waterfall and the Tags fold use it; three pasted chevron blocks deleted.
+- `UiBadge` gained `danger`/`warning` tones. FontTable (format, licence), FontGrid (Variable, Fallback), HealthBadge and CatalogFamilyItem (Variable, Update) use it; five local badge blocks deleted; catalog "Variable" is monochrome.
+- Waterfall shows "Variable" on its first line only (`FontPreviewRow` `showVariable`), not on all six.
+- `UiSegmentedControl` uses `--fm-motion-fast`/`--fm-ease`.
+**Rule amended (DESIGN.md):** the component list is current; a local `.badge` or a ▸/▾ glyph is a bug. Items 5 and 6 list what is left.
+**Verified:** typecheck, `lint:js`, Vitest 906, Playwright 272 passed / 16 skipped in one run (`.harness/redesign/e2e-review-10.log`). Shots `review-10/` (before) and `review-10-after/`: all views render in light and dark, comfortable and compact.
+**Not fixed, noted:** focused list draws a ring round the whole pane (item 26); Collections "Smart" pill (item 5); status bar version strings (item 4); grid cards still cut the pangram to "The quick b" (item 7).
+**Next five:** item 4 rest (status bar to live state, dark first launch — both on the first screen) → item 5 rest (collection row menu, "Turn on", smart subtype, Problems dedupe) → item 6 rest (hover row actions as `UiIconButton`, chevron alignment) → item 7 (grid cards) → item 8 (inspector Info grouping). Use the tokens for every duration and colour; when a `ui/` component lands, move every copy onto it in the same iteration and grep for the old class.

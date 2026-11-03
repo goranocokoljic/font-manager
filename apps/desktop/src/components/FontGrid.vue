@@ -13,7 +13,8 @@
 // family or opens a style. While the grid moves fast (E35.8, `list/settle.ts`) cards
 // ask for no thumbnails or faces and show their empty frame; once it settles, the
 // cards on screen ask.
-import UiIcon from './ui/UiIcon.vue';
+import UiBadge from './ui/UiBadge.vue';
+import UiChevron from './ui/UiChevron.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import { useScrollAnchor } from '../list/anchor';
@@ -332,17 +333,17 @@ function onToggle(row: ListRow): void {
               class="twisty fm-directional"
               aria-hidden="true"
               @click.stop="onToggle(item.row)"
-              ><UiIcon class="chevron" :class="{ open: item.row.expanded }" name="chevron"
+              ><UiChevron :open="item.row.expanded"
             /></span>
             <ActivationDot :state="rowActivation(item.row)" />
             <bdi class="name">{{ item.name }}</bdi>
             <span v-if="item.row.kind === 'family'" class="detail">{{
               styleCount(item.row.family.styleCount)
             }}</span>
-            <span v-if="item.face?.isVariable" class="badge">{{ t('list.variable') }}</span>
-            <span v-if="item.fallback" class="fallback" data-testid="fallback-hint">{{
+            <UiBadge v-if="item.face?.isVariable">{{ t('list.variable') }}</UiBadge>
+            <UiBadge v-if="item.fallback" data-testid="fallback-hint">{{
               t('list.fallback')
-            }}</span>
+            }}</UiBadge>
           </div>
         </div>
       </div>
@@ -441,24 +442,8 @@ function onToggle(row: ListRow): void {
   flex: none;
   cursor: pointer;
 }
-.badge {
-  color: var(--fm-muted);
-}
 .note {
   color: var(--fm-warning);
   font-size: var(--fm-text-xs);
-}
-.fallback {
-  padding: 0 4px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  font-size: var(--fm-text-xs);
-  line-height: 14px;
-}
-.chevron {
-  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-.chevron.open {
-  transform: rotate(90deg);
 }
 </style>

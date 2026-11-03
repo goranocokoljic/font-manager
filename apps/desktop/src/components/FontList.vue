@@ -42,7 +42,7 @@ import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 import UiBadge from './ui/UiBadge.vue';
-import UiIcon from './ui/UiIcon.vue';
+import UiChevron from './ui/UiChevron.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -295,7 +295,7 @@ function onToggle(row: ListRow): void {
           class="twisty fm-directional"
           aria-hidden="true"
           @click.stop="onToggle(item.row)"
-          ><UiIcon class="chevron" :class="{ open: item.row.expanded }" name="chevron"
+          ><UiChevron :open="item.row.expanded"
         /></span>
         <FontPreviewRow
           v-if="item.face"
@@ -436,12 +436,6 @@ function onToggle(row: ListRow): void {
 }
 .twisty:hover {
   color: var(--fm-fg);
-}
-.chevron {
-  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
-}
-.chevron.open {
-  transform: rotate(90deg);
 }
 .preview {
   flex: 1;

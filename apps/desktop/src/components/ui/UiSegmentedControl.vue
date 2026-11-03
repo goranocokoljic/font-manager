@@ -50,8 +50,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
   background-color: transparent;
   color: var(--fm-muted);
   transition:
-    background-color 120ms cubic-bezier(0.2, 0, 0, 1),
-    color 120ms cubic-bezier(0.2, 0, 0, 1);
+    background-color var(--fm-motion-fast) var(--fm-ease),
+    color var(--fm-motion-fast) var(--fm-ease);
 }
 .seg:hover {
   color: var(--fm-fg);

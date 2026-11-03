@@ -17,6 +17,7 @@ import { WATERFALL_SIZES } from '../list/waterfall';
 import { catalogFamily, useFaceLoader } from '../preview/faceLoader';
 import { useCatalogsStore } from '../stores/catalogs';
 import type { PreviewSettings } from '../stores/preview';
+import UiBadge from './ui/UiBadge.vue';
 
 const props = defineProps<{
   catalog: CatalogId;
@@ -91,11 +92,11 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
       <span v-if="mode !== 'grid'" class="detail">
         <span v-if="family.category">{{ family.category }}</span>
         <span>{{ styles }}</span>
-        <span v-if="family.axes?.length" class="badge">{{ t('list.variable') }}</span>
+        <UiBadge v-if="family.axes?.length">{{ t('list.variable') }}</UiBadge>
       </span>
-      <span
+      <UiBadge
         v-if="update"
-        class="update"
+        tone="accent"
         data-testid="update-available"
         :title="
           t('catalogs.updates.badgeTitle', {
@@ -103,7 +104,7 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
             version: update.availableVersion ?? '',
           })
         "
-        >{{ t('catalogs.updates.badge') }}</span
+        >{{ t('catalogs.updates.badge') }}</UiBadge
       >
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
       <button
@@ -182,18 +183,8 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
   display: flex;
   gap: 8px;
 }
-.badge {
-  color: var(--fm-accent);
-}
 .note {
   color: var(--fm-warning);
-}
-.update {
-  flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--fm-accent);
-  border-radius: var(--fm-radius-md);
-  color: var(--fm-accent);
 }
 .get {
   flex: none;

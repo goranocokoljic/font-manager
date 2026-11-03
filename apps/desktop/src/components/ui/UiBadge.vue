@@ -1,7 +1,10 @@
 <script setup lang="ts">
-// A small monochrome label (licence, variable, fallback). `accent` is for the one
-// state that asks for attention (an update); nothing else is coloured.
-withDefaults(defineProps<{ tone?: 'quiet' | 'accent' }>(), { tone: 'quiet' });
+// A small monochrome label (licence, format, variable, fallback, health). `accent` is for
+// the one state that asks for attention (an update); `danger` and `warning` mark a problem
+// (a broken or unsupported file). Nothing else is coloured.
+withDefaults(defineProps<{ tone?: 'quiet' | 'accent' | 'danger' | 'warning' }>(), {
+  tone: 'quiet',
+});
 </script>
 
 <template>
@@ -25,5 +28,13 @@ withDefaults(defineProps<{ tone?: 'quiet' | 'accent' }>(), { tone: 'quiet' });
 .tone-accent {
   border-color: color-mix(in srgb, var(--fm-accent) 50%, transparent);
   color: var(--fm-accent);
+}
+.tone-danger {
+  border-color: color-mix(in srgb, var(--fm-danger) 50%, transparent);
+  color: var(--fm-danger);
+}
+.tone-warning {
+  border-color: color-mix(in srgb, var(--fm-warning) 50%, transparent);
+  color: var(--fm-warning);
 }
 </style>

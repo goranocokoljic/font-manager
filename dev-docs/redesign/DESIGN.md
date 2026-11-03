@@ -125,9 +125,11 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
 - **Dialog scrim:** `--fm-scrim`, never a literal. (Added in review 5.)
 - **Specimen area:** neutral background, no border; preview colour follows the theme unless
   the user overrides it; previews honour the `font-feature-settings` chosen in Features.
-- **Components** (`src/components/ui/`): `UiPopover` and `UiSelect` exist (iteration 3).
-  The rest — Button, IconButton (with tooltip), Toggle, SegmentedControl, Slider (with value
-  field), Chip, Badge, Drawer, Field, Tabs, EmptyState — are built **by the first visible
+- **Components** (`src/components/ui/`): `UiPopover`, `UiSelect`, `UiDrawer`, `UiIcon` (+ `icons.ts`),
+  `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
+  and `UiChevron` exist (review 10). Every badge and every expand/fold twisty uses them; a
+  local `.badge` class or a ▸/▾ text glyph is a bug. The rest — Button, Toggle, Slider
+  (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
   change that needs them**, not ahead of time: the Filters drawer brings the Drawer and the
   Chip, the view switcher brings the SegmentedControl, the preview bar brings the Slider and
   the Field. Build once, reuse everywhere; when a later change needs a component that exists,
@@ -214,15 +216,19 @@ wrong thing. Items 2–9 are ordered by how much of the first screen they change
 5. **Sidebar redesign.** Sections with icons, counts right-aligned in tabular figures, smart
    collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
    actions as `UiIconButton`s in the section header, sections collapsible, collections as
-   drop targets. Brings `UiIconButton` with tooltip.
+   drop targets. Brings `UiIconButton` with tooltip. Left after iteration 8: a selected collection still opens a
+   block of six bordered text buttons (New inside, Rename, Up, Down, Export…, Delete) — move
+   them into a row menu; the catalog "Turn on" buttons; source actions float on their own
+   line under the source name.
 
 ### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
    format as monochrome glyph badges; row actions (Activate, Compare, Tag, Similar) appear on
    hover or focus, right-aligned; selection = accent bar + subtle tint; expanded family shows
-   its styles as sub-rows. Brings `UiBadge`: the badge CSS is copied in `FontList`,
-   `FontTable`, `FontPreviewRow`, `FontGrid` and `HealthBadge` — one component replaces all
-   five. The expand twisty (a 6 px triangle below the meta line) needs a real 16 px chevron.
+   its styles as sub-rows. `UiBadge` and `UiChevron` are done (iteration 9, review 10). Left: the
+   stray bordered "Similar" button on the selected row becomes a hover/focus `UiIconButton`;
+   the chevron sits between the meta line and the sample — align it with the sample's
+   cap height.
 7. **Grid cards never truncate.** Fit the sample automatically (a short word at large size,
    or auto-size the pangram to the card width); footer with name and style count; hover
    reveals the weight range.
