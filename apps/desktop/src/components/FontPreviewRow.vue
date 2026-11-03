@@ -203,12 +203,14 @@ const scrubTip = computed(() => `wght ${scrubbing.value}`);
 const SCRUB_THRESHOLD_PX = 4;
 /** The weight shown while scrubbing, else null. */
 const scrubbing = ref<number | null>(null);
-let scrub: { x: number; from: number; axis: Axis; active: boolean } | null = null;
+let scrub: { x: number; from: number; axis: Axis; dir: number; active: boolean } | null = null;
 
 function onScrubDown(e: PointerEvent): void {
   const axis = wghtAxis.value;
   if (!axis || e.button !== 0 || state.value !== 'ready') return;
-  scrub = { x: e.clientX, from: axesSet.value(props.face.id, axis), axis, active: false };
+  // The direction is read once per drag, not on every move (a style read forces layout).
+  const dir = getComputedStyle(e.currentTarget as HTMLElement).direction === 'rtl' ? -1 : 1;
+  scrub = { x: e.clientX, from: axesSet.value(props.face.id, axis), axis, dir, active: false };
 }
 
 function onScrubMove(e: PointerEvent): void {
@@ -220,9 +222,8 @@ function onScrubMove(e: PointerEvent): void {
     scrub.active = true;
     el.setPointerCapture?.(e.pointerId);
   }
-  const { axis, from } = scrub;
+  const { axis, from, dir } = scrub;
   const span = (axis.max ?? 0) - (axis.min ?? 0);
-  const dir = getComputedStyle(el).direction === 'rtl' ? -1 : 1;
   axesSet.set(props.face.id, axis, Math.round(from + ((dx * dir) / SCRUB_SPAN_PX) * span));
   scrubbing.value = axesSet.value(props.face.id, axis);
 }
@@ -334,10 +335,11 @@ const deferredStyle = computed(() => ({
 .sample.scrubbable {
   cursor: ew-resize;
   touch-action: pan-y;
+  user-select: none;
 }
 .scrub-tip {
   margin-inline-start: auto;
-  padding: 0 6px;
+  padding: 0 var(--fm-space-2);
   border-radius: var(--fm-radius-sm);
   background: var(--fm-hover);
   color: var(--fm-accent);

@@ -519,6 +519,7 @@
     "rows": {
       "move": "Hoch und runter",
       "extend": "Auswahl erweitern",
+      "family": "Familie öffnen oder schließen",
       "search": "Suche",
       "palette": "Befehlspalette",
       "quickLook": "Schnellansicht",

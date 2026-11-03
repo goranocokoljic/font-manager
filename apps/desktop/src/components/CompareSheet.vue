@@ -240,12 +240,7 @@ function onFocusIn(e: FocusEvent): void {
         }}</span>
         <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
           <span id="fm-compare-mode-label" class="sr-only">{{ t('compare.mode') }}</span>
-          <label
-            v-for="m in COMPARE_MODES"
-            :key="m.value"
-            class="mode"
-            :class="{ on: compare.mode === m.value }"
-          >
+          <label v-for="m in COMPARE_MODES" :key="m.value" class="mode">
             <input
               type="radio"
               name="fm-compare-mode"
@@ -410,7 +405,7 @@ function onFocusIn(e: FocusEvent): void {
   --fm-compare-1: #e0451d;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--fm-space-3);
   width: min(1200px, 96vw);
   min-height: min(560px, 90vh);
   max-height: 90vh;
@@ -429,7 +424,7 @@ function onFocusIn(e: FocusEvent): void {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: var(--fm-space-3);
 }
 .current {
   font-weight: 600;
@@ -438,22 +433,22 @@ function onFocusIn(e: FocusEvent): void {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: var(--fm-space-3);
 }
 .save {
   display: flex;
-  gap: 6px;
+  gap: var(--fm-space-2);
 }
 .saved {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--fm-space-2);
 }
 .saved ul {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--fm-space-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -494,7 +489,7 @@ h2 {
 .mode:hover {
   color: var(--fm-fg);
 }
-.mode.on {
+.mode:has(input:checked) {
   background-color: var(--fm-bg);
   color: var(--fm-accent);
   box-shadow: 0 0 0 1px var(--fm-border);
@@ -557,7 +552,7 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: var(--fm-space-2);
   color: var(--fm-muted);
 }
 .name {
@@ -573,19 +568,23 @@ h2 {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--fm-space-2);
 }
 .picks {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--fm-space-3);
 }
 .pick {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--fm-space-2);
 }
 .stage {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
   overflow: hidden;
   padding-block: var(--fm-space-6);
   border-block: 1px solid var(--fm-border);
@@ -602,7 +601,7 @@ h2 {
 }
 .legend {
   display: flex;
-  gap: 16px;
+  gap: var(--fm-space-4);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -610,7 +609,7 @@ h2 {
 .legend li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--fm-space-2);
 }
 .swatch {
   flex: none;

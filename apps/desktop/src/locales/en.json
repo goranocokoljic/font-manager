@@ -519,6 +519,7 @@
     "rows": {
       "move": "Up and down",
       "extend": "Extend the selection",
+      "family": "Open or close a family",
       "search": "Search",
       "palette": "Command palette",
       "quickLook": "Quick look",

@@ -218,9 +218,12 @@ button (17), the Filters drawer names features (8) and Features shows each sampl
 Since review 60 every number field on the first screen is `UiNumberField` (26); since review 65
 every text button in the main window is one quiet `UiButton` (26) and the sidebar Tags empty is a
 title and a key chip (21); since review 70 every toolbar icon is one `UiIconButton` and Grid cards
-show the weight range on hover (7). Consistency sweeps no longer move the `list` shot; the next
-wins are features a designer feels: Compare overlay (16), weight scrubbing (14), the grid's
-keyboard expand (13), "Lock width" beside the page (17), then the last native inputs (26).
+show the weight range on hover (7). Since review 75 the Compare sheet is a centred specimen sheet at
+twice the list size (16), variable samples scrub their weight on drag (14) and the Grid opens a
+family with Alt+→/← (13). The `list` shot has not changed since review 70: the next wins must move
+it or a scene beside it — "Lock width" beside the page and the Layout help behind its info button
+(17), the bordered buttons left in the Catalog rows and the Axes tab (26), the Grid card name cut to
+"Sam…" (7), then scrubbing in Grid cards and Quick Look (14).
 Every feature adds a scene to `shots.mjs` in the same
 iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
@@ -269,7 +272,8 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
    style cards are solid and every card tints on hover (iteration 47); hover or the cursor
    swaps the style count for the weight range, with `grid-hover` and `grid-expanded` scenes
-   (iteration 66). Left: a family card with a chevron and a badge cuts its name to "Sam…".
+   (iteration 66). Left: a family card with a chevron and a badge cuts its name to "Sam…"
+   (seen again in review 75 — the first thing to fix in the Grid).
 8. **Inspector.** Info, Glyphs, the Features switches and one shared `InspectorTabHead` are
    done (iterations 17, 26–28, 43, reviews 20, 30, 45); each Features switch shows a sample in the
    face with the feature on (iteration 49), beside the same text with it off (iteration 54); the
@@ -303,16 +307,24 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 13. **Keyboard model.** `↑`/`↓` or `J`/`K` move through the list; Space quick look; `A`
     toggle activation; `C` add to compare; `T` tag; `S` find similar; `1`–`5` switch views;
     `/` or `F` focus search; `[` `]` toggle sidebar / inspector; `?` opens the shortcut
-    sheet. Shortcuts shown in tooltips. Done (iteration 31, review 35). Left: the Grid cannot
-    open a family from the keyboard (ArrowRight moves the cursor; iteration 66); shortcuts in
+    sheet. Shortcuts shown in tooltips. Done (iteration 31, review 35); the Grid opens and closes
+    a family with Alt+→/← (iteration 74), listed in the `?` sheet (review 75). Left: shortcuts in
     the tooltips of the toolbar buttons; a test for J/K and the sheet.
 14. **Weight scrubbing.** On variable fonts, drag horizontally on a preview to scrub the
-    weight axis; axis value shown as a tooltip; release to keep.
+    weight axis; axis value shown as a tooltip; release to keep. Done in `FontPreviewRow`
+    (iteration 73; review 75: no text selection while dragging, direction read once per drag).
+    Left: Grid cards and Quick Look do not scrub; other axes (wdth, opsz) with a modifier; a
+    Playwright drag test with a real pointer; a `scrub` scene (hold the pointer mid-drag).
 15. **Context presets in Layout.** Website hero, Mobile UI (iOS sizes), Instagram post,
     Video title and lower third (1920×1080 safe area), Poster. Real layouts with the user's
     sample text.
 16. **Compare: overlay mode.** Two faces superimposed, the second in the accent colour at
-    50 % opacity, for x-height and width comparison — in addition to side-by-side.
+    50 % opacity, for x-height and width comparison — in addition to side-by-side. The overlay
+    existed; the sheet is now centred, quiet and draws at twice the list size, the overlay line
+    centred on its stage (iterations 71–72, review 75; `compare`, `compare-overlay` scenes).
+    Left: a size control in the sheet; the mode switch is a local radio copy of the
+    `UiSegmentedControl` look — give `UiSegmentedControl` a text + radio-group variant and move
+    Compare onto it; Pairings under the sheet is a sentence when empty.
 17. **Pairing Studio + "Pairs with" (API?).** The studio is where designers will spend real
     time, so it should feel like a canvas, not a form: a paper surface at realistic page scale
     centred in the window with a neutral backdrop; roles instead of blocks (Headline, Deck,
@@ -327,7 +339,8 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     Two bars now: Close, Print and close-panel are icon buttons, the gesture sentence opens
     from the info button (iteration 52, review 55); "Add panel" is a plus icon (iteration 67).
     Left: options in their own face; "Lock width" floats at the window's corner instead of
-    beside the page (shared `FontLayout` header).
+    beside the page (shared `FontLayout` header); the Layout view still prints its gesture
+    sentence under the page, where the Studio has it behind the info button.
 18. **Drag out (API?).** Drag a family from the list to drop its files into Explorer / Finder or
     another app; copy CSS / `font-family` name from the row menu.
 19. **Problems & Duplicates triage view (API?).** Grouped, with a "keep best" suggestion and bulk
@@ -353,7 +366,7 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     `UiIconButton`, Quick Collection and Catalog on `UiButton` (iterations 68–69, review 70).
     Left, in order: the Settings nav shows the focus ring on load (since review 40);
     `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; the
-    bordered buttons left in dialogs (CompareSheet, CatalogDownload/Install, LocalApiSettings,
+    bordered buttons left in the Catalog rows (Install, Download…), dialogs (CatalogDownload/Install, LocalApiSettings,
     Axes presets and "Pin this instance"); `quick-collection` and `catalog` scenes; a designed date picker
     (purchase date is a plain text field with a `YYYY-MM-DD` hint); a `preview-options-open`
     scene.

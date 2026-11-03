@@ -34,6 +34,7 @@ const groups = computed(() => [
     rows: [
       { label: t('shortcuts.rows.move'), keys: ['↑↓', 'J', 'K'] },
       { label: t('shortcuts.rows.extend'), keys: ['Shift+↑↓'] },
+      { label: t('shortcuts.rows.family'), keys: ['←→', 'Alt+←→'] },
       { label: t('shortcuts.rows.search'), keys: [chord(ACTIONS.search)] },
       { label: t('shortcuts.rows.palette'), keys: [chord(ACTIONS.palette)] },
     ],

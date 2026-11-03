@@ -17,10 +17,10 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 10 Language & script filter (iteration 36: visible language chips in the Filters drawer, choosing one switches the All fonts pangram; counts and script grouping remain)
 - [ ] 11 "Renders my text" filter + visible missing glyphs
 - [x] 12 Quick Look, finished (iteration 32: full-window specimen, size ladder, paragraph, arrows move between fonts; no glyph grid or per-view sample/size follow yet)
-- [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; toolbar toggle + more tooltips remain)
+- [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; iteration 74 + review 75: Grid Alt+→/← opens a family, listed in the sheet; more tooltips remain)
 - [x] 14 Weight scrubbing (iteration 73: drag across a variable sample in the list/table rows to scrub `wght`; value pill beside the label; kept on release)
 - [ ] 15 Context presets in Layout
-- [ ] 16 Compare overlay (overlay mode already existed; iteration 71 redesigned the Compare sheet: text segmented control, icon close, quiet buttons, hairline specimens; weight/size scale and `UiSegmentedControl` for text remain)
+- [ ] 16 Compare overlay (overlay mode already existed; iterations 71–72 + review 75: centred sheet, quiet controls, hairline specimens at 2× the list size, overlay centred on its stage; a size control and a text/radio `UiSegmentedControl` variant remain)
 - [ ] 17 Pairing Studio + Pairs with
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
@@ -426,40 +426,27 @@ Four iterations since review 65 (66–69); all four graded.
 **Next five:** stop sweeping, ship features — item 16 (Compare overlay) → item 14 (weight scrubbing on a variable preview) → item 13 (Grid opens a family from the keyboard) → item 17 ("Lock width" beside the page) → item 26 (Settings nav focus ring; `quick-collection` and `catalog` scenes). Every iteration opens before/after shots of a scene that shows its change; a new component state goes through the global baseline, never a local copy.
 
 ## Iteration 71 — 2026-11-03 — Compare sheet: a centered sheet with designed controls
-**Critique (before):** the Compare sheet hung from the top edge like a dropdown. Native radios, a boxed "×", bordered Remove / Save buttons and a form-style name field made it look like a dialog from another app. Each face sat in its own bordered card, and the overlay (the best idea here) was a thin strip. Good: the overlay already exists, the blue/red 50 % colours read well.
-**Why:** item 16 asked for an overlay, but the code already had one; the visible gap was the sheet's surface. Alternative (not taken): scale the specimens up — needs a size decision, logged below.
-**Changed:** `CompareSheet.vue` only. Centered, rounded sheet with a minimum height; modes are a text segmented control (the radios stay real, hidden inputs, so keyboard and tests are unchanged); close is `UiIconButton`; Remove, Save and saved-comparison buttons are `UiButton` (current one turns accent); the name field is an underline; faces are hairline columns/rows, not cards; overlay stage has hairlines only. New `compare` and `compare-overlay` scenes in `shots.mjs`.
-**Backlog:** item 16 stays `[ ]` (see its line). **Shots:** `.harness/redesign/shots/71-before/`, `71/` (viewed: compare light, compare-overlay light and dark).
-**Verified:** typecheck, `lint:js`, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-71.log`).
-**Follow-ups:** specimens in the sheet are still list size (28 px) and leave white space — draw them larger; a text `UiSegmentedControl` variant (the mode control is local CSS now); `.sheet` hard-codes the two compare colours; the sheet is not a full-window Quick-Look-style specimen yet.
-**Dependencies:** none.
-
+The top-hung Compare dialog became a centred sheet with a text segmented mode switch, icon close, quiet buttons and hairline specimens; new `compare` and `compare-overlay` scenes.
 
 ## Iteration 72 — 2026-11-03 — Compare sheet: specimens drawn large
-**Critique (before):** the Compare sheet was centered and calm after 71, but its specimens were list-size (28 px) and filled a third of the sheet; the rest was white space. A comparison sheet should show the letterforms, not a caption. Good: hairline columns, one baseline in overlay.
-**Why:** follow-up from 71. Alternative (not taken): a full-window Quick-Look-style sheet — larger change.
-**Changed:** `CompareSheet.vue` only: the sheet draws the list's size at 2×, clamped 40–96 px, in all three modes (overlay too). Vitest and `compare.spec.ts` expectations updated for the new size (28→56, 40→80).
-**Backlog:** item 16 stays `[ ]` (weight/size scale and a text `UiSegmentedControl` remain).
-**Shots:** `.harness/redesign/shots/72/` (before), `72b/` (after; viewed compare light).
-**Verified:** typecheck, `lint:js`, Vitest 910 (timing tests flake under parallel load: `search.test.ts`, `catalogs.test.ts`; green alone), Playwright 273 passed / 16 skipped (`e2e-72.log`).
-**Follow-ups:** a size control inside the sheet; `.sheet` hard-codes the compare colours; full-window specimen.
-**Dependencies:** none.
+The sheet draws the list's size at 2× (clamped 40–96 px) in all three modes.
 
 ## Iteration 73 — 2026-11-03 — Weight scrubbing on variable previews
-**Critique (before):** the list is calm and paper-white, but a variable font is a still picture: the weight lives in the inspector's Axes tab, three clicks away. Good: specimens are large, chrome is quiet. Worst: nothing invites touching the type.
-**Why:** backlog item 14, first unfinished feature item per review 70. Alternative (not taken): Grid keyboard expand (13). The `list` shot is unchanged at rest; the change is felt on the first drag (cursor `ew-resize` on variable samples).
-**Changed:** `FontPreviewRow.vue` only. Press and drag horizontally on a variable face's sample: 320 px sweeps the whole `wght` range, written to the axes store (the Axes tab follows, "Reset" still works). A 4 px threshold keeps plain clicks selecting; the click that ends a drag is swallowed. RTL flips the direction. A `wght 640` pill shows beside the label while dragging; release keeps the value. Pinned (virtual style) rows do not scrub. Two Vitest tests added.
-**Backlog:** item 14 ticked. **Shots:** `.harness/redesign/shots/73-before/` (nothing static changes; not opened).
-**Verified:** typecheck, `lint:js`, Vitest 912, Playwright 272 passed in the full run + the one `settings.spec` failure was `ERR_CONNECTION_REFUSED` (dev server); settings/list/inspector re-run 31 passed (`e2e-73.log`).
-**Follow-ups:** scrub other axes (opsz, wdth) with a modifier key; a keyboard way to scrub (Alt+←/→); scrubbing in Grid cards and Quick Look; a Playwright drag spec with a real pointer; no `scrub` scene (transient).
-**Dependencies:** none.
+Dragging across a variable face's sample in `FontPreviewRow` scrubs `wght` (320 px = full range) with a value pill, kept on release; no scene.
 
 ## Iteration 74 — 2026-11-03 — Grid: Alt+Right / Alt+Left open and close a family
-**Critique (before):** not looked at (token budget; no static change planned). The list is paper-white and calm; the Grid hides a family's styles behind a click, and its Left/Right keys move between cards.
-**Why:** review 70 listed "Grid opens a family from the keyboard" (item 13). Finding: Enter already toggled a family in the Grid; what was missing was the tree-style pair. Honest scope: small, and no `list` shot changes. Alternative (not taken): Compare size control.
-**Changed:** `list/keys.ts` only: in a multi-column view Alt+Right expands and Alt+Left collapses the cursor family (RTL-aware, cursor stays); outside the Grid Alt stays the browser's. One Vitest test added.
-**Backlog:** item 13 stays `[x]`; its "Grid cannot open a family from the keyboard" gap is closed.
-**Shots:** none opened.
-**Verified:** typecheck, `lint:js`, Vitest, Playwright 273 passed / 16 skipped (`e2e-74.log`).
-**Follow-ups:** show the shortcut in the `?` sheet; Compare size control; "Lock width" beside the page (17).
-**Dependencies:** none.
+`list/keys.ts` gives the Grid the tree-style Alt+→/← pair (Enter already toggled); taken without shots.
+
+## Review 75 — 2026-11-03
+Four iterations since review 70 (71–74); all four graded.
+**Grades:** iter 71 **3** — the Compare sheet finally looks like this app (centred, quiet, hairlines, two scenes added); but its mode switch is a local copy of the `UiSegmentedControl` look with a local `.on` class (the bug review 70 named), literal gaps, and its new `min-height` left the overlay line floating over a ~250 px empty band. Iter 72 **3** — one line, a visible gain: letterforms read; side by side now wraps the pangram to four lines. Iter 73 **3** — the first change in months a designer feels in the hand, tested, RTL-aware; but it read `getComputedStyle` on every pointer move, selected the sample's text while dragging in Waterfall/Strip/Similar/Quick Collection (only List rows had `user-select: none`), a literal 6 px pad, no scene. Iter 74 **2** — correct and tested, but invisible: no shots, no critique, and the keys were not added to the `?` sheet, so nobody finds them.
+**Regressions:** none in views, keyboard, tests or list performance (59.8 fps). **Drift:** literal spacing (71, 73); a local state class (71). No new colours, fonts, radii or native controls.
+**Pulled apart:** 71's local segmented control against `UiSegmentedControl` (two looks of one control; Compare needs radio semantics, the toolbar `aria-pressed`). The `list` shot is byte-identical from review 70 to now.
+**Fixed:**
+- `CompareSheet`: the checked radio draws the segment (`:has(input:checked)`), `.on` class gone; the overlay stage takes the free height and centres the line; every literal gap on spacing tokens.
+- `FontPreviewRow`: direction read once per drag; `user-select: none` on scrubbable samples; pill padding on a token.
+- `ShortcutSheet`: "Open or close a family  ←→  Alt+←→" row (en/de).
+**Rule amended:** none. **Backlog (DESIGN.md):** items 7, 13, 14, 16, 17, 26 and the three-second note rewritten; item 16 names the text/radio `UiSegmentedControl` variant.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 913, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-75.log`). Shots `75/` (before, 64) and `75-after/` (64): all 32 scenes render in light and dark, comfortable and compact; `compare`, `compare-overlay`, `shortcuts` changed.
+**Not fixed, noted:** Grid card name "Sam…"; Layout view's gesture sentence under the page; Catalog Install/Download and Axes instance chips bordered; Settings nav focus ring on load; empty collection shows "Clear filters" with no filters.
+**Next five:** move the `list` shot or a scene beside it — item 17 ("Lock width" beside the page; Layout help behind the info button) → item 7 (Grid card name never cut to "Sam…") → item 26 (Catalog row buttons and Axes chips quiet) → item 16 (text/radio `UiSegmentedControl`, Compare onto it) → item 14 (scrub in Grid cards and Quick Look, a `scrub` scene). Every iteration opens before/after shots of a scene that shows its change; no shots means a 2.
