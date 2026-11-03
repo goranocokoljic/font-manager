@@ -243,3 +243,13 @@ Sources, Collections and Tags moved onto `UiFoldButton`, so all six headings sha
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed (`.harness/redesign/e2e-36.log`).
 **Follow-ups:** per-language family counts and grouping by script need a count per language from `FmClient` (blocked: API). The drawer scrolls, so the language facet sits at the bottom; move it up. Catalog view does not follow the language pick.
 **Dependencies:** none.
+
+## Iteration 37 — 2026-11-03 — Sidebar section icons; "All fonts" survives folding
+**Critique (before):** The sidebar is six bare grey headings; nothing tells Sources from Collections at a glance, so the left edge reads as a text file. The specimens carry the screen well and the list is calm. Folding Collections used to hide "All fonts", the one link you always need.
+**Why:** Backlog item 5, what was left: section icons and keeping "All fonts" visible. It is the last first-screen sidebar change.
+**What changed:** `UiFoldButton` takes an optional `icon`; six Lucide-style icons added (folder, layers, tag, alert, box, globe) and used by Sources, Collections, Tags, Problems, Project sets, Online catalogs. Collections splits into an always-visible "All fonts" list and a folding list of the user's collections. Problems label gap matches the others.
+**Ticked:** none fully (item 5 keeps the collapsed-sidebar toggle).
+**Shots:** `.harness/redesign/shots/37/` (before), `37b/` (after).
+**Verified:** typecheck, `lint:js` exit 0, Vitest ok, Playwright 272 passed / 1 flake (`notes.spec.ts` light, passes alone) (`.harness/redesign/e2e-37.log`).
+**Follow-ups:** toolbar toggle for the sidebar; no scene for folded Collections.
+**Dependencies:** none.

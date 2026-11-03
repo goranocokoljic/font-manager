@@ -17,6 +17,14 @@ export const ICONS = {
   pause: '<path d="M5.5 3.5v9M10.5 3.5v9"/>',
   play: '<path d="M5 3.5l7 4.5-7 4.5z"/>',
   trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5"/>',
+  folder:
+    '<path d="M2.5 4.5v7a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H8L6.8 3.5H3.5a1 1 0 0 0-1 1z"/>',
+  layers: '<path d="M8 2.5l5.5 3L8 8.5l-5.5-3zM2.5 8L8 11l5.5-3M2.5 10.5L8 13.5l5.5-3"/>',
+  tag: '<path d="M2.5 8.2V3.5a1 1 0 0 1 1-1h4.7l5.3 5.3a1 1 0 0 1 0 1.4l-4.3 4.3a1 1 0 0 1-1.4 0z"/><path d="M5.5 5.5h.01" stroke-width="2"/>',
+  alert: '<path d="M8 2.8l5.5 9.4h-11zM8 6.8v2.4M8 11h.01"/>',
+  box: '<path d="M2.5 5l5.5-2.5L13.5 5v6L8 13.5 2.5 11zM2.5 5L8 7.5 13.5 5M8 7.5v6"/>',
+  globe:
+    '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c-2 2-2 9 0 11M8 2.5c2 2 2 9 0 11"/>',
   chevron: '<path d="M6 3.5l4.5 4.5L6 12.5"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',
   power: '<path d="M8 2.5v5M4.7 4.6a5 5 0 1 0 6.6 0"/>',

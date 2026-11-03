@@ -18,6 +18,7 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
   <section class="problems" aria-labelledby="fm-problems-heading">
     <h2 id="fm-problems-heading" class="heading">
       <UiFoldButton
+        icon="alert"
         class="fold"
         :folded="folded"
         controls="fm-problems-list"
@@ -65,7 +66,7 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
 .heading .link {
   flex: 1;
   padding: 8px;
-  padding-inline-start: 0;
+  padding-inline-start: 4px;
 }
 .fold {
   padding: 8px 0;

@@ -18,7 +18,7 @@ const { folded, toggle } = useFolded('sets');
   <section class="sets" aria-labelledby="fm-sets-heading">
     <header class="head">
       <h2 id="fm-sets-heading" class="heading">
-        <UiFoldButton :folded="folded" controls="fm-sets-body" @toggle="toggle">
+        <UiFoldButton :folded="folded" controls="fm-sets-body" icon="box" @toggle="toggle">
           {{ t('sets.heading') }}
         </UiFoldButton>
       </h2>

@@ -264,9 +264,13 @@ const { folded, toggle } = useFolded('collections');
   <section class="collections" aria-labelledby="fm-collections-heading">
     <header class="head">
       <h2 id="fm-collections-heading" class="heading">
-        <UiFoldButton :folded="folded" controls="fm-collections-list" @toggle="toggle">{{
-          t('collections.heading')
-        }}</UiFoldButton>
+        <UiFoldButton
+          :folded="folded"
+          controls="fm-collections-list"
+          icon="layers"
+          @toggle="toggle"
+          >{{ t('collections.heading') }}</UiFoldButton
+        >
       </h2>
       <span class="head-actions">
         <UiIconButton
@@ -284,12 +288,7 @@ const { folded, toggle } = useFolded('collections');
       </span>
     </header>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
-    <ul
-      v-show="!folded"
-      id="fm-collections-list"
-      class="list"
-      aria-labelledby="fm-collections-heading"
-    >
+    <ul class="list" aria-labelledby="fm-collections-heading">
       <li class="item">
         <div class="row">
           <button
@@ -302,6 +301,14 @@ const { folded, toggle } = useFolded('collections');
           </button>
         </div>
       </li>
+    </ul>
+    <!-- "All fonts" stays when the group folds; the user's own collections fold away. -->
+    <ul
+      v-show="!folded"
+      id="fm-collections-list"
+      class="list"
+      aria-labelledby="fm-collections-heading"
+    >
       <li v-if="editing && editing.id == null && editing.parent == null" class="item">
         <form class="edit" @submit.prevent="commit">
           <input

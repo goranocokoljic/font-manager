@@ -49,7 +49,7 @@ const { folded, toggle } = useFolded('sources');
   <section class="sources" aria-labelledby="fm-sources-heading">
     <header class="head">
       <h2 id="fm-sources-heading" class="heading">
-        <UiFoldButton :folded="folded" controls="fm-sources-list" @toggle="toggle">{{
+        <UiFoldButton :folded="folded" controls="fm-sources-list" icon="folder" @toggle="toggle">{{
           t('sources.title')
         }}</UiFoldButton>
       </h2>

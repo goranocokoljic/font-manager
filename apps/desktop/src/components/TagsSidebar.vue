@@ -63,6 +63,7 @@ function countLabel(n: number): string {
     <header class="head">
       <h2 id="fm-tags-heading" class="heading">
         <UiFoldButton
+          icon="tag"
           :folded="tagging.folded"
           controls="fm-tags-list"
           @toggle="tagging.folded = !tagging.folded"

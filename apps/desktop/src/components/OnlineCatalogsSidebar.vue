@@ -17,7 +17,7 @@ onMounted(() => void store.load());
 <template>
   <section class="catalogs" aria-labelledby="online-catalogs-title">
     <h2 id="online-catalogs-title" class="group">
-      <UiFoldButton :folded="folded" controls="online-catalogs-body" @toggle="toggle">
+      <UiFoldButton :folded="folded" controls="online-catalogs-body" icon="globe" @toggle="toggle">
         {{ t('home.sidebarGroups.online') }}
       </UiFoldButton>
     </h2>
