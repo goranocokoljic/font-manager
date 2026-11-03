@@ -23,6 +23,8 @@ import { useFaceLoader } from '../preview/faceLoader';
 import { COMPARE_MODES, MAX_PINS, useCompareStore, type CompareMode } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import PairingsPanel from './PairingsPanel.vue';
+import UiButton from './ui/UiButton.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const compare = useCompareStore();
@@ -236,8 +238,13 @@ function onFocusIn(e: FocusEvent): void {
           t('compare.pinnedCount', { count: compare.pins.length, max: MAX_PINS })
         }}</span>
         <div class="modes" role="radiogroup" aria-labelledby="fm-compare-mode-label">
-          <span id="fm-compare-mode-label" class="muted">{{ t('compare.mode') }}</span>
-          <label v-for="m in COMPARE_MODES" :key="m.value" class="mode">
+          <span id="fm-compare-mode-label" class="sr-only">{{ t('compare.mode') }}</span>
+          <label
+            v-for="m in COMPARE_MODES"
+            :key="m.value"
+            class="mode"
+            :class="{ on: compare.mode === m.value }"
+          >
             <input
               type="radio"
               name="fm-compare-mode"
@@ -248,15 +255,13 @@ function onFocusIn(e: FocusEvent): void {
             {{ m.label }}
           </label>
         </div>
-        <button
-          type="button"
-          class="button close"
-          :aria-label="t('compare.closeLabel')"
+        <UiIconButton
+          class="close"
+          icon="close"
+          :label="t('compare.closeLabel')"
           :title="t('compare.closeTitle')"
           @click="compare.close"
-        >
-          ×
-        </button>
+        />
       </header>
 
       <div class="named">
@@ -269,21 +274,19 @@ function onFocusIn(e: FocusEvent): void {
             :placeholder="t('compare.namePlaceholder')"
             maxlength="200"
           />
-          <button type="submit" class="button" :disabled="!canSave">{{ t('compare.save') }}</button>
+          <UiButton type="submit" :disabled="!canSave">{{ t('compare.save') }}</UiButton>
         </form>
         <div v-if="compare.saved.length" class="saved">
           <span id="fm-compare-saved-label" class="muted">{{ t('compare.saved') }}</span>
           <ul aria-labelledby="fm-compare-saved-label">
             <li v-for="c in compare.saved" :key="c.id">
-              <button
-                type="button"
-                class="button"
+              <UiButton
                 :aria-current="compare.current?.id === c.id ? 'true' : undefined"
                 :aria-label="t('compare.openLabel', { name: c.name })"
                 @click="onReopen(c.id)"
               >
                 {{ c.name }} <span class="muted">({{ c.faceCount }})</span>
-              </button>
+              </UiButton>
             </li>
           </ul>
         </div>
@@ -362,15 +365,13 @@ function onFocusIn(e: FocusEvent): void {
         <li v-for="f in compare.pins" :key="f.id" class="face" :data-face="f.id">
           <div class="label">
             <span class="name">{{ fontNameSample(f) }}</span>
-            <button
-              type="button"
-              class="button"
+            <UiButton
               :data-remove="f.id"
               :aria-label="t('compare.removeLabel', { name: fontNameSample(f) })"
               @click="remove(f.id)"
             >
               {{ t('common.remove') }}
-            </button>
+            </UiButton>
           </div>
           <p
             class="sample"
@@ -399,7 +400,7 @@ function onFocusIn(e: FocusEvent): void {
   z-index: var(--fm-z-popover);
   display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
   background: var(--fm-scrim);
 }
 .sheet {
@@ -409,12 +410,12 @@ function onFocusIn(e: FocusEvent): void {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: min(1100px, 96vw);
+  width: min(1200px, 96vw);
+  min-height: min(560px, 90vh);
   max-height: 90vh;
-  padding: 16px;
+  padding: var(--fm-space-4);
   border: 1px solid var(--fm-border);
-  border-top: 0;
-  border-radius: 0 0 8px 8px;
+  border-radius: var(--fm-radius-md);
   background-color: var(--fm-bg);
   color: var(--fm-fg);
   box-shadow: var(--fm-shadow-2);
@@ -456,11 +457,8 @@ function onFocusIn(e: FocusEvent): void {
   padding: 0;
   list-style: none;
 }
-.button[aria-current='true'] {
-  border-color: var(--fm-accent);
-}
-.button:disabled {
-  opacity: 0.6;
+.saved [aria-current='true'] {
+  color: var(--fm-accent);
 }
 .missing {
   margin: 0;
@@ -470,44 +468,67 @@ h2 {
   font-size: var(--fm-text-lg);
   font-weight: 600;
 }
+/* A text segmented control: the radios stay real inputs, drawn as the segments. */
 .modes {
   display: flex;
-  flex: 1;
-  justify-content: center;
+  flex: none;
   align-items: center;
-  gap: 12px;
+  gap: 2px;
+  margin-inline: auto;
+  padding: 2px;
+  border: 1px solid var(--fm-border);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-surface);
 }
 .mode {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  position: relative;
+  padding: 2px var(--fm-space-3);
+  border-radius: var(--fm-radius-sm);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+  transition:
+    background-color var(--fm-motion-fast) var(--fm-ease),
+    color var(--fm-motion-fast) var(--fm-ease);
+}
+.mode:hover {
+  color: var(--fm-fg);
+}
+.mode.on {
+  background-color: var(--fm-bg);
+  color: var(--fm-accent);
+  box-shadow: 0 0 0 1px var(--fm-border);
+}
+.mode input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+}
+.mode:has(input:focus-visible) {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 2px;
 }
 .muted {
   margin: 0;
   color: var(--fm-muted);
 }
-.button,
 .field {
-  padding: 2px 8px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
+  padding: 2px 0;
+  border: 0;
+  border-bottom: 1px solid var(--fm-border);
+  background-color: transparent;
   color: var(--fm-fg);
   font: inherit;
 }
-.close {
-  font-size: 16px;
-  line-height: 1.4;
-}
-.button:focus-visible,
-.field:focus-visible,
-.mode input:focus-visible {
+.field:focus-visible {
   outline: 2px solid var(--fm-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 .faces {
   display: grid;
-  gap: 12px;
+  flex: 1;
+  align-content: start;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -519,11 +540,17 @@ h2 {
 .face {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--fm-space-2);
   min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
+  padding: var(--fm-space-4) var(--fm-space-3);
+  border-block-start: 1px solid var(--fm-border);
+}
+.sideBySide .face {
+  border-block-start: 0;
+  border-inline-start: 1px solid var(--fm-border);
+}
+.sideBySide .face:first-child {
+  border-inline-start: 0;
 }
 .label {
   display: flex;
@@ -543,6 +570,7 @@ h2 {
 }
 .overlay {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 8px;
 }
@@ -558,8 +586,8 @@ h2 {
 }
 .stage {
   overflow: hidden;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
+  padding-block: var(--fm-space-6);
+  border-block: 1px solid var(--fm-border);
 }
 .drawing {
   display: block;

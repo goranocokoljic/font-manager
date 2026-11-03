@@ -20,7 +20,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; toolbar toggle + more tooltips remain)
 - [ ] 14 Weight scrubbing
 - [ ] 15 Context presets in Layout
-- [ ] 16 Compare overlay
+- [ ] 16 Compare overlay (overlay mode already existed; iteration 71 redesigned the Compare sheet: text segmented control, icon close, quiet buttons, hairline specimens; weight/size scale and `UiSegmentedControl` for text remain)
 - [ ] 17 Pairing Studio + Pairs with
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
@@ -424,3 +424,13 @@ Four iterations since review 65 (66–69); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-70.log`). Shots `70/` (before, 56) and `70-after/` (56): all 28 scenes render in light and dark, comfortable and compact; only `empty-collection` changed (the "…" icon button).
 **Not fixed, noted:** grid cards cut long names beside chevron + badge; Settings nav focus ring on load; empty collection shows "Clear filters" with no filters; no `quick-collection`/`catalog` scenes.
 **Next five:** stop sweeping, ship features — item 16 (Compare overlay) → item 14 (weight scrubbing on a variable preview) → item 13 (Grid opens a family from the keyboard) → item 17 ("Lock width" beside the page) → item 26 (Settings nav focus ring; `quick-collection` and `catalog` scenes). Every iteration opens before/after shots of a scene that shows its change; a new component state goes through the global baseline, never a local copy.
+
+## Iteration 71 — 2026-11-03 — Compare sheet: a centered sheet with designed controls
+**Critique (before):** the Compare sheet hung from the top edge like a dropdown. Native radios, a boxed "×", bordered Remove / Save buttons and a form-style name field made it look like a dialog from another app. Each face sat in its own bordered card, and the overlay (the best idea here) was a thin strip. Good: the overlay already exists, the blue/red 50 % colours read well.
+**Why:** item 16 asked for an overlay, but the code already had one; the visible gap was the sheet's surface. Alternative (not taken): scale the specimens up — needs a size decision, logged below.
+**Changed:** `CompareSheet.vue` only. Centered, rounded sheet with a minimum height; modes are a text segmented control (the radios stay real, hidden inputs, so keyboard and tests are unchanged); close is `UiIconButton`; Remove, Save and saved-comparison buttons are `UiButton` (current one turns accent); the name field is an underline; faces are hairline columns/rows, not cards; overlay stage has hairlines only. New `compare` and `compare-overlay` scenes in `shots.mjs`.
+**Backlog:** item 16 stays `[ ]` (see its line). **Shots:** `.harness/redesign/shots/71-before/`, `71/` (viewed: compare light, compare-overlay light and dark).
+**Verified:** typecheck, `lint:js`, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-71.log`).
+**Follow-ups:** specimens in the sheet are still list size (28 px) and leave white space — draw them larger; a text `UiSegmentedControl` variant (the mode control is local CSS now); `.sheet` hard-codes the two compare colours; the sheet is not a full-window Quick-Look-style specimen yet.
+**Dependencies:** none.
+

@@ -74,6 +74,9 @@ const scenes = {
   'quick-collection': { routes: '/?face=1', quick: '3' },
   // The Google Fonts catalog browsed from the sidebar (mockCatalog=1 starts with it turned on).
   catalog: { query: '?mockCatalog=1', routes: '/', click: 'Google Fonts' },
+  // Three faces pinned with C, the Compare sheet open: side by side, then the overlay.
+  compare: { routes: '/?face=1', pin: '3' },
+  'compare-overlay': { routes: '/?face=1', pin: '3', pinMode: 'Overlay' },
   'empty-collection': { routes: '/', collection: 'Empty' },
   compact: {
     routes: '/?face=1',
@@ -111,6 +114,8 @@ const envKey = {
   hover: 'FM_SCREENS_HOVER',
   collection: 'FM_SCREENS_COLLECTION',
   quick: 'FM_SCREENS_QUICK',
+  pin: 'FM_SCREENS_PIN',
+  pinMode: 'FM_SCREENS_PIN_MODE',
   storage: 'FM_SCREENS_STORAGE',
   session: 'FM_SCREENS_SESSION',
   command: 'FM_SCREENS_COMMAND',
