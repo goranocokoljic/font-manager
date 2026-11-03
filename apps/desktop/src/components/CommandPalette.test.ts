@@ -106,7 +106,7 @@ describe('command palette', () => {
 
   it('closes with Escape and returns focus to where it was', async () => {
     await mountApp();
-    const button = document.querySelector<HTMLButtonElement>('button.toggle')!;
+    const button = document.querySelector<HTMLButtonElement>('button.ui-icon-button')!;
     button.focus();
     await press({ key: 'k', ctrlKey: true });
     expect(document.activeElement).toBe(input());

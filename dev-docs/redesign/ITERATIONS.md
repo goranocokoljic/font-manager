@@ -415,3 +415,12 @@ Ticked: item 17 stays `[ ]` (Lock width remains).
 Shots: `.harness/redesign/shots/67/` (studio, both themes; opened dark). Playwright 273 passed / 16 skipped (`e2e-67.log`), typecheck and lint:js green, Vitest run.
 Follow-ups: "Lock width" beside the page (shared `FontLayout` header); the plus icon has no "4 of 4" cue besides the fade and tooltip.
 Dependencies: none.
+
+## Iteration 68 — 2026-11-03 — Toolbar toggles become one icon button
+Critique (before, `list`): the specimens lead and the chrome is quiet, but the sidebar and inspector toggles are outlined squares with a blue-ish rim, and the density and compare buttons are a second, differently sized icon button (28 px, own hover). Light and dark both clean; the toolbar reads as two button families.
+Why: backlog item 26 (review 65 "next five"): the toolbar's `.toggle.icon` was a second copy of `UiIconButton`.
+Changed: `UiIconButton` gains a pressed tint (`aria-pressed`), a disabled fade, a trailing slot (the compare pin count) and `min-width` so a count fits; `HomeView` uses it for sidebar, density, compare and inspector, and its `.toggle.icon` CSS is deleted. Accessible names, shortcuts and `aria-pressed` are unchanged. `CommandPalette.test.ts` looks for `button.ui-icon-button` (class renamed on purpose).
+Ticked: item 26 stays `[ ]` (Settings nav focus ring on load, three `type="number"`, tags `datalist`, dialog buttons remain).
+Shots: `.harness/redesign/shots/68/` (before), `68b/` (after); opened list in both themes. Playwright 273 passed / 16 skipped (`e2e-68.log`); typecheck, lint:js green; Vitest: one 10k-search timing test flaked at 50.8 ms in the full run, passed on re-run.
+Follow-ups: `QuickCollectionReview`, `CatalogBrowser` and `InspectorLicense` still use bordered `.toggle` text buttons — move to `UiButton`.
+Dependencies: none.

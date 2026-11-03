@@ -16,7 +16,7 @@ import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
-import UiIcon from '../components/ui/UiIcon.vue';
+import UiIconButton from '../components/ui/UiIconButton.vue';
 import { hasChosenFilters } from '../search/chips';
 import { useSourcesStore } from '../stores/sources';
 import UiSegmentedControl from '../components/ui/UiSegmentedControl.vue';
@@ -485,18 +485,15 @@ function openFace(face: FaceId): void {
       />
       <template v-else>
         <header class="toolbar">
-          <button
-            type="button"
-            class="toggle icon"
-            :aria-label="t('home.sidebar')"
+          <UiIconButton
+            icon="sidebar"
+            :label="t('home.sidebar')"
             aria-controls="fm-sidebar"
             aria-keyshortcuts="["
             :aria-pressed="layout.sidebarOpen"
             :title="t('home.sidebarTitle')"
             @click="layout.toggleSidebar"
-          >
-            <UiIcon name="sidebar" />
-          </button>
+          />
           <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
           <SearchBox />
           <p class="count" role="status">
@@ -523,39 +520,31 @@ function openFace(face: FaceId): void {
             />
           </label>
           <!-- After the controls of the view mode, so Tab from the modes reaches those first. -->
-          <button
-            type="button"
-            class="toggle icon"
-            :aria-label="t('home.compactRows')"
+          <UiIconButton
+            icon="density"
+            :label="t('home.compactRows')"
             :aria-pressed="settings.density === 'compact'"
             :title="t('home.densityTitle', { density: densityLabel })"
             @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
-          >
-            <UiIcon name="density" />
-          </button>
-          <button
-            type="button"
-            class="toggle icon"
-            :aria-label="t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS })"
+          />
+          <UiIconButton
+            icon="compare"
+            :label="t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS })"
             :disabled="!compare.canOpen"
             :title="t('home.compareTitle', { chord: formatChord(compareChord) })"
             @click="compare.openSheet"
           >
-            <UiIcon name="compare" />
             <span class="pins">{{ compare.pins.length }}</span>
-          </button>
-          <button
-            type="button"
-            class="toggle icon"
-            :aria-label="t('home.inspector')"
+          </UiIconButton>
+          <UiIconButton
+            icon="inspector"
+            :label="t('home.inspector')"
             aria-controls="fm-inspector"
             aria-keyshortcuts="Control+I Meta+I"
             :aria-pressed="layout.inspectorVisible"
             :title="t('home.inspectorTitle')"
             @click="layout.toggleInspector"
-          >
-            <UiIcon name="inspector" />
-          </button>
+          />
         </header>
         <div v-show="!similar.open" class="browse">
           <FilterChips />
@@ -717,22 +706,6 @@ function openFace(face: FaceId): void {
 /* In the layout file bar: at its own end. */
 .studio {
   margin-inline-start: auto;
-}
-.toggle.icon {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 28px;
-  padding: 0 6px;
-  border-color: transparent;
-  color: var(--fm-muted);
-}
-.toggle.icon:hover:not(:disabled) {
-  color: var(--fm-fg);
-}
-.toggle.icon[aria-pressed='true'] {
-  border-color: transparent;
-  background-color: var(--fm-surface);
 }
 .pins {
   font-size: var(--fm-text-xs);
