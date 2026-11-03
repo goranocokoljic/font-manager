@@ -16,8 +16,8 @@ defineProps<{ hint: string }>();
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 8px;
-  padding-bottom: 12px;
+  gap: var(--fm-space-2);
+  padding-block-end: var(--fm-space-3);
 }
 .hint {
   margin: 0;
@@ -28,6 +28,6 @@ defineProps<{ hint: string }>();
   flex: none;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
+  gap: var(--fm-space-2);
 }
 </style>

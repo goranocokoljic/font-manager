@@ -160,14 +160,17 @@ function onKey(e: KeyboardEvent): void {
 .field {
   box-sizing: border-box;
   width: 100%;
-  padding: 2px 6px;
-  padding-inline-end: 20px;
+  padding-block: 2px;
+  /* The end pad keeps the text clear of the 12 px caret. */
+  padding-inline: var(--fm-space-2) 20px;
   border: 1px solid transparent;
   border-radius: var(--fm-radius-sm);
   background-color: transparent;
   color: var(--fm-fg);
   font: inherit;
   text-overflow: ellipsis;
+  /* At rest the name sits against its caret and the block, not 120 px away from it. */
+  text-align: end;
   transition:
     background-color var(--fm-motion-fast) var(--fm-ease),
     border-color var(--fm-motion-fast) var(--fm-ease);
@@ -179,6 +182,7 @@ function onKey(e: KeyboardEvent): void {
   background-color: var(--fm-hover);
 }
 .field:focus {
+  text-align: start;
   border-color: var(--fm-control-border);
   background-color: var(--fm-bg);
 }

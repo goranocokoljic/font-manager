@@ -78,7 +78,6 @@ function reset(): void {
               {{ f.name ?? f.tag }}
               <span v-if="f.name" class="tag">{{ f.tag }}</span>
             </span>
-            <span class="auto">{{ t('features.automaticNote') }}</span>
           </li>
         </ul>
       </section>
@@ -137,11 +136,6 @@ h3 {
   margin-inline-start: 4px;
   color: var(--fm-muted);
   font-family: var(--fm-font-mono);
-}
-.auto {
-  flex: none;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
 }
 .switch {
   position: relative;

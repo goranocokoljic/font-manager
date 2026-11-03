@@ -260,41 +260,29 @@ A pressed-state sidebar toggle (`[`) sits before the title in the All fonts tool
 **Next five:** item 21 (designed empty states) → item 6 rest (`?face=` selects the list row; fix the `selected-row` scene) → item 8 rest (one shared inspector tab head; Developer stacked) → item 17 first slice (Studio font pickers that show the font, not an empty field) → item 26 rest (license date/number/datalist, Advanced number fields). Every iteration changes a shot and reads the `lint:js` exit code.
 
 ## Iteration 41 — 2026-11-03 — Designed empty states
-**Critique (before):** The `empty-collection` scene was one small grey sentence ("No fonts match the search and filters.") in the middle of a dark pane. It was wrong too: an empty collection is not a failed search. The rest of the screen is now calm and typographic, so this dead pane was the weakest spot.
-**Why:** Backlog item 21, first on review 40's "Next five". The `list` shot does not change (it has fonts); the `empty-collection` shot does.
-**What changed:** New `ui/UiEmptyState` (20 px headline, 13 px muted line, one action slot, no illustration). `HomeView` picks one of three states: empty collection ("Show all fonts"), no matches ("Clear search and filters"), empty library ("Add folder…"). New en/de strings; `home.empty` removed. `search.spec.ts` now looks for the heading.
-**Ticked:** item 21. **Shots:** `.harness/redesign/shots/41/` (before), `41-after/`.
-**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-41.log`).
-**Follow-ups:** no scene for "no matches" or "empty library" (the screens spec cannot type a search); other empties (Tags "No tags yet", Layout, Catalog, Quick Collection) still plain text; the "Empty" collection hint names no shortcut for adding fonts.
-**Dependencies:** none.
+Built `UiEmptyState` (headline, one line, one action); HomeView shows empty collection, no matches or empty library instead of one grey sentence.
 
 ## Iteration 42 — 2026-11-03 — `?face=` selects the row in the list
-**Critique (before):** The `selected-row` scene showed a plain list: the inspector had Inter open, but no row looked selected. A designer reading that shot sees two panes that disagree. The rest of the list is calm and the cursor bar from iteration 29 is good; it just never appeared for a face that came in through the URL.
-**Why:** Review 40's "Next five", item 6 rest. The `list` shot has no `?face=`, so it does not change; `selected-row` does (and a reload now keeps the row, not just the inspector).
-**What changed:** `HomeView` watches the loaded detail and the family list; once, when the list has no cursor, it calls the existing `fontList.reveal(face)` (expands the family, selects the style row, scrolls to it). No store or API change.
-**Ticked:** none fully; item 6 now only lacks nothing in the list (the `?face=` gap is closed).
-**Shots:** `.harness/redesign/shots/42/` (after only; the before run was overwritten).
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 289 run, one spec updated (`color-palette.spec.ts` row locator `.first()`, because the family now opens and shows two rows for face 8); it passes (`e2e-42.log`).
-**Follow-ups:** none new.
-**Dependencies:** none.
+HomeView reveals the URL's face once the list loads, so the row and the inspector agree after a reload.
 
 ## Iteration 43 — 2026-11-03 — One shared inspector tab head
-**Critique (before):** The Developer tab put its hint beside the Copy button, so the sentence wrapped into a narrow column while Axes and Features stacked the same parts. Three tabs repeated the same head CSS. The rest of the inspector is calm; this was the one tab that looked different.
-**Why:** Review 40's "Next five", item 8 rest. The `list` shot does not change; `inspector-developer` does (hint on its own line, both Copy buttons right-aligned under it).
-**What changed:** New `InspectorTabHead` (hint + actions slot). Axes, Features and Developer use it; their three copies of the head CSS are gone. Developer's two head rows became one.
-**Ticked:** none fully (Features live preview remains in item 8).
-**Shots:** `.harness/redesign/shots/43/` (after only).
-**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-43.log`).
-**Follow-ups:** Features rows still repeat "applied automatically"; the two Copy status texts in Developer could be one.
-**Dependencies:** none.
-
+New `InspectorTabHead` (hint line, actions under it) replaced three copies of head CSS in Axes, Features and Developer.
 
 ## Iteration 44 — 2026-11-03 — Studio "Panel font" fields become quiet name tags
-**Critique (before):** In `studio` three bordered, empty-looking "Panel font" boxes sat in the gutter, set in `system-ui` at 11 px. They read as unfilled form fields, the worst-looking control left. The text column and the big headline are good.
-**Why:** Review 40's "Next five", item 17 first slice. The `list` shot does not change; `studio` does.
-**What changed:** `BlockFontPicker`: no box until hover or focus (hover tint, focus border), Inter and tokens instead of `system-ui` and literals, muted placeholder, a `UiChevron` caret that says it opens. Behaviour and ARIA unchanged.
-**Ticked:** none (item 17 stays open).
-**Shots:** `.harness/redesign/shots/44/` (before), `44a/` (after).
-**Verified:** typecheck, `lint:js` exit 0, Vitest (one catalogs test flaked, passes alone; logical-properties test caught a physical padding, fixed), Playwright 273 passed / 16 skipped (`e2e-44.log`).
-**Follow-ups:** dropdown options do not show each family in its own face; the Studio toolbar still has four rows of text buttons; the Layout select and "Lock width" look different from `UiSelect`/buttons.
-**Dependencies:** none.
+`BlockFontPicker` lost its box until hover or focus, moved to Inter and tokens, and gained a `UiChevron` caret.
+
+## Review 45 — 2026-11-03
+**Grades:** iter 41 **4** — a real component, three honest states with one action each; only one of the three has a scene, and Tags/Layout/Catalog empties stay plain text. Iter 42 **3** — the right fix, but it made every `?face=1` scene show the same state: `hover-row` hovered the now-selected row (no hover visible), `expanded-family` matched `list`; a one-style family now shows its sample twice (Waterfall: twelve lines of Inter); a redundant branch in the watch; its "before" shots were lost. Iter 43 **4** — the right consolidation, three CSS copies gone; the new head used literal 8/12 px. Iter 44 **3** — the box is gone, but "Panel font" sat ~120 px from its caret, so label and caret read as two things; literal paddings.
+**Regressions:** none in views, keyboard or tests; two screenshot scenes stopped showing what they are named for (42).
+**Drift:** literal spacing in `InspectorTabHead` and `BlockFontPicker`. No new colours, fonts, radii or native controls.
+**Pulled apart:** none head-on. Only iteration 42 changed the `list` shot (Inter now opens).
+**Fixed:**
+- `shots.mjs`: `hover-row` hovers row 3, `expanded-family` opens row 3 — both show their state again.
+- `BlockFontPicker`: the name is end-aligned at rest, so "Panel font ⌄" sits beside the block; start-aligned while typing; spacing tokens.
+- `InspectorTabHead`: spacing tokens, logical padding.
+- `InspectorFeatures`: rows under "Applied automatically" no longer repeat "applied automatically"; `.auto` CSS and `features.automaticNote` (en/de) deleted; unit and e2e checks follow (UI changed on purpose).
+- `HomeView`: the `?face=` watch has one exit path.
+**Rule amended (DESIGN.md):** component list adds `UiEmptyState` and `InspectorTabHead`. Items 6, 8, 17, 21 and the three-second note rewritten; item 6 adds the one-style double sample.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-45.log`). Shots `review-45/` (before, 52) and `review-45-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** an open empty collection shows "Clear filters" with no filters chosen; Grid's selected style card keeps a dashed border; Settings nav focus ring on load.
+**Next five:** item 6 rest (one-style family: no doubled sample on reveal) → item 7 rest (Grid style card without the dashed border; hover weight range) → item 17 (Studio toolbar to one row; options in their own face) → item 26 (license date/number/datalist, Advanced number fields) → item 21 rest (Tags/Quick Collection empties on `UiEmptyState`). Every iteration takes before and after shots and reads the `lint:js` exit code.

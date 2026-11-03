@@ -750,8 +750,7 @@
     "hint": "Schalter ändern die Vorschau dieses Schnitts.",
     "cssLabel": "Features",
     "list": "OpenType-Features",
-    "automatic": "Automatisch angewendet",
-    "automaticNote": "automatisch angewendet"
+    "automatic": "Automatisch angewendet"
   },
   "palettes": {
     "title": "Farbpalette",

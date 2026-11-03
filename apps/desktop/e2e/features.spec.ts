@@ -48,7 +48,6 @@ test('the Features tab lists every feature by name and tag at the browser defaul
   await expect(panel.getByRole('switch', { name: /ccmp/ })).toHaveCount(0);
   const auto = panel.getByRole('list', { name: 'Applied automatically' });
   await expect(auto).toContainText('Glyph composition and decomposition');
-  await expect(auto).toContainText('applied automatically');
 });
 
 test("toggling smcp changes the row's computed font-feature-settings; Reset restores it", async ({

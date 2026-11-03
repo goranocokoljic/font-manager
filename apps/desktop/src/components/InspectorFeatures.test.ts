@@ -54,7 +54,8 @@ describe('inspector features tab', () => {
     expect(w.find('[role="switch"][data-tag="ccmp"]').exists()).toBe(false);
     const row = w.get('li[data-tag="ccmp"]');
     expect(row.text()).toContain('Glyph composition and decomposition');
-    expect(row.text()).toContain('applied automatically');
+    // The section heading says it; the row does not repeat it.
+    expect(row.element.closest('ul')?.getAttribute('aria-label')).toBe('Applied automatically');
   });
 
   it('switches a feature for the face and Reset restores the defaults', async () => {

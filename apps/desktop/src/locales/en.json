@@ -750,8 +750,7 @@
     "hint": "Switches change this face's previews.",
     "cssLabel": "features",
     "list": "Features",
-    "automatic": "Applied automatically",
-    "automaticNote": "applied automatically"
+    "automatic": "Applied automatically"
   },
   "palettes": {
     "title": "Color palette",

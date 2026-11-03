@@ -443,12 +443,9 @@ watch(
   () => [selection.detail?.face, fontList.families.length] as const,
   ([face, count]) => {
     if (revealedFromUrl || !face || face.id !== selection.faceId || count === 0) return;
-    if (fontList.cursor !== null) {
-      revealedFromUrl = true;
-      return;
-    }
     revealedFromUrl = true;
-    void fontList.reveal(face);
+    // A row the user already moved to wins over the URL.
+    if (fontList.cursor === null) void fontList.reveal(face);
   },
   { immediate: true },
 );
