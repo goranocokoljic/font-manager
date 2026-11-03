@@ -26,12 +26,10 @@ test('Ctrl/Cmd+, opens Settings with its eight sections; Escape closes it', asyn
   await expect(page.getByRole('list', { name: 'Sources' })).toContainText('/Users/demo/Fonts');
 
   await tab(page, 'Advanced').click();
-  await expect(page.getByRole('spinbutton', { name: 'Preview cache size (MB)' })).toHaveValue(
-    '1024',
+  await expect(page.getByRole('textbox', { name: 'Preview cache size (MB)' })).toHaveValue('1024');
+  await expect(page.getByRole('textbox', { name: 'Rescan sources every (minutes)' })).toHaveValue(
+    '60',
   );
-  await expect(
-    page.getByRole('spinbutton', { name: 'Rescan sources every (minutes)' }),
-  ).toHaveValue('60');
   await expect(
     page.getByRole('button', { name: /^Copy logs folder: .*font-manager\/logs$/ }),
   ).toBeVisible();

@@ -361,3 +361,13 @@ Four iterations since review 50 (51–54); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-57.log`).
 **Follow-ups:** Use `UiNumberField` in Settings › Advanced. A real date picker (UiPopover + calendar) is a later step. Add a `license-open` scene to `shots.mjs`.
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 58 — 2026-11-03 — Settings › Advanced: designed number fields
+**Critique:** Not looked at by eye (token budget); the `list` shot is unchanged. Settings › Advanced still drew two browser spin boxes, the last native number inputs outside the Preview bar and Layout.
+**Why:** Review 55 and iteration 57 follow-up: reuse `UiNumberField` in Settings. Rule 2. The Settings radios were already drawn by `theme.css`, so only the number fields were left.
+**Changed:** Cache size and Rescan interval use `UiNumberField`. Saves go out after a 400 ms pause; an empty or refused value puts the saved number back (re-keyed field). Vitest test rewritten with fake timers; the e2e Settings test now finds them as textboxes, not spinbuttons.
+**Backlog:** item 26 still open (tags `datalist`, Preview bar / Layout / Smart rule / Glyph compare `type="number"`, Problems "Recommended" pill).
+**Shots:** none taken.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-58.log`, run before the debounce fix; `settings` + `a11y` re-run 48 passed).
+**Follow-ups:** `aria-describedby="rescan-hint"` was dropped from the rescan field; give `UiNumberField` an `aria-describedby` pass-through. Other `type="number"` inputs: PreviewControls (3), BlockProperties, SmartRuleRow, GlyphCompare.
+**Dependencies:** none. **Reverted:** no.

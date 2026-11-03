@@ -299,27 +299,33 @@ describe('Settings window', () => {
   });
 
   it('saves a valid number, and puts the saved value back after a bad one', async () => {
+    vi.useFakeTimers();
     const { wrapper } = await mountAt('/settings?section=advanced');
-    const [cache, rescan] = wrapper.findAll('input[type="number"]');
-    await cache.setValue('2048');
-    await flushPromises();
+    const field = (i: number) => wrapper.findAll('.number input')[i];
+    const settle = async () => {
+      await vi.advanceTimersByTimeAsync(500);
+      await flushPromises();
+    };
+    await field(0).setValue('2048');
+    await settle();
     expect((await client.getSettings()).cacheLimitMb).toBe(2048);
 
-    await cache.setValue('1');
-    await flushPromises();
+    await field(0).setValue('1');
+    await settle();
     expect(wrapper.get('[role="alert"]').text()).toContain('between 64 and 16384');
-    expect((cache.element as HTMLInputElement).value).toBe('2048');
+    expect((field(0).element as HTMLInputElement).value).toBe('2048');
 
-    await rescan.setValue('');
-    await flushPromises();
-    expect((rescan.element as HTMLInputElement).value).toBe('60');
+    await field(1).setValue('');
+    await settle();
+    expect((field(1).element as HTMLInputElement).value).toBe('60');
     expect((await client.getSettings()).rescanIntervalMinutes).toBe(60);
 
-    await rescan.setValue('0');
-    await flushPromises();
+    await field(1).setValue('0');
+    await settle();
     expect((await client.getSettings()).rescanIntervalMinutes).toBe(0);
     expect(wrapper.text()).toContain(mockFolders.logs);
     wrapper.unmount();
+    vi.useRealTimers();
   });
 
   it('moves between sections with the arrow keys and closes on Escape', async () => {

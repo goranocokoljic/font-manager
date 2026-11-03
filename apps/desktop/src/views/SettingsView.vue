@@ -9,6 +9,7 @@ import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
+import UiNumberField from '../components/ui/UiNumberField.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
 import {
   CATALOGS,
@@ -138,18 +139,23 @@ async function saveStartAtLogin(e: Event): Promise<void> {
 
 type NumberKey = keyof Pick<FullSettings, 'cacheLimitMb' | 'rescanIntervalMinutes'>;
 
-/** A number field: whole numbers are sent; anything else shows the saved value again. */
-async function saveNumber(key: NumberKey, e: Event): Promise<void> {
-  const input = e.target as HTMLInputElement;
-  const text = input.value.trim();
-  const ok = /^\d{1,10}$/.test(text) && (await store.update({ [key]: Number(text) }));
-  if (!ok && store.settings) input.value = String(store.settings[key]);
+/** A number field: whole numbers are sent after a short pause; a refused or empty one is put back. */
+const numberTimers: Partial<Record<NumberKey, ReturnType<typeof setTimeout>>> = {};
+const numberReset = ref(0);
+function saveNumber(key: NumberKey, value: number | ''): void {
+  clearTimeout(numberTimers[key]);
+  numberTimers[key] = setTimeout(() => {
+    const valid = value !== '' && value >= 0 && Number.isInteger(value);
+    void (valid ? store.update({ [key]: value }) : Promise.resolve(false)).then((ok) => {
+      if (!ok) numberReset.value += 1;
+    });
+  }, 400);
 }
 
 // Identifiers the template uses, kept here: the catalog check (src/i18n/templates.test.ts)
 // reads a camelCase literal in a template as text.
-const saveCacheLimit = (e: Event) => saveNumber('cacheLimitMb', e);
-const saveRescanInterval = (e: Event) => saveNumber('rescanIntervalMinutes', e);
+const saveCacheLimit = (v: number | '') => saveNumber('cacheLimitMb', v);
+const saveRescanInterval = (v: number | '') => saveNumber('rescanIntervalMinutes', v);
 const KEEP_EXISTING = 'keepExisting' satisfies FullSettings['onConflict'];
 const upToDate = computed(() => updates.status === 'upToDate');
 
@@ -472,24 +478,25 @@ function chooseLanguage(value: string): void {
           <h2 class="heading">{{ sectionTitle('advanced') }}</h2>
           <label class="field">
             <span>{{ t('settings.advanced.cacheSize') }}</span>
-            <input
-              type="number"
-              class="input number"
-              inputmode="numeric"
-              :value="s.cacheLimitMb"
-              @change="saveCacheLimit"
-            />
+            <span class="number">
+              <UiNumberField
+                :key="`cache-${numberReset}`"
+                :model-value="s.cacheLimitMb"
+                :min="0"
+                @update:model-value="saveCacheLimit"
+              />
+            </span>
           </label>
           <label class="field">
             <span>{{ t('settings.advanced.rescanInterval') }}</span>
-            <input
-              type="number"
-              class="input number"
-              inputmode="numeric"
-              aria-describedby="rescan-hint"
-              :value="s.rescanIntervalMinutes"
-              @change="saveRescanInterval"
-            />
+            <span class="number">
+              <UiNumberField
+                :key="`rescan-${numberReset}`"
+                :model-value="s.rescanIntervalMinutes"
+                :min="0"
+                @update:model-value="saveRescanInterval"
+              />
+            </span>
           </label>
           <p id="rescan-hint" class="note">{{ t('settings.advanced.rescanHint') }}</p>
           <div v-if="store.folders" class="field">
