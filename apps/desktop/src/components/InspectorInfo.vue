@@ -209,7 +209,7 @@ function clashText(c: Conflict): string {
           <dt>{{ t('info.license.license') }}</dt>
           <dd>{{ show(d.license.description) }}</dd>
           <dt>{{ t('info.license.url') }}</dt>
-          <dd>
+          <dd class="url">
             <CopyValue
               v-if="d.license.url"
               :label="t('info.copyLabels.licenseUrl')"
@@ -658,6 +658,7 @@ dd {
 }
 .stars {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 2px;
 }
@@ -671,5 +672,14 @@ dd {
 }
 .stars .state {
   margin-inline-start: 6px;
+  white-space: nowrap;
+}
+/* A URL cut mid-word reads as a typo: one line, ellipsis; the full value copies on click. */
+.url :deep(.copy) {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

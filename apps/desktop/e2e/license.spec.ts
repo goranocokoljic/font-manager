@@ -9,6 +9,11 @@ async function openOn(page: Page, face: number) {
   await page.route('**/fmfont/*', (route) => route.fulfill({ status: 404 }));
   await page.goto(`/#/?face=${face}`);
   await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
+  // The form is folded while the family has no declaration; its heading opens it.
+  const toggle = info(page).getByRole('button', { name: 'Your license for this family' });
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 }
 
 test('the License section declares, keeps and clears a family license from the keyboard', async ({

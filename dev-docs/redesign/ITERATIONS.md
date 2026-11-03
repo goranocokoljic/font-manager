@@ -9,10 +9,10 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
-- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19: Fonts row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets counts, section icons, collapsible sections, Problems dedupe remain)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19: Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
 - [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
-- [ ] 8 Inspector (iteration 17: Info shows About + License + Your notes first, raw data behind "Technical details"; Glyphs clipped column, Features names remain)
+- [ ] 8 Inspector (iteration 17 + review 20: Info shows About + License + Your notes first, license form and raw data folded; Glyphs clipped column, Features names remain)
 - [ ] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; grouping by family remains)
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
@@ -125,29 +125,27 @@ The row's bordered "Find similar" text button became a hover/focus `UiIconButton
 **Next five:** item 7 (grid cards: the "The quick b" cut is the worst thing in any view) → item 8 (inspector Info grouped, hash/path behind "Technical") → item 9 (Find similar as a mode) → item 5 rest (Fonts row actions inline, Project sets counts) → item 6 rest (chevron alignment, sub-rows). Every iteration must change a shot; hover-only work adds a hover scene first. Run `pnpm lint:js` and read its exit code, not only its warnings.
 
 ## Iteration 16 — 2026-11-03 — Grid cards stop cutting the sample mid-word
-Critique: the grid showed "The quick b" on every card, a cut mid-letter that looks like a bug. Chrome is calm; the inspector Info is still a raw dump. Cards are fine otherwise (dashed border on face cards is odd).
-Why: backlog item 7, the worst visible flaw in any view.
-Changed: `list/grid.ts` gets `cardChars` (characters that fit the card width) and `cardText` now ends on a whole word; `FontGrid` passes the fit. Grid now shows "The quick". 3 new Vitest cases.
-Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed (`.harness/redesign/e2e-16.log`). Shots `16/`.
-Follow-ups: hover reveals weight range; dashed border on style cards; inspector Info grouping (item 8) next.
+`cardChars`/`cardText` in `list/grid.ts` fit the card width and end on a whole word, so cards show "The quick", not "The quick b".
 
 ## Iteration 17 — 2026-11-03 — Inspector Info: what matters first, raw data folded
-Critique: the Info tab opened on a wall of raw fields (name IDs, vendor ID, copyright) before Designer or Foundry. Hash and path sat at the same weight as everything else. The list and grid are calm now; the inspector is the loudest chrome left.
-Why: backlog item 8; the right pane is visible in every first-screen shot.
-Changed: `InspectorInfo` order is now header, About (Designer, Foundry, Version), License, Your notes, then a "Technical details" expander (`UiChevron`, `aria-expanded`) holding Names, File, Style, Metrics, Characters. New `info.about` / `info.technical` strings (en, de). `inspector.spec` and `rtl.spec` open the expander first.
-Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 271 passed + 1 flaky (`app.spec` theme test passed alone; `.harness/redesign/e2e-17.log`). Shots `17/`.
-Follow-ups: License URL wraps mid-word; the license editor form is still tall (fold it); Glyphs clipped column; Features human names; Axes tab.
+Info opens on About, License and Your notes; names, file, hash, style and metrics moved behind a "Technical details" expander.
 
 ## Iteration 18 — 2026-11-03 — Find similar becomes a mode, not a split
-Critique: the similar panel halved the list and put three rows under a mostly empty pane. Every result said the same "Why" line, and the close was a text "×". The rest of the screen is calm; this was the roughest surface left.
-Why: backlog item 9. Visible the moment a designer presses S.
-Changed: `SimilarPanel` fills the main area; `HomeView` hides the list (`v-show`, so state and focus survive) while it is open. The source face is pinned on top. Each result has a quiet score bar. "Why" shows only reasons that differ between results. Close is a `UiIconButton` (new `close` icon). Esc returns to the list at the picked face. `similar.spec` and `SimilarPanel.test` updated on purpose (list check after Esc; shared reasons dropped).
-Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed (`.harness/redesign/e2e-18.log`). Shots `18/`.
-Follow-ups: group results by family (closest face shown); the list `list` shot is unchanged (mode shows only in `similar`); inspector license form still tall.
+`SimilarPanel` replaces the list (kept alive with `v-show`), pins the source face, draws a score bar and shows only the reasons that differ.
 
 ## Iteration 19 — 2026-11-03 — Sources: row actions sit on the row
-Critique: the first screen shows a floating strip of three icons under "Fonts", a line of chrome with no label. The list itself is calm; the right pane Info is still long (license form, wrapped URL). Sidebar rows have uneven heights because of that strip.
-Why: backlog item 5 rest; the only visible oddity in the `list` shot.
-Changed: `SourcesSidebar` puts Rescan / Pause / Remove inside the row, replacing the count on hover or keyboard focus (same grid cell, 120 ms fade). Rows keep one height; the sidebar is 21 px shorter. The local `.badge` became `UiBadge`.
-Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 3 failed on first run (invisible buttons had `pointer-events: none`; removed), then sources + a11y specs 36 passed. Full run before the fix: 269 passed (`.harness/redesign/e2e-19.log`). Shots `19/`, `19-after/`.
-Follow-ups: Project sets count not right-aligned; license URL wraps mid-word; fold the license form; Glyphs clipped column; Features human names.
+Rescan / Pause / Remove moved into the Sources row, replacing the count on hover or focus; the local `.badge` became `UiBadge`.
+
+## Review 20 — 2026-11-03
+**Grades:** iter 16 **4** — fixed the worst flaw in any view with a small, tested helper; cards still show only two words and keep a dashed border on style cards. Iter 17 **3** — the right order, but it lifted the tall license form (native date field, radios, two buttons) into the first screen of Info, so Your notes and Technical details sat below the fold, and the license URL broke as "openfontlicense.or / g". Iter 18 **4** — the strongest change of the four: a real mode, quiet score bars, honest "Why"; results are still single faces, not families, and the bar used a literal 2 px radius. Iter 19 **4** — rows keep one height and the sidebar is calmer; the change shows only on hover, and no hover scene was added.
+**Regressions:** none in tests, keyboard or views. Compact density wrapped "Not rated" one letter per line in the inspector (older, now fixed).
+**Drift:** `SimilarPanel` `.bar`/`.fill` literal `border-radius: 2px` (now `--fm-radius-sm`). No new colours, fonts or native controls added.
+**Pulled apart:** iteration 17 (raw data folded, progressive disclosure) and its own License placement (a full edit form open by default) worked against each other.
+**Fixed:**
+- `InspectorLicense`: the "Your license for this family" form is folded behind its heading (a `UiChevron` button, `aria-expanded`); it opens by itself when the family has a declaration. All of Info, Technical details included, now fits a 900 px window. `license.spec` opens it first (UI changed on purpose).
+- `InspectorInfo`: the license URL stays on one line with an ellipsis (click still copies the full value); rating stars wrap as a group and "Not rated" never breaks.
+- `SimilarPanel`: bar radii use the token.
+**Rule amended:** none. **Backlog (DESIGN.md):** items 5, 7, 8, 9 rewritten to what is left; item 26 now names the native inputs still in the inspector and the list-pane focus ring; the three-second note points at items 6, 5, 26.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-20.log`). Shots `20/` (before) and `20-after/`: all 23 scenes render in light and dark, comfortable and compact (46 images).
+**Not fixed, noted:** Project sets count mid-row (hidden Export button holds space); Glyphs grid's last column touches the pane edge; Studio "Panel font" fields look empty; Find similar results not grouped by family.
+**Next five:** item 6 rest (chevron on the sample's cap height, quieter sub-rows, no ring round the whole list pane) → item 5 rest (Project sets row like Sources) → item 26 native-input sweep in the inspector (date, number, datalist, text stars) → item 9 rest (group similar results by family) → item 8 rest (Glyphs column, Features human names). Hover-only work adds a hover scene to `screens.spec.ts` in the same iteration.

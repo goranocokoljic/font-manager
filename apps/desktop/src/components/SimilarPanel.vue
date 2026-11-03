@@ -278,14 +278,14 @@ function onKeyDown(e: KeyboardEvent): void {
   inline-size: 48px;
   block-size: 3px;
   margin-inline-start: var(--fm-space-2);
-  border-radius: 2px;
+  border-radius: var(--fm-radius-sm);
   background-color: var(--fm-hover);
   vertical-align: middle;
 }
 .fill {
   display: block;
   block-size: 100%;
-  border-radius: 2px;
+  border-radius: var(--fm-radius-sm);
   background-color: var(--fm-accent);
 }
 .message {

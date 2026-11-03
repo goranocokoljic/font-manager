@@ -8,6 +8,7 @@ import type { LicenseType, ReceiptChange, ReceiptPlace } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useSelectionStore } from '../stores/selection';
 import CopyValue from './CopyValue.vue';
+import UiChevron from './ui/UiChevron.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const selection = useSelectionStore();
@@ -56,6 +57,14 @@ const declared = computed(
       license.value.receipt != null),
 );
 
+// The form is folded until the user opens it, or open when the family has a declaration.
+const open = ref(false);
+watch(
+  () => selection.detail?.face.id,
+  () => (open.value = declared.value),
+  { immediate: true },
+);
+
 function save(receipt: ReceiptChange = { kind: 'keep' }): void {
   void selection.declareLicense({ ...fields(), receipt });
 }
@@ -80,76 +89,89 @@ function clearAll(): void {
     novalidate
     @submit.prevent="save()"
   >
-    <h4 id="fm-license-declared">{{ t('license.title') }}</h4>
-    <p v-if="selection.licenseError" role="alert" class="error">
-      {{ errorMessage(selection.licenseError) }}
-    </p>
-    <dl>
-      <dt>
-        <label for="fm-license-type">{{ t('license.type') }}</label>
-      </dt>
-      <dd>
-        <UiSelect id="fm-license-type" v-model="kind" class="type" :options="kindOptions" />
-      </dd>
-      <dt>
-        <label for="fm-license-seats">{{ t('license.seats') }}</label>
-      </dt>
-      <dd>
-        <input
-          id="fm-license-seats"
-          v-model.number="seats"
-          class="field"
-          type="number"
-          min="0"
-          step="1"
-          inputmode="numeric"
-        />
-      </dd>
-      <dt>
-        <label for="fm-license-date">{{ t('license.purchaseDate') }}</label>
-      </dt>
-      <dd>
-        <input id="fm-license-date" v-model="date" class="field" type="date" />
-      </dd>
-      <dt id="fm-license-receipt">{{ t('license.receipt') }}</dt>
-      <dd>
-        <CopyValue
-          v-if="license.receipt"
-          :label="t('license.receiptLabel')"
-          :value="license.receipt"
-        />
-        <span v-else data-testid="no-receipt">{{ t('license.none') }}</span>
-        <fieldset class="place">
-          <legend>{{ t('license.keepCopy') }}</legend>
-          <label>
-            <input v-model="place" type="radio" name="fm-license-place" value="nextToFont" />
-            {{ t('license.nextToFont') }}
-          </label>
-          <label>
-            <input v-model="place" type="radio" name="fm-license-place" value="appData" />
-            {{ t('license.appData') }}
-          </label>
-        </fieldset>
-        <div class="actions">
-          <button type="button" class="choice" @click="attach">
-            {{ license.receipt ? t('license.replaceReceipt') : t('license.attachReceipt') }}
-          </button>
-          <button
-            v-if="license.receipt"
-            type="button"
-            class="choice"
-            @click="save({ kind: 'clear' })"
-          >
-            {{ t('license.removeReceipt') }}
-          </button>
-        </div>
-      </dd>
-    </dl>
-    <div class="actions">
-      <button type="submit" class="choice primary">{{ t('license.save') }}</button>
-      <button type="button" class="choice" :disabled="!declared" @click="clearAll">
-        {{ t('license.clear') }}
+    <h4 id="fm-license-declared">
+      <button
+        type="button"
+        class="toggle fm-directional"
+        aria-controls="fm-license-fields"
+        :aria-expanded="open"
+        @click="open = !open"
+      >
+        <UiChevron :open="open" />
+        {{ t('license.title') }}
       </button>
+    </h4>
+    <div v-show="open" id="fm-license-fields" class="fields">
+      <p v-if="selection.licenseError" role="alert" class="error">
+        {{ errorMessage(selection.licenseError) }}
+      </p>
+      <dl>
+        <dt>
+          <label for="fm-license-type">{{ t('license.type') }}</label>
+        </dt>
+        <dd>
+          <UiSelect id="fm-license-type" v-model="kind" class="type" :options="kindOptions" />
+        </dd>
+        <dt>
+          <label for="fm-license-seats">{{ t('license.seats') }}</label>
+        </dt>
+        <dd>
+          <input
+            id="fm-license-seats"
+            v-model.number="seats"
+            class="field"
+            type="number"
+            min="0"
+            step="1"
+            inputmode="numeric"
+          />
+        </dd>
+        <dt>
+          <label for="fm-license-date">{{ t('license.purchaseDate') }}</label>
+        </dt>
+        <dd>
+          <input id="fm-license-date" v-model="date" class="field" type="date" />
+        </dd>
+        <dt id="fm-license-receipt">{{ t('license.receipt') }}</dt>
+        <dd>
+          <CopyValue
+            v-if="license.receipt"
+            :label="t('license.receiptLabel')"
+            :value="license.receipt"
+          />
+          <span v-else data-testid="no-receipt">{{ t('license.none') }}</span>
+          <fieldset class="place">
+            <legend>{{ t('license.keepCopy') }}</legend>
+            <label>
+              <input v-model="place" type="radio" name="fm-license-place" value="nextToFont" />
+              {{ t('license.nextToFont') }}
+            </label>
+            <label>
+              <input v-model="place" type="radio" name="fm-license-place" value="appData" />
+              {{ t('license.appData') }}
+            </label>
+          </fieldset>
+          <div class="actions">
+            <button type="button" class="choice" @click="attach">
+              {{ license.receipt ? t('license.replaceReceipt') : t('license.attachReceipt') }}
+            </button>
+            <button
+              v-if="license.receipt"
+              type="button"
+              class="choice"
+              @click="save({ kind: 'clear' })"
+            >
+              {{ t('license.removeReceipt') }}
+            </button>
+          </div>
+        </dd>
+      </dl>
+      <div class="actions">
+        <button type="submit" class="choice primary">{{ t('license.save') }}</button>
+        <button type="button" class="choice" :disabled="!declared" @click="clearAll">
+          {{ t('license.clear') }}
+        </button>
+      </div>
     </div>
   </form>
 </template>
@@ -168,6 +190,21 @@ h4 {
   margin: 0;
   font-size: inherit;
   font-weight: 600;
+}
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.fields {
+  display: grid;
+  gap: var(--fm-space-2);
 }
 dl {
   display: grid;

@@ -192,11 +192,12 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 15 the
-`list` shot has not changed for four iterations: the next iterations take items 7, 8 and 9
-(grid cards, inspector Info, Find similar as a mode) before more sidebar polish. The shots
-scenes do not hover; an iteration whose change shows only on hover adds a hover scene to
-`screens.spec.ts` first.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 20 the
+grid, the inspector Info and Find similar are in shape; the first screen's loudest chrome
+left is the list itself (rows, chevron, sub-rows, the focus ring round the whole pane) and
+the sidebar's Project sets row. The next iterations take items 6, 5 and the native-input
+sweep (item 26) before new features. The shots scenes do not hover; an iteration whose
+change shows only on hover adds a hover scene to `screens.spec.ts` first.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -218,10 +219,11 @@ scenes do not hover; an iteration whose change shows only on hover adds a hover 
    collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
    actions as `UiIconButton`s in the section header, sections collapsible, collections as
    drop targets. Done: `UiIconButton`, header icons, the collection "…" menu, catalog power
-   icons, the smart sparkle (iterations 8, 12, 13). Left: the Sources "Fonts" row actions
-   still float on their own line (put them on the row, shown on hover/focus like the
-   collection "…"); Project sets counts sit mid-row instead of right-aligned in tabular
-   figures; section icons; collapsible sections; Problems header vs the smart "Problems".
+   icons, the smart sparkle, Sources row actions on the row (iterations 8, 12, 13, 19).
+   Left: Project sets rows keep an "Export" text button that reserves space after the
+   count, so the count sits mid-row — make it a hover `UiIconButton` in the count's cell,
+   as Sources does; section icons; collapsible sections; Problems header vs the smart
+   "Problems".
 
 ### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
@@ -231,11 +233,10 @@ scenes do not hover; an iteration whose change shows only on hover adds a hover 
    (iterations 9, 14, review 10). Left: the chevron sits between the meta line and the
    sample — align it with the sample's cap height; sub-rows need their own indent and a
    quieter meta line; the focused list draws a ring round the whole pane.
-7. **Grid cards never truncate.** Fit the sample automatically (a short word at large size,
-   or auto-size the pangram to the card width); footer with name and style count; hover
-   reveals the weight range.
-8. **Inspector.** Info grouped and prioritised (Designer, Foundry, Licence, Styles first;
-   file, hash, IDs under a "Technical" expander). Glyphs grid without inner scrollbars (its
+7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word).
+   Left: hover reveals the weight range; style cards drop their dashed border.
+8. **Inspector.** Info is done (iteration 17; review 20 folded the license form and kept
+   the URL on one line). Left: Glyphs grid without inner scrollbars (its
    last column is clipped today). Features with human names and a live preview of each
    switch — the same human names and groups ("Small caps", "Tabular figures", "Stylistic
    sets") replace the raw tags in the Filters drawer's features group (left open by item 2).
@@ -245,7 +246,8 @@ scenes do not hover; an iteration whose change shows only on hover adds a hover 
    ("Similar to ADLaM Display Regular · Esc to go back"), grouped by family with the closest
    face shown, score as a quiet bar, and the "Why" line showing only what *differs* from the
    source (e.g. "wider, lower contrast") — a line that is identical for every result is
-   noise and is dropped. Source family pinned at the top for comparison.
+   noise and is dropped. Source family pinned at the top for comparison. Done in
+   iteration 18 except grouping results by family (closest face shown, "+2 styles").
 
 ### Functional features designers will love
 10. **Language & script support as a filter facet.** The per-font coverage data already
@@ -292,5 +294,8 @@ scenes do not hover; an iteration whose change shows only on hover adds a hover 
 ### Polish
 24. Motion pass: list transitions, panel collapse, selection changes.
 25. Custom overlay scrollbars on all platforms.
-26. Hover / focus / active audit across every control.
+26. Hover / focus / active audit across every control, and the native-input sweep:
+    the inspector still draws a native date field (license purchase date, with the
+    browser's calendar icon), a number field (seats), a `datalist` (tags) and text-glyph
+    stars and hearts; the focused font list draws a ring round the whole pane.
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.
