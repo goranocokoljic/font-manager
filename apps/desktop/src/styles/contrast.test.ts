@@ -217,6 +217,21 @@ describe('the accent in the style sheets', () => {
     expect(found).toEqual([]);
   });
 
+  it('never draws an accent focus ring inside an accent fill', () => {
+    const parts = (selector: string) => selector.split(',').map((s) => s.trim());
+    const found = SOURCES.flatMap(([path, source]) => {
+      const all = rules(source);
+      const filled = all.filter((r) => ACCENT_FILL.test(r.body)).flatMap((r) => parts(r.selector));
+      return all
+        .filter((r) => /outline:[^;]*var\(--fm-accent\)/.test(r.body))
+        .filter((r) => /outline-offset:\s*-/.test(r.body))
+        .flatMap((r) => parts(r.selector))
+        .filter((s) => filled.some((f) => s === `${f}:focus-visible`))
+        .map((s) => `${path}: ${s}`);
+    });
+    expect(found).toEqual([]);
+  });
+
   it.each([
     ['primary button', 'components/UpdateDialog.vue', '.button.primary'],
     ['primary button', 'views/ProblemsView.vue', '.button.primary'],

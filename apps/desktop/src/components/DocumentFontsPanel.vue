@@ -244,10 +244,14 @@ function onKeyDown(e: KeyboardEvent): void {
   text-align: start;
 }
 .row:focus-visible,
-.close:focus-visible,
-.activate:focus-visible {
+.close:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
+}
+/* The button is an accent fill: a ring inside it would not show. */
+.activate:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 2px;
 }
 .name {
   flex: 1;

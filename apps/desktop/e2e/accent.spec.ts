@@ -57,6 +57,20 @@ for (const [colorScheme, accent, onAccent] of [
       await expect(toggle).toHaveCSS('color', onAccent);
     });
 
+    test('the focus ring of a filled button sits outside the fill', async ({ page }) => {
+      await page.keyboard.press('ControlOrMeta+k');
+      await page.keyboard.type("Check a document's fonts");
+      await page.keyboard.press('Enter');
+      const activate = page
+        .getByRole('region', { name: 'Document fonts' })
+        .getByRole('button', { name: /^Activate / });
+      await expect(activate).toHaveCSS('background-color', accent);
+      await activate.focus();
+      await expect(activate).toBeFocused();
+      expect(await css(activate, 'outline-color')).toBe(accent);
+      expect(parseFloat(await css(activate, 'outline-offset'))).toBeGreaterThanOrEqual(0);
+    });
+
     test('a toast action is an accent fill with on-accent text', async ({ page }) => {
       await page.getByRole('treeitem').first().click();
       await page.keyboard.press('a');
