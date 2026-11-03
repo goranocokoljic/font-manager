@@ -317,6 +317,7 @@ function onToggle(row: ListRow): void {
           :missing="item.missing"
           :variations="item.variations"
           :defer="!motion.settled.value"
+          :show-variable="item.row.kind === 'family'"
         >
           <template #lead>
             <ActivationDot :state="rowActivation(item.row)" />

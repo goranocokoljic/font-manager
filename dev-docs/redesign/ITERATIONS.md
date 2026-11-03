@@ -341,3 +341,13 @@ Four iterations since review 50 (51–54); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-55.log`). Shots `review-55/` (before, 52) and `review-55-after/` (52): all 26 scenes render in light and dark, comfortable and compact; only `expanded-family` changed. Tall drawer check in `review-55-tall/`.
 **Not fixed, noted:** sub-rows repeat "Variable" on every style; "Lock width" placement; Table's "Columns" is a bordered text button among icons; Settings nav shows the focus ring on load.
 **Next five:** the first screen again — item 26 (license date/number/datalist; Settings radios and Advanced number fields) → item 6 (no repeated badge on sub-rows) → item 7 (hover weight range on cards, a `grid-expanded` scene) → item 21 (Tags / Quick Collection empties on `UiEmptyState`) → item 17 ("Lock width" beside the page; options in their own face). Every iteration takes before and after shots of a scene that shows its change and reads the `lint:js` exit code.
+
+## Iteration 56 — 2026-11-03 — Sub-rows stop repeating the "Variable" badge
+**Critique:** Opening a variable family showed "Variable" on the family row and again on every style under it. The badge is a fact about the family, so the repeat was noise next to the specimens. The list itself is calm: hairline rows, quiet metadata, Inter, one accent.
+**Why:** Review 55 listed it as left over in item 6; small, but it is on the `expanded-family` scene and the Variable badge is the loudest chrome there.
+**Changed:** `FontList` passes `:show-variable` only for family rows (Waterfall already did the same for its first line). Table has its own cell and is unchanged.
+**Backlog:** item 6 finished (already ticked); no new ticks.
+**Shots:** `.harness/redesign/shots/56/` (looked at `expanded-family` dark only; the plain `list` shot is unchanged — this was a small iteration).
+**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-56.log`).
+**Follow-ups:** item 26 natives (license date/number/datalist, Settings radios) still the next big first-screen change.
+**Dependencies:** none. **Reverted:** no.
