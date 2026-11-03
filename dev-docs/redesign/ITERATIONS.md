@@ -480,3 +480,13 @@ Four iterations since review 70 (71–74); all four graded.
 **Follow-ups:** Install is not accented as the primary action; dialogs (CatalogDownload/Install, LocalApiSettings) and Axes instance chips still bordered.
 **Verified:** typecheck, lint:js, Vitest catalog files, Playwright 273 passed / 16 skipped (`e2e-78.log`).
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 79 — 2026-11-03 — Axes tab: named instances and Pin button become quiet
+**Critique (before):** `list` is unchanged. In the Axes tab, four bordered pills (Thin, Regular, Bold, Black) with one solid blue fill, and a bordered "Pin this instance" box, shout louder than the sliders above them. Good: the weight slider with its number field and the "100 to 900, default 400" line read cleanly.
+**Why:** Backlog 26 / review 75 "Next five" (Axes chips). The Compare segmented control is a bigger change; this finishes a clear leftover first.
+**What changed:** `InspectorAxes` uses `UiButton` for the instances and the Pin button. The active instance is accent text, semibold. Local border/fill CSS deleted. Also ran Prettier on `catalogs.spec.ts` (iteration 78 left it unformatted).
+**Backlog:** item 26 (Axes chips done; dialog buttons remain).
+**Shots:** `.harness/redesign/shots/79/` (before) and `79b/` (after); `inspector-axes`.
+**Follow-ups:** the selected instance is a weaker cue than the old solid pill; a text `UiSegmentedControl` could fix it (see item 16).
+**Verified:** typecheck, lint:js, Vitest, Playwright 273 passed / 16 skipped (`e2e-79.log`).
+**Dependencies:** none. **Reverted:** no.

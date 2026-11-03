@@ -218,15 +218,14 @@ onMounted(() => {
         <h3 :id="`${uid}-instances`">{{ t('axes.instances') }}</h3>
         <ul class="plain presets" :aria-labelledby="`${uid}-instances`">
           <li v-for="i in d.instances" :key="i.name">
-            <button
-              type="button"
+            <UiButton
               class="preset"
               :aria-pressed="isAt(i)"
               :data-instance="i.name"
               @click="choose(i)"
             >
               {{ i.name }}
-            </button>
+            </UiButton>
           </li>
         </ul>
       </section>
@@ -246,9 +245,9 @@ onMounted(() => {
           />
           <label :for="`${uid}-pin-holder`">{{ t('axes.saveIn') }}</label>
           <UiSelect :id="`${uid}-pin-holder`" v-model="holderKey" :options="holderOptions" />
-          <button type="button" class="pin-button" :disabled="!canPin" @click="pin">
+          <UiButton class="pin-button" :disabled="!canPin" @click="pin">
             {{ t('axes.pin') }}
-          </button>
+          </UiButton>
           <p v-if="pinError" class="error" role="alert">{{ pinError }}</p>
         </template>
       </section>
@@ -265,23 +264,8 @@ onMounted(() => {
   margin: 0;
   color: var(--fm-muted);
 }
-.preset,
-.pin-button {
-  padding: 2px 10px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.pin-button:disabled {
-  border-color: var(--fm-border);
-  color: var(--fm-muted);
-}
 .preset[aria-pressed='true'] {
-  border-color: var(--fm-accent);
-  background: var(--fm-accent);
-  color: var(--fm-bg);
+  font-weight: 600;
 }
 h3 {
   margin: 16px 0 8px;
@@ -355,6 +339,6 @@ h3 {
 }
 .pin-button {
   align-self: flex-start;
-  margin-top: 4px;
+  margin-top: var(--fm-space-1);
 }
 </style>
