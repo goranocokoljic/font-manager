@@ -1,0 +1,18 @@
+{
+  "id": "a-value-a-mock-offers-in-one-list-must-work-in-every-mock-ha",
+  "title": "A value a mock offers in one list must work in every mock handler that takes it",
+  "category": "correctness",
+  "rule": "When a mock list gains an entry only in one mode (a language preset, a filter value), every handler that resolves that value must find it too: grep for the list's other readers. Test the round trip: pick the offered value and assert a result that holds families, not only that the list contains it.",
+  "rationale": "E40.2 (#444): the wall added a Vietnamese preset to listLanguages only, the language filter looked in mockLanguages, so the offered chip returned no families.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    444
+  ],
+  "file_globs": [
+    "apps/desktop/src/api/mock*.ts"
+  ],
+  "first_seen": "2026-11-03T21:09:55.600Z",
+  "last_seen": "2026-11-03T21:09:55.600Z"
+}

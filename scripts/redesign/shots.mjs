@@ -22,6 +22,12 @@
 //   storage     FM_SCREENS_STORAGE     localStorage JSON (fm.views.v1 holds the view mode)
 //   session     FM_SCREENS_SESSION     sessionStorage JSON (fm.mock.settings.v1 holds mock settings, e.g. density)
 //   command     FM_SCREENS_COMMAND     a command-palette action to run before the shot
+//   query       FM_SCREENS_QUERY       MockApi options; the spec adds `mockLibrary=wall` unless the
+//                                      query names a library (`?mockLibrary=small`: three families)
+//
+// The library is the 60-family wall (E40.2), one class after another: row 1 Asap Sharp (face 1,
+// variable, selected by `?face=1`), row 2 Crimson Pro (six styles), row 3 Archivo, row 4
+// Roboto Slab, row 5 Clicker Script, row 6 JetBrains Mono, row 7 Bebas Neue.
 
 import { spawnSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -37,13 +43,8 @@ const scenes = {
   grid: { routes: '/?face=1', storage: views('grid') },
   // The pointer over a grid card: the weight range appears in its meta line.
   'grid-hover': { routes: '/?face=1', storage: views('grid'), hover: '3' },
-  // The twisty on card 4 ("Sample 1", three styles) opens the family: its style cards follow it.
-  'grid-expanded': {
-    query: '?mockFaces=1&mockStyles=3',
-    routes: '/?face=1',
-    storage: views('grid'),
-    twisty: '4',
-  },
+  // The twisty on card 2 (Crimson Pro, six styles) opens the family: its style cards follow it.
+  'grid-expanded': { routes: '/?face=1', storage: views('grid'), twisty: '2' },
   waterfall: { routes: '/?face=1', storage: views('waterfall') },
   layout: { routes: '/?face=1', storage: views('layout') },
   'layout-help': { routes: '/?face=1', storage: views('layout'), click: 'How to edit' },
@@ -63,12 +64,11 @@ const scenes = {
   similar: { routes: '/?face=1', tab: 'Info', click: 'Find similar' },
   studio: { routes: '/studio?layout=magazine&face=1' },
   // ArrowRight expands the family only when the list has focus: click the row first.
-  // Since iteration 51 a one-style family does not open, and every built-in mock family has
-  // one style: the query `mockFaces=1&mockStyles=3` adds "Sample 1" (row 4) with three styles.
-  'expanded-family': { query: '?mockFaces=1&mockStyles=3', routes: '/?face=1@ArrowRight', row: '4' },
+  // A one-style family does not open: row 2 is Crimson Pro, six styles.
+  'expanded-family': { routes: '/?face=1@ArrowRight', row: '2' },
   'selected-row': { routes: '/?face=1' },
   // The pointer over an unselected row: hover-only row actions and the hover tint.
-  // Row 2 is Inter Regular, selected by `?face=1` since iteration 42.
+  // Row 1 is Asap Sharp, selected by `?face=1`.
   'hover-row': { routes: '/?face=1', hover: '3' },
   // Browser mode starts without collections; the spec makes one and opens it.
   // Three rows added to the Quick Collection with B, then its review opened (spec hook).
