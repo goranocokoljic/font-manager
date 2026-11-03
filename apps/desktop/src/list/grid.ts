@@ -34,11 +34,21 @@ export function gridRange(
 /** Longest thumbnail text, in characters. */
 export const CARD_TEXT_MAX = 24;
 
+/** Characters of sample text that fit a card `cardWidth` px wide at `sizePx` text (about 0.55 em each). */
+export function cardChars(cardWidth: number, sizePx: number): number {
+  const fit = Math.floor((cardWidth - 28) / (sizePx * 0.55));
+  return Math.min(CARD_TEXT_MAX, Math.max(4, Number.isFinite(fit) ? fit : CARD_TEXT_MAX));
+}
+
 /**
  * The text a card's thumbnail renders: the start of the row's preview text, cut
  * at a character (not inside a surrogate pair), so a long sample stays a small image.
+ * A cut after a space ends on a whole word ("The quick", never "The quick b").
  */
 export function cardText(text: string, max: number = CARD_TEXT_MAX): string {
   const chars = [...text.trim()];
-  return chars.length <= max ? chars.join('') : chars.slice(0, max).join('').trimEnd();
+  if (chars.length <= max) return chars.join('');
+  const cut = chars.slice(0, max);
+  const space = chars[max] === ' ' ? max : cut.lastIndexOf(' ');
+  return (space >= 3 ? cut.slice(0, space) : cut).join('').trimEnd();
 }

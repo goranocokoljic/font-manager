@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { CARD, CARD_TEXT_MAX, cardText, gridColumns, gridRange, lineCount } from './grid';
+import {
+  CARD,
+  CARD_TEXT_MAX,
+  cardChars,
+  cardText,
+  gridColumns,
+  gridRange,
+  lineCount,
+} from './grid';
 
 describe('grid layout', () => {
   it('fits as many cards per line as the width allows, at least one', () => {
@@ -27,5 +35,19 @@ describe('grid layout', () => {
     expect(long.startsWith(cardText(long))).toBe(true);
     const emoji = '😀'.repeat(30);
     expect(cardText(emoji)).toBe('😀'.repeat(CARD_TEXT_MAX));
+  });
+});
+
+describe('card text fit', () => {
+  it('ends on a whole word', () => {
+    expect(cardText('The quick brown fox', 11)).toBe('The quick');
+    expect(cardText('The quick brown fox', 9)).toBe('The quick');
+  });
+  it('keeps a long single word cut at a character', () => {
+    expect(cardText('Supercalifragilistic', 8)).toBe('Supercal');
+  });
+  it('fits fewer characters in a narrower card', () => {
+    expect(cardChars(200, 36)).toBeLessThan(cardChars(400, 36));
+    expect(cardChars(10, 36)).toBe(4);
   });
 });

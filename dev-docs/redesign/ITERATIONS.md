@@ -11,7 +11,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13: UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Fonts row actions, Project sets counts, section icons, collapsible sections, Problems dedupe remain)
 - [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
-- [ ] 7 Grid cards
+- [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector
 - [ ] 9 Find similar as a mode
 - [ ] 10 Language & script filter
@@ -123,3 +123,10 @@ The row's bordered "Find similar" text button became a hover/focus `UiIconButton
 **Verified:** typecheck, `lint:js` (exit 0, no warnings), Vitest 906, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-15.log`). Shots `review-15/` (before) and `review-15-after/`: all 23 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** Fonts source-row actions on their own line; Project sets count not right-aligned; focus ring round the whole list pane; Find similar result pane close is a text "×"; Studio "Panel font" fields look empty.
 **Next five:** item 7 (grid cards: the "The quick b" cut is the worst thing in any view) → item 8 (inspector Info grouped, hash/path behind "Technical") → item 9 (Find similar as a mode) → item 5 rest (Fonts row actions inline, Project sets counts) → item 6 rest (chevron alignment, sub-rows). Every iteration must change a shot; hover-only work adds a hover scene first. Run `pnpm lint:js` and read its exit code, not only its warnings.
+
+## Iteration 16 — 2026-11-03 — Grid cards stop cutting the sample mid-word
+Critique: the grid showed "The quick b" on every card, a cut mid-letter that looks like a bug. Chrome is calm; the inspector Info is still a raw dump. Cards are fine otherwise (dashed border on face cards is odd).
+Why: backlog item 7, the worst visible flaw in any view.
+Changed: `list/grid.ts` gets `cardChars` (characters that fit the card width) and `cardText` now ends on a whole word; `FontGrid` passes the fit. Grid now shows "The quick". 3 new Vitest cases.
+Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed (`.harness/redesign/e2e-16.log`). Shots `16/`.
+Follow-ups: hover reveals weight range; dashed border on style cards; inspector Info grouping (item 8) next.

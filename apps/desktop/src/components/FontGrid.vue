@@ -21,7 +21,7 @@ import { useScrollAnchor } from '../list/anchor';
 import { useScrollSettle } from '../list/settle';
 import { rowActivation } from '../list/activation';
 import { dragKeys } from '../list/drag';
-import { CARD, cardText, gridColumns, gridRange, lineCount } from '../list/grid';
+import { CARD, cardChars, cardText, gridColumns, gridRange, lineCount } from '../list/grid';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
@@ -142,11 +142,13 @@ const liveText = computed(() => props.preview.outline || props.preview.trackingE
 
 const rowId = (row: ListRow) => `fm-card-${row.key.replace(':', '-')}`;
 
+const textMax = computed(() => cardChars(width.value / columns.value, THUMB_PX));
+
 const visible = computed(() =>
   rendered.value.map((row, i) => {
     const index = range.value.start + i;
     const p = previewOf(row);
-    const text = cardText(p.text);
+    const text = cardText(p.text, textMax.value);
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     const live = !!palette || liveText.value;
