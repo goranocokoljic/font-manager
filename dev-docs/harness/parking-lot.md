@@ -332,3 +332,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E29.5 #428] plugins/shared/src/panel.ts:205 — the missing-fonts panel's "Activate all" sends only rows the library has and never reads `fetched`, so the panel cannot fetch a missing font and does not say so.
 - [E29.5 #428] crates/fm-bench/src/lib.rs:686 — macOS `fonts_needed_100` has little headroom: main baseline 943.5 ms against the 1000 ms budget (ADR 0008), and the same code measured 585.5 ms and 1006.1 ms in two attempts of bench run 41374843783 (attempt 1 flagged `macos.search` +38 % instead); the path it times (`ActivationManager::fonts_needed`) was not changed by E29.5, so the macOS activation/conflict-check cost or the runner variance needs a look, not a retry.
 - [E32.4 #422] crates/fm-core/src/document_fonts/psd.rs:484 — `ps_string` maps `\n`/`\r`/`\t` escapes inside UTF-16 engine-data strings, but Photoshop escapes only `(`, `)` and `\`; harmless while real files escape the backslash.
+
+## 2026-11-03
+
+- [E42.11 #462] apps/desktop/src/search/chips.ts:143 — the filter chips keep their own feature names (with apps/desktop/src/locales/en.json:484), separate from data/features; the texts sampled match the catalog today, but the two copies can drift.
