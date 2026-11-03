@@ -392,7 +392,14 @@ function onToggle(row: ListRow): void {
   overflow: hidden;
 }
 .slot.face .card {
-  border-style: dashed;
+  border-color: transparent;
+  background: var(--fm-surface);
+}
+.slot .card {
+  transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+.slot:hover .card {
+  background: var(--fm-hover);
 }
 .slot.selected .card {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);

@@ -294,3 +294,11 @@ New `InspectorTabHead` (hint line, actions under it) replaced three copies of he
 **Ticked:** none (item 6 stays ticked; the double sample is closed). **Shots:** `.harness/redesign/shots/46-after/` (the before run overlapped the edit, so it is not a clean before).
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright similar 6/6; full suite had 1 failure (the one fixed). Log `.harness/redesign/e2e-46.log`.
 **Follow-ups:** item 7 rest (Grid style card dashed border) next. **Dependencies:** none.
+
+## Iteration 47 — 2026-11-03 — Grid style cards: no dashed border, hover tint
+**Critique (before):** Grid is calm and the selected card reads well. The worst detail is that style cards (revealed styles) keep a dashed border, the only dashed line in the app. Family cards had no hover response.
+**Why:** Item 7 rest, the lowest open backlog item after item 6.
+**What changed:** `FontGrid.vue`: style cards use a transparent border on `--fm-surface`; every card tints with `--fm-hover` over 120 ms. Selected still wins.
+**Ticked:** none. **Shots:** `.harness/redesign/shots/47/` (no style card is visible in the `grid` scene, so the dashed fix is not seen in a shot; the hover tint is not either).
+**Verified:** typecheck, `lint:js` exit 0, Playwright 273 passed / 16 skipped (`e2e-47.log`). No before shots taken.
+**Follow-ups:** hover weight range on Grid cards (needs a visible use); add a Grid scene with an expanded multi-style family. **Dependencies:** none.
