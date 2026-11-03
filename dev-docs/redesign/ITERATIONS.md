@@ -10,7 +10,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iteration 7: toolbar icons + UiSegmentedControl done; status bar, dark-first, collapsible panes remain)
 - [ ] 5 Sidebar redesign (iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
-- [ ] 6 List rows
+- [ ] 6 List rows (iteration 9: UiBadge + real chevron twisty done; row meta line, hover actions, sub-row styling remain)
 - [ ] 7 Grid cards
 - [ ] 8 Inspector
 - [ ] 9 Find similar as a mode
@@ -100,4 +100,14 @@ Built `UiDrawer`; the facets moved into it, the bar shows `Filters · N` plus re
 **Backlog ticked:** 5 (partly).
 **Shots:** `.harness/redesign/shots/8` (before), `8b` (after).
 **Follow-ups:** section icons and collapsible sections; smart collections as a subtype (not a trailing pill); empty "Smart collections" header; Problems de-dupe; Online catalogs "Turn on" buttons; Tags/Quick Collection headers; source actions could show on hover once tests focus first.
+**Dependencies:** none.
+
+## Iteration 9 — 2026-11-03 — List rows: one badge component, a real chevron
+**Critique (before):** The list is calmer, but row metadata is a mix of three badge looks (bordered "Open license", plain-text "Variable", bordered "Fallback") and the expand twisty is a 6 px text triangle that sits off the baseline. The sidebar still has "Turn on" buttons and an empty Smart collections header; the status bar still prints version strings. Good: one-row preview bar, quiet toolbar, Inter.
+**Why:** backlog item 6, lowest unfinished with a clear win on the list shot (item 4's leftovers are status-bar text only).
+**What changed:** new `ui/UiBadge` (quiet hairline label; `accent` tone for "Update"). FontList (licence, update) and FontPreviewRow (Variable, Fallback) use it; their copied badge CSS is gone. New `chevron` icon replaces the ▸/▾ twisty in List, Table and Grid; it rotates 90° with a 120 ms ease; RTL flip is kept.
+**Tests:** `rtl.spec.ts` checks the chevron svg, not the ▸ text (UI changed on purpose). A tinted badge failed axe contrast on a selected row, so the badge has no fill. Vitest green; full Playwright 268 passed, 4 failed (a11y contrast, fixed), then a11y/search/rtl/font-list re-run green (55).
+**Backlog ticked:** 6 (partly).
+**Shots:** `.harness/redesign/shots/9` (before), `9b` (after).
+**Follow-ups:** `FontTable`/`FontGrid`/`HealthBadge` still have their own badge CSS (move onto `UiBadge`); row actions as icon buttons on hover; name weight/size in the meta line; Waterfall repeats "Variable" per line; Table/Grid chevrons were not screenshot-checked.
 **Dependencies:** none.

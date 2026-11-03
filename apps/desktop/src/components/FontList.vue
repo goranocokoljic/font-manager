@@ -41,6 +41,8 @@ import { DEFAULT_PREVIEW, previewRowHeight, type PreviewSettings } from '../stor
 import { t } from '../i18n';
 import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
+import UiBadge from './ui/UiBadge.vue';
+import UiIcon from './ui/UiIcon.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -293,8 +295,8 @@ function onToggle(row: ListRow): void {
           class="twisty fm-directional"
           aria-hidden="true"
           @click.stop="onToggle(item.row)"
-          >{{ item.row.expanded ? '▾' : '▸' }}</span
-        >
+          ><UiIcon class="chevron" :class="{ open: item.row.expanded }" name="chevron"
+        /></span>
         <FontPreviewRow
           v-if="item.face"
           class="preview"
@@ -326,19 +328,19 @@ function onToggle(row: ListRow): void {
           </template>
           <template v-if="item.row.kind === 'family'" #detail>
             <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
-            <span
+            <UiBadge
               v-if="item.row.family.openLicense"
               class="open-license"
               data-testid="open-license"
               :title="openLicenseName(item.row.family.openLicense)"
-              >{{ openLicenseBadge() }}</span
+              >{{ openLicenseBadge() }}</UiBadge
             >
-            <span
+            <UiBadge
               v-if="updateTitle(item.row.family.name)"
-              class="update"
+              tone="accent"
               data-testid="update-available"
               :title="updateTitle(item.row.family.name) ?? undefined"
-              >{{ t('catalogs.updates.badge') }}</span
+              >{{ t('catalogs.updates.badge') }}</UiBadge
             >
           </template>
           <template v-else-if="item.row.virtual" #detail>
@@ -430,8 +432,16 @@ function onToggle(row: ListRow): void {
   place-items: center;
   width: 24px;
   color: var(--fm-muted);
-  font-size: var(--fm-text-md);
   cursor: pointer;
+}
+.twisty:hover {
+  color: var(--fm-fg);
+}
+.chevron {
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+.chevron.open {
+  transform: rotate(90deg);
 }
 .preview {
   flex: 1;
@@ -463,22 +473,6 @@ function onToggle(row: ListRow): void {
 }
 .count {
   color: var(--fm-muted);
-}
-.open-license {
-  padding: 0 4px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  line-height: 14px;
-}
-.update {
-  padding: 0 4px;
-  border: 1px solid var(--fm-accent);
-  border-radius: var(--fm-radius-sm);
-  color: var(--fm-accent);
-  font-size: var(--fm-text-xs);
-  line-height: 14px;
 }
 .note {
   color: var(--fm-warning);

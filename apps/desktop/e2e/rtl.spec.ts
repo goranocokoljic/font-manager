@@ -114,9 +114,9 @@ test.describe('in right-to-left chrome', () => {
     expect(labelEdges.left - rowEdges.left).toBeGreaterThan(48);
     await expect(row.locator('.label')).toHaveCSS('direction', 'rtl');
 
-    // A closed family's ▸ points left (toward the row's end).
+    // A closed family's chevron points left (toward the row's end).
     const twisty = page.locator('.twisty').first();
-    await expect(twisty).toHaveText('▸');
+    await expect(twisty.locator('svg')).toHaveCount(1);
     await expect(twisty).toHaveCSS('transform', 'matrix(-1, 0, 0, 1, 0, 0)');
 
     // A key chord keeps its order: "Ctrl+K" in the status bar reads left to right.

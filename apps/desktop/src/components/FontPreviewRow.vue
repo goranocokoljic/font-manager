@@ -25,6 +25,7 @@ import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
 import { usePalettesStore } from '../stores/palettes';
+import UiBadge from './ui/UiBadge.vue';
 import { ALL_FONTS_VIEW } from '../stores/preview';
 import { faceAxes, variationSettings } from '../preview/variations';
 import { t } from '../i18n';
@@ -200,14 +201,13 @@ const deferredStyle = computed(() => ({
       <slot name="lead" />
       <bdi>{{ name }}</bdi>
       <slot name="detail" />
-      <span v-if="face.isVariable" class="badge">{{ t('list.variable') }}</span>
-      <span
+      <UiBadge v-if="face.isVariable">{{ t('list.variable') }}</UiBadge>
+      <UiBadge
         v-if="fallback"
-        class="fallback"
         data-testid="fallback-hint"
         :title="fallbackTitle"
         :aria-label="fallbackTitle"
-        >{{ t('list.fallback') }}</span
+        >{{ t('list.fallback') }}</UiBadge
       >
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
     </span>
@@ -257,19 +257,8 @@ const deferredStyle = computed(() => ({
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
 }
-.badge {
-  color: var(--fm-muted);
-}
 .note {
   color: var(--fm-warning);
-}
-.fallback {
-  padding: 0 4px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  line-height: 14px;
 }
 .sample {
   overflow: hidden;

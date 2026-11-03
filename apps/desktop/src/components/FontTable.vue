@@ -7,6 +7,7 @@
 // Headers sort (ascending, descending, default) and can be dragged to reorder;
 // the Columns menu (TableColumnsMenu) hides and moves them by keyboard. The
 // order of the families comes from the API (`ListFamiliesRequest.order`).
+import UiIcon from './ui/UiIcon.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchEffect } from 'vue';
 import type { FaceId } from '../api/types';
 import {
@@ -424,8 +425,8 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 class="twisty fm-directional"
                 aria-hidden="true"
                 @click.stop="onToggle(item.row)"
-                >{{ item.row.expanded ? '▾' : '▸' }}</span
-              >
+                ><UiIcon class="chevron" :class="{ open: item.row.expanded }" name="chevron"
+              /></span>
               <bdi class="text" :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
               }}</bdi>
@@ -648,5 +649,11 @@ span.sort {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+.chevron {
+  transition: transform 120ms cubic-bezier(0.2, 0, 0, 1);
+}
+.chevron.open {
+  transform: rotate(90deg);
 }
 </style>
