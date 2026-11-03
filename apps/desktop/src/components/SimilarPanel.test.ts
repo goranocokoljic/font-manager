@@ -65,7 +65,9 @@ describe('SimilarPanel', () => {
     const name = `${first.face.familyName} ${first.face.style}`;
     expect(buttons[0]!.attributes('aria-label')).toBe(`${name}, ${percent}% similar`);
     expect(buttons[0]!.get('[data-testid="similar-score"]').text()).toBe(`${percent}% similar`);
-    expect(buttons[0]!.text()).toContain(`Why: ${first.reasons.join(', ')}`);
+    // Only what differs from the other results is explained ("same weight" is shared).
+    expect(buttons[0]!.text()).toContain('Why: same classification');
+    expect(buttons[0]!.text()).not.toContain('same weight');
     // Live text in the face's own font, not an image.
     const sample = buttons[0]!.get('.sample');
     expect(sample.attributes('style')).toContain(faceFamily(first.face.id));

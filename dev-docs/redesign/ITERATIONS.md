@@ -13,7 +13,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iteration 17: Info shows About + License + Your notes first, raw data behind "Technical details"; Glyphs clipped column, Features names remain)
-- [ ] 9 Find similar as a mode
+- [ ] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; grouping by family remains)
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
 - [ ] 12 Quick Look, finished
@@ -137,3 +137,10 @@ Why: backlog item 8; the right pane is visible in every first-screen shot.
 Changed: `InspectorInfo` order is now header, About (Designer, Foundry, Version), License, Your notes, then a "Technical details" expander (`UiChevron`, `aria-expanded`) holding Names, File, Style, Metrics, Characters. New `info.about` / `info.technical` strings (en, de). `inspector.spec` and `rtl.spec` open the expander first.
 Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 271 passed + 1 flaky (`app.spec` theme test passed alone; `.harness/redesign/e2e-17.log`). Shots `17/`.
 Follow-ups: License URL wraps mid-word; the license editor form is still tall (fold it); Glyphs clipped column; Features human names; Axes tab.
+
+## Iteration 18 — 2026-11-03 — Find similar becomes a mode, not a split
+Critique: the similar panel halved the list and put three rows under a mostly empty pane. Every result said the same "Why" line, and the close was a text "×". The rest of the screen is calm; this was the roughest surface left.
+Why: backlog item 9. Visible the moment a designer presses S.
+Changed: `SimilarPanel` fills the main area; `HomeView` hides the list (`v-show`, so state and focus survive) while it is open. The source face is pinned on top. Each result has a quiet score bar. "Why" shows only reasons that differ between results. Close is a `UiIconButton` (new `close` icon). Esc returns to the list at the picked face. `similar.spec` and `SimilarPanel.test` updated on purpose (list check after Esc; shared reasons dropped).
+Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed (`.harness/redesign/e2e-18.log`). Shots `18/`.
+Follow-ups: group results by family (closest face shown); the list `list` shot is unchanged (mode shows only in `similar`); inspector license form still tall.

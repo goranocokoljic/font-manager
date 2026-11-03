@@ -46,7 +46,7 @@ async function expectResults(page: Page): Promise<void> {
     const b = buttons.nth(i);
     await expect(b).toHaveAccessibleName(/, \d+% similar$/);
     await expect(b.getByTestId('similar-score')).toHaveText(/^\d+% similar$/);
-    await expect(b).toHaveAccessibleDescription(/^Why: \S/);
+    await expect(b).toHaveAccessibleDescription(/^(Why: \S.*)?$/); // only what differs from the other results
     const face = await b.getAttribute('data-face');
     await expect(b.locator('.sample')).toHaveCSS('font-family', new RegExp(`fm-face-${face}\\b`));
   }
@@ -74,6 +74,8 @@ test('the row action opens "Similar to" and a click selects the result in the li
   await sample.click();
   await expect(sample).toHaveAttribute('aria-current', 'true');
   await expect(info(page).getByRole('heading', { name })).toBeVisible();
+  // The panel replaces the list; closing it shows the picked face selected.
+  await page.keyboard.press('Escape');
   await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveAccessibleName(
     new RegExp(`^${name}, `),
   );
@@ -97,9 +99,6 @@ test('S on the selected row opens the panel; arrows and Enter select; Escape clo
   const name = await nameOf(buttons.nth(1));
   await page.keyboard.press('Enter');
   await expect(info(page).getByRole('heading', { name })).toBeVisible();
-  await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveAccessibleName(
-    new RegExp(`^${name}, `),
-  );
   // Tab reaches every result; Shift+Tab back to the close button.
   await page.keyboard.press('Tab');
   await expect(buttons.nth(2)).toBeFocused();
@@ -110,6 +109,9 @@ test('S on the selected row opens the panel; arrows and Enter select; Escape clo
   await page.keyboard.press('Escape');
   await expect(panel(page)).toBeHidden();
   await expect(tree).toBeFocused();
+  await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveAccessibleName(
+    new RegExp(`^${name}, `),
+  );
 });
 
 test('the inspector header opens the panel for the shown face', async ({ page }) => {

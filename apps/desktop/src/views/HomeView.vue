@@ -521,58 +521,60 @@ function openFace(face: FaceId): void {
             <UiIcon name="inspector" />
           </button>
         </header>
-        <FilterChips />
-        <PreviewControls :view="ALL_FONTS_VIEW" />
-        <template v-if="fontList.families.length && mode === 'table'">
-          <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
-          <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
-        </template>
-        <template v-else-if="fontList.families.length && mode === 'layout'">
-          <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
-            <button
-              type="button"
-              class="toggle studio"
-              :disabled="!canOpenStudio"
-              :title="t('home.openStudioTitle')"
-              @click="openStudio"
-            >
-              {{ t('home.openStudio') }}
-            </button>
-          </LayoutActions>
-          <FontLayout
-            :layout="shownLayout"
-            :face="layoutFace"
-            editable
-            :bounds="textLayouts.bounds"
-            :set-props="textLayouts.setBlockProps"
-            :width="textLayouts.width"
-            :set-width-lock="textLayouts.setWidthLock"
-            @edit-text="textLayouts.setBlockText"
+        <div v-show="!similar.open" class="browse">
+          <FilterChips />
+          <PreviewControls :view="ALL_FONTS_VIEW" />
+          <template v-if="fontList.families.length && mode === 'table'">
+            <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
+            <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
+          </template>
+          <template v-else-if="fontList.families.length && mode === 'layout'">
+            <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
+              <button
+                type="button"
+                class="toggle studio"
+                :disabled="!canOpenStudio"
+                :title="t('home.openStudioTitle')"
+                @click="openStudio"
+              >
+                {{ t('home.openStudio') }}
+              </button>
+            </LayoutActions>
+            <FontLayout
+              :layout="shownLayout"
+              :face="layoutFace"
+              editable
+              :bounds="textLayouts.bounds"
+              :set-props="textLayouts.setBlockProps"
+              :width="textLayouts.width"
+              :set-width-lock="textLayouts.setWidthLock"
+              @edit-text="textLayouts.setBlockText"
+            />
+          </template>
+          <FontGrid
+            v-else-if="fontList.families.length && mode === 'grid'"
+            :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+            @cursor-face="showFace"
+            @open="openFace"
           />
-        </template>
-        <FontGrid
-          v-else-if="fontList.families.length && mode === 'grid'"
-          :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-          @cursor-face="showFace"
-          @open="openFace"
-        />
-        <FontWaterfall
-          v-else-if="fontList.families.length && mode === 'waterfall'"
-          :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-          @cursor-face="showFace"
-          @open="openFace"
-        />
-        <FontList
-          v-else-if="fontList.families.length"
-          :preview="preview.settingsFor(ALL_FONTS_VIEW)"
-          @cursor-face="showFace"
-          @open="openFace"
-        />
-        <section v-else class="empty" :aria-label="t('home.fontList')">
-          <p v-if="library.error" role="alert" class="error">{{ errorMessage(library.error) }}</p>
-          <p v-else-if="search.hits">{{ t('home.noMatches') }}</p>
-          <p v-else-if="library.loaded">{{ t('home.empty') }}</p>
-        </section>
+          <FontWaterfall
+            v-else-if="fontList.families.length && mode === 'waterfall'"
+            :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+            @cursor-face="showFace"
+            @open="openFace"
+          />
+          <FontList
+            v-else-if="fontList.families.length"
+            :preview="preview.settingsFor(ALL_FONTS_VIEW)"
+            @cursor-face="showFace"
+            @open="openFace"
+          />
+          <section v-else class="empty" :aria-label="t('home.fontList')">
+            <p v-if="library.error" role="alert" class="error">{{ errorMessage(library.error) }}</p>
+            <p v-else-if="search.hits">{{ t('home.noMatches') }}</p>
+            <p v-else-if="library.loaded">{{ t('home.empty') }}</p>
+          </section>
+        </div>
       </template>
       <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />
       <DocumentFontsPanel @select="openFace" />
@@ -619,6 +621,12 @@ function openFace(face: FaceId): void {
 </template>
 
 <style scoped>
+.browse {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
 .toolbar {
   display: flex;
   align-items: center;

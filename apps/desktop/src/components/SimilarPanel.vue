@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // "Similar to <family style>" (E23.3): the faces `findSimilar` ranks as closest to
 // one face, each previewed in its own font with the view's preview text, its score
-// as a percent and fm-core's reasons. Docked below the font list, so the list and
-// the inspector stay in view while results are picked.
+// as a percent and fm-core's reasons. It replaces the font list while open
+// (a mode, not a split); the source face is pinned on top and the inspector stays.
 //
 // Keys: Tab reaches the close button and every result; Up/Down (Home/End) move
 // between results; Enter or a click selects the result in the list and the
@@ -15,6 +15,7 @@ import { usePreviewStore, type PreviewSettings } from '../stores/preview';
 import { useSamplesStore } from '../stores/samples';
 import { scorePercent, useSimilarStore } from '../stores/similar';
 import FontPreviewRow from './FontPreviewRow.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 
 const props = defineProps<{ preview: PreviewSettings }>();
 const emit = defineEmits<{
@@ -46,6 +47,28 @@ function scoreText(r: SimilarFace): string {
   return percent === null ? t('similar.noScore') : t('similar.score', { percent });
 }
 
+// A reason every result shares says nothing about which one is closer: show only what differs.
+const sharedReasons = computed(() => {
+  const all = similar.results;
+  if (all.length < 2) return new Set<string>();
+  const [first, ...rest] = all.map((r) => r.reasons);
+  return new Set((first ?? []).filter((x) => rest.every((o) => o.includes(x))));
+});
+
+const source = computed(() => {
+  const face = similar.target;
+  if (!face) return null;
+  const sample = sampleText(props.preview, face, previews.pangramText);
+  const got = samples.get(face.id, sample);
+  return {
+    face,
+    name: nameOf(face),
+    text: got?.text ?? sample,
+    fallback: got?.fallback ?? null,
+    missing: got?.missing ?? [],
+  };
+});
+
 const items = computed(() =>
   similar.results.map((r, i) => {
     const sample = sampleText(props.preview, r.face, previews.pangramText);
@@ -55,6 +78,8 @@ const items = computed(() =>
       id: `fm-similar-${i}`,
       name: nameOf(r.face),
       score: scoreText(r),
+      percent: scorePercent(r.score) ?? 0,
+      why: r.reasons.filter((x) => !sharedReasons.value.has(x)).join(', '),
       text: got?.text ?? sample,
       fallback: got?.fallback ?? null,
       missing: got?.missing ?? [],
@@ -63,6 +88,11 @@ const items = computed(() =>
 );
 
 watchEffect(() => {
+  if (similar.target)
+    samples.want(
+      similar.target.id,
+      sampleText(props.preview, similar.target, previews.pangramText),
+    );
   for (const r of similar.results)
     samples.want(r.face.id, sampleText(props.preview, r.face, previews.pangramText));
 });
@@ -145,8 +175,22 @@ function onKeyDown(e: KeyboardEvent): void {
         >{{ titleParts.after }}
       </h2>
       <p class="hint">{{ t('similar.hint') }}</p>
-      <button type="button" class="close" :aria-label="t('similar.close')" @click="close">×</button>
+      <UiIconButton icon="close" :label="t('similar.close')" @click="close" />
     </header>
+    <div v-if="source" class="source" data-testid="similar-source">
+      <FontPreviewRow
+        class="preview"
+        :face="source.face"
+        :label="source.name"
+        :text="source.text"
+        :size-px="Math.min(preview.sizePx, 32)"
+        :line-height="preview.lineHeight"
+        :tracking-em="preview.trackingEm"
+        :align="preview.align"
+        :fallback="source.fallback"
+        :missing="source.missing"
+      />
+    </div>
     <p v-if="similar.loading" class="message" role="status">{{ t('similar.loading') }}</p>
     <p v-else-if="similar.error" class="message error" role="alert">
       {{ t('similar.error', { message: errorMessage(similar.error) }) }}
@@ -179,10 +223,13 @@ function onKeyDown(e: KeyboardEvent): void {
           >
             <template #detail>
               <span class="score" data-testid="similar-score">{{ item.score }}</span>
+              <span class="bar" aria-hidden="true"
+                ><span class="fill" :style="{ inlineSize: `${item.percent}%` }"
+              /></span>
             </template>
           </FontPreviewRow>
           <span :id="`${item.id}-why`" class="why">{{
-            t('similar.reasons', { reasons: item.r.reasons.join(', ') || '—' })
+            item.why ? t('similar.reasons', { reasons: item.why }) : ''
           }}</span>
         </button>
       </li>
@@ -196,10 +243,9 @@ function onKeyDown(e: KeyboardEvent): void {
 <style scoped>
 .similar {
   display: flex;
-  flex: none;
+  flex: 1;
   flex-direction: column;
-  max-height: 45%;
-  border-top: 1px solid var(--fm-border);
+  min-height: 0;
   background-color: var(--fm-bg);
 }
 .similar:focus-visible {
@@ -223,13 +269,24 @@ function onKeyDown(e: KeyboardEvent): void {
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
 }
-.close {
-  padding: 0 8px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
+.source {
+  border-bottom: 1px solid var(--fm-border);
+  background-color: var(--fm-surface);
+}
+.bar {
+  display: inline-block;
+  inline-size: 48px;
+  block-size: 3px;
+  margin-inline-start: var(--fm-space-2);
+  border-radius: 2px;
+  background-color: var(--fm-hover);
+  vertical-align: middle;
+}
+.fill {
+  display: block;
+  block-size: 100%;
+  border-radius: 2px;
+  background-color: var(--fm-accent);
 }
 .message {
   margin: 0;
@@ -276,5 +333,8 @@ function onKeyDown(e: KeyboardEvent): void {
   padding: 0 16px;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
+}
+.why:empty {
+  display: none;
 }
 </style>
