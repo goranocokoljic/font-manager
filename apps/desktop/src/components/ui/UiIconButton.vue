@@ -27,6 +27,9 @@ defineProps<{ icon: IconName; label: string; title?: string }>();
   color: var(--fm-muted);
   transition: background-color var(--fm-motion-fast) var(--fm-ease);
 }
+.ui-icon-button[aria-disabled='true'] {
+  opacity: 0.55;
+}
 .ui-icon-button:hover {
   background-color: var(--fm-hover);
   color: var(--fm-fg);

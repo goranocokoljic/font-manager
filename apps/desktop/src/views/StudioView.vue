@@ -16,7 +16,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import StudioPanel from '../components/StudioPanel.vue';
-import UiButton from '../components/ui/UiButton.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
 import { t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
@@ -63,7 +62,7 @@ function setPanelRef(panel: number, c: unknown): void {
   if (c) panelRefs.set(panel, c as { focus: () => void });
   else panelRefs.delete(panel);
 }
-const addButton = ref<InstanceType<typeof UiButton> | null>(null);
+const addButton = ref<InstanceType<typeof UiIconButton> | null>(null);
 
 /** Adds a copy of the current panel at the end and moves the focus to it. */
 async function addPanel(): Promise<void> {
@@ -130,16 +129,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :class="{ on: helpOpen }"
         @click="helpOpen = !helpOpen"
       />
-      <UiButton
+      <UiIconButton
         ref="addButton"
+        icon="plus"
+        :label="t('studio.addPanel')"
         :aria-disabled="full"
         :title="
           full ? t('studio.panelsFull', { max: String(MAX_PANELS) }) : t('studio.addPanelTitle')
         "
         @click="addPanel"
-      >
-        {{ t('studio.addPanel') }}
-      </UiButton>
+      />
       <UiIconButton
         icon="close"
         :label="t('common.close')"

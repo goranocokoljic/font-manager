@@ -406,3 +406,12 @@ Ticked: item 7 stays `[x]`; its "hover weight range" and "grid-expanded scene" l
 Shots: `.harness/redesign/shots/66/` (grid-hover, grid-expanded, both themes; opened dark expanded, light hover).
 Follow-ups: the grid cannot expand a family from the keyboard (ArrowRight moves the cursor) — a Shift+Arrow or Enter binding is needed (item 3 of "Keyboard-first"); `list` shot unchanged by design (grid view only).
 Dependencies: none.
+
+## Iteration 67 — 2026-11-03 — Studio: "Add panel" becomes a plus icon
+Critique (before/after, `studio`): the bar had a text button "Add panel" between two icons, the last text in a row of icons, and "Lock width" floats at the window's corner far from the page. The specimen is good; the chrome around it is nearly quiet.
+Why: backlog item 17's "Add panel as an icon"; the bar is now info, plus, close, all 24 px icon buttons. Picked over "Lock width" beside the page, which needs a layout change in `FontLayout` shared with Layout view (logged below).
+Changed: `StudioView` uses `UiIconButton` (plus) with the same label, title, `aria-disabled` and focus return; `UiIconButton` fades on `aria-disabled` like `UiButton`. Accessible name is still "Add panel", so no test changed.
+Ticked: item 17 stays `[ ]` (Lock width remains).
+Shots: `.harness/redesign/shots/67/` (studio, both themes; opened dark). Playwright 273 passed / 16 skipped (`e2e-67.log`), typecheck and lint:js green, Vitest run.
+Follow-ups: "Lock width" beside the page (shared `FontLayout` header); the plus icon has no "4 of 4" cue besides the fade and tooltip.
+Dependencies: none.
