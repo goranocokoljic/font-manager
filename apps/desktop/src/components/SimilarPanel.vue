@@ -69,8 +69,22 @@ const source = computed(() => {
   };
 });
 
+// One row per family: its closest face (highest score), then "+N styles" for the rest.
+const grouped = computed(() => {
+  const byFamily = new Map<string, { best: SimilarFace; extra: number }>();
+  for (const r of similar.results) {
+    const g = byFamily.get(r.face.familyName);
+    if (!g) byFamily.set(r.face.familyName, { best: r, extra: 0 });
+    else {
+      g.extra += 1;
+      if ((r.score ?? -1) > (g.best.score ?? -1)) g.best = r;
+    }
+  }
+  return [...byFamily.values()];
+});
+
 const items = computed(() =>
-  similar.results.map((r, i) => {
+  grouped.value.map(({ best: r, extra }, i) => {
     const sample = sampleText(props.preview, r.face, previews.pangramText);
     const got = samples.get(r.face.id, sample);
     return {
@@ -78,6 +92,7 @@ const items = computed(() =>
       id: `fm-similar-${i}`,
       name: nameOf(r.face),
       score: scoreText(r),
+      more: extra ? t('similar.moreStyles', { count: extra }) : '',
       percent: scorePercent(r.score) ?? 0,
       why: r.reasons.filter((x) => !sharedReasons.value.has(x)).join(', '),
       text: got?.text ?? sample,
@@ -226,6 +241,7 @@ function onKeyDown(e: KeyboardEvent): void {
               <span class="bar" aria-hidden="true"
                 ><span class="fill" :style="{ inlineSize: `${item.percent}%` }"
               /></span>
+              <span v-if="item.more" class="more">{{ item.more }}</span>
             </template>
           </FontPreviewRow>
           <span :id="`${item.id}-why`" class="why">{{
@@ -287,6 +303,11 @@ function onKeyDown(e: KeyboardEvent): void {
   block-size: 100%;
   border-radius: var(--fm-radius-sm);
   background-color: var(--fm-accent);
+}
+.more {
+  margin-inline-start: var(--fm-space-2);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
 }
 .message {
   margin: 0;

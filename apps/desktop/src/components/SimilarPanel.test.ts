@@ -74,6 +74,20 @@ describe('SimilarPanel', () => {
     expect(buttons[0]!.find('img').exists()).toBe(false);
   });
 
+  it('shows one row per family with its closest face and a "+N more" count', async () => {
+    const { wrapper, similar } = await setup();
+    const first = similar.results[0]!;
+    similar.results = [
+      first,
+      { ...first, score: 0.1, face: { ...first.face, id: 9001, style: 'Bold' } },
+      { ...first, score: 0.05, face: { ...first.face, id: 9002, style: 'Italic' } },
+    ];
+    await flushPromises();
+    const buttons = wrapper.findAll('button.result');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]!.text()).toContain('+2 more styles');
+  });
+
   it('the first result takes the focus; arrows move; Enter selects', async () => {
     const { wrapper, similar } = await setup();
     const buttons = wrapper.findAll<HTMLButtonElement>('button.result');

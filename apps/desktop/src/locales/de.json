@@ -1509,6 +1509,10 @@
     "score": "{percent} % ähnlich",
     "noScore": "Keine Bewertung",
     "resultLabel": "{name}, {score}",
+    "moreStyles": {
+      "one": "+{count} weiterer Schnitt",
+      "other": "+{count} weitere Schnitte"
+    },
     "reasons": "Warum: {reasons}",
     "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet sie aus. Der Inspektor zeigt sie."
   },

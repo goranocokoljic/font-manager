@@ -1509,6 +1509,10 @@
     "score": "{percent}% similar",
     "noScore": "No score",
     "resultLabel": "{name}, {score}",
+    "moreStyles": {
+      "one": "+{count} more style",
+      "other": "+{count} more styles"
+    },
     "reasons": "Why: {reasons}",
     "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
   },

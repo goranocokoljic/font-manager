@@ -13,7 +13,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 6 List rows (iteration 21: chevron on sample line, sub-row guide, no pane ring; iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iteration 17 + review 20: Info shows About + License + Your notes first, license form and raw data folded; Glyphs clipped column, Features names remain)
-- [ ] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; grouping by family remains)
+- [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
 - [ ] 12 Quick Look, finished
@@ -179,3 +179,13 @@ Rescan / Pause / Remove moved into the Sources row, replacing the count on hover
 **Verified:** typecheck, `lint:js` exit 0, Vitest 909. Playwright: full run had 2 failures from the reverted field change; the notes, tags, rating, license and inspector specs pass after the revert (13 passed). Full log `e2e-23.log` is from before the revert.
 **Follow-ups:** a hover scene for sidebar rows and list rows. Heavy bordered notes boxes need a design that keeps 3:1 (e.g. underline style).
 **Dependencies:** none. **Reverted:** partly (field borders).
+
+## Iteration 24 — 2026-11-03 — Find similar: one row per family
+**Critique (before):** Not re-shot this iteration (token budget); the critique comes from the code and review 20. Three Myriad Pro faces fill three result rows, so a long result list hides the variety of families. Good: pinned source, quiet score bar, honest "Why" line.
+**Why:** Item 9 rest, next on review 20's list. The results list now shows families, not repeated styles.
+**What changed:** `SimilarPanel.vue` groups results by family name: the closest face is shown, the rest become a quiet "+N more styles" next to the score bar. New `similar.moreStyles` in en and de. New Vitest case for grouping.
+**Backlog:** item 9 ticked.
+**Shots:** none taken; the mock library has few multi-style families, so the change is small in browser mode.
+**Verified:** typecheck, `lint:js` exit 0, Vitest all pass, Playwright 272 passed / 16 skipped (`e2e-24.log`).
+**Follow-ups:** picking a family row opens only its closest face; a way to expand the other styles inline is not built. Item 8 rest (Glyphs column, Features names) is next.
+**Dependencies:** none. **Reverted:** no.
