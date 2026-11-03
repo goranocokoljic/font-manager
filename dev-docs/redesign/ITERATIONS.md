@@ -9,7 +9,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
-- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19: Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
 - [ ] 6 List rows (iteration 21: chevron on sample line, sub-row guide, no pane ring; iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iteration 17 + review 20: Info shows About + License + Your notes first, license form and raw data folded; Glyphs clipped column, Features names remain)
@@ -158,4 +158,14 @@ Rescan / Pause / Remove moved into the Sources row, replacing the count on hover
 **Shots:** `.harness/redesign/shots/21/` (before), `21a/` (after).
 **Verified:** typecheck, `lint:js` exit 0 (after prettier), Vitest 909, Playwright 272 passed / 16 skipped (`e2e-21.log`).
 **Follow-ups:** the cursor ring on the family row is still a heavy 2 px box; consider an accent bar plus tint. Item 5 rest (Project sets) and item 26 native inputs are next.
+**Dependencies:** none. **Reverted:** no.
+
+## Iteration 22 — 2026-11-03 — Project sets: count at the edge, Export becomes a hover icon
+**Critique (before):** The list and inspector are calm; the specimens lead. The worst leftover on the first screen is the sidebar's Project sets row: "Client brand 2" has its count mid-row because a hidden "Export set…" text button holds space beside it, so it does not line up with the counts above it. Good: Sources and Collections rows are quiet and aligned.
+**Why:** Backlog item 5 rest (review 20's pick). The count column now runs straight down the sidebar.
+**What changed:** `ProjectSetsSidebar.vue`: Export is a `UiIconButton` laid over the count's cell (count hides on hover/focus, like Sources). New `export` icon in `icons.ts`. `sets.spec.ts`: dropped the "Export set…" text assertion (the control is an icon now; its accessible name is still checked).
+**Backlog:** item 5 still open (section icons, collapsible sections, Problems header vs smart "Problems").
+**Shots:** `.harness/redesign/shots/22/` (before), `22a/` (after).
+**Verified:** typecheck, `lint:js` exit 0 (after prettier), Vitest 909, Playwright 272 passed / 16 skipped (`e2e-22.log`).
+**Follow-ups:** hover scene for sidebar rows is still missing. Item 26 native inputs in the inspector (date, number, datalist, text stars) are next.
 **Dependencies:** none. **Reverted:** no.

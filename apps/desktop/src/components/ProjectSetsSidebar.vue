@@ -63,15 +63,13 @@ const store = useSetsStore();
           <span class="name">{{ set.name }}</span>
           <span class="count">{{ formatNumber(set.faces.length) }}</span>
         </button>
-        <button
-          type="button"
-          class="action export"
-          :aria-label="t('sets.exportLabel', { name: set.name })"
+        <UiIconButton
+          class="export"
+          icon="export"
+          :label="t('sets.exportLabel', { name: set.name })"
           :title="t('sets.exportTitle')"
           @click="store.exportSet(set.id)"
-        >
-          {{ t('sets.export') }}
-        </button>
+        />
       </li>
     </ul>
     <p v-else class="note">{{ t('sets.empty') }}</p>
@@ -101,9 +99,9 @@ const store = useSetsStore();
   list-style: none;
 }
 .item {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
 }
 .action {
   flex: none;
@@ -115,13 +113,20 @@ const store = useSetsStore();
   font: inherit;
   font-size: var(--fm-text-xs);
 }
-/* A set's "Export set…" shows under the pointer and under keyboard focus. */
+/* A set's export icon takes the count's place under the pointer and under keyboard focus. */
 .export {
+  position: absolute;
+  inset-inline-end: 4px;
   opacity: 0;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
 }
 .item:hover .export,
 .item:focus-within .export {
   opacity: 1;
+}
+.item:hover .count,
+.item:focus-within .count {
+  visibility: hidden;
 }
 .imported {
   margin: 0 8px 4px;

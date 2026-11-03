@@ -16,7 +16,6 @@ test('"Export set…" and "Import set…" work from the keyboard and list what i
   await page.keyboard.press('Tab');
   const exportSet = sets.getByRole('button', { name: 'Export the set Client brand' });
   await expect(exportSet).toBeFocused();
-  await expect(exportSet).toHaveText('Export set…');
   await expect(exportSet).toHaveCSS('opacity', '1');
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('toast')).toContainText('Saved the set: 2 fonts.');

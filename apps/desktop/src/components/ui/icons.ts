@@ -24,5 +24,6 @@ export const ICONS = {
   similar:
     '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5M5 6.2q1-.9 2 0t2 0M5 8.2q1-.9 2 0t2 0"/>',
   import: '<path d="M8 2.5v7M5 6.5l3 3 3-3M3 12.5h10"/>',
+  export: '<path d="M8 9.5v-7M5 5.5l3-3 3 3M3 12.5h10"/>',
 } as const;
 export type IconName = keyof typeof ICONS;
