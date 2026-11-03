@@ -310,3 +310,11 @@ New `InspectorTabHead` (hint line, actions under it) replaced three copies of he
 **Ticked:** none. **Shots:** `.harness/redesign/shots/48/` (before), `48-after/`.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910 (one catalogs test flaked once, passed alone), Playwright 273 passed / 16 skipped (`e2e-48.log`).
 **Follow-ups:** the "Lock width" row could join the panel bar; options in their own face; Layout select and Print/Close as `UiIconButton`s. **Dependencies:** none.
+
+## Iteration 49 — 2026-11-03 — Features tab: each switch shows its feature at work
+**Critique (before):** The `list` is calm: Inter selected with a clear bar, quiet badges, sidebar with rhythm. The Features tab is a clean switch list, but it is only names and tags; a designer cannot tell what "Small capitals" or "Oldstyle figures" does without flipping it and reading a row elsewhere. The worst gap is that the tab has no type in it.
+**Why:** Item 8 rest (Features live preview); the only open item in the lowest-numbered unblocked entry.
+**What changed:** `InspectorFeatures.vue` loads the face with `useFaceLoader` and shows a short sample under each switchable feature, in the face, with that feature forced on (static tag → sample table; fallback "Rag Agy 0123"). Presentation only.
+**Ticked:** none (item 8 keeps "human names in the Filters drawer's features group"). **Shots:** `.harness/redesign/shots/49/` (before), `49-after/`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-49.log`).
+**Follow-ups:** sample could also show the feature off beside it; reuse the human names in the Filters drawer; add `ss01–ss20` sample. **Dependencies:** none.
