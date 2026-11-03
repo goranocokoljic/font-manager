@@ -13,16 +13,17 @@ import {
   type Chip,
 } from '../search/chips';
 import { useCollectionsStore } from '../stores/collections';
+import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
 import UiDrawer from './ui/UiDrawer.vue';
-import UiSelect from './ui/UiSelect.vue';
 
 const search = useSearchStore();
 const collections = useCollectionsStore();
 const sources = useSourcesStore();
 const tags = useTagsStore();
+const preview = usePreviewStore();
 
 /** A source chip shows the folder's name. */
 function sourceName(id: SourceId): string {
@@ -32,11 +33,14 @@ function sourceName(id: SourceId): string {
 
 const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
 const languages = computed(() => chosenLanguages(search.filters));
-const addable = computed(() =>
-  search.languages
-    .filter((l) => !languages.value.includes(l.code))
-    .map((l) => ({ value: l.code, label: l.name })),
-);
+/** The first languages sit in the drawer; the rest hide behind an expander. */
+const LANGUAGES_SHOWN = 10;
+const allLanguages = ref(false);
+const shownLanguages = computed(() => {
+  const all = search.languages;
+  if (allLanguages.value) return all;
+  return all.filter((l, i) => i < LANGUAGES_SHOWN || languages.value.includes(l.code));
+});
 const filtering = computed(() => hasFilters(search.filters));
 
 // The facets live in a drawer; the bar shows only what is chosen, as chips to remove.
@@ -59,9 +63,13 @@ function toggle(chip: Chip): void {
   search.setFilters(toggleChip(search.filters, chip.facet, chip.value));
 }
 
-/** The picker only adds: it shows "Add…" again once a language is chosen. */
+/** Choosing a language also puts its pangram in the All fonts previews. */
 function onLanguage(code: string): void {
+  const adding = !languages.value.includes(code);
   search.setFilters(toggleLanguage(search.filters, code));
+  if (adding && search.languages.find((l) => l.code === code)?.pangram) {
+    preview.update(ALL_FONTS_VIEW, { language: code });
+  }
 }
 
 // Saving the chosen filters as a smart collection (E14.4): the rules are the
@@ -219,16 +227,29 @@ async function save(): Promise<void> {
       <div class="facet" role="group" :aria-label="t('chips.languages')">
         <h3 class="label" aria-hidden="true">{{ t('chips.language') }}</h3>
         <div class="chipset">
-          <UiSelect
-            v-if="addable.length"
-            class="add"
-            :model-value="null"
-            :options="addable"
-            :placeholder="t('chips.add')"
-            :fit="false"
-            :aria-label="t('chips.addLanguage')"
-            @update:model-value="onLanguage"
-          />
+          <button
+            v-for="l in shownLanguages"
+            :key="l.code"
+            type="button"
+            class="chip"
+            :aria-pressed="languages.includes(l.code)"
+            @click="onLanguage(l.code)"
+          >
+            {{ l.name }}
+          </button>
+          <button
+            v-if="search.languages.length > LANGUAGES_SHOWN"
+            type="button"
+            class="chip more"
+            :aria-expanded="allLanguages"
+            @click="allLanguages = !allLanguages"
+          >
+            {{
+              allLanguages
+                ? t('chips.fewerLanguages')
+                : t('chips.moreLanguages', { count: search.languages.length - LANGUAGES_SHOWN })
+            }}
+          </button>
         </div>
       </div>
       <div v-if="featureGroup" class="facet" role="group" :aria-label="featureGroup.label">
@@ -315,8 +336,9 @@ async function save(): Promise<void> {
   flex-wrap: wrap;
   gap: var(--fm-space-1);
 }
-.add {
-  font-size: var(--fm-text-sm);
+.more {
+  border-color: transparent;
+  color: var(--fm-muted);
 }
 .chip,
 .name {

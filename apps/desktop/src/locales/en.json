@@ -387,6 +387,8 @@
     "languages": "Languages",
     "language": "Language",
     "addLanguage": "Add a language",
+    "moreLanguages": "{count} more…",
+    "fewerLanguages": "Fewer",
     "add": "Add…",
     "clear": "Clear filters",
     "saveAsSmart": "Save as smart collection",

@@ -72,7 +72,8 @@ test('filter chips under the title show counts and filter the list', async ({ pa
   await expect(facets.getByRole('group', { name: 'Format' })).not.toContainText('Type 1');
 
   // A language preset joins as a chip with the result count.
-  await selectOption(facets.getByRole('combobox', { name: 'Add a language' }), 'sr-Cyrl');
+  const languageFacet = facets.getByRole('group', { name: 'Languages' });
+  await languageFacet.getByRole('button', { name: 'Serbian (Cyrillic)' }).click();
   const serbian = chips.getByRole('button', { name: 'Remove filter Serbian (Cyrillic)' });
   await expect(serbian).toBeVisible();
 

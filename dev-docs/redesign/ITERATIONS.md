@@ -14,7 +14,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
-- [ ] 10 Language & script filter
+- [x] 10 Language & script filter (iteration 36: visible language chips in the Filters drawer, choosing one switches the All fonts pangram; counts and script grouping remain)
 - [ ] 11 "Renders my text" filter + visible missing glyphs
 - [x] 12 Quick Look, finished (iteration 32: full-window specimen, size ladder, paragraph, arrows move between fonts; no glyph grid or per-view sample/size follow yet)
 - [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; toolbar toggle + more tooltips remain)
@@ -233,3 +233,13 @@ Sources, Collections and Tags moved onto `UiFoldButton`, so all six headings sha
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-35.log`). Shots `review-35/` (before, 52 with `quicklook`) and `review-35-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** folded Collections hides "All fonts"; Problems heading is fold + link with the same name; no toolbar toggle for the sidebar; QL sample/size follow All fonts only; Studio "Panel font" fields look empty; Settings radios and nav box.
 **Next five:** item 10 (language & script filter facet; choosing a language switches the pangram) → item 5 rest (section icons; keep "All fonts" visible when Collections folds) → item 26 (Settings radios/checkboxes, nav focus box) → item 8 rest (one shared inspector tab head; Developer stacked) → item 21 (designed empty states — "No fonts match" is still one grey sentence). Every iteration runs `pnpm lint:js` and reads the exit code; every feature adds a scene.
+
+## Iteration 36 — 2026-11-03 — Language filter: visible chips, pangram follows
+**Critique (before):** The Filters drawer hid languages behind an "Add…" drop-down, so a designer could not see that the library can be filtered by language at all. Every other facet is a row of chips; this one looked like a leftover form field. The list itself is calm and the specimens carry the screen. Nothing yet connects a chosen language to the sample text.
+**Why:** Backlog item 10, lowest unfinished unblocked. The `supports` filter and `listLanguages` already exist, so no API work was needed.
+**What changed:** `FilterChips` shows the first 10 language presets as chips (chosen ones always shown) with a "N more…" expander; the `UiSelect` is gone. Choosing a language also sets the All fonts preview language, so the pangram switches. New strings in en and de. `search.spec.ts` clicks the chip instead of the select.
+**Ticked:** item 10.
+**Shots:** `.harness/redesign/shots/36/` (`filters` scene shows the chips). The `list` shot is unchanged; the change lives in the drawer.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed (`.harness/redesign/e2e-36.log`).
+**Follow-ups:** per-language family counts and grouping by script need a count per language from `FmClient` (blocked: API). The drawer scrolls, so the language facet sits at the bottom; move it up. Catalog view does not follow the language pick.
+**Dependencies:** none.
