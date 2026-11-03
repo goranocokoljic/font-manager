@@ -14,7 +14,10 @@ import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
+import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
+import { hasChosenFilters } from '../search/chips';
+import { useSourcesStore } from '../stores/sources';
 import UiSegmentedControl from '../components/ui/UiSegmentedControl.vue';
 import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
@@ -71,6 +74,12 @@ const fontList = useFontListStore();
 const views = useViewsStore();
 const search = useSearchStore();
 const collections = useCollectionsStore();
+const sources = useSourcesStore();
+/** An open collection with nothing in it and nothing typed or chosen on top of it. */
+const emptyCollection = computed(
+  () =>
+    collections.open !== null && search.query.trim() === '' && !hasChosenFilters(search.filters),
+);
 const sets = useSetsStore();
 const textLayouts = useTextLayoutsStore();
 const compare = useCompareStore();
@@ -583,8 +592,33 @@ function openFace(face: FaceId): void {
           />
           <section v-else class="empty" :aria-label="t('home.fontList')">
             <p v-if="library.error" role="alert" class="error">{{ errorMessage(library.error) }}</p>
-            <p v-else-if="search.hits">{{ t('home.noMatches') }}</p>
-            <p v-else-if="library.loaded">{{ t('home.empty') }}</p>
+            <UiEmptyState
+              v-else-if="search.hits && emptyCollection"
+              :title="t('home.emptyCollection.title')"
+              :body="t('home.emptyCollection.body')"
+            >
+              <button type="button" data-testid="empty-action" @click="collections.show(null)">
+                {{ t('home.emptyCollection.action') }}
+              </button>
+            </UiEmptyState>
+            <UiEmptyState
+              v-else-if="search.hits"
+              :title="t('home.noMatchesTitle')"
+              :body="t('home.noMatches')"
+            >
+              <button type="button" data-testid="empty-action" @click="search.clear()">
+                {{ t('home.noMatchesAction') }}
+              </button>
+            </UiEmptyState>
+            <UiEmptyState
+              v-else-if="library.loaded"
+              :title="t('home.emptyLibrary.title')"
+              :body="t('home.emptyLibrary.body')"
+            >
+              <button type="button" data-testid="empty-action" @click="sources.add()">
+                {{ t('home.emptyLibrary.action') }}
+              </button>
+            </UiEmptyState>
           </section>
         </div>
       </template>

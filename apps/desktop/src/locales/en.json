@@ -278,8 +278,7 @@
     "inspectorTitle": "Show or hide the inspector (Ctrl+I / ⌘I)",
     "inspector": "Inspector",
     "fontList": "Font list",
-    "noMatches": "No fonts match the search and filters.",
-    "empty": "No fonts yet. Add a folder to start your library.",
+    "noMatches": "Try a shorter search or fewer filters.",
     "commands": "Commands",
     "settings": "Settings",
     "settingsTitle": "Open Settings ({chord})",
@@ -326,6 +325,18 @@
       "findSimilar": "Find similar fonts",
       "openStudio": "Open the layout in Pairing Studio",
       "quickLook": "Quick look at the selected font"
+    },
+    "noMatchesTitle": "No fonts match",
+    "noMatchesAction": "Clear search and filters",
+    "emptyCollection": {
+      "title": "This collection is empty",
+      "body": "Select fonts in the list and add them here from their menu.",
+      "action": "Show all fonts"
+    },
+    "emptyLibrary": {
+      "title": "Your library is empty",
+      "body": "Add a folder of fonts. The files stay where they are.",
+      "action": "Add folder…"
     }
   },
   "views": {
@@ -564,8 +575,12 @@
       "keep": "Keep existing",
       "replace": "Replace for this session"
     },
-    "about": { "title": "About" },
-    "technical": { "title": "Technical details" },
+    "about": {
+      "title": "About"
+    },
+    "technical": {
+      "title": "Technical details"
+    },
     "names": {
       "title": "Names",
       "family": "Family",

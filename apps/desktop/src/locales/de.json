@@ -278,8 +278,7 @@
     "inspectorTitle": "Inspektor ein- oder ausblenden (Strg+I / ⌘I)",
     "inspector": "Inspektor",
     "fontList": "Schriftliste",
-    "noMatches": "Keine Schriften passen zur Suche und zu den Filtern.",
-    "empty": "Noch keine Schriften. Füge einen Ordner hinzu, um deine Bibliothek anzulegen.",
+    "noMatches": "Versuche eine kürzere Suche oder weniger Filter.",
     "commands": "Befehle",
     "settings": "Einstellungen",
     "settingsTitle": "Einstellungen öffnen ({chord})",
@@ -326,6 +325,18 @@
       "findSimilar": "Ähnliche Schriften finden",
       "openStudio": "Satzbild im Pairing Studio öffnen",
       "quickLook": "Ausgewählte Schrift in der Übersicht ansehen"
+    },
+    "noMatchesTitle": "Keine Schriften gefunden",
+    "noMatchesAction": "Suche und Filter zurücksetzen",
+    "emptyCollection": {
+      "title": "Diese Sammlung ist leer",
+      "body": "Wähle Schriften in der Liste und füge sie über ihr Menü hier hinzu.",
+      "action": "Alle Schriften zeigen"
+    },
+    "emptyLibrary": {
+      "title": "Deine Bibliothek ist leer",
+      "body": "Füge einen Ordner mit Schriften hinzu. Die Dateien bleiben, wo sie sind.",
+      "action": "Ordner hinzufügen…"
     }
   },
   "views": {
@@ -564,8 +575,12 @@
       "keep": "Vorhandene behalten",
       "replace": "Für diese Sitzung ersetzen"
     },
-    "about": { "title": "Über" },
-    "technical": { "title": "Technische Details" },
+    "about": {
+      "title": "Über"
+    },
+    "technical": {
+      "title": "Technische Details"
+    },
     "names": {
       "title": "Namen",
       "family": "Familie",

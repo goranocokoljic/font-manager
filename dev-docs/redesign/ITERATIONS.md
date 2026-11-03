@@ -25,7 +25,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
 - [ ] 20 Collections UX
-- [ ] 21 Empty states
+- [x] 21 Empty states (iteration 41: UiEmptyState — headline, one line, one action; empty collection, no matches, empty library)
 - [ ] 22 First run
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
@@ -258,3 +258,12 @@ A pressed-state sidebar toggle (`[`) sits before the title in the All fonts tool
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped / 1 flake (`pairing-studio.spec.ts:361`, the list did not load in time; passes alone) (`.harness/redesign/e2e-review-40.log`). Shots `40/` (before, 52) and `review-40-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** Settings opened by keyboard shows the focus ring on the active tab (correct for keyboard, heavy to look at); `selected-row` scene shows no selected row (`?face=`); Studio "Panel font" fields look empty; Developer tab head still side by side.
 **Next five:** item 21 (designed empty states) → item 6 rest (`?face=` selects the list row; fix the `selected-row` scene) → item 8 rest (one shared inspector tab head; Developer stacked) → item 17 first slice (Studio font pickers that show the font, not an empty field) → item 26 rest (license date/number/datalist, Advanced number fields). Every iteration changes a shot and reads the `lint:js` exit code.
+
+## Iteration 41 — 2026-11-03 — Designed empty states
+**Critique (before):** The `empty-collection` scene was one small grey sentence ("No fonts match the search and filters.") in the middle of a dark pane. It was wrong too: an empty collection is not a failed search. The rest of the screen is now calm and typographic, so this dead pane was the weakest spot.
+**Why:** Backlog item 21, first on review 40's "Next five". The `list` shot does not change (it has fonts); the `empty-collection` shot does.
+**What changed:** New `ui/UiEmptyState` (20 px headline, 13 px muted line, one action slot, no illustration). `HomeView` picks one of three states: empty collection ("Show all fonts"), no matches ("Clear search and filters"), empty library ("Add folder…"). New en/de strings; `home.empty` removed. `search.spec.ts` now looks for the heading.
+**Ticked:** item 21. **Shots:** `.harness/redesign/shots/41/` (before), `41-after/`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-41.log`).
+**Follow-ups:** no scene for "no matches" or "empty library" (the screens spec cannot type a search); other empties (Tags "No tags yet", Layout, Catalog, Quick Collection) still plain text; the "Empty" collection hint names no shortcut for adding fonts.
+**Dependencies:** none.

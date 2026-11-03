@@ -51,7 +51,7 @@ test('/ focuses the search box and typing narrows the list', async ({ page }) =>
 test('a search with no result says so', async ({ page }) => {
   await open(page);
   await page.getByRole('searchbox', { name: 'Search fonts' }).fill('zzzz');
-  await expect(page.getByText('No fonts match the search and filters.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No fonts match' })).toBeVisible();
 });
 
 test('filter chips under the title show counts and filter the list', async ({ page }) => {
