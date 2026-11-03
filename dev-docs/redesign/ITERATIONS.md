@@ -12,7 +12,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
 - [x] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
-- [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
+- [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head + stacked Developer head in iteration 43; Features live preview remains)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [x] 10 Language & script filter (iteration 36: visible language chips in the Filters drawer, choosing one switches the All fonts pangram; counts and script grouping remain)
 - [ ] 11 "Renders my text" filter + visible missing glyphs
@@ -277,3 +277,14 @@ A pressed-state sidebar toggle (`[`) sits before the title in the All fonts tool
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 289 run, one spec updated (`color-palette.spec.ts` row locator `.first()`, because the family now opens and shows two rows for face 8); it passes (`e2e-42.log`).
 **Follow-ups:** none new.
 **Dependencies:** none.
+
+## Iteration 43 — 2026-11-03 — One shared inspector tab head
+**Critique (before):** The Developer tab put its hint beside the Copy button, so the sentence wrapped into a narrow column while Axes and Features stacked the same parts. Three tabs repeated the same head CSS. The rest of the inspector is calm; this was the one tab that looked different.
+**Why:** Review 40's "Next five", item 8 rest. The `list` shot does not change; `inspector-developer` does (hint on its own line, both Copy buttons right-aligned under it).
+**What changed:** New `InspectorTabHead` (hint + actions slot). Axes, Features and Developer use it; their three copies of the head CSS are gone. Developer's two head rows became one.
+**Ticked:** none fully (Features live preview remains in item 8).
+**Shots:** `.harness/redesign/shots/43/` (after only).
+**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-43.log`).
+**Follow-ups:** Features rows still repeat "applied automatically"; the two Copy status texts in Developer could be one.
+**Dependencies:** none.
+

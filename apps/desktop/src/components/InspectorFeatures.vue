@@ -10,6 +10,7 @@ import type { FeatureInfo } from '../api/types';
 import { t } from '../i18n';
 import { useFeaturesStore } from '../stores/features';
 import { useSelectionStore } from '../stores/selection';
+import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
 
 const selection = useSelectionStore();
@@ -35,24 +36,21 @@ function reset(): void {
     <p v-if="!d" class="placeholder">{{ t('features.noFace') }}</p>
     <p v-else-if="!d.features.length" class="placeholder">{{ t('features.none') }}</p>
     <template v-else>
-      <div class="head">
-        <p class="hint">{{ t('features.hint') }}</p>
-        <div class="actions">
-          <CopyCss
-            v-if="faceId !== null"
-            :label="t('features.cssLabel')"
-            :css="() => features.css(faceId!)"
-          />
-          <button
-            type="button"
-            class="reset"
-            :disabled="faceId === null || !features.isChanged(faceId)"
-            @click="reset"
-          >
-            {{ t('common.reset') }}
-          </button>
-        </div>
-      </div>
+      <InspectorTabHead :hint="t('features.hint')">
+        <CopyCss
+          v-if="faceId !== null"
+          :label="t('features.cssLabel')"
+          :css="() => features.css(faceId!)"
+        />
+        <button
+          type="button"
+          class="reset"
+          :disabled="faceId === null || !features.isChanged(faceId)"
+          @click="reset"
+        >
+          {{ t('common.reset') }}
+        </button>
+      </InspectorTabHead>
       <ul v-if="switchable.length" class="plain list" :aria-label="t('features.list')">
         <li v-for="f in switchable" :key="f.tag" class="row">
           <span class="name">
@@ -92,24 +90,9 @@ function reset(): void {
 .features {
   padding: 16px;
 }
-.placeholder,
-.hint {
+.placeholder {
   margin: 0;
   color: var(--fm-muted);
-}
-.head {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding-bottom: 12px;
-}
-.actions {
-  display: flex;
-  flex: none;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
 }
 .reset {
   padding: 2px 10px;

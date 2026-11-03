@@ -12,6 +12,7 @@ import { useAxesStore } from '../stores/axes';
 import { useFeaturesStore } from '../stores/features';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useSelectionStore } from '../stores/selection';
+import InspectorTabHead from './InspectorTabHead.vue';
 import { useCopy } from './useCopy';
 
 const selection = useSelectionStore();
@@ -74,41 +75,34 @@ watch(
   <div class="developer">
     <p v-if="faceId === null" class="placeholder">{{ t('developer.noFace') }}</p>
     <template v-else>
-      <div class="head">
-        <p class="hint">{{ t('developer.hint') }}</p>
-        <span class="actions">
-          <span class="status" role="status">
-            <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
-            <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
-          </span>
-          <button
-            type="button"
-            class="button"
-            :aria-label="t('developer.copyLabel')"
-            :disabled="!snippet"
-            @click="copy(snippet)"
-          >
-            {{ t('common.copy') }}
-          </button>
+      <InspectorTabHead :hint="t('developer.hint')">
+        <span class="status" role="status">
+          <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
+          <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
         </span>
-      </div>
-      <div class="head">
-        <span class="actions">
-          <button
-            type="button"
-            class="button"
-            data-testid="copy-font-switch"
-            :aria-label="t('fontSwitch.copyLabel', { name: faceName })"
-            @click="copyForFontSwitch"
-          >
-            {{ t('fontSwitch.copy') }}
-          </button>
-          <span class="status" aria-live="polite" data-testid="font-switch-status">
-            <template v-if="switchStatus === 'copied'">{{ t('common.copied') }}</template>
-            <template v-else-if="switchStatus === 'failed'">{{ t('copy.failed') }}</template>
-          </span>
+        <button
+          type="button"
+          class="button"
+          :aria-label="t('developer.copyLabel')"
+          :disabled="!snippet"
+          @click="copy(snippet)"
+        >
+          {{ t('common.copy') }}
+        </button>
+        <span class="status" aria-live="polite" data-testid="font-switch-status">
+          <template v-if="switchStatus === 'copied'">{{ t('common.copied') }}</template>
+          <template v-else-if="switchStatus === 'failed'">{{ t('copy.failed') }}</template>
         </span>
-      </div>
+        <button
+          type="button"
+          class="button"
+          data-testid="copy-font-switch"
+          :aria-label="t('fontSwitch.copyLabel', { name: faceName })"
+          @click="copyForFontSwitch"
+        >
+          {{ t('fontSwitch.copy') }}
+        </button>
+      </InspectorTabHead>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <pre v-else class="snippet" data-testid="css-snippet"><code>{{ snippet }}</code></pre>
     </template>
@@ -119,23 +113,9 @@ watch(
 .developer {
   padding: 16px;
 }
-.placeholder,
-.hint {
+.placeholder {
   margin: 0;
   color: var(--fm-muted);
-}
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding-bottom: 8px;
-}
-.actions {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
 }
 .button {
   padding: 2px 10px;

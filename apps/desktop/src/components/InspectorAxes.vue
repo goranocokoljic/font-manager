@@ -9,6 +9,7 @@ import { computed, onMounted, ref, useId, watch } from 'vue';
 import type { ApiError, Axis, NamedInstance } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { axisStep, useAxesStore } from '../stores/axes';
+import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
 import UiSelect from './ui/UiSelect.vue';
 import { useCollectionsStore } from '../stores/collections';
@@ -157,24 +158,21 @@ onMounted(() => {
     <p v-if="!d" class="placeholder">{{ t('axes.noFace') }}</p>
     <p v-else-if="!axes.length" class="placeholder">{{ t('axes.none') }}</p>
     <template v-else>
-      <div class="head">
-        <p class="hint">{{ t('axes.hint') }}</p>
-        <div class="actions">
-          <CopyCss
-            v-if="faceId !== null"
-            :label="t('axes.cssLabel')"
-            :css="() => axesSet.css(faceId!)"
-          />
-          <button
-            type="button"
-            class="reset"
-            :disabled="faceId === null || !axesSet.isChanged(faceId)"
-            @click="reset"
-          >
-            {{ t('common.reset') }}
-          </button>
-        </div>
-      </div>
+      <InspectorTabHead :hint="t('axes.hint')">
+        <CopyCss
+          v-if="faceId !== null"
+          :label="t('axes.cssLabel')"
+          :css="() => axesSet.css(faceId!)"
+        />
+        <button
+          type="button"
+          class="reset"
+          :disabled="faceId === null || !axesSet.isChanged(faceId)"
+          @click="reset"
+        >
+          {{ t('common.reset') }}
+        </button>
+      </InspectorTabHead>
       <ul class="plain list" :aria-label="t('axes.list')">
         <li v-for="a in axes" :key="a.tag" class="axis" :data-tag="a.tag">
           <label class="name" :for="`${uid}-${a.tag}-range`">
@@ -266,21 +264,6 @@ onMounted(() => {
 .hint {
   margin: 0;
   color: var(--fm-muted);
-}
-/* Same head as the Features tab: the hint on its own line, the actions right below it. */
-.head {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  padding-bottom: 12px;
-}
-.actions {
-  display: flex;
-  flex: none;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 8px;
 }
 .reset,
 .preset,
