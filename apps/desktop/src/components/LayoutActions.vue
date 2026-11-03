@@ -12,6 +12,8 @@ import { type TextLayoutsStore, useTextLayoutsStore } from '../stores/textLayout
 const props = defineProps<{
   /** The text layouts store the actions work on; the library's when not given. */
   store?: TextLayoutsStore;
+  /** Sit inside another bar: no border or padding of its own, quiet buttons. */
+  inline?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -65,7 +67,12 @@ const when = (iso: string) => {
 </script>
 
 <template>
-  <div class="actions" role="toolbar" :aria-label="t('textLayout.file.toolbar')">
+  <div
+    class="actions"
+    :class="{ inline }"
+    role="toolbar"
+    :aria-label="t('textLayout.file.toolbar')"
+  >
     <button
       type="button"
       class="toggle"
@@ -123,6 +130,7 @@ const when = (iso: string) => {
     v-if="historyOpen"
     :id="historyId"
     class="history"
+    :class="{ inline }"
     :aria-label="t('textLayout.file.historyRegion')"
   >
     <p v-if="!layouts.history.length" class="note">{{ t('textLayout.file.noHistory') }}</p>
@@ -172,6 +180,23 @@ const when = (iso: string) => {
 .toggle[aria-expanded='true'] {
   border-color: var(--fm-accent);
   color: var(--fm-accent);
+}
+.actions.inline {
+  padding: 0;
+  border-bottom: 0;
+}
+.inline .toggle {
+  padding: 4px 8px;
+  border-color: transparent;
+  transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+.inline .toggle:hover:not(:disabled) {
+  background-color: var(--fm-hover);
+}
+.history.inline {
+  flex-basis: 100%;
+  border-top: 1px solid var(--fm-border);
+  border-bottom: 0;
 }
 .note {
   color: var(--fm-muted);

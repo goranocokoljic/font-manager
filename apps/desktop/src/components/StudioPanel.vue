@@ -109,6 +109,7 @@ onMounted(() => {
   >
     <header class="bar fm-no-print">
       <h2 :id="headingId" ref="heading" class="name" tabindex="-1">{{ label }}</h2>
+      <LayoutActions :store="layouts" inline @opened="pick" />
       <label class="picker">
         {{ t('studio.layout') }}
         <UiSelect :model-value="selected" :options="pickerOptions" @update:model-value="pick" />
@@ -133,9 +134,6 @@ onMounted(() => {
       </button>
     </header>
     <p v-if="printError" class="error fm-no-print" role="alert">{{ printError.message }}</p>
-    <div class="fm-no-print">
-      <LayoutActions :store="layouts" @opened="pick" />
-    </div>
     <FontLayout
       :layout="layouts.draft"
       :face="face"
@@ -173,13 +171,14 @@ onMounted(() => {
 .bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   min-height: 40px;
   padding: 0 16px;
   border-bottom: 1px solid var(--fm-border);
 }
 .name {
-  flex: 1;
+  flex: 0 1 auto;
   margin: 0;
   overflow: hidden;
   font-size: var(--fm-text-sm);
@@ -189,6 +188,7 @@ onMounted(() => {
 }
 .picker {
   display: flex;
+  margin-inline-start: auto;
   align-items: center;
   gap: 4px;
 }

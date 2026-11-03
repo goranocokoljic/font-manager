@@ -302,3 +302,11 @@ New `InspectorTabHead` (hint line, actions under it) replaced three copies of he
 **Ticked:** none. **Shots:** `.harness/redesign/shots/47/` (no style card is visible in the `grid` scene, so the dashed fix is not seen in a shot; the hover tint is not either).
 **Verified:** typecheck, `lint:js` exit 0, Playwright 273 passed / 16 skipped (`e2e-47.log`). No before shots taken.
 **Follow-ups:** hover weight range on Grid cards (needs a visible use); add a Grid scene with an expanded multi-style family. **Dependencies:** none.
+
+## Iteration 48 — 2026-11-03 — Studio toolbar: four rows become three
+**Critique (before):** The Studio is a quiet canvas, but its chrome is four stacked bars: title, panel name + Layout + Print, a row of five bordered text buttons, then the font line. The bordered buttons shout louder than the specimen. The type itself looks good.
+**Why:** Item 17 rest (Studio toolbar to one row); the biggest visible change in the Studio.
+**What changed:** `LayoutActions` gets an `inline` mode (no border or padding, borderless buttons, `--fm-hover` tint). `StudioPanel` puts Save/Revert/Duplicate/Reset/History in the panel bar next to the name; the History list wraps below. The Layout view keeps the old bar.
+**Ticked:** none. **Shots:** `.harness/redesign/shots/48/` (before), `48-after/`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910 (one catalogs test flaked once, passed alone), Playwright 273 passed / 16 skipped (`e2e-48.log`).
+**Follow-ups:** the "Lock width" row could join the panel bar; options in their own face; Layout select and Print/Close as `UiIconButton`s. **Dependencies:** none.
