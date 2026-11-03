@@ -18,7 +18,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 11 "Renders my text" filter + visible missing glyphs
 - [x] 12 Quick Look, finished (iteration 32: full-window specimen, size ladder, paragraph, arrows move between fonts; no glyph grid or per-view sample/size follow yet)
 - [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; toolbar toggle + more tooltips remain)
-- [ ] 14 Weight scrubbing
+- [x] 14 Weight scrubbing (iteration 73: drag across a variable sample in the list/table rows to scrub `wght`; value pill beside the label; kept on release)
 - [ ] 15 Context presets in Layout
 - [ ] 16 Compare overlay (overlay mode already existed; iteration 71 redesigned the Compare sheet: text segmented control, icon close, quiet buttons, hairline specimens; weight/size scale and `UiSegmentedControl` for text remain)
 - [ ] 17 Pairing Studio + Pairs with
@@ -443,4 +443,13 @@ Four iterations since review 65 (66–69); all four graded.
 **Shots:** `.harness/redesign/shots/72/` (before), `72b/` (after; viewed compare light).
 **Verified:** typecheck, `lint:js`, Vitest 910 (timing tests flake under parallel load: `search.test.ts`, `catalogs.test.ts`; green alone), Playwright 273 passed / 16 skipped (`e2e-72.log`).
 **Follow-ups:** a size control inside the sheet; `.sheet` hard-codes the compare colours; full-window specimen.
+**Dependencies:** none.
+
+## Iteration 73 — 2026-11-03 — Weight scrubbing on variable previews
+**Critique (before):** the list is calm and paper-white, but a variable font is a still picture: the weight lives in the inspector's Axes tab, three clicks away. Good: specimens are large, chrome is quiet. Worst: nothing invites touching the type.
+**Why:** backlog item 14, first unfinished feature item per review 70. Alternative (not taken): Grid keyboard expand (13). The `list` shot is unchanged at rest; the change is felt on the first drag (cursor `ew-resize` on variable samples).
+**Changed:** `FontPreviewRow.vue` only. Press and drag horizontally on a variable face's sample: 320 px sweeps the whole `wght` range, written to the axes store (the Axes tab follows, "Reset" still works). A 4 px threshold keeps plain clicks selecting; the click that ends a drag is swallowed. RTL flips the direction. A `wght 640` pill shows beside the label while dragging; release keeps the value. Pinned (virtual style) rows do not scrub. Two Vitest tests added.
+**Backlog:** item 14 ticked. **Shots:** `.harness/redesign/shots/73-before/` (nothing static changes; not opened).
+**Verified:** typecheck, `lint:js`, Vitest 912, Playwright 272 passed in the full run + the one `settings.spec` failure was `ERR_CONNECTION_REFUSED` (dev server); settings/list/inspector re-run 31 passed (`e2e-73.log`).
+**Follow-ups:** scrub other axes (opsz, wdth) with a modifier key; a keyboard way to scrub (Alt+←/→); scrubbing in Grid cards and Quick Look; a Playwright drag spec with a real pointer; no `scrub` scene (transient).
 **Dependencies:** none.

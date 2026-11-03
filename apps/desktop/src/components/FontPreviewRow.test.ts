@@ -142,6 +142,36 @@ describe('FontPreviewRow', () => {
     expect(sample()).toContain('font-variation-settings: "wght" 400');
   });
 
+  // jsdom has no PointerEvent: a MouseEvent of the pointer type carries clientX the same way.
+  const ptr = async (el: Element, type: string, clientX: number) => {
+    el.dispatchEvent(new MouseEvent(type, { clientX, button: 0, bubbles: true }));
+    await flushPromises();
+  };
+
+  it('scrubs the weight by dragging across a variable sample, and keeps it on release', async () => {
+    const row = mount(FontPreviewRow, { props: { face: inter } });
+    await flushPromises();
+    const sample = row.get('.sample');
+    expect(sample.classes()).toContain('scrubbable');
+    // 320 px sweeps 100–900: 40 px is +100.
+    await ptr(sample.element, 'pointerdown', 100);
+    await ptr(sample.element, 'pointermove', 102);
+    expect(row.find('[data-testid="scrub-tip"]').exists()).toBe(false);
+    await ptr(sample.element, 'pointermove', 140);
+    expect(row.get('[data-testid="scrub-tip"]').text()).toBe('wght 500');
+    expect(row.get('.sample').attributes('style')).toContain('"wght" 500');
+    await ptr(sample.element, 'pointerup', 140);
+    expect(row.find('[data-testid="scrub-tip"]').exists()).toBe(false);
+    expect(row.get('.sample').attributes('style')).toContain('"wght" 500');
+    useAxesStore().reset(inter.id);
+  });
+
+  it('does not scrub a static face', async () => {
+    const row = mount(FontPreviewRow, { props: { face: mono } });
+    await flushPromises();
+    expect(row.get('.sample').classes()).not.toContain('scrubbable');
+  });
+
   it('says so when the face cannot load', async () => {
     const face: FaceSummary = { ...mono, id: 404 };
     const row = mount(FontPreviewRow, { props: { face } });

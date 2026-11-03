@@ -188,6 +188,58 @@ const fallbackTitle = computed(() => {
   });
 });
 
+/** The weight axis, when this row may be scrubbed: a variable face whose coordinates are not pinned. */
+const wghtAxis = computed(() =>
+  props.variations.length
+    ? undefined
+    : axes.value.find((a) => a.tag === 'wght' && (a.max ?? 0) > (a.min ?? 0)),
+);
+
+/** Pixels of drag that sweep the whole weight range. */
+const SCRUB_SPAN_PX = 320;
+/** The pill beside the label while scrubbing: the axis tag and its value. */
+const scrubTip = computed(() => `wght ${scrubbing.value}`);
+/** Pixels before a press becomes a scrub, so a plain click still selects. */
+const SCRUB_THRESHOLD_PX = 4;
+/** The weight shown while scrubbing, else null. */
+const scrubbing = ref<number | null>(null);
+let scrub: { x: number; from: number; axis: Axis; active: boolean } | null = null;
+
+function onScrubDown(e: PointerEvent): void {
+  const axis = wghtAxis.value;
+  if (!axis || e.button !== 0 || state.value !== 'ready') return;
+  scrub = { x: e.clientX, from: axesSet.value(props.face.id, axis), axis, active: false };
+}
+
+function onScrubMove(e: PointerEvent): void {
+  if (!scrub) return;
+  const dx = e.clientX - scrub.x;
+  const el = e.currentTarget as HTMLElement;
+  if (!scrub.active) {
+    if (Math.abs(dx) < SCRUB_THRESHOLD_PX) return;
+    scrub.active = true;
+    el.setPointerCapture?.(e.pointerId);
+  }
+  const { axis, from } = scrub;
+  const span = (axis.max ?? 0) - (axis.min ?? 0);
+  const dir = getComputedStyle(el).direction === 'rtl' ? -1 : 1;
+  axesSet.set(props.face.id, axis, Math.round(from + ((dx * dir) / SCRUB_SPAN_PX) * span));
+  scrubbing.value = axesSet.value(props.face.id, axis);
+}
+
+function onScrubUp(e: PointerEvent): void {
+  const was = scrub?.active;
+  scrub = null;
+  scrubbing.value = null;
+  (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  // The click that ends a drag must not select the row.
+  if (was) {
+    const swallow = (c: Event): void => c.stopPropagation();
+    window.addEventListener('click', swallow, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', swallow, true), 0);
+  }
+}
+
 const name = computed(() => props.label ?? `${props.face.familyName} ${props.face.style}`);
 
 /** While deferred, the sample slot shows the row's name in the UI font. */
@@ -213,6 +265,13 @@ const deferredStyle = computed(() => ({
         >{{ t('list.fallback') }}</UiBadge
       >
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
+      <span
+        v-if="scrubbing !== null"
+        class="scrub-tip"
+        data-testid="scrub-tip"
+        aria-hidden="true"
+        >{{ scrubTip }}</span
+      >
     </span>
     <span
       v-if="state === 'deferred'"
@@ -224,10 +283,14 @@ const deferredStyle = computed(() => ({
     <span
       v-else
       class="sample"
-      :class="{ outline }"
+      :class="{ outline, scrubbable: wghtAxis }"
       dir="auto"
       :style="sampleStyle"
       :data-fallback="fallback?.kind"
+      @pointerdown="onScrubDown"
+      @pointermove="onScrubMove"
+      @pointerup="onScrubUp"
+      @pointercancel="onScrubUp"
       ><span v-if="metricLines.length" class="metrics" data-testid="metrics" aria-hidden="true"
         ><i
           v-for="line in metricLines"
@@ -267,6 +330,18 @@ const deferredStyle = computed(() => ({
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.sample.scrubbable {
+  cursor: ew-resize;
+  touch-action: pan-y;
+}
+.scrub-tip {
+  margin-inline-start: auto;
+  padding: 0 6px;
+  border-radius: var(--fm-radius-sm);
+  background: var(--fm-hover);
+  color: var(--fm-accent);
+  font-variant-numeric: tabular-nums;
 }
 .sample.deferred {
   color: var(--fm-muted);
