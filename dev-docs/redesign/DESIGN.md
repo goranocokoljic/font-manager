@@ -121,7 +121,12 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   people who want it, never the showcase. Three elevation levels of surface, not more.
   Borders are hairlines at low alpha, not solid grey lines. No iteration changes the
   default theme.
-- **One accent colour,** used only for selection, active state, focus and the primary action.
+- **One accent colour, per theme (owner's decision, 3 Nov):** light `--fm-accent: #C56EB2`,
+  dark `--fm-accent: #AB4B96`. Used only for selection, active state, focus and the primary
+  action. Neither value is a text colour on its own: on white the light accent is 3.4:1, so
+  accent-coloured *text* and *links* stay near-black / `--fm-fg`, and anything drawn *on* the
+  accent uses a paired token `--fm-on-accent` (light: `#141413`, dark: `#ffffff` — both
+  ≥ 4.5:1). Rings, fills, knobs, badges and the pressed state take the accent; words do not.
   Nothing else is coloured. Licence / format / variable badges are monochrome glyphs.
   Status colours (`--fm-danger`, `--fm-warning`) mark problems only — a broken file, an
   unsupported format, a conflict. A good state ("OK", "Open license") is neutral, never
@@ -354,6 +359,15 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 23. **Online catalogues (API?)** browsed with the same list UI; install from the row.
 
 ### Polish
+23a. **Accent swap.** Move `--fm-accent` to the owner's colours (light `#C56EB2`, dark
+    `#AB4B96`), add `--fm-on-accent`, and route every place that puts text on the accent
+    (primary button, count badge, pressed chip, toast) through it; accent-coloured text and
+    links go back to `--fm-fg`. Contrast tests updated to the new pairs; both themes, both
+    densities, every scene opened.
+23b. **Themes (later).** A small set of named themes the user picks in Settings, Slack-style:
+    each is one token set (accent + on-accent + surfaces), light and dark variants; the
+    current pair is "Paper". Needs an API default and a settings field — write up as a
+    follow-up for the API task; the UI side is a theme picker that previews the specimens.
 24. Motion pass: list transitions, panel collapse, selection changes.
 25. Custom overlay scrollbars on all platforms.
 26. Hover / focus / active audit across every control, and the native-input sweep.

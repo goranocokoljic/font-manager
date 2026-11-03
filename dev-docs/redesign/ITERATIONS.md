@@ -28,6 +28,8 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 21 Empty states (iteration 41: UiEmptyState — headline, one line, one action; empty collection, no matches, empty library; iteration 64: sidebar Tags empty = quiet title + key chip; Layout, Catalog, Quick Collection empties remain)
 - [ ] 22 First run
 - [ ] 23 Online catalogues
+- [ ] 23a Accent swap to #C56EB2 / #AB4B96 + --fm-on-accent
+- [ ] 23b Themes picker (Slack-style; API follow-up)
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
 - [ ] 26 Hover/focus/active audit (iterations 61–63, 68–69, 78–79 + reviews 65, 70, 80: one quiet UiButton for every text button incl. Catalog rows and Axes, one UiIconButton for every toolbar icon; three `type="number"` inputs, the tags `datalist`, dialog buttons, Filters drawer chips and the Settings nav focus ring remain)
