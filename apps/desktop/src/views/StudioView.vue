@@ -126,7 +126,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :label="t('studio.help')"
         :aria-expanded="helpOpen"
         aria-controls="studio-help"
-        :class="{ on: helpOpen }"
         @click="helpOpen = !helpOpen"
       />
       <UiIconButton
@@ -197,9 +196,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .label {
   margin-inline-end: 4px;
   color: var(--fm-muted);
-}
-.bar .on {
-  color: var(--fm-accent);
 }
 .help {
   margin: 0;

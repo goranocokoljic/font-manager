@@ -452,12 +452,10 @@ function onToggle(row: ListRow): void {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.detail {
-  flex: none;
-}
 /* The weight span takes the style count's place on hover or at the cursor: no extra width. */
 .detail {
   display: inline-grid;
+  flex: none;
 }
 .count,
 .range {

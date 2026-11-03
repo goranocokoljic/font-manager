@@ -135,7 +135,10 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   text button is `UiButton` (iteration 61): quiet, accent text while pressed or expanded; its hover
   tint and disabled fade come from the global `button` baseline in `theme.css`, so neither
   `UiButton` nor a caller adds a hover background of its own (a second tint doubles it), and a
-  local `.button`/`.toggle` text-button class is a bug (review 65). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
+  local `.button`/`.toggle` text-button class is a bug (review 65). Every icon button is
+  `UiIconButton` under the same baseline rule: no own hover background; a pressed toggle
+  (`aria-pressed`) keeps the `--fm-hover` tint, an open one (`aria-expanded`) turns accent; a
+  local `.on` class or `.toggle.icon` copy is a bug (review 70). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
   ▸/▾ text glyph or a sidebar heading with its own fold markup is a bug. Text for screen readers only uses the
   global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider
   (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
@@ -208,10 +211,10 @@ one-style families have no chevron (6), the Studio is two bars with its help beh
 button (17), the Filters drawer names features (8) and Features shows each sample off and on (8).
 Since review 60 every number field on the first screen is `UiNumberField` (26); since review 65
 every text button in the main window is one quiet `UiButton` (26) and the sidebar Tags empty is a
-title and a key chip (21). The first screen's chrome is now quiet; the next wins are in the
-specimens and the second minute: the hover weight range with a `grid-expanded` scene (7), "Lock
-width" beside the page (17), the Settings nav focus ring on load, then the last three
-`type="number"` inputs and the tags `datalist` (26).
+title and a key chip (21); since review 70 every toolbar icon is one `UiIconButton` and Grid cards
+show the weight range on hover (7). Consistency sweeps no longer move the `list` shot; the next
+wins are features a designer feels: Compare overlay (16), weight scrubbing (14), the grid's
+keyboard expand (13), "Lock width" beside the page (17), then the last native inputs (26).
 Every feature adds a scene to `shots.mjs` in the same
 iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
@@ -257,8 +260,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
    longer repeat "Variable" (iteration 56). Nothing left but the row-action set (Activate,
    Compare, Tag on hover).
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
-   style cards are solid and every card tints on hover (iteration 47). Left: hover reveals the
-   weight range; a `grid-expanded` scene so a style card is ever seen in a shot.
+   style cards are solid and every card tints on hover (iteration 47); hover or the cursor
+   swaps the style count for the weight range, with `grid-hover` and `grid-expanded` scenes
+   (iteration 66). Left: a family card with a chevron and a badge cuts its name to "Sam…".
 8. **Inspector.** Info, Glyphs, the Features switches and one shared `InspectorTabHead` are
    done (iterations 17, 26–28, 43, reviews 20, 30, 45); each Features switch shows a sample in the
    face with the feature on (iteration 49), beside the same text with it off (iteration 54); the
@@ -292,8 +296,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 13. **Keyboard model.** `↑`/`↓` or `J`/`K` move through the list; Space quick look; `A`
     toggle activation; `C` add to compare; `T` tag; `S` find similar; `1`–`5` switch views;
     `/` or `F` focus search; `[` `]` toggle sidebar / inspector; `?` opens the shortcut
-    sheet. Shortcuts shown in tooltips. Done (iteration 31, review 35). Left: shortcuts in the
-    tooltips of the toolbar buttons; a test for J/K and the sheet.
+    sheet. Shortcuts shown in tooltips. Done (iteration 31, review 35). Left: the Grid cannot
+    open a family from the keyboard (ArrowRight moves the cursor; iteration 66); shortcuts in
+    the tooltips of the toolbar buttons; a test for J/K and the sheet.
 14. **Weight scrubbing.** On variable fonts, drag horizontally on a preview to scrub the
     weight axis; axis value shown as a tooltip; release to keep.
 15. **Context presets in Layout.** Website hero, Mobile UI (iOS sizes), Instagram post,
@@ -313,8 +318,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     block (iteration 44, review 45); Save/Revert/Duplicate/Reset/History are quiet buttons in the
     panel bar, and the Layout view's bar uses the same quiet buttons (iteration 48, review 50).
     Two bars now: Close, Print and close-panel are icon buttons, the gesture sentence opens
-    from the info button (iteration 52, review 55). Left: options in their own face; "Lock
-    width" floats at the window's corner instead of beside the page; "Add panel" as an icon.
+    from the info button (iteration 52, review 55); "Add panel" is a plus icon (iteration 67).
+    Left: options in their own face; "Lock width" floats at the window's corner instead of
+    beside the page (shared `FontLayout` header).
 18. **Drag out (API?).** Drag a family from the list to drop its files into Explorer / Finder or
     another app; copy CSS / `font-family` name from the row menu.
 19. **Problems & Duplicates triage view (API?).** Grouped, with a "keep best" suggestion and bulk
@@ -336,11 +342,12 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     `UiNumberField` in the license form, Settings › Advanced and the Preview bar (iterations
     57–59, review 60: saves on `commit`). One quiet `UiButton` for every text button in the
     toolbar, Preview bar, inspector heads (Copy CSS, Reset, Developer copies), Layout and Studio
-    bars, Settings, Problems and Conflicts (iterations 61–63, review 65). Left, in order: the
-    Settings nav shows the focus ring on load (since review 40); `type="number"` in
-    BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; the bordered buttons left in
-    dialogs (CompareSheet, CatalogDownload/Install, LocalApiSettings, Axes presets and "Pin this
-    instance"); the toolbar's `.toggle.icon` buttons onto `UiIconButton`; a designed date picker
+    bars, Settings, Problems and Conflicts (iterations 61–63, review 65); toolbar toggles on
+    `UiIconButton`, Quick Collection and Catalog on `UiButton` (iterations 68–69, review 70).
+    Left, in order: the Settings nav shows the focus ring on load (since review 40);
+    `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; the
+    bordered buttons left in dialogs (CompareSheet, CatalogDownload/Install, LocalApiSettings,
+    Axes presets and "Pin this instance"); `quick-collection` and `catalog` scenes; a designed date picker
     (purchase date is a plain text field with a `YYYY-MM-DD` hint); a `preview-options-open`
     scene.
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.

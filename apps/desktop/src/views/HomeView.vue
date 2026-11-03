@@ -695,14 +695,6 @@ function openFace(face: FaceId): void {
   margin: 0;
   color: var(--fm-muted);
 }
-.toggle {
-  padding: 4px 6px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
 /* In the layout file bar: at its own end. */
 .studio {
   margin-inline-start: auto;
@@ -715,13 +707,6 @@ function openFace(face: FaceId): void {
   display: flex;
   align-items: center;
   gap: 4px;
-}
-.toggle:disabled {
-  color: var(--fm-muted);
-}
-.toggle[aria-pressed='true'] {
-  border-color: var(--fm-accent);
-  color: var(--fm-accent);
 }
 .empty {
   display: grid;

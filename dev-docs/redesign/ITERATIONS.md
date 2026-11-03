@@ -11,7 +11,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 4 Dark by default + app shell (iterations 7, 11, 31, 39: toolbar icons, UiSegmentedControl, live status bar, collapsible panes with `[` `]` and a sidebar toggle; dark-first launch blocked on the API default theme)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
 - [x] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
-- [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
+- [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; iteration 66: hover weight range, `grid-hover`/`grid-expanded` scenes)
 - [ ] 8 Inspector (iterations 17, 26–28, 43, 49, 53, 54 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes, shared tab head, off/on feature samples, human feature names in the drawer; stylistic-set samples blocked on the API)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [x] 10 Language & script filter (iteration 36: visible language chips in the Filters drawer, choosing one switches the All fonts pangram; counts and script grouping remain)
@@ -30,7 +30,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
-- [ ] 26 Hover/focus/active audit (iterations 61–63 + review 65: one quiet UiButton for every text button in the toolbar, Preview bar, inspector heads, Layout/Studio bars, Settings, Problems, Conflicts; three `type="number"` inputs and the tags `datalist` remain)
+- [ ] 26 Hover/focus/active audit (iterations 61–63, 68–69 + reviews 65, 70: one quiet UiButton for every text button, one UiIconButton for every toolbar icon; three `type="number"` inputs, the tags `datalist`, dialog buttons and the Settings nav focus ring remain)
 - [ ] 27 Accessibility
 
 ## Entry template (at most 25 lines per entry)
@@ -399,37 +399,28 @@ Four iterations since review 60 (61–64); all four graded.
 **Next five:** item 7 (hover weight range on cards + a `grid-expanded` scene — a change inside the specimens) → item 17 ("Lock width" beside the page; "Add panel" as an icon) → item 26 (Settings nav focus ring on load; toolbar `.toggle.icon` onto `UiIconButton`) → item 26 rest (three `type="number"`, tags `datalist`) → item 21 rest (Quick Collection / Layout empties). Open every shot you take, both themes; an iteration whose log contradicts its shots or its tick is graded 2 at most.
 
 ## Iteration 66 — 2026-11-03 — Grid cards show the weight range on hover
-Critique (before, `grid`): the cards are clean and the specimen leads, but every card repeats "N styles" and nothing tells a designer how far a family reaches; a hover changes only the tint. Dark and light both quiet. The expanded style cards had never been seen in a shot.
-Why: backlog item 7's last open part, and the data (`FamilySummary.weightRange`) already exists.
-Changed: `FontGrid` — on hover or at the cursor the style count in a card's meta line swaps to the weight range ("100–900", tabular figures, 120 ms fade, same cell so no extra width; a first try added it beside the count and squeezed the name out, so it was dropped). Shots: new scenes `grid-hover` and `grid-expanded`; `screens.spec.ts` rows and hover now also find grid cards, and `FM_SCREENS_TWISTY` clicks a card's twisty (the grid has no keyboard expand — see follow-ups).
-Ticked: item 7 stays `[x]`; its "hover weight range" and "grid-expanded scene" leftovers are done.
-Shots: `.harness/redesign/shots/66/` (grid-hover, grid-expanded, both themes; opened dark expanded, light hover).
-Follow-ups: the grid cannot expand a family from the keyboard (ArrowRight moves the cursor) — a Shift+Arrow or Enter binding is needed (item 3 of "Keyboard-first"); `list` shot unchanged by design (grid view only).
-Dependencies: none.
+On hover or at the cursor a card's style count fades to the weight range in the same cell; new `grid-hover` and `grid-expanded` scenes.
 
 ## Iteration 67 — 2026-11-03 — Studio: "Add panel" becomes a plus icon
-Critique (before/after, `studio`): the bar had a text button "Add panel" between two icons, the last text in a row of icons, and "Lock width" floats at the window's corner far from the page. The specimen is good; the chrome around it is nearly quiet.
-Why: backlog item 17's "Add panel as an icon"; the bar is now info, plus, close, all 24 px icon buttons. Picked over "Lock width" beside the page, which needs a layout change in `FontLayout` shared with Layout view (logged below).
-Changed: `StudioView` uses `UiIconButton` (plus) with the same label, title, `aria-disabled` and focus return; `UiIconButton` fades on `aria-disabled` like `UiButton`. Accessible name is still "Add panel", so no test changed.
-Ticked: item 17 stays `[ ]` (Lock width remains).
-Shots: `.harness/redesign/shots/67/` (studio, both themes; opened dark). Playwright 273 passed / 16 skipped (`e2e-67.log`), typecheck and lint:js green, Vitest run.
-Follow-ups: "Lock width" beside the page (shared `FontLayout` header); the plus icon has no "4 of 4" cue besides the fade and tooltip.
-Dependencies: none.
+The Studio bar's last text button became a plus `UiIconButton` with the same name, title and focus return.
 
 ## Iteration 68 — 2026-11-03 — Toolbar toggles become one icon button
-Critique (before, `list`): the specimens lead and the chrome is quiet, but the sidebar and inspector toggles are outlined squares with a blue-ish rim, and the density and compare buttons are a second, differently sized icon button (28 px, own hover). Light and dark both clean; the toolbar reads as two button families.
-Why: backlog item 26 (review 65 "next five"): the toolbar's `.toggle.icon` was a second copy of `UiIconButton`.
-Changed: `UiIconButton` gains a pressed tint (`aria-pressed`), a disabled fade, a trailing slot (the compare pin count) and `min-width` so a count fits; `HomeView` uses it for sidebar, density, compare and inspector, and its `.toggle.icon` CSS is deleted. Accessible names, shortcuts and `aria-pressed` are unchanged. `CommandPalette.test.ts` looks for `button.ui-icon-button` (class renamed on purpose).
-Ticked: item 26 stays `[ ]` (Settings nav focus ring on load, three `type="number"`, tags `datalist`, dialog buttons remain).
-Shots: `.harness/redesign/shots/68/` (before), `68b/` (after); opened list in both themes. Playwright 273 passed / 16 skipped (`e2e-68.log`); typecheck, lint:js green; Vitest: one 10k-search timing test flaked at 50.8 ms in the full run, passed on re-run.
-Follow-ups: `QuickCollectionReview`, `CatalogBrowser` and `InspectorLicense` still use bordered `.toggle` text buttons — move to `UiButton`.
-Dependencies: none.
+Sidebar, density, compare and inspector toggles moved onto `UiIconButton` (pressed tint, trailing count slot); the `.toggle.icon` CSS was deleted.
 
 ## Iteration 69 — 2026-11-03 — Quick Collection and Catalog buttons become `UiButton`
-Critique: not looked at in a screenshot — no scene shows these two screens (`shots.mjs` has none), and the `list` shot is unaffected by them. From iteration 68's follow-up: both screens still drew bordered `.toggle` text buttons beside the quiet ones everywhere else.
-Why: backlog item 26 (hover/focus/active audit), the follow-up from iteration 68. This is a consistency change, not a first-three-seconds change; picked over the grid keyboard expand because it was already scoped.
-Changed: `QuickCollectionReview` (Clear, Back, Save as collection, Tag all, per-row Drop) and `CatalogBrowser` (view-mode buttons keep `aria-pressed`, Refresh, Check updates, Turn on) use `UiButton`; both local `.toggle` rules are deleted. Test ids, labels and `type="submit"` unchanged.
-Ticked: item 26 stays `[ ]` (`InspectorLicense` toggles, dialog buttons, tags `datalist`, Settings nav focus ring remain).
-Shots: `.harness/redesign/shots/69/` exist but none shows the touched screens; not opened. Playwright 273 passed / 16 skipped (`e2e-69.log`), Vitest 910 passed, typecheck and lint:js green.
-Follow-ups: add `quick-collection` and `catalog` scenes to `shots.mjs`; `InspectorLicense` toggles (it had no `.toggle` in the file this time — recheck the name); grid keyboard expand.
-Dependencies: none.
+Both screens' bordered `.toggle` text buttons moved onto `UiButton`; taken without a scene for either screen.
+
+## Review 70 — 2026-11-03
+Four iterations since review 65 (66–69); all four graded.
+**Grades:** iter 66 **4** — a real change inside the specimens, done in place (no extra width), two scenes added at last; a family card with chevron + badge now cuts its name to "Sam…", and it left `.detail` declared twice. Iter 67 **3** — small and correct; the bar is all icons now, but "Lock width" (the harder half) was skipped. Iter 68 **3** — the right consolidation, the toolbar is one button family; but it grew `UiIconButton` the way 61 grew `UiButton`: its own `--fm-hover` background on hover on top of the global gradient (doubled tint, also on the disabled Compare), a repeat of the global `:disabled` fade, literal 4 px; it left HomeView's three `.toggle` rules dead. Iter 69 **2** — a consistency move with no shot opened (no scene exists for either screen) and no scene added; nothing a designer sees in three seconds.
+**Regressions:** none in views, keyboard, tests or list performance (60 fps alone; 17 fps under the full parallel run is load, not code). Doubled hover on every icon button (68; fixed).
+**Drift:** literal spacing in `UiIconButton`; Studio's info button kept a local `.on` accent class beside the component's own states. No new colours, fonts, radii or native controls.
+**Pulled apart:** 68's `UiIconButton` against review 65's rule for `UiButton` (the baseline owns hover and disabled) — two buttons, two models. Now one. Three of four iterations were consistency sweeps; the `list` shot moved only in 68.
+**Fixed:**
+- `UiIconButton`: no own hover background or `:disabled` rule (global baseline); pressed keeps the tint; `aria-expanded` turns accent like `UiButton`; spacing tokens.
+- `StudioView`: the info button's local `.on` class and CSS deleted (the component draws the open state).
+- Dead: HomeView `.toggle`, `.toggle:disabled`, `.toggle[aria-pressed]`; FontGrid's duplicate `.detail` rule merged.
+**Rule amended (DESIGN.md):** every icon button is `UiIconButton` under the same baseline rule; pressed = tint, open = accent. Items 7, 13, 17, 26 and the three-second note rewritten.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-70.log`). Shots `70/` (before, 56) and `70-after/` (56): all 28 scenes render in light and dark, comfortable and compact; only `empty-collection` changed (the "…" icon button).
+**Not fixed, noted:** grid cards cut long names beside chevron + badge; Settings nav focus ring on load; empty collection shows "Clear filters" with no filters; no `quick-collection`/`catalog` scenes.
+**Next five:** stop sweeping, ship features — item 16 (Compare overlay) → item 14 (weight scrubbing on a variable preview) → item 13 (Grid opens a family from the keyboard) → item 17 ("Lock width" beside the page) → item 26 (Settings nav focus ring; `quick-collection` and `catalog` scenes). Every iteration opens before/after shots of a scene that shows its change; a new component state goes through the global baseline, never a local copy.
