@@ -22,8 +22,8 @@
 //   storage     FM_SCREENS_STORAGE     localStorage JSON (fm.views.v1 holds the view mode)
 //   session     FM_SCREENS_SESSION     sessionStorage JSON (fm.mock.settings.v1 holds mock settings, e.g. density)
 //   command     FM_SCREENS_COMMAND     a command-palette action to run before the shot
-//   query       FM_SCREENS_QUERY       MockApi options; `mockLibrary=wall` is added unless the
-//                                      scene names a library (`?mockLibrary=small`: three families)
+//   query       FM_SCREENS_QUERY       MockApi options; the spec adds `mockLibrary=wall` unless the
+//                                      query names a library (`?mockLibrary=small`: three families)
 //
 // The library is the 60-family wall (E40.2), one class after another: row 1 Asap Sharp (face 1,
 // variable, selected by `?face=1`), row 2 Crimson Pro (six styles), row 3 Archivo, row 4
@@ -105,13 +105,6 @@ const root = resolve(import.meta.dirname, '..', '..');
 const outRoot = resolve(root, '.harness', 'redesign', 'shots', String(iteration));
 mkdirSync(outRoot, { recursive: true });
 
-/** A scene's query with the wall library unless it names one. */
-function withWall(query = '') {
-  const params = new URLSearchParams(query);
-  if (!params.has('mockLibrary')) params.set('mockLibrary', 'wall');
-  return `?${params.toString()}`;
-}
-
 const envKey = {
   routes: 'FM_SCREENS_ROUTES',
   tab: 'FM_SCREENS_TAB',
@@ -147,7 +140,6 @@ for (const name of wanted) {
     FM_SCREENS_VIEWPORTS: viewports,
   };
   for (const [k, v] of Object.entries(scenes[name])) env[envKey[k]] = v;
-  env.FM_SCREENS_QUERY = withWall(scenes[name].query);
   process.stdout.write(`\n=== scene ${name} → ${outRoot}/${name}-*.png\n`);
   const r = spawnSync(
     'pnpm',

@@ -96,6 +96,34 @@ describe('the wall library (E40.2)', () => {
     expect((await client.listLanguages()).map((l) => l.code)).toContain('vi');
   });
 
+  it('filters by language on the characters a wall family maps', async () => {
+    const client = createMockClient({ library: 'wall' });
+    const namesFor = async (code: string) => {
+      const res = await client.search({
+        query: '',
+        filters: { supports: { kind: 'languages', codes: [code] } },
+        page: { offset: 0, limit: 1000 },
+      });
+      return res.families.map((h) => h.family.name);
+    };
+    const vietnamese = await namesFor('vi');
+    expect(vietnamese).toContain('Be Vietnam Pro');
+    expect(vietnamese).not.toContain('Rufina');
+    const german = await namesFor('de');
+    expect(german).toContain('Rufina');
+    expect(german).not.toContain('Zeyada');
+    const greek = await namesFor('el');
+    expect(greek).toContain('Ubuntu');
+    expect(greek).not.toContain('Crimson Pro');
+    // The small library keeps its script rule and has no Vietnamese preset.
+    const small = await createMockClient().search({
+      query: '',
+      filters: { supports: { kind: 'languages', codes: ['vi'] } },
+      page: { offset: 0, limit: 1000 },
+    });
+    expect(small.families).toEqual([]);
+  });
+
   it('has three duplicates and two broken files', () => {
     const lib = mockWall();
     const dupes = wallDuplicates(lib);

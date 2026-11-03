@@ -1235,8 +1235,15 @@ function passes(
   q: Filters,
 ): boolean {
   const f = d.face;
+  // A wall face covers a language by its own characters, so the wall's gaps show in this
+  // filter too (its Vietnamese preset included); the other faces by script.
+  const own = mockWall().chars.get(f.family);
   const covers = (code: string) => {
-    const script = mockLanguages.find((l) => l.code === code)?.script.toLowerCase();
+    const preset = [...mockLanguages, ...(own ? [WALL_VIETNAMESE] : [])].find(
+      (l) => l.code === code,
+    );
+    if (own && preset?.pangram) return [...preset.pangram].every((c) => /\s/.test(c) || own.has(c));
+    const script = preset?.script.toLowerCase();
     return !!script && d.scripts.includes(script);
   };
   const supports = q.supports;
