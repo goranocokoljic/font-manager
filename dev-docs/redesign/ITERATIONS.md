@@ -253,3 +253,13 @@ Sources, Collections and Tags moved onto `UiFoldButton`, so all six headings sha
 **Verified:** typecheck, `lint:js` exit 0, Vitest ok, Playwright 272 passed / 1 flake (`notes.spec.ts` light, passes alone) (`.harness/redesign/e2e-37.log`).
 **Follow-ups:** toolbar toggle for the sidebar; no scene for folded Collections.
 **Dependencies:** none.
+
+## Iteration 38 — 2026-11-03 — Settings menu: icons, quiet active state
+**Critique (before):** Settings opens with a plain text menu whose active item is a heavy boxed block, unlike the sidebar. Controls are already drawn (checkboxes, radios), so the page looks plain but not broken. Legends shout at the same weight as the values below them. The `list` screen is calm and the specimens lead.
+**Why:** Backlog item 26, the nav box. Checkboxes and radios were already drawn globally (theme.css); only the nav and legends were left.
+**What changed:** Settings tabs get a 16 px icon each (four new icons: sun, sliders, code, info), muted text, hover tint, and a tint plus 2 px accent bar when active. Focus ring moves inside the tab. Group legends are quiet 12 px muted.
+**Ticked:** none fully (item 26 keeps license date/number/datalist fields, Problems pill).
+**Shots:** `.harness/redesign/shots/38/` (before), `38b/` (after). The `list` shot is unchanged; the change lives in Settings.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 29 views ok, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-38.log`).
+**Follow-ups:** the active tab shows only the focus ring on open (it is focused); consider focusing the panel heading. Settings panel is still sparse: group options in cards.
+**Dependencies:** none.

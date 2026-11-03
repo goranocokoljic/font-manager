@@ -40,5 +40,10 @@ export const ICONS = {
     '<path d="M8 13.3S2.5 10 2.5 6.1A2.9 2.9 0 0 1 8 5a2.9 2.9 0 0 1 5.5 1.1C13.5 10 8 13.3 8 13.3z"/>',
   heartFilled:
     '<path fill="currentColor" d="M8 13.3S2.5 10 2.5 6.1A2.9 2.9 0 0 1 8 5a2.9 2.9 0 0 1 5.5 1.1C13.5 10 8 13.3 8 13.3z"/>',
+  sun: '<circle cx="8" cy="8" r="2.8"/><path d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14M3.8 3.8l1 1M11.2 11.2l1 1M12.2 3.8l-1 1M4.8 11.2l-1 1"/>',
+  sliders:
+    '<path d="M3 5h5.5M11.5 5H13M3 11h1.5M7.5 11H13"/><circle cx="10" cy="5" r="1.5"/><circle cx="6" cy="11" r="1.5"/>',
+  code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/>',
+  info: '<circle cx="8" cy="8" r="5.5"/><path d="M8 7.5v3.2M8 5.4h.01"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

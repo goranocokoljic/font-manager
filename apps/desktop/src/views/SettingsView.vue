@@ -8,6 +8,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
+import UiIcon from '../components/ui/UiIcon.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
 import {
   CATALOGS,
@@ -37,14 +38,14 @@ const route = useRoute();
 const router = useRouter();
 
 const sections = [
-  { id: 'sources' },
-  { id: 'activation' },
-  { id: 'appearance' },
-  { id: 'catalogs' },
-  { id: 'advanced' },
-  { id: 'localApi' },
-  { id: 'mcp' },
-  { id: 'about' },
+  { id: 'sources', icon: 'folder' },
+  { id: 'activation', icon: 'power' },
+  { id: 'appearance', icon: 'sun' },
+  { id: 'catalogs', icon: 'globe' },
+  { id: 'advanced', icon: 'sliders' },
+  { id: 'localApi', icon: 'code' },
+  { id: 'mcp', icon: 'sparkles' },
+  { id: 'about', icon: 'info' },
 ] as const;
 type SectionId = (typeof sections)[number]['id'];
 
@@ -205,6 +206,7 @@ function chooseLanguage(value: string): void {
           :tabindex="current === section.id ? 0 : -1"
           @click="select(section.id)"
         >
+          <UiIcon :name="section.icon" />
           {{ sectionTitle(section.id) }}
         </button>
       </div>
@@ -618,18 +620,41 @@ function chooseLanguage(value: string): void {
   background-color: var(--fm-surface);
 }
 .tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: var(--fm-gap) 8px;
   border: 0;
   border-radius: var(--fm-radius-sm);
   background-color: transparent;
-  color: inherit;
+  color: var(--fm-muted);
   font: inherit;
   text-align: start;
 }
+.tab:hover {
+  background-color: var(--fm-hover);
+  color: var(--fm-fg);
+}
+.tab:focus-visible {
+  outline-offset: -2px;
+}
 .tab[aria-selected='true'] {
-  background-color: var(--fm-bg);
-  color: var(--fm-accent);
+  background-color: var(--fm-hover);
+  color: var(--fm-fg);
   font-weight: 600;
+}
+.tab[aria-selected='true']::before {
+  content: '';
+  position: absolute;
+  inset-block: 6px;
+  inset-inline-start: 0;
+  width: 2px;
+  border-radius: 1px;
+  background-color: var(--fm-accent);
+}
+.tab[aria-selected='true'] :deep(.ui-icon) {
+  color: var(--fm-accent);
 }
 .panel {
   flex: 1;
@@ -727,6 +752,8 @@ function chooseLanguage(value: string): void {
 .group legend {
   margin-bottom: 6px;
   padding: 0;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
   font-weight: 600;
 }
 .field {
