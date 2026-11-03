@@ -29,6 +29,8 @@ export const ACTIONS = {
   viewMode: (n: 1 | 2 | 3 | 4 | 5) => `view.mode${n}`,
   settings: 'settings.open',
   inspector: 'view.toggleInspector',
+  sidebar: 'view.toggleSidebar',
+  shortcuts: 'shortcuts.toggle',
 } as const;
 
 /**
@@ -56,6 +58,9 @@ export const KEYMAP: readonly Binding[] = [
   })),
   { action: ACTIONS.settings, chord: { key: ',', mod: true } },
   { action: ACTIONS.inspector, chord: { key: 'i', mod: true } },
+  { action: ACTIONS.sidebar, chord: { key: '[' } },
+  { action: ACTIONS.inspector, chord: { key: ']' } },
+  { action: ACTIONS.shortcuts, chord: { key: '?' } },
 ];
 
 /** The binding of an action, if it has one. */

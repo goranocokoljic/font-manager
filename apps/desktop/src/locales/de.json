@@ -344,6 +344,7 @@
     "resizeInspector": "Inspektor in der Breite ändern",
     "actions": {
       "toggleInspector": "Inspektor ein- oder ausblenden",
+      "toggleSidebar": "Seitenleiste ein- oder ausblenden",
       "goSidebar": "Zur Seitenleiste wechseln",
       "goList": "Zur Schriftliste wechseln",
       "goInspector": "Zum Inspektor wechseln"
@@ -458,6 +459,34 @@
       "editable": "Bearbeitbar",
       "previewAndPrint": "Vorschau & Druck",
       "restricted": "Eingeschränkt"
+    }
+  },
+  "shortcuts": {
+    "label": "Tastenkürzel",
+    "close": "Schließen",
+    "hint": "? oder Esc schließt",
+    "toggle": "Tastenkürzel anzeigen",
+    "groups": {
+      "go": "Bewegen",
+      "fonts": "Schriften",
+      "view": "Ansicht"
+    },
+    "rows": {
+      "move": "Hoch und runter",
+      "extend": "Auswahl erweitern",
+      "search": "Suche",
+      "palette": "Befehlspalette",
+      "quickLook": "Schnellansicht",
+      "activate": "Für diese Sitzung aktivieren",
+      "activatePermanent": "Dauerhaft aktivieren",
+      "compare": "Zum Vergleich hinzufügen",
+      "quick": "Zur Schnellsammlung",
+      "tag": "Verschlagworten",
+      "similar": "Ähnliche finden",
+      "views": "Liste, Tabelle, Raster, Kaskade, Layout",
+      "sidebar": "Seitenleiste",
+      "inspector": "Inspektor",
+      "settings": "Einstellungen"
     }
   },
   "palette": {

@@ -3,6 +3,7 @@ import { onMounted, onUnmounted, watch, watchEffect } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import { useClient } from './api/client';
 import CommandPalette from './components/CommandPalette.vue';
+import ShortcutSheet from './components/ShortcutSheet.vue';
 import McpConfirmToast from './components/McpConfirmToast.vue';
 import ToastMessage from './components/ToastMessage.vue';
 import UpdateDialog from './components/UpdateDialog.vue';
@@ -107,6 +108,7 @@ watch(
 <template>
   <RouterView />
   <CommandPalette />
+  <ShortcutSheet />
   <ToastMessage />
   <McpConfirmToast />
   <UpdateDialog />

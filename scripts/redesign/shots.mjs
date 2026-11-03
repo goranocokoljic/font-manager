@@ -45,6 +45,7 @@ const scenes = {
 
   filters: { routes: '/?face=1', click: 'Filters' },
   palette: { routes: '/?face=1@ControlOrMeta+k' },
+  shortcuts: { routes: '/?face=1@Shift+?' },
   // The ui/ Select's menu on a long list (the Glyphs block picker), with its filter line.
   'select-open': { routes: '/?face=1', tab: 'Glyphs', open: 'Block' },
   similar: { routes: '/?face=1', tab: 'Info', click: 'Find similar' },

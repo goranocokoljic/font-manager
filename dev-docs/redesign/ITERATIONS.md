@@ -17,7 +17,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
 - [ ] 12 Quick Look, finished
-- [ ] 13 Keyboard model
+- [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; toolbar toggle + more tooltips remain)
 - [ ] 14 Weight scrubbing
 - [ ] 15 Context presets in Layout
 - [ ] 16 Compare overlay
@@ -205,3 +205,17 @@ The cursor row's 2 px accent box became a 1 px ring at 60 % plus a 2 px start ba
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-30.log`). Shots `review-30/` (before, 46) and `review-30-after/` (48, with `hover-row`): all 24 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** Developer tab head; three copies of the tab-head CSS; "applied automatically" repeated per row; Settings nav 2 px box; Studio "Panel font" fields look empty; `?face=` list selection.
 **Next five:** item 13 (keyboard model: J/K, A, C, S, 1–5, `[` `]`, `?` sheet) → item 12 (Quick Look as the hero) → item 5 rest (section icons, collapsible sections, Problems dedupe) → item 8 rest (one shared inspector tab head; Developer stacked) → item 26 (Settings radios/checkboxes and nav focus). Inspector polish is done for now: every iteration must change the `list` shot or a scene a feature adds.
+
+## Iteration 31 — 2026-11-03 — Keyboard model: `?` shortcut sheet, `[` / `]` panes, J/K
+Critique (before): the `list` shot is calm, but nothing tells a designer the app is keyboard-first: shortcuts exist (A, C, S, T, 1–5) yet none is discoverable, and the sidebar cannot be hidden. Worst: the rows' beauty is boxed in by a fixed 240 px sidebar. Good: hairlines, quiet chrome.
+Why: backlog item 13 is next after review 30. Feels different in the first minute: `?` opens a sheet, `[` hides the sidebar so the list gets 240 px more width.
+What changed:
+- `ShortcutSheet.vue` (new, mounted in `App.vue`): modal, three columns (Move / Fonts / View), chords read from `KEYMAP`, `?` or Esc closes, focus returns.
+- `keymap.ts`: bindings `[` (sidebar), `]` (inspector, next to Ctrl+I), `?` (sheet).
+- `layout.ts` + `MainLayout.vue`: `sidebarOpen` (remembered), `toggleSidebar`, palette action.
+- `list/keys.ts`: `J` / `K` move the cursor down / up.
+- `screens.spec` scene table: new `shortcuts` scene (`shots.mjs`). en + de strings.
+Backlog: item 13 mostly done (left: `/` already bound; tooltips with shortcuts on more controls).
+Shots: `.harness/redesign/shots/31/` (`shortcuts-*` checked by eye, both themes). Verified: typecheck, lint:js, Vitest 910, Playwright 272 passed / 16 skipped.
+Follow-ups: no collapsed-sidebar rail or toggle button in the toolbar (keyboard only); sheet is static text for list keys; no unit test for `ShortcutSheet` or J/K yet.
+Dependencies: none.

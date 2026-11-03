@@ -15,6 +15,7 @@ interface SavedLayout {
   sidebarWidth: number;
   inspectorWidth: number;
   inspectorOpen: boolean;
+  sidebarOpen: boolean;
 }
 
 /** Rounds `value` and keeps it inside `bounds`; anything not a finite number gives `initial`. */
@@ -35,6 +36,7 @@ function readSaved(storage: Storage | undefined): SavedLayout {
     sidebarWidth: clampWidth(raw.sidebarWidth, SIDEBAR),
     inspectorWidth: clampWidth(raw.inspectorWidth, INSPECTOR),
     inspectorOpen: typeof raw.inspectorOpen === 'boolean' ? raw.inspectorOpen : true,
+    sidebarOpen: typeof raw.sidebarOpen === 'boolean' ? raw.sidebarOpen : true,
   };
 }
 
@@ -58,6 +60,7 @@ export const useLayoutStore = defineStore('layout', () => {
   const sidebarWidth = ref(saved.sidebarWidth);
   const inspectorWidth = ref(saved.inspectorWidth);
   const inspectorOpen = ref(saved.inspectorOpen);
+  const sidebarOpen = ref(saved.sidebarOpen);
   const narrow = ref(false);
   const narrowReveal = ref(false);
 
@@ -83,11 +86,16 @@ export const useLayoutStore = defineStore('layout', () => {
     else inspectorOpen.value = !inspectorOpen.value;
   }
 
-  watch([sidebarWidth, inspectorWidth, inspectorOpen], () => {
+  function toggleSidebar(): void {
+    sidebarOpen.value = !sidebarOpen.value;
+  }
+
+  watch([sidebarWidth, inspectorWidth, inspectorOpen, sidebarOpen], () => {
     const value: SavedLayout = {
       sidebarWidth: sidebarWidth.value,
       inspectorWidth: inspectorWidth.value,
       inspectorOpen: inspectorOpen.value,
+      sidebarOpen: sidebarOpen.value,
     };
     try {
       storage?.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(value));
@@ -100,11 +108,13 @@ export const useLayoutStore = defineStore('layout', () => {
     sidebarWidth,
     inspectorWidth,
     inspectorOpen,
+    sidebarOpen,
     narrow,
     inspectorVisible,
     setSidebarWidth,
     setInspectorWidth,
     setNarrow,
     toggleInspector,
+    toggleSidebar,
   };
 });

@@ -344,6 +344,7 @@
     "resizeInspector": "Resize inspector",
     "actions": {
       "toggleInspector": "Show or hide the inspector",
+      "toggleSidebar": "Show or hide the sidebar",
       "goSidebar": "Go to the sidebar",
       "goList": "Go to the font list",
       "goInspector": "Go to the inspector"
@@ -458,6 +459,34 @@
       "editable": "Editable",
       "previewAndPrint": "Preview & print",
       "restricted": "Restricted"
+    }
+  },
+  "shortcuts": {
+    "label": "Keyboard shortcuts",
+    "close": "Close",
+    "hint": "Press ? or Esc to close",
+    "toggle": "Show the keyboard shortcuts",
+    "groups": {
+      "go": "Move",
+      "fonts": "Fonts",
+      "view": "View"
+    },
+    "rows": {
+      "move": "Up and down",
+      "extend": "Extend the selection",
+      "search": "Search",
+      "palette": "Command palette",
+      "quickLook": "Quick look",
+      "activate": "Activate for this session",
+      "activatePermanent": "Activate permanently",
+      "compare": "Add to Compare",
+      "quick": "Add to Quick Collection",
+      "tag": "Tag",
+      "similar": "Find similar",
+      "views": "List, Table, Grid, Waterfall, Layout",
+      "sidebar": "Sidebar",
+      "inspector": "Inspector",
+      "settings": "Settings"
     }
   },
   "palette": {

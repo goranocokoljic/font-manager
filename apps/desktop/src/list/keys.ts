@@ -77,6 +77,11 @@ export function handleListKey(
       if (!mod) return false;
       list.toggleCursor();
       return true;
+    case 'j':
+    case 'k':
+      if (mod || e.shiftKey) return false;
+      list.moveBy(e.key === 'j' ? columns : -columns, 'replace');
+      return true;
     default:
       if (mod && !e.shiftKey && e.key.toLowerCase() === 'a') {
         list.selectAll();

@@ -52,6 +52,16 @@ useActions([
     run: layout.toggleInspector,
   },
   {
+    id: ACTIONS.sidebar,
+    get title() {
+      return t('layout.actions.toggleSidebar');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    run: layout.toggleSidebar,
+  },
+  {
     id: 'focus.sidebar',
     get title() {
       return t('layout.actions.goSidebar');
@@ -100,6 +110,7 @@ onBeforeUnmount(() => {
   <div class="window">
     <div class="columns">
       <nav
+        v-if="layout.sidebarOpen"
         id="fm-sidebar"
         ref="sidebar"
         class="sidebar column"
@@ -110,6 +121,7 @@ onBeforeUnmount(() => {
         <slot name="sidebar" />
       </nav>
       <PaneDivider
+        v-if="layout.sidebarOpen"
         :label="t('layout.resizeSidebar')"
         controls="fm-sidebar"
         :value="layout.sidebarWidth"
