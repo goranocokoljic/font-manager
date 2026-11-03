@@ -288,3 +288,13 @@ A pressed-state sidebar toggle (`[`) sits before the title in the All fonts tool
 **Follow-ups:** Features rows still repeat "applied automatically"; the two Copy status texts in Developer could be one.
 **Dependencies:** none.
 
+
+## Iteration 44 — 2026-11-03 — Studio "Panel font" fields become quiet name tags
+**Critique (before):** In `studio` three bordered, empty-looking "Panel font" boxes sat in the gutter, set in `system-ui` at 11 px. They read as unfilled form fields, the worst-looking control left. The text column and the big headline are good.
+**Why:** Review 40's "Next five", item 17 first slice. The `list` shot does not change; `studio` does.
+**What changed:** `BlockFontPicker`: no box until hover or focus (hover tint, focus border), Inter and tokens instead of `system-ui` and literals, muted placeholder, a `UiChevron` caret that says it opens. Behaviour and ARIA unchanged.
+**Ticked:** none (item 17 stays open).
+**Shots:** `.harness/redesign/shots/44/` (before), `44a/` (after).
+**Verified:** typecheck, `lint:js` exit 0, Vitest (one catalogs test flaked, passes alone; logical-properties test caught a physical padding, fixed), Playwright 273 passed / 16 skipped (`e2e-44.log`).
+**Follow-ups:** dropdown options do not show each family in its own face; the Studio toolbar still has four rows of text buttons; the Layout select and "Lock width" look different from `UiSelect`/buttons.
+**Dependencies:** none.

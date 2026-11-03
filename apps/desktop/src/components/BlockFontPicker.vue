@@ -7,6 +7,7 @@
 import { computed, ref, useId, watch } from 'vue';
 import type { FaceSummary, FamilyHit } from '../api/types';
 import { errorMessage, t } from '../i18n';
+import UiChevron from './ui/UiChevron.vue';
 import { useStudioStore } from '../stores/studio';
 
 const props = defineProps<{
@@ -102,6 +103,7 @@ function onKey(e: KeyboardEvent): void {
       @blur="close"
       @keydown="onKey"
     />
+    <UiChevron class="caret" :open="true" aria-hidden="true" />
     <!-- mousedown.prevent keeps focus in the input while an option is clicked. -->
     <ul
       v-show="expanded"
@@ -148,21 +150,46 @@ function onKey(e: KeyboardEvent): void {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 4px;
+  gap: var(--fm-space-1);
   min-width: 0;
-  font:
-    11px/1.4 system-ui,
-    sans-serif;
+  font-family: var(--fm-font-ui);
+  font-size: var(--fm-text-xs);
+  line-height: 1.4;
 }
+/* A quiet name tag: no box until hovered or focused, a caret says it opens. */
 .field {
   box-sizing: border-box;
   width: 100%;
-  padding: 1px 6px;
-  border: 1px solid var(--fm-control-border);
+  padding: 2px 6px;
+  padding-inline-end: 20px;
+  border: 1px solid transparent;
   border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
+  background-color: transparent;
   color: var(--fm-fg);
   font: inherit;
+  text-overflow: ellipsis;
+  transition:
+    background-color var(--fm-motion-fast) var(--fm-ease),
+    border-color var(--fm-motion-fast) var(--fm-ease);
+}
+.field::placeholder {
+  color: var(--fm-muted);
+}
+.field:hover {
+  background-color: var(--fm-hover);
+}
+.field:focus {
+  border-color: var(--fm-control-border);
+  background-color: var(--fm-bg);
+}
+.caret {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  color: var(--fm-muted);
+  pointer-events: none;
 }
 .list {
   position: absolute;
