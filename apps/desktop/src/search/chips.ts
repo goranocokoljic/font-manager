@@ -14,6 +14,7 @@ import type {
   TagId,
 } from '../api/types';
 import { t, type MessageKey } from '../i18n';
+import en from '../locales/en.json';
 
 /**
  * The filters shown as chips. Weight and width are ranges in `Filters` (the
@@ -135,6 +136,21 @@ const EMBEDDINGS: Record<Embedding, string> = labels('chips.embeddings', [
 const yesNo = (yes: string, no: string) => (v: ChipValue) =>
   t(`chips.values.${v ? yes : no}` as MessageKey);
 
+/** The tags with a registered name in `chips.featureNames`. */
+const NAMED_FEATURES = new Set(Object.keys(en.chips.featureNames));
+const SET_TAG = /^(ss|cv)(\d{2})$/;
+
+/** A feature's name for people: "Small capitals", "Stylistic set 1"; an unknown tag stays as it is. */
+export function featureName(tag: string): string {
+  if (NAMED_FEATURES.has(tag)) return t(`chips.featureNames.${tag}` as MessageKey);
+  const m = SET_TAG.exec(tag);
+  if (m) return t(m[1] === 'ss' ? 'chips.styleSet' : 'chips.charVariant', { n: Number(m[2]) });
+  return tag;
+}
+
+/** True for the features everyone knows (named); stylistic sets, variants and the rest are not. */
+export const isCommonFeature = (tag: string): boolean => NAMED_FEATURES.has(tag);
+
 /** The groups in the order the bar shows them; the label is `chips.groups.<facet>`. */
 const GROUPS: { facet: ChipFacet; name: (v: ChipValue) => string }[] = [
   { facet: 'active', name: yesNo('active', 'inactive') },
@@ -143,7 +159,7 @@ const GROUPS: { facet: ChipFacet; name: (v: ChipValue) => string }[] = [
   { facet: 'variable', name: yesNo('variable', 'static') },
   { facet: 'color', name: yesNo('color', 'notColor') },
   { facet: 'formats', name: (v) => FORMATS[v as FontFormat] ?? String(v) },
-  { facet: 'features', name: String },
+  { facet: 'features', name: (v) => featureName(String(v)) },
   { facet: 'license', name: (v) => LICENSES[v as LicenseType] ?? String(v) },
   { facet: 'webOk', name: yesNo('webOk', 'notWeb') },
   { facet: 'openLicense', name: yesNo('openLicense', 'notOpen') },

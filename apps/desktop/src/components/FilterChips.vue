@@ -7,6 +7,7 @@ import {
   chosenLanguages,
   hasChosenFilters,
   hasFilters,
+  isCommonFeature,
   languageName,
   toggleChip,
   toggleLanguage,
@@ -60,6 +61,13 @@ const drawerFacets = computed(() => {
   return list;
 });
 const featureGroup = computed(() => groups.value.find((g) => g.facet === 'features') ?? null);
+/** Named features show in the drawer; stylistic sets, variants and the rest sit behind an expander. */
+const commonFeatures = computed(
+  () => featureGroup.value?.chips.filter((c) => isCommonFeature(String(c.value))) ?? [],
+);
+const otherFeatures = computed(
+  () => featureGroup.value?.chips.filter((c) => !isCommonFeature(String(c.value))) ?? [],
+);
 const active = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
 const activeCount = computed(() => active.value.length + languages.value.length);
 /** A smart collection needs a chosen filter; the open collection alone is none. */
@@ -270,7 +278,25 @@ async function save(): Promise<void> {
         </div>
       </template>
       <div v-if="featureGroup" class="facet" role="group" :aria-label="featureGroup.label">
+        <h3 v-if="commonFeatures.length" class="label" aria-hidden="true">
+          {{ featureGroup.label }}
+        </h3>
+        <div v-if="commonFeatures.length" class="chipset">
+          <button
+            v-for="chip in commonFeatures"
+            :key="String(chip.value)"
+            type="button"
+            class="chip"
+            :title="String(chip.value)"
+            :aria-pressed="chip.selected"
+            :aria-label="chipLabel(chip.label, chip.count)"
+            @click="toggle(chip)"
+          >
+            {{ chip.label }} <span class="n">{{ chip.count }}</span>
+          </button>
+        </div>
         <button
+          v-if="otherFeatures.length"
           type="button"
           class="expander"
           :aria-expanded="allFeatures"
@@ -285,14 +311,15 @@ async function save(): Promise<void> {
           >
             <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" />
           </svg>
-          {{ t('chips.allFeatures') }}
+          {{ t('chips.moreFeatures') }}
         </button>
-        <div v-if="allFeatures" class="chipset">
+        <div v-if="allFeatures && otherFeatures.length" class="chipset">
           <button
-            v-for="chip in featureGroup.chips"
+            v-for="chip in otherFeatures"
             :key="String(chip.value)"
             type="button"
             class="chip"
+            :title="String(chip.value)"
             :aria-pressed="chip.selected"
             :aria-label="chipLabel(chip.label, chip.count)"
             @click="toggle(chip)"

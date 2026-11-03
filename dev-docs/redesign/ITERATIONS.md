@@ -333,3 +333,13 @@ Only four iterations since review 45 (46–49); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 (two pairing-studio specs updated on purpose: font name now read from `studio-font`; Print is an icon, so title not text; `e2e-52.log`).
 **Follow-ups:** item 17 left: options in their own face, a tooltip that shows instantly for the info icon (native title is slow), fold Add panel into an icon. Item 6 `expanded-family` scene still points at a one-style row.
 **Dependencies:** none.
+
+## Iteration 53 — 2026-11-03 — Filters drawer: features get human names
+**Critique (before):** the `list` shot is calm; the chrome is quiet and the samples carry it. The Filters drawer is the weak spot: a long column of facets, and the OpenType features hide behind an expander as raw tags (`liga`, `smcp`, `ss01`) — developer data in a designer's tool. The facet chips themselves are tidy and consistent.
+**Why:** DESIGN item 8 "Left" (human feature names in the drawer). Visible in the drawer: "Kerning", "Small capitals", "Standard ligatures" sit on the surface; no tag is shown.
+**What changed:** `featureName` / `isCommonFeature` in `search/chips.ts` (28 registered tags in `chips.featureNames`, en + de; `ssNN` → "Stylistic set N", `cvNN` → "Character variant N"; unknown tags stay raw). The drawer's Features group lists named features directly; sets, variants and unknown tags fold behind "Stylistic sets and variants". The raw tag is the chip's tooltip. The same names show in the active chips on the bar.
+**Ticked:** none (item 8 stays open: the off/on Features sample).
+**Shots:** `.harness/redesign/shots/53` (before), `53-after`; tall drawer in `apps/desktop/.harness/redesign/shots/53-tall` (filters is taller than 900 px, so the standard scene never shows Features).
+**Verified:** typecheck, `lint:js`, Vitest, Playwright 273 passed / 16 skipped (`e2e-53.log`).
+**Follow-ups:** a `filters` scene scrolled to Features (or a taller viewport); Features tab off/on sample; item 6 `expanded-family` scene still on a one-style row; the "Stylistic sets and variants" expander is styled differently from a facet label.
+**Dependencies:** none.
