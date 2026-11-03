@@ -484,7 +484,6 @@ const noResults = computed(
   position: relative;
   height: 384px;
   overflow-y: auto;
-  border: 1px solid var(--fm-border);
   border-radius: var(--fm-radius-sm);
 }
 .viewport:focus-visible {
@@ -506,7 +505,7 @@ const noResults = computed(
   align-items: flex-end;
   gap: 6px;
   width: 100%;
-  padding: 0 8px 6px;
+  padding: 8px 8px 6px;
   font-weight: 600;
 }
 .cell {
@@ -514,10 +513,16 @@ const noResults = computed(
   flex: none;
   align-items: center;
   justify-content: center;
-  border-inline-end: 1px solid var(--fm-border);
-  border-bottom: 1px solid var(--fm-border);
+  box-sizing: border-box;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: var(--fm-radius-sm);
   font-size: 24px;
   cursor: default;
+  transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+.cell:hover {
+  background-color: var(--fm-surface-2);
 }
 .cell[aria-selected='true'] {
   background: var(--fm-accent);

@@ -184,3 +184,12 @@ Rating stars and the Favorite heart became `UiIcon`s and the favorite turned acc
 **Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-26.log`). Shots `26/` (before), `26-after/`.
 **Follow-ups:** live per-feature preview in Features; Glyphs clipped column; underline-style note fields; date/number/datalist natives; hover scene.
 **Dependencies:** none.
+
+## Iteration 27 — 2026-11-03 — Inspector Glyphs: no grid lines, hover tint, sixth column
+**Critique (before):** The Glyphs grid is a boxed table: a border round the pane and a hairline on every cell, so the characters look like spreadsheet data, and the last column touches the pane edge. Heading "Basic Latin 95" sits tight on the top border. Good: the Coverage lists below are calm and aligned.
+**Why:** Item 8's last open Glyphs point (clipped column) and item 26's hover audit; the grid is the loudest chrome left in the inspector.
+**What changed:** `InspectorGlyphs`: removed the pane border and per-cell borders; cells get a transparent 2 px border, `--fm-radius-sm`, and a `--fm-surface-2` hover tint (token motion); heading gets top padding. The grid now fits six columns, none clipped.
+**Backlog:** item 8 Glyphs part done; item 8 not ticked (Features live preview remains).
+**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-27.log`). Shots `27/` (before), `27-after/`.
+**Follow-ups:** hover scene in `screens.spec.ts` (still missing); underline-style note fields; date/number/datalist natives; live per-feature preview in Features.
+**Dependencies:** none.
