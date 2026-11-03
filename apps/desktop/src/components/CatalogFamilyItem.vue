@@ -18,6 +18,7 @@ import { catalogFamily, useFaceLoader } from '../preview/faceLoader';
 import { useCatalogsStore } from '../stores/catalogs';
 import type { PreviewSettings } from '../stores/preview';
 import UiBadge from './ui/UiBadge.vue';
+import UiButton from './ui/UiButton.vue';
 
 const props = defineProps<{
   catalog: CatalogId;
@@ -107,26 +108,23 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
         >{{ t('catalogs.updates.badge') }}</UiBadge
       >
       <span v-if="state === 'failed'" class="note">{{ t('list.previewUnavailable') }}</span>
-      <button
-        type="button"
-        class="get install"
+      <UiButton
+        class="install"
         data-testid="catalog-install-open"
         :aria-label="t('catalogs.install.actionLabel', { name: family.name })"
         :disabled="catalogs.downloading"
         @click="catalogs.askInstall(family)"
       >
         {{ t('catalogs.install.action') }}
-      </button>
-      <button
-        type="button"
-        class="get"
+      </UiButton>
+      <UiButton
         data-testid="catalog-download-open"
         :aria-label="t('catalogs.download.actionLabel', { name: family.name })"
         :disabled="catalogs.downloading"
         @click="catalogs.askDownload(family)"
       >
         {{ t('catalogs.download.action') }}
-      </button>
+      </UiButton>
     </span>
     <template v-if="mode === 'waterfall'">
       <span v-for="size in WATERFALL_SIZES" :key="size" class="line">
@@ -186,20 +184,8 @@ const update = computed(() => catalogs.updateOf(props.catalog, props.family.name
 .note {
   color: var(--fm-warning);
 }
-.get {
-  flex: none;
-  padding: 1px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: var(--fm-fg);
-  font: inherit;
-}
-.get.install {
+.install {
   margin-inline-start: auto;
-}
-.get:disabled {
-  color: var(--fm-muted);
 }
 .line {
   display: flex;

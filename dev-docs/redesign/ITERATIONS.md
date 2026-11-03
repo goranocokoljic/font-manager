@@ -470,3 +470,13 @@ Four iterations since review 70 (71–74); all four graded.
 **Follow-ups:** on a narrow card the Variable badge now drops; a quiet variable glyph that always fits would keep the cue.
 **Verified:** typecheck, lint:js, Vitest, Playwright 273 passed / 16 skipped (`e2e-77.log`).
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 78 — 2026-11-03 — Catalog rows: Install and Download… become quiet buttons
+**Critique (before):** `list` is unchanged. In the Catalog, every row carried two bordered boxes ("Install", "Download…") that shout louder than the specimen under them. Good: the specimen line and the quiet badges already read like the rest of the app.
+**Why:** Backlog 26 / review 75 "Next five" (Catalog row buttons). Chosen over the Compare segmented control because it is one clear visible leftover; the list shot cannot move without a bigger redesign.
+**What changed:** `CatalogFamilyItem` uses `UiButton` for both actions; local `.get` button CSS deleted. Test: the "outlined at 3:1" check no longer asserts the row's Download… border (panel controls keep theirs).
+**Backlog:** item 26 (Catalog row buttons done; dialog buttons and Axes chips remain).
+**Shots:** `.harness/redesign/shots/78b/` (`catalog`; 78 is mixed before/after).
+**Follow-ups:** Install is not accented as the primary action; dialogs (CatalogDownload/Install, LocalApiSettings) and Axes instance chips still bordered.
+**Verified:** typecheck, lint:js, Vitest catalog files, Playwright 273 passed / 16 skipped (`e2e-78.log`).
+**Dependencies:** none. **Reverted:** no.
