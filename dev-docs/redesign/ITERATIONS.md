@@ -9,7 +9,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
-- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; iteration 33: Problems / Project sets / Online catalogs fold with a chevron, remembered; section icons, Sources/Collections folding, Problems dedupe remain)
 - [ ] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; `?face=` list selection remains)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
@@ -230,4 +230,15 @@ What changed:
 Backlog: item 12 ticked (core). Shots: `.harness/redesign/ql-dbg.png` (dark, by eye); no scene yet.
 Verified: typecheck, lint:js, Vitest 910, Playwright 273 passed (`.harness/redesign/e2e-32.log`).
 Follow-ups: add a `quicklook` scene to `shots.mjs`; glyph grid and variable-axis sliders in the sheet; sample text/size do not follow per-view settings; the keyboard-model test breaks if it moves the cursor and returns (activation `A` then misses) — worth a look.
+Dependencies: none.
+
+## Iteration 33 — 2026-11-03 — Sidebar groups fold
+Critique (before): the `list` shot is calm, but the sidebar is six headings of the same weight with only Tags able to fold; Problems alone lists five rows nobody needs every day. Worst: three headings look identical yet behave differently. Good: hairlines, counts at the edge.
+Why: item 5 rest (collapsible sections). Feels different in the first minute: a chevron on each group; folding Problems gives the sidebar 130 px back.
+What changed:
+- `ui/UiFoldButton.vue` (new) + `components/useFolded.ts` (remembered in localStorage `fm.sidebar.folded.v1`, a view preference).
+- Problems, Project sets, Online catalogs use them. Problems keeps its link and test id; the chevron is its own button.
+Backlog: item 5 partly. Shots: `.harness/redesign/shots/33-after/` (`list-dark` by eye).
+Verified: typecheck, lint:js, Vitest 910, Playwright 271 passed + 2 timeouts that pass alone (`.harness/redesign/e2e-33.log`).
+Follow-ups: Tags still has its own fold markup (move to `UiFoldButton`); Sources and Collections do not fold; no section icons; Problems heading still doubles the Problems view link.
 Dependencies: none.

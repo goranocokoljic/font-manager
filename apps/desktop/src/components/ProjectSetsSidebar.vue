@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import UiFoldButton from './ui/UiFoldButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
+import { useFolded } from './useFolded';
 // The Project sets group of the sidebar: one button per set. Pressing a set makes
 // it the current set ("Deactivate everything not in the current set" keeps it
 // active); pressing it again clears it. The parent view loads the sets store.
@@ -9,12 +11,17 @@ import { errorMessage, formatNumber, t } from '../i18n';
 import { useSetsStore } from '../stores/sets';
 
 const store = useSetsStore();
+const { folded, toggle } = useFolded('sets');
 </script>
 
 <template>
   <section class="sets" aria-labelledby="fm-sets-heading">
     <header class="head">
-      <h2 id="fm-sets-heading" class="heading">{{ t('sets.heading') }}</h2>
+      <h2 id="fm-sets-heading" class="heading">
+        <UiFoldButton :folded="folded" controls="fm-sets-body" @toggle="toggle">
+          {{ t('sets.heading') }}
+        </UiFoldButton>
+      </h2>
       <UiIconButton
         icon="import"
         :label="t('sets.import')"
@@ -22,57 +29,59 @@ const store = useSetsStore();
         @click="store.importSet()"
       />
     </header>
-    <div v-if="store.imported" class="imported" role="status" aria-labelledby="fm-sets-imported">
-      <p id="fm-sets-imported" class="imported-line">
-        <span>{{
-          store.imported.missing.length
-            ? t('sets.imported', { name: store.imported.set.name })
-            : t('sets.importedAll', { name: store.imported.set.name })
-        }}</span>
-        <button
-          type="button"
-          class="action"
-          :aria-label="t('sets.dismissLabel')"
-          @click="store.dismissImport()"
-        >
-          {{ t('common.close') }}
-        </button>
-      </p>
-      <template v-if="store.imported.missing.length">
-        <p id="fm-sets-missing" class="missing-heading">
-          {{ t('sets.missing', { count: store.imported.missing.length }) }}
+    <div v-show="!folded" id="fm-sets-body">
+      <div v-if="store.imported" class="imported" role="status" aria-labelledby="fm-sets-imported">
+        <p id="fm-sets-imported" class="imported-line">
+          <span>{{
+            store.imported.missing.length
+              ? t('sets.imported', { name: store.imported.set.name })
+              : t('sets.importedAll', { name: store.imported.set.name })
+          }}</span>
+          <button
+            type="button"
+            class="action"
+            :aria-label="t('sets.dismissLabel')"
+            @click="store.dismissImport()"
+          >
+            {{ t('common.close') }}
+          </button>
         </p>
-        <ul class="missing" aria-labelledby="fm-sets-missing">
-          <li v-for="(m, i) in store.imported.missing" :key="i">{{ m.family }} {{ m.style }}</li>
-        </ul>
-      </template>
+        <template v-if="store.imported.missing.length">
+          <p id="fm-sets-missing" class="missing-heading">
+            {{ t('sets.missing', { count: store.imported.missing.length }) }}
+          </p>
+          <ul class="missing" aria-labelledby="fm-sets-missing">
+            <li v-for="(m, i) in store.imported.missing" :key="i">{{ m.family }} {{ m.style }}</li>
+          </ul>
+        </template>
+      </div>
+      <p v-if="store.error" class="note" role="alert">{{ errorMessage(store.error) }}</p>
+      <ul v-else-if="store.sets.length" class="list" aria-labelledby="fm-sets-heading">
+        <li v-for="set in store.sets" :key="set.id" class="item">
+          <button
+            type="button"
+            class="set"
+            :aria-pressed="store.current?.id === set.id"
+            :data-set="set.id"
+            :title="
+              store.current?.id === set.id ? t('sets.currentTitle') : t('sets.makeCurrentTitle')
+            "
+            @click="store.pick(set.id)"
+          >
+            <span class="name">{{ set.name }}</span>
+            <span class="count">{{ formatNumber(set.faces.length) }}</span>
+          </button>
+          <UiIconButton
+            class="export"
+            icon="export"
+            :label="t('sets.exportLabel', { name: set.name })"
+            :title="t('sets.exportTitle')"
+            @click="store.exportSet(set.id)"
+          />
+        </li>
+      </ul>
+      <p v-else class="note">{{ t('sets.empty') }}</p>
     </div>
-    <p v-if="store.error" class="note" role="alert">{{ errorMessage(store.error) }}</p>
-    <ul v-else-if="store.sets.length" class="list" aria-labelledby="fm-sets-heading">
-      <li v-for="set in store.sets" :key="set.id" class="item">
-        <button
-          type="button"
-          class="set"
-          :aria-pressed="store.current?.id === set.id"
-          :data-set="set.id"
-          :title="
-            store.current?.id === set.id ? t('sets.currentTitle') : t('sets.makeCurrentTitle')
-          "
-          @click="store.pick(set.id)"
-        >
-          <span class="name">{{ set.name }}</span>
-          <span class="count">{{ formatNumber(set.faces.length) }}</span>
-        </button>
-        <UiIconButton
-          class="export"
-          icon="export"
-          :label="t('sets.exportLabel', { name: set.name })"
-          :title="t('sets.exportTitle')"
-          @click="store.exportSet(set.id)"
-        />
-      </li>
-    </ul>
-    <p v-else class="note">{{ t('sets.empty') }}</p>
   </section>
 </template>
 

@@ -6,20 +6,36 @@ import { computed } from 'vue';
 import { RouterLink } from 'vue-router';
 import { t } from '../i18n';
 import { PROBLEM_GROUPS, useProblemsStore } from '../stores/problems';
+import UiFoldButton from './ui/UiFoldButton.vue';
+import { useFolded } from './useFolded';
 
 const store = useProblemsStore();
+const { folded, toggle } = useFolded('problems');
 const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 0));
 </script>
 
 <template>
   <section class="problems" aria-labelledby="fm-problems-heading">
     <h2 id="fm-problems-heading" class="heading">
+      <UiFoldButton
+        class="fold"
+        :folded="folded"
+        controls="fm-problems-list"
+        :aria-label="t('problems.title')"
+        @toggle="toggle"
+      />
       <RouterLink :to="{ name: 'problems' }" class="link" data-testid="sidebar-problems">
         <span class="name">{{ t('problems.title') }}</span>
         <span class="count">{{ store.total }}</span>
       </RouterLink>
     </h2>
-    <ul v-if="groups.length" class="list" aria-labelledby="fm-problems-heading">
+    <ul
+      v-if="groups.length"
+      v-show="!folded"
+      id="fm-problems-list"
+      class="list"
+      aria-labelledby="fm-problems-heading"
+    >
       <li v-for="g in groups" :key="g.id">
         <RouterLink
           :to="{ name: 'problems', query: { kind: g.id } }"
@@ -39,13 +55,21 @@ const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 
   padding: 8px;
 }
 .heading {
+  display: flex;
+  align-items: center;
   margin: 0;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   font-weight: 600;
 }
 .heading .link {
+  flex: 1;
   padding: 8px;
+  padding-inline-start: 4px;
+}
+.fold {
+  padding: 8px 0;
+  padding-inline-start: 8px;
 }
 .list {
   margin: 0;
