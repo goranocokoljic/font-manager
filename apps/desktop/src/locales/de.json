@@ -185,7 +185,7 @@
   },
   "quickLook": {
     "title": "Übersicht: {name}",
-    "hint": "Leertaste oder Escape schließt die Übersicht."
+    "hint": "← → wechseln die Schrift · Leertaste oder Escape schließt"
   },
   "preview": {
     "settings": "Vorschau-Einstellungen",

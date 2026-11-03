@@ -6,12 +6,14 @@
 // A modal dialog: the focus starts on Close and stays in the sheet, plain keys do
 // not reach the list's shortcuts, and Space, Escape or Close return the focus to
 // where it was (the list row).
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import type { FaceSummary } from '../api/types';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { FaceId, FaceSummary } from '../api/types';
 import { t } from '../i18n';
+import UiIconButton from './ui/UiIconButton.vue';
 import { sheetReturnTarget } from '../keyboard/returnFocus';
 import { useFaceLoader } from '../preview/faceLoader';
-import { fontNameSample, sampleText } from '../preview/sampleText';
+import { ALPHABET, LOREM, NUMERALS, fontNameSample, sampleText } from '../preview/sampleText';
+import { useFontListStore } from '../stores/fontList';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useQuickLookStore } from '../stores/quickLook';
 
@@ -19,19 +21,33 @@ const props = defineProps<{ face: FaceSummary }>();
 
 const quickLook = useQuickLookStore();
 const preview = usePreviewStore();
+const fontList = useFontListStore();
 const loader = useFaceLoader();
 
 const dialog = ref<HTMLElement | null>(null);
-const closeButton = ref<HTMLButtonElement | null>(null);
+const closeButton = ref<InstanceType<typeof UiIconButton> | null>(null);
+const focusClose = () => (closeButton.value?.$el as HTMLElement | undefined)?.focus();
 const family = ref<string | null>(null);
 let returnFocus: HTMLElement | null = null;
-const held = props.face.id;
+let held: FaceId | null = null;
 
-loader.acquire(held).then(
-  (name) => {
-    family.value = name;
+// The face changes while the sheet stays open (arrow keys): load the new one, then
+// let the old one go, so the specimen never falls back to a system font.
+watch(
+  () => props.face.id,
+  (id) => {
+    const previous = held;
+    held = id;
+    loader.acquire(id).then(
+      (name) => {
+        if (held !== id) return;
+        family.value = name;
+        if (previous !== null && previous !== id) loader.release(previous);
+      },
+      () => undefined,
+    );
   },
-  () => undefined,
+  { immediate: true },
 );
 
 const name = computed(() => fontNameSample(props.face));
@@ -41,20 +57,32 @@ const text = computed(() =>
 const font = computed(() =>
   family.value ? `"${family.value}", var(--fm-preview-fallback, system-ui), sans-serif` : undefined,
 );
+const alphabet = `${ALPHABET}  ${NUMERALS}`;
+const SIZES = [12, 14, 18, 24, 36];
+
+// The list cursor follows the arrows; the sheet shows whatever face it lands on.
+watch(
+  () => fontList.cursorFace,
+  (f) => {
+    if (f && f.id !== props.face.id) quickLook.open(f);
+  },
+);
 
 onMounted(async () => {
   returnFocus = sheetReturnTarget();
   document.addEventListener('focusin', onFocusIn);
   await nextTick();
-  closeButton.value?.focus();
+  focusClose();
 });
 onBeforeUnmount(() => {
   document.removeEventListener('focusin', onFocusIn);
-  loader.release(held);
+  if (held !== null) loader.release(held);
   if (returnFocus?.isConnected) returnFocus.focus();
 });
 
-/** Space and Escape close; Tab stays on Close; plain keys stay out of the list's shortcuts. */
+const STEP: Record<string, number> = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+
+/** Space and Escape close; arrows move to the next or previous font; Tab stays on Close; plain keys stay out of the list's shortcuts. */
 function onKeyDown(e: KeyboardEvent): void {
   const space = e.key === ' ' && e.target === dialog.value;
   if (e.key === 'Escape' || space) {
@@ -63,10 +91,17 @@ function onKeyDown(e: KeyboardEvent): void {
     quickLook.close();
     return;
   }
+  const step = STEP[e.key];
+  if (step && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    e.stopPropagation();
+    fontList.moveBy(step);
+    return;
+  }
   if (!e.ctrlKey && !e.metaKey) e.stopPropagation();
   if (e.key === 'Tab') {
     e.preventDefault();
-    closeButton.value?.focus();
+    focusClose();
   }
 }
 
@@ -75,7 +110,7 @@ function onFocusIn(e: FocusEvent): void {
   const target = e.target;
   if (!dialog.value || !(target instanceof Element) || dialog.value.contains(target)) return;
   if (target.closest('[role="dialog"]')) return;
-  closeButton.value?.focus();
+  focusClose();
 }
 </script>
 
@@ -93,12 +128,28 @@ function onFocusIn(e: FocusEvent): void {
       @keydown="onKeyDown"
     >
       <header class="head">
-        <h2 id="fm-quick-look-title">{{ t('quickLook.title', { name }) }}</h2>
-        <button ref="closeButton" type="button" @click="quickLook.close">
-          {{ t('common.close') }}
-        </button>
+        <div class="title">
+          <h2 id="fm-quick-look-title">{{ t('quickLook.title', { name }) }}</h2>
+          <span class="meta">{{ face.style }}</span>
+        </div>
+        <UiIconButton
+          ref="closeButton"
+          icon="close"
+          :label="t('common.close')"
+          @click="quickLook.close"
+        />
       </header>
-      <p class="sample" dir="auto" :style="{ fontFamily: font }">{{ text }}</p>
+      <div class="body" :style="{ fontFamily: font }">
+        <p class="sample" dir="auto">{{ text }}</p>
+        <p class="alphabet" dir="auto">{{ alphabet }}</p>
+        <ul class="ladder">
+          <li v-for="size in SIZES" :key="size" dir="auto">
+            <span class="size" aria-hidden="true">{{ size }}</span>
+            <span class="line" :style="{ fontSize: size + 'px' }">{{ name }}</span>
+          </li>
+        </ul>
+        <p class="paragraph" dir="auto">{{ LOREM }}</p>
+      </div>
       <p id="fm-quick-look-hint" class="hint">{{ t('quickLook.hint') }}</p>
     </div>
   </div>
@@ -109,24 +160,18 @@ function onFocusIn(e: FocusEvent): void {
   position: fixed;
   inset: 0;
   z-index: var(--fm-z-popover);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
   background: var(--fm-scrim);
 }
 .sheet {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  width: min(1100px, 96vw);
-  max-height: 90vh;
-  padding: 16px;
-  border: 1px solid var(--fm-border);
-  border-top: 0;
-  border-radius: 0 0 8px 8px;
+  gap: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  padding: 16px 48px 12px;
   background-color: var(--fm-bg);
   color: var(--fm-fg);
-  box-shadow: var(--fm-shadow-2);
   overflow: auto;
 }
 .sheet:focus {
@@ -138,15 +183,73 @@ function onFocusIn(e: FocusEvent): void {
   justify-content: space-between;
   gap: 12px;
 }
+.title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
 h2 {
   margin: 0;
-  font-size: var(--fm-text-lg);
+  font-size: var(--fm-text-md);
+  font-weight: 500;
+}
+.meta {
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}
+.body {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 24px;
 }
 .sample {
   margin: 0;
-  font-size: 96px;
-  line-height: 1.15;
+  font-size: clamp(48px, 7vw, 104px);
+  line-height: 1.1;
   overflow-wrap: anywhere;
+}
+.alphabet {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.3;
+  color: var(--fm-muted);
+  overflow-wrap: anywhere;
+}
+.ladder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 16px 0;
+  border-block: 1px solid var(--fm-border);
+  list-style: none;
+}
+.ladder li {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+.size {
+  flex: none;
+  width: 24px;
+  color: var(--fm-muted);
+  font-family: var(--fm-font-ui, inherit);
+  font-size: var(--fm-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+.line {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.paragraph {
+  max-width: 64ch;
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
 }
 .hint {
   margin: 0;
@@ -155,13 +258,12 @@ h2 {
 }
 @media (prefers-reduced-motion: no-preference) {
   .sheet {
-    animation: rise 150ms ease-out;
+    animation: rise var(--fm-motion-panel, 200ms) var(--fm-ease);
   }
 }
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(-4px);
   }
 }
 </style>

@@ -579,7 +579,7 @@ function openFace(face: FaceId): void {
       <SimilarPanel :preview="preview.settingsFor(ALL_FONTS_VIEW)" @select="openFace" />
       <DocumentFontsPanel @select="openFace" />
       <CompareSheet v-if="compare.open" />
-      <QuickLookSheet v-if="quickLook.face" :key="quickLook.face.id" :face="quickLook.face" />
+      <QuickLookSheet v-if="quickLook.face" :face="quickLook.face" />
       <TaggingPanel />
       <SmartRuleEditor />
     </template>

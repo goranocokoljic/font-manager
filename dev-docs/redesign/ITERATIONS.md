@@ -16,7 +16,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
-- [ ] 12 Quick Look, finished
+- [x] 12 Quick Look, finished (iteration 32: full-window specimen, size ladder, paragraph, arrows move between fonts; no glyph grid or per-view sample/size follow yet)
 - [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; toolbar toggle + more tooltips remain)
 - [ ] 14 Weight scrubbing
 - [ ] 15 Context presets in Layout
@@ -218,4 +218,16 @@ What changed:
 Backlog: item 13 mostly done (left: `/` already bound; tooltips with shortcuts on more controls).
 Shots: `.harness/redesign/shots/31/` (`shortcuts-*` checked by eye, both themes). Verified: typecheck, lint:js, Vitest 910, Playwright 272 passed / 16 skipped.
 Follow-ups: no collapsed-sidebar rail or toggle button in the toolbar (keyboard only); sheet is static text for list keys; no unit test for `ShortcutSheet` or J/K yet.
+Dependencies: none.
+
+## Iteration 32 — 2026-11-03 — Quick Look becomes a full-window specimen
+Critique (before): the `list` shot is calm and the rows read well, but Quick Look was a 1100 px card with one 96 px line and a Close text button: it hid the list and showed almost nothing new. Worst: no way to see the next font without closing it. Good: quiet chrome, hairlines.
+Why: backlog item 12, next after the keyboard model. Feels different in the first minute: Space fills the window with one specimen, and arrows flip through fonts.
+What changed:
+- `QuickLookSheet.vue`: full-window sheet on `--fm-bg`; hero sample up to 104 px, alphabet + numerals line, a 12–36 px size ladder (tabular size labels), a paragraph; close is a `UiIconButton`; the face loader swaps faces without a system-font flash.
+- Arrow keys (←↑ / →↓) move the list cursor; the sheet follows `fontList.cursorFace`. `HomeView` no longer remounts the sheet per face.
+- en + de hint; `a11y.spec` gets an arrows test.
+Backlog: item 12 ticked (core). Shots: `.harness/redesign/ql-dbg.png` (dark, by eye); no scene yet.
+Verified: typecheck, lint:js, Vitest 910, Playwright 273 passed (`.harness/redesign/e2e-32.log`).
+Follow-ups: add a `quicklook` scene to `shots.mjs`; glyph grid and variable-axis sliders in the sheet; sample text/size do not follow per-view settings; the keyboard-model test breaks if it moves the cursor and returns (activation `A` then misses) — worth a look.
 Dependencies: none.

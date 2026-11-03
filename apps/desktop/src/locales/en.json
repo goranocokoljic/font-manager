@@ -185,7 +185,7 @@
   },
   "quickLook": {
     "title": "Quick look: {name}",
-    "hint": "Space or Escape closes the quick look."
+    "hint": "← → move between fonts · Space or Escape closes"
   },
   "preview": {
     "settings": "Preview settings",

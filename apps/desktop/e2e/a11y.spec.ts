@@ -666,3 +666,19 @@ test('scan progress, activation changes and toasts are announced in live regions
   await expect(region).toHaveAttribute('aria-live', 'polite');
   await expect(region).toContainText(/Activated/);
 });
+
+test('Quick look: arrows move to the next font without closing the sheet', async ({ page }) => {
+  await open(page);
+  const tree = page.getByRole('tree', { name: 'Font list' });
+  await tree.focus();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Space');
+  const sheet = page.getByTestId('quick-look');
+  await expect(sheet).toBeVisible();
+  const before = await sheet.getByRole('heading').textContent();
+  await page.keyboard.press('ArrowDown');
+  await expect(sheet.getByRole('heading')).not.toHaveText(before!);
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('ArrowUp');
+  await expect(sheet.getByRole('heading')).toHaveText(before!);
+});
