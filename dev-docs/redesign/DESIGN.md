@@ -32,8 +32,9 @@ that is not a font is either neutral or gone.
 
 ## Principles (ranked — when two conflict, the higher one wins)
 
-1. **Fonts are the UI.** Specimens are the only thing allowed to be loud. Chrome is quiet,
-   neutral, low-contrast.
+1. **Fonts are the UI.** Specimens are the only thing allowed to be loud, and they read as
+   ink on paper: black type on a white specimen surface in the primary (light) theme. Chrome
+   is quiet, neutral, low-contrast.
 2. **Zero browser defaults.** No native `<select>`, checkbox, radio, range slider, button or
    scrollbar look anywhere. Every control is a designed component.
 3. **Keyboard-first, mouse-complete.** Everything reachable from the keyboard; everything
@@ -113,8 +114,13 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   motion durations, z-index. Components use tokens, never literal values.
 - **UI typeface:** one neutral sans with good small sizes, bundled (Inter or equivalent),
   never the system font. Tabular numerals for all counts. UI scale: 11 / 12 / 13 / 15 / 20 px.
-- **Theme:** dark by default on first launch; light equally finished. Three elevation levels
-  of surface, not more. Borders are hairlines at low alpha, not solid grey lines.
+- **Theme: paper first.** The default follows the system, and the light theme is the
+  primary one: type is judged as it will be read, black on paper. The light specimen
+  surface is paper white (not grey, not warm-tinted), specimens are near-black at full
+  contrast, and the chrome around them is the quiet thing. Dark is equally finished for
+  people who want it, never the showcase. Three elevation levels of surface, not more.
+  Borders are hairlines at low alpha, not solid grey lines. No iteration changes the
+  default theme.
 - **One accent colour,** used only for selection, active state, focus and the primary action.
   Nothing else is coloured. Licence / format / variable badges are monochrome glyphs.
   Status colours (`--fm-danger`, `--fm-warning`) mark problems only — a broken file, an
@@ -233,8 +239,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 4. **App shell (rest).** Toolbar, view switcher and status bar are done (iterations 7, 11).
    Left: sidebar and inspector collapsible with `[` `]`, widths and open state remembered.
    The toolbar sidebar toggle is done (iteration 39); it shows only on the All fonts toolbar,
-   not in Table-only or the Studio. Dark-first launch is **blocked (API)**: the default theme comes from the settings
-   `FmClient` returns (`theme: 'system'`); a separate API task must change the default.
+   not in Table-only or the Studio. The default theme stays `system` (owner's decision:
+   fonts are judged on paper, so light is the primary theme — see the design-system rules);
+   nothing left here is about the theme.
 5. **Sidebar redesign.** Sections with icons, counts right-aligned in tabular figures, smart
    collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
    actions as `UiIconButton`s in the section header, sections collapsible, collections as
