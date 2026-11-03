@@ -744,6 +744,7 @@
     },
     "seats": "Arbeitsplätze",
     "purchaseDate": "Kaufdatum",
+    "datePlaceholder": "JJJJ-MM-TT",
     "receipt": "Beleg",
     "receiptLabel": "Beleg",
     "none": "Keiner",
@@ -1629,6 +1630,8 @@
     "denied": "Abgelehnt. Es wurde nichts geändert."
   },
   "ui": {
+    "decrease": "Verringern",
+    "increase": "Erhöhen",
     "select": {
       "search": "Tippen zum Filtern",
       "noMatches": "Keine Treffer"

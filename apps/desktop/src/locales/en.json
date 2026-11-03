@@ -744,6 +744,7 @@
     },
     "seats": "Seats",
     "purchaseDate": "Purchase date",
+    "datePlaceholder": "YYYY-MM-DD",
     "receipt": "Receipt",
     "receiptLabel": "receipt",
     "none": "None",
@@ -1629,6 +1630,8 @@
     "denied": "Denied. Nothing was changed."
   },
   "ui": {
+    "decrease": "Decrease",
+    "increase": "Increase",
     "select": {
       "search": "Type to filter",
       "noMatches": "No matches"

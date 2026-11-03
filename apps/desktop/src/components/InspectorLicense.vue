@@ -9,6 +9,7 @@ import { errorMessage, t } from '../i18n';
 import { useSelectionStore } from '../stores/selection';
 import CopyValue from './CopyValue.vue';
 import UiChevron from './ui/UiChevron.vue';
+import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const selection = useSelectionStore();
@@ -116,21 +117,21 @@ function clearAll(): void {
           <label for="fm-license-seats">{{ t('license.seats') }}</label>
         </dt>
         <dd>
-          <input
-            id="fm-license-seats"
-            v-model.number="seats"
-            class="field"
-            type="number"
-            min="0"
-            step="1"
-            inputmode="numeric"
-          />
+          <UiNumberField id="fm-license-seats" v-model="seats" :min="0" />
         </dd>
         <dt>
           <label for="fm-license-date">{{ t('license.purchaseDate') }}</label>
         </dt>
         <dd>
-          <input id="fm-license-date" v-model="date" class="field" type="date" />
+          <input
+            id="fm-license-date"
+            v-model="date"
+            class="field"
+            type="text"
+            inputmode="numeric"
+            autocomplete="off"
+            :placeholder="t('license.datePlaceholder')"
+          />
         </dd>
         <dt id="fm-license-receipt">{{ t('license.receipt') }}</dt>
         <dd>

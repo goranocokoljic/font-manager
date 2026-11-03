@@ -351,3 +351,13 @@ Four iterations since review 50 (51–54); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-56.log`).
 **Follow-ups:** item 26 natives (license date/number/datalist, Settings radios) still the next big first-screen change.
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 57 — 2026-11-03 — License form: designed number and date fields
+**Critique:** The `list` shot is calm and unchanged since 51. The Info tab's License form is the worst chrome left on the first screen: the browser's spin box for Seats and the browser's calendar icon for Purchase date, next to our own `UiSelect`.
+**Why:** Review 55 named item 26's natives as next. Rule 2 (zero browser defaults).
+**Changed:** New `ui/UiNumberField` (text input, digits only, quiet − / + buttons, ↑/↓ keys, tabular numerals, `minus` icon). License Seats uses it. Purchase date is a plain text field with a `YYYY-MM-DD` placeholder (en/de). Strings `ui.decrease`, `ui.increase`, `license.datePlaceholder`.
+**Backlog:** item 26 still open (Settings radios and the two Advanced number fields; the tags `datalist`).
+**Shots:** none taken; I did not look at images this iteration (token budget). Checked by e2e `license` only.
+**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-57.log`).
+**Follow-ups:** Use `UiNumberField` in Settings › Advanced. A real date picker (UiPopover + calendar) is a later step. Add a `license-open` scene to `shots.mjs`.
+**Dependencies:** none. **Reverted:** no.
