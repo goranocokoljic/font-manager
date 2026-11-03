@@ -8,7 +8,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
-- [ ] 4 Dark by default + app shell (+ UiSegmentedControl)
+- [ ] 4 Dark by default + app shell (iteration 7: toolbar icons + UiSegmentedControl done; status bar, dark-first, collapsible panes remain)
 - [ ] 5 Sidebar redesign (+ UiIconButton)
 - [ ] 6 List rows
 - [ ] 7 Grid cards
@@ -81,3 +81,13 @@ Built `UiDrawer`; the facets moved into it, the bar shows `Filters · N` plus re
 **Alternative not taken:** an options popover; `UiPopover` teleports to body and would break every `controls.getByLabel(...)` scope.
 **Follow-ups:** open state is not remembered per view; the text field shows only a placeholder for non-custom samples (showing the resolved sample needs the store, not logic); `UiSlider`, `UiToggle` and `UiField` still wait for their visible use; presets menu lacks saved texts.
 **Dependencies:** none.
+
+## Iteration 7 — 2026-11-03 — Toolbar: icon view switcher, quiet icon buttons
+**Critique (before):** The top bar is a row of eight bordered text buttons (List, Table, Grid, Waterfall, Layout, Compact rows, Compare 0/4, Inspector); it was one wrap away from overflowing at 1440 px. The sidebar is still a list of small buttons (Rescan/Pause/Remove, New/New smart) and the status bar shows version strings. Good: one-row preview bar, the Filters button, Inter.
+**Why:** backlog item 4, lowest unfinished. The `list` shot changes at once: the toolbar loses ~400 px of text.
+**What changed:** new `ui/UiSegmentedControl`, `ui/UiIcon` and `ui/icons.ts` (16 px, 1.5 stroke line icons, one markup map). View modes use the segmented control; Compact rows, Compare (icon + count) and Inspector are quiet icon toggles. Accessible names and `aria-pressed` are unchanged; names double as tooltips.
+**Tests:** `compare.spec.ts` checks the button's accessible name, not its text (UI changed on purpose). Vitest and Playwright green (270 + 2 fixed; log `.harness/redesign/e2e-7.log`).
+**Backlog ticked:** 4 (partly).
+**Shots:** `.harness/redesign/shots/7` (before), `7b` (after, `list` only).
+**Follow-ups:** status bar still shows App/API/Platform strings (move to About); first launch dark; pane collapse shortcuts; the sidebar's inline buttons (item 5, `UiIconButton`); the Compact-rows icon needs a clearer shape; `UiIcon` could replace the Filters icon.
+**Dependencies:** none (hand-drawn Lucide-shaped paths, no package).

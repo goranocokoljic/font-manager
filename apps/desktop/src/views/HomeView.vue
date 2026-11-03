@@ -15,6 +15,8 @@ import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
+import UiIcon from '../components/ui/UiIcon.vue';
+import UiSegmentedControl from '../components/ui/UiSegmentedControl.vue';
 import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
@@ -93,6 +95,9 @@ watch(
 const mode = computed(() => views.modeFor(ALL_FONTS_VIEW));
 // The label of each is `home.modes.<mode>`.
 const MODES: readonly ViewMode[] = ['list', 'table', 'grid', 'waterfall', 'layout'];
+const modeOptions = computed(() =>
+  MODES.map((m) => ({ value: m, label: t(`home.modes.${m}`), icon: m })),
+);
 
 // The layout mode sets the selected face (else the list cursor's, else the first
 // family's) in the picked layout file, with the editor's unsaved changes.
@@ -473,18 +478,12 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
               t('home.families', { count: search.total })
             }}</template>
           </p>
-          <div class="modes" role="group" :aria-label="t('home.viewMode')">
-            <button
-              v-for="m in MODES"
-              :key="m"
-              type="button"
-              class="toggle"
-              :aria-pressed="mode === m"
-              @click="views.setMode(ALL_FONTS_VIEW, m)"
-            >
-              {{ t(`home.modes.${m}`) }}
-            </button>
-          </div>
+          <UiSegmentedControl
+            :model-value="mode"
+            :options="modeOptions"
+            :label="t('home.viewMode')"
+            @update:model-value="views.setMode(ALL_FONTS_VIEW, $event)"
+          />
           <TableColumnsMenu v-if="mode === 'table'" :view="ALL_FONTS_VIEW" />
           <label v-if="mode === 'layout'" class="preset">
             {{ t('home.preset') }}
@@ -497,32 +496,36 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
           <!-- After the controls of the view mode, so Tab from the modes reaches those first. -->
           <button
             type="button"
-            class="toggle"
+            class="toggle icon"
+            :aria-label="t('home.compactRows')"
             :aria-pressed="settings.density === 'compact'"
             :title="t('home.densityTitle', { density: densityLabel })"
             @click="settings.setDensity(settings.density === 'compact' ? 'comfortable' : 'compact')"
           >
-            {{ t('home.compactRows') }}
+            <UiIcon name="density" />
           </button>
           <button
             type="button"
-            class="toggle"
+            class="toggle icon"
+            :aria-label="t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS })"
             :disabled="!compare.canOpen"
             :title="t('home.compareTitle', { chord: formatChord(compareChord) })"
             @click="compare.openSheet"
           >
-            {{ t('home.compareButton', { pinned: compare.pins.length, max: MAX_PINS }) }}
+            <UiIcon name="compare" />
+            <span class="pins">{{ compare.pins.length }}</span>
           </button>
           <button
             type="button"
-            class="toggle"
+            class="toggle icon"
+            :aria-label="t('home.inspector')"
             aria-controls="fm-inspector"
             aria-keyshortcuts="Control+I Meta+I"
             :aria-pressed="layout.inspectorVisible"
             :title="t('home.inspectorTitle')"
             @click="layout.toggleInspector"
           >
-            {{ t('home.inspector') }}
+            <UiIcon name="inspector" />
           </button>
         </header>
         <FilterChips />
@@ -676,9 +679,25 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
   margin-inline-start: auto;
   padding: 2px 8px;
 }
-.modes {
-  display: flex;
+.toggle.icon {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
+  height: 28px;
+  padding: 0 6px;
+  border-color: transparent;
+  color: var(--fm-muted);
+}
+.toggle.icon:hover:not(:disabled) {
+  color: var(--fm-fg);
+}
+.toggle.icon[aria-pressed='true'] {
+  border-color: transparent;
+  background-color: var(--fm-surface);
+}
+.pins {
+  font-size: var(--fm-text-xs);
+  font-variant-numeric: tabular-nums;
 }
 .preset {
   display: flex;

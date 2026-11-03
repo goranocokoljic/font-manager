@@ -52,13 +52,13 @@ test('C and the palette pin up to four fonts; a fifth is refused; a pin can be r
   await page.keyboard.press('Enter');
   await expect(toast(page)).toContainText('Sample 1');
   await expect(toast(page)).toContainText('(4 of 4)');
-  await expect(compareButton(page)).toHaveText('Compare 4/4');
+  await expect(compareButton(page)).toHaveAccessibleName('Compare 4/4');
 
   // The fifth is refused with a message.
   await tree.getByRole('treeitem').nth(4).click();
   await page.keyboard.press('c');
   await expect(toast(page)).toContainText('Compare holds 4 fonts. Remove one to pin Sample 2');
-  await expect(compareButton(page)).toHaveText('Compare 4/4');
+  await expect(compareButton(page)).toHaveAccessibleName('Compare 4/4');
 
   // Remove one in the sheet; the fifth then fits.
   await compareButton(page).click();
@@ -161,7 +161,7 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
   }
   // C in the sheet does not pin the list's face behind it.
   await page.keyboard.press('c');
-  await expect(compareButton(page)).toHaveText('Compare 2/4');
+  await expect(compareButton(page)).toHaveAccessibleName('Compare 2/4');
 
   // A click on the sample text keeps the focus in the sheet: Tab stays inside, and
   // A does not activate the list's face behind the modal.
