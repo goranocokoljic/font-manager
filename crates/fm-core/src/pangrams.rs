@@ -213,12 +213,32 @@ mod tests {
                 "no pangram for script {script}"
             );
         }
-        for code in ["sr-Latn", "sr-Cyrl", "zh-Hans", "zh-Hant", "ja", "ko"] {
+        for code in [
+            "sr-Latn", "sr-Cyrl", "hr", "bs", "sl", "mk", "zh-Hans", "zh-Hant", "ja", "ko",
+        ] {
             assert!(all.contains_key(code), "{code} has no pangram");
         }
         // The pangrams the preview offered before this data existed.
         for code in ["en", "de", "fr", "es", "pl", "cs", "ru", "el", "he", "ja"] {
             assert!(all.contains_key(code), "{code} lost its pangram");
+        }
+    }
+
+    #[test]
+    fn every_preset_with_sample_glyphs_has_a_pangram() {
+        let all = by_code();
+        let with_glyphs: Vec<Charset> = charsets::load()
+            .expect("charsets")
+            .into_iter()
+            .filter(|c| c.sample_glyphs.is_some())
+            .collect();
+        assert!(with_glyphs.len() >= 30, "{}", with_glyphs.len());
+        for c in &with_glyphs {
+            assert!(
+                all.contains_key(&c.code),
+                "{} has sampleGlyphs but no pangram",
+                c.code
+            );
         }
     }
 
@@ -256,6 +276,11 @@ mod tests {
         assert_eq!(all["en"].kind, Kind::Pangram);
         assert_eq!(all["zh-Hans"].kind, Kind::Sample);
         assert_eq!(all["ko"].source, Source::Project);
+        // E42.10: only texts found on Wikipedia carry that source.
+        assert_eq!(all["hr"].source, Source::Wikipedia);
+        assert_eq!(all["sl"].source, Source::Wikipedia);
+        assert_eq!(all["bs"].source, Source::Project);
+        assert_eq!(all["mk"].source, Source::Project);
     }
 
     #[test]
@@ -268,6 +293,20 @@ mod tests {
             Some(by_code()["sr-Cyrl"].text.as_str())
         );
         assert_eq!(sr.name, "Serbian (Cyrillic)");
+        assert_eq!(sr.sample_glyphs.as_deref(), Some("ЂЈЉЊЋЏбђјљњћџ"));
+        // The glyph line comes from data/charsets, for every preset.
+        let charsets: BTreeMap<String, Charset> = charsets::load()
+            .expect("charsets")
+            .into_iter()
+            .map(|c| (c.code.clone(), c))
+            .collect();
+        for p in &presets {
+            assert_eq!(
+                p.sample_glyphs, charsets[&p.code].sample_glyphs,
+                "{}",
+                p.code
+            );
+        }
         // A preset without data has no pangram, not an empty one.
         let all = by_code();
         for p in &presets {

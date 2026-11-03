@@ -53,6 +53,12 @@
           "$ref": "#/$defs/chars",
           "description": "Characters seen in loanwords, names or older spelling. Reported, never required. No overlap with base."
         },
+        "sampleGlyphs": {
+          "description": "The language's distinctive letters, written together without spaces (Šđčćž for sr-Latn), for a short glyph line next to the pangram. 1–32 characters, none twice, each in base or auxiliary. A preset with sampleGlyphs has a pangram in data/pangrams.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\S+$"
+        },
         "source": {
           "description": "Where the base set comes from: hyperglot, google-fonts (Google Fonts language data), or project (curated here; see README).",
           "enum": ["hyperglot", "google-fonts", "project"]
