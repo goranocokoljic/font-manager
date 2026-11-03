@@ -533,6 +533,8 @@
       "keep": "Keep existing",
       "replace": "Replace for this session"
     },
+    "about": { "title": "About" },
+    "technical": { "title": "Technical details" },
     "names": {
       "title": "Names",
       "family": "Family",

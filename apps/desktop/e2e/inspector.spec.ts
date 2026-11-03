@@ -7,6 +7,7 @@ test('the Info tab shows the selected face with every field', async ({ page }) =
   await expect(page.getByRole('tab', { name: 'Info' })).toHaveAttribute('aria-selected', 'true');
   const panel = info(page);
   await expect(panel.getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Technical details' }).click();
   for (const section of [
     'Names',
     'File',
@@ -35,6 +36,7 @@ test('names and paths copy on click', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto('/#/?face=1');
   const panel = info(page);
+  await panel.getByRole('button', { name: 'Technical details' }).click();
   for (const [label, value] of [
     ['PostScript name', 'Inter-Regular'],
     ['path', '/Users/demo/Fonts/Inter/Inter[wght].ttf'],

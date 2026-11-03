@@ -12,6 +12,7 @@ import { useSelectionStore } from '../stores/selection';
 import { useSimilarStore } from '../stores/similar';
 import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
+import UiChevron from './ui/UiChevron.vue';
 import HealthBadge from './HealthBadge.vue';
 import InspectorLicense from './InspectorLicense.vue';
 import InspectorPalettes from './InspectorPalettes.vue';
@@ -21,6 +22,8 @@ const tags = useTagsStore();
 const similar = useSimilarStore();
 const similarChord = chordOf(ACTIONS.similar)!;
 const d = computed(() => selection.detail);
+// Names, file, style, metrics and characters are raw data: folded by default.
+const technical = ref(false);
 
 // Tag names to complete from: the library's tags the face does not have yet.
 const suggestions = computed(() => {
@@ -188,119 +191,15 @@ function clashText(c: Conflict): string {
 
       <InspectorPalettes />
 
-      <section aria-labelledby="fm-info-names">
-        <h3 id="fm-info-names">{{ t('info.names.title') }}</h3>
-        <dl>
-          <dt>{{ t('info.names.family') }}</dt>
-          <dd><CopyValue :label="t('info.copyLabels.family')" :value="d.face.familyName" /></dd>
-          <dt>{{ t('info.names.style') }}</dt>
-          <dd><CopyValue :label="t('info.copyLabels.style')" :value="d.face.style" /></dd>
-          <dt>{{ t('info.names.legacyFamily') }}</dt>
-          <dd>
-            <CopyValue
-              v-if="d.legacyFamily"
-              :label="t('info.copyLabels.legacyFamily')"
-              :value="d.legacyFamily"
-            />
-            <template v-else>—</template>
-          </dd>
-          <dt>{{ t('info.names.legacyStyle') }}</dt>
-          <dd>
-            <CopyValue
-              v-if="d.legacyStyle"
-              :label="t('info.copyLabels.legacyStyle')"
-              :value="d.legacyStyle"
-            />
-            <template v-else>—</template>
-          </dd>
-          <dt>{{ t('info.names.postscript') }}</dt>
-          <dd>
-            <CopyValue :label="t('info.copyLabels.postscript')" :value="d.face.postscriptName" />
-          </dd>
-          <dt>{{ t('info.names.version') }}</dt>
-          <dd>{{ show(d.version) }}</dd>
-          <dt>{{ t('info.names.foundry') }}</dt>
-          <dd>{{ show(d.foundry) }}</dd>
-          <dt>{{ t('info.names.vendorId') }}</dt>
-          <dd>{{ show(d.vendorId) }}</dd>
+      <section aria-labelledby="fm-info-about">
+        <h3 id="fm-info-about">{{ t('info.about.title') }}</h3>
+        <dl class="about">
           <dt>{{ t('info.names.designer') }}</dt>
           <dd>{{ show(d.designer) }}</dd>
-          <dt>{{ t('info.names.copyright') }}</dt>
-          <dd>{{ show(d.copyright) }}</dd>
-        </dl>
-      </section>
-
-      <section aria-labelledby="fm-info-file">
-        <h3 id="fm-info-file">{{ t('info.file.title') }}</h3>
-        <dl>
-          <dt>{{ t('info.file.path') }}</dt>
-          <dd><CopyValue :label="t('info.copyLabels.path')" :value="d.path" /></dd>
-          <dt>{{ t('info.file.format') }}</dt>
-          <dd>{{ t(`info.formats.${d.face.format}`) }}</dd>
-          <dt>{{ t('info.file.faceInFile') }}</dt>
-          <dd>{{ show(d.collectionIndex) }}</dd>
-          <dt>{{ t('info.file.size') }}</dt>
-          <dd>{{ t('info.file.bytes', { size: show(d.fileSize) }) }}</dd>
-          <dt>{{ t('info.file.hash') }}</dt>
-          <dd class="mono">{{ d.hash }}</dd>
-        </dl>
-      </section>
-
-      <section aria-labelledby="fm-info-style">
-        <h3 id="fm-info-style">{{ t('info.style.title') }}</h3>
-        <dl>
-          <dt>{{ t('info.style.weight') }}</dt>
-          <dd>{{ show(d.face.weight) }}</dd>
-          <dt>{{ t('info.style.width') }}</dt>
-          <dd>{{ show(d.face.width) }}</dd>
-          <dt>{{ t('info.style.slant') }}</dt>
-          <dd class="cap">{{ t(`info.slants.${d.face.slant}`) }}</dd>
-          <dt>{{ t('info.style.italicAngle') }}</dt>
-          <dd>{{ degrees(d.italicAngle) }}</dd>
-          <dt>{{ t('info.style.variable') }}</dt>
-          <dd>{{ d.face.isVariable ? t('info.style.yes') : t('info.style.no') }}</dd>
-          <dt>{{ t('info.style.axes') }}</dt>
-          <dd>
-            <ul v-if="d.axes.length" class="plain">
-              <li v-for="a in d.axes" :key="a.tag">
-                <span class="mono">{{ a.tag }}</span>
-                {{ axisText(a) }}
-              </li>
-            </ul>
-            <template v-else>—</template>
-          </dd>
-          <dt>{{ t('info.style.namedInstances') }}</dt>
-          <dd>{{ list(d.instances.map((i) => i.name)) }}</dd>
-        </dl>
-      </section>
-
-      <section aria-labelledby="fm-info-metrics">
-        <h3 id="fm-info-metrics">{{ t('info.metrics.title') }}</h3>
-        <dl>
-          <dt>{{ t('info.metrics.unitsPerEm') }}</dt>
-          <dd>{{ show(d.metrics.unitsPerEm) }}</dd>
-          <dt>{{ t('info.metrics.ascender') }}</dt>
-          <dd>{{ show(d.metrics.ascender) }}</dd>
-          <dt>{{ t('info.metrics.descender') }}</dt>
-          <dd>{{ show(d.metrics.descender) }}</dd>
-          <dt>{{ t('info.metrics.xHeight') }}</dt>
-          <dd>{{ show(d.metrics.xHeight) }}</dd>
-          <dt>{{ t('info.metrics.capHeight') }}</dt>
-          <dd>{{ show(d.metrics.capHeight) }}</dd>
-        </dl>
-      </section>
-
-      <section aria-labelledby="fm-info-layout">
-        <h3 id="fm-info-layout">{{ t('info.layout.title') }}</h3>
-        <dl>
-          <dt>{{ t('info.layout.codePoints') }}</dt>
-          <dd>{{ show(d.codePointCount) }}</dd>
-          <dt>{{ t('info.layout.scripts') }}</dt>
-          <dd class="mono">{{ list(d.scripts) }}</dd>
-          <dt>{{ t('info.layout.features') }}</dt>
-          <dd class="mono">
-            {{ list(d.features.map((f) => (f.name ? `${f.tag} (${f.name})` : f.tag))) }}
-          </dd>
+          <dt>{{ t('info.names.foundry') }}</dt>
+          <dd>{{ show(d.foundry) }}</dd>
+          <dt>{{ t('info.names.version') }}</dt>
+          <dd>{{ show(d.version) }}</dd>
         </dl>
       </section>
 
@@ -428,6 +327,133 @@ function clashText(c: Conflict): string {
           </dd>
         </dl>
       </section>
+
+      <div class="technical">
+        <button
+          type="button"
+          class="tech-toggle fm-directional"
+          aria-controls="fm-info-technical"
+          :aria-expanded="technical"
+          @click="technical = !technical"
+        >
+          <UiChevron :open="technical" />
+          {{ t('info.technical.title') }}
+        </button>
+        <div v-show="technical" id="fm-info-technical">
+          <section aria-labelledby="fm-info-names">
+            <h3 id="fm-info-names">{{ t('info.names.title') }}</h3>
+            <dl>
+              <dt>{{ t('info.names.family') }}</dt>
+              <dd><CopyValue :label="t('info.copyLabels.family')" :value="d.face.familyName" /></dd>
+              <dt>{{ t('info.names.style') }}</dt>
+              <dd><CopyValue :label="t('info.copyLabels.style')" :value="d.face.style" /></dd>
+              <dt>{{ t('info.names.legacyFamily') }}</dt>
+              <dd>
+                <CopyValue
+                  v-if="d.legacyFamily"
+                  :label="t('info.copyLabels.legacyFamily')"
+                  :value="d.legacyFamily"
+                />
+                <template v-else>—</template>
+              </dd>
+              <dt>{{ t('info.names.legacyStyle') }}</dt>
+              <dd>
+                <CopyValue
+                  v-if="d.legacyStyle"
+                  :label="t('info.copyLabels.legacyStyle')"
+                  :value="d.legacyStyle"
+                />
+                <template v-else>—</template>
+              </dd>
+              <dt>{{ t('info.names.postscript') }}</dt>
+              <dd>
+                <CopyValue
+                  :label="t('info.copyLabels.postscript')"
+                  :value="d.face.postscriptName"
+                />
+              </dd>
+              <dt>{{ t('info.names.vendorId') }}</dt>
+              <dd>{{ show(d.vendorId) }}</dd>
+              <dt>{{ t('info.names.copyright') }}</dt>
+              <dd>{{ show(d.copyright) }}</dd>
+            </dl>
+          </section>
+
+          <section aria-labelledby="fm-info-file">
+            <h3 id="fm-info-file">{{ t('info.file.title') }}</h3>
+            <dl>
+              <dt>{{ t('info.file.path') }}</dt>
+              <dd><CopyValue :label="t('info.copyLabels.path')" :value="d.path" /></dd>
+              <dt>{{ t('info.file.format') }}</dt>
+              <dd>{{ t(`info.formats.${d.face.format}`) }}</dd>
+              <dt>{{ t('info.file.faceInFile') }}</dt>
+              <dd>{{ show(d.collectionIndex) }}</dd>
+              <dt>{{ t('info.file.size') }}</dt>
+              <dd>{{ t('info.file.bytes', { size: show(d.fileSize) }) }}</dd>
+              <dt>{{ t('info.file.hash') }}</dt>
+              <dd class="mono">{{ d.hash }}</dd>
+            </dl>
+          </section>
+
+          <section aria-labelledby="fm-info-style">
+            <h3 id="fm-info-style">{{ t('info.style.title') }}</h3>
+            <dl>
+              <dt>{{ t('info.style.weight') }}</dt>
+              <dd>{{ show(d.face.weight) }}</dd>
+              <dt>{{ t('info.style.width') }}</dt>
+              <dd>{{ show(d.face.width) }}</dd>
+              <dt>{{ t('info.style.slant') }}</dt>
+              <dd class="cap">{{ t(`info.slants.${d.face.slant}`) }}</dd>
+              <dt>{{ t('info.style.italicAngle') }}</dt>
+              <dd>{{ degrees(d.italicAngle) }}</dd>
+              <dt>{{ t('info.style.variable') }}</dt>
+              <dd>{{ d.face.isVariable ? t('info.style.yes') : t('info.style.no') }}</dd>
+              <dt>{{ t('info.style.axes') }}</dt>
+              <dd>
+                <ul v-if="d.axes.length" class="plain">
+                  <li v-for="a in d.axes" :key="a.tag">
+                    <span class="mono">{{ a.tag }}</span>
+                    {{ axisText(a) }}
+                  </li>
+                </ul>
+                <template v-else>—</template>
+              </dd>
+              <dt>{{ t('info.style.namedInstances') }}</dt>
+              <dd>{{ list(d.instances.map((i) => i.name)) }}</dd>
+            </dl>
+          </section>
+
+          <section aria-labelledby="fm-info-metrics">
+            <h3 id="fm-info-metrics">{{ t('info.metrics.title') }}</h3>
+            <dl>
+              <dt>{{ t('info.metrics.unitsPerEm') }}</dt>
+              <dd>{{ show(d.metrics.unitsPerEm) }}</dd>
+              <dt>{{ t('info.metrics.ascender') }}</dt>
+              <dd>{{ show(d.metrics.ascender) }}</dd>
+              <dt>{{ t('info.metrics.descender') }}</dt>
+              <dd>{{ show(d.metrics.descender) }}</dd>
+              <dt>{{ t('info.metrics.xHeight') }}</dt>
+              <dd>{{ show(d.metrics.xHeight) }}</dd>
+              <dt>{{ t('info.metrics.capHeight') }}</dt>
+              <dd>{{ show(d.metrics.capHeight) }}</dd>
+            </dl>
+          </section>
+
+          <section aria-labelledby="fm-info-layout">
+            <h3 id="fm-info-layout">{{ t('info.layout.title') }}</h3>
+            <dl>
+              <dt>{{ t('info.layout.codePoints') }}</dt>
+              <dd>{{ show(d.codePointCount) }}</dd>
+              <dt>{{ t('info.layout.scripts') }}</dt>
+              <dd class="mono">{{ list(d.scripts) }}</dd>
+              <dt>{{ t('info.layout.features') }}</dt>
+              <dd class="mono">
+                {{ list(d.features.map((f) => (f.name ? `${f.tag} (${f.name})` : f.tag))) }}
+              </dd>
+            </dl>
+          </section>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -517,6 +543,29 @@ function clashText(c: Conflict): string {
   background-color: transparent;
   color: inherit;
   font: inherit;
+}
+.tech-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-block-start: 16px;
+  padding: 8px 0 0;
+  border: 0;
+  border-block-start: 1px solid var(--fm-border);
+  background-color: transparent;
+  color: var(--fm-muted);
+  font: inherit;
+  font-size: var(--fm-text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.tech-toggle:hover {
+  color: inherit;
+}
+.about dd {
+  font-weight: 500;
 }
 h3 {
   margin: 16px 0 8px;

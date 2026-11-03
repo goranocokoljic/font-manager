@@ -533,6 +533,8 @@
       "keep": "Vorhandene behalten",
       "replace": "Für diese Sitzung ersetzen"
     },
+    "about": { "title": "Über" },
+    "technical": { "title": "Technische Details" },
     "names": {
       "title": "Namen",
       "family": "Familie",

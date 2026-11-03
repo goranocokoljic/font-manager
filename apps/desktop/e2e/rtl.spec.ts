@@ -140,6 +140,7 @@ test.describe('in right-to-left chrome', () => {
     await expect(row.locator('.label bdi')).toHaveText('Frank רוחל');
     const inspector = columns(page).inspector;
     await expect(inspector.locator('h2 bdi')).toHaveText(/^Frank רוחל /);
+    await inspector.getByRole('button', { name: 'Technical details' }).click();
     await expect(inspector.getByRole('button', { name: /^Copy path/ }).locator('bdi')).toHaveText(
       '/Users/demo/Fonts/עברית/FrankRuhl-Regular.ttf',
     );

@@ -12,7 +12,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13: UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Fonts row actions, Project sets counts, section icons, collapsible sections, Problems dedupe remain)
 - [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
-- [ ] 8 Inspector
+- [ ] 8 Inspector (iteration 17: Info shows About + License + Your notes first, raw data behind "Technical details"; Glyphs clipped column, Features names remain)
 - [ ] 9 Find similar as a mode
 - [ ] 10 Language & script filter
 - [ ] 11 "Renders my text" filter + visible missing glyphs
@@ -130,3 +130,10 @@ Why: backlog item 7, the worst visible flaw in any view.
 Changed: `list/grid.ts` gets `cardChars` (characters that fit the card width) and `cardText` now ends on a whole word; `FontGrid` passes the fit. Grid now shows "The quick". 3 new Vitest cases.
 Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed (`.harness/redesign/e2e-16.log`). Shots `16/`.
 Follow-ups: hover reveals weight range; dashed border on style cards; inspector Info grouping (item 8) next.
+
+## Iteration 17 — 2026-11-03 — Inspector Info: what matters first, raw data folded
+Critique: the Info tab opened on a wall of raw fields (name IDs, vendor ID, copyright) before Designer or Foundry. Hash and path sat at the same weight as everything else. The list and grid are calm now; the inspector is the loudest chrome left.
+Why: backlog item 8; the right pane is visible in every first-screen shot.
+Changed: `InspectorInfo` order is now header, About (Designer, Foundry, Version), License, Your notes, then a "Technical details" expander (`UiChevron`, `aria-expanded`) holding Names, File, Style, Metrics, Characters. New `info.about` / `info.technical` strings (en, de). `inspector.spec` and `rtl.spec` open the expander first.
+Verified: typecheck, `lint:js` exit 0, Vitest 909, Playwright 271 passed + 1 flaky (`app.spec` theme test passed alone; `.harness/redesign/e2e-17.log`). Shots `17/`.
+Follow-ups: License URL wraps mid-word; the license editor form is still tall (fold it); Glyphs clipped column; Features human names; Axes tab.
