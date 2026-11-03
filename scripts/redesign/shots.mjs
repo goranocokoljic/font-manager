@@ -35,6 +35,15 @@ const scenes = {
   list: { routes: '/?face=1', storage: views('list') },
   table: { routes: '/?face=1', storage: views('table') },
   grid: { routes: '/?face=1', storage: views('grid') },
+  // The pointer over a grid card: the weight range appears in its meta line.
+  'grid-hover': { routes: '/?face=1', storage: views('grid'), hover: '3' },
+  // The twisty on card 4 ("Sample 1", three styles) opens the family: its style cards follow it.
+  'grid-expanded': {
+    query: '?mockFaces=1&mockStyles=3',
+    routes: '/?face=1',
+    storage: views('grid'),
+    twisty: '4',
+  },
   waterfall: { routes: '/?face=1', storage: views('waterfall') },
   layout: { routes: '/?face=1', storage: views('layout') },
   'inspector-info': { routes: '/?face=1', tab: 'Info' },
@@ -94,6 +103,7 @@ const envKey = {
   click: 'FM_SCREENS_CLICK',
   open: 'FM_SCREENS_OPEN',
   row: 'FM_SCREENS_ROW',
+  twisty: 'FM_SCREENS_TWISTY',
   hover: 'FM_SCREENS_HOVER',
   collection: 'FM_SCREENS_COLLECTION',
   storage: 'FM_SCREENS_STORAGE',

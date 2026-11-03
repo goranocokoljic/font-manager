@@ -46,11 +46,17 @@ const tagNames = (process.env.FM_SCREENS_TAGS ?? '').split(',').filter(Boolean);
 // FM_SCREENS_COMMAND="Check a document's fonts" runs that command palette action before the shot.
 const command = process.env.FM_SCREENS_COMMAND;
 // FM_SCREENS_QUERY='?mockColor=1' sets MockApi options (the page URL before the hash).
+/** The list's rows, or the grid's cards when the view is the grid. */
+const listRows = (page: import('@playwright/test').Page) =>
+  page.locator('[role="tree"][aria-label="Font list"] [role="treeitem"], .slot[role="option"]');
+
 const query = process.env.FM_SCREENS_QUERY ?? '';
 // FM_SCREENS_LOCALE=ar-XB sets the browser's (the OS's) language: `ar-XB` shows the RTL chrome.
 const locale = process.env.FM_SCREENS_LOCALE;
 // FM_SCREENS_ROW=1 clicks that list row (1-based) after the page loads, before the route's key
 // is pressed, so a key meant for the list (ArrowRight expands the family) reaches it.
+// FM_SCREENS_TWISTY=4 clicks the open/fold twisty on that grid card (1-based).
+const twistyCard = Number(process.env.FM_SCREENS_TWISTY ?? 0);
 const rowIndex = Number(process.env.FM_SCREENS_ROW ?? 0);
 // FM_SCREENS_HOVER=2 leaves the pointer over that list row (1-based) for the shot, so hover-only
 // row actions (Find similar) are in it.
@@ -112,8 +118,16 @@ test.describe('@screens', () => {
             await item.getByRole('button', { name: collectionName, exact: true }).click();
           }
           if (rowIndex) {
-            const rows = page.getByRole('tree', { name: 'Font list' }).getByRole('treeitem');
-            await rows.nth(rowIndex - 1).click();
+            await listRows(page)
+              .nth(rowIndex - 1)
+              .click();
+          }
+          if (twistyCard) {
+            await listRows(page)
+              .nth(twistyCard - 1)
+              .locator('.twisty')
+              .click();
+            await page.waitForTimeout(200);
           }
           if (press) await page.keyboard.press(press);
           if (tab) {
@@ -203,9 +217,7 @@ test.describe('@screens', () => {
             await expect(page.locator('.ui-popover').first()).toHaveCSS('opacity', '1');
           }
           if (hoverRow) {
-            await page
-              .getByRole('tree', { name: 'Font list' })
-              .getByRole('treeitem')
+            await listRows(page)
               .nth(hoverRow - 1)
               .hover();
             await page.waitForTimeout(200); // the row's actions fade in

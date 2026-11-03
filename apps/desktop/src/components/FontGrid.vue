@@ -33,6 +33,7 @@ import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
 import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
 import { direction, t } from '../i18n';
+import { weightRangeText } from '../list/columns';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
 
@@ -339,9 +340,16 @@ function onToggle(row: ListRow): void {
             /></span>
             <ActivationDot :state="rowActivation(item.row)" />
             <bdi class="name">{{ item.name }}</bdi>
-            <span v-if="item.row.kind === 'family'" class="detail">{{
-              styleCount(item.row.family.styleCount)
-            }}</span>
+            <span v-if="item.row.kind === 'family'" class="detail">
+              <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
+              <span
+                v-if="item.row.family.weightRange"
+                class="range"
+                data-testid="weight-range"
+                aria-hidden="true"
+                >{{ weightRangeText(item.row.family.weightRange) }}</span
+              >
+            </span>
             <UiBadge v-if="item.face?.isVariable">{{ t('list.variable') }}</UiBadge>
             <UiBadge v-if="item.fallback" data-testid="fallback-hint">{{
               t('list.fallback')
@@ -446,6 +454,27 @@ function onToggle(row: ListRow): void {
 }
 .detail {
   flex: none;
+}
+/* The weight span takes the style count's place on hover or at the cursor: no extra width. */
+.detail {
+  display: inline-grid;
+}
+.count,
+.range {
+  grid-area: 1 / 1;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.range {
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+}
+.slot:hover .range,
+.viewport:focus .slot.cursor .range {
+  opacity: 1;
+}
+.slot:hover .count,
+.viewport:focus .slot.cursor .count {
+  opacity: 0;
 }
 .twisty {
   flex: none;
