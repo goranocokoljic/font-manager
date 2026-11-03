@@ -432,6 +432,14 @@ const LANGUAGES: [(&str, &str, &str, &str); 4] = [
     ),
 ];
 
+/// (code, distinctive letters) for the mock languages, as in `data/charsets`.
+const SAMPLE_GLYPHS: [(&str, &str); 4] = [
+    ("en", "AaGgQqRrWw"),
+    ("pl", "Ąćęłńóśźż"),
+    ("sr-Latn", "Šđčćž"),
+    ("sr-Cyrl", "ЂЈЉЊЋЏбђјљњћџ"),
+];
+
 /// (code, pangram) for the mock languages, as in `data/pangrams`.
 const PANGRAMS: [(&str, &str); 4] = [
     ("en", "The quick brown fox jumps over the lazy dog"),
@@ -2322,6 +2330,10 @@ impl SearchService for MockApi {
                     .iter()
                     .find(|(c, _)| c == code)
                     .map(|(_, text)| (*text).into()),
+                sample_glyphs: SAMPLE_GLYPHS
+                    .iter()
+                    .find(|(c, _)| c == code)
+                    .map(|(_, glyphs)| (*glyphs).into()),
             })
             .collect())
     }

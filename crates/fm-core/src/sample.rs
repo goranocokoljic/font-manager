@@ -219,6 +219,7 @@ mod tests {
             base: base.chars().filter(|c| !c.is_whitespace()).collect(),
             auxiliary: Vec::new(),
             source: charsets::Source::Project,
+            sample_glyphs: None,
         }
     }
 

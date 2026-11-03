@@ -776,6 +776,7 @@ mod tests {
             base: base.chars().collect(),
             auxiliary: Vec::new(),
             source: charsets::Source::Project,
+            sample_glyphs: None,
         })
     }
 

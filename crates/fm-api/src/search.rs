@@ -279,6 +279,11 @@ pub struct LanguagePreset {
     /// pangram, from `data/pangrams`; `None` when there is none (E19.4).
     #[serde(default)]
     pub pangram: Option<String>,
+    /// The language's distinctive letters (`Šđčćž` for `sr-Latn`), from
+    /// `data/charsets`, for a short glyph line next to the pangram; every one
+    /// is in the preset's characters. `None` when the preset has none (E42.10).
+    #[serde(default)]
+    pub sample_glyphs: Option<String>,
 }
 
 /// How many characters of one Unicode block a face maps.

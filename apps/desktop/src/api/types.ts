@@ -1895,6 +1895,12 @@ export type LanguagePreset = {
 	 *  pangram, from `data/pangrams`; `None` when there is none (E19.4).
 	 */
 	pangram?: string | null,
+	/**
+	 *  The language's distinctive letters (`Šđčćž` for `sr-Latn`), from
+	 *  `data/charsets`, for a short glyph line next to the pangram; every one
+	 *  is in the preset's characters. `None` when the preset has none (E42.10).
+	 */
+	sampleGlyphs?: string | null,
 };
 
 /**  A layout: a list of text blocks, top to bottom. */

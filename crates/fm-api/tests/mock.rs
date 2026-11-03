@@ -2735,6 +2735,19 @@ fn a_language_preset_without_pangram_still_deserializes() {
         serde_json::from_str(r#"{"code":"en","name":"English","script":"Latn"}"#)
             .expect("old shape");
     assert_eq!(p.pangram, None);
+    assert_eq!(p.sample_glyphs, None);
+}
+
+#[test]
+fn language_presets_carry_their_sample_glyphs() {
+    let languages = api().list_languages().expect("languages");
+    let sr = languages
+        .iter()
+        .find(|l| l.code == "sr-Latn")
+        .expect("sr-Latn");
+    assert_eq!(sr.sample_glyphs.as_deref(), Some("Šđčćž"));
+    let json = serde_json::to_value(sr).expect("json");
+    assert_eq!(json["sampleGlyphs"], "Šđčćž");
 }
 
 #[test]

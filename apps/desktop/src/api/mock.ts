@@ -1121,41 +1121,52 @@ function sortFamilies(rows: FamilySummary[], order: FamilyOrder): FamilySummary[
 const MOCK_ADDED = '2026-10-01T00:00:00Z';
 
 /** Language presets of the mock: a face covers one when it has the preset's script. */
-/** Language presets with their pangrams, as in `data/charsets` and `data/pangrams`. */
+/** Language presets with their pangrams and glyph lines (`data/charsets`, `data/pangrams`). */
 export const mockLanguages: LanguagePreset[] = [
   {
     code: 'en',
     name: 'English',
     script: 'Latn',
     pangram: 'The quick brown fox jumps over the lazy dog',
+    sampleGlyphs: 'AaGgQqRrWw',
   },
   {
     code: 'de',
     name: 'German',
     script: 'Latn',
     pangram: 'Victor jagt zwölf Boxkämpfer quer über den großen Sylter Deich',
+    sampleGlyphs: 'ÄÖÜäöüß',
   },
   {
     code: 'fr',
     name: 'French',
     script: 'Latn',
     pangram: 'Portez ce vieux whisky au juge blond qui fume',
+    sampleGlyphs: 'ÇÉÈÊàçéèêœ',
   },
   {
     code: 'pl',
     name: 'Polish',
     script: 'Latn',
     pangram: 'Pchnąć w tę łódź jeża lub ośm skrzyń fig',
+    sampleGlyphs: 'Ąćęłńóśźż',
   },
   {
     code: 'sr-Cyrl',
     name: 'Serbian (Cyrillic)',
     script: 'Cyrl',
     pangram: 'Љубазни фењерџија чађавог лица хоће да ми покаже штос',
+    sampleGlyphs: 'ЂЈЉЊЋЏбђјљњћџ',
   },
-  { code: 'el', name: 'Greek', script: 'Grek', pangram: 'Ξεσκεπάζω την ψυχοφθόρα βδελυγμία' },
+  {
+    code: 'el',
+    name: 'Greek',
+    script: 'Grek',
+    pangram: 'Ξεσκεπάζω την ψυχοφθόρα βδελυγμία',
+    sampleGlyphs: 'ΔΘΛΞΣΨΩαβγδζθλξςψω',
+  },
   // A preset without a pangram: the picker leaves it out.
-  { code: 'mt', name: 'Maltese', script: 'Latn', pangram: null },
+  { code: 'mt', name: 'Maltese', script: 'Latn', pangram: null, sampleGlyphs: null },
 ];
 
 const OPEN_LICENSE_LABELS: Record<OpenLicense, string> = {

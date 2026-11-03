@@ -8,6 +8,7 @@
       "otLanguage": "IWR",
       "base": "א ב ג ד ה ו ז ח ט י ך כ ל ם מ ן נ ס ע ף פ ץ צ ק ר ש ת",
       "auxiliary": "ְ ֱ ֲ ֳ ִ ֵ ֶ ַ ָ ֹ ֺ ֻ ּ ׁ ׂ ׳ ״",
+      "sampleGlyphs": "אבגדהזטשת",
       "source": "hyperglot"
     }
   ]

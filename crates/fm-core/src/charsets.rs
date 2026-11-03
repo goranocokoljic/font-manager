@@ -82,6 +82,9 @@ pub struct Charset {
     pub auxiliary: Vec<char>,
     /// Where the base set comes from.
     pub source: Source,
+    /// The language's distinctive letters for a short glyph line (`Šđčćž`);
+    /// each is in `base` or `auxiliary`, none twice.
+    pub sample_glyphs: Option<String>,
 }
 
 impl Charset {
@@ -93,6 +96,7 @@ impl Charset {
             name: self.name.clone(),
             script: self.script.clone(),
             pangram: None,
+            sample_glyphs: self.sample_glyphs.clone(),
         }
     }
 }
@@ -116,6 +120,8 @@ struct RawLanguage {
     base: String,
     #[serde(default)]
     auxiliary: Option<String>,
+    #[serde(default)]
+    sample_glyphs: Option<String>,
     source: Source,
 }
 
@@ -199,6 +205,10 @@ fn check_language(lang: &RawLanguage) -> Result<Charset, String> {
     if let Some(c) = auxiliary.iter().find(|c| base.contains(c)) {
         return Err(format!("auxiliary repeats base character {c:?}"));
     }
+    if let Some(glyphs) = &lang.sample_glyphs {
+        check_sample_glyphs(glyphs, &base, &auxiliary)
+            .map_err(|why| format!("sampleGlyphs: {why}"))?;
+    }
     Ok(Charset {
         code: lang.code.clone(),
         name: lang.name.clone(),
@@ -207,7 +217,38 @@ fn check_language(lang: &RawLanguage) -> Result<Charset, String> {
         base,
         auxiliary,
         source: lang.source,
+        sample_glyphs: lang.sample_glyphs.clone(),
     })
+}
+
+/// The most characters a glyph line may have; it is a short line.
+const MAX_SAMPLE_GLYPHS: usize = 32;
+
+/// Checks a `sampleGlyphs` string: not empty, no white space or control, at
+/// most [`MAX_SAMPLE_GLYPHS`] characters, none twice, each in the preset.
+fn check_sample_glyphs(glyphs: &str, base: &[char], auxiliary: &[char]) -> Result<(), String> {
+    if glyphs.is_empty() {
+        return Err("is empty".into());
+    }
+    let mut seen = BTreeSet::new();
+    for c in glyphs.chars() {
+        if c.is_whitespace() || c.is_control() {
+            return Err(format!(
+                "U+{:04X} is white space or a control",
+                u32::from(c)
+            ));
+        }
+        if !seen.insert(c) {
+            return Err(format!("{c:?} is listed twice"));
+        }
+        if !base.contains(&c) && !auxiliary.contains(&c) {
+            return Err(format!("{c:?} is not in base or auxiliary"));
+        }
+    }
+    if seen.len() > MAX_SAMPLE_GLYPHS {
+        return Err(format!("more than {MAX_SAMPLE_GLYPHS} characters"));
+    }
+    Ok(())
 }
 
 /// Splits a space-separated character list; each item is one scalar value.
@@ -444,6 +485,7 @@ mod tests {
                 "code",
                 "name",
                 "otLanguage",
+                "sampleGlyphs",
                 "script",
                 "source"
             ]
@@ -459,11 +501,12 @@ mod tests {
         assert_eq!(lang["additionalProperties"], false);
         // Every optional field the schema names is accepted by the loader.
         let full = one(&format!(
-            r#"{OK}, "otLanguage": "XX", "base": "a", "auxiliary": "b""#
+            r#"{OK}, "otLanguage": "XX", "base": "a", "auxiliary": "b", "sampleGlyphs": "ba""#
         ))
         .expect("all fields parse");
         assert_eq!(full[0].ot_language.as_deref(), Some("XX  "));
         assert_eq!(full[0].auxiliary, ['b']);
+        assert_eq!(full[0].sample_glyphs.as_deref(), Some("ba"));
     }
 
     #[test]
@@ -481,6 +524,8 @@ mod tests {
             (p.code.as_str(), p.name.as_str(), p.script.as_str()),
             ("sr-Cyrl", "Serbian (Cyrillic)", "Cyrl")
         );
+        assert_eq!(p.sample_glyphs.as_deref(), Some("ЂЈЉЊЋЏбђјљњћџ"));
+        assert_eq!(p.pangram, None);
     }
 
     #[test]
@@ -489,6 +534,54 @@ mod tests {
         assert_eq!(c[0].base, ['a', 'b', 'ć']);
         assert_eq!(c[0].source, Source::Project);
         assert!(c[0].ot_language.is_none() && c[0].auxiliary.is_empty());
+        assert!(c[0].sample_glyphs.is_none());
+    }
+
+    #[test]
+    fn a_glyph_line_longer_than_the_limit_is_rejected() {
+        let letters: Vec<char> = ('a'..='z').chain('A'..='Z').collect();
+        let base = letters
+            .iter()
+            .map(char::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        let fits: String = letters[..MAX_SAMPLE_GLYPHS].iter().collect();
+        let long: String = letters[..=MAX_SAMPLE_GLYPHS].iter().collect();
+        assert!(
+            one(&format!(
+                r#"{OK}, "base": "{base}", "sampleGlyphs": "{fits}""#
+            ))
+            .is_ok()
+        );
+        let err = one(&format!(
+            r#"{OK}, "base": "{base}", "sampleGlyphs": "{long}""#
+        ))
+        .expect_err("too long");
+        assert!(
+            err.detail()
+                .unwrap_or_default()
+                .contains("sampleGlyphs: more than 32 characters")
+        );
+    }
+
+    #[test]
+    fn the_most_used_presets_have_sample_glyphs() {
+        let all = all();
+        let filled = all.values().filter(|c| c.sample_glyphs.is_some()).count();
+        assert!(filled >= 30, "{filled} presets have sampleGlyphs");
+        for code in [
+            "en", "de", "fr", "es", "it", "pt", "nl", "pl", "cs", "tr", "sr-Latn", "sr-Cyrl", "hr",
+            "bs", "sl", "mk", "ru", "uk", "el", "ar", "he", "hi", "th", "zh-Hans", "zh-Hant", "ja",
+            "ko",
+        ] {
+            assert!(
+                all[code].sample_glyphs.is_some(),
+                "{code} has no sampleGlyphs"
+            );
+        }
+        assert_eq!(all["sr-Latn"].sample_glyphs.as_deref(), Some("Šđčćž"));
+        assert_eq!(all["pl"].sample_glyphs.as_deref(), Some("Ąćęłńóśźż"));
+        assert!(all["mt"].sample_glyphs.is_none());
     }
 
     #[test]
@@ -504,6 +597,23 @@ mod tests {
             (r#""base": "a", "auxiliary": "a""#, "auxiliary repeats"),
             (r#""base": "a", "otLanguage": "srb""#, "otLanguage"),
             (r#""base": "a", "extra": 1"#, "unknown field"),
+            (
+                r#""base": "a b", "sampleGlyphs": """#,
+                "sampleGlyphs: is empty",
+            ),
+            (
+                r#""base": "a b", "sampleGlyphs": "aa""#,
+                "sampleGlyphs: 'a' is listed twice",
+            ),
+            (
+                r#""base": "a b", "sampleGlyphs": "a b""#,
+                "sampleGlyphs: U+0020",
+            ),
+            (
+                r#""base": "a b", "sampleGlyphs": "ac""#,
+                "sampleGlyphs: 'c' is not in base",
+            ),
+            (r#""base": "a b", "sampleGlyphs": 1"#, "invalid type"),
         ];
         for (fields, why) in cases {
             let err = one(&format!("{OK}, {fields}")).expect_err(fields);
