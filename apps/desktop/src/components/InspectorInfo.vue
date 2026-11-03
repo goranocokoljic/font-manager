@@ -630,26 +630,32 @@ dd {
   padding: 0 6px;
   color: var(--fm-muted);
 }
-.tag-input {
-  width: 100%;
-  padding: 2px 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
+.tag-input,
 .notes {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  padding: 4px 6px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
+  padding: 4px 2px;
+  border: 0;
+  border-block-end: 1px solid var(--fm-control-border);
+  border-radius: 0;
   background-color: transparent;
   color: inherit;
   font: inherit;
-  resize: vertical;
+  transition: border-color var(--fm-motion-fast) var(--fm-ease);
+}
+.tag-input:hover,
+.notes:hover {
+  border-block-end-color: var(--fm-border-strong);
+}
+.tag-input:focus,
+.notes:focus {
+  border-block-end-color: var(--fm-accent);
+}
+.notes {
+  min-height: 2.2em;
+  resize: none;
+  field-sizing: content;
 }
 .favorite {
   display: inline-flex;

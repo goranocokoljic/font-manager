@@ -193,3 +193,12 @@ Rating stars and the Favorite heart became `UiIcon`s and the favorite turned acc
 **Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-27.log`). Shots `27/` (before), `27-after/`.
 **Follow-ups:** hover scene in `screens.spec.ts` (still missing); underline-style note fields; date/number/datalist natives; live per-feature preview in Features.
 **Dependencies:** none.
+
+## Iteration 28 — 2026-11-03 — Inspector notes: underline fields, no boxes, no resize grip
+**Critique (before):** The Info tab's "Your notes" block is the heaviest chrome left in the inspector: a full box round the tag field and two tall boxes for notes, each with a native resize grip in the corner. They outweigh the data above them. Good: About and License read calmly with quiet labels.
+**Why:** Item 26 names these fields; the tests need a 3:1 outline, so an underline keeps that and drops the weight. Hover scene still not added (this change has a hover state; follow-up).
+**What changed:** `InspectorInfo`: tag and notes fields are underline-style (bottom border only, strong on hover, accent on focus); notes auto-grow (`field-sizing: content`), no native grip. `tags.spec` now checks the bottom border (UI changed on purpose).
+**Backlog:** item 26 partly (note fields). Not ticked.
+**Verified:** typecheck, lint:js, Vitest 910, Playwright 272 after the one test update (`.harness/redesign/e2e-28.log` shows the one failure, then fixed and re-run). Shots `28/` (before), `28-after/`.
+**Follow-ups:** hover scene in `screens.spec.ts`; date/number/datalist natives in the license form; Features live preview; cursor-row ring in the list.
+**Dependencies:** none.

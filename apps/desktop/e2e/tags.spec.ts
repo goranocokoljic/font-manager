@@ -21,11 +21,11 @@ test('the Info tab tags, favorites and rates a face, and the chips filter by the
   // The field's outline is the 3:1 form-field color (WCAG 1.4.11), not the decorative border.
   const outline = await input.evaluate((el) => {
     const probe = document.createElement('div');
-    probe.style.borderTop = '1px solid var(--fm-control-border)';
+    probe.style.borderBottom = '1px solid var(--fm-control-border)';
     document.body.append(probe);
-    const want = getComputedStyle(probe).borderTopColor;
+    const want = getComputedStyle(probe).borderBottomColor;
     probe.remove();
-    return [getComputedStyle(el).borderTopColor, want];
+    return [getComputedStyle(el).borderBottomColor, want];
   });
   expect(outline[0]).toBe(outline[1]);
   await input.fill('display');
