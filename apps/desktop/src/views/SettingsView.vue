@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { formatApiVersion } from '../api/version';
 import type { FullSettings } from '../api/client';
 import type { Language, SettingsUpdate } from '../api/types';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
@@ -506,7 +507,18 @@ function chooseLanguage(value: string): void {
 
         <template v-else-if="current === 'about' && app.info">
           <h2 class="heading">{{ sectionTitle('about') }}</h2>
-          <p class="note">{{ app.info.name }} {{ app.info.version }}</p>
+          <dl class="info" data-testid="app-info">
+            <dt>{{ t('home.info.app') }}</dt>
+            <dd>
+              <bdi>{{ app.info.name }} {{ app.info.version }}</bdi>
+            </dd>
+            <dt>{{ t('home.info.api') }}</dt>
+            <dd>{{ formatApiVersion(app.info.apiVersion) }}</dd>
+            <dt>{{ t('home.info.platform') }}</dt>
+            <dd>
+              <bdi>{{ app.info.platform }}</bdi>
+            </dd>
+          </dl>
           <!-- Hidden where Flatpak or a package manager installs the updates; the
                platform notes below say so (ADR 0012). -->
           <section v-if="updates.support?.offered" class="updates" aria-labelledby="updates-title">
@@ -759,5 +771,18 @@ function chooseLanguage(value: string): void {
 }
 .button:disabled {
   opacity: 0.5;
+}
+.info {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--fm-space-1) var(--fm-space-4);
+  margin: 0 0 var(--fm-space-4);
+  font-size: var(--fm-text-sm);
+}
+.info dt {
+  color: var(--fm-muted);
+}
+.info dd {
+  margin: 0;
 }
 </style>

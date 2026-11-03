@@ -8,7 +8,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
-- [ ] 4 Dark by default + app shell (iteration 7: toolbar icons + UiSegmentedControl done; status bar, dark-first, collapsible panes remain)
+- [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; dark-first launch, collapsible panes remain)
 - [ ] 5 Sidebar redesign (iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
 - [ ] 6 List rows (iteration 9 + review 10: UiBadge and UiChevron everywhere; hover actions, chevron alignment, sub-row styling remain)
 - [ ] 7 Grid cards
@@ -96,3 +96,12 @@ Built `UiBadge`; FontList and FontPreviewRow badges moved onto it and the ▸/�
 **Verified:** typecheck, `lint:js`, Vitest 906, Playwright 272 passed / 16 skipped in one run (`.harness/redesign/e2e-review-10.log`). Shots `review-10/` (before) and `review-10-after/`: all views render in light and dark, comfortable and compact.
 **Not fixed, noted:** focused list draws a ring round the whole pane (item 26); Collections "Smart" pill (item 5); status bar version strings (item 4); grid cards still cut the pangram to "The quick b" (item 7).
 **Next five:** item 4 rest (status bar to live state, dark first launch — both on the first screen) → item 5 rest (collection row menu, "Turn on", smart subtype, Problems dedupe) → item 6 rest (hover row actions as `UiIconButton`, chevron alignment) → item 7 (grid cards) → item 8 (inspector Info grouping). Use the tokens for every duration and colour; when a `ui/` component lands, move every copy onto it in the same iteration and grep for the old class.
+
+## Iteration 11 — 2026-11-03 — Status bar: live state only
+**Critique:** The list is calm and the specimens lead. The worst thing left on screen is the bottom bar: `App: Font Manager (mock) 0.1.0  API: 0.23.0  Platform: linux` is developer data at the same weight as the actions. The sidebar still has bordered "Turn on" buttons and a stray "Smart collections" header with nothing under it.
+**Why:** Backlog item 4 (rest): status bar to live state, version strings to About. Visible in the first three seconds: the bottom line is now `0 fonts active · 5 problems · Conflicts` on the left and `Commands Ctrl+K · Settings Ctrl+,` on the right.
+**What changed:** `HomeView` status slot reordered (live state left, hints right via `.status-end`); the app/API/platform list moved to Settings › About (`data-testid="app-info"` kept). Tests: `App.test.ts` now asserts the bar has no version strings; e2e `app`, `rtl`, `settings` read app info from About.
+**Ticked:** none (item 4 still open). **Shots:** `.harness/redesign/shots/11/` (before), `11a/` (after).
+**Verified:** typecheck, lint:js, Vitest 906, Playwright 272 passed / 16 skipped.
+**Follow-ups:** dark-first launch (first-run theme is "system"; the e2e theme tests assume system) and collapsible panes are the remainder of item 4. Settings link sits ~2 px higher than Commands in the bar (kbd height); align in the polish pass.
+**Dependencies:** none. **Reverted:** no.

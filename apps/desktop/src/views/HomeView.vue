@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
-import { formatApiVersion } from '../api/version';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
@@ -594,43 +593,33 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
     </template>
 
     <template #status>
-      <button
-        type="button"
-        class="hint"
-        :aria-keyshortcuts="ariaShortcut(paletteChord)"
-        @click="commands.openPalette"
-      >
-        {{ t('home.commands') }} <kbd>{{ formatChord(paletteChord) }}</kbd>
-      </button>
-      <RouterLink
-        :to="{ name: 'settings' }"
-        class="hint settings-link"
-        data-testid="status-settings"
-        :title="t('home.settingsTitle', { chord: formatChord(settingsChord) })"
-        :aria-keyshortcuts="ariaShortcut(settingsChord)"
-      >
-        {{ t('home.settings') }} <kbd>{{ formatChord(settingsChord) }}</kbd>
-      </RouterLink>
-      <RouterLink :to="{ name: 'conflicts' }" class="hint">{{ t('home.conflicts') }}</RouterLink>
-      <RouterLink :to="{ name: 'problems' }" class="hint" data-testid="problem-count">
-        {{ t('home.problems', { count: problems.total }) }}
-      </RouterLink>
       <p class="active-count" data-testid="active-count" role="status">
         {{ t('home.fontsActive', { count: activation.count }) }}
       </p>
+      <RouterLink :to="{ name: 'problems' }" class="hint" data-testid="problem-count">
+        {{ t('home.problems', { count: problems.total }) }}
+      </RouterLink>
+      <RouterLink :to="{ name: 'conflicts' }" class="hint">{{ t('home.conflicts') }}</RouterLink>
       <p v-if="app.error" role="alert" class="error">{{ errorMessage(app.error) }}</p>
-      <dl v-else-if="app.info" class="info" data-testid="app-info">
-        <dt>{{ t('home.info.app') }}</dt>
-        <dd>
-          <bdi>{{ app.info.name }} {{ app.info.version }}</bdi>
-        </dd>
-        <dt>{{ t('home.info.api') }}</dt>
-        <dd>{{ formatApiVersion(app.info.apiVersion) }}</dd>
-        <dt>{{ t('home.info.platform') }}</dt>
-        <dd>
-          <bdi>{{ app.info.platform }}</bdi>
-        </dd>
-      </dl>
+      <span class="status-end">
+        <button
+          type="button"
+          class="hint"
+          :aria-keyshortcuts="ariaShortcut(paletteChord)"
+          @click="commands.openPalette"
+        >
+          {{ t('home.commands') }} <kbd>{{ formatChord(paletteChord) }}</kbd>
+        </button>
+        <RouterLink
+          :to="{ name: 'settings' }"
+          class="hint settings-link"
+          data-testid="status-settings"
+          :title="t('home.settingsTitle', { chord: formatChord(settingsChord) })"
+          :aria-keyshortcuts="ariaShortcut(settingsChord)"
+        >
+          {{ t('home.settings') }} <kbd>{{ formatChord(settingsChord) }}</kbd>
+        </RouterLink>
+      </span>
     </template>
   </MainLayout>
 </template>
@@ -741,17 +730,10 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 .active-count {
   margin: 0;
 }
-.info {
+.status-end {
   display: flex;
-  gap: 4px 8px;
-  margin: 0;
-}
-.info dt::after {
-  content: ':';
-}
-.info dd {
-  margin-block: 0;
-  margin-inline: 0 8px;
+  gap: var(--fm-space-4);
+  margin-inline-start: auto;
 }
 .error {
   margin: 0;

@@ -143,9 +143,6 @@ test.describe('in right-to-left chrome', () => {
     await expect(inspector.getByRole('button', { name: /^Copy path/ }).locator('bdi')).toHaveText(
       '/Users/demo/Fonts/עברית/FrankRuhl-Regular.ttf',
     );
-    await expect(page.getByTestId('app-info').locator('dd bdi').first()).toHaveText(
-      /^Font Manager/,
-    );
     // Isolated, the name's Hebrew does not pull the text after it into its run:
     // the style follows the name on the line, at the inline end of the heading.
     await expect(inspector.locator('h2 bdi')).toHaveCSS('unicode-bidi', 'isolate');

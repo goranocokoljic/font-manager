@@ -169,8 +169,10 @@ test('"Keep running in the tray" is on by default, saves, and About lists the pl
 test('"Start at login" is visible on Windows, macOS and Linux alike', async ({ page }) => {
   for (const platform of ['windows', 'macos', 'linux']) {
     await page.goto(`/?mockPlatform=${platform}#/`);
-    await expect(page.getByTestId('app-info')).toContainText(`Platform${platform}`);
+    await expect(page.getByTestId('status-settings')).toBeVisible();
     await page.keyboard.press('ControlOrMeta+,');
+    await tab(page, 'About').click();
+    await expect(page.getByTestId('app-info')).toContainText(platform);
     await tab(page, 'Activation').click();
     await expect(page.getByRole('checkbox', { name: 'Start at login' })).toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Start at login' })).not.toBeChecked();

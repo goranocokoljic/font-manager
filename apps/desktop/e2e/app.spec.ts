@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 test('opens the shell and shows the app info from the API client', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'All fonts' })).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+,');
+  await page.getByRole('tab', { name: 'About' }).click();
   const info = page.getByTestId('app-info');
   await expect(info).toContainText('Font Manager (mock)');
   await expect(info).toContainText(/\d+\.\d+\.\d+/);
@@ -11,14 +13,14 @@ test('opens the shell and shows the app info from the API client', async ({ page
 test('an unknown route lands on home', async ({ page }) => {
   await page.goto('/#/no/such/page');
   await expect(page).toHaveURL(/#\/$/);
-  await expect(page.getByTestId('app-info')).toBeVisible();
+  await expect(page.getByTestId('status-settings')).toBeVisible();
 });
 
 for (const scheme of ['light', 'dark'] as const) {
   test(`theme follows the OS: ${scheme}`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
     await page.goto('/');
-    await expect(page.getByTestId('app-info')).toBeVisible();
+    await expect(page.getByTestId('status-settings')).toBeVisible();
     const colors = await page.evaluate(() => {
       const style = getComputedStyle(document.body);
       return { bg: style.backgroundColor, fg: style.color };
@@ -34,7 +36,7 @@ for (const scheme of ['light', 'dark'] as const) {
 test('theme changes live when the OS appearance changes', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await page.goto('/');
-  await expect(page.getByTestId('app-info')).toBeVisible();
+  await expect(page.getByTestId('status-settings')).toBeVisible();
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect
     .poll(() => page.evaluate(() => getComputedStyle(document.body).backgroundColor))

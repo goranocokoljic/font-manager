@@ -30,11 +30,10 @@ afterEach(() => {
 });
 
 describe('app shell', () => {
-  it('shows the app info fetched through the API client', async () => {
+  it('keeps version strings out of the status bar (they live in Settings > About)', async () => {
     const text = (await mountApp()).text();
-    expect(text).toContain(`${mockAppInfo.name} ${mockAppInfo.version}`);
-    expect(text).toContain(formatApiVersion());
-    expect(text).toContain(mockAppInfo.platform);
+    expect(text).not.toContain(`${mockAppInfo.name} ${mockAppInfo.version}`);
+    expect(text).not.toContain(formatApiVersion());
   });
 
   it('shows the API error message when the call fails', async () => {
