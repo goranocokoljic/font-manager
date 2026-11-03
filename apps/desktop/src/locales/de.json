@@ -1145,7 +1145,8 @@
       "one": "{count} Schrift",
       "other": "{count} Schriften"
     },
-    "empty": "Noch keine Tags. Drücke {chord}, um die ausgewählten Schriften zu taggen.",
+    "empty": "Noch keine Tags",
+    "emptyHint": "Wähle Schriften, dann drücke",
     "fallbackName": "Tag {id}"
   },
   "quickCollection": {

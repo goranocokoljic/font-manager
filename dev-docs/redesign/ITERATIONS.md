@@ -25,7 +25,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
 - [ ] 20 Collections UX
-- [x] 21 Empty states (iteration 41: UiEmptyState — headline, one line, one action; empty collection, no matches, empty library)
+- [x] 21 Empty states (iteration 41; iteration 64: sidebar Tags empty = title + key chip: UiEmptyState — headline, one line, one action; empty collection, no matches, empty library)
 - [ ] 22 First run
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
@@ -397,4 +397,14 @@ Four iterations since review 55 (56–59); all four graded.
 **Shots:** `.harness/redesign/shots/63/` (before only; no scene changes — Settings and the Options row have no scene; honest grade: invisible on the `list` shot).
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-63.log`).
 **Follow-ups:** add `settings` and `preview-options-open` scenes; StudioView and ProblemsView still have local `.button` CSS; last three `type="number"` inputs; tags `datalist`.
+**Dependencies:** none. **Reverted:** no.
+
+## Iteration 64 — 2026-11-03 — Sidebar Tags empty state: title and key chip
+**Critique (before):** The `list` shot is calm: quiet buttons, clear rows, specimens lead. The worst spot left in the sidebar is the Tags empty text, a grey two-line sentence with "Press T" buried in it, which reads like body copy among tidy rows. The Options button and the Pangram/English selects are still the heaviest chrome in the Preview bar.
+**Why:** Item 21 follow-up and the only change visible in the first three seconds on the sidebar. Principle 1: chrome is quiet.
+**What changed:** `TagsSidebar` empty row is a title ("No tags yet") plus a small hint with the shortcut in a `<kbd>` chip. Locale keys `tags.empty` (shortened) and `tags.emptyHint` added in en and de.
+**Backlog:** item 21 still open (Layout, Catalog, Quick Collection empties).
+**Shots:** `.harness/redesign/shots/64/` (before), `64-after/`: `list` dark opened. Light not opened.
+**Verified:** typecheck, Prettier clean, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-64.log`).
+**Follow-ups:** Quick Collection "0" row has no empty hint; StudioView and ProblemsView local `.button` CSS; last three `type="number"` inputs; tags `datalist`; `settings` and `preview-options-open` scenes.
 **Dependencies:** none. **Reverted:** no.

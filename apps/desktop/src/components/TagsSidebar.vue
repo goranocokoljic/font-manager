@@ -96,7 +96,10 @@ function countLabel(n: number): string {
         }}</span>
       </li>
       <li v-if="!tags.tags.length" class="empty">
-        {{ t('tags.empty', { chord: tagChord }) }}
+        <span class="empty-title">{{ t('tags.empty') }}</span>
+        <span class="empty-hint"
+          >{{ t('tags.emptyHint') }} <kbd>{{ tagChord }}</kbd></span
+        >
       </li>
     </ul>
   </section>
@@ -155,8 +158,19 @@ function countLabel(n: number): string {
   font-variant-numeric: tabular-nums;
 }
 .empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-space-1);
   padding: 4px 8px;
+}
+.empty-title {
+  color: var(--fm-fg);
+  font-size: var(--fm-text-md);
+}
+.empty-hint {
   color: var(--fm-muted);
+  font-size: var(--fm-text-xs);
+  line-height: 1.5;
 }
 .error {
   margin: 4px 8px;

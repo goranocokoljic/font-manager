@@ -1145,7 +1145,8 @@
       "one": "{count} font",
       "other": "{count} fonts"
     },
-    "empty": "No tags yet. Press {chord} to tag the selected fonts.",
+    "empty": "No tags yet",
+    "emptyHint": "Select fonts, then press",
     "fallbackName": "Tag {id}"
   },
   "quickCollection": {
