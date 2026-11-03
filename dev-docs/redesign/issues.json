@@ -123,7 +123,7 @@
           "human": true,
           "depends": [],
           "criteria": [
-            "dev-docs/design/redesign/ holds 1-wall.png, 2-family.png, 3-wall-text.png, 4-drag.png, 5-studio.png, 6-motion.png exported from the concept canvas at 1440 px wide (Share › Export on each board), plus README.md naming the canvas link and the export date",
+            "dev-docs/design/redesign/ holds the 18 PNGs listed in its README.md (five wall presets, eight family-page states, two your-own-text states, drag, studio, motion), each exported from the concept canvas at 1440 px wide with the Export-state tweak set as the README says; the export date is filled in",
             "Every UI story in E41–E46 links its target image by that path; a story is reviewed against the image, not against the previous screenshot",
             "DESIGN.md's audit section is replaced by a pointer to the boards and a short list of what the boards leave open (dark theme of each board, compact density, narrow windows)"
           ]
@@ -180,7 +180,7 @@
       "depends": [
         "E40"
       ],
-      "summary": "Board 1. One hero control (type to preview), a uniform wall of white cards on paper that reflows with the size slider, a quiet paper-tinted sidebar, filters as a button plus chips, no inspector on the wall. Target: dev-docs/design/redesign/1-wall.png.",
+      "summary": "Board 1. One hero control (type to preview), a uniform wall of white cards on paper that reflows with the size slider, a quiet paper-tinted sidebar, filters as a button plus chips, no inspector on the wall. Target: dev-docs/design/redesign/1-wall-word.png (and 1-wall-pangram/alphabet/numerals/paragraph.png for the presets).",
       "stories": [
         {
           "id": "E41.1",
@@ -196,7 +196,7 @@
             "The size slider (24–120) resizes every visible card and the grid reflows through `<FmFlipGroup>`; cards keep identity; off-screen cards jump; 60 fps with 1,000 families in the wall library (measured in e2e with the Performance API, asserted ≥ 55 fps median)",
             "Column count follows width (minmax 260px); at 1440 px that is four columns; the wall stays virtualised in rows",
             "Selected card: 2 px accent ring; hover: shadow lift per the motion table; Enter opens the family page, Space opens Quick Look, A toggles activation, as today",
-            "Matches 1-wall.png at 1440×900 in light and dark (reviewer compares side by side; differences listed in the PR)"
+            "Matches 1-wall-word.png (and 1-wall-pangram/alphabet/numerals/paragraph.png for the presets) at 1440×900 in light and dark (reviewer compares side by side; differences listed in the PR)"
           ]
         },
         {
@@ -208,7 +208,7 @@
             "E41.1"
           ],
           "criteria": [
-            "Above the wall: a 44 px text field 'Type to preview' with 'renders in N fonts' at its end, and preset chips Pangram · Alphabet · 0123 · Paragraph · one chip per language the user has used (default: the OS language's pangram from `listLanguages().pangram`)",
+            "Above the wall: a 44 px text field 'Type to preview' with a hint at its end, preset chips Word · Pangram · Alphabet · Numerals · Paragraph — each a different wall layout as in 1-wall-<preset>.png (4 columns / 2 wide / 2 wrapped / 4 figures / 2 body-text) — then a divider and a Language picker (recent languages first, then all from `listLanguages()`) that puts that language's pangram on the wall",
             "Typing repaints every specimen on the next frame with no transition; the value is shared by list, wall, waterfall, family page and Quick Look, and remembered per view (view preferences in localStorage, as today)",
             "The old preview toolbar's remaining controls (size, auto size, line height, tracking, alignment, metrics, outline, colours, surface) live in a Preview options popover opened from one button at the end of the row; nothing else is on screen by default",
             "Keyboard: `/` focuses search, `T` (when no row is focused) focuses the preview field; Esc returns focus to the wall"
@@ -227,7 +227,7 @@
             "Section headers are 11 px uppercase with their actions as icon buttons that appear on hover/focus (New collection, Add folder, Import set); no text buttons inline in the list",
             "Collections show a colour dot (E44.3) and smart collections a distinct icon, not a trailing 'Smart' pill; Problems appears once, as a section with its count; empty sections show one quiet line",
             "Bottom row: problems count with its dot and the ⌘K/Ctrl+K hint; app/API/platform versions move to About",
-            "Matches the sidebar of 1-wall.png; RTL chrome and compact density verified in @screens"
+            "Matches the sidebar of 1-wall-word.png (and 1-wall-pangram/alphabet/numerals/paragraph.png for the presets); RTL chrome and compact density verified in @screens"
           ]
         },
         {
@@ -272,7 +272,7 @@
       "depends": [
         "E40"
       ],
-      "summary": "Board 2. Clicking a card pushes a page: hero specimen in your text with the variable axes under it, a segmented switch Styles · Text · Characters · Features · Pairings · Info, and a quiet rail (languages you can preview in, pairs well with, facts). Target: dev-docs/design/redesign/2-family.png; the board is interactive — play it for every section.",
+      "summary": "Board 2. Clicking a card pushes a page: hero specimen in your text with the variable axes under it, a segmented switch Styles · Text · Characters · Features · Pairings · Info, and a quiet rail (languages you can preview in, pairs well with, facts). Target: dev-docs/design/redesign/2-family-*.png (one per section; see dev-docs/design/redesign/README.md); the board is interactive — play it for every section.",
       "stories": [
         {
           "id": "E42.1",
@@ -473,7 +473,7 @@
       "depends": [
         "E41"
       ],
-      "summary": "Board 3. Type a sentence in your language and the wall becomes reading rows at real body size; fonts that cannot render every glyph say so with visible tofu, and one switch hides them. Target: dev-docs/design/redesign/3-wall-text.png.",
+      "summary": "Board 3. Type a sentence in your language and the wall becomes reading rows at real body size; fonts that cannot render every glyph say so with visible tofu, and one switch hides them. Target: dev-docs/design/redesign/3-wall-text.png and 3-wall-text-complete.png.",
       "stories": [
         {
           "id": "E43.1",
@@ -487,7 +487,7 @@
             "When the preview text exceeds 80 characters or the Paragraph preset is chosen, the wall switches to two-column rows: family name and meta in a 12 px line, the text at the body size (default 17 px / 1.45; the Preview options size applies), 18 px padding, same card chrome",
             "The switch animates as a view crossfade (motion table); switching back restores the wall and its scroll position",
             "The count line reads 'N of M families render your text completely' when the text has glyphs outside Basic Latin",
-            "Matches 3-wall-text.png"
+            "Matches 3-wall-text.png and 3-wall-text-complete.png"
           ]
         },
         {
@@ -529,7 +529,7 @@
             "Every specimen renderer (wall card, list row, waterfall, family hero and rows, Quick Look, Studio) takes the `missing` characters from `sampleTexts` and renders each as an inline box: 0.62 em wide, 1.5 px accent border, 2 px radius, light accent fill; the box is an element with `role=img` and `aria-label=\"missing glyph ž\"`",
             "The row/card shows 'N glyphs missing · š đ č' in the accent colour; the family page shows the same under the hero",
             "No specimen anywhere falls back to a system font for a missing character (a Playwright check compares the rendered width of a known-missing string against the tofu width)",
-            "Matches the gap rows of 3-wall-text.png"
+            "Matches the gap rows of 3-wall-text.png and 3-wall-text-complete.png"
           ]
         }
       ],
