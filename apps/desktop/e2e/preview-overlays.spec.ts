@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { showPreviewOptions } from './select';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -17,6 +18,7 @@ async function open(page: Page) {
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
   await page.goto('/#/');
+  await showPreviewOptions(page);
   await expect(page.locator('[data-face="1"]')).toHaveAttribute('data-state', 'ready');
 }
 
@@ -100,6 +102,7 @@ test('the metrics toggle draws baseline, x-height and cap height that follow siz
 
   // Persists for the view across a reload; the list stays virtualized.
   await page.reload();
+  await showPreviewOptions(page);
   await expect(controls.getByRole('checkbox', { name: 'Metrics' })).toBeChecked();
   await expect(page.locator('[data-face="1"] [data-line="baseline"]')).toHaveCount(1);
   const total = Number(await rows.first().getAttribute('aria-setsize'));

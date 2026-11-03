@@ -42,3 +42,11 @@ export async function optionLabels(combobox: Locator): Promise<string[]> {
   await expect(menu).toBeHidden();
   return labels.map((l) => l.trim());
 }
+
+/** Opens the preview bar's Options row (line height, tracking, colours…) if it is closed. */
+export async function showPreviewOptions(page: import('@playwright/test').Page): Promise<void> {
+  const toggle = page
+    .getByRole('group', { name: 'Preview settings' })
+    .getByRole('button', { name: 'Options' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+}

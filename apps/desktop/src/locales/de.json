@@ -192,6 +192,8 @@
     "sample": "Beispiel",
     "language": "Sprache",
     "customText": "Eigener Text",
+    "heroPlaceholder": "Eigenen Text eingeben",
+    "options": "Optionen",
     "customPlaceholder": "Beispieltext eingeben",
     "size": "Größe",
     "sizeSlider": "Größenregler",

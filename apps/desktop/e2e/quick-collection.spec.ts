@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { selectOption } from './select';
+import { selectOption, showPreviewOptions } from './select';
 
 // Browser mode runs on the mock client; the Quick Collection starts empty.
 const fixture = readFileSync(
@@ -18,6 +18,7 @@ async function open(page: Page) {
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
   await page.goto('/#/');
+  await showPreviewOptions(page);
 }
 
 const list = (page: Page) => page.getByRole('tree', { name: 'Font list' });
@@ -79,6 +80,7 @@ test('the review lists the fonts with the preview settings; each drops by key or
 
   // The Surface setting applies too: white text picked for a dark surface stays readable.
   await review(page).getByRole('button', { name: 'Back to fonts' }).click();
+  await showPreviewOptions(page);
   const controls = page.getByRole('group', { name: 'Preview settings' });
   await selectOption(controls.getByLabel('Surface'), 'dark');
   await controls.getByLabel('Text color').fill('#ffffff');

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { selectOption } from './select';
+import { selectOption, showPreviewOptions } from './select';
 import { openFilters } from './filters';
 
 // Preview rows load face files from `/fmfont/<id>`; serve one fixture for all.
@@ -21,6 +21,7 @@ async function open(page: Page, query = '') {
   await page.goto(`/${query}#/`);
   const tree = page.getByRole('tree', { name: 'Font list' });
   await expect(tree.getByRole('treeitem').first()).toBeVisible();
+  await showPreviewOptions(page);
   return tree;
 }
 

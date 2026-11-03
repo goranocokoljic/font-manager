@@ -192,6 +192,8 @@
     "sample": "Sample",
     "language": "Language",
     "customText": "Custom text",
+    "heroPlaceholder": "Type to preview your own text",
+    "options": "Options",
     "customPlaceholder": "Type a sample",
     "size": "Size",
     "sizeSlider": "Size slider",

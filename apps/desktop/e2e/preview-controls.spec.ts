@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { optionLabels, selectOption } from './select';
+import { optionLabels, selectOption, showPreviewOptions } from './select';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -18,6 +18,7 @@ async function open(page: Page) {
   );
   await page.goto('/#/');
   await expect(page.locator('[data-face="1"]')).toHaveAttribute('data-state', 'ready');
+  await showPreviewOptions(page);
 }
 
 test('preview controls apply to all rows live and persist after a reload', async ({ page }) => {
@@ -54,6 +55,7 @@ test('preview controls apply to all rows live and persist after a reload', async
   await expect(page.locator('[data-face="1"] .sample')).toHaveCSS('font-size', '72px');
   await expect(page.locator('[data-face="1"] .sample')).toHaveText(/Victor jagt/);
   await expect(controls.getByLabel('Surface')).toHaveAttribute('data-value', 'dark');
+  await showPreviewOptions(page);
 
   await controls.getByRole('button', { name: 'Reset' }).click();
   await expect(page.locator('[data-face="1"] .sample')).toHaveCSS('font-size', '28px');
@@ -84,6 +86,8 @@ test('auto size scales each row by its x-height or cap height, by keyboard, and 
   await expect(autoSize).toHaveAttribute('data-value', 'off');
   // Keyboard-reachable: Tab from the size field lands on it (line height comes after).
   await controls.getByLabel('Size in pixels').focus();
+  // The Options toggle sits between Size and the options row.
+  await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await expect(autoSize).toBeFocused();
 
@@ -99,6 +103,7 @@ test('auto size scales each row by its x-height or cap height, by keyboard, and 
   await expect.poll(() => size(1)).toBeCloseTo((28 * 0.7) / 0.72, 1);
 
   await page.reload();
+  await showPreviewOptions(page);
   await expect(controls.getByLabel('Auto size')).toHaveAttribute('data-value', 'capHeight');
   await expect.poll(() => size(1)).toBeCloseTo((28 * 0.7) / 0.72, 1);
 

@@ -7,7 +7,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 <!-- Keep this list in sync: mark an item [x] in the iteration that finishes it. -->
 - [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
-- [ ] 3 Preview bar — sample text as the hero control (+ UiField, UiSlider, UiToggle)
+- [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (+ UiSegmentedControl)
 - [ ] 5 Sidebar redesign (+ UiIconButton)
 - [ ] 6 List rows
@@ -70,3 +70,14 @@ Built `UiDrawer`; the facets moved into it, the bar shows `Filters · N` plus re
 **Verified:** typecheck, `lint:js`, Vitest 906, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-5.log`). Shots `.harness/redesign/shots/review-5/` (before) and `review-5-after/`: every view renders in light and dark, comfortable and compact.
 **Not fixed, noted:** the focused font list draws a ring round the whole pane (item 26); Waterfall repeats the "Variable" label on every size line (item 6); `PreviewControls` keeps hex fallbacks for the colour wells in TS.
 **Next five:** item 3 (preview bar: sample text as the hero; `UiField`, `UiSlider`, `UiToggle`) → item 4 (shell + toolbar overflow; `UiSegmentedControl`) → item 5 (sidebar; `UiIconButton`) → item 6 (rows; `UiBadge`) → item 7 (grid cards). Every one must change the `list` shot. Build each `ui/` component once and move existing copies onto it in the same iteration.
+
+## Iteration 6 — 2026-11-03 — Preview bar: one row, sample text as the hero
+**Critique (before):** Three rows of form fields sit above the specimens. Labels, native-looking number boxes and checkboxes outweigh the fonts. The one control that matters, the sample text, is a dropdown. Good: the Filters button and chips are quiet now; Inter reads well.
+**Why:** backlog item 3, lowest unfinished and unblocked. The `list` shot changes at once: three rows become one.
+**What changed:** `PreviewControls.vue` — row 1 is sample preset, a real text field (typing switches to custom text), language (pangram only), size slider and number, and an `Options` toggle. Row 2 (line height, tracking, auto size, metrics, outline, align, colours, surface, reset) opens under it, closed by default. Specimens start ~90 px higher. New strings `preview.heroPlaceholder`, `preview.options` (en, de).
+**Tests:** e2e helper `showPreviewOptions` in `e2e/select.ts`; preview-controls, preview-overlays, quick-collection and search call it. Tab order in the auto-size test gained the Options button. Vitest 906, Playwright 272 (one run hit a dev-server refusal; palette re-ran green).
+**Backlog ticked:** 3 (partly).
+**Shots:** `.harness/redesign/shots/6` (before), `6b` (after).
+**Alternative not taken:** an options popover; `UiPopover` teleports to body and would break every `controls.getByLabel(...)` scope.
+**Follow-ups:** open state is not remembered per view; the text field shows only a placeholder for non-custom samples (showing the resolved sample needs the store, not logic); `UiSlider`, `UiToggle` and `UiField` still wait for their visible use; presets menu lacks saved texts.
+**Dependencies:** none.
