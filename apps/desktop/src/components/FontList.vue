@@ -388,8 +388,7 @@ function onToggle(row: ListRow): void {
   color: var(--fm-fg);
 }
 .viewport:focus-visible {
-  outline: 2px solid var(--fm-accent);
-  outline-offset: -2px;
+  outline: none; /* the cursor row draws the focus ring, not the whole pane */
 }
 .spacer {
   position: relative;
@@ -408,6 +407,17 @@ function onToggle(row: ListRow): void {
 }
 .slot.face {
   padding-inline-start: 24px;
+  background: color-mix(in srgb, var(--fm-fg) 3%, transparent);
+}
+/* Style sub-rows hang off a hairline guide under the family's chevron. */
+.slot.face::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 12px;
+  width: 1px;
+  background: var(--fm-border);
+  content: '';
 }
 .slot.selected {
   background: color-mix(in srgb, var(--fm-accent) 16%, transparent);
@@ -428,8 +438,10 @@ function onToggle(row: ListRow): void {
 .twisty {
   display: grid;
   flex: none;
+  align-self: flex-end; /* sits on the sample line, not between meta and sample */
   place-items: center;
   width: 24px;
+  height: 48px;
   color: var(--fm-muted);
   cursor: pointer;
 }

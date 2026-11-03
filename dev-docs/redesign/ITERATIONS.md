@@ -10,7 +10,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19: Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
-- [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
+- [ ] 6 List rows (iteration 21: chevron on sample line, sub-row guide, no pane ring; iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iteration 17 + review 20: Info shows About + License + Your notes first, license form and raw data folded; Glyphs clipped column, Features names remain)
 - [ ] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; grouping by family remains)
@@ -149,3 +149,13 @@ Rescan / Pause / Remove moved into the Sources row, replacing the count on hover
 **Verified:** typecheck, `lint:js` exit 0, Vitest 909, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-20.log`). Shots `20/` (before) and `20-after/`: all 23 scenes render in light and dark, comfortable and compact (46 images).
 **Not fixed, noted:** Project sets count mid-row (hidden Export button holds space); Glyphs grid's last column touches the pane edge; Studio "Panel font" fields look empty; Find similar results not grouped by family.
 **Next five:** item 6 rest (chevron on the sample's cap height, quieter sub-rows, no ring round the whole list pane) → item 5 rest (Project sets row like Sources) → item 26 native-input sweep in the inspector (date, number, datalist, text stars) → item 9 rest (group similar results by family) → item 8 rest (Glyphs column, Features human names). Hover-only work adds a hover scene to `screens.spec.ts` in the same iteration.
+
+## Iteration 21 — 2026-11-03 — List rows: chevron on the sample line, quiet sub-rows, no pane ring
+**Critique (before):** The list is calm and the specimens lead, but the chevron floats between the meta line and the sample, so each row reads as two lines with a stray arrow. The focused list draws a loud blue box round the whole pane. Expanded style sub-rows look identical to family rows apart from a 24 px indent. Good: one-line meta, quiet badges, accent bar on selection.
+**Why:** Backlog item 6 rest; it is the loudest chrome left on the first screen.
+**What changed:** `FontList.vue` only. Chevron aligns to the sample line (bottom-anchored 48 px cell). The pane focus outline is removed; the cursor row keeps its own 2 px ring. Style sub-rows get a faint tint and a hairline guide under the chevron.
+**Backlog:** item 6 still open (sub-row meta line could be quieter; compact density chevron not tuned).
+**Shots:** `.harness/redesign/shots/21/` (before), `21a/` (after).
+**Verified:** typecheck, `lint:js` exit 0 (after prettier), Vitest 909, Playwright 272 passed / 16 skipped (`e2e-21.log`).
+**Follow-ups:** the cursor ring on the family row is still a heavy 2 px box; consider an accent bar plus tint. Item 5 rest (Project sets) and item 26 native inputs are next.
+**Dependencies:** none. **Reverted:** no.
