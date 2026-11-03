@@ -18,6 +18,7 @@ export const ICONS = {
   trash: '<path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.5 8.5h6l.5-8.5"/>',
   chevron: '<path d="M6 3.5l4.5 4.5L6 12.5"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',
+  power: '<path d="M8 2.5v5M4.7 4.6a5 5 0 1 0 6.6 0"/>',
   import: '<path d="M8 2.5v7M5 6.5l3 3 3-3M3 12.5h10"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

@@ -33,7 +33,7 @@ import TableColumnsMenu from '../components/TableColumnsMenu.vue';
 import SmartRuleEditor from '../components/SmartRuleEditor.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
-import { errorMessage, t, type MessageKey } from '../i18n';
+import { errorMessage, t } from '../i18n';
 import { DENSITIES } from '../list/density';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
@@ -438,9 +438,6 @@ function openFace(face: FaceId): void {
   showFace(face);
   if (!layout.inspectorVisible) layout.toggleInspector();
 }
-
-// Sidebar groups from the spec's information architecture; later stories fill them.
-const groups: MessageKey[] = ['home.sidebarGroups.smart'];
 </script>
 
 <template>
@@ -452,9 +449,6 @@ const groups: MessageKey[] = ['home.sidebarGroups.smart'];
       <TagsSidebar />
       <ProblemsSidebar />
       <ProjectSetsSidebar />
-      <ul class="groups">
-        <li v-for="group in groups" :key="group" class="group">{{ t(group) }}</li>
-      </ul>
       <OnlineCatalogsSidebar />
     </template>
 

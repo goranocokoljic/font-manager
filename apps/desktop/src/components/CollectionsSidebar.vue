@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import UiIconButton from './ui/UiIconButton.vue';
+import UiIcon from './ui/UiIcon.vue';
 import UiPopover from './ui/UiPopover.vue';
 // The Collections group of the sidebar: every manual and smart collection as a
 // tree, with its face count. Click one to show it in the list. Make, rename,
@@ -337,7 +338,9 @@ function countLabel(n: number): string {
             >
               {{ row.collection.name }}
             </button>
-            <span v-if="row.collection.rules" class="badge">{{ t('collections.smart') }}</span>
+            <span v-if="row.collection.rules" class="smart" :title="t('collections.smart')">
+              <UiIcon name="sparkles" /><span class="sr-only">{{ t('collections.smart') }}</span>
+            </span>
             <span class="count" :aria-label="countLabel(row.collection.faceCount)">{{
               row.collection.faceCount
             }}</span>
@@ -529,12 +532,17 @@ function countLabel(n: number): string {
   color: var(--fm-accent);
   font-weight: 600;
 }
-.badge {
-  padding: 0 4px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.smart {
+  display: inline-flex;
+  flex: none;
   color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
 }
 .count {
   color: var(--fm-muted);

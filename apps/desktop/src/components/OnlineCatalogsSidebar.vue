@@ -4,6 +4,7 @@
 // off has a "Turn on" button that says it connects to the internet.
 import { onMounted } from 'vue';
 import { t } from '../i18n';
+import UiIconButton from './ui/UiIconButton.vue';
 import { useCatalogsStore } from '../stores/catalogs';
 
 const store = useCatalogsStore();
@@ -24,17 +25,16 @@ onMounted(() => void store.load());
         <bdi>{{ c.name }}</bdi>
       </button>
       <template v-if="!c.enabled">
-        <button
-          type="button"
+        <UiIconButton
           class="turn-on"
+          icon="power"
           :data-testid="`catalog-turn-on-${c.id}`"
-          :aria-label="t('catalogs.turnOnLabel', { name: c.name })"
+          :label="t('catalogs.turnOnLabel', { name: c.name })"
+          :title="`${t('catalogs.turnOn')} — ${t('catalogs.connects')}`"
           :aria-describedby="`catalog-connects-${c.id}`"
           :disabled="store.busy === c.id"
           @click="store.setEnabled(c.id, true)"
-        >
-          {{ t('catalogs.turnOn') }}
-        </button>
+        />
         <span :id="`catalog-connects-${c.id}`" class="connects">{{ t('catalogs.connects') }}</span>
       </template>
     </div>
@@ -91,19 +91,12 @@ onMounted(() => void store.load());
   color: var(--fm-accent);
   font-weight: 600;
 }
-.turn-on {
-  padding: 1px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
-  font-size: var(--fm-text-xs);
-}
 .connects {
-  flex-basis: 100%;
-  padding: 0 8px 4px;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 </style>

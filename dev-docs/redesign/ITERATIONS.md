@@ -114,3 +114,12 @@ Built `UiBadge`; FontList and FontPreviewRow badges moved onto it and the ▸/�
 **Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (one export test fixed, re-run green).
 **Follow-ups:** "Turn on" catalog buttons; smart subtype instead of the "Smart" pill (still a local `.badge` in this file); empty "Smart collections" header; Problems dedupe. A shared `UiMenu` could replace the hand-made menu if a second menu appears.
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 13 — 2026-11-03 — Sidebar: "Turn on" becomes an icon, empty header gone
+**Critique:** The list is calm and specimens lead. The sidebar is the noisiest part: two bordered "Turn on" buttons with a grey line under each, an empty "Smart collections" header, and a "Smart" pill. The Sources "Fonts" row still has icon actions floating on their own line.
+**Why:** Backlog item 5 (rest). After: the Online catalogs group is three plain rows (power icon on the off ones) and the empty header is gone. Dark-first launch (item 4) is blocked: the default theme comes from the settings the API returns (`theme: 'system'` in the mock / Rust default), not from the UI.
+**What changed:** `OnlineCatalogsSidebar` uses `UiIconButton` (new `power` icon; tooltip "Turn on — Connects to the internet"; hint stays as the accessible description, visually hidden). `CollectionsSidebar` shows a sparkles icon (hidden "Smart" text kept) instead of the pill; its local `.badge` is deleted. `HomeView` drops the empty groups list. One Vitest line updated.
+**Ticked:** none (item 5 still open). **Shots:** `.harness/redesign/shots/13/` (before), `13a/` (after).
+**Verified:** typecheck, lint:js (only the old `collections.spec.ts` format warning), Vitest 906, Playwright 272 passed.
+**Follow-ups:** Sources "Fonts" row actions on their own line; Problems header vs smart "Problems"; section icons and collapsible sections. Dark-first launch needs the API default theme changed to `dark` (API task).
+**Dependencies:** none. **Reverted:** no.

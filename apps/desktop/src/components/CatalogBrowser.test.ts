@@ -58,7 +58,7 @@ describe('OnlineCatalogsSidebar with catalogs', () => {
     await flushPromises();
     expect(sidebar.get('[data-testid="catalog-googleFonts"]').text()).toBe('Google Fonts');
     const on = sidebar.get('[data-testid="catalog-turn-on-googleFonts"]');
-    expect(on.text()).toBe('Turn on');
+    expect(on.attributes('title')).toContain('Turn on');
     expect(on.attributes('aria-label')).toBe('Turn on Google Fonts');
     const hint = sidebar.get(`#${on.attributes('aria-describedby')}`);
     expect(hint.text()).toBe('Connects to the internet');
