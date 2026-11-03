@@ -506,3 +506,13 @@ Shots: `.harness/redesign/shots/83/`; `compare` and `compare-overlay` changed.
 Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 273 passed / 16 skipped.
 Follow-ups: size choice is not remembered; give `UiSegmentedControl` arrow-key roving, then move the Compare mode on to it.
 Dependencies: none.
+
+## Iteration 84 — 2026-11-03 — Studio: the width lock moves beside the page
+Critique (before): the Studio page is a centred paper column, but its width-lock icon floated alone at the far window corner, 400 px from the thing it controls. The rest of the screen is calm and reads well.
+Why: item 17's named left-over (review 80, "Studio lock beside the page").
+Changed: `FontLayout` bare head, when locked, takes the page's width variables and centres to the page grid, so the lock sits at the page's right edge. Unlocked it stays at the window edge (the page is full width there).
+Backlog: 17 stays open (suggestions rail, options in own face).
+Shots: `.harness/redesign/shots/83/` (before) and `84/`; `studio` changed.
+Verified: typecheck, `lint:js` 0 (after Prettier fix), Vitest 913, Playwright 273 passed / 16 skipped.
+Follow-ups: the magazine text is narrower than the locked width, so the lock still sits ~150 px right of the text; a lock tied to the text column would need the real column width.
+Dependencies: none.

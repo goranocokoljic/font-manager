@@ -211,7 +211,11 @@ function blockFamily(i: number): string {
     :data-state="face ? state : undefined"
   >
     <template v-if="face && layout">
-      <header class="head" :class="{ bare }">
+      <header
+        class="head"
+        :class="{ bare, locked: pageStyle !== undefined, 'with-tools': hasTools }"
+        :style="pageStyle"
+      >
         <template v-if="!bare">
           <span class="name">{{ face.familyName }}</span>
           <span class="style">{{ face.style }}</span>
@@ -336,6 +340,16 @@ function blockFamily(i: number): string {
   padding: var(--fm-space-2) var(--fm-space-4) 0;
   border-bottom: 0;
   overflow: visible;
+}
+/* Locked in the Studio: the icon sits at the right edge of the centred page, not the window. */
+.head.bare.locked {
+  --fm-tools-width: 5em;
+  max-width: calc(var(--fm-layout-width) + 2 * var(--fm-tools-width) + 2 * 32px);
+  margin-inline: auto;
+  padding-inline: 32px;
+}
+.head.bare.locked.with-tools {
+  --fm-tools-width: 11em;
 }
 .name {
   font-weight: 600;
