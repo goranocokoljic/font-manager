@@ -24,6 +24,9 @@
   font-size: var(--fm-text-sm);
   white-space: nowrap;
 }
+.ui-button:disabled {
+  opacity: 0.5;
+}
 .ui-button:not(:disabled):hover {
   background-color: var(--fm-hover);
   color: var(--fm-fg);

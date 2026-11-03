@@ -217,16 +217,14 @@ function colorFrom(e: Event): string {
       </label>
 
       <div class="field" role="group" :aria-label="t('preview.alignment')">
-        <button
+        <UiButton
           v-for="a in alignments"
           :key="a"
-          type="button"
-          class="button"
           :aria-pressed="s.align === a"
           @click="set({ align: a })"
         >
           {{ t(`preview.aligns.${a}`) }}
-        </button>
+        </UiButton>
       </div>
 
       <label class="field">
@@ -256,9 +254,9 @@ function colorFrom(e: Event): string {
           @update:model-value="set({ surface: $event })"
         />
       </div>
-      <button type="button" class="button" @click="store.reset(view)">
+      <UiButton @click="store.reset(view)">
         {{ t('common.reset') }}
-      </button>
+      </UiButton>
     </div>
   </div>
 </template>
@@ -342,18 +340,6 @@ input[type='color'] {
   border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-radius-sm);
   background-color: transparent;
-}
-.button {
-  padding: 2px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.button[aria-pressed='true'] {
-  border-color: var(--fm-accent);
-  color: var(--fm-accent);
 }
 :focus-visible {
   outline: 2px solid var(--fm-accent);

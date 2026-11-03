@@ -30,7 +30,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
-- [ ] 26 Hover/focus/active audit (iterations 61–62: quiet UiButton on Options, Find similar, Columns, Copy CSS; Problems view)
+- [ ] 26 Hover/focus/active audit (iterations 61–63: quiet UiButton on Options, Find similar, Columns, Copy CSS; Problems view)
 - [ ] 27 Accessibility
 
 ## Entry template (at most 25 lines per entry)
@@ -387,4 +387,14 @@ Four iterations since review 55 (56–59); all four graded.
 **Shots:** `.harness/redesign/shots/62/` (before), `62-after/`: `problems` changed. Dark opened; light not opened.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-62.log`, run before the final chip fix; `problems` specs re-run: 7 passed).
 **Follow-ups:** the quiet resolve buttons are faint (consider a `primary` look for the single row action); Preview options-row buttons (alignment, Reset), Settings Close, ConflictsView button; last three `type="number"` inputs; tags `datalist`.
+**Dependencies:** none. **Reverted:** no.
+
+## Iteration 63 — 2026-11-03 — Settings, Conflicts and Preview options: quiet buttons
+**Critique (before):** Shots were taken but not opened: no scene shows these screens. From the code, Settings and Conflicts still draw bordered Close, Add folder, Check for updates, Change and Remove buttons, and the Preview options row has bordered alignment buttons and Reset. They are the last bordered text buttons.
+**Why:** Item 26's follow-ups from iterations 61–62. Principle 1: chrome is quiet.
+**What changed:** `SettingsView` (8 buttons), `ConflictsView` (Close) and `PreviewControls` (alignment, Reset) use `UiButton`; three local `.button` CSS blocks removed. `UiButton` gained a disabled look (50 % opacity).
+**Backlog:** item 26 still open.
+**Shots:** `.harness/redesign/shots/63/` (before only; no scene changes — Settings and the Options row have no scene; honest grade: invisible on the `list` shot).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-63.log`).
+**Follow-ups:** add `settings` and `preview-options-open` scenes; StudioView and ProblemsView still have local `.button` CSS; last three `type="number"` inputs; tags `datalist`.
 **Dependencies:** none. **Reverted:** no.

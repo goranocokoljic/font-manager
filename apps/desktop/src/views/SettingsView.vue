@@ -8,6 +8,7 @@ import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CopyValue from '../components/CopyValue.vue';
 import LocalApiSettings from '../components/LocalApiSettings.vue';
 import McpSettings from '../components/McpSettings.vue';
+import UiButton from '../components/ui/UiButton.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
 import UiNumberField from '../components/ui/UiNumberField.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
@@ -186,9 +187,9 @@ function chooseLanguage(value: string): void {
   <div class="settings" @keydown="onKey">
     <header class="bar">
       <h1 id="settings-title" class="title">{{ t('settings.title') }}</h1>
-      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">
+      <UiButton aria-keyshortcuts="Escape" @click="close">
         {{ t('common.close') }}
-      </button>
+      </UiButton>
     </header>
 
     <div class="body">
@@ -248,9 +249,7 @@ function chooseLanguage(value: string): void {
                 />
                 {{ t('settings.sources.paused') }}
               </label>
-              <button
-                type="button"
-                class="button"
+              <UiButton
                 :aria-label="t('settings.sources.remove', { path: source.path })"
                 :disabled="source.kind === 'system'"
                 :title="
@@ -259,13 +258,13 @@ function chooseLanguage(value: string): void {
                 @click="sources.remove(source.id)"
               >
                 {{ t('common.remove') }}
-              </button>
+              </UiButton>
             </li>
           </ul>
           <div class="add">
-            <button type="button" class="button" @click="sources.add">
+            <UiButton @click="sources.add">
               {{ t('settings.sources.addFolder') }}
-            </button>
+            </UiButton>
           </div>
         </template>
 
@@ -419,15 +418,13 @@ function chooseLanguage(value: string): void {
           <p v-if="catalogs.error" role="alert" class="note">
             {{ errorMessage(catalogs.error) }}
           </p>
-          <button
-            type="button"
-            class="button"
+          <UiButton
             aria-controls="settings-adobe-fonts"
             :aria-expanded="adobeFontsOpen"
             @click="adobeFontsOpen = !adobeFontsOpen"
           >
             {{ t('catalogs.adobeFonts.name') }}
-          </button>
+          </UiButton>
           <AdobeFontsNote v-if="adobeFontsOpen" id="settings-adobe-fonts" :level="3" />
           <div class="field" data-testid="settings-download-folder">
             <span id="download-folder-label">{{ t('settings.catalogs.downloadFolder') }}</span>
@@ -439,15 +436,13 @@ function chooseLanguage(value: string): void {
                 >{{ s.downloadFolder }}</bdi
               >
               <span v-else class="note">{{ t('settings.catalogs.downloadFolderNone') }}</span>
-              <button
-                type="button"
-                class="button"
+              <UiButton
                 aria-describedby="download-folder-label download-folder-hint"
                 data-testid="settings-download-folder-change"
                 @click="catalogs.changeDownloadFolder()"
               >
                 {{ t('settings.catalogs.change') }}
-              </button>
+              </UiButton>
             </span>
           </div>
           <p id="download-folder-hint" class="note hint">
@@ -533,22 +528,18 @@ function chooseLanguage(value: string): void {
           <section v-if="updates.support?.offered" class="updates" aria-labelledby="updates-title">
             <h3 id="updates-title" class="subheading">{{ t('updates.title') }}</h3>
             <div class="add">
-              <button
-                type="button"
-                class="button"
+              <UiButton
                 :disabled="updates.status === 'checking' || updates.status === 'installing'"
                 @click="updates.check()"
               >
                 {{ t('updates.check') }}
-              </button>
-              <button
+              </UiButton>
+              <UiButton
                 v-if="updates.status === 'available' && updates.update && !updates.open"
-                type="button"
-                class="button"
                 @click="updates.open = true"
               >
                 {{ t('updates.showVersion', { version: updates.update.version }) }}
-              </button>
+              </UiButton>
             </div>
             <p role="status" class="note status">
               <template v-if="updates.status === 'checking'">{{ t('updates.checking') }}</template>
@@ -795,17 +786,6 @@ function chooseLanguage(value: string): void {
 }
 .select {
   align-self: flex-start;
-}
-.button {
-  padding: 4px 10px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.button:disabled {
-  opacity: 0.5;
 }
 .info {
   display: grid;
