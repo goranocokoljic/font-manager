@@ -286,3 +286,11 @@ New `InspectorTabHead` (hint line, actions under it) replaced three copies of he
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-45.log`). Shots `review-45/` (before, 52) and `review-45-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
 **Not fixed, noted:** an open empty collection shows "Clear filters" with no filters chosen; Grid's selected style card keeps a dashed border; Settings nav focus ring on load.
 **Next five:** item 6 rest (one-style family: no doubled sample on reveal) → item 7 rest (Grid style card without the dashed border; hover weight range) → item 17 (Studio toolbar to one row; options in their own face) → item 26 (license date/number/datalist, Advanced number fields) → item 21 rest (Tags/Quick Collection empties on `UiEmptyState`). Every iteration takes before and after shots and reads the `lint:js` exit code.
+
+## Iteration 46 — 2026-11-03 — One-style families no longer show their sample twice
+**Critique (before):** After a `?face=` reload the first list row was Inter, expanded, so the family row and its only style showed the same pangram twice; Waterfall repeated the ladder. The list itself is calm and the selected-row bar reads well. The worst thing is the redundant row on first open.
+**Why:** Review 45 named it as the next item (6 rest). It changes the `list` and `waterfall` shots.
+**What changed:** `fontList.reveal` keeps a one-style family folded and selects the family row. `e2e/similar.spec.ts` accepts the family row as the selected row (UI changed on purpose).
+**Ticked:** none (item 6 stays ticked; the double sample is closed). **Shots:** `.harness/redesign/shots/46-after/` (the before run overlapped the edit, so it is not a clean before).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright similar 6/6; full suite had 1 failure (the one fixed). Log `.harness/redesign/e2e-46.log`.
+**Follow-ups:** item 7 rest (Grid style card dashed border) next. **Dependencies:** none.

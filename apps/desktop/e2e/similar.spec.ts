@@ -78,7 +78,8 @@ test('the row action opens "Similar to" and a click selects the result in the li
   // The panel replaces the list; closing it shows the picked face selected.
   await page.keyboard.press('Escape');
   await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveAccessibleName(
-    new RegExp(`^${name}, `),
+    // A one-style family is selected as its family row, not as a style row.
+    new RegExp(`^(${name}|${name.replace(/ \S+$/, '')}), `),
   );
 });
 
@@ -111,7 +112,8 @@ test('S on the selected row opens the panel; arrows and Enter select; Escape clo
   await expect(panel(page)).toBeHidden();
   await expect(tree).toBeFocused();
   await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveAccessibleName(
-    new RegExp(`^${name}, `),
+    // A one-style family is selected as its family row, not as a style row.
+    new RegExp(`^(${name}|${name.replace(/ \S+$/, '')}), `),
   );
 });
 

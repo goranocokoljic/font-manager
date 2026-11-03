@@ -170,6 +170,13 @@ export const useFontListStore = defineStore('fontList', () => {
   async function reveal(face: FaceSummary): Promise<boolean> {
     const id = face.family;
     if (!indexOf.value.has(familyKey(id))) return false;
+    // A one-style family stays folded: its row already shows that style's sample.
+    const single = families.value.find((f) => f.id === id)?.styleCount === 1;
+    if (single) {
+      click(familyKey(id));
+      revealed.value++;
+      return true;
+    }
     expanded.add(id);
     await library.facesOf(id).catch(() => undefined);
     const key = indexOf.value.has(faceKey(face.id)) ? faceKey(face.id) : familyKey(id);
