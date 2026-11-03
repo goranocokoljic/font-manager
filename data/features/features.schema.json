@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/features/features.schema.json",
+  "title": "Font Manager feature catalog",
+  "description": "Every registered OpenType layout feature tag with a friendly name, a group and a sample text. features.json follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "features"],
+  "properties": {
+    "$schema": { "const": "./features.schema.json" },
+    "features": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/feature" }
+    }
+  },
+  "$defs": {
+    "feature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "name", "group", "sample"],
+      "properties": {
+        "tag": {
+          "description": "Four-character feature tag (smcp, ss01). Unique in the file; the file is sorted by tag.",
+          "type": "string",
+          "pattern": "^[a-z0-9]{4}$"
+        },
+        "name": {
+          "description": "Friendly name in sentence case (Small capitals).",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\S(.*\\S)?$"
+        },
+        "group": {
+          "description": "The group the UI lists the feature under. automatic: the shaper applies it by itself.",
+          "enum": [
+            "ligatures",
+            "capitals",
+            "figures",
+            "fractions",
+            "positioning",
+            "stylistic",
+            "language",
+            "automatic"
+          ]
+        },
+        "sample": {
+          "description": "A short text that shows what the feature does.",
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^\\S(.*\\S)?$"
+        }
+      }
+    }
+  }
+}

@@ -122,6 +122,8 @@ mod tests {
             name: None,
             automatic,
             default_on,
+            group: None,
+            sample: None,
         }
     }
 

@@ -24,8 +24,8 @@ use crate::catalog::{
     ListCatalogFamiliesRequest, SetCatalogEnabledRequest,
 };
 use crate::common::{
-    Axis, AxisValue, Classification, Embedding, FeatureInfo, FontFormat, Health, Metrics,
-    NamedInstance, Page, Paged, Slant,
+    Axis, AxisValue, Classification, Embedding, FeatureGroup, FeatureInfo, FontFormat, Health,
+    Metrics, NamedInstance, Page, Paged, Slant,
 };
 use crate::comparison::{
     Comparison, ComparisonEntry, ComparisonRef, ComparisonService, MAX_COMPARISON_FACES,
@@ -756,6 +756,8 @@ fn face(
                 name: Some((*name).into()),
                 automatic: false,
                 default_on: matches!(*t, "kern" | "liga"),
+                group: Some(mock_feature_group(t)),
+                sample: Some(mock_feature_sample(t).into()),
             })
             .collect(),
             scripts: if chars.contains(&CYRILLIC) {
@@ -1459,6 +1461,28 @@ fn mock_glyph_name(c: char) -> String {
     }
 }
 
+/// The group of a mock feature, as in `data/features`.
+fn mock_feature_group(tag: &str) -> FeatureGroup {
+    match tag {
+        "kern" => FeatureGroup::Positioning,
+        "liga" => FeatureGroup::Ligatures,
+        "smcp" => FeatureGroup::Capitals,
+        "onum" => FeatureGroup::Figures,
+        _ => FeatureGroup::Stylistic,
+    }
+}
+
+/// The sample of a mock feature, as in `data/features`.
+fn mock_feature_sample(tag: &str) -> &'static str {
+    match tag {
+        "kern" => "AVATAR Toy",
+        "liga" => "fi fl ffi ffl",
+        "smcp" => "Small Capitals",
+        "onum" => "0123456789",
+        _ => "Rag Agy 0123",
+    }
+}
+
 /// A GSUB feature as fm-core names it, for the mock's glyph detail.
 fn mock_feature(tag: &str) -> FeatureInfo {
     let name = match tag {
@@ -1472,6 +1496,8 @@ fn mock_feature(tag: &str) -> FeatureInfo {
         name: Some(name.into()),
         automatic: false,
         default_on: tag == "liga",
+        group: Some(mock_feature_group(tag)),
+        sample: Some(mock_feature_sample(tag).into()),
     }
 }
 

@@ -1307,6 +1307,25 @@ export type FamilySummary = {
 	notes?: string | null,
 };
 
+/**  The group a registered OpenType feature is listed under. */
+export type FeatureGroup = 
+/**  `liga`, `dlig`. */
+"ligatures" | 
+/**  `smcp`, `case`. */
+"capitals" | 
+/**  `onum`, `tnum`. */
+"figures" | 
+/**  `frac`, `numr`. */
+"fractions" | 
+/**  `kern`, `sups`. */
+"positioning" | 
+/**  `ss01`, `swsh`. */
+"stylistic" | 
+/**  `locl`, `jp78`. */
+"language" | 
+/**  What the shaper applies by itself (`ccmp`, `mark`). */
+"automatic";
+
 /**  An OpenType layout feature the face provides. */
 export type FeatureInfo = {
 	/**  Four-letter feature tag (`smcp`, `ss01`). */
@@ -1320,6 +1339,13 @@ export type FeatureInfo = {
 	automatic?: boolean,
 	/**  On in default text rendering (`kern`, `liga`, `calt`). */
 	defaultOn?: boolean,
+	/**  The group of a registered tag, from `data/features` (E42.11). */
+	group?: FeatureGroup | null,
+	/**
+	 *  A short text that shows what a registered tag does, from `data/features`
+	 *  (E42.11).
+	 */
+	sample?: string | null,
 };
 
 /**  A feature switched on or off for a preview or CSS output. */
