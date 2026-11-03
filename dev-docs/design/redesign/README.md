@@ -1,6 +1,6 @@
 # Redesign target images
 
-Exports of the concept canvas, light theme, 1440 px wide:
+Exports of the concept canvas, light theme, exported at 2× (2880 px wide for a 1440 px board):
 https://claude.ai/artifact/4EtzdBCYU4LWsxaXNQKvNv
 
 ## How to export
@@ -9,7 +9,7 @@ Boards 1, 2 and 3 have several states. Each state is a Tweak, so an export is re
 
 1. Select the board on the canvas and open its **Tweaks** (the Tweaks button on the artboard).
 2. Under **Export state** choose the state from the table below (leave the other tweaks alone).
-3. **Share › Export** the board as PNG at 1× and save it under the file name in the table.
+3. **Share › Export** the board as PNG at 2× and save it under the file name in the table.
 4. Put the files in this folder; fill in the export date at the bottom.
 
 Boards 4, 5 and 6 have one state each: export them as they are.
@@ -41,4 +41,4 @@ A UI story is reviewed against its image, not against the previous screenshot. T
 the light theme at 1440 wide; the dark theme, compact density and narrow windows follow the
 design-system rules in dev-docs/redesign/DESIGN.md.
 
-Export date: _(fill in when E40.1 is done)_
+Export date: 2026-11-03 (17 of 18; `2-family-language.png` still to export — section = Styles, language = Serbian (Latin)).
