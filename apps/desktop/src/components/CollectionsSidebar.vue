@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import UiIconButton from './ui/UiIconButton.vue';
+import UiPopover from './ui/UiPopover.vue';
 // The Collections group of the sidebar: every manual and smart collection as a
 // tree, with its face count. Click one to show it in the list. Make, rename,
 // nest (In, Out), reorder (Up, Down) and delete them with the row buttons or by dragging a
@@ -203,6 +204,52 @@ function registerCommands(): void {
 watch(() => store.collections, registerCommands, { immediate: true });
 onBeforeUnmount(() => undo.splice(0).forEach((u) => u()));
 
+/** The row whose "more" menu is open, and the button it hangs from. */
+const menu = ref<{ id: CollectionId } | null>(null);
+const menuAnchor = ref<HTMLElement | null>(null);
+const menuEl = ref<HTMLElement | null>(null);
+const menuRow = computed(() => (menu.value ? rowOf(menu.value.id) : undefined));
+
+async function openMenu(row: CollectionRow, e: Event): Promise<void> {
+  const el = e.currentTarget as HTMLElement;
+  if (menu.value?.id === row.collection.id) return closeMenu();
+  menuAnchor.value = el;
+  menu.value = { id: row.collection.id };
+  await nextTick();
+  await nextTick();
+  menuEl.value?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+}
+function closeMenu(refocus = false): void {
+  menu.value = null;
+  if (refocus === true) menuAnchor.value?.focus();
+}
+/** Run a menu action, then close the menu. */
+function run(action: (row: CollectionRow) => void): void {
+  const row = menuRow.value;
+  closeMenu();
+  if (row) action(row);
+}
+function onMenuKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeMenu(true);
+    return;
+  }
+  const items = [
+    ...(menuEl.value?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []),
+  ];
+  const at = items.indexOf(document.activeElement as HTMLElement);
+  const go = (i: number) => {
+    e.preventDefault();
+    items[(i + items.length) % items.length]?.focus();
+  };
+  if (e.key === 'ArrowDown') go(at + 1);
+  else if (e.key === 'ArrowUp') go(at - 1);
+  else if (e.key === 'Home') go(0);
+  else if (e.key === 'End') go(items.length - 1);
+  else if (e.key === 'Tab') closeMenu();
+}
+
 function countLabel(n: number): string {
   return t('collections.fontCount', { count: n });
 }
@@ -294,79 +341,14 @@ function countLabel(n: number): string {
             <span class="count" :aria-label="countLabel(row.collection.faceCount)">{{
               row.collection.faceCount
             }}</span>
-          </div>
-          <div class="actions">
-            <button
-              type="button"
-              :aria-label="t('collections.newInsideLabel', { name: row.collection.name })"
-              @click="startEdit(null, row.collection.id)"
-            >
-              {{ t('collections.newInside') }}
-            </button>
-            <button
-              v-if="row.collection.rules"
-              type="button"
-              :aria-label="t('collections.editRulesLabel', { name: row.collection.name })"
-              @click="ruleEditor.openEdit(row.collection.id)"
-            >
-              {{ t('collections.editRules') }}
-            </button>
-            <button
-              type="button"
-              :aria-label="t('collections.renameActionLabel', { name: row.collection.name })"
-              @click="startEdit(row.collection.id, row.collection.parent, row.collection.name)"
-            >
-              {{ t('common.rename') }}
-            </button>
-            <button
-              type="button"
-              :aria-label="t('collections.upLabel', { name: row.collection.name })"
-              :disabled="row.position === 0"
-              @click="shift(row, -1)"
-            >
-              {{ t('collections.up') }}
-            </button>
-            <button
-              type="button"
-              :aria-label="t('collections.downLabel', { name: row.collection.name })"
-              :disabled="row.position === row.siblings - 1"
-              @click="shift(row, 1)"
-            >
-              {{ t('collections.down') }}
-            </button>
-            <button
-              v-if="row.position > 0"
-              type="button"
-              :aria-label="t('collections.inLabel', { name: row.collection.name })"
-              :title="t('collections.inTitle')"
-              @click="moveIn(row)"
-            >
-              {{ t('collections.in') }}
-            </button>
-            <button
-              v-if="row.collection.parent != null"
-              type="button"
-              :aria-label="t('collections.outLabel', { name: row.collection.name })"
-              @click="moveOut(row)"
-            >
-              {{ t('collections.out') }}
-            </button>
-            <button
-              type="button"
-              :aria-label="t('collections.exportLabel', { name: row.collection.name })"
-              :title="t('collections.exportTitle')"
-              @click="store.exportLicenseInventory(row.collection.id)"
-            >
-              {{ t('collections.exportLicenseInventory') }}
-            </button>
-            <button
-              type="button"
-              :aria-label="t('collections.deleteLabel', { name: row.collection.name })"
-              :title="t('collections.deleteTitle')"
-              @click="store.remove(row.collection.id)"
-            >
-              {{ t('common.delete') }}
-            </button>
+            <UiIconButton
+              class="more"
+              icon="more"
+              :label="t('collections.moreLabel', { name: row.collection.name })"
+              aria-haspopup="menu"
+              :aria-expanded="menu?.id === row.collection.id ? 'true' : 'false'"
+              @click="openMenu(row, $event)"
+            />
           </div>
         </li>
         <li
@@ -385,6 +367,97 @@ function countLabel(n: number): string {
         </li>
       </template>
     </ul>
+    <UiPopover :open="menu !== null" :anchor="menuAnchor" @close="closeMenu">
+      <div
+        v-if="menuRow"
+        ref="menuEl"
+        class="menu"
+        role="menu"
+        :aria-label="t('collections.moreLabel', { name: menuRow.collection.name })"
+        @keydown="onMenuKey"
+      >
+        <button
+          role="menuitem"
+          type="button"
+          :aria-label="t('collections.newInsideLabel', { name: menuRow.collection.name })"
+          @click="run((r) => startEdit(null, r.collection.id))"
+        >
+          {{ t('collections.newInside') }}
+        </button>
+        <button
+          role="menuitem"
+          v-if="menuRow.collection.rules"
+          type="button"
+          :aria-label="t('collections.editRulesLabel', { name: menuRow.collection.name })"
+          @click="run((r) => ruleEditor.openEdit(r.collection.id))"
+        >
+          {{ t('collections.editRules') }}
+        </button>
+        <button
+          role="menuitem"
+          type="button"
+          :aria-label="t('collections.renameActionLabel', { name: menuRow.collection.name })"
+          @click="run((r) => startEdit(r.collection.id, r.collection.parent, r.collection.name))"
+        >
+          {{ t('common.rename') }}
+        </button>
+        <button
+          role="menuitem"
+          type="button"
+          :aria-label="t('collections.upLabel', { name: menuRow.collection.name })"
+          :disabled="menuRow.position === 0"
+          @click="run((r) => shift(r, -1))"
+        >
+          {{ t('collections.up') }}
+        </button>
+        <button
+          role="menuitem"
+          type="button"
+          :aria-label="t('collections.downLabel', { name: menuRow.collection.name })"
+          :disabled="menuRow.position === menuRow.siblings - 1"
+          @click="run((r) => shift(r, 1))"
+        >
+          {{ t('collections.down') }}
+        </button>
+        <button
+          role="menuitem"
+          v-if="menuRow.position > 0"
+          type="button"
+          :aria-label="t('collections.inLabel', { name: menuRow.collection.name })"
+          :title="t('collections.inTitle')"
+          @click="run((r) => moveIn(r))"
+        >
+          {{ t('collections.in') }}
+        </button>
+        <button
+          role="menuitem"
+          v-if="menuRow.collection.parent != null"
+          type="button"
+          :aria-label="t('collections.outLabel', { name: menuRow.collection.name })"
+          @click="run((r) => moveOut(r))"
+        >
+          {{ t('collections.out') }}
+        </button>
+        <button
+          role="menuitem"
+          type="button"
+          :aria-label="t('collections.exportLabel', { name: menuRow.collection.name })"
+          :title="t('collections.exportTitle')"
+          @click="run((r) => store.exportLicenseInventory(r.collection.id))"
+        >
+          {{ t('collections.exportLicenseInventory') }}
+        </button>
+        <button
+          role="menuitem"
+          type="button"
+          :aria-label="t('collections.deleteLabel', { name: menuRow.collection.name })"
+          :title="t('collections.deleteTitle')"
+          @click="run((r) => store.remove(r.collection.id))"
+        >
+          {{ t('common.delete') }}
+        </button>
+      </div>
+    </UiPopover>
   </section>
 </template>
 
@@ -408,15 +481,6 @@ function countLabel(n: number): string {
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   font-weight: 600;
-}
-.actions button {
-  padding: 2px 6px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--fm-text-xs);
 }
 .list {
   margin: 0;
@@ -476,17 +540,36 @@ function countLabel(n: number): string {
   color: var(--fm-muted);
   font-variant-numeric: tabular-nums;
 }
-.actions {
-  display: none;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding-top: 4px;
+.more {
+  visibility: hidden;
 }
-/* Shown for the open collection and under keyboard focus, never on hover: rows that
-   grow under the pointer would move a drag's target. */
-.open .actions,
-.item:focus-within .actions {
+.open .more,
+.item:hover .more,
+.item:focus-within .more,
+.more[aria-expanded='true'] {
+  visibility: visible;
+}
+.menu {
   display: flex;
+  flex-direction: column;
+  min-width: 180px;
+}
+.menu button {
+  padding: var(--fm-space-1) var(--fm-space-2);
+  border: 0;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: nowrap;
+}
+.menu button:hover:not(:disabled),
+.menu button:focus-visible {
+  background-color: var(--fm-hover);
+}
+.menu button:disabled {
+  color: var(--fm-muted);
 }
 .edit input {
   box-sizing: border-box;

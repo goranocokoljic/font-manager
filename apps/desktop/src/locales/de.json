@@ -926,6 +926,7 @@
     },
     "newInside": "Neu darin",
     "newInsideLabel": "Neue Sammlung in {name}",
+    "moreLabel": "Weitere Aktionen für {name}",
     "editRules": "Regeln bearbeiten",
     "editRulesLabel": "Regeln von {name} bearbeiten",
     "renameActionLabel": "{name} umbenennen",

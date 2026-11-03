@@ -67,7 +67,8 @@ test('"Sans serif AND (Cyrillic OR Greek)" is built, saved, and the sidebar coun
   expect(count).toBe(1);
 
   // Edit rules: the saved rule comes back, a change is saved through the new method.
-  await saved.getByRole('button', { name: 'Edit rules of Sans Cyrillic or Greek' }).click();
+  await saved.getByRole('button', { name: 'More actions for Sans Cyrillic or Greek' }).click();
+  await page.getByRole('menuitem', { name: 'Edit rules of Sans Cyrillic or Greek' }).click();
   await expect(dialog.getByRole('heading')).toHaveText('Edit rules of “Sans Cyrillic or Greek”');
   await expect(
     dialog.getByRole('combobox', { name: 'Rule 1: value', exact: true }),

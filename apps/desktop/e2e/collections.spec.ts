@@ -16,13 +16,21 @@ async function make(page: Page, name: string) {
   await expect(row(page, name)).toBeVisible();
 }
 
+/** Open a collection's "more" menu and click one of its items. */
+async function act(page: Page, owner: string, name: string): Promise<void> {
+  await row(page, owner)
+    .getByRole('button', { name: `More actions for ${owner}` })
+    .click();
+  await page.getByRole('menuitem', { name }).click();
+}
+
 test('collections are made, renamed, nested, reordered and deleted', async ({ page }) => {
   await page.goto('/');
   await make(page, 'Clients');
   await make(page, 'Brand');
 
   await open(page, 'Brand');
-  await row(page, 'Brand').getByRole('button', { name: 'Rename Brand' }).click();
+  await act(page, 'Brand', 'Rename Brand');
   const rename = sidebar(page).getByRole('textbox', { name: 'New name for Brand' });
   await rename.fill('Marque');
   await rename.press('Enter');
@@ -33,22 +41,23 @@ test('collections are made, renamed, nested, reordered and deleted', async ({ pa
   await expect(row(page, 'Marque')).toHaveAttribute('data-depth', '1');
 
   await open(page, 'Marque');
-  await row(page, 'Marque').getByRole('button', { name: 'Move Marque out of its parent' }).click();
+  await act(page, 'Marque', 'Move Marque out of its parent');
   await expect(row(page, 'Marque')).toHaveAttribute('data-depth', '0');
-  await row(page, 'Marque').getByRole('button', { name: 'Move Marque up' }).click();
+  await act(page, 'Marque', 'Move Marque up');
   const order = sidebar(page).locator('li[data-collection]');
   await expect(order).toHaveText([/Marque/, /Clients/]);
 
   await open(page, 'Clients');
   // Nest again from the keyboard: In puts Clients inside Marque, the collection above it.
-  const into = row(page, 'Clients').getByRole('button', {
-    name: 'Move Clients into the collection above',
-  });
-  await into.focus();
-  await page.keyboard.press('Enter');
+  await row(page, 'Clients')
+    .getByRole('button', { name: 'More actions for Clients' })
+    .press('Enter');
+  await page
+    .getByRole('menuitem', { name: 'Move Clients into the collection above' })
+    .press('Enter');
   await expect(row(page, 'Clients')).toHaveAttribute('data-depth', '1');
   await open(page, 'Clients');
-  await row(page, 'Clients').getByRole('button', { name: 'Delete Clients' }).click();
+  await act(page, 'Clients', 'Delete Clients');
   await expect(row(page, 'Clients')).toHaveCount(0);
 });
 
@@ -100,9 +109,7 @@ test('"Export license inventory…" saves a CSV of the library or of one collect
   // A collection's own button exports its families only: none yet.
   await make(page, 'Picks');
   await open(page, 'Picks');
-  await row(page, 'Picks')
-    .getByRole('button', { name: 'Export the license inventory of Picks' })
-    .click();
+  await act(page, 'Picks', 'Export the license inventory of Picks');
   await expect(toast).toContainText('Saved the license inventory: 0 families.');
 
   // With one family in it, the palette exports the open collection.

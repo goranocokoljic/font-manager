@@ -926,6 +926,7 @@
     },
     "newInside": "New inside",
     "newInsideLabel": "New collection inside {name}",
+    "moreLabel": "More actions for {name}",
     "editRules": "Edit rules",
     "editRulesLabel": "Edit rules of {name}",
     "renameActionLabel": "Rename {name}",

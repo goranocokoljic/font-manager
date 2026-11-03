@@ -9,7 +9,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; dark-first launch, collapsible panes remain)
-- [ ] 5 Sidebar redesign (iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
+- [ ] 5 Sidebar redesign (iteration 12: collection row actions in a "…" menu; iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
 - [ ] 6 List rows (iteration 9 + review 10: UiBadge and UiChevron everywhere; hover actions, chevron alignment, sub-row styling remain)
 - [ ] 7 Grid cards
 - [ ] 8 Inspector
@@ -104,4 +104,13 @@ Built `UiBadge`; FontList and FontPreviewRow badges moved onto it and the ▸/�
 **Ticked:** none (item 4 still open). **Shots:** `.harness/redesign/shots/11/` (before), `11a/` (after).
 **Verified:** typecheck, lint:js, Vitest 906, Playwright 272 passed / 16 skipped.
 **Follow-ups:** dark-first launch (first-run theme is "system"; the e2e theme tests assume system) and collapsible panes are the remainder of item 4. Settings link sits ~2 px higher than Commands in the bar (kbd height); align in the polish pass.
+**Dependencies:** none. **Reverted:** no.
+
+## Iteration 12 — 2026-11-03 — Collections: six row buttons become one "…" menu
+**Critique:** The list is calm, but an opened collection grows a block of six bordered text buttons (New inside, Rename, Up, Down, Export…, Delete) that is the loudest chrome on screen. "Turn on" buttons and an empty "Smart collections" header are next.
+**Why:** Backlog item 5 (rest). After: the open collection row shows its count plus a quiet "…" and stays one line tall.
+**What changed:** `CollectionsSidebar` row actions moved into a `UiPopover` menu (`role=menu`, arrows/Home/End/Esc, focus returns to the "…"); new `more` icon; `collections.moreLabel` in en/de. The "…" shows on hover, focus and the open row. Tests: Vitest and e2e `collections`, `smart-rules` open the menu first.
+**Ticked:** none (item 5 still open). **Shots:** `.harness/redesign/shots/12/` (before), `12a/` (after).
+**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (one export test fixed, re-run green).
+**Follow-ups:** "Turn on" catalog buttons; smart subtype instead of the "Smart" pill (still a local `.badge` in this file); empty "Smart collections" header; Problems dedupe. A shared `UiMenu` could replace the hand-made menu if a second menu appears.
 **Dependencies:** none. **Reverted:** no.
