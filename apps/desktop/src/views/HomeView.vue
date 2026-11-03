@@ -461,6 +461,18 @@ function openFace(face: FaceId): void {
       />
       <template v-else>
         <header class="toolbar">
+          <button
+            type="button"
+            class="toggle icon"
+            :aria-label="t('home.sidebar')"
+            aria-controls="fm-sidebar"
+            aria-keyshortcuts="["
+            :aria-pressed="layout.sidebarOpen"
+            :title="t('home.sidebarTitle')"
+            @click="layout.toggleSidebar"
+          >
+            <UiIcon name="sidebar" />
+          </button>
           <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
           <SearchBox />
           <p class="count" role="status">

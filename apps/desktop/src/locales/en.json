@@ -273,6 +273,8 @@
     "compactRows": "Compact rows",
     "compareTitle": "Compare the pinned fonts; {chord} pins the selected font",
     "compareButton": "Compare {pinned}/{max}",
+    "sidebar": "Sidebar",
+    "sidebarTitle": "Show or hide the sidebar ([)",
     "inspectorTitle": "Show or hide the inspector (Ctrl+I / ⌘I)",
     "inspector": "Inspector",
     "fontList": "Font list",

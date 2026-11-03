@@ -8,6 +8,7 @@ export const ICONS = {
   density: '<path d="M3 3.5h10M3 6h10M3 8.5h10M3 11h10M3 13.5h10"/>',
   compare:
     '<rect x="2" y="3" width="5" height="10" rx="1"/><rect x="9" y="3" width="5" height="10" rx="1"/>',
+  sidebar: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6 3v10"/>',
   inspector: '<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M10 3v10"/>',
   close: '<path d="M4 4l8 8M12 4l-8 8"/>',
   plus: '<path d="M8 3v10M3 8h10"/>',

@@ -273,6 +273,8 @@
     "compactRows": "Kompakte Zeilen",
     "compareTitle": "Angeheftete Schriften vergleichen; {chord} heftet die ausgewählte Schrift an",
     "compareButton": "Vergleichen {pinned}/{max}",
+    "sidebar": "Seitenleiste",
+    "sidebarTitle": "Seitenleiste ein- oder ausblenden ([)",
     "inspectorTitle": "Inspektor ein- oder ausblenden (Strg+I / ⌘I)",
     "inspector": "Inspektor",
     "fontList": "Schriftliste",

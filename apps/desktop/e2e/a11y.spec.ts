@@ -530,7 +530,9 @@ test('every action of the keyboard model works without a mouse', async ({ page }
   await expect(palette).toBeHidden();
   await expect(search).toBeFocused();
 
-  // Tab between columns: from the search box back to its column, then into the list.
+  // Tab between columns: from the search box back past the sidebar toggle to its column.
+  await page.keyboard.press('Shift+Tab');
+  await expect(page.getByRole('button', { name: 'Sidebar' })).toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(page.getByRole('main', { name: 'Fonts' })).toBeFocused();
   // Arrows on the column move into the list; arrows and Enter work the list.

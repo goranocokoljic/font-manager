@@ -263,3 +263,13 @@ Sources, Collections and Tags moved onto `UiFoldButton`, so all six headings sha
 **Verified:** typecheck, `lint:js` exit 0, Vitest 29 views ok, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-38.log`).
 **Follow-ups:** the active tab shows only the focus ring on open (it is focused); consider focusing the panel heading. Settings panel is still sparse: group options in cards.
 **Dependencies:** none.
+
+## Iteration 39 — 2026-11-03 — Toolbar: sidebar toggle button
+**Critique (before):** The toolbar had a button for the inspector on the right but none for the sidebar on the left; `[` worked only from the keyboard. The list is calm and the specimens lead. The left pane could not be hidden with the mouse.
+**Why:** Backlog items 4/5 leftover (collapsed-sidebar toggle), visible in the first three seconds as a new icon left of the title.
+**What changed:** New `sidebar` icon; a pressed-state toggle button before the title in `HomeView` (same `toggle icon` style as the inspector one, `aria-controls`, tooltip with `[`). en and de strings. `a11y.spec.ts` Tab-order step now passes through this button.
+**Ticked:** none fully (item 4 keeps dark-first launch, blocked on the API).
+**Shots:** `.harness/redesign/shots/39/` (before), `39b/` (after).
+**Verified:** typecheck, `lint:js` exit 0, Vitest ok, Playwright 273 expected (one a11y step updated, `a11y` 34 passed; full run had only that failure, `.harness/redesign/e2e-39.log`).
+**Follow-ups:** the toggle shows only on All fonts toolbar; other views (Table-only, Studio) have no button. Settings panel still sparse.
+**Dependencies:** none.
