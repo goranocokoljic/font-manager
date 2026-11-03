@@ -342,14 +342,16 @@ function blockFamily(i: number): string {
   overflow: visible;
 }
 /* Locked in the Studio: the icon sits at the right edge of the centred page, not the window. */
+/* Same tracks as `.page.locked .row.with-badge` below; the end pad skips the right tools
+   column, so the icon ends where the text column does. */
 .head.bare.locked {
-  --fm-tools-width: 5em;
-  max-width: calc(var(--fm-layout-width) + 2 * var(--fm-tools-width) + 2 * 32px);
+  max-width: calc(
+    var(--fm-layout-width) + 2 * var(--fm-tools-width) + 2 * var(--fm-space-2) + 2 *
+      var(--fm-space-8)
+  );
   margin-inline: auto;
-  padding-inline: 32px;
-}
-.head.bare.locked.with-tools {
-  --fm-tools-width: 11em;
+  padding-inline: var(--fm-space-8)
+    calc(var(--fm-space-8) + var(--fm-tools-width) + var(--fm-space-2));
 }
 .name {
   font-weight: 600;
@@ -360,12 +362,16 @@ function blockFamily(i: number): string {
 .failed {
   color: var(--fm-warning);
 }
-.page {
+.page,
+.head.bare.locked {
   --fm-tools-width: 5em;
-  padding: 24px 32px;
+}
+.page {
+  padding: var(--fm-space-6) var(--fm-space-8);
 }
 /* Room for the parent's block controls (a font picker) beside the badge. */
-.page.with-tools {
+.page.with-tools,
+.head.bare.locked.with-tools {
   --fm-tools-width: 11em;
 }
 .row.with-badge {
@@ -373,7 +379,7 @@ function blockFamily(i: number): string {
   /* An empty column opposite the badges keeps the text centered and gives the locked and
      unlocked grids the same tracks, so locking keeps the width the text has on screen. */
   grid-template-columns: var(--fm-tools-width) minmax(0, 1fr) var(--fm-tools-width);
-  gap: 8px;
+  gap: var(--fm-space-2);
   align-items: start;
 }
 /* Locked: the text column keeps its width and is centered in the window. */

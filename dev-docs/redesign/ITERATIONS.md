@@ -20,8 +20,8 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; iteration 74 + review 75: Grid Alt+→/← opens a family, listed in the sheet; more tooltips remain)
 - [x] 14 Weight scrubbing (iteration 73: drag across a variable sample in the list/table rows to scrub `wght`; value pill beside the label; kept on release)
 - [ ] 15 Context presets in Layout
-- [ ] 16 Compare overlay (overlay mode already existed; iterations 71–72 + review 75: centred sheet, quiet controls, hairline specimens at 2× the list size, overlay centred on its stage; a size control and a text/radio `UiSegmentedControl` variant for Compare and the Axes instances remain)
-- [ ] 17 Pairing Studio + Pairs with (iterations 44, 48, 52, 67, 76: quiet name tags, two bars, icon buttons, Layout help behind info and a lock icon; Studio lock beside the page and suggestions remain)
+- [ ] 16 Compare overlay (overlay mode already existed; iterations 71–72, 82–83 + reviews 75, 85: centred sheet, quiet controls, specimens at 2× the list size, a size control, Axes instances on a text `UiSegmentedControl`; arrow-key roving and the Compare mode onto it remain)
+- [ ] 17 Pairing Studio + Pairs with (iterations 44, 48, 52, 67, 76, 84 + review 85: quiet name tags, two bars, icon buttons, Layout help behind info, lock icon at the text column; suggestions and options in their own face remain)
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
 - [ ] 20 Collections UX
@@ -478,41 +478,28 @@ Four iterations since review 75 (76–79); all four graded.
 **Next five:** item 6 (row actions Activate / Compare / Tag on hover, seen in `hover-row`) → item 16 (text/radio `UiSegmentedControl`; Compare and Axes instances onto it) → item 17 (Studio lock beside the page) → item 14 (scrub in Grid cards and Quick Look; a `scrub` scene) → item 26 (Settings nav focus ring; Catalog toolbar on one line). Open before and after shots of the touched scene, both themes; run `pnpm lint:js` and read its exit code.
 
 ## Iteration 81 — 2026-11-03 — List rows: Activate, Compare and Similar on hover
-Critique (before): the list is calm and the type leads; a hovered row showed one lone lens icon, so activating or comparing meant going to the inspector or a shortcut nobody sees. The rest of the first screen is mature.
-Why: backlog item 6's last open part, named in review 80; seen in `hover-row`.
-Changed: `FontList` row actions are three `UiIconButton`s (power, compare, similar) in one hover/cursor group; they select the row, then toggle for the session (`activation.toggleRows`) or pin (`compare.pin`). Labels are `list.activateLabel` and `list.compareLabel` (en/de); "Switch … on or off" avoids a clash with the inspector's "Activate" button in role queries.
-Backlog: 6 stays ticked, row-action set done.
-Shots: `.harness/redesign/shots/81/` (before) and `81-after/`; `hover-row` changed.
-Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 270 passed on first run; the 3 failures (name clash) fixed and re-run green (a11y, settings).
-Follow-ups: Tag action on hover; the row actions do not show in compact density checks; no scene for keyboard focus on them (they are `tabindex=-1`, shortcuts cover keyboard).
-Dependencies: none.
+`FontList` row actions became three `UiIconButton`s (power, compare, similar) shown on hover and on the cursor row; `hover-row` changed.
 
 ## Iteration 82 — 2026-11-03 — Axes: named instances become a text segmented control
-Critique (before): the first screen is mature; in the Axes tab the named instances were bare words, and the current one differed only by text colour, so the choice did not read as one exclusive set.
-Why: item 16, named by review 80 (one `UiSegmentedControl` text variant for instances and, next, Compare).
-Changed: `UiSegmentedControl` takes icon-less options (text segment) and a `wrap` flag, and sets `data-value`; `InspectorAxes` uses it for the instances (pressed = lifted segment, accent text). The old `.presets` CSS is gone. Tests: Vitest and `axes.spec.ts` now find a `group` named "Named instances".
-Backlog: 16 stays open (Compare size control and text/radio variant there remain).
-Shots: `.harness/redesign/shots/81-after/` (before) and `82/`; `inspector-axes` changed.
-Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 273 passed / 16 skipped.
-Follow-ups: Compare overlay controls onto the text variant; arrow-key roving inside the group (buttons are all tab stops today).
-Dependencies: none.
+`UiSegmentedControl` took text segments, a `wrap` flag and `data-value`; the Axes instances moved onto it.
 
 ## Iteration 83 — 2026-11-03 — Compare sheet: a size control
-Critique (before): the first screen is mature; the Compare sheet draws specimens at a size it picks itself (twice the list's), and the user cannot change it. Mode switch and specimens are calm and read well.
-Why: item 16's named left-over ("a size control in the sheet"). The mode radios stay: they are real radios with arrow-key roving, and moving them to buttons would lose that.
-Changed: `CompareSheet` head gets a text `UiSegmentedControl` — Auto, 48, 72, 96 — that overrides the sheet's draw size (Side by side, Stacked and Overlay). Auto still follows the list. Keys `compare.sizeLabel` / `compare.sizeAuto` (en/de).
-Backlog: 16 stays open (mode switch still a local radio look).
-Shots: `.harness/redesign/shots/83/`; `compare` and `compare-overlay` changed.
-Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 273 passed / 16 skipped.
-Follow-ups: size choice is not remembered; give `UiSegmentedControl` arrow-key roving, then move the Compare mode on to it.
-Dependencies: none.
+A text `UiSegmentedControl` (Auto, 48, 72, 96) in the sheet head overrides the draw size in all three modes.
 
 ## Iteration 84 — 2026-11-03 — Studio: the width lock moves beside the page
-Critique (before): the Studio page is a centred paper column, but its width-lock icon floated alone at the far window corner, 400 px from the thing it controls. The rest of the screen is calm and reads well.
-Why: item 17's named left-over (review 80, "Studio lock beside the page").
-Changed: `FontLayout` bare head, when locked, takes the page's width variables and centres to the page grid, so the lock sits at the page's right edge. Unlocked it stays at the window edge (the page is full width there).
-Backlog: 17 stays open (suggestions rail, options in own face).
-Shots: `.harness/redesign/shots/83/` (before) and `84/`; `studio` changed.
-Verified: typecheck, `lint:js` 0 (after Prettier fix), Vitest 913, Playwright 273 passed / 16 skipped.
-Follow-ups: the magazine text is narrower than the locked width, so the lock still sits ~150 px right of the text; a lock tied to the text column would need the real column width.
-Dependencies: none.
+`FontLayout`'s bare head, when locked, takes the page width and centres, so the lock left the window corner.
+
+## Review 85 — 2026-11-03
+Four iterations since review 80 (81–84); all four graded.
+**Grades:** iter 81 **4** — the first change since review 70 that moves the `list` shot (the cursor row now shows three quiet actions), done on the existing components with honest labels and tests; a literal 8 px margin stayed, Activate shows no on/off state, and Tag is missing. Iter 82 **3** — the right consolidation (instances onto `UiSegmentedControl`), but `wrap` turned the track into a block, so in the Axes tab it ran the full pane width with an empty band after "Black"; a literal `12px`; no arrow keys inside the group. Iter 83 **3** — a useful control, but it put a second segmented look beside the local mode radios at a different height (20 px vs 24 px), and the choice is not remembered. Iter 84 **3** — the lock left the window corner, but it pasted the page's track constants (`5em`/`11em`, literal `32px`) into a second rule and still sat ~160 px right of the text it locks.
+**Regressions:** none in views, keyboard or tests. List performance 42.6 fps under the 12-worker run (load; 59.8 fps alone in earlier reviews). **Drift:** literal sizes (81, 82, 84). No new colours, fonts, radii or native controls.
+**Pulled apart:** 83's `UiSegmentedControl` size switch against 71's local radio mode switch — two looks of one control side by side in one head. Not merged (the radios keep real arrow-key roving); their metrics now match.
+**Fixed:**
+- `UiSegmentedControl`: `wrap` keeps the track inline (hugs its segments); text segments use `--fm-text-sm`.
+- `CompareSheet`: the mode radios use the segment height and padding of the size control beside them.
+- `FontLayout`: one rule sets `--fm-tools-width` for the page and the locked head; page padding, row gap and head padding on spacing tokens; the locked head's end pad skips the right tools column, so the lock ends at the layout column (~90 px right of the magazine text, which is narrower than its column; was ~160 px).
+- `FontList`: row-action margin on a token.
+**Rule amended (DESIGN.md):** the component list names the `UiSegmentedControl` text/wrap variant. Items 6, 16, 17 and the three-second note rewritten.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 913, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-85.log`). Shots `85/` (before, 66; the first fixes landed mid-run) and `85-after/` (66): every scene renders in light and dark, comfortable and compact.
+**Not fixed, noted:** Settings nav focus ring on load; empty collection shows "Clear filters" with no filters; Catalog toolbar wraps "Check for updates"; Compare size not remembered.
+**Next five:** item 14 (scrub in Grid cards and Quick Look; a `scrub` scene) → item 16 (`UiSegmentedControl` arrow-key roving + radio role; Compare mode onto it, local radio CSS deleted) → item 15 (Layout context presets — a real feature) → item 6 (Tag row action; Activate shows its state) → item 26 (Settings nav focus ring; Catalog toolbar on one line). Every literal size goes on a token; open before and after shots of the touched scene in both themes.

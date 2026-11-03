@@ -494,9 +494,13 @@ h2 {
   border-radius: var(--fm-radius-md);
   background-color: var(--fm-surface);
 }
+/* Same segment metrics as `UiSegmentedControl` text segments, which sit beside it (size). */
 .mode {
   position: relative;
-  padding: 2px var(--fm-space-3);
+  display: grid;
+  place-items: center;
+  height: 24px;
+  padding: 0 var(--fm-space-2);
   border-radius: var(--fm-radius-sm);
   color: var(--fm-muted);
   font-size: var(--fm-text-sm);

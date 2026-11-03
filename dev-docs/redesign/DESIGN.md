@@ -133,7 +133,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   the user overrides it; previews honour the `font-feature-settings` chosen in Features.
 - **Components** (`src/components/ui/`): `UiPopover`, `UiSelect`, `UiDrawer`, `UiIcon` (+ `icons.ts`),
   `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
-  and `UiChevron` exist (review 10), plus `UiFoldButton` with `components/useFolded.ts`
+  and `UiChevron` exist (review 10); `UiSegmentedControl` takes icon or text segments and a `wrap`
+  flag, and its track always hugs its segments (iteration 82, review 85), plus `UiFoldButton` with `components/useFolded.ts`
   (review 35) and `UiEmptyState` (review 45); every inspector tab head is `InspectorTabHead`;
   a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
   local acquire/release copy (review 50). Every number field is `UiNumberField`; a caller that
@@ -213,12 +214,11 @@ Every iteration must change something a designer would see in the first three se
 opening the app, or feel in the first minute of using it, and open before/after shots of a scene
 that shows it. (Amended in review 80: the `list` shot has not moved since review 70 — the first
 screen is mature — so "the `list` shot or the scene of the view the change touches" is the test;
-a change no scene shows adds that scene first.) Since review 75 the Layout view's help sits behind
-an info button and "Lock width" is an icon (17), Grid card names are never cut (7), and the Catalog
-rows and the Axes instances are quiet `UiButton`s (26). Next: row actions on hover in the list (6,
-seen in `hover-row`), a text/radio `UiSegmentedControl` for Compare and the Axes instances (16),
-the Studio's lock beside the page (17), scrubbing in Grid cards and Quick Look with a `scrub` scene
-(14).
+a change no scene shows adds that scene first.) Since review 80 list rows carry Activate, Compare
+and Similar on hover (6), the Axes instances and the Compare size are text segments (16), and the
+Studio lock ends at the text column (17). Next: scrubbing in Grid cards and Quick Look with a
+`scrub` scene (14); arrow-key roving in `UiSegmentedControl`, then Compare's mode radios onto it
+(16); Layout presets with real contexts (15) — the first new feature in a while.
 Every feature adds a scene to `shots.mjs` in the same
 iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
@@ -262,8 +262,8 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
    review 30). `?face=` selects the list row (iteration 42); revealing a one-style family keeps
    it folded (iteration 46); a one-style family has no chevron and does not open in any view
    (iteration 51, review 55: `aria-expanded` follows the same `single` flag); sub-rows no
-   longer repeat "Variable" (iteration 56). Nothing left but the row-action set (Activate,
-   Compare, Tag on hover).
+   longer repeat "Variable" (iteration 56). Activate, Compare and Similar on hover and on the
+   cursor row (iteration 81). Left: a Tag action; Activate shows no on/off state on the button.
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
    style cards are solid and every card tints on hover (iteration 47); hover or the cursor
    swaps the style count for the weight range, with `grid-hover` and `grid-expanded` scenes
@@ -317,10 +317,11 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     50 % opacity, for x-height and width comparison — in addition to side-by-side. The overlay
     existed; the sheet is now centred, quiet and draws at twice the list size, the overlay line
     centred on its stage (iterations 71–72, review 75; `compare`, `compare-overlay` scenes).
-    Left: a size control in the sheet; the mode switch is a local radio copy of the
-    `UiSegmentedControl` look — give `UiSegmentedControl` a text + radio-group variant and move
-    Compare and the Axes named instances onto it (a pressed quiet button in accent text is a weak
-    "current" cue there, review 80); Pairings under the sheet is a sentence when empty.
+    The Axes instances are a text `UiSegmentedControl` (iteration 82) and the sheet has a size
+    control, Auto / 48 / 72 / 96 (iteration 83; review 85: the local mode radios share its segment
+    height). Left: `UiSegmentedControl` arrow-key roving and a radio role, then the mode radios
+    onto it (one look, not two side by side); the size choice is not remembered; Pairings under
+    the sheet is a sentence when empty.
 17. **Pairing Studio + "Pairs with" (API?).** The studio is where designers will spend real
     time, so it should feel like a canvas, not a form: a paper surface at realistic page scale
     centred in the window with a neutral backdrop; roles instead of blocks (Headline, Deck,
@@ -335,9 +336,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     Two bars now: Close, Print and close-panel are icon buttons, the gesture sentence opens
     from the info button (iteration 52, review 55); "Add panel" is a plus icon (iteration 67).
     The Layout view's help is behind an info button and "Lock width" is a `width` icon in its
-    head (iteration 76, review 80: the help line aligns with the head). Left: options in their own
-    face; in the Studio (`FontLayout` `bare`) the lock icon floats alone at the window's corner
-    instead of beside the page.
+    head (iteration 76, review 80: the help line aligns with the head). The Studio lock ends at the
+    locked text column, from the same tracks as the page (iteration 84, review 85). Left: options
+    in their own face; the suggestions rail.
 18. **Drag out (API?).** Drag a family from the list to drop its files into Explorer / Finder or
     another app; copy CSS / `font-family` name from the row menu.
 19. **Problems & Duplicates triage view (API?).** Grouped, with a "keep best" suggestion and bulk

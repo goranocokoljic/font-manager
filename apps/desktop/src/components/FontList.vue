@@ -539,7 +539,7 @@ function onToggle(row: ListRow): void {
   align-self: center;
   display: flex;
   gap: var(--fm-space-1);
-  margin-inline-end: 8px;
+  margin-inline-end: var(--fm-space-2);
   visibility: hidden;
 }
 .slot:hover .row-actions,

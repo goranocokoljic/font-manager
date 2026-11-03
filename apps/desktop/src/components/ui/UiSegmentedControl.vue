@@ -63,15 +63,16 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
     background-color var(--fm-motion-fast) var(--fm-ease),
     color var(--fm-motion-fast) var(--fm-ease);
 }
+/* Still inline: the track hugs its segments and only wraps when the row runs out. */
 .wrap {
-  display: flex;
   flex-wrap: wrap;
+  max-width: 100%;
 }
 .seg.text {
   width: auto;
   min-width: 28px;
   padding: 0 var(--fm-space-2);
-  font-size: 12px;
+  font-size: var(--fm-text-sm);
   white-space: nowrap;
 }
 .seg:hover {
