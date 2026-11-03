@@ -140,6 +140,8 @@
     "title": "Vergleichen",
     "pinnedCount": "{count} von {max} angeheftet",
     "mode": "Modus",
+    "sizeLabel": "Größe",
+    "sizeAuto": "Auto",
     "modes": {
       "sideBySide": "Nebeneinander",
       "stacked": "Untereinander",

@@ -25,6 +25,7 @@ import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import PairingsPanel from './PairingsPanel.vue';
 import UiButton from './ui/UiButton.vue';
 import UiIconButton from './ui/UiIconButton.vue';
+import UiSegmentedControl, { type SegmentOption } from './ui/UiSegmentedControl.vue';
 import UiSelect from './ui/UiSelect.vue';
 
 const compare = useCompareStore();
@@ -137,7 +138,19 @@ async function remove(face: FaceId): Promise<void> {
 }
 
 // The sheet is a specimen: it draws the list's size at twice the scale, within 40–96 px.
-const size = computed(() => Math.min(96, Math.max(40, settings.value.sizePx * 2)));
+// A chosen step overrides it for this sheet; "Auto" follows the list.
+const sizeChoice = ref<'auto' | '48' | '72' | '96'>('auto');
+const sizeOptions = computed<SegmentOption<'auto' | '48' | '72' | '96'>[]>(() => [
+  { value: 'auto', label: t('compare.sizeAuto') },
+  { value: '48', label: '48' },
+  { value: '72', label: '72' },
+  { value: '96', label: '96' },
+]);
+const size = computed(() =>
+  sizeChoice.value === 'auto'
+    ? Math.min(96, Math.max(40, settings.value.sizePx * 2))
+    : Number(sizeChoice.value),
+);
 // Overlay: one SVG line box; both texts sit on the same baseline (one `y`).
 const overlayHeight = computed(() => Math.ceil(size.value * 1.5));
 const overlayBaseline = computed(() => Math.round(size.value * 1.1));
@@ -251,6 +264,11 @@ function onFocusIn(e: FocusEvent): void {
             {{ m.label }}
           </label>
         </div>
+        <UiSegmentedControl
+          v-model="sizeChoice"
+          :options="sizeOptions"
+          :label="t('compare.sizeLabel')"
+        />
         <UiIconButton
           class="close"
           icon="close"

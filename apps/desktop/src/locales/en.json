@@ -140,6 +140,8 @@
     "title": "Compare",
     "pinnedCount": "{count} of {max} pinned",
     "mode": "Mode",
+    "sizeLabel": "Size",
+    "sizeAuto": "Auto",
     "modes": {
       "sideBySide": "Side by side",
       "stacked": "Stacked",

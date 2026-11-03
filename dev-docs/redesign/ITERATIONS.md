@@ -496,3 +496,13 @@ Shots: `.harness/redesign/shots/81-after/` (before) and `82/`; `inspector-axes` 
 Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 273 passed / 16 skipped.
 Follow-ups: Compare overlay controls onto the text variant; arrow-key roving inside the group (buttons are all tab stops today).
 Dependencies: none.
+
+## Iteration 83 — 2026-11-03 — Compare sheet: a size control
+Critique (before): the first screen is mature; the Compare sheet draws specimens at a size it picks itself (twice the list's), and the user cannot change it. Mode switch and specimens are calm and read well.
+Why: item 16's named left-over ("a size control in the sheet"). The mode radios stay: they are real radios with arrow-key roving, and moving them to buttons would lose that.
+Changed: `CompareSheet` head gets a text `UiSegmentedControl` — Auto, 48, 72, 96 — that overrides the sheet's draw size (Side by side, Stacked and Overlay). Auto still follows the list. Keys `compare.sizeLabel` / `compare.sizeAuto` (en/de).
+Backlog: 16 stays open (mode switch still a local radio look).
+Shots: `.harness/redesign/shots/83/`; `compare` and `compare-overlay` changed.
+Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 273 passed / 16 skipped.
+Follow-ups: size choice is not remembered; give `UiSegmentedControl` arrow-key roving, then move the Compare mode on to it.
+Dependencies: none.
