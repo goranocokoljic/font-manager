@@ -83,4 +83,20 @@ describe('list keys', () => {
     handleListKey(key('PageDown'), list, opts);
     expect(list.cursorIndex).toBe(13);
   });
+
+  it('in a grid, Alt+Right opens a family and Alt+Left closes it', async () => {
+    const list = await setup();
+    onFoldable(list);
+    const opts = { page: 12, count: 20, open, columns: 4 };
+    const cursor = list.cursorIndex;
+    expect(handleListKey(key('ArrowRight', { altKey: true }), list, opts)).toBe(true);
+    expect(list.expanded.size).toBe(1);
+    expect(list.cursorIndex).toBe(cursor);
+    handleListKey(key('ArrowLeft', { altKey: true }), list, opts);
+    expect(list.expanded.size).toBe(0);
+    // Outside a grid Alt stays the browser's.
+    expect(
+      handleListKey(key('ArrowRight', { altKey: true }), list, { page: 5, count: 20, open }),
+    ).toBe(false);
+  });
 });

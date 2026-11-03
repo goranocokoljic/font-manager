@@ -453,3 +453,13 @@ Four iterations since review 65 (66–69); all four graded.
 **Verified:** typecheck, `lint:js`, Vitest 912, Playwright 272 passed in the full run + the one `settings.spec` failure was `ERR_CONNECTION_REFUSED` (dev server); settings/list/inspector re-run 31 passed (`e2e-73.log`).
 **Follow-ups:** scrub other axes (opsz, wdth) with a modifier key; a keyboard way to scrub (Alt+←/→); scrubbing in Grid cards and Quick Look; a Playwright drag spec with a real pointer; no `scrub` scene (transient).
 **Dependencies:** none.
+
+## Iteration 74 — 2026-11-03 — Grid: Alt+Right / Alt+Left open and close a family
+**Critique (before):** not looked at (token budget; no static change planned). The list is paper-white and calm; the Grid hides a family's styles behind a click, and its Left/Right keys move between cards.
+**Why:** review 70 listed "Grid opens a family from the keyboard" (item 13). Finding: Enter already toggled a family in the Grid; what was missing was the tree-style pair. Honest scope: small, and no `list` shot changes. Alternative (not taken): Compare size control.
+**Changed:** `list/keys.ts` only: in a multi-column view Alt+Right expands and Alt+Left collapses the cursor family (RTL-aware, cursor stays); outside the Grid Alt stays the browser's. One Vitest test added.
+**Backlog:** item 13 stays `[x]`; its "Grid cannot open a family from the keyboard" gap is closed.
+**Shots:** none opened.
+**Verified:** typecheck, `lint:js`, Vitest, Playwright 273 passed / 16 skipped (`e2e-74.log`).
+**Follow-ups:** show the shortcut in the `?` sheet; Compare size control; "Lock width" beside the page (17).
+**Dependencies:** none.

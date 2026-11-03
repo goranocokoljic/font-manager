@@ -4,7 +4,7 @@
 // Ctrl/Cmd moves without selecting, Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A
 // selects all. Plain Space is the app's quick-look key, so it is left alone.
 // The grid view lays rows out in `columns` per line: Up/Down then move by a
-// line of cards and Left/Right by one card (Enter still expands a family).
+// line of cards and Left/Right by one card (Enter, or Alt+Right / Alt+Left, opens and closes a family).
 // Left/Right follow what the user sees: in right-to-left chrome they swap.
 import { inlineKey } from '../i18n';
 import type { FaceId } from '../api/types';
@@ -29,10 +29,18 @@ export function handleListKey(
   list: FontListStore,
   opts: { page: number; count: number; open: (face: FaceId) => void; columns?: number },
 ): boolean {
-  if (e.altKey) return false;
   const mod = e.ctrlKey || e.metaKey;
   const row = list.cursorRow;
   const columns = Math.max(1, opts.columns ?? 1);
+  if (e.altKey) {
+    // In the grid plain Left/Right move between cards, so Alt+Right/Left open and close a family.
+    if (columns === 1 || mod || e.shiftKey) return false;
+    const key = inlineKey(e.key);
+    if (key === 'ArrowRight') list.expandOrEnter();
+    else if (key === 'ArrowLeft') list.collapseOrLeave();
+    else return false;
+    return true;
+  }
   switch (inlineKey(e.key)) {
     case 'ArrowDown':
       list.moveBy(columns, modeOf(e));
