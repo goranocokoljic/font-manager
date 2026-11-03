@@ -343,3 +343,13 @@ Only four iterations since review 45 (46–49); all four graded.
 **Verified:** typecheck, `lint:js`, Vitest, Playwright 273 passed / 16 skipped (`e2e-53.log`).
 **Follow-ups:** a `filters` scene scrolled to Features (or a taller viewport); Features tab off/on sample; item 6 `expanded-family` scene still on a one-style row; the "Stylistic sets and variants" expander is styled differently from a facet label.
 **Dependencies:** none.
+
+## Iteration 54 — 2026-11-03 — Features tab: each sample shows off and on side by side
+**Critique (before):** the `list` shot is calm and the samples carry it. The Features tab shows each feature at work, but only "on": you cannot see what the feature changes. Chrome is quiet and consistent elsewhere.
+**Why:** DESIGN item 8 "Left" (the sample beside the same text with the feature off). Visible in `inspector-features`: two columns per switch, dim "off" left, bright "on" right.
+**What changed:** `InspectorFeatures`: each row's sample is a two-column pair, the same text with `"tag" 0` (muted) and `"tag" 1`. Spacing uses a token.
+**Ticked:** none (item 8 stays open: stylistic sets still get a generic sample).
+**Shots:** `.harness/redesign/shots/54` (before), `54-after`.
+**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-54.log`).
+**Follow-ups:** real sample text for stylistic sets (needs per-set glyph data, **blocked (API)**); `expanded-family` scene still on a one-style row; a `filters` scene scrolled to Features.
+**Dependencies:** none.

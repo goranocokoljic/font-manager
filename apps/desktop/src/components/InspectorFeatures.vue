@@ -47,9 +47,10 @@ const SAMPLES: Record<string, string> = {
   calt: 'a->b ==',
 };
 const sample = (f: FeatureInfo) => SAMPLES[f.tag] ?? 'Rag Agy 0123';
-const sampleStyle = (f: FeatureInfo) => ({
+// The same text twice: with the feature forced off, then forced on.
+const sampleStyle = (f: FeatureInfo, value: 0 | 1) => ({
   fontFamily: family.value ? `"${family.value}", sans-serif` : undefined,
-  fontFeatureSettings: `"${f.tag}" 1`,
+  fontFeatureSettings: `"${f.tag}" ${value}`,
 });
 
 /** "Small capitals (smcp)", or the tag alone when fm-core has no name for it. */
@@ -88,9 +89,10 @@ function reset(): void {
           <span class="name">
             {{ f.name ?? f.tag }}
             <span v-if="f.name" class="tag">{{ f.tag }}</span>
-            <span v-if="family" class="sample" :style="sampleStyle(f)" aria-hidden="true">{{
-              sample(f)
-            }}</span>
+            <span v-if="family" class="pair" aria-hidden="true">
+              <span class="sample off" :style="sampleStyle(f, 0)">{{ sample(f) }}</span>
+              <span class="sample on" :style="sampleStyle(f, 1)">{{ sample(f) }}</span>
+            </span>
           </span>
           <button
             type="button"
@@ -171,10 +173,19 @@ h3 {
   min-width: 0;
   overflow-wrap: anywhere;
 }
-.sample {
+.pair {
+  display: grid;
   flex-basis: 100%;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--fm-space-3);
+}
+.sample {
+  min-width: 0;
   font-size: var(--fm-text-lg);
   line-height: 1.5;
+}
+.sample.off {
+  color: var(--fm-muted);
 }
 .tag {
   margin-inline-start: 4px;
