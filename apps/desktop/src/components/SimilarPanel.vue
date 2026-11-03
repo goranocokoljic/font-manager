@@ -219,7 +219,10 @@ function onKeyDown(e: KeyboardEvent): void {
           type="button"
           class="result"
           :data-face="item.r.face.id"
-          :aria-label="t('similar.resultLabel', { name: item.name, score: item.score })"
+          :aria-label="
+            t('similar.resultLabel', { name: item.name, score: item.score }) +
+            (item.more ? `, ${item.more}` : '')
+          "
           :aria-describedby="`${item.id}-why`"
           :aria-current="similar.picked === item.r.face.id ? 'true' : undefined"
           @click="select(item.r.face)"

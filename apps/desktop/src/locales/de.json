@@ -1100,7 +1100,6 @@
     "empty": "Noch keine Sets.",
     "import": "Set importieren…",
     "importTitle": "Ein Set aus einer Set-Datei hinzufügen; seine Schriften werden in dieser Bibliothek am Dateiinhalt erkannt",
-    "export": "Set exportieren…",
     "exportLabel": "Das Set {name} exportieren",
     "exportTitle": "Eine Set-Datei zum Teilen speichern; sie benennt jede Schrift nach ihrem Dateiinhalt",
     "saved": {

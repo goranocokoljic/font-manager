@@ -1100,7 +1100,6 @@
     "empty": "No sets yet.",
     "import": "Import set…",
     "importTitle": "Add a set from a set file; its fonts are found in this library by file content",
-    "export": "Export set…",
     "exportLabel": "Export the set {name}",
     "exportTitle": "Save a set file to share; it names each font by its file content",
     "saved": {

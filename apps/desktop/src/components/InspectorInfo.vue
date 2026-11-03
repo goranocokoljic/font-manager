@@ -634,7 +634,6 @@ dd {
   width: 100%;
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
-  background-color: transparent;
   border-radius: var(--fm-radius-sm);
   background-color: transparent;
   color: inherit;
@@ -674,7 +673,7 @@ dd {
   color: var(--fm-muted);
 }
 .star:hover {
-  color: var(--fm-text);
+  color: var(--fm-fg);
 }
 .star.on {
   color: var(--fm-accent);

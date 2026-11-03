@@ -33,7 +33,7 @@ const info = (page: Page) => page.getByRole('tabpanel', { name: 'Info' });
 /** The face name of a result button, from its label "<name>, <n>% similar". */
 async function nameOf(result: Locator): Promise<string> {
   const label = (await result.getAttribute('aria-label')) ?? '';
-  return label.replace(/, (\d+% similar|No score)$/, '');
+  return label.replace(/, (\d+% similar|No score)(, \+\d+ more styles?)?$/, '');
 }
 
 /** Every result shows its own font as live text, a percent and its reasons. */
@@ -44,7 +44,8 @@ async function expectResults(page: Page): Promise<void> {
   expect(count).toBeGreaterThan(1);
   for (let i = 0; i < count; i++) {
     const b = buttons.nth(i);
-    await expect(b).toHaveAccessibleName(/, \d+% similar$/);
+    // A family row names how many more of its styles it stands for (review 25).
+    await expect(b).toHaveAccessibleName(/, \d+% similar(, \+\d+ more styles?)?$/);
     await expect(b.getByTestId('similar-score')).toHaveText(/^\d+% similar$/);
     await expect(b).toHaveAccessibleDescription(/^(Why: \S.*)?$/); // only what differs from the other results
     const face = await b.getAttribute('data-face');

@@ -192,12 +192,13 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 20 the
-grid, the inspector Info and Find similar are in shape; the first screen's loudest chrome
-left is the list itself (rows, chevron, sub-rows, the focus ring round the whole pane) and
-the sidebar's Project sets row. The next iterations take items 6, 5 and the native-input
-sweep (item 26) before new features. The shots scenes do not hover; an iteration whose
-change shows only on hover adds a hover scene to `screens.spec.ts` first.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 25 the
+list rows, the Project sets row and Find similar are in shape. The loudest chrome left is
+in the inspector: the bordered tag and notes boxes, the off-centre toggle knobs in Features,
+the Glyphs grid's clipped column. The next iterations take items 8 and 26, then item 5's
+section work, then the first features (12, 13). The shots scenes do not hover; three
+iterations in a row changed hover-only UI without a hover scene — the next iteration that
+touches hover adds one to `screens.spec.ts` before anything else.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -220,19 +221,18 @@ change shows only on hover adds a hover scene to `screens.spec.ts` first.
    actions as `UiIconButton`s in the section header, sections collapsible, collections as
    drop targets. Done: `UiIconButton`, header icons, the collection "…" menu, catalog power
    icons, the smart sparkle, Sources row actions on the row (iterations 8, 12, 13, 19).
-   Left: Project sets rows keep an "Export" text button that reserves space after the
-   count, so the count sits mid-row — make it a hover `UiIconButton` in the count's cell,
-   as Sources does; section icons; collapsible sections; Problems header vs the smart
-   "Problems".
+   Project sets rows export from a hover icon in the count's cell (iteration 22).
+   Left: section icons; collapsible sections; Problems header vs the smart "Problems".
 
 ### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
    format as monochrome glyph badges; row actions (Activate, Compare, Tag, Similar) appear on
    hover or focus, right-aligned; selection = accent bar + subtle tint; expanded family shows
    its styles as sub-rows. `UiBadge`, `UiChevron` and the hover "Find similar" icon are done
-   (iterations 9, 14, review 10). Left: the chevron sits between the meta line and the
-   sample — align it with the sample's cap height; sub-rows need their own indent and a
-   quieter meta line; the focused list draws a ring round the whole pane.
+   (iterations 9, 14, review 10); the chevron sits on the sample line in both densities,
+   sub-rows hang off a hairline guide, the pane has no ring (iteration 21, review 25).
+   Left: the keyboard cursor row draws a heavy 2 px box — make it the accent bar plus a
+   1 px ring; `?face=` in the URL selects the face in the inspector but not in the list.
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word).
    Left: hover reveals the weight range; style cards drop their dashed border.
 8. **Inspector.** Info is done (iteration 17; review 20 folded the license form and kept
@@ -246,8 +246,8 @@ change shows only on hover adds a hover scene to `screens.spec.ts` first.
    ("Similar to ADLaM Display Regular · Esc to go back"), grouped by family with the closest
    face shown, score as a quiet bar, and the "Why" line showing only what *differs* from the
    source (e.g. "wider, lower contrast") — a line that is identical for every result is
-   noise and is dropped. Source family pinned at the top for comparison. Done in
-   iteration 18 except grouping results by family (closest face shown, "+2 styles").
+   noise and is dropped. Source family pinned at the top for comparison. Done (iterations
+   18, 24). Left: a family row could expand its other styles inline.
 
 ### Functional features designers will love
 10. **Language & script support as a filter facet.** The per-font coverage data already
@@ -296,6 +296,8 @@ change shows only on hover adds a hover scene to `screens.spec.ts` first.
 25. Custom overlay scrollbars on all platforms.
 26. Hover / focus / active audit across every control, and the native-input sweep:
     the inspector still draws a native date field (license purchase date, with the
-    browser's calendar icon), a number field (seats), a `datalist` (tags) and text-glyph
-    stars and hearts; the focused font list draws a ring round the whole pane.
+    browser's calendar icon), a number field (seats) and a `datalist` (tags); the
+    Features toggles' knob sits off-centre in its track; the tag and notes boxes are heavy
+    bordered fields (tests demand a 3:1 outline — an underline style keeps it); the
+    Problems view's "Recommended" pill and the Settings nav focus box need the same pass.
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.

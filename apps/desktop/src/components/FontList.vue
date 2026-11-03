@@ -438,10 +438,14 @@ function onToggle(row: ListRow): void {
 .twisty {
   display: grid;
   flex: none;
-  align-self: flex-end; /* sits on the sample line, not between meta and sample */
+  /* Sits on the sample line, not between meta and sample: the row centres the meta line
+     (18 px) and the sample with a 2 px gap, so the sample's middle is 10 px below the row's.
+     Centring a box padded 20 px on top lands the chevron there in both densities. */
+  align-self: center;
   place-items: center;
+  box-sizing: border-box;
   width: 24px;
-  height: 48px;
+  padding-block-start: 20px;
   color: var(--fm-muted);
   cursor: pointer;
 }

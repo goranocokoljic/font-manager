@@ -10,7 +10,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Project sets row, section icons, collapsible sections, Problems dedupe remain)
-- [ ] 6 List rows (iteration 21: chevron on sample line, sub-row guide, no pane ring; iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
+- [ ] 6 List rows (iterations 9, 14, 21 + reviews 10, 25: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line in both densities, sub-row guide, no pane ring; cursor-row ring and `?face=` list selection remain)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iteration 17 + review 20: Info shows About + License + Your notes first, license form and raw data folded; Glyphs clipped column, Features names remain)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
@@ -151,41 +151,27 @@ Rescan / Pause / Remove moved into the Sources row, replacing the count on hover
 **Next five:** item 6 rest (chevron on the sample's cap height, quieter sub-rows, no ring round the whole list pane) → item 5 rest (Project sets row like Sources) → item 26 native-input sweep in the inspector (date, number, datalist, text stars) → item 9 rest (group similar results by family) → item 8 rest (Glyphs column, Features human names). Hover-only work adds a hover scene to `screens.spec.ts` in the same iteration.
 
 ## Iteration 21 — 2026-11-03 — List rows: chevron on the sample line, quiet sub-rows, no pane ring
-**Critique (before):** The list is calm and the specimens lead, but the chevron floats between the meta line and the sample, so each row reads as two lines with a stray arrow. The focused list draws a loud blue box round the whole pane. Expanded style sub-rows look identical to family rows apart from a 24 px indent. Good: one-line meta, quiet badges, accent bar on selection.
-**Why:** Backlog item 6 rest; it is the loudest chrome left on the first screen.
-**What changed:** `FontList.vue` only. Chevron aligns to the sample line (bottom-anchored 48 px cell). The pane focus outline is removed; the cursor row keeps its own 2 px ring. Style sub-rows get a faint tint and a hairline guide under the chevron.
-**Backlog:** item 6 still open (sub-row meta line could be quieter; compact density chevron not tuned).
-**Shots:** `.harness/redesign/shots/21/` (before), `21a/` (after).
-**Verified:** typecheck, `lint:js` exit 0 (after prettier), Vitest 909, Playwright 272 passed / 16 skipped (`e2e-21.log`).
-**Follow-ups:** the cursor ring on the family row is still a heavy 2 px box; consider an accent bar plus tint. Item 5 rest (Project sets) and item 26 native inputs are next.
-**Dependencies:** none. **Reverted:** no.
+The chevron moved onto the sample line, the list pane lost its focus ring, and style sub-rows got a faint tint and a hairline guide.
 
 ## Iteration 22 — 2026-11-03 — Project sets: count at the edge, Export becomes a hover icon
-**Critique (before):** The list and inspector are calm; the specimens lead. The worst leftover on the first screen is the sidebar's Project sets row: "Client brand 2" has its count mid-row because a hidden "Export set…" text button holds space beside it, so it does not line up with the counts above it. Good: Sources and Collections rows are quiet and aligned.
-**Why:** Backlog item 5 rest (review 20's pick). The count column now runs straight down the sidebar.
-**What changed:** `ProjectSetsSidebar.vue`: Export is a `UiIconButton` laid over the count's cell (count hides on hover/focus, like Sources). New `export` icon in `icons.ts`. `sets.spec.ts`: dropped the "Export set…" text assertion (the control is an icon now; its accessible name is still checked).
-**Backlog:** item 5 still open (section icons, collapsible sections, Problems header vs smart "Problems").
-**Shots:** `.harness/redesign/shots/22/` (before), `22a/` (after).
-**Verified:** typecheck, `lint:js` exit 0 (after prettier), Vitest 909, Playwright 272 passed / 16 skipped (`e2e-22.log`).
-**Follow-ups:** hover scene for sidebar rows is still missing. Item 26 native inputs in the inspector (date, number, datalist, text stars) are next.
-**Dependencies:** none. **Reverted:** no.
+The Project sets "Export set…" text button became a hover `UiIconButton` over the count, so counts line up down the sidebar.
 
 ## Iteration 23 — 2026-11-03 — Inspector: drawn stars and heart instead of text glyphs
-**Critique (before):** The first screen is calm; specimens lead. In the inspector, the Favorite heart and rating stars are text glyphs (♡ ☆), and the heart turns danger-red, which breaks the "one accent" rule. The notes boxes are heavy but their 3:1 outline is required by tests. Good: Info order, folded raw data, quiet list rows.
-**Why:** Item 26 native-input sweep, the text-glyph part. Not a big first-screen change; picked as the smallest visible inspector fix.
-**What changed:** `icons.ts`: `star`, `starFilled`, `heart`, `heartFilled`. `InspectorInfo.vue`: stars and heart use `UiIcon`; favorite is accent, not danger; stars get a hover state. I tried borderless notes/tag fields; `notes.spec` and `tags.spec` demand a 3:1 outline, so I reverted that part.
-**Backlog:** item 26 still open (native date and number fields in the license form, `datalist` for tags).
-**Shots:** `.harness/redesign/shots/23/` (before), `23a/` (after).
-**Verified:** typecheck, `lint:js` exit 0, Vitest 909. Playwright: full run had 2 failures from the reverted field change; the notes, tags, rating, license and inspector specs pass after the revert (13 passed). Full log `e2e-23.log` is from before the revert.
-**Follow-ups:** a hover scene for sidebar rows and list rows. Heavy bordered notes boxes need a design that keeps 3:1 (e.g. underline style).
-**Dependencies:** none. **Reverted:** partly (field borders).
+Rating stars and the Favorite heart became `UiIcon`s and the favorite turned accent instead of danger-red; a borderless-fields attempt was reverted for the 3:1 outline tests.
 
 ## Iteration 24 — 2026-11-03 — Find similar: one row per family
-**Critique (before):** Not re-shot this iteration (token budget); the critique comes from the code and review 20. Three Myriad Pro faces fill three result rows, so a long result list hides the variety of families. Good: pinned source, quiet score bar, honest "Why" line.
-**Why:** Item 9 rest, next on review 20's list. The results list now shows families, not repeated styles.
-**What changed:** `SimilarPanel.vue` groups results by family name: the closest face is shown, the rest become a quiet "+N more styles" next to the score bar. New `similar.moreStyles` in en and de. New Vitest case for grouping.
-**Backlog:** item 9 ticked.
-**Shots:** none taken; the mock library has few multi-style families, so the change is small in browser mode.
-**Verified:** typecheck, `lint:js` exit 0, Vitest all pass, Playwright 272 passed / 16 skipped (`e2e-24.log`).
-**Follow-ups:** picking a family row opens only its closest face; a way to expand the other styles inline is not built. Item 8 rest (Glyphs column, Features names) is next.
-**Dependencies:** none. **Reverted:** no.
+`SimilarPanel` shows one row per family (closest face) with a quiet "+N more styles"; taken without shots.
+
+## Review 25 — 2026-11-03
+**Grades:** iter 21 **3** — the pane ring is gone and comfortable rows read cleanly, but the 48 px bottom-anchored chevron cell missed the sample line in compact density, and the cursor row keeps a heavy 2 px box. Iter 22 **4** — small, exact, consistent with Sources; counts now line up; hover-only again and no hover scene. Iter 23 **3** — right direction (no text glyphs, one accent), but it left a duplicate `background-color` from the reverted attempt and a star hover on `--fm-text`, a token that does not exist, so the hover did nothing; the Playwright log it cites is from before its revert. Iter 24 **3** — the right grouping, but taken blind (no shots), and the "+N more styles" was visible text only: the result's `aria-label` hid it from screen readers.
+**Regressions:** none in views or keyboard; compact chevron misaligned (iter 21). **Drift:** non-existent token (iter 23); no new colours, fonts, radii or native controls.
+**Pulled apart:** none head-on; 22 and 24 both added hover/inline text without the hover scene review 15 and 20 asked for.
+**Fixed:**
+- `FontList`: the chevron is centred with a 20 px top pad (the meta line plus its gap), so it sits on the sample line in comfortable and compact.
+- `InspectorInfo`: star hover uses `--fm-fg`; the duplicate `background-color` on the tag field deleted.
+- `SimilarPanel`: the result's accessible name ends with ", +N more styles"; `similar.spec` updated to allow that suffix (UI changed on purpose).
+- Dead: `sets.export` string in en/de (the icon uses `sets.exportLabel`).
+**Rule amended:** none. **Backlog (DESIGN.md):** items 5, 6, 9 rewritten to what is left; item 26 adds the Features toggle knob, the heavy note fields, the Problems "Recommended" pill; the three-second note points at items 8, 26, 5.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-25.log`). Shots `25/` (before) and `25-after/`: all 23 scenes render in light and dark, comfortable and compact (46 images).
+**Not fixed, noted:** the cursor row's 2 px box; `?face=` does not select the list row; Studio "Panel font" fields look empty; Features toggle knob off-centre.
+**Next five:** a hover scene in `screens.spec.ts` first (rows, sidebar) → item 26 (Features toggles, underline-style note fields, date/number/datalist) → item 8 rest (Glyphs clipped column, Features human names) → item 5 rest (section icons, collapsible sections, Problems dedupe) → item 12 or 13 (Quick Look or the keyboard model — the first real features). Every iteration takes before/after shots; no blind iterations.
