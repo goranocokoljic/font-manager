@@ -210,6 +210,7 @@
           "criteria": [
             "Above the wall: a 44 px text field 'Type to preview' with a hint at its end, preset chips Word · Pangram · Alphabet · Numerals · Paragraph — each a different wall layout as in 1-wall-<preset>.png (4 columns / 2 wide / 2 wrapped / 4 figures / 2 body-text) — then a divider and a Language picker (recent languages first, then all from `listLanguages()`) that puts that language's pangram on the wall",
             "Typing repaints every specimen on the next frame with no transition; the value is shared by list, wall, waterfall, family page and Quick Look, and remembered per view (view preferences in localStorage, as today)",
+            "The size slider applies in every preset, scaled to the preset's density (Word 1×, Pangram 0.6×, Alphabet 0.42×, Numerals 0.75×; Paragraph is fixed at the body size), so a user who likes big specimens gets them everywhere; the preset and size are remembered per view",
             "The old preview toolbar's remaining controls (size, auto size, line height, tracking, alignment, metrics, outline, colours, surface) live in a Preview options popover opened from one button at the end of the row; nothing else is on screen by default",
             "Keyboard: `/` focuses search, `T` (when no row is focused) focuses the preview field; Esc returns focus to the wall"
           ]
@@ -286,6 +287,7 @@
             "`/family/:id` route; opening from any view pushes the page with the shared-element transition from the motion table (fallback: slide + fade); Back (button, Esc, Alt+←) pops it and restores the view's scroll position and selection",
             "Top bar: ‹ Library, '1 of 212 · ← → next family' (arrows move to the previous/next family in the current filtered order without leaving the page), icon buttons Favorite · Add to collection · Tag · Find similar, and the primary 'Activate family' (accent, on-accent)",
             "Page skeleton: hero area, axis row, section switch (`UiSegmentedControl`), a 560+ px main column and a 320 px rail that wraps under it below 1100 px",
+            "Switching sections replaces only the panel under the segmented switch (120 ms crossfade); the hero, the axis row and the rail stay where they are, so a weight or language chosen on the hero carries across every section",
             "Deep link works in browser mode for the @screens scene `family`"
           ]
         },
@@ -315,6 +317,7 @@
           "criteria": [
             "Named styles: one row per face — name and weight/italic meta (150 px), the preview text at 38 px, hover actions Copy CSS · Compare, and an activation switch (`role=switch`, accent when on) that calls activate/deactivate for that face",
             "A `Named styles · N | Weight ramp` switch (variable families only) shows the weight axis at every 100 with the instance name where one exists; clicking a ramp row sets the hero weight; the accent ring on both lists follows the current hero weight (±12)",
+            "For families with more than the weight axis the ramp switch offers one ramp per axis (Weight · Optical size · Soft …), nine steps across the axis range, weight first; the other axes hold the hero's current values while one is ramped",
             "Pinned instances (`listVirtualStyles`) appear in the named list with a 'yours' badge and can be deleted from the row menu",
             "Keyboard: ↑/↓ move between rows, Space toggles activation, Enter sets the hero to that row's weight"
           ]
@@ -354,7 +357,8 @@
           "size": "S",
           "track": "ui",
           "depends": [
-            "E42.1"
+            "E42.1",
+            "E42.11"
           ],
           "criteria": [
             "Each non-automatic feature from `FeatureInfo` is a row: friendly name with the tag in mono under it, the sample rendered without the feature (muted) and with it (`font-feature-settings`), and a switch",
@@ -400,7 +404,8 @@
           "size": "M",
           "track": "ui",
           "depends": [
-            "E42.1"
+            "E42.1",
+            "E42.10"
           ],
           "criteria": [
             "'Supports N languages': only complete languages from `faceCoverage` as chips (six, then '+N more' expands); clicking a chip sets the page's preview text to that language's pangram (`LanguagePreset.pangram`) and marks the chip with the accent; clicking again or 'back to my text' restores the user's text",
