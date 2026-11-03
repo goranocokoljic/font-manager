@@ -11,7 +11,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 4 App shell (iterations 7, 11, 31, 39: toolbar icons, UiSegmentedControl, live status bar, collapsible panes with `[` `]` and a sidebar toggle; dark-first dropped — owner wants paper-first, default stays `system`)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
 - [x] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
-- [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; iteration 66: hover weight range, `grid-hover`/`grid-expanded` scenes)
+- [x] 7 Grid cards (iteration 77: name never cut; iteration 16: sample ends on a whole word that fits; iteration 66: hover weight range, `grid-hover`/`grid-expanded` scenes)
 - [ ] 8 Inspector (iterations 17, 26–28, 43, 49, 53, 54 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes, shared tab head, off/on feature samples, human feature names in the drawer; stylistic-set samples blocked on the API)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [x] 10 Language & script filter (iteration 36: visible language chips in the Filters drawer, choosing one switches the All fonts pangram; counts and script grouping remain)
@@ -459,4 +459,14 @@ Four iterations since review 70 (71–74); all four graded.
 **Shots:** `.harness/redesign/shots/76/` (after only; `layout`, `layout-help`).
 **Follow-ups:** Studio panels still float the lock at each panel's corner (bare mode); the open hint is padded 32 px, not aligned to the text column.
 **Verified:** typecheck, lint:js, Vitest 913, Playwright 273 passed / 16 skipped (`e2e-76.log`).
+**Dependencies:** none. **Reverted:** no.
+
+## Iteration 77 — 2026-11-03 — Grid cards: the name is never cut
+**Critique (before):** `list` is unchanged; the Grid is the next loud leftover. A family card with a chevron, a weight range and a Variable badge cut its name to "Sam…" — the one fact a card exists to show. Good: the big "The quick" specimen and the hover tint on cards read like paper.
+**Why:** Backlog 7 / review 75 "Next five" (Grid card name). Name first, extras second.
+**What changed:** `FontGrid` card meta is one fixed 16 px line that wraps; the name group (twisty, dot, name) comes first, and the count/range and badge wrap out of sight whole when they do not fit. Name ellipsis stays only for names wider than the card.
+**Backlog:** item 7 (name cut fixed).
+**Shots:** `.harness/redesign/shots/77/` (before) and `77b/` (after); `grid-expanded` shows "Sample 1" in full.
+**Follow-ups:** on a narrow card the Variable badge now drops; a quiet variable glyph that always fits would keep the cue.
+**Verified:** typecheck, lint:js, Vitest, Playwright 273 passed / 16 skipped (`e2e-77.log`).
 **Dependencies:** none. **Reverted:** no.

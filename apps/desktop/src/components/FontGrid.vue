@@ -331,15 +331,17 @@ function onToggle(row: ListRow): void {
             {{ t('list.stylesUnavailable') }}
           </span>
           <div class="meta">
-            <span
-              v-if="item.row.kind === 'family'"
-              class="twisty fm-directional"
-              aria-hidden="true"
-              @click.stop="onToggle(item.row)"
-              ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
-            /></span>
-            <ActivationDot :state="rowActivation(item.row)" />
-            <bdi class="name">{{ item.name }}</bdi>
+            <span class="lead">
+              <span
+                v-if="item.row.kind === 'family'"
+                class="twisty fm-directional"
+                aria-hidden="true"
+                @click.stop="onToggle(item.row)"
+                ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
+              /></span>
+              <ActivationDot :state="rowActivation(item.row)" />
+              <bdi class="name">{{ item.name }}</bdi>
+            </span>
             <span v-if="item.row.kind === 'family'" class="detail">
               <span class="count">{{ styleCount(item.row.family.styleCount) }}</span>
               <span
@@ -438,15 +440,29 @@ function onToggle(row: ListRow): void {
 .thumb:not([data-state='ready']) {
   background-color: transparent;
 }
+/* One line, name first: what does not fit beside the name wraps out of sight whole, so the
+   name is never cut to "Sam…" by the count or the badge. */
 .meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: var(--fm-space-1) var(--fm-space-2);
+  block-size: 16px;
+  overflow: hidden;
   min-width: 0;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
 }
+.lead {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: var(--fm-space-2);
+  min-width: 0;
+  max-width: 100%;
+}
 .name {
+  min-width: 0;
   overflow: hidden;
   color: var(--fm-fg);
   white-space: nowrap;
