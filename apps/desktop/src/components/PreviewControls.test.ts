@@ -52,9 +52,8 @@ describe('PreviewControls', () => {
 
   it('sets line height, tracking, alignment, colors and surface', async () => {
     const { wrapper, store } = mountControls();
-    const numbers = wrapper.findAll('input[type="number"]');
-    await numbers[1]!.setValue('1.6');
-    await numbers[2]!.setValue('0.1');
+    await wrapper.get('input[aria-label="Line height"]').setValue('1.6');
+    await wrapper.get('input[aria-label="Tracking in em"]').setValue('0.1');
     await wrapper.get('button[aria-pressed="false"]:nth-of-type(2)').trigger('click');
     await wrapper.get('input[aria-label="Text color"]').setValue('#123456');
     await wrapper.get('input[aria-label="Background color"]').setValue('#fedcba');

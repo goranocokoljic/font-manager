@@ -1,26 +1,68 @@
 <script setup lang="ts">
-// A number field drawn by us: a text input that accepts digits, with quiet − / +
-// buttons. Empty is allowed (`''`). It replaces the browser's `type="number"`.
+// A number field drawn by us: a text input that accepts numbers (decimals too), with
+// quiet − / + buttons. Empty is allowed (`''`). It replaces the browser's `type="number"`.
+// `commit` fires when the user leaves the field or presses Enter, with the final value.
+import { nextTick, ref, watch } from 'vue';
 import { t } from '../../i18n';
 import UiIcon from './UiIcon.vue';
 
 const props = withDefaults(
-  defineProps<{ modelValue: number | ''; id?: string; min?: number; step?: number }>(),
-  { id: undefined, min: undefined, step: 1 },
+  defineProps<{
+    modelValue: number | '';
+    id?: string;
+    min?: number;
+    max?: number;
+    step?: number;
+    ariaLabel?: string;
+  }>(),
+  { id: undefined, min: undefined, max: undefined, step: 1, ariaLabel: undefined },
 );
-const emit = defineEmits<{ 'update:modelValue': [value: number | ''] }>();
+const emit = defineEmits<{
+  'update:modelValue': [value: number | ''];
+  commit: [value: number | ''];
+}>();
 
-function parse(raw: string): number | '' {
+/** What the input shows: kept apart so "0." and "-" survive on the way to a number. */
+const text = ref(String(props.modelValue));
+watch(
+  () => props.modelValue,
+  (value) => {
+    const shown = text.value.trim() === '' ? '' : Number(text.value);
+    if (shown !== value) text.value = String(value);
+  },
+);
+
+function parse(raw: string): number | '' | null {
   const trimmed = raw.trim();
   if (trimmed === '') return '';
   const n = Number(trimmed);
-  return Number.isFinite(n) ? n : props.modelValue;
+  return Number.isFinite(n) ? n : null;
+}
+/** Digits after the point in `step`, so 0.05 steps do not drift to 0.15000000000000002. */
+function places(): number {
+  return (String(props.step).split('.')[1] ?? '').length;
 }
 function bump(dir: 1 | -1) {
   const base =
     props.modelValue === '' ? (props.min ?? 0) - (dir === 1 ? props.step : 0) : props.modelValue;
-  const next = base + dir * props.step;
-  emit('update:modelValue', props.min !== undefined ? Math.max(props.min, next) : next);
+  let next = Number((base + dir * props.step).toFixed(places()));
+  if (props.min !== undefined) next = Math.max(props.min, next);
+  if (props.max !== undefined) next = Math.min(props.max, next);
+  text.value = String(next);
+  emit('update:modelValue', next);
+  emit('commit', next);
+}
+function onInput(e: Event) {
+  const raw = (e.target as HTMLInputElement).value;
+  text.value = raw;
+  const n = parse(raw);
+  if (n !== null) emit('update:modelValue', n);
+}
+async function onChange(e: Event) {
+  const n = parse((e.target as HTMLInputElement).value);
+  emit('commit', n ?? props.modelValue);
+  await nextTick();
+  text.value = String(props.modelValue);
 }
 function onKey(e: KeyboardEvent) {
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
@@ -36,10 +78,12 @@ function onKey(e: KeyboardEvent) {
       :id="id"
       class="in"
       type="text"
-      inputmode="numeric"
+      inputmode="decimal"
       autocomplete="off"
-      :value="modelValue"
-      @input="emit('update:modelValue', parse(($event.target as HTMLInputElement).value))"
+      :aria-label="ariaLabel"
+      :value="text"
+      @input="onInput"
+      @change="onChange"
       @keydown="onKey"
     />
     <button type="button" class="b" tabindex="-1" :aria-label="t('ui.decrease')" @click="bump(-1)">

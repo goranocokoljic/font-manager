@@ -153,7 +153,7 @@ test('turn Google Fonts on, browse, search and change the sample text, by keyboa
   await text.focus();
   await page.keyboard.type('Hamburgefonstiv');
   await expect(catalogRows(page).locator('.sample')).toHaveText(Array(4).fill('Hamburgefonstiv'));
-  const size = controls.getByRole('spinbutton', { name: /Size/ });
+  const size = controls.getByRole('textbox', { name: /Size/ });
   await size.fill('48');
   await size.press('Enter');
   await expect(lato).toHaveCSS('font-size', '48px');

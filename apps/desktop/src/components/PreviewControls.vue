@@ -6,6 +6,7 @@
 import { computed, ref, useId } from 'vue';
 import { t } from '../i18n';
 import { SAMPLE_KINDS } from '../preview/sampleText';
+import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
 import {
   LINE_HEIGHT,
@@ -45,16 +46,15 @@ const KEY = { size: 'sizePx', lineHeight: 'lineHeight', tracking: 'trackingEm' }
 
 /**
  * While typing, only a value inside the bounds applies (so "1" on the way to "12" does
- * not jump to the minimum). On change, the store clamps and the field shows the result.
+ * not jump to the minimum). On commit, the store clamps and the field shows the result.
  */
-function typed(key: NumberKey, e: Event, commit: boolean): void {
-  const input = e.target as HTMLInputElement;
-  const value = input.valueAsNumber;
+function slid(key: NumberKey, e: Event): void {
+  typed(key, (e.target as HTMLInputElement).valueAsNumber, false);
+}
+function typed(key: NumberKey, value: number | '', commit: boolean): void {
+  if (value === '') return;
   const b = BOUNDS[key];
-  if (commit || (Number.isFinite(value) && value >= b.min && value <= b.max)) {
-    set({ [key]: value });
-  }
-  if (commit) input.value = String(store.settingsFor(props.view)[key]);
+  if (commit || (value >= b.min && value <= b.max)) set({ [key]: value });
 }
 
 // The labels are read where they are shown (`preview.aligns.*`) or when the options are
@@ -129,18 +129,17 @@ function colorFrom(e: Event): string {
           :max="SIZE.max"
           :step="SIZE.step"
           :value="s.sizePx"
-          @input="typed(KEY.size, $event, false)"
+          @input="slid(KEY.size, $event)"
         />
-        <input
-          type="number"
+        <UiNumberField
           class="number"
           :aria-label="t('preview.sizeInPixels')"
           :min="SIZE.min"
           :max="SIZE.max"
           :step="SIZE.step"
-          :value="s.sizePx"
-          @input="typed(KEY.size, $event, false)"
-          @change="typed(KEY.size, $event, true)"
+          :model-value="s.sizePx"
+          @update:model-value="typed(KEY.size, $event, false)"
+          @commit="typed(KEY.size, $event, true)"
         />
       </div>
       <button
@@ -165,19 +164,19 @@ function colorFrom(e: Event): string {
           @update:model-value="set({ autoSize: $event })"
         />
       </div>
-      <label class="field">
+      <div class="field">
         <span>{{ t('preview.lineHeight') }}</span>
-        <input
-          type="number"
+        <UiNumberField
           class="number"
+          :aria-label="t('preview.lineHeight')"
           :min="LINE_HEIGHT.min"
           :max="LINE_HEIGHT.max"
           :step="LINE_HEIGHT.step"
-          :value="s.lineHeight"
-          @input="typed(KEY.lineHeight, $event, false)"
-          @change="typed(KEY.lineHeight, $event, true)"
+          :model-value="s.lineHeight"
+          @update:model-value="typed(KEY.lineHeight, $event, false)"
+          @commit="typed(KEY.lineHeight, $event, true)"
         />
-      </label>
+      </div>
       <div class="field" role="group" :aria-labelledby="`${uid}-tracking`">
         <span :id="`${uid}-tracking`">{{ t('preview.tracking') }}</span>
         <input
@@ -187,18 +186,17 @@ function colorFrom(e: Event): string {
           :max="TRACKING.max"
           :step="TRACKING.step"
           :value="s.trackingEm"
-          @input="typed(KEY.tracking, $event, false)"
+          @input="slid(KEY.tracking, $event)"
         />
-        <input
-          type="number"
+        <UiNumberField
           class="number"
           :aria-label="t('preview.trackingInEm')"
           :min="TRACKING.min"
           :max="TRACKING.max"
           :step="TRACKING.step"
-          :value="s.trackingEm"
-          @input="typed(KEY.tracking, $event, false)"
-          @change="typed(KEY.tracking, $event, true)"
+          :model-value="s.trackingEm"
+          @update:model-value="typed(KEY.tracking, $event, false)"
+          @commit="typed(KEY.tracking, $event, true)"
         />
       </div>
       <label class="field" :title="t('preview.metricsHint')">
@@ -319,8 +317,7 @@ function colorFrom(e: Event): string {
   flex: 1;
   min-width: 0;
 }
-input[type='text'],
-.number {
+input[type='text'] {
   padding: 2px 4px;
   border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-radius-sm);
@@ -328,8 +325,8 @@ input[type='text'],
   color: inherit;
   font: inherit;
 }
-.number {
-  width: 4.5em;
+.field .number {
+  width: 7em;
 }
 input[type='range'] {
   width: 96px;

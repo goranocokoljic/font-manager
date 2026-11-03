@@ -371,3 +371,13 @@ Four iterations since review 50 (51–54); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-58.log`, run before the debounce fix; `settings` + `a11y` re-run 48 passed).
 **Follow-ups:** `aria-describedby="rescan-hint"` was dropped from the rescan field; give `UiNumberField` an `aria-describedby` pass-through. Other `type="number"` inputs: PreviewControls (3), BlockProperties, SmartRuleRow, GlyphCompare.
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 59 — 2026-11-03 — Preview bar: designed number fields
+**Critique:** The `list` shot is calm: hairline rows, quiet metadata, Inter. The Preview bar's size box still showed the browser's spin arrows, the one native control left on the first screen. A designer sees it next to our own select and field.
+**Why:** Item 26 (rule 2) and the iteration 58 follow-up. It changes the first screen: Size now has − / + buttons.
+**Changed:** `UiNumberField` now takes decimals, `max`, `aria-label`, keeps what the user types (so "0." works), rounds steps (0.05 does not drift) and emits `commit` on blur/Enter. Size, Line height and Tracking in `PreviewControls` use it. Vitest and the catalogs e2e find the size box as a textbox.
+**Backlog:** item 26 still open (tags `datalist`, `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the Problems "Recommended" pill).
+**Shots:** `.harness/redesign/shots/59/` (looked at `list` dark only).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed (`e2e-59.log`).
+**Follow-ups:** `aria-describedby` pass-through; the three remaining `type="number"` inputs; Options toggle is still a bordered text button.
+**Dependencies:** none. **Reverted:** no.
