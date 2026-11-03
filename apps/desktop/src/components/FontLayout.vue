@@ -233,7 +233,7 @@ function blockFamily(i: number): string {
           v-if="setWidthLock"
           icon="width"
           :label="t('textLayout.lockWidth')"
-          class="lock fm-no-print"
+          class="fm-no-print"
           data-testid="layout-width-lock"
           :aria-pressed="locked"
           :title="locked ? t('textLayout.lockedTitle') : t('textLayout.unlockedTitle')"
@@ -322,8 +322,8 @@ function blockFamily(i: number): string {
 .head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: var(--fm-space-2);
+  padding: var(--fm-space-2) var(--fm-space-4);
   border-bottom: 1px solid var(--fm-border);
   font-size: var(--fm-text-sm);
 }
@@ -377,9 +377,6 @@ function blockFamily(i: number): string {
 .spacer {
   flex: 1;
 }
-.lock {
-  margin-inline-start: 0;
-}
 .tools {
   display: flex;
   flex-direction: column;
@@ -408,7 +405,7 @@ function blockFamily(i: number): string {
 }
 .hint {
   margin: 0;
-  padding: var(--fm-space-2) var(--fm-space-8) 0;
+  padding: var(--fm-space-2) var(--fm-space-4) 0;
   color: var(--fm-muted);
   font-size: var(--fm-text-sm);
 }

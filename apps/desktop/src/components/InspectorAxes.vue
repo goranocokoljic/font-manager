@@ -264,9 +264,6 @@ onMounted(() => {
   margin: 0;
   color: var(--fm-muted);
 }
-.preset[aria-pressed='true'] {
-  font-weight: 600;
-}
 h3 {
   margin: 16px 0 8px;
   color: var(--fm-muted);
@@ -327,10 +324,13 @@ h3 {
 .error {
   color: var(--fm-warning);
 }
+/* Quiet buttons: pull the first label back by the button's own padding, so the text lines up
+   with the heading and the fields above it. */
 .presets {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--fm-space-1);
+  margin-inline-start: calc(-1 * var(--fm-space-2));
 }
 .pin {
   display: flex;
@@ -340,5 +340,6 @@ h3 {
 .pin-button {
   align-self: flex-start;
   margin-top: var(--fm-space-1);
+  margin-inline-start: calc(-1 * var(--fm-space-2));
 }
 </style>

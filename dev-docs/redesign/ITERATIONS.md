@@ -20,8 +20,8 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 13 Keyboard model (iteration 31: `?` sheet, `[` `]`, J/K; iteration 74 + review 75: Grid Alt+→/← opens a family, listed in the sheet; more tooltips remain)
 - [x] 14 Weight scrubbing (iteration 73: drag across a variable sample in the list/table rows to scrub `wght`; value pill beside the label; kept on release)
 - [ ] 15 Context presets in Layout
-- [ ] 16 Compare overlay (overlay mode already existed; iterations 71–72 + review 75: centred sheet, quiet controls, hairline specimens at 2× the list size, overlay centred on its stage; a size control and a text/radio `UiSegmentedControl` variant remain)
-- [ ] 17 Pairing Studio + Pairs with
+- [ ] 16 Compare overlay (overlay mode already existed; iterations 71–72 + review 75: centred sheet, quiet controls, hairline specimens at 2× the list size, overlay centred on its stage; a size control and a text/radio `UiSegmentedControl` variant for Compare and the Axes instances remain)
+- [ ] 17 Pairing Studio + Pairs with (iterations 44, 48, 52, 67, 76: quiet name tags, two bars, icon buttons, Layout help behind info and a lock icon; Studio lock beside the page and suggestions remain)
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
 - [ ] 20 Collections UX
@@ -30,7 +30,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
-- [ ] 26 Hover/focus/active audit (iterations 61–63, 68–69 + reviews 65, 70: one quiet UiButton for every text button, one UiIconButton for every toolbar icon; three `type="number"` inputs, the tags `datalist`, dialog buttons and the Settings nav focus ring remain)
+- [ ] 26 Hover/focus/active audit (iterations 61–63, 68–69, 78–79 + reviews 65, 70, 80: one quiet UiButton for every text button incl. Catalog rows and Axes, one UiIconButton for every toolbar icon; three `type="number"` inputs, the tags `datalist`, dialog buttons, Filters drawer chips and the Settings nav focus ring remain)
 - [ ] 27 Accessibility
 
 ## Entry template (at most 25 lines per entry)
@@ -452,41 +452,27 @@ Four iterations since review 70 (71–74); all four graded.
 **Next five:** move the `list` shot or a scene beside it — item 17 ("Lock width" beside the page; Layout help behind the info button) → item 7 (Grid card name never cut to "Sam…") → item 26 (Catalog row buttons and Axes chips quiet) → item 16 (text/radio `UiSegmentedControl`, Compare onto it) → item 14 (scrub in Grid cards and Quick Look, a `scrub` scene). Every iteration opens before/after shots of a scene that shows its change; no shots means a 2.
 
 ## Iteration 76 — 2026-11-03 — Layout view: help behind an info button, Lock width an icon
-**Critique (before):** The `list` shot is unchanged since review 70; the Layout view is the next loudest leftover. Under the page it printed a two-line gesture sentence, and "Lock width" was a loose text button at the far corner of the head. A designer sees prose where the Studio already has a quiet info icon. Good: the page itself (centred text column, size badges) reads like paper.
-**Why:** Backlog 17 / review 75 "Next five" first item. Same pattern as the Studio, so the two views match.
-**What changed:** `FontLayout` head: an info `UiIconButton` (`aria-expanded`) shows the sentence under the head; "Lock width" is a `UiIconButton` with a new `width` icon (`aria-pressed`, same label and test id). The sentence stays in the DOM (sr-only when closed) so blocks keep `aria-describedby`. New `layout-help` scene. Test updated: the lock's name is its `aria-label`.
-**Backlog:** item 17 (Layout help + lock width done); item 26 (one more bordered/text button gone).
-**Shots:** `.harness/redesign/shots/76/` (after only; `layout`, `layout-help`).
-**Follow-ups:** Studio panels still float the lock at each panel's corner (bare mode); the open hint is padded 32 px, not aligned to the text column.
-**Verified:** typecheck, lint:js, Vitest 913, Playwright 273 passed / 16 skipped (`e2e-76.log`).
-**Dependencies:** none. **Reverted:** no.
+The Layout view's gesture sentence moved behind an info `UiIconButton` and "Lock width" became a `width` icon (`aria-pressed`); new `layout-help` scene.
 
 ## Iteration 77 — 2026-11-03 — Grid cards: the name is never cut
-**Critique (before):** `list` is unchanged; the Grid is the next loud leftover. A family card with a chevron, a weight range and a Variable badge cut its name to "Sam…" — the one fact a card exists to show. Good: the big "The quick" specimen and the hover tint on cards read like paper.
-**Why:** Backlog 7 / review 75 "Next five" (Grid card name). Name first, extras second.
-**What changed:** `FontGrid` card meta is one fixed 16 px line that wraps; the name group (twisty, dot, name) comes first, and the count/range and badge wrap out of sight whole when they do not fit. Name ellipsis stays only for names wider than the card.
-**Backlog:** item 7 (name cut fixed).
-**Shots:** `.harness/redesign/shots/77/` (before) and `77b/` (after); `grid-expanded` shows "Sample 1" in full.
-**Follow-ups:** on a narrow card the Variable badge now drops; a quiet variable glyph that always fits would keep the cue.
-**Verified:** typecheck, lint:js, Vitest, Playwright 273 passed / 16 skipped (`e2e-77.log`).
-**Dependencies:** none. **Reverted:** no.
+`FontGrid` card meta is one 16 px line, name first; the count/range and badge wrap out of sight whole when they do not fit.
 
 ## Iteration 78 — 2026-11-03 — Catalog rows: Install and Download… become quiet buttons
-**Critique (before):** `list` is unchanged. In the Catalog, every row carried two bordered boxes ("Install", "Download…") that shout louder than the specimen under them. Good: the specimen line and the quiet badges already read like the rest of the app.
-**Why:** Backlog 26 / review 75 "Next five" (Catalog row buttons). Chosen over the Compare segmented control because it is one clear visible leftover; the list shot cannot move without a bigger redesign.
-**What changed:** `CatalogFamilyItem` uses `UiButton` for both actions; local `.get` button CSS deleted. Test: the "outlined at 3:1" check no longer asserts the row's Download… border (panel controls keep theirs).
-**Backlog:** item 26 (Catalog row buttons done; dialog buttons and Axes chips remain).
-**Shots:** `.harness/redesign/shots/78b/` (`catalog`; 78 is mixed before/after).
-**Follow-ups:** Install is not accented as the primary action; dialogs (CatalogDownload/Install, LocalApiSettings) and Axes instance chips still bordered.
-**Verified:** typecheck, lint:js, Vitest catalog files, Playwright 273 passed / 16 skipped (`e2e-78.log`).
-**Dependencies:** none. **Reverted:** no.
+`CatalogFamilyItem` uses `UiButton` for both row actions; the local bordered `.get` CSS was deleted.
 
 ## Iteration 79 — 2026-11-03 — Axes tab: named instances and Pin button become quiet
-**Critique (before):** `list` is unchanged. In the Axes tab, four bordered pills (Thin, Regular, Bold, Black) with one solid blue fill, and a bordered "Pin this instance" box, shout louder than the sliders above them. Good: the weight slider with its number field and the "100 to 900, default 400" line read cleanly.
-**Why:** Backlog 26 / review 75 "Next five" (Axes chips). The Compare segmented control is a bigger change; this finishes a clear leftover first.
-**What changed:** `InspectorAxes` uses `UiButton` for the instances and the Pin button. The active instance is accent text, semibold. Local border/fill CSS deleted. Also ran Prettier on `catalogs.spec.ts` (iteration 78 left it unformatted).
-**Backlog:** item 26 (Axes chips done; dialog buttons remain).
-**Shots:** `.harness/redesign/shots/79/` (before) and `79b/` (after); `inspector-axes`.
-**Follow-ups:** the selected instance is a weaker cue than the old solid pill; a text `UiSegmentedControl` could fix it (see item 16).
-**Verified:** typecheck, lint:js, Vitest, Playwright 273 passed / 16 skipped (`e2e-79.log`).
-**Dependencies:** none. **Reverted:** no.
+`InspectorAxes` instances and "Pin this instance" moved onto `UiButton`; it also formatted `catalogs.spec.ts`, left unformatted by 78.
+
+## Review 80 — 2026-11-03
+Four iterations since review 75 (76–79); all four graded.
+**Grades:** iter 76 **3** — the Layout view now matches the Studio (help behind info, lock an icon) and a scene was added; but only "after" shots, the opened help line sat 16 px right of the head it belongs to, a dead `.lock { margin-inline-start: 0 }` stayed, and in the Studio the lock still floats alone at the window corner. Iter 77 **4** — the worst Grid flaw fixed in CSS alone, with before/after shots; a narrow card now drops its Variable badge with no cue. Iter 78 **3** — Catalog rows are calmer; "Install" no longer reads as the primary action, shots are a mix of before and after, and it left `catalogs.spec.ts` failing Prettier (`lint:js` red until 79). Iter 79 **3** — the Axes tab lost five boxes; but the quiet buttons sat 8 px in from the column the fields and headings use, and it gave the pressed instance a local `font-weight: 600` beside `UiButton`'s own accent state — a caller-side state style (the bug reviews 65/70 named) that also shifts the row when the pressed instance changes.
+**Regressions:** none in views, keyboard, tests or list performance (59.8 fps). `lint:js` red between 78 and 79.
+**Drift:** a local pressed style (79); a dead rule and a literal head padding (76). No literal colours, new fonts, radii or native controls.
+**Pulled apart:** 79's quiet instances against item 16's planned text segmented control — the "current instance" cue is weak; both belong on one `UiSegmentedControl` variant. Three of four iterations were consistency sweeps; the `list` shot is byte-identical since review 70.
+**Fixed:**
+- `InspectorAxes`: the local pressed weight deleted (accent text from `UiButton` only); the instances row and "Pin this instance" pull back by the button padding, so their text lines up with the headings and fields.
+- `FontLayout`: the help line aligns with the head (`--fm-space-4`); head gap/padding on tokens; dead `.lock` rule and class deleted.
+**Rule amended (DESIGN.md):** the three-second test is "the `list` shot or the scene of the view the change touches", with before/after shots of that scene — the `list` shot has not moved in ten iterations. Items 7, 16, 17, 21, 26 rewritten; item 21 adds "Clear filters" on an empty collection (a store fix).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 913, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-80.log`). Shots `80/` (before, 66) and `80-after/` (66): all 33 scenes render in light and dark, comfortable and compact; only `inspector-axes` and `layout-help` changed.
+**Not fixed, noted:** Studio lock beside the page; Settings nav focus ring on load; Catalog toolbar wraps "Check for updates" to its own line at 1440 px; Install not primary.
+**Next five:** item 6 (row actions Activate / Compare / Tag on hover, seen in `hover-row`) → item 16 (text/radio `UiSegmentedControl`; Compare and Axes instances onto it) → item 17 (Studio lock beside the page) → item 14 (scrub in Grid cards and Quick Look; a `scrub` scene) → item 26 (Settings nav focus ring; Catalog toolbar on one line). Open before and after shots of the touched scene, both themes; run `pnpm lint:js` and read its exit code.

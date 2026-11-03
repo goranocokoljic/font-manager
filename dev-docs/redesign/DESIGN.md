@@ -210,20 +210,15 @@ it does not extend the mock or the store to fake it.
 
 ### The three-second test (applies to every item from here on)
 Every iteration must change something a designer would see in the first three seconds of
-opening the app, or feel in the first minute of using it. If the iteration's "after"
-screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 55
-one-style families have no chevron (6), the Studio is two bars with its help behind the info
-button (17), the Filters drawer names features (8) and Features shows each sample off and on (8).
-Since review 60 every number field on the first screen is `UiNumberField` (26); since review 65
-every text button in the main window is one quiet `UiButton` (26) and the sidebar Tags empty is a
-title and a key chip (21); since review 70 every toolbar icon is one `UiIconButton` and Grid cards
-show the weight range on hover (7). Since review 75 the Compare sheet is a centred specimen sheet at
-twice the list size (16), variable samples scrub their weight on drag (14) and the Grid opens a
-family with Alt+→/← (13). The `list` shot has not changed since review 70: the next wins must move
-it or a scene beside it — "Lock width" beside the page and the Layout help behind its info button
-(17), the bordered buttons left in the Catalog rows and the Axes tab (26), the Grid card name cut to
-"Sam…" (7), then scrubbing in Grid cards and Quick Look (14).
+opening the app, or feel in the first minute of using it, and open before/after shots of a scene
+that shows it. (Amended in review 80: the `list` shot has not moved since review 70 — the first
+screen is mature — so "the `list` shot or the scene of the view the change touches" is the test;
+a change no scene shows adds that scene first.) Since review 75 the Layout view's help sits behind
+an info button and "Lock width" is an icon (17), Grid card names are never cut (7), and the Catalog
+rows and the Axes instances are quiet `UiButton`s (26). Next: row actions on hover in the list (6,
+seen in `hover-row`), a text/radio `UiSegmentedControl` for Compare and the Axes instances (16),
+the Studio's lock beside the page (17), scrubbing in Grid cards and Quick Look with a `scrub` scene
+(14).
 Every feature adds a scene to `shots.mjs` in the same
 iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
@@ -272,8 +267,8 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
    style cards are solid and every card tints on hover (iteration 47); hover or the cursor
    swaps the style count for the weight range, with `grid-hover` and `grid-expanded` scenes
-   (iteration 66). Left: a family card with a chevron and a badge cuts its name to "Sam…"
-   (seen again in review 75 — the first thing to fix in the Grid).
+   (iteration 66); the name comes first and is never cut by the count or badge (iteration 77).
+   Left: on a narrow card the Variable badge wraps out of sight — a quiet glyph that always fits.
 8. **Inspector.** Info, Glyphs, the Features switches and one shared `InspectorTabHead` are
    done (iterations 17, 26–28, 43, reviews 20, 30, 45); each Features switch shows a sample in the
    face with the feature on (iteration 49), beside the same text with it off (iteration 54); the
@@ -324,7 +319,8 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     centred on its stage (iterations 71–72, review 75; `compare`, `compare-overlay` scenes).
     Left: a size control in the sheet; the mode switch is a local radio copy of the
     `UiSegmentedControl` look — give `UiSegmentedControl` a text + radio-group variant and move
-    Compare onto it; Pairings under the sheet is a sentence when empty.
+    Compare and the Axes named instances onto it (a pressed quiet button in accent text is a weak
+    "current" cue there, review 80); Pairings under the sheet is a sentence when empty.
 17. **Pairing Studio + "Pairs with" (API?).** The studio is where designers will spend real
     time, so it should feel like a canvas, not a form: a paper surface at realistic page scale
     centred in the window with a neutral backdrop; roles instead of blocks (Headline, Deck,
@@ -338,9 +334,10 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     panel bar, and the Layout view's bar uses the same quiet buttons (iteration 48, review 50).
     Two bars now: Close, Print and close-panel are icon buttons, the gesture sentence opens
     from the info button (iteration 52, review 55); "Add panel" is a plus icon (iteration 67).
-    Left: options in their own face; "Lock width" floats at the window's corner instead of
-    beside the page (shared `FontLayout` header); the Layout view still prints its gesture
-    sentence under the page, where the Studio has it behind the info button.
+    The Layout view's help is behind an info button and "Lock width" is a `width` icon in its
+    head (iteration 76, review 80: the help line aligns with the head). Left: options in their own
+    face; in the Studio (`FontLayout` `bare`) the lock icon floats alone at the window's corner
+    instead of beside the page.
 18. **Drag out (API?).** Drag a family from the list to drop its files into Explorer / Finder or
     another app; copy CSS / `font-family` name from the row menu.
 19. **Problems & Duplicates triage view (API?).** Grouped, with a "keep best" suggestion and bulk
@@ -350,7 +347,8 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 21. **Designed empty states.** Typographic, no illustrations, exactly one action that fills
     the state. `UiEmptyState` is done (iteration 41); the sidebar Tags empty is a quiet title
     plus a key chip (iteration 64, review 65). Left: Layout, Catalog and Quick Collection empties
-    are still plain text; no scene for "no matches" or "empty library".
+    are still plain text; no scene for "no matches" or "empty library"; an empty collection shows
+   "Clear filters" with no filter chosen (`hasFilters` counts the collection — a store fix).
 22. **First run (API?).** Detect system font folders, offer to add them, three-step welcome.
 23. **Online catalogues (API?)** browsed with the same list UI; install from the row.
 
@@ -366,8 +364,10 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     `UiIconButton`, Quick Collection and Catalog on `UiButton` (iterations 68–69, review 70).
     Left, in order: the Settings nav shows the focus ring on load (since review 40);
     `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; the
-    bordered buttons left in the Catalog rows (Install, Download…), dialogs (CatalogDownload/Install, LocalApiSettings,
-    Axes presets and "Pin this instance"); `quick-collection` and `catalog` scenes; a designed date picker
+    bordered dialog buttons (CatalogDownload/Install, LocalApiSettings); the Filters drawer's local
+    `.chip`/`.link` buttons; Catalog "Install" not marked as the primary action (Catalog rows and Axes
+    done in iterations 78–79; quiet buttons in a column pull back by their own padding, review 80);
+    a designed date picker
     (purchase date is a plain text field with a `YYYY-MM-DD` hint); a `preview-options-open`
     scene.
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.
