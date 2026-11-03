@@ -260,7 +260,7 @@ function onKeyDown(e: KeyboardEvent): void {
   font-weight: 600;
 }
 .status.active {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
 }
 .status.inLibrary {
   color: var(--fm-fg);
@@ -280,8 +280,8 @@ function onKeyDown(e: KeyboardEvent): void {
   padding: 2px 12px;
   border: 1px solid var(--fm-accent);
   border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
   font: inherit;
   font-weight: 600;
 }

@@ -97,7 +97,7 @@ onMounted(() => void store.load());
   background-color: var(--fm-bg);
 }
 .entry[aria-current='true'] {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 </style>

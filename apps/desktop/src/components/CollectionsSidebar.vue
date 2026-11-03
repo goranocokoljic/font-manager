@@ -554,7 +554,7 @@ const { folded, toggle } = useFolded('collections');
   background-image: none;
 }
 .name[aria-current='true'] {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 .smart {

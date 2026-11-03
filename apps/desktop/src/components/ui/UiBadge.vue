@@ -26,8 +26,9 @@ withDefaults(defineProps<{ tone?: 'quiet' | 'accent' | 'danger' | 'warning' }>()
   white-space: nowrap;
 }
 .tone-accent {
-  border-color: color-mix(in srgb, var(--fm-accent) 50%, transparent);
-  color: var(--fm-accent);
+  border-color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 .tone-danger {
   border-color: color-mix(in srgb, var(--fm-danger) 50%, transparent);

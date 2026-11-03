@@ -266,6 +266,7 @@ const folderName = computed(() => family.value?.name ?? '');
 }
 .button.primary {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 </style>

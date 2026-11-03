@@ -86,6 +86,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   accent-coloured *text* and *links* stay near-black / `--fm-fg`, and anything drawn *on* the
   accent uses a paired token `--fm-on-accent` (light: `#141413`, dark: `#ffffff` — both
   ≥ 4.5:1). Rings, fills, knobs, badges and the pressed state take the accent; words do not.
+  As a focus ring the dark accent must still reach 3:1 on every surface, so dark
+  `--fm-surface-2` is `#262628`, the lightest value that does.
   Nothing else is coloured. Licence / format / variable badges are monochrome glyphs.
   Status colours (`--fm-danger`, `--fm-warning`) mark problems only — a broken file, an
   unsupported format, a conflict. A good state ("OK", "Open license") is neutral, never
@@ -103,12 +105,12 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
   local acquire/release copy (review 50). Every number field is `UiNumberField`; a caller that
   saves listens to `commit` (Enter, blur, − / +), never to every keystroke or a timer (review 60). Every
-  text button is `UiButton` (iteration 61): quiet, accent text while pressed or expanded; its hover
+  text button is `UiButton` (iteration 61): quiet, an accent tint under `--fm-fg` text while pressed or expanded; its hover
   tint and disabled fade come from the global `button` baseline in `theme.css`, so neither
   `UiButton` nor a caller adds a hover background of its own (a second tint doubles it), and a
   local `.button`/`.toggle` text-button class is a bug (review 65). Every icon button is
   `UiIconButton` under the same baseline rule: no own hover background; a pressed toggle
-  (`aria-pressed`) keeps the `--fm-hover` tint, an open one (`aria-expanded`) turns accent; a
+  (`aria-pressed`) keeps the `--fm-hover` tint, an open one (`aria-expanded`) takes the accent tint; a
   local `.on` class or `.toggle.icon` copy is a bug (review 70). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
   ▸/▾ text glyph or a sidebar heading with its own fold markup is a bug. Text for screen readers only uses the
   global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider

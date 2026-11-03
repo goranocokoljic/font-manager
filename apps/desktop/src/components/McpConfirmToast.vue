@@ -113,7 +113,8 @@ button:disabled {
 }
 .allow {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
   font-weight: 600;
 }
 @media (prefers-reduced-motion: no-preference) {

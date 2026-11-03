@@ -42,6 +42,7 @@ defineProps<{ icon: IconName; label: string; title?: string }>();
   background-color: var(--fm-hover);
 }
 .ui-icon-button[aria-expanded='true'] {
-  color: var(--fm-accent);
+  background-color: color-mix(in srgb, var(--fm-accent) 16%, transparent);
+  color: var(--fm-fg);
 }
 </style>

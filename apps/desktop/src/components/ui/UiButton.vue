@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A quiet text button: no border at rest, accent text while it is pressed or expanded.
+// A quiet text button: no border at rest, an accent tint while it is pressed or expanded.
 // The hover/press tint and the disabled fade come from the global `button` baseline in
 // theme.css (do not add a second tint here). Attributes (aria-*, @click, title) fall
 // through to the <button>.
@@ -34,6 +34,7 @@
 }
 .ui-button[aria-pressed='true'],
 .ui-button[aria-expanded='true'] {
-  color: var(--fm-accent);
+  background-color: color-mix(in srgb, var(--fm-accent) 16%, transparent);
+  color: var(--fm-fg);
 }
 </style>

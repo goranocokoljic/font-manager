@@ -76,7 +76,8 @@ button:focus-visible {
 .action {
   padding: 2px 12px;
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
   font-weight: 600;
 }
 .close {

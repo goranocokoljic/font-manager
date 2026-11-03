@@ -43,14 +43,33 @@ const tint = (top: string, p: number, under: string) =>
 
 const light = palette(theme, ':root');
 const dark = palette(theme, ":root[data-theme='dark']");
-const TEXT = ['fg', 'muted', 'danger', 'accent', 'success', 'warning'];
+// The accent is not a text color: words on it are `on-accent`, the rest `fg` (DESIGN.md).
+const TEXT = ['fg', 'muted', 'danger', 'success', 'warning'];
+
+describe('the accent pair (E40.3)', () => {
+  it.each([
+    ['light', light, '#c56eb2', '#141413'],
+    ['dark', dark, '#ab4b96', '#ffffff'],
+  ])('%s is the owner’s colors', (_, p, accent, onAccent) => {
+    expect(p.accent).toBe(accent);
+    expect(p['on-accent']).toBe(onAccent);
+  });
+});
 
 describe.each([
   ['light', light],
   ['dark', dark],
 ])('%s theme', (_, p) => {
   it('has every color the checks need', () => {
-    for (const k of [...TEXT, 'bg', 'surface', 'surface-2', 'control-border'])
+    for (const k of [
+      ...TEXT,
+      'accent',
+      'on-accent',
+      'bg',
+      'surface',
+      'surface-2',
+      'control-border',
+    ])
       expect(p[k], k).toBeDefined();
   });
 
@@ -66,8 +85,13 @@ describe.each([
       expect(contrast(fg, bg), `${k} on ${name}`).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('button text on the accent is at least 4.5:1', () => {
-    expect(contrast(rgb(p.bg!), rgb(p.accent!))).toBeGreaterThanOrEqual(4.5);
+  it('text on the accent is at least 4.5:1', () => {
+    expect(contrast(rgb(p['on-accent']!), rgb(p.accent!))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('text on the accent tint of a pressed button is at least 4.5:1', () => {
+    for (const under of [p.bg!, p.surface!, p['surface-2']!])
+      expect(contrast(rgb(p.fg!), tint(p.accent!, 0.16, under))).toBeGreaterThanOrEqual(4.5);
   });
 
   it('control outlines and the focus ring are at least 3:1', () => {
@@ -108,7 +132,7 @@ describe('palettes stay in step', () => {
 
 /** Colors with no contrast duty: row and panel separators (WCAG 1.4.11 exempts them). */
 const DECORATIVE = ['border'];
-const CHECKED = [...TEXT, 'bg', 'surface', 'surface-2', 'control-border'];
+const CHECKED = [...TEXT, 'accent', 'on-accent', 'bg', 'surface', 'surface-2', 'control-border'];
 
 describe('every color token', () => {
   it.each([
@@ -137,6 +161,116 @@ describe('Compare colors', () => {
     for (const c of compareColors(compareSheet))
       for (const bg of [p.bg!, p.surface!])
         expect(contrast(rgb(c), rgb(bg)), `${c} on ${bg}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
+// E40.3: where the accent goes. A style sheet is read as rules, so a new component is held
+// to the same two checks without being named here.
+const SOURCES = Object.entries(
+  import.meta.glob<string>(['/src/**/*.vue', '/src/**/*.css'], {
+    query: '?raw',
+    import: 'default',
+    eager: true,
+  }),
+).map(([path, source]) => [path.replace(/^\/src\//, ''), source] as const);
+
+/** The innermost `selector { declarations }` rules of a style sheet. */
+const rules = (source: string) =>
+  [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selector: m[1]!.replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+    body: m[2]!,
+  }));
+
+/** The rule of `file` for exactly `selector`. */
+function ruleOf(file: string, selector: string): string {
+  const source = SOURCES.find(([path]) => path === file)?.[1];
+  expect(source, file).toBeDefined();
+  const rule = rules(source!).find((r) => r.selector.replace(/\s+/g, ' ') === selector);
+  expect(rule, `${file}: ${selector}`).toBeDefined();
+  return rule!.body;
+}
+
+const ACCENT_FILL = /(^|[\s;])background(-color)?:\s*var\(--fm-accent\)/;
+const TEXT_COLOR = /(^|[\s;])color:\s*([^;]+)/;
+
+describe('the accent in the style sheets', () => {
+  it('finds the style sheets', () => {
+    expect(SOURCES.length).toBeGreaterThan(50);
+  });
+
+  it('is never a text color', () => {
+    const found = SOURCES.flatMap(([path, source]) =>
+      rules(source)
+        .filter((r) => TEXT_COLOR.exec(r.body)?.[2]?.trim() === 'var(--fm-accent)')
+        .map((r) => `${path}: ${r.selector}`),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it('has on-accent text wherever a rule fills with it and sets a text color', () => {
+    const found = SOURCES.flatMap(([path, source]) =>
+      rules(source)
+        .filter((r) => ACCENT_FILL.test(r.body) && TEXT_COLOR.test(r.body))
+        .filter((r) => TEXT_COLOR.exec(r.body)?.[2]?.trim() !== 'var(--fm-on-accent)')
+        .map((r) => `${path}: ${r.selector}`),
+    );
+    expect(found).toEqual([]);
+  });
+
+  it.each([
+    ['primary button', 'components/UpdateDialog.vue', '.button.primary'],
+    ['primary button', 'views/ProblemsView.vue', '.button.primary'],
+    ['activate button', 'components/InspectorInfo.vue', '.activate'],
+    ['count badge', 'components/ui/UiBadge.vue', '.tone-accent'],
+    ['pressed chip', 'components/FilterChips.vue', ".chip[aria-pressed='true'], .chip.active"],
+    ['filters chip', 'components/FilterChips.vue', ".opener.on, .opener[aria-expanded='true']"],
+    ['toast action', 'components/ToastMessage.vue', '.action'],
+    ['active segment', 'components/ui/UiSegmentedControl.vue', ".seg[aria-pressed='true']"],
+    ['active Compare mode', 'components/CompareSheet.vue', '.mode:has(input:checked)'],
+    ['selected glyph', 'components/InspectorGlyphs.vue', ".cell[aria-selected='true']"],
+  ])('%s fills with the accent and writes on-accent (%s)', (_, file, selector) => {
+    const body = ruleOf(file, selector);
+    expect(body).toMatch(ACCENT_FILL);
+    expect(TEXT_COLOR.exec(body)?.[2]?.trim()).toBe('var(--fm-on-accent)');
+  });
+
+  it.each([
+    ['focus ring', 'styles/theme.css', ':focus-visible', /outline:\s*2px solid var\(--fm-accent\)/],
+    [
+      'selection ring',
+      'components/FontGrid.vue',
+      '.viewport:focus .slot.cursor .card',
+      /box-shadow:\s*inset 0 0 0 2px var\(--fm-accent\)/,
+    ],
+    ['switch on', 'components/InspectorFeatures.vue', ".switch[aria-checked='true']", ACCENT_FILL],
+    ['slider thumb', 'styles/theme.css', "input[type='range']::-webkit-slider-thumb", ACCENT_FILL],
+    [
+      'Firefox slider thumb',
+      'styles/theme.css',
+      "input[type='range']::-moz-range-thumb",
+      ACCENT_FILL,
+    ],
+    ['activation dot', 'components/ActivationDot.vue', '.dot.active', ACCENT_FILL],
+    [
+      'check box',
+      'styles/theme.css',
+      "input[type='checkbox']:checked, input[type='radio']:checked",
+      ACCENT_FILL,
+    ],
+  ])('%s takes the accent (%s)', (_, file, selector, pattern) => {
+    expect(ruleOf(file, selector)).toMatch(pattern);
+  });
+
+  it('draws the check mark, radio dot and switch knob in on-accent', () => {
+    expect(ruleOf('styles/theme.css', "input[type='checkbox']::before")).toContain(
+      'background-color: var(--fm-on-accent)',
+    );
+    expect(ruleOf('styles/theme.css', "input[type='radio']::before")).toContain(
+      'background-color: var(--fm-on-accent)',
+    );
+    expect(
+      ruleOf('components/InspectorFeatures.vue', ".switch[aria-checked='true'] .knob"),
+    ).toContain('background-color: var(--fm-on-accent)');
   });
 });
 

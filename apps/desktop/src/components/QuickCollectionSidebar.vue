@@ -49,7 +49,7 @@ const chord = chordOf(ACTIONS.quickCollection)!;
   background-color: var(--fm-bg);
 }
 .entry[aria-current='true'] {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 .name {
