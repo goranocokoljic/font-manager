@@ -128,7 +128,9 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
 - **Components** (`src/components/ui/`): `UiPopover`, `UiSelect`, `UiDrawer`, `UiIcon` (+ `icons.ts`),
   `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
   and `UiChevron` exist (review 10), plus `UiFoldButton` with `components/useFolded.ts`
-  (review 35) and `UiEmptyState` (review 45); every inspector tab head is `InspectorTabHead`. Every badge and every expand/fold twisty uses them; a local `.badge` class, a
+  (review 35) and `UiEmptyState` (review 45); every inspector tab head is `InspectorTabHead`;
+  a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
+  local acquire/release copy (review 50). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
   ▸/▾ text glyph or a sidebar heading with its own fold markup is a bug. Text for screen readers only uses the
   global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider
   (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
@@ -196,13 +198,15 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 45
-empty states (21), `?face=` list selection (6), the shared inspector tab head (8) and quiet
-Studio font fields (17, first slice) are in. Next: item 6's one-style families (a `?face=` reload
-now opens Inter and shows the same sample twice in List and Waterfall), item 7's dashed style
-card in Grid, item 17's Studio toolbar (four rows of text buttons) and font options in their own
-face, then item 26's license-form natives. Every feature adds a scene to `shots.mjs` in the same
-iteration; a change that alters what `?face=` shows checks every scene that uses it.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 50
+the `?face=` reveal keeps one-style families folded (6), Grid style cards are solid (7), the
+Studio file actions share the panel bar (17) and Features shows each feature at work (8). Next:
+item 6's chevron on one-style families (expanding one still shows its sample twice — the
+`expanded-family` scene), item 17's last two Studio bars (the font line with "Lock width" and the
+Layout/Print row into one bar; the help sentence behind `?`), item 26's license-form natives,
+item 21's Tags / Quick Collection empties, and the human feature names in the Filters drawer
+(item 8). Every feature adds a scene to `shots.mjs` in the same iteration; a change that alters
+what `?face=` shows checks every scene that uses it.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -240,14 +244,17 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
    (iterations 9, 14, review 10); the chevron sits on the sample line in both densities,
    sub-rows hang off a hairline guide, the pane has no ring (iteration 21, review 25).
    The cursor row is a 2 px bar plus a hairline ring, rows tint on hover (iteration 29,
-   review 30). `?face=` selects the list row (iteration 42). Left: revealing a one-style family
-   expands it, so the family row and its only style show the same sample twice (List, Waterfall,
-   Grid) — select the family row instead, or do not expand a family with one style.
-7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word).
-   Left: hover reveals the weight range; style cards drop their dashed border.
+   review 30). `?face=` selects the list row (iteration 42); revealing a one-style family keeps
+   it folded (iteration 46). Left: a one-style family still has a chevron, and opening it shows
+   the same sample twice (List, Waterfall, Grid, Table) — drop the chevron and the expand for
+   `styleCount === 1` in all four views, keyboard ArrowRight included.
+7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
+   style cards are solid and every card tints on hover (iteration 47). Left: hover reveals the
+   weight range; a `grid-expanded` scene so a style card is ever seen in a shot.
 8. **Inspector.** Info, Glyphs, the Features switches and one shared `InspectorTabHead` are
-   done (iterations 17, 26–28, 43, reviews 20, 30, 45). Left: Features with a live preview of each
-   switch — the same human names and groups ("Small caps", "Tabular figures", "Stylistic
+   done (iterations 17, 26–28, 43, reviews 20, 30, 45); each Features switch shows a sample in the
+   face with the feature on (iteration 49). Left: the sample beside the same text with the
+   feature off, so the difference is visible (and stylistic sets get a real sample); the same human names and groups ("Small caps", "Tabular figures", "Stylistic
    sets") replace the raw tags in the Filters drawer's features group (left open by item 2).
    The labels are a static table of registered OpenType tags, which is presentation, not
    font logic.
@@ -294,8 +301,10 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
     pairings; export as PNG. `PairingsPanel` already exists in the inspector —
     redesign it as the same suggestions rail with one click to open a pairing in the studio.
     Toolbar collapsed to one row. Done: the block font fields are quiet name tags beside the
-    block (iteration 44, review 45). Left: options in their own face, the four toolbar rows, the
-    Layout select and "Lock width" in `UiSelect`/button style.
+    block (iteration 44, review 45); Save/Revert/Duplicate/Reset/History are quiet buttons in the
+    panel bar, and the Layout view's bar uses the same quiet buttons (iteration 48, review 50).
+    Left: options in their own face; the font line ("Inter Regular" + "Lock width") and the panel
+    bar into one row; Print/Close as icon buttons; the instruction sentence under the page.
 18. **Drag out (API?).** Drag a family from the list to drop its files into Explorer / Finder or
     another app; copy CSS / `font-family` name from the row menu.
 19. **Problems & Duplicates triage view (API?).** Grouped, with a "keep best" suggestion and bulk

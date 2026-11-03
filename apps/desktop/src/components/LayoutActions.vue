@@ -161,37 +161,32 @@ const when = (iso: string) => {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  padding: 4px 16px;
+  gap: var(--fm-space-1);
+  padding: var(--fm-space-1) var(--fm-space-4);
   border-bottom: 1px solid var(--fm-border);
   font-size: var(--fm-text-sm);
 }
 .toggle {
-  padding: 2px 8px;
-  border: 1px solid var(--fm-border);
+  padding: var(--fm-space-1) var(--fm-space-2);
+  border: 0;
   border-radius: var(--fm-radius-md);
   background-color: transparent;
   color: inherit;
   font: inherit;
+  transition: background-color var(--fm-motion-fast) var(--fm-ease);
+}
+.toggle:hover:not(:disabled) {
+  background-color: var(--fm-hover);
 }
 .toggle:disabled {
   opacity: 0.5;
 }
 .toggle[aria-expanded='true'] {
-  border-color: var(--fm-accent);
   color: var(--fm-accent);
 }
 .actions.inline {
   padding: 0;
   border-bottom: 0;
-}
-.inline .toggle {
-  padding: 4px 8px;
-  border-color: transparent;
-  transition: background-color var(--fm-motion-fast) var(--fm-ease);
-}
-.inline .toggle:hover:not(:disabled) {
-  background-color: var(--fm-hover);
 }
 .history.inline {
   flex-basis: 100%;

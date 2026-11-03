@@ -423,9 +423,7 @@ function onFieldKey(e: KeyboardEvent): void {
   border-radius: var(--fm-radius-sm);
   background-color: var(--fm-surface);
   color: var(--fm-fg);
-  font:
-    11px/1.4 system-ui,
-    sans-serif;
+  font: var(--fm-text-xs)/1.4 var(--fm-font-ui);
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;

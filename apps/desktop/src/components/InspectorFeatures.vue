@@ -5,12 +5,12 @@
 // face's preview rows through font-feature-settings (the features store).
 // Features the shaper applies by itself are listed without a switch. "Copy
 // CSS" copies font-feature-settings for the switched features (E10.5).
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed } from 'vue';
 import type { FeatureInfo } from '../api/types';
 import { t } from '../i18n';
 import { useFeaturesStore } from '../stores/features';
 import { useSelectionStore } from '../stores/selection';
-import { useFaceLoader } from '../preview/faceLoader';
+import { useHeldFace } from '../preview/useHeldFace';
 import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
 
@@ -23,23 +23,7 @@ const automatic = computed(() => d.value?.features.filter((f) => f.automatic) ??
 
 // The face's font, registered with the webview while the tab shows it, so each
 // row can show its feature at work.
-const loader = useFaceLoader();
-const family = ref<string | null>(null);
-let held: number | null = null;
-function hold(id: number | null): void {
-  if (held !== null) loader.release(held);
-  held = id;
-  family.value = null;
-  if (id === null) return;
-  loader.acquire(id).then(
-    (name) => {
-      if (held === id) family.value = name;
-    },
-    () => undefined,
-  );
-}
-watch(faceId, hold, { immediate: true });
-onBeforeUnmount(() => hold(null));
+const family = useHeldFace(faceId);
 
 // Presentation only: a short text that shows what a registered feature does.
 const SAMPLES: Record<string, string> = {

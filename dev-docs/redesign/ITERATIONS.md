@@ -288,33 +288,28 @@ New `InspectorTabHead` (hint line, actions under it) replaced three copies of he
 **Next five:** item 6 rest (one-style family: no doubled sample on reveal) → item 7 rest (Grid style card without the dashed border; hover weight range) → item 17 (Studio toolbar to one row; options in their own face) → item 26 (license date/number/datalist, Advanced number fields) → item 21 rest (Tags/Quick Collection empties on `UiEmptyState`). Every iteration takes before and after shots and reads the `lint:js` exit code.
 
 ## Iteration 46 — 2026-11-03 — One-style families no longer show their sample twice
-**Critique (before):** After a `?face=` reload the first list row was Inter, expanded, so the family row and its only style showed the same pangram twice; Waterfall repeated the ladder. The list itself is calm and the selected-row bar reads well. The worst thing is the redundant row on first open.
-**Why:** Review 45 named it as the next item (6 rest). It changes the `list` and `waterfall` shots.
-**What changed:** `fontList.reveal` keeps a one-style family folded and selects the family row. `e2e/similar.spec.ts` accepts the family row as the selected row (UI changed on purpose).
-**Ticked:** none (item 6 stays ticked; the double sample is closed). **Shots:** `.harness/redesign/shots/46-after/` (the before run overlapped the edit, so it is not a clean before).
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright similar 6/6; full suite had 1 failure (the one fixed). Log `.harness/redesign/e2e-46.log`.
-**Follow-ups:** item 7 rest (Grid style card dashed border) next. **Dependencies:** none.
+`fontList.reveal` keeps a one-style family folded and selects its family row, so a `?face=` reload no longer doubles Inter's sample.
 
 ## Iteration 47 — 2026-11-03 — Grid style cards: no dashed border, hover tint
-**Critique (before):** Grid is calm and the selected card reads well. The worst detail is that style cards (revealed styles) keep a dashed border, the only dashed line in the app. Family cards had no hover response.
-**Why:** Item 7 rest, the lowest open backlog item after item 6.
-**What changed:** `FontGrid.vue`: style cards use a transparent border on `--fm-surface`; every card tints with `--fm-hover` over 120 ms. Selected still wins.
-**Ticked:** none. **Shots:** `.harness/redesign/shots/47/` (no style card is visible in the `grid` scene, so the dashed fix is not seen in a shot; the hover tint is not either).
-**Verified:** typecheck, `lint:js` exit 0, Playwright 273 passed / 16 skipped (`e2e-47.log`). No before shots taken.
-**Follow-ups:** hover weight range on Grid cards (needs a visible use); add a Grid scene with an expanded multi-style family. **Dependencies:** none.
+Style cards in Grid lost the app's only dashed border; every card tints with `--fm-hover`.
 
 ## Iteration 48 — 2026-11-03 — Studio toolbar: four rows become three
-**Critique (before):** The Studio is a quiet canvas, but its chrome is four stacked bars: title, panel name + Layout + Print, a row of five bordered text buttons, then the font line. The bordered buttons shout louder than the specimen. The type itself looks good.
-**Why:** Item 17 rest (Studio toolbar to one row); the biggest visible change in the Studio.
-**What changed:** `LayoutActions` gets an `inline` mode (no border or padding, borderless buttons, `--fm-hover` tint). `StudioPanel` puts Save/Revert/Duplicate/Reset/History in the panel bar next to the name; the History list wraps below. The Layout view keeps the old bar.
-**Ticked:** none. **Shots:** `.harness/redesign/shots/48/` (before), `48-after/`.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910 (one catalogs test flaked once, passed alone), Playwright 273 passed / 16 skipped (`e2e-48.log`).
-**Follow-ups:** the "Lock width" row could join the panel bar; options in their own face; Layout select and Print/Close as `UiIconButton`s. **Dependencies:** none.
+`LayoutActions` got an `inline` mode and moved into the Studio panel bar as quiet buttons.
 
 ## Iteration 49 — 2026-11-03 — Features tab: each switch shows its feature at work
-**Critique (before):** The `list` is calm: Inter selected with a clear bar, quiet badges, sidebar with rhythm. The Features tab is a clean switch list, but it is only names and tags; a designer cannot tell what "Small capitals" or "Oldstyle figures" does without flipping it and reading a row elsewhere. The worst gap is that the tab has no type in it.
-**Why:** Item 8 rest (Features live preview); the only open item in the lowest-numbered unblocked entry.
-**What changed:** `InspectorFeatures.vue` loads the face with `useFaceLoader` and shows a short sample under each switchable feature, in the face, with that feature forced on (static tag → sample table; fallback "Rag Agy 0123"). Presentation only.
-**Ticked:** none (item 8 keeps "human names in the Filters drawer's features group"). **Shots:** `.harness/redesign/shots/49/` (before), `49-after/`.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-49.log`).
-**Follow-ups:** sample could also show the feature off beside it; reuse the human names in the Filters drawer; add `ss01–ss20` sample. **Dependencies:** none.
+Each switchable feature shows a short sample in the face with that feature forced on.
+
+## Review 50 — 2026-11-03
+Only four iterations since review 45 (46–49); all four graded.
+**Grades:** iter 46 **3** — the right fix for `?face=` reveal, but only there: a one-style family still has a chevron, and opening it shows the sample twice (`expanded-family` scene); the e2e regex now accepts either row name. Iter 47 **3** — correct small cleanup (the only dashed line gone, hover tint on a token), but no scene shows a style card or hover, and no before shots. Iter 48 **2** — the Studio got quiet buttons, but `LayoutActions` kept the old bordered look in the Layout view: one component, two looks; literal `4px 8px`; the Studio still has three bars plus the font line. Iter 49 **4** — the first type inside the Features tab, a real visible change; it copied the acquire/release block from `InspectorGlyphs` word for word, and the sample does not show the difference (always on; stylistic sets get a generic "Rag Agy").
+**Regressions:** none in views, keyboard, tests or list performance (59.8 fps).
+**Drift:** literal padding in `LayoutActions`; found older: `FontLayout` (Lock width, font name) and `LayoutBlock` (pt chips) drew `11px system-ui` — the only system font left in the chrome.
+**Pulled apart:** 48 against the Layout view (same toolbar, two styles). Only 46 changed the `list` shot; 47 and 48 left it as it was (not opened again — the code paths do not touch the list).
+**Fixed:**
+- New `preview/useHeldFace.ts`; `InspectorFeatures` and `InspectorGlyphs` use it instead of two copies of the hold/release code.
+- `LayoutActions`: one quiet button style (no border, `--fm-hover`, accent text when History is open) in both Studio and Layout; spacing tokens; `inline` only drops the bar's own padding and border.
+- `FontLayout`, `LayoutBlock`: `11px system-ui` → `var(--fm-text-xs)/1.4 var(--fm-font-ui)`.
+**Rule amended (DESIGN.md):** components add `useHeldFace` (one face in its own font). Items 6, 7, 8, 17 and the three-second note rewritten.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-50.log`; edits landed during that run, so features/glyphs/layout/studio/text-layouts/a11y re-run after: 91 passed / 4 skipped, `e2e-review-50-recheck.log`). Shots `review-50/` (before, 52) and `review-50-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** "Lock width" pressed state is an accent outline in a quiet bar; the Studio help sentence under the page; Grid pangram at 28 px shows two words only.
+**Next five:** item 6 (no chevron / expand for one-style families in all four views, ArrowRight too) → item 17 (Studio: font line and panel bar into one row; Print/Close as icon buttons; help behind `?`) → item 8 (Features sample off/on side by side; human names in the Filters drawer) → item 26 (license date/number/datalist, Advanced number fields) → item 21 (Tags / Quick Collection empties on `UiEmptyState`). Every iteration takes before and after shots of a scene that shows its change.

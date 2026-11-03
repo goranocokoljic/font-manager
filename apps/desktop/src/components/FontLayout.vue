@@ -349,9 +349,7 @@ function blockFamily(i: number): string {
   border-radius: var(--fm-radius-sm);
   background-color: var(--fm-bg);
   color: var(--fm-fg);
-  font:
-    11px/1.4 system-ui,
-    sans-serif;
+  font: var(--fm-text-xs)/1.4 var(--fm-font-ui);
   cursor: pointer;
 }
 .lock[aria-pressed='true'] {
@@ -376,9 +374,7 @@ function blockFamily(i: number): string {
   border-radius: var(--fm-radius-sm);
   background-color: var(--fm-bg);
   color: var(--fm-muted);
-  font:
-    11px/1.4 system-ui,
-    sans-serif;
+  font: var(--fm-text-xs)/1.4 var(--fm-font-ui);
   white-space: nowrap;
   cursor: pointer;
 }

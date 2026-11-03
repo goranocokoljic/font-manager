@@ -24,7 +24,7 @@ import {
   rowOf,
 } from '../glyphs/layout';
 import { scrollToShow, windowRange } from '../list/virtual';
-import { useFaceLoader } from '../preview/faceLoader';
+import { useHeldFace } from '../preview/useHeldFace';
 import CopyValue from './CopyValue.vue';
 import GlyphCompare from './GlyphCompare.vue';
 import GlyphCoverage from './GlyphCoverage.vue';
@@ -50,29 +50,14 @@ const selection = useSelectionStore();
 const glyphs = useGlyphsStore();
 const compare = useGlyphCompareStore();
 const coverage = useCoverageStore();
-const loader = useFaceLoader();
 
 const faceId = computed(() => selection.detail?.face.id ?? null);
 
 // The face's font, registered with the webview while the tab shows it.
-const family = ref<string | null>(null);
-let held: number | null = null;
-function hold(id: number | null): void {
-  if (held !== null) loader.release(held);
-  held = id;
-  family.value = null;
-  if (id === null) return;
-  loader.acquire(id).then(
-    (name) => {
-      if (held === id) family.value = name;
-    },
-    () => undefined,
-  );
-}
+const family = useHeldFace(faceId);
 watch(
   faceId,
   (id) => {
-    hold(id);
     if (id !== null) {
       void glyphs.open(id);
       void coverage.open(id);
@@ -80,7 +65,6 @@ watch(
   },
   { immediate: true },
 );
-onBeforeUnmount(() => hold(null));
 
 const viewport = ref<HTMLElement | null>(null);
 const scrollTop = ref(0);
