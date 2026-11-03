@@ -123,3 +123,12 @@ Built `UiBadge`; FontList and FontPreviewRow badges moved onto it and the ▸/�
 **Verified:** typecheck, lint:js (only the old `collections.spec.ts` format warning), Vitest 906, Playwright 272 passed.
 **Follow-ups:** Sources "Fonts" row actions on their own line; Problems header vs smart "Problems"; section icons and collapsible sections. Dark-first launch needs the API default theme changed to `dark` (API task).
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 14 — 2026-11-03 — List rows: "Find similar" becomes a hover icon button
+**Critique:** The list is calm and specimens lead. The sidebar is still the noisiest part (Fonts row actions on their own line, no section icons). The row's bordered "Find similar" text button only appears on hover or on the cursor row, and it looked like a form button.
+**Why:** Backlog item 6 (rest). After: the row shows a quiet 24 px icon on hover/focus instead of a bordered text button. The shots scenes do not hover, so `list` looks the same; the change shows only on hover. Picked over item 7 because it is small and finishes the row-action rule.
+**What changed:** `FontList` uses `UiIconButton` with a new `similar` icon (same label, shortcut and test id; row-action CSS cut to position and visibility).
+**Ticked:** none (item 6 still open: chevron alignment, sub-row styling). **Shots:** `.harness/redesign/shots/14/` (before), `14a/` (after).
+**Verified:** typecheck, Playwright 272 passed / 16 skipped. Vitest 905/906: the 50 ms search timing test failed under load and passed alone (9/9). `lint:js` shows only prettier warnings on the old `collections.spec.ts`.
+**Follow-ups:** add a hover scene to `screens.spec.ts` so hover actions are visible in shots. Next: item 7 (grid cards).
+**Dependencies:** none. **Reverted:** no.

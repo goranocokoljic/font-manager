@@ -43,6 +43,7 @@ import ActivationDot from './ActivationDot.vue';
 import FontPreviewRow from './FontPreviewRow.vue';
 import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 
 const props = withDefaults(
   defineProps<{
@@ -347,19 +348,17 @@ function onToggle(row: ListRow): void {
             <span class="count">{{ t('list.pinned') }}</span>
           </template>
         </FontPreviewRow>
-        <button
+        <UiIconButton
           v-if="item.face"
-          type="button"
           class="row-action"
+          icon="similar"
           tabindex="-1"
           data-testid="row-similar"
-          :aria-label="similarLabel(item.face)"
+          :label="similarLabel(item.face)"
           :aria-keyshortcuts="ariaShortcut(similarChord)"
           :title="`${similarLabel(item.face)} (${formatChord(similarChord)})`"
           @click.stop="findSimilar(item.row, item.face)"
-        >
-          {{ t('list.findSimilar') }}
-        </button>
+        />
         <div
           v-else
           class="preview placeholder"
@@ -472,16 +471,8 @@ function onToggle(row: ListRow): void {
   color: var(--fm-warning);
 }
 .row-action {
-  flex: none;
   align-self: center;
   margin-inline-end: 8px;
-  padding: 2px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
-  font-size: var(--fm-text-xs);
   visibility: hidden;
 }
 .slot:hover .row-action,
