@@ -7,12 +7,9 @@ This is the document where I wil write down different type of improvements to th
 - We need to make those tags in the top much better, this isn't nice and people that will use the font manager are expecting things to be beautiful, not ugly. I'm not even sure if most of those tags or buttons are of any use to the user. 
 - Can we make MCP automatically install fonts without questions in Font Manager? That's much better for the user. Maybe some configuration that list applications that are allowed to install fonts or something similar.
 - I believe we would have great benffit if we could drop one or several documents to the font manager and from them create project set.
-
-### Google and other external fonts improvements
-
- - When I click on a font from Google Fonts or other external sources, I want to be able to preview the font and see the details of the font.
- - I want to be able to install the font from Google Fonts or other external sources without going through several steps I have to do now. Now I have to download the font to certain folder, add it and install it by myself. I want to be able to do that with one click.
- 
+- Compare fonts view: I want to be able to compare fonts by dragging them to the compare view or adding them to it.
+- I want to be able to inspect all of the font's glyphs.
+- I want to introduce enlarged interface for people that don't see details well. I want to add that to settings panel.
 
 ## UI improvements
 

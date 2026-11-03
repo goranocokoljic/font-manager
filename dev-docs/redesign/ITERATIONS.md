@@ -30,7 +30,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
-- [ ] 26 Hover/focus/active audit (iteration 61: quiet UiButton on Options, Find similar, Columns, Copy CSS)
+- [ ] 26 Hover/focus/active audit (iterations 61–62: quiet UiButton on Options, Find similar, Columns, Copy CSS; Problems view)
 - [ ] 27 Accessibility
 
 ## Entry template (at most 25 lines per entry)
@@ -377,4 +377,14 @@ Four iterations since review 55 (56–59); all four graded.
 **Shots:** `.harness/redesign/shots/61/` (before), `61-after/` (after): `list` and `inspector-info` changed, both themes.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-61.log`).
 **Follow-ups:** move the Preview options-row buttons (alignment, Reset), Settings/Problems Close, Problems chip row onto `UiButton`; then the last three `type="number"` inputs and tags `datalist`. Table shot not opened (Columns only changes the same way).
+**Dependencies:** none. **Reverted:** no.
+
+## Iteration 62 — 2026-11-03 — Problems view: quiet buttons, no chip boxes
+**Critique (before):** The Problems view is a wall of boxes: seven bordered filter chips, a bordered Close, bordered Keep mine / Use theirs / Keep this one on every row, and an outlined "Recommended" pill. All of it has the same weight as the table, so nothing leads. The table itself is tidy and the monospace paths read well.
+**Why:** Item 26's left list (Close, Problems chip row, Recommended pill). Principle 1: chrome is quiet. The `list` shot has no bordered text buttons left, so this is the next loudest screen.
+**What changed:** `ProblemsView` uses `UiButton` for Close, the filter row (accent text while pressed), Keep mine, Use theirs, Keep this one, Undo and Cancel. "Recommended" is a `UiBadge` (accent tone). The confirm button in the dialog keeps its accent border as the one primary action. Local `.toggle` and `.badge` CSS removed.
+**Backlog:** item 26 still open.
+**Shots:** `.harness/redesign/shots/62/` (before), `62-after/`: `problems` changed. Dark opened; light not opened.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-62.log`, run before the final chip fix; `problems` specs re-run: 7 passed).
+**Follow-ups:** the quiet resolve buttons are faint (consider a `primary` look for the single row action); Preview options-row buttons (alignment, Reset), Settings Close, ConflictsView button; last three `type="number"` inputs; tags `datalist`.
 **Dependencies:** none. **Reverted:** no.

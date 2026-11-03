@@ -10,6 +10,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router';
 import type { SidecarField } from '../api/types';
 import { errorMessage, formatDate, t } from '../i18n';
+import UiBadge from '../components/ui/UiBadge.vue';
+import UiButton from '../components/ui/UiButton.vue';
 import { useCommandsStore } from '../stores/commands';
 import {
   PROBLEM_GROUPS,
@@ -91,30 +93,23 @@ function when(at: string): string {
       <h1 id="problems-title" ref="title" class="title" tabindex="-1">
         {{ t('problems.title') }}
       </h1>
-      <button type="button" class="button" aria-keyshortcuts="Escape" @click="close">
+      <UiButton aria-keyshortcuts="Escape" @click="close">
         {{ t('common.close') }}
-      </button>
+      </UiButton>
     </header>
     <main class="panel">
       <div class="filters" role="group" :aria-label="t('problems.filters')">
-        <button
-          type="button"
-          class="toggle"
-          :aria-pressed="filter === undefined"
-          @click="setFilter(undefined)"
-        >
+        <UiButton :aria-pressed="filter === undefined" @click="setFilter(undefined)">
           {{ t('problems.all') }} <span class="n">{{ store.total }}</span>
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           v-for="g in PROBLEM_GROUPS"
           :key="g.id"
-          type="button"
-          class="toggle"
           :aria-pressed="filter === g.id"
           @click="setFilter(g.id)"
         >
           {{ g.label }} <span class="n">{{ store.counts[g.id] }}</span>
-        </button>
+        </UiButton>
       </div>
       <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
       <p v-else-if="store.loaded && !rows.length" class="note">
@@ -164,9 +159,7 @@ function when(at: string): string {
           </dl>
           <p class="path">{{ c.sidecarPath }}</p>
           <div class="actions start">
-            <button
-              type="button"
-              class="button"
+            <UiButton
               :aria-label="
                 t('problems.sidecar.keepMineLabel', {
                   field: fieldName(c.field),
@@ -177,10 +170,8 @@ function when(at: string): string {
               @click="store.resolveConflict(c.id, 'mine')"
             >
               {{ t('problems.sidecar.keepMine') }}
-            </button>
-            <button
-              type="button"
-              class="button"
+            </UiButton>
+            <UiButton
               :aria-label="
                 t('problems.sidecar.useTheirsLabel', {
                   field: fieldName(c.field),
@@ -191,7 +182,7 @@ function when(at: string): string {
               @click="store.resolveConflict(c.id, 'theirs')"
             >
               {{ t('problems.sidecar.useTheirs') }}
-            </button>
+            </UiButton>
           </div>
         </div>
       </section>
@@ -219,15 +210,15 @@ function when(at: string): string {
             <li v-for="c in g.copies" :key="c.path" class="copy">
               <span class="path">{{ c.path }}</span>
               <span v-if="c.version" class="muted">{{ c.version }}</span>
-              <span v-if="c.keep" class="badge">{{ t('problems.duplicates.recommended') }}</span>
-              <button
-                type="button"
-                class="button"
+              <UiBadge v-if="c.keep" tone="accent">{{
+                t('problems.duplicates.recommended')
+              }}</UiBadge>
+              <UiButton
                 :aria-label="t('problems.duplicates.keepLabel', { path: c.path })"
                 @click="store.planKeep(g, c.path)"
               >
                 {{ t('problems.duplicates.keep') }}
-              </button>
+              </UiButton>
             </li>
           </ul>
         </div>
@@ -252,15 +243,13 @@ function when(at: string): string {
               <td class="path">{{ r.kept }}</td>
               <td>{{ summary(r) }}</td>
               <td>
-                <button
+                <UiButton
                   v-if="!r.undone && r.id !== null"
-                  type="button"
-                  class="button"
                   :aria-label="t('problems.history.undoLabel', { summary: summary(r) })"
                   @click="store.undo(r.id)"
                 >
                   {{ t('common.undo') }}
-                </button>
+                </UiButton>
               </td>
             </tr>
           </tbody>
@@ -290,9 +279,9 @@ function when(at: string): string {
         </li>
       </ul>
       <div class="actions">
-        <button type="button" class="button" @click="store.cancelPlan()">
+        <UiButton @click="store.cancelPlan()">
           {{ t('common.cancel') }}
-        </button>
+        </UiButton>
         <button
           ref="confirmButton"
           type="button"
@@ -336,18 +325,6 @@ function when(at: string): string {
   flex-wrap: wrap;
   gap: 4px;
   margin: 0 0 12px;
-}
-.toggle {
-  padding: 4px 8px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.toggle[aria-pressed='true'] {
-  border-color: var(--fm-accent);
-  color: var(--fm-accent);
 }
 .n {
   margin-inline-start: 4px;
@@ -412,12 +389,6 @@ function when(at: string): string {
 }
 .copy .path {
   flex: 1;
-}
-.badge {
-  padding: 0 6px;
-  border: 1px solid var(--fm-accent);
-  border-radius: var(--fm-radius-md);
-  color: var(--fm-accent);
 }
 .dialog {
   position: fixed;
