@@ -49,6 +49,16 @@ const opener = ref<HTMLButtonElement | null>(null);
 const allFeatures = ref(false);
 /** Raw OpenType tags are developer data: they sit behind an expander. */
 const facetGroups = computed(() => groups.value.filter((g) => g.facet !== 'features'));
+/** Language sits right after Class, not at the bottom of a long drawer. */
+const LANGUAGE_SLOT = { facet: 'language' as const };
+const drawerFacets = computed(() => {
+  const list: ((typeof facetGroups.value)[number] | typeof LANGUAGE_SLOT)[] = [
+    ...facetGroups.value,
+  ];
+  const i = list.findIndex((g) => g.facet === 'classification');
+  list.splice(i < 0 ? list.length : i + 1, 0, LANGUAGE_SLOT);
+  return list;
+});
 const featureGroup = computed(() => groups.value.find((g) => g.facet === 'features') ?? null);
 const active = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
 const activeCount = computed(() => active.value.length + languages.value.length);
@@ -208,50 +218,57 @@ async function save(): Promise<void> {
       :anchor="opener"
       @close="drawerOpen = false"
     >
-      <div v-for="g in facetGroups" :key="g.facet" class="facet" role="group" :aria-label="g.label">
-        <h3 class="label" aria-hidden="true">{{ g.label }}</h3>
-        <div class="chipset">
-          <button
-            v-for="chip in g.chips"
-            :key="String(chip.value)"
-            type="button"
-            class="chip"
-            :aria-pressed="chip.selected"
-            :aria-label="chipLabel(chip.label, chip.count)"
-            @click="toggle(chip)"
-          >
-            {{ chip.label }} <span class="n">{{ chip.count }}</span>
-          </button>
+      <template v-for="g in drawerFacets" :key="g.facet">
+        <div
+          v-if="g.facet === 'language'"
+          class="facet"
+          role="group"
+          :aria-label="t('chips.languages')"
+        >
+          <h3 class="label" aria-hidden="true">{{ t('chips.language') }}</h3>
+          <div class="chipset">
+            <button
+              v-for="l in shownLanguages"
+              :key="l.code"
+              type="button"
+              class="chip"
+              :aria-pressed="languages.includes(l.code)"
+              @click="onLanguage(l.code)"
+            >
+              {{ l.name }}
+            </button>
+            <button
+              v-if="search.languages.length > LANGUAGES_SHOWN"
+              type="button"
+              class="chip more"
+              :aria-expanded="allLanguages"
+              @click="allLanguages = !allLanguages"
+            >
+              {{
+                allLanguages
+                  ? t('chips.fewerLanguages')
+                  : t('chips.moreLanguages', { count: search.languages.length - LANGUAGES_SHOWN })
+              }}
+            </button>
+          </div>
         </div>
-      </div>
-      <div class="facet" role="group" :aria-label="t('chips.languages')">
-        <h3 class="label" aria-hidden="true">{{ t('chips.language') }}</h3>
-        <div class="chipset">
-          <button
-            v-for="l in shownLanguages"
-            :key="l.code"
-            type="button"
-            class="chip"
-            :aria-pressed="languages.includes(l.code)"
-            @click="onLanguage(l.code)"
-          >
-            {{ l.name }}
-          </button>
-          <button
-            v-if="search.languages.length > LANGUAGES_SHOWN"
-            type="button"
-            class="chip more"
-            :aria-expanded="allLanguages"
-            @click="allLanguages = !allLanguages"
-          >
-            {{
-              allLanguages
-                ? t('chips.fewerLanguages')
-                : t('chips.moreLanguages', { count: search.languages.length - LANGUAGES_SHOWN })
-            }}
-          </button>
+        <div v-else class="facet" role="group" :aria-label="g.label">
+          <h3 class="label" aria-hidden="true">{{ g.label }}</h3>
+          <div class="chipset">
+            <button
+              v-for="chip in g.chips"
+              :key="String(chip.value)"
+              type="button"
+              class="chip"
+              :aria-pressed="chip.selected"
+              :aria-label="chipLabel(chip.label, chip.count)"
+              @click="toggle(chip)"
+            >
+              {{ chip.label }} <span class="n">{{ chip.count }}</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </template>
       <div v-if="featureGroup" class="facet" role="group" :aria-label="featureGroup.label">
         <button
           type="button"

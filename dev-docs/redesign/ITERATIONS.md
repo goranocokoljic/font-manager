@@ -8,8 +8,8 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
-- [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
-- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22: Project sets count at the edge, hover export icon; Sources row actions inline on hover; UiIconButton, collection "…" menu, catalog power icons, smart sparkle; iterations 33–34 + review 35: every group folds with UiFoldButton, remembered; section icons, "All fonts" visible when folded, Problems fold+link remain)
+- [ ] 4 Dark by default + app shell (iterations 7, 11, 31, 39: toolbar icons, UiSegmentedControl, live status bar, collapsible panes with `[` `]` and a sidebar toggle; dark-first launch blocked on the API default theme)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
 - [ ] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; `?face=` list selection remains)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
@@ -235,41 +235,26 @@ Sources, Collections and Tags moved onto `UiFoldButton`, so all six headings sha
 **Next five:** item 10 (language & script filter facet; choosing a language switches the pangram) → item 5 rest (section icons; keep "All fonts" visible when Collections folds) → item 26 (Settings radios/checkboxes, nav focus box) → item 8 rest (one shared inspector tab head; Developer stacked) → item 21 (designed empty states — "No fonts match" is still one grey sentence). Every iteration runs `pnpm lint:js` and reads the exit code; every feature adds a scene.
 
 ## Iteration 36 — 2026-11-03 — Language filter: visible chips, pangram follows
-**Critique (before):** The Filters drawer hid languages behind an "Add…" drop-down, so a designer could not see that the library can be filtered by language at all. Every other facet is a row of chips; this one looked like a leftover form field. The list itself is calm and the specimens carry the screen. Nothing yet connects a chosen language to the sample text.
-**Why:** Backlog item 10, lowest unfinished unblocked. The `supports` filter and `listLanguages` already exist, so no API work was needed.
-**What changed:** `FilterChips` shows the first 10 language presets as chips (chosen ones always shown) with a "N more…" expander; the `UiSelect` is gone. Choosing a language also sets the All fonts preview language, so the pangram switches. New strings in en and de. `search.spec.ts` clicks the chip instead of the select.
-**Ticked:** item 10.
-**Shots:** `.harness/redesign/shots/36/` (`filters` scene shows the chips). The `list` shot is unchanged; the change lives in the drawer.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed (`.harness/redesign/e2e-36.log`).
-**Follow-ups:** per-language family counts and grouping by script need a count per language from `FmClient` (blocked: API). The drawer scrolls, so the language facet sits at the bottom; move it up. Catalog view does not follow the language pick.
-**Dependencies:** none.
+The language facet became a row of chips (first 10, "N more…" expander) and choosing one switches the All fonts pangram.
 
 ## Iteration 37 — 2026-11-03 — Sidebar section icons; "All fonts" survives folding
-**Critique (before):** The sidebar is six bare grey headings; nothing tells Sources from Collections at a glance, so the left edge reads as a text file. The specimens carry the screen well and the list is calm. Folding Collections used to hide "All fonts", the one link you always need.
-**Why:** Backlog item 5, what was left: section icons and keeping "All fonts" visible. It is the last first-screen sidebar change.
-**What changed:** `UiFoldButton` takes an optional `icon`; six Lucide-style icons added (folder, layers, tag, alert, box, globe) and used by Sources, Collections, Tags, Problems, Project sets, Online catalogs. Collections splits into an always-visible "All fonts" list and a folding list of the user's collections. Problems label gap matches the others.
-**Ticked:** none fully (item 5 keeps the collapsed-sidebar toggle).
-**Shots:** `.harness/redesign/shots/37/` (before), `37b/` (after).
-**Verified:** typecheck, `lint:js` exit 0, Vitest ok, Playwright 272 passed / 1 flake (`notes.spec.ts` light, passes alone) (`.harness/redesign/e2e-37.log`).
-**Follow-ups:** toolbar toggle for the sidebar; no scene for folded Collections.
-**Dependencies:** none.
+`UiFoldButton` took an optional `icon` (six new icons on the six headings) and "All fonts" moved out of the folding Collections list.
 
 ## Iteration 38 — 2026-11-03 — Settings menu: icons, quiet active state
-**Critique (before):** Settings opens with a plain text menu whose active item is a heavy boxed block, unlike the sidebar. Controls are already drawn (checkboxes, radios), so the page looks plain but not broken. Legends shout at the same weight as the values below them. The `list` screen is calm and the specimens lead.
-**Why:** Backlog item 26, the nav box. Checkboxes and radios were already drawn globally (theme.css); only the nav and legends were left.
-**What changed:** Settings tabs get a 16 px icon each (four new icons: sun, sliders, code, info), muted text, hover tint, and a tint plus 2 px accent bar when active. Focus ring moves inside the tab. Group legends are quiet 12 px muted.
-**Ticked:** none fully (item 26 keeps license date/number/datalist fields, Problems pill).
-**Shots:** `.harness/redesign/shots/38/` (before), `38b/` (after). The `list` shot is unchanged; the change lives in Settings.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 29 views ok, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-38.log`).
-**Follow-ups:** the active tab shows only the focus ring on open (it is focused); consider focusing the panel heading. Settings panel is still sparse: group options in cards.
-**Dependencies:** none.
+Settings tabs got icons, muted text, a hover tint and an accent bar when active; group legends became quiet captions.
 
 ## Iteration 39 — 2026-11-03 — Toolbar: sidebar toggle button
-**Critique (before):** The toolbar had a button for the inspector on the right but none for the sidebar on the left; `[` worked only from the keyboard. The list is calm and the specimens lead. The left pane could not be hidden with the mouse.
-**Why:** Backlog items 4/5 leftover (collapsed-sidebar toggle), visible in the first three seconds as a new icon left of the title.
-**What changed:** New `sidebar` icon; a pressed-state toggle button before the title in `HomeView` (same `toggle icon` style as the inspector one, `aria-controls`, tooltip with `[`). en and de strings. `a11y.spec.ts` Tab-order step now passes through this button.
-**Ticked:** none fully (item 4 keeps dark-first launch, blocked on the API).
-**Shots:** `.harness/redesign/shots/39/` (before), `39b/` (after).
-**Verified:** typecheck, `lint:js` exit 0, Vitest ok, Playwright 273 expected (one a11y step updated, `a11y` 34 passed; full run had only that failure, `.harness/redesign/e2e-39.log`).
-**Follow-ups:** the toggle shows only on All fonts toolbar; other views (Table-only, Studio) have no button. Settings panel still sparse.
-**Dependencies:** none.
+A pressed-state sidebar toggle (`[`) sits before the title in the All fonts toolbar, the mouse twin of the keyboard shortcut.
+
+## Review 40 — 2026-11-03
+**Grades:** iter 36 **3** — the right feature, now visible, but the facet landed at the very bottom of the drawer (below the fold at 900 px) and left `chips.add`/`chips.addLanguage` dead in en/de. Iter 37 **3** — the sidebar finally has rhythm; the icon uses `opacity` instead of a token and "All fonts" and the collections are two lists with one label. Iter 38 **3** — calmer nav, but it quietened the fieldset legends and not the field labels, so Appearance showed a loud "Language" under quiet "Theme" and "Density". Iter 39 **4** — small, exact, accessible (`aria-pressed`, `aria-controls`, `[` in the title), a test step updated honestly; it shows on the All fonts toolbar only.
+**Regressions:** none in views, keyboard or tests. **Drift:** no literal colours, new fonts, radii or native controls added.
+**Pulled apart:** iteration 38 within itself (legends vs field labels). Three of four iterations left the `list` shot unchanged; 37 and 39 changed it.
+**Fixed:**
+- `FilterChips`: the language facet sits right after Class (one loop over the facets with a language slot, no duplicated markup).
+- `SettingsView`: legends and `.field` labels share one quiet caption rule.
+- Dead: `chips.add`, `chips.addLanguage` in en/de.
+**Rule amended:** none. **Backlog (DESIGN.md):** items 4, 5, 10, 26 and the three-second note rewritten; item 10's counts marked blocked (API).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped / 1 flake (`pairing-studio.spec.ts:361`, the list did not load in time; passes alone) (`.harness/redesign/e2e-review-40.log`). Shots `40/` (before, 52) and `review-40-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** Settings opened by keyboard shows the focus ring on the active tab (correct for keyboard, heavy to look at); `selected-row` scene shows no selected row (`?face=`); Studio "Panel font" fields look empty; Developer tab head still side by side.
+**Next five:** item 21 (designed empty states) → item 6 rest (`?face=` selects the list row; fix the `selected-row` scene) → item 8 rest (one shared inspector tab head; Developer stacked) → item 17 first slice (Studio font pickers that show the font, not an empty field) → item 26 rest (license date/number/datalist, Advanced number fields). Every iteration changes a shot and reads the `lint:js` exit code.

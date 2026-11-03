@@ -196,13 +196,14 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 35
-the keyboard model (13), Quick Look (12) and folding sidebar groups (5) are in; for four
-iterations the `list` shot barely moved (31 and 32 byte-identical). Next: item 10 (language &
-script filter — the first new *library* feature and visible in the Filters drawer), then item 5's
-section icons (the last first-screen sidebar change), item 8's shared tab head, and item 26
-(Settings radios/checkboxes and the heavy nav box — the worst native look left). Every feature
-adds a scene to `shots.mjs` in the same iteration (`quicklook` was added only in review 35).
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 40
+the language facet (10), sidebar section icons and the sidebar toggle (4, 5) and the Settings nav
+(26) are in. Next: item 21 (designed empty states — "No fonts match" is still one grey
+sentence mid-pane), item 6's `?face=` list selection (the `selected-row` scene shows no
+selected row at all), item 8's shared inspector tab head (Developer still puts its hint beside
+Copy), item 17's Studio font fields (three empty "Panel font" boxes — the worst-looking control
+left), then item 26's license-form natives. Every feature adds a scene to `shots.mjs` in the
+same iteration.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -218,7 +219,8 @@ adds a scene to `shots.mjs` in the same iteration (`quicklook` was added only in
    remembered per view. Brings `UiField`, `UiSlider`, `UiToggle`.
 4. **App shell (rest).** Toolbar, view switcher and status bar are done (iterations 7, 11).
    Left: sidebar and inspector collapsible with `[` `]`, widths and open state remembered.
-   Dark-first launch is **blocked (API)**: the default theme comes from the settings
+   The toolbar sidebar toggle is done (iteration 39); it shows only on the All fonts toolbar,
+   not in Table-only or the Studio. Dark-first launch is **blocked (API)**: the default theme comes from the settings
    `FmClient` returns (`theme: 'system'`); a separate API task must change the default.
 5. **Sidebar redesign.** Sections with icons, counts right-aligned in tabular figures, smart
    collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
@@ -227,9 +229,9 @@ adds a scene to `shots.mjs` in the same iteration (`quicklook` was added only in
    icons, the smart sparkle, Sources row actions on the row (iterations 8, 12, 13, 19).
    Project sets rows export from a hover icon in the count's cell (iteration 22). Every group
    folds with `UiFoldButton` + `useFolded`, remembered (iterations 33–34, review 35).
-   Left: section icons; folded Collections hides "All fonts" (keep it visible); the Problems
-   heading is both a fold and a link to the Problems view; a collapsed-sidebar rail or toolbar
-   toggle (today `[` is keyboard-only).
+   Section icons and "All fonts" staying visible when Collections folds are done (iteration
+   37). Left: the Problems heading is both a fold and a link to the Problems view; no scene
+   for folded groups.
 
 ### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
@@ -261,7 +263,9 @@ adds a scene to `shots.mjs` in the same iteration (`quicklook` was added only in
 ### Functional features designers will love
 10. **Language & script support as a filter facet.** The per-font coverage data already
    exists. "Supports Serbian (Cyrillic)", "Serbian (Latin)", "Greek", "Vietnamese", … with
-   counts. Choosing a language also switches the pangram to that language's sample.
+   counts. Choosing a language also switches the pangram to that language's sample. Done
+   (iteration 36, review 40: chips sit right after Class). Left: per-language counts and
+   script grouping are **blocked (API)** — `FmClient` gives no count per language.
 11. **"Renders my text" filter (API?).** Type anything — a brand name, a Serbian sentence — and
     filter to fonts that cover every glyph. In every preview, render missing glyphs as a
     visible tofu marker in the accent colour instead of a silent fallback.
@@ -309,7 +313,7 @@ adds a scene to `shots.mjs` in the same iteration (`quicklook` was added only in
 26. Hover / focus / active audit across every control, and the native-input sweep:
     the license form still draws a native date field (purchase date, with the browser's
     calendar icon), a number field (seats) and a `datalist` (tags); Settings' radios and
-    checkboxes still read as browser defaults, and its active nav item has a heavy 2 px box; the Problems
-    view's "Recommended" pill and its chip row. (Features knob and note fields done in
+    Settings › Advanced draws two native number fields; the Problems view's "Recommended" pill
+    and its chip row. (Settings nav, legends and field captions done in iteration 38, review 40.) (Features knob and note fields done in
     iterations 26, 28.)
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.

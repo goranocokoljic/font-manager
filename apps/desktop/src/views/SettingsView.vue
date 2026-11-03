@@ -752,6 +752,10 @@ function chooseLanguage(value: string): void {
 .group legend {
   margin-bottom: 6px;
   padding: 0;
+}
+/* Group legends and field labels share one quiet caption style. */
+.group legend,
+.field > span:first-child {
   color: var(--fm-muted);
   font-size: var(--fm-text-sm);
   font-weight: 600;
@@ -761,9 +765,6 @@ function chooseLanguage(value: string): void {
   flex-direction: column;
   gap: 4px;
   margin: 0 0 12px;
-}
-.field > span:first-child {
-  font-weight: 600;
 }
 .folder-row {
   display: flex;
