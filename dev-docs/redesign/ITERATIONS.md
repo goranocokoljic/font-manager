@@ -10,7 +10,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 App shell (iterations 7, 11, 31, 39: toolbar icons, UiSegmentedControl, live status bar, collapsible panes with `[` `]` and a sidebar toggle; dark-first dropped — owner wants paper-first, default stays `system`)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
-- [x] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
+- [x] 6 List rows (iteration 81: row actions Activate, Compare, Similar on hover) (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
 - [x] 7 Grid cards (iteration 77: name never cut; iteration 16: sample ends on a whole word that fits; iteration 66: hover weight range, `grid-hover`/`grid-expanded` scenes)
 - [ ] 8 Inspector (iterations 17, 26–28, 43, 49, 53, 54 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes, shared tab head, off/on feature samples, human feature names in the drawer; stylistic-set samples blocked on the API)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
@@ -476,3 +476,13 @@ Four iterations since review 75 (76–79); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 913, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-80.log`). Shots `80/` (before, 66) and `80-after/` (66): all 33 scenes render in light and dark, comfortable and compact; only `inspector-axes` and `layout-help` changed.
 **Not fixed, noted:** Studio lock beside the page; Settings nav focus ring on load; Catalog toolbar wraps "Check for updates" to its own line at 1440 px; Install not primary.
 **Next five:** item 6 (row actions Activate / Compare / Tag on hover, seen in `hover-row`) → item 16 (text/radio `UiSegmentedControl`; Compare and Axes instances onto it) → item 17 (Studio lock beside the page) → item 14 (scrub in Grid cards and Quick Look; a `scrub` scene) → item 26 (Settings nav focus ring; Catalog toolbar on one line). Open before and after shots of the touched scene, both themes; run `pnpm lint:js` and read its exit code.
+
+## Iteration 81 — 2026-11-03 — List rows: Activate, Compare and Similar on hover
+Critique (before): the list is calm and the type leads; a hovered row showed one lone lens icon, so activating or comparing meant going to the inspector or a shortcut nobody sees. The rest of the first screen is mature.
+Why: backlog item 6's last open part, named in review 80; seen in `hover-row`.
+Changed: `FontList` row actions are three `UiIconButton`s (power, compare, similar) in one hover/cursor group; they select the row, then toggle for the session (`activation.toggleRows`) or pin (`compare.pin`). Labels are `list.activateLabel` and `list.compareLabel` (en/de); "Switch … on or off" avoids a clash with the inspector's "Activate" button in role queries.
+Backlog: 6 stays ticked, row-action set done.
+Shots: `.harness/redesign/shots/81/` (before) and `81-after/`; `hover-row` changed.
+Verified: typecheck, `lint:js` 0, Vitest 913, Playwright 270 passed on first run; the 3 failures (name clash) fixed and re-run green (a11y, settings).
+Follow-ups: Tag action on hover; the row actions do not show in compact density checks; no scene for keyboard focus on them (they are `tabindex=-1`, shortcuts cover keyboard).
+Dependencies: none.

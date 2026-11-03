@@ -30,6 +30,8 @@ import { rowActivation } from '../list/activation';
 import { openLicenseBadge, openLicenseName } from '../list/columns';
 import { useRowPreviews } from '../list/previews';
 import { rowLabel, styleCount, styleName, type ListRow } from '../list/rows';
+import { useActivationStore } from '../stores/activation';
+import { useCompareStore } from '../stores/compare';
 import { useCatalogsStore } from '../stores/catalogs';
 import { useFontListStore } from '../stores/fontList';
 import { useFontSwitchStore } from '../stores/fontSwitch';
@@ -81,6 +83,10 @@ const quick = useQuickCollectionStore();
 const settings = useSettingsStore();
 const similar = useSimilarStore();
 const similarChord = chordOf(ACTIONS.similar)!;
+const activateChord = chordOf(ACTIONS.activateSession)!;
+const compareChord = chordOf(ACTIONS.compare)!;
+const activation = useActivationStore();
+const compare = useCompareStore();
 
 const rowPx = computed(() => props.rowHeight ?? previewRowHeight(props.preview, settings.density));
 
@@ -230,6 +236,20 @@ function onRowClick(row: ListRow, e: MouseEvent): void {
 const similarLabel = (face: FaceSummary) =>
   t('list.findSimilarLabel', { name: `${face.familyName} ${face.style}` });
 
+const rowName = (face: FaceSummary) => `${face.familyName} ${face.style}`;
+
+/** The row's "Activate" action: selects the row and toggles it for this session. */
+function toggleActive(row: ListRow): void {
+  list.click(row.key);
+  void activation.toggleRows([row], 'session');
+}
+
+/** The row's "Compare" action: pins the row's face to Compare. */
+function pinToCompare(row: ListRow, face: FaceSummary): void {
+  list.click(row.key);
+  compare.pin(face);
+}
+
 /** The row's "Similar" action: selects the row and finds the faces like its face. */
 function findSimilar(row: ListRow, face: FaceSummary): void {
   list.click(row.key);
@@ -351,17 +371,35 @@ function onToggle(row: ListRow): void {
             <span class="count">{{ t('list.pinned') }}</span>
           </template>
         </FontPreviewRow>
-        <UiIconButton
-          v-if="item.face"
-          class="row-action"
-          icon="similar"
-          tabindex="-1"
-          data-testid="row-similar"
-          :label="similarLabel(item.face)"
-          :aria-keyshortcuts="ariaShortcut(similarChord)"
-          :title="`${similarLabel(item.face)} (${formatChord(similarChord)})`"
-          @click.stop="findSimilar(item.row, item.face)"
-        />
+        <div v-if="item.face" class="row-actions">
+          <UiIconButton
+            icon="power"
+            tabindex="-1"
+            data-testid="row-activate"
+            :label="t('list.activateLabel', { name: rowName(item.face) })"
+            :aria-keyshortcuts="ariaShortcut(activateChord)"
+            :title="`${t('list.activateLabel', { name: rowName(item.face) })} (${formatChord(activateChord)})`"
+            @click.stop="toggleActive(item.row)"
+          />
+          <UiIconButton
+            icon="compare"
+            tabindex="-1"
+            data-testid="row-compare"
+            :label="t('list.compareLabel', { name: rowName(item.face) })"
+            :aria-keyshortcuts="ariaShortcut(compareChord)"
+            :title="`${t('list.compareLabel', { name: rowName(item.face) })} (${formatChord(compareChord)})`"
+            @click.stop="pinToCompare(item.row, item.face)"
+          />
+          <UiIconButton
+            icon="similar"
+            tabindex="-1"
+            data-testid="row-similar"
+            :label="similarLabel(item.face)"
+            :aria-keyshortcuts="ariaShortcut(similarChord)"
+            :title="`${similarLabel(item.face)} (${formatChord(similarChord)})`"
+            @click.stop="findSimilar(item.row, item.face)"
+          />
+        </div>
         <div
           v-else
           class="preview placeholder"
@@ -497,13 +535,15 @@ function onToggle(row: ListRow): void {
 .note {
   color: var(--fm-warning);
 }
-.row-action {
+.row-actions {
   align-self: center;
+  display: flex;
+  gap: var(--fm-space-1);
   margin-inline-end: 8px;
   visibility: hidden;
 }
-.slot:hover .row-action,
-.slot.cursor .row-action {
+.slot:hover .row-actions,
+.slot.cursor .row-actions {
   visibility: visible;
 }
 .quick-mark {

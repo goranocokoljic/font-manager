@@ -975,6 +975,8 @@
       "activePermanently": "dauerhaft aktiv",
       "activeSession": "aktiv für diese Sitzung"
     },
+    "activateLabel": "{name} für diese Sitzung ein- oder ausschalten",
+    "compareLabel": "{name} zum Vergleich hinzufügen",
     "findSimilar": "Ähnliche",
     "findSimilarLabel": "Die Schriften finden, die {name} ähneln"
   },

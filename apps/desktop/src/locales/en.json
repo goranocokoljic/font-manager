@@ -975,6 +975,8 @@
       "activePermanently": "active permanently",
       "activeSession": "active for this session"
     },
+    "activateLabel": "Switch {name} on or off for this session",
+    "compareLabel": "Add {name} to Compare",
     "findSimilar": "Similar",
     "findSimilarLabel": "Find the fonts similar to {name}"
   },
