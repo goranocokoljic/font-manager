@@ -31,7 +31,8 @@ pangram picker lists every language that has one here.
 
 A change is a pull request to `pangrams.json`. `cargo nextest run -p fm-core pangrams`
 checks it: the schema rules, known codes, no code twice, every letter in its preset, and
-a pangram for every script in `data/charsets`.
+a pangram for every script in `data/charsets`, and a pangram for every preset that has
+`sampleGlyphs`.
 
 ## Sources
 

@@ -31,6 +31,7 @@ validated against the JSON schema next to it by a test (epic E3).
       "otLanguage": "SRB",
       "base": "А Б В …",
       "auxiliary": "…",
+      "sampleGlyphs": "ЂЈЉЊЋЏбђјљњћџ",
       "source": "hyperglot"
     }
   ]
@@ -45,6 +46,11 @@ validated against the JSON schema next to it by a test (epic E3).
   (`ệ`, not `e` + two marks). No item twice.
 - `auxiliary` — characters for loanwords, names or older spelling. Shown, never
   required. No overlap with `base`.
+- `sampleGlyphs` — optional: the language's distinctive letters, written together
+  without spaces (`Šđčćž` for `sr-Latn`, `Ąćęłńóśźż` for `pl`). The family page shows
+  them as a short glyph line next to the pangram. 1–32 characters, none twice, each in
+  `base` or `auxiliary`. A preset with `sampleGlyphs` must have a pangram in
+  `data/pangrams`.
 - `source` — where the base set comes from: `hyperglot`, `google-fonts` or `project`.
 
 ## Contributing
