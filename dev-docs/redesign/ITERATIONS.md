@@ -169,3 +169,13 @@ Rescan / Pause / Remove moved into the Sources row, replacing the count on hover
 **Verified:** typecheck, `lint:js` exit 0 (after prettier), Vitest 909, Playwright 272 passed / 16 skipped (`e2e-22.log`).
 **Follow-ups:** hover scene for sidebar rows is still missing. Item 26 native inputs in the inspector (date, number, datalist, text stars) are next.
 **Dependencies:** none. **Reverted:** no.
+
+## Iteration 23 — 2026-11-03 — Inspector: drawn stars and heart instead of text glyphs
+**Critique (before):** The first screen is calm; specimens lead. In the inspector, the Favorite heart and rating stars are text glyphs (♡ ☆), and the heart turns danger-red, which breaks the "one accent" rule. The notes boxes are heavy but their 3:1 outline is required by tests. Good: Info order, folded raw data, quiet list rows.
+**Why:** Item 26 native-input sweep, the text-glyph part. Not a big first-screen change; picked as the smallest visible inspector fix.
+**What changed:** `icons.ts`: `star`, `starFilled`, `heart`, `heartFilled`. `InspectorInfo.vue`: stars and heart use `UiIcon`; favorite is accent, not danger; stars get a hover state. I tried borderless notes/tag fields; `notes.spec` and `tags.spec` demand a 3:1 outline, so I reverted that part.
+**Backlog:** item 26 still open (native date and number fields in the license form, `datalist` for tags).
+**Shots:** `.harness/redesign/shots/23/` (before), `23a/` (after).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 909. Playwright: full run had 2 failures from the reverted field change; the notes, tags, rating, license and inspector specs pass after the revert (13 passed). Full log `e2e-23.log` is from before the revert.
+**Follow-ups:** a hover scene for sidebar rows and list rows. Heavy bordered notes boxes need a design that keeps 3:1 (e.g. underline style).
+**Dependencies:** none. **Reverted:** partly (field borders).

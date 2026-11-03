@@ -13,6 +13,7 @@ import { useSimilarStore } from '../stores/similar';
 import { sameTagName, useTagsStore } from '../stores/tags';
 import CopyValue from './CopyValue.vue';
 import UiChevron from './ui/UiChevron.vue';
+import UiIcon from './ui/UiIcon.vue';
 import HealthBadge from './HealthBadge.vue';
 import InspectorLicense from './InspectorLicense.vue';
 import InspectorPalettes from './InspectorPalettes.vue';
@@ -272,7 +273,7 @@ function clashText(c: Conflict): string {
               :aria-pressed="d.favorite"
               @click="selection.setFavorite(!d.favorite)"
             >
-              <span aria-hidden="true">{{ d.favorite ? '♥' : '♡' }}</span>
+              <UiIcon :name="d.favorite ? 'heartFilled' : 'heart'" />
               {{ t('info.user.favorite') }}
             </button>
           </dd>
@@ -290,7 +291,7 @@ function clashText(c: Conflict): string {
                 :title="d.rating === n ? t('info.user.clearRating') : starLabel(n)"
                 @click="rate(n)"
               >
-                {{ (d.rating ?? 0) >= n ? '★' : '☆' }}
+                <UiIcon :name="(d.rating ?? 0) >= n ? 'starFilled' : 'star'" />
               </button>
               <span class="state" data-testid="rating">{{
                 d.rating ? t('info.user.ratingOf', { rating: d.rating }) : t('info.user.notRated')
@@ -633,6 +634,7 @@ dd {
   width: 100%;
   padding: 2px 6px;
   border: 1px solid var(--fm-control-border);
+  background-color: transparent;
   border-radius: var(--fm-radius-sm);
   background-color: transparent;
   color: inherit;
@@ -651,10 +653,14 @@ dd {
   resize: vertical;
 }
 .favorite {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   padding: 0;
+  color: var(--fm-muted);
 }
-.favorite[aria-pressed='true'] span {
-  color: var(--fm-danger);
+.favorite[aria-pressed='true'] {
+  color: var(--fm-accent);
 }
 .stars {
   display: flex;
@@ -663,9 +669,12 @@ dd {
   gap: 2px;
 }
 .star {
-  padding: 0 2px;
+  display: inline-flex;
+  padding: 2px;
   color: var(--fm-muted);
-  font-size: 16px;
+}
+.star:hover {
+  color: var(--fm-text);
 }
 .star.on {
   color: var(--fm-accent);

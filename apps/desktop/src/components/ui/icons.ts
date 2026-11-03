@@ -25,5 +25,12 @@ export const ICONS = {
     '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5M5 6.2q1-.9 2 0t2 0M5 8.2q1-.9 2 0t2 0"/>',
   import: '<path d="M8 2.5v7M5 6.5l3 3 3-3M3 12.5h10"/>',
   export: '<path d="M8 9.5v-7M5 5.5l3-3 3 3M3 12.5h10"/>',
+  star: '<path d="M8 2.2l1.7 3.5 3.8.5-2.8 2.7.7 3.8L8 10.8l-3.4 1.9.7-3.8-2.8-2.7 3.8-.5z"/>',
+  starFilled:
+    '<path fill="currentColor" d="M8 2.2l1.7 3.5 3.8.5-2.8 2.7.7 3.8L8 10.8l-3.4 1.9.7-3.8-2.8-2.7 3.8-.5z"/>',
+  heart:
+    '<path d="M8 13.3S2.5 10 2.5 6.1A2.9 2.9 0 0 1 8 5a2.9 2.9 0 0 1 5.5 1.1C13.5 10 8 13.3 8 13.3z"/>',
+  heartFilled:
+    '<path fill="currentColor" d="M8 13.3S2.5 10 2.5 6.1A2.9 2.9 0 0 1 8 5a2.9 2.9 0 0 1 5.5 1.1C13.5 10 8 13.3 8 13.3z"/>',
 } as const;
 export type IconName = keyof typeof ICONS;
