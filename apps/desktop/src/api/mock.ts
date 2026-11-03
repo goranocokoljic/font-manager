@@ -1,6 +1,7 @@
 // Sample answers for browser mode (Playwright) and unit tests, shaped like
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
+import permissionRules from '../../../../data/licenses/permissions.json';
 import { HELP_PAGES } from '../help';
 import { catalogFontPath } from './catalogFont';
 import type { FmClient, FullSettings } from './client';
@@ -69,6 +70,8 @@ import {
   type JobId,
   type LanguagePreset,
   type LicenseInfo,
+  type LicensePermissions,
+  type LicenseType,
   type Layout,
   type LayoutBounds,
   type LayoutEntry,
@@ -1253,6 +1256,36 @@ export function mockWebUse(l: LicenseInfo): WebUse {
   if (l.openLicense)
     return { ok: true, reason: `Open license (${OPEN_LICENSE_LABELS[l.openLicense]})` };
   return no('No web license declared');
+}
+
+/**
+ * The mock's copy of `fm_core::license::permissions`, with the wording of the same
+ * data file: a declared Web, Desktop, Trial or Personal-only type; then restricted
+ * or preview-and-print embedding, or declared App instead of it; then an open
+ * license; then declared App, or editable embedding. Nothing else is known.
+ */
+export function mockPermissions(l: LicenseInfo): LicensePermissions | null {
+  const { declared, embedding, openLicense } = l;
+  const fromDeclared = (t: Exclude<LicenseType, 'unknown'>): LicensePermissions => ({
+    ...permissionRules.declared[t],
+    source: 'declared',
+  });
+  if (
+    declared === 'web' ||
+    declared === 'desktop' ||
+    declared === 'trial' ||
+    declared === 'personalOnly'
+  ) {
+    return fromDeclared(declared);
+  }
+  const blocked = embedding === 'restricted' || embedding === 'previewAndPrint';
+  if (declared === 'app' && (blocked || !openLicense)) return fromDeclared('app');
+  if (blocked) return { ...permissionRules.embedding[embedding], source: 'embedding-bits' };
+  if (openLicense) return { ...permissionRules.openLicenses[openLicense], source: 'open-license' };
+  if (embedding === 'editable') {
+    return { ...permissionRules.embedding.editable, source: 'embedding-bits' };
+  }
+  return null;
 }
 
 /**
@@ -2696,6 +2729,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const detail = structuredClone(f);
       detail.face.active = active.get(id) ?? null;
       detail.license.webUse = mockWebUse(detail.license);
+      detail.license.permissions = mockPermissions(detail.license);
       return detail;
     },
     // Families in id order (the sample ones first), or in `order`; `sort` is not mocked.

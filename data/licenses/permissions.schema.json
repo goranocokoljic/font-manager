@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/licenses/permissions.schema.json",
+  "title": "Font Manager license permissions",
+  "description": "What a font's license lets a user do, in plain words: one rule per recognized open license, declared license type and embedding permission. permissions.json follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "openLicenses", "declared", "embedding"],
+  "properties": {
+    "$schema": { "const": "./permissions.schema.json" },
+    "openLicenses": {
+      "description": "A license the name table states (OpenLicense in fm-api).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ofl", "apache", "ufl", "mit"],
+      "properties": {
+        "ofl": { "$ref": "#/$defs/rule" },
+        "apache": { "$ref": "#/$defs/rule" },
+        "ufl": { "$ref": "#/$defs/rule" },
+        "mit": { "$ref": "#/$defs/rule" }
+      }
+    },
+    "declared": {
+      "description": "A license type the user declared (LicenseType in fm-api). unknown has no rule: it says nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["desktop", "web", "app", "trial", "personalOnly"],
+      "properties": {
+        "desktop": { "$ref": "#/$defs/rule" },
+        "web": { "$ref": "#/$defs/rule" },
+        "app": { "$ref": "#/$defs/rule" },
+        "trial": { "$ref": "#/$defs/rule" },
+        "personalOnly": { "$ref": "#/$defs/rule" }
+      }
+    },
+    "embedding": {
+      "description": "An embedding permission of OS/2.fsType (Embedding in fm-api). installable has no rule: a file with no OS/2 table reads the same, so it says nothing.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["restricted", "previewAndPrint", "editable"],
+      "properties": {
+        "restricted": { "$ref": "#/$defs/rule" },
+        "previewAndPrint": { "$ref": "#/$defs/rule" },
+        "editable": { "$ref": "#/$defs/rule" }
+      }
+    }
+  },
+  "$defs": {
+    "rule": {
+      "description": "The lines the UI lists. A rule has at least one line, and no line twice.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["may", "mayNot"],
+      "anyOf": [
+        { "properties": { "may": { "minItems": 1 } } },
+        { "properties": { "mayNot": { "minItems": 1 } } }
+      ],
+      "properties": {
+        "may": { "$ref": "#/$defs/lines" },
+        "mayNot": { "$ref": "#/$defs/lines" }
+      }
+    },
+    "lines": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "description": "One short line in sentence case, no final period. It reads after 'You may' or 'You may not' as a separate label.",
+        "type": "string",
+        "minLength": 1,
+        "pattern": "^\\S(.*\\S)?$"
+      }
+    }
+  }
+}

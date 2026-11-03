@@ -45,10 +45,11 @@ use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
     FontNames, FontSwitchPayload, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest,
-    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicenseType, ListFamiliesRequest,
-    OpenLicense, Platform, Problem, ProblemKind, Resolution, ResolveFontRequest,
-    ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest, SidecarConflict, Source,
-    SourceKind, StyleMark, TrashMove, TrashMoveStatus, WebUse,
+    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions,
+    LicensePermissionsSource, LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem,
+    ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
+    TrashMoveStatus, WebUse,
 };
 use crate::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -139,6 +140,56 @@ fn mock_web_use(l: &LicenseInfo) -> WebUse {
         (_, _, None) => (false, "No web license declared".to_owned()),
     };
     WebUse { ok, reason }
+}
+
+/// The sample's copy of `fm_core::license::permissions` (fm-api cannot depend
+/// on fm-core), with the wording of the same data file: a declared Web, Desktop,
+/// Trial or Personal-only type; then restricted or preview-and-print embedding,
+/// or declared App instead of it; then an open license; then declared App, or
+/// editable embedding. Nothing else is known.
+fn mock_permissions(l: &LicenseInfo) -> Option<LicensePermissions> {
+    use LicensePermissionsSource as Source;
+    let blocked = matches!(
+        l.embedding,
+        Embedding::Restricted | Embedding::PreviewAndPrint
+    );
+    let declared = |t: LicenseType| ("declared", serde_json::to_value(t), Source::Declared);
+    let bits = || {
+        (
+            "embedding",
+            serde_json::to_value(l.embedding),
+            Source::EmbeddingBits,
+        )
+    };
+    let (group, key, source) = match (l.declared, l.open_license) {
+        (
+            Some(
+                t @ (LicenseType::Web
+                | LicenseType::Desktop
+                | LicenseType::Trial
+                | LicenseType::PersonalOnly),
+            ),
+            _,
+        ) => declared(t),
+        (Some(LicenseType::App), None) => declared(LicenseType::App),
+        (Some(LicenseType::App), Some(_)) if blocked => declared(LicenseType::App),
+        _ if blocked => bits(),
+        (_, Some(o)) => ("openLicenses", serde_json::to_value(o), Source::OpenLicense),
+        _ if l.embedding == Embedding::Editable => bits(),
+        _ => return None,
+    };
+    let rules: serde_json::Value =
+        serde_json::from_str(include_str!("../../../data/licenses/permissions.json")).ok()?;
+    let key = key.ok()?;
+    let rule = rules.get(group)?.get(key.as_str()?)?;
+    let lines = |field: &str| -> Option<Vec<String>> {
+        serde_json::from_value(rule.get(field)?.clone()).ok()
+    };
+    Some(LicensePermissions {
+        may: lines("may")?,
+        may_not: lines("mayNot")?,
+        source,
+    })
 }
 
 /// The sample's copy of `fm_core::license::web_embedding_block`, the
@@ -637,6 +688,7 @@ impl MockApi {
             .ok_or_else(|| ApiError::not_found(format!("Face {face}")))?;
         f.detail.license.embedding = embedding;
         f.detail.license.web_use = Some(mock_web_use(&f.detail.license));
+        f.detail.license.permissions = mock_permissions(&f.detail.license);
         Ok(())
     }
 }
@@ -705,8 +757,10 @@ fn face(
         purchase_date: None,
         receipt: None,
         web_use: None,
+        permissions: None,
     };
     license.web_use = Some(mock_web_use(&license));
+    license.permissions = mock_permissions(&license);
     MockFace {
         detail: FaceDetail {
             face: FaceSummary {
@@ -3631,6 +3685,7 @@ impl OrganizationService for MockApi {
                 license.receipt.clone_from(receipt);
             }
             license.web_use = Some(mock_web_use(license));
+            license.permissions = mock_permissions(license);
             updated.push(face.detail.face.id);
         }
         st.emit(Event::LibraryChanged {

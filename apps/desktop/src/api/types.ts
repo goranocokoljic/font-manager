@@ -2057,6 +2057,8 @@ export type LicenseInfo = {
 	receipt?: string | null,
 	/**  Whether the face may be used on the web, and why (E15.3). */
 	webUse?: WebUse | null,
+	/**  What the license lets the user do (E42.12); absent when nothing is known. */
+	permissions?: LicensePermissions | null,
 };
 
 /**  A license inventory as CSV text. */
@@ -2072,6 +2074,25 @@ export type LicenseInventoryRequest = {
 	/**  One collection, or the whole library when absent. */
 	collection?: CollectionId | null,
 };
+
+/**  What a license lets the user do, in plain words (E42.12). */
+export type LicensePermissions = {
+	/**  What the user may do. */
+	may: string[],
+	/**  What the user may not do. */
+	mayNot: string[],
+	/**  Where the lines come from. */
+	source: LicensePermissionsSource,
+};
+
+/**  Where the lines of [`LicensePermissions`] come from. */
+export type LicensePermissionsSource = 
+/**  The open license the name table states. */
+"open-license" | 
+/**  The license type the user declared. */
+"declared" | 
+/**  The embedding permission of `OS/2.fsType`. */
+"embedding-bits";
 
 /**  License type the user declared for a family. */
 export type LicenseType = 

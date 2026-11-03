@@ -309,6 +309,7 @@ mod tests {
             purchase_date: None,
             receipt: None,
             web_use: None,
+            permissions: None,
         }
     }
 
