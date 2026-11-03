@@ -84,7 +84,7 @@ describe('compare sheet', () => {
     expect(ids()).toEqual(['200', '203']);
     expect(s.overlayPair.map((f) => f?.id)).toEqual([200, 203]);
     expect(wrapper.get('.stage svg').attributes('aria-label')).toBe(
-      `Overlay of ${name(faces[0]!)} and ${name(faces[3]!)}, 28 px`,
+      `Overlay of ${name(faces[0]!)} and ${name(faces[3]!)}, 56 px`,
     );
   });
 
@@ -96,7 +96,7 @@ describe('compare sheet', () => {
     expect(samples).toHaveLength(3);
     for (const p of samples) {
       expect(p.text()).toBe('ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz');
-      expect((p.element as HTMLElement).style.fontSize).toBe('40px');
+      expect((p.element as HTMLElement).style.fontSize).toBe('80px');
     }
     expect((samples[2]!.element as HTMLElement).style.fontFamily).toContain(faceFamily(202));
     expect(loader.inUse).toBe(3);

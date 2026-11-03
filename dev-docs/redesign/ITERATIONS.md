@@ -434,3 +434,13 @@ Four iterations since review 65 (66–69); all four graded.
 **Follow-ups:** specimens in the sheet are still list size (28 px) and leave white space — draw them larger; a text `UiSegmentedControl` variant (the mode control is local CSS now); `.sheet` hard-codes the two compare colours; the sheet is not a full-window Quick-Look-style specimen yet.
 **Dependencies:** none.
 
+
+## Iteration 72 — 2026-11-03 — Compare sheet: specimens drawn large
+**Critique (before):** the Compare sheet was centered and calm after 71, but its specimens were list-size (28 px) and filled a third of the sheet; the rest was white space. A comparison sheet should show the letterforms, not a caption. Good: hairline columns, one baseline in overlay.
+**Why:** follow-up from 71. Alternative (not taken): a full-window Quick-Look-style sheet — larger change.
+**Changed:** `CompareSheet.vue` only: the sheet draws the list's size at 2×, clamped 40–96 px, in all three modes (overlay too). Vitest and `compare.spec.ts` expectations updated for the new size (28→56, 40→80).
+**Backlog:** item 16 stays `[ ]` (weight/size scale and a text `UiSegmentedControl` remain).
+**Shots:** `.harness/redesign/shots/72/` (before), `72b/` (after; viewed compare light).
+**Verified:** typecheck, `lint:js`, Vitest 910 (timing tests flake under parallel load: `search.test.ts`, `catalogs.test.ts`; green alone), Playwright 273 passed / 16 skipped (`e2e-72.log`).
+**Follow-ups:** a size control inside the sheet; `.sheet` hard-codes the compare colours; full-window specimen.
+**Dependencies:** none.

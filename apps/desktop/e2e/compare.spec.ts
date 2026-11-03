@@ -108,7 +108,7 @@ test('the sheet shows the pins in the sample text at one size, in three modes', 
   );
   expect(new Set(boxes.map((b) => b.text)).size).toBe(1);
   expect(boxes[0]!.text).toContain('quick brown fox');
-  expect(boxes.map((b) => b.size)).toEqual(['28px', '28px', '28px']);
+  expect(boxes.map((b) => b.size)).toEqual(['56px', '56px', '56px']);
   expect(boxes[0]!.top).toBe(boxes[2]!.top);
   expect(boxes[0]!.left).toBeLessThan(boxes[1]!.left);
 

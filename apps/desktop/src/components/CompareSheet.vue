@@ -136,7 +136,8 @@ async function remove(face: FaceId): Promise<void> {
   next?.focus();
 }
 
-const size = computed(() => settings.value.sizePx);
+// The sheet is a specimen: it draws the list's size at twice the scale, within 40–96 px.
+const size = computed(() => Math.min(96, Math.max(40, settings.value.sizePx * 2)));
 // Overlay: one SVG line box; both texts sit on the same baseline (one `y`).
 const overlayHeight = computed(() => Math.ceil(size.value * 1.5));
 const overlayBaseline = computed(() => Math.round(size.value * 1.1));
