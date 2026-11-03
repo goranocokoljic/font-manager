@@ -432,8 +432,18 @@ function onToggle(row: ListRow): void {
   background: var(--fm-accent);
   content: '';
 }
+/* The keyboard cursor: the accent bar plus a hairline ring, not a heavy box. */
 .viewport:focus .slot.cursor {
-  box-shadow: inset 0 0 0 2px var(--fm-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fm-accent) 60%, transparent);
+}
+.viewport:focus .slot.cursor:not(.selected)::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-start: 0;
+  width: 2px;
+  background: var(--fm-accent);
+  content: '';
 }
 .twisty {
   display: grid;

@@ -202,3 +202,12 @@ Rating stars and the Favorite heart became `UiIcon`s and the favorite turned acc
 **Verified:** typecheck, lint:js, Vitest 910, Playwright 272 after the one test update (`.harness/redesign/e2e-28.log` shows the one failure, then fixed and re-run). Shots `28/` (before), `28-after/`.
 **Follow-ups:** hover scene in `screens.spec.ts`; date/number/datalist natives in the license form; Features live preview; cursor-row ring in the list.
 **Dependencies:** none.
+
+## Iteration 29 — 2026-11-03 — List: keyboard cursor row gets a hairline ring and a bar
+**Critique (before):** The list is calm, but the keyboard cursor row draws a heavy 2 px accent box that outweighs the specimen it frames. Review 25 named it twice. Good: selection bar and tint are clear.
+**Why:** Item 6's last visible open point. Hover scene still not added; no hover UI touched. Shots were taken without a cursor scene, so the cursor look was not seen by eye (follow-up).
+**What changed:** `FontList`: cursor row = 1 px accent ring at 60 % plus a 2 px accent start bar (when not selected; selected keeps its 4 px bar).
+**Backlog:** item 6 partly (cursor ring done; `?face=` list selection remains). Not ticked.
+**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-29.log`). Shots `29/`.
+**Follow-ups:** cursor scene + hover scene in `screens.spec.ts`; `?face=` list selection; license form natives; Features live preview.
+**Dependencies:** none.
