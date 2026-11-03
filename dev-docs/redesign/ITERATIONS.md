@@ -9,7 +9,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iteration 7: toolbar icons + UiSegmentedControl done; status bar, dark-first, collapsible panes remain)
-- [ ] 5 Sidebar redesign (+ UiIconButton)
+- [ ] 5 Sidebar redesign (iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
 - [ ] 6 List rows
 - [ ] 7 Grid cards
 - [ ] 8 Inspector
@@ -91,3 +91,13 @@ Built `UiDrawer`; the facets moved into it, the bar shows `Filters · N` plus re
 **Shots:** `.harness/redesign/shots/7` (before), `7b` (after, `list` only).
 **Follow-ups:** status bar still shows App/API/Platform strings (move to About); first launch dark; pane collapse shortcuts; the sidebar's inline buttons (item 5, `UiIconButton`); the Compact-rows icon needs a clearer shape; `UiIcon` could replace the Filters icon.
 **Dependencies:** none (hand-drawn Lucide-shaped paths, no package).
+
+## Iteration 8 — 2026-11-03 — Sidebar: header and source actions become icon buttons
+**Critique (before):** The sidebar is the loudest chrome on screen: bordered text buttons (Add folder, Rescan, Pause, Remove, New, New smart, Import set…) sit between rows and out-shout the fonts. No icons, uneven rhythm, "Smart collections" header with nothing under it. Good: counts are right-aligned, the toolbar and preview bar are quiet now.
+**Why:** backlog item 5 (item 4's remaining parts are smaller). The `list` shot changes: seven bordered buttons become quiet 16 px icons.
+**What changed:** new `ui/UiIconButton` (24 px, tooltip = accessible name); eight icons added to `icons.ts`. Sources, Collections and Project sets headers use it; source rows show rescan/pause/remove as icons. Accessible names are unchanged, so tests needed no edits.
+**Tests:** typecheck, lint, Vitest green; Playwright green after the first try failed 3 specs (actions hidden until hover made them unclickable; kept them visible).
+**Backlog ticked:** 5 (partly).
+**Shots:** `.harness/redesign/shots/8` (before), `8b` (after).
+**Follow-ups:** section icons and collapsible sections; smart collections as a subtype (not a trailing pill); empty "Smart collections" header; Problems de-dupe; Online catalogs "Turn on" buttons; Tags/Quick Collection headers; source actions could show on hover once tests focus first.
+**Dependencies:** none.

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIconButton from './ui/UiIconButton.vue';
 // The Sources group of the sidebar: add a folder with the native picker,
 // pause, resume, rescan or remove it, and see scan progress inline. The
 // System source is listed read-only: the app never pauses or removes it.
@@ -43,9 +44,12 @@ const announcement = computed(() => {
   <section class="sources" aria-labelledby="fm-sources-heading">
     <header class="head">
       <h2 id="fm-sources-heading" class="heading">{{ t('sources.title') }}</h2>
-      <button type="button" class="add" :title="t('sources.addFolderTitle')" @click="store.add">
-        {{ t('sources.addFolder') }}
-      </button>
+      <UiIconButton
+        icon="plus"
+        :label="t('sources.addFolder')"
+        :title="t('sources.addFolderTitle')"
+        @click="store.add"
+      />
     </header>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
     <p class="announce" role="status" data-testid="scan-status">{{ announcement }}</p>
@@ -85,32 +89,28 @@ const announcement = computed(() => {
           <span class="scan-text">{{ progressText(store.progressOf(source.id)!) }}</span>
         </div>
         <div v-if="source.kind !== 'system'" class="actions">
-          <button
-            type="button"
-            :aria-label="t('sources.rescanLabel', { name: folderName(source) })"
+          <UiIconButton
+            icon="rescan"
+            :label="t('sources.rescanLabel', { name: folderName(source) })"
+            :title="t('sources.rescan')"
             @click="store.rescan(source.id)"
-          >
-            {{ t('sources.rescan') }}
-          </button>
-          <button
-            type="button"
-            :aria-label="
+          />
+          <UiIconButton
+            :icon="source.paused ? 'play' : 'pause'"
+            :label="
               source.paused
                 ? t('sources.resumeLabel', { name: folderName(source) })
                 : t('sources.pauseLabel', { name: folderName(source) })
             "
+            :title="source.paused ? t('sources.resume') : t('sources.pause')"
             @click="store.setPaused(source.id, !source.paused)"
-          >
-            {{ source.paused ? t('sources.resume') : t('sources.pause') }}
-          </button>
-          <button
-            type="button"
-            :aria-label="t('sources.removeLabel', { name: folderName(source) })"
+          />
+          <UiIconButton
+            icon="trash"
+            :label="t('sources.removeLabel', { name: folderName(source) })"
             :title="t('sources.removeTitle')"
             @click="store.remove(source.id)"
-          >
-            {{ t('common.remove') }}
-          </button>
+          />
         </div>
       </li>
     </ul>
@@ -133,16 +133,6 @@ const announcement = computed(() => {
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   font-weight: 600;
-}
-.add,
-.actions button {
-  padding: 2px 6px;
-  border: 1px solid var(--fm-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: var(--fm-text-xs);
 }
 .list {
   margin: 0;
@@ -204,8 +194,9 @@ const announcement = computed(() => {
 }
 .actions {
   display: flex;
-  gap: 4px;
-  padding-top: 4px;
+  gap: 2px;
+  justify-content: flex-end;
+  padding-top: 2px;
 }
 /* Read by screen readers only; the progress bars show the same. */
 .announce {

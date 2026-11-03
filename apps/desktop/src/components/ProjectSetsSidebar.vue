@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIconButton from './ui/UiIconButton.vue';
 // The Project sets group of the sidebar: one button per set. Pressing a set makes
 // it the current set ("Deactivate everything not in the current set" keeps it
 // active); pressing it again clears it. The parent view loads the sets store.
@@ -14,14 +15,12 @@ const store = useSetsStore();
   <section class="sets" aria-labelledby="fm-sets-heading">
     <header class="head">
       <h2 id="fm-sets-heading" class="heading">{{ t('sets.heading') }}</h2>
-      <button
-        type="button"
-        class="action"
+      <UiIconButton
+        icon="import"
+        :label="t('sets.import')"
         :title="t('sets.importTitle')"
         @click="store.importSet()"
-      >
-        {{ t('sets.import') }}
-      </button>
+      />
     </header>
     <div v-if="store.imported" class="imported" role="status" aria-labelledby="fm-sets-imported">
       <p id="fm-sets-imported" class="imported-line">

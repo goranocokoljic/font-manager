@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIconButton from './ui/UiIconButton.vue';
 // The Collections group of the sidebar: every manual and smart collection as a
 // tree, with its face count. Click one to show it in the list. Make, rename,
 // nest (In, Out), reorder (Up, Down) and delete them with the row buttons or by dragging a
@@ -212,23 +213,18 @@ function countLabel(n: number): string {
     <header class="head">
       <h2 id="fm-collections-heading" class="heading">{{ t('collections.heading') }}</h2>
       <span class="head-actions">
-        <button
-          type="button"
-          class="add"
+        <UiIconButton
+          icon="plus"
+          :label="t('collections.new')"
           :title="t('collections.newTitle')"
           @click="startEdit(null, null)"
-        >
-          {{ t('collections.new') }}
-        </button>
-        <button
-          type="button"
-          class="add"
-          :aria-label="t('collections.newSmartLabel')"
+        />
+        <UiIconButton
+          icon="sparkles"
+          :label="t('collections.newSmartLabel')"
           :title="t('collections.newSmartTitle')"
           @click="ruleEditor.openNew()"
-        >
-          {{ t('collections.newSmart') }}
-        </button>
+        />
       </span>
     </header>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
@@ -413,7 +409,6 @@ function countLabel(n: number): string {
   font-size: var(--fm-text-xs);
   font-weight: 600;
 }
-.add,
 .actions button {
   padding: 2px 6px;
   border: 1px solid var(--fm-border);
