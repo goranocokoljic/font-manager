@@ -73,6 +73,7 @@
     "regionNamed": "Layout {name}",
     "loadFailed": "Diese Schrift konnte nicht geladen werden.",
     "lockWidth": "Breite sperren",
+    "help": "So bearbeitest du die Seite",
     "lockedTitle": "Der Text behält seine Breite; klicke, um dem Fenster zu folgen",
     "unlockedTitle": "Der Text folgt dem Fenster; klicke, um seine Breite zu behalten",
     "badgeLabel": "Eigenschaften von Block {n}, {size}",

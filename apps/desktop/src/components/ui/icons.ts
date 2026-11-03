@@ -48,6 +48,7 @@ export const ICONS = {
   code: '<path d="M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5"/>',
   print:
     '<path d="M4.5 6V2.5h7V6M4.5 11.5h-2v-5h11v5h-2"/><rect x="4.5" y="9.5" width="7" height="4"/>',
+  width: '<path d="M2.5 3v10M13.5 3v10M5.5 8h5M7.5 6L5.5 8l2 2M8.5 6l2 2-2 2"/>',
   info: '<circle cx="8" cy="8" r="5.5"/><path d="M8 7.5v3.2M8 5.4h.01"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

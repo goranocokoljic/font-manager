@@ -450,3 +450,13 @@ Four iterations since review 70 (71–74); all four graded.
 **Verified:** typecheck, `lint:js` exit 0, Vitest 913, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-75.log`). Shots `75/` (before, 64) and `75-after/` (64): all 32 scenes render in light and dark, comfortable and compact; `compare`, `compare-overlay`, `shortcuts` changed.
 **Not fixed, noted:** Grid card name "Sam…"; Layout view's gesture sentence under the page; Catalog Install/Download and Axes instance chips bordered; Settings nav focus ring on load; empty collection shows "Clear filters" with no filters.
 **Next five:** move the `list` shot or a scene beside it — item 17 ("Lock width" beside the page; Layout help behind the info button) → item 7 (Grid card name never cut to "Sam…") → item 26 (Catalog row buttons and Axes chips quiet) → item 16 (text/radio `UiSegmentedControl`, Compare onto it) → item 14 (scrub in Grid cards and Quick Look, a `scrub` scene). Every iteration opens before/after shots of a scene that shows its change; no shots means a 2.
+
+## Iteration 76 — 2026-11-03 — Layout view: help behind an info button, Lock width an icon
+**Critique (before):** The `list` shot is unchanged since review 70; the Layout view is the next loudest leftover. Under the page it printed a two-line gesture sentence, and "Lock width" was a loose text button at the far corner of the head. A designer sees prose where the Studio already has a quiet info icon. Good: the page itself (centred text column, size badges) reads like paper.
+**Why:** Backlog 17 / review 75 "Next five" first item. Same pattern as the Studio, so the two views match.
+**What changed:** `FontLayout` head: an info `UiIconButton` (`aria-expanded`) shows the sentence under the head; "Lock width" is a `UiIconButton` with a new `width` icon (`aria-pressed`, same label and test id). The sentence stays in the DOM (sr-only when closed) so blocks keep `aria-describedby`. New `layout-help` scene. Test updated: the lock's name is its `aria-label`.
+**Backlog:** item 17 (Layout help + lock width done); item 26 (one more bordered/text button gone).
+**Shots:** `.harness/redesign/shots/76/` (after only; `layout`, `layout-help`).
+**Follow-ups:** Studio panels still float the lock at each panel's corner (bare mode); the open hint is padded 32 px, not aligned to the text column.
+**Verified:** typecheck, lint:js, Vitest 913, Playwright 273 passed / 16 skipped (`e2e-76.log`).
+**Dependencies:** none. **Reverted:** no.

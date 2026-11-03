@@ -46,6 +46,7 @@ const scenes = {
   },
   waterfall: { routes: '/?face=1', storage: views('waterfall') },
   layout: { routes: '/?face=1', storage: views('layout') },
+  'layout-help': { routes: '/?face=1', storage: views('layout'), click: 'How to edit' },
   'inspector-info': { routes: '/?face=1', tab: 'Info' },
   'inspector-axes': { routes: '/?face=1', tab: 'Axes' },
   'inspector-features': { routes: '/?face=1', tab: 'Features' },

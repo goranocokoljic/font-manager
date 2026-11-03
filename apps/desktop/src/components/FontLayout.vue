@@ -24,6 +24,7 @@ import { computed, nextTick, onBeforeUnmount, ref, useId, useSlots, watch } from
 import type { FaceId, FaceSummary, Layout, LayoutBounds, TextBlock } from '../api/types';
 import type { BlockProps } from '../stores/textLayouts';
 import BlockProperties from './BlockProperties.vue';
+import UiIconButton from './ui/UiIconButton.vue';
 import { t } from '../i18n';
 import { faceFamily, useFaceLoader } from '../preview/faceLoader';
 import { useActions } from '../stores/commands';
@@ -119,6 +120,8 @@ const editing = ref<number | null>(null);
 const badges = ref<HTMLButtonElement[]>([]);
 const hasEditor = computed(() => Boolean(props.bounds && props.setProps));
 const hasTools = computed(() => Boolean(slots['block-tools']));
+// The gesture sentence sits behind the info button (Studio has its own).
+const helpOpen = ref(false);
 const hintId = `${useId()}-hint`;
 
 /** A block resized in place hands its new values to the core like an editor change. */
@@ -216,18 +219,36 @@ function blockFamily(i: number): string {
         <span v-if="state === 'failed'" class="failed" role="status">
           {{ t('textLayout.loadFailed') }}
         </span>
-        <button
+        <span v-if="!bare" class="spacer" />
+        <UiIconButton
+          v-if="hasEditor && !bare"
+          icon="info"
+          :label="t('textLayout.help')"
+          class="fm-no-print"
+          :aria-expanded="helpOpen"
+          :aria-controls="hintId"
+          @click="helpOpen = !helpOpen"
+        />
+        <UiIconButton
           v-if="setWidthLock"
-          type="button"
+          icon="width"
+          :label="t('textLayout.lockWidth')"
           class="lock fm-no-print"
           data-testid="layout-width-lock"
           :aria-pressed="locked"
           :title="locked ? t('textLayout.lockedTitle') : t('textLayout.unlockedTitle')"
           @click="toggleWidthLock"
-        >
-          {{ t('textLayout.lockWidth') }}
-        </button>
+        />
       </header>
+      <p
+        v-if="hasEditor"
+        :id="hintId"
+        class="hint fm-no-print"
+        :class="{ 'sr-only': bare || !helpOpen }"
+      >
+        {{ t('textLayout.hint') }}
+        <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
+      </p>
       <div
         ref="page"
         class="page"
@@ -281,10 +302,6 @@ function blockFamily(i: number): string {
           </div>
         </div>
       </div>
-      <p v-if="hasEditor" :id="hintId" class="hint fm-no-print" :class="{ 'sr-only': bare }">
-        {{ t('textLayout.hint') }}
-        <template v-if="editable">{{ t('textLayout.hintEdit') }}</template>
-      </p>
     </template>
     <p v-else-if="!face" class="empty">{{ t('textLayout.empty') }}</p>
   </section>
@@ -357,27 +374,11 @@ function blockFamily(i: number): string {
     var(--fm-tools-width);
   justify-content: center;
 }
+.spacer {
+  flex: 1;
+}
 .lock {
-  margin-inline-start: auto;
-  padding: 2px var(--fm-space-2);
-  border: 0;
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: var(--fm-muted);
-  font: var(--fm-text-xs)/1.4 var(--fm-font-ui);
-  cursor: pointer;
-  transition: background-color var(--fm-motion-fast) var(--fm-ease);
-}
-.lock:hover {
-  background-color: var(--fm-hover);
-  color: var(--fm-fg);
-}
-.lock[aria-pressed='true'] {
-  color: var(--fm-accent);
-}
-.lock:focus-visible {
-  outline: 2px solid var(--fm-accent);
-  outline-offset: 1px;
+  margin-inline-start: 0;
 }
 .tools {
   display: flex;
@@ -407,7 +408,7 @@ function blockFamily(i: number): string {
 }
 .hint {
   margin: 0;
-  padding: 0 32px 16px;
+  padding: var(--fm-space-2) var(--fm-space-8) 0;
   color: var(--fm-muted);
   font-size: var(--fm-text-sm);
 }

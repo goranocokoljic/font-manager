@@ -428,7 +428,7 @@ describe('FontLayout block properties (E12.3)', () => {
     it('is a labelled toggle button that sets the text at the locked width', async () => {
       const { w } = await locking();
       expect(lock(w).element.tagName).toBe('BUTTON');
-      expect(lock(w).text()).toBe('Lock width');
+      expect(lock(w).attributes('aria-label')).toBe('Lock width');
       expect(lock(w).attributes('aria-pressed')).toBe('true');
       expect(page(w).classList.contains('locked')).toBe(true);
       expect(page(w).style.getPropertyValue('--fm-layout-width')).toBe('500px');

@@ -73,6 +73,7 @@
     "regionNamed": "{name} layout",
     "loadFailed": "This font could not be loaded.",
     "lockWidth": "Lock width",
+    "help": "How to edit the page",
     "lockedTitle": "The text keeps its width; press to follow the window",
     "unlockedTitle": "The text follows the window; press to keep its width",
     "badgeLabel": "Block {n} properties, {size}",
