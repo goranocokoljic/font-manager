@@ -388,8 +388,8 @@ function countLabel(n: number): string {
           {{ t('collections.newInside') }}
         </button>
         <button
-          role="menuitem"
           v-if="menuRow.collection.rules"
+          role="menuitem"
           type="button"
           :aria-label="t('collections.editRulesLabel', { name: menuRow.collection.name })"
           @click="run((r) => ruleEditor.openEdit(r.collection.id))"
@@ -423,8 +423,8 @@ function countLabel(n: number): string {
           {{ t('collections.down') }}
         </button>
         <button
-          role="menuitem"
           v-if="menuRow.position > 0"
+          role="menuitem"
           type="button"
           :aria-label="t('collections.inLabel', { name: menuRow.collection.name })"
           :title="t('collections.inTitle')"
@@ -433,8 +433,8 @@ function countLabel(n: number): string {
           {{ t('collections.in') }}
         </button>
         <button
-          role="menuitem"
           v-if="menuRow.collection.parent != null"
+          role="menuitem"
           type="button"
           :aria-label="t('collections.outLabel', { name: menuRow.collection.name })"
           @click="run((r) => moveOut(r))"
@@ -528,16 +528,14 @@ function countLabel(n: number): string {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The row carries the hover tint; the name button must not add a second one. */
+.row .name:hover,
+.row .name:active {
+  background-image: none;
+}
 .name[aria-current='true'] {
   color: var(--fm-accent);
   font-weight: 600;
-}
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
 }
 .smart {
   display: inline-flex;

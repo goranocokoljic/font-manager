@@ -619,17 +619,6 @@ function openFace(face: FaceId): void {
 </template>
 
 <style scoped>
-.groups {
-  margin: 0;
-  padding: 8px;
-  list-style: none;
-}
-.group {
-  padding: 8px;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  font-weight: 600;
-}
 .toolbar {
   display: flex;
   align-items: center;
@@ -701,15 +690,16 @@ function openFace(face: FaceId): void {
   color: var(--fm-muted);
 }
 .hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  min-height: 0;
   padding: 0;
   border: 0;
   background-color: transparent;
   color: inherit;
   font: inherit;
   text-decoration: none;
-}
-.hint kbd {
-  font: inherit;
 }
 /* Settings reads as a link: the full text colour (theme.css calls it --fm-fg), not
    the muted status-bar colour, underlined on hover and focus. */
@@ -726,6 +716,7 @@ function openFace(face: FaceId): void {
 }
 .status-end {
   display: flex;
+  align-items: center;
   gap: var(--fm-space-4);
   margin-inline-start: auto;
 }

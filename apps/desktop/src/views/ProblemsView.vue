@@ -459,14 +459,6 @@ function when(at: string): string {
 .button:disabled {
   opacity: 0.5;
 }
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
 .button {
   padding: 4px 10px;
   border: 1px solid var(--fm-border-strong);

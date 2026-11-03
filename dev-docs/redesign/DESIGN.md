@@ -128,7 +128,8 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
 - **Components** (`src/components/ui/`): `UiPopover`, `UiSelect`, `UiDrawer`, `UiIcon` (+ `icons.ts`),
   `UiIconButton`, `UiSegmentedControl`, `UiBadge` (tones quiet / accent / danger / warning)
   and `UiChevron` exist (review 10). Every badge and every expand/fold twisty uses them; a
-  local `.badge` class or a ▸/▾ text glyph is a bug. The rest — Button, Toggle, Slider
+  local `.badge` class or a ▸/▾ text glyph is a bug. Text for screen readers only uses the
+  global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider
   (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
   change that needs them**, not ahead of time: the Filters drawer brings the Drawer and the
   Chip, the view switcher brings the SegmentedControl, the preview bar brings the Slider and
@@ -191,7 +192,11 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 15 the
+`list` shot has not changed for four iterations: the next iterations take items 7, 8 and 9
+(grid cards, inspector Info, Find similar as a mode) before more sidebar polish. The shots
+scenes do not hover; an iteration whose change shows only on hover adds a hover scene to
+`screens.spec.ts` first.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -205,30 +210,27 @@ wrong thing. Items 2–9 are ordered by how much of the first screen they change
    Size slider plus the three or four most-used controls inline; everything else (tracking,
    line height, alignment, metrics, outline, colours) in a Preview options popover. State
    remembered per view. Brings `UiField`, `UiSlider`, `UiToggle`.
-4. **Dark by default + the app shell.** Fix first: at 1440 px the Home toolbar wraps
-   ("All fonts", "Compact rows", "Compare 0/4") and clips "Inspector" in Table and Layout
-   modes — the view modes as an icon `UiSegmentedControl` and the inspector toggle at the
-   pane edge free the room. First launch opens dark (Settings keeps system /
-   light / dark). Sidebar / main / inspector as three panes with hairline dividers,
-   collapsible and remembered; the view switcher as a `UiSegmentedControl`; status bar
-   reduced to live state (active fonts, problems, `Ctrl+K` hint), version strings move to
-   About.
+4. **App shell (rest).** Toolbar, view switcher and status bar are done (iterations 7, 11).
+   Left: sidebar and inspector collapsible with `[` `]`, widths and open state remembered.
+   Dark-first launch is **blocked (API)**: the default theme comes from the settings
+   `FmClient` returns (`theme: 'system'`); a separate API task must change the default.
 5. **Sidebar redesign.** Sections with icons, counts right-aligned in tabular figures, smart
    collections as a visual subtype (not a trailing pill), Problems de-duplicated, section
    actions as `UiIconButton`s in the section header, sections collapsible, collections as
-   drop targets. Brings `UiIconButton` with tooltip. Left after iteration 8: a selected collection still opens a
-   block of six bordered text buttons (New inside, Rename, Up, Down, Export…, Delete) — move
-   them into a row menu; the catalog "Turn on" buttons; source actions float on their own
-   line under the source name.
+   drop targets. Done: `UiIconButton`, header icons, the collection "…" menu, catalog power
+   icons, the smart sparkle (iterations 8, 12, 13). Left: the Sources "Fonts" row actions
+   still float on their own line (put them on the row, shown on hover/focus like the
+   collection "…"); Project sets counts sit mid-row instead of right-aligned in tabular
+   figures; section icons; collapsible sections; Problems header vs the smart "Problems".
 
 ### Information architecture
 6. **List rows.** Name and metadata in a quiet 12 px line with tabular counts; licence /
    format as monochrome glyph badges; row actions (Activate, Compare, Tag, Similar) appear on
    hover or focus, right-aligned; selection = accent bar + subtle tint; expanded family shows
-   its styles as sub-rows. `UiBadge` and `UiChevron` are done (iteration 9, review 10). Left: the
-   stray bordered "Similar" button on the selected row becomes a hover/focus `UiIconButton`;
-   the chevron sits between the meta line and the sample — align it with the sample's
-   cap height.
+   its styles as sub-rows. `UiBadge`, `UiChevron` and the hover "Find similar" icon are done
+   (iterations 9, 14, review 10). Left: the chevron sits between the meta line and the
+   sample — align it with the sample's cap height; sub-rows need their own indent and a
+   quieter meta line; the focused list draws a ring round the whole pane.
 7. **Grid cards never truncate.** Fit the sample automatically (a short word at large size,
    or auto-size the pangram to the card width); footer with name and style count; hover
    reveals the weight range.

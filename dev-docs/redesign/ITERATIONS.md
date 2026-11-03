@@ -8,9 +8,9 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 1 Design tokens + theme + UI font + ui/ Select (iterations 2–3; the gate is lifted)
 - [x] 2 Filters panel instead of the wall (iteration 4; UiDrawer built, chips stay in FilterChips; human feature names moved to item 8)
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
-- [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; dark-first launch, collapsible panes remain)
-- [ ] 5 Sidebar redesign (iteration 12: collection row actions in a "…" menu; iteration 8: UiIconButton + section-header and source-row icon actions; section icons, collapsible sections, smart subtype, Problems dedupe remain)
-- [ ] 6 List rows (iteration 9 + review 10: UiBadge and UiChevron everywhere; hover actions, chevron alignment, sub-row styling remain)
+- [ ] 4 Dark by default + app shell (iterations 7, 11: toolbar icons + UiSegmentedControl, status bar reduced to live state; collapsible panes remain; dark-first launch blocked on the API default theme)
+- [ ] 5 Sidebar redesign (iterations 8, 12, 13: UiIconButton, collection "…" menu, catalog power icons, smart sparkle; Fonts row actions, Project sets counts, section icons, collapsible sections, Problems dedupe remain)
+- [ ] 6 List rows (iterations 9, 14 + review 10: UiBadge, UiChevron, hover Find-similar icon; chevron alignment, sub-row styling remain)
 - [ ] 7 Grid cards
 - [ ] 8 Inspector
 - [ ] 9 Find similar as a mode
@@ -98,37 +98,28 @@ Built `UiBadge`; FontList and FontPreviewRow badges moved onto it and the ▸/�
 **Next five:** item 4 rest (status bar to live state, dark first launch — both on the first screen) → item 5 rest (collection row menu, "Turn on", smart subtype, Problems dedupe) → item 6 rest (hover row actions as `UiIconButton`, chevron alignment) → item 7 (grid cards) → item 8 (inspector Info grouping). Use the tokens for every duration and colour; when a `ui/` component lands, move every copy onto it in the same iteration and grep for the old class.
 
 ## Iteration 11 — 2026-11-03 — Status bar: live state only
-**Critique:** The list is calm and the specimens lead. The worst thing left on screen is the bottom bar: `App: Font Manager (mock) 0.1.0  API: 0.23.0  Platform: linux` is developer data at the same weight as the actions. The sidebar still has bordered "Turn on" buttons and a stray "Smart collections" header with nothing under it.
-**Why:** Backlog item 4 (rest): status bar to live state, version strings to About. Visible in the first three seconds: the bottom line is now `0 fonts active · 5 problems · Conflicts` on the left and `Commands Ctrl+K · Settings Ctrl+,` on the right.
-**What changed:** `HomeView` status slot reordered (live state left, hints right via `.status-end`); the app/API/platform list moved to Settings › About (`data-testid="app-info"` kept). Tests: `App.test.ts` now asserts the bar has no version strings; e2e `app`, `rtl`, `settings` read app info from About.
-**Ticked:** none (item 4 still open). **Shots:** `.harness/redesign/shots/11/` (before), `11a/` (after).
-**Verified:** typecheck, lint:js, Vitest 906, Playwright 272 passed / 16 skipped.
-**Follow-ups:** dark-first launch (first-run theme is "system"; the e2e theme tests assume system) and collapsible panes are the remainder of item 4. Settings link sits ~2 px higher than Commands in the bar (kbd height); align in the polish pass.
-**Dependencies:** none. **Reverted:** no.
+Status bar shows `0 fonts active · 5 problems · Conflicts` left and the Commands/Settings hints right; app/API/platform versions moved to Settings › About.
 
 ## Iteration 12 — 2026-11-03 — Collections: six row buttons become one "…" menu
-**Critique:** The list is calm, but an opened collection grows a block of six bordered text buttons (New inside, Rename, Up, Down, Export…, Delete) that is the loudest chrome on screen. "Turn on" buttons and an empty "Smart collections" header are next.
-**Why:** Backlog item 5 (rest). After: the open collection row shows its count plus a quiet "…" and stays one line tall.
-**What changed:** `CollectionsSidebar` row actions moved into a `UiPopover` menu (`role=menu`, arrows/Home/End/Esc, focus returns to the "…"); new `more` icon; `collections.moreLabel` in en/de. The "…" shows on hover, focus and the open row. Tests: Vitest and e2e `collections`, `smart-rules` open the menu first.
-**Ticked:** none (item 5 still open). **Shots:** `.harness/redesign/shots/12/` (before), `12a/` (after).
-**Verified:** typecheck, lint:js, Vitest, Playwright 272 passed / 16 skipped (one export test fixed, re-run green).
-**Follow-ups:** "Turn on" catalog buttons; smart subtype instead of the "Smart" pill (still a local `.badge` in this file); empty "Smart collections" header; Problems dedupe. A shared `UiMenu` could replace the hand-made menu if a second menu appears.
-**Dependencies:** none. **Reverted:** no.
+An open collection's six bordered buttons moved into a keyboard-complete `role=menu` popover behind a "…" `UiIconButton`.
 
 ## Iteration 13 — 2026-11-03 — Sidebar: "Turn on" becomes an icon, empty header gone
-**Critique:** The list is calm and specimens lead. The sidebar is the noisiest part: two bordered "Turn on" buttons with a grey line under each, an empty "Smart collections" header, and a "Smart" pill. The Sources "Fonts" row still has icon actions floating on their own line.
-**Why:** Backlog item 5 (rest). After: the Online catalogs group is three plain rows (power icon on the off ones) and the empty header is gone. Dark-first launch (item 4) is blocked: the default theme comes from the settings the API returns (`theme: 'system'` in the mock / Rust default), not from the UI.
-**What changed:** `OnlineCatalogsSidebar` uses `UiIconButton` (new `power` icon; tooltip "Turn on — Connects to the internet"; hint stays as the accessible description, visually hidden). `CollectionsSidebar` shows a sparkles icon (hidden "Smart" text kept) instead of the pill; its local `.badge` is deleted. `HomeView` drops the empty groups list. One Vitest line updated.
-**Ticked:** none (item 5 still open). **Shots:** `.harness/redesign/shots/13/` (before), `13a/` (after).
-**Verified:** typecheck, lint:js (only the old `collections.spec.ts` format warning), Vitest 906, Playwright 272 passed.
-**Follow-ups:** Sources "Fonts" row actions on their own line; Problems header vs smart "Problems"; section icons and collapsible sections. Dark-first launch needs the API default theme changed to `dark` (API task).
-**Dependencies:** none. **Reverted:** no.
+Catalog "Turn on" buttons became power `UiIconButton`s, the "Smart" pill a sparkle icon, and the empty "Smart collections" header was removed.
 
 ## Iteration 14 — 2026-11-03 — List rows: "Find similar" becomes a hover icon button
-**Critique:** The list is calm and specimens lead. The sidebar is still the noisiest part (Fonts row actions on their own line, no section icons). The row's bordered "Find similar" text button only appears on hover or on the cursor row, and it looked like a form button.
-**Why:** Backlog item 6 (rest). After: the row shows a quiet 24 px icon on hover/focus instead of a bordered text button. The shots scenes do not hover, so `list` looks the same; the change shows only on hover. Picked over item 7 because it is small and finishes the row-action rule.
-**What changed:** `FontList` uses `UiIconButton` with a new `similar` icon (same label, shortcut and test id; row-action CSS cut to position and visibility).
-**Ticked:** none (item 6 still open: chevron alignment, sub-row styling). **Shots:** `.harness/redesign/shots/14/` (before), `14a/` (after).
-**Verified:** typecheck, Playwright 272 passed / 16 skipped. Vitest 905/906: the 50 ms search timing test failed under load and passed alone (9/9). `lint:js` shows only prettier warnings on the old `collections.spec.ts`.
-**Follow-ups:** add a hover scene to `screens.spec.ts` so hover actions are visible in shots. Next: item 7 (grid cards).
-**Dependencies:** none. **Reverted:** no.
+The row's bordered "Find similar" text button became a hover/focus `UiIconButton`; not visible in the shots (no hover scene).
+
+## Review 15 — 2026-11-03
+**Grades:** iter 11 **3** — the right first-screen change, but the Settings key cap sat ~2 px above Commands (a link and a button on different baselines, `kbd` forced to inherit the font). Iter 12 **3** — a correct, keyboard-complete menu; the open row showed two hover tints (row + global button gradient on the name), and it left three `vue/attributes-order` warnings. Iter 13 **3** — the calmest sidebar change yet (two text buttons and two caption lines gone); it left the `.groups` CSS and the `home.sidebarGroups.smart` string dead. Iter 14 **2** — invisible in every shot, and its lens-with-plus icon reads as "zoom in".
+**Regressions:** none in views, keyboard or tests. **Drift:** six local copies of the screen-reader-only rule (two added by 12 and 13); `lint:js` exited 1 on `collections.spec.ts` formatting since iteration 12 while the log called it "warnings".
+**Pulled apart:** none head-on; four small sidebar/row iterations in a row left the `list` shot unchanged since iteration 13.
+**Fixed:**
+- One global `.sr-only` in `theme.css`; local copies deleted in CollectionsSidebar, PreviewControls, ProblemsView, FontTable (`.visually-hidden`), OnlineCatalogsSidebar (`.connects`), SourcesSidebar (`.announce`).
+- Status bar: hints are inline-flex and centred; key caps keep the `kbd` token style. Commands and Settings now share one baseline.
+- CollectionsSidebar: the name button adds no second hover tint; attribute order fixed. `collections.spec.ts` formatted (`lint:js` exits 0).
+- `similar` icon: a lens with "≈" instead of "+".
+- Dead: HomeView `.groups`/`.group` CSS; `home.sidebarGroups.smart` in en/de.
+**Rule amended (DESIGN.md):** screen-reader-only text uses the global `.sr-only`. Items 4, 5, 6 rewritten to what is left; item 4's dark-first launch marked blocked (API).
+**Verified:** typecheck, `lint:js` (exit 0, no warnings), Vitest 906, Playwright 272 passed / 16 skipped (`.harness/redesign/e2e-review-15.log`). Shots `review-15/` (before) and `review-15-after/`: all 23 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** Fonts source-row actions on their own line; Project sets count not right-aligned; focus ring round the whole list pane; Find similar result pane close is a text "×"; Studio "Panel font" fields look empty.
+**Next five:** item 7 (grid cards: the "The quick b" cut is the worst thing in any view) → item 8 (inspector Info grouped, hash/path behind "Technical") → item 9 (Find similar as a mode) → item 5 rest (Fonts row actions inline, Project sets counts) → item 6 rest (chevron alignment, sub-rows). Every iteration must change a shot; hover-only work adds a hover scene first. Run `pnpm lint:js` and read its exit code, not only its warnings.

@@ -19,7 +19,9 @@ export const ICONS = {
   chevron: '<path d="M6 3.5l4.5 4.5L6 12.5"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',
   power: '<path d="M8 2.5v5M4.7 4.6a5 5 0 1 0 6.6 0"/>',
-  similar: '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5M5.5 7h3M7 5.5v3"/>',
+  // A lens with "≈" inside: "find what looks like this", not zoom (a "+" read as zoom in).
+  similar:
+    '<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5M5 6.2q1-.9 2 0t2 0M5 8.2q1-.9 2 0t2 0"/>',
   import: '<path d="M8 2.5v7M5 6.5l3 3 3-3M3 12.5h10"/>',
 } as const;
 export type IconName = keyof typeof ICONS;

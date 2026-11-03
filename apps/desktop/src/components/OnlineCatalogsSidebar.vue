@@ -35,7 +35,7 @@ onMounted(() => void store.load());
           :disabled="store.busy === c.id"
           @click="store.setEnabled(c.id, true)"
         />
-        <span :id="`catalog-connects-${c.id}`" class="connects">{{ t('catalogs.connects') }}</span>
+        <span :id="`catalog-connects-${c.id}`" class="sr-only">{{ t('catalogs.connects') }}</span>
       </template>
     </div>
     <button
@@ -90,13 +90,5 @@ onMounted(() => void store.load());
 .entry[aria-current='true'] {
   color: var(--fm-accent);
   font-weight: 600;
-}
-.connects {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 </style>

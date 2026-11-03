@@ -370,7 +370,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
             :title="t('table.sortBy', { column: col.label })"
             @click="views.sortBy(view, col.id)"
           >
-            <span :class="{ 'visually-hidden': col.id === 'activation' }">{{ col.label }}</span>
+            <span :class="{ 'sr-only': col.id === 'activation' }">{{ col.label }}</span>
             <ActivationDot v-if="col.id === 'activation'" state="inactive" />
             <span class="arrow" aria-hidden="true">{{ SORT_ARROW[ariaSort(config, col.id)] }}</span>
           </button>
@@ -418,7 +418,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
           >
             <template v-if="col.id === 'activation'">
               <ActivationDot :state="rowActivation(item.row)" />
-              <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
+              <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="col.id === 'name'">
               <span
@@ -450,7 +450,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                   :style="{ insetInlineStart: `${d.left}%` }"
                 />
               </span>
-              <span class="visually-hidden">{{ cellOf(item.row, col.id).text }}</span>
+              <span class="sr-only">{{ cellOf(item.row, col.id).text }}</span>
             </template>
             <template v-else-if="cellOf(item.row, col.id).badges">
               <UiBadge
@@ -630,13 +630,5 @@ span.sort {
 }
 .mark.italic {
   background-color: var(--fm-bg);
-}
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 </style>

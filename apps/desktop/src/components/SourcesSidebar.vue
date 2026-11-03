@@ -52,7 +52,7 @@ const announcement = computed(() => {
       />
     </header>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
-    <p class="announce" role="status" data-testid="scan-status">{{ announcement }}</p>
+    <p class="sr-only" role="status" data-testid="scan-status">{{ announcement }}</p>
     <div v-if="store.otherScan" class="scan library-scan" data-testid="library-scan">
       <progress
         :value="store.otherScan.done"
@@ -197,17 +197,6 @@ const announcement = computed(() => {
   gap: 2px;
   justify-content: flex-end;
   padding-top: 2px;
-}
-/* Read by screen readers only; the progress bars show the same. */
-.announce {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
 }
 .error {
   margin: 4px 8px;
