@@ -1,0 +1,819 @@
+{
+  "$schema": "../issues.schema.json",
+  "project": {
+    "name": "Font Manager",
+    "spec_url": "https://claude.ai/code/artifact/b90dd55a-4c52-4f44-b868-46878caa6f11",
+    "breakdown_url": "https://claude.ai/artifact/4EtzdBCYU4LWsxaXNQKvNv",
+    "board_title": "Font Manager — Redesign",
+    "board_columns": [
+      "Backlog",
+      "Ready",
+      "In progress",
+      "In review",
+      "Done"
+    ]
+  },
+  "milestones": [
+    {
+      "title": "Redesign — paper first",
+      "description": "The concept canvas (six boards) built for real: type wall, family page, your-own-text flow, selection and drag, Pairing Studio, motion. Gate: every board matched by eye at 1440×900 in both themes; e2e, a11y and the 60 fps wall budget green."
+    }
+  ],
+  "labels": [
+    {
+      "name": "type:epic",
+      "color": "5319E7",
+      "description": "Epic — parent of stories (sub-issues)"
+    },
+    {
+      "name": "type:story",
+      "color": "0E8A16",
+      "description": "Story — one PR"
+    },
+    {
+      "name": "phase:3",
+      "color": "C5DEF5",
+      "description": "v1.5 (internal)"
+    },
+    {
+      "name": "size:S",
+      "color": "BFD4F2",
+      "description": "Up to a day"
+    },
+    {
+      "name": "size:M",
+      "color": "7FA7D9",
+      "description": "A few days"
+    },
+    {
+      "name": "size:L",
+      "color": "3F6FB5",
+      "description": "A week or more"
+    },
+    {
+      "name": "track:core",
+      "color": "D93F0B",
+      "description": "fm-core / fm-api"
+    },
+    {
+      "name": "track:ui",
+      "color": "FBCA04",
+      "description": "Tauri + Vue desktop UI"
+    },
+    {
+      "name": "track:platform",
+      "color": "B60205",
+      "description": "fm-platform, OS integration"
+    },
+    {
+      "name": "track:ops",
+      "color": "5319E7",
+      "description": "Build, CI, release"
+    },
+    {
+      "name": "track:data",
+      "color": "1D76DB",
+      "description": "data/ files and schemas"
+    },
+    {
+      "name": "human",
+      "color": "000000",
+      "description": "Needs a person"
+    },
+    {
+      "name": "harness:ready",
+      "color": "0052CC",
+      "description": "Can be picked up by the harness"
+    },
+    {
+      "name": "harness:in-progress",
+      "color": "0052CC",
+      "description": "Being worked by the harness"
+    },
+    {
+      "name": "harness:blocked",
+      "color": "0052CC",
+      "description": "Harness stopped on it"
+    },
+    {
+      "name": "criteria:tbd",
+      "color": "EEEEEE",
+      "description": "Acceptance criteria not written yet"
+    },
+    {
+      "name": "redesign",
+      "color": "C56EB2",
+      "description": "Paper-first redesign (concept canvas)"
+    }
+  ],
+  "epics": [
+    {
+      "id": "E40",
+      "title": "Redesign foundation: targets, fixture, tokens, motion primitives",
+      "phase": 3,
+      "track": "ui",
+      "depends": [],
+      "summary": "What every redesign story builds on: the concept boards exported as target images next to the code, a browser-mode library big enough to look like one, the owner's accent per theme, and the motion tokens and transition helpers the later epics reuse. Concept canvas: https://claude.ai/artifact/4EtzdBCYU4LWsxaXNQKvNv — boards 1–6. The design rules live in dev-docs/redesign/DESIGN.md.",
+      "stories": [
+        {
+          "id": "E40.1",
+          "title": "Export the six concept boards as target images",
+          "size": "S",
+          "track": "ops",
+          "human": true,
+          "depends": [],
+          "criteria": [
+            "dev-docs/design/redesign/ holds 1-wall.png, 2-family.png, 3-wall-text.png, 4-drag.png, 5-studio.png, 6-motion.png exported from the concept canvas at 1440 px wide (Share › Export on each board), plus README.md naming the canvas link and the export date",
+            "Every UI story in E41–E46 links its target image by that path; a story is reviewed against the image, not against the previous screenshot",
+            "DESIGN.md's audit section is replaced by a pointer to the boards and a short list of what the boards leave open (dark theme of each board, compact density, narrow windows)"
+          ]
+        },
+        {
+          "id": "E40.2",
+          "title": "Browser-mode library that looks like a library",
+          "size": "M",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "`?mockLibrary=wall` (and the default for e2e @screens) serves 60 families across classifications: ≥12 serif, ≥16 sans, 6 slab, 6 script/hand, 6 mono, 8 display, 6 variable (two with 3+ axes), with Cyrillic, Greek and Vietnamese coverage on some and deliberate gaps on others, 3 duplicates and 2 broken files — all from fixtures/fonts/ (OFL/Apache/UFL only)",
+            "Families carry realistic designer, foundry, year, licence and style counts; mock `sampleTexts` reports `missing` glyphs for the gap families so tofu rendering can be seen",
+            "scripts/redesign/shots.mjs and the @screens spec use the wall library by default; the three-family library stays available as `?mockLibrary=small` for the existing specs that count rows",
+            "No change to the FmClient interface or generated types"
+          ]
+        },
+        {
+          "id": "E40.3",
+          "title": "Accent per theme and on-accent token",
+          "size": "S",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "`--fm-accent` is #C56EB2 in light and #AB4B96 in dark; a new `--fm-on-accent` is #141413 in light and #ffffff in dark; both pairs ≥ 4.5:1, enforced by styles/contrast.test.ts",
+            "Every element that paints text on the accent (primary button, count badge, pressed chip, toast, switch label if any) uses `--fm-on-accent`; accent-coloured text and links go back to `--fm-fg` — grep shows no `color: var(--fm-accent)` on text",
+            "Focus ring, selection ring, active segment, switch-on state, slider thumb and the activation toggle take the accent",
+            "The @screens set opened in both themes; axe (a11y.spec.ts) green"
+          ]
+        },
+        {
+          "id": "E40.4",
+          "title": "Motion tokens, reduced-motion switch and transition helpers",
+          "size": "M",
+          "track": "ui",
+          "depends": [],
+          "criteria": [
+            "theme.css defines `--fm-motion-fast: 120ms`, `--fm-motion-move: 200ms`, `--fm-motion-page: 280ms`, `--fm-ease: cubic-bezier(.2,0,0,1)` and sets all three durations to 0ms under `prefers-reduced-motion: reduce`; no component declares its own duration or curve (lint rule or grep test)",
+            "`src/motion/` exports `useReducedMotion()`, a `<FmFade>` / `<FmSlide>` pair over Vue `<Transition>`, a `<FmFlipGroup>` over `<TransitionGroup>` that animates transform only, and `withViewTransition(fn)` that uses `document.startViewTransition` when present and falls back to running `fn` directly",
+            "Only `transform` and `opacity` are animated by the helpers (asserted in a unit test that inspects the generated styles)",
+            "Board 6 (6-motion.png) is copied into dev-docs/redesign/MOTION.md as the table the later epics implement against"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E41",
+      "title": "Type wall — the library as designers open it",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E40"
+      ],
+      "summary": "Board 1. One hero control (type to preview), a uniform wall of white cards on paper that reflows with the size slider, a quiet paper-tinted sidebar, filters as a button plus chips, no inspector on the wall. Target: dev-docs/design/redesign/1-wall.png.",
+      "stories": [
+        {
+          "id": "E41.1",
+          "title": "The wall: uniform specimen cards that reflow",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E40.2",
+            "E40.4"
+          ],
+          "criteria": [
+            "Grid view renders families as white cards on #ffffff with a hairline (`--fm-border`) and 12 px radius: specimen centred (the preview text, never truncated — the text shrinks to fit or the card shows the longest prefix that fits on a word boundary), footer with activation dot, family name (500) and style count / Variable in tabular figures",
+            "The size slider (24–120) resizes every visible card and the grid reflows through `<FmFlipGroup>`; cards keep identity; off-screen cards jump; 60 fps with 1,000 families in the wall library (measured in e2e with the Performance API, asserted ≥ 55 fps median)",
+            "Column count follows width (minmax 260px); at 1440 px that is four columns; the wall stays virtualised in rows",
+            "Selected card: 2 px accent ring; hover: shadow lift per the motion table; Enter opens the family page, Space opens Quick Look, A toggles activation, as today",
+            "Matches 1-wall.png at 1440×900 in light and dark (reviewer compares side by side; differences listed in the PR)"
+          ]
+        },
+        {
+          "id": "E41.2",
+          "title": "Preview text as the hero control",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E41.1"
+          ],
+          "criteria": [
+            "Above the wall: a 44 px text field 'Type to preview' with 'renders in N fonts' at its end, and preset chips Pangram · Alphabet · 0123 · Paragraph · one chip per language the user has used (default: the OS language's pangram from `listLanguages().pangram`)",
+            "Typing repaints every specimen on the next frame with no transition; the value is shared by list, wall, waterfall, family page and Quick Look, and remembered per view (view preferences in localStorage, as today)",
+            "The old preview toolbar's remaining controls (size, auto size, line height, tracking, alignment, metrics, outline, colours, surface) live in a Preview options popover opened from one button at the end of the row; nothing else is on screen by default",
+            "Keyboard: `/` focuses search, `T` (when no row is focused) focuses the preview field; Esc returns focus to the wall"
+          ]
+        },
+        {
+          "id": "E41.3",
+          "title": "Sidebar as a quiet paper panel",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E40.3"
+          ],
+          "criteria": [
+            "Sidebar background `--fm-surface` (paper tint #f6f5f2 light / surface-2 dark), 232 px, hairline on its right; rows 30 px with a 16 px Lucide icon, label and a right-aligned tabular count; the active row has the 7 % tint",
+            "Section headers are 11 px uppercase with their actions as icon buttons that appear on hover/focus (New collection, Add folder, Import set); no text buttons inline in the list",
+            "Collections show a colour dot (E44.3) and smart collections a distinct icon, not a trailing 'Smart' pill; Problems appears once, as a section with its count; empty sections show one quiet line",
+            "Bottom row: problems count with its dot and the ⌘K/Ctrl+K hint; app/API/platform versions move to About",
+            "Matches the sidebar of 1-wall.png; RTL chrome and compact density verified in @screens"
+          ]
+        },
+        {
+          "id": "E41.4",
+          "title": "Filters as a button and a chip row",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E41.1"
+          ],
+          "criteria": [
+            "The top bar shows `Filters` with a count badge (accent, on-accent text) that opens the existing drawer; active filters render as removable chips to its right, one row, overflow collapses into '+N'",
+            "The chip wall above the list is gone from every view; its facets are all reachable in the drawer (parity checked by the filters e2e spec)",
+            "The count line above the wall reads '212 families · Sans serif · Serbian (Latin)' and 'Sorted by name · change'"
+          ]
+        },
+        {
+          "id": "E41.5",
+          "title": "No inspector on the wall",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "The wall, list, waterfall and table views no longer show the inspector pane; selecting a row shows its name and state in the count line, Enter or a click on the name opens the family page, Space opens Quick Look",
+            "The `]` shortcut and the toolbar inspector toggle are removed from these views; the table view keeps its column menu",
+            "Every inspector capability has a home on the family page (E42) — a checklist in the PR maps Info/Axes/Features/Glyphs/Developer/License/Palettes/Notes to their new section",
+            "The existing inspector e2e specs are updated to the family page; none deleted"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E42",
+      "title": "Family page — one place for everything about a family",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E40"
+      ],
+      "summary": "Board 2. Clicking a card pushes a page: hero specimen in your text with the variable axes under it, a segmented switch Styles · Text · Characters · Features · Pairings · Info, and a quiet rail (languages you can preview in, pairs well with, facts). Target: dev-docs/design/redesign/2-family.png; the board is interactive — play it for every section.",
+      "stories": [
+        {
+          "id": "E42.1",
+          "title": "Route, push/pop navigation and the page frame",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E40.4"
+          ],
+          "criteria": [
+            "`/family/:id` route; opening from any view pushes the page with the shared-element transition from the motion table (fallback: slide + fade); Back (button, Esc, Alt+←) pops it and restores the view's scroll position and selection",
+            "Top bar: ‹ Library, '1 of 212 · ← → next family' (arrows move to the previous/next family in the current filtered order without leaving the page), icon buttons Favorite · Add to collection · Tag · Find similar, and the primary 'Activate family' (accent, on-accent)",
+            "Page skeleton: hero area, axis row, section switch (`UiSegmentedControl`), a 560+ px main column and a 320 px rail that wraps under it below 1100 px",
+            "Deep link works in browser mode for the @screens scene `family`"
+          ]
+        },
+        {
+          "id": "E42.2",
+          "title": "Hero specimen and live axes",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "Hero: the preview text at 132 px (clamped to the width, one line, ellipsis) in the family's default face; a meta line with foundry, year, axes/style count, licence and activation state",
+            "For a variable family every axis is a slider with a numeric readout; dragging updates the hero, the Styles rows and the rail samples on the same frame via `font-variation-settings`; ticks under the weight slider mark the named instances and a label reads '= Medium' within ±12 or 'between instances'",
+            "Dragging horizontally on the hero specimen scrubs the weight axis (pointer capture; 1 px = 2 units; Shift halves); the cursor shows ew-resize",
+            "'Pin 537 as my instance' calls the existing `pinInstance` and the new style appears in Styles; 'Copy CSS' puts `font-variation-settings` on the clipboard via `cssValues`"
+          ]
+        },
+        {
+          "id": "E42.3",
+          "title": "Styles: named list and weight ramp",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.2"
+          ],
+          "criteria": [
+            "Named styles: one row per face — name and weight/italic meta (150 px), the preview text at 38 px, hover actions Copy CSS · Compare, and an activation switch (`role=switch`, accent when on) that calls activate/deactivate for that face",
+            "A `Named styles · N | Weight ramp` switch (variable families only) shows the weight axis at every 100 with the instance name where one exists; clicking a ramp row sets the hero weight; the accent ring on both lists follows the current hero weight (±12)",
+            "Pinned instances (`listVirtualStyles`) appear in the named list with a 'yours' badge and can be deleted from the row menu",
+            "Keyboard: ↑/↓ move between rows, Space toggles activation, Enter sets the hero to that row's weight"
+          ]
+        },
+        {
+          "id": "E42.4",
+          "title": "Text section: the reading test",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "Three columns of the same passage at 12 / 17 / 24 px labelled captions · body · lead, line height 1.45, `opsz` set to the size where the family has the axis",
+            "Measure (40–90 ch) and leading (1.10–1.80) sliders apply to all three; a Paper | Ink switch flips the section to light-on-dark; an ink block below shows the body size on `--fm-fg` ground",
+            "The passage is the user's preview text when it is longer than 80 characters, otherwise the stock passage; the Paragraph preset from E41.2 lands here"
+          ]
+        },
+        {
+          "id": "E42.5",
+          "title": "Characters section: grid, blocks and glyph detail",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "A 12-column glyph grid from `listGlyphs` in the family's face at 26 px, virtualised, with block filter chips (count per block) and a search that accepts a character, `U+017D` or a glyph name (`getGlyph`)",
+            "Selecting a cell (click, arrows, Enter) shows the detail card: the glyph at 160 px, name, code point, 'in N of M styles', and its alternates rendered live (stylistic sets and axis extremes from `GlyphDetail`); Copy glyph and 'Compare with…' (existing GlyphCompare)",
+            "No inner scrollbars: the grid grows with the page; the detail card is sticky on tall windows",
+            "Matches the Characters state of board 2"
+          ]
+        },
+        {
+          "id": "E42.6",
+          "title": "Features section: off and on, side by side",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "Each non-automatic feature from `FeatureInfo` is a row: friendly name with the tag in mono under it, the sample rendered without the feature (muted) and with it (`font-feature-settings`), and a switch",
+            "Switched-on features apply to every preview on the page (hero, Styles, Text) through the shared preview state; 'Copy CSS for N switched on' writes the `font-feature-settings` line",
+            "Samples are chosen per feature from data/features (E42.11): ligature words for `liga`/`dlig`, mixed case for `smcp`/`c2sc`, digits for `onum`/`tnum`/`pnum`/`lnum`, fractions for `frac`; stylistic sets fall back to the preview text",
+            "Rare tags (cvXX, locl, mark…) sit behind an 'N more' expander"
+          ]
+        },
+        {
+          "id": "E42.7",
+          "title": "Pairings section: candidates from your library",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.1",
+            "E42.13"
+          ],
+          "criteria": [
+            "Four to eight cards from `suggestPairings`, each a mini layout — this family as the headline (30 px) over the candidate as body (14 px) — with the candidate's name and its `reasons` joined by ' · '",
+            "A `This family for headlines | for body` switch sends the role to the request and swaps which face plays which part in the cards",
+            "Clicking a card opens the Studio with the pairing loaded (E45.2); hovering lifts the card per the motion table",
+            "Empty state when the library has no candidate: one line and an action to browse catalogs"
+          ]
+        },
+        {
+          "id": "E42.8",
+          "title": "Info section: design, licence, files, metrics",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E42.1",
+            "E42.12"
+          ],
+          "criteria": [
+            "Four groups in a two-column grid: Design (designer, foundry · year, classification, axes with ranges, named styles, description), Licence (name, 'You may' and 'You may not' lines from `LicenseInfo.permissions`, the user's record with a link to declare), Files (format, location, added, health), Metrics (units/em, cap, x-height with ratio, ascender, descender)",
+            "Metrics show an 'Hxg' specimen at 96 px with dashed accent lines at cap height and x-height and a solid baseline, drawn from the face's metrics",
+            "Hash, name IDs, vendor ID and the full table list stay in the Developer section, reachable from a 'Technical details' expander at the end of the rail"
+          ]
+        },
+        {
+          "id": "E42.9",
+          "title": "The rail: preview in a language, pairs well with, facts",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.1"
+          ],
+          "criteria": [
+            "'Supports N languages': only complete languages from `faceCoverage` as chips (six, then '+N more' expands); clicking a chip sets the page's preview text to that language's pangram (`LanguagePreset.pangram`) and marks the chip with the accent; clicking again or 'back to my text' restores the user's text",
+            "Under the chips a 22 px line of the language's distinctive glyphs (from data/charsets) rendered in the face — never a fallback font (missing glyphs would be tofu per E43.4)",
+            "'Pairs well with': the top two from `suggestPairings` with one reason each and 'Open in Pairing Studio'",
+            "Facts grid: designer, foundry, licence with web/embed marks, format/files/size, 'Used in' linking to collections that contain the family; 'Technical details' expander at the end",
+            "Choosing a language here also offers 'Show only fonts that can do Polish' which applies the language filter when going back to the wall"
+          ]
+        },
+        {
+          "id": "E42.10",
+          "title": "Language samples: distinctive glyph lines per language",
+          "size": "S",
+          "track": "data",
+          "depends": [],
+          "criteria": [
+            "data/charsets/<lang>.json gains an optional `sampleGlyphs` string (the language's distinctive letters, e.g. 'Šđčćž' for sr-Latn, 'Ąćęłńóśźż' for pl) and the schema and validation test accept it; the 30 most used presets are filled",
+            "`LanguagePreset` gains `sampleGlyphs?: string | null` (additive, `#[serde(default)]`); `pnpm gen:types` output committed",
+            "Pangrams exist for every preset that has `sampleGlyphs` (data/pangrams); missing ones added for sr-Latn, sr-Cyrl, hr, bs, sl, mk"
+          ]
+        },
+        {
+          "id": "E42.11",
+          "title": "Feature catalog: friendly names, groups and samples",
+          "size": "S",
+          "track": "data",
+          "depends": [],
+          "criteria": [
+            "data/features/features.json (schema-validated) lists every registered OpenType feature tag with a friendly name, a group (Ligatures · Capitals · Figures · Fractions · Positioning · Stylistic · Language · Automatic) and a sample string; the fm-core feature reader uses it for `FeatureInfo.name` and gains `group` and `sample` (additive fields)",
+            "A unit test checks every tag the fixture corpus exposes has a name; `cvXX`/`ssXX` without a font-supplied name fall back to 'Character variant 3' / 'Stylistic set 1'",
+            "`pnpm gen:types` output committed"
+          ]
+        },
+        {
+          "id": "E42.12",
+          "title": "Licence permissions summary in fm-core",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`LicenseInfo` gains `permissions?: LicensePermissions | null` with `may: string[]`, `mayNot: string[]`, `source: 'open-license' | 'declared' | 'embedding-bits'` — derived in fm-core from the recognised open licence (OFL, Apache, UFL, MIT…), the user's declaration and `fsType`; never invented when nothing is known (null)",
+            "Rules live in data/licenses/permissions.json (schema-validated) so wording is editable without code changes",
+            "Unit tests cover OFL, Apache-2.0, UFL, a declared desktop licence and a restricted-embedding file",
+            "Additive change to fm-api: no existing field renamed or removed; `pnpm gen:types` output committed"
+          ]
+        },
+        {
+          "id": "E42.13",
+          "title": "Role-aware pairing suggestions",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`PairingRequest` gains `role?: 'headline' | 'body' | 'caption'` (default: as today) and `partnerOf?: FaceId` for 'given this body face, suggest headlines'; scoring weights contrast, x-height ratio, width and era differently per role, documented in docs/adr/ as an amendment to the pairing ADR",
+            "`PairingSuggestion.reasons` stay plain words and become role-specific ('lower contrast for body', 'x-height within 4 %')",
+            "Bench: suggestions for one face against the 10k reference library return in < 50 ms (search budget)",
+            "Additive change; `pnpm gen:types` output committed"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E43",
+      "title": "Your own text and honest rendering",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E41"
+      ],
+      "summary": "Board 3. Type a sentence in your language and the wall becomes reading rows at real body size; fonts that cannot render every glyph say so with visible tofu, and one switch hides them. Target: dev-docs/design/redesign/3-wall-text.png.",
+      "stories": [
+        {
+          "id": "E43.1",
+          "title": "Paragraph mode: reading rows when the text is long",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E41.2"
+          ],
+          "criteria": [
+            "When the preview text exceeds 80 characters or the Paragraph preset is chosen, the wall switches to two-column rows: family name and meta in a 12 px line, the text at the body size (default 17 px / 1.45; the Preview options size applies), 18 px padding, same card chrome",
+            "The switch animates as a view crossfade (motion table); switching back restores the wall and its scroll position",
+            "The count line reads 'N of M families render your text completely' when the text has glyphs outside Basic Latin",
+            "Matches 3-wall-text.png"
+          ]
+        },
+        {
+          "id": "E43.2",
+          "title": "Script detection for typed text",
+          "size": "S",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`detect_languages(text) -> Vec<LanguageHint { code, confidence }>` in fm-core, exposed through fm-api as `detectLanguages`, using the charsets data: a text whose distinctive glyphs match a preset's `sampleGlyphs`/required set ranks that preset first (sr-Latn before hr before pl for 'đ' + 'ć'); pure ASCII returns an empty list",
+            "Unit tests for Serbian Latin, Serbian Cyrillic, Polish, Vietnamese, Greek and mixed text; < 1 ms per call",
+            "`pnpm gen:types` output committed"
+          ]
+        },
+        {
+          "id": "E43.3",
+          "title": "Renders-my-text filter with a count",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E43.1",
+            "E43.2"
+          ],
+          "criteria": [
+            "When the text has non-ASCII glyphs the field's end label reads '<Language> detected · showing fonts that render every glyph' from `detectLanguages`; the count line gets a switch 'Hide the N with missing glyphs' that applies `Supports { kind: 'text' }` to the search",
+            "The switch state is a filter chip like any other (removable, shown in the Filters badge count) and is remembered with the view",
+            "Performance: toggling on the 1,000-family wall library re-renders in < 100 ms (search budget + paint) measured in e2e"
+          ]
+        },
+        {
+          "id": "E43.4",
+          "title": "Tofu: missing glyphs drawn, never faked",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E41.1"
+          ],
+          "criteria": [
+            "Every specimen renderer (wall card, list row, waterfall, family hero and rows, Quick Look, Studio) takes the `missing` characters from `sampleTexts` and renders each as an inline box: 0.62 em wide, 1.5 px accent border, 2 px radius, light accent fill; the box is an element with `role=img` and `aria-label=\"missing glyph ž\"`",
+            "The row/card shows 'N glyphs missing · š đ č' in the accent colour; the family page shows the same under the hero",
+            "No specimen anywhere falls back to a system font for a missing character (a Playwright check compares the rendered width of a known-missing string against the tofu width)",
+            "Matches the gap rows of 3-wall-text.png"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E44",
+      "title": "Selection, drag and collections",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E41"
+      ],
+      "summary": "Board 4. Select several families, act on them from a bar that rises from the bottom, drag them onto a collection, a tag or the Studio with a ghost and a count, and drag them out of the app as files. Target: dev-docs/design/redesign/4-drag.png.",
+      "stories": [
+        {
+          "id": "E44.1",
+          "title": "Multi-select model and the selection bar",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E41.1",
+            "E40.4"
+          ],
+          "criteria": [
+            "Click selects one; Shift-click a range; Ctrl/Cmd-click toggles; dragging on the wall's empty ground draws a box that selects what it touches; Esc clears; Ctrl/Cmd-A selects the filtered set; selection survives view switches",
+            "Selected cards/rows: accent ring and a 6 % accent tint; the count line reads 'N selected · Shift-click or drag a box to select · Esc clears'",
+            "On the first selection a dark bar (#141413, on it white) rises from the bottom centre per the motion table: 'N families' · Activate · Collection · Tag · Compare · Studio · ×; each action applies to the whole selection through the existing client calls; the bar is a `role=toolbar` reachable with Tab",
+            "Matches 4-drag.png minus the drag ghost"
+          ]
+        },
+        {
+          "id": "E44.2",
+          "title": "Drag families onto collections, tags and the Studio",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E44.1",
+            "E41.3"
+          ],
+          "criteria": [
+            "Dragging a selected card lifts a ghost (the card at 0.9 scale, −3°, shadow, a count badge when more than one) that follows the pointer; the origin cards fade to 35 %",
+            "Sidebar collections and tags, and the Studio button in the selection bar, are drop targets: entering one shows the accent ring and the count as '31 → 34'; dropping calls `addToCollection` / `tagFaces` / opens the Studio with the faces; the ghost flies into the row and the count crossfades (motion table)",
+            "Smart collections are not drop targets and say why in a tooltip; Esc cancels a drag",
+            "Keyboard equivalent exists for every drop (the selection bar's Collection and Tag menus)"
+          ]
+        },
+        {
+          "id": "E44.3",
+          "title": "Collection colours",
+          "size": "S",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`Collection` gains `color?: string | null` (a key from a fixed palette of eight, not a hex) and `createCollection` / `renameCollection` accept it (additive); stored in the database with a migration",
+            "The sidebar shows the colour as an 8 px dot before the name and the collection header uses it for its mini specimen strip; the picker is a row of eight swatches in the collection's menu",
+            "`pnpm gen:types` output committed; mock supports it"
+          ]
+        },
+        {
+          "id": "E44.4",
+          "title": "Drag out: drop font files into other apps",
+          "size": "L",
+          "track": "platform",
+          "depends": [
+            "E44.1"
+          ],
+          "criteria": [
+            "Dragging a selection past the window edge starts a native file drag with the faces' files on Windows (IDataObject CF_HDROP), macOS (NSFilePromiseProvider or NSPasteboard file URLs) and Linux (text/uri-list via GTK/Wayland portal) — behind the `FontActivator`-style trait in fm-platform, one implementation per OS, each with an integration test that a second process receives the paths",
+            "Files are referenced in place (rule 2: never copied or moved); Explorer/Finder/Nautilus receive them as a copy",
+            "Documented in docs/adr/ with the parity decision; a platform that cannot support it ships the feature disabled with a tooltip, not a `cfg` branch elsewhere"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E45",
+      "title": "Pairing Studio — roles on paper",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E42"
+      ],
+      "summary": "Board 5. One toolbar, the context as a segmented switch, the pairing as four roles in a rail with real font pickers and locks, the page on paper at realistic scale, role marks only on hover or selection, shuffle the unlocked roles, suggestions with reasons, compare two pairings, export. Target: dev-docs/design/redesign/5-studio.png.",
+      "stories": [
+        {
+          "id": "E45.1",
+          "title": "One toolbar and context presets",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E40.3"
+          ],
+          "criteria": [
+            "The Studio's four bars become one: Back · 'Pairing Studio' · '<Headline> + <Body> · unsaved' · context switch (Magazine · Web hero · Mobile UI · Video title · Poster) · Compare 2 pairings · Shuffle unlocked · Save · Export",
+            "Each context is a real layout from `layoutPresets`/layout templates with the right page: A4 (Magazine, Poster), 1440×900 web hero, 390×844 mobile with iOS type sizes, 1920×1080 video title with safe-area guides",
+            "The page sits on a neutral ground (`#ecebe7` light / surface-2 dark) with a soft shadow at 100 % scale by default; the hint line under it says how to hover, select and drag",
+            "Matches the toolbar and page of 5-studio.png"
+          ]
+        },
+        {
+          "id": "E45.2",
+          "title": "Roles rail with font pickers and locks",
+          "size": "L",
+          "track": "ui",
+          "depends": [
+            "E45.1"
+          ],
+          "criteria": [
+            "A 300 px rail lists the context's roles (Magazine: Headline, Deck, Body, Caption; each context defines its own) as cards: role name, lock toggle, a font picker (`UiSelect` with the family rendered in itself and a search over the library), style and size/leading",
+            "Role blocks on the page carry no marks at rest; hovering a block shows its role mark in the margin and a hairline ring; clicking selects it (accent ring and mark) and focuses its card in the rail; the rail card's ring follows selection",
+            "Drag sideways on a selected block for size, up/down for leading (existing behaviour, kept); Enter edits the block text",
+            "Opening the Studio from a pairing card (E42.7) or a drop (E44.2) fills Headline and Body"
+          ]
+        },
+        {
+          "id": "E45.3",
+          "title": "Shuffle unlocked and suggestions with reasons",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E45.2",
+            "E42.13"
+          ],
+          "criteria": [
+            "'Shuffle unlocked' asks `suggestPairings` with the locked roles as `partnerOf` and the role as `role`, picks the next candidate for each unlocked role and animates the change (crossfade of the block)",
+            "Under the roles a 'Try for <selected role>' list shows three candidates with their reasons; clicking applies to that role only; a shuffled result can be undone (Ctrl/Cmd-Z)",
+            "Suggestions come from the user's library only; an empty library state links to catalogs"
+          ]
+        },
+        {
+          "id": "E45.4",
+          "title": "Compare two pairings, save, export",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E45.2",
+            "E45.5"
+          ],
+          "criteria": [
+            "'Compare 2 pairings' duplicates the page side by side (two panels, independent roles, shared text); the toolbar label names both; closing one keeps the other",
+            "Save stores the pairing as a layout (existing `saveLayout`) named after its faces; History and Revert keep working",
+            "Export offers PNG (via E45.5) and PDF (existing print) at 1× and 2×; the file is named '<Headline>-<Body>-<context>.png'"
+          ]
+        },
+        {
+          "id": "E45.5",
+          "title": "Render a layout to PNG in fm-core",
+          "size": "M",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`exportLayoutPng(req: { layout: LayoutId, scale: 1 | 2, surface: 'paper' | 'ink' }) -> path` renders the layout with the core rasterizer (same engine as `renderPreview`), honouring axes and features, into the app's export folder; returns the path",
+            "Output matches the webview within tolerance on the fixture layouts (pixel diff < 2 % on a 1× A4 render)",
+            "< 1 s for an A4 page at 2× on the reference machine; additive fm-api change; `pnpm gen:types` output committed"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E46",
+      "title": "Motion — everything moves for a reason",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E40",
+        "E41",
+        "E42"
+      ],
+      "summary": "Board 6: the twelve moments in dev-docs/redesign/MOTION.md, built on the E40.4 helpers, each with its reduced-motion fallback and a frame budget. Target: dev-docs/design/redesign/6-motion.png.",
+      "stories": [
+        {
+          "id": "E46.1",
+          "title": "Family page push and pop",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E42.1",
+            "E41.1"
+          ],
+          "criteria": [
+            "Opening a family: the card's specimen is the shared element that scales into the hero position while the wall fades under it and the top bar crossfades (View Transitions API with `view-transition-name` per card; fallback: 24 px slide + fade), 280 ms `--fm-ease`",
+            "Back reverses it at 220 ms with the exit curve and lands on the same scroll position; ← → between families crossfade the page content only (200 ms)",
+            "Reduced motion: a 120 ms fade; verified by an e2e test that emulates `prefers-reduced-motion`"
+          ]
+        },
+        {
+          "id": "E46.2",
+          "title": "Wall reflow, view switch and size slider",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E41.1"
+          ],
+          "criteria": [
+            "Size slider and column-count changes reflow the visible cards with FLIP (transform only), 200 ms; cards entering the viewport appear without animation",
+            "Switching view modes crossfades the two lists (200 ms) while the segmented thumb slides (120 ms)",
+            "Measured ≥ 55 fps median during a 24→120 slider sweep with the 1,000-family library; the measurement is an e2e test that fails under budget"
+          ]
+        },
+        {
+          "id": "E46.3",
+          "title": "Drawers, popovers, selection bar, toasts",
+          "size": "S",
+          "track": "ui",
+          "depends": [
+            "E44.1"
+          ],
+          "criteria": [
+            "Filters drawer: translateX from −100 % plus a 6 % scrim, 200 ms; popovers and `UiSelect` lists: 120 ms fade + 4 px rise; selection bar: 16 px rise + fade, 200 ms; toasts the same",
+            "All through `<FmFade>`/`<FmSlide>`; no component-local keyframes (grep test)",
+            "Reduced motion: fades only"
+          ]
+        },
+        {
+          "id": "E46.4",
+          "title": "Drag, activation, Quick Look and Studio moments",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E44.2",
+            "E42.3",
+            "E45.1"
+          ],
+          "criteria": [
+            "Drag: ghost lift 120 ms (scale .9, −3°, shadow), drop flies into the target in 200 ms and the count crossfades; activation: dot scale 0→1 and switch knob translate in 120 ms; Quick Look: 200 ms fade + 8 px rise over a fixed (not animated) backdrop blur, ← → crossfade 120 ms; Studio open: paper scale .98→1 + rail slide, 280 ms",
+            "Nothing animates while the user types in the preview field, in search results, on the Table view, or when focus moves by keyboard (ring appears at once) — asserted in e2e by checking computed transitions",
+            "Reduced motion fallbacks per MOTION.md"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    },
+    {
+      "id": "E47",
+      "title": "Themes — Paper and friends",
+      "phase": 3,
+      "track": "ui",
+      "depends": [
+        "E40"
+      ],
+      "summary": "A small set of named themes the user picks in Settings, Slack-style: each is one token set (accent, on-accent, surfaces) with light and dark variants; the current pair is 'Paper' and stays the default. The theme id is a setting, so the model is an API change first.",
+      "stories": [
+        {
+          "id": "E47.1",
+          "title": "Theme model in settings",
+          "size": "S",
+          "track": "core",
+          "depends": [],
+          "criteria": [
+            "`Settings` gains `themeId?: string` (default 'paper') next to the existing `theme` (system/light/dark, unchanged); `updateSettings` accepts it; additive, with a migration default",
+            "Built-in theme definitions live in data/themes/*.json (schema-validated): id, name, light and dark token sets for accent, on-accent, bg, surface, surface-2, border; at least Paper, Graphite (neutral), Indigo, Moss — each pair checked ≥ 4.5:1 by a test",
+            "`listThemes()` returns them; `pnpm gen:types` output committed"
+          ]
+        },
+        {
+          "id": "E47.2",
+          "title": "Theme picker that previews the specimens",
+          "size": "M",
+          "track": "ui",
+          "depends": [
+            "E47.1",
+            "E40.3"
+          ],
+          "criteria": [
+            "Settings › Appearance shows the themes as cards with a live mini wall (three specimens on the theme's surface, its accent on a selected card) in the current light/dark mode; choosing one writes the tokens onto `:root` at once with a 200 ms crossfade and saves `themeId`",
+            "The command palette offers 'Theme: <name>'; the choice survives a restart (reads from settings, not localStorage)",
+            "Every @screens scene renders correctly under every built-in theme (a loop in the screens spec, run on the review pass)"
+          ]
+        }
+      ],
+      "labels": [
+        "redesign"
+      ]
+    }
+  ]
+}

@@ -143,6 +143,7 @@ def epic_body(epic: dict, project: dict) -> str:
 def story_labels(story: dict, epic: dict) -> list[str]:
     labels = ["type:story", f"phase:{epic['phase']}", f"size:{story['size']}",
               f"track:{story.get('track', epic.get('track', 'core'))}"]
+    labels += [l for l in [*epic.get("labels", []), *story.get("labels", [])] if l not in labels]
     if story.get("human"):
         labels.append("human")
     if not story.get("criteria"):
@@ -276,6 +277,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--repo", required=True, help="OWNER/NAME")
     ap.add_argument("--file", default=str(HERE / "issues.json"))
+    ap.add_argument("--map", help="where to write the ID -> issue map (default: next to --file, as <name>.map.json)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--project", action="store_true", help="also create a Projects board and add every issue")
     ap.add_argument("--only", nargs="*", help="limit to these epic IDs, e.g. --only E1 E2")
@@ -287,14 +289,23 @@ def main() -> int:
     if args.only:
         epics = [e for e in epics if e["id"] in set(args.only)]
 
-    code, _ = gh(["auth", "status"], ok_codes=(0, 1))
-    if code != 0 and not args.dry_run:
-        print("gh is not authenticated; run `gh auth login` first")
-        return 1
+    if not args.dry_run:
+        code, _ = gh(["auth", "status"], ok_codes=(0, 1))
+        if code != 0:
+            print("gh is not authenticated; run `gh auth login` first")
+            return 1
 
     ensure_labels(args.repo, data["labels"], args.dry_run)
     milestones = ensure_milestones(args.repo, data["milestones"], args.dry_run)
+    # Phase N -> the Nth milestone of the file. A file with one milestone (a themed backlog such as
+    # dev-docs/redesign/issues.json) puts every phase on that milestone; `milestone` on an epic wins.
     phase_to_ms = {i + 1: milestones[m["title"]] for i, m in enumerate(data["milestones"])}
+    default_ms = milestones[data["milestones"][-1]["title"]] if data["milestones"] else None
+
+    def milestone_of(epic: dict):
+        if epic.get("milestone"):
+            return milestones[epic["milestone"]]
+        return phase_to_ms.get(epic["phase"], default_ms)
 
     existing = {} if args.dry_run else load_existing_issues(args.repo)
     print(f"Existing issues with IDs: {len(existing)}")
@@ -303,8 +314,8 @@ def main() -> int:
     print("Epics")
     for epic in epics:
         create_or_get(args.repo, existing, epic["id"], f"{epic['id']} {epic['title']}",
-                      epic_body(epic, project), ["type:epic", f"phase:{epic['phase']}", f"track:{epic.get('track', 'core')}"],
-                      phase_to_ms[epic["phase"]], args.dry_run)
+                      epic_body(epic, project), ["type:epic", f"phase:{epic['phase']}", f"track:{epic.get('track', 'core')}", *epic.get("labels", [])],
+                      milestone_of(epic), args.dry_run)
 
     # 2. stories
     print("Stories")
@@ -312,7 +323,7 @@ def main() -> int:
         for story in epic["stories"]:
             create_or_get(args.repo, existing, story["id"], f"{story['id']} {story['title']}",
                           story_body(story, epic, project), story_labels(story, epic),
-                          phase_to_ms[epic["phase"]], args.dry_run)
+                          milestone_of(epic), args.dry_run)
 
     # 3. sub-issues (epic -> story)
     print("Sub-issues (epic → story)")
@@ -347,8 +358,10 @@ def main() -> int:
 
     if not args.dry_run:
         mapping = {k: {"number": v["number"], "id": v["id"], "url": v.get("html_url", "")} for k, v in existing.items()}
-        (HERE / "issues.map.json").write_text(json.dumps(mapping, indent=2), encoding="utf-8")
-        print("Wrote issues.map.json")
+        src = Path(args.file)
+        map_path = Path(args.map) if args.map else src.with_name(src.stem + ".map.json")
+        map_path.write_text(json.dumps(mapping, indent=2), encoding="utf-8")
+        print(f"Wrote {map_path}")
     print("Done.")
     return 0
 
