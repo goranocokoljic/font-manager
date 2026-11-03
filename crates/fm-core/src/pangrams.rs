@@ -276,6 +276,11 @@ mod tests {
         assert_eq!(all["en"].kind, Kind::Pangram);
         assert_eq!(all["zh-Hans"].kind, Kind::Sample);
         assert_eq!(all["ko"].source, Source::Project);
+        // E42.10: only texts found on Wikipedia carry that source.
+        assert_eq!(all["hr"].source, Source::Wikipedia);
+        assert_eq!(all["sl"].source, Source::Wikipedia);
+        assert_eq!(all["bs"].source, Source::Project);
+        assert_eq!(all["mk"].source, Source::Project);
     }
 
     #[test]

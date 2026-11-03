@@ -37,7 +37,12 @@ a pangram for every script in `data/charsets`, and a pangram for every preset th
 ## Sources
 
 - **Wikipedia** — the pangrams marked `"source": "wikipedia"` are the well-known
-  pangrams of each language, as Wikipedia's list of pangrams gives them.
+  pangrams of each language, as Wikipedia's list of pangrams gives them. The Croatian
+  pangram is from [hr.wikipedia.org/wiki/Pangram](https://hr.wikipedia.org/wiki/Pangram)
+  and the Slovene pangram is from
+  [sl.wikipedia.org/wiki/Pangram](https://sl.wikipedia.org/wiki/Pangram).
 - **Project (`"source": "project"`)** — the Chinese and Korean sample sentences are
   written here only from the characters of the `data/charsets` basics sets, so a font
-  that passes the preset can show them.
+  that passes the preset can show them. The Bosnian and Macedonian pangrams are also
+  marked `project`: no published source was found for them. The tests check only their
+  letters, so a native speaker should check their wording.
