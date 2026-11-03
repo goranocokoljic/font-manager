@@ -131,7 +131,11 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   (review 35) and `UiEmptyState` (review 45); every inspector tab head is `InspectorTabHead`;
   a component that shows one face in its own font holds it with `preview/useHeldFace.ts`, not a
   local acquire/release copy (review 50). Every number field is `UiNumberField`; a caller that
-  saves listens to `commit` (Enter, blur, − / +), never to every keystroke or a timer (review 60). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
+  saves listens to `commit` (Enter, blur, − / +), never to every keystroke or a timer (review 60). Every
+  text button is `UiButton` (iteration 61): quiet, accent text while pressed or expanded; its hover
+  tint and disabled fade come from the global `button` baseline in `theme.css`, so neither
+  `UiButton` nor a caller adds a hover background of its own (a second tint doubles it), and a
+  local `.button`/`.toggle` text-button class is a bug (review 65). Every badge and every expand/fold twisty uses them; a local `.badge` class, a
   ▸/▾ text glyph or a sidebar heading with its own fold markup is a bug. Text for screen readers only uses the
   global `.sr-only` class in `theme.css`; a local copy of that rule is a bug (review 15). The rest — Button, Toggle, Slider
   (with value field), Chip, Field, Tabs, EmptyState — are built **by the first visible
@@ -202,11 +206,12 @@ screenshot of `list` is not visibly different from its "before", the iteration p
 wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 55
 one-style families have no chevron (6), the Studio is two bars with its help behind the info
 button (17), the Filters drawer names features (8) and Features shows each sample off and on (8).
-Since review 60 every number field on the first screen is `UiNumberField` (26). The loudest chrome
-left on the first screen is the bordered text buttons — Options, Columns, Find similar, Copy CSS —
-next to quiet icon buttons: there is still no shared quiet `UiButton` (26). Next: that button, the
-last three `type="number"` inputs and the tags `datalist` (26), the Tags empty text in the sidebar
-(21), the hover weight range with a `grid-expanded` scene (7), "Lock width" beside the page (17).
+Since review 60 every number field on the first screen is `UiNumberField` (26); since review 65
+every text button in the main window is one quiet `UiButton` (26) and the sidebar Tags empty is a
+title and a key chip (21). The first screen's chrome is now quiet; the next wins are in the
+specimens and the second minute: the hover weight range with a `grid-expanded` scene (7), "Lock
+width" beside the page (17), the Settings nav focus ring on load, then the last three
+`type="number"` inputs and the tags `datalist` (26).
 Every feature adds a scene to `shots.mjs` in the same
 iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
@@ -317,8 +322,9 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 20. **Collections UX.** Drag families onto sidebar collections; colour per collection; a
     collection header shows a mini specimen strip of its fonts.
 21. **Designed empty states.** Typographic, no illustrations, exactly one action that fills
-    the state. `UiEmptyState` is done (iteration 41). Left: Tags, Layout, Catalog and Quick
-    Collection empties are still plain text; no scene for "no matches" or "empty library".
+    the state. `UiEmptyState` is done (iteration 41); the sidebar Tags empty is a quiet title
+    plus a key chip (iteration 64, review 65). Left: Layout, Catalog and Quick Collection empties
+    are still plain text; no scene for "no matches" or "empty library".
 22. **First run (API?).** Detect system font folders, offer to add them, three-step welcome.
 23. **Online catalogues (API?)** browsed with the same list UI; install from the row.
 
@@ -328,9 +334,13 @@ iteration; a change that alters what `?face=` shows checks every scene that uses
 26. Hover / focus / active audit across every control, and the native-input sweep.
     Done: Settings nav and captions (iteration 38), Features knob and note fields (26, 28),
     `UiNumberField` in the license form, Settings › Advanced and the Preview bar (iterations
-    57–59, review 60: saves on `commit`). Left, in order: one quiet `UiButton` for the bordered
-    text buttons (Options, Columns, Find similar, Copy CSS, Close in Settings/Problems);
-    `type="number"` in BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; a
-    designed date picker (purchase date is a plain text field with a `YYYY-MM-DD` hint); the
-    Problems view's bordered chip row and accent-outlined "Recommended" pill.
+    57–59, review 60: saves on `commit`). One quiet `UiButton` for every text button in the
+    toolbar, Preview bar, inspector heads (Copy CSS, Reset, Developer copies), Layout and Studio
+    bars, Settings, Problems and Conflicts (iterations 61–63, review 65). Left, in order: the
+    Settings nav shows the focus ring on load (since review 40); `type="number"` in
+    BlockProperties, SmartRuleRow, GlyphCompare; the tags `datalist`; the bordered buttons left in
+    dialogs (CompareSheet, CatalogDownload/Install, LocalApiSettings, Axes presets and "Pin this
+    instance"); the toolbar's `.toggle.icon` buttons onto `UiIconButton`; a designed date picker
+    (purchase date is a plain text field with a `YYYY-MM-DD` hint); a `preview-options-open`
+    scene.
 27. Accessibility: contrast ≥ 4.5:1 for UI text in both themes; full keyboard reachability.

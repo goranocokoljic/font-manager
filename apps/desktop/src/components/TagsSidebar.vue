@@ -164,8 +164,7 @@ function countLabel(n: number): string {
   padding: 4px 8px;
 }
 .empty-title {
-  color: var(--fm-fg);
-  font-size: var(--fm-text-md);
+  color: var(--fm-muted);
 }
 .empty-hint {
   color: var(--fm-muted);

@@ -6,6 +6,7 @@
 // The default slot adds the parent's own controls at the end of the bar. A Pairing Studio
 // panel passes its own store (E24.3); without one, the library's store is used.
 import { computed, ref, useId } from 'vue';
+import UiButton from './ui/UiButton.vue';
 import { errorMessage, formatDate, t } from '../i18n';
 import { type TextLayoutsStore, useTextLayoutsStore } from '../stores/textLayouts';
 
@@ -73,53 +74,43 @@ const when = (iso: string) => {
     role="toolbar"
     :aria-label="t('textLayout.file.toolbar')"
   >
-    <button
-      type="button"
-      class="toggle"
+    <UiButton
       :disabled="!layouts.dirty || layouts.busy"
       :title="t('textLayout.file.saveTitle')"
       @click="save"
     >
       {{ t('common.save') }}
-    </button>
-    <button
-      type="button"
-      class="toggle"
+    </UiButton>
+    <UiButton
       :disabled="!layouts.dirty || layouts.busy"
       :title="t('textLayout.file.revertTitle')"
       @click="revert"
     >
       {{ t('textLayout.file.revert') }}
-    </button>
-    <button
-      type="button"
-      class="toggle"
+    </UiButton>
+    <UiButton
       :disabled="!layouts.saved || layouts.busy"
       :title="t('textLayout.file.duplicateTitle')"
       @click="duplicate"
     >
       {{ t('textLayout.file.duplicate') }}
-    </button>
-    <button
+    </UiButton>
+    <UiButton
       v-if="canReset"
-      type="button"
-      class="toggle"
       :disabled="layouts.busy"
       :title="t('textLayout.file.resetTitle')"
       @click="reset"
     >
       {{ t('textLayout.file.resetOriginal') }}
-    </button>
-    <button
-      type="button"
-      class="toggle"
+    </UiButton>
+    <UiButton
       :aria-controls="historyId"
       :aria-expanded="historyOpen"
       :disabled="!layouts.saved"
       @click="toggleHistory"
     >
       {{ t('textLayout.file.history') }}
-    </button>
+    </UiButton>
     <span v-if="layouts.dirty" class="note">{{ t('textLayout.file.unsaved') }}</span>
     <span class="note" role="status">{{
       layouts.error ? errorMessage(layouts.error) : (status?.() ?? '')
@@ -141,16 +132,14 @@ const when = (iso: string) => {
         }}</span>
         <span>{{ v.name ?? t('textLayout.file.unreadable') }}</span>
         <span class="note">{{ when(v.savedAt) }}</span>
-        <button
-          type="button"
-          class="toggle"
+        <UiButton
           :disabled="v.broken !== null || layouts.busy"
           :title="v.broken ?? t('textLayout.file.restoreTitle')"
           :aria-label="t('textLayout.file.restoreLabel', { number: String(v.number) })"
           @click="restore(v.number)"
         >
           {{ t('textLayout.file.restore') }}
-        </button>
+        </UiButton>
       </li>
     </ol>
   </section>
@@ -165,24 +154,6 @@ const when = (iso: string) => {
   padding: var(--fm-space-1) var(--fm-space-4);
   border-bottom: 1px solid var(--fm-border);
   font-size: var(--fm-text-sm);
-}
-.toggle {
-  padding: var(--fm-space-1) var(--fm-space-2);
-  border: 0;
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-  transition: background-color var(--fm-motion-fast) var(--fm-ease);
-}
-.toggle:hover:not(:disabled) {
-  background-color: var(--fm-hover);
-}
-.toggle:disabled {
-  opacity: 0.5;
-}
-.toggle[aria-expanded='true'] {
-  color: var(--fm-accent);
 }
 .actions.inline {
   padding: 0;

@@ -11,6 +11,7 @@ import { errorMessage, t } from '../i18n';
 import { axisStep, useAxesStore } from '../stores/axes';
 import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
+import UiButton from './ui/UiButton.vue';
 import UiSelect from './ui/UiSelect.vue';
 import { useCollectionsStore } from '../stores/collections';
 import { useSelectionStore } from '../stores/selection';
@@ -164,14 +165,13 @@ onMounted(() => {
           :label="t('axes.cssLabel')"
           :css="() => axesSet.css(faceId!)"
         />
-        <button
-          type="button"
+        <UiButton
           class="reset"
           :disabled="faceId === null || !axesSet.isChanged(faceId)"
           @click="reset"
         >
           {{ t('common.reset') }}
-        </button>
+        </UiButton>
       </InspectorTabHead>
       <ul class="plain list" :aria-label="t('axes.list')">
         <li v-for="a in axes" :key="a.tag" class="axis" :data-tag="a.tag">
@@ -265,7 +265,6 @@ onMounted(() => {
   margin: 0;
   color: var(--fm-muted);
 }
-.reset,
 .preset,
 .pin-button {
   padding: 2px 10px;
@@ -275,7 +274,6 @@ onMounted(() => {
   color: inherit;
   font: inherit;
 }
-.reset:disabled,
 .pin-button:disabled {
   border-color: var(--fm-border);
   color: var(--fm-muted);

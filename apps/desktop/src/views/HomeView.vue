@@ -14,6 +14,7 @@ import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
+import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
 import { hasChosenFilters } from '../search/chips';
@@ -565,15 +566,14 @@ function openFace(face: FaceId): void {
           </template>
           <template v-else-if="fontList.families.length && mode === 'layout'">
             <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
-              <button
-                type="button"
-                class="toggle studio"
+              <UiButton
+                class="studio"
                 :disabled="!canOpenStudio"
                 :title="t('home.openStudioTitle')"
                 @click="openStudio"
               >
                 {{ t('home.openStudio') }}
-              </button>
+              </UiButton>
             </LayoutActions>
             <FontLayout
               :layout="shownLayout"
@@ -714,10 +714,9 @@ function openFace(face: FaceId): void {
   color: inherit;
   font: inherit;
 }
-/* In the layout file bar: its own end, the bar's size. */
-.toggle.studio {
+/* In the layout file bar: at its own end. */
+.studio {
   margin-inline-start: auto;
-  padding: 2px 8px;
 }
 .toggle.icon {
   display: inline-flex;

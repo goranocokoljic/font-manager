@@ -25,12 +25,12 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 18 Drag out / copy CSS
 - [ ] 19 Problems & Duplicates triage
 - [ ] 20 Collections UX
-- [x] 21 Empty states (iteration 41; iteration 64: sidebar Tags empty = title + key chip: UiEmptyState — headline, one line, one action; empty collection, no matches, empty library)
+- [ ] 21 Empty states (iteration 41: UiEmptyState — headline, one line, one action; empty collection, no matches, empty library; iteration 64: sidebar Tags empty = quiet title + key chip; Layout, Catalog, Quick Collection empties remain)
 - [ ] 22 First run
 - [ ] 23 Online catalogues
 - [ ] 24 Motion pass
 - [ ] 25 Overlay scrollbars
-- [ ] 26 Hover/focus/active audit (iterations 61–63: quiet UiButton on Options, Find similar, Columns, Copy CSS; Problems view)
+- [ ] 26 Hover/focus/active audit (iterations 61–63 + review 65: one quiet UiButton for every text button in the toolbar, Preview bar, inspector heads, Layout/Studio bars, Settings, Problems, Conflicts; three `type="number"` inputs and the tags `datalist` remain)
 - [ ] 27 Accessibility
 
 ## Entry template (at most 25 lines per entry)
@@ -370,41 +370,30 @@ Four iterations since review 55 (56–59); all four graded.
 **Next five:** item 26 — a quiet `UiButton`, moved onto every bordered text button in the toolbar, Preview bar and inspector (first screen) → item 26 rest (last three `type="number"`, tags `datalist`) → item 21 (Tags empty in the sidebar on `UiEmptyState`) → item 7 (hover weight range, `grid-expanded` scene) → item 17 ("Lock width" beside the page). Every iteration takes before and after shots of a scene that shows its change; an iteration with no shots is graded 2 at most.
 
 ## Iteration 61 — 2026-11-03 — One quiet UiButton for the bordered text buttons
-**Critique (before):** The `list` shot has one loud pattern left: bordered text buttons ("Options" in the Preview bar, "Find similar" in the inspector) sit next to borderless icon buttons. The boxes pull the eye away from the specimens. The rest (rows, sidebar, selection bar) is calm and consistent.
-**Why:** Item 26's first "left" entry, and the loudest chrome on the first screen. Principle 1: chrome is quiet.
-**What changed:** Built `ui/UiButton` (no border, muted text, `--fm-hover` tint, accent text while `aria-pressed` / `aria-expanded`). Moved Options (Preview bar), Find similar (Info header), Columns (Table) and Copy CSS (Axes, Features) onto it; the local border rules are gone. `TableColumnsMenu` reads the button via `$el`.
-**Backlog:** item 26 still open (more bordered buttons remain: Close in Settings/Problems, Preview options row buttons, Reset).
-**Shots:** `.harness/redesign/shots/61/` (before), `61-after/` (after): `list` and `inspector-info` changed, both themes.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-61.log`).
-**Follow-ups:** move the Preview options-row buttons (alignment, Reset), Settings/Problems Close, Problems chip row onto `UiButton`; then the last three `type="number"` inputs and tags `datalist`. Table shot not opened (Columns only changes the same way).
-**Dependencies:** none. **Reverted:** no.
+Built `ui/UiButton` and moved Options, Find similar, Columns and Copy CSS onto it, so the `list` shot lost its last bordered text buttons.
 
 ## Iteration 62 — 2026-11-03 — Problems view: quiet buttons, no chip boxes
-**Critique (before):** The Problems view is a wall of boxes: seven bordered filter chips, a bordered Close, bordered Keep mine / Use theirs / Keep this one on every row, and an outlined "Recommended" pill. All of it has the same weight as the table, so nothing leads. The table itself is tidy and the monospace paths read well.
-**Why:** Item 26's left list (Close, Problems chip row, Recommended pill). Principle 1: chrome is quiet. The `list` shot has no bordered text buttons left, so this is the next loudest screen.
-**What changed:** `ProblemsView` uses `UiButton` for Close, the filter row (accent text while pressed), Keep mine, Use theirs, Keep this one, Undo and Cancel. "Recommended" is a `UiBadge` (accent tone). The confirm button in the dialog keeps its accent border as the one primary action. Local `.toggle` and `.badge` CSS removed.
-**Backlog:** item 26 still open.
-**Shots:** `.harness/redesign/shots/62/` (before), `62-after/`: `problems` changed. Dark opened; light not opened.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-62.log`, run before the final chip fix; `problems` specs re-run: 7 passed).
-**Follow-ups:** the quiet resolve buttons are faint (consider a `primary` look for the single row action); Preview options-row buttons (alignment, Reset), Settings Close, ConflictsView button; last three `type="number"` inputs; tags `datalist`.
-**Dependencies:** none. **Reverted:** no.
+The Problems filter row, Close and every resolve button became `UiButton`s and "Recommended" a `UiBadge` (made quiet in review 65).
 
 ## Iteration 63 — 2026-11-03 — Settings, Conflicts and Preview options: quiet buttons
-**Critique (before):** Shots were taken but not opened: no scene shows these screens. From the code, Settings and Conflicts still draw bordered Close, Add folder, Check for updates, Change and Remove buttons, and the Preview options row has bordered alignment buttons and Reset. They are the last bordered text buttons.
-**Why:** Item 26's follow-ups from iterations 61–62. Principle 1: chrome is quiet.
-**What changed:** `SettingsView` (8 buttons), `ConflictsView` (Close) and `PreviewControls` (alignment, Reset) use `UiButton`; three local `.button` CSS blocks removed. `UiButton` gained a disabled look (50 % opacity).
-**Backlog:** item 26 still open.
-**Shots:** `.harness/redesign/shots/63/` (before only; no scene changes — Settings and the Options row have no scene; honest grade: invisible on the `list` shot).
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-63.log`).
-**Follow-ups:** add `settings` and `preview-options-open` scenes; StudioView and ProblemsView still have local `.button` CSS; last three `type="number"` inputs; tags `datalist`.
-**Dependencies:** none. **Reverted:** no.
+Settings (8 buttons), Conflicts Close and the Preview options row (alignment, Reset) moved onto `UiButton`; taken without opening a shot.
 
 ## Iteration 64 — 2026-11-03 — Sidebar Tags empty state: title and key chip
-**Critique (before):** The `list` shot is calm: quiet buttons, clear rows, specimens lead. The worst spot left in the sidebar is the Tags empty text, a grey two-line sentence with "Press T" buried in it, which reads like body copy among tidy rows. The Options button and the Pangram/English selects are still the heaviest chrome in the Preview bar.
-**Why:** Item 21 follow-up and the only change visible in the first three seconds on the sidebar. Principle 1: chrome is quiet.
-**What changed:** `TagsSidebar` empty row is a title ("No tags yet") plus a small hint with the shortcut in a `<kbd>` chip. Locale keys `tags.empty` (shortened) and `tags.emptyHint` added in en and de.
-**Backlog:** item 21 still open (Layout, Catalog, Quick Collection empties).
-**Shots:** `.harness/redesign/shots/64/` (before), `64-after/`: `list` dark opened. Light not opened.
-**Verified:** typecheck, Prettier clean, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-64.log`).
-**Follow-ups:** Quick Collection "0" row has no empty hint; StudioView and ProblemsView local `.button` CSS; last three `type="number"` inputs; tags `datalist`; `settings` and `preview-options-open` scenes.
-**Dependencies:** none. **Reverted:** no.
+The Tags empty sentence became a short title plus a "Select fonts, then press T" hint with the key in a `<kbd>` chip.
+
+## Review 65 — 2026-11-03
+Four iterations since review 60 (61–64); all four graded.
+**Grades:** iter 61 **3** — the right component and the one change that moved the `list` shot (Options, Find similar lost their boxes); but `UiButton` drew its own `--fm-hover` background on top of the global `button` hover gradient (a doubled tint), and three older quiet-button copies stayed (LayoutActions `.toggle`, Studio "Add panel", HomeView "Open in Pairing Studio"). Iter 62 **3** — the Problems view finally has a lead (the table); but "Recommended" became an accent badge, against the one-accent rule; light not opened. Iter 63 **2** — eleven buttons moved, but no shot opened and the log said Settings has no scene (`settings`, `settings-activation`, `settings-appearance` exist); its disabled rule repeated the global one. Iter 64 **3** — the Tags empty reads better than a sentence; the title in full `--fm-fg` looked like a tag row; it ticked item 21 `[x]` with a garbled status line while its entry said "still open"; `lint:js` was not run (Prettier only).
+**Regressions:** none in views, keyboard, tests or list performance (59.8 fps). Doubled hover tint on every `UiButton` (61; fixed).
+**Drift:** an accent badge for a non-selection state (62); literal disabled opacity twice (63). No new colours, fonts, radii or native controls.
+**Pulled apart:** 61's `UiButton` against 48's quiet `LayoutActions` buttons and the Studio's local `.button` — three quiet text buttons, three hover rules. Now one.
+**Fixed:**
+- `UiButton`: no own hover background or disabled rule (the `theme.css` baseline draws both); `aria-disabled` fades it.
+- Onto `UiButton`, local CSS deleted: `LayoutActions` (Save, Revert, Duplicate, Reset, History, Restore), Studio "Add panel", Layout "Open in Pairing Studio" (was bordered), Axes/Features "Reset" and Developer "Copy" / "Copy for Font Switch" (were bordered beside a quiet Copy CSS).
+- `ProblemsView`: "Recommended" is a quiet `UiBadge`.
+- `TagsSidebar`: the empty title is muted, so it does not read as a tag.
+- Backlog status: item 21 back to `[ ]` (Layout, Catalog, Quick Collection empties remain); item 26 line current.
+**Rule amended (DESIGN.md):** every text button is `UiButton`; its hover and disabled look come from the global baseline, and no caller adds a second tint. Items 21, 26 and the three-second note rewritten.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 272 passed / 16 skipped / 1 flake (`text-layouts.spec.ts:446`, the list did not load in time; the file and `pairing-studio.spec.ts` re-run: 29 passed) (`.harness/redesign/e2e-review-65.log`, `e2e-review-65-recheck.log`). Shots `review-65/` (before, 52; some edits landed mid-run) and `review-65-after/` (52): all 26 scenes render in light and dark, comfortable and compact.
+**Not fixed, noted:** Settings nav focus ring on load; Axes presets and "Pin this instance" bordered; dialog buttons (CompareSheet, Catalog, Local API) bordered; toolbar `.toggle.icon` is a second icon-button copy; an empty collection shows "Clear filters" with no filters.
+**Next five:** item 7 (hover weight range on cards + a `grid-expanded` scene — a change inside the specimens) → item 17 ("Lock width" beside the page; "Add panel" as an icon) → item 26 (Settings nav focus ring on load; toolbar `.toggle.icon` onto `UiIconButton`) → item 26 rest (three `type="number"`, tags `datalist`) → item 21 rest (Quick Collection / Layout empties). Open every shot you take, both themes; an iteration whose log contradicts its shots or its tick is graded 2 at most.

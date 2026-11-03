@@ -16,6 +16,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import StudioPanel from '../components/StudioPanel.vue';
+import UiButton from '../components/ui/UiButton.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
 import { t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
@@ -62,7 +63,7 @@ function setPanelRef(panel: number, c: unknown): void {
   if (c) panelRefs.set(panel, c as { focus: () => void });
   else panelRefs.delete(panel);
 }
-const addButton = ref<HTMLButtonElement | null>(null);
+const addButton = ref<InstanceType<typeof UiButton> | null>(null);
 
 /** Adds a copy of the current panel at the end and moves the focus to it. */
 async function addPanel(): Promise<void> {
@@ -77,7 +78,7 @@ async function addPanel(): Promise<void> {
 function closePanel(panel: number): void {
   studio.closePanel(panel);
   if (current.value === panel) current.value = null;
-  addButton.value?.focus();
+  (addButton.value?.$el as HTMLElement | undefined)?.focus();
 }
 
 /** Shows another layout in the first panel; the library's Layout mode keeps its own pick. */
@@ -129,10 +130,8 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         :class="{ on: helpOpen }"
         @click="helpOpen = !helpOpen"
       />
-      <button
+      <UiButton
         ref="addButton"
-        type="button"
-        class="button"
         :aria-disabled="full"
         :title="
           full ? t('studio.panelsFull', { max: String(MAX_PANELS) }) : t('studio.addPanelTitle')
@@ -140,7 +139,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         @click="addPanel"
       >
         {{ t('studio.addPanel') }}
-      </button>
+      </UiButton>
       <UiIconButton
         icon="close"
         :label="t('common.close')"
@@ -199,22 +198,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 .label {
   margin-inline-end: 4px;
   color: var(--fm-muted);
-}
-.button {
-  padding: 2px var(--fm-space-2);
-  border: 0;
-  border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: var(--fm-muted);
-  font: inherit;
-  transition: background-color var(--fm-motion-fast) var(--fm-ease);
-}
-.button:hover {
-  background-color: var(--fm-hover);
-  color: var(--fm-fg);
-}
-.button[aria-disabled='true'] {
-  opacity: 0.5;
 }
 .bar .on {
   color: var(--fm-accent);

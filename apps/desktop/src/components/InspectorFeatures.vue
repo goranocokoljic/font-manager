@@ -13,6 +13,7 @@ import { useSelectionStore } from '../stores/selection';
 import { useHeldFace } from '../preview/useHeldFace';
 import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
+import UiButton from './ui/UiButton.vue';
 
 const selection = useSelectionStore();
 const features = useFeaturesStore();
@@ -75,14 +76,13 @@ function reset(): void {
           :label="t('features.cssLabel')"
           :css="() => features.css(faceId!)"
         />
-        <button
-          type="button"
+        <UiButton
           class="reset"
           :disabled="faceId === null || !features.isChanged(faceId)"
           @click="reset"
         >
           {{ t('common.reset') }}
-        </button>
+        </UiButton>
       </InspectorTabHead>
       <ul v-if="switchable.length" class="plain list" :aria-label="t('features.list')">
         <li v-for="f in switchable" :key="f.tag" class="row">
@@ -128,18 +128,6 @@ function reset(): void {
 }
 .placeholder {
   margin: 0;
-  color: var(--fm-muted);
-}
-.reset {
-  padding: 2px 10px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.reset:disabled {
-  border-color: var(--fm-border);
   color: var(--fm-muted);
 }
 h3 {

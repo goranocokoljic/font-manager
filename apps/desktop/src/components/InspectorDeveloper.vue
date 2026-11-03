@@ -13,6 +13,7 @@ import { useFeaturesStore } from '../stores/features';
 import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useSelectionStore } from '../stores/selection';
 import InspectorTabHead from './InspectorTabHead.vue';
+import UiButton from './ui/UiButton.vue';
 import { useCopy } from './useCopy';
 
 const selection = useSelectionStore();
@@ -80,28 +81,24 @@ watch(
           <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
           <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
         </span>
-        <button
-          type="button"
-          class="button"
+        <UiButton
           :aria-label="t('developer.copyLabel')"
           :disabled="!snippet"
           @click="copy(snippet)"
         >
           {{ t('common.copy') }}
-        </button>
+        </UiButton>
         <span class="status" aria-live="polite" data-testid="font-switch-status">
           <template v-if="switchStatus === 'copied'">{{ t('common.copied') }}</template>
           <template v-else-if="switchStatus === 'failed'">{{ t('copy.failed') }}</template>
         </span>
-        <button
-          type="button"
-          class="button"
+        <UiButton
           data-testid="copy-font-switch"
           :aria-label="t('fontSwitch.copyLabel', { name: faceName })"
           @click="copyForFontSwitch"
         >
           {{ t('fontSwitch.copy') }}
-        </button>
+        </UiButton>
       </InspectorTabHead>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <pre v-else class="snippet" data-testid="css-snippet"><code>{{ snippet }}</code></pre>
@@ -115,18 +112,6 @@ watch(
 }
 .placeholder {
   margin: 0;
-  color: var(--fm-muted);
-}
-.button {
-  padding: 2px 10px;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-}
-.button:disabled {
-  border-color: var(--fm-border);
   color: var(--fm-muted);
 }
 .status {

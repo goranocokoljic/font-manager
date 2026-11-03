@@ -210,9 +210,7 @@ function when(at: string): string {
             <li v-for="c in g.copies" :key="c.path" class="copy">
               <span class="path">{{ c.path }}</span>
               <span v-if="c.version" class="muted">{{ c.version }}</span>
-              <UiBadge v-if="c.keep" tone="accent">{{
-                t('problems.duplicates.recommended')
-              }}</UiBadge>
+              <UiBadge v-if="c.keep">{{ t('problems.duplicates.recommended') }}</UiBadge>
               <UiButton
                 :aria-label="t('problems.duplicates.keepLabel', { path: c.path })"
                 @click="store.planKeep(g, c.path)"
