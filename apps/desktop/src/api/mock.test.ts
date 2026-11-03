@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FmClient } from './client';
-import { createMockClient } from './mock';
-import type { CollectionId, FaceId, Filters, Rule, RuleGroup } from './types';
+import { createMockClient, mockPermissions, mockWebUse } from './mock';
+import type { CollectionId, FaceId, Filters, LicenseInfo, Rule, RuleGroup } from './types';
 
 /** The faces a search with `filters` finds, sorted. */
 async function facesOf(client: FmClient, filters: Filters): Promise<FaceId[]> {
@@ -272,5 +272,63 @@ describe('MockApi thumbnails (E35.5)', () => {
         code: 'notFound',
       },
     );
+  });
+});
+
+describe('MockApi license permissions (E42.12)', () => {
+  const info = (l: Partial<LicenseInfo>): LicenseInfo => ({
+    description: null,
+    url: null,
+    openLicense: null,
+    embedding: 'installable',
+    declared: null,
+    ...l,
+  });
+
+  it('follows the order of the Rust rule', () => {
+    const source = (l: Partial<LicenseInfo>) => mockPermissions(info(l))?.source ?? null;
+    expect(source({})).toBeNull();
+    expect(source({ declared: 'unknown' })).toBeNull();
+    expect(source({ openLicense: 'ofl' })).toBe('open-license');
+    expect(source({ embedding: 'editable' })).toBe('embedding-bits');
+    expect(source({ embedding: 'restricted', openLicense: 'ofl' })).toBe('embedding-bits');
+    expect(source({ declared: 'desktop', openLicense: 'ofl' })).toBe('declared');
+    expect(source({ declared: 'app' })).toBe('declared');
+    expect(source({ declared: 'app', embedding: 'restricted', openLicense: 'ofl' })).toBe(
+      'declared',
+    );
+    expect(source({ declared: 'app', openLicense: 'ofl' })).toBe('open-license');
+  });
+
+  it('never disagrees with the answer on web use', () => {
+    const embeddings = ['installable', 'restricted', 'previewAndPrint', 'editable'] as const;
+    const opens = [null, 'ofl', 'apache', 'ufl', 'mit'] as const;
+    const declared = [null, 'desktop', 'web', 'app', 'trial', 'personalOnly', 'unknown'] as const;
+    for (const embedding of embeddings) {
+      for (const openLicense of opens) {
+        for (const d of declared) {
+          const l = info({ embedding, openLicense, declared: d });
+          const p = mockPermissions(l);
+          if (!p) continue;
+          const mentions = p.may.some((line) => line.includes('websites'));
+          expect(mentions, JSON.stringify(l)).toBe(mockWebUse(l).ok);
+        }
+      }
+    }
+  });
+
+  it('getFace gives the lines of the face and follows a declaration', async () => {
+    const client = createMockClient();
+    const face = await client.getFace(7);
+    expect(face.license.permissions?.source).toBe('embedding-bits');
+    await client.declareLicense({
+      family: face.face.family,
+      licenseType: 'desktop',
+      seats: null,
+      purchaseDate: null,
+    });
+    const declared = await client.getFace(7);
+    expect(declared.license.permissions?.source).toBe('declared');
+    expect(declared.license.permissions?.mayNot).toContain('Embed it on websites');
   });
 });

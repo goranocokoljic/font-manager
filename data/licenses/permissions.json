@@ -1,0 +1,94 @@
+{
+  "$schema": "./permissions.schema.json",
+  "openLicenses": {
+    "ofl": {
+      "may": [
+        "Use it in personal and commercial work",
+        "Embed it in documents, websites and apps",
+        "Change it and share your version",
+        "Bundle it with software you sell"
+      ],
+      "mayNot": [
+        "Sell the font files on their own",
+        "Give a changed version a Reserved Font Name",
+        "Share it or a changed version under another license"
+      ]
+    },
+    "apache": {
+      "may": [
+        "Use it in personal and commercial work",
+        "Embed it in documents, websites and apps",
+        "Change it and share your version",
+        "Sell software that includes it"
+      ],
+      "mayNot": [
+        "Remove the license and copyright notices when you share it",
+        "Use the authors' trademarks without permission"
+      ]
+    },
+    "ufl": {
+      "may": [
+        "Use it in personal and commercial work",
+        "Embed it in documents, websites and apps",
+        "Change it and share your version",
+        "Bundle it with software you sell"
+      ],
+      "mayNot": [
+        "Sell the font files on their own",
+        "Keep the original name on a substantially changed version",
+        "Share it or a changed version under another license"
+      ]
+    },
+    "mit": {
+      "may": [
+        "Use it in personal and commercial work",
+        "Embed it in documents, websites and apps",
+        "Change it and share your version",
+        "Sell copies of it"
+      ],
+      "mayNot": ["Remove the copyright and license notice from copies"]
+    }
+  },
+  "declared": {
+    "desktop": {
+      "may": ["Install it and use it in design and office apps", "Use it in print and in images"],
+      "mayNot": ["Embed it on websites", "Embed it in apps"]
+    },
+    "web": {
+      "may": ["Embed it on websites"],
+      "mayNot": ["Install it for desktop work", "Embed it in apps"]
+    },
+    "app": {
+      "may": ["Embed it in apps"],
+      "mayNot": ["Install it for desktop work", "Embed it on websites"]
+    },
+    "trial": {
+      "may": ["Try it in layouts and mockups"],
+      "mayNot": ["Use it in published or paid work", "Embed it on websites"]
+    },
+    "personalOnly": {
+      "may": ["Use it in personal projects"],
+      "mayNot": ["Use it in commercial work", "Embed it on websites"]
+    }
+  },
+  "embedding": {
+    "restricted": {
+      "may": [],
+      "mayNot": [
+        "Embed it in files you share without the owner's permission",
+        "Embed it on websites without a web license"
+      ]
+    },
+    "previewAndPrint": {
+      "may": ["Embed it in documents people view and print"],
+      "mayNot": [
+        "Embed it in documents people can edit",
+        "Embed it on websites without a web license"
+      ]
+    },
+    "editable": {
+      "may": ["Embed it in documents people view, print and edit"],
+      "mayNot": ["Embed it on websites without a web license"]
+    }
+  }
+}

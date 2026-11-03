@@ -2240,6 +2240,104 @@ fn with_fs_type(file: &str, fs_type: u16, folder: &Path) {
     std::fs::write(folder.join(name), &data).expect("font");
 }
 
+/// Writes a copy of the fixture `file` whose name table no longer has a license
+/// description or URL (name IDs 13 and 14 become an unused ID) into `folder`.
+fn without_license_text(file: &str, folder: &Path) {
+    let mut data = std::fs::read(fixtures().join(file)).expect("fixture");
+    let name = read_fonts::FontRef::new(&data)
+        .expect("font")
+        .table_directory()
+        .table_records()
+        .iter()
+        .find(|r| r.tag() == read_fonts::types::Tag::new(b"name"))
+        .map(|r| r.offset() as usize)
+        .expect("name");
+    let count = u16::from_be_bytes([data[name + 2], data[name + 3]]) as usize;
+    for record in 0..count {
+        let id = name + 6 + record * 12 + 6;
+        if matches!(u16::from_be_bytes([data[id], data[id + 1]]), 13 | 14) {
+            data[id..id + 2].copy_from_slice(&0x7FFFu16.to_be_bytes());
+        }
+    }
+    std::fs::create_dir_all(folder).expect("folder");
+    let base = Path::new(file).file_name().expect("name");
+    std::fs::write(folder.join(base), &data).expect("font");
+}
+
+/// The permissions of the first face of `family`.
+fn permissions_of(lib: &Lib, family: &str) -> Option<fm_api::library::LicensePermissions> {
+    let id = lib.family(family).id;
+    let face = lib.api.get_family(id).expect("family").faces[0].id;
+    lib.api.get_face(face).expect("detail").license.permissions
+}
+
+#[test]
+fn a_face_gets_the_permissions_of_its_license_declaration_or_embedding() {
+    use fm_api::library::LicensePermissionsSource as Source;
+    let lib = Lib::new("api-permissions");
+    let folder = lib.dir.path().join("Patched");
+    with_fs_type(
+        "google-repo/bebasneue/BebasNeue-Regular.ttf",
+        0x0002,
+        &folder,
+    );
+    with_fs_type("google-repo/asul/Asul-Bold.ttf", 0x0000, &folder);
+    without_license_text("google-repo/basic/Basic-Regular.ttf", &folder);
+    let source = lib
+        .api
+        .add_source(AddSourceRequest {
+            path: folder.display().to_string(),
+            mode: ImportMode::IndexInPlace,
+        })
+        .expect("source");
+    lib.scan(Some(source.id), true);
+
+    // The file's open license.
+    let open = permissions_of(&lib, "Asul").expect("open license lines");
+    assert_eq!(open.source, Source::OpenLicense);
+    assert!(open.may.iter().any(|l| l.contains("websites")), "{open:?}");
+
+    // The file's restricted embedding, over its open license.
+    let restricted = permissions_of(&lib, "Bebas Neue").expect("embedding lines");
+    assert_eq!(restricted.source, Source::EmbeddingBits);
+    assert!(restricted.may.is_empty(), "{restricted:?}");
+
+    // A file that says nothing has no lines at all.
+    let basic = lib.family("Basic");
+    let face = lib.api.get_family(basic.id).expect("family").faces[0].id;
+    let license = lib.api.get_face(face).expect("detail").license;
+    assert_eq!(license.open_license, None);
+    assert_eq!(license.embedding, Embedding::Installable);
+    assert_eq!(license.permissions, None);
+
+    // The family's declaration wins over all of it, and Unknown says nothing.
+    for family in ["Bebas Neue", "Asul", "Basic"] {
+        let id = lib.family(family).id;
+        lib.api.declare_license(declaration(id)).expect("declare");
+        let declared = permissions_of(&lib, family).expect("declared lines");
+        assert_eq!(declared.source, Source::Declared, "{family}");
+        assert!(
+            declared.may_not.iter().any(|l| l.contains("websites")),
+            "{family}: {declared:?}"
+        );
+        lib.api
+            .declare_license(LicenseDeclaration {
+                license_type: Some(LicenseType::Unknown),
+                ..declaration(id)
+            })
+            .expect("declare unknown");
+    }
+    assert_eq!(
+        permissions_of(&lib, "Bebas Neue").map(|p| p.source),
+        Some(Source::EmbeddingBits)
+    );
+    assert_eq!(
+        permissions_of(&lib, "Asul").map(|p| p.source),
+        Some(Source::OpenLicense)
+    );
+    assert_eq!(permissions_of(&lib, "Basic"), None);
+}
+
 #[test]
 fn the_license_guard_refuses_the_whole_export_on_embedding_bits() {
     let lib = Lib::new("api-export-web-guard");

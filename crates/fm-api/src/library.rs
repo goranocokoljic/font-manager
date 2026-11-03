@@ -522,6 +522,33 @@ pub struct LicenseInfo {
     /// Whether the face may be used on the web, and why (E15.3).
     #[serde(default)]
     pub web_use: Option<WebUse>,
+    /// What the license lets the user do (E42.12); absent when nothing is known.
+    #[serde(default)]
+    pub permissions: Option<LicensePermissions>,
+}
+
+/// What a license lets the user do, in plain words (E42.12).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LicensePermissions {
+    /// What the user may do.
+    pub may: Vec<String>,
+    /// What the user may not do.
+    pub may_not: Vec<String>,
+    /// Where the lines come from.
+    pub source: LicensePermissionsSource,
+}
+
+/// Where the lines of [`LicensePermissions`] come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "kebab-case")]
+pub enum LicensePermissionsSource {
+    /// The open license the name table states.
+    OpenLicense,
+    /// The license type the user declared.
+    Declared,
+    /// The embedding permission of `OS/2.fsType`.
+    EmbeddingBits,
 }
 
 /// Whether a face may be used on the web, decided from its embedding
