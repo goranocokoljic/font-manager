@@ -18,6 +18,7 @@ import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
 import { useSourcesStore } from '../stores/sources';
 import { useTagsStore } from '../stores/tags';
+import UiChevron from './ui/UiChevron.vue';
 import UiDrawer from './ui/UiDrawer.vue';
 
 const search = useSearchStore();
@@ -67,6 +68,13 @@ const commonFeatures = computed(
 );
 const otherFeatures = computed(
   () => featureGroup.value?.chips.filter((c) => !isCommonFeature(String(c.value))) ?? [],
+);
+/** The named chips, then the expander and the rest; an empty set draws nothing. */
+const featureSets = computed(() =>
+  [
+    { key: 'common', chips: commonFeatures.value },
+    { key: 'other', chips: otherFeatures.value },
+  ].filter((set) => set.chips.length),
 );
 const active = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
 const activeCount = computed(() => active.value.length + languages.value.length);
@@ -281,52 +289,32 @@ async function save(): Promise<void> {
         <h3 v-if="commonFeatures.length" class="label" aria-hidden="true">
           {{ featureGroup.label }}
         </h3>
-        <div v-if="commonFeatures.length" class="chipset">
+        <template v-for="set in featureSets" :key="set.key">
           <button
-            v-for="chip in commonFeatures"
-            :key="String(chip.value)"
+            v-if="set.key === 'other'"
             type="button"
-            class="chip"
-            :title="String(chip.value)"
-            :aria-pressed="chip.selected"
-            :aria-label="chipLabel(chip.label, chip.count)"
-            @click="toggle(chip)"
+            class="expander"
+            :aria-expanded="allFeatures"
+            @click="allFeatures = !allFeatures"
           >
-            {{ chip.label }} <span class="n">{{ chip.count }}</span>
+            <span class="fm-directional"><UiChevron :open="allFeatures" /></span>
+            {{ t('chips.moreFeatures') }}
           </button>
-        </div>
-        <button
-          v-if="otherFeatures.length"
-          type="button"
-          class="expander"
-          :aria-expanded="allFeatures"
-          @click="allFeatures = !allFeatures"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            width="12"
-            height="12"
-            aria-hidden="true"
-            :class="{ open: allFeatures }"
-          >
-            <path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5" />
-          </svg>
-          {{ t('chips.moreFeatures') }}
-        </button>
-        <div v-if="allFeatures && otherFeatures.length" class="chipset">
-          <button
-            v-for="chip in otherFeatures"
-            :key="String(chip.value)"
-            type="button"
-            class="chip"
-            :title="String(chip.value)"
-            :aria-pressed="chip.selected"
-            :aria-label="chipLabel(chip.label, chip.count)"
-            @click="toggle(chip)"
-          >
-            {{ chip.label }} <span class="n">{{ chip.count }}</span>
-          </button>
-        </div>
+          <div v-if="set.key === 'common' || allFeatures" class="chipset">
+            <button
+              v-for="chip in set.chips"
+              :key="String(chip.value)"
+              type="button"
+              class="chip"
+              :title="String(chip.value)"
+              :aria-pressed="chip.selected"
+              :aria-label="chipLabel(chip.label, chip.count)"
+              @click="toggle(chip)"
+            >
+              {{ chip.label }} <span class="n">{{ chip.count }}</span>
+            </button>
+          </div>
+        </template>
       </div>
     </UiDrawer>
   </section>
@@ -426,19 +414,13 @@ async function save(): Promise<void> {
   align-items: center;
   gap: var(--fm-space-2);
   margin-bottom: var(--fm-space-2);
-  padding: 2px 4px;
+  padding: 2px 0;
   border-color: transparent;
   color: var(--fm-muted);
   font-size: var(--fm-text-xs);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.expander svg {
-  transition: transform var(--fm-motion-fast) var(--fm-ease);
-}
-.expander svg.open {
-  transform: rotate(90deg);
 }
 .n {
   color: var(--fm-muted);

@@ -390,7 +390,6 @@
   "chips": {
     "options": "Filteroptionen",
     "remove": "Filter {name} entfernen",
-    "allFeatures": "Alle OpenType-Features",
     "filters": "Filter",
     "chipLabel": "{name}, {families}",
     "families": {
@@ -1358,9 +1357,7 @@
     "panelsFull": "Höchstens {max} Panels",
     "panel": "Panel {number}: {name}",
     "noLayout": "Kein Layout",
-    "closePanel": "Panel schließen",
     "closePanelFor": "Panel {number} schließen",
-    "printPanel": "Drucken…",
     "printPanelFor": "Panel {number} drucken",
     "printTitle": "Nur dieses Panel drucken oder im Druckdialog als PDF sichern"
   },

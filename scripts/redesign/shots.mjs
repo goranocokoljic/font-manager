@@ -53,8 +53,9 @@ const scenes = {
   similar: { routes: '/?face=1', tab: 'Info', click: 'Find similar' },
   studio: { routes: '/studio?layout=magazine&face=1' },
   // ArrowRight expands the family only when the list has focus: click the row first.
-  // Row 3 (JetBrains Mono): since iteration 42 `?face=1` already opens Inter (rows 1–2).
-  'expanded-family': { routes: '/?face=1@ArrowRight', row: '3' },
+  // Since iteration 51 a one-style family does not open, and every built-in mock family has
+  // one style: the query `mockFaces=1&mockStyles=3` adds "Sample 1" (row 4) with three styles.
+  'expanded-family': { query: '?mockFaces=1&mockStyles=3', routes: '/?face=1@ArrowRight', row: '4' },
   'selected-row': { routes: '/?face=1' },
   // The pointer over an unselected row: hover-only row actions and the hover tint.
   // Row 2 is Inter Regular, selected by `?face=1` since iteration 42.

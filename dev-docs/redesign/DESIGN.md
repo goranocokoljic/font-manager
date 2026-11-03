@@ -198,15 +198,15 @@ it does not extend the mock or the store to fake it.
 Every iteration must change something a designer would see in the first three seconds of
 opening the app, or feel in the first minute of using it. If the iteration's "after"
 screenshot of `list` is not visibly different from its "before", the iteration picked the
-wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 50
-the `?face=` reveal keeps one-style families folded (6), Grid style cards are solid (7), the
-Studio file actions share the panel bar (17) and Features shows each feature at work (8). Next:
-item 6's chevron on one-style families (expanding one still shows its sample twice — the
-`expanded-family` scene), item 17's last two Studio bars (the font line with "Lock width" and the
-Layout/Print row into one bar; the help sentence behind `?`), item 26's license-form natives,
-item 21's Tags / Quick Collection empties, and the human feature names in the Filters drawer
-(item 8). Every feature adds a scene to `shots.mjs` in the same iteration; a change that alters
-what `?face=` shows checks every scene that uses it.
+wrong thing. Items 2–9 are ordered by how much of the first screen they change. After review 55
+one-style families have no chevron (6), the Studio is two bars with its help behind the info
+button (17), the Filters drawer names features (8) and Features shows each sample off and on (8).
+The `list` shot has not changed since iteration 51: the next five must move the first screen
+again. Next: item 26's license-form natives and Settings radios (the Info tab is on the first
+screen), item 6's repeated "Variable" badge on every sub-row (`expanded-family`), item 21's Tags /
+Quick Collection empties, item 7's hover weight range, item 17's "Lock width" (it floats at the
+window corner, far from the page). Every feature adds a scene to `shots.mjs` in the same
+iteration; a change that alters what `?face=` shows checks every scene that uses it.
 
 ### First screen
 2. **Filters panel instead of the wall.** A `Filters · 2` button opens a left drawer with
@@ -245,19 +245,20 @@ what `?face=` shows checks every scene that uses it.
    sub-rows hang off a hairline guide, the pane has no ring (iteration 21, review 25).
    The cursor row is a 2 px bar plus a hairline ring, rows tint on hover (iteration 29,
    review 30). `?face=` selects the list row (iteration 42); revealing a one-style family keeps
-   it folded (iteration 46). Left: a one-style family still has a chevron, and opening it shows
-   the same sample twice (List, Waterfall, Grid, Table) — drop the chevron and the expand for
-   `styleCount === 1` in all four views, keyboard ArrowRight included.
+   it folded (iteration 46); a one-style family has no chevron and does not open in any view
+   (iteration 51, review 55: `aria-expanded` follows the same `single` flag). Left: sub-rows
+   repeat the family's "Variable" badge on every style (`expanded-family` scene).
 7. **Grid cards never truncate.** Done in iteration 16 (the sample ends on a whole word);
    style cards are solid and every card tints on hover (iteration 47). Left: hover reveals the
    weight range; a `grid-expanded` scene so a style card is ever seen in a shot.
 8. **Inspector.** Info, Glyphs, the Features switches and one shared `InspectorTabHead` are
    done (iterations 17, 26–28, 43, reviews 20, 30, 45); each Features switch shows a sample in the
-   face with the feature on (iteration 49). Left: the sample beside the same text with the
-   feature off, so the difference is visible (and stylistic sets get a real sample); the same human names and groups ("Small caps", "Tabular figures", "Stylistic
-   sets") replace the raw tags in the Filters drawer's features group (left open by item 2).
-   The labels are a static table of registered OpenType tags, which is presentation, not
-   font logic.
+   face with the feature on (iteration 49), beside the same text with it off (iteration 54); the
+   Filters drawer names features ("Small capitals", "Stylistic set 1") from a static table of
+   registered tags (iteration 53). Left: stylistic sets get a generic sample — a real one is
+   **blocked (API)** (no per-set glyph data); the off/on pair has no visible "off"/"on" cue; the
+   drawer's names (`chips.featureNames`) and the inspector's (`FeatureInfo.name` from fm-core)
+   differ for some tags ("Glyph composition" vs "Glyph composition and decomposition").
 9. **Find similar as a mode, not a split.** Results replace the list with a header
    ("Similar to ADLaM Display Regular · Esc to go back"), grouped by family with the closest
    face shown, score as a quiet bar, and the "Why" line showing only what *differs* from the
@@ -303,8 +304,9 @@ what `?face=` shows checks every scene that uses it.
     Toolbar collapsed to one row. Done: the block font fields are quiet name tags beside the
     block (iteration 44, review 45); Save/Revert/Duplicate/Reset/History are quiet buttons in the
     panel bar, and the Layout view's bar uses the same quiet buttons (iteration 48, review 50).
-    Left: options in their own face; the font line ("Inter Regular" + "Lock width") and the panel
-    bar into one row; Print/Close as icon buttons; the instruction sentence under the page.
+    Two bars now: Close, Print and close-panel are icon buttons, the gesture sentence opens
+    from the info button (iteration 52, review 55). Left: options in their own face; "Lock
+    width" floats at the window's corner instead of beside the page; "Add panel" as an icon.
 18. **Drag out (API?).** Drag a family from the list to drop its files into Explorer / Finder or
     another app; copy CSS / `font-family` name from the row menu.
 19. **Problems & Duplicates triage view (API?).** Grouped, with a "keep best" suggestion and bulk

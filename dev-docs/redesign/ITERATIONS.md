@@ -12,7 +12,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
 - [x] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
-- [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head + stacked Developer head in iteration 43; Features live preview remains)
+- [ ] 8 Inspector (iterations 17, 26–28, 43, 49, 53, 54 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes, shared tab head, off/on feature samples, human feature names in the drawer; stylistic-set samples blocked on the API)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
 - [x] 10 Language & script filter (iteration 36: visible language chips in the Filters drawer, choosing one switches the All fonts pangram; counts and script grouping remain)
 - [ ] 11 "Renders my text" filter + visible missing glyphs
@@ -315,41 +315,29 @@ Only four iterations since review 45 (46–49); all four graded.
 **Next five:** item 6 (no chevron / expand for one-style families in all four views, ArrowRight too) → item 17 (Studio: font line and panel bar into one row; Print/Close as icon buttons; help behind `?`) → item 8 (Features sample off/on side by side; human names in the Filters drawer) → item 26 (license date/number/datalist, Advanced number fields) → item 21 (Tags / Quick Collection empties on `UiEmptyState`). Every iteration takes before and after shots of a scene that shows its change.
 
 ## Iteration 51 — 2026-11-03 — One-style families lose their chevron
-**Critique (before):** the `list` shot opens on three one-style families (Inter, JetBrains Mono, Legacy Grotesk), each with a chevron that promises something and opens onto the same sample twice. The samples are good and big; the chevron is noise. The chrome is otherwise quiet and consistent.
-**Why:** DESIGN item 6 "Left", named by review 50 as the next pick. Visible in `list`: three chevrons gone.
-**What changed:** `FamilyRow.single` (one style, nothing pinned; `list/rows.ts`); List, Table, Grid and Waterfall draw no chevron and no `aria-expanded` for it; `toggleExpanded` and ArrowRight do nothing on it. A family with a pinned (virtual) style still opens. The empty twisty keeps its width, so samples stay aligned. Tests moved to multi-style mock families (`stylesPerFamily: 3`, `?mockStyles=2`); the a11y test asserts Inter has no `aria-expanded`.
-**Ticked:** none (item 6 already ticked; its "Left" is now done).
-**Shots:** `.harness/redesign/shots/51` (before), `51-after`.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`e2e-51.log`).
-**Follow-ups:** the `expanded-family` scene opens row 3 (one-style) so it now shows no expansion — point it at a multi-style family (`?mockStyles=`) next time shots are touched. Item 7 hover weight range; item 17 Studio bars.
-**Dependencies:** none.
+`FamilyRow.single` drops the chevron, `aria-expanded` and ArrowRight/toggle for one-style families in List, Table, Grid and Waterfall.
 
 ## Iteration 52 — 2026-11-03 — Studio: three bars become two, quiet icon buttons
-**Critique (before):** the `list` shot is calm and consistent. The Studio is the weakest screen: three stacked bars, bordered text buttons (Add panel, Close, Print…), the font name shown twice (top bar and again above the page), a boxed "Lock width", and a help sentence under the page.
-**Why:** DESIGN item 17 "Left", named by review 50. Visible in `studio`: one bar gone, the page starts 33 px higher, three bordered buttons gone.
-**What changed:** `FontLayout` got a `bare` prop (Studio only): no duplicate name line, "Lock width" floats quiet at the page corner, the hint stays for screen readers (`aria-describedby`). Studio top bar: Close is an icon, help is an info icon whose tooltip holds the gesture sentence, Add panel is a quiet text button. Panel bar: Print and close-panel are `UiIconButton`s. New `print` icon. `studio.help` string (en/de).
-**Ticked:** none (item 17 stays open).
-**Shots:** `.harness/redesign/shots/52` (before), `52-after`.
-**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 (two pairing-studio specs updated on purpose: font name now read from `studio-font`; Print is an icon, so title not text; `e2e-52.log`).
-**Follow-ups:** item 17 left: options in their own face, a tooltip that shows instantly for the info icon (native title is slow), fold Add panel into an icon. Item 6 `expanded-family` scene still points at a one-style row.
-**Dependencies:** none.
+`FontLayout` `bare` drops the Studio's duplicate name line; Close, Print and close-panel became icon buttons and the gesture sentence moved behind an info icon.
 
 ## Iteration 53 — 2026-11-03 — Filters drawer: features get human names
-**Critique (before):** the `list` shot is calm; the chrome is quiet and the samples carry it. The Filters drawer is the weak spot: a long column of facets, and the OpenType features hide behind an expander as raw tags (`liga`, `smcp`, `ss01`) — developer data in a designer's tool. The facet chips themselves are tidy and consistent.
-**Why:** DESIGN item 8 "Left" (human feature names in the drawer). Visible in the drawer: "Kerning", "Small capitals", "Standard ligatures" sit on the surface; no tag is shown.
-**What changed:** `featureName` / `isCommonFeature` in `search/chips.ts` (28 registered tags in `chips.featureNames`, en + de; `ssNN` → "Stylistic set N", `cvNN` → "Character variant N"; unknown tags stay raw). The drawer's Features group lists named features directly; sets, variants and unknown tags fold behind "Stylistic sets and variants". The raw tag is the chip's tooltip. The same names show in the active chips on the bar.
-**Ticked:** none (item 8 stays open: the off/on Features sample).
-**Shots:** `.harness/redesign/shots/53` (before), `53-after`; tall drawer in `apps/desktop/.harness/redesign/shots/53-tall` (filters is taller than 900 px, so the standard scene never shows Features).
-**Verified:** typecheck, `lint:js`, Vitest, Playwright 273 passed / 16 skipped (`e2e-53.log`).
-**Follow-ups:** a `filters` scene scrolled to Features (or a taller viewport); Features tab off/on sample; item 6 `expanded-family` scene still on a one-style row; the "Stylistic sets and variants" expander is styled differently from a facet label.
-**Dependencies:** none.
+`featureName` in `search/chips.ts` names 28 registered tags plus `ssNN`/`cvNN`; named features sit in the drawer, sets and variants behind an expander.
 
 ## Iteration 54 — 2026-11-03 — Features tab: each sample shows off and on side by side
-**Critique (before):** the `list` shot is calm and the samples carry it. The Features tab shows each feature at work, but only "on": you cannot see what the feature changes. Chrome is quiet and consistent elsewhere.
-**Why:** DESIGN item 8 "Left" (the sample beside the same text with the feature off). Visible in `inspector-features`: two columns per switch, dim "off" left, bright "on" right.
-**What changed:** `InspectorFeatures`: each row's sample is a two-column pair, the same text with `"tag" 0` (muted) and `"tag" 1`. Spacing uses a token.
-**Ticked:** none (item 8 stays open: stylistic sets still get a generic sample).
-**Shots:** `.harness/redesign/shots/54` (before), `54-after`.
-**Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-54.log`).
-**Follow-ups:** real sample text for stylistic sets (needs per-set glyph data, **blocked (API)**); `expanded-family` scene still on a one-style row; a `filters` scene scrolled to Features.
-**Dependencies:** none.
+Each Features row shows its sample twice, muted with the feature off and bright with it on.
+
+## Review 55 — 2026-11-03
+Four iterations since review 50 (51–54); all four graded.
+**Grades:** iter 51 **4** — the one change of the four that moved the `list` shot, done in all four views with the keyboard; but `aria-expanded` keyed on `styleCount > 1` while the chevron keyed on `single`, so a one-style family with a pinned instance showed a chevron and no `aria-expanded`; it left the `expanded-family` scene showing nothing for three iterations. Iter 52 **3** — one bar and three bordered buttons gone, but the gesture sentence moved into a native `title` on an info icon: slow on hover, never shown to keyboard users; "Lock width" now floats at the window corner, far from the page. Iter 53 **3** — the right change for designers, but it pasted the chip button block twice, kept a hand-drawn SVG twisty (not `UiChevron`, not flipped in RTL) and left `chips.allFeatures` dead; no scene shows it (the drawer is taller than 900 px). Iter 54 **3** — the difference is now visible for liga/onum/smcp; the pair has no "off"/"on" cue and stylistic sets still compare "Rag Agy" with itself.
+**Regressions:** none in views, tests or list performance (59.8 fps). Keyboard: the Studio help was unreachable without a mouse (52; fixed). **Drift:** a local SVG twisty (53); no literal colours, fonts, radii or native controls added.
+**Pulled apart:** none head-on. Only 51 changed the `list` shot; 52–54 are byte-identical to it.
+**Fixed:**
+- `FontList`, `FontTable`, `FontWaterfall`: `aria-expanded` follows `row.single`, like the chevron and the store.
+- `shots.mjs` `expanded-family`: query `?mockFaces=1&mockStyles=3`, row 4 ("Sample 1", three styles) — the scene shows an open family again.
+- `StudioView`: the info button toggles the gesture sentence as a quiet line under the bar (`aria-expanded`, `aria-controls`, accent while open); no `title`-only help.
+- `FilterChips`: one loop draws both feature sets; the expander uses `UiChevron` in an `fm-directional` wrapper and lines up with the facet labels.
+- Dead: `chips.allFeatures`, `studio.printPanel`, `studio.closePanel` (en/de).
+**Rule amended:** none. **Backlog (DESIGN.md):** items 6, 8, 17 and the three-second note rewritten; item 8 notes the stylistic-set sample as blocked (API) and the two feature-name sources.
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 273 passed / 16 skipped (`.harness/redesign/e2e-review-55.log`). Shots `review-55/` (before, 52) and `review-55-after/` (52): all 26 scenes render in light and dark, comfortable and compact; only `expanded-family` changed. Tall drawer check in `review-55-tall/`.
+**Not fixed, noted:** sub-rows repeat "Variable" on every style; "Lock width" placement; Table's "Columns" is a bordered text button among icons; Settings nav shows the focus ring on load.
+**Next five:** the first screen again — item 26 (license date/number/datalist; Settings radios and Advanced number fields) → item 6 (no repeated badge on sub-rows) → item 7 (hover weight range on cards, a `grid-expanded` scene) → item 21 (Tags / Quick Collection empties on `UiEmptyState`) → item 17 ("Lock width" beside the page; options in their own face). Every iteration takes before and after shots of a scene that shows its change and reads the `lint:js` exit code.

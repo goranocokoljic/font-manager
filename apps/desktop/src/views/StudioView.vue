@@ -104,6 +104,8 @@ function onKey(e: KeyboardEvent): void {
 // The studio takes the focus, so Escape closes it at once; Escape from anywhere in the
 // window closes it, unless a block editor or the palette used the key first.
 const title = ref<HTMLHeadingElement | null>(null);
+// The gesture sentence sits behind the info button: a click (or Enter) shows it under the bar.
+const helpOpen = ref(false);
 onMounted(() => {
   title.value?.focus();
   window.addEventListener('keydown', onKey);
@@ -122,7 +124,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
       <UiIconButton
         icon="info"
         :label="t('studio.help')"
-        :title="`${t('textLayout.hint')} ${t('textLayout.hintEdit')}`"
+        :aria-expanded="helpOpen"
+        aria-controls="studio-help"
+        :class="{ on: helpOpen }"
+        @click="helpOpen = !helpOpen"
       />
       <button
         ref="addButton"
@@ -144,6 +149,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
         @click="close"
       />
     </header>
+    <p v-if="helpOpen" id="studio-help" class="help">
+      {{ t('textLayout.hint') }} {{ t('textLayout.hintEdit') }}
+    </p>
     <div class="panels">
       <StudioPanel
         v-for="(panel, i) in studio.panels"
@@ -207,6 +215,16 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey));
 }
 .button[aria-disabled='true'] {
   opacity: 0.5;
+}
+.bar .on {
+  color: var(--fm-accent);
+}
+.help {
+  margin: 0;
+  padding: var(--fm-space-2) var(--fm-space-4);
+  border-bottom: 1px solid var(--fm-border);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
 }
 /* Equal widths; below a panel's least width the row scrolls sideways. */
 .panels {

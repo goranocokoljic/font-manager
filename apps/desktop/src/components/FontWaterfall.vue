@@ -205,9 +205,7 @@ function onToggle(row: ListRow): void {
         :data-key="item.row.key"
         :aria-level="item.row.kind === 'face' ? 2 : 1"
         :aria-expanded="
-          item.row.kind === 'family' && item.row.family.styleCount > 1
-            ? item.row.expanded
-            : undefined
+          item.row.kind === 'family' && !item.row.single ? item.row.expanded : undefined
         "
         :aria-selected="list.isSelected(item.row.key)"
         :aria-setsize="item.row.kind === 'face' ? item.row.count : list.families.length"
