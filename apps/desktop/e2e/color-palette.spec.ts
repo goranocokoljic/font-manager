@@ -59,7 +59,7 @@ async function open(page: Page) {
 
 /** The sample of Color Play's row in the font list, once its font has loaded. */
 async function listSample(page: Page) {
-  const row = page.getByRole('tree', { name: 'Font list' }).locator('.row[data-face="8"]');
+  const row = page.getByRole('tree', { name: 'Font list' }).locator('.row[data-face="8"]').first();
   await expect(row).toHaveAttribute('data-state', 'ready');
   return row.locator('.sample');
 }

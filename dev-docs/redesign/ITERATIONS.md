@@ -10,7 +10,7 @@ Backlog ticks live here, not in `DESIGN.md`.
 - [x] 3 Preview bar — sample text as the hero control (iteration 6; first pass: one row + Options row; UiField/UiSlider/UiToggle not built)
 - [ ] 4 Dark by default + app shell (iterations 7, 11, 31, 39: toolbar icons, UiSegmentedControl, live status bar, collapsible panes with `[` `]` and a sidebar toggle; dark-first launch blocked on the API default theme)
 - [ ] 5 Sidebar redesign (iterations 8, 12, 13, 19, 22, 33–34, 37, 39 + review 35: icon buttons, row menus, folding groups, section icons, "All fonts" stays, toolbar toggle; Problems fold+link remains)
-- [ ] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; `?face=` list selection remains)
+- [x] 6 List rows (iterations 9, 14, 21, 29 + reviews 10, 25, 30: UiBadge, UiChevron, hover Find-similar icon, chevron on the sample line, sub-row guide, no pane ring, cursor bar + ring, hover tint; iteration 42: `?face=` selects the list row)
 - [x] 7 Grid cards (iteration 16: sample ends on a whole word that fits; hover weight range remains)
 - [ ] 8 Inspector (iterations 17, 26–28 + reviews 20, 30: Info grouped, Features switches, Glyphs grid, underline notes; shared tab head, Developer head, Features live preview remain)
 - [x] 9 Find similar as a mode (iteration 18: results replace the list, source pinned, score bar, only differing reasons; iteration 24: grouped by family)
@@ -266,4 +266,14 @@ A pressed-state sidebar toggle (`[`) sits before the title in the All fonts tool
 **Ticked:** item 21. **Shots:** `.harness/redesign/shots/41/` (before), `41-after/`.
 **Verified:** typecheck, `lint:js` exit 0, Vitest, Playwright 273 passed / 16 skipped (`e2e-41.log`).
 **Follow-ups:** no scene for "no matches" or "empty library" (the screens spec cannot type a search); other empties (Tags "No tags yet", Layout, Catalog, Quick Collection) still plain text; the "Empty" collection hint names no shortcut for adding fonts.
+**Dependencies:** none.
+
+## Iteration 42 — 2026-11-03 — `?face=` selects the row in the list
+**Critique (before):** The `selected-row` scene showed a plain list: the inspector had Inter open, but no row looked selected. A designer reading that shot sees two panes that disagree. The rest of the list is calm and the cursor bar from iteration 29 is good; it just never appeared for a face that came in through the URL.
+**Why:** Review 40's "Next five", item 6 rest. The `list` shot has no `?face=`, so it does not change; `selected-row` does (and a reload now keeps the row, not just the inspector).
+**What changed:** `HomeView` watches the loaded detail and the family list; once, when the list has no cursor, it calls the existing `fontList.reveal(face)` (expands the family, selects the style row, scrolls to it). No store or API change.
+**Ticked:** none fully; item 6 now only lacks nothing in the list (the `?face=` gap is closed).
+**Shots:** `.harness/redesign/shots/42/` (after only; the before run was overwritten).
+**Verified:** typecheck, `lint:js` exit 0, Vitest 910, Playwright 289 run, one spec updated (`color-palette.spec.ts` row locator `.first()`, because the family now opens and shows two rows for face 8); it passes (`e2e-42.log`).
+**Follow-ups:** none new.
 **Dependencies:** none.

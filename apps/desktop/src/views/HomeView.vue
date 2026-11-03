@@ -436,6 +436,23 @@ watch(
   { immediate: true },
 );
 
+// A face that arrives through the URL (a reload, a link) has no row selected yet:
+// once its detail and the family list are in, the list selects it (once).
+let revealedFromUrl = false;
+watch(
+  () => [selection.detail?.face, fontList.families.length] as const,
+  ([face, count]) => {
+    if (revealedFromUrl || !face || face.id !== selection.faceId || count === 0) return;
+    if (fontList.cursor !== null) {
+      revealedFromUrl = true;
+      return;
+    }
+    revealedFromUrl = true;
+    void fontList.reveal(face);
+  },
+  { immediate: true },
+);
+
 /** The face under the list's cursor goes to the inspector. */
 function showFace(face: FaceId): void {
   if (parseFaceId(route.query.face) === face) return;
