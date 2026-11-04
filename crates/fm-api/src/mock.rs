@@ -37,9 +37,10 @@ use crate::export::{
     SpecimenRequest, SpecimenResponse, Subset, WebFormat,
 };
 use crate::layout::{
-    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
-    LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef, LayoutVersion, RestoreLayoutRequest,
-    RevertLayoutRequest, SaveLayoutRequest, SavedLayout, TextBlock,
+    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest,
+    ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef,
+    LayoutSurface, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    SavedLayout, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
@@ -52,8 +53,8 @@ use crate::library::{
     TrashMoveStatus, WebUse,
 };
 use crate::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
+    COLLECTION_COLORS, Collection, CollectionFacesRequest, CreateCollectionRequest,
+    CreateSetRequest, FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
     MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
     ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp,
     SET_FILE_EXTENSION, SaveSetFileRequest, SavedSetFile, SelectionTag, SelectionTags,
@@ -66,15 +67,16 @@ use crate::preview::{
     SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
 };
 use crate::search::{
-    BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
-    FilterCount, FilterCounts, Filters, ImageMatchRequest, LanguageCoverage, LanguagePreset,
-    Missing, PairingRequest, PairingRole, PairingSuggestion, SearchRequest, SearchResponse,
-    SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
+    BlockCoverage, CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage,
+    FaceLanguageCoverage, FamilyHit, FilterCount, FilterCounts, Filters, ImageMatchRequest,
+    LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingRole,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
+    WeightRange, WidthRange,
 };
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
     McpClient, McpConfirmationAnswer, McpGrant, McpGrantUpdate, McpSnippet, McpStatus, McpToolCall,
-    McpUpdate, Settings, SettingsUpdate,
+    McpUpdate, Settings, SettingsUpdate, ThemeDefinition, ThemeTokens, unknown_theme,
 };
 use crate::workflows::{
     BriefRequest, Candidate, DocumentFontCheck, DocumentFontRef, DocumentFontStatus, DocumentFonts,
@@ -210,6 +212,15 @@ fn mock_web_embedding_block(l: &LicenseInfo) -> Option<String> {
 
 /// Refuses a rule as fm-core does (E14.1): a group with no rules, at any
 /// depth, or a weight or width range whose minimum is above its maximum.
+fn check_collection_color(color: Option<String>) -> ApiResult<Option<String>> {
+    match color {
+        Some(key) if !COLLECTION_COLORS.contains(&key.as_str()) => Err(ApiError::invalid(
+            "Pick one of the eight collection colours.",
+        )),
+        color => Ok(color),
+    }
+}
+
 fn check_rule_shape(group: &RuleGroup) -> ApiResult<()> {
     if group.rules.is_empty() {
         return Err(ApiError::invalid(
@@ -2418,6 +2429,31 @@ impl SearchService for MockApi {
             .collect())
     }
 
+    /// A simple stand-in for the core's score: the share of the text's letters
+    /// outside ASCII that the mock language has.
+    fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>> {
+        let mut letters: Vec<char> = req
+            .text
+            .to_lowercase()
+            .chars()
+            .filter(|c| !c.is_ascii() && c.is_alphabetic())
+            .collect();
+        letters.sort_unstable();
+        letters.dedup();
+        let mut hints: Vec<LanguageHint> = LANGUAGES
+            .iter()
+            .filter_map(|(code, _, _, chars)| {
+                let hits = letters.iter().filter(|c| chars.contains(**c)).count();
+                (hits > 0).then(|| LanguageHint {
+                    code: (*code).into(),
+                    confidence: hits as f32 / letters.len() as f32,
+                })
+            })
+            .collect();
+        hints.sort_by(|a, b| b.confidence.total_cmp(&a.confidence));
+        Ok(hints)
+    }
+
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
         let st = self.state();
         let me = st.face(req.face)?;
@@ -3179,6 +3215,7 @@ impl OrganizationService for MockApi {
         if name.is_empty() {
             return Err(ApiError::invalid("Give the collection a name."));
         }
+        let color = check_collection_color(req.color)?;
         let mut st = self.state();
         if let Some(p) = req.parent
             && !st.collections.iter().any(|c| c.id == p)
@@ -3210,6 +3247,7 @@ impl OrganizationService for MockApi {
                 .map(|g| g.plain_filters().cloned().unwrap_or_default()),
             rule_group: group,
             face_count: 0,
+            color,
         };
         st.collections.push(c.clone());
         Ok(st.collection_view(&c))
@@ -3240,6 +3278,11 @@ impl OrganizationService for MockApi {
         if name.is_empty() {
             return Err(ApiError::invalid("Give the collection a name."));
         }
+        let color = match req.color.as_deref() {
+            None => None,
+            Some("") => Some(None),
+            Some(_) => Some(check_collection_color(req.color)?),
+        };
         let mut st = self.state();
         let parent = st.collection(req.collection)?.parent;
         st.check_sibling_name(parent, name, Some(req.collection))?;
@@ -3249,6 +3292,9 @@ impl OrganizationService for MockApi {
             .find(|c| c.id == req.collection)
             .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
         c.name = name.into();
+        if let Some(color) = color {
+            c.color = color;
+        }
         let c = c.clone();
         Ok(st.collection_view(&c))
     }
@@ -4523,12 +4569,47 @@ impl WorkflowService for MockApi {
     }
 }
 
+/// The theme files, in the order of fm-core's list.
+const MOCK_THEME_FILES: [&str; 4] = [
+    include_str!("../../../data/themes/paper.json"),
+    include_str!("../../../data/themes/graphite.json"),
+    include_str!("../../../data/themes/indigo.json"),
+    include_str!("../../../data/themes/moss.json"),
+];
+
+/// One theme file of `data/themes`; fm-core checks the rules of the files.
+fn mock_theme(file: &str) -> ApiResult<ThemeDefinition> {
+    let v: serde_json::Value = serde_json::from_str(file).map_err(|e| {
+        ApiError::new(ErrorCode::Internal, "A theme file is damaged.").with_detail(e.to_string())
+    })?;
+    let text = |o: &serde_json::Value, key: &str| o[key].as_str().unwrap_or_default().to_owned();
+    let tokens = |o: &serde_json::Value| ThemeTokens {
+        accent: text(o, "accent"),
+        on_accent: text(o, "on-accent"),
+        bg: text(o, "bg"),
+        surface: text(o, "surface"),
+        surface_2: text(o, "surface-2"),
+        border: text(o, "border"),
+    };
+    Ok(ThemeDefinition {
+        id: text(&v, "id"),
+        name: text(&v, "name"),
+        light: tokens(&v["light"]),
+        dark: tokens(&v["dark"]),
+    })
+}
+
 impl SettingsService for MockApi {
     fn get_settings(&self) -> ApiResult<Settings> {
         Ok(self.state().settings.clone())
     }
 
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
+        if let Some(id) = &req.theme_id
+            && !self.list_themes()?.iter().any(|t| t.id == *id)
+        {
+            return Err(unknown_theme(id));
+        }
         let mut st = self.state();
         st.settings = st.settings.apply(&req)?;
         Ok(st.settings.clone())
@@ -4541,6 +4622,10 @@ impl SettingsService for MockApi {
             cache: "/home/demo/.cache/font-manager".into(),
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
+    }
+
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        MOCK_THEME_FILES.iter().map(|f| mock_theme(f)).collect()
     }
 
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
@@ -5065,6 +5150,35 @@ impl LayoutService for MockApi {
             .with_detail(reason)
         })?;
         mock_save_layout(&mut st.layouts, &req.id, layout)
+    }
+
+    /// The core's checks (scale, layout, faces), then the file it would write;
+    /// nothing is written.
+    fn export_layout_png(&self, req: ExportLayoutPngRequest) -> ApiResult<String> {
+        if !matches!(req.scale, 1 | 2) {
+            return Err(ApiError::invalid("A layout exports at 1x or 2x."));
+        }
+        let saved = self.get_layout(LayoutRef {
+            id: req.layout.clone(),
+        })?;
+        if req.block_fonts.len() > saved.layout.blocks.len() {
+            return Err(ApiError::invalid(
+                "A font was given for a block that does not exist.",
+            ));
+        }
+        let st = self.state();
+        st.face(req.font.face)?;
+        for font in req.block_fonts.iter().flatten() {
+            st.face(font.face)?;
+        }
+        let surface = match req.surface {
+            LayoutSurface::Paper => "paper",
+            LayoutSurface::Ink => "ink",
+        };
+        Ok(format!(
+            "/mock/exports/{}-{surface}-{}x.png",
+            saved.id, req.scale
+        ))
     }
 
     /// `fm_core::layout::layout_width`: 33 em at the body block's size (the

@@ -94,6 +94,7 @@ async fn every_tool_answers_over_mock_api_without_font_bytes() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("collection");
     let inter = face_of(&client, "inter").await;

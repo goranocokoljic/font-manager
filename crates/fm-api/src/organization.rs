@@ -7,6 +7,12 @@ use crate::library::{FaceSummary, LicenseType};
 use crate::search::Filters;
 use crate::{ApiResult, CollectionId, FaceId, FamilyId, SetId, TagId, VirtualStyleId};
 
+/// The keys of the fixed palette a collection's colour comes from (E44.3). A
+/// key names a colour the UI draws per theme; it is never a hex value.
+pub const COLLECTION_COLORS: [&str; 8] = [
+    "coral", "amber", "green", "teal", "blue", "violet", "orchid", "slate",
+];
+
 /// A manual collection, or a smart one when `rules` is set. Siblings are
 /// ordered by the user; `list_collections` returns them in that order.
 ///
@@ -33,6 +39,9 @@ pub struct Collection {
     pub rule_group: Option<RuleGroup>,
     /// Faces in it now.
     pub face_count: u32,
+    /// Its colour, a key of [`COLLECTION_COLORS`]; absent when it has none.
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 /// How a [`RuleGroup`] combines its rules.
@@ -128,16 +137,25 @@ pub struct CreateCollectionRequest {
     /// and `rules` is `InvalidRequest`.
     #[serde(default)]
     pub rule_group: Option<RuleGroup>,
+    /// Its colour, a key of [`COLLECTION_COLORS`]; any other value is
+    /// `InvalidRequest`.
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
-/// Rename a collection.
+/// Rename a collection, or change its colour.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct RenameCollectionRequest {
     /// The collection.
     pub collection: CollectionId,
-    /// New name.
+    /// New name; its current name changes only the colour.
     pub name: String,
+    /// A key of [`COLLECTION_COLORS`] sets the colour and an empty string
+    /// removes it; absent keeps it, so a plain rename leaves it alone. Any
+    /// other value is `InvalidRequest`.
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 /// Move a collection under another parent, or to another place among its

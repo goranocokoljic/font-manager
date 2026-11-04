@@ -10,6 +10,7 @@ use fm_api::activation::{
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
+use fm_api::layout::{LayoutFont, LayoutSurface};
 use fm_api::library::{
     FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest, LicenseType,
     OpenLicense, ProblemKind, TrashMoveStatus,
@@ -107,7 +108,8 @@ impl Lib {
             SettingsStore::new(&paths),
             Some(previews),
         )
-        .with_layouts_in(paths.layouts_dir());
+        .with_layouts_in(paths.layouts_dir())
+        .with_exports_in(paths.exports_dir());
         let fetcher = Arc::new(OfflineFetcher::default());
         let api = api.with_catalogs(Catalogs::new(
             paths.data.join(CATALOGS_DIR),
@@ -451,6 +453,7 @@ fn families_filter_by_a_manual_or_smart_collection_and_an_unknown_one_is_not_fou
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("manual");
     assert!(in_collection(manual.id).is_empty(), "an empty collection");
@@ -476,6 +479,7 @@ fn families_filter_by_a_manual_or_smart_collection_and_an_unknown_one_is_not_fou
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .expect("smart");
     let all = lib
@@ -1090,6 +1094,7 @@ fn pinned_styles_survive_a_rebuild_and_reach_the_sidecar() {
             name: "Brand".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("collection")
         .id;
@@ -1225,6 +1230,22 @@ fn search_and_filters_run_on_the_real_index() {
         .collect();
     assert_eq!(names, ["Asap Sharp"]);
     assert!(variable.counts.is_some());
+}
+
+/// E43.2: the core API answers from the charsets data, with no library needed.
+#[test]
+fn detect_languages_ranks_the_presets_of_the_data() {
+    let lib = Lib::new("api-detect-languages");
+    let detect = |text: &str| {
+        lib.api
+            .detect_languages(fm_api::search::DetectLanguagesRequest { text: text.into() })
+            .expect("hints")
+    };
+    let codes: Vec<String> = detect("đć").into_iter().map(|h| h.code).collect();
+    let at = |code: &str| codes.iter().position(|c| c == code).expect(code);
+    assert_eq!(at("sr-Latn"), 0, "{codes:?}");
+    assert!(at("hr") < at("pl"), "{codes:?}");
+    assert!(detect("plain ascii").is_empty());
 }
 
 #[test]
@@ -1515,6 +1536,7 @@ fn collections_tags_metadata_and_sets_use_the_index() {
             name: "Headlines".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("collection");
     let filled = lib
@@ -2967,6 +2989,22 @@ fn layouts_are_the_core_presets_and_come_back_clamped() {
 }
 
 #[test]
+fn list_themes_is_the_data_files_and_the_mock_matches_them() {
+    let lib = Lib::new("api-list-themes");
+    let themes = lib.api.list_themes().expect("themes");
+    assert_eq!(themes, crate::themes::load().expect("valid"));
+    let ids: Vec<&str> = themes.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["paper", "graphite", "indigo", "moss"]);
+    // The Paper pair is the app's colors, with the tokens in their API fields.
+    assert_eq!(themes[0].light.on_accent, "#141413");
+    assert_eq!(themes[0].dark.surface_2, "#262628");
+    assert_eq!(themes[0].dark.border, "#ffffff17");
+    // The UI's MockApi (browser mode, e2e) must offer the same themes as the core.
+    let mock = fm_api::mock::MockApi::new();
+    assert_eq!(mock.list_themes().expect("mock themes"), themes);
+}
+
+#[test]
 fn layout_bounds_are_the_core_ranges_and_the_mock_matches_them() {
     let lib = Lib::new("api-layout-bounds");
     let bounds = lib.api.layout_bounds().expect("bounds");
@@ -2975,6 +3013,124 @@ fn layout_bounds_are_the_core_ranges_and_the_mock_matches_them() {
     // The UI's MockApi (browser mode, e2e) must offer the same ranges as the core.
     let mock = fm_api::mock::MockApi::new();
     assert_eq!(mock.layout_bounds().expect("mock bounds"), bounds);
+}
+
+/// An export of `layout` in `face` at `scale` on paper.
+fn layout_png(layout: &str, face: FaceId, scale: u8) -> ExportLayoutPngRequest {
+    ExportLayoutPngRequest {
+        layout: layout.to_owned(),
+        scale,
+        surface: LayoutSurface::Paper,
+        font: LayoutFont {
+            face,
+            variations: Vec::new(),
+            features: Vec::new(),
+        },
+        block_fonts: Vec::new(),
+    }
+}
+
+#[test]
+fn a_layout_exports_to_a_png_in_the_export_folder() {
+    let (lib, _, _) = Lib::scanned("api-layout-png");
+    let face = first_face(&lib, "Archivo").id;
+    let path = lib
+        .api
+        .export_layout_png(layout_png("magazine", face, 2))
+        .expect("export");
+    let path = PathBuf::from(path);
+    assert_eq!(path.parent(), Some(lib.paths.exports_dir().as_path()));
+    assert_eq!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some("magazine-paper-2x.png")
+    );
+    let image =
+        crate::preview::png_decode::decode(&std::fs::read(&path).expect("file")).expect("a PNG");
+    assert_eq!(
+        (image.width, image.height),
+        (
+            2 * crate::preview::page::A4_WIDTH_PX,
+            2 * crate::preview::page::A4_HEIGHT_PX
+        )
+    );
+    assert!(image.grey.iter().any(|g| *g < 64), "it holds type");
+
+    // Asked again, it writes another file and leaves the first.
+    let again = lib
+        .api
+        .export_layout_png(layout_png("magazine", face, 2))
+        .expect("export");
+    assert_ne!(PathBuf::from(again), path);
+    assert!(path.is_file());
+}
+
+#[test]
+fn a_layout_export_honours_the_axes_features_and_block_fonts_it_is_given() {
+    let (lib, _, _) = Lib::scanned("api-layout-png-axes");
+    let asap = first_face(&lib, "Asap Sharp").id;
+    let archivo = first_face(&lib, "Archivo").id;
+    let render = |req: ExportLayoutPngRequest| {
+        let path = lib.api.export_layout_png(req).expect("export");
+        crate::preview::png_decode::decode(&std::fs::read(path).expect("file"))
+            .expect("a PNG")
+            .grey
+    };
+    let base = render(layout_png("quote", asap, 1));
+    assert_eq!(base, render(layout_png("quote", asap, 1)), "stable");
+    let mut bold = layout_png("quote", asap, 1);
+    bold.font.variations.push(AxisValue {
+        tag: "wght".into(),
+        value: 800.0,
+    });
+    assert_ne!(base, render(bold), "the weight axis");
+    let mut own = layout_png("quote", asap, 1);
+    own.block_fonts = vec![Some(layout_png("quote", archivo, 1).font)];
+    assert_ne!(base, render(own), "the block's own face");
+    let mut no_kerning = layout_png("quote", asap, 1);
+    no_kerning.font.features.push(FeatureSetting {
+        tag: "kern".into(),
+        on: false,
+    });
+    assert_ne!(base, render(no_kerning), "a feature");
+}
+
+#[test]
+fn a_layout_export_refuses_what_it_cannot_render_and_writes_nothing() {
+    let (lib, _, _) = Lib::scanned("api-layout-png-errors");
+    let face = first_face(&lib, "Archivo").id;
+    let code = |req| lib.api.export_layout_png(req).unwrap_err().code;
+    assert_eq!(code(layout_png("book", face, 3)), ErrorCode::InvalidRequest);
+    assert_eq!(code(layout_png("no-such", face, 1)), ErrorCode::NotFound);
+    assert_eq!(
+        code(layout_png("../escape", face, 1)),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        code(layout_png("book", FaceId(999_999), 1)),
+        ErrorCode::NotFound
+    );
+    let mut extra = layout_png("book", face, 1);
+    extra.block_fonts = vec![None; 3];
+    assert_eq!(code(extra), ErrorCode::InvalidRequest);
+    assert!(!lib.paths.exports_dir().exists());
+}
+
+#[test]
+fn layout_export_without_an_export_folder_is_not_available() {
+    let lib = Lib::new("api-layout-png-off");
+    let api = CoreApi::new(
+        Index::open(&lib.paths.data.join("second.db"))
+            .expect("index")
+            .index,
+        Arc::new(MockActivator::new()) as Arc<dyn FontActivator>,
+        SettingsStore::new(&lib.paths),
+        None,
+    )
+    .with_layouts_in(lib.paths.layouts_dir());
+    let err = api
+        .export_layout_png(layout_png("book", FaceId(1), 1))
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Unsupported);
 }
 
 #[test]
@@ -3260,6 +3416,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("collection");
     let names = |c| -> Vec<String> {
@@ -3292,6 +3449,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .expect("smart");
     let mut variable: Vec<String> = lib
@@ -3935,6 +4093,7 @@ fn new_collection(lib: &Lib, name: &str, rules: Option<Filters>) -> CollectionId
             parent: None,
             rules,
             rule_group: None,
+            color: None,
         })
         .expect("collection")
         .id
@@ -6652,13 +6811,17 @@ impl Fetcher for SlowFetcher {
 #[test]
 fn the_fetch_work_of_one_request_ends_with_its_budget() {
     let (lib, _server) = fetching("fetch-budget", lato_ok(), true);
+    // The clock starts before the download path and its fetch thread run, so
+    // the budget must outlast a loaded runner, or no request starts at all;
+    // 200 ms did not on Windows CI. The delay is far longer than the budget,
+    // and the sleeping thread ends with the test process.
     let slow = Arc::new(SlowFetcher {
-        delay: Duration::from_secs(5),
+        delay: Duration::from_secs(120),
         calls: AtomicU32::new(0),
     });
     let lib = with_fetcher(lib, Arc::clone(&slow) as Arc<dyn Fetcher>);
     let lib = Lib {
-        api: lib.api.with_fetch_budget(Duration::from_millis(200)),
+        api: lib.api.with_fetch_budget(Duration::from_secs(10)),
         ..lib
     };
     let started = Instant::now();
@@ -6668,7 +6831,7 @@ fn the_fetch_work_of_one_request_ends_with_its_budget() {
         .expect("needed");
     let took = started.elapsed();
     assert!(
-        took < Duration::from_secs(3),
+        took < Duration::from_secs(60),
         "bounded by the budget: {took:?}"
     );
     assert_eq!(

@@ -52,8 +52,9 @@ use fm_api::export::{
     LicenseInventoryRequest, SpecimenFormat, SpecimenRequest, SpecimenResponse, WebFormat,
 };
 use fm_api::layout::{
-    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutService,
-    LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+    DuplicateLayoutRequest, ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef,
+    LayoutService, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    SavedLayout,
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
@@ -76,13 +77,13 @@ use fm_api::preview::{
     PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, Filters, ImageMatchRequest, LanguagePreset,
-    PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace,
-    SimilarRequest, Supports,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters,
+    ImageMatchRequest, LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion,
+    SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest, Supports,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
-    McpUpdate, Settings, SettingsService, SettingsUpdate,
+    McpUpdate, Settings, SettingsService, SettingsUpdate, ThemeDefinition,
 };
 use fm_api::workflows::{
     BriefRequest, Candidate, DocumentFonts, DocumentFontsCheck, DocumentFontsRequest,
@@ -143,6 +144,8 @@ pub struct CoreApi {
     receipts: Option<PathBuf>,
     /// The layout template files (E12.5); `None` when the API has no config folder.
     layouts: Option<LayoutStore>,
+    /// The folder of rendered layouts; none in tests that do not export.
+    exports: Option<PathBuf>,
     /// The OS webview printer for PDF specimens (E21.2); `None` without the
     /// app (the CLI's direct link), when a PDF is `Unsupported`.
     pdf: Option<Arc<dyn PdfPrinter>>,
@@ -194,6 +197,7 @@ impl CoreApi {
         let api = Self::new(index, activator, settings, previews)
             .with_receipts_in(paths.data.join(crate::receipt::RECEIPTS_DIR))
             .with_layouts_in(paths.layouts_dir())
+            .with_exports_in(paths.exports_dir())
             .with_endpoint_in(paths.data.clone())
             .with_catalogs(
                 Catalogs::open(paths.data.join(crate::catalog::CATALOGS_DIR))
@@ -230,6 +234,7 @@ impl CoreApi {
             trash: None,
             receipts: None,
             layouts: None,
+            exports: None,
             pdf: None,
             catalogs: None,
             endpoint: None,
@@ -273,6 +278,13 @@ impl CoreApi {
     #[must_use]
     pub fn with_layouts_in(mut self, dir: PathBuf) -> Self {
         self.layouts = Some(LayoutStore::new(dir));
+        self
+    }
+
+    /// The same API, writing rendered layouts to `dir`.
+    #[must_use]
+    pub fn with_exports_in(mut self, dir: PathBuf) -> Self {
+        self.exports = Some(dir);
         self
     }
 
@@ -938,6 +950,10 @@ impl SearchService for CoreApi {
 
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
         Ok(pangrams::presets()?)
+    }
+
+    fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>> {
+        Ok(crate::language_detect::detect_languages(&req.text)?)
     }
 
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {
@@ -1670,6 +1686,28 @@ impl LayoutService for CoreApi {
     fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>> {
         Ok(layout::layout_width(&layout))
     }
+
+    fn export_layout_png(&self, req: ExportLayoutPngRequest) -> ApiResult<String> {
+        let saved = self.layouts()?.get(&req.layout)?;
+        let dir = self
+            .exports
+            .as_deref()
+            .ok_or_else(|| not_available("Exporting layouts"))?;
+        let (fonts, _) = preview::page::request_fonts(&req, saved.layout.blocks.len())?;
+        let located = {
+            let index = self.lock();
+            fonts
+                .iter()
+                .map(|font| index.face_file(font.face))
+                .collect::<FmResult<Vec<_>>>()?
+        };
+        let files: Vec<(&Path, u32)> = located
+            .iter()
+            .map(|f| (f.path.as_path(), f.collection_index))
+            .collect();
+        let path = preview::page::export_layout(&saved, &req, &files, dir)?;
+        Ok(path.display().to_string())
+    }
 }
 
 impl ComparisonService for CoreApi {
@@ -1783,6 +1821,10 @@ impl SettingsService for CoreApi {
 
     fn app_folders(&self) -> ApiResult<AppFolders> {
         self.settings.app_folders()
+    }
+
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        self.settings.list_themes()
     }
 
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {

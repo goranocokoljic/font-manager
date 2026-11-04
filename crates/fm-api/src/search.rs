@@ -414,6 +414,24 @@ pub struct PairingSuggestion {
     pub reasons: Vec<String>,
 }
 
+/// A text to find the likely languages of (E43.2).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectLanguagesRequest {
+    /// The text, as the user typed it. Long text is read in part.
+    pub text: String,
+}
+
+/// A language preset that a text may be in.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageHint {
+    /// Preset code from `list_languages`.
+    pub code: String,
+    /// Above 0.0 and at most 1.0; higher fits the text better.
+    pub confidence: f32,
+}
+
 /// Search, filters, coverage and similarity.
 pub trait SearchService {
     /// Ranked results grouped by family.
@@ -425,6 +443,9 @@ pub trait SearchService {
     fn face_coverage(&self, face: FaceId) -> ApiResult<FaceCoverage>;
     /// Every language preset.
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>>;
+    /// The language presets a text may be in, best first, from its letters
+    /// outside ASCII. Empty for a text without such letters.
+    fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>>;
     /// Faces ranked by visual similarity.
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>>;
     /// Faces ranked by how close they look to the text in an image, closest

@@ -467,6 +467,8 @@ export type Collection = {
 	ruleGroup?: RuleGroup | null,
 	/**  Faces in it now. */
 	faceCount: number,
+	/**  Its colour, a key of [`COLLECTION_COLORS`]; absent when it has none. */
+	color?: string | null,
 };
 
 /**  Add faces to, or remove them from, a manual collection. */
@@ -644,6 +646,11 @@ export type CreateCollectionRequest = {
 	 *  and `rules` is `InvalidRequest`.
 	 */
 	ruleGroup?: RuleGroup | null,
+	/**
+	 *  Its colour, a key of [`COLLECTION_COLORS`]; any other value is
+	 *  `InvalidRequest`.
+	 */
+	color?: string | null,
 };
 
 /**  Create a project set. */
@@ -709,6 +716,12 @@ export type Deprecation = {
 	since: ApiVersion,
 	/**  One plain sentence: what to use instead. */
 	note: string,
+};
+
+/**  A text to find the likely languages of (E43.2). */
+export type DetectLanguagesRequest = {
+	/**  The text, as the user typed it. Long text is read in part. */
+	text: string,
 };
 
 /**  A design app closed a document (E29.3). */
@@ -1024,6 +1037,20 @@ timeoutSecs: number } |
 id: number; 
 /**  Whether the call may run. */
 allowed: boolean };
+
+/**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
+export type ExportLayoutPngRequest = {
+	/**  The template file's id. */
+	layout: string,
+	/**  Device pixels per CSS pixel: 1 or 2. */
+	scale: number,
+	/**  The page's colours. */
+	surface: LayoutSurface,
+	/**  The font of every block without its own. */
+	font: LayoutFont,
+	/**  The block's own font, by block index; a missing or null entry uses `font`. */
+	blockFonts?: (LayoutFont | null)[],
+};
 
 /**
  *  Convert faces to web fonts. Refused with `PermissionDenied` when the
@@ -1908,6 +1935,14 @@ export type LanguageCoverage = {
 	hasLocl: boolean,
 };
 
+/**  A language preset that a text may be in. */
+export type LanguageHint = {
+	/**  Preset code from `list_languages`. */
+	code: string,
+	/**  Above 0.0 and at most 1.0; higher fits the text better. */
+	confidence: number | null,
+};
+
 /**  A language preset from `data/charsets`. */
 export type LanguagePreset = {
 	/**  Code (`sr-Cyrl`). */
@@ -1980,6 +2015,16 @@ export type LayoutEntry = {
 	broken?: string | null,
 };
 
+/**  The font a block is set in: a layout file holds no fonts, so an export names them. */
+export type LayoutFont = {
+	/**  The face. */
+	face: FaceId,
+	/**  Variation-axis values; axes not named keep their defaults. */
+	variations?: AxisValue[],
+	/**  OpenType features switched on or off. */
+	features?: FeatureSetting[],
+};
+
 /**  A built-in layout. */
 export type LayoutPreset = 
 /**  A book page: a heading and indented paragraphs in one column. */
@@ -2000,6 +2045,13 @@ export type LayoutRef = {
 	/**  The template file's id. */
 	id: string,
 };
+
+/**  The colours a layout is exported on. */
+export type LayoutSurface = 
+/**  Near-black type on paper white. */
+"paper" | 
+/**  Light type on near-black. */
+"ink";
 
 /**  An earlier content of a template file. */
 export type LayoutVersion = {
@@ -2651,12 +2703,18 @@ export type ReceiptPlace =
 /**  In the app's data folder, on this machine only. */
 "appData";
 
-/**  Rename a collection. */
+/**  Rename a collection, or change its colour. */
 export type RenameCollectionRequest = {
 	/**  The collection. */
 	collection: CollectionId,
-	/**  New name. */
+	/**  New name; its current name changes only the colour. */
 	name: string,
+	/**
+	 *  A key of [`COLLECTION_COLORS`] sets the colour and an empty string
+	 *  removes it; absent keeps it, so a plain rename leaves it alone. Any
+	 *  other value is `InvalidRequest`.
+	 */
+	color?: string | null,
 };
 
 /**  Gives a saved comparison a new name. */
@@ -3013,6 +3071,14 @@ export type Settings = {
 	 *  [`Self::download_folder`]. Off by default.
 	 */
 	fetchMissingFonts?: boolean,
+	/**
+	 *  The named theme (E47.1), one of [`SettingsService::list_themes`]; next
+	 *  to [`Self::theme`], which still chooses its light or dark token set.
+	 *  A `config.json` from before themes gets [`DEFAULT_THEME_ID`] from the
+	 *  struct's defaults; so does a request while the file names a theme this
+	 *  version does not ship.
+	 */
+	themeId?: string,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -3049,6 +3115,11 @@ export type SettingsUpdate = {
 	downloadFolder?: string | null,
 	/**  Download fonts a document needs from the catalogs the user turned on. */
 	fetchMissingFonts?: boolean | null,
+	/**
+	 *  The named theme: the id of one of [`SettingsService::list_themes`];
+	 *  any other id is refused and nothing changes.
+	 */
+	themeId?: string | null,
 };
 
 /**  The shortlist for a brief. */
@@ -3313,6 +3384,37 @@ export type Theme =
 /**  Always dark. */
 "dark";
 
+/**  A named theme the app ships, from `data/themes` (E47.1). */
+export type ThemeDefinition = {
+	/**  The value of [`Settings::theme_id`], e.g. `paper`. */
+	id: string,
+	/**  The name to show, e.g. `Paper`. */
+	name: string,
+	/**  The tokens for the light appearance. */
+	light: ThemeTokens,
+	/**  The tokens for the dark appearance. */
+	dark: ThemeTokens,
+};
+
+/**
+ *  One token set of a theme: a color for each `--fm-*` token of the same
+ *  name. `#rrggbb`; [`Self::border`] may also be `#rrggbbaa`.
+ */
+export type ThemeTokens = {
+	/**  Rings, fills, knobs and badges. */
+	accent: string,
+	/**  Words and marks on the accent; at least 4.5:1 on it. */
+	onAccent: string,
+	/**  Level 0: the list and the specimens. */
+	bg: string,
+	/**  Level 1: side panes and bars. */
+	surface: string,
+	/**  Level 2: popovers, dialogs and cards. */
+	surface2: string,
+	/**  Hairlines between rows and panels. */
+	border: string,
+};
+
 /**  One copy of a [`Resolution`]. */
 export type TrashMove = {
 	/**  The copy's path in the library. */
@@ -3482,4 +3584,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 23, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 24, patch: 0 };

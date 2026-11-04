@@ -127,8 +127,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onPointerDown,
 .drawer-enter-active,
 .drawer-leave-active {
   transition:
-    transform var(--fm-motion-panel) var(--fm-ease),
-    opacity var(--fm-motion-panel) var(--fm-ease);
+    transform var(--fm-motion-move) var(--fm-ease),
+    opacity var(--fm-motion-move) var(--fm-ease);
 }
 .drawer-enter-from,
 .drawer-leave-to {

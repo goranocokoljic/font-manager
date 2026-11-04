@@ -246,7 +246,7 @@ h2 {
 }
 @media (prefers-reduced-motion: no-preference) {
   .sheet {
-    animation: rise var(--fm-motion-panel, 200ms) var(--fm-ease);
+    animation: rise var(--fm-motion-move) var(--fm-ease);
   }
 }
 @keyframes rise {

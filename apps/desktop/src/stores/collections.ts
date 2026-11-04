@@ -89,6 +89,18 @@ export const useCollectionsStore = defineStore('collections', () => {
     return !!done;
   }
 
+  /** Sets a collection's colour, a key of the palette, or removes it (an empty one). */
+  async function setColor(collection: Collection, color: string | null): Promise<void> {
+    const done = await attempt(() =>
+      useClient().renameCollection({
+        collection: collection.id,
+        name: collection.name,
+        color: color ?? '',
+      }),
+    );
+    if (done) await refresh();
+  }
+
   /** Puts a collection under `parent` (null: the top level) at `position` among its siblings. */
   async function move(
     collection: CollectionId,
@@ -163,6 +175,7 @@ export const useCollectionsStore = defineStore('collections', () => {
     show,
     create,
     rename,
+    setColor,
     move,
     remove,
     add,

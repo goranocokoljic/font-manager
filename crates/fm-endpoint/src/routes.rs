@@ -99,6 +99,7 @@ routes! {
     check_coverage(req),
     face_coverage(face),
     list_languages(),
+    detect_languages(req),
     find_similar(req),
     find_by_image(req),
     suggest_pairings(req),
@@ -163,6 +164,7 @@ routes! {
     get_settings(),
     update_settings(req),
     app_folders(),
+    list_themes(),
     endpoint_info(),
     regenerate_endpoint_token(),
     mcp_status(),
@@ -182,6 +184,7 @@ routes! {
     layout_history(req),
     restore_layout(req),
     layout_width(layout),
+    export_layout_png(req),
     // comparisons
     list_comparisons(),
     get_comparison(req),

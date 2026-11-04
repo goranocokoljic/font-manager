@@ -1,0 +1,19 @@
+{
+  "id": "a-general-rule-over-a-data-set-needs-a-test-over-the-rows-th",
+  "title": "A general rule over a data set needs a test over the rows the examples do not name",
+  "category": "testing",
+  "rule": "When a criterion states a rule over a data set (every language preset, every feature, every file format) and names one example, test the rule on rows of the data that the example does not cover, and on the kinds of row that differ: a row with an optional field missing, a row whose field writes both cases, a value in the secondary set. Sweep the rows where you can: feed each preset's own letters to the detector and print who comes first. Tests of the named example and of rows with no competitor still pass when the rule fails for the rest.",
+  "rationale": "E43.2 (#466): detect_languages passed the named sr-Latn, hr, pl order and five language tests, but ranked sr-Latn above sl on Slovene's own line, fr above nl on Dutch's own line, and any preset without sampleGlyphs below others on its exact required set.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    466
+  ],
+  "file_globs": [
+    "crates/fm-core/src/**",
+    "data/**"
+  ],
+  "first_seen": "2026-11-04T02:57:28.636Z",
+  "last_seen": "2026-11-04T02:57:28.636Z"
+}

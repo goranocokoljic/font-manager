@@ -309,6 +309,7 @@ async fn collection_and_set_resources_read_the_core() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("collection");
     api.add_to_collection(CollectionFacesRequest {

@@ -1113,7 +1113,7 @@ impl Collections {
                 Some((_, true)) => return Ok(Err(())),
                 Some((id, false)) => Some(id),
                 None if create => {
-                    let id = super::collections::insert_collection(tx, parent, name, None)?;
+                    let id = super::collections::insert_collection(tx, parent, name, None, None)?;
                     self.by_id.insert(id, (parent, name.clone(), false));
                     Some(id)
                 }

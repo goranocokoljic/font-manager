@@ -1,6 +1,6 @@
 # 0007 — App folders, config and logs per OS
 
-Status: Accepted (2026-10-16; layouts folder added 2026-10-21, E12.5)
+Status: Accepted (2026-10-16; layouts folder added 2026-10-21, E12.5; exports folder added 2026-11-04, E45.5)
 
 ## Context
 
@@ -37,6 +37,9 @@ tested on every host; only `AppPaths::current()` picks the host's rules.
   the folder again; a file that is not a layout is listed as broken with the reason. A
   save keeps the content it replaces in `layouts/.history/<id>/<number>-<unix ms>.json`,
   the newest 20 kept; these are app-owned copies, so the oldest are removed, not trashed.
+- Rendered layouts (E45.5) are PNG files in `exports/` inside the data folder
+  (`AppPaths::exports_dir`). Images are not settings, so they stay local to the machine. A
+  new export takes a free name and never replaces an earlier one.
 - Logs use `tracing` with `tracing-appender`: one file per day, `fm.YYYY-MM-DD.log`,
   the newest 7 kept, written from a background thread.
 - A panic writes a crash log next to them, synchronously from the panic hook:

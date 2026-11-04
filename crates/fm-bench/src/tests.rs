@@ -186,6 +186,23 @@ fn similar_faces_are_timed_for_every_face_and_round() {
 }
 
 #[test]
+fn a_layout_export_is_timed_for_the_first_faces_and_writes_files() {
+    let home = TempDir::new("layout-png");
+    first_scan(&fixtures(), home.path()).expect("scan");
+    let res = layout_png(home.path(), 2).expect("layout png");
+    assert_eq!(res.faces, LAYOUT_PNG_FACES as usize, "{res:?}");
+    assert_eq!(res.samples, res.faces * 2, "{res:?}");
+    assert!(
+        res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
+        "{res:?}"
+    );
+    let written = std::fs::read_dir(home_paths(home.path()).exports_dir())
+        .expect("exports")
+        .count();
+    assert_eq!(written, res.samples + res.faces, "one untimed per face");
+}
+
+#[test]
 fn pairings_are_timed_for_the_first_faces() {
     let home = TempDir::new("pairings");
     first_scan(&fixtures(), home.path()).expect("scan");

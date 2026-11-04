@@ -48,7 +48,7 @@ describe('metric', () => {
   test('every budget of CLAUDE.md rule 8 is in the report', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
       'activation_100', 'cold_start', 'first_scan', 'fonts_needed_100', 'idle_memory', 'incremental_update',
-      'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
+      'layout_png', 'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
     ]);
     assert.equal(BUDGETS.preview_cache_hit.target, 2);
     assert.equal(BUDGETS.first_scan.target, 10000);

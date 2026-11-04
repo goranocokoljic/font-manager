@@ -99,6 +99,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; check_coverage, json!({ "face": 1, "target": { "kind": "text", "text": "Ab" } }));
     same!(seen, d, c; face_coverage, json!(1));
     same!(seen, d, c; list_languages);
+    same!(seen, d, c; detect_languages, json!({ "text": "đć" }));
     same!(seen, d, c; find_similar, json!({ "face": 1, "limit": 3 }));
     same!(seen, d, c; find_by_image, json!({ "path": format!("{out}-missing.png"), "limit": 3 }));
     same!(seen, d, c; suggest_pairings, json!({ "face": 1, "limit": 3 }));
@@ -126,6 +127,12 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; create_collection, json!({ "name": "Over HTTP" }));
     same!(seen, d, c; create_collection, json!({ "name": "Over HTTP" }));
     same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed" }));
+    // A colour is set, kept when the request has none, removed by "", and checked.
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed", "color": "teal" }));
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed" }));
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed", "color": "" }));
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed", "color": "#ff0000" }));
+    same!(seen, d, c; create_collection, json!({ "name": "Painted", "color": "#ff0000" }));
     same!(seen, d, c; move_collection, json!({ "collection": 1, "position": 0 }));
     same!(seen, d, c; update_collection_rules, json!({ "collection": 1, "ruleGroup": { "op": "and", "rules": [] } }));
     same!(seen, d, c; delete_collection, json!(999));
@@ -169,7 +176,10 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; get_settings);
     same!(seen, d, c; update_settings, json!({ "theme": "dark" }));
     same!(seen, d, c; update_settings, json!({ "cacheLimitMb": 1 }));
+    same!(seen, d, c; update_settings, json!({ "themeId": "indigo" }));
+    same!(seen, d, c; update_settings, json!({ "themeId": "no-such-theme" }));
     same!(seen, d, c; app_folders);
+    same!(seen, d, c; list_themes);
     same!(seen, d, c; endpoint_info);
     // The client takes the new token, so the calls after this still get in.
     same!(seen, d, c; regenerate_endpoint_token);
@@ -194,6 +204,9 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; layout_history, json!({ "id": "via-http" }));
     same!(seen, d, c; restore_layout, json!({ "id": "via-http", "number": 1 }));
     same!(seen, d, c; layout_width, layout);
+    same!(seen, d, c; export_layout_png, json!({
+        "layout": "none", "scale": 1, "surface": "paper", "font": { "face": 1 }
+    }));
     // comparisons
     same!(seen, d, c; list_comparisons);
     same!(seen, d, c; save_comparison, json!({ "name": "Pair", "faces": [1] }));

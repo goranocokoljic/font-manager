@@ -20,7 +20,7 @@ use fm_api::search::{
     CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, SearchRequest, SearchResponse,
     Supports,
 };
-use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme};
+use fm_api::settings::{AppFolders, Settings, SettingsUpdate, Theme, ThemeDefinition};
 use fm_api::{
     API_VERSION, ActivationService, ApiResult, Event, FaceId, FamilyId, JobId, SearchService,
     SettingsService, SourceId,
@@ -211,6 +211,20 @@ fn search_returns_hits_and_filter_counts() {
         .deserialize()
         .unwrap();
     assert_eq!(langs, api.list_languages().unwrap());
+}
+
+#[test]
+fn detect_languages_answers_through_the_command() {
+    let hints: Vec<serde_json::Value> = invoke_with(
+        "detect_languages",
+        serde_json::json!({ "req": { "text": "đć" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(hints[0]["code"], "sr-Latn");
+    assert_eq!(hints[1]["code"], "pl");
 }
 
 #[test]
@@ -743,6 +757,9 @@ impl SettingsService for Store {
             logs: "/store/logs".into(),
         })
     }
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        Ok(Vec::new())
+    }
 }
 
 #[test]
@@ -761,6 +778,37 @@ fn the_settings_store_serves_the_settings_commands() {
         .deserialize()
         .unwrap();
     assert_eq!(folders.logs, "/store/logs");
+    let themes: Vec<ThemeDefinition> = send(&webview, "list_themes", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert!(themes.is_empty(), "the store's list, not the mock's");
+}
+
+#[test]
+fn list_themes_and_the_theme_id_are_camel_case_over_ipc() {
+    let (_app, webview) = app().unwrap();
+    let themes: serde_json::Value = send(&webview, "list_themes", serde_json::json!({}))
+        .unwrap()
+        .unwrap()
+        .deserialize()
+        .unwrap();
+    assert_eq!(themes[0]["id"], "paper");
+    assert_eq!(themes[1]["light"]["onAccent"], "#ffffff");
+    assert_eq!(themes[1]["dark"]["surface2"], "#262627");
+
+    let settings: serde_json::Value = send(
+        &webview,
+        "update_settings",
+        serde_json::json!({ "req": { "themeId": "moss" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(settings["themeId"], "moss");
+    assert_eq!(settings["theme"], "system");
 }
 
 #[test]

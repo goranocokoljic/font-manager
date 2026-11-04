@@ -1041,6 +1041,18 @@
       "newSmart": "Neue intelligente Sammlung",
       "exportLicenseInventory": "Lizenzübersicht exportieren…",
       "addSelected": "Ausgewählte Schriften zu „{name}“ hinzufügen"
+    },
+    "specimens": "Schriften in {name}",
+    "colorLabel": "Farbe von {name}",
+    "color": {
+      "coral": "Koralle",
+      "amber": "Bernstein",
+      "green": "Grün",
+      "teal": "Blaugrün",
+      "blue": "Blau",
+      "violet": "Violett",
+      "orchid": "Orchidee",
+      "slate": "Schiefer"
     }
   },
   "rules": {

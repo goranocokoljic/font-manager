@@ -18,8 +18,8 @@ use fm_api::export::{
     GlyphSvgRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat,
 };
 use fm_api::layout::{
-    BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
-    RevertLayoutRequest, SaveLayoutRequest,
+    BlockOverflow, DuplicateLayoutRequest, ExportLayoutPngRequest, LayoutFont, LayoutPreset,
+    LayoutRef, LayoutSurface, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
 };
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
@@ -638,6 +638,7 @@ fn collections_nest_reorder_and_take_families() {
             name: name.into(),
             parent,
             rules: None,
+            color: None,
         })
         .unwrap()
     };
@@ -681,6 +682,7 @@ fn collections_nest_reorder_and_take_families() {
     let clash = api.rename_collection(RenameCollectionRequest {
         collection: b.id,
         name: "C".into(),
+        color: None,
     });
     assert_eq!(clash.unwrap_err().code, ErrorCode::Conflict);
 
@@ -717,6 +719,7 @@ fn families_filter_by_a_collection_and_an_unknown_one_is_not_found() {
             name: "Clients".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap();
     let families = |collection| {
@@ -753,6 +756,7 @@ fn collections_tags_meta_and_sets() {
             name: "Clients".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap();
     let c = api
@@ -773,6 +777,7 @@ fn collections_tags_meta_and_sets() {
                 variable: Some(true),
                 ..Default::default()
             }),
+            color: None,
         })
         .unwrap();
     assert_eq!(smart.face_count, 2);
@@ -1615,6 +1620,35 @@ fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
 }
 
 #[test]
+fn the_theme_id_is_one_of_the_listed_themes_and_an_unknown_one_changes_nothing() {
+    use fm_api::settings::SettingsUpdate;
+    let api = api();
+    let themes = api.list_themes().unwrap();
+    let ids: Vec<&str> = themes.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["paper", "graphite", "indigo", "moss"]);
+    assert_eq!(api.get_settings().unwrap().theme_id, "paper");
+
+    let next = api
+        .update_settings(SettingsUpdate {
+            theme_id: Some("indigo".into()),
+            ..SettingsUpdate::default()
+        })
+        .unwrap();
+    assert_eq!(next.theme_id, "indigo");
+    assert_eq!(api.get_settings().unwrap(), next);
+
+    let err = api
+        .update_settings(SettingsUpdate {
+            theme_id: Some("no-such-theme".into()),
+            cache_limit_mb: Some(128),
+            ..SettingsUpdate::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert_eq!(api.get_settings().unwrap(), next, "nothing is half-applied");
+}
+
+#[test]
 fn family_rows_carry_the_detail_list_columns() {
     let api = api();
     api.tag_faces(TagFacesRequest {
@@ -1988,6 +2022,7 @@ fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
             name: "Brand".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap()
         .id;
@@ -2086,6 +2121,7 @@ fn smart(
         parent: None,
         rules: None,
         rule_group: Some(RuleGroup { op, rules }),
+        color: None,
     })
 }
 
@@ -2177,6 +2213,7 @@ fn smart_collections_follow_the_rules() {
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .unwrap();
     assert_eq!(
@@ -2255,6 +2292,7 @@ fn smart_collections_follow_the_rules() {
         parent: None,
         rules: Some(Filters::default()),
         rule_group: Some(RuleGroup::from(Filters::default())),
+        color: None,
     });
     assert_eq!(both.unwrap_err().code, ErrorCode::InvalidRequest);
 }
@@ -2410,6 +2448,37 @@ fn layout_presets_start_locked_at_a_readable_width_that_follows_the_body_block()
     );
     chosen.width_locked = false;
     assert_eq!(api.layout_width(chosen).expect("width"), None);
+}
+
+#[test]
+fn a_layout_export_makes_the_core_checks_and_names_the_file() {
+    let api = api();
+    let font = LayoutFont {
+        face: FaceId(1),
+        variations: Vec::new(),
+        features: Vec::new(),
+    };
+    let req = |layout: &str, scale: u8| ExportLayoutPngRequest {
+        layout: layout.into(),
+        scale,
+        surface: LayoutSurface::Ink,
+        font: font.clone(),
+        block_fonts: Vec::new(),
+    };
+    assert_eq!(
+        api.export_layout_png(req("book", 2)).expect("export"),
+        "/mock/exports/book-ink-2x.png"
+    );
+    let code = |r: ExportLayoutPngRequest| api.export_layout_png(r).unwrap_err().code;
+    assert_eq!(code(req("book", 3)), ErrorCode::InvalidRequest);
+    assert_eq!(code(req("none", 1)), ErrorCode::NotFound);
+    assert_eq!(code(req("draft", 1)), ErrorCode::InvalidRequest);
+    let mut unknown = req("book", 1);
+    unknown.font.face = FaceId(999_999);
+    assert_eq!(code(unknown), ErrorCode::NotFound);
+    let mut extra = req("book", 1);
+    extra.block_fonts = vec![None; 40];
+    assert_eq!(code(extra), ErrorCode::InvalidRequest);
 }
 
 #[test]
@@ -2788,6 +2857,7 @@ fn rule_editor_calls_behave_like_the_core() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .unwrap();
     let not_smart = api
@@ -2847,6 +2917,27 @@ fn language_presets_carry_their_sample_glyphs() {
     assert_eq!(sr.sample_glyphs.as_deref(), Some("Šđčćž"));
     let json = serde_json::to_value(sr).expect("json");
     assert_eq!(json["sampleGlyphs"], "Šđčćž");
+}
+
+#[test]
+fn detect_languages_ranks_the_presets_by_the_text_letters() {
+    let detect = |text: &str| {
+        api()
+            .detect_languages(fm_api::search::DetectLanguagesRequest { text: text.into() })
+            .expect("hints")
+    };
+    let hints = detect("Đ ć");
+    let codes: Vec<&str> = hints.iter().map(|h| h.code.as_str()).collect();
+    assert_eq!(codes, ["sr-Latn", "pl"]);
+    assert_eq!(hints[0].confidence, 1.0);
+    assert_eq!(hints[1].confidence, 0.5);
+    assert!(detect("plain ascii").is_empty());
+    assert!(detect("“—”").is_empty());
+    let json = serde_json::to_value(&hints[0]).expect("json");
+    assert_eq!(
+        json,
+        serde_json::json!({ "code": "sr-Latn", "confidence": 1.0 })
+    );
 }
 
 #[test]
@@ -2995,6 +3086,7 @@ fn a_collection_specimen_checks_like_the_core_and_returns_the_path() {
             name: name.into(),
             parent: None,
             rules,
+            color: None,
         })
         .unwrap()
         .id
@@ -3432,4 +3524,93 @@ fn font_switch_payload_names_the_face_and_its_file() {
         api.font_switch_payload(FaceId(999)).unwrap_err().code,
         ErrorCode::NotFound
     );
+}
+
+#[test]
+fn collection_colours_are_set_kept_removed_and_checked() {
+    let api = api();
+    let made = api
+        .create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+            color: Some("coral".into()),
+        })
+        .unwrap();
+    assert_eq!(made.color.as_deref(), Some("coral"));
+    let rename = |color: Option<&str>| {
+        api.rename_collection(RenameCollectionRequest {
+            collection: made.id,
+            name: "Brand".into(),
+            color: color.map(str::to_owned),
+        })
+    };
+    assert_eq!(rename(None).unwrap().color.as_deref(), Some("coral"));
+    assert_eq!(rename(Some("teal")).unwrap().color.as_deref(), Some("teal"));
+    assert_eq!(
+        rename(Some("#ff0000")).unwrap_err().code,
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(rename(None).unwrap().color.as_deref(), Some("teal"));
+    assert_eq!(rename(Some("")).unwrap().color, None);
+    assert_eq!(
+        api.create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Hex".into(),
+            parent: None,
+            rules: None,
+            color: Some("#ff0000".into()),
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::InvalidRequest
+    );
+}
+
+/// A client that sends no colour, or null, must not take a collection's colour away.
+#[test]
+fn a_rename_request_without_a_colour_keeps_it() {
+    let read = |json: serde_json::Value| {
+        serde_json::from_value::<RenameCollectionRequest>(json)
+            .unwrap()
+            .color
+    };
+    assert_eq!(
+        read(serde_json::json!({ "collection": 1, "name": "A" })),
+        None
+    );
+    assert_eq!(
+        read(serde_json::json!({ "collection": 1, "name": "A", "color": null })),
+        None
+    );
+    assert_eq!(
+        read(serde_json::json!({ "collection": 1, "name": "A", "color": "" })).as_deref(),
+        Some("")
+    );
+}
+
+/// The UI lists the palette and draws each key with a token in both themes; a key that
+/// is missing there could be stored and never shown.
+#[test]
+fn the_ui_draws_every_collection_colour() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/desktop/src");
+    let read = |file: &str| std::fs::read_to_string(src.join(file)).unwrap();
+    let keys = read("api/collectionColors.ts");
+    let theme = read("styles/theme.css");
+    assert_eq!(
+        keys.matches("  '").count(),
+        fm_api::organization::COLLECTION_COLORS.len()
+    );
+    for key in fm_api::organization::COLLECTION_COLORS {
+        assert!(
+            keys.contains(&format!("'{key}'")),
+            "{key} in the UI's palette"
+        );
+        assert_eq!(
+            theme.matches(&format!("--fm-collection-{key}:")).count(),
+            3,
+            "{key}: a light, an OS dark and a forced dark value"
+        );
+    }
 }

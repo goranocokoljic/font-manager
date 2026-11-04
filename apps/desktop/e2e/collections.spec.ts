@@ -61,6 +61,61 @@ test('collections are made, renamed, nested, reordered and deleted', async ({ pa
   await expect(row(page, 'Clients')).toHaveCount(0);
 });
 
+test('a collection takes a colour: a dot in the sidebar, a tinted strip of its fonts', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await make(page, 'Mono');
+  const list = page.getByRole('tree', { name: 'Font list' });
+  await list.getByRole('treeitem', { name: /JetBrains Mono/ }).dragTo(row(page, 'Mono'));
+  await open(page, 'Mono');
+
+  await row(page, 'Mono').getByRole('button', { name: 'More actions for Mono' }).click();
+  await expect(page.getByRole('menuitemradio')).toHaveCount(8);
+  await page.getByRole('menuitemradio', { name: 'Teal' }).click();
+
+  const dot = row(page, 'Mono').getByTestId('collection-dot');
+  await expect(dot).toHaveCSS('width', '8px');
+  await expect(dot).toHaveCSS('height', '8px');
+  const teal = await page.evaluate(() => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--fm-collection-teal)';
+    document.body.append(probe);
+    const color = getComputedStyle(probe).color;
+    probe.remove();
+    return color;
+  });
+  await expect(dot).toHaveCSS('background-color', teal);
+
+  const strip = page.getByRole('list', { name: 'Fonts in Mono' });
+  await expect(strip).toHaveCSS('border-inline-start-color', teal);
+  await expect(strip.getByRole('listitem')).toHaveText(/JetBrains Mono/);
+
+  // A rename keeps the colour; the chosen swatch takes it off.
+  await row(page, 'Mono').getByRole('button', { name: 'More actions for Mono' }).click();
+  await page.getByRole('menuitem', { name: 'Rename Mono' }).click();
+  const rename = sidebar(page).getByRole('textbox', { name: 'New name for Mono' });
+  await rename.fill('Code');
+  await rename.press('Enter');
+  await expect(row(page, 'Code').getByTestId('collection-dot')).toBeVisible();
+
+  await row(page, 'Code').getByRole('button', { name: 'More actions for Code' }).click();
+  await expect(page.getByRole('menuitemradio', { name: 'Teal' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
+  await page.getByRole('menuitemradio', { name: 'Teal' }).click();
+  await expect(row(page, 'Code').getByTestId('collection-dot')).toHaveCount(0);
+
+  // By keyboard: the focus comes back to the row's button and stays there through the refresh.
+  const more = row(page, 'Code').getByRole('button', { name: 'More actions for Code' });
+  await more.click();
+  await page.getByRole('menuitemradio', { name: 'Blue' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(row(page, 'Code').getByTestId('collection-dot')).toBeVisible();
+  await expect(more).toBeFocused();
+});
+
 test('fonts dragged from the list land in a collection, and the sidebar counts them', async ({
   page,
 }) => {

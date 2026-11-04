@@ -50,7 +50,8 @@ validated against the JSON schema next to it by a test (epic E3).
   without spaces (`Šđčćž` for `sr-Latn`, `Ąćęłńóśźż` for `pl`). The family page shows
   them as a short glyph line next to the pangram. 1–32 characters, none twice, each in
   `base` or `auxiliary`. A preset with `sampleGlyphs` must have a pangram in
-  `data/pangrams`.
+  `data/pangrams`. Language detection also reads them: when presets have the same
+  letters, the shorter line ranks first (`sr-Latn` before `hr` for `đ` + `ć`).
 - `source` — where the base set comes from: `hyperglot`, `google-fonts` or `project`.
 
 ## Contributing

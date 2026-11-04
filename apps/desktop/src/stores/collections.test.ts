@@ -28,6 +28,17 @@ beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => setClient(undefined));
 
 describe('collections store', () => {
+  it('sets a colour under the same name, keeps it through a rename and removes it', async () => {
+    const store = await setup();
+    await store.create('Brand');
+    await store.setColor(store.collections[0]!, 'teal');
+    expect(store.collections[0]).toMatchObject({ name: 'Brand', color: 'teal' });
+    await store.rename(store.collections[0]!.id, 'Marque');
+    expect(store.collections[0]).toMatchObject({ name: 'Marque', color: 'teal' });
+    await store.setColor(store.collections[0]!, null);
+    expect(store.collections[0]).toMatchObject({ name: 'Marque', color: null });
+  });
+
   it('creates, renames, nests, reorders and deletes collections', async () => {
     const store = await setup();
     expect(await store.create('Clients')).toBe(true);

@@ -10,6 +10,7 @@ import { decodePreview, type PreviewBytes } from './preview';
 import type {
   Catalog,
   CatalogDownload,
+  ThemeDefinition,
   CatalogFamily,
   CatalogId,
   CatalogRef,
@@ -66,7 +67,9 @@ import type {
   GlyphsRequest,
   JobId,
   KeepCopyRequest,
+  LanguageHint,
   LanguagePreset,
+  DetectLanguagesRequest,
   DuplicateLayoutRequest,
   Layout,
   LayoutBounds,
@@ -75,6 +78,7 @@ import type {
   LayoutVersion,
   ListFamiliesRequest,
   RestoreLayoutRequest,
+  ExportLayoutPngRequest,
   RevertLayoutRequest,
   SavedLayout,
   SaveLayoutRequest,
@@ -170,6 +174,8 @@ export interface FmClient {
   faceCoverage(face: FaceId): Promise<FaceCoverage>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
+  /** The language presets a typed text may be in, best first; empty for plain ASCII (E43.2). */
+  detectLanguages(req: DetectLanguagesRequest): Promise<LanguageHint[]>;
   /** Faces that look like one face, closest first, each with its score and reasons (E23.3). */
   findSimilar(req: SimilarRequest): Promise<SimilarFace[]>;
   /** Faces of other families that pair with one face by rule, best first, with reasons (E23.4). */
@@ -251,6 +257,8 @@ export interface FmClient {
   restoreLayout(req: RestoreLayoutRequest): Promise<SavedLayout>;
   /** The width in CSS px the layout's text is set at; null when unlocked (follows the window). */
   layoutWidth(req: Layout): Promise<number | null>;
+  /** Renders a saved layout to a new PNG in the export folder; answers the file's path. */
+  exportLayoutPng(req: ExportLayoutPngRequest): Promise<string>;
   /** Every online catalog (E22.1), on or off, with the state of its cache. */
   listCatalogs(): Promise<Catalog[]>;
   /** Turns a catalog on or off; makes no request. */
@@ -347,6 +355,8 @@ export interface FmClient {
   setSourcePaused(req: SetSourcePausedRequest): Promise<Source>;
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
+  /** The themes the app ships, the default first (`themeId` in the settings holds one id). */
+  listThemes(): Promise<ThemeDefinition[]>;
   getAppFolders(): Promise<AppFolders>;
   /** The local API endpoint: its address (while it runs) and the token (Settings → Local API). */
   endpointInfo(): Promise<EndpointInfo>;
@@ -412,6 +422,7 @@ export const tauriClient: FmClient = {
   checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
   faceCoverage: (face) => invoke<FaceCoverage>('face_coverage', { face }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
+  detectLanguages: (req) => invoke<LanguageHint[]>('detect_languages', { req }),
   findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
   suggestPairings: (req) => invoke<PairingSuggestion[]>('suggest_pairings', { req }),
   listCollections: () => invoke<Collection[]>('list_collections'),
@@ -453,6 +464,7 @@ export const tauriClient: FmClient = {
   layoutHistory: (req) => invoke<LayoutVersion[]>('layout_history', { req }),
   restoreLayout: (req) => invoke<SavedLayout>('restore_layout', { req }),
   layoutWidth: (req) => invoke<number | null>('layout_width', { req }),
+  exportLayoutPng: (req) => invoke<string>('export_layout_png', { req }),
   listCatalogs: () => invoke<Catalog[]>('list_catalogs'),
   setCatalogEnabled: (req) => invoke<Catalog>('set_catalog_enabled', { req }),
   refreshCatalog: (req) => invoke<Catalog>('refresh_catalog', { req }),
@@ -493,6 +505,7 @@ export const tauriClient: FmClient = {
   setSourcePaused: (req) => invoke<Source>('set_source_paused', { req }),
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
+  listThemes: () => invoke<ThemeDefinition[]>('list_themes'),
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
   endpointInfo: () => invoke<EndpointInfo>('endpoint_info'),
   regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),
