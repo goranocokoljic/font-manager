@@ -171,6 +171,9 @@ describe('FontGrid', () => {
   });
 
   it('the slider keeps each card, scales its mask and starts no render', async () => {
+    // The text is re-chosen (and rendered) once the slider rests for SETTLE_MS; a real timer
+    // would fire on a slow machine before the check below.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await load({ extraFaces: 20 });
     const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW, sizePx: 30 } });
     await flushPromises();

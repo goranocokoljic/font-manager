@@ -314,34 +314,43 @@ test.describe('the wall', () => {
       'data-state',
       'ready',
     );
-    const fps = await page.evaluate(
-      () =>
-        new Promise<number>((resolve) => {
-          const input = document.querySelector<HTMLInputElement>(
-            'input[aria-label="Size slider"]',
-          )!;
-          const stamps: number[] = [];
-          let size = 24;
-          let step = 1;
-          const tick = (now: number) => {
-            stamps.push(now);
-            size += step;
-            if (size >= 120 || size <= 24) step = -step;
-            input.value = String(size);
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-            if (stamps.length < 180) requestAnimationFrame(tick);
-            else {
-              const gaps = stamps
-                .slice(1)
-                .map((t, i) => t - stamps[i]!)
-                .sort((a, b) => a - b);
-              resolve(1000 / gaps[Math.floor(gaps.length / 2)]!);
-            }
-          };
-          requestAnimationFrame(tick);
-        }),
-    );
-    console.log(`wall slider: ${fps.toFixed(1)} fps median`);
-    expect(fps).toBeGreaterThanOrEqual(55);
+    // Median frame rate of `frames` animation frames; `work` runs in every frame.
+    const measure = (work: boolean, frames: number) =>
+      page.evaluate(
+        ([work, frames]) =>
+          new Promise<number>((resolve) => {
+            const input = document.querySelector<HTMLInputElement>(
+              'input[aria-label="Size slider"]',
+            )!;
+            const stamps: number[] = [];
+            let size = 24;
+            let step = 1;
+            const tick = (now: number) => {
+              stamps.push(now);
+              if (work) {
+                size += step;
+                if (size >= 120 || size <= 24) step = -step;
+                input.value = String(size);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              if (stamps.length < frames) requestAnimationFrame(tick);
+              else {
+                const gaps = stamps
+                  .slice(1)
+                  .map((t, i) => t - stamps[i]!)
+                  .sort((a, b) => a - b);
+                resolve(1000 / gaps[Math.floor(gaps.length / 2)]!);
+              }
+            };
+            requestAnimationFrame(tick);
+          }),
+        [work, frames] as const,
+      );
+    // What this machine's animation frames run at when nothing happens: 60 on a display at
+    // 60 Hz, less on a shared CI runner. The slider may cost at most 5 fps of that.
+    const idle = await measure(false, 60);
+    const fps = await measure(true, 180);
+    console.log(`wall slider: ${fps.toFixed(1)} fps median (idle ${idle.toFixed(1)})`);
+    expect(fps).toBeGreaterThanOrEqual(Math.min(55, idle - 5));
   });
 });
