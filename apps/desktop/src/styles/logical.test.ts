@@ -19,12 +19,7 @@ const SOURCES = Object.fromEntries(
  * Physical declarations that stay, as `file: declaration` (the declaration as
  * `physicalDeclarations` reports it), each with the reason it must not mirror.
  */
-const ALLOWED: Record<string, string> = {
-  // The thumbnail is a picture of the sample text, and the sample's direction is
-  // the text's, not the chrome's (criterion 3): a Latin sample starts on the left.
-  'components/FontGrid.vue: mask-position: left center': 'thumbnail follows its text',
-  'components/FontGrid.vue: -webkit-mask-position: left center': 'thumbnail follows its text',
-};
+const ALLOWED: Record<string, string> = {};
 
 /** Properties that name a physical side. */
 const PHYSICAL_PROPERTY =

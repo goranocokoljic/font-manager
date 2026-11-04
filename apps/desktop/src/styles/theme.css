@@ -30,6 +30,7 @@
   /* Radii: small for controls and chips, medium for cards, panels and popovers. */
   --fm-radius-sm: 4px;
   --fm-radius-md: 8px;
+  --fm-radius-lg: 12px;
 
   /* Motion: three durations and one curve, nothing bounces (dev-docs/redesign/MOTION.md).
      Hover and press fast, panels and reflow move, whole pages page. */

@@ -3,10 +3,10 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Component } from 'vue';
-import { setClient, type FmClient } from '../api/client';
+import { setClient, useClient, type FmClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
 import type { PreviewRequest } from '../api/types';
-import { CARD } from '../list/grid';
+import { specimenBox, WALL, wallCardWidth, wallColumns, wallLinePx } from '../list/grid';
 import { familyKey } from '../list/rows';
 import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
 import { FRAME_MS, SETTLE_MS } from '../list/settle';
@@ -97,20 +97,32 @@ async function scrollTo(w: VueWrapper, selector: string, top: number) {
 
 const viewportOf = (w: VueWrapper, selector: string) => w.get(selector).element as HTMLElement;
 
+/** A line at the default size. In the 800 px fallback viewport that size has 2 cards per line. */
+const LINE = wallLinePx(DEFAULT_PREVIEW.sizePx);
+const FALLBACK_WIDTH = 800;
+
+/** The width in a card's `mask-size`, in px. */
+const maskWidth = (card: { get(s: string): { attributes(n: string): string | undefined } }) =>
+  Number(
+    /mask-size: ([\d.]+)px/.exec(card.get('[data-testid="thumbnail"]').attributes('style')!)?.[1],
+  );
+
 describe('FontGrid', () => {
   it('renders only the lines on screen, as cards with thumbnails from render_preview', async () => {
     await load({ extraFaces: 1997 });
     const grid = await mountView(FontGrid, { overscan: 2 });
-    // 800 × 600 px fallback viewport: 4 cards per line, 5 + 1 + 2 × 2 lines.
-    expect(grid.get('[role="listbox"]').attributes('data-columns')).toBe('4');
+    // 800 × 600 px fallback viewport: 2 cards per line, 5 + 1 + 2 × 2 lines.
+    expect(grid.get('[role="listbox"]').attributes('data-columns')).toBe('2');
     const cards = grid.findAll('[role="option"]');
-    expect(cards).toHaveLength(40);
-    expect(grid.get('.spacer').attributes('style')).toContain(`height: ${500 * CARD.linePx}px`);
-    // One render per card on screen, at the thumbnail size, with the card's text.
+    expect(cards).toHaveLength(20);
+    expect(grid.get('.spacer').attributes('style')).toContain(
+      `height: ${WALL.gap + 1000 * LINE}px`,
+    );
+    // One render per card on screen, at the render size, with the card's text.
     await flushPromises();
-    expect(renders).toHaveLength(40);
+    expect(renders).toHaveLength(20);
     const sample = pangramOf('en');
-    expect(renders[0]).toMatchObject({ sizePx: 36 });
+    expect(renders[0]).toMatchObject({ sizePx: WALL.renderPx });
     expect(sample.startsWith(renders[0]!.text)).toBe(true);
     const thumb = cards[0]!.get('[data-testid="thumbnail"]');
     expect(thumb.attributes('data-state')).toBe('ready');
@@ -122,15 +134,18 @@ describe('FontGrid', () => {
     const grid = await mountView(FontGrid);
     const list = useFontListStore();
     const cards = grid.findAll('[role="option"]');
-    expect(cards[5]!.attributes('style')).toContain(`translate(100%, ${CARD.linePx}px)`);
+    // The sixth card: second column, third line.
+    const place = (cards[5]!.element as HTMLElement).style;
+    expect(place.top).toBe(`${WALL.gap + 2 * LINE}px`);
+    expect(place.transform).toBe('');
     await cards[0]!.trigger('click');
     const box = grid.get('[role="listbox"]');
     await box.trigger('keydown', { key: 'ArrowDown' });
-    expect(list.cursorIndex).toBe(4);
+    expect(list.cursorIndex).toBe(2);
     await box.trigger('keydown', { key: 'ArrowRight' });
-    expect(list.cursorIndex).toBe(5);
+    expect(list.cursorIndex).toBe(3);
     expect(box.attributes('aria-activedescendant')).toBe(
-      `fm-card-family-${list.rows[5]!.family.id}`,
+      `fm-card-family-${list.rows[3]!.family.id}`,
     );
     // Enter on a family card expands it: its styles follow as cards.
     list.moveCursor(list.rows.findIndex((r) => r.kind === 'family' && r.family.styleCount > 1));
@@ -148,6 +163,100 @@ describe('FontGrid', () => {
     const card = grid.findAll('[role="option"]')[0]!;
     expect(card.get('[data-testid="thumbnail"]').attributes('data-state')).toBe('failed');
     expect(card.text()).toContain('Preview not available');
+  });
+
+  it('the slider keeps each card, scales its mask and starts no render', async () => {
+    await load({ extraFaces: 20 });
+    const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW, sizePx: 30 } });
+    await flushPromises();
+    const first = grid.findAll('[role="option"]')[0]!;
+    const el = first.element;
+    const before = maskWidth(first);
+    expect(before).toBeGreaterThan(0);
+    const asked = renders.length;
+
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx: 36 } });
+    await flushPromises();
+    const after = grid.findAll('[role="option"]')[0]!;
+    expect(after.element).toBe(el);
+    expect(maskWidth(after)).toBeGreaterThan(before);
+    expect(renders).toHaveLength(asked);
+    // Cards are as tall as the size asks.
+    expect((after.element as HTMLElement).style.height).toBe(`${wallLinePx(36) - WALL.gap}px`);
+  });
+
+  it('after the slider rests, a card holds its old mask until the new text is rendered', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await load({ extraFaces: 20 });
+    const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW, sizePx: 24 } });
+    await flushPromises();
+    const asked = renders.length;
+    const texts = () => renders.slice(asked).map((r) => r.text);
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx: 60 } });
+    await flushPromises();
+    // Still moving: the old text at the new scale.
+    expect(texts()).toEqual([]);
+    vi.advanceTimersByTime(SETTLE_MS);
+    await grid.vm.$nextTick();
+    // Rested: the shorter text is asked for, and the old mask is still up.
+    expect(texts().length).toBeGreaterThan(0);
+    expect(renders.at(-1)!.text.length).toBeLessThan(renders[0]!.text.length);
+    const thumb = grid.findAll('[role="option"]')[0]!.get('[data-testid="thumbnail"]');
+    expect(thumb.attributes('data-state')).toBe('ready');
+  });
+
+  it('a word wider than its card shrinks to fit; one that fits stays at its size', async () => {
+    await load({ extraFaces: 4 });
+    // The mock renders 1 px images: here a character is 60 px wide at the render size.
+    const mock = useClient();
+    setClient({
+      ...mock,
+      renderPreview: async (req) => {
+        renders.push(structuredClone(req));
+        return { ...(await mock.renderPreview(req)), width: req.text.length * 60, height: 140 };
+      },
+    });
+    const preview = (customText: string) => ({
+      ...DEFAULT_PREVIEW,
+      sample: 'custom' as const,
+      customText,
+      sizePx: 120,
+    });
+    const room = specimenBox(
+      wallCardWidth(FALLBACK_WIDTH, wallColumns(FALLBACK_WIDTH, 120)),
+      120,
+    ).width;
+    const long = 'Supercalifragilisticexpialidocious';
+    const grid = await mountView(FontGrid, { preview: preview(long) });
+    await flushPromises();
+    const card = () => grid.findAll('[role="option"]')[0]!;
+    expect(renders.at(-1)!.text).toBe(long);
+    expect(maskWidth(card())).toBeCloseTo(room, 3);
+    await grid.setProps({ preview: preview('Ag') });
+    await flushPromises();
+    expect(maskWidth(card())).toBeLessThan(room);
+  });
+
+  it('the footer says Variable on a variable face and the style count otherwise', async () => {
+    await load({ library: 'wall' });
+    const grid = await mountView(FontGrid);
+    await flushPromises();
+    const library = useLibraryStore();
+    const cards = grid.findAll('[role="option"]');
+    const faces = await Promise.all(
+      useFontListStore()
+        .rows.slice(0, cards.length)
+        .map((r) => library.facesOf(r.family.id)),
+    );
+    await flushPromises();
+    const isVariable = faces.map((f) => f[0]!.isVariable);
+    expect(isVariable).toContain(true);
+    expect(isVariable).toContain(false);
+    grid.findAll('[role="option"]').forEach((card, i) => {
+      const detail = card.get('.detail').text();
+      if (isVariable[i]) expect(detail).toBe('Variable');
+      else expect(detail).toMatch(/^\d+ styles?/);
+    });
   });
 });
 
@@ -237,7 +346,7 @@ describe('switching views', () => {
   const views: [string, Component, string, (rowIndex: number) => number][] = [
     ['list', FontList, '[role="tree"]', (i) => i * 56],
     ['table', FontTable, '[role="treegrid"]', (i) => i * 32],
-    ['grid', FontGrid, '[role="listbox"]', (i) => Math.floor(i / 4) * CARD.linePx],
+    ['grid', FontGrid, '[role="listbox"]', (i) => Math.floor(i / 2) * LINE],
     ['waterfall', FontWaterfall, '[role="tree"]', (i) => i * waterfallRowPx(1.2)],
   ];
 
@@ -285,15 +394,13 @@ describe('switching views', () => {
     // The grid mounts at the sorted row; then the default order comes back (HomeView
     // sets the order after the mode changes), so the family is at another row.
     const grid = await mountView(FontGrid);
-    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(50 * CARD.linePx);
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(100 * LINE);
     await library.setOrder(null);
     await flushPromises();
     const moved = list.anchorIndex;
     expect(moved).not.toBe(200);
     expect(list.rows[moved]!.family.id).toBe(top);
-    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(
-      Math.floor(moved / 4) * CARD.linePx,
-    );
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(Math.floor(moved / 2) * LINE);
     // Back to the sorted table: it mounts in the default order, then re-sorts.
     grid.unmount();
     const again = await mountView(FontTable, { view: 'all' });
@@ -308,13 +415,29 @@ describe('switching views', () => {
     const list = useFontListStore();
     list.setAnchor(202, 203);
     const grid = await mountView(FontGrid);
-    // Row 202 sits in line 50 (rows 200–203): the grid shows that line on top.
-    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(50 * CARD.linePx);
-    await scrollTo(grid, '[role="listbox"]', 50 * CARD.linePx + 10);
+    // Row 202 sits in line 101 (rows 202–203): the grid shows that line on top.
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(101 * LINE);
+    await scrollTo(grid, '[role="listbox"]', 101 * LINE + 10);
     expect(list.anchor).toBe(list.rows[202]!.family.id);
-    await scrollTo(grid, '[role="listbox"]', 60 * CARD.linePx);
+    await scrollTo(grid, '[role="listbox"]', 120 * LINE);
     expect(list.anchor).toBe(list.rows[240]!.family.id);
     expect(list.rows[0]!.family.id).toBeLessThan(EXTRA_ID_BASE);
+  });
+
+  it('the anchor family stays on top when the slider changes the lines', async () => {
+    await load({ extraFaces: 997 });
+    const list = useFontListStore();
+    list.setAnchor(202, 203);
+    const grid = await mountView(FontGrid);
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(101 * LINE);
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx: 40 } });
+    await flushPromises();
+    expect(viewportOf(grid, '[role="listbox"]').scrollTop).toBe(101 * wallLinePx(40));
+    // The anchor's card is rendered, not a window worked out from the old scroll position.
+    const keys = grid.findAll('[role="option"]').map((c) => c.attributes('data-key'));
+    expect(keys).toContain(list.rows[202]!.key);
+    // The slider's move is the app's, so it does not change the anchor.
+    expect(list.anchor).toBe(list.rows[202]!.family.id);
   });
 });
 
@@ -339,12 +462,12 @@ describe('grid and waterfall while scrolling fast (E35.8)', () => {
     await load({ extraFaces: 397 });
     const grid = await mountView(FontGrid, { overscan: 2 });
     await flushPromises();
-    await frames(grid, '[role="listbox"]', CARD.linePx * 2, 2);
+    await frames(grid, '[role="listbox"]', LINE * 2, 2);
     const before = renders.length;
-    await frames(grid, '[role="listbox"]', CARD.linePx * 3, 10);
+    await frames(grid, '[role="listbox"]', LINE * 3, 10);
     expect(renders).toHaveLength(before);
     const states = grid.findAll('[data-testid="thumbnail"]').map((t) => t.attributes('data-state'));
-    expect(states).toHaveLength(40);
+    expect(states).toHaveLength(20);
     expect(states).not.toContain('loading');
     expect(states).toContain('deferred');
     await settle();
