@@ -106,6 +106,14 @@ test('a collection takes a colour: a dot in the sidebar, a tinted strip of its f
   );
   await page.getByRole('menuitemradio', { name: 'Teal' }).click();
   await expect(row(page, 'Code').getByTestId('collection-dot')).toHaveCount(0);
+
+  // By keyboard: the focus comes back to the row's button and stays there through the refresh.
+  const more = row(page, 'Code').getByRole('button', { name: 'More actions for Code' });
+  await more.click();
+  await page.getByRole('menuitemradio', { name: 'Blue' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(row(page, 'Code').getByTestId('collection-dot')).toBeVisible();
+  await expect(more).toBeFocused();
 });
 
 test('fonts dragged from the list land in a collection, and the sidebar counts them', async ({

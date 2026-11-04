@@ -208,9 +208,14 @@ function registerCommands(): void {
 watch(() => store.collections, registerCommands, { immediate: true });
 onBeforeUnmount(() => undo.splice(0).forEach((u) => u()));
 
-/** Picks a colour from the menu; the colour it already has takes it off again. */
+/**
+ * Picks a colour from the menu; the colour it already has takes it off again. Nothing opens
+ * after it, so the focus goes back to the row's button.
+ */
 function pickColor(key: string): void {
-  run((r) => void store.setColor(r.collection, r.collection.color === key ? null : key));
+  const row = menuRow.value;
+  closeMenu(true);
+  if (row) void store.setColor(row.collection, row.collection.color === key ? null : key);
 }
 
 /** The row whose "more" menu is open, and the button it hangs from. */

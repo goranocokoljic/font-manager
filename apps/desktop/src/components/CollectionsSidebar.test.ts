@@ -135,6 +135,14 @@ describe('collections sidebar', () => {
       expect((await client.listCollections()).find((c) => c.name === 'Brand')?.color).toBeNull();
     });
 
+    it('gives the focus back to the row button after a pick', async () => {
+      const w = await mountSidebar();
+      await pick(w, 'Brand', 'Teal');
+      expect(document.activeElement).toBe(
+        w.get('button[aria-label="More actions for Brand"]').element,
+      );
+    });
+
     it('reaches the swatches with the arrow keys, along the row too', async () => {
       const w = await mountSidebar();
       await openMenu(w, 'Brand');
