@@ -292,6 +292,34 @@ describe('FontGrid', () => {
     expect(maskWidth(card())).toBeLessThan(room);
   });
 
+  it('a long line on a HiDPI display renders inside the canvas and keeps its true size', async () => {
+    vi.stubGlobal('devicePixelRatio', 2);
+    await load({ extraFaces: 4 });
+    const mock = useClient();
+    // A thin face: 0.1 em a character, so this line fits its card at size 24.
+    setClient({
+      ...mock,
+      renderPreview: async (req) => {
+        renders.push(structuredClone(req));
+        return {
+          ...(await mock.renderPreview(req)),
+          width: Math.round([...req.text].length * 0.1 * req.sizePx!),
+          height: Math.round(req.sizePx! * 1.2),
+        };
+      },
+    });
+    const long = 'W'.repeat(30);
+    const grid = await mountView(FontGrid, {
+      preview: { ...DEFAULT_PREVIEW, sample: 'custom' as const, customText: long, sizePx: 24 },
+    });
+    await flushPromises();
+    const asked = renders.at(-1)!;
+    expect(asked.text).toBe(long);
+    expect(30 * 1.5 * asked.sizePx!).toBeLessThanOrEqual(8192);
+    // 30 × 0.1 em at 24 px: scaled from the size it rendered at, not from `WALL.renderPx`.
+    expect(maskWidth(grid.findAll('[role="option"]')[0]!)).toBeCloseTo(72, 0);
+  });
+
   it('the footer says Variable on a variable face and the style count otherwise', async () => {
     await load({ library: 'wall' });
     const grid = await mountView(FontGrid);

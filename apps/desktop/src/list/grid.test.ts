@@ -7,6 +7,7 @@ import {
   gridRange,
   lineCount,
   specimenBox,
+  specimenRenderPx,
   specimenScale,
   specimenText,
   SPECIMEN_TEXT_MAX,
@@ -111,6 +112,21 @@ describe('the wall (E41.1)', () => {
     expect(specimenText(long, 242, 28)).toBe('永'.repeat(SPECIMEN_TEXT_MAX));
     const emoji = '😀'.repeat(SPECIMEN_TEXT_MAX + 10);
     expect(specimenText(emoji, 242, 28)).toBe('😀'.repeat(SPECIMEN_TEXT_MAX));
+  });
+
+  it('renders a long line smaller, so it stays inside the 8,192 px canvas', () => {
+    expect(specimenRenderPx('Hamburg', 1)).toBe(WALL.renderPx);
+    expect(specimenRenderPx('Hamburg', 3)).toBe(WALL.renderPx);
+    expect(specimenRenderPx('', 2)).toBe(WALL.renderPx);
+    for (const scale of [1, 1.5, 2, 3]) {
+      for (let chars = 1; chars <= SPECIMEN_TEXT_MAX; chars++) {
+        const px = specimenRenderPx('永'.repeat(chars), scale);
+        expect(px).toBeGreaterThanOrEqual(8);
+        expect(chars * 1.5 * px * scale).toBeLessThanOrEqual(8192);
+      }
+    }
+    // Code points, not UTF-16 units: an emoji is one character.
+    expect(specimenRenderPx('😀'.repeat(40), 2)).toBe(specimenRenderPx('永'.repeat(40), 2));
   });
 
   it('scales a specimen down to fit and never up', () => {

@@ -29,6 +29,7 @@ import {
   gridRange,
   lineCount,
   specimenBox,
+  specimenRenderPx,
   specimenScale,
   specimenText,
   WALL,
@@ -47,7 +48,7 @@ import { useFontSwitchStore } from '../stores/fontSwitch';
 import { useLibraryStore } from '../stores/library';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, DEFAULT_PREVIEW, type PreviewSettings } from '../stores/preview';
-import { useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
+import { deviceScale, useThumbnailsStore, type Thumbnail } from '../stores/thumbnails';
 import { t } from '../i18n';
 import { weightRangeText } from '../list/columns';
 import ActivationDot from './ActivationDot.vue';
@@ -239,19 +240,27 @@ const textWidth = computed(
 /** The room a specimen has right now. */
 const box = computed(() => specimenBox(cardWidth.value, layoutPx.value));
 
+/** A thumbnail and the size it was rendered at, which depends on its text. */
+type HeldThumbnail = Thumbnail & { renderPx: number };
+
 /** A card's last thumbnail: it stays up while the thumbnail of a new text is on its way. */
-let lastThumbs = new Map<string, Thumbnail>();
+let lastThumbs = new Map<string, HeldThumbnail>();
 
 const visible = computed(() => {
-  const thumbs = new Map<string, Thumbnail>();
+  const thumbs = new Map<string, HeldThumbnail>();
   const items = rendered.value.map((row, i) => {
     const p = previewOf(row);
     const text = specimenText(p.text, textWidth.value, textPx.value);
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
     const live = !!palette || liveText.value;
-    const fresh = face && !live ? thumbnails.get(face.id, text, WALL.renderPx) : undefined;
-    const thumb = fresh ?? (face && !live ? lastThumbs.get(row.key) : undefined);
+    const renderPx = specimenRenderPx(text, deviceScale());
+    const fresh = face && !live ? thumbnails.get(face.id, text, renderPx) : undefined;
+    const thumb = fresh
+      ? { ...fresh, renderPx }
+      : face && !live
+        ? lastThumbs.get(row.key)
+        : undefined;
     if (thumb) thumbs.set(row.key, thumb);
     return {
       row,
@@ -263,7 +272,8 @@ const visible = computed(() => {
       palette,
       live,
       thumb,
-      failed: face && !live && !thumb ? thumbnails.hasFailed(face.id, text, WALL.renderPx) : false,
+      renderPx,
+      failed: face && !live && !thumb ? thumbnails.hasFailed(face.id, text, renderPx) : false,
       name: row.kind === 'face' ? styleName(row) : row.family.name,
     };
   });
@@ -276,7 +286,7 @@ watchEffect(() => {
   if (!motion.settled.value) return;
   for (const item of visible.value)
     if (item.face && item.text && !item.live)
-      thumbnails.want(item.face.id, item.text, WALL.renderPx);
+      thumbnails.want(item.face.id, item.text, item.renderPx);
 });
 
 /** A card's place. Not a transform: the FlipGroup owns that while a card moves. */
@@ -291,11 +301,11 @@ function cardStyle(index: number) {
   };
 }
 
-function thumbStyle(thumb: Thumbnail | undefined) {
+function thumbStyle(thumb: HeldThumbnail | undefined) {
   const color = props.preview.textColor ?? undefined;
   if (!thumb) return { color };
   const image = `url("${thumb.url}")`;
-  const scale = sizePx.value / WALL.renderPx;
+  const scale = sizePx.value / thumb.renderPx;
   const w = thumb.width * scale;
   const h = thumb.height * scale;
   const fit = specimenScale(w, h, box.value);

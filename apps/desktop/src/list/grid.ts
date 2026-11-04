@@ -122,6 +122,24 @@ export function specimenText(text: string, width: number, sizePx: number): strin
   return chars.slice(0, Math.min(end, SPECIMEN_TEXT_MAX)).join('');
 }
 
+/** The widest image `render_preview` makes (`MAX_SIDE_PX` in fm-core); it clips the rest. */
+const RENDER_MAX_SIDE_PX = 8192;
+/** The advance to plan for per character, in em: 1 for Chinese, more in a wide face. */
+const RENDER_EM_PER_CHAR = 1.5;
+
+/**
+ * The CSS px size to render `text` at on a display of `scale`: `WALL.renderPx`, or less
+ * when the line would pass the renderer's canvas and lose its end. The lost size costs no
+ * sharpness: text that long shrinks to its card anyway.
+ */
+export function specimenRenderPx(text: string, scale: number): number {
+  const chars = Math.max([...text].length, 1);
+  return Math.min(
+    WALL.renderPx,
+    Math.floor(RENDER_MAX_SIDE_PX / (chars * RENDER_EM_PER_CHAR * scale)),
+  );
+}
+
 /** The scale that fits a `width` × `height` px specimen into `box`; never above 1. */
 export function specimenScale(
   width: number,

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { showPreviewOptions } from './select';
 
 // The wall (E41.1): the grid view's uniform cards. The wall library has 60 families;
 // `mockFaces` adds the rest for the 1,000-family frame-rate check.
@@ -102,6 +103,28 @@ test.describe('the wall', () => {
         }),
       )
       .toEqual({ position: '50% 50%', fitsWidth: true, fitsHeight: true });
+  });
+
+  test('live text shrinks to fit and is never cut', async ({ page }) => {
+    const wall = await openWall(page);
+    await page.getByRole('textbox', { name: 'Custom text' }).fill('Supercalifragilistic');
+    await showPreviewOptions(page);
+    await page.getByRole('slider', { name: 'Tracking slider' }).fill('0.1');
+    await setSize(page, 120);
+    const live = cards(wall).first().getByTestId('card-live-text');
+    await expect(live).toHaveAttribute('data-state', 'ready');
+    await expect
+      .poll(() =>
+        live.evaluate((el) => {
+          const line = el.querySelector<HTMLElement>('.line')!;
+          return {
+            shrunk: parseFloat(getComputedStyle(el).fontSize) < 120,
+            fits: line.offsetWidth <= el.clientWidth + 0.5,
+            text: line.textContent,
+          };
+        }),
+      )
+      .toEqual({ shrunk: true, fits: true, text: 'Supercalifragilistic' });
   });
 
   test('four columns at 1440 px, following the width; only the lines on screen render', async ({
@@ -347,10 +370,15 @@ test.describe('the wall', () => {
         [work, frames] as const,
       );
     // What this machine's animation frames run at when nothing happens: 60 on a display at
-    // 60 Hz, less on a shared CI runner. The slider may cost at most 5 fps of that.
+    // 60 Hz. A machine that cannot reach 55 idle (the macOS runner gives 30) cannot prove the
+    // target, so the test says so as a skip; it still fails if the slider costs frames there.
     const idle = await measure(false, 60);
     const fps = await measure(true, 180);
     console.log(`wall slider: ${fps.toFixed(1)} fps median (idle ${idle.toFixed(1)})`);
-    expect(fps).toBeGreaterThanOrEqual(Math.min(55, idle - 5));
+    if (idle < 55) {
+      expect(fps).toBeGreaterThanOrEqual(idle - 5);
+      test.skip(true, `not measured: animation frames run at ${idle.toFixed(1)} fps when idle`);
+    }
+    expect(fps).toBeGreaterThanOrEqual(55);
   });
 });
