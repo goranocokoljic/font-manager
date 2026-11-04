@@ -61,7 +61,11 @@ beforeEach(() => {
   );
 });
 
+/** Views still mounted: a view left alive keeps its timers and asks the next test's client. */
+const mounted: VueWrapper[] = [];
+
 afterEach(() => {
+  for (const w of mounted.splice(0)) if (w.exists()) w.unmount();
   vi.useRealTimers();
   setFaceLoader(undefined);
   setClient(undefined);
@@ -84,6 +88,7 @@ async function load(options: MockOptions) {
 
 async function mountView(view: Component, props: Record<string, unknown> = {}) {
   const w = mount(view, { props, attachTo: document.body });
+  mounted.push(w);
   await flushPromises();
   return w;
 }
@@ -511,6 +516,8 @@ describe('grid and waterfall while scrolling fast (E35.8)', () => {
     await flushPromises();
     await frames(grid, '[role="listbox"]', LINE * 2, 2);
     const before = renders.length;
+    // Only this grid's first ten lines: two cards each, nothing from another test.
+    expect(before).toBe(20);
     await frames(grid, '[role="listbox"]', LINE * 3, 10);
     expect(renders).toHaveLength(before);
     const states = grid.findAll('[data-testid="thumbnail"]').map((t) => t.attributes('data-state'));
