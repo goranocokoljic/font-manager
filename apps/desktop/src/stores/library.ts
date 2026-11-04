@@ -172,8 +172,13 @@ export const useLibraryStore = defineStore('library', () => {
       void refreshActivation([...event.activated, ...event.deactivated]);
   }
 
-  /** Subscribes to library changes (once) and loads the families. */
+  /**
+   * Subscribes to library changes (once) and loads the families. Still subscribed with a
+   * good list (the library view and a family page hand over to each other): the events
+   * kept it current, and a refresh would forget the faces and with them a selected style.
+   */
   async function load(): Promise<void> {
+    if (unsubscribe && loaded.value && !error.value) return;
     unsubscribe ??= useClient().onEvent(onEvent);
     await unsubscribe.catch(() => undefined);
     await refresh();

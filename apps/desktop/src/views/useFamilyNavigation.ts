@@ -1,0 +1,99 @@
+// Going from the library to a family page and back (E42.1). The specimen of the row or card
+// and the page's hero share a `view-transition-name`, so the browser moves one into the other
+// (MOTION.md, "Open a family"); a webview without view transitions gets the page's own slide.
+import { nextTick } from 'vue';
+import { useRouter } from 'vue-router';
+import type { FamilyId } from '../api/types';
+import { familyKey } from '../list/rows';
+import { withViewTransition } from '../motion';
+import { useFamilyPageStore } from '../stores/familyPage';
+
+/** The name FamilyView's hero carries in its stylesheet. */
+export const SHARED_SPECIMEN = 'fm-family-specimen';
+const OPENING = 'fm-family-opening';
+const CLOSING = 'fm-family-closing';
+
+/** The row or card of `family` when it is on screen, its specimen if it has a separate one. */
+function specimenOf(family: FamilyId): HTMLElement | null {
+  const row = document.querySelector<HTMLElement>(`[data-key="${familyKey(family)}"]`);
+  if (!row) return null;
+  const box = row.getBoundingClientRect();
+  if (box.bottom <= 0 || box.top >= window.innerHeight) return null;
+  return row.querySelector<HTMLElement>('.sample, .thumb') ?? row;
+}
+
+let shared: HTMLElement | null = null;
+
+function share(el: HTMLElement | null): void {
+  if (shared) shared.style.removeProperty('view-transition-name');
+  shared = el;
+  el?.style.setProperty('view-transition-name', SHARED_SPECIMEN);
+}
+
+/** Runs a page change with the root class that picks the timing, and cleans up after it. */
+function transition(rootClass: string, change: () => Promise<void>): Promise<void> {
+  const root = document.documentElement;
+  root.classList.add(rootClass);
+  return withViewTransition(change, () => {
+    root.classList.remove(rootClass);
+    share(null);
+  });
+}
+
+export function useFamilyNavigation() {
+  const router = useRouter();
+  const page = useFamilyPageStore();
+
+  /** Pushes the family page from the library. */
+  async function open(family: FamilyId): Promise<void> {
+    share(specimenOf(family));
+    page.section = 'styles';
+    page.pushed = true;
+    await transition(OPENING, async () => {
+      // The row leaves with the library, so the only element left with the name is the hero.
+      await router.push({ name: 'family', params: { id: String(family) } });
+      await nextTick();
+    });
+  }
+
+  /** The entry to go back to, when the page was opened from the library. */
+  function cameFromLibrary(): boolean {
+    const back = router.options.history.state.back;
+    return typeof back === 'string' && router.resolve(back).name === 'home';
+  }
+
+  function pop(): Promise<void> {
+    return new Promise((resolve) => {
+      const stop = router.afterEach(() => {
+        stop();
+        resolve();
+      });
+      router.back();
+    });
+  }
+
+  /**
+   * Back to the library. A page opened from there pops, so the list's URL and selection come
+   * back as they were; a deep link has nothing to pop and replaces itself with the library.
+   */
+  async function back(): Promise<void> {
+    const family = page.id;
+    await transition(CLOSING, async () => {
+      if (cameFromLibrary()) await pop();
+      else await router.replace({ name: 'home' });
+      await nextTick();
+      if (family === null) return;
+      const specimen = specimenOf(family);
+      share(specimen);
+      // The list takes the keyboard again, as it had it before the page opened.
+      specimen?.closest<HTMLElement>('[tabindex="0"]')?.focus({ preventScroll: true });
+    });
+  }
+
+  /** The arrows: another family on the same history entry, so Back still goes to the library. */
+  function step(family: FamilyId | null): void {
+    if (family !== null) void router.replace({ name: 'family', params: { id: String(family) } });
+  }
+
+  return { open, back, step };
+}

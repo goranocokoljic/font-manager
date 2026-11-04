@@ -28,6 +28,11 @@ export const ICONS = {
   globe:
     '<circle cx="8" cy="8" r="5.5"/><path d="M2.5 8h11M8 2.5c-2 2-2 9 0 11M8 2.5c2 2 2 9 0 11"/>',
   chevron: '<path d="M6 3.5l4.5 4.5L6 12.5"/>',
+  chevronBack: '<path d="M10 3.5L5.5 8l4.5 4.5"/>',
+  arrowLeft: '<path d="M13 8H3M7 4L3 8l4 4"/>',
+  arrowRight: '<path d="M3 8h10M9 4l4 4-4 4"/>',
+  folderPlus:
+    '<path d="M2.5 4.5v7a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H8L6.8 3.5H3.5a1 1 0 0 0-1 1zM8 7.5v3M6.5 9h3"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',
   power: '<path d="M8 2.5v5M4.7 4.6a5 5 0 1 0 6.6 0"/>',
   // A lens with "≈" inside: "find what looks like this", not zoom (a "+" read as zoom in).

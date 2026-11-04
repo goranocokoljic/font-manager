@@ -327,7 +327,8 @@
       "reopenComparison": "Open comparison: {name}",
       "findSimilar": "Find similar fonts",
       "openStudio": "Open the layout in Pairing Studio",
-      "quickLook": "Quick look at the selected font"
+      "quickLook": "Quick look at the selected font",
+      "openFamily": "Open family page"
     },
     "noMatchesTitle": "No fonts match",
     "noMatchesAction": "Clear search and filters",
@@ -535,7 +536,8 @@
       "views": "List, Table, Grid, Waterfall, Layout",
       "sidebar": "Sidebar",
       "inspector": "Inspector",
-      "settings": "Settings"
+      "settings": "Settings",
+      "openFamily": "Open the family page"
     }
   },
   "palette": {
@@ -1357,6 +1359,42 @@
       "installVersion": "Install version {version}",
       "installAndRestart": "Install and restart"
     }
+  },
+  "family": {
+    "library": "Library",
+    "position": "{position} of {total}",
+    "previous": "Previous family",
+    "next": "Next family",
+    "nextHint": "next family",
+    "favorite": "Favorite",
+    "addToCollection": "Add to collection",
+    "addedToCollection": "Added to {name}",
+    "noCollections": "No collections to add to",
+    "tag": "Tag",
+    "findSimilar": "Find similar",
+    "activate": "Activate family",
+    "deactivate": "Deactivate family",
+    "backAction": "Back to the library",
+    "notFound": "No such family",
+    "notFoundBody": "The link does not name a family in your library.",
+    "hero": "Specimen",
+    "axes": "Axes",
+    "axesVariable": "Variable font",
+    "axesStatic": "No variable axes",
+    "sectionSwitch": "Section",
+    "sections": {
+      "styles": "Styles",
+      "text": "Text",
+      "characters": "Characters",
+      "features": "Features",
+      "pairings": "Pairings",
+      "info": "Info"
+    },
+    "sectionLater": "This section comes in a later update.",
+    "rail": "About this family",
+    "designer": "Designer",
+    "foundry": "Foundry",
+    "stylesFact": "Styles"
   },
   "studio": {
     "title": "Pairing Studio",

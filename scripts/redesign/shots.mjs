@@ -83,6 +83,8 @@ const scenes = {
     routes: '/?face=1',
     session: JSON.stringify({ 'fm.mock.settings.v1': JSON.stringify({ density: 'compact' }) }),
   },
+  // The family page by deep link (E42.1): Asap Sharp, the first family of the wall.
+  family: { routes: '/family/500' },
   problems: { routes: '/problems' },
   settings: { routes: '/settings' },
   'settings-activation': { routes: '/settings?section=activation' },

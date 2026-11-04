@@ -327,7 +327,8 @@
       "reopenComparison": "Vergleich öffnen: {name}",
       "findSimilar": "Ähnliche Schriften finden",
       "openStudio": "Satzbild im Pairing Studio öffnen",
-      "quickLook": "Ausgewählte Schrift in der Übersicht ansehen"
+      "quickLook": "Ausgewählte Schrift in der Übersicht ansehen",
+      "openFamily": "Familienseite öffnen"
     },
     "noMatchesTitle": "Keine Schriften gefunden",
     "noMatchesAction": "Suche und Filter zurücksetzen",
@@ -535,7 +536,8 @@
       "views": "Liste, Tabelle, Raster, Kaskade, Layout",
       "sidebar": "Seitenleiste",
       "inspector": "Inspektor",
-      "settings": "Einstellungen"
+      "settings": "Einstellungen",
+      "openFamily": "Familienseite öffnen"
     }
   },
   "palette": {
@@ -1357,6 +1359,42 @@
       "installVersion": "Version {version} installieren",
       "installAndRestart": "Installieren und neu starten"
     }
+  },
+  "family": {
+    "library": "Bibliothek",
+    "position": "{position} von {total}",
+    "previous": "Vorherige Familie",
+    "next": "Nächste Familie",
+    "nextHint": "nächste Familie",
+    "favorite": "Favorit",
+    "addToCollection": "Zur Sammlung hinzufügen",
+    "addedToCollection": "Zu {name} hinzugefügt",
+    "noCollections": "Keine Sammlungen zum Hinzufügen",
+    "tag": "Tag",
+    "findSimilar": "Ähnliche finden",
+    "activate": "Familie aktivieren",
+    "deactivate": "Familie deaktivieren",
+    "backAction": "Zurück zur Bibliothek",
+    "notFound": "Keine solche Familie",
+    "notFoundBody": "Der Link nennt keine Familie aus Ihrer Bibliothek.",
+    "hero": "Schriftprobe",
+    "axes": "Achsen",
+    "axesVariable": "Variable Schrift",
+    "axesStatic": "Keine variablen Achsen",
+    "sectionSwitch": "Bereich",
+    "sections": {
+      "styles": "Schnitte",
+      "text": "Text",
+      "characters": "Zeichen",
+      "features": "Funktionen",
+      "pairings": "Kombinationen",
+      "info": "Info"
+    },
+    "sectionLater": "Dieser Bereich kommt in einem späteren Update.",
+    "rail": "Über diese Familie",
+    "designer": "Designer",
+    "foundry": "Schriftgießerei",
+    "stylesFact": "Schnitte"
   },
   "studio": {
     "title": "Pairing Studio",

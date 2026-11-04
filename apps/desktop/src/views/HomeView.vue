@@ -63,6 +63,8 @@ import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useTextLayoutsStore } from '../stores/textLayouts';
 import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore, type ViewMode } from '../stores/views';
+import { useFamilyNavigation } from './useFamilyNavigation';
+import { useLiveLibrary } from './useLiveLibrary';
 
 const app = useAppStore();
 const layout = useLayoutStore();
@@ -185,23 +187,31 @@ function openStudio(): void {
   });
 }
 
+useLiveLibrary('family');
 onMounted(() => {
   void app.load();
-  void library.load();
-  void activation.load();
-  void selection.start();
-  void problems.load();
   void search.loadLanguages();
   void sets.load();
   void quick.load();
   void compare.loadSaved();
 });
-onBeforeUnmount(() => {
-  void library.stop();
-  void activation.stop();
-  void selection.stop();
-  void problems.stop();
+
+// The family page (E42.1): O, the palette or a double-click on a row or card, in any view.
+// The Layout mode has no rows; it opens the family it shows.
+const familyNav = useFamilyNavigation();
+const openableFamily = computed(() => {
+  if (quick.open || catalogs.current) return null;
+  return mode.value === 'layout' ? layoutFamily.value : (fontList.cursorRow?.family.id ?? null);
 });
+
+function onDoubleClick(e: MouseEvent): void {
+  const el = e.target instanceof Element ? e.target : null;
+  if (!el || el.closest('button, input, a, .twisty, [role="slider"], [contenteditable="true"]'))
+    return;
+  const key = el.closest('[data-key]')?.getAttribute('data-key');
+  const row = fontList.rows.find((r) => r.key === key);
+  if (row) void familyNav.open(row.family.id);
+}
 
 // One style (or nothing) selected: A acts on the inspector's face, which shows the
 // outcome. Several rows or a family: on all of them, with a toast that can undo it.
@@ -278,6 +288,17 @@ useActions([
     },
     enabled: () => pinTarget.value !== null,
     run: () => (pinTarget.value ? similar.openFor(pinTarget.value) : undefined),
+  },
+  {
+    id: ACTIONS.openFamily,
+    get title() {
+      return t('home.actions.openFamily');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => openableFamily.value !== null,
+    run: () => (openableFamily.value !== null ? familyNav.open(openableFamily.value) : undefined),
   },
   {
     id: ACTIONS.quickLook,
@@ -547,7 +568,7 @@ function openFace(face: FaceId): void {
             @click="layout.toggleInspector"
           />
         </header>
-        <div v-show="!similar.open" class="browse">
+        <div v-show="!similar.open" class="browse" @dblclick="onDoubleClick">
           <CollectionHeader />
           <FilterChips />
           <PreviewControls :view="ALL_FONTS_VIEW" />
