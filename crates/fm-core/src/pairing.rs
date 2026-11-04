@@ -18,10 +18,14 @@
 //!
 //! [`model`] (E33.2) learns from curated pairings how much each fact
 //! matters; the index blends its score into the rules' ranking.
+//!
+//! [`role`] (E42.13) scores a pair again for the role the partner plays, when
+//! the request names one. Why these numbers: ADR 0021.
 
 use fm_api::common::Classification;
 
 pub mod model;
+pub mod role;
 
 /// Score of the contrast rule between text classes (serif or slab with a
 /// sans). It outweighs the designer and x-height rules together: a
@@ -38,6 +42,8 @@ pub const DESIGNER: f32 = 0.2;
 pub const X_HEIGHT: f32 = 0.1;
 /// How far apart two x-heights may be, as a share of the smaller one.
 pub const X_HEIGHT_TOLERANCE: f32 = 0.05;
+/// The reason the x-height rule gives.
+const X_HEIGHT_REASON: &str = "similar x-height";
 
 /// Words that end the superfamily part of a family name.
 const CLASS_WORDS: [&str; 4] = ["sans", "serif", "slab", "mono"];
@@ -93,7 +99,7 @@ pub fn pair(base: &PairFacts<'_>, other: &PairFacts<'_>) -> Option<Pairing> {
         && close_x_heights(a, b)
     {
         score += X_HEIGHT;
-        reasons.push("similar x-height".to_owned());
+        reasons.push(X_HEIGHT_REASON.to_owned());
     }
     (!reasons.is_empty()).then_some(Pairing { score, reasons })
 }

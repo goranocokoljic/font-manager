@@ -22,6 +22,7 @@ use crate::pairing::model::{
     self, Curated, FaceFeatures, Features, MODEL_REASON, MODEL_SAYS_PAIR, MODEL_SHARE, Model,
     NEGATIVES_PER_POSITIVE, Rng,
 };
+use crate::pairing::role::{self, RoleFacts};
 use crate::pairing::{PairFacts, Pairing, pair};
 use crate::similar::Profile;
 
@@ -33,6 +34,12 @@ impl Index {
     /// ([`MODEL_SHARE`]). Ties go by family name, then id. A face that is
     /// not visible (unknown, its file gone, its source paused) is
     /// `NotFound`.
+    ///
+    /// With `req.partner_of`, that face takes `req.face`'s place in all of
+    /// this, and `req.face`'s family is left out: it is the one being
+    /// replaced. With `req.role`, the score is shared with how well each face
+    /// plays that role ([`role::fit`], [`role::blend`]), and the reasons say
+    /// so. Without either, the answer is the plain one.
     pub fn suggest_pairings(&self, req: &PairingRequest) -> FmResult<Vec<PairingSuggestion>> {
         self.suggest_with(req, Some(model::embedded()?))
     }
@@ -44,20 +51,29 @@ impl Index {
         model: Option<&Model>,
     ) -> FmResult<Vec<PairingSuggestion>> {
         self.refresh_search_cache()?;
-        if model.is_some() {
+        if model.is_some() || req.role.is_some() {
             self.read_profiles()?;
         }
         let picked: Vec<(FaceId, Pairing)> = {
             let cache = self.search_cache.borrow();
             let profiles = cache.profiles.as_ref();
-            let base = cache
-                .rows
-                .iter()
-                .find(|r| r.id == req.face.0)
-                .ok_or_else(|| FmError::not_found(format!("Face {}", req.face)))?;
+            let visible = |face: FaceId| {
+                cache
+                    .rows
+                    .iter()
+                    .find(|r| r.id == face.0)
+                    .ok_or_else(|| FmError::not_found(format!("Face {face}")))
+            };
+            let replaced = visible(req.face)?;
+            let base = match req.partner_of {
+                Some(partner) => visible(partner)?,
+                None => replaced,
+            };
             let mine = face_features(base, profiles);
+            let my_role = role_facts(base, profiles);
             let mut ranked: Vec<(&Row, Pairing)> = representatives(&cache.rows, base)
                 .into_iter()
+                .filter(|row| row.family_key != replaced.family_key)
                 .filter_map(|row| {
                     let theirs = face_features(row, profiles);
                     let mut p = pair(&mine.facts, &theirs.facts)?;
@@ -67,6 +83,10 @@ impl Index {
                         if chance >= MODEL_SAYS_PAIR {
                             p.reasons.push(MODEL_REASON.to_owned());
                         }
+                    }
+                    if let Some(wanted) = req.role {
+                        let fit = role::fit(wanted, &my_role, &role_facts(row, profiles));
+                        p = role::blend(p, fit);
                     }
                     Some((row, p))
                 })
@@ -202,6 +222,18 @@ fn face_features<'a>(
             .and_then(|p| p.get(&row.id))
             .and_then(|p| p.fingerprint.as_ref())
             .map(|f| f.vector.as_slice()),
+    }
+}
+
+fn role_facts(row: &Row, profiles: Option<&HashMap<u32, Profile>>) -> RoleFacts {
+    RoleFacts {
+        stroke_contrast: profiles
+            .and_then(|p| p.get(&row.id))
+            .and_then(|p| p.fingerprint.as_ref())
+            .map(|f| f.contrast),
+        x_height: row.x_height,
+        width: row.text.width,
+        year: row.year,
     }
 }
 

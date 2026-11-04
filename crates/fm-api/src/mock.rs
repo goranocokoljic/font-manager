@@ -69,8 +69,9 @@ use crate::preview::{
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage,
     FaceLanguageCoverage, FamilyHit, FilterCount, FilterCounts, Filters, ImageMatchRequest,
-    LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingSuggestion,
-    SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
+    LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingRole,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
+    WeightRange, WidthRange,
 };
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
@@ -2529,11 +2530,14 @@ impl SearchService for MockApi {
     /// contrasting classes +0.4 (a display or script face only with a sans
     /// or serif), the same designer +0.2, x-heights within 5% +0.1. One
     /// face per other family, the closest in weight; best first, then by
-    /// family id.
+    /// family id. `partner_of` takes `face`'s place, and `face`'s family is
+    /// left out. A role (the samples have no stroke contrast: the class stands
+    /// in for it) adds +0.1 and its reason first, and names the x-height gap.
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
         use Classification::{Display, Sans, Script, Serif, Slab};
         let st = self.state();
-        let me = st.face(req.face)?;
+        let replaced = st.face(req.face)?.detail.face.family;
+        let me = st.face(req.partner_of.unwrap_or(req.face))?;
         let mine = st.family(me.detail.face.family)?;
         let ratio = |f: &MockFace| {
             let m = f.detail.metrics;
@@ -2545,6 +2549,7 @@ impl SearchService for MockApi {
         let mut best: BTreeMap<FamilyId, (&MockFace, &MockFamily)> = BTreeMap::new();
         for f in st.faces.iter().filter(|f| {
             f.detail.face.family != me.detail.face.family
+                && f.detail.face.family != replaced
                 && st.visible(f)
                 && !st.trashed.contains(&f.detail.path)
         }) {
@@ -2594,9 +2599,30 @@ impl SearchService for MockApi {
                 && (x / y - 1.0).abs() <= 0.05
             {
                 score += 0.1;
-                reasons.push("similar x-height".to_string());
+                reasons.push(match req.role {
+                    Some(_) => {
+                        let gap = x.max(y) / x.min(y) - 1.0;
+                        let percent = ((gap * 100.0 - 0.001).ceil() as u32).max(1);
+                        format!("x-height within {percent} %")
+                    }
+                    None => "similar x-height".to_string(),
+                });
             }
             if !reasons.is_empty() {
+                let role_reason = match req.role {
+                    Some(PairingRole::Headline) if matches!(b, Serif | Display | Script) => {
+                        Some("higher contrast for headline")
+                    }
+                    Some(PairingRole::Body) if matches!(b, Sans) => Some("lower contrast for body"),
+                    Some(PairingRole::Caption) if matches!(b, Sans) => {
+                        Some("lower contrast for caption")
+                    }
+                    _ => None,
+                };
+                if let Some(reason) = role_reason {
+                    score += 0.1;
+                    reasons.insert(0, reason.to_string());
+                }
                 out.push(PairingSuggestion {
                     face: st.summary(f),
                     score,
