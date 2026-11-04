@@ -207,16 +207,21 @@ test.describe('going back', () => {
       // Not on a line's edge: only the exact place passes.
       await viewport.evaluate((el) => (el.scrollTop = 1537));
       await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBeGreaterThan(1000);
-      // A row all on screen, under the table's header, so the click does not scroll.
-      const key = await viewport.evaluate((el) => {
-        const box = el.getBoundingClientRect();
-        return [...el.querySelectorAll<HTMLElement>('[data-key^="family:"]')]
-          .find((row) => {
-            const r = row.getBoundingClientRect();
-            return r.top >= box.top + 60 && r.bottom <= box.bottom;
-          })
-          ?.getAttribute('data-key');
-      });
+      // A row all on screen, under the table's header, so the click does not scroll. The
+      // virtualised view renders the rows at the new position a frame after the scroll, so
+      // wait for one.
+      const findKey = () =>
+        viewport.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          return [...el.querySelectorAll<HTMLElement>('[data-key^="family:"]')]
+            .find((row) => {
+              const r = row.getBoundingClientRect();
+              return r.top >= box.top + 60 && r.bottom <= box.bottom;
+            })
+            ?.getAttribute('data-key');
+        });
+      let key: string | null | undefined;
+      await expect.poll(async () => (key = await findKey())).toBeTruthy();
       await page
         .locator(`[data-key="${key}"]`)
         .first()
