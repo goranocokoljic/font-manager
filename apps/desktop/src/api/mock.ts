@@ -68,6 +68,7 @@ import {
   type FilterCounts,
   type Filters,
   type JobId,
+  type LanguageHint,
   type LanguagePreset,
   type LicenseInfo,
   type LicensePermissions,
@@ -2780,6 +2781,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       structuredClone(
         options.library === 'wall' ? [...mockLanguages, WALL_VIETNAMESE] : mockLanguages,
       ),
+    // A simple stand-in for the core's score: the share of the text's letters
+    // outside ASCII that are on the preset's glyph line.
+    detectLanguages: async (req) => {
+      const lower = (text: string) => [...text.toLowerCase()];
+      const letters = new Set(lower(req.text).filter((c) => c > '\x7f' && /^\p{L}$/u.test(c)));
+      const presets =
+        options.library === 'wall' ? [...mockLanguages, WALL_VIETNAMESE] : mockLanguages;
+      const hints: LanguageHint[] = [];
+      for (const preset of presets) {
+        const line = new Set(lower(preset.sampleGlyphs ?? ''));
+        const hits = [...letters].filter((c) => line.has(c)).length;
+        if (hits > 0) hints.push({ code: preset.code, confidence: hits / letters.size });
+      }
+      return hints.sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0));
+    },
     // The Rust mock's ranking: 0.2, +0.5 same classification, +0.2 same weight,
     // +0.1 same x-height; closest first, `limit` of them.
     findSimilar: async (req) => {

@@ -66,7 +66,9 @@ import type {
   GlyphsRequest,
   JobId,
   KeepCopyRequest,
+  LanguageHint,
   LanguagePreset,
+  DetectLanguagesRequest,
   DuplicateLayoutRequest,
   Layout,
   LayoutBounds,
@@ -170,6 +172,8 @@ export interface FmClient {
   faceCoverage(face: FaceId): Promise<FaceCoverage>;
   /** The language presets a `supports` filter can name. */
   listLanguages(): Promise<LanguagePreset[]>;
+  /** The language presets a typed text may be in, best first; empty for plain ASCII (E43.2). */
+  detectLanguages(req: DetectLanguagesRequest): Promise<LanguageHint[]>;
   /** Faces that look like one face, closest first, each with its score and reasons (E23.3). */
   findSimilar(req: SimilarRequest): Promise<SimilarFace[]>;
   /** Faces of other families that pair with one face by rule, best first, with reasons (E23.4). */
@@ -412,6 +416,7 @@ export const tauriClient: FmClient = {
   checkCoverage: (req) => invoke<CoverageReport>('check_coverage', { req }),
   faceCoverage: (face) => invoke<FaceCoverage>('face_coverage', { face }),
   listLanguages: () => invoke<LanguagePreset[]>('list_languages'),
+  detectLanguages: (req) => invoke<LanguageHint[]>('detect_languages', { req }),
   findSimilar: (req) => invoke<SimilarFace[]>('find_similar', { req }),
   suggestPairings: (req) => invoke<PairingSuggestion[]>('suggest_pairings', { req }),
   listCollections: () => invoke<Collection[]>('list_collections'),

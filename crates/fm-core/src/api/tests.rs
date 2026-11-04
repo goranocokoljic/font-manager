@@ -1227,6 +1227,22 @@ fn search_and_filters_run_on_the_real_index() {
     assert!(variable.counts.is_some());
 }
 
+/// E43.2: the core API answers from the charsets data, with no library needed.
+#[test]
+fn detect_languages_ranks_the_presets_of_the_data() {
+    let lib = Lib::new("api-detect-languages");
+    let detect = |text: &str| {
+        lib.api
+            .detect_languages(fm_api::search::DetectLanguagesRequest { text: text.into() })
+            .expect("hints")
+    };
+    let codes: Vec<String> = detect("đć").into_iter().map(|h| h.code).collect();
+    let at = |code: &str| codes.iter().position(|c| c == code).expect(code);
+    assert_eq!(at("sr-Latn"), 0, "{codes:?}");
+    assert!(at("hr") < at("pl"), "{codes:?}");
+    assert!(detect("plain ascii").is_empty());
+}
+
 #[test]
 fn coverage_and_languages_come_from_the_stored_cmap() {
     let (lib, _, _) = Lib::scanned("api-coverage");

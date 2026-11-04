@@ -214,6 +214,20 @@ fn search_returns_hits_and_filter_counts() {
 }
 
 #[test]
+fn detect_languages_answers_through_the_command() {
+    let hints: Vec<serde_json::Value> = invoke_with(
+        "detect_languages",
+        serde_json::json!({ "req": { "text": "đć" } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    assert_eq!(hints[0]["code"], "sr-Latn");
+    assert_eq!(hints[1]["code"], "pl");
+}
+
+#[test]
 fn check_coverage_reports_the_characters_a_face_lacks() {
     let api = MockApi::new();
     // Face 7 of the mock has no Cyrillic; face 1 has it.

@@ -2783,6 +2783,27 @@ fn language_presets_carry_their_sample_glyphs() {
 }
 
 #[test]
+fn detect_languages_ranks_the_presets_by_the_text_letters() {
+    let detect = |text: &str| {
+        api()
+            .detect_languages(fm_api::search::DetectLanguagesRequest { text: text.into() })
+            .expect("hints")
+    };
+    let hints = detect("Đ ć");
+    let codes: Vec<&str> = hints.iter().map(|h| h.code.as_str()).collect();
+    assert_eq!(codes, ["sr-Latn", "pl"]);
+    assert_eq!(hints[0].confidence, 1.0);
+    assert_eq!(hints[1].confidence, 0.5);
+    assert!(detect("plain ascii").is_empty());
+    assert!(detect("“—”").is_empty());
+    let json = serde_json::to_value(&hints[0]).expect("json");
+    assert_eq!(
+        json,
+        serde_json::json!({ "code": "sr-Latn", "confidence": 1.0 })
+    );
+}
+
+#[test]
 fn export_css_follows_the_core_rules() {
     let api = api();
     let req = |faces: Vec<u32>, subset: Option<Subset>| ExportWebRequest {

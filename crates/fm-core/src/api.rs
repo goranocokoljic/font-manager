@@ -76,9 +76,9 @@ use fm_api::preview::{
     PreviewService, SampleText, SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, Filters, ImageMatchRequest, LanguagePreset,
-    PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SearchService, SimilarFace,
-    SimilarRequest, Supports,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, Filters,
+    ImageMatchRequest, LanguageHint, LanguagePreset, PairingRequest, PairingSuggestion,
+    SearchRequest, SearchResponse, SearchService, SimilarFace, SimilarRequest, Supports,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
@@ -938,6 +938,10 @@ impl SearchService for CoreApi {
 
     fn list_languages(&self) -> ApiResult<Vec<LanguagePreset>> {
         Ok(pangrams::presets()?)
+    }
+
+    fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>> {
+        Ok(crate::language_detect::detect_languages(&req.text)?)
     }
 
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {

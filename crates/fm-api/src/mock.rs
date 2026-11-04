@@ -66,10 +66,10 @@ use crate::preview::{
     SampleTextRequest, SizeBasis, SizeFactor, SizeFactorRequest,
 };
 use crate::search::{
-    BlockCoverage, CoverageReport, CoverageRequest, FaceCoverage, FaceLanguageCoverage, FamilyHit,
-    FilterCount, FilterCounts, Filters, ImageMatchRequest, LanguageCoverage, LanguagePreset,
-    Missing, PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SimilarFace,
-    SimilarRequest, Supports, WeightRange, WidthRange,
+    BlockCoverage, CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage,
+    FaceLanguageCoverage, FamilyHit, FilterCount, FilterCounts, Filters, ImageMatchRequest,
+    LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingSuggestion,
+    SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
 };
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
@@ -2416,6 +2416,31 @@ impl SearchService for MockApi {
                     .map(|(_, glyphs)| (*glyphs).into()),
             })
             .collect())
+    }
+
+    /// A simple stand-in for the core's score: the share of the text's letters
+    /// outside ASCII that the mock language has.
+    fn detect_languages(&self, req: DetectLanguagesRequest) -> ApiResult<Vec<LanguageHint>> {
+        let mut letters: Vec<char> = req
+            .text
+            .to_lowercase()
+            .chars()
+            .filter(|c| !c.is_ascii() && c.is_alphabetic())
+            .collect();
+        letters.sort_unstable();
+        letters.dedup();
+        let mut hints: Vec<LanguageHint> = LANGUAGES
+            .iter()
+            .filter_map(|(code, _, _, chars)| {
+                let hits = letters.iter().filter(|c| chars.contains(**c)).count();
+                (hits > 0).then(|| LanguageHint {
+                    code: (*code).into(),
+                    confidence: hits as f32 / letters.len() as f32,
+                })
+            })
+            .collect();
+        hints.sort_by(|a, b| b.confidence.total_cmp(&a.confidence));
+        Ok(hints)
     }
 
     fn find_similar(&self, req: SimilarRequest) -> ApiResult<Vec<SimilarFace>> {

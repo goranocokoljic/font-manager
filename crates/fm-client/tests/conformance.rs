@@ -99,6 +99,7 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; check_coverage, json!({ "face": 1, "target": { "kind": "text", "text": "Ab" } }));
     same!(seen, d, c; face_coverage, json!(1));
     same!(seen, d, c; list_languages);
+    same!(seen, d, c; detect_languages, json!({ "text": "đć" }));
     same!(seen, d, c; find_similar, json!({ "face": 1, "limit": 3 }));
     same!(seen, d, c; find_by_image, json!({ "path": format!("{out}-missing.png"), "limit": 3 }));
     same!(seen, d, c; suggest_pairings, json!({ "face": 1, "limit": 3 }));
