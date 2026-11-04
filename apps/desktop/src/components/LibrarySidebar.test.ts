@@ -13,6 +13,7 @@ import { useLibraryStore } from '../stores/library';
 import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useSearchStore } from '../stores/search';
+import { useSourcesStore } from '../stores/sources';
 import CollectionsSidebar from './CollectionsSidebar.vue';
 import LibraryViewsSidebar from './LibraryViewsSidebar.vue';
 import OnlineCatalogsSidebar from './OnlineCatalogsSidebar.vue';
@@ -156,6 +157,15 @@ describe('an empty section', () => {
     await w.get('button[title="Make a collection"]').trigger('click');
     await flushPromises();
     expect(w.find('[data-testid="collections-empty"]').exists()).toBe(false);
+  });
+
+  it('of Sources is one quiet line, and no line with a folder', async () => {
+    const { w, client } = await mountIt(SourcesSidebar);
+    expect(w.find('.side-quiet').exists()).toBe(false);
+    client.listSources = async () => [];
+    await useSourcesStore().load();
+    await flushPromises();
+    expect(w.findAll('.side-quiet').map((e) => e.text())).toEqual(['No folders yet']);
   });
 
   it('of Tags is one quiet line and no key hint', async () => {

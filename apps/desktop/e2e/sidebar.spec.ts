@@ -132,6 +132,38 @@ test.describe('the sections', () => {
     expect(await css(star, 'border-top-width')).toBe('0px');
   });
 
+  test('ring a focused label round its row, off the tint, open or not', async ({ page }) => {
+    await open(page);
+    const label = nav(page)
+      .getByRole('region', { name: 'Collections' })
+      .getByRole('button', { name: 'Editorial', exact: true });
+    const expectRing = async (button: Locator) => {
+      await expect(button).toBeFocused();
+      await expect(button).toHaveCSS('outline-style', 'none');
+      const ringed = button.locator('xpath=..');
+      await expect(ringed).toHaveCSS('outline-style', 'solid');
+      await expect(ringed).toHaveCSS('outline-width', '2px');
+      await expect(ringed).toHaveCSS('outline-offset', '2px');
+    };
+    // Back and forth with Tab: a pointer's focus does not show the ring.
+    await label.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expectRing(label);
+
+    await label.click();
+    await expect(label).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expectRing(label);
+
+    const catalog = page.getByTestId('catalog-adobe-fonts');
+    await catalog.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expectRing(catalog);
+  });
+
   test('count Problems once, at the foot, with a dot and the palette key', async ({ page }) => {
     await open(page);
     const problems = page.getByRole('region', { name: 'Problems' });

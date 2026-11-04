@@ -1278,6 +1278,35 @@ fn the_replaced_defaults_of_an_earlier_version_go_once() {
     assert!(tree(&index).iter().any(|n| n == "Problems"));
 }
 
+/// The upgrade itself: a library of an earlier version already has the mark of
+/// its defaults, so the retirement must hold on the path that makes nothing.
+#[test]
+fn a_library_that_had_its_defaults_loses_the_replaced_ones_for_good() {
+    let dir = crate::test_support::TempDir::new("collections-defaults-retired");
+    let path = dir.path().join(crate::index::INDEX_FILE);
+    {
+        let mut index = Index::open(&path).expect("open").index;
+        index
+            .conn
+            .execute(
+                "INSERT INTO index_meta (key, value) VALUES (?1, 'earlier')",
+                [DEFAULTS_KEY],
+            )
+            .expect("mark");
+        old_default(&mut index, "Recently added", old_recent(), None);
+        old_default(&mut index, "Problems", old_problems(), None);
+        create(&mut index, "Mine", None);
+        assert!(!index.create_default_collections().expect("defaults"));
+        assert_eq!(tree(&index), ["Mine"]);
+    }
+    // Written to the file, not only to this connection, and not done twice.
+    let mut index = Index::open(&path).expect("reopen").index;
+    assert_eq!(tree(&index), ["Mine"]);
+    old_default(&mut index, "Problems", old_problems(), None);
+    assert!(!index.create_default_collections().expect("defaults"));
+    assert!(tree(&index).iter().any(|n| n == "Problems"));
+}
+
 #[test]
 fn a_replaced_default_the_user_changed_stays() {
     // Another rule under the name; a colour.

@@ -191,7 +191,8 @@ test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) =
       const el = document.activeElement;
       if (!el || el === document.body) return null;
       // The ring is an outline of at least 2 px, or a box-shadow ring (the pane divider).
-      const s = getComputedStyle(el);
+      // A sidebar row's label has its ring round the row, off the row's tint (E41.3).
+      const s = getComputedStyle(el.matches('button.side-label') ? el.parentElement! : el);
       const width = parseFloat(s.outlineWidth);
       const visible = (s.outlineStyle !== 'none' && width >= 2) || s.boxShadow !== 'none';
       return { id: el.outerHTML.slice(0, 120), visible };
