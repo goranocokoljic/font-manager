@@ -2404,11 +2404,35 @@ export type Paged<T> = {
 
 /**  Faces that pair well with this one (E23.4). */
 export type PairingRequest = {
-	/**  The face to find partners for. */
+	/**
+	 *  The face to find partners for. With `partner_of` set, the face being
+	 *  replaced instead: its family is not suggested.
+	 */
 	face: FaceId,
 	/**  Suggestions to return. */
 	limit: number,
+	/**
+	 *  The role the suggested faces play, which changes how they are scored
+	 *  and the reasons given (ADR 0021). Absent: the plain rules, for no
+	 *  role in particular.
+	 */
+	role?: PairingRole | null,
+	/**
+	 *  The face the suggestions must go with, when that is not `face`:
+	 *  "given this body face, suggest headlines". A face that is not visible
+	 *  is `NotFound`.
+	 */
+	partnerOf?: FaceId | null,
 };
+
+/**  The part a suggested face plays in a layout (E42.13). */
+export type PairingRole = 
+/**  Large type: a title or a heading. */
+"headline" | 
+/**  Running text. */
+"body" | 
+/**  Small type: a note or a label. */
+"caption";
 
 /**  A face suggested as a partner and why. */
 export type PairingSuggestion = {
@@ -2416,7 +2440,11 @@ export type PairingSuggestion = {
 	face: FaceSummary,
 	/**  0.0–1.0; higher pairs better. */
 	score: number | null,
-	/**  Plain-word reasons, one per rule that holds ("same superfamily"). */
+	/**
+	 *  Plain-word reasons, one per rule that holds ("same superfamily"); with
+	 *  a role in the request, those of the role first ("lower contrast for
+	 *  body", "x-height within 4 %").
+	 */
 	reasons: string[],
 };
 

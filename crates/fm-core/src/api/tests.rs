@@ -1301,6 +1301,8 @@ fn pairings_come_from_the_index_by_rule() {
         .suggest_pairings(PairingRequest {
             face: serif,
             limit: 3,
+            role: None,
+            partner_of: None,
         })
         .expect("pairings");
     assert_eq!(got.len(), 3);
@@ -1317,6 +1319,8 @@ fn pairings_come_from_the_index_by_rule() {
         .suggest_pairings(PairingRequest {
             face: FaceId(99_999),
             limit: 3,
+            role: None,
+            partner_of: None,
         })
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);

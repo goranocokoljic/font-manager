@@ -25,5 +25,6 @@ that contradicts one needs a new ADR that supersedes it, not a quiet workaround.
 | [0018](0018-adobe-host-integration.md) | Adobe hosts: UXP for InDesign and Photoshop, CEP for Illustrator; events, transports, manifests | Accepted |
 | [0019](0019-memory-after-a-scan.md) | Memory after a scan: drop the file index, return free heap memory per OS | Accepted |
 | [0020](0020-keep-the-webview-shell.md) | Keep the webview shell: the E35 measurements, the fixes, and the rules that keep it within budget | Accepted |
+| [0021](0021-font-pairing-and-roles.md) | Font pairing: the rules, the model and role-aware scoring | Accepted |
 
 Format: Context, Decision, Consequences. Decided on 2026-10-14 with the specification.

@@ -149,6 +149,8 @@ async fn every_tool_answers_over_mock_api_without_font_bytes() {
         .suggest_pairings(PairingRequest {
             face: FaceId(inter),
             limit: 3,
+            role: None,
+            partner_of: None,
         })
         .expect("pairings");
     assert_ne!(
