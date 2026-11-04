@@ -341,3 +341,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E40.3 #445] apps/desktop/src/components/ui/UiIconButton.vue:42 — a pressed icon toggle is marked only by the `--fm-hover` tint, about 1.12 to 1.20:1 and under 3:1.
 - [E40.3 #445] apps/desktop/src/components/FontList.test.ts — `recycles row elements while scrolling…` and `does not leak font faces while 1,000 families scroll past` timed out at 5000 ms in 2 of 5 full `pnpm test` runs on Windows when all suites run together; the file passes 3 of 3 runs alone, and CI was green.
+- [E43.2 #466] crates/fm-api/src/lib.rs:66 — the doc says `API_VERSION` is bumped on every contract change, but the last bump is #376; later contract commits such as #397 and #484 stayed at 0.23.0, and E43.2 continues the pattern, so a client cannot use the version to tell whether a method exists.
