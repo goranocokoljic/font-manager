@@ -299,6 +299,11 @@ describe('auto merge', () => {
     mainCi: 'success', removals: [], track: 'core', epic: 'E3', ...extra,
   });
 
+  test('a PR a human merged meanwhile ends the story as merged, not blocked', () => {
+    assert.deepEqual(decide(facts({ state: 'MERGED' }), auto), { action: 'merged', reasons: ['PR is already merged (by a human)'] });
+    assert.equal(decide(facts({ state: 'CLOSED' }), auto).action, 'block');
+  });
+
   test('merges a green, reviewed, up-to-date PR', () => {
     assert.equal(decide(facts(), auto).action, 'merge');
     assert.equal(decide(facts({ mainCi: 'pending' }), auto).action, 'merge');

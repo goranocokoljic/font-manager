@@ -73,6 +73,8 @@ export function commitCi(runs) {
 /** The decision, from facts gathered by `gather` (pure, so it is testable). */
 export function decide(f, cfg) {
   const reasons = [];
+  // A PR a human merged while the lane waited: the story is done, not blocked.
+  if (f.state === 'MERGED') return { action: 'merged', reasons: ['PR is already merged (by a human)'] };
   if (f.state !== 'OPEN') return { action: 'block', reasons: [`PR is ${f.state.toLowerCase()}`] };
   if (f.isDraft) return { action: 'block', reasons: ['PR is still a draft'] };
   if (f.mainCi === 'failure') return { action: 'stop', reasons: [`main is red at ${f.baseSha.slice(0, 7)}; merge nothing until it is fixed`] };
