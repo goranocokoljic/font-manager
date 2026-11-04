@@ -68,6 +68,8 @@ export const WALL = {
   paddingPx: 19,
   /** Thumbnails render at the largest size; the slider only scales them, so it never renders. */
   renderPx: WALL_SIZE.max,
+  /** Shortest time between two reflows during a drag, in ms. */
+  reflowMs: 100,
 } as const;
 
 /** `sizePx` inside the wall's range: other views keep their own larger or smaller values. */

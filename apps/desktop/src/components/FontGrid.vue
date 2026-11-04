@@ -53,6 +53,7 @@ import { weightRangeText } from '../list/columns';
 import ActivationDot from './ActivationDot.vue';
 import CardLiveText from './CardLiveText.vue';
 import FmFlipGroup from '../motion/FmFlipGroup.vue';
+import { useReducedMotion } from '../motion/useReducedMotion';
 
 const props = withDefaults(
   defineProps<{
@@ -107,9 +108,35 @@ function measure(): void {
   if (el.clientWidth > 0) width.value = el.clientWidth;
 }
 
+/** The slider's size: the specimens follow it on every frame. */
 const sizePx = computed(() => wallSize(props.preview.sizePx));
-const linePx = computed(() => wallLinePx(sizePx.value));
-const columns = computed(() => wallColumns(width.value, sizePx.value));
+/**
+ * The size the cards are laid out for. Restarting the glide of every card is what a drag
+ * pays for, so it happens at most every `WALL.reflowMs`; the 200 ms glide runs on between
+ * two. Under reduced motion nothing glides, so the cards follow at once.
+ */
+const layoutPx = ref(sizePx.value);
+const reducedMotion = useReducedMotion();
+let reflowedAt = -Infinity;
+let reflowTimer: ReturnType<typeof setTimeout> | undefined;
+function reflow(px: number): void {
+  reflowedAt = performance.now();
+  layoutPx.value = px;
+}
+watch(
+  sizePx,
+  (px) => {
+    clearTimeout(reflowTimer);
+    const wait = reflowedAt + WALL.reflowMs - performance.now();
+    if (wait <= 0 || reducedMotion.value) reflow(px);
+    else reflowTimer = setTimeout(() => reflow(sizePx.value), wait);
+  },
+  { flush: 'sync' },
+);
+onBeforeUnmount(() => clearTimeout(reflowTimer));
+
+const linePx = computed(() => wallLinePx(layoutPx.value));
+const columns = computed(() => wallColumns(width.value, layoutPx.value));
 const cardWidth = computed(() => wallCardWidth(width.value, columns.value));
 const count = computed(() => list.rows.length);
 const range = computed(() =>
@@ -210,7 +237,7 @@ const textWidth = computed(
       .width,
 );
 /** The room a specimen has right now. */
-const box = computed(() => specimenBox(cardWidth.value, sizePx.value));
+const box = computed(() => specimenBox(cardWidth.value, layoutPx.value));
 
 /** A card's last thumbnail: it stays up while the thumbnail of a new text is on its way. */
 let lastThumbs = new Map<string, Thumbnail>();
@@ -258,7 +285,7 @@ function cardStyle(index: number) {
   const line = Math.floor(index / cols);
   return {
     width: `${cardWidth.value}px`,
-    height: `${wallCardHeight(sizePx.value)}px`,
+    height: `${wallCardHeight(layoutPx.value)}px`,
     top: `${WALL.gap + line * linePx.value}px`,
     insetInlineStart: `${WALL.inset + (index % cols) * (cardWidth.value + WALL.gap)}px`,
   };

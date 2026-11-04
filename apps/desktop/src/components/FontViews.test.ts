@@ -185,6 +185,53 @@ describe('FontGrid', () => {
     expect((after.element as HTMLElement).style.height).toBe(`${wallLinePx(36) - WALL.gap}px`);
   });
 
+  it('during a drag the specimen follows every step and the cards reflow at most every 100 ms', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    await load({ extraFaces: 20 });
+    const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW, sizePx: 30 } });
+    await flushPromises();
+    const size = (sizePx: number) => grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx } });
+    const card = () => grid.findAll('[role="option"]')[0]!;
+    const height = () => (card().element as HTMLElement).style.height;
+    const tall = (sizePx: number) => `${wallLinePx(sizePx) - WALL.gap}px`;
+    expect(height()).toBe(tall(30));
+
+    // The first step reflows at once.
+    await size(32);
+    expect(height()).toBe(tall(32));
+    const first = maskWidth(card());
+    // The next steps, 10 ms apart: the mask grows, the card waits.
+    vi.advanceTimersByTime(10);
+    await size(34);
+    expect(height()).toBe(tall(32));
+    expect(maskWidth(card())).toBeGreaterThan(first);
+    vi.advanceTimersByTime(10);
+    await size(36);
+    expect(height()).toBe(tall(32));
+    // 100 ms after the last reflow: the card takes the latest size, not an older one.
+    vi.advanceTimersByTime(WALL.reflowMs - 20);
+    await flushPromises();
+    expect(height()).toBe(tall(36));
+  });
+
+  it('under reduced motion the cards follow every step of a drag', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('reduce'),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    }));
+    await load({ extraFaces: 20 });
+    const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW, sizePx: 30 } });
+    await flushPromises();
+    const height = () => (grid.findAll('[role="option"]')[0]!.element as HTMLElement).style.height;
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx: 32 } });
+    vi.advanceTimersByTime(10);
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx: 34 } });
+    expect(height()).toBe(`${wallLinePx(34) - WALL.gap}px`);
+  });
+
   it('after the slider rests, a card holds its old mask until the new text is rendered', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     await load({ extraFaces: 20 });
