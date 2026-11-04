@@ -17,6 +17,29 @@ async function live(client: FmClient, id: CollectionId) {
   return { count: c.faceCount, faces: await facesOf(client, { collection: id }) };
 }
 
+describe('MockApi collection colours (E44.3)', () => {
+  it('sets, keeps, removes and checks a colour as fm-core does', async () => {
+    const client = createMockClient();
+    const made = await client.createCollection({ name: 'Brand', color: 'coral' });
+    expect(made.color).toBe('coral');
+    const rename = (color?: string | null) =>
+      client.renameCollection({ collection: made.id, name: 'Brand', color });
+    expect((await rename()).color).toBe('coral');
+    expect((await rename(null)).color).toBe('coral');
+    expect((await rename('teal')).color).toBe('teal');
+    await expect(rename('#ff0000')).rejects.toMatchObject({ code: 'invalidRequest' });
+    expect((await client.listCollections())[0]!.color).toBe('teal');
+    expect((await rename('')).color).toBeNull();
+    await expect(client.createCollection({ name: 'Hex', color: '#ff0000' })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    await expect(client.createCollection({ name: 'None', color: '' })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    expect((await client.createCollection({ name: 'Plain' })).color).toBeNull();
+  });
+});
+
 describe('MockApi detectLanguages (E43.2)', () => {
   it('ranks the presets by the letters of the text', async () => {
     const hints = await createMockClient().detectLanguages({ text: 'Zażółć Ђ' });

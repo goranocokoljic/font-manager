@@ -68,7 +68,7 @@ use serde::{Deserialize, Serialize};
 /// [`NEGOTIATED_MAJOR`] too (ADR 0015).
 pub const API_VERSION: ApiVersion = ApiVersion {
     major: 0,
-    minor: 23,
+    minor: 24,
     patch: 0,
 };
 
@@ -337,13 +337,13 @@ mod tests {
 
     #[test]
     fn api_version_displays_as_semver() {
-        assert_eq!(API_VERSION.to_string(), "0.23.0");
+        assert_eq!(API_VERSION.to_string(), "0.24.0");
     }
 
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":23,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":24,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }

@@ -4,6 +4,7 @@
 import permissionRules from '../../../../data/licenses/permissions.json';
 import { HELP_PAGES } from '../help';
 import { catalogFontPath } from './catalogFont';
+import { COLLECTION_COLORS } from './collectionColors';
 import type { FmClient, FullSettings } from './client';
 import type { PreviewBytes } from './preview';
 import {
@@ -792,6 +793,10 @@ export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewByte
 }
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
+const checkCollectionColor = (color: string | null | undefined): void => {
+  if (color != null && !(COLLECTION_COLORS as readonly string[]).includes(color))
+    throw invalid('Pick one of the eight collection colours.');
+};
 
 /** Options of a mock client. */
 export interface MockOptions {
@@ -2899,6 +2904,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (nameTaken(req.parent ?? null, name)) throw conflict(name);
       if (req.rules && req.ruleGroup)
         throw invalid('Give a smart collection rules or a rule group, not both.');
+      checkCollectionColor(req.color);
       const group: RuleGroup | null =
         req.ruleGroup ??
         (req.rules ? { op: 'and', rules: [{ kind: 'filters', filters: req.rules }] } : null);
@@ -2913,6 +2919,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         rules: group ? (only?.kind === 'filters' ? only.filters : {}) : null,
         ruleGroup: group,
         faceCount: 0,
+        color: req.color ?? null,
       };
       collections.push(c);
       try {
@@ -2946,9 +2953,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     renameCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
+      if (req.color) checkCollectionColor(req.color);
       const c = findCollection(req.collection);
       if (nameTaken(c.parent, name, c.id)) throw conflict(name);
       c.name = name;
+      // Absent keeps the colour, an empty one removes it.
+      if (req.color != null) c.color = req.color || null;
       return viewOf(c);
     },
     moveCollection: async (req) => {

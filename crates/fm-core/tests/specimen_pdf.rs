@@ -260,6 +260,7 @@ fn run_collection() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("collection");
     api.add_to_collection(CollectionFacesRequest {

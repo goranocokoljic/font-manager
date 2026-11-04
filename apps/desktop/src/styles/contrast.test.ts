@@ -2,6 +2,7 @@
 // and focus rings 3:1. Reads the palettes from the style sheets, so a color
 // change that breaks contrast fails here.
 import { describe, expect, it } from 'vitest';
+import { COLLECTION_COLORS } from '../api/collectionColors';
 import theme from './theme.css?raw';
 import print from './print.css?raw';
 import compareSheet from '../components/CompareSheet.vue?raw';
@@ -132,7 +133,17 @@ describe('palettes stay in step', () => {
 
 /** Colors with no contrast duty: row and panel separators (WCAG 1.4.11 exempts them). */
 const DECORATIVE = ['border'];
-const CHECKED = [...TEXT, 'accent', 'on-accent', 'bg', 'surface', 'surface-2', 'control-border'];
+const COLLECTION = COLLECTION_COLORS.map((key) => `collection-${key}`);
+const CHECKED = [
+  ...TEXT,
+  ...COLLECTION,
+  'accent',
+  'on-accent',
+  'bg',
+  'surface',
+  'surface-2',
+  'control-border',
+];
 
 describe('every color token', () => {
   it.each([
@@ -147,6 +158,28 @@ describe('every color token', () => {
 function compareColors(css: string): string[] {
   return [...css.matchAll(/--fm-compare-\d:\s*(#[0-9a-f]{6})/gi)].map((m) => m[1]!.toLowerCase());
 }
+
+// E44.3: a dot on the sidebar and a swatch in a popover; the dot is the only mark of the colour.
+describe('collection colors', () => {
+  it.each([
+    ['light', light],
+    ['dark', dark],
+  ])('are all there and at least 3:1 on the %s surfaces', (_, p) => {
+    for (const k of COLLECTION) {
+      expect(p[k], k).toBeDefined();
+      for (const bg of [p.bg!, p.surface!, p['surface-2']!])
+        expect(contrast(rgb(p[k]!), rgb(bg)), `${k} on ${bg}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it.each([
+    ['light', light],
+    ['dark', dark],
+  ])('leave the text of the %s strip at least 4.5:1 on their 10 % tint', (_, p) => {
+    for (const k of COLLECTION)
+      expect(contrast(rgb(p.fg!), tint(p[k]!, 0.1, p.bg!)), k).toBeGreaterThanOrEqual(4.5);
+  });
+});
 
 describe('Compare colors', () => {
   it('are the same in the Compare sheet and the glyph compare', () => {

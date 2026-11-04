@@ -599,6 +599,7 @@ fn activate_and_deactivate_a_collection_by_name_or_id() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .unwrap();
     api.add_to_collection(CollectionFacesRequest {
@@ -652,6 +653,7 @@ fn a_target_that_names_nothing_or_several_things_is_refused() {
             parent,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .unwrap()
     };

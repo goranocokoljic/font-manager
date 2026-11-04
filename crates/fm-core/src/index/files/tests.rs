@@ -1220,7 +1220,8 @@ fn an_index_from_before_fingerprints_fills_them_in_on_the_next_scan() {
         // tags (V21) too.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(
-            "DROP TABLE activation_document;
+            "ALTER TABLE collection DROP COLUMN color;
+             DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;
              DROP TABLE sidecar_absorb;
              ALTER TABLE sidecar_conflict DROP COLUMN disk_rev;
@@ -1298,7 +1299,8 @@ fn an_index_from_before_full_names_fills_them_in_on_the_next_scan() {
         // `face.parsed`); a tag and a rating on one of them.
         let conn = Connection::open(&path).expect("open");
         conn.execute_batch(&format!(
-            "DROP TABLE activation_document;
+            "ALTER TABLE collection DROP COLUMN color;
+             DROP TABLE activation_document;
              ALTER TABLE face DROP COLUMN full_name;
              UPDATE face SET parsed = json_remove(parsed, '$.fullName')
              WHERE file_id = (SELECT id FROM font_file WHERE path LIKE '%collection.ttc');

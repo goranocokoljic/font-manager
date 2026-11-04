@@ -638,6 +638,7 @@ fn collections_nest_reorder_and_take_families() {
             name: name.into(),
             parent,
             rules: None,
+            color: None,
         })
         .unwrap()
     };
@@ -681,6 +682,7 @@ fn collections_nest_reorder_and_take_families() {
     let clash = api.rename_collection(RenameCollectionRequest {
         collection: b.id,
         name: "C".into(),
+        color: None,
     });
     assert_eq!(clash.unwrap_err().code, ErrorCode::Conflict);
 
@@ -717,6 +719,7 @@ fn families_filter_by_a_collection_and_an_unknown_one_is_not_found() {
             name: "Clients".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap();
     let families = |collection| {
@@ -753,6 +756,7 @@ fn collections_tags_meta_and_sets() {
             name: "Clients".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap();
     let c = api
@@ -773,6 +777,7 @@ fn collections_tags_meta_and_sets() {
                 variable: Some(true),
                 ..Default::default()
             }),
+            color: None,
         })
         .unwrap();
     assert_eq!(smart.face_count, 2);
@@ -1921,6 +1926,7 @@ fn virtual_styles_pin_list_delete_and_activate_their_face_once() {
             name: "Brand".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap()
         .id;
@@ -2019,6 +2025,7 @@ fn smart(
         parent: None,
         rules: None,
         rule_group: Some(RuleGroup { op, rules }),
+        color: None,
     })
 }
 
@@ -2110,6 +2117,7 @@ fn smart_collections_follow_the_rules() {
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .unwrap();
     assert_eq!(
@@ -2188,6 +2196,7 @@ fn smart_collections_follow_the_rules() {
         parent: None,
         rules: Some(Filters::default()),
         rule_group: Some(RuleGroup::from(Filters::default())),
+        color: None,
     });
     assert_eq!(both.unwrap_err().code, ErrorCode::InvalidRequest);
 }
@@ -2721,6 +2730,7 @@ fn rule_editor_calls_behave_like_the_core() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .unwrap();
     let not_smart = api
@@ -2949,6 +2959,7 @@ fn a_collection_specimen_checks_like_the_core_and_returns_the_path() {
             name: name.into(),
             parent: None,
             rules,
+            color: None,
         })
         .unwrap()
         .id
@@ -3386,4 +3397,93 @@ fn font_switch_payload_names_the_face_and_its_file() {
         api.font_switch_payload(FaceId(999)).unwrap_err().code,
         ErrorCode::NotFound
     );
+}
+
+#[test]
+fn collection_colours_are_set_kept_removed_and_checked() {
+    let api = api();
+    let made = api
+        .create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+            color: Some("coral".into()),
+        })
+        .unwrap();
+    assert_eq!(made.color.as_deref(), Some("coral"));
+    let rename = |color: Option<&str>| {
+        api.rename_collection(RenameCollectionRequest {
+            collection: made.id,
+            name: "Brand".into(),
+            color: color.map(str::to_owned),
+        })
+    };
+    assert_eq!(rename(None).unwrap().color.as_deref(), Some("coral"));
+    assert_eq!(rename(Some("teal")).unwrap().color.as_deref(), Some("teal"));
+    assert_eq!(
+        rename(Some("#ff0000")).unwrap_err().code,
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(rename(None).unwrap().color.as_deref(), Some("teal"));
+    assert_eq!(rename(Some("")).unwrap().color, None);
+    assert_eq!(
+        api.create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Hex".into(),
+            parent: None,
+            rules: None,
+            color: Some("#ff0000".into()),
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::InvalidRequest
+    );
+}
+
+/// A client that sends no colour, or null, must not take a collection's colour away.
+#[test]
+fn a_rename_request_without_a_colour_keeps_it() {
+    let read = |json: serde_json::Value| {
+        serde_json::from_value::<RenameCollectionRequest>(json)
+            .unwrap()
+            .color
+    };
+    assert_eq!(
+        read(serde_json::json!({ "collection": 1, "name": "A" })),
+        None
+    );
+    assert_eq!(
+        read(serde_json::json!({ "collection": 1, "name": "A", "color": null })),
+        None
+    );
+    assert_eq!(
+        read(serde_json::json!({ "collection": 1, "name": "A", "color": "" })).as_deref(),
+        Some("")
+    );
+}
+
+/// The UI lists the palette and draws each key with a token in both themes; a key that
+/// is missing there could be stored and never shown.
+#[test]
+fn the_ui_draws_every_collection_colour() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/desktop/src");
+    let read = |file: &str| std::fs::read_to_string(src.join(file)).unwrap();
+    let keys = read("api/collectionColors.ts");
+    let theme = read("styles/theme.css");
+    assert_eq!(
+        keys.matches("  '").count(),
+        fm_api::organization::COLLECTION_COLORS.len()
+    );
+    for key in fm_api::organization::COLLECTION_COLORS {
+        assert!(
+            keys.contains(&format!("'{key}'")),
+            "{key} in the UI's palette"
+        );
+        assert_eq!(
+            theme.matches(&format!("--fm-collection-{key}:")).count(),
+            3,
+            "{key}: a light, an OS dark and a forced dark value"
+        );
+    }
 }

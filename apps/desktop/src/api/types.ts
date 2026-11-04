@@ -467,6 +467,8 @@ export type Collection = {
 	ruleGroup?: RuleGroup | null,
 	/**  Faces in it now. */
 	faceCount: number,
+	/**  Its colour, a key of [`COLLECTION_COLORS`]; absent when it has none. */
+	color?: string | null,
 };
 
 /**  Add faces to, or remove them from, a manual collection. */
@@ -644,6 +646,11 @@ export type CreateCollectionRequest = {
 	 *  and `rules` is `InvalidRequest`.
 	 */
 	ruleGroup?: RuleGroup | null,
+	/**
+	 *  Its colour, a key of [`COLLECTION_COLORS`]; any other value is
+	 *  `InvalidRequest`.
+	 */
+	color?: string | null,
 };
 
 /**  Create a project set. */
@@ -2637,12 +2644,18 @@ export type ReceiptPlace =
 /**  In the app's data folder, on this machine only. */
 "appData";
 
-/**  Rename a collection. */
+/**  Rename a collection, or change its colour. */
 export type RenameCollectionRequest = {
 	/**  The collection. */
 	collection: CollectionId,
-	/**  New name. */
+	/**  New name; its current name changes only the colour. */
 	name: string,
+	/**
+	 *  A key of [`COLLECTION_COLORS`] sets the colour and an empty string
+	 *  removes it; absent keeps it, so a plain rename leaves it alone. Any
+	 *  other value is `InvalidRequest`.
+	 */
+	color?: string | null,
 };
 
 /**  Gives a saved comparison a new name. */
@@ -3468,4 +3481,4 @@ export type WidthRange = {
 	max: number,
 };
 
-export const API_VERSION: ApiVersion = { major: 0, minor: 23, patch: 0 };
+export const API_VERSION: ApiVersion = { major: 0, minor: 24, patch: 0 };

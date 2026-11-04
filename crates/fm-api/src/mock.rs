@@ -52,8 +52,8 @@ use crate::library::{
     TrashMoveStatus, WebUse,
 };
 use crate::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
-    FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
+    COLLECTION_COLORS, Collection, CollectionFacesRequest, CreateCollectionRequest,
+    CreateSetRequest, FamilyNotesUpdate, ImportSetResponse, LicenseDeclaration, LoadSetFileRequest,
     MoveCollectionRequest, PinInstanceRequest, ProjectSet, QuickCollection, QuickCollectionRequest,
     ReceiptChange, ReceiptPlace, RenameCollectionRequest, Rule, RuleGroup, RuleOp,
     SET_FILE_EXTENSION, SaveSetFileRequest, SavedSetFile, SelectionTag, SelectionTags,
@@ -210,6 +210,15 @@ fn mock_web_embedding_block(l: &LicenseInfo) -> Option<String> {
 
 /// Refuses a rule as fm-core does (E14.1): a group with no rules, at any
 /// depth, or a weight or width range whose minimum is above its maximum.
+fn check_collection_color(color: Option<String>) -> ApiResult<Option<String>> {
+    match color {
+        Some(key) if !COLLECTION_COLORS.contains(&key.as_str()) => Err(ApiError::invalid(
+            "Pick one of the eight collection colours.",
+        )),
+        color => Ok(color),
+    }
+}
+
 fn check_rule_shape(group: &RuleGroup) -> ApiResult<()> {
     if group.rules.is_empty() {
         return Err(ApiError::invalid(
@@ -3179,6 +3188,7 @@ impl OrganizationService for MockApi {
         if name.is_empty() {
             return Err(ApiError::invalid("Give the collection a name."));
         }
+        let color = check_collection_color(req.color)?;
         let mut st = self.state();
         if let Some(p) = req.parent
             && !st.collections.iter().any(|c| c.id == p)
@@ -3210,6 +3220,7 @@ impl OrganizationService for MockApi {
                 .map(|g| g.plain_filters().cloned().unwrap_or_default()),
             rule_group: group,
             face_count: 0,
+            color,
         };
         st.collections.push(c.clone());
         Ok(st.collection_view(&c))
@@ -3240,6 +3251,11 @@ impl OrganizationService for MockApi {
         if name.is_empty() {
             return Err(ApiError::invalid("Give the collection a name."));
         }
+        let color = match req.color.as_deref() {
+            None => None,
+            Some("") => Some(None),
+            Some(_) => Some(check_collection_color(req.color)?),
+        };
         let mut st = self.state();
         let parent = st.collection(req.collection)?.parent;
         st.check_sibling_name(parent, name, Some(req.collection))?;
@@ -3249,6 +3265,9 @@ impl OrganizationService for MockApi {
             .find(|c| c.id == req.collection)
             .ok_or_else(|| ApiError::not_found(format!("Collection {}", req.collection)))?;
         c.name = name.into();
+        if let Some(color) = color {
+            c.color = color;
+        }
         let c = c.clone();
         Ok(st.collection_view(&c))
     }
