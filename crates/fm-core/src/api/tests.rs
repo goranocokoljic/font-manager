@@ -158,6 +158,9 @@ impl Lib {
         let rx = self.api.subscribe();
         let job = self.api.scan(ScanRequest { source }).expect("scan");
         let mut events = Vec::new();
+        // `LibraryChanged` names no job, and the one of an earlier scan can
+        // still come: only one after this job's `ScanFinished` is this job's.
+        let mut finished = false;
         let deadline = Instant::now() + WAIT;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -168,8 +171,11 @@ impl Lib {
             };
             let last = match &event {
                 Event::JobFailed { job: j, .. } => *j == job,
-                Event::ScanFinished { job: j, .. } => *j == job && !changes,
-                Event::LibraryChanged { .. } => changes,
+                Event::ScanFinished { job: j, .. } if *j == job => {
+                    finished = true;
+                    !changes
+                }
+                Event::LibraryChanged { .. } => changes && finished,
                 _ => false,
             };
             events.push(event);
