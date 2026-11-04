@@ -61,7 +61,10 @@
   --fm-hover: rgb(0 0 0 / 5%);
   --fm-active: rgb(0 0 0 / 9%);
   --fm-danger: #b3261e;
-  --fm-accent: #0a5fd6;
+  /* Rings, fills, knobs and badges, never words: text on it is --fm-on-accent, accent-coloured
+     words are --fm-fg (DESIGN.md). */
+  --fm-accent: #c56eb2;
+  --fm-on-accent: #141413;
   --fm-success: #1b6e2d;
   --fm-warning: #8a4b00;
   --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 8%), 0 4px 16px rgb(0 0 0 / 10%);
@@ -80,7 +83,7 @@
   :root:not([data-theme='light']) {
     --fm-bg: #1c1c1e;
     --fm-surface: #242426;
-    --fm-surface-2: #2c2c2f;
+    --fm-surface-2: #262628;
     --fm-fg: #ececec;
     --fm-muted: #a3a3a8;
     --fm-border: rgb(255 255 255 / 9%);
@@ -89,7 +92,8 @@
     --fm-hover: rgb(255 255 255 / 6%);
     --fm-active: rgb(255 255 255 / 10%);
     --fm-danger: #ff8a80;
-    --fm-accent: #6ea8ff;
+    --fm-accent: #ab4b96;
+    --fm-on-accent: #ffffff;
     --fm-success: #7bd88f;
     --fm-warning: #ffb74d;
     --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 35%);
@@ -101,7 +105,8 @@
   color-scheme: dark;
   --fm-bg: #1c1c1e;
   --fm-surface: #242426;
-  --fm-surface-2: #2c2c2f;
+  /* The lightest surface where the dark accent, as a focus ring, still reaches 3:1. */
+  --fm-surface-2: #262628;
   --fm-fg: #ececec;
   --fm-muted: #a3a3a8;
   --fm-border: rgb(255 255 255 / 9%);
@@ -110,7 +115,8 @@
   --fm-hover: rgb(255 255 255 / 6%);
   --fm-active: rgb(255 255 255 / 10%);
   --fm-danger: #ff8a80;
-  --fm-accent: #6ea8ff;
+  --fm-accent: #ab4b96;
+  --fm-on-accent: #ffffff;
   --fm-success: #7bd88f;
   --fm-warning: #ffb74d;
   --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 35%);
@@ -296,7 +302,7 @@ input[type='radio']::before {
   content: '';
 }
 input[type='checkbox']::before {
-  background-color: var(--fm-bg);
+  background-color: var(--fm-on-accent);
   mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 5.5l2.5 2.5 4.5-5'/%3E%3C/svg%3E")
     center / contain no-repeat;
   -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 5.5l2.5 2.5 4.5-5'/%3E%3C/svg%3E")
@@ -306,7 +312,7 @@ input[type='radio']::before {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: var(--fm-bg);
+  background-color: var(--fm-on-accent);
 }
 input[type='checkbox']:checked::before,
 input[type='radio']:checked::before {
@@ -458,7 +464,8 @@ hr {
   --fm-border-strong: rgb(0 0 0 / 16%);
   --fm-hover: rgb(0 0 0 / 5%);
   --fm-active: rgb(0 0 0 / 9%);
-  --fm-accent: #0a5fd6;
+  --fm-accent: #c56eb2;
+  --fm-on-accent: #141413;
   --fm-warning: #8a4b00;
   --fm-success: #1b6e2d;
 }
@@ -466,14 +473,15 @@ hr {
   color-scheme: dark;
   --fm-bg: #1c1c1e;
   --fm-surface: #242426;
-  --fm-surface-2: #2c2c2f;
+  --fm-surface-2: #262628;
   --fm-fg: #ececec;
   --fm-muted: #a3a3a8;
   --fm-border: rgb(255 255 255 / 9%);
   --fm-border-strong: rgb(255 255 255 / 16%);
   --fm-hover: rgb(255 255 255 / 6%);
   --fm-active: rgb(255 255 255 / 10%);
-  --fm-accent: #6ea8ff;
+  --fm-accent: #ab4b96;
+  --fm-on-accent: #ffffff;
   --fm-warning: #ffb74d;
   --fm-success: #7bd88f;
 }

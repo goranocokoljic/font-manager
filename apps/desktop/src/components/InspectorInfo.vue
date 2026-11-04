@@ -520,13 +520,13 @@ function clashText(c: Conflict): string {
   border: 1px solid var(--fm-accent);
   border-radius: var(--fm-radius-md);
   background: var(--fm-accent);
-  color: var(--fm-bg);
+  color: var(--fm-on-accent);
   font: inherit;
   font-weight: 600;
 }
 .activate[aria-pressed='true'] {
   background-color: transparent;
-  color: var(--fm-accent);
+  color: var(--fm-fg);
 }
 .activate:disabled {
   border-color: var(--fm-border);
@@ -666,7 +666,7 @@ dd {
   color: var(--fm-muted);
 }
 .favorite[aria-pressed='true'] {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
 }
 .stars {
   display: flex;
@@ -683,7 +683,7 @@ dd {
   color: var(--fm-fg);
 }
 .star.on {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
 }
 .stars .state {
   margin-inline-start: 6px;

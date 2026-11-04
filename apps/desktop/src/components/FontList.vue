@@ -547,7 +547,7 @@ function onToggle(row: ListRow): void {
   visibility: visible;
 }
 .quick-mark {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-size: var(--fm-text-xs);
 }
 </style>

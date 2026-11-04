@@ -244,10 +244,14 @@ function onKeyDown(e: KeyboardEvent): void {
   text-align: start;
 }
 .row:focus-visible,
-.close:focus-visible,
-.activate:focus-visible {
+.close:focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: -2px;
+}
+/* The button is an accent fill: a ring inside it would not show. */
+.activate:focus-visible {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 2px;
 }
 .name {
   flex: 1;
@@ -260,7 +264,7 @@ function onKeyDown(e: KeyboardEvent): void {
   font-weight: 600;
 }
 .status.active {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
 }
 .status.inLibrary {
   color: var(--fm-fg);
@@ -280,8 +284,8 @@ function onKeyDown(e: KeyboardEvent): void {
   padding: 2px 12px;
   border: 1px solid var(--fm-accent);
   border-radius: var(--fm-radius-sm);
-  background-color: transparent;
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
   font: inherit;
   font-weight: 600;
 }

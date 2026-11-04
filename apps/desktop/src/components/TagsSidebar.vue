@@ -140,7 +140,7 @@ function countLabel(n: number): string {
 /* A tag the dragged fonts already carry. */
 .carried {
   box-shadow: inset 2px 0 0 var(--fm-accent);
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 .drop {

@@ -347,7 +347,8 @@ async function save(): Promise<void> {
 .opener.on,
 .opener[aria-expanded='true'] {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 .count {
   font-variant-numeric: tabular-nums;
@@ -389,7 +390,8 @@ async function save(): Promise<void> {
 .chip[aria-pressed='true'],
 .chip.active {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 .chip.active {
   display: inline-flex;

@@ -57,7 +57,8 @@ async function openSite(): Promise<void> {
   line-height: 1.5;
 }
 .link {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
+  text-decoration: underline;
 }
 .link:focus-visible {
   outline: 2px solid var(--fm-accent);

@@ -342,7 +342,7 @@ const deferredStyle = computed(() => ({
   padding: 0 var(--fm-space-2);
   border-radius: var(--fm-radius-sm);
   background: var(--fm-hover);
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-variant-numeric: tabular-nums;
 }
 .sample.deferred {

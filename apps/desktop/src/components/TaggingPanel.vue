@@ -291,7 +291,8 @@ const summary = computed(() => {
 .box.all,
 .box.some {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 .name {
   flex: 1;
@@ -309,7 +310,7 @@ const summary = computed(() => {
 }
 mark {
   background-color: transparent;
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 .none {
@@ -337,7 +338,8 @@ mark {
 }
 .button.primary {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 @media (prefers-reduced-motion: no-preference) {
   .panel {

@@ -261,7 +261,7 @@ async function toggle(event: globalThis.Event): Promise<void> {
   padding: 0;
   border: 0;
   background: none;
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font: inherit;
   text-decoration: underline;
   cursor: pointer;

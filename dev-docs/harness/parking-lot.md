@@ -336,3 +336,8 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-03
 
 - [E42.11 #462] apps/desktop/src/search/chips.ts:143 — the filter chips keep their own feature names (with apps/desktop/src/locales/en.json:484), separate from data/features; the texts sampled match the catalog today, but the two copies can drift.
+
+## 2026-11-04
+
+- [E40.3 #445] apps/desktop/src/components/ui/UiIconButton.vue:42 — a pressed icon toggle is marked only by the `--fm-hover` tint, about 1.12 to 1.20:1 and under 3:1.
+- [E40.3 #445] apps/desktop/src/components/FontList.test.ts — `recycles row elements while scrolling…` and `does not leak font faces while 1,000 families scroll past` timed out at 5000 ms in 2 of 5 full `pnpm test` runs on Windows when all suites run together; the file passes 3 of 3 runs alone, and CI was green.

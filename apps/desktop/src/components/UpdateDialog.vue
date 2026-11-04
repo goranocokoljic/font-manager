@@ -240,7 +240,8 @@ function onFocusIn(e: FocusEvent): void {
 }
 .button.primary {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 .button:disabled {
   opacity: 0.5;

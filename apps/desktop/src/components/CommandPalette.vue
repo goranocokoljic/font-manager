@@ -236,7 +236,7 @@ function onKeyDown(e: KeyboardEvent): void {
 }
 mark {
   background-color: transparent;
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 .chord {

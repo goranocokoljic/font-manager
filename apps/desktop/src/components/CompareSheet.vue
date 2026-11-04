@@ -472,7 +472,8 @@ function onFocusIn(e: FocusEvent): void {
   list-style: none;
 }
 .saved [aria-current='true'] {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
+  font-weight: 600;
 }
 .missing {
   margin: 0;
@@ -512,9 +513,9 @@ h2 {
   color: var(--fm-fg);
 }
 .mode:has(input:checked) {
-  background-color: var(--fm-bg);
-  color: var(--fm-accent);
-  box-shadow: 0 0 0 1px var(--fm-border);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
+  box-shadow: 0 0 0 1px var(--fm-accent);
 }
 .mode input {
   position: absolute;
