@@ -336,3 +336,7 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-03
 
 - [E42.11 #462] apps/desktop/src/search/chips.ts:143 — the filter chips keep their own feature names (with apps/desktop/src/locales/en.json:484), separate from data/features; the texts sampled match the catalog today, but the two copies can drift.
+
+## 2026-11-04
+
+- [E42.13 #464] crates/fm-core/src/index/search/pairing/tests.rs:594 — `ten_thousand_faces_pair_in_under_50_ms` skips its timing in debug builds and `.github/workflows/ci.yml:88-90` runs nextest without `--release`, so its 50 ms check does not run in the CI matrix; the bench job is the gate.
