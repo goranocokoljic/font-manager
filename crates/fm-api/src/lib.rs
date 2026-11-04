@@ -299,6 +299,9 @@ pub fn types() -> specta::Types {
         layout::RevertLayoutRequest,
         layout::LayoutVersion,
         layout::RestoreLayoutRequest,
+        layout::LayoutSurface,
+        layout::LayoutFont,
+        layout::ExportLayoutPngRequest,
         // comparisons
         comparison::CompareMode,
         comparison::ComparisonEntry,

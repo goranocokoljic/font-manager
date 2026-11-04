@@ -18,8 +18,8 @@ use fm_api::export::{
     GlyphSvgRequest, SpecimenFormat, SpecimenRequest, Subset, WebFormat,
 };
 use fm_api::layout::{
-    BlockOverflow, DuplicateLayoutRequest, LayoutPreset, LayoutRef, RestoreLayoutRequest,
-    RevertLayoutRequest, SaveLayoutRequest,
+    BlockOverflow, DuplicateLayoutRequest, ExportLayoutPngRequest, LayoutFont, LayoutPreset,
+    LayoutRef, LayoutSurface, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
 };
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
@@ -2352,6 +2352,37 @@ fn layout_presets_start_locked_at_a_readable_width_that_follows_the_body_block()
     );
     chosen.width_locked = false;
     assert_eq!(api.layout_width(chosen).expect("width"), None);
+}
+
+#[test]
+fn a_layout_export_makes_the_core_checks_and_names_the_file() {
+    let api = api();
+    let font = LayoutFont {
+        face: FaceId(1),
+        variations: Vec::new(),
+        features: Vec::new(),
+    };
+    let req = |layout: &str, scale: u8| ExportLayoutPngRequest {
+        layout: layout.into(),
+        scale,
+        surface: LayoutSurface::Ink,
+        font: font.clone(),
+        block_fonts: Vec::new(),
+    };
+    assert_eq!(
+        api.export_layout_png(req("book", 2)).expect("export"),
+        "/mock/exports/book-ink-2x.png"
+    );
+    let code = |r: ExportLayoutPngRequest| api.export_layout_png(r).unwrap_err().code;
+    assert_eq!(code(req("book", 3)), ErrorCode::InvalidRequest);
+    assert_eq!(code(req("none", 1)), ErrorCode::NotFound);
+    assert_eq!(code(req("draft", 1)), ErrorCode::InvalidRequest);
+    let mut unknown = req("book", 1);
+    unknown.font.face = FaceId(999_999);
+    assert_eq!(code(unknown), ErrorCode::NotFound);
+    let mut extra = req("book", 1);
+    extra.block_fonts = vec![None; 40];
+    assert_eq!(code(extra), ErrorCode::InvalidRequest);
 }
 
 #[test]

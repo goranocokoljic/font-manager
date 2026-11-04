@@ -37,9 +37,10 @@ use crate::export::{
     SpecimenRequest, SpecimenResponse, Subset, WebFormat,
 };
 use crate::layout::{
-    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest, Layout,
-    LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef, LayoutVersion, RestoreLayoutRequest,
-    RevertLayoutRequest, SaveLayoutRequest, SavedLayout, TextBlock,
+    BlockAlign, BlockOverflow, BlockRange, ColumnRange, DuplicateLayoutRequest,
+    ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutPreset, LayoutRef,
+    LayoutSurface, LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest,
+    SavedLayout, TextBlock,
 };
 use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
@@ -5084,6 +5085,35 @@ impl LayoutService for MockApi {
             .with_detail(reason)
         })?;
         mock_save_layout(&mut st.layouts, &req.id, layout)
+    }
+
+    /// The core's checks (scale, layout, faces), then the file it would write;
+    /// nothing is written.
+    fn export_layout_png(&self, req: ExportLayoutPngRequest) -> ApiResult<String> {
+        if !matches!(req.scale, 1 | 2) {
+            return Err(ApiError::invalid("A layout exports at 1x or 2x."));
+        }
+        let saved = self.get_layout(LayoutRef {
+            id: req.layout.clone(),
+        })?;
+        if req.block_fonts.len() > saved.layout.blocks.len() {
+            return Err(ApiError::invalid(
+                "A font was given for a block that does not exist.",
+            ));
+        }
+        let st = self.state();
+        st.face(req.font.face)?;
+        for font in req.block_fonts.iter().flatten() {
+            st.face(font.face)?;
+        }
+        let surface = match req.surface {
+            LayoutSurface::Paper => "paper",
+            LayoutSurface::Ink => "ink",
+        };
+        Ok(format!(
+            "/mock/exports/{}-{surface}-{}x.png",
+            saved.id, req.scale
+        ))
     }
 
     /// `fm_core::layout::layout_width`: 33 em at the body block's size (the

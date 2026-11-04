@@ -154,6 +154,7 @@ service!(LayoutService {
     layout_history(req: LayoutRef) -> Vec<LayoutVersion>;
     restore_layout(req: RestoreLayoutRequest) -> SavedLayout;
     layout_width(layout: Layout) -> Option<f32>;
+    export_layout_png(req: ExportLayoutPngRequest) -> String;
 });
 
 service!(ComparisonService {

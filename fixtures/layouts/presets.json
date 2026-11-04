@@ -1,0 +1,294 @@
+[
+  {
+    "id": "book",
+    "layout": {
+      "blocks": [
+        {
+          "align": "center",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 18.0,
+          "sizePt": 24.0,
+          "text": "Chapter One",
+          "tracking": 0.0
+        },
+        {
+          "align": "justify",
+          "columns": 1,
+          "firstLineIndentEm": 1.5,
+          "lineHeight": 1.5,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 11.0,
+          "text": "Typography is the craft of endowing human language with a durable visual form. It exists to honor content, and a page set with care invites the reader in and keeps them reading.\nThe best type does not call attention to itself. Letters sit evenly on the line, words keep a steady rhythm, and the eye moves from one line to the next without effort or doubt.\nA good body face holds up at small sizes and over long passages. Its spacing is even, its figures line up, and its italic and bold follow the voice of the text rather than shouting over it.",
+          "tracking": 0.0
+        }
+      ],
+      "name": "Book",
+      "preset": "book",
+      "widthLocked": true,
+      "widthPx": null
+    },
+    "widthPx": 484.0
+  },
+  {
+    "id": "columns",
+    "layout": {
+      "blocks": [
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 12.0,
+          "sizePt": 18.0,
+          "text": "Chapter One",
+          "tracking": 0.0
+        },
+        {
+          "align": "justify",
+          "columns": 3,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.399999976158142,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 6.0,
+          "sizePt": 10.0,
+          "text": "Typography is the craft of endowing human language with a durable visual form. It exists to honor content, and a page set with care invites the reader in and keeps them reading.\nThe best type does not call attention to itself. Letters sit evenly on the line, words keep a steady rhythm, and the eye moves from one line to the next without effort or doubt.\nA good body face holds up at small sizes and over long passages. Its spacing is even, its figures line up, and its italic and bold follow the voice of the text rather than shouting over it.",
+          "tracking": 0.0
+        }
+      ],
+      "name": "Columns",
+      "preset": "columns",
+      "widthLocked": true,
+      "widthPx": null
+    },
+    "widthPx": 440.0000305175781
+  },
+  {
+    "id": "magazine",
+    "layout": {
+      "blocks": [
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.0499999523162842,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 12.0,
+          "sizePt": 48.0,
+          "text": "The Quiet Return of the Printed Page",
+          "tracking": -20.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.350000023841858,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 18.0,
+          "sizePt": 16.0,
+          "text": "Readers are going back to paper, and designers are relearning what makes a page worth turning.",
+          "tracking": 0.0
+        },
+        {
+          "align": "justify",
+          "columns": 2,
+          "firstLineIndentEm": 1.0,
+          "lineHeight": 1.4500000476837158,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 10.0,
+          "text": "Typography is the craft of endowing human language with a durable visual form. It exists to honor content, and a page set with care invites the reader in and keeps them reading.\nThe best type does not call attention to itself. Letters sit evenly on the line, words keep a steady rhythm, and the eye moves from one line to the next without effort or doubt.\nA good body face holds up at small sizes and over long passages. Its spacing is even, its figures line up, and its italic and bold follow the voice of the text rather than shouting over it.",
+          "tracking": 0.0
+        }
+      ],
+      "name": "Magazine",
+      "preset": "magazine",
+      "widthLocked": true,
+      "widthPx": null
+    },
+    "widthPx": 440.0000305175781
+  },
+  {
+    "id": "quote",
+    "layout": {
+      "blocks": [
+        {
+          "align": "center",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.149999976158142,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 18.0,
+          "sizePt": 36.0,
+          "text": "“Type is a beautiful group of letters, not a group of beautiful letters.”",
+          "tracking": 0.0
+        },
+        {
+          "align": "center",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2999999523162842,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 12.0,
+          "text": "Matthew Carter",
+          "tracking": 100.0
+        }
+      ],
+      "name": "Quote",
+      "preset": "quote",
+      "widthLocked": true,
+      "widthPx": null
+    },
+    "widthPx": 1584.0
+  },
+  {
+    "id": "characters",
+    "layout": {
+      "blocks": [
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 12.0,
+          "sizePt": 36.0,
+          "text": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+          "tracking": 50.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 12.0,
+          "sizePt": 36.0,
+          "text": "abcdefghijklmnopqrstuvwxyz",
+          "tracking": 50.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "wrap",
+          "paragraphSpacingPt": 12.0,
+          "sizePt": 36.0,
+          "text": "0123456789 &@#%?!.,:;‘’“”()[]{}/*+-=",
+          "tracking": 50.0
+        }
+      ],
+      "name": "Characters",
+      "preset": "characters",
+      "widthLocked": true,
+      "widthPx": null
+    },
+    "widthPx": 1584.0
+  },
+  {
+    "id": "waterfall",
+    "layout": {
+      "blocks": [
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 72.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 48.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 36.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 24.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 18.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 14.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 12.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        },
+        {
+          "align": "start",
+          "columns": 1,
+          "firstLineIndentEm": 0.0,
+          "lineHeight": 1.2000000476837158,
+          "overflow": "clip",
+          "paragraphSpacingPt": 0.0,
+          "sizePt": 9.0,
+          "text": "The quick brown fox jumps over the lazy dog",
+          "tracking": 0.0
+        }
+      ],
+      "name": "Waterfall",
+      "preset": "waterfall",
+      "widthLocked": true,
+      "widthPx": null
+    },
+    "widthPx": 3168.0
+  }
+]

@@ -13,6 +13,7 @@
 //! or keeps the file. Malformed font data is an error, never a panic.
 
 pub mod cache;
+pub mod page;
 mod png;
 pub mod png_decode;
 
@@ -74,6 +75,11 @@ impl Raster {
     /// Encodes the raster as a PNG.
     pub fn to_png(&self) -> Vec<u8> {
         png::encode_rgba(self.width, self.height, &self.rgba)
+    }
+
+    /// Encodes the raster as a compressed PNG, for an image kept as a file.
+    pub fn to_compressed_png(&self) -> Vec<u8> {
+        png::encode_rgba_compressed(self.width, self.height, &self.rgba)
     }
 }
 
@@ -383,7 +389,25 @@ struct Run {
 /// without explicit embeddings (rules P2–P3, W1, W7, N1–N2, I1–I2, L2).
 /// That is what a one-line preview needs; isolates and embedding controls
 /// are treated as neutrals.
+#[cfg(test)]
 fn visual_runs(text: &str) -> Vec<Run> {
+    visual_runs_in(text, first_strong_rtl(text))
+}
+
+/// Whether the first letter of `text` with a strong direction is right-to-left
+/// (rules P2–P3); false when it has none.
+fn first_strong_rtl(text: &str) -> bool {
+    text.chars()
+        .find_map(|ch| match ch.bidi_class() {
+            BidiClass::L => Some(false),
+            BidiClass::R | BidiClass::AL => Some(true),
+            _ => None,
+        })
+        .unwrap_or(false)
+}
+
+/// [`visual_runs`] of one line of a paragraph whose direction is `para_rtl`.
+fn visual_runs_in(text: &str, para_rtl: bool) -> Vec<Run> {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Kind {
         Ltr,
@@ -405,14 +429,6 @@ fn visual_runs(text: &str) -> Vec<Run> {
         chars.push((at, kind));
         prev = kind;
     }
-    let para_rtl = chars
-        .iter()
-        .find_map(|&(_, k)| match k {
-            Kind::Ltr => Some(false),
-            Kind::Rtl => Some(true),
-            _ => None,
-        })
-        .unwrap_or(false);
     let para = if para_rtl { Kind::Rtl } else { Kind::Ltr };
 
     // W7: a number after left-to-right text (or at the start of a
@@ -502,6 +518,58 @@ fn visual_runs(text: &str) -> Vec<Run> {
     runs.into_iter().map(|(run, _)| run).collect()
 }
 
+/// Shaped glyphs in visual order, with their positions.
+type Shaped = Vec<(harfrust::GlyphInfo, harfrust::GlyphPosition)>;
+
+/// Where a glyph's image comes from, best first: colour layers, a colour
+/// bitmap, the outline.
+const GLYPH_SOURCES: [Source; 3] = [
+    Source::ColorOutline(0),
+    Source::ColorBitmap(StrikeWith::BestFit),
+    Source::Outline,
+];
+
+/// Shapes one line of a paragraph whose direction is `para_rtl`. Each direction
+/// run is shaped on its own; harfrust returns the glyphs of a right-to-left run
+/// already in visual order. Positions come back in font units (no scale is
+/// set), clusters as byte offsets into `text`.
+fn shape_runs(
+    shaper: &harfrust::ShaperFont<'_, '_>,
+    text: &str,
+    para_rtl: bool,
+    features: &[harfrust::Feature],
+) -> FmResult<Shaped> {
+    let mut glyphs: Shaped = Vec::new();
+    for run in visual_runs_in(text, para_rtl) {
+        let mut buffer = harfrust::Buffer::new();
+        buffer.push_str(&text[run.start..run.end]);
+        buffer.set_direction(if run.rtl {
+            harfrust::Direction::RightToLeft
+        } else {
+            harfrust::Direction::LeftToRight
+        });
+        buffer.guess_segment_properties();
+        harfrust::shape(
+            shaper,
+            &mut buffer,
+            harfrust::ShapeOptions::new().features(features),
+        )
+        .map_err(|e| malformed(format!("harfrust cannot shape the text: {e:?}")))?;
+        glyphs.extend(
+            buffer
+                .glyph_infos()
+                .iter()
+                .copied()
+                .zip(buffer.glyph_positions().iter().copied())
+                .map(|(mut info, pos)| {
+                    info.cluster += run.start as u32;
+                    (info, pos)
+                }),
+        );
+    }
+    Ok(glyphs)
+}
+
 /// A glyph image and where its top-left pixel goes, relative to the pen
 /// origin (x right, y down from the baseline).
 struct Placed {
@@ -537,33 +605,7 @@ fn draw(sfnt: &[u8], index: u32, style: &Style<'_>) -> FmResult<Raster> {
         .map(|(t, on)| harfrust::Feature::new(Tag::new(t), u32::from(*on), ..))
         .collect();
 
-    // Each direction run is shaped on its own; harfrust returns the glyphs
-    // of a right-to-left run already in visual order. Positions come back in
-    // font units (no scale is set).
-    let mut glyphs: Vec<(harfrust::GlyphInfo, harfrust::GlyphPosition)> = Vec::new();
-    for run in visual_runs(style.text) {
-        let mut buffer = harfrust::Buffer::new();
-        buffer.push_str(&style.text[run.start..run.end]);
-        buffer.set_direction(if run.rtl {
-            harfrust::Direction::RightToLeft
-        } else {
-            harfrust::Direction::LeftToRight
-        });
-        buffer.guess_segment_properties();
-        harfrust::shape(
-            &shaper,
-            &mut buffer,
-            harfrust::ShapeOptions::new().features(&features),
-        )
-        .map_err(|e| malformed(format!("harfrust cannot shape the text: {e:?}")))?;
-        glyphs.extend(
-            buffer
-                .glyph_infos()
-                .iter()
-                .copied()
-                .zip(buffer.glyph_positions().iter().copied()),
-        );
-    }
+    let glyphs = shape_runs(&shaper, style.text, first_strong_rtl(style.text), &features)?;
 
     let upem = face.units_per_em();
     if upem == 0 {
@@ -591,11 +633,6 @@ fn draw(sfnt: &[u8], index: u32, style: &Style<'_>) -> FmResult<Raster> {
         .hint(false)
         .normalized_coords(&coords)
         .build();
-    let sources = [
-        Source::ColorOutline(0),
-        Source::ColorBitmap(StrikeWith::BestFit),
-        Source::Outline,
-    ];
     let fg = style.foreground.map(|c| (c * 255.0).round() as u8);
 
     let mut placed = Vec::with_capacity(glyphs.len());
@@ -611,7 +648,7 @@ fn draw(sfnt: &[u8], index: u32, style: &Style<'_>) -> FmResult<Raster> {
         let Ok(id) = u16::try_from(info.glyph_id) else {
             continue;
         };
-        let image = Render::new(&sources)
+        let image = Render::new(&GLYPH_SOURCES)
             .format(Format::Alpha)
             .offset(Vector::new(x.fract(), 0.0))
             .default_color(fg)
@@ -669,7 +706,29 @@ impl Canvas {
         }
     }
 
+    /// The whole canvas as a clip rectangle: left, top, right, bottom.
+    fn bounds(&self) -> [i32; 4] {
+        [0, 0, self.width as i32, self.height as i32]
+    }
+
     fn blend(&mut self, left: i32, top: i32, image: &Image, foreground: [f32; 4]) {
+        self.blend_within(left, top, image, foreground, self.bounds());
+    }
+
+    /// Draws `image` with its top-left pixel at `(left, top)`, keeping only
+    /// what falls inside `clip` (left, top, right, bottom) and the canvas.
+    fn blend_within(
+        &mut self,
+        left: i32,
+        top: i32,
+        image: &Image,
+        foreground: [f32; 4],
+        clip: [i32; 4],
+    ) {
+        let [clip_left, clip_top, clip_right, clip_bottom] = clip;
+        let (clip_left, clip_top) = (clip_left.max(0), clip_top.max(0));
+        let clip_right = clip_right.min(self.width as i32);
+        let clip_bottom = clip_bottom.min(self.height as i32);
         let w = image.placement.width as usize;
         let h = image.placement.height as usize;
         let channels = match image.content {
@@ -678,12 +737,12 @@ impl Canvas {
         };
         for row in 0..h {
             let y = top + row as i32;
-            if y < 0 || y >= self.height as i32 {
+            if y < clip_top || y >= clip_bottom {
                 continue;
             }
             for col in 0..w {
                 let x = left + col as i32;
-                if x < 0 || x >= self.width as i32 {
+                if x < clip_left || x >= clip_right {
                     continue;
                 }
                 let at = (row * w + col) * channels;

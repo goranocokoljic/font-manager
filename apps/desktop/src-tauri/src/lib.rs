@@ -21,8 +21,8 @@ use fm_api::comparison::{
 };
 use fm_api::export::{ExportService, LicenseInventoryRequest};
 use fm_api::layout::{
-    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
-    RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+    DuplicateLayoutRequest, ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef,
+    LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary,
@@ -656,6 +656,15 @@ async fn restore_layout(
 #[tauri::command]
 async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Option<f32>> {
     call(&state, move |api| api.layout_width(req)).await
+}
+
+/// Renders a saved layout to a new PNG in the export folder (E45.5).
+#[tauri::command]
+async fn export_layout_png(
+    state: State<'_, AppState>,
+    req: ExportLayoutPngRequest,
+) -> ApiResult<String> {
+    call(&state, move |api| api.export_layout_png(req)).await
 }
 
 /// Every online catalog with the state of its cache (E22.1).
@@ -1458,6 +1467,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             layout_history,
             restore_layout,
             layout_width,
+            export_layout_png,
             list_comparisons,
             get_comparison,
             save_comparison,
