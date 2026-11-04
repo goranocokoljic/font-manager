@@ -314,6 +314,7 @@ fn a_collection_target_activates_its_members() {
                 name: "Brand".into(),
                 parent: None,
                 rules: None,
+                color: None,
             })
             .expect("create");
         index
@@ -445,6 +446,7 @@ fn unknown_targets_and_smart_collections_are_refused_without_changes() {
                 name: "Smart".into(),
                 parent: None,
                 rules: Some(fm_api::search::Filters::default()),
+                color: None,
             })
             .expect("create")
             .id
@@ -1218,6 +1220,7 @@ fn a_virtual_style_activates_its_face_once_with_the_collection_or_set() {
                 name: "Brand".into(),
                 parent: None,
                 rules: None,
+                color: None,
             })
             .expect("collection")
             .id;

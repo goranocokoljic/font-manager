@@ -134,6 +134,7 @@ async function run(opts) {
     const smart = bench(bin, ['smart', '--home', home, '--rounds', String(opts.rounds)]);
     const similar = bench(bin, ['similar', '--home', home, '--rounds', String(opts.rounds)]);
     const paired = bench(bin, ['pairings', '--home', home, '--rounds', String(opts.rounds)]);
+    const layoutPng = bench(bin, ['layout-png', '--home', home, '--rounds', String(opts.rounds)]);
     const previewCache = bench(bin, ['preview-cache', '--home', home, '--rounds', String(opts.rounds)]);
     const activation = bench(bin, ['activate', '--home', home]);
     console.log(`activation: ${activation.done}/${activation.faces} faces activated, ${activation.conflicts} clashes`);
@@ -155,6 +156,7 @@ async function run(opts) {
         smart_collections: metric('smart_collections', smart.p95_ms),
         similar: metric('similar', similar.p95_ms),
         pairings: metric('pairings', paired.p95_ms),
+        layout_png: metric('layout_png', layoutPng.p95_ms),
         activation_100: activation100(activation),
         fonts_needed_100: fontsNeeded100(needed),
         idle_memory: metric('idle_memory', idle),
@@ -162,7 +164,7 @@ async function run(opts) {
           ? metric('preview_cache_hit', previewCache.p95_ms)
           : metric('preview_cache_hit', null, 'no face the rasterizer could draw'),
       },
-      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, preview_cache: previewCache, activation, fonts_needed: needed },
+      detail: { cold_start_runs: starts, scan, incremental: inc, search, smart, similar, pairings: paired, layout_png: layoutPng, preview_cache: previewCache, activation, fonts_needed: needed },
     };
     mkdirSync(dirname(out), { recursive: true });
     writeFileSync(out, JSON.stringify(report, null, 2) + '\n');

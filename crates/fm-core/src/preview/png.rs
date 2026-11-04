@@ -1,9 +1,15 @@
 //! A minimal PNG encoder for rendered previews.
 //!
-//! The spec's library table names no PNG or deflate crate, so this writes the
-//! format by hand: 8-bit RGBA, no interlace, filter type 0, and a zlib stream
-//! of stored (uncompressed) deflate blocks. Every decoder reads it; the cost is
-//! size (about four bytes per pixel), which is fine for thumbnail-sized images.
+//! The spec's library table names no PNG crate, so this writes the format by
+//! hand: 8-bit RGBA, no interlace, filter type 0, and a zlib stream of stored
+//! (uncompressed) deflate blocks. Every decoder reads it; the cost is size
+//! (about four bytes per pixel), which is fine for thumbnail-sized images. An
+//! image kept as a file (a layout export) is deflated with `flate2` instead.
+
+use std::io::Write as _;
+
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
 
 /// The largest payload of one stored deflate block.
 const MAX_STORED_BLOCK: usize = 0xFFFF;
@@ -11,14 +17,36 @@ const MAX_STORED_BLOCK: usize = 0xFFFF;
 /// Encodes straight (not premultiplied) RGBA pixels, row by row, as a PNG.
 /// `rgba.len()` must be `width * height * 4`; the caller guarantees it.
 pub(crate) fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+    assemble(width, height, &zlib_stored(&rows(width, height, rgba)))
+}
+
+/// [`encode_rgba`] with real deflate compression, for an image kept as a file:
+/// a page is mostly one colour, so it shrinks to a small part of its size.
+pub(crate) fn encode_rgba_compressed(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
+    let raw = rows(width, height, rgba);
+    let mut encoder = ZlibEncoder::new(Vec::new(), Compression::fast());
+    // Writing into a Vec cannot fail; if it ever does, the stored form is still a PNG.
+    let zlib = match encoder.write_all(&raw).and_then(|()| encoder.finish()) {
+        Ok(zlib) => zlib,
+        Err(_) => zlib_stored(&raw),
+    };
+    assemble(width, height, &zlib)
+}
+
+/// The pixel rows, each with its filter type byte.
+fn rows(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     let row = width as usize * 4;
     let mut raw = Vec::with_capacity((row + 1) * height as usize);
     for line in rgba.chunks_exact(row.max(1)).take(height as usize) {
         raw.push(0); // filter type None
         raw.extend_from_slice(line);
     }
+    raw
+}
 
-    let mut out = Vec::with_capacity(raw.len() + raw.len() / MAX_STORED_BLOCK * 5 + 64);
+/// A whole PNG file around a zlib stream of pixel rows.
+fn assemble(width: u32, height: u32, zlib: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(zlib.len() + 64);
     out.extend_from_slice(b"\x89PNG\r\n\x1a\n");
 
     let mut ihdr = Vec::with_capacity(13);
@@ -27,7 +55,7 @@ pub(crate) fn encode_rgba(width: u32, height: u32, rgba: &[u8]) -> Vec<u8> {
     // Bit depth 8, colour type 6 (RGBA), deflate, adaptive filtering, no interlace.
     ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
     chunk(&mut out, b"IHDR", &ihdr);
-    chunk(&mut out, b"IDAT", &zlib_stored(&raw));
+    chunk(&mut out, b"IDAT", zlib);
     chunk(&mut out, b"IEND", &[]);
     out
 }

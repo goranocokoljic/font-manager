@@ -11,6 +11,8 @@ pub const CACHE_LIMIT_MB_MIN: u32 = 64;
 pub const CACHE_LIMIT_MB_MAX: u32 = 16_384;
 /// The longest time between automatic rescans, in minutes (one day).
 pub const RESCAN_INTERVAL_MAX_MINUTES: u32 = 1_440;
+/// The theme of a new install and of a `config.json` from before themes.
+pub const DEFAULT_THEME_ID: &str = "paper";
 
 /// The colors of the app.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, specta::Type)]
@@ -104,6 +106,12 @@ pub struct Settings {
     /// [`Self::download_folder`]. Off by default.
     #[serde(default)]
     pub fetch_missing_fonts: bool,
+    /// The named theme (E47.1), one of [`SettingsService::list_themes`]; next
+    /// to [`Self::theme`], which still chooses its light or dark token set.
+    /// A `config.json` from before themes gets [`DEFAULT_THEME_ID`] from the
+    /// struct's defaults; so does a request while the file names a theme this
+    /// version does not ship.
+    pub theme_id: String,
 }
 
 impl Default for Settings {
@@ -122,6 +130,7 @@ impl Default for Settings {
             language: Language::System,
             download_folder: None,
             fetch_missing_fonts: false,
+            theme_id: DEFAULT_THEME_ID.to_owned(),
         }
     }
 }
@@ -171,6 +180,10 @@ pub struct SettingsUpdate {
     /// Download fonts a document needs from the catalogs the user turned on.
     #[serde(default)]
     pub fetch_missing_fonts: Option<bool>,
+    /// The named theme: the id of one of [`SettingsService::list_themes`];
+    /// any other id is refused and nothing changes.
+    #[serde(default)]
+    pub theme_id: Option<String>,
 }
 
 impl Settings {
@@ -230,8 +243,52 @@ impl Settings {
             fetch_missing_fonts: update
                 .fetch_missing_fonts
                 .unwrap_or(self.fetch_missing_fonts),
+            theme_id: update
+                .theme_id
+                .clone()
+                .unwrap_or_else(|| self.theme_id.clone()),
         })
     }
+}
+
+/// One token set of a theme: a color for each `--fm-*` token of the same
+/// name. `#rrggbb`; [`Self::border`] may also be `#rrggbbaa`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeTokens {
+    /// Rings, fills, knobs and badges.
+    pub accent: String,
+    /// Words and marks on the accent; at least 4.5:1 on it.
+    pub on_accent: String,
+    /// Level 0: the list and the specimens.
+    pub bg: String,
+    /// Level 1: side panes and bars.
+    pub surface: String,
+    /// Level 2: popovers, dialogs and cards.
+    pub surface_2: String,
+    /// Hairlines between rows and panels.
+    pub border: String,
+}
+
+/// A named theme the app ships, from `data/themes` (E47.1).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeDefinition {
+    /// The value of [`Settings::theme_id`], e.g. `paper`.
+    pub id: String,
+    /// The name to show, e.g. `Paper`.
+    pub name: String,
+    /// The tokens for the light appearance.
+    pub light: ThemeTokens,
+    /// The tokens for the dark appearance.
+    pub dark: ThemeTokens,
+}
+
+/// The refusal of a theme id that [`SettingsService::list_themes`] does not
+/// have. Implementations of [`SettingsService::update_settings`] use it, so
+/// the answer is one.
+pub fn unknown_theme(id: &str) -> ApiError {
+    ApiError::invalid("This theme does not exist.").with_detail(format!("themeId {id:?}"))
 }
 
 /// The per-user folders the app keeps its own files in (ADR 0007).
@@ -391,6 +448,8 @@ pub trait SettingsService {
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings>;
     /// Where the app keeps its config, data, cache and logs.
     fn app_folders(&self) -> ApiResult<AppFolders>;
+    /// The themes the app ships, the default ([`DEFAULT_THEME_ID`]) first.
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>>;
     /// The local API endpoint's address and token. `Unsupported` where there
     /// is no data folder to keep the token in.
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
@@ -539,6 +598,41 @@ mod tests {
         assert!(!next.keep_in_tray);
         let unchanged = next.apply(&SettingsUpdate::default()).expect("valid");
         assert!(!unchanged.keep_in_tray);
+    }
+
+    #[test]
+    fn the_theme_id_is_paper_for_old_config_files_and_is_kept_by_other_updates() {
+        assert_eq!(Settings::default().theme_id, "paper");
+        // A config.json written before the field existed gets the default.
+        let old: Settings = serde_json::from_str(r#"{"theme":"dark"}"#).expect("old config");
+        assert_eq!(old.theme_id, "paper");
+        assert_eq!(old.theme, Theme::Dark, "the old setting is untouched");
+        let json = serde_json::to_value(Settings::default()).expect("json");
+        assert_eq!(json["themeId"], "paper");
+        assert_eq!(json["theme"], "system");
+
+        let moss: SettingsUpdate = serde_json::from_str(r#"{"themeId":"moss"}"#).expect("update");
+        assert_eq!(moss.theme, None);
+        let next = Settings::default().apply(&moss).expect("valid");
+        assert_eq!(next.theme_id, "moss");
+        assert_eq!(next.theme, Theme::System, "the two settings are separate");
+        let other = next
+            .apply(&SettingsUpdate {
+                theme: Some(Theme::Dark),
+                ..SettingsUpdate::default()
+            })
+            .expect("valid");
+        assert_eq!(other.theme_id, "moss", "kept by another update");
+    }
+
+    #[test]
+    fn theme_tokens_are_camel_case_on_the_wire() {
+        let themes = crate::mock::MockApi::new().list_themes().expect("themes");
+        let json = serde_json::to_value(&themes[0]).expect("json");
+        for key in ["accent", "onAccent", "bg", "surface", "surface2", "border"] {
+            assert!(json["light"][key].is_string(), "light {key}");
+            assert!(json["dark"][key].is_string(), "dark {key}");
+        }
     }
 
     #[test]

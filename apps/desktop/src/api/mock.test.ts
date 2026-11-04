@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { FmClient } from './client';
 import { createMockClient, mockPermissions, mockWebUse } from './mock';
-import type { CollectionId, FaceId, Filters, LicenseInfo, Rule, RuleGroup } from './types';
+import type {
+  CollectionId,
+  ExportLayoutPngRequest,
+  FaceId,
+  Filters,
+  LicenseInfo,
+  Rule,
+  RuleGroup,
+} from './types';
 
 /** The faces a search with `filters` finds, sorted. */
 async function facesOf(client: FmClient, filters: Filters): Promise<FaceId[]> {
@@ -16,6 +24,58 @@ async function live(client: FmClient, id: CollectionId) {
   const c = (await client.listCollections()).find((x) => x.id === id)!;
   return { count: c.faceCount, faces: await facesOf(client, { collection: id }) };
 }
+
+describe('MockApi themes (E47.1)', () => {
+  it('lists the data files, Paper first, with the API field names', async () => {
+    const themes = await createMockClient().listThemes();
+    expect(themes.map((t) => t.id)).toEqual(['paper', 'graphite', 'indigo', 'moss']);
+    expect(themes[0]!.light).toEqual({
+      accent: '#c56eb2',
+      onAccent: '#141413',
+      bg: '#ffffff',
+      surface: '#f6f6f7',
+      surface2: '#ffffff',
+      border: '#00000017',
+    });
+  });
+
+  it('starts on Paper next to the theme setting, changes it and refuses an unknown id', async () => {
+    const client = createMockClient();
+    const first = await client.getSettings();
+    expect(first.themeId).toBe('paper');
+    expect(first.theme).toBe('system');
+    const moss = await client.updateSettings({ themeId: 'moss' });
+    expect(moss.themeId).toBe('moss');
+    expect(moss.theme).toBe('system');
+    await expect(
+      client.updateSettings({ themeId: 'no-such-theme', density: 'compact' }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+    expect(await client.getSettings()).toEqual(moss);
+  });
+});
+
+describe('MockApi collection colours (E44.3)', () => {
+  it('sets, keeps, removes and checks a colour as fm-core does', async () => {
+    const client = createMockClient();
+    const made = await client.createCollection({ name: 'Brand', color: 'coral' });
+    expect(made.color).toBe('coral');
+    const rename = (color?: string | null) =>
+      client.renameCollection({ collection: made.id, name: 'Brand', color });
+    expect((await rename()).color).toBe('coral');
+    expect((await rename(null)).color).toBe('coral');
+    expect((await rename('teal')).color).toBe('teal');
+    await expect(rename('#ff0000')).rejects.toMatchObject({ code: 'invalidRequest' });
+    expect((await client.listCollections())[0]!.color).toBe('teal');
+    expect((await rename('')).color).toBeNull();
+    await expect(client.createCollection({ name: 'Hex', color: '#ff0000' })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    await expect(client.createCollection({ name: 'None', color: '' })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    expect((await client.createCollection({ name: 'Plain' })).color).toBeNull();
+  });
+});
 
 describe('MockApi detectLanguages (E43.2)', () => {
   it('ranks the presets by the letters of the text', async () => {
@@ -138,6 +198,22 @@ describe('MockApi smart collections (E14.2)', () => {
 });
 
 describe('MockApi layouts (E12.1)', () => {
+  it('names the PNG a layout export would write and makes the core checks (E45.5)', async () => {
+    const api = createMockClient();
+    const font = { face: 1, variations: [], features: [] };
+    const req: ExportLayoutPngRequest = { layout: 'book', scale: 2, surface: 'ink', font };
+    await expect(api.exportLayoutPng(req)).resolves.toBe('/mock/exports/book-ink-2x.png');
+    await expect(api.exportLayoutPng({ ...req, scale: 3 })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    await expect(api.exportLayoutPng({ ...req, layout: 'none' })).rejects.toMatchObject({
+      code: 'notFound',
+    });
+    await expect(api.exportLayoutPng({ ...req, layout: 'draft' })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+  });
+
   it('lists the six presets in picker order, each already inside the ranges', async () => {
     const api = createMockClient();
     const presets = await api.layoutPresets();

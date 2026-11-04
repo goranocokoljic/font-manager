@@ -102,6 +102,12 @@ impl AppPaths {
         self.config.join("layouts")
     }
 
+    /// The per-user folder of rendered layout exports (E45.5), inside
+    /// [`AppPaths::data`]: images are not settings, so they do not roam.
+    pub fn exports_dir(&self) -> PathBuf {
+        self.data.join("exports")
+    }
+
     /// Where the app's IPC listener is on the host OS (E29.1, ADR 0016).
     pub fn ipc_name(&self) -> IpcName {
         self.ipc_name_for(Os::current(), |name| std::env::var_os(name))
@@ -495,6 +501,16 @@ mod tests {
             assert_eq!(paths.layouts_dir(), want, "{os:?}");
             assert!(paths.layouts_dir().starts_with(&paths.config));
         }
+    }
+
+    #[test]
+    fn exports_stay_in_the_local_data_folder() {
+        let paths = AppPaths::under(Path::new("/scratch"));
+        assert_eq!(
+            paths.exports_dir(),
+            Path::new("/scratch").join("data").join("exports")
+        );
+        assert!(!paths.exports_dir().starts_with(&paths.config));
     }
 
     #[test]

@@ -629,6 +629,13 @@ WHERE document IS NOT NULL AND mode = 'session';
 UPDATE activation SET document = NULL WHERE mode = 'permanent';
 ";
 
+/// Collection colours (E44.3): `collection.color` is a key of the API's fixed
+/// palette, `NULL` for a collection without a colour. Collections made before
+/// have none.
+const V22: &str = r"
+ALTER TABLE collection ADD COLUMN color TEXT;
+";
+
 /// The schema version that adds `face.open_license`; the migration to it
 /// also fills the column for the faces already indexed.
 pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
@@ -636,6 +643,7 @@ pub(crate) const OPEN_LICENSE_VERSION: u32 = 12;
 /// Every migration, in order. The schema version is the length of this list.
 pub(crate) const MIGRATIONS: &[&str] = &[
     V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16, V17, V18, V19, V20, V21,
+    V22,
 ];
 
 /// The schema version this build writes.

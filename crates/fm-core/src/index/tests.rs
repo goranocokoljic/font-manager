@@ -129,7 +129,15 @@ fn fresh_database_has_every_table_of_the_data_model() {
         ("activation", &["face_id", "mode", "document", "since"][..]),
         (
             "collection",
-            &["id", "parent_id", "name", "is_smart", "rules", "position"][..],
+            &[
+                "id",
+                "parent_id",
+                "name",
+                "is_smart",
+                "rules",
+                "position",
+                "color",
+            ][..],
         ),
     ] {
         let mut stmt = index

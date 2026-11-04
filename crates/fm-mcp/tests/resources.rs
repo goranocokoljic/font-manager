@@ -97,6 +97,7 @@ async fn a_collection_resource_lists_the_families_in_it() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .unwrap();
     api.add_to_collection(CollectionFacesRequest {
@@ -178,6 +179,7 @@ async fn no_resource_carries_font_bytes_on_a_scanned_library() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .unwrap();
     let families = api.list_families(ListFamiliesRequest::default()).unwrap();

@@ -691,6 +691,7 @@ fn a_smart_collection_applies_and_an_unknown_one_is_refused() {
                     },
                 ],
             }),
+            color: None,
         })
         .expect("smart");
     let res = filtered(&index, "", smart(web.id.0));
@@ -1257,6 +1258,7 @@ fn twenty_smart_collections(index: &mut Index) -> Vec<CollectionId> {
                 parent: None,
                 rules: None,
                 rule_group: Some(rule_group),
+                color: None,
             })
             .expect("smart collection");
         ids.push(c.id);

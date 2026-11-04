@@ -103,6 +103,13 @@ your team, read [Shared libraries](shared-libraries.md).
   embedding permission of the font, its license URL and its folder. From the palette,
   the file lists the collection that is open, or all fonts.
 
+## Give a collection a colour
+
+Open the **More actions** menu of a collection in the sidebar and click one of
+the eight colours. A dot of this colour shows before the name of the collection.
+When you open the collection, the strip of its fonts above the list has this
+colour too. To remove the colour, click the same colour again.
+
 ## Make a smart collection
 
 A smart collection fills itself from rules. Click **New smart** in the

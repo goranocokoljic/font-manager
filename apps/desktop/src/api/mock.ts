@@ -2,8 +2,13 @@
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
 import permissionRules from '../../../../data/licenses/permissions.json';
+import graphiteTheme from '../../../../data/themes/graphite.json';
+import indigoTheme from '../../../../data/themes/indigo.json';
+import mossTheme from '../../../../data/themes/moss.json';
+import paperTheme from '../../../../data/themes/paper.json';
 import { HELP_PAGES } from '../help';
 import { catalogFontPath } from './catalogFont';
+import { COLLECTION_COLORS } from './collectionColors';
 import type { FmClient, FullSettings } from './client';
 import type { PreviewBytes } from './preview';
 import {
@@ -106,6 +111,7 @@ import {
   DocumentFontRef,
   DocumentFontsCheck,
   DocumentFormat,
+  ThemeDefinition,
 } from './types';
 
 export const mockAppInfo: AppInfo = {
@@ -415,7 +421,29 @@ export const defaultSettings: FullSettings = {
   downloadFolder: null,
   // Off unless the user turns it on (E29.5, rule 7).
   fetchMissingFonts: false,
+  // The theme of a new install (E47.1, `DEFAULT_THEME_ID` in fm-api).
+  themeId: 'paper',
 };
+
+/** A token set of `data/themes` as the API answers it. */
+const themeTokens = (t: typeof paperTheme.light) => ({
+  accent: t.accent,
+  onAccent: t['on-accent'],
+  bg: t.bg,
+  surface: t.surface,
+  surface2: t['surface-2'],
+  border: t.border,
+});
+
+/** The themes in the order of fm-core's list. */
+const MOCK_THEMES: ThemeDefinition[] = [paperTheme, graphiteTheme, indigoTheme, mossTheme].map(
+  (t) => ({
+    id: t.id,
+    name: t.name,
+    light: themeTokens(t.light),
+    dark: themeTokens(t.dark),
+  }),
+);
 
 /** The releases the mock's server can offer the mock app (0.1.0). */
 export const mockUpdates = {
@@ -792,6 +820,10 @@ export async function mockPreviewImage(req: PreviewRequest): Promise<PreviewByte
 }
 
 const invalid = (message: string): ApiError => ({ code: 'invalidRequest', message, detail: null });
+const checkCollectionColor = (color: string | null | undefined): void => {
+  if (color != null && !(COLLECTION_COLORS as readonly string[]).includes(color))
+    throw invalid('Pick one of the eight collection colours.');
+};
 
 /** Options of a mock client. */
 export interface MockOptions {
@@ -1966,6 +1998,7 @@ function createMockLayouts(): Pick<
   | 'revertLayout'
   | 'layoutHistory'
   | 'restoreLayout'
+  | 'exportLayoutPng'
 > {
   const files: MockLayoutFile[] = [
     ...MOCK_LAYOUT_PRESETS.map((l) => ({
@@ -2074,6 +2107,12 @@ function createMockLayouts(): Pick<
         name: 'layout' in v.content ? v.content.layout.name : null,
         broken: 'broken' in v.content ? v.content.broken : null,
       })),
+    // The core's checks on the scale and the layout, then the file it would write.
+    exportLayoutPng: async ({ layout, scale, surface }) => {
+      if (scale !== 1 && scale !== 2) throw err('invalidRequest', 'A layout exports at 1x or 2x.');
+      content(file(layout));
+      return `/mock/exports/${layout}-${surface}-${scale}x.png`;
+    },
     restoreLayout: async ({ id, number }) => {
       const v = file(id).versions.find((x) => x.number === number);
       if (!v) throw err('notFound', 'That version is no longer kept.');
@@ -2899,6 +2938,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (nameTaken(req.parent ?? null, name)) throw conflict(name);
       if (req.rules && req.ruleGroup)
         throw invalid('Give a smart collection rules or a rule group, not both.');
+      checkCollectionColor(req.color);
       const group: RuleGroup | null =
         req.ruleGroup ??
         (req.rules ? { op: 'and', rules: [{ kind: 'filters', filters: req.rules }] } : null);
@@ -2913,6 +2953,7 @@ export function createMockClient(options: MockOptions = {}): FmClient {
         rules: group ? (only?.kind === 'filters' ? only.filters : {}) : null,
         ruleGroup: group,
         faceCount: 0,
+        color: req.color ?? null,
       };
       collections.push(c);
       try {
@@ -2946,9 +2987,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     renameCollection: async (req) => {
       const name = req.name.trim();
       if (!name) throw invalid('Give the collection a name.');
+      if (req.color) checkCollectionColor(req.color);
       const c = findCollection(req.collection);
       if (nameTaken(c.parent, name, c.id)) throw conflict(name);
       c.name = name;
+      // Absent keeps the colour, an empty one removes it.
+      if (req.color != null) c.color = req.color || null;
       return viewOf(c);
     },
     moveCollection: async (req) => {
@@ -3542,8 +3586,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       ][pick]!;
     },
     getSettings: async () => ({ ...settings }),
+    listThemes: async () => structuredClone(MOCK_THEMES),
     // The same ranges as `Settings::apply` in fm-api.
     updateSettings: async (req) => {
+      // The same refusal as `unknown_theme` in fm-api.
+      if (req.themeId != null && !MOCK_THEMES.some((t) => t.id === req.themeId))
+        throw invalid('This theme does not exist.');
       const mb = req.cacheLimitMb;
       if (mb != null && (mb < 64 || mb > 16384))
         throw invalid('The cache size must be between 64 and 16384 MB.');

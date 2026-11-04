@@ -285,6 +285,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
             name: "Work".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("work");
     let client = m
@@ -294,6 +295,7 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
             name: "Client".into(),
             parent: Some(work.id),
             rules: None,
+            color: None,
         })
         .expect("client");
     m.index
@@ -341,6 +343,56 @@ fn metadata_is_mirrored_to_one_sidecar_per_family() {
 }
 
 #[test]
+fn a_collection_colour_stays_out_of_the_sidecar() {
+    let tmp = TempDir::new("sidecar-colour");
+    let mut m = Machine::new(tmp.path());
+    let face = m.face("Inter-Regular");
+    let made = m
+        .index
+        .create_collection(&CreateCollectionRequest {
+            rule_group: None,
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+            color: None,
+        })
+        .expect("create");
+    m.index
+        .add_to_collection(&CollectionFacesRequest {
+            collection: made.id,
+            faces: vec![face],
+            families: Vec::new(),
+        })
+        .expect("add");
+    let head = entry_head(&m, "Inter", "Inter-Regular.ttf");
+
+    let mut rename = |name: &str| {
+        m.index
+            .rename_collection(&RenameCollectionRequest {
+                collection: made.id,
+                name: name.into(),
+                color: Some("teal".into()),
+            })
+            .expect("rename")
+    };
+    assert_eq!(rename("Brand").color.as_deref(), Some("teal"));
+    assert_eq!(entry_head(&m, "Inter", "Inter-Regular.ttf"), head);
+
+    // The same call with a new name does write: the check above can fail.
+    let mut rename = |name: &str| {
+        m.index
+            .rename_collection(&RenameCollectionRequest {
+                collection: made.id,
+                name: name.into(),
+                color: None,
+            })
+            .expect("rename")
+    };
+    assert_eq!(rename("Marque").color.as_deref(), Some("teal"));
+    assert_ne!(entry_head(&m, "Inter", "Inter-Regular.ttf"), head);
+}
+
+#[test]
 fn every_kind_of_change_reaches_the_sidecar() {
     let tmp = TempDir::new("sidecar-changes");
     let mut m = Machine::new(tmp.path());
@@ -353,6 +405,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
             name: "Old".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("parent");
     let child = m
@@ -362,6 +415,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
             name: "Child".into(),
             parent: Some(parent.id),
             rules: None,
+            color: None,
         })
         .expect("child");
     let add = CollectionFacesRequest {
@@ -376,6 +430,7 @@ fn every_kind_of_change_reaches_the_sidecar() {
         .rename_collection(&RenameCollectionRequest {
             collection: parent.id,
             name: "New".into(),
+            color: None,
         })
         .expect("rename");
     let entry = m.entry("Inter", "Inter-Regular.ttf").expect("entry");
@@ -517,6 +572,7 @@ fn a_new_machine_takes_the_metadata_from_the_sidecars() {
             name: "Work".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("work");
     first
@@ -756,6 +812,7 @@ fn smart_collection_on_the_way_is_a_problem_not_a_lost_membership() {
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
+            color: None,
         })
         .expect("smart");
     m.write_as_other_machine("Lora", |s| {
@@ -791,6 +848,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
             name: "Serifs".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("manual");
     b.index
@@ -807,6 +865,7 @@ fn a_membership_blocked_here_survives_the_round_trip_on_the_other_machine() {
         name: "Serifs".into(),
         parent: None,
         rules: Some(fm_api::search::Filters::default()),
+        color: None,
     })
     .expect("smart");
     let a_source = a
@@ -859,6 +918,7 @@ fn a_carried_membership_is_joined_once_the_smart_collection_is_gone() {
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
+            color: None,
         })
         .expect("smart");
     m.write_as_other_machine("Lora", |s| {
@@ -896,6 +956,7 @@ fn a_carried_membership_the_other_machine_dropped_is_let_go() {
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
+            color: None,
         })
         .expect("smart");
     m.write_as_other_machine("Lora", |s| {
@@ -1161,6 +1222,7 @@ fn pinned_styles_of_a_real_variable_font_round_trip_through_a_second_machine() {
             name: "Brand".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("collection")
         .id;
@@ -1241,6 +1303,7 @@ fn a_pin_in_a_collection_that_is_smart_here_is_a_problem_and_is_kept() {
             name: "Serifs".into(),
             parent: None,
             rules: Some(fm_api::search::Filters::default()),
+            color: None,
         })
         .expect("smart");
     let pin = crate::sidecar::Pin {
@@ -1279,6 +1342,7 @@ fn renaming_a_collection_renames_it_in_its_pins() {
             name: "Work".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("work")
         .id;
@@ -1305,6 +1369,7 @@ fn renaming_a_collection_renames_it_in_its_pins() {
         .rename_collection(&RenameCollectionRequest {
             collection: work,
             name: "Clients".into(),
+            color: None,
         })
         .expect("rename");
     assert_eq!(names_of(&m), [Some(names(&["Clients"]))]);
@@ -2209,6 +2274,7 @@ fn interleaved_edits_and_syncs_of_two_machines_lose_no_value() {
                                 name: name.clone(),
                                 parent: None,
                                 rules: None,
+                                color: None,
                             })
                             .expect("collection");
                         let face_id = ms[x].face(FACES[face]);
