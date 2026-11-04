@@ -652,7 +652,7 @@ function chooseLanguage(value: string): void {
   background-color: var(--fm-accent);
 }
 .tab[aria-selected='true'] :deep(.ui-icon) {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
 }
 .panel {
   flex: 1;

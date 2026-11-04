@@ -179,7 +179,7 @@ const { folded, toggle } = useFolded('sets');
   background-color: var(--fm-bg);
 }
 .set[aria-pressed='true'] {
-  color: var(--fm-accent);
+  color: var(--fm-fg);
   font-weight: 600;
 }
 .name {

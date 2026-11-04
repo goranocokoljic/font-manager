@@ -138,9 +138,11 @@ const running = computed(
 }
 .button.primary {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 .button:disabled {
+  background-color: transparent;
   color: var(--fm-muted);
 }
 </style>

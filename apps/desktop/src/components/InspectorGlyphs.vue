@@ -510,14 +510,14 @@ const noResults = computed(
 }
 .cell[aria-selected='true'] {
   background: var(--fm-accent);
-  color: var(--fm-bg);
+  color: var(--fm-on-accent);
 }
 .viewport:focus-visible .cell.cursor {
   outline: 2px solid var(--fm-accent);
   outline-offset: -3px;
 }
 .viewport:focus-visible .cell.cursor[aria-selected='true'] {
-  outline-color: var(--fm-bg);
+  outline-color: var(--fm-on-accent);
 }
 .char {
   line-height: 1;

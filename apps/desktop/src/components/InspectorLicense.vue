@@ -261,10 +261,12 @@ dd {
 }
 .choice.primary {
   border-color: var(--fm-accent);
-  color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
   font-weight: 600;
 }
 .choice:disabled {
+  background-color: transparent;
   color: var(--fm-muted);
 }
 </style>

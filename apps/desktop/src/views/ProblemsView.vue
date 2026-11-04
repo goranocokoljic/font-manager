@@ -421,10 +421,6 @@ function when(at: string): string {
 .values dd {
   margin: 0;
 }
-.primary {
-  border-color: var(--fm-accent);
-  color: var(--fm-accent);
-}
 .button:disabled {
   opacity: 0.5;
 }
@@ -435,5 +431,10 @@ function when(at: string): string {
   background-color: transparent;
   color: inherit;
   font: inherit;
+}
+.button.primary {
+  border-color: var(--fm-accent);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
 }
 </style>

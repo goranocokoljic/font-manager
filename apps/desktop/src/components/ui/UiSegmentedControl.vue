@@ -79,8 +79,8 @@ const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
   color: var(--fm-fg);
 }
 .seg[aria-pressed='true'] {
-  background-color: var(--fm-bg);
-  color: var(--fm-accent);
-  box-shadow: 0 0 0 1px var(--fm-border);
+  background-color: var(--fm-accent);
+  color: var(--fm-on-accent);
+  box-shadow: 0 0 0 1px var(--fm-accent);
 }
 </style>

@@ -1,0 +1,19 @@
+{
+  "id": "a-control-that-gets-an-accent-fill-must-keep-a-visible-focus",
+  "title": "A control that gets an accent fill must keep a visible focus ring",
+  "category": "accessibility",
+  "rule": "When a control's background changes to the accent (or any color its focus ring uses), check its own `:focus-visible` rule, not only the global one. A ring with a negative `outline-offset` is drawn inside the control, so an accent ring on an accent fill does not show. Give the ring a positive offset, or use `--fm-on-accent` for it, and add a test that reads the computed `outline-offset` and `outline-color` in both themes.",
+  "rationale": "E40.3 (#445): the Document Fonts Activate button became an accent fill, but kept a shared inset focus rule with `outline-offset: -2px`, so keyboard users saw no change on focus.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    445
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/src/styles/*.css"
+  ],
+  "first_seen": "2026-11-03T23:59:42.086Z",
+  "last_seen": "2026-11-03T23:59:42.086Z"
+}

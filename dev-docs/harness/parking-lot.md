@@ -340,3 +340,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-04
 
 - [E42.13 #464] crates/fm-core/src/index/search/pairing/tests.rs:594 — `ten_thousand_faces_pair_in_under_50_ms` skips its timing in debug builds and `.github/workflows/ci.yml:88-90` runs nextest without `--release`, so its 50 ms check does not run in the CI matrix; the bench job is the gate.
+- [E40.3 #445] apps/desktop/src/components/ui/UiIconButton.vue:42 — a pressed icon toggle is marked only by the `--fm-hover` tint, about 1.12 to 1.20:1 and under 3:1.
+- [E40.3 #445] apps/desktop/src/components/FontList.test.ts — `recycles row elements while scrolling…` and `does not leak font faces while 1,000 families scroll past` timed out at 5000 ms in 2 of 5 full `pnpm test` runs on Windows when all suites run together; the file passes 3 of 3 runs alone, and CI was green.

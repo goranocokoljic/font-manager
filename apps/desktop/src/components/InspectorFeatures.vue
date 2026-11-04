@@ -211,6 +211,6 @@ h3 {
 }
 .switch[aria-checked='true'] .knob {
   inset-inline-start: 17px;
-  background-color: var(--fm-bg);
+  background-color: var(--fm-on-accent);
 }
 </style>
