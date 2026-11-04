@@ -1,0 +1,20 @@
+{
+  "id": "back-to-a-view-that-remounts-must-restore-its-exact-scroll-p",
+  "title": "Back to a view that remounts must restore its exact scroll position",
+  "category": "correctness",
+  "rule": "When a page push unmounts a scrolling view and Back mounts it again, record the view's exact scrollTop as it leaves and apply it on the way back. An anchor kept by item or by line is for a switch to another layout: it snaps to the top of a line, and to a family's header when the top row was one of its styles. Fall back to the anchor only when the layout changed (line height, columns, row count). Test every view mode with an exact equality at a scrollTop that is not on a line's edge, and with a top row inside an expanded group; a tolerance of one line hides the defect.",
+  "rationale": "E42.1 (#452): Back reused the view-switch anchor, so Waterfall came back 289 px away and an expanded family returned to its header, and the test accepted any shift under one line in the list view only.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    452
+  ],
+  "file_globs": [
+    "apps/desktop/src/views/**",
+    "apps/desktop/src/list/**",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-04T10:41:19.504Z",
+  "last_seen": "2026-11-04T10:41:19.504Z"
+}
