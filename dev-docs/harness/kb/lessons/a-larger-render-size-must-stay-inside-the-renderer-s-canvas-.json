@@ -1,0 +1,20 @@
+{
+  "id": "a-larger-render-size-must-stay-inside-the-renderer-s-canvas-",
+  "title": "A larger render size must stay inside the renderer's canvas limit",
+  "category": "correctness",
+  "rule": "When the UI raises the size or text length it asks render_preview for, multiply it out: characters × em × CSS px × device scale must stay under MAX_SIDE_PX (8,192) in crates/fm-core/src/preview.rs. Past that the renderer clips silently and reports no error. Test the requested size at devicePixelRatio 2, not only at 1.",
+  "rationale": "E41.1 (#447): thumbnails moved from 36 px to 120 px with a 64-character guard, so 40 CJK characters at DPR 2 lost their end with the card state still ready.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    447
+  ],
+  "file_globs": [
+    "apps/desktop/src/list/grid.ts",
+    "apps/desktop/src/stores/thumbnails.ts",
+    "apps/desktop/src/components/FontGrid.vue"
+  ],
+  "first_seen": "2026-11-04T18:58:45.475Z",
+  "last_seen": "2026-11-04T18:58:45.475Z"
+}
