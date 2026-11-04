@@ -6807,13 +6807,17 @@ impl Fetcher for SlowFetcher {
 #[test]
 fn the_fetch_work_of_one_request_ends_with_its_budget() {
     let (lib, _server) = fetching("fetch-budget", lato_ok(), true);
+    // The clock starts before the download path and its fetch thread run, so
+    // the budget must outlast a loaded runner, or no request starts at all;
+    // 200 ms did not on Windows CI. The delay is far longer than the budget,
+    // and the sleeping thread ends with the test process.
     let slow = Arc::new(SlowFetcher {
-        delay: Duration::from_secs(5),
+        delay: Duration::from_secs(120),
         calls: AtomicU32::new(0),
     });
     let lib = with_fetcher(lib, Arc::clone(&slow) as Arc<dyn Fetcher>);
     let lib = Lib {
-        api: lib.api.with_fetch_budget(Duration::from_millis(200)),
+        api: lib.api.with_fetch_budget(Duration::from_secs(10)),
         ..lib
     };
     let started = Instant::now();
@@ -6823,7 +6827,7 @@ fn the_fetch_work_of_one_request_ends_with_its_budget() {
         .expect("needed");
     let took = started.elapsed();
     assert!(
-        took < Duration::from_secs(3),
+        took < Duration::from_secs(60),
         "bounded by the budget: {took:?}"
     );
     assert_eq!(
