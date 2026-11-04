@@ -72,6 +72,7 @@ fn create(index: &mut Index, name: &str, parent: Option<CollectionId>) -> Collec
             name: name.into(),
             parent,
             rules: None,
+            color: None,
         })
         .expect("create")
 }
@@ -129,6 +130,7 @@ fn create_rename_nest_reorder_and_delete() {
         .rename_collection(&RenameCollectionRequest {
             collection: brand.id,
             name: "  Marque déposée  ".into(),
+            color: None,
         })
         .expect("rename");
     assert_eq!(renamed.name, "Marque déposée");
@@ -179,6 +181,7 @@ fn names_are_required_and_unique_among_siblings() {
             name: "   ".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap_err();
     assert_eq!(empty.code(), ErrorCode::InvalidRequest);
@@ -188,6 +191,7 @@ fn names_are_required_and_unique_among_siblings() {
             name: " A ".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .unwrap_err();
     assert_eq!(twice.code(), ErrorCode::Conflict);
@@ -195,6 +199,7 @@ fn names_are_required_and_unique_among_siblings() {
         .rename_collection(&RenameCollectionRequest {
             collection: b.id,
             name: "A".into(),
+            color: None,
         })
         .unwrap_err();
     assert_eq!(clash.code(), ErrorCode::Conflict);
@@ -203,6 +208,7 @@ fn names_are_required_and_unique_among_siblings() {
         .rename_collection(&RenameCollectionRequest {
             collection: a.id,
             name: "A".into(),
+            color: None,
         })
         .expect("same name");
     let child = create(&mut index, "A", Some(b.id));
@@ -217,6 +223,7 @@ fn names_are_required_and_unique_among_siblings() {
             name: "C".into(),
             parent: Some(CollectionId(999)),
             rules: None,
+            color: None,
         })
         .unwrap_err();
     assert_eq!(orphan.code(), ErrorCode::NotFound);
@@ -334,6 +341,7 @@ fn unknown_faces_families_and_smart_collections_are_refused() {
                 variable: Some(true),
                 ..Filters::default()
             }),
+            color: None,
         })
         .expect("smart");
     assert_eq!(smart.rules.as_ref().and_then(|r| r.variable), Some(true));
@@ -367,6 +375,151 @@ fn counts_leave_out_gone_files_and_paused_sources() {
 
 /// Collections made before positions existed keep their order (by id) and
 /// their faces after the migration.
+/// A rename of `id` that keeps its name, with this colour change.
+fn paint(
+    index: &mut Index,
+    id: CollectionId,
+    name: &str,
+    color: Option<&str>,
+) -> FmResult<Collection> {
+    index.rename_collection(&RenameCollectionRequest {
+        collection: id,
+        name: name.into(),
+        color: color.map(str::to_owned),
+    })
+}
+
+#[test]
+fn a_collection_colour_is_set_kept_removed_and_checked() {
+    let (mut index, _) = library();
+    let plain = create(&mut index, "Plain", None);
+    assert_eq!(plain.color, None);
+    let made = index
+        .create_collection(&CreateCollectionRequest {
+            rule_group: None,
+            name: "Brand".into(),
+            parent: None,
+            rules: None,
+            color: Some("coral".into()),
+        })
+        .expect("create");
+    assert_eq!(made.color.as_deref(), Some("coral"));
+    let listed = index.collections().expect("list");
+    assert_eq!(
+        listed[0].color, None,
+        "another collection stays without one"
+    );
+    assert_eq!(listed[1].color.as_deref(), Some("coral"));
+
+    // Every key of the palette is taken.
+    for key in COLLECTION_COLORS {
+        let c = paint(&mut index, made.id, "Brand", Some(key)).expect("key");
+        assert_eq!(c.color.as_deref(), Some(key));
+    }
+    let c = paint(&mut index, made.id, "Brand", Some("teal")).expect("teal");
+    assert_eq!(c.color.as_deref(), Some("teal"));
+    assert_eq!(c.name, "Brand");
+
+    // A rename without a colour keeps it; a refused colour changes nothing.
+    let c = paint(&mut index, made.id, "Marque", None).expect("rename");
+    assert_eq!(
+        (c.name.as_str(), c.color.as_deref()),
+        ("Marque", Some("teal"))
+    );
+    for bad in ["#ff0000", "Teal", " ", "red"] {
+        let err = paint(&mut index, made.id, "Other", Some(bad)).expect_err(bad);
+        assert_eq!(err.code(), ErrorCode::InvalidRequest, "{bad}");
+    }
+    let c = index.collection(made.id).expect("collection");
+    assert_eq!(
+        (c.name.as_str(), c.color.as_deref()),
+        ("Marque", Some("teal"))
+    );
+
+    let c = paint(&mut index, made.id, "Marque", Some("")).expect("remove");
+    assert_eq!(c.color, None);
+
+    let err = index
+        .create_collection(&CreateCollectionRequest {
+            rule_group: None,
+            name: "Hex".into(),
+            parent: None,
+            rules: None,
+            color: Some("#ff0000".into()),
+        })
+        .expect_err("a hex is no key");
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    // On a new collection an empty colour removes nothing: it is no key either.
+    let err = index
+        .create_collection(&CreateCollectionRequest {
+            rule_group: None,
+            name: "Empty".into(),
+            parent: None,
+            rules: None,
+            color: Some(String::new()),
+        })
+        .expect_err("empty is no key");
+    assert_eq!(err.code(), ErrorCode::InvalidRequest);
+    assert_eq!(
+        index.collections().expect("list").len(),
+        2,
+        "nothing was made"
+    );
+
+    // An unknown collection is still NotFound.
+    let err = paint(&mut index, CollectionId(999), "X", Some("teal")).expect_err("unknown");
+    assert_eq!(err.code(), ErrorCode::NotFound);
+}
+
+#[test]
+fn a_smart_collection_takes_a_colour_too() {
+    let (mut index, _) = library();
+    let made = index
+        .create_collection(&CreateCollectionRequest {
+            rule_group: None,
+            name: "Variable".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            color: Some("violet".into()),
+        })
+        .expect("smart");
+    assert!(made.rules.is_some());
+    assert_eq!(made.color.as_deref(), Some("violet"));
+}
+
+#[test]
+fn a_collection_colour_survives_a_reopen_and_a_version_21_index_has_none() {
+    let dir = crate::test_support::TempDir::new("collections-migrate-v21");
+    let path = dir.path().join(crate::index::INDEX_FILE);
+    {
+        let conn = rusqlite::Connection::open(&path).expect("open");
+        for sql in &crate::index::schema::MIGRATIONS[..21] {
+            conn.execute_batch(sql).expect("old schema");
+        }
+        conn.execute_batch(
+            "PRAGMA user_version = 21;
+             INSERT INTO collection (id, name, position) VALUES (1, 'Old', 0);",
+        )
+        .expect("old collection");
+    }
+    {
+        let mut index = Index::open(&path).expect("open").index;
+        assert_eq!(
+            index.schema_version().expect("version"),
+            crate::index::SCHEMA_VERSION
+        );
+        let old = index.collection(CollectionId(1)).expect("kept");
+        assert_eq!((old.name.as_str(), old.color.as_deref()), ("Old", None));
+        paint(&mut index, old.id, "Old", Some("slate")).expect("paint");
+    }
+    let index = Index::open(&path).expect("reopen").index;
+    let old = index.collection(CollectionId(1)).expect("kept");
+    assert_eq!(old.color.as_deref(), Some("slate"));
+}
+
 #[test]
 fn a_version_5_index_keeps_its_collections() {
     let dir = crate::test_support::TempDir::new("collections-migrate-v5");
@@ -395,6 +548,7 @@ fn smart(index: &mut Index, name: &str, op: RuleOp, rules: Vec<Rule>) -> FmResul
         parent: None,
         rules: None,
         rule_group: Some(RuleGroup { op, rules }),
+        color: None,
     })
 }
 
@@ -824,6 +978,7 @@ fn bad_rules_are_refused_and_nothing_is_kept() {
             parent: None,
             rules: Some(Filters::default()),
             rule_group: Some(RuleGroup::from(Filters::default())),
+            color: None,
         })
         .unwrap_err();
     assert_eq!(both.code(), ErrorCode::InvalidRequest);
@@ -885,6 +1040,7 @@ fn empty_groups_and_upside_down_ranges_are_refused_on_create() {
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .unwrap_err();
     assert_eq!(plain.code(), ErrorCode::InvalidRequest);
@@ -1092,6 +1248,7 @@ fn defaults_are_made_once_and_a_renamed_or_deleted_one_stays_so() {
             .rename_collection(&RenameCollectionRequest {
                 collection: id("Variable"),
                 name: "Variable fonts".into(),
+                color: None,
             })
             .expect("rename");
         index.delete_collection(id("Problems")).expect("delete");

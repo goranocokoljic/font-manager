@@ -73,6 +73,16 @@
   --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 8%), 0 12px 40px rgb(0 0 0 / 18%);
   /* The dimmed page behind a modal dialog; the same in both themes. */
   --fm-scrim: rgb(0 0 0 / 20%);
+
+  /* A collection's colour (E44.3): marks, never words, so each is at least 3:1 on the surfaces. */
+  --fm-collection-coral: #d9553a;
+  --fm-collection-amber: #b37400;
+  --fm-collection-green: #3f8f4f;
+  --fm-collection-teal: #1a8a8a;
+  --fm-collection-blue: #3b78d8;
+  --fm-collection-violet: #8a63d2;
+  --fm-collection-orchid: #c56eb2;
+  --fm-collection-slate: #6b7280;
 }
 
 /* The Settings theme (`data-theme` on the root, set by App.vue): `system` follows
@@ -100,6 +110,14 @@
     --fm-warning: #ffb74d;
     --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 35%);
     --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 30%), 0 12px 40px rgb(0 0 0 / 50%);
+    --fm-collection-coral: #ef7a5f;
+    --fm-collection-amber: #e0a030;
+    --fm-collection-green: #62b873;
+    --fm-collection-teal: #3fb5b5;
+    --fm-collection-blue: #6fa3ee;
+    --fm-collection-violet: #a98bea;
+    --fm-collection-orchid: #cf7dbd;
+    --fm-collection-slate: #9aa0ab;
   }
 }
 
@@ -123,6 +141,14 @@
   --fm-warning: #ffb74d;
   --fm-shadow-1: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 35%);
   --fm-shadow-2: 0 2px 4px rgb(0 0 0 / 30%), 0 12px 40px rgb(0 0 0 / 50%);
+  --fm-collection-coral: #ef7a5f;
+  --fm-collection-amber: #e0a030;
+  --fm-collection-green: #62b873;
+  --fm-collection-teal: #3fb5b5;
+  --fm-collection-blue: #6fa3ee;
+  --fm-collection-violet: #a98bea;
+  --fm-collection-orchid: #cf7dbd;
+  --fm-collection-slate: #9aa0ab;
 }
 
 /* The Settings density (`data-density` on the root) swaps the spacing set. */

@@ -76,6 +76,83 @@ describe('collections sidebar', () => {
     expect(w.find('input[aria-label="New collection name"]').exists()).toBe(false);
   });
 
+  describe('colours (E44.3)', () => {
+    const dot = (w: VueWrapper, name: string) =>
+      w.find(`li[aria-label="${name}"] [data-testid="collection-dot"]`);
+    const swatches = () => [
+      ...document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]'),
+    ];
+    async function openMenu(w: VueWrapper, name: string) {
+      await w.get(`button[aria-label="More actions for ${name}"]`).trigger('click');
+      await flushPromises();
+    }
+    async function pick(w: VueWrapper, name: string, label: string) {
+      await openMenu(w, name);
+      swatches()
+        .find((s) => s.getAttribute('aria-label') === label)!
+        .click();
+      await flushPromises();
+    }
+
+    it('shows a dot only on a collection with a colour, before its name', async () => {
+      const w = await mountSidebar();
+      expect(dot(w, 'Brand').exists()).toBe(false);
+      await pick(w, 'Brand', 'Teal');
+      const el = dot(w, 'Brand').element as HTMLElement;
+      expect(el.style.backgroundColor).toBe('var(--fm-collection-teal)');
+      expect(el.nextElementSibling?.textContent).toContain('Brand');
+      expect(dot(w, 'Clients').exists()).toBe(false);
+    });
+
+    it('offers eight named swatches in a labeled group and marks the chosen one', async () => {
+      const w = await mountSidebar();
+      await pick(w, 'Brand', 'Coral');
+      await openMenu(w, 'Brand');
+      expect(swatches().map((s) => s.getAttribute('aria-label'))).toEqual([
+        'Coral',
+        'Amber',
+        'Green',
+        'Teal',
+        'Blue',
+        'Violet',
+        'Orchid',
+        'Slate',
+      ]);
+      expect(swatches().map((s) => s.getAttribute('aria-checked'))).toEqual([
+        'true',
+        ...Array<string>(7).fill('false'),
+      ]);
+      expect(document.body.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe(
+        'Colour of Brand',
+      );
+    });
+
+    it('takes the colour off when the chosen swatch is clicked again', async () => {
+      const w = await mountSidebar();
+      await pick(w, 'Brand', 'Teal');
+      await pick(w, 'Brand', 'Teal');
+      expect(dot(w, 'Brand').exists()).toBe(false);
+      expect((await client.listCollections()).find((c) => c.name === 'Brand')?.color).toBeNull();
+    });
+
+    it('reaches the swatches with the arrow keys, along the row too', async () => {
+      const w = await mountSidebar();
+      await openMenu(w, 'Brand');
+      const menu = document.body.querySelector<HTMLElement>('[role="menu"]')!;
+      const press = (key: string) =>
+        document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+      expect(menu.contains(document.activeElement)).toBe(true);
+      swatches()[2]!.focus();
+      press('ArrowRight');
+      expect(document.activeElement).toBe(swatches()[3]);
+      press('ArrowLeft');
+      press('ArrowLeft');
+      expect(document.activeElement).toBe(swatches()[1]);
+      press('ArrowDown');
+      expect(document.activeElement).toBe(swatches()[2]);
+    });
+  });
+
   it('renames, nests, reorders and deletes with the row buttons', async () => {
     const w = await mountSidebar();
     await act(w, 'Brand', 'Rename Brand');

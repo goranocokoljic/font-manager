@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
+import CollectionHeader from '../components/CollectionHeader.vue';
 import CollectionsSidebar from '../components/CollectionsSidebar.vue';
 import CompareSheet from '../components/CompareSheet.vue';
 import DocumentFontsPanel from '../components/DocumentFontsPanel.vue';
@@ -547,6 +548,7 @@ function openFace(face: FaceId): void {
           />
         </header>
         <div v-show="!similar.open" class="browse">
+          <CollectionHeader />
           <FilterChips />
           <PreviewControls :view="ALL_FONTS_VIEW" />
           <template v-if="fontList.families.length && mode === 'table'">

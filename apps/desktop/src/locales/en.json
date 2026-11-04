@@ -1041,6 +1041,18 @@
       "newSmart": "New smart collection",
       "exportLicenseInventory": "Export license inventory…",
       "addSelected": "Add selected fonts to “{name}”"
+    },
+    "specimens": "Fonts in {name}",
+    "colorLabel": "Colour of {name}",
+    "color": {
+      "coral": "Coral",
+      "amber": "Amber",
+      "green": "Green",
+      "teal": "Teal",
+      "blue": "Blue",
+      "violet": "Violet",
+      "orchid": "Orchid",
+      "slate": "Slate"
     }
   },
   "rules": {

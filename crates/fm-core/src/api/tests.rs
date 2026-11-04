@@ -451,6 +451,7 @@ fn families_filter_by_a_manual_or_smart_collection_and_an_unknown_one_is_not_fou
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("manual");
     assert!(in_collection(manual.id).is_empty(), "an empty collection");
@@ -476,6 +477,7 @@ fn families_filter_by_a_manual_or_smart_collection_and_an_unknown_one_is_not_fou
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .expect("smart");
     let all = lib
@@ -1090,6 +1092,7 @@ fn pinned_styles_survive_a_rebuild_and_reach_the_sidecar() {
             name: "Brand".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("collection")
         .id;
@@ -1527,6 +1530,7 @@ fn collections_tags_metadata_and_sets_use_the_index() {
             name: "Headlines".into(),
             parent: None,
             rules: None,
+            color: None,
         })
         .expect("collection");
     let filled = lib
@@ -3272,6 +3276,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
             parent: None,
             rules: None,
             rule_group: None,
+            color: None,
         })
         .expect("collection");
     let names = |c| -> Vec<String> {
@@ -3304,6 +3309,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
                 ..Filters::default()
             }),
             rule_group: None,
+            color: None,
         })
         .expect("smart");
     let mut variable: Vec<String> = lib
@@ -3947,6 +3953,7 @@ fn new_collection(lib: &Lib, name: &str, rules: Option<Filters>) -> CollectionId
             parent: None,
             rules,
             rule_group: None,
+            color: None,
         })
         .expect("collection")
         .id

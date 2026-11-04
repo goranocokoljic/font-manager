@@ -101,6 +101,7 @@ impl Lib {
                 name: "Brand".into(),
                 parent: None,
                 rules: None,
+                color: None,
             })
             .expect("collection")
             .id;
@@ -113,6 +114,7 @@ impl Lib {
                     variable: Some(true),
                     ..Filters::default()
                 }),
+                color: None,
             })
             .expect("smart")
             .id;

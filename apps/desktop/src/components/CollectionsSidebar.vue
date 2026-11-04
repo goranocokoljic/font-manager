@@ -13,6 +13,7 @@ import UiPopover from './ui/UiPopover.vue';
 // buttons show on the open collection and under keyboard focus. "New smart" and a
 // smart collection's "Edit rules" open the rule editor (E14.1).
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { COLLECTION_COLORS, collectionColorVar } from '../api/collectionColors';
 import type { CollectionId } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { useFolded } from './useFolded';
@@ -207,6 +208,11 @@ function registerCommands(): void {
 watch(() => store.collections, registerCommands, { immediate: true });
 onBeforeUnmount(() => undo.splice(0).forEach((u) => u()));
 
+/** Picks a colour from the menu; the colour it already has takes it off again. */
+function pickColor(key: string): void {
+  run((r) => void store.setColor(r.collection, r.collection.color === key ? null : key));
+}
+
 /** The row whose "more" menu is open, and the button it hangs from. */
 const menu = ref<{ id: CollectionId } | null>(null);
 const menuAnchor = ref<HTMLElement | null>(null);
@@ -239,15 +245,22 @@ function onMenuKey(e: KeyboardEvent): void {
     return;
   }
   const items = [
-    ...(menuEl.value?.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)') ?? []),
+    ...(menuEl.value?.querySelectorAll<HTMLElement>(
+      '[role="menuitem"]:not(:disabled), [role="menuitemradio"]',
+    ) ?? []),
   ];
   const at = items.indexOf(document.activeElement as HTMLElement);
   const go = (i: number) => {
     e.preventDefault();
     items[(i + items.length) % items.length]?.focus();
   };
-  if (e.key === 'ArrowDown') go(at + 1);
-  else if (e.key === 'ArrowUp') go(at - 1);
+  // The swatches are a row: left and right move along it, in the reading direction.
+  const swatch = (e.target as HTMLElement).getAttribute('role') === 'menuitemradio';
+  const rtl = swatch && getComputedStyle(e.target as HTMLElement).direction === 'rtl';
+  const next = swatch && e.key === (rtl ? 'ArrowLeft' : 'ArrowRight');
+  const previous = swatch && e.key === (rtl ? 'ArrowRight' : 'ArrowLeft');
+  if (e.key === 'ArrowDown' || next) go(at + 1);
+  else if (e.key === 'ArrowUp' || previous) go(at - 1);
   else if (e.key === 'Home') go(0);
   else if (e.key === 'End') go(items.length - 1);
   else if (e.key === 'Tab') closeMenu();
@@ -350,6 +363,13 @@ const { folded, toggle } = useFolded('collections');
             />
           </form>
           <div v-else class="row">
+            <span
+              v-if="row.collection.color"
+              class="dot"
+              data-testid="collection-dot"
+              :style="{ backgroundColor: collectionColorVar(row.collection.color) }"
+              aria-hidden="true"
+            ></span>
             <button
               type="button"
               class="name"
@@ -424,6 +444,24 @@ const { folded, toggle } = useFolded('collections');
         >
           {{ t('common.rename') }}
         </button>
+        <div
+          class="swatches"
+          role="group"
+          :aria-label="t('collections.colorLabel', { name: menuRow.collection.name })"
+        >
+          <button
+            v-for="key in COLLECTION_COLORS"
+            :key="key"
+            role="menuitemradio"
+            type="button"
+            class="swatch"
+            :aria-checked="menuRow.collection.color === key ? 'true' : 'false'"
+            :aria-label="t(`collections.color.${key}`)"
+            :title="t(`collections.color.${key}`)"
+            :style="{ backgroundColor: collectionColorVar(key) }"
+            @click="pickColor(key)"
+          ></button>
+        </div>
         <button
           role="menuitem"
           type="button"
@@ -557,6 +595,12 @@ const { folded, toggle } = useFolded('collections');
   color: var(--fm-fg);
   font-weight: 600;
 }
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
 .smart {
   display: inline-flex;
   flex: none;
@@ -596,6 +640,26 @@ const { folded, toggle } = useFolded('collections');
 }
 .menu button:disabled {
   color: var(--fm-muted);
+}
+.swatches {
+  display: flex;
+  gap: var(--fm-space-1);
+  padding: var(--fm-space-1) var(--fm-space-2);
+}
+/* The fill is the colour; the ring, outside it, shows the chosen one and the focus. */
+.menu button.swatch {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+}
+.menu button.swatch[aria-checked='true'] {
+  outline: 2px solid var(--fm-fg);
+  outline-offset: 2px;
+}
+.menu button.swatch:focus-visible {
+  outline-offset: 2px;
 }
 .edit input {
   box-sizing: border-box;

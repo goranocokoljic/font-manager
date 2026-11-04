@@ -127,6 +127,12 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; create_collection, json!({ "name": "Over HTTP" }));
     same!(seen, d, c; create_collection, json!({ "name": "Over HTTP" }));
     same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed" }));
+    // A colour is set, kept when the request has none, removed by "", and checked.
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed", "color": "teal" }));
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed" }));
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed", "color": "" }));
+    same!(seen, d, c; rename_collection, json!({ "collection": 1, "name": "Renamed", "color": "#ff0000" }));
+    same!(seen, d, c; create_collection, json!({ "name": "Painted", "color": "#ff0000" }));
     same!(seen, d, c; move_collection, json!({ "collection": 1, "position": 0 }));
     same!(seen, d, c; update_collection_rules, json!({ "collection": 1, "ruleGroup": { "op": "and", "rules": [] } }));
     same!(seen, d, c; delete_collection, json!(999));

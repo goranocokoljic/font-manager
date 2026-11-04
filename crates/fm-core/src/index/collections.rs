@@ -10,6 +10,9 @@
 //! added to it. Its count is evaluated now, never stored (E14.2,
 //! `index/search/smart.rs`).
 //!
+//! A collection can have a colour, a key of the API's fixed palette. It is
+//! this library's own: sidecars carry what a face is in, not how it looks.
+//!
 //! Every change to what a face is in, or to the names on the way to it, is
 //! mirrored to the sidecars of the faces' families (`index/sidecars.rs`).
 
@@ -18,8 +21,8 @@ use std::collections::HashMap;
 use fm_api::CollectionId;
 use fm_api::common::Classification;
 use fm_api::organization::{
-    Collection, CollectionFacesRequest, CreateCollectionRequest, MoveCollectionRequest,
-    RenameCollectionRequest, RuleGroup, UpdateCollectionRulesRequest,
+    COLLECTION_COLORS, Collection, CollectionFacesRequest, CreateCollectionRequest,
+    MoveCollectionRequest, RenameCollectionRequest, RuleGroup, UpdateCollectionRulesRequest,
 };
 use fm_api::search::Filters;
 use fm_api::{ErrorCode, FaceId};
@@ -38,7 +41,8 @@ SELECT c.id, c.parent_id, c.name, c.rules,
         JOIN face ON face.id = cf.face_id
         JOIN font_file ON font_file.id = face.file_id
         JOIN source ON source.id = font_file.source_id
-        WHERE cf.collection_id = c.id AND font_file.gone = 0 AND source.paused = 0)
+        WHERE cf.collection_id = c.id AND font_file.gone = 0 AND source.paused = 0),
+       c.color
 FROM collection AS c
 ORDER BY c.position, c.id";
 
@@ -55,6 +59,7 @@ impl Index {
                     row.get::<_, String>(2)?,
                     row.get::<_, Option<String>>(3)?,
                     row.get::<_, u32>(4)?,
+                    row.get::<_, Option<String>>(5)?,
                 ))
             })
             .map_err(|e| db_error(&e))?;
@@ -64,7 +69,7 @@ impl Index {
         drop(stmt);
         let smart_counts = self.smart_face_counts()?;
         let mut children: HashMap<Option<CollectionId>, Vec<Collection>> = HashMap::new();
-        for (id, parent, name, rules, count) in rows {
+        for (id, parent, name, rules, count, color) in rows {
             let rule_group = rules
                 .map(|json| {
                     stored_rule(&json).map_err(|e| {
@@ -88,6 +93,7 @@ impl Index {
                         .as_ref()
                         .map(|g| g.plain_filters().cloned().unwrap_or_default()),
                     rule_group,
+                    color,
                 });
         }
         let mut out = Vec::new();
@@ -111,9 +117,11 @@ impl Index {
     /// A rule naming an unknown collection is `NotFound`; one that leads
     /// back to the new collection, or names an unknown language preset, is
     /// `InvalidRequest`, as is a rule [`check_rule`] refuses (an empty group,
-    /// a range whose minimum is above its maximum).
+    /// a range whose minimum is above its maximum). A colour that is not a
+    /// key of the palette is `InvalidRequest`.
     pub fn create_collection(&mut self, req: &CreateCollectionRequest) -> FmResult<Collection> {
         let name = collection_name(&req.name)?;
+        let color = collection_color(req.color.as_deref())?;
         let group = match (&req.rules, &req.rule_group) {
             (Some(_), Some(_)) => {
                 return Err(FmError::invalid(
@@ -140,6 +148,7 @@ impl Index {
             req.parent.map(|p| p.0),
             name,
             rules.as_deref(),
+            color,
         )?);
         if let Some(group) = &group {
             // Checked with the new row in place, so a rule naming the new
@@ -198,18 +207,36 @@ impl Index {
         self.collection(req.collection)
     }
 
-    /// Renames a collection; the same rules as [`Index::create_collection`].
+    /// Renames a collection and sets or removes its colour; the same rules as
+    /// [`Index::create_collection`]. No colour in the request keeps the colour; an
+    /// empty one removes it.
+    /// The name is what the sidecars mirror: a colour alone writes none of them.
     pub fn rename_collection(&mut self, req: &RenameCollectionRequest) -> FmResult<Collection> {
         let name = collection_name(&req.name)?;
+        let color = match req.color.as_deref() {
+            None => None,
+            Some("") => Some(None),
+            key => Some(collection_color(key)?),
+        };
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
         let parent = parent_of(&tx, req.collection)?;
         ensure_free_name(&tx, parent, name, Some(req.collection))?;
-        tx.execute(
-            "UPDATE collection SET name = ?2 WHERE id = ?1",
-            params![req.collection.0, name],
-        )
-        .map_err(|e| db_error(&e))?;
-        sidecars::mark_collection_dirty(&tx, req.collection.0)?;
+        let renamed = tx
+            .execute(
+                "UPDATE collection SET name = ?2 WHERE id = ?1 AND name != ?2",
+                params![req.collection.0, name],
+            )
+            .map_err(|e| db_error(&e))?;
+        if renamed > 0 {
+            sidecars::mark_collection_dirty(&tx, req.collection.0)?;
+        }
+        if let Some(color) = color {
+            tx.execute(
+                "UPDATE collection SET color = ?2 WHERE id = ?1",
+                params![req.collection.0, color],
+            )
+            .map_err(|e| db_error(&e))?;
+        }
         tx.commit().map_err(|e| db_error(&e))?;
         self.mirror_sidecars();
         self.collection(req.collection)
@@ -314,7 +341,7 @@ impl Index {
             }
             let rules = serde_json::to_string(&RuleGroup::from(filters))
                 .map_err(|e| FmError::internal(format!("collection rules: {e}")))?;
-            insert_collection(&tx, None, name, Some(&rules))?;
+            insert_collection(&tx, None, name, Some(&rules), None)?;
         }
         tx.execute(
             "INSERT INTO index_meta (key, value)
@@ -421,13 +448,14 @@ pub(super) fn insert_collection(
     parent: Option<u32>,
     name: &str,
     rules: Option<&str>,
+    color: Option<&str>,
 ) -> FmResult<u32> {
     tx.execute(
-        "INSERT INTO collection (parent_id, name, is_smart, rules, position)
-         VALUES (?1, ?2, ?3, ?4,
+        "INSERT INTO collection (parent_id, name, is_smart, rules, color, position)
+         VALUES (?1, ?2, ?3, ?4, ?5,
                  (SELECT coalesce(max(position) + 1, 0) FROM collection
                   WHERE parent_id IS ?1))",
-        params![parent, name, rules.is_some(), rules],
+        params![parent, name, rules.is_some(), rules, color],
     )
     .map_err(|e| db_error(&e))?;
     u32::try_from(tx.last_insert_rowid())
@@ -454,6 +482,16 @@ fn collection_name(name: &str) -> FmResult<&str> {
         return Err(FmError::invalid("Give the collection a name."));
     }
     Ok(name)
+}
+
+/// The colour, when it is a key of the palette; else `InvalidRequest`.
+fn collection_color(color: Option<&str>) -> FmResult<Option<&str>> {
+    match color {
+        Some(key) if !COLLECTION_COLORS.contains(&key) => Err(FmError::invalid(
+            "Pick one of the eight collection colours.",
+        )),
+        _ => Ok(color),
+    }
 }
 
 fn ensure_exists(tx: &Transaction<'_>, id: CollectionId) -> FmResult<()> {

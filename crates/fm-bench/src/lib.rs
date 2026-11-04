@@ -477,6 +477,7 @@ pub fn smart_collections(home: &Path, rounds: usize) -> BenchResult<SmartTimed> 
                     parent: None,
                     rules: None,
                     rule_group: Some(smart_rule(i, &made)),
+                    color: None,
                 })?
                 .id
             }
