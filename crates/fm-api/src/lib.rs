@@ -343,7 +343,7 @@ mod tests {
     #[test]
     fn api_version_round_trips_through_json() {
         let json = serde_json::to_string(&API_VERSION).unwrap();
-        assert_eq!(json, r#"{"major":0,"minor":23,"patch":0}"#);
+        assert_eq!(json, r#"{"major":0,"minor":24,"patch":0}"#);
         let back: ApiVersion = serde_json::from_str(&json).unwrap();
         assert_eq!(back, API_VERSION);
     }
