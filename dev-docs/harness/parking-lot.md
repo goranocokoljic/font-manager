@@ -341,3 +341,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E40.3 #445] apps/desktop/src/components/ui/UiIconButton.vue:42 — a pressed icon toggle is marked only by the `--fm-hover` tint, about 1.12 to 1.20:1 and under 3:1.
 - [E40.3 #445] apps/desktop/src/components/FontList.test.ts — `recycles row elements while scrolling…` and `does not leak font faces while 1,000 families scroll past` timed out at 5000 ms in 2 of 5 full `pnpm test` runs on Windows when all suites run together; the file passes 3 of 3 runs alone, and CI was green.
+- [E40.4 #446] dev-docs/redesign/DESIGN.md:123 — still gives motion as "hover/active 120 ms, panel open/close 200 ms" and does not mention the 280 ms page duration or `MOTION.md`.
