@@ -23,8 +23,8 @@ use fm_api::layout::{
 };
 use fm_api::library::{
     AddSourceRequest, FamilyOrder, FamilySort, FamilySortKey, FamilySummary, GlyphRequest,
-    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseType, ListFamiliesRequest, OpenLicense,
-    ScanRequest, SetSourcePausedRequest, TrashMoveStatus,
+    GlyphsRequest, ImportMode, KeepCopyRequest, LicensePermissionsSource, LicenseType,
+    ListFamiliesRequest, OpenLicense, ScanRequest, SetSourcePausedRequest, TrashMoveStatus,
 };
 use fm_api::mock::MockApi;
 use fm_api::organization::{
@@ -2477,6 +2477,10 @@ fn the_web_filter_follows_declarations_and_explains_each_face() {
             "Embedding restricted, no web license declared".to_owned()
         ))
     );
+    assert_eq!(
+        legacy.license.permissions.as_ref().map(|p| p.source),
+        Some(LicensePermissionsSource::EmbeddingBits)
+    );
     api.declare_license(LicenseDeclaration {
         family: legacy.face.family,
         license_type: Some(LicenseType::Web),
@@ -2493,6 +2497,34 @@ fn the_web_filter_follows_declarations_and_explains_each_face() {
             .web_use
             .map(|w| w.reason),
         Some("Declared web license".to_owned())
+    );
+    let declared = api.get_face(FaceId(7)).unwrap().license.permissions;
+    let declared = declared.expect("declared lines");
+    assert_eq!(declared.source, LicensePermissionsSource::Declared);
+    assert!(declared.may.iter().any(|l| l.contains("websites")));
+    // Clearing the declaration brings the file's own lines back.
+    api.declare_license(LicenseDeclaration {
+        family: legacy.face.family,
+        license_type: None,
+        seats: None,
+        purchase_date: None,
+        receipt: ReceiptChange::Keep,
+    })
+    .unwrap();
+    assert_eq!(
+        api.get_face(FaceId(7))
+            .unwrap()
+            .license
+            .permissions
+            .map(|p| p.source),
+        Some(LicensePermissionsSource::EmbeddingBits)
+    );
+    // An open-licensed sample face has the open license's lines.
+    let open = api.get_face(FaceId(1)).unwrap().license;
+    assert!(open.open_license.is_some());
+    assert_eq!(
+        open.permissions.map(|p| p.source),
+        Some(LicensePermissionsSource::OpenLicense)
     );
 }
 

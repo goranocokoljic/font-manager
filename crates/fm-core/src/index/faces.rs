@@ -197,6 +197,7 @@ impl Index {
                 web_use: Some(
                     license::web_use(embedding, row.open_license, declared_type).to_api(),
                 ),
+                permissions: license::permissions(embedding, row.open_license, declared_type),
             },
             metrics,
             axes: parsed.map(|p| p.axes.clone()).unwrap_or_default(),

@@ -12,6 +12,10 @@
 use fm_api::common::Embedding;
 use fm_api::library::{LicenseType, OpenLicense, WebUse};
 
+mod permissions;
+
+pub use permissions::permissions;
+
 /// The embedding permission `OS/2.fsType` grants.
 ///
 /// Bits 0–3 are the usage permissions: none set is installable, bit 1
