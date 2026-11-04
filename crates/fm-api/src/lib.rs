@@ -274,6 +274,8 @@ pub fn types() -> specta::Types {
         settings::McpUpdate,
         settings::McpGrant,
         settings::McpGrantUpdate,
+        settings::ThemeDefinition,
+        settings::ThemeTokens,
         settings::McpToolCall,
         settings::McpConfirmationAnswer,
         // updates

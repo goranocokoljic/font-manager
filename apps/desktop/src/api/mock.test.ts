@@ -25,6 +25,35 @@ async function live(client: FmClient, id: CollectionId) {
   return { count: c.faceCount, faces: await facesOf(client, { collection: id }) };
 }
 
+describe('MockApi themes (E47.1)', () => {
+  it('lists the data files, Paper first, with the API field names', async () => {
+    const themes = await createMockClient().listThemes();
+    expect(themes.map((t) => t.id)).toEqual(['paper', 'graphite', 'indigo', 'moss']);
+    expect(themes[0]!.light).toEqual({
+      accent: '#c56eb2',
+      onAccent: '#141413',
+      bg: '#ffffff',
+      surface: '#f6f6f7',
+      surface2: '#ffffff',
+      border: '#00000017',
+    });
+  });
+
+  it('starts on Paper next to the theme setting, changes it and refuses an unknown id', async () => {
+    const client = createMockClient();
+    const first = await client.getSettings();
+    expect(first.themeId).toBe('paper');
+    expect(first.theme).toBe('system');
+    const moss = await client.updateSettings({ themeId: 'moss' });
+    expect(moss.themeId).toBe('moss');
+    expect(moss.theme).toBe('system');
+    await expect(
+      client.updateSettings({ themeId: 'no-such-theme', density: 'compact' }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+    expect(await client.getSettings()).toEqual(moss);
+  });
+});
+
 describe('MockApi collection colours (E44.3)', () => {
   it('sets, keeps, removes and checks a colour as fm-core does', async () => {
     const client = createMockClient();

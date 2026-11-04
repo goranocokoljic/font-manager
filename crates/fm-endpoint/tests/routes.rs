@@ -230,6 +230,7 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("get_settings", String::new()),
         ("update_settings", r#"{"theme":"dark"}"#.into()),
         ("app_folders", String::new()),
+        ("list_themes", String::new()),
         ("endpoint_info", String::new()),
         ("regenerate_endpoint_token", String::new()),
         ("mcp_status", String::new()),

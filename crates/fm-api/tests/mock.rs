@@ -1553,6 +1553,35 @@ fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
 }
 
 #[test]
+fn the_theme_id_is_one_of_the_listed_themes_and_an_unknown_one_changes_nothing() {
+    use fm_api::settings::SettingsUpdate;
+    let api = api();
+    let themes = api.list_themes().unwrap();
+    let ids: Vec<&str> = themes.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["paper", "graphite", "indigo", "moss"]);
+    assert_eq!(api.get_settings().unwrap().theme_id, "paper");
+
+    let next = api
+        .update_settings(SettingsUpdate {
+            theme_id: Some("indigo".into()),
+            ..SettingsUpdate::default()
+        })
+        .unwrap();
+    assert_eq!(next.theme_id, "indigo");
+    assert_eq!(api.get_settings().unwrap(), next);
+
+    let err = api
+        .update_settings(SettingsUpdate {
+            theme_id: Some("no-such-theme".into()),
+            cache_limit_mb: Some(128),
+            ..SettingsUpdate::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert_eq!(api.get_settings().unwrap(), next, "nothing is half-applied");
+}
+
+#[test]
 fn family_rows_carry_the_detail_list_columns() {
     let api = api();
     api.tag_faces(TagFacesRequest {
