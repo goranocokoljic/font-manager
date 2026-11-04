@@ -17,6 +17,20 @@ async function live(client: FmClient, id: CollectionId) {
   return { count: c.faceCount, faces: await facesOf(client, { collection: id }) };
 }
 
+describe('MockApi detectLanguages (E43.2)', () => {
+  it('ranks the presets by the letters of the text', async () => {
+    const hints = await createMockClient().detectLanguages({ text: 'Zażółć Ђ' });
+    expect(hints.map((h) => h.code)).toEqual(['pl', 'sr-Cyrl']);
+    expect(hints[0]?.confidence ?? 0).toBeGreaterThan(hints[1]?.confidence ?? 1);
+  });
+
+  it('has no hints for plain ASCII or punctuation', async () => {
+    const client = createMockClient();
+    expect(await client.detectLanguages({ text: 'plain ascii' })).toEqual([]);
+    expect(await client.detectLanguages({ text: '“—”' })).toEqual([]);
+  });
+});
+
 describe('MockApi smart collections (E14.2)', () => {
   it('reads a phase-1 rule as one AND group and counts it live', async () => {
     const client = createMockClient();

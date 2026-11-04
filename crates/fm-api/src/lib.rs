@@ -180,6 +180,8 @@ pub fn types() -> specta::Types {
         search::FaceLanguageCoverage,
         search::FaceCoverage,
         search::LanguagePreset,
+        search::DetectLanguagesRequest,
+        search::LanguageHint,
         search::SimilarRequest,
         search::SimilarFace,
         search::ImageMatchRequest,

@@ -99,6 +99,7 @@ routes! {
     check_coverage(req),
     face_coverage(face),
     list_languages(),
+    detect_languages(req),
     find_similar(req),
     find_by_image(req),
     suggest_pairings(req),

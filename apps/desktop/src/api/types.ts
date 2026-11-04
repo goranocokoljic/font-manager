@@ -711,6 +711,12 @@ export type Deprecation = {
 	note: string,
 };
 
+/**  A text to find the likely languages of (E43.2). */
+export type DetectLanguagesRequest = {
+	/**  The text, as the user typed it. Long text is read in part. */
+	text: string,
+};
+
 /**  A design app closed a document (E29.3). */
 export type DocumentClosedRequest = {
 	/**  The document, as [`FontsNeededRequest::document`] named it. */
@@ -1906,6 +1912,14 @@ export type LanguageCoverage = {
 	missing: string[],
 	/**  The face has `locl` forms for this language. */
 	hasLocl: boolean,
+};
+
+/**  A language preset that a text may be in. */
+export type LanguageHint = {
+	/**  Preset code from `list_languages`. */
+	code: string,
+	/**  Above 0.0 and at most 1.0; higher fits the text better. */
+	confidence: number | null,
 };
 
 /**  A language preset from `data/charsets`. */

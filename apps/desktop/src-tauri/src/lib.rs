@@ -44,8 +44,9 @@ use fm_api::preview::{
     SampleTextRequest, SizeFactor, SizeFactorRequest,
 };
 use fm_api::search::{
-    CoverageReport, CoverageRequest, FaceCoverage, LanguagePreset, PairingRequest,
-    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest,
+    CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage, LanguageHint,
+    LanguagePreset, PairingRequest, PairingSuggestion, SearchRequest, SearchResponse, SimilarFace,
+    SimilarRequest,
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
@@ -906,6 +907,15 @@ async fn list_languages(state: State<'_, AppState>) -> ApiResult<Vec<LanguagePre
     call(&state, |api| api.list_languages()).await
 }
 
+/// The language presets a typed text may be in, best first.
+#[tauri::command]
+async fn detect_languages(
+    state: State<'_, AppState>,
+    req: DetectLanguagesRequest,
+) -> ApiResult<Vec<LanguageHint>> {
+    call(&state, move |api| api.detect_languages(req)).await
+}
+
 /// Creates a collection; with rules, a smart one.
 #[tauri::command]
 async fn create_collection(
@@ -1407,6 +1417,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             check_coverage,
             face_coverage,
             list_languages,
+            detect_languages,
             list_collections,
             create_collection,
             rename_collection,

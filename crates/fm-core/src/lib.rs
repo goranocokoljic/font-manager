@@ -32,6 +32,7 @@ pub mod grouping;
 pub mod image_match;
 pub mod index;
 pub mod inventory;
+pub mod language_detect;
 pub mod layout;
 pub mod license;
 pub mod lifecycle;
