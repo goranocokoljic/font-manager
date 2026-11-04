@@ -18,7 +18,8 @@ In `apps/desktop/src/styles/theme.css`. All three durations are `0ms` under
 | `--fm-motion-fast` | 120 ms                    | hover, press, toggle, chip, focus ring                                               |
 | `--fm-motion-move` | 200 ms                    | panels, drawers, popovers, reflow, selection bar                                     |
 | `--fm-motion-page` | 280 ms                    | family page push and pop, Studio open, Quick Look                                    |
-| `--fm-ease`        | `cubic-bezier(.2, 0, 0, 1)` | the only curve; exits may use `ease-in` at 0.8× the duration                       |
+| `--fm-ease`        | `cubic-bezier(.2, 0, 0, 1)` | the only curve; exits may use `--fm-ease-exit` at 0.8× the duration                |
+| `--fm-ease-exit`   | `ease-in`                 | exits, such as "Back to the wall"                                                    |
 
 ## Moments
 
@@ -62,7 +63,7 @@ The story that builds each moment decides these, without a literal value in a co
 - **Hover under reduced motion.** The board keeps the tint ("Same"); today it is instant, for
   the same reason.
 - **Exits.** The board allows `ease-in` at 0.8× the duration (220 ms for "Back to the wall").
-  There is no token for the curve; the time is `calc(var(--fm-motion-page) * 0.8)` (224 ms).
+  The curve is `--fm-ease-exit`; the time is `calc(var(--fm-motion-page) * 0.8)` (224 ms).
   The helpers leave on the same time and curve as they enter.
 - **Other properties.** "Hover anything" animates `background-color`, and the ghost's shadow
   is not a transform. Those are not the helpers' job; the helpers stay transform and opacity.

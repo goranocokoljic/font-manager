@@ -82,6 +82,10 @@ describe('motion tokens', () => {
     expect(Object.keys(base).filter((name) => name.startsWith('--fm-motion-'))).toHaveLength(3);
   });
 
+  it('name the curve an exit may use', () => {
+    expect(base['--fm-ease-exit']).toBe('ease-in');
+  });
+
   it('all go to 0ms under prefers-reduced-motion: reduce', () => {
     const block = theme.match(/@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n\}/)?.[1];
     expect(rootTokens(block ?? '')).toEqual({

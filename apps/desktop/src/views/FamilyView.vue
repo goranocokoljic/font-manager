@@ -468,6 +468,6 @@ html.fm-family-closing::view-transition-group(*),
 html.fm-family-closing::view-transition-old(*),
 html.fm-family-closing::view-transition-new(*) {
   animation-duration: calc(var(--fm-motion-page) * 0.8);
-  animation-timing-function: ease-in;
+  animation-timing-function: var(--fm-ease-exit);
 }
 </style>

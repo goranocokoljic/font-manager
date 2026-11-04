@@ -37,6 +37,8 @@
   --fm-motion-move: 200ms;
   --fm-motion-page: 280ms;
   --fm-ease: cubic-bezier(0.2, 0, 0, 1);
+  /* The curve an exit may use, at 0.8× the duration (MOTION.md). */
+  --fm-ease-exit: ease-in;
 
   /* Stacking order. */
   --fm-z-raised: 1;
