@@ -31,9 +31,11 @@
   --fm-radius-sm: 4px;
   --fm-radius-md: 8px;
 
-  /* Motion: hover/active fast, panels slower, nothing bounces. */
+  /* Motion: three durations and one curve, nothing bounces (dev-docs/redesign/MOTION.md).
+     Hover and press fast, panels and reflow move, whole pages page. */
   --fm-motion-fast: 120ms;
-  --fm-motion-panel: 200ms;
+  --fm-motion-move: 200ms;
+  --fm-motion-page: 280ms;
   --fm-ease: cubic-bezier(0.2, 0, 0, 1);
 
   /* Stacking order. */
@@ -440,8 +442,20 @@ hr {
   border-top: 1px solid var(--fm-border);
 }
 
+/* A page change through withViewTransition crossfades at the page duration, on our curve. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--fm-motion-page);
+  animation-timing-function: var(--fm-ease);
+}
+
 /* The OS reduce-motion setting turns every animation and transition off. */
 @media (prefers-reduced-motion: reduce) {
+  :root {
+    --fm-motion-fast: 0ms;
+    --fm-motion-move: 0ms;
+    --fm-motion-page: 0ms;
+  }
   *,
   *::before,
   *::after {

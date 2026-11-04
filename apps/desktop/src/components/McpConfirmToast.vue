@@ -119,7 +119,7 @@ button:disabled {
 }
 @media (prefers-reduced-motion: no-preference) {
   .confirm {
-    animation: rise 120ms ease-out;
+    animation: rise var(--fm-motion-fast) var(--fm-ease);
   }
 }
 @keyframes rise {
