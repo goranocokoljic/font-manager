@@ -6,15 +6,21 @@
 //! and symbols say nothing either: curly quotes are in the Chinese presets but do
 //! not make a text Chinese.
 //!
-//! The score of a preset comes from three facts of `data/charsets`, in this order
+//! The score of a preset comes from these facts of `data/charsets`, in this order
 //! of weight:
 //!
-//! 1. How much of the text the preset can write (an auxiliary letter counts half).
-//!    This is squared, so a preset that writes all of the text comes before one
-//!    that misses a letter.
-//! 2. How many of the text's letters are in the preset's `sampleGlyphs`.
-//! 3. How much of the glyph line the text uses. Presets with the same letters
-//!    differ only here: `sr-Latn` has a line of 5, `hr` a line of 10.
+//! 1. Whether the preset writes all of the text. A required letter or a letter on
+//!    the glyph line counts 1, another auxiliary letter counts half. A preset that
+//!    writes the whole text always comes before one that does not.
+//! 2. How many of the text's letters are on the preset's `sampleGlyphs` line.
+//! 3. How much of the line the text uses, in letters of either case.
+//! 4. For equal scores, the shorter line as the data writes it: `sr-Latn` has 5
+//!    characters and `hr` 10, for the same five letters.
+//!
+//! A preset without a line has nothing to compare a partial match with. It gets
+//! the full score only when the text uses all of its required distinctive letters,
+//! which is the same match as a text that uses all of a line. A partial credit here
+//! would rank Arabic text as Persian, because a whole alphabet holds every letter.
 //!
 //! Text in decomposed form (`c` + U+0301) is not composed first: the workspace
 //! has no normalization crate, and the coverage checks treat text the same way.
@@ -34,7 +40,8 @@ const MAX_SCANNED_CHARS: usize = 1024;
 /// What an auxiliary letter counts for; a required letter counts 1.
 const AUXILIARY_WEIGHT: f32 = 0.5;
 
-/// Part of the confidence that any preset writing the whole text gets.
+/// Part of the confidence that any preset writing the whole text gets; also the
+/// ceiling of a preset that does not write it.
 const WRITES_WEIGHT: f32 = 0.6;
 /// Part of the confidence for text letters that are in the glyph line.
 const SAMPLE_WEIGHT: f32 = 0.3;
@@ -42,7 +49,8 @@ const SAMPLE_WEIGHT: f32 = 0.3;
 const FOCUS_WEIGHT: f32 = 0.1;
 
 /// The language presets that may match `text`, best first, each with a
-/// confidence above 0 and at most 1; presets of equal score stay in data order.
+/// confidence above 0 and at most 1. Equal scores go by the shorter glyph line,
+/// then by data order.
 /// Empty for a text without distinctive letters, or with none that a preset has.
 pub fn detect_languages(text: &str) -> FmResult<Vec<LanguageHint>> {
     Ok(table()?.hints(text))
@@ -64,7 +72,7 @@ fn table() -> FmResult<&'static Table> {
 #[derive(Debug, Clone, Copy)]
 struct Hit {
     preset: usize,
-    /// In the base set; otherwise in the auxiliary set.
+    /// In the base set or on the glyph line; otherwise only auxiliary.
     required: bool,
     in_sample: bool,
 }
@@ -77,13 +85,24 @@ struct Tally {
     sample: u32,
 }
 
+/// The letters a text can match in full, for one preset.
+#[derive(Debug, Clone, Copy)]
+struct Signature {
+    /// The glyph line has distinctive letters; otherwise `letters` counts the
+    /// required distinctive letters.
+    has_line: bool,
+    /// Distinct letters, in any case.
+    letters: usize,
+    /// Distinctive characters as the data writes them; both cases count.
+    written: usize,
+}
+
 /// The presets, indexed by distinctive letter: a call only visits the presets
 /// that have one of the text's letters.
 #[derive(Debug)]
 struct Table {
     codes: Vec<String>,
-    /// Distinctive letters on each preset's glyph line, as the data writes them.
-    sample_lens: Vec<usize>,
+    signatures: Vec<Signature>,
     letters: BTreeMap<char, Vec<Hit>>,
 }
 
@@ -91,12 +110,16 @@ impl Table {
     fn new(presets: &[Charset]) -> Self {
         let mut table = Self {
             codes: Vec::with_capacity(presets.len()),
-            sample_lens: Vec::with_capacity(presets.len()),
+            signatures: Vec::with_capacity(presets.len()),
             letters: BTreeMap::new(),
         };
         for (preset, charset) in presets.iter().enumerate() {
             let sample = charset.sample_glyphs.as_deref().unwrap_or_default();
-            let in_sample: BTreeSet<char> = sample.chars().map(fold).collect();
+            let in_sample: BTreeSet<char> = sample
+                .chars()
+                .map(fold)
+                .filter(|c| is_distinctive(*c))
+                .collect();
             // Auxiliary first: a letter in both cases of the two sets is required.
             let mut required = BTreeMap::new();
             for c in &charset.auxiliary {
@@ -105,19 +128,32 @@ impl Table {
             for c in &charset.base {
                 required.insert(fold(*c), true);
             }
+            let mut required_letters = 0;
             for (letter, required) in required {
                 if is_distinctive(letter) {
+                    required_letters += usize::from(required);
+                    let in_sample = in_sample.contains(&letter);
                     table.letters.entry(letter).or_default().push(Hit {
                         preset,
-                        required,
-                        in_sample: in_sample.contains(&letter),
+                        required: required || in_sample,
+                        in_sample,
                     });
                 }
             }
             table.codes.push(charset.code.clone());
-            table
-                .sample_lens
-                .push(sample.chars().filter(|c| is_distinctive(fold(*c))).count());
+            table.signatures.push(if in_sample.is_empty() {
+                Signature {
+                    has_line: false,
+                    letters: required_letters,
+                    written: required_letters,
+                }
+            } else {
+                Signature {
+                    has_line: true,
+                    letters: in_sample.len(),
+                    written: sample.chars().filter(|c| is_distinctive(fold(*c))).count(),
+                }
+            });
         }
         table
     }
@@ -148,31 +184,49 @@ impl Table {
             }
             tally.sample += u32::from(hit.in_sample);
         }
-        let total = letters.len() as f32;
-        let mut hints: Vec<LanguageHint> = tallies
+        let total = letters.len();
+        let mut scored: Vec<(usize, f32)> = tallies
             .iter()
             .enumerate()
             .filter(|(_, tally)| tally.required + tally.auxiliary > 0)
-            .map(|(preset, tally)| LanguageHint {
-                code: self.codes[preset].clone(),
-                confidence: confidence(*tally, total, self.sample_lens[preset]),
-            })
+            .map(|(preset, tally)| (preset, confidence(*tally, total, self.signatures[preset])))
             .collect();
-        // A stable sort, so equal scores stay in data order.
-        hints.sort_by(|a, b| b.confidence.total_cmp(&a.confidence));
-        hints
+        // A stable sort, so what is still equal stays in data order.
+        scored.sort_by(|a, b| {
+            b.1.total_cmp(&a.1).then_with(|| {
+                self.signatures[a.0]
+                    .written
+                    .cmp(&self.signatures[b.0].written)
+            })
+        });
+        scored
+            .into_iter()
+            .map(|(preset, confidence)| LanguageHint {
+                code: self.codes[preset].clone(),
+                confidence,
+            })
+            .collect()
     }
 }
 
-fn confidence(tally: Tally, total: f32, sample_len: usize) -> f32 {
-    let writes = (tally.required as f32 + AUXILIARY_WEIGHT * tally.auxiliary as f32) / total;
-    let sample = tally.sample as f32;
-    let focus = if sample_len == 0 {
-        0.0
+/// `total` is the number of distinct distinctive letters in the text; above 0.
+fn confidence(tally: Tally, total: usize, signature: Signature) -> f32 {
+    let writes_all = tally.required as usize == total;
+    let fit = if signature.has_line {
+        let sample = tally.sample as f32;
+        WRITES_WEIGHT
+            + SAMPLE_WEIGHT * (sample / total as f32)
+            + FOCUS_WEIGHT * (sample / signature.letters as f32)
+    } else if writes_all && total == signature.letters {
+        1.0
     } else {
-        sample / sample_len as f32
+        WRITES_WEIGHT
     };
-    writes * writes * (WRITES_WEIGHT + SAMPLE_WEIGHT * (sample / total) + FOCUS_WEIGHT * focus)
+    if writes_all {
+        return fit.min(1.0);
+    }
+    let writes = (tally.required as f32 + AUXILIARY_WEIGHT * tally.auxiliary as f32) / total as f32;
+    writes * writes * WRITES_WEIGHT * fit
 }
 
 /// The lower case of a letter, when that is one character. `İ` lowers to two,
@@ -350,10 +404,11 @@ mod tests {
 
     #[test]
     fn a_required_letter_outranks_an_auxiliary_one() {
+        // The required set has a second letter, so ć alone is no exact match.
         let got = hand_made(
             &[
                 charset("aux", "a", "ć", None),
-                charset("req", "ć", "", None),
+                charset("req", "ćđ", "", None),
             ],
             "ć",
         );
@@ -361,10 +416,108 @@ mod tests {
         assert_eq!(got[1].0, "aux");
         // Both presets have the letter; only its weight differs.
         assert!((got[0].1 - WRITES_WEIGHT).abs() < 1e-6, "{got:?}");
-        assert!(
-            (got[1].1 - AUXILIARY_WEIGHT * AUXILIARY_WEIGHT * WRITES_WEIGHT).abs() < 1e-6,
-            "{got:?}"
+        let half = AUXILIARY_WEIGHT * AUXILIARY_WEIGHT * WRITES_WEIGHT * WRITES_WEIGHT;
+        assert!((got[1].1 - half).abs() < 1e-6, "{got:?}");
+    }
+
+    // SPEC-1: the line is measured in letters, not in the cases the data writes.
+    #[test]
+    fn slovene_comes_first_for_its_own_letters() {
+        assert_eq!(first("ČŠŽčšž"), "sl");
+        assert_eq!(first("Šolski čaj in žaba"), "sl");
+        assert_eq!(codes("ČŠŽčšž")[1], "sr-Latn");
+    }
+
+    #[test]
+    fn a_line_in_two_cases_counts_each_letter_once() {
+        let got = hand_made(
+            &[
+                charset("three", "ćđŋ", "", Some("ćđŋ")),
+                charset("cased", "ćđ", "", Some("ĆĐćđ")),
+            ],
+            "ćđ",
         );
+        assert_eq!(got[0].0, "cased", "{got:?}");
+        assert!((got[0].1 - 1.0).abs() < 1e-6, "{got:?}");
+    }
+
+    // SPEC-2: a preset without a line.
+    #[test]
+    fn a_text_of_exactly_the_required_letters_ranks_a_preset_without_a_line_first() {
+        for (text, code) in [
+            ("Hyvää päivää, öljyä", "fi"),
+            ("Shqipëri, çaj", "sq"),
+            ("Euskal Herria, ñabardura", "eu"),
+            ("Tá sé go hálainn, fíor, ó, úll", "ga"),
+            ("абвгдеёжзійклмнопрстуўфхцчшыьэюя", "be"),
+        ] {
+            assert_eq!(first(text), code, "{text}");
+        }
+    }
+
+    #[test]
+    fn part_of_the_required_letters_gets_no_full_score_without_a_line() {
+        // ä alone is on the lines of sv and de; fi has it too, as one of two.
+        let list = codes("ä");
+        assert!(position(&list, "sv") < position(&list, "fi"), "{list:?}");
+        assert!(position(&list, "de") < position(&list, "fi"), "{list:?}");
+        let got = hand_made(
+            &[
+                charset("part", "ćđ", "", None),
+                charset("all", "ć", "", None),
+            ],
+            "ć",
+        );
+        assert_eq!(got[0], ("all".to_owned(), 1.0), "{got:?}");
+        assert!((got[1].1 - WRITES_WEIGHT).abs() < 1e-6, "{got:?}");
+    }
+
+    #[test]
+    fn a_whole_alphabet_does_not_outrank_a_line_for_ordinary_text() {
+        // fa, mr and ne have no line and hold every letter of these words.
+        assert_eq!(first("سلام"), "ar");
+        assert_eq!(first("नमस्ते"), "hi");
+    }
+
+    #[test]
+    fn a_preset_with_only_ascii_on_its_line_is_treated_as_having_none() {
+        let got = hand_made(&[charset("x", "abć", "", Some("ab"))], "ć");
+        assert_eq!(got, [("x".to_owned(), 1.0)]);
+    }
+
+    #[test]
+    fn writing_the_whole_text_always_outranks_missing_a_letter() {
+        // be writes all of this; ru has no і.
+        assert_eq!(first("Усе людзі нараджаюцца свабоднымі"), "be");
+        // The other preset has every letter but one on its line.
+        let got = hand_made(
+            &[
+                charset("line", "ćđŋ", "", Some("ćđŋ")),
+                charset("whole", "ćđŋħŧ", "", None),
+            ],
+            "ćđŋħ",
+        );
+        assert_eq!(got[0].0, "whole", "{got:?}");
+        assert!(got[1].1 < WRITES_WEIGHT, "{got:?}");
+        assert!((got[0].1 - WRITES_WEIGHT).abs() < 1e-6, "{got:?}");
+    }
+
+    // SPEC-3: a letter on the preset's own line counts as a whole letter.
+    #[test]
+    fn dutch_comes_first_for_its_own_line() {
+        assert_eq!(first("ËÏëïéè"), "nl");
+        assert_eq!(first("Één coördinatie, ideeën, reünie, café, crème"), "nl");
+    }
+
+    #[test]
+    fn an_auxiliary_letter_on_the_line_counts_in_full_and_one_off_it_counts_half() {
+        let on = hand_made(&[charset("x", "ć", "đ", Some("ćđ"))], "ćđ");
+        assert!((on[0].1 - 1.0).abs() < 1e-6, "{on:?}");
+        let off = hand_made(&[charset("x", "ć", "đ", Some("ć"))], "ćđ");
+        let writes: f32 = (1.0 + AUXILIARY_WEIGHT) / 2.0;
+        let fit = WRITES_WEIGHT + SAMPLE_WEIGHT * 0.5 + FOCUS_WEIGHT;
+        let want = writes * writes * WRITES_WEIGHT * fit;
+        assert!((off[0].1 - want).abs() < 1e-6, "{off:?}");
     }
 
     #[test]
