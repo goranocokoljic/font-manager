@@ -61,6 +61,7 @@ pub mod subset;
 pub mod telemetry;
 #[cfg(test)]
 mod test_support;
+pub mod themes;
 pub mod update;
 pub mod web_css;
 pub mod web_font;

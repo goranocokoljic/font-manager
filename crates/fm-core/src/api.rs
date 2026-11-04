@@ -83,7 +83,7 @@ use fm_api::search::{
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpToolCall,
-    McpUpdate, Settings, SettingsService, SettingsUpdate,
+    McpUpdate, Settings, SettingsService, SettingsUpdate, ThemeDefinition,
 };
 use fm_api::workflows::{
     BriefRequest, Candidate, DocumentFonts, DocumentFontsCheck, DocumentFontsRequest,
@@ -1821,6 +1821,10 @@ impl SettingsService for CoreApi {
 
     fn app_folders(&self) -> ApiResult<AppFolders> {
         self.settings.app_folders()
+    }
+
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        self.settings.list_themes()
     }
 
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {

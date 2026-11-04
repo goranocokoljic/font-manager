@@ -1,0 +1,21 @@
+{
+  "$schema": "./theme.schema.json",
+  "id": "indigo",
+  "name": "Indigo",
+  "light": {
+    "accent": "#4f46c8",
+    "on-accent": "#ffffff",
+    "bg": "#ffffff",
+    "surface": "#f6f6fb",
+    "surface-2": "#ffffff",
+    "border": "#1a1a5c17"
+  },
+  "dark": {
+    "accent": "#8f8af0",
+    "on-accent": "#141413",
+    "bg": "#1a1a24",
+    "surface": "#21212c",
+    "surface-2": "#262632",
+    "border": "#d8d8ff17"
+  }
+}

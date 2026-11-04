@@ -10,6 +10,7 @@ import { decodePreview, type PreviewBytes } from './preview';
 import type {
   Catalog,
   CatalogDownload,
+  ThemeDefinition,
   CatalogFamily,
   CatalogId,
   CatalogRef,
@@ -354,6 +355,8 @@ export interface FmClient {
   setSourcePaused(req: SetSourcePausedRequest): Promise<Source>;
   getSettings(): Promise<FullSettings>;
   updateSettings(req: SettingsUpdate): Promise<FullSettings>;
+  /** The themes the app ships, the default first (`themeId` in the settings holds one id). */
+  listThemes(): Promise<ThemeDefinition[]>;
   getAppFolders(): Promise<AppFolders>;
   /** The local API endpoint: its address (while it runs) and the token (Settings → Local API). */
   endpointInfo(): Promise<EndpointInfo>;
@@ -502,6 +505,7 @@ export const tauriClient: FmClient = {
   setSourcePaused: (req) => invoke<Source>('set_source_paused', { req }),
   getSettings: () => invoke<FullSettings>('get_settings'),
   updateSettings: (req) => invoke<FullSettings>('update_settings', { req }),
+  listThemes: () => invoke<ThemeDefinition[]>('list_themes'),
   getAppFolders: () => invoke<AppFolders>('get_app_folders'),
   endpointInfo: () => invoke<EndpointInfo>('endpoint_info'),
   regenerateEndpointToken: () => invoke<EndpointInfo>('regenerate_endpoint_token'),

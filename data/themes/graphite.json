@@ -1,0 +1,21 @@
+{
+  "$schema": "./theme.schema.json",
+  "id": "graphite",
+  "name": "Graphite",
+  "light": {
+    "accent": "#5c5f66",
+    "on-accent": "#ffffff",
+    "bg": "#ffffff",
+    "surface": "#f6f6f6",
+    "surface-2": "#ffffff",
+    "border": "#00000017"
+  },
+  "dark": {
+    "accent": "#a0a2a8",
+    "on-accent": "#141413",
+    "bg": "#1a1a1b",
+    "surface": "#222223",
+    "surface-2": "#262627",
+    "border": "#ffffff17"
+  }
+}

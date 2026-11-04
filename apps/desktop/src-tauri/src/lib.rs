@@ -50,7 +50,7 @@ use fm_api::search::{
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
-    Settings, SettingsUpdate,
+    Settings, SettingsUpdate, ThemeDefinition,
 };
 use fm_api::workflows::{DocumentFontsCheck, DocumentFontsRequest};
 use fm_api::{
@@ -1258,6 +1258,12 @@ async fn update_settings(state: State<'_, AppState>, req: SettingsUpdate) -> Api
     call_settings(&state, move |s| s.update_settings(req)).await
 }
 
+/// The themes the app ships.
+#[tauri::command]
+async fn list_themes(state: State<'_, AppState>) -> ApiResult<Vec<ThemeDefinition>> {
+    call_settings(&state, |s| s.list_themes()).await
+}
+
 /// Where the app keeps its config, data, cache and logs.
 #[tauri::command]
 async fn get_app_folders(state: State<'_, AppState>) -> ApiResult<AppFolders> {
@@ -1502,6 +1508,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             scan,
             get_settings,
             update_settings,
+            list_themes,
             get_app_folders,
             endpoint_info,
             regenerate_endpoint_token,

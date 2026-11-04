@@ -2,6 +2,10 @@
 // `fm_api::mock::MockApi`: the same faces, the same activation outcomes. Fixed
 // data plus the faces it has activated (and how), so the UI can round-trip.
 import permissionRules from '../../../../data/licenses/permissions.json';
+import graphiteTheme from '../../../../data/themes/graphite.json';
+import indigoTheme from '../../../../data/themes/indigo.json';
+import mossTheme from '../../../../data/themes/moss.json';
+import paperTheme from '../../../../data/themes/paper.json';
 import { HELP_PAGES } from '../help';
 import { catalogFontPath } from './catalogFont';
 import { COLLECTION_COLORS } from './collectionColors';
@@ -107,6 +111,7 @@ import {
   DocumentFontRef,
   DocumentFontsCheck,
   DocumentFormat,
+  ThemeDefinition,
 } from './types';
 
 export const mockAppInfo: AppInfo = {
@@ -416,7 +421,29 @@ export const defaultSettings: FullSettings = {
   downloadFolder: null,
   // Off unless the user turns it on (E29.5, rule 7).
   fetchMissingFonts: false,
+  // The theme of a new install (E47.1, `DEFAULT_THEME_ID` in fm-api).
+  themeId: 'paper',
 };
+
+/** A token set of `data/themes` as the API answers it. */
+const themeTokens = (t: typeof paperTheme.light) => ({
+  accent: t.accent,
+  onAccent: t['on-accent'],
+  bg: t.bg,
+  surface: t.surface,
+  surface2: t['surface-2'],
+  border: t.border,
+});
+
+/** The themes in the order of fm-core's list. */
+const MOCK_THEMES: ThemeDefinition[] = [paperTheme, graphiteTheme, indigoTheme, mossTheme].map(
+  (t) => ({
+    id: t.id,
+    name: t.name,
+    light: themeTokens(t.light),
+    dark: themeTokens(t.dark),
+  }),
+);
 
 /** The releases the mock's server can offer the mock app (0.1.0). */
 export const mockUpdates = {
@@ -3559,8 +3586,12 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       ][pick]!;
     },
     getSettings: async () => ({ ...settings }),
+    listThemes: async () => structuredClone(MOCK_THEMES),
     // The same ranges as `Settings::apply` in fm-api.
     updateSettings: async (req) => {
+      // The same refusal as `unknown_theme` in fm-api.
+      if (req.themeId != null && !MOCK_THEMES.some((t) => t.id === req.themeId))
+        throw invalid('This theme does not exist.');
       const mb = req.cacheLimitMb;
       if (mb != null && (mb < 64 || mb > 16384))
         throw invalid('The cache size must be between 64 and 16384 MB.');

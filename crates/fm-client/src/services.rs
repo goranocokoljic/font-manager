@@ -192,6 +192,10 @@ impl SettingsService for Client {
         self.call("app_folders", &())
     }
 
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        self.call("list_themes", &())
+    }
+
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {
         self.call("endpoint_info", &())
     }

@@ -2985,6 +2985,22 @@ fn layouts_are_the_core_presets_and_come_back_clamped() {
 }
 
 #[test]
+fn list_themes_is_the_data_files_and_the_mock_matches_them() {
+    let lib = Lib::new("api-list-themes");
+    let themes = lib.api.list_themes().expect("themes");
+    assert_eq!(themes, crate::themes::load().expect("valid"));
+    let ids: Vec<&str> = themes.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["paper", "graphite", "indigo", "moss"]);
+    // The Paper pair is the app's colors, with the tokens in their API fields.
+    assert_eq!(themes[0].light.on_accent, "#141413");
+    assert_eq!(themes[0].dark.surface_2, "#262628");
+    assert_eq!(themes[0].dark.border, "#ffffff17");
+    // The UI's MockApi (browser mode, e2e) must offer the same themes as the core.
+    let mock = fm_api::mock::MockApi::new();
+    assert_eq!(mock.list_themes().expect("mock themes"), themes);
+}
+
+#[test]
 fn layout_bounds_are_the_core_ranges_and_the_mock_matches_them() {
     let lib = Lib::new("api-layout-bounds");
     let bounds = lib.api.layout_bounds().expect("bounds");
