@@ -1038,6 +1038,20 @@ id: number;
 /**  Whether the call may run. */
 allowed: boolean };
 
+/**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
+export type ExportLayoutPngRequest = {
+	/**  The template file's id. */
+	layout: string,
+	/**  Device pixels per CSS pixel: 1 or 2. */
+	scale: number,
+	/**  The page's colours. */
+	surface: LayoutSurface,
+	/**  The font of every block without its own. */
+	font: LayoutFont,
+	/**  The block's own font, by block index; a missing or null entry uses `font`. */
+	blockFonts?: (LayoutFont | null)[],
+};
+
 /**
  *  Convert faces to web fonts. Refused with `PermissionDenied` when the
  *  embedding bits forbid it and no web license is declared.
@@ -2001,6 +2015,16 @@ export type LayoutEntry = {
 	broken?: string | null,
 };
 
+/**  The font a block is set in: a layout file holds no fonts, so an export names them. */
+export type LayoutFont = {
+	/**  The face. */
+	face: FaceId,
+	/**  Variation-axis values; axes not named keep their defaults. */
+	variations?: AxisValue[],
+	/**  OpenType features switched on or off. */
+	features?: FeatureSetting[],
+};
+
 /**  A built-in layout. */
 export type LayoutPreset = 
 /**  A book page: a heading and indented paragraphs in one column. */
@@ -2021,6 +2045,13 @@ export type LayoutRef = {
 	/**  The template file's id. */
 	id: string,
 };
+
+/**  The colours a layout is exported on. */
+export type LayoutSurface = 
+/**  Near-black type on paper white. */
+"paper" | 
+/**  Light type on near-black. */
+"ink";
 
 /**  An earlier content of a template file. */
 export type LayoutVersion = {

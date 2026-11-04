@@ -1971,6 +1971,7 @@ function createMockLayouts(): Pick<
   | 'revertLayout'
   | 'layoutHistory'
   | 'restoreLayout'
+  | 'exportLayoutPng'
 > {
   const files: MockLayoutFile[] = [
     ...MOCK_LAYOUT_PRESETS.map((l) => ({
@@ -2079,6 +2080,12 @@ function createMockLayouts(): Pick<
         name: 'layout' in v.content ? v.content.layout.name : null,
         broken: 'broken' in v.content ? v.content.broken : null,
       })),
+    // The core's checks on the scale and the layout, then the file it would write.
+    exportLayoutPng: async ({ layout, scale, surface }) => {
+      if (scale !== 1 && scale !== 2) throw err('invalidRequest', 'A layout exports at 1x or 2x.');
+      content(file(layout));
+      return `/mock/exports/${layout}-${surface}-${scale}x.png`;
+    },
     restoreLayout: async ({ id, number }) => {
       const v = file(id).versions.find((x) => x.number === number);
       if (!v) throw err('notFound', 'That version is no longer kept.');

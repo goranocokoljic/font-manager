@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { FmClient } from './client';
 import { createMockClient, mockPermissions, mockWebUse } from './mock';
-import type { CollectionId, FaceId, Filters, LicenseInfo, Rule, RuleGroup } from './types';
+import type {
+  CollectionId,
+  ExportLayoutPngRequest,
+  FaceId,
+  Filters,
+  LicenseInfo,
+  Rule,
+  RuleGroup,
+} from './types';
 
 /** The faces a search with `filters` finds, sorted. */
 async function facesOf(client: FmClient, filters: Filters): Promise<FaceId[]> {
@@ -161,6 +169,22 @@ describe('MockApi smart collections (E14.2)', () => {
 });
 
 describe('MockApi layouts (E12.1)', () => {
+  it('names the PNG a layout export would write and makes the core checks (E45.5)', async () => {
+    const api = createMockClient();
+    const font = { face: 1, variations: [], features: [] };
+    const req: ExportLayoutPngRequest = { layout: 'book', scale: 2, surface: 'ink', font };
+    await expect(api.exportLayoutPng(req)).resolves.toBe('/mock/exports/book-ink-2x.png');
+    await expect(api.exportLayoutPng({ ...req, scale: 3 })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+    await expect(api.exportLayoutPng({ ...req, layout: 'none' })).rejects.toMatchObject({
+      code: 'notFound',
+    });
+    await expect(api.exportLayoutPng({ ...req, layout: 'draft' })).rejects.toMatchObject({
+      code: 'invalidRequest',
+    });
+  });
+
   it('lists the six presets in picker order, each already inside the ranges', async () => {
     const api = createMockClient();
     const presets = await api.layoutPresets();

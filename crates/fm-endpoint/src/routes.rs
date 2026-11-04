@@ -183,6 +183,7 @@ routes! {
     layout_history(req),
     restore_layout(req),
     layout_width(layout),
+    export_layout_png(req),
     // comparisons
     list_comparisons(),
     get_comparison(req),

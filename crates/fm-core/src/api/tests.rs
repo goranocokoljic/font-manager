@@ -10,6 +10,7 @@ use fm_api::activation::{
 };
 use fm_api::common::{AxisValue, Embedding, FeatureSetting, FontFormat, Health, Page};
 use fm_api::export::{Framework, FrameworkSnippetRequest, Subset, WebFormat};
+use fm_api::layout::{LayoutFont, LayoutSurface};
 use fm_api::library::{
     FamilyActivation, FamilySort, FontMatchKind, GlyphRequest, GlyphsRequest, LicenseType,
     OpenLicense, ProblemKind, TrashMoveStatus,
@@ -107,7 +108,8 @@ impl Lib {
             SettingsStore::new(&paths),
             Some(previews),
         )
-        .with_layouts_in(paths.layouts_dir());
+        .with_layouts_in(paths.layouts_dir())
+        .with_exports_in(paths.exports_dir());
         let fetcher = Arc::new(OfflineFetcher::default());
         let api = api.with_catalogs(Catalogs::new(
             paths.data.join(CATALOGS_DIR),
@@ -2991,6 +2993,124 @@ fn layout_bounds_are_the_core_ranges_and_the_mock_matches_them() {
     // The UI's MockApi (browser mode, e2e) must offer the same ranges as the core.
     let mock = fm_api::mock::MockApi::new();
     assert_eq!(mock.layout_bounds().expect("mock bounds"), bounds);
+}
+
+/// An export of `layout` in `face` at `scale` on paper.
+fn layout_png(layout: &str, face: FaceId, scale: u8) -> ExportLayoutPngRequest {
+    ExportLayoutPngRequest {
+        layout: layout.to_owned(),
+        scale,
+        surface: LayoutSurface::Paper,
+        font: LayoutFont {
+            face,
+            variations: Vec::new(),
+            features: Vec::new(),
+        },
+        block_fonts: Vec::new(),
+    }
+}
+
+#[test]
+fn a_layout_exports_to_a_png_in_the_export_folder() {
+    let (lib, _, _) = Lib::scanned("api-layout-png");
+    let face = first_face(&lib, "Archivo").id;
+    let path = lib
+        .api
+        .export_layout_png(layout_png("magazine", face, 2))
+        .expect("export");
+    let path = PathBuf::from(path);
+    assert_eq!(path.parent(), Some(lib.paths.exports_dir().as_path()));
+    assert_eq!(
+        path.file_name().and_then(|n| n.to_str()),
+        Some("magazine-paper-2x.png")
+    );
+    let image =
+        crate::preview::png_decode::decode(&std::fs::read(&path).expect("file")).expect("a PNG");
+    assert_eq!(
+        (image.width, image.height),
+        (
+            2 * crate::preview::page::A4_WIDTH_PX,
+            2 * crate::preview::page::A4_HEIGHT_PX
+        )
+    );
+    assert!(image.grey.iter().any(|g| *g < 64), "it holds type");
+
+    // Asked again, it writes another file and leaves the first.
+    let again = lib
+        .api
+        .export_layout_png(layout_png("magazine", face, 2))
+        .expect("export");
+    assert_ne!(PathBuf::from(again), path);
+    assert!(path.is_file());
+}
+
+#[test]
+fn a_layout_export_honours_the_axes_features_and_block_fonts_it_is_given() {
+    let (lib, _, _) = Lib::scanned("api-layout-png-axes");
+    let asap = first_face(&lib, "Asap Sharp").id;
+    let archivo = first_face(&lib, "Archivo").id;
+    let render = |req: ExportLayoutPngRequest| {
+        let path = lib.api.export_layout_png(req).expect("export");
+        crate::preview::png_decode::decode(&std::fs::read(path).expect("file"))
+            .expect("a PNG")
+            .grey
+    };
+    let base = render(layout_png("quote", asap, 1));
+    assert_eq!(base, render(layout_png("quote", asap, 1)), "stable");
+    let mut bold = layout_png("quote", asap, 1);
+    bold.font.variations.push(AxisValue {
+        tag: "wght".into(),
+        value: 800.0,
+    });
+    assert_ne!(base, render(bold), "the weight axis");
+    let mut own = layout_png("quote", asap, 1);
+    own.block_fonts = vec![Some(layout_png("quote", archivo, 1).font)];
+    assert_ne!(base, render(own), "the block's own face");
+    let mut no_kerning = layout_png("quote", asap, 1);
+    no_kerning.font.features.push(FeatureSetting {
+        tag: "kern".into(),
+        on: false,
+    });
+    assert_ne!(base, render(no_kerning), "a feature");
+}
+
+#[test]
+fn a_layout_export_refuses_what_it_cannot_render_and_writes_nothing() {
+    let (lib, _, _) = Lib::scanned("api-layout-png-errors");
+    let face = first_face(&lib, "Archivo").id;
+    let code = |req| lib.api.export_layout_png(req).unwrap_err().code;
+    assert_eq!(code(layout_png("book", face, 3)), ErrorCode::InvalidRequest);
+    assert_eq!(code(layout_png("no-such", face, 1)), ErrorCode::NotFound);
+    assert_eq!(
+        code(layout_png("../escape", face, 1)),
+        ErrorCode::InvalidRequest
+    );
+    assert_eq!(
+        code(layout_png("book", FaceId(999_999), 1)),
+        ErrorCode::NotFound
+    );
+    let mut extra = layout_png("book", face, 1);
+    extra.block_fonts = vec![None; 3];
+    assert_eq!(code(extra), ErrorCode::InvalidRequest);
+    assert!(!lib.paths.exports_dir().exists());
+}
+
+#[test]
+fn layout_export_without_an_export_folder_is_not_available() {
+    let lib = Lib::new("api-layout-png-off");
+    let api = CoreApi::new(
+        Index::open(&lib.paths.data.join("second.db"))
+            .expect("index")
+            .index,
+        Arc::new(MockActivator::new()) as Arc<dyn FontActivator>,
+        SettingsStore::new(&lib.paths),
+        None,
+    )
+    .with_layouts_in(lib.paths.layouts_dir());
+    let err = api
+        .export_layout_png(layout_png("book", FaceId(1), 1))
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::Unsupported);
 }
 
 #[test]

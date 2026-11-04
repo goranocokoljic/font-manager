@@ -258,6 +258,10 @@ fn bodies(served: &Served) -> BTreeMap<&'static str, String> {
         ("layout_history", r#"{"id":"via-http"}"#.into()),
         ("restore_layout", r#"{"id":"via-http","number":1}"#.into()),
         ("layout_width", layout.to_string()),
+        (
+            "export_layout_png",
+            r#"{"layout":"none","scale":1,"surface":"paper","font":{"face":1}}"#.into(),
+        ),
         // comparisons
         ("list_comparisons", String::new()),
         ("get_comparison", r#"{"id":1}"#.into()),

@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::ApiResult;
+use crate::common::{AxisValue, FeatureSetting};
+use crate::ids::FaceId;
 
 /// A built-in layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, specta::Type)]
@@ -241,6 +243,47 @@ pub struct RestoreLayoutRequest {
     pub number: u32,
 }
 
+/// The colours a layout is exported on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum LayoutSurface {
+    /// Near-black type on paper white.
+    Paper,
+    /// Light type on near-black.
+    Ink,
+}
+
+/// The font a block is set in: a layout file holds no fonts, so an export names them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct LayoutFont {
+    /// The face.
+    pub face: FaceId,
+    /// Variation-axis values; axes not named keep their defaults.
+    #[serde(default)]
+    pub variations: Vec<AxisValue>,
+    /// OpenType features switched on or off.
+    #[serde(default)]
+    pub features: Vec<FeatureSetting>,
+}
+
+/// Renders a saved layout on an A4 page into the app's export folder (E45.5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportLayoutPngRequest {
+    /// The template file's id.
+    pub layout: String,
+    /// Device pixels per CSS pixel: 1 or 2.
+    pub scale: u8,
+    /// The page's colours.
+    pub surface: LayoutSurface,
+    /// The font of every block without its own.
+    pub font: LayoutFont,
+    /// The block's own font, by block index; a missing or null entry uses `font`.
+    #[serde(default)]
+    pub block_fonts: Vec<Option<LayoutFont>>,
+}
+
 /// Body-text layouts.
 pub trait LayoutService {
     /// The six presets, in the order the UI offers them.
@@ -273,4 +316,8 @@ pub trait LayoutService {
     /// or a readable line length at the body block's size when it has none;
     /// none when the width is unlocked and follows the window (E12.4).
     fn layout_width(&self, layout: Layout) -> ApiResult<Option<f32>>;
+    /// Renders a saved layout to a new PNG in the app's export folder with the
+    /// core rasterizer, and answers the file's absolute path. An existing
+    /// export is never replaced.
+    fn export_layout_png(&self, req: ExportLayoutPngRequest) -> ApiResult<String>;
 }
