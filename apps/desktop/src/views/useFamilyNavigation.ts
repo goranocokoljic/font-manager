@@ -7,6 +7,7 @@ import type { FamilyId } from '../api/types';
 import { familyKey } from '../list/rows';
 import { withViewTransition } from '../motion';
 import { useFamilyPageStore } from '../stores/familyPage';
+import { useFontListStore } from '../stores/fontList';
 
 /** The name FamilyView's hero carries in its stylesheet. */
 export const SHARED_SPECIMEN = 'fm-family-specimen';
@@ -43,6 +44,7 @@ function transition(rootClass: string, change: () => Promise<void>): Promise<voi
 export function useFamilyNavigation() {
   const router = useRouter();
   const page = useFamilyPageStore();
+  const list = useFontListStore();
 
   /** Pushes the family page from the library. */
   async function open(family: FamilyId): Promise<void> {
@@ -50,9 +52,12 @@ export function useFamilyNavigation() {
     page.section = 'styles';
     page.pushed = true;
     await transition(OPENING, async () => {
+      // The view records where it is as it leaves, and Back brings it to that place.
+      list.holdScroll(true);
       // The row leaves with the library, so the only element left with the name is the hero.
       await router.push({ name: 'family', params: { id: String(family) } });
       await nextTick();
+      list.holdScroll(false);
     });
   }
 

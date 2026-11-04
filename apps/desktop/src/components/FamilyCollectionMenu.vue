@@ -117,6 +117,7 @@ function onKey(e: KeyboardEvent): void {
 }
 .item.active {
   background-color: var(--fm-hover);
+  box-shadow: inset 2px 0 0 var(--fm-accent);
 }
 .none {
   margin: 0;

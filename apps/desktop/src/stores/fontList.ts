@@ -111,6 +111,47 @@ export const useFontListStore = defineStore('fontList', () => {
     anchor.value = rows.value[start]?.family.id ?? null;
   }
 
+  /**
+   * The exact place of the view a family page opened over (E42.1). `anchor` keeps only the
+   * family at the top, which is what a switch to another view needs; Back must come back to
+   * the same pixel. It counts while the view would still lay out the same way.
+   */
+  let holding = false;
+  let held: {
+    top: number;
+    linePx: number;
+    perLine: number;
+    rows: number;
+    anchorIndex: number;
+  } | null = null;
+
+  /** While on, a view that leaves records where it was. */
+  function holdScroll(on: boolean): void {
+    holding = on;
+  }
+  /** A view is leaving at `top`. */
+  function viewLeft(top: number, linePx: number, perLine: number): void {
+    if (!holding) return;
+    held = { top, linePx, perLine, rows: rows.value.length, anchorIndex: anchorIndex.value };
+  }
+  /** The place to come back to, for a view with these lines; null when there is none. */
+  function heldScrollTop(linePx: number, perLine: number): number | null {
+    if (
+      !held ||
+      held.linePx !== linePx ||
+      held.perLine !== perLine ||
+      held.rows !== rows.value.length ||
+      held.anchorIndex !== anchorIndex.value
+    ) {
+      return null;
+    }
+    return held.top;
+  }
+  /** The user scrolled: the place is theirs again. */
+  function dropHeldScroll(): void {
+    held = null;
+  }
+
   function expand(id: FamilyId): void {
     expanded.add(id);
     void library.facesOf(id).catch(() => undefined);
@@ -222,6 +263,10 @@ export const useFontListStore = defineStore('fontList', () => {
     anchor,
     anchorIndex,
     setAnchor,
+    holdScroll,
+    viewLeft,
+    heldScrollTop,
+    dropHeldScroll,
     expand,
     collapse,
     toggleExpanded,

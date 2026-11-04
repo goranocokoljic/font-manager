@@ -168,6 +168,31 @@ describe('the family page store', () => {
   });
 });
 
+describe('the place held for Back', () => {
+  it('counts only while the view lays out the same way, until the user scrolls', async () => {
+    const { list } = await setup();
+    list.viewLeft(500, 40, 1);
+    expect(list.heldScrollTop(40, 1)).toBeNull();
+
+    list.holdScroll(true);
+    list.viewLeft(500, 40, 1);
+    list.holdScroll(false);
+    list.viewLeft(900, 40, 1);
+    expect(list.heldScrollTop(40, 1)).toBe(500);
+    expect(list.heldScrollTop(20, 1)).toBeNull();
+    expect(list.heldScrollTop(40, 3)).toBeNull();
+
+    list.expand(list.families[0]!.id);
+    await flushPromises();
+    expect(list.heldScrollTop(40, 1)).toBeNull();
+    list.collapse(list.families[0]!.id);
+    expect(list.heldScrollTop(40, 1)).toBe(500);
+
+    list.dropHeldScroll();
+    expect(list.heldScrollTop(40, 1)).toBeNull();
+  });
+});
+
 describe('the library hand-over', () => {
   it('does not forget the faces when it loads while still subscribed', async () => {
     const { library, list } = await setup();

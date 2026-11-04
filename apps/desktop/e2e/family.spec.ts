@@ -187,12 +187,7 @@ test.describe('going back', () => {
       await expect(
         tree(page).getByRole('treeitem', { name: label!, selected: true }),
       ).toBeVisible();
-      const line = await tree(page).evaluate(
-        (el) => (el.querySelector('[data-key]') as HTMLElement).offsetHeight,
-      );
-      const after = await tree(page).evaluate((el) => el.scrollTop);
-      expect(after).toBeGreaterThan(before - line);
-      expect(after).toBeLessThanOrEqual(before);
+      expect(await tree(page).evaluate((el) => el.scrollTop)).toBe(before);
       // The list has the keyboard again.
       await page.keyboard.press('ArrowDown');
       await expect(tree(page).getByRole('treeitem', { name: label!, selected: true })).toHaveCount(
@@ -200,6 +195,63 @@ test.describe('going back', () => {
       );
     });
   }
+
+  for (const mode of ['list', 'table', 'grid', 'waterfall']) {
+    test(`Back comes back to the same scroll position in the ${mode} view`, async ({ page }) => {
+      await setup(page, mode);
+      await page.goto('/?mockLibrary=wall#/');
+      const viewport = page
+        .locator('[data-key^="family:"]')
+        .first()
+        .locator('xpath=ancestor::*[@tabindex="0"][1]');
+      // Not on a line's edge: only the exact place passes.
+      await viewport.evaluate((el) => (el.scrollTop = 1537));
+      await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBeGreaterThan(1000);
+      // A row all on screen, under the table's header, so the click does not scroll.
+      const key = await viewport.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return [...el.querySelectorAll<HTMLElement>('[data-key^="family:"]')]
+          .find((row) => {
+            const r = row.getBoundingClientRect();
+            return r.top >= box.top + 60 && r.bottom <= box.bottom;
+          })
+          ?.getAttribute('data-key');
+      });
+      await page
+        .locator(`[data-key="${key}"]`)
+        .first()
+        .click({ position: { x: 200, y: 20 } });
+      const before = await viewport.evaluate((el) => el.scrollTop);
+      await page.keyboard.press('o');
+      await onFamilyPage(page);
+      await page.keyboard.press('Escape');
+      await expect(page).not.toHaveURL(/family/);
+      await expect(page.locator(`[data-key="${key}"]`).first()).toBeVisible();
+      expect(await viewport.evaluate((el) => el.scrollTop)).toBe(before);
+    });
+  }
+
+  test('Back comes back to the same place inside an expanded family', async ({ page }) => {
+    await setup(page, 'list');
+    await page.goto('/?mockLibrary=wall#/');
+    const list = tree(page);
+    await familyRows(page).nth(1).click();
+    await page.keyboard.press('ArrowRight');
+    const styles = list.locator('[aria-level="2"]');
+    await expect.poll(() => styles.count()).toBeGreaterThan(3);
+    const line = await familyRows(page)
+      .nth(1)
+      .evaluate((el) => (el as HTMLElement).offsetHeight);
+    // The third style of the family is the top row.
+    await list.evaluate((el, top) => (el.scrollTop = top), line * 4 + 5);
+    await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(line * 4 + 5);
+    await page.keyboard.press('o');
+    await onFamilyPage(page);
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/family/);
+    await expect(tree(page)).toBeVisible();
+    expect(await tree(page).evaluate((el) => el.scrollTop)).toBe(line * 4 + 5);
+  });
 
   test('the button pops the page, and a selected style survives it', async ({ page }) => {
     await setup(page);
@@ -275,20 +327,22 @@ test.describe('the top bar', () => {
   }) => {
     await setup(page);
     await page.goto('/?mockLibrary=wall#/');
-    await page.getByRole('searchbox').first().fill('Roboto');
+    // Families that are not next to each other without the filter.
+    await page.getByRole('searchbox').first().fill('Serif');
     await expect(page.getByTestId('active-count')).toBeVisible();
     await expect.poll(() => familyRows(page).count()).toBeLessThan(10);
     const shown = await familyRows(page).count();
+    expect(shown).toBeGreaterThan(1);
+    const second = await familyRows(page).nth(1).getAttribute('data-key');
     await familyRows(page).first().click();
     await page.keyboard.press('o');
     await expect(position(page)).toContainText(`1 of ${shown}`);
-    if (shown > 1) {
-      await page.keyboard.press('ArrowRight');
-      await expect(position(page)).toContainText(`2 of ${shown}`);
-    }
+    await page.keyboard.press('ArrowRight');
+    await expect(page).toHaveURL(new RegExp(`#/family/${second!.replace('family:', '')}$`));
+    await expect(position(page)).toContainText(`2 of ${shown}`);
     await page.keyboard.press('Escape');
     await expect(tree(page)).toBeVisible();
-    await expect(page.getByRole('searchbox').first()).toHaveValue('Roboto');
+    await expect(page.getByRole('searchbox').first()).toHaveValue('Serif');
   });
 
   test('has the four icon buttons and the primary action on the accent', async ({ page }) => {
@@ -354,6 +408,8 @@ test.describe('the top bar', () => {
     // The keyboard reaches it too, and the arrows stay in the menu while it is open.
     await page.getByRole('combobox', { name: 'Add to collection' }).click();
     await expect(page.getByRole('option', { name: 'Picks' })).toBeVisible();
+    // The tint alone is too faint to show which option Enter takes.
+    await expect(page.getByRole('option', { name: 'Picks' })).toHaveCSS('box-shadow', /inset$/);
     await page.keyboard.press('ArrowRight');
     await onFamilyPage(page);
     const url = page.url();
