@@ -22,7 +22,7 @@ test('the sidebar entry opens the note; the link opens fonts.adobe.com', async (
   context,
 }) => {
   await page.goto('/');
-  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   const entry = catalogs.getByRole('button', { name: 'Adobe Fonts' });
   await expect(entry).toBeVisible();
 
@@ -104,7 +104,7 @@ test('turn Google Fonts on, browse, search and change the sample text, by keyboa
 }) => {
   const asked = await serveFonts(page);
   await page.goto('/');
-  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   const entry = catalogs.getByRole('button', { name: 'Google Fonts', exact: true });
   const turnOn = catalogs.getByRole('button', { name: 'Turn on Google Fonts' });
   await expect(turnOn).toHaveAccessibleDescription('Connects to the internet');
@@ -262,7 +262,7 @@ test('download a family into a chosen folder, by keyboard, with progress and the
 }) => {
   await serveFonts(page);
   await page.goto('/?mockCatalog=1&mockDownloadMs=800');
-  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).press('Enter');
   await expect(catalogRows(page)).toHaveCount(4);
 
@@ -302,7 +302,7 @@ test('download a family into a chosen folder, by keyboard, with progress and the
 test('a failed download says nothing was written; Escape closes the panel', async ({ page }) => {
   await serveFonts(page);
   await page.goto('/?mockCatalog=1&mockCatalogDownload=1');
-  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).press('Enter');
   const open = catalogRows(page)
     .filter({ hasText: 'Inter' })
@@ -343,7 +343,7 @@ for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     await serveFonts(page);
     await page.goto('/?mockCatalog=1');
-    const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+    const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
     await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).press('Enter');
     const open = page.getByRole('button', { name: 'Download Lato…' });
     await open.press('Enter');
@@ -366,7 +366,7 @@ test('Check for updates badges the families with a newer version, in the catalog
   // Nothing checks on start.
   await expect(page.getByTestId('update-available')).toHaveCount(0);
 
-  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   await catalogs.getByRole('button', { name: 'Google Fonts', exact: true }).click();
   const check = page.getByTestId('catalog-check-updates');
   await expect(check).toHaveText('Check for updates');
@@ -405,7 +405,7 @@ test('Install proposes the folder once, then shows the progress and the family a
     'data-activation',
     'active',
   );
-  const catalogs = sidebar(page).getByRole('region', { name: 'Online catalogs' });
+  const catalogs = sidebar(page).getByRole('region', { name: 'Catalogs' });
   const google = catalogs.getByRole('button', { name: 'Google Fonts', exact: true });
   await google.click();
   await expect(catalogRows(page)).toHaveCount(4);

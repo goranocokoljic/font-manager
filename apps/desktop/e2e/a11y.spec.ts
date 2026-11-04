@@ -157,7 +157,7 @@ test('every interactive element of the Conflicts view and the clash question has
   await open(page, '/?face=6');
   await page
     .getByRole('tabpanel', { name: 'Info' })
-    .getByRole('button', { name: 'Activate' })
+    .getByRole('button', { name: 'Activate', exact: true })
     .click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   expect(await unnamedControls(page)).toEqual([]);
@@ -217,7 +217,7 @@ test('the list announces family, style and activation state', async ({ page }) =
   await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, not active$/);
   await style.click();
   await page.keyboard.press('Enter'); // open it in the inspector
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, active for this session$/);
   await expect(family).toHaveAccessibleName('Sample 1, 2 styles, partly active');
 });

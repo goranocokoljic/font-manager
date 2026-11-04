@@ -300,7 +300,7 @@
       "platform": "Platform"
     },
     "sidebarGroups": {
-      "online": "Online catalogs"
+      "online": "Catalogs"
     },
     "actions": {
       "quickToggle": "Add the selected fonts to the Quick Collection, or remove them",
@@ -993,9 +993,17 @@
     "comfortable": "Comfortable",
     "compact": "Compact"
   },
+  "libraryViews": {
+    "heading": "Library views",
+    "all": "All fonts",
+    "recent": "Recently added",
+    "activated": "Activated",
+    "favorites": "Favorites"
+  },
   "collections": {
     "heading": "Collections",
-    "new": "New",
+    "empty": "No collections yet",
+    "new": "New collection",
     "newTitle": "Make a collection",
     "newSmart": "New smart",
     "newSmartLabel": "New smart collection",
@@ -1155,16 +1163,11 @@
   },
   "tags": {
     "heading": "Tags",
-    "tagCount": {
-      "one": "{count} tag",
-      "other": "{count} tags"
-    },
     "fontCount": {
       "one": "{count} font",
       "other": "{count} fonts"
     },
     "empty": "No tags yet",
-    "emptyHint": "Select fonts, then press",
     "fallbackName": "Tag {id}"
   },
   "quickCollection": {
@@ -1396,6 +1399,7 @@
   },
   "problems": {
     "title": "Problems",
+    "noneShort": "No problems",
     "filters": "Show problems",
     "all": "All",
     "noneOfKind": "No problems of this kind.",
@@ -1480,6 +1484,7 @@
   },
   "sources": {
     "title": "Sources",
+    "empty": "No folders yet",
     "addFolder": "Add folder",
     "addFolderTitle": "Add a folder to the library",
     "scanningLibrary": "Scanning the library",
@@ -1504,6 +1509,7 @@
     "removeTitle": "Remove from the library. The files stay where they are."
   },
   "catalogs": {
+    "offShort": "off",
     "adobeFonts": {
       "name": "Adobe Fonts",
       "note": "Adobe Fonts are delivered encrypted through Creative Cloud, so no third-party app can manage them. Activate them in the Creative Cloud app.",

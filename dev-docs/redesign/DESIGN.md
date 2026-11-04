@@ -126,7 +126,7 @@ to be wrong, change the rule in this file *and* the code in the same iteration.
   A surface token used as a hover is a bug — `--fm-surface-2` is white in light theme, so it
   vanishes on a white pane (review 30).
 - **Focus:** a custom ring (accent, 2 px, 2 px offset) on `:focus-visible` only.
-- **Shell:** sidebar 240 px, main, inspector 320 px; both side panes collapsible, with
+- **Shell:** sidebar 232 px, main, inspector 320 px; both side panes collapsible, with
   keyboard shortcuts, widths and open state remembered.
 - **Density:** the existing `data-density` switch (Comfortable / Compact) swaps the spacing
   token set, not per-component overrides.

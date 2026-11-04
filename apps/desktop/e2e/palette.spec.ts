@@ -67,9 +67,9 @@ test('keyboard only: activate, go to columns and hide the inspector', async ({ p
   await page.keyboard.press('Enter');
   await expect(page.getByRole('navigation', { name: 'Library' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Sources' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'All fonts' })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('button', { name: 'Add folder' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Recently added' })).toBeFocused();
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('font list');
   await page.keyboard.press('Enter');

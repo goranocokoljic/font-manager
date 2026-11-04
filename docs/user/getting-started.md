@@ -112,7 +112,7 @@ colour too. To remove the colour, click the same colour again.
 
 ## Make a smart collection
 
-A smart collection fills itself from rules. Click **New smart** in the
+A smart collection fills itself from rules. Point at the heading and click the **New smart collection** icon in the
 **Collections** group of the sidebar, or choose **New smart collection** in the
 command palette. Give the collection a name. Then make the rules:
 

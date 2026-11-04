@@ -300,7 +300,7 @@
       "platform": "Plattform"
     },
     "sidebarGroups": {
-      "online": "Online-Kataloge"
+      "online": "Kataloge"
     },
     "actions": {
       "quickToggle": "Ausgewählte Schriften zur Schnellsammlung hinzufügen oder daraus entfernen",
@@ -993,9 +993,17 @@
     "comfortable": "Komfortabel",
     "compact": "Kompakt"
   },
+  "libraryViews": {
+    "heading": "Bibliotheksansichten",
+    "all": "Alle Schriften",
+    "recent": "Kürzlich hinzugefügt",
+    "activated": "Aktiviert",
+    "favorites": "Favoriten"
+  },
   "collections": {
+    "empty": "Noch keine Sammlungen",
     "heading": "Sammlungen",
-    "new": "Neu",
+    "new": "Neue Sammlung",
     "newTitle": "Sammlung anlegen",
     "newSmart": "Neu (intelligent)",
     "newSmartLabel": "Neue intelligente Sammlung",
@@ -1155,16 +1163,11 @@
   },
   "tags": {
     "heading": "Tags",
-    "tagCount": {
-      "one": "{count} Tag",
-      "other": "{count} Tags"
-    },
     "fontCount": {
       "one": "{count} Schrift",
       "other": "{count} Schriften"
     },
     "empty": "Noch keine Tags",
-    "emptyHint": "Wähle Schriften, dann drücke",
     "fallbackName": "Tag {id}"
   },
   "quickCollection": {
@@ -1395,6 +1398,7 @@
     "face": "Schriftschnitt {id}"
   },
   "problems": {
+    "noneShort": "Keine Probleme",
     "title": "Probleme",
     "filters": "Probleme anzeigen",
     "all": "Alle",
@@ -1480,6 +1484,7 @@
   },
   "sources": {
     "title": "Quellen",
+    "empty": "Noch keine Ordner",
     "addFolder": "Ordner hinzufügen",
     "addFolderTitle": "Einen Ordner zur Bibliothek hinzufügen",
     "scanningLibrary": "Bibliothek wird eingelesen",
@@ -1504,6 +1509,7 @@
     "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
   },
   "catalogs": {
+    "offShort": "aus",
     "adobeFonts": {
       "name": "Adobe Fonts",
       "note": "Adobe Fonts werden verschlüsselt über Creative Cloud geliefert, daher kann keine Drittanbieter-App sie verwalten. Aktivieren Sie sie in der Creative Cloud-App.",

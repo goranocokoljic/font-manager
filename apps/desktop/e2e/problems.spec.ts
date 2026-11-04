@@ -8,18 +8,10 @@ const table = (page: Page) => page.getByRole('table', { name: 'Problems' });
 const filter = (page: Page, name: RegExp) =>
   page.getByRole('group', { name: 'Show problems' }).getByRole('button', { name });
 
-test('the sidebar and the status bar count the problems', async ({ page }) => {
+test('the foot of the sidebar counts the problems, once', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByTestId('problem-count')).toHaveText('5 problems');
-  await expect(sidebar(page).getByTestId('sidebar-problems')).toHaveText(/Problems\s*5/);
-  const groups = sidebar(page).locator('[data-group]');
-  await expect(groups).toHaveText([
-    /Duplicates\s*1/,
-    /Broken files\s*1/,
-    /Legacy formats\s*1/,
-    /Sidecar conflicts\s*1/,
-    /Activation conflicts\s*1/,
-  ]);
+  await expect(sidebar(page).getByTestId('problem-count')).toHaveText('5 problems');
+  await expect(page.getByTestId('problem-count')).toHaveCount(1);
 });
 
 test('one view lists every kind of problem and filters by kind', async ({ page }) => {
@@ -63,9 +55,8 @@ test('one view lists every kind of problem and filters by kind', async ({ page }
   await expect(page.getByRole('heading', { name: 'All fonts' })).toBeVisible();
 });
 
-test('a sidebar group opens the view filtered to it', async ({ page }) => {
-  await page.goto('/');
-  await sidebar(page).locator('[data-group="duplicates"]').click();
+test('a link to a kind opens the view filtered to it', async ({ page }) => {
+  await page.goto('/#/problems?kind=duplicates');
   await expect(filter(page, /^Duplicates/)).toHaveAttribute('aria-pressed', 'true');
   const rows = table(page).getByRole('row');
   await expect(rows).toHaveCount(2);

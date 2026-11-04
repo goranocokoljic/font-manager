@@ -157,9 +157,9 @@ describe('command palette', () => {
     expect(document.activeElement?.id).toBe('fm-sidebar');
   });
 
-  it('opens from the status bar hint', async () => {
+  it('opens from the key at the foot of the sidebar', async () => {
     await mountApp();
-    await wrapper!.find('button.hint').trigger('click');
+    await wrapper!.find('button.palette').trigger('click');
     expect(useCommandsStore().open).toBe(true);
   });
 });

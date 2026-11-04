@@ -328,11 +328,16 @@ impl Index {
     /// they were made now.
     pub fn create_default_collections(&mut self) -> FmResult<bool> {
         let tx = self.conn.transaction().map_err(|e| db_error(&e))?;
+        let retired = retire_replaced_defaults(&tx)?;
         let made = tx
             .prepare("SELECT 1 FROM index_meta WHERE key = ?1")
             .and_then(|mut stmt| stmt.exists([DEFAULTS_KEY]))
             .map_err(|e| db_error(&e))?;
         if made {
+            tx.commit().map_err(|e| db_error(&e))?;
+            if retired {
+                self.mirror_sidecars();
+            }
             return Ok(false);
         }
         for (name, filters) in default_collections() {
@@ -350,6 +355,9 @@ impl Index {
         )
         .map_err(|e| db_error(&e))?;
         tx.commit().map_err(|e| db_error(&e))?;
+        if retired {
+            self.mirror_sidecars();
+        }
         Ok(true)
     }
 
@@ -412,6 +420,9 @@ impl Index {
 /// its value is when.
 const DEFAULTS_KEY: &str = "default_collections";
 
+/// The `index_meta` key set once [`replaced_defaults`] were retired.
+const RETIRED_KEY: &str = "default_collections_retired";
+
 /// What "Recently" means for the default smart collections, in days.
 pub(crate) const RECENT_DAYS: u32 = 30;
 
@@ -425,10 +436,6 @@ pub(crate) fn default_collections() -> Vec<(&'static str, Filters)> {
     };
     vec![
         (
-            "Recently added",
-            rule(|f| f.added_within_days = Some(RECENT_DAYS)),
-        ),
-        (
             "Recently activated",
             rule(|f| f.activated_within_days = Some(RECENT_DAYS)),
         ),
@@ -438,8 +445,74 @@ pub(crate) fn default_collections() -> Vec<(&'static str, Filters)> {
             rule(|f| f.classification = vec![Classification::Mono]),
         ),
         ("Web-licensed", rule(|f| f.web_ok = Some(true))),
-        ("Problems", rule(|f| f.problems = Some(true))),
     ]
+}
+
+/// The defaults the sidebar's own rows replaced (E41.3): "Recently added" is
+/// a row at its top, and Problems appears once, as the section at its foot.
+fn replaced_defaults() -> Vec<(&'static str, Filters)> {
+    vec![
+        (
+            "Recently added",
+            Filters {
+                added_within_days: Some(RECENT_DAYS),
+                ..Filters::default()
+            },
+        ),
+        (
+            "Problems",
+            Filters {
+                problems: Some(true),
+                ..Filters::default()
+            },
+        ),
+    ]
+}
+
+/// Deletes, once per library, the [`replaced_defaults`] an earlier version
+/// made and the user left as they were: same name and rule, top level, no
+/// colour, no children. One the user changed is theirs and stays. Returns
+/// whether it deleted any.
+fn retire_replaced_defaults(tx: &Transaction<'_>) -> FmResult<bool> {
+    let done = tx
+        .prepare("SELECT 1 FROM index_meta WHERE key = ?1")
+        .and_then(|mut stmt| stmt.exists([RETIRED_KEY]))
+        .map_err(|e| db_error(&e))?;
+    if done {
+        return Ok(false);
+    }
+    let mut retired = false;
+    for (name, filters) in replaced_defaults() {
+        let found = tx
+            .query_row(
+                "SELECT c.id, c.rules FROM collection c
+                 WHERE c.parent_id IS NULL AND c.is_smart = 1 AND c.name = ?1
+                   AND c.color IS NULL
+                   AND NOT EXISTS (SELECT 1 FROM collection k WHERE k.parent_id = c.id)",
+                [name],
+                |row| Ok((row.get::<_, u32>(0)?, row.get::<_, Option<String>>(1)?)),
+            )
+            .optional()
+            .map_err(|e| db_error(&e))?;
+        let Some((id, Some(rules))) = found else {
+            continue;
+        };
+        let same = serde_json::from_str::<RuleGroup>(&rules)
+            .is_ok_and(|group| group.plain_filters() == Some(&filters));
+        if same {
+            sidecars::mark_collection_dirty(tx, id)?;
+            tx.execute("DELETE FROM collection WHERE id = ?1", [id])
+                .map_err(|e| db_error(&e))?;
+            retired = true;
+        }
+    }
+    tx.execute(
+        "INSERT INTO index_meta (key, value)
+         VALUES (?1, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))",
+        [RETIRED_KEY],
+    )
+    .map_err(|e| db_error(&e))?;
+    Ok(retired)
 }
 
 /// Inserts a collection last among the children of `parent`; returns its id.

@@ -16,6 +16,7 @@ describe('layout store', () => {
   it('starts with the default widths and the inspector open', () => {
     const layout = freshStore();
     expect(layout.sidebarWidth).toBe(SIDEBAR.initial);
+    expect(SIDEBAR.initial).toBe(232);
     expect(layout.inspectorWidth).toBe(INSPECTOR.initial);
     expect(layout.inspectorVisible).toBe(true);
   });

@@ -202,7 +202,7 @@ test('"Pin this instance" saves a virtual style that shows as its own row in the
   const panel = await openAxes(page);
   // A manual collection to pin into.
   const sidebar = page.getByRole('region', { name: 'Collections' });
-  await sidebar.getByRole('button', { name: 'New', exact: true }).click();
+  await sidebar.getByRole('button', { name: 'New collection', exact: true }).click();
   const input = sidebar.getByRole('textbox', { name: 'New collection name' });
   await input.fill('Brand');
   await input.press('Enter');

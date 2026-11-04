@@ -49,10 +49,10 @@
   --fm-icon-size: 16px;
 
   /* Colour, light. Three surfaces: --fm-bg (level 0, the list and the specimens),
-     --fm-surface (level 1, side panes and bars), --fm-surface-2 (level 2, popovers,
-     dialogs, cards). Borders are hairlines at low alpha, not solid grey lines. */
+     --fm-surface (level 1, side panes and bars, the paper tint), --fm-surface-2 (level 2,
+     popovers, dialogs, cards). Borders are hairlines at low alpha, not solid grey lines. */
   --fm-bg: #ffffff;
-  --fm-surface: #f6f6f7;
+  --fm-surface: #f6f5f2;
   --fm-surface-2: #ffffff;
   --fm-fg: #1a1a1a;
   --fm-muted: #5c5c63;
@@ -62,6 +62,8 @@
   --fm-control-border: #8a8a8a;
   --fm-hover: rgb(0 0 0 / 5%);
   --fm-active: rgb(0 0 0 / 9%);
+  /* The open row of the sidebar. */
+  --fm-side-active: rgb(0 0 0 / 7%);
   --fm-danger: #b3261e;
   /* Rings, fills, knobs and badges, never words: text on it is --fm-on-accent, accent-coloured
      words are --fm-fg (DESIGN.md). */
@@ -94,7 +96,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --fm-bg: #1c1c1e;
-    --fm-surface: #242426;
+    --fm-surface: #262628;
     --fm-surface-2: #262628;
     --fm-fg: #ececec;
     --fm-muted: #a3a3a8;
@@ -103,6 +105,7 @@
     --fm-control-border: #7a7a7c;
     --fm-hover: rgb(255 255 255 / 6%);
     --fm-active: rgb(255 255 255 / 10%);
+    --fm-side-active: rgb(255 255 255 / 7%);
     --fm-danger: #ff8a80;
     --fm-accent: #ab4b96;
     --fm-on-accent: #ffffff;
@@ -124,7 +127,7 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
   --fm-bg: #1c1c1e;
-  --fm-surface: #242426;
+  --fm-surface: #262628;
   /* The lightest surface where the dark accent, as a focus ring, still reaches 3:1. */
   --fm-surface-2: #262628;
   --fm-fg: #ececec;
@@ -134,6 +137,7 @@
   --fm-control-border: #7a7a7c;
   --fm-hover: rgb(255 255 255 / 6%);
   --fm-active: rgb(255 255 255 / 10%);
+  --fm-side-active: rgb(255 255 255 / 7%);
   --fm-danger: #ff8a80;
   --fm-accent: #ab4b96;
   --fm-on-accent: #ffffff;
@@ -154,11 +158,13 @@
 /* The Settings density (`data-density` on the root) swaps the spacing set. */
 :root {
   --fm-row-height: 32px;
+  --fm-side-row: 30px;
   --fm-gap: 8px;
 }
 
 :root[data-density='compact'] {
   --fm-row-height: 24px;
+  --fm-side-row: 24px;
   --fm-gap: 4px;
   --fm-control-height: 24px;
   --fm-space-2: 6px;
@@ -496,7 +502,7 @@ hr {
 .surface-light {
   color-scheme: light;
   --fm-bg: #ffffff;
-  --fm-surface: #f6f6f7;
+  --fm-surface: #f6f5f2;
   --fm-surface-2: #ffffff;
   --fm-fg: #1a1a1a;
   --fm-muted: #5c5c63;
@@ -512,7 +518,7 @@ hr {
 .surface-dark {
   color-scheme: dark;
   --fm-bg: #1c1c1e;
-  --fm-surface: #242426;
+  --fm-surface: #262628;
   --fm-surface-2: #262628;
   --fm-fg: #ececec;
   --fm-muted: #a3a3a8;
