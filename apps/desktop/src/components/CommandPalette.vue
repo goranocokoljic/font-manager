@@ -253,7 +253,7 @@ mark {
 }
 @media (prefers-reduced-motion: no-preference) {
   .palette {
-    animation: rise 120ms ease-out;
+    animation: rise var(--fm-motion-fast) var(--fm-ease);
   }
 }
 @keyframes rise {

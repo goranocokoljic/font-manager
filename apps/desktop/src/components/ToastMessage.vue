@@ -87,7 +87,7 @@ button:focus-visible {
 }
 @media (prefers-reduced-motion: no-preference) {
   .toast {
-    animation: rise 120ms ease-out;
+    animation: rise var(--fm-motion-fast) var(--fm-ease);
   }
 }
 @keyframes rise {
