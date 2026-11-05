@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::common::{Classification, Embedding, FontFormat, Page, Slant};
-use crate::library::{FaceSummary, FamilySummary, LicenseType};
+use crate::library::{FaceSummary, FamilyOrder, FamilySummary, LicenseType};
 use crate::organization::RuleGroup;
 use crate::{ApiResult, CollectionId, FaceId, SourceId, TagId};
 
@@ -119,6 +119,9 @@ pub struct SearchRequest {
     /// not saved yet).
     #[serde(default)]
     pub rule: Option<RuleGroup>,
+    /// The order of the family groups; `None`: best match first.
+    #[serde(default)]
+    pub order: Option<FamilyOrder>,
     /// Window over the family groups.
     #[serde(default)]
     pub page: Page,

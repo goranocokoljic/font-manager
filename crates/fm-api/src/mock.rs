@@ -2338,7 +2338,10 @@ impl SearchService for MockApi {
             .split_whitespace()
             .map(str::to_lowercase)
             .collect();
-        let hits = st.hits(&words, &req.filters, req.rule.as_ref())?;
+        let mut hits = st.hits(&words, &req.filters, req.rule.as_ref())?;
+        if let Some(order) = req.order {
+            order.sort_by_family(&mut hits, |hit| &hit.family);
+        }
         let counts = st.counts(&words, &req.filters, req.rule.as_ref())?;
         let page = State::page(&hits, req.page.offset, req.page.limit);
         Ok(SearchResponse {

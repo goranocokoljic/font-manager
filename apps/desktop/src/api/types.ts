@@ -2921,6 +2921,8 @@ export type SearchRequest = {
 	 *  not saved yet).
 	 */
 	rule?: RuleGroup | null,
+	/**  The order of the family groups; `None`: best match first. */
+	order?: FamilyOrder | null,
 	/**  Window over the family groups. */
 	page?: Page,
 };

@@ -69,6 +69,8 @@ export const useSearchStore = defineStore('search', () => {
         const page = await client.search({
           query: q,
           filters: f,
+          // Without a search only the counts are read: no order to pay for.
+          ...(searching && library.order ? { order: library.order } : {}),
           page: { offset, limit: searching ? PAGE : 1 },
         });
         if (mine !== generation) return;

@@ -3455,6 +3455,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
     let mut variable: Vec<String> = lib
         .api
         .search(SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 variable: Some(true),
@@ -4114,6 +4115,7 @@ fn page_families(page: &str) -> Vec<String> {
 fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
     lib.api
         .search(SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 collection: Some(collection),

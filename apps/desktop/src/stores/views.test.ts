@@ -20,12 +20,24 @@ describe('views store', () => {
     expect(store.orderFor(ALL_FONTS_VIEW)).toBeNull();
   });
 
-  it('asks the API for the sort column only in table mode', () => {
+  it('asks the API for the one sort of the view in every mode', () => {
     const store = freshStore();
     store.sortBy(ALL_FONTS_VIEW, 'manufacturer');
+    for (const mode of ['list', 'table', 'grid', 'waterfall', 'layout'] as const) {
+      store.setMode(ALL_FONTS_VIEW, mode);
+      expect(store.orderFor(ALL_FONTS_VIEW)).toEqual({ by: 'manufacturer', descending: false });
+    }
+  });
+
+  it('sets the sort from the count line, and null goes back to the default', () => {
+    const store = freshStore();
+    store.setSort(ALL_FONTS_VIEW, 'added', true);
+    expect(store.orderFor(ALL_FONTS_VIEW)).toEqual({ by: 'dateAdded', descending: true });
+    expect(store.tableFor(ALL_FONTS_VIEW).sort).toEqual({ column: 'added', descending: true });
+    store.setSort(ALL_FONTS_VIEW, 'name');
+    expect(store.orderFor(ALL_FONTS_VIEW)).toEqual({ by: 'name', descending: false });
+    store.setSort(ALL_FONTS_VIEW, null);
     expect(store.orderFor(ALL_FONTS_VIEW)).toBeNull();
-    store.setMode(ALL_FONTS_VIEW, 'table');
-    expect(store.orderFor(ALL_FONTS_VIEW)).toEqual({ by: 'manufacturer', descending: false });
   });
 
   it('saves mode, columns, sort and strip size per view and reads them back', async () => {
@@ -77,7 +89,7 @@ describe('views store', () => {
     expect(store.tableFor(ALL_FONTS_VIEW)).toEqual(defaultTable());
   });
 
-  it('keeps the grid and waterfall modes, with no API order', async () => {
+  it('keeps the grid and waterfall modes, with no API order until one is chosen', async () => {
     const store = freshStore();
     for (const mode of ['grid', 'waterfall'] as const) {
       store.setMode(ALL_FONTS_VIEW, mode);
