@@ -1369,7 +1369,8 @@ function Start-Lane {
     param([string]$Of)
     $laneArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'go-harness.ps1'), '-Lane', $Of, '-Model', $Model)
     if (Get-Command wt.exe -ErrorAction SilentlyContinue) {
-        Start-Process wt.exe -ArgumentList (@('-w', '0', 'new-tab', '--title', "go-harness $Of", 'pwsh') + $laneArgs) | Out-Null
+        # No spaces in the title: Start-Process joins the arguments with spaces and quotes nothing.
+        Start-Process wt.exe -ArgumentList (@('-w', '0', 'new-tab', '--title', "go-harness-$Of", 'pwsh') + $laneArgs) | Out-Null
     } else {
         Start-Process pwsh -ArgumentList $laneArgs | Out-Null
     }
