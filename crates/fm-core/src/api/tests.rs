@@ -153,11 +153,14 @@ impl Lib {
     }
 
     /// Scans and returns the events up to the scan's last one: its
-    /// `LibraryChanged` when `changes`, else its `ScanFinished`.
+    /// `LibraryChanged` when `changes`, else its `ScanFinished`. A
+    /// `LibraryChanged` before the `ScanFinished` is not this scan's: it is
+    /// the end of an earlier scan, sent before this scan has written.
     fn scan(&self, source: Option<SourceId>, changes: bool) -> Vec<Event> {
         let rx = self.api.subscribe();
         let job = self.api.scan(ScanRequest { source }).expect("scan");
         let mut events = Vec::new();
+        let mut finished = false;
         let deadline = Instant::now() + WAIT;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -168,8 +171,11 @@ impl Lib {
             };
             let last = match &event {
                 Event::JobFailed { job: j, .. } => *j == job,
-                Event::ScanFinished { job: j, .. } => *j == job && !changes,
-                Event::LibraryChanged { .. } => changes,
+                Event::ScanFinished { job: j, .. } if *j == job => {
+                    finished = true;
+                    !changes
+                }
+                Event::LibraryChanged { .. } => changes && finished,
                 _ => false,
             };
             events.push(event);
