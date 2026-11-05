@@ -20,7 +20,7 @@ const key = (face: FaceId, text: string, sizePx: number, scale: number) =>
   `${face}\u0000${sizePx}\u0000${scale}\u0000${text}`;
 
 /** The device pixel ratio a thumbnail renders at, so it is sharp on HiDPI screens. */
-function deviceScale(): number {
+export function deviceScale(): number {
   const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio;
   return Number.isFinite(dpr) && dpr > 0 ? Math.min(dpr, 3) : 1;
 }

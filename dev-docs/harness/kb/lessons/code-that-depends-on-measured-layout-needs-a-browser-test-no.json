@@ -1,0 +1,19 @@
+{
+  "id": "code-that-depends-on-measured-layout-needs-a-browser-test-no",
+  "title": "Code that depends on measured layout needs a browser test, not jsdom",
+  "category": "testing",
+  "rule": "When a component's behavior depends on a measured size (offsetWidth, clientWidth, getBoundingClientRect), test it in Playwright and assert the measured result. Under jsdom these sizes are 0, so a Vitest test passes whether or not the logic works.",
+  "rationale": "E41.1 (#447): the shrink-to-fit in CardLiveText reads offsetWidth; under jsdom it stayed at 1, and no test failed when it was broken.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    447
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-04T18:58:45.475Z",
+  "last_seen": "2026-11-04T18:58:45.475Z"
+}

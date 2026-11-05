@@ -186,7 +186,8 @@ test.describe('in right-to-left chrome', () => {
     const first = await edges(cards.nth(0));
     const second = await edges(cards.nth(1));
     expect(second.right).toBeLessThanOrEqual(first.left + 1);
-    expect(first.right).toBeGreaterThan((await edges(grid)).right - 24);
+    // The first card sits at the right edge, past the wall's 26 px inset (and a scrollbar).
+    expect(first.right).toBeGreaterThan((await edges(grid)).right - 48);
 
     await cards.nth(0).click();
     await expect(cards.nth(0)).toHaveAttribute('aria-selected', 'true');

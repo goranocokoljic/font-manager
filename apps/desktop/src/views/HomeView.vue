@@ -40,6 +40,7 @@ import TaggingPanel from '../components/TaggingPanel.vue';
 import TagsSidebar from '../components/TagsSidebar.vue';
 import { errorMessage, t } from '../i18n';
 import { DENSITIES } from '../list/density';
+import { WALL_SIZE } from '../list/grid';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
@@ -550,7 +551,10 @@ function openFace(face: FaceId): void {
         <div v-show="!similar.open" class="browse">
           <CollectionHeader />
           <FilterChips />
-          <PreviewControls :view="ALL_FONTS_VIEW" />
+          <PreviewControls
+            :view="ALL_FONTS_VIEW"
+            :size-range="mode === 'grid' ? WALL_SIZE : undefined"
+          />
           <template v-if="fontList.families.length && mode === 'table'">
             <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
             <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />

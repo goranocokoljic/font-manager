@@ -20,7 +20,11 @@ import {
   type Surface,
 } from '../stores/preview';
 
-const props = defineProps<{ view: string }>();
+const props = defineProps<{
+  view: string;
+  /** The size slider's range, when the view mode has its own (the wall's 24–120). */
+  sizeRange?: { readonly min: number; readonly max: number; readonly step: number };
+}>();
 
 const store = usePreviewStore();
 void store.loadPangrams();
@@ -41,7 +45,16 @@ function set(patch: Partial<PreviewSettings>): void {
 }
 
 type NumberKey = 'sizePx' | 'lineHeight' | 'trackingEm';
-const BOUNDS = { sizePx: SIZE, lineHeight: LINE_HEIGHT, trackingEm: TRACKING } as const;
+const size = computed(() => props.sizeRange ?? SIZE);
+const BOUNDS = computed(() => ({
+  sizePx: size.value,
+  lineHeight: LINE_HEIGHT,
+  trackingEm: TRACKING,
+}));
+/** The size the slider shows: a saved size outside the view mode's range shows at its end. */
+const shownSize = computed(() =>
+  Math.min(size.value.max, Math.max(size.value.min, s.value.sizePx)),
+);
 /** The number fields' setting keys, so the template holds no key literals. */
 const KEY = { size: 'sizePx', lineHeight: 'lineHeight', tracking: 'trackingEm' } as const;
 
@@ -54,8 +67,9 @@ function slid(key: NumberKey, e: Event): void {
 }
 function typed(key: NumberKey, value: number | '', commit: boolean): void {
   if (value === '') return;
-  const b = BOUNDS[key];
-  if (commit || (value >= b.min && value <= b.max)) set({ [key]: value });
+  const b = BOUNDS.value[key];
+  if (commit) set({ [key]: Math.min(b.max, Math.max(b.min, value)) });
+  else if (value >= b.min && value <= b.max) set({ [key]: value });
 }
 
 // The labels are read where they are shown (`preview.aligns.*`) or when the options are
@@ -126,19 +140,19 @@ function colorFrom(e: Event): string {
         <input
           type="range"
           :aria-label="t('preview.sizeSlider')"
-          :min="SIZE.min"
-          :max="SIZE.max"
-          :step="SIZE.step"
-          :value="s.sizePx"
+          :min="size.min"
+          :max="size.max"
+          :step="size.step"
+          :value="shownSize"
           @input="slid(KEY.size, $event)"
         />
         <UiNumberField
           class="number"
           :aria-label="t('preview.sizeInPixels')"
-          :min="SIZE.min"
-          :max="SIZE.max"
-          :step="SIZE.step"
-          :model-value="s.sizePx"
+          :min="size.min"
+          :max="size.max"
+          :step="size.step"
+          :model-value="shownSize"
           @update:model-value="typed(KEY.size, $event, false)"
           @commit="typed(KEY.size, $event, true)"
         />
