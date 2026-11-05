@@ -124,6 +124,11 @@ $cyclesJsonl  = Join-Path $HarnessDir 'review-cycles.jsonl'  # one record per re
 $storiesJsonl = Join-Path $HarnessDir 'stories.jsonl'        # one record per finished story
 $summaryMd    = Join-Path $HarnessDir 'fm-run-summary.md'
 foreach ($d in $HarnessDir, $logDir, $stateDir) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
+# gh resolves the repository from the current directory. A Windows Terminal tab
+# (the keeper, the Task Scheduler, a lane the keeper started) opens in the home
+# folder, where every gh call fails with "not a git repository" and a story is
+# blocked for nothing. Work from the repository, whatever started us.
+Set-Location $PSScriptRoot
 
 $Cfg = Get-Content (Join-Path $PSScriptRoot 'go-harness.config.json') -Raw | ConvertFrom-Json
 if ($ReviewCycles -eq 0) { $ReviewCycles = [int]($Cfg.review.max_cycles ?? 3) }
@@ -1349,19 +1354,29 @@ function Write-KeeperOnce {
 }
 
 function Get-StoryRecords {
-    if (-not (Test-Path $storiesJsonl)) { return ,@() }
-    return ,@(Get-Content $storiesJsonl | Where-Object { $_.Trim() } | ForEach-Object { try { $_ | ConvertFrom-Json } catch { } } | Where-Object { $_ })
+    # Plain `return @(...)`: a leading comma would hand the pipeline ONE object (the
+    # whole array), and `Where-Object { $_.lane -eq 'ui' }` would then pass or drop
+    # all records at once (Test-LaneStreak never saw a streak that way).
+    if (-not (Test-Path $storiesJsonl)) { return @() }
+    return @(Get-Content $storiesJsonl | Where-Object { $_.Trim() } | ForEach-Object { try { $_ | ConvertFrom-Json } catch { } } | Where-Object { $_ })
 }
 
 # ---- 2. lanes alive ---------------------------------------------------------
 
-# $true when the lane's last $MaxConsecutiveFails stories all ended blocked or failed.
+# $true when the lane's last $MaxConsecutiveFails stories all ended blocked or failed
+# AND nobody has looked since: a blocked story whose label harness:blocked is gone
+# was unblocked by a human (or the keeper), and the lane may run again. Without
+# that, a lane that cannot run writes no new record and the streak never ends.
 function Test-LaneStreak {
-    param([string]$Of)
+    param([string]$Of, [int[]]$StillBlocked = $null)
     $recs = @(Get-StoryRecords | Where-Object { $_.lane -eq $Of } | Sort-Object ts)
     if ($recs.Count -lt $MaxConsecutiveFails) { return $false }
     $tail = @($recs | Select-Object -Last $MaxConsecutiveFails)
-    return @($tail | Where-Object { $_.outcome -in 'blocked', 'failed' }).Count -eq $MaxConsecutiveFails
+    if ($null -eq $StillBlocked) {
+        $StillBlocked = @(gh issue list --label 'harness:blocked' --state open --limit 200 --json number -q '.[].number' 2>$null | Where-Object { $_ } | ForEach-Object { [int]$_ })
+    }
+    $bad = @($tail | Where-Object { $_.outcome -eq 'failed' -or ($_.outcome -eq 'blocked' -and [int]$_.issue -in $StillBlocked) })
+    return $bad.Count -eq $MaxConsecutiveFails
 }
 
 # A new Windows Terminal tab when wt is there (the panel needs a terminal), else a new window.
@@ -1370,25 +1385,40 @@ function Start-Lane {
     $laneArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'go-harness.ps1'), '-Lane', $Of, '-Model', $Model)
     if (Get-Command wt.exe -ErrorAction SilentlyContinue) {
         # No spaces in the title: Start-Process joins the arguments with spaces and quotes nothing.
-        Start-Process wt.exe -ArgumentList (@('-w', '0', 'new-tab', '--title', "go-harness-$Of", 'pwsh') + $laneArgs) | Out-Null
+        # -d: a new tab opens in the home folder otherwise, and gh needs the repository as cwd.
+        Start-Process wt.exe -ArgumentList (@('-w', '0', 'new-tab', '-d', $PSScriptRoot, '--title', "go-harness-$Of", 'pwsh') + $laneArgs) | Out-Null
     } else {
-        Start-Process pwsh -ArgumentList $laneArgs | Out-Null
+        Start-Process pwsh -ArgumentList $laneArgs -WorkingDirectory $PSScriptRoot | Out-Null
     }
+}
+
+# $true when the picker has a story to start or resume for the lane (nothing is claimed).
+function Test-LaneHasWork {
+    param([string]$Of)
+    try { $plan = Get-NodeJson 'pick.mjs' @('--lane', $Of) } catch { return $true }   # picker broken: let the lane report it
+    return $plan.action -in 'start', 'resume'
 }
 
 function Keep-LanesAlive {
     param($M)
     if (-not [bool]($Cfg.keeper.restart_lanes ?? $true)) { return }
     $cool = [double]($Cfg.keeper.lane_restart_min ?? 30)
+    $blockedNow = @(gh issue list --label 'harness:blocked' --state open --limit 200 --json number -q '.[].number' 2>$null | Where-Object { $_ } | ForEach-Object { [int]$_ })
     foreach ($l in @($Cfg.lanes.PSObject.Properties.Name)) {
         if (Test-LockAlive (Read-LaneLock -Of $l)) { continue }
-        if (Test-LaneStreak $l) {
+        if (Test-LaneStreak $l -StillBlocked $blockedNow) {
             Write-KeeperOnce $M "streak-$l" "    lane $($l): its last $MaxConsecutiveFails stories ended blocked - not restarted; a human must look ($summaryMd)"
             continue
         }
         $M.noted.Remove("streak-$l")
         $last = $M.restart[$l]
         if ($last -and ((Get-Date) - [datetime]$last).TotalMinutes -lt $cool) { continue }
+        if (-not (Test-LaneHasWork $l)) {
+            # An idle lane ends on purpose; a new tab every half hour would only show IDLE.
+            Write-KeeperOnce $M "idle-$l" "    lane $($l): nothing to start (every open story waits on another one or on a human) - not restarted"
+            continue
+        }
+        $M.noted.Remove("idle-$l")
         Invoke-KeeperAction "start lane $l (no live process)" { Start-Lane $l }
         $M.restart[$l] = (Get-Date).ToString('o')
         Write-KeeperRecord 'lane-start' @{ lane = $l }
@@ -1580,6 +1610,7 @@ function Invoke-Keeper {
             Retry-TransientBlocks $M
         } catch {
             Write-Log "    this look failed: $($_.Exception.Message)" 'Red'
+            Write-KeeperRecord 'error' @{ message = $_.Exception.Message }   # visible later, not only in the tab
             if (Test-NetworkError $_.Exception.Message) { Wait-Network | Out-Null }
         }
         Save-KeeperMemory $M
