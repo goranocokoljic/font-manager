@@ -194,6 +194,9 @@ describe('the wall presets (E41.2)', () => {
   it('counts the whole lines of wrapped text that fit; at least one', () => {
     expect(wrappedLines(131, 17, 1.45)).toBe(5);
     expect(wrappedLines(10, 17, 1.45)).toBe(1);
+    // Alphabet at slider 120: five lines need 302.4 px, and the box rounds to 302.
+    expect(wrappedLines(specimenBox(500, 120, 'alphabet').height, 50.4, 1.2)).toBe(5);
+    expect(wrappedLines(301, 50.4, 1.2)).toBe(4);
   });
 
   it('the specimen box and the line follow the preset', () => {

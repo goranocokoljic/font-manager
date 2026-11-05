@@ -130,6 +130,8 @@ const style = computed(() => ({
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
+  /* A run wider than the card (the capitals at a big size) wraps too, or its end is cut. */
+  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--fm-wrap-lines);
 }

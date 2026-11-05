@@ -143,6 +143,21 @@ describe('PreviewControls', () => {
     );
   });
 
+  it('picking the language it already shows puts that pangram up too', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    const language = selectLabelled(wrapper, 'Language');
+    store.update('all', { sample: 'custom', customText: 'Hamburg' });
+    await flushPromises();
+    await pickOption(language, store.settingsFor('all').language);
+    expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'pangram' });
+
+    store.applyPreset('all', 'alphabet');
+    await flushPromises();
+    await pickOption(language, store.settingsFor('all').language);
+    expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'pangram' });
+  });
+
   it('cannot choose a language that has no pangram', async () => {
     const { wrapper, store } = controls();
     await flushPromises();

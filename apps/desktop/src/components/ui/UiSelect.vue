@@ -30,7 +30,11 @@ const props = withDefaults(
   }>(),
   { disabled: false, placeholder: '', searchable: undefined, fit: true },
 );
-const emit = defineEmits<{ 'update:modelValue': [value: T] }>();
+const emit = defineEmits<{
+  'update:modelValue': [value: T];
+  /** The open menu's current option was chosen again: no change, but the user asked for it. */
+  repick: [value: T];
+}>();
 const attrs = useAttrs();
 
 const uid = useId();
@@ -89,6 +93,7 @@ function toggle(): void {
 function choose(option: SelectOption<T> | undefined): void {
   if (!option || option.disabled) return;
   if (option.value !== props.modelValue) emit('update:modelValue', option.value);
+  else if (open.value) emit('repick', option.value);
   hide();
 }
 

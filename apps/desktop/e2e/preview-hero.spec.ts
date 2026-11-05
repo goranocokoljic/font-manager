@@ -135,6 +135,38 @@ test.describe('the preview row', () => {
     await expect(firstCard(wall).getByTestId('card-live-text')).toHaveCSS('font-size', '17px');
   });
 
+  test('wrapped text is whole at the biggest size, and a long typed word stays inside', async ({
+    page,
+  }) => {
+    const wall = await openWall(page);
+    const whole = () =>
+      firstCard(wall)
+        .getByTestId('card-live-text')
+        .evaluate((el) => {
+          const line = el.querySelector<HTMLElement>('.line')!;
+          return {
+            wide: line.scrollWidth - line.clientWidth,
+            tall: line.scrollHeight - line.clientHeight,
+          };
+        });
+    await chip(page, 'Alphabet').click();
+    await expect(firstCard(wall).getByTestId('card-live-text')).toHaveAttribute(
+      'data-state',
+      'ready',
+    );
+    for (const size of [80, 100, 120]) {
+      await setSize(page, size);
+      await expect(firstCard(wall).getByTestId('card-live-text')).toHaveCSS(
+        'font-size',
+        `${size * 0.42}px`,
+      );
+      await expect.poll(whole).toEqual({ wide: 0, tall: 0 });
+    }
+    await field(page).fill('W'.repeat(30));
+    await expect(firstCard(wall).getByTestId('card-live-text')).toContainText('WWW');
+    expect((await whole()).wide).toBe(0);
+  });
+
   test('the slider scales by the preset; Paragraph stays at the body size', async ({ page }) => {
     const wall = await openWall(page);
     const fontSize = () =>
@@ -214,6 +246,21 @@ test.describe('the preview row', () => {
     await expect(wall).toHaveAttribute('data-preset', 'pangram');
     await expect(chip(page, 'Pangram')).toHaveAttribute('aria-pressed', 'true');
     expect((await optionLabels(language))[0]).toBe('Serbian (Cyrillic)');
+  });
+
+  test('the language it already shows puts its pangram up too', async ({ page }) => {
+    const wall = await openWall(page);
+    const language = row(page).getByLabel('Language');
+    await field(page).fill('Hamburg');
+    await selectOption(language, { label: 'English' });
+    await expect(field(page)).toHaveValue('The quick brown fox jumps over the lazy dog');
+    await expect(wall).toHaveAttribute('data-preset', 'pangram');
+
+    await chip(page, 'Alphabet').click();
+    await expect(wall).toHaveAttribute('data-preset', 'alphabet');
+    await selectOption(language, { label: 'English' });
+    await expect(wall).toHaveAttribute('data-preset', 'pangram');
+    await expect(chip(page, 'Pangram')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('the options popover opens from the row, closes on a press outside and on Escape', async ({

@@ -175,9 +175,12 @@ export const specimenBox = (cardWidth: number, sizePx: number, preset: WallPrese
   height: Math.max(0, wallCardHeight(sizePx, preset) - WALL.chromePx),
 });
 
-/** The lines of wrapped text that fit `height` px; at least one, so no line is cut. */
+/**
+ * The lines of wrapped text that fit `height` px; at least one, so no line is cut.
+ * `height` is rounded to a whole px: half a px of slack keeps a line that fits exactly.
+ */
 export const wrappedLines = (height: number, specimenPx: number, lineHeight: number) =>
-  Math.max(1, Math.floor(height / (specimenPx * lineHeight)));
+  Math.max(1, Math.floor((height + 0.5) / (specimenPx * lineHeight)));
 
 /** Longest specimen, in characters: a guard for long text without spaces (Chinese, say). */
 export const SPECIMEN_TEXT_MAX = 64;

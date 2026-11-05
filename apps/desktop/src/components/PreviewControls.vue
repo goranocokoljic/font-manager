@@ -245,6 +245,7 @@ function colorFrom(e: Event): string {
           :options="languageOptions"
           :fit="false"
           @update:model-value="store.chooseLanguage(view, $event)"
+          @repick="store.chooseLanguage(view, $event)"
         />
       </div>
       <PreviewSizeSlider v-if="inlineSize" :view="view" :size-range="sizeRange" />
