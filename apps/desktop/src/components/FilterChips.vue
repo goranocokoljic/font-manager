@@ -119,6 +119,12 @@ onMounted(() => {
 });
 onBeforeUnmount(() => observer?.disconnect());
 
+/** "+N" may be gone when the drawer closes: focus goes back to the button, not to it. */
+function openFromMore(): void {
+  opener.value?.focus();
+  drawerOpen.value = true;
+}
+
 // Saving the chosen filters as a smart collection (E14.4): the rules are the
 // filters as they are, so the collection lists the families the chips gave.
 const naming = ref(false);
@@ -218,7 +224,7 @@ async function save(): Promise<void> {
         class="chip more-chips"
         :class="{ spilled: spilled === 0 }"
         :aria-label="t('chips.more', { count: spilled })"
-        @click="drawerOpen = true"
+        @click="openFromMore"
       >
         +{{ formatNumber(spilled) }}
       </button>

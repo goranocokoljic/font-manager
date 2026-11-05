@@ -86,6 +86,46 @@ test('active filters are chips right of the button, and a chip removes its filte
   await expect(opener(page)).toBeFocused();
   await expect(opener(page)).toHaveAccessibleName('Filters 1');
   await expect(line(page).getByRole('status')).not.toContainText('Sans serif');
+
+  // A language chip has its own way out.
+  await expect(line(page).getByRole('status')).toContainText('Serbian (Cyrillic)');
+  await serbian.click();
+  await expect(serbian).toHaveCount(0);
+  await expect(opener(page)).toHaveAccessibleName('Filters');
+  await expect(opener(page)).toBeFocused();
+  await expect(line(page).getByRole('status')).not.toContainText('Serbian (Cyrillic)');
+  await expect(line(page).getByRole('status')).toHaveText('60 families');
+});
+
+test('+N hands the keyboard back to the button when the drawer closes and +N is gone', async ({
+  page,
+}) => {
+  await open(page);
+  await page.setViewportSize({ width: 1000, height: 700 });
+  const drawer = await openFilters(page);
+  const formats = drawer.getByRole('group', { name: 'Format' }).getByRole('button');
+  for (let i = 0, n = await formats.count(); i < n; i++) await formats.nth(i).click();
+  for (const name of ['English', 'Polish', 'Greek', 'Serbian (Cyrillic)']) {
+    await drawer.getByRole('button', { name, exact: true }).click();
+  }
+  await drawer.getByRole('button', { name: 'Close' }).click();
+  await expect(drawer).toBeHidden();
+
+  const more = bar(page).getByRole('button', { name: /^\+\d+ more filter/ });
+  await more.focus();
+  await page.keyboard.press('Enter');
+  await expect(drawer).toBeVisible();
+  // Turn off all but one: every chip fits, and +N is hidden.
+  const on = drawer.locator('button[aria-pressed="true"]');
+  while ((await on.count()) > 1) {
+    const before = await on.count();
+    await on.first().click();
+    await expect(on).toHaveCount(before - 1);
+  }
+  await expect(more).toBeHidden();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+  await expect(opener(page)).toBeFocused();
 });
 
 test('chips that do not fit collapse into +N on one row', async ({ page }) => {

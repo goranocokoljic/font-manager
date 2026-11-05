@@ -7,6 +7,7 @@ import type {
   FaceId,
   FamilyHit,
   FamilyId,
+  FamilyOrder,
   FilterCounts,
   Filters,
   LanguagePreset,
@@ -51,6 +52,18 @@ export const useSearchStore = defineStore('search', () => {
     return map;
   });
 
+  /**
+   * The order to ask for: the chosen one. With a language or text filter and nothing
+   * typed, the API would rank by fewest missing characters; the count line says "by
+   * name" there, so it asks for that. Without a search only the counts are read: no
+   * order to pay for.
+   */
+  function orderOf(q: string, f: Filters, searching: boolean): FamilyOrder | null {
+    if (!searching) return null;
+    if (library.order) return library.order;
+    return q === '' && f.supports ? { by: 'name', descending: false } : null;
+  }
+
   /** Runs the search for the current query and filters now. */
   async function run(): Promise<void> {
     clearTimeout(timer);
@@ -59,6 +72,7 @@ export const useSearchStore = defineStore('search', () => {
     const q = query.value.trim();
     const f = filters.value;
     const searching = q !== '' || hasFilters(f);
+    const order = orderOf(q, f, searching);
     const client = useClient();
     try {
       const list: FamilyHit[] = [];
@@ -69,8 +83,7 @@ export const useSearchStore = defineStore('search', () => {
         const page = await client.search({
           query: q,
           filters: f,
-          // Without a search only the counts are read: no order to pay for.
-          ...(searching && library.order ? { order: library.order } : {}),
+          ...(order ? { order } : {}),
           page: { offset, limit: searching ? PAGE : 1 },
         });
         if (mine !== generation) return;

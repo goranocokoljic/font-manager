@@ -58,6 +58,27 @@ describe('search store', () => {
     expect(search.hits!.map((h) => h.family.name)).toEqual(['Sample 1', 'Sample 2']);
   });
 
+  it('asks for name order under a language filter with nothing typed, where the line says so', async () => {
+    const search = await setup();
+    const languages = { supports: { kind: 'languages' as const, codes: ['pl'] } };
+    search.setFilters(languages);
+    await flushPromises();
+    expect(requests.at(-1)?.order).toEqual({ by: 'name', descending: false });
+    // Another filter is in name order already, and a text search is ranked: no order.
+    search.setFilters({ slant: 'italic' });
+    await flushPromises();
+    expect(requests.at(-1)?.order).toBeUndefined();
+    search.setFilters(languages);
+    search.query = 'sample';
+    await search.run();
+    expect(requests.at(-1)?.order).toBeUndefined();
+    // A chosen order wins over it.
+    search.query = '';
+    await useLibraryStore().setOrder({ by: 'styleCount', descending: true });
+    await flushPromises();
+    expect(requests.at(-1)?.order).toEqual({ by: 'styleCount', descending: true });
+  });
+
   it(`waits ${SEARCH_DEBOUNCE_MS} ms after the last key, then searches once`, async () => {
     const search = await setup();
     vi.useFakeTimers();
