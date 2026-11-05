@@ -199,6 +199,7 @@
     "options": "Vorschauoptionen",
     "customPlaceholder": "Beispieltext eingeben",
     "size": "Größe",
+    "sizeGlyph": "A",
     "sizeSlider": "Größenregler",
     "sizeInPixels": "Größe in Pixeln",
     "autoSize": "Automatische Größe",

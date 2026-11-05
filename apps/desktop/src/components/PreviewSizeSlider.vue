@@ -25,7 +25,7 @@ function slid(e: Event): void {
 
 <template>
   <div class="size">
-    <span class="small" aria-hidden="true">A</span>
+    <span class="small" aria-hidden="true">{{ t('preview.sizeGlyph') }}</span>
     <input
       type="range"
       :aria-label="t('preview.sizeSlider')"
@@ -35,7 +35,7 @@ function slid(e: Event): void {
       :value="shown"
       @input="slid"
     />
-    <span class="large" aria-hidden="true">A</span>
+    <span class="large" aria-hidden="true">{{ t('preview.sizeGlyph') }}</span>
   </div>
 </template>
 

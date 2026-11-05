@@ -199,6 +199,7 @@
     "options": "Preview options",
     "customPlaceholder": "Type a sample",
     "size": "Size",
+    "sizeGlyph": "A",
     "sizeSlider": "Size slider",
     "sizeInPixels": "Size in pixels",
     "autoSize": "Auto size",
