@@ -358,3 +358,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 
 - [E41.1 #447] apps/desktop/src/components/FontGrid.vue:545 — the keyboard cursor mark is only an inset `box-shadow`, and nothing under `apps/desktop/src` has a `forced-colors` rule, so Windows High Contrast should drop the mark on an unselected card; from the CSS, not rendered.
 - [E41.2 #448] apps/desktop/src/i18n/templates.test.ts:8 — Vitest 5's file-system module cache keeps the expanded `import.meta.glob` of an unchanged test file, so a new `.vue` file is not scanned locally and its literal text passes until CI (no cache there); `--experimental.fsModuleCache=false` shows the failure. Any test with a glob has the same gap.
+- [E41.4 #450] apps/desktop/src/components/ui/UiDrawer.vue:39 — `returnTo.focus()` has no fallback when the opener is gone or hidden, for any drawer user.

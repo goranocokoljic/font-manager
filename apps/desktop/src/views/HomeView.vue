@@ -14,6 +14,7 @@ import LayoutActions from '../components/LayoutActions.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
+import WallCountLine from '../components/WallCountLine.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
@@ -508,14 +509,7 @@ function openFace(face: FaceId): void {
           />
           <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
           <SearchBox @leave="focusList" />
-          <p class="count" role="status">
-            <template v-if="fontList.selectedCount > 1">{{
-              t('home.selected', { count: fontList.selectedCount })
-            }}</template>
-            <template v-else-if="search.hits">{{
-              t('home.families', { count: search.total })
-            }}</template>
-          </p>
+          <FilterChips v-show="!similar.open" class="filters" />
           <UiSegmentedControl
             :model-value="mode"
             :options="modeOptions"
@@ -564,13 +558,13 @@ function openFace(face: FaceId): void {
         </header>
         <div v-show="!similar.open" ref="browse" class="browse">
           <CollectionHeader />
-          <FilterChips />
           <PreviewControls
             :view="ALL_FONTS_VIEW"
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
             :font-count="search.total"
             @leave="focusList"
           />
+          <WallCountLine :view="ALL_FONTS_VIEW" />
           <template v-if="fontList.families.length && mode === 'table'">
             <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
             <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
@@ -699,24 +693,38 @@ function openFace(face: FaceId): void {
   min-height: 0;
 }
 .toolbar {
+  /* A stacking level of its own, above the view below: the Columns menu opens over it. */
+  position: relative;
+  z-index: 1;
+  container-type: inline-size;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--fm-space-1);
-  height: 48px;
-  padding: 0 var(--fm-space-3);
+  min-height: 48px;
+  padding: var(--fm-space-2) var(--fm-space-3);
   border-bottom: 1px solid var(--fm-border);
+}
+/* The rest of the bar: Filters and its chips, one row. */
+.filters {
+  flex: 1 1 0;
+  min-width: 120px;
+}
+/* A column too narrow for both: the filters take a row of their own under the controls. */
+@container (max-width: 960px) {
+  .filters {
+    order: 1;
+    flex-basis: 100%;
+  }
+  .title {
+    flex: 1;
+  }
 }
 .title {
   margin: 0;
   font-size: var(--fm-text-md);
   font-weight: 600;
   white-space: nowrap;
-}
-.count {
-  flex: 1;
-  margin: 0;
-  color: var(--fm-muted);
 }
 /* In the layout file bar: at its own end. */
 .studio {

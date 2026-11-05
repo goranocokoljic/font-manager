@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from 'vue';
-import type { ApiError, SourceId } from '../api/types';
-import { errorMessage, t } from '../i18n';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import type { ApiError } from '../api/types';
+import { errorMessage, formatNumber, t } from '../i18n';
+import { useActiveFilters } from '../search/activeFilters';
 import {
-  chipGroups,
-  chosenLanguages,
+  chipsThatFit,
   hasChosenFilters,
   hasFilters,
   isCommonFeature,
@@ -16,25 +16,15 @@ import {
 import { useCollectionsStore } from '../stores/collections';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
-import { useSourcesStore } from '../stores/sources';
-import { useTagsStore } from '../stores/tags';
+import UiBadge from './ui/UiBadge.vue';
 import UiChevron from './ui/UiChevron.vue';
 import UiDrawer from './ui/UiDrawer.vue';
 
 const search = useSearchStore();
 const collections = useCollectionsStore();
-const sources = useSourcesStore();
-const tags = useTagsStore();
 const preview = usePreviewStore();
+const { groups, languages, chips: active, labels } = useActiveFilters();
 
-/** A source chip shows the folder's name. */
-function sourceName(id: SourceId): string {
-  const path = sources.sources.find((s) => s.id === id)?.path;
-  return path?.split(/[\\/]/).filter(Boolean).pop() ?? t('chips.source', { id: String(id) });
-}
-
-const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
-const languages = computed(() => chosenLanguages(search.filters));
 /** The first languages sit in the drawer; the rest hide behind an expander. */
 const LANGUAGES_SHOWN = 10;
 const allLanguages = ref(false);
@@ -47,6 +37,7 @@ const filtering = computed(() => hasFilters(search.filters));
 
 // The facets live in a drawer; the bar shows only what is chosen, as chips to remove.
 const drawerOpen = ref(false);
+const bar = ref<HTMLElement | null>(null);
 const opener = ref<HTMLButtonElement | null>(null);
 const allFeatures = ref(false);
 /** Raw OpenType tags are developer data: they sit behind an expander. */
@@ -76,8 +67,7 @@ const featureSets = computed(() =>
     { key: 'other', chips: otherFeatures.value },
   ].filter((set) => set.chips.length),
 );
-const active = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
-const activeCount = computed(() => active.value.length + languages.value.length);
+const activeCount = computed(() => labels.value.length);
 /** A smart collection needs a chosen filter; the open collection alone is none. */
 const savable = computed(() => hasChosenFilters(search.filters));
 
@@ -96,6 +86,43 @@ function onLanguage(code: string): void {
   if (adding && search.languages.find((l) => l.code === code)?.pangram) {
     preview.update(ALL_FONTS_VIEW, { language: code });
   }
+}
+
+/** Takes a filter off from its chip; the chip goes away, so the focus goes to the button. */
+async function remove(off: () => void): Promise<void> {
+  off();
+  await nextTick();
+  if (!drawerOpen.value) opener.value?.focus();
+}
+
+// The chips stay on one row: those that do not fit stay in the page, unseen, to be
+// measured again, and "+N" stands for them and opens the drawer.
+const row = ref<HTMLElement | null>(null);
+const more = ref<HTMLButtonElement | null>(null);
+const fit = ref(Infinity);
+const spilled = computed(() => Math.max(0, activeCount.value - fit.value));
+
+function measure(): void {
+  const el = row.value;
+  if (!el) return;
+  const widths = [...el.querySelectorAll<HTMLElement>('.chip.active')].map((c) => c.offsetWidth);
+  const gap = parseFloat(getComputedStyle(el).columnGap) || 0;
+  fit.value = chipsThatFit(widths, el.clientWidth, more.value?.offsetWidth ?? 0, gap);
+}
+watch(labels, measure, { flush: 'post' });
+let observer: ResizeObserver | undefined;
+onMounted(() => {
+  measure();
+  if (typeof ResizeObserver === 'undefined' || !row.value) return;
+  observer = new ResizeObserver(measure);
+  observer.observe(row.value);
+});
+onBeforeUnmount(() => observer?.disconnect());
+
+/** "+N" may be gone when the drawer closes: focus goes back to the button, not to it. */
+function openFromMore(): void {
+  opener.value?.focus();
+  drawerOpen.value = true;
 }
 
 // Saving the chosen filters as a smart collection (E14.4): the rules are the
@@ -139,14 +166,13 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <section class="chips" :aria-label="t('chips.filters')">
+  <section ref="bar" class="chips" :aria-label="t('chips.filters')">
     <button
       ref="opener"
       type="button"
       class="opener"
       aria-haspopup="dialog"
       :aria-expanded="drawerOpen"
-      :class="{ on: activeCount > 0 }"
       @click="drawerOpen = !drawerOpen"
     >
       <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -158,82 +184,98 @@ async function save(): Promise<void> {
           stroke-linecap="round"
         />
       </svg>
-      {{ t('chips.filters') }}<span v-if="activeCount" class="count"> · {{ activeCount }}</span>
+      {{ t('chips.filters') }}
+      <UiBadge v-if="activeCount" tone="accent" class="count">{{
+        formatNumber(activeCount)
+      }}</UiBadge>
     </button>
-    <button
-      v-for="chip in active"
-      :key="`${chip.facet}:${String(chip.value)}`"
-      type="button"
-      class="chip active"
-      :aria-label="t('chips.remove', { name: chip.label })"
-      @click="toggle(chip)"
-    >
-      {{ chip.label }}
-      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-        <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-    </button>
-    <button
-      v-for="code in languages"
-      :key="`lang:${code}`"
-      type="button"
-      class="chip active"
-      :aria-label="t('chips.remove', { name: languageName(search.languages, code) })"
-      @click="onLanguage(code)"
-    >
-      {{ languageName(search.languages, code) }}
-      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-        <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-    </button>
-    <div class="group actions">
-      <button v-if="filtering" type="button" class="link" @click="search.setFilters({})">
-        {{ t('chips.clear') }}
-      </button>
-      <form
-        v-if="naming"
-        class="save"
-        :aria-label="t('chips.saveAsSmart')"
-        @submit.prevent="save"
-        @keydown.esc.prevent="endSave"
-      >
-        <input
-          ref="nameInput"
-          v-model="name"
-          class="name"
-          :aria-label="t('chips.smartName')"
-          :placeholder="t('chips.namePlaceholder')"
-          :aria-invalid="saveError ? 'true' : undefined"
-          :aria-describedby="saveError ? 'fm-save-smart-error' : undefined"
-          @input="saveError = null"
-        />
-        <button type="submit" class="chip">{{ t('common.save') }}</button>
-        <button type="button" class="chip" @click="endSave">{{ t('common.cancel') }}</button>
-        <p v-if="saveError" id="fm-save-smart-error" role="alert" class="error">
-          {{ errorMessage(saveError) }}
-        </p>
-      </form>
+    <div ref="row" class="row">
       <button
-        v-else
-        ref="saveButton"
+        v-for="(chip, i) in active"
+        :key="`${chip.facet}:${String(chip.value)}`"
         type="button"
-        class="link"
-        :disabled="!savable"
-        :title="savable ? undefined : t('chips.saveHint')"
-        @click="startSave"
+        class="chip active"
+        :class="{ spilled: i >= fit }"
+        :aria-label="t('chips.remove', { name: chip.label })"
+        @click="remove(() => toggle(chip))"
       >
-        {{ t('chips.saveAsSmart') }}
+        {{ chip.label }}
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </button>
+      <button
+        v-for="(code, i) in languages"
+        :key="`lang:${code}`"
+        type="button"
+        class="chip active"
+        :class="{ spilled: active.length + i >= fit }"
+        :aria-label="t('chips.remove', { name: languageName(search.languages, code) })"
+        @click="remove(() => onLanguage(code))"
+      >
+        {{ languageName(search.languages, code) }}
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </button>
+      <button
+        ref="more"
+        type="button"
+        class="chip more-chips"
+        :class="{ spilled: spilled === 0 }"
+        :aria-label="t('chips.more', { count: spilled })"
+        @click="openFromMore"
+      >
+        +{{ formatNumber(spilled) }}
       </button>
     </div>
-    <p v-if="search.error" role="alert" class="error">{{ errorMessage(search.error) }}</p>
-    <p class="note" role="status">{{ saved ? t('chips.saved', { name: saved }) : '' }}</p>
 
     <UiDrawer
       :open="drawerOpen"
       :label="t('chips.options')"
-      :anchor="opener"
+      :anchor="bar"
       @close="drawerOpen = false"
     >
+      <div class="actions">
+        <button v-if="filtering" type="button" class="link" @click="search.setFilters({})">
+          {{ t('chips.clear') }}
+        </button>
+        <form
+          v-if="naming"
+          class="save"
+          :aria-label="t('chips.saveAsSmart')"
+          @submit.prevent="save"
+          @keydown.esc.prevent.stop="endSave"
+        >
+          <input
+            ref="nameInput"
+            v-model="name"
+            class="name"
+            :aria-label="t('chips.smartName')"
+            :placeholder="t('chips.namePlaceholder')"
+            :aria-invalid="saveError ? 'true' : undefined"
+            :aria-describedby="saveError ? 'fm-save-smart-error' : undefined"
+            @input="saveError = null"
+          />
+          <button type="submit" class="chip">{{ t('common.save') }}</button>
+          <button type="button" class="chip" @click="endSave">{{ t('common.cancel') }}</button>
+          <p v-if="saveError" id="fm-save-smart-error" role="alert" class="error">
+            {{ errorMessage(saveError) }}
+          </p>
+        </form>
+        <button
+          v-else
+          ref="saveButton"
+          type="button"
+          class="link"
+          :disabled="!savable"
+          :title="savable ? undefined : t('chips.saveHint')"
+          @click="startSave"
+        >
+          {{ t('chips.saveAsSmart') }}
+        </button>
+        <p class="note" role="status">{{ saved ? t('chips.saved', { name: saved }) : '' }}</p>
+      </div>
       <template v-for="g in drawerFacets" :key="g.facet">
         <div
           v-if="g.facet === 'language'"
@@ -323,35 +365,45 @@ async function save(): Promise<void> {
 <style scoped>
 .chips {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: var(--fm-space-2);
-  padding: var(--fm-space-2) var(--fm-space-4);
-  border-bottom: 1px solid var(--fm-border);
-}
-.group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--fm-space-2);
-}
-.actions {
-  margin-inline-start: auto;
 }
 .opener {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: var(--fm-space-2);
   font-size: var(--fm-text-sm);
 }
-.opener.on,
 .opener[aria-expanded='true'] {
-  border-color: var(--fm-accent);
-  background-color: var(--fm-accent);
-  color: var(--fm-on-accent);
+  background-color: var(--fm-hover);
 }
+/* A pill, and the digits line up. */
 .count {
+  border-radius: var(--fm-radius-lg);
+  padding-inline: var(--fm-space-2);
   font-variant-numeric: tabular-nums;
+}
+.row {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--fm-space-1);
+  min-width: 0;
+}
+/* Out of the row and of the keyboard's way, but still measured. */
+.spilled {
+  position: absolute;
+  visibility: hidden;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fm-space-2);
+  margin-bottom: var(--fm-space-4);
 }
 .label {
   margin: 0 0 var(--fm-space-2);
@@ -387,16 +439,22 @@ async function save(): Promise<void> {
   width: 140px;
   border-color: var(--fm-control-border);
 }
-.chip[aria-pressed='true'],
-.chip.active {
+.chip[aria-pressed='true'] {
   border-color: var(--fm-accent);
   background-color: var(--fm-accent);
   color: var(--fm-on-accent);
 }
-.chip.active {
+.chip.active,
+.more-chips {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: var(--fm-space-1);
+  border-radius: var(--fm-radius-lg);
+  white-space: nowrap;
+}
+.more-chips {
+  color: var(--fm-muted);
 }
 .link {
   padding: 2px 4px;
@@ -437,6 +495,9 @@ async function save(): Promise<void> {
   align-items: center;
   gap: 4px;
   margin: 0;
+}
+.note:empty {
+  display: none;
 }
 .note,
 .error {

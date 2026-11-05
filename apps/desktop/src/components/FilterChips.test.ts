@@ -19,7 +19,13 @@ async function mountChips(filters: Filters = {}) {
   setClient(client);
   await useLibraryStore().load();
   useSearchStore().setFilters(filters);
-  wrapper = mount(FilterChips, { global: { plugins: [pinia] }, attachTo: document.body });
+  // The save action sits in the drawer: rendered in place here, and opened.
+  wrapper = mount(FilterChips, {
+    global: { plugins: [pinia], stubs: { teleport: true } },
+    attachTo: document.body,
+  });
+  await flushPromises();
+  await wrapper.get('button.opener').trigger('click');
   await flushPromises();
   return wrapper;
 }
@@ -112,5 +118,30 @@ describe('saving the filter chips as a smart collection', () => {
     expect(nameField(w).exists()).toBe(false);
     expect(document.activeElement).toBe(saveButton(w)!.element);
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe('the filter bar', () => {
+  it('shows the count on the button, and the chips beside it, not the save action', async () => {
+    const w = await mountChips({ slant: 'italic', formats: ['ttf'] });
+    expect(w.get('button.opener .ui-badge').text()).toBe('2');
+    const row = w.get('.row');
+    expect(row.findAll('.chip.active').map((c) => c.attributes('aria-label'))).toEqual([
+      'Remove filter Italic',
+      'Remove filter TTF',
+    ]);
+    expect(w.get('.row').text()).not.toContain('Save as smart collection');
+    expect(w.get('.actions').text()).toContain('Save as smart collection');
+  });
+
+  it('has no badge with no filter', async () => {
+    const w = await mountChips();
+    expect(w.find('button.opener .ui-badge').exists()).toBe(false);
+  });
+
+  it('hides the +N chip while every chip fits', async () => {
+    const w = await mountChips({ slant: 'italic' });
+    expect(w.get('.more-chips').classes()).toContain('spilled');
+    expect(w.findAll('.chip.active.spilled')).toHaveLength(0);
   });
 });

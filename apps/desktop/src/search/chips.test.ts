@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FilterCounts } from '../api/types';
 import {
   chipGroups,
+  chipsThatFit,
   chosenLanguages,
   hasChosenFilters,
   hasFilters,
@@ -209,5 +210,23 @@ describe('filter chips', () => {
   it('no filter is no filter', () => {
     expect(hasFilters({})).toBe(false);
     expect(hasFilters({ formats: [], slant: null })).toBe(false);
+  });
+});
+
+describe('chipsThatFit', () => {
+  it('fits every chip when they all fit, with no room kept for the +N chip', () => {
+    // 50 + 8 + 50 = 108: exactly the row.
+    expect(chipsThatFit([50, 50], 108, 30, 8)).toBe(2);
+  });
+
+  it('keeps room for the +N chip once one does not fit', () => {
+    // 30 (+N) + 8 + 50 = 88 fits; another 8 + 50 does not.
+    expect(chipsThatFit([50, 50, 50], 100, 30, 8)).toBe(1);
+    // One px short of the first chip beside the +N chip: only the +N chip is left.
+    expect(chipsThatFit([50, 50, 50], 87, 30, 8)).toBe(0);
+  });
+
+  it('has nothing to fit with no chips', () => {
+    expect(chipsThatFit([], 0, 30, 8)).toBe(0);
   });
 });

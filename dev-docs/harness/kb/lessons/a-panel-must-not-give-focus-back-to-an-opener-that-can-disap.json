@@ -1,0 +1,19 @@
+{
+  "id": "a-panel-must-not-give-focus-back-to-an-opener-that-can-disap",
+  "title": "A panel must not give focus back to an opener that can disappear while it is open",
+  "category": "accessibility",
+  "rule": "When a drawer or popover gives focus back on close to the element that opened it, and that opener can be hidden or removed while the panel is open (a '+N' chip that goes when everything fits, a row action on a row that leaves the list), open the panel with focus on a control that always stays, such as the bar's main button. focus() on a hidden element does nothing, so focus falls to body and the next Tab starts at the top of the page. Test it with a Playwright step that opens the panel by keyboard, makes the opener go away, closes with Escape and asserts where focus is, and check that the test fails without the fix.",
+  "rationale": "E41.4 (#450): the +N chip opened the filter drawer; turning filters off from the drawer hid +N, and Escape left focus on body.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    450
+  ],
+  "file_globs": [
+    "apps/desktop/src/**/*.vue",
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-05T21:43:46.796Z",
+  "last_seen": "2026-11-05T21:43:46.796Z"
+}
