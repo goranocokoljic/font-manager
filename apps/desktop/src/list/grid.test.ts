@@ -2,11 +2,22 @@ import { describe, expect, it } from 'vitest';
 import {
   CARD,
   CARD_TEXT_MAX,
-  cardChars,
   cardText,
   gridColumns,
   gridRange,
   lineCount,
+  specimenBox,
+  specimenRenderPx,
+  specimenScale,
+  specimenText,
+  SPECIMEN_TEXT_MAX,
+  WALL,
+  wallCardHeight,
+  wallCardWidth,
+  wallColumns,
+  wallLinePx,
+  wallMinWidth,
+  wallSize,
 } from './grid';
 
 describe('grid layout', () => {
@@ -46,8 +57,84 @@ describe('card text fit', () => {
   it('keeps a long single word cut at a character', () => {
     expect(cardText('Supercalifragilistic', 8)).toBe('Supercal');
   });
-  it('fits fewer characters in a narrower card', () => {
-    expect(cardChars(200, 36)).toBeLessThan(cardChars(400, 36));
-    expect(cardChars(10, 36)).toBe(4);
+});
+
+describe('the wall (E41.1)', () => {
+  it('follows the width with a 260 px floor: four columns at 1440 less the sidebar', () => {
+    // 1440 window − 240 sidebar, with and without a 15 px scrollbar.
+    expect(wallColumns(1200, 28)).toBe(4);
+    expect(wallColumns(1185, 28)).toBe(4);
+    // Exactly n cards of the floor width and n − 1 gaps fit; one px less does not.
+    const three = 3 * WALL.minWidth + 2 * WALL.gap + 2 * WALL.inset;
+    expect(wallColumns(three, 28)).toBe(3);
+    expect(wallColumns(three - 1, 28)).toBe(2);
+    expect(wallColumns(100, 28)).toBe(1);
+    expect(wallCardWidth(three, 3)).toBe(WALL.minWidth);
+  });
+
+  it('asks for wider cards only past the floor, so the top of the slider still grows text', () => {
+    expect(wallMinWidth(24)).toBe(260);
+    expect(wallMinWidth(61)).toBe(260);
+    expect(wallMinWidth(120)).toBe(504);
+    expect(wallColumns(1200, 61)).toBe(4);
+    expect(wallColumns(1200, 120)).toBe(2);
+  });
+
+  it('keeps sizes in the 24–120 range and grows the line with the size', () => {
+    expect(wallSize(8)).toBe(24);
+    expect(wallSize(300)).toBe(120);
+    expect(wallSize(61)).toBe(61);
+    expect(wallLinePx(24)).toBeLessThan(wallLinePx(120));
+    expect(wallLinePx(61)).toBe(wallCardHeight(61) + WALL.gap);
+    // The board's card: about 230 px tall at its slider position.
+    expect(wallCardHeight(61)).toBe(230);
+    expect(wallCardHeight(300)).toBe(wallCardHeight(120));
+  });
+
+  it('shows the longest start that ends on a word', () => {
+    const pangram = 'The quick brown fox jumps over the lazy dog';
+    // 242 px at 28 px text: 15 characters, "The quick brown" exactly.
+    expect(specimenText(pangram, 242, 28)).toBe('The quick brown');
+    // One character less: back to the word before.
+    expect(specimenText(pangram, 226, 28)).toBe('The quick');
+    expect(specimenText(`  ${pangram}  `, 5000, 28)).toBe(pangram);
+    expect(specimenText('The\n quick', 5000, 28)).toBe('The quick');
+  });
+
+  it('never cuts the first word: it stays whole, and the scale shrinks it', () => {
+    expect(specimenText('Hamburg', 242, 120)).toBe('Hamburg');
+    expect(specimenText('Hamburg ist', 242, 120)).toBe('Hamburg');
+    expect(specimenText('Hamburg', 0, 120)).toBe('Hamburg');
+  });
+
+  it('cuts only a run with no space past the guard, at a character', () => {
+    const long = '永'.repeat(SPECIMEN_TEXT_MAX + 10);
+    expect(specimenText(long, 242, 28)).toBe('永'.repeat(SPECIMEN_TEXT_MAX));
+    const emoji = '😀'.repeat(SPECIMEN_TEXT_MAX + 10);
+    expect(specimenText(emoji, 242, 28)).toBe('😀'.repeat(SPECIMEN_TEXT_MAX));
+  });
+
+  it('renders a long line smaller, so it stays inside the 8,192 px canvas', () => {
+    expect(specimenRenderPx('Hamburg', 1)).toBe(WALL.renderPx);
+    expect(specimenRenderPx('Hamburg', 3)).toBe(WALL.renderPx);
+    expect(specimenRenderPx('', 2)).toBe(WALL.renderPx);
+    for (const scale of [1, 1.5, 2, 3]) {
+      for (let chars = 1; chars <= SPECIMEN_TEXT_MAX; chars++) {
+        const px = specimenRenderPx('永'.repeat(chars), scale);
+        expect(px).toBeGreaterThanOrEqual(8);
+        expect(chars * 1.5 * px * scale).toBeLessThanOrEqual(8192);
+      }
+    }
+    // Code points, not UTF-16 units: an emoji is one character.
+    expect(specimenRenderPx('😀'.repeat(40), 2)).toBe(specimenRenderPx('永'.repeat(40), 2));
+  });
+
+  it('scales a specimen down to fit and never up', () => {
+    const box = specimenBox(278, 61);
+    expect(box).toEqual({ width: 240, height: 177 });
+    expect(specimenScale(100, 50, box)).toBe(1);
+    expect(specimenScale(480, 50, box)).toBe(0.5);
+    expect(specimenScale(100, 354, box)).toBe(0.5);
+    expect(specimenScale(0, 0, box)).toBe(1);
   });
 });

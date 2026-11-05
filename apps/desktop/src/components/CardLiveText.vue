@@ -22,6 +22,8 @@ const props = defineProps<{
   color?: string | null;
   /** Starts no load for a face not held yet (the grid moves fast). */
   defer?: boolean;
+  /** The width the text must fit, in CSS px; wider text shrinks so it is never cut. */
+  fitWidth?: number;
 }>();
 
 const loader = useFaceLoader();
@@ -56,9 +58,28 @@ watch(
 );
 onBeforeUnmount(() => hold(null));
 
+const line = ref<HTMLElement | null>(null);
+/** The text's size as a share of `sizePx`: below 1 when the text would not fit. */
+const fit = ref(1);
+
+// Measured once the text has its face. Without layout (no width to measure) it stays 1.
+watch(
+  () => [props.text, props.sizePx, props.fitWidth, props.trackingEm, state.value] as const,
+  () => {
+    const el = line.value;
+    if (!el || !props.fitWidth || !el.offsetWidth) {
+      fit.value = 1;
+      return;
+    }
+    // offsetWidth is the text at the size it has now: take that size out first.
+    fit.value = Math.min(1, (props.fitWidth * fit.value) / el.offsetWidth);
+  },
+  { flush: 'post', immediate: true },
+);
+
 const style = computed(() => ({
   fontFamily: `"${faceFamily(props.face)}", var(--fm-preview-fallback, system-ui), sans-serif`,
-  fontSize: `${props.sizePx}px`,
+  fontSize: `${props.sizePx * fit.value}px`,
   fontPalette: props.palette,
   letterSpacing: props.trackingEm ? `${props.trackingEm}em` : undefined,
   color: props.color ?? undefined,
@@ -74,17 +95,25 @@ const style = computed(() => ({
     :data-state="state"
     :style="style"
   >
-    <template v-if="state !== 'deferred'">{{ text }}</template>
+    <span ref="line" class="line"
+      ><template v-if="state !== 'deferred'">{{ text }}</template></span
+    >
   </div>
 </template>
 
 <style scoped>
 .live {
+  display: flex;
   flex: 1;
+  align-items: center;
+  justify-content: center;
   min-height: 0;
   overflow: hidden;
   line-height: 1.2;
   white-space: nowrap;
+}
+.line {
+  flex: none;
 }
 .live.outline {
   -webkit-text-fill-color: transparent;

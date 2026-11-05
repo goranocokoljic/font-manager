@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/goranocokoljic/font-manager/data/themes/theme.schema.json",
+  "title": "Font Manager theme file",
+  "description": "One named theme of the app: a light and a dark token set. Each file in data/themes but this one follows it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "id", "name", "light", "dark"],
+  "properties": {
+    "$schema": { "const": "./theme.schema.json" },
+    "id": {
+      "description": "The value of the themeId setting. The same as the file name without .json; unique.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "name": {
+      "description": "The name the theme picker shows.",
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S(.*\\S)?$"
+    },
+    "light": { "$ref": "#/$defs/tokens" },
+    "dark": { "$ref": "#/$defs/tokens" }
+  },
+  "$defs": {
+    "opaque": {
+      "description": "An opaque color: #rrggbb in lowercase.",
+      "type": "string",
+      "pattern": "^#[0-9a-f]{6}$"
+    },
+    "tokens": {
+      "description": "One token set. on-accent on accent is at least 4.5:1 and accent on bg, surface and surface-2 is at least 3:1; the loader and its tests check this.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accent", "on-accent", "bg", "surface", "surface-2", "border"],
+      "properties": {
+        "accent": { "$ref": "#/$defs/opaque" },
+        "on-accent": { "$ref": "#/$defs/opaque" },
+        "bg": { "$ref": "#/$defs/opaque" },
+        "surface": { "$ref": "#/$defs/opaque" },
+        "surface-2": { "$ref": "#/$defs/opaque" },
+        "border": {
+          "description": "A hairline: #rrggbb or, with alpha, #rrggbbaa, in lowercase.",
+          "type": "string",
+          "pattern": "^#[0-9a-f]{6}([0-9a-f]{2})?$"
+        }
+      }
+    }
+  }
+}

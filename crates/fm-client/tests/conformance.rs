@@ -176,7 +176,10 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; get_settings);
     same!(seen, d, c; update_settings, json!({ "theme": "dark" }));
     same!(seen, d, c; update_settings, json!({ "cacheLimitMb": 1 }));
+    same!(seen, d, c; update_settings, json!({ "themeId": "indigo" }));
+    same!(seen, d, c; update_settings, json!({ "themeId": "no-such-theme" }));
     same!(seen, d, c; app_folders);
+    same!(seen, d, c; list_themes);
     same!(seen, d, c; endpoint_info);
     // The client takes the new token, so the calls after this still get in.
     same!(seen, d, c; regenerate_endpoint_token);
@@ -201,6 +204,9 @@ fn every_route_gives_the_same_result_and_error_as_the_mock() {
     same!(seen, d, c; layout_history, json!({ "id": "via-http" }));
     same!(seen, d, c; restore_layout, json!({ "id": "via-http", "number": 1 }));
     same!(seen, d, c; layout_width, layout);
+    same!(seen, d, c; export_layout_png, json!({
+        "layout": "none", "scale": 1, "surface": "paper", "font": { "face": 1 }
+    }));
     // comparisons
     same!(seen, d, c; list_comparisons);
     same!(seen, d, c; save_comparison, json!({ "name": "Pair", "faces": [1] }));

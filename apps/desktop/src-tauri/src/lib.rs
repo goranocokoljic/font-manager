@@ -21,8 +21,8 @@ use fm_api::comparison::{
 };
 use fm_api::export::{ExportService, LicenseInventoryRequest};
 use fm_api::layout::{
-    DuplicateLayoutRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef, LayoutVersion,
-    RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
+    DuplicateLayoutRequest, ExportLayoutPngRequest, Layout, LayoutBounds, LayoutEntry, LayoutRef,
+    LayoutVersion, RestoreLayoutRequest, RevertLayoutRequest, SaveLayoutRequest, SavedLayout,
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary,
@@ -50,7 +50,7 @@ use fm_api::search::{
 };
 use fm_api::settings::{
     AppFolders, EndpointInfo, McpConfirmationAnswer, McpGrantUpdate, McpStatus, McpUpdate,
-    Settings, SettingsUpdate,
+    Settings, SettingsUpdate, ThemeDefinition,
 };
 use fm_api::workflows::{DocumentFontsCheck, DocumentFontsRequest};
 use fm_api::{
@@ -658,6 +658,15 @@ async fn layout_width(state: State<'_, AppState>, req: Layout) -> ApiResult<Opti
     call(&state, move |api| api.layout_width(req)).await
 }
 
+/// Renders a saved layout to a new PNG in the export folder (E45.5).
+#[tauri::command]
+async fn export_layout_png(
+    state: State<'_, AppState>,
+    req: ExportLayoutPngRequest,
+) -> ApiResult<String> {
+    call(&state, move |api| api.export_layout_png(req)).await
+}
+
 /// Every online catalog with the state of its cache (E22.1).
 #[tauri::command]
 async fn list_catalogs(state: State<'_, AppState>) -> ApiResult<Vec<Catalog>> {
@@ -1249,6 +1258,12 @@ async fn update_settings(state: State<'_, AppState>, req: SettingsUpdate) -> Api
     call_settings(&state, move |s| s.update_settings(req)).await
 }
 
+/// The themes the app ships.
+#[tauri::command]
+async fn list_themes(state: State<'_, AppState>) -> ApiResult<Vec<ThemeDefinition>> {
+    call_settings(&state, |s| s.list_themes()).await
+}
+
 /// Where the app keeps its config, data, cache and logs.
 #[tauri::command]
 async fn get_app_folders(state: State<'_, AppState>) -> ApiResult<AppFolders> {
@@ -1458,6 +1473,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             layout_history,
             restore_layout,
             layout_width,
+            export_layout_png,
             list_comparisons,
             get_comparison,
             save_comparison,
@@ -1492,6 +1508,7 @@ pub fn setup_state<R: Runtime>(builder: tauri::Builder<R>, state: AppState) -> t
             scan,
             get_settings,
             update_settings,
+            list_themes,
             get_app_folders,
             endpoint_info,
             regenerate_endpoint_token,

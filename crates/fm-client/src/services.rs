@@ -154,6 +154,7 @@ service!(LayoutService {
     layout_history(req: LayoutRef) -> Vec<LayoutVersion>;
     restore_layout(req: RestoreLayoutRequest) -> SavedLayout;
     layout_width(layout: Layout) -> Option<f32>;
+    export_layout_png(req: ExportLayoutPngRequest) -> String;
 });
 
 service!(ComparisonService {
@@ -189,6 +190,10 @@ impl SettingsService for Client {
 
     fn app_folders(&self) -> ApiResult<AppFolders> {
         self.call("app_folders", &())
+    }
+
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        self.call("list_themes", &())
     }
 
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {

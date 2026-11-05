@@ -1,0 +1,20 @@
+{
+  "id": "a-numeric-criterion-s-test-must-not-lower-its-bar-to-fit-a-s",
+  "title": "A numeric criterion's test must not lower its bar to fit a slow machine",
+  "category": "testing",
+  "rule": "When a criterion states a number (fps, ms, MB), assert that literal number. If a machine cannot measure it (a CI runner whose idle frame rate is under the target), call test.skip with a reason, so the report says it was not measured. Never derive the bar from the machine's own speed: a green test must mean the number was met.",
+  "rationale": "E41.1 (#447): `fps >= min(55, idle - 5)` set the bar at 25 on the macOS runner, so a 30 fps slider was green against a criterion of 55.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    447
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**",
+    "**/*.test.ts",
+    "crates/**/tests/**"
+  ],
+  "first_seen": "2026-11-04T18:58:45.475Z",
+  "last_seen": "2026-11-04T18:58:45.475Z"
+}

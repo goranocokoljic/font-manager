@@ -1038,6 +1038,20 @@ id: number;
 /**  Whether the call may run. */
 allowed: boolean };
 
+/**  Renders a saved layout on an A4 page into the app's export folder (E45.5). */
+export type ExportLayoutPngRequest = {
+	/**  The template file's id. */
+	layout: string,
+	/**  Device pixels per CSS pixel: 1 or 2. */
+	scale: number,
+	/**  The page's colours. */
+	surface: LayoutSurface,
+	/**  The font of every block without its own. */
+	font: LayoutFont,
+	/**  The block's own font, by block index; a missing or null entry uses `font`. */
+	blockFonts?: (LayoutFont | null)[],
+};
+
 /**
  *  Convert faces to web fonts. Refused with `PermissionDenied` when the
  *  embedding bits forbid it and no web license is declared.
@@ -2001,6 +2015,16 @@ export type LayoutEntry = {
 	broken?: string | null,
 };
 
+/**  The font a block is set in: a layout file holds no fonts, so an export names them. */
+export type LayoutFont = {
+	/**  The face. */
+	face: FaceId,
+	/**  Variation-axis values; axes not named keep their defaults. */
+	variations?: AxisValue[],
+	/**  OpenType features switched on or off. */
+	features?: FeatureSetting[],
+};
+
 /**  A built-in layout. */
 export type LayoutPreset = 
 /**  A book page: a heading and indented paragraphs in one column. */
@@ -2021,6 +2045,13 @@ export type LayoutRef = {
 	/**  The template file's id. */
 	id: string,
 };
+
+/**  The colours a layout is exported on. */
+export type LayoutSurface = 
+/**  Near-black type on paper white. */
+"paper" | 
+/**  Light type on near-black. */
+"ink";
 
 /**  An earlier content of a template file. */
 export type LayoutVersion = {
@@ -2425,11 +2456,35 @@ export type Paged<T> = {
 
 /**  Faces that pair well with this one (E23.4). */
 export type PairingRequest = {
-	/**  The face to find partners for. */
+	/**
+	 *  The face to find partners for. With `partner_of` set, the face being
+	 *  replaced instead: its family is not suggested.
+	 */
 	face: FaceId,
 	/**  Suggestions to return. */
 	limit: number,
+	/**
+	 *  The role the suggested faces play, which changes how they are scored
+	 *  and the reasons given (ADR 0021). Absent: the plain rules, for no
+	 *  role in particular.
+	 */
+	role?: PairingRole | null,
+	/**
+	 *  The face the suggestions must go with, when that is not `face`:
+	 *  "given this body face, suggest headlines". A face that is not visible
+	 *  is `NotFound`.
+	 */
+	partnerOf?: FaceId | null,
 };
+
+/**  The part a suggested face plays in a layout (E42.13). */
+export type PairingRole = 
+/**  Large type: a title or a heading. */
+"headline" | 
+/**  Running text. */
+"body" | 
+/**  Small type: a note or a label. */
+"caption";
 
 /**  A face suggested as a partner and why. */
 export type PairingSuggestion = {
@@ -2437,7 +2492,11 @@ export type PairingSuggestion = {
 	face: FaceSummary,
 	/**  0.0–1.0; higher pairs better. */
 	score: number | null,
-	/**  Plain-word reasons, one per rule that holds ("same superfamily"). */
+	/**
+	 *  Plain-word reasons, one per rule that holds ("same superfamily"); with
+	 *  a role in the request, those of the role first ("lower contrast for
+	 *  body", "x-height within 4 %").
+	 */
 	reasons: string[],
 };
 
@@ -3012,6 +3071,14 @@ export type Settings = {
 	 *  [`Self::download_folder`]. Off by default.
 	 */
 	fetchMissingFonts?: boolean,
+	/**
+	 *  The named theme (E47.1), one of [`SettingsService::list_themes`]; next
+	 *  to [`Self::theme`], which still chooses its light or dark token set.
+	 *  A `config.json` from before themes gets [`DEFAULT_THEME_ID`] from the
+	 *  struct's defaults; so does a request while the file names a theme this
+	 *  version does not ship.
+	 */
+	themeId?: string,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -3048,6 +3115,11 @@ export type SettingsUpdate = {
 	downloadFolder?: string | null,
 	/**  Download fonts a document needs from the catalogs the user turned on. */
 	fetchMissingFonts?: boolean | null,
+	/**
+	 *  The named theme: the id of one of [`SettingsService::list_themes`];
+	 *  any other id is refused and nothing changes.
+	 */
+	themeId?: string | null,
 };
 
 /**  The shortlist for a brief. */
@@ -3311,6 +3383,37 @@ export type Theme =
 "light" | 
 /**  Always dark. */
 "dark";
+
+/**  A named theme the app ships, from `data/themes` (E47.1). */
+export type ThemeDefinition = {
+	/**  The value of [`Settings::theme_id`], e.g. `paper`. */
+	id: string,
+	/**  The name to show, e.g. `Paper`. */
+	name: string,
+	/**  The tokens for the light appearance. */
+	light: ThemeTokens,
+	/**  The tokens for the dark appearance. */
+	dark: ThemeTokens,
+};
+
+/**
+ *  One token set of a theme: a color for each `--fm-*` token of the same
+ *  name. `#rrggbb`; [`Self::border`] may also be `#rrggbbaa`.
+ */
+export type ThemeTokens = {
+	/**  Rings, fills, knobs and badges. */
+	accent: string,
+	/**  Words and marks on the accent; at least 4.5:1 on it. */
+	onAccent: string,
+	/**  Level 0: the list and the specimens. */
+	bg: string,
+	/**  Level 1: side panes and bars. */
+	surface: string,
+	/**  Level 2: popovers, dialogs and cards. */
+	surface2: string,
+	/**  Hairlines between rows and panels. */
+	border: string,
+};
 
 /**  One copy of a [`Resolution`]. */
 export type TrashMove = {

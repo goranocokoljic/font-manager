@@ -22,7 +22,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, mkdtempSync, rmSync
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadConfig, gh, ghJson, parseArgs, isMain } from './lib.mjs';
-import { blocking } from '../bench/lib.mjs';
+import { blocking, touchesNative } from '../bench/lib.mjs';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -129,8 +129,16 @@ async function bench(prNumber, sha, cfg, deadline) {
     const metrics = JSON.parse(readFileSync(join(dir, String(file)), 'utf8'));
     // The PR report is gated against main (E9.2): a regression is red, a metric
     // already over budget on main is not. An ungated report: over budget is red.
-    const failed = blocking(metrics).map((k) => ({ metric: k, ...metrics[k] }));
-    return { status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion };
+    // A PR that changes no native code (crates, Tauri shell, the bench) cannot
+    // have moved the numbers: its report is kept for the record and never blocks.
+    const files = ghJson(['pr', 'view', String(prNumber), '--json', 'files'])?.files ?? [];
+    const nativeChanged = files.length === 0 || files.some((f) => touchesNative(f.path));
+    const failed = blocking(metrics, { nativeChanged }).map((k) => ({ metric: k, ...metrics[k] }));
+    const informational = !nativeChanged && blocking(metrics).length > 0;
+    return {
+      status: failed.length ? 'red' : 'green', metrics, failed, conclusion: run.conclusion, nativeChanged,
+      ...(informational ? { note: 'bench regressions not counted: the PR changes no native code (crates, src-tauri, bench)' } : {}),
+    };
   } catch (e) {
     return { status: 'error', note: e.message };
   } finally {

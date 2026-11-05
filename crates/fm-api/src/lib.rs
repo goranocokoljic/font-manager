@@ -186,6 +186,7 @@ pub fn types() -> specta::Types {
         search::SimilarFace,
         search::ImageMatchRequest,
         search::PairingRequest,
+        search::PairingRole,
         search::PairingSuggestion,
         // preview
         preview::PreviewRequest,
@@ -274,6 +275,8 @@ pub fn types() -> specta::Types {
         settings::McpUpdate,
         settings::McpGrant,
         settings::McpGrantUpdate,
+        settings::ThemeDefinition,
+        settings::ThemeTokens,
         settings::McpToolCall,
         settings::McpConfirmationAnswer,
         // updates
@@ -299,6 +302,9 @@ pub fn types() -> specta::Types {
         layout::RevertLayoutRequest,
         layout::LayoutVersion,
         layout::RestoreLayoutRequest,
+        layout::LayoutSurface,
+        layout::LayoutFont,
+        layout::ExportLayoutPngRequest,
         // comparisons
         comparison::CompareMode,
         comparison::ComparisonEntry,

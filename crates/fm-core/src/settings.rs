@@ -11,11 +11,14 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
-use fm_api::settings::{AppFolders, Settings, SettingsUpdate};
+use fm_api::settings::{
+    AppFolders, DEFAULT_THEME_ID, Settings, SettingsUpdate, ThemeDefinition, unknown_theme,
+};
 use fm_api::{ApiError, ApiResult, ErrorCode, SettingsService};
 use fm_platform::{AppPaths, Autostart};
 
 use crate::config::Config;
+use crate::themes;
 
 /// Reads and writes the settings in the config file.
 #[derive(Debug)]
@@ -145,9 +148,22 @@ impl SettingsStore {
     }
 }
 
+/// These settings as a caller sees them: a theme id this version does not ship
+/// (a hand edit, a file from a newer version) reads as the default, so the UI
+/// always gets a listed theme. The file keeps the id until the user picks one.
+fn with_known_theme(settings: Settings) -> ApiResult<Settings> {
+    if themes::is_known(&settings.theme_id)? {
+        return Ok(settings);
+    }
+    Ok(Settings {
+        theme_id: DEFAULT_THEME_ID.to_owned(),
+        ..settings
+    })
+}
+
 impl SettingsService for SettingsStore {
     fn get_settings(&self) -> ApiResult<Settings> {
-        Ok(Settings {
+        with_known_theme(Settings {
             start_at_login: self.start_at_login(),
             ..Config::load(&self.file)?.settings
         })
@@ -161,6 +177,11 @@ impl SettingsService for SettingsStore {
             ..config.settings
         };
         // Every value is checked before the OS or the file changes.
+        if let Some(id) = &req.theme_id
+            && !themes::is_known(id)?
+        {
+            return Err(unknown_theme(id));
+        }
         let next = current.apply(&req)?;
         if let Some(on) = req.start_at_login
             && current.start_at_login != Some(on)
@@ -172,7 +193,7 @@ impl SettingsService for SettingsStore {
             ..next
         };
         config.save(&self.file)?;
-        Ok(Settings {
+        with_known_theme(Settings {
             start_at_login: self.start_at_login(),
             ..config.settings
         })
@@ -180,6 +201,10 @@ impl SettingsService for SettingsStore {
 
     fn app_folders(&self) -> ApiResult<AppFolders> {
         Ok(self.folders.clone())
+    }
+
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        Ok(themes::load()?.to_vec())
     }
 }
 
@@ -271,6 +296,90 @@ mod tests {
                 .expect("json");
         assert_eq!(json["downloadFolder"], folder.as_str());
         assert!(!dir.path().join("Font Manager Fonts").exists(), "not made");
+    }
+
+    #[test]
+    fn the_theme_id_is_saved_in_the_file_and_read_by_the_next_start() {
+        let dir = TempDir::new("settings-theme-id");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        let file = paths.config_file();
+        // A file from before themes keeps its other values and gets Paper.
+        fs::write(&file, r#"{"theme":"dark"}"#).expect("write");
+        let store = SettingsStore::new(&paths);
+        let old = store.get_settings().expect("settings");
+        assert_eq!(old.theme_id, "paper");
+        assert_eq!(old.theme, Theme::Dark);
+
+        let saved = store
+            .update_settings(SettingsUpdate {
+                theme_id: Some("moss".into()),
+                ..SettingsUpdate::default()
+            })
+            .expect("saved");
+        assert_eq!(saved.theme_id, "moss");
+        assert_eq!(saved.theme, Theme::Dark, "the two settings are separate");
+        let json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&file).expect("read")).expect("json");
+        assert_eq!(json["themeId"], "moss");
+        let next_start = SettingsStore::new(&paths);
+        assert_eq!(
+            next_start.get_settings().expect("settings").theme_id,
+            "moss"
+        );
+    }
+
+    #[test]
+    fn an_unknown_theme_id_is_refused_and_nothing_changes() {
+        let dir = TempDir::new("settings-theme-unknown");
+        let paths = paths_in(&dir);
+        let store = SettingsStore::new(&paths);
+        for id in ["no-such-theme", "", "Paper"] {
+            let e = store
+                .update_settings(SettingsUpdate {
+                    theme_id: Some(id.into()),
+                    density: Some(Density::Compact),
+                    ..SettingsUpdate::default()
+                })
+                .expect_err("unknown");
+            assert_eq!(e.code, ErrorCode::InvalidRequest, "{id:?}");
+        }
+        let settings = store.get_settings().expect("settings");
+        assert_eq!(settings.theme_id, "paper");
+        assert_eq!(settings.density, Density::Comfortable);
+    }
+
+    #[test]
+    fn a_theme_this_version_lacks_reads_as_paper_and_stays_in_the_file_until_changed() {
+        let dir = TempDir::new("settings-theme-newer");
+        let paths = paths_in(&dir);
+        fs::create_dir_all(&paths.config).expect("folder");
+        let file = paths.config_file();
+        fs::write(&file, r#"{"themeId":"from-a-newer-version"}"#).expect("write");
+        let in_file = || -> serde_json::Value {
+            serde_json::from_str(&fs::read_to_string(&file).expect("read")).expect("json")
+        };
+        let store = SettingsStore::new(&paths);
+        assert_eq!(store.get_settings().expect("settings").theme_id, "paper");
+
+        // Another update answers with Paper and writes the user's id back.
+        let other = store
+            .update_settings(SettingsUpdate {
+                density: Some(Density::Compact),
+                ..SettingsUpdate::default()
+            })
+            .expect("saved");
+        assert_eq!(other.theme_id, "paper");
+        assert_eq!(in_file()["themeId"], "from-a-newer-version");
+
+        // A listed id replaces it.
+        store
+            .update_settings(SettingsUpdate {
+                theme_id: Some("indigo".into()),
+                ..SettingsUpdate::default()
+            })
+            .expect("saved");
+        assert_eq!(in_file()["themeId"], "indigo");
     }
 
     #[test]

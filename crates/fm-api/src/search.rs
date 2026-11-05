@@ -367,14 +367,37 @@ pub struct ImageMatchRequest {
     pub limit: u32,
 }
 
+/// The part a suggested face plays in a layout (E42.13).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub enum PairingRole {
+    /// Large type: a title or a heading.
+    Headline,
+    /// Running text.
+    Body,
+    /// Small type: a note or a label.
+    Caption,
+}
+
 /// Faces that pair well with this one (E23.4).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
 pub struct PairingRequest {
-    /// The face to find partners for.
+    /// The face to find partners for. With `partner_of` set, the face being
+    /// replaced instead: its family is not suggested.
     pub face: FaceId,
     /// Suggestions to return.
     pub limit: u32,
+    /// The role the suggested faces play, which changes how they are scored
+    /// and the reasons given (ADR 0021). Absent: the plain rules, for no
+    /// role in particular.
+    #[serde(default)]
+    pub role: Option<PairingRole>,
+    /// The face the suggestions must go with, when that is not `face`:
+    /// "given this body face, suggest headlines". A face that is not visible
+    /// is `NotFound`.
+    #[serde(default)]
+    pub partner_of: Option<FaceId>,
 }
 
 /// A face suggested as a partner and why.
@@ -385,7 +408,9 @@ pub struct PairingSuggestion {
     pub face: FaceSummary,
     /// 0.0–1.0; higher pairs better.
     pub score: f32,
-    /// Plain-word reasons, one per rule that holds ("same superfamily").
+    /// Plain-word reasons, one per rule that holds ("same superfamily"); with
+    /// a role in the request, those of the role first ("lower contrast for
+    /// body", "x-height within 4 %").
     pub reasons: Vec<String>,
 }
 
@@ -430,6 +455,7 @@ pub trait SearchService {
     fn find_by_image(&self, req: ImageMatchRequest) -> ApiResult<Vec<SimilarFace>>;
     /// Faces of other families that pair with this one by rule: contrasting
     /// classes, a matching x-height, the same designer or superfamily. Best
-    /// first; a face no rule holds for is not suggested.
+    /// first; a face no rule holds for is not suggested. A role in the request
+    /// also weighs stroke contrast, x-height, width and era for that role.
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>>;
 }

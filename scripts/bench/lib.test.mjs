@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   BUDGETS, COMMENT_MARKER, OSES, SCAN_FILES, activation100, blocking, failures, firstScan, fontsNeeded100, gate, median, merge, metric, target,
-  nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe,
+  nightlyRunsArgs, osName, parseCli, parseRss, renderTable, renderTrend, rssProbe, touchesNative,
 } from './lib.mjs';
 import { loadHistory } from './bench.mjs';
 
@@ -48,7 +48,7 @@ describe('metric', () => {
   test('every budget of CLAUDE.md rule 8 is in the report', () => {
     assert.deepEqual(Object.keys(BUDGETS).sort(), [
       'activation_100', 'cold_start', 'first_scan', 'fonts_needed_100', 'idle_memory', 'incremental_update',
-      'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
+      'layout_png', 'pairings', 'preview_cache_hit', 'search', 'similar', 'smart_collections',
     ]);
     assert.equal(BUDGETS.preview_cache_hit.target, 2);
     assert.equal(BUDGETS.first_scan.target, 10000);
@@ -304,8 +304,32 @@ describe('regression gate (E9.2)', () => {
     assert.equal(parseCli(['gate', '--accept']).accept, true);
   });
 
-  test('crossing the budget fails even by less than 10%', () => {
-    assert.equal(gate(linux({ cold_start: 1020 }), nightly({ cold_start: 980 }))['linux.cold_start'].regressed, true);
+  test('crossing the budget fails when the step is above the noise floor, not by runner jitter', () => {
+    // 980 -> 1020 ms is 4%: the runner, not the PR (macOS activation sat at 523..932 ms on
+    // four nights of the same main, then crossed 1 s on a PR with no Rust in it).
+    assert.equal(gate(linux({ cold_start: 1020 }), nightly({ cold_start: 980 }))['linux.cold_start'].regressed, false);
+    // 790 -> 1020 ms crosses the budget by a step of 230 ms, above the 200 ms noise floor.
+    assert.equal(gate(linux({ cold_start: 1020 }), nightly({ cold_start: 790 }))['linux.cold_start'].regressed, true);
+    assert.equal(gate(linux({ cold_start: 1210 }), nightly({ cold_start: 980 }))['linux.cold_start'].regressed, true, 'a 230 ms step over the budget');
+  });
+
+  test('a PR with no native change is informed by the bench, never blocked by it', () => {
+    const gated = gate(linux({ cold_start: 1300, search: 60 }), nightly({ cold_start: 400, search: 10 }));
+    assert.deepEqual(blocking(gated).sort(), ['linux.cold_start', 'linux.search'], 'a Rust change blocks');
+    assert.deepEqual(blocking(gated, { nativeChanged: false }), [], 'a Vue change cannot have moved the numbers');
+    const missing = gate(merge([report('linux', { search: 10 })], ['linux', 'macos']), nightly({ search: 10 }));
+    assert.deepEqual(blocking(missing, { nativeChanged: false }), [], 'nor does a missing OS report block it');
+    const nightlyReport = linux({ first_scan: 20000 });
+    assert.deepEqual(blocking(nightlyReport, { nativeChanged: false }), failures(nightlyReport), 'the nightly keeps its budgets');
+  });
+
+  test('native paths are the crates, their manifests, the Tauri shell and the bench itself', () => {
+    for (const p of ['crates/fm-core/src/lib.rs', 'Cargo.toml', 'Cargo.lock', 'apps/desktop/src-tauri/src/main.rs', 'scripts/bench.sh', 'scripts/bench/lib.mjs', '.github/workflows/bench.yml']) {
+      assert.equal(touchesNative(p), true, p);
+    }
+    for (const p of ['apps/desktop/src/components/FontGrid.vue', 'apps/desktop/e2e/wall.spec.ts', 'apps/desktop/src/api/types.ts', 'dev-docs/harness/parking-lot.md', '.github/workflows/ci.yml', 'scripts/harness/pick.mjs']) {
+      assert.equal(touchesNative(p), false, p);
+    }
   });
 
   test('without a nightly value on main the budget is the gate', () => {

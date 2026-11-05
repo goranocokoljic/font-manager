@@ -17,7 +17,7 @@ export const SCHEMA = 1;
  * "a cache hit returns in under 2 ms"; smart_collections: E14.2, a search by a
  * smart collection and list_collections with 20 of them, each under 50 ms;
  * similar: E23.2, 20 similar faces in under 50 ms; pairings: E23.4,
- * suggest_pairings under 50 ms).
+ * suggest_pairings under 50 ms; layout_png: E45.5, an A4 page at 2x under 1 s).
  * target null = reported, not budgeted.
  * `byOs` overrides the target on one OS; each override is recorded in an ADR.
  */
@@ -35,6 +35,7 @@ export const BUDGETS = {
   smart_collections: { unit: 'ms', target: 50 },
   similar: { unit: 'ms', target: 50 },
   pairings: { unit: 'ms', target: 50 },
+  layout_png: { unit: 'ms', target: 1000 },
 };
 
 export const OSES = ['windows', 'macos', 'linux'];
@@ -181,7 +182,9 @@ export function nightlyRunsArgs(limit) {
  * `baseline` (slowest of the last `runs` values on main), `change`
  * (fraction vs the baseline) and `regressed`:
  *   - more than `tolerance` worse than the baseline (and above the noise floor), or
- *   - over its budget while the baseline was within it.
+ *   - over its budget while the baseline was within it, by a step above the noise floor
+ *     (a shared runner crosses a budget it sits just under on its own: macOS activation
+ *     ran 523, 696, 815, 932 ms on four nights of the same code, then 1126 on a PR).
  * A metric already over budget on main (known red) blocks only when it gets
  * slower still. Without a nightly value on main the budget is the gate:
  * `regressed` = over budget. Unbudgeted or unmeasured metrics get `regressed: null`.
@@ -200,8 +203,9 @@ export function gate(current, history, { tolerance = REGRESSION_TOLERANCE, runs 
     let change = null;
     if (baseline != null) {
       change = baseline === 0 ? null : Math.round(((m.value - baseline) / baseline) * 1000) / 1000;
-      const slower = m.value - baseline > NOISE_FLOOR * m.target && m.value > baseline * (1 + tolerance);
-      regressed = slower || (m.pass === false && baseline <= m.target);
+      const aboveNoise = m.value - baseline > NOISE_FLOOR * m.target;
+      const slower = aboveNoise && m.value > baseline * (1 + tolerance);
+      regressed = slower || (m.pass === false && baseline <= m.target && aboveNoise);
     }
     out[key] = { ...m, baseline, change, regressed };
   }
@@ -209,12 +213,24 @@ export function gate(current, history, { tolerance = REGRESSION_TOLERANCE, runs 
 }
 
 /**
- * The entries that make the bench check red. A gated report (a PR): the
- * regressions and the missing OS reports. Otherwise (nightly): every metric over budget.
+ * Paths whose change can move a bench number: the Rust crates and their
+ * manifests, the Tauri shell, the bench itself. A PR that touches none of them
+ * (a Vue view, a test, docs) cannot have changed the numbers, so its bench
+ * report is information, not a gate.
  */
-export function blocking(report, { accept = false } = {}) {
+export function touchesNative(path) {
+  return /^(crates\/|Cargo\.(toml|lock)$|apps\/desktop\/src-tauri\/|scripts\/bench(\.sh|\/)|\.github\/workflows\/bench\.yml$)/.test(path);
+}
+
+/**
+ * The entries that make the bench check red. A gated report (a PR): the
+ * regressions and the missing OS reports, and none at all when the PR changes
+ * no native code (`nativeChanged: false`). Otherwise (nightly): every metric over budget.
+ */
+export function blocking(report, { accept = false, nativeChanged = true } = {}) {
   const entries = Object.entries(report);
   const gated = entries.some(([, m]) => 'regressed' in m);
+  if (gated && !nativeChanged) return [];
   // `accept` (the PR's `bench:accept` label): a regression that stays within
   // its budget is the known cost of the feature, so it no longer blocks.
   const regressed = (m) => m.regressed === true && !(accept && m.pass !== false);

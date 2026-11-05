@@ -1,0 +1,21 @@
+{
+  "$schema": "./theme.schema.json",
+  "id": "moss",
+  "name": "Moss",
+  "light": {
+    "accent": "#4f7033",
+    "on-accent": "#ffffff",
+    "bg": "#fefefb",
+    "surface": "#f6f7f1",
+    "surface-2": "#ffffff",
+    "border": "#2a331a17"
+  },
+  "dark": {
+    "accent": "#8fb573",
+    "on-accent": "#141413",
+    "bg": "#1a1c17",
+    "surface": "#21241d",
+    "surface-2": "#262922",
+    "border": "#e6f0d817"
+  }
+}

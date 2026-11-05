@@ -1,0 +1,21 @@
+{
+  "$schema": "./theme.schema.json",
+  "id": "paper",
+  "name": "Paper",
+  "light": {
+    "accent": "#c56eb2",
+    "on-accent": "#141413",
+    "bg": "#ffffff",
+    "surface": "#f6f6f7",
+    "surface-2": "#ffffff",
+    "border": "#00000017"
+  },
+  "dark": {
+    "accent": "#ab4b96",
+    "on-accent": "#ffffff",
+    "bg": "#1c1c1e",
+    "surface": "#242426",
+    "surface-2": "#262628",
+    "border": "#ffffff17"
+  }
+}
