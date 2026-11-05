@@ -24,6 +24,10 @@ const props = defineProps<{
   defer?: boolean;
   /** The width the text must fit, in CSS px; wider text shrinks so it is never cut. */
   fitWidth?: number;
+  /** Wraps the text and shows at most this many whole lines (a wrapped preset, E41.2). */
+  wrapLines?: number;
+  /** The line height of wrapped text. */
+  lineHeight?: number;
 }>();
 
 const loader = useFaceLoader();
@@ -83,13 +87,15 @@ const style = computed(() => ({
   fontPalette: props.palette,
   letterSpacing: props.trackingEm ? `${props.trackingEm}em` : undefined,
   color: props.color ?? undefined,
+  lineHeight: props.lineHeight,
+  '--fm-wrap-lines': props.wrapLines,
 }));
 </script>
 
 <template>
   <div
     class="live"
-    :class="{ outline }"
+    :class="{ outline, wrap: wrapLines !== undefined }"
     dir="auto"
     data-testid="card-live-text"
     :data-state="state"
@@ -114,6 +120,18 @@ const style = computed(() => ({
 }
 .line {
   flex: none;
+}
+.live.wrap {
+  justify-content: flex-start;
+  white-space: normal;
+}
+.wrap .line {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--fm-wrap-lines);
 }
 .live.outline {
   -webkit-text-fill-color: transparent;

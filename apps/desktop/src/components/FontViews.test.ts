@@ -288,8 +288,95 @@ describe('FontGrid', () => {
     expect(renders.at(-1)!.text).toBe(long);
     expect(maskWidth(card())).toBeCloseTo(room, 3);
     await grid.setProps({ preview: preview('Ag') });
+    // The thumbnail of a typed text is asked for once the keys rest.
+    await vi.waitFor(() => expect(maskWidth(card())).toBeLessThan(room));
+  });
+
+  it('a typed text shows live at once, asks for no render per key, then takes its thumbnail', async () => {
+    await load({ extraFaces: 4 });
+    const preview = (customText: string) => ({
+      ...DEFAULT_PREVIEW,
+      sample: 'custom' as const,
+      customText,
+    });
+    const grid = await mountView(FontGrid, { preview: preview('Ag') });
+    await vi.waitFor(() =>
+      expect(grid.findAll('[data-testid="thumbnail"][data-state="ready"]').length).toBeGreaterThan(
+        0,
+      ),
+    );
+    renders.length = 0;
+    const card = () => grid.findAll('[role="option"]')[0]!;
+
+    await grid.setProps({ preview: preview('Ham') });
+    // In the same tick: the old text is gone, the new one is on the card.
+    expect(card().get('[data-testid="card-live-text"]').text()).toBe('Ham');
+    await grid.setProps({ preview: preview('Hamb') });
     await flushPromises();
-    expect(maskWidth(card())).toBeLessThan(room);
+    expect(card().get('[data-testid="card-live-text"]').text()).toBe('Hamb');
+    expect(renders).toHaveLength(0);
+
+    await vi.waitFor(() => expect(renders.some((r) => r.text === 'Hamb')).toBe(true));
+    expect(renders.some((r) => r.text === 'Ham')).toBe(false);
+    await vi.waitFor(() =>
+      expect(card().get('[data-testid="thumbnail"]').attributes('data-state')).toBe('ready'),
+    );
+    expect(card().find('[data-testid="card-live-text"]').exists()).toBe(false);
+  });
+
+  it('a card with no text typed waits for its thumbnail; it loads no face', async () => {
+    await load({ extraFaces: 4 });
+    // Thumbnails that never arrive: only a typed text may turn a waiting card live.
+    setClient({ ...useClient(), renderPreview: () => new Promise(() => undefined) });
+    const grid = await mountView(FontGrid, { preview: { ...DEFAULT_PREVIEW } });
+    expect(grid.find('[data-testid="card-live-text"]').exists()).toBe(false);
+    // The slider changes no text.
+    await grid.setProps({ preview: { ...DEFAULT_PREVIEW, sizePx: 60 } });
+    expect(grid.find('[data-testid="card-live-text"]').exists()).toBe(false);
+    await grid.setProps({
+      preview: { ...DEFAULT_PREVIEW, sizePx: 60, customText: 'A', sample: 'custom' },
+    });
+    expect(grid.find('[data-testid="card-live-text"]').exists()).toBe(true);
+  });
+
+  it('a wrapped preset shows live wrapped text at the fixed body size and asks for no render', async () => {
+    await load({ extraFaces: 4 });
+    renders.length = 0;
+    const grid = await mountView(FontGrid, {
+      preview: { ...DEFAULT_PREVIEW, preset: 'paragraph', sample: 'paragraph', sizePx: 120 },
+    });
+    await flushPromises();
+    const live = grid.findAll('[data-testid="card-live-text"]')[0]!;
+    expect(live.classes()).toContain('wrap');
+    expect((live.element as HTMLElement).style.fontSize).toBe('17px');
+    expect((live.element as HTMLElement).style.lineHeight).toBe('1.45');
+    expect(live.text()).toMatch(/^Typography is the craft.*keeps them reading\.$/);
+    expect(renders).toHaveLength(0);
+  });
+
+  it('a one-line preset scales the thumbnail by the preset, not by the slider alone', async () => {
+    await load({ extraFaces: 4 });
+    const mock = useClient();
+    setClient({
+      ...mock,
+      renderPreview: async (req) => ({
+        ...(await mock.renderPreview(req)),
+        width: req.text.length * 8,
+        height: 140,
+      }),
+    });
+    const widthAt = async (preset: 'word' | 'numerals') => {
+      const grid = await mountView(FontGrid, {
+        preview: { ...DEFAULT_PREVIEW, preset, sample: 'numerals', sizePx: 40 },
+      });
+      await vi.waitFor(() =>
+        expect(maskWidth(grid.findAll('[role="option"]')[0]!)).toBeGreaterThan(0),
+      );
+      const w = maskWidth(grid.findAll('[role="option"]')[0]!);
+      grid.unmount();
+      return w;
+    };
+    expect(await widthAt('numerals')).toBeCloseTo((await widthAt('word')) * 0.75, 3);
   });
 
   it('a long line on a HiDPI display renders inside the canvas and keeps its true size', async () => {

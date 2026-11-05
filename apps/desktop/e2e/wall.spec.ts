@@ -86,7 +86,7 @@ test.describe('the wall', () => {
 
   test('the specimen is centred and a wide one is never cut', async ({ page }) => {
     const wall = await openWall(page);
-    await page.getByRole('textbox', { name: 'Custom text' }).fill('Supercalifragilistic');
+    await page.getByRole('textbox', { name: 'Type to preview' }).fill('Supercalifragilistic');
     await setSize(page, 120);
     const thumb = cards(wall).first().getByTestId('thumbnail');
     await expect(thumb).toHaveAttribute('data-state', 'ready');
@@ -107,7 +107,7 @@ test.describe('the wall', () => {
 
   test('live text shrinks to fit and is never cut', async ({ page }) => {
     const wall = await openWall(page);
-    await page.getByRole('textbox', { name: 'Custom text' }).fill('Supercalifragilistic');
+    await page.getByRole('textbox', { name: 'Type to preview' }).fill('Supercalifragilistic');
     await showPreviewOptions(page);
     await page.getByRole('slider', { name: 'Tracking slider' }).fill('0.1');
     await setSize(page, 120);

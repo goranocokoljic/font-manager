@@ -194,9 +194,9 @@
     "settings": "Preview settings",
     "sample": "Sample",
     "language": "Language",
-    "customText": "Custom text",
-    "heroPlaceholder": "Type to preview your own text",
-    "options": "Options",
+    "customText": "Type to preview",
+    "heroPlaceholder": "Type to preview",
+    "options": "Preview options",
     "customPlaceholder": "Type a sample",
     "size": "Size",
     "sizeSlider": "Size slider",
@@ -237,6 +237,26 @@
       "px": "{size} px",
       "useToolbar": "Use toolbar size",
       "empty": "Select a family to preview it here."
+    },
+    "focusField": "Focus the preview field",
+    "preset": "Preset",
+    "noPangram": "No pangram for this language yet",
+    "presets": {
+      "word": "Word",
+      "pangram": "Pangram",
+      "alphabet": "Alphabet",
+      "numerals": "Numerals",
+      "paragraph": "Paragraph"
+    },
+    "hints": {
+      "custom": {
+        "one": "renders in {count} font",
+        "other": "renders in {count} fonts"
+      },
+      "pangram": "a pangram · every letter once",
+      "alphabet": "the character set at a glance",
+      "numerals": "figures · tabular where the font has them",
+      "paragraph": "body text at {size} px"
     }
   },
   "samples": {
@@ -246,7 +266,8 @@
       "lorem": "Lorem ipsum",
       "alphabet": "Alphabet",
       "numerals": "Numerals",
-      "fontName": "Font name"
+      "fontName": "Font name",
+      "paragraph": "Paragraph"
     }
   },
   "home": {
@@ -535,7 +556,8 @@
       "views": "List, Table, Grid, Waterfall, Layout",
       "sidebar": "Sidebar",
       "inspector": "Inspector",
-      "settings": "Settings"
+      "settings": "Settings",
+      "previewField": "Focus the preview field"
     }
   },
   "palette": {

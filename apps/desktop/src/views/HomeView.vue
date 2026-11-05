@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
@@ -24,6 +24,7 @@ import UiSegmentedControl from '../components/ui/UiSegmentedControl.vue';
 import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
+import PreviewSizeSlider from '../components/PreviewSizeSlider.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
@@ -459,6 +460,15 @@ function showFace(face: FaceId): void {
   void router.replace({ query: { ...route.query, face: String(face) } });
 }
 
+const browse = ref<HTMLElement | null>(null);
+
+/** Escape in the search box or the preview field: back to the font list the keys drive. */
+function focusList(): void {
+  browse.value
+    ?.querySelector<HTMLElement>('[role="listbox"], [role="tree"], [role="treegrid"]')
+    ?.focus({ preventScroll: true });
+}
+
 /** Enter on a style: show it, opening the inspector when it is hidden. */
 function openFace(face: FaceId): void {
   showFace(face);
@@ -497,7 +507,7 @@ function openFace(face: FaceId): void {
             @click="layout.toggleSidebar"
           />
           <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
-          <SearchBox />
+          <SearchBox @leave="focusList" />
           <p class="count" role="status">
             <template v-if="fontList.selectedCount > 1">{{
               t('home.selected', { count: fontList.selectedCount })
@@ -547,13 +557,19 @@ function openFace(face: FaceId): void {
             :title="t('home.inspectorTitle')"
             @click="layout.toggleInspector"
           />
+          <PreviewSizeSlider
+            :view="ALL_FONTS_VIEW"
+            :size-range="mode === 'grid' ? WALL_SIZE : undefined"
+          />
         </header>
-        <div v-show="!similar.open" class="browse">
+        <div v-show="!similar.open" ref="browse" class="browse">
           <CollectionHeader />
           <FilterChips />
           <PreviewControls
             :view="ALL_FONTS_VIEW"
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
+            :font-count="search.total"
+            @leave="focusList"
           />
           <template v-if="fontList.families.length && mode === 'table'">
             <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
@@ -695,6 +711,7 @@ function openFace(face: FaceId): void {
   margin: 0;
   font-size: var(--fm-text-md);
   font-weight: 600;
+  white-space: nowrap;
 }
 .count {
   flex: 1;

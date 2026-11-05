@@ -18,7 +18,6 @@ async function open(page: Page) {
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
   await page.goto('/#/');
-  await showPreviewOptions(page);
 }
 
 const list = (page: Page) => page.getByRole('tree', { name: 'Font list' });
@@ -67,10 +66,10 @@ test('the review lists the fonts with the preview settings; each drops by key or
   page,
 }) => {
   await open(page);
-  await page
-    .getByRole('group', { name: 'Preview settings' })
-    .getByLabel('Size in pixels')
-    .fill('40');
+  await showPreviewOptions(page);
+  const size = page.getByRole('group', { name: 'Preview settings' }).getByLabel('Size in pixels');
+  await size.fill('40');
+  await size.press('Escape');
   await addTwo(page);
   await page.getByTestId('quick-collection').click();
   await expect(page.getByRole('heading', { name: 'Quick Collection' })).toBeVisible();

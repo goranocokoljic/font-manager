@@ -11,7 +11,11 @@ import {
   specimenScale,
   specimenText,
   SPECIMEN_TEXT_MAX,
+  PARAGRAPH_PX,
   WALL,
+  WALL_PRESETS,
+  wallSpecimenPx,
+  wrappedLines,
   wallCardHeight,
   wallCardWidth,
   wallColumns,
@@ -136,5 +140,66 @@ describe('the wall (E41.1)', () => {
     expect(specimenScale(480, 50, box)).toBe(0.5);
     expect(specimenScale(100, 354, box)).toBe(0.5);
     expect(specimenScale(0, 0, box)).toBe(1);
+  });
+});
+
+describe('the wall presets (E41.2)', () => {
+  // The wall at 1440 px, with the board's sidebar and no inspector.
+  const WIDE = 1208;
+
+  it('scales the slider by the preset: 1, 0.6, 0.42, 0.75, and a fixed Paragraph', () => {
+    expect(wallSpecimenPx(100)).toBe(100);
+    expect(wallSpecimenPx(100, 'word')).toBe(100);
+    expect(wallSpecimenPx(100, 'pangram')).toBeCloseTo(60, 6);
+    expect(wallSpecimenPx(100, 'alphabet')).toBeCloseTo(42, 6);
+    expect(wallSpecimenPx(100, 'numerals')).toBe(75);
+    expect(wallSpecimenPx(24, 'paragraph')).toBe(PARAGRAPH_PX);
+    expect(wallSpecimenPx(120, 'paragraph')).toBe(PARAGRAPH_PX);
+  });
+
+  it('keeps the slider inside the wall range before it scales', () => {
+    expect(wallSpecimenPx(300, 'numerals')).toBe(90);
+    expect(wallSpecimenPx(8, 'numerals')).toBe(18);
+  });
+
+  it('lays each preset out as its board: 4 / 2 / 2 / 4 / 2 columns at 1440', () => {
+    expect(wallColumns(WIDE, 60, 'word')).toBe(4);
+    expect(wallColumns(WIDE, 60, 'pangram')).toBe(2);
+    expect(wallColumns(WIDE, 60, 'alphabet')).toBe(2);
+    expect(wallColumns(WIDE, 60, 'numerals')).toBe(4);
+    expect(wallColumns(WIDE, 60, 'paragraph')).toBe(2);
+  });
+
+  it('gives each preset the card height of its board at the slider of the boards', () => {
+    expect(wallCardHeight(60, 'word')).toBe(227);
+    expect(wallCardHeight(60, 'pangram')).toBe(183);
+    expect(wallCardHeight(60, 'alphabet')).toBe(204);
+    expect(wallCardHeight(60, 'numerals')).toBe(184);
+    expect(wallCardHeight(60, 'paragraph')).toBe(184);
+  });
+
+  it('a bigger size asks for wider cards, but not in the fixed Paragraph', () => {
+    expect(wallColumns(WIDE, 120, 'word')).toBeLessThan(wallColumns(WIDE, 60, 'word'));
+    expect(wallColumns(WIDE, 120, 'numerals')).toBeLessThan(wallColumns(WIDE, 60, 'numerals'));
+    expect(wallMinWidth(120, 'pangram')).toBeGreaterThan(wallMinWidth(60, 'pangram'));
+    expect(wallColumns(WIDE, 120, 'paragraph')).toBe(wallColumns(WIDE, 24, 'paragraph'));
+    expect(wallCardHeight(120, 'paragraph')).toBe(wallCardHeight(24, 'paragraph'));
+  });
+
+  it('only Alphabet and Paragraph wrap', () => {
+    const wrapping = Object.entries(WALL_PRESETS).flatMap(([id, p]) => (p.wrapped ? [id] : []));
+    expect(wrapping).toEqual(['alphabet', 'paragraph']);
+  });
+
+  it('counts the whole lines of wrapped text that fit; at least one', () => {
+    expect(wrappedLines(131, 17, 1.45)).toBe(5);
+    expect(wrappedLines(10, 17, 1.45)).toBe(1);
+  });
+
+  it('the specimen box and the line follow the preset', () => {
+    expect(specimenBox(500, 60, 'pangram').height).toBe(
+      wallCardHeight(60, 'pangram') - WALL.chromePx,
+    );
+    expect(wallLinePx(60, 'alphabet')).toBe(wallCardHeight(60, 'alphabet') + WALL.gap);
   });
 });

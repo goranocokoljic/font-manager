@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FaceSummary } from '../api/types';
 import { mockFaces, mockLanguages } from '../api/mock';
 import { FaceLoader, faceFamily, setFaceLoader } from '../preview/faceLoader';
+import { ALPHABET } from '../preview/sampleText';
 import { useSearchStore } from '../stores/search';
 import { useCompareStore } from '../stores/compare';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
@@ -95,7 +96,7 @@ describe('compare sheet', () => {
     const samples = wrapper.findAll('.face .sample');
     expect(samples).toHaveLength(3);
     for (const p of samples) {
-      expect(p.text()).toBe('ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz');
+      expect(p.text()).toBe(ALPHABET);
       expect((p.element as HTMLElement).style.fontSize).toBe('80px');
     }
     expect((samples[2]!.element as HTMLElement).style.fontFamily).toContain(faceFamily(202));

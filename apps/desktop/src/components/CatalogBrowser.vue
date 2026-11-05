@@ -234,7 +234,7 @@ const surfaceClass = computed(() =>
       @close="downloadClosed"
     />
     <CatalogInstall v-if="store.install && store.install.catalog === catalog.id" />
-    <PreviewControls :view="CATALOG_VIEW" />
+    <PreviewControls :view="CATALOG_VIEW" inline-size />
 
     <div v-if="!catalog.enabled" class="empty" data-testid="catalog-off">
       <p>{{ t('catalogs.off', { name: catalog.name }) }}</p>

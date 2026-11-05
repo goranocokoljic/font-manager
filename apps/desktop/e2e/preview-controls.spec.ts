@@ -30,6 +30,8 @@ test('preview controls apply to all rows live and persist after a reload', async
 
   await selectOption(controls.getByLabel('Sample'), 'pangram');
   await selectOption(controls.getByLabel('Language'), 'de');
+  // A press on the row outside the popover closes it.
+  await showPreviewOptions(page);
   await controls.getByLabel('Size in pixels').fill('72');
   await controls.getByLabel('Line height').fill('1.5');
   await controls.getByLabel('Tracking in em').fill('0.1');
@@ -68,7 +70,7 @@ test('the font-name and custom samples show per-face text', async ({ page }) => 
   await expect(page.locator('[data-face="1"] .sample')).toHaveText('Inter Regular');
   await expect(page.locator('[data-face="6"] .sample')).toHaveText('JetBrains Mono Regular');
   await selectOption(controls.getByLabel('Sample'), 'custom');
-  await controls.getByLabel('Custom text').fill('Hamburgefonstiv');
+  await controls.getByLabel('Type to preview').fill('Hamburgefonstiv');
   await expect(page.locator('[data-face="6"] .sample')).toHaveText('Hamburgefonstiv');
 });
 
@@ -86,8 +88,6 @@ test('auto size scales each row by its x-height or cap height, by keyboard, and 
   await expect(autoSize).toHaveAttribute('data-value', 'off');
   // Keyboard-reachable: Tab from the size field lands on it (line height comes after).
   await controls.getByLabel('Size in pixels').focus();
-  // The Options toggle sits between Size and the options row.
-  await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await expect(autoSize).toBeFocused();
 
@@ -121,8 +121,13 @@ test('the pangram picker lists the API languages and shows Serbian (Cyrillic)', 
   await expect(language).toHaveAttribute('data-value', 'en');
   const names = await optionLabels(language);
   expect(names).toContain('Serbian (Cyrillic)');
-  // A preset without a pangram is not offered.
-  expect(names).not.toContain('Maltese');
+  // A preset without a pangram is listed, but it cannot be chosen.
+  await language.click();
+  await expect(page.getByRole('option', { name: 'Maltese', exact: true })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+  await language.press('Escape');
   await selectOption(language, { label: 'Serbian (Cyrillic)' });
   await expect(page.locator('[data-face="1"] .sample')).toHaveText(
     'Љубазни фењерџија чађавог лица хоће да ми покаже штос',

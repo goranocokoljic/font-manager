@@ -54,6 +54,7 @@ const groups = computed(() => [
   {
     title: t('shortcuts.groups.view'),
     rows: [
+      { label: t('shortcuts.rows.previewField'), keys: [chord(ACTIONS.previewField)] },
       { label: t('shortcuts.rows.views'), keys: ['1–5'] },
       { label: t('shortcuts.rows.sidebar'), keys: ['['] },
       { label: t('shortcuts.rows.inspector'), keys: [']'] },
