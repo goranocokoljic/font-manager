@@ -69,6 +69,27 @@ test.describe('the preview row', () => {
     expect(toggle!.x).toBeGreaterThan(language!.x + language!.width - 1);
   });
 
+  test('at the smallest window the divider stays between the chips and the language', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1000, height: 700 });
+    await page.goto('/?mockLibrary=wall#/');
+    await expect(field(page)).toBeVisible();
+    const middle = async (target: Locator) => {
+      const box = await target.boundingBox();
+      return box!.y + box!.height / 2;
+    };
+    const chips = row(page).getByRole('group', { name: 'Preset' });
+    const divider = row(page).locator('.divider');
+    const language = row(page).getByLabel('Language');
+    // One row: the field above it, and all of it on the screen.
+    expect(await middle(divider)).toBeCloseTo(await middle(chips), 0);
+    expect(await middle(language)).toBeCloseTo(await middle(chips), 0);
+    expect(await middle(field(page))).toBeLessThan((await chips.boundingBox())!.y);
+    const toggle = await row(page).getByRole('button', { name: 'Preview options' }).boundingBox();
+    expect(toggle!.x + toggle!.width).toBeLessThanOrEqual(1000);
+  });
+
   test('each preset is its own wall layout, as the boards draw it', async ({ page }) => {
     const wall = await openWall(page);
     await setSize(page, 60);

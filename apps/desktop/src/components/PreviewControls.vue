@@ -412,6 +412,7 @@ function colorFrom(e: Event): string {
   align-items: center;
   gap: var(--fm-space-2) 12px;
   padding: 14px 26px 6px;
+  container-type: inline-size;
 }
 /* The field's hairline is its only edge: --fm-control-border keeps it at 3:1. */
 .hero {
@@ -426,6 +427,12 @@ function colorFrom(e: Event): string {
   border: 1px solid var(--fm-control-border);
   border-radius: var(--fm-radius-md);
   background-color: var(--fm-bg);
+}
+/* Too narrow for one row: the field takes its own, so the divider never ends a row alone. */
+@container (max-width: 900px) {
+  .hero {
+    flex-basis: 100%;
+  }
 }
 .hero:focus-within {
   outline: 2px solid var(--fm-accent);
