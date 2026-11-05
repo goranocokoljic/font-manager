@@ -15,7 +15,7 @@ The named themes of the app, one JSON file per theme. The `themeId` setting hold
     "accent": "#c56eb2",
     "on-accent": "#141413",
     "bg": "#ffffff",
-    "surface": "#f6f6f7",
+    "surface": "#f6f5f2",
     "surface-2": "#ffffff",
     "border": "#00000017"
   },

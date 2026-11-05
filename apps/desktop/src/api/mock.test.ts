@@ -33,7 +33,7 @@ describe('MockApi themes (E47.1)', () => {
       accent: '#c56eb2',
       onAccent: '#141413',
       bg: '#ffffff',
-      surface: '#f6f6f7',
+      surface: '#f6f5f2',
       surface2: '#ffffff',
       border: '#00000017',
     });
