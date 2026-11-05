@@ -119,6 +119,7 @@ Stories are worked by `go-harness.ps1` (one lane per terminal: `-Lane core`, `-L
 through the `/go-cycle` skill and reviewed by `/fm-review`. Manual:
 `dev-docs/harness/go-harness.md`. With `merge: auto` the harness merges green, reviewed
 stories itself, platform stories included; changes to existing `fm-api` types wait for a human.
+`-Lane keeper` keeps `main` green (re-run, then `/fix-main`) and restarts a lane that ended.
 
 - Use the PureContext MCP index for code navigation and impact: `resolve_repo` for the
   `repoId`, `get_task_context` to orient, `prepare_change` / `check_consistency` before
