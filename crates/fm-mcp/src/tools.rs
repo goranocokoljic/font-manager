@@ -877,6 +877,8 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
             let pairings = api.suggest_pairings(PairingRequest {
                 face: FaceId(a.face_id),
                 limit: a.limit.unwrap_or(DEFAULT_LIMIT),
+                role: None,
+                partner_of: None,
             })?;
             Ok(json!({ "pairings": to_json(&pairings)? }))
         }

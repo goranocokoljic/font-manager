@@ -70,7 +70,8 @@ SELECT face.id, fts.family, fts.style, fts.postscript_name, fts.foundry, fts.des
             THEN json_extract(face.parsed, '$.classification.class') END,
        CASE WHEN json_valid(face.metrics)
             THEN CAST(json_extract(face.metrics, '$.xHeight') AS REAL)
-                 / nullif(json_extract(face.metrics, '$.unitsPerEm'), 0) END
+                 / nullif(json_extract(face.metrics, '$.unitsPerEm'), 0) END,
+       CASE WHEN json_valid(face.parsed) THEN json_extract(face.parsed, '$.copyright') END
 FROM face
 JOIN face_fts AS fts ON fts.rowid = face.id
 JOIN font_file ON font_file.id = face.file_id
@@ -128,6 +129,8 @@ struct Row {
     designer: Option<String>,
     /// Its x-height as a share of the em (E23.4).
     x_height: Option<f32>,
+    /// The earliest year in its copyright (E42.13).
+    year: Option<u16>,
 }
 
 impl Index {
@@ -530,6 +533,12 @@ impl Index {
                     .ok()
                     .flatten()
                     .map(|x| x as f32),
+                // Not text (a damaged row): unknown, like a missing one.
+                year: row
+                    .get_ref(33)
+                    .ok()
+                    .and_then(|v| v.as_str().ok())
+                    .and_then(crate::pairing::role::copyright_year),
             });
         }
         Ok(out)

@@ -186,6 +186,7 @@ pub fn types() -> specta::Types {
         search::SimilarFace,
         search::ImageMatchRequest,
         search::PairingRequest,
+        search::PairingRole,
         search::PairingSuggestion,
         // preview
         preview::PreviewRequest,

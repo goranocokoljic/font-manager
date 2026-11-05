@@ -869,6 +869,12 @@ function Invoke-MergeGate {
             return 'again'
         }
         'block' { Block-Story -Reason "auto-merge: $why" }
+        'merged' {
+            # A human merged the PR while the lane waited on CI or the gate.
+            gh issue edit $s.issue --remove-label 'harness:in-progress' 2>$null | Out-Null
+            Write-Log "=== #$($s.issue) $($s.id) MERGED (by a human). ===" 'Green'
+            Complete-Story -Outcome 'merged' -Reason $why
+        }
         'update' {
             $max = [int]($Cfg.auto_merge.max_branch_updates ?? 3)
             $s.merge_updates = [int]$s.merge_updates + 1

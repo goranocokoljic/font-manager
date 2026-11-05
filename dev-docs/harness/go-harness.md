@@ -118,11 +118,15 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   `bench-report.json` (`"<os>.<metric>"` entries); a metric not measured yet
   has `pass: null` and a note. On a PR the job gates the report against main
   (E9.2): a budgeted metric more than 10% worse than the slowest of the last 5
-  runs on main (CI timings swing with GitHub's load), or newly over budget, gets `regressed: true` and makes the check
+  runs on main (CI timings swing with GitHub's load), or newly over budget by a
+  step above the noise floor (20% of the budget), gets `regressed: true` and makes the check
   red; a metric over budget on main too blocks only when it gets slower still.
   The job annotates each regression and keeps one sticky bench comment on the
   PR. ci-wait counts the same entries as red (`blocking()` in
-  `scripts/bench/lib.mjs`).
+  `scripts/bench/lib.mjs`), except for a PR that changes no native code (no
+  `crates/`, `Cargo.*`, `src-tauri`, bench files): its numbers are recorded and
+  never block, since a Vue or test change cannot have moved them. A PR a human
+  merged while the lane waited ends the story as `merged`, not `blocked`.
 - **sync** — merge `origin/main` into the branch, resolve the conflicts (keep
   both sides; the same thing added twice → keep one; lock files and `types.ts`
   regenerated), full preflight, push, CI again. At most

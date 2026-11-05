@@ -24,7 +24,9 @@ use fm_api::layout::{ExportLayoutPngRequest, LayoutFont, LayoutService, LayoutSu
 use fm_api::library::{LibraryService, ListFamiliesRequest, SourceKind};
 use fm_api::organization::{CreateCollectionRequest, Rule, RuleGroup, RuleOp};
 use fm_api::preview::PreviewRequest;
-use fm_api::search::{Filters, PairingRequest, SearchRequest, SimilarRequest, Supports};
+use fm_api::search::{
+    Filters, PairingRequest, PairingRole, SearchRequest, SimilarRequest, Supports,
+};
 use fm_api::{ActivationService, CollectionId, OrganizationService, SearchService, SourceId};
 use fm_core::index::INDEX_FILE;
 use fm_core::preview::cache::{CacheKey, DEFAULT_LIMIT_BYTES, PreviewCache, cache_dir};
@@ -380,7 +382,8 @@ pub fn layout_png(home: &Path, rounds: usize) -> BenchResult<LayoutPngTimed> {
 
 /// Times `suggest_pairings` (12 suggestions, as the Compare sheet asks) for
 /// the first face of the first [`PAIRING_FACES`] families of the index in
-/// `home`, each `rounds` times after one untimed call.
+/// `home`, plainly and for a role (E42.13), each `rounds` times after one
+/// untimed call.
 pub fn pairings(home: &Path, rounds: usize) -> BenchResult<PairingTimed> {
     let paths = home_paths(home);
     let index = startup::open_index(&paths)?.index;
@@ -397,17 +400,21 @@ pub fn pairings(home: &Path, rounds: usize) -> BenchResult<PairingTimed> {
         },
         ..ListFamiliesRequest::default()
     })?;
-    let mut samples = Vec::with_capacity(families.items.len() * rounds);
+    let mut samples = Vec::with_capacity(families.items.len() * 2 * rounds);
     for family in &families.items {
-        let req = PairingRequest {
-            face: FaceId(family.id.0),
-            limit: 12,
-        };
-        api.suggest_pairings(req)?;
-        for _ in 0..rounds {
-            let begin = Instant::now();
+        for role in [None, Some(PairingRole::Body)] {
+            let req = PairingRequest {
+                face: FaceId(family.id.0),
+                limit: 12,
+                role,
+                partner_of: None,
+            };
             api.suggest_pairings(req)?;
-            samples.push(ms(begin.elapsed()));
+            for _ in 0..rounds {
+                let begin = Instant::now();
+                api.suggest_pairings(req)?;
+                samples.push(ms(begin.elapsed()));
+            }
         }
     }
     samples.sort_by(f64::total_cmp);

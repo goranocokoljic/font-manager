@@ -208,7 +208,8 @@ fn pairings_are_timed_for_the_first_faces() {
     first_scan(&fixtures(), home.path()).expect("scan");
     let res = pairings(home.path(), 2).expect("pairings");
     assert_eq!(res.faces, PAIRING_FACES as usize, "{res:?}");
-    assert_eq!(res.samples, res.faces * 2, "{res:?}");
+    // Two rounds each of the plain request and of the role request.
+    assert_eq!(res.samples, res.faces * 2 * 2, "{res:?}");
     assert!(
         res.p50_ms <= res.p95_ms && res.p95_ms <= res.max_ms,
         "{res:?}"

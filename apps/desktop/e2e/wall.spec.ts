@@ -370,8 +370,9 @@ test.describe('the wall', () => {
         [work, frames] as const,
       );
     // What this machine's animation frames run at when nothing happens: 60 on a display at
-    // 60 Hz. A machine that cannot reach 55 idle (the macOS runner gives 30) cannot prove the
-    // target, so the test says so as a skip; it still fails if the slider costs frames there.
+    // 60 Hz. A machine that cannot reach 55 idle (one macOS runner gave 30, others gave 60)
+    // cannot prove the target, so the test says so as a skip; it still fails if the slider
+    // costs frames there.
     const idle = await measure(false, 60);
     const fps = await measure(true, 180);
     console.log(`wall slider: ${fps.toFixed(1)} fps median (idle ${idle.toFixed(1)})`);

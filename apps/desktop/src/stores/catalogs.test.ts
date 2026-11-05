@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import { watch } from 'vue';
 import type { CatalogDownload } from '../api/types';
@@ -20,6 +20,10 @@ beforeEach(() => {
   setActivePinia(createPinia());
   setClient(createMockClient());
   mockPickedFolders.length = 0;
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('catalogs store', () => {
@@ -168,6 +172,11 @@ describe('catalogs store: opened before the list arrives', () => {
   });
 
   it("a download follows its own rescan's events to the end, not another scan's", async () => {
+    // The mock emits the two scans on timers 2 ms apart. Fake timers run them in
+    // schedule order whatever the machine does; real timers on a loaded CI runner
+    // once delivered the last progress step after the finish. flushPromises uses
+    // setImmediate, so only the timeouts are faked.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const client = createMockClient({ catalog: 'offline', scanStepMs: 2 });
     setClient(client);
     const store = useCatalogsStore();
@@ -191,7 +200,7 @@ describe('catalogs store: opened before the list arrives', () => {
     store.closeDownload();
     expect(store.download, 'kept open while it runs').not.toBeNull();
 
-    await new Promise((r) => setTimeout(r, 60));
+    await vi.advanceTimersByTimeAsync(60);
     expect(store.download?.phase).toBe('done');
     expect(store.download?.scan).toEqual({ done: 7, total: 7 });
     expect(seen.length).toBeGreaterThan(1);
