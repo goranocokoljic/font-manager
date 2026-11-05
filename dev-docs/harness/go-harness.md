@@ -14,6 +14,9 @@ as briefed in `dev-docs/HARNESS-ADAPTATION.md`.
 | `.claude/commands/fm-review.md` | the code review (must/should, verified, verify-mode later cycles) |
 | `scripts/harness/pick.mjs` | Definition of Ready, lane choice, ordering, overlap, dry run |
 | `scripts/harness/ci-wait.mjs` | waits for `ci / windows`, `ci / macos`, `ci / linux` (+ bench) |
+| `scripts/harness/main-check.mjs` | the keeper's facts: is `main` red, which job and step, runner or code; the state of a fix PR |
+| `scripts/harness/install-keeper.ps1` | registers the keeper as a logon task (Task Scheduler) |
+| `.claude/skills/fix-main/SKILL.md` | the keeper's agent run: fix a flaky test for good or revert the bad commit, open a PR |
 | `scripts/harness/issue.mjs` | fm-meta, criteria tick with evidence, `harness:blocked` |
 | `scripts/harness/kb.mjs` | review knowledge base (lessons, retrieval, graduation) |
 | `scripts/harness/epic-sync.mjs` | summary comment on the epic when a story closes; closes done epics |
@@ -46,6 +49,8 @@ Tests: `node --test "scripts/harness/**/*.test.mjs"` (part of `pnpm test`).
 ./go-harness.ps1 -Lane core -NoWorktree -MaxStories 1   # first loop: one story, in this checkout, watched
 ./go-harness.ps1 -Lane core                 # terminal 1
 ./go-harness.ps1 -Lane ui                   # terminal 2
+./go-harness.ps1 -Lane keeper               # terminal 3: keeps main green and the two lanes alive (see The keeper)
+./scripts/harness/install-keeper.ps1        # once: start the keeper at every logon
 ./go-harness.ps1 -Lane core -MaxStories 10   # night run (merge: auto): blocked stories are skipped
 ./go-harness.ps1 -Lane core -Issues 42,43   # only these (still Definition-of-Ready checked)
 ./go-harness.ps1 -EpicSync                  # post epic summaries for stories a human merged
@@ -118,11 +123,15 @@ pick (DoR) → claim → build → CI → [ci-fix | sync → CI]* → review →
   `bench-report.json` (`"<os>.<metric>"` entries); a metric not measured yet
   has `pass: null` and a note. On a PR the job gates the report against main
   (E9.2): a budgeted metric more than 10% worse than the slowest of the last 5
-  runs on main (CI timings swing with GitHub's load), or newly over budget, gets `regressed: true` and makes the check
+  runs on main (CI timings swing with GitHub's load), or newly over budget by a
+  step above the noise floor (20% of the budget), gets `regressed: true` and makes the check
   red; a metric over budget on main too blocks only when it gets slower still.
   The job annotates each regression and keeps one sticky bench comment on the
   PR. ci-wait counts the same entries as red (`blocking()` in
-  `scripts/bench/lib.mjs`).
+  `scripts/bench/lib.mjs`), except for a PR that changes no native code (no
+  `crates/`, `Cargo.*`, `src-tauri`, bench files): its numbers are recorded and
+  never block, since a Vue or test change cannot have moved them. A PR a human
+  merged while the lane waited ends the story as `merged`, not `blocked`.
 - **sync** — merge `origin/main` into the branch, resolve the conflicts (keep
   both sides; the same thing added twice → keep one; lock files and `types.ts`
   regenerated), full preflight, push, CI again. At most
@@ -176,6 +185,38 @@ rejected by cargo-deny; contradictory or unverifiable criteria; a conflict with
 an ADR; with `-Budget` only: the story over budget (S = 1×, M = 2.5×, L = 5×
 `budget_base_usd`) before an agent stage (waiting for CI and the merge gate go on).
 To retry: fix the cause, remove `harness:blocked`, run the lane again.
+
+## The keeper
+
+The story lanes fix their own PRs. Two things had no owner: `main` itself, and a
+lane that ended. A flaky test on `main`, or a macOS runner that never started,
+made every merge wait; a lane that ran out of ready stories (or hit
+`main_red.max_hours`) stayed ended until a person typed the command. The keeper
+is a third process, `./go-harness.ps1 -Lane keeper`, that looks every
+`keeper.poll_min` (10) minutes and acts without tokens where it can:
+
+| It sees | It does |
+|---|---|
+| `main` red, first time for this commit | re-runs the failed jobs once (`gh run rerun --failed`); the lanes do the same at their merge gate |
+| `main` red again, **no step failed** (job cancelled, timed out, runner never started) | a runner problem: re-runs again, once an hour; no agent |
+| `main` red again, **a step failed** | writes the verdict to `.harness/ci/main-<sha7>.json` and runs one `/fix-main` agent in `../font-manager-keeper`: it fixes the flaky test for good or reverts the bad commit and opens a PR `fix-main-<sha7>`; the keeper merges that PR itself when its three OS are green (the merge gate would refuse: `main` is red). Red again → one re-run, then a PR comment and a red log line: a human must look. At most `keeper.max_fixes_per_day` (3) |
+| a story lane with no live process (`.harness/state/<lane>.lock` has no running PID) | starts it in a new Windows Terminal tab (or window), not more often than `keeper.lane_restart_min` (30); never while the lane's last 3 stories ended blocked (that looks systemic) |
+| a `harness:blocked` story whose block reason in `stories.jsonl` matches `keeper.retry_blocks` (GitHub hiccups: `ci-wait failed`, `CI timeout`, `could not update the branch`, `merge-check failed`) | removes the label once (twice at most per story) with a comment; the lane takes it again. Decisions (bench, `must` findings, fm-api types) are never unblocked |
+
+What it remembers is in `.harness/state/keeper.json` (re-runs per commit, fixes
+per commit, lane restarts, unblocks); every action is one line in
+`.harness/keeper.jsonl`; the agent runs land in `tasks.jsonl` with lane
+`keeper`, not in `stories.jsonl` (so the loop guard does not count them).
+`-DryRun -Lane keeper` prints what one look would do and changes nothing;
+`-MaxStories 1` does one look for real and exits.
+
+`./scripts/harness/install-keeper.ps1` registers a Task Scheduler task that
+starts the keeper one minute after every logon, in a terminal tab, and starts it
+now. `-Uninstall` removes the task. The PC must stay on; the lanes need that too.
+
+What the keeper does **not** do: pick stories, judge reviews, merge story PRs
+(the lanes' merge gate owns that), touch budgets or workflows, or unblock a
+story that waits for a decision.
 
 ## The review — why it is different from tr-harness
 
@@ -277,7 +318,10 @@ pick; then commit the changed files in a PR.
 | `pc 0` in yellow | `claude mcp list`; `resolve_repo` on the worktree path |
 | lane says WAIT | `merge: human` and a ready PR waits for your merge (`lane_max_unmerged`) |
 | lane says IDLE and waits | the other lane's PR touches the same area or closes a dependency; it asks again every 10 min (`-NoIdleWait` to end instead) |
-| lane stopped: "main stayed red" | fix `main`; the next run takes the ready PR back to the merge gate |
+| lane stopped: "main stayed red" | fix `main`; the next run takes the ready PR back to the merge gate. With the keeper running, both happen by themselves |
+| keeper: "A human must look" in red | `main` is red after a re-run and a fix PR (`.harness/keeper.jsonl` says which); open the PR or the main run and decide |
+| keeper: "lane x: its last 3 stories ended blocked - not restarted" | read `.harness/fm-run-summary.md`, fix the cause, start the lane by hand once; the keeper takes over again |
+| keeper opens no tabs | `wt.exe` not on PATH: it opens PowerShell windows instead; or `keeper.restart_lanes` is false |
 | lane stopped: "GitHub did not run CI" | fix billing / the spending limit, then run the lane again: it resumes the story at CI |
 | `[wait] no connection to GitHub or the API` | the PC lost the network: the lane checks every `network.poll_min` minutes (5) for at most `network.max_hours` (48) and goes on by itself; a stage that failed for it is run again and not counted |
 | a story stays `harness:in-progress` after you merged | it closes with the PR (`Closes #n`); `-EpicSync` posts its epic line |

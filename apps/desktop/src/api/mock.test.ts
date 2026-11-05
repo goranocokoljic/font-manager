@@ -25,6 +25,35 @@ async function live(client: FmClient, id: CollectionId) {
   return { count: c.faceCount, faces: await facesOf(client, { collection: id }) };
 }
 
+describe('MockApi themes (E47.1)', () => {
+  it('lists the data files, Paper first, with the API field names', async () => {
+    const themes = await createMockClient().listThemes();
+    expect(themes.map((t) => t.id)).toEqual(['paper', 'graphite', 'indigo', 'moss']);
+    expect(themes[0]!.light).toEqual({
+      accent: '#c56eb2',
+      onAccent: '#141413',
+      bg: '#ffffff',
+      surface: '#f6f6f7',
+      surface2: '#ffffff',
+      border: '#00000017',
+    });
+  });
+
+  it('starts on Paper next to the theme setting, changes it and refuses an unknown id', async () => {
+    const client = createMockClient();
+    const first = await client.getSettings();
+    expect(first.themeId).toBe('paper');
+    expect(first.theme).toBe('system');
+    const moss = await client.updateSettings({ themeId: 'moss' });
+    expect(moss.themeId).toBe('moss');
+    expect(moss.theme).toBe('system');
+    await expect(
+      client.updateSettings({ themeId: 'no-such-theme', density: 'compact' }),
+    ).rejects.toMatchObject({ code: 'invalidRequest' });
+    expect(await client.getSettings()).toEqual(moss);
+  });
+});
+
 describe('MockApi collection colours (E44.3)', () => {
   it('sets, keeps, removes and checks a colour as fm-core does', async () => {
     const client = createMockClient();
@@ -391,5 +420,55 @@ describe('MockApi license permissions (E42.12)', () => {
     const declared = await client.getFace(7);
     expect(declared.license.permissions?.source).toBe('declared');
     expect(declared.license.permissions?.mayNot).toContain('Embed it on websites');
+  });
+});
+
+describe('MockApi role-aware pairing (E42.13)', () => {
+  // Inter (face 1), and Sample 1 and Sample 3: sans copies by the same designer.
+  const inter = 1 as FaceId;
+  const reasonsOf = async (role?: 'headline' | 'body' | 'caption') => {
+    const client = createMockClient({ extraFaces: 4 });
+    const got = await client.suggestPairings({ face: inter, limit: 10, role });
+    const sample = got.find((s) => s.face.familyName === 'Sample 1');
+    if (!sample) throw new Error('no Sample 1');
+    return sample;
+  };
+
+  it('adds a role reason only to a face that earns it, and names the x-height gap', async () => {
+    const plain = await reasonsOf();
+    expect(plain.reasons).toEqual(['same designer', 'similar x-height']);
+
+    const body = await reasonsOf('body');
+    expect(body.reasons).toEqual([
+      'lower contrast for body',
+      'same designer',
+      'x-height within 1 %',
+    ]);
+    expect(body.score).toBeCloseTo(plain.score! + 0.1);
+    expect((await reasonsOf('caption')).reasons[0]).toBe('lower contrast for caption');
+
+    // A sans is no higher-contrast headline: same words as the plain rules, gap named.
+    const headline = await reasonsOf('headline');
+    expect(headline.reasons).toEqual(['same designer', 'x-height within 1 %']);
+    expect(headline.score).toBeCloseTo(plain.score!);
+  });
+
+  it('asks from partnerOf and leaves the replaced family out', async () => {
+    const client = createMockClient({ extraFaces: 4 });
+    const names = (got: { face: { familyName: string } }[]) => got.map((s) => s.face.familyName);
+    const plain = await client.suggestPairings({ face: inter, limit: 10 });
+    const other = plain.find((s) => s.face.familyName === 'Sample 1')?.face;
+    if (!other) throw new Error('no Sample 1');
+    expect(names(plain)).toContain('Sample 3');
+    // Asked plainly from Sample 1, Inter is a partner.
+    expect(names(await client.suggestPairings({ face: other.id, limit: 10 }))).toContain('Inter');
+
+    const got = await client.suggestPairings({ face: inter, limit: 10, partnerOf: other.id });
+    expect(names(got)).toContain('Sample 3');
+    expect(names(got)).not.toContain('Inter');
+    expect(names(got)).not.toContain('Sample 1');
+    await expect(
+      client.suggestPairings({ face: inter, limit: 10, partnerOf: 99_999 as FaceId }),
+    ).rejects.toBeTruthy();
   });
 });

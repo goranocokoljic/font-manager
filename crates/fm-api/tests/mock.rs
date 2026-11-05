@@ -1422,6 +1422,67 @@ fn previews_and_font_sources() {
 }
 
 #[test]
+fn a_pairing_role_changes_the_reasons_and_partner_of_the_base() {
+    use fm_api::search::{PairingRequest, PairingRole};
+    let api = api();
+    let ask = |face, role, partner_of| {
+        api.suggest_pairings(PairingRequest {
+            face: FaceId(face),
+            limit: 10,
+            role,
+            partner_of,
+        })
+    };
+    // Inter (sans): Source Serif 4 is the higher-contrast headline...
+    let headline = ask(1, Some(PairingRole::Headline), None).unwrap();
+    assert_eq!(headline[0].face.id, FaceId(3));
+    assert_eq!(headline[0].reasons[0], "higher contrast for headline");
+    assert!(
+        headline[0]
+            .reasons
+            .iter()
+            .any(|r| r.starts_with("x-height within ") && r.ends_with(" %")),
+        "{headline:?}"
+    );
+    assert!(headline[0].reasons.iter().all(|r| r != "similar x-height"));
+    // ...and no serif gets a body reason it has not earned.
+    let body = ask(1, Some(PairingRole::Body), None).unwrap();
+    let serif = body.iter().find(|s| s.face.id == FaceId(3)).unwrap();
+    assert!(
+        serif.reasons.iter().all(|r| !r.contains("for body")),
+        "{serif:?}"
+    );
+
+    // No role, no partner: the plain answer.
+    let plain = ask(1, None, None).unwrap();
+    assert_eq!(plain[0].reasons[0], "contrast: sans serif with serif");
+
+    // From Source Serif 4, replacing Inter: Inter's family is left out, and
+    // the serif is the base, so it is not suggested either.
+    let got = ask(1, None, Some(FaceId(3))).unwrap();
+    assert!(!got.is_empty());
+    let source_serif = api.suggest_pairings(PairingRequest {
+        face: FaceId(3),
+        limit: 10,
+        role: None,
+        partner_of: None,
+    });
+    let source_serif = source_serif.unwrap();
+    assert!(source_serif.iter().any(|s| s.face.family == FamilyId(1)));
+    assert!(got.iter().all(|s| s.face.family != FamilyId(1)));
+    assert!(got.iter().all(|s| s.face.id != FaceId(3)));
+
+    assert_eq!(
+        ask(1, None, Some(FaceId(99))).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+    assert_eq!(
+        ask(99, None, Some(FaceId(1))).unwrap_err().code,
+        ErrorCode::NotFound
+    );
+}
+
+#[test]
 fn pairings_follow_the_rules_one_face_per_other_family() {
     use fm_api::search::PairingRequest;
     let api = api();
@@ -1429,6 +1490,8 @@ fn pairings_follow_the_rules_one_face_per_other_family() {
         .suggest_pairings(PairingRequest {
             face: FaceId(1),
             limit: 10,
+            role: None,
+            partner_of: None,
         })
         .unwrap();
     // Inter (sans): Source Serif 4 by contrast first, through its Regular;
@@ -1453,13 +1516,17 @@ fn pairings_follow_the_rules_one_face_per_other_family() {
         .suggest_pairings(PairingRequest {
             face: FaceId(1),
             limit: 1,
+            role: None,
+            partner_of: None,
         })
         .unwrap();
     assert_eq!(one.len(), 1);
     assert_eq!(
         api.suggest_pairings(PairingRequest {
             face: FaceId(99),
-            limit: 5
+            limit: 5,
+            role: None,
+            partner_of: None
         })
         .unwrap_err()
         .code,
@@ -1550,6 +1617,35 @@ fn settings_update_through_dyn_api_and_a_bad_value_changes_nothing() {
         "a rejected update is not half-applied"
     );
     assert!(api.app_folders().unwrap().logs.ends_with("logs"));
+}
+
+#[test]
+fn the_theme_id_is_one_of_the_listed_themes_and_an_unknown_one_changes_nothing() {
+    use fm_api::settings::SettingsUpdate;
+    let api = api();
+    let themes = api.list_themes().unwrap();
+    let ids: Vec<&str> = themes.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["paper", "graphite", "indigo", "moss"]);
+    assert_eq!(api.get_settings().unwrap().theme_id, "paper");
+
+    let next = api
+        .update_settings(SettingsUpdate {
+            theme_id: Some("indigo".into()),
+            ..SettingsUpdate::default()
+        })
+        .unwrap();
+    assert_eq!(next.theme_id, "indigo");
+    assert_eq!(api.get_settings().unwrap(), next);
+
+    let err = api
+        .update_settings(SettingsUpdate {
+            theme_id: Some("no-such-theme".into()),
+            cache_limit_mb: Some(128),
+            ..SettingsUpdate::default()
+        })
+        .unwrap_err();
+    assert_eq!(err.code, ErrorCode::InvalidRequest);
+    assert_eq!(api.get_settings().unwrap(), next, "nothing is half-applied");
 }
 
 #[test]

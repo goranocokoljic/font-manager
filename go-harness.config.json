@@ -13,6 +13,17 @@
   "_main_red": "Main red at the merge gate: the harness re-runs the failed main jobs once (a flaky test), then checks every poll_min minutes for at most max_hours before it stops the lane.",
   "main_red": { "poll_min": 10, "max_hours": 6 },
 
+  "_keeper": "The keeper lane (./go-harness.ps1 -Lane keeper) runs beside the two story lanes and looks every poll_min minutes: main red -> re-run the failed jobs once per commit; still red with a failed step -> one /fix-main agent run (a PR; merged by the keeper when its CI is green), at most max_fixes_per_day. A story lane whose process is gone is started again (restart_lanes; not more often than lane_restart_min minutes, never after 3 blocked stories in a row). A harness:blocked story whose block reason matches retry_blocks (transient: network, GitHub hiccups) is unblocked once.",
+  "keeper": {
+    "poll_min": 10,
+    "worktree": "../font-manager-keeper",
+    "restart_lanes": true,
+    "lane_restart_min": 30,
+    "fix_main": true,
+    "max_fixes_per_day": 3,
+    "retry_blocks": ["ci-wait failed", "CI timeout", "could not update the branch", "merge-check failed"]
+  },
+
   "_network": "No connection to GitHub or the API (Wi-Fi, DNS, GitHub down): the harness checks every poll_min minutes for at most max_hours, then goes on as before (blocks the story, or stops after 3 picker failures).",
   "network": { "poll_min": 5, "max_hours": 48 },
 

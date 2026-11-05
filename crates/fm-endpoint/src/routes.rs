@@ -164,6 +164,7 @@ routes! {
     get_settings(),
     update_settings(req),
     app_folders(),
+    list_themes(),
     endpoint_info(),
     regenerate_endpoint_token(),
     mcp_status(),

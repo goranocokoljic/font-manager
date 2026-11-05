@@ -2456,11 +2456,35 @@ export type Paged<T> = {
 
 /**  Faces that pair well with this one (E23.4). */
 export type PairingRequest = {
-	/**  The face to find partners for. */
+	/**
+	 *  The face to find partners for. With `partner_of` set, the face being
+	 *  replaced instead: its family is not suggested.
+	 */
 	face: FaceId,
 	/**  Suggestions to return. */
 	limit: number,
+	/**
+	 *  The role the suggested faces play, which changes how they are scored
+	 *  and the reasons given (ADR 0021). Absent: the plain rules, for no
+	 *  role in particular.
+	 */
+	role?: PairingRole | null,
+	/**
+	 *  The face the suggestions must go with, when that is not `face`:
+	 *  "given this body face, suggest headlines". A face that is not visible
+	 *  is `NotFound`.
+	 */
+	partnerOf?: FaceId | null,
 };
+
+/**  The part a suggested face plays in a layout (E42.13). */
+export type PairingRole = 
+/**  Large type: a title or a heading. */
+"headline" | 
+/**  Running text. */
+"body" | 
+/**  Small type: a note or a label. */
+"caption";
 
 /**  A face suggested as a partner and why. */
 export type PairingSuggestion = {
@@ -2468,7 +2492,11 @@ export type PairingSuggestion = {
 	face: FaceSummary,
 	/**  0.0–1.0; higher pairs better. */
 	score: number | null,
-	/**  Plain-word reasons, one per rule that holds ("same superfamily"). */
+	/**
+	 *  Plain-word reasons, one per rule that holds ("same superfamily"); with
+	 *  a role in the request, those of the role first ("lower contrast for
+	 *  body", "x-height within 4 %").
+	 */
 	reasons: string[],
 };
 
@@ -3043,6 +3071,14 @@ export type Settings = {
 	 *  [`Self::download_folder`]. Off by default.
 	 */
 	fetchMissingFonts?: boolean,
+	/**
+	 *  The named theme (E47.1), one of [`SettingsService::list_themes`]; next
+	 *  to [`Self::theme`], which still chooses its light or dark token set.
+	 *  A `config.json` from before themes gets [`DEFAULT_THEME_ID`] from the
+	 *  struct's defaults; so does a request while the file names a theme this
+	 *  version does not ship.
+	 */
+	themeId?: string,
 };
 
 /**  Change some settings; absent fields keep their value. */
@@ -3079,6 +3115,11 @@ export type SettingsUpdate = {
 	downloadFolder?: string | null,
 	/**  Download fonts a document needs from the catalogs the user turned on. */
 	fetchMissingFonts?: boolean | null,
+	/**
+	 *  The named theme: the id of one of [`SettingsService::list_themes`];
+	 *  any other id is refused and nothing changes.
+	 */
+	themeId?: string | null,
 };
 
 /**  The shortlist for a brief. */
@@ -3342,6 +3383,37 @@ export type Theme =
 "light" | 
 /**  Always dark. */
 "dark";
+
+/**  A named theme the app ships, from `data/themes` (E47.1). */
+export type ThemeDefinition = {
+	/**  The value of [`Settings::theme_id`], e.g. `paper`. */
+	id: string,
+	/**  The name to show, e.g. `Paper`. */
+	name: string,
+	/**  The tokens for the light appearance. */
+	light: ThemeTokens,
+	/**  The tokens for the dark appearance. */
+	dark: ThemeTokens,
+};
+
+/**
+ *  One token set of a theme: a color for each `--fm-*` token of the same
+ *  name. `#rrggbb`; [`Self::border`] may also be `#rrggbbaa`.
+ */
+export type ThemeTokens = {
+	/**  Rings, fills, knobs and badges. */
+	accent: string,
+	/**  Words and marks on the accent; at least 4.5:1 on it. */
+	onAccent: string,
+	/**  Level 0: the list and the specimens. */
+	bg: string,
+	/**  Level 1: side panes and bars. */
+	surface: string,
+	/**  Level 2: popovers, dialogs and cards. */
+	surface2: string,
+	/**  Hairlines between rows and panels. */
+	border: string,
+};
 
 /**  One copy of a [`Resolution`]. */
 export type TrashMove = {

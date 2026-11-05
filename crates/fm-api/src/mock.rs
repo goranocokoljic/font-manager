@@ -69,13 +69,14 @@ use crate::preview::{
 use crate::search::{
     BlockCoverage, CoverageReport, CoverageRequest, DetectLanguagesRequest, FaceCoverage,
     FaceLanguageCoverage, FamilyHit, FilterCount, FilterCounts, Filters, ImageMatchRequest,
-    LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingSuggestion,
-    SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports, WeightRange, WidthRange,
+    LanguageCoverage, LanguageHint, LanguagePreset, Missing, PairingRequest, PairingRole,
+    PairingSuggestion, SearchRequest, SearchResponse, SimilarFace, SimilarRequest, Supports,
+    WeightRange, WidthRange,
 };
 use crate::settings::{
     AppFolders, EndpointInfo, MCP_CONFIRM_TIMEOUT_SECS, MCP_CONFIRM_TOOLS, MCP_MUTATING_TOOLS,
     McpClient, McpConfirmationAnswer, McpGrant, McpGrantUpdate, McpSnippet, McpStatus, McpToolCall,
-    McpUpdate, Settings, SettingsUpdate,
+    McpUpdate, Settings, SettingsUpdate, ThemeDefinition, ThemeTokens, unknown_theme,
 };
 use crate::workflows::{
     BriefRequest, Candidate, DocumentFontCheck, DocumentFontRef, DocumentFontStatus, DocumentFonts,
@@ -2529,11 +2530,14 @@ impl SearchService for MockApi {
     /// contrasting classes +0.4 (a display or script face only with a sans
     /// or serif), the same designer +0.2, x-heights within 5% +0.1. One
     /// face per other family, the closest in weight; best first, then by
-    /// family id.
+    /// family id. `partner_of` takes `face`'s place, and `face`'s family is
+    /// left out. A role (the samples have no stroke contrast: the class stands
+    /// in for it) adds +0.1 and its reason first, and names the x-height gap.
     fn suggest_pairings(&self, req: PairingRequest) -> ApiResult<Vec<PairingSuggestion>> {
         use Classification::{Display, Sans, Script, Serif, Slab};
         let st = self.state();
-        let me = st.face(req.face)?;
+        let replaced = st.face(req.face)?.detail.face.family;
+        let me = st.face(req.partner_of.unwrap_or(req.face))?;
         let mine = st.family(me.detail.face.family)?;
         let ratio = |f: &MockFace| {
             let m = f.detail.metrics;
@@ -2545,6 +2549,7 @@ impl SearchService for MockApi {
         let mut best: BTreeMap<FamilyId, (&MockFace, &MockFamily)> = BTreeMap::new();
         for f in st.faces.iter().filter(|f| {
             f.detail.face.family != me.detail.face.family
+                && f.detail.face.family != replaced
                 && st.visible(f)
                 && !st.trashed.contains(&f.detail.path)
         }) {
@@ -2594,9 +2599,30 @@ impl SearchService for MockApi {
                 && (x / y - 1.0).abs() <= 0.05
             {
                 score += 0.1;
-                reasons.push("similar x-height".to_string());
+                reasons.push(match req.role {
+                    Some(_) => {
+                        let gap = x.max(y) / x.min(y) - 1.0;
+                        let percent = ((gap * 100.0 - 0.001).ceil() as u32).max(1);
+                        format!("x-height within {percent} %")
+                    }
+                    None => "similar x-height".to_string(),
+                });
             }
             if !reasons.is_empty() {
+                let role_reason = match req.role {
+                    Some(PairingRole::Headline) if matches!(b, Serif | Display | Script) => {
+                        Some("higher contrast for headline")
+                    }
+                    Some(PairingRole::Body) if matches!(b, Sans) => Some("lower contrast for body"),
+                    Some(PairingRole::Caption) if matches!(b, Sans) => {
+                        Some("lower contrast for caption")
+                    }
+                    _ => None,
+                };
+                if let Some(reason) = role_reason {
+                    score += 0.1;
+                    reasons.insert(0, reason.to_string());
+                }
                 out.push(PairingSuggestion {
                     face: st.summary(f),
                     score,
@@ -4543,12 +4569,47 @@ impl WorkflowService for MockApi {
     }
 }
 
+/// The theme files, in the order of fm-core's list.
+const MOCK_THEME_FILES: [&str; 4] = [
+    include_str!("../../../data/themes/paper.json"),
+    include_str!("../../../data/themes/graphite.json"),
+    include_str!("../../../data/themes/indigo.json"),
+    include_str!("../../../data/themes/moss.json"),
+];
+
+/// One theme file of `data/themes`; fm-core checks the rules of the files.
+fn mock_theme(file: &str) -> ApiResult<ThemeDefinition> {
+    let v: serde_json::Value = serde_json::from_str(file).map_err(|e| {
+        ApiError::new(ErrorCode::Internal, "A theme file is damaged.").with_detail(e.to_string())
+    })?;
+    let text = |o: &serde_json::Value, key: &str| o[key].as_str().unwrap_or_default().to_owned();
+    let tokens = |o: &serde_json::Value| ThemeTokens {
+        accent: text(o, "accent"),
+        on_accent: text(o, "on-accent"),
+        bg: text(o, "bg"),
+        surface: text(o, "surface"),
+        surface_2: text(o, "surface-2"),
+        border: text(o, "border"),
+    };
+    Ok(ThemeDefinition {
+        id: text(&v, "id"),
+        name: text(&v, "name"),
+        light: tokens(&v["light"]),
+        dark: tokens(&v["dark"]),
+    })
+}
+
 impl SettingsService for MockApi {
     fn get_settings(&self) -> ApiResult<Settings> {
         Ok(self.state().settings.clone())
     }
 
     fn update_settings(&self, req: SettingsUpdate) -> ApiResult<Settings> {
+        if let Some(id) = &req.theme_id
+            && !self.list_themes()?.iter().any(|t| t.id == *id)
+        {
+            return Err(unknown_theme(id));
+        }
         let mut st = self.state();
         st.settings = st.settings.apply(&req)?;
         Ok(st.settings.clone())
@@ -4561,6 +4622,10 @@ impl SettingsService for MockApi {
             cache: "/home/demo/.cache/font-manager".into(),
             logs: "/home/demo/.local/state/font-manager/logs".into(),
         })
+    }
+
+    fn list_themes(&self) -> ApiResult<Vec<ThemeDefinition>> {
+        MOCK_THEME_FILES.iter().map(|f| mock_theme(f)).collect()
     }
 
     fn endpoint_info(&self) -> ApiResult<EndpointInfo> {

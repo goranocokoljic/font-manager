@@ -4,9 +4,10 @@ use std::time::{Duration, Instant};
 
 use fm_api::common::{Classification, Health, Metrics};
 use fm_api::library::SourceKind;
-use fm_api::search::{PairingRequest, PairingSuggestion};
+use fm_api::search::{PairingRequest, PairingRole, PairingSuggestion};
 use fm_api::{ErrorCode, FaceId};
 
+use crate::fingerprint::{FaceFingerprint, Fingerprint};
 use crate::grouping::family_key;
 use crate::index::Index;
 use crate::pairing::model::{self, Curated, MODEL_REASON};
@@ -78,7 +79,12 @@ fn class_of(index: &Index, face: FaceId) -> Option<Classification> {
 
 fn pairings(index: &Index, face: FaceId, limit: u32) -> Vec<PairingSuggestion> {
     index
-        .suggest_pairings(&PairingRequest { face, limit })
+        .suggest_pairings(&PairingRequest {
+            face,
+            limit,
+            role: None,
+            partner_of: None,
+        })
         .expect("pairings")
 }
 
@@ -169,6 +175,8 @@ fn an_unknown_or_hidden_face_is_not_found_and_limit_caps() {
         .suggest_pairings(&PairingRequest {
             face: FaceId(99_999),
             limit: 5,
+            role: None,
+            partner_of: None,
         })
         .expect_err("unknown");
     assert_eq!(err.code(), ErrorCode::NotFound);
@@ -181,13 +189,23 @@ fn an_unknown_or_hidden_face_is_not_found_and_limit_caps() {
         .execute("UPDATE source SET paused = 1", [])
         .expect("pause");
     let err = index
-        .suggest_pairings(&PairingRequest { face, limit: 5 })
+        .suggest_pairings(&PairingRequest {
+            face,
+            limit: 5,
+            role: None,
+            partner_of: None,
+        })
         .expect_err("hidden");
     assert_eq!(err.code(), ErrorCode::NotFound);
     index = indexed(&[]);
     assert!(
         index
-            .suggest_pairings(&PairingRequest { face, limit: 5 })
+            .suggest_pairings(&PairingRequest {
+                face,
+                limit: 5,
+                role: None,
+                partner_of: None
+            })
             .is_err()
     );
 }
@@ -240,6 +258,8 @@ fn the_index_feeds_designer_and_x_height_to_the_rules() {
     let req = PairingRequest {
         face: face_of(&index, "Alder"),
         limit: 10,
+        role: None,
+        partner_of: None,
     };
     let got = index.suggest_with(&req, None).expect("pairings");
     let reasons: Vec<(&str, Vec<&str>)> = got
@@ -260,6 +280,232 @@ fn the_index_feeds_designer_and_x_height_to_the_rules() {
     );
 }
 
+/// [`plain_sans`] by one designer, so the rules let every pair through, with
+/// a stroke contrast (a fingerprint), a width class and a copyright. The
+/// x-heights are far apart: no x-height reason gets in the way.
+fn role_face(i: u8, family: &str, contrast: f32, width: u16, copyright: &str) -> IndexedFile {
+    let mut file = plain_sans(i, family, "Ada Lovelace", 300 + i16::from(i) * 100);
+    let face = &mut file.parsed.faces[0];
+    face.width = Some(width);
+    face.copyright = Some(copyright.into());
+    face.fingerprint = FaceFingerprint::Taken(Fingerprint {
+        vector: vec![0.5; 16],
+        x_height_ratio: 0.7,
+        contrast,
+        stroke_width: 0.1,
+        width_class: f32::from(width),
+        advance_ratio: 1.0,
+    });
+    file
+}
+
+fn role_library() -> Index {
+    indexed(&[
+        role_face(1, "Alder", 0.5, 5, "Copyright 2011 Someone"),
+        // Low contrast, a far year.
+        role_face(2, "Birch", 0.1, 5, "Copyright 1950 Someone"),
+        // High contrast, narrow, the same era.
+        role_face(3, "Cedar", 0.9, 3, "(c) 2013-2020 Someone"),
+    ])
+}
+
+/// Family name and reasons, as the rules alone answer (the model adds a
+/// reason of its own).
+fn ask_role(
+    index: &Index,
+    face: FaceId,
+    role: Option<PairingRole>,
+    partner_of: Option<FaceId>,
+) -> Vec<(String, Vec<String>)> {
+    index
+        .suggest_with(
+            &PairingRequest {
+                face,
+                limit: 10,
+                role,
+                partner_of,
+            },
+            None,
+        )
+        .expect("pairings")
+        .into_iter()
+        .map(|s| (s.face.family_name, s.reasons))
+        .collect()
+}
+
+fn owned(family: &str, reasons: &[&str]) -> (String, Vec<String>) {
+    (
+        family.to_owned(),
+        reasons.iter().map(|r| (*r).to_owned()).collect(),
+    )
+}
+
+#[test]
+fn the_index_feeds_contrast_width_and_era_to_the_role() {
+    let index = role_library();
+    let alder = face_of(&index, "Alder");
+    assert_eq!(
+        ask_role(&index, alder, Some(PairingRole::Body), None),
+        [
+            owned("Birch", &["lower contrast for body", "same designer"]),
+            owned("Cedar", &["same era", "same designer"]),
+        ]
+    );
+    assert_eq!(
+        ask_role(&index, alder, Some(PairingRole::Headline), None),
+        [
+            owned(
+                "Cedar",
+                &[
+                    "higher contrast for headline",
+                    "narrower for headline",
+                    "same era",
+                    "same designer"
+                ]
+            ),
+            owned("Birch", &["same designer"]),
+        ]
+    );
+    let caption = ask_role(&index, alder, Some(PairingRole::Caption), None);
+    assert_eq!(caption[0].1[0], "lower contrast for caption");
+}
+
+#[test]
+fn no_role_and_no_partner_is_the_plain_answer() {
+    let index = role_library();
+    let alder = face_of(&index, "Alder");
+    assert_eq!(
+        ask_role(&index, alder, None, None),
+        [
+            owned("Birch", &["same designer"]),
+            owned("Cedar", &["same designer"]),
+        ]
+    );
+    // The missing fields read as absent: an old client's JSON still works.
+    let old: PairingRequest =
+        serde_json::from_str(&format!("{{\"face\":{},\"limit\":3}}", alder.0)).expect("json");
+    assert_eq!((old.role, old.partner_of), (None, None));
+    // The plain score is the rules' own; a role moves it.
+    let score = |role| {
+        index
+            .suggest_with(
+                &PairingRequest {
+                    face: alder,
+                    limit: 1,
+                    role,
+                    partner_of: None,
+                },
+                None,
+            )
+            .expect("pairings")[0]
+            .score
+    };
+    assert!((score(None) - crate::pairing::DESIGNER).abs() < 1e-6);
+    assert!((score(Some(PairingRole::Body)) - crate::pairing::DESIGNER).abs() > 0.05);
+}
+
+#[test]
+fn partner_of_is_the_base_and_the_replaced_family_is_left_out() {
+    let index = indexed(&[
+        role_face(1, "Alder", 0.5, 5, "Copyright 2011 Someone"),
+        role_face(2, "Birch", 0.1, 5, "Copyright 1950 Someone"),
+        role_face(3, "Cedar", 0.9, 3, "(c) 2013-2020 Someone"),
+        role_face(4, "Damson", 0.3, 5, "Copyright 1950 Someone"),
+    ]);
+    let (alder, birch, cedar) = (
+        face_of(&index, "Alder"),
+        face_of(&index, "Birch"),
+        face_of(&index, "Cedar"),
+    );
+    // Replacing Alder next to Birch: neither of them is suggested.
+    let got = ask_role(&index, alder, Some(PairingRole::Headline), Some(birch));
+    let mut names: Vec<&str> = got.iter().map(|(name, _)| name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["Cedar", "Damson"]);
+    // Damson is compared with Birch: more contrast than its 0.1, the same year.
+    let damson = got.iter().find(|(n, _)| n == "Damson").expect("damson");
+    assert_eq!(
+        damson.1,
+        ["higher contrast for headline", "same era", "same designer"]
+    );
+    // Compared with Alder (0.5, 2011) Damson earns neither: the base did change.
+    let from_alder = ask_role(&index, alder, Some(PairingRole::Headline), None);
+    let damson = from_alder
+        .iter()
+        .find(|(n, _)| n == "Damson")
+        .expect("damson");
+    assert_eq!(damson.1, ["same designer"]);
+
+    // "Given this body face, suggest headlines": the face in both fields is
+    // the same as the role alone.
+    assert_eq!(
+        ask_role(&index, birch, Some(PairingRole::Headline), Some(birch)),
+        ask_role(&index, birch, Some(PairingRole::Headline), None)
+    );
+
+    // A partner that is not visible is NotFound, and so is the replaced face.
+    let not_found = |index: &Index, face, partner_of| {
+        index
+            .suggest_with(
+                &PairingRequest {
+                    face,
+                    limit: 5,
+                    role: None,
+                    partner_of,
+                },
+                None,
+            )
+            .expect_err("not visible")
+            .code()
+    };
+    let gone = FaceId(99_999);
+    assert_eq!(not_found(&index, alder, Some(gone)), ErrorCode::NotFound);
+    assert_eq!(not_found(&index, gone, Some(cedar)), ErrorCode::NotFound);
+    index
+        .conn
+        .execute("UPDATE source SET paused = 1", [])
+        .expect("pause");
+    assert_eq!(not_found(&index, alder, Some(birch)), ErrorCode::NotFound);
+}
+
+#[test]
+fn the_fixture_corpus_answers_for_every_role_with_role_reasons() {
+    let index = indexed(corpus());
+    let face = face_of(&index, "Libre Baskerville");
+    let ask = |role| PairingRequest {
+        face,
+        limit: 40,
+        role,
+        partner_of: None,
+    };
+    let plain = index.suggest_pairings(&ask(None)).expect("plain");
+    for (role, reason) in [
+        (PairingRole::Headline, "for headline"),
+        (PairingRole::Body, "lower contrast for body"),
+        (PairingRole::Caption, "lower contrast for caption"),
+    ] {
+        let got = index.suggest_pairings(&ask(Some(role))).expect("role");
+        assert!(!got.is_empty(), "{role:?}");
+        assert!(got.windows(2).all(|w| w[0].score >= w[1].score));
+        assert!(got.iter().all(|s| (0.0..=1.0).contains(&s.score)));
+        assert!(got.iter().all(|s| !s.reasons.is_empty()));
+        let says =
+            |test: &dyn Fn(&str) -> bool| got.iter().any(|s| s.reasons.iter().any(|r| test(r)));
+        assert!(says(&|r| r.contains(reason)), "{role:?}: {got:#?}");
+        // The fixtures' copyright years and x-heights reach the rule.
+        assert!(says(&|r| r == "same era"), "{role:?}: {got:#?}");
+        assert!(
+            says(&|r| r.starts_with("x-height within ")),
+            "{role:?}: {got:#?}"
+        );
+        assert_ne!(
+            got.iter().map(|s| s.face.id).collect::<Vec<_>>(),
+            plain.iter().map(|s| s.face.id).collect::<Vec<_>>(),
+            "{role:?} ranks as the plain request does"
+        );
+    }
+}
+
 /// A face with every pairing fact set, in a file of its own.
 fn synthetic_face(i: usize) -> IndexedFile {
     let classes = [
@@ -277,6 +523,7 @@ fn synthetic_face(i: usize) -> IndexedFile {
     face.weight = Some(400);
     face.width = Some(5);
     face.designer = Some(format!("Designer {}", i % 40));
+    face.copyright = Some(format!("Copyright {} Kamiten", 1980 + i % 40));
     face.metrics = Metrics {
         units_per_em: 1000,
         ascender: 800,
@@ -313,17 +560,25 @@ fn time_pairings(index: &Index, label: &str) {
         .collect::<Result<_, _>>()
         .expect("ids");
     for id in ids {
-        let req = PairingRequest {
-            face: FaceId(id),
-            limit: 12,
-        };
-        // Warm the search cache and the statement cache, as a running app has.
-        index.suggest_pairings(&req).expect("pairings");
-        let start = Instant::now();
-        let got = index.suggest_pairings(&req).expect("pairings");
-        let elapsed = start.elapsed();
-        eprintln!("{label}: face {id} → {} pairings in {elapsed:?}", got.len());
-        assert!(elapsed < BUDGET, "{label}: face {id} took {elapsed:?}");
+        // The plain request and a role's (E42.13): both are in the budget.
+        for role in [None, Some(PairingRole::Body)] {
+            let req = PairingRequest {
+                face: FaceId(id),
+                limit: 12,
+                role,
+                partner_of: None,
+            };
+            // Warm the search cache and the statement cache, as a running app has.
+            index.suggest_pairings(&req).expect("pairings");
+            let start = Instant::now();
+            let got = index.suggest_pairings(&req).expect("pairings");
+            let elapsed = start.elapsed();
+            eprintln!(
+                "{label}: face {id} ({role:?}) → {} pairings in {elapsed:?}",
+                got.len()
+            );
+            assert!(elapsed < BUDGET, "{label}: face {id} took {elapsed:?}");
+        }
     }
 }
 
@@ -469,6 +724,8 @@ fn the_model_ranks_held_out_partners_higher_than_the_rules() {
                 let req = PairingRequest {
                     face,
                     limit: u32::MAX,
+                    role: None,
+                    partner_of: None,
                 };
                 let got = index.suggest_with(&req, None).expect("rules");
                 rules.push(reciprocal_rank(&got, to));
@@ -504,7 +761,15 @@ fn a_curated_partner_gains_the_model_reason() {
     assert!(got.iter().all(|s| (0.0..=1.0).contains(&s.score)));
     // Without the model nobody gets the reason.
     let rules = index
-        .suggest_with(&PairingRequest { face, limit: 1000 }, None)
+        .suggest_with(
+            &PairingRequest {
+                face,
+                limit: 1000,
+                role: None,
+                partner_of: None,
+            },
+            None,
+        )
         .expect("rules");
     assert!(
         rules
@@ -544,6 +809,8 @@ fn the_model_reason_comes_only_when_the_model_says_pair() {
     let req = PairingRequest {
         face: face_of(&index, "Alder"),
         limit: 10,
+        role: None,
+        partner_of: None,
     };
     let m = designer_model();
     let got = index.suggest_with(&req, Some(&m)).expect("pairings");

@@ -3,6 +3,10 @@
 // change that breaks contrast fails here.
 import { describe, expect, it } from 'vitest';
 import { COLLECTION_COLORS } from '../api/collectionColors';
+import graphiteTheme from '../../../../data/themes/graphite.json';
+import indigoTheme from '../../../../data/themes/indigo.json';
+import mossTheme from '../../../../data/themes/moss.json';
+import paperTheme from '../../../../data/themes/paper.json';
 import theme from './theme.css?raw';
 import print from './print.css?raw';
 import compareSheet from '../components/CompareSheet.vue?raw';
@@ -178,6 +182,77 @@ describe('collection colors', () => {
   ])('leave the text of the %s strip at least 4.5:1 on their 10 % tint', (_, p) => {
     for (const k of COLLECTION)
       expect(contrast(rgb(p.fg!), tint(p[k]!, 0.1, p.bg!)), k).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// E47.1: the named themes replace six tokens and keep the rest of `theme.css`, so the colors
+// they keep must stay legible on the surfaces they bring.
+describe.each(
+  [paperTheme, graphiteTheme, indigoTheme, mossTheme].flatMap((t) => [
+    [t.id, 'light', t.light, light],
+    [t.id, 'dark', t.dark, dark],
+  ]) as [string, string, typeof paperTheme.light, Palette][],
+)('theme %s, %s', (_, __, tokens, base) => {
+  const surfaces = [tokens.bg, tokens.surface, tokens['surface-2']];
+
+  it('has text at least 4.5:1 on the accent', () => {
+    expect(contrast(rgb(tokens['on-accent']), rgb(tokens.accent))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('has a focus ring and control outlines at least 3:1 on the surfaces', () => {
+    for (const bg of surfaces) {
+      expect(contrast(rgb(tokens.accent), rgb(bg)), bg).toBeGreaterThanOrEqual(3);
+      expect(contrast(rgb(base['control-border']!), rgb(bg)), bg).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it.each(TEXT)('keeps %s text at least 4.5:1 on the surfaces and the selected row', (k) => {
+    const fg = rgb(base[k]!);
+    for (const bg of surfaces) expect(contrast(fg, rgb(bg)), bg).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(fg, tint(tokens.accent, 0.16, tokens.bg))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps text at least 4.5:1 on the accent tint of a pressed button', () => {
+    for (const under of surfaces)
+      expect(contrast(rgb(base.fg!), tint(tokens.accent, 0.16, under))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps the collection colors at least 3:1 and their strip text at least 4.5:1', () => {
+    for (const k of COLLECTION) {
+      for (const bg of surfaces)
+        expect(contrast(rgb(base[k]!), rgb(bg)), `${k} on ${bg}`).toBeGreaterThanOrEqual(3);
+      expect(contrast(rgb(base.fg!), tint(base[k]!, 0.1, tokens.bg)), k).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    }
+  });
+
+  it('keeps the Compare colors at least 3:1 on the background and surface', () => {
+    for (const c of compareColors(compareSheet))
+      for (const bg of [tokens.bg, tokens.surface])
+        expect(contrast(rgb(c), rgb(bg)), `${c} on ${bg}`).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('the Paper theme', () => {
+  /** `rgb(0 0 0 / 9%)` as `#00000017`, the form the theme files use. */
+  function hairline(css: string, selector: string): string {
+    const start = css.indexOf(`${selector} {`);
+    const body = css.slice(start, css.indexOf('}', start));
+    const m = /--fm-border:\s*rgb\((\d+) (\d+) (\d+) \/ (\d+)%\)/.exec(body);
+    expect(m, selector).not.toBeNull();
+    const hex = (v: number) => Math.round(v).toString(16).padStart(2, '0');
+    const [r, g, b] = [m![1]!, m![2]!, m![3]!].map((v) => hex(Number(v)));
+    return `#${r}${g}${b}${hex((Number(m![4]) / 100) * 255)}`;
+  }
+
+  it.each([
+    ['light', paperTheme.light, light, ':root'],
+    ['dark', paperTheme.dark, dark, ":root[data-theme='dark']"],
+  ] as const)('is the %s palette of theme.css', (_, tokens, p, selector) => {
+    for (const k of ['accent', 'on-accent', 'bg', 'surface', 'surface-2'] as const)
+      expect(tokens[k], k).toBe(p[k]);
+    expect(tokens.border).toBe(hairline(theme, selector));
   });
 });
 

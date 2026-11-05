@@ -1328,6 +1328,8 @@ fn pairings_come_from_the_index_by_rule() {
         .suggest_pairings(PairingRequest {
             face: serif,
             limit: 3,
+            role: None,
+            partner_of: None,
         })
         .expect("pairings");
     assert_eq!(got.len(), 3);
@@ -1344,6 +1346,8 @@ fn pairings_come_from_the_index_by_rule() {
         .suggest_pairings(PairingRequest {
             face: FaceId(99_999),
             limit: 3,
+            role: None,
+            partner_of: None,
         })
         .expect_err("unknown face");
     assert_eq!(err.code, ErrorCode::NotFound);
@@ -2988,6 +2992,22 @@ fn layouts_are_the_core_presets_and_come_back_clamped() {
     assert_eq!(got.blocks[0].size_pt, 600.0);
     assert_eq!(got.blocks[1].tracking, 0.0);
     assert_eq!(lib.api.layout_bounds().expect("bounds"), layout::bounds());
+}
+
+#[test]
+fn list_themes_is_the_data_files_and_the_mock_matches_them() {
+    let lib = Lib::new("api-list-themes");
+    let themes = lib.api.list_themes().expect("themes");
+    assert_eq!(themes, crate::themes::load().expect("valid"));
+    let ids: Vec<&str> = themes.iter().map(|t| t.id.as_str()).collect();
+    assert_eq!(ids, ["paper", "graphite", "indigo", "moss"]);
+    // The Paper pair is the app's colors, with the tokens in their API fields.
+    assert_eq!(themes[0].light.on_accent, "#141413");
+    assert_eq!(themes[0].dark.surface_2, "#262628");
+    assert_eq!(themes[0].dark.border, "#ffffff17");
+    // The UI's MockApi (browser mode, e2e) must offer the same themes as the core.
+    let mock = fm_api::mock::MockApi::new();
+    assert_eq!(mock.list_themes().expect("mock themes"), themes);
 }
 
 #[test]
@@ -6797,13 +6817,17 @@ impl Fetcher for SlowFetcher {
 #[test]
 fn the_fetch_work_of_one_request_ends_with_its_budget() {
     let (lib, _server) = fetching("fetch-budget", lato_ok(), true);
+    // The clock starts before the download path and its fetch thread run, so
+    // the budget must outlast a loaded runner, or no request starts at all;
+    // 200 ms did not on Windows CI. The delay is far longer than the budget,
+    // and the sleeping thread ends with the test process.
     let slow = Arc::new(SlowFetcher {
-        delay: Duration::from_secs(5),
+        delay: Duration::from_secs(120),
         calls: AtomicU32::new(0),
     });
     let lib = with_fetcher(lib, Arc::clone(&slow) as Arc<dyn Fetcher>);
     let lib = Lib {
-        api: lib.api.with_fetch_budget(Duration::from_millis(200)),
+        api: lib.api.with_fetch_budget(Duration::from_secs(10)),
         ..lib
     };
     let started = Instant::now();
@@ -6813,7 +6837,7 @@ fn the_fetch_work_of_one_request_ends_with_its_budget() {
         .expect("needed");
     let took = started.elapsed();
     assert!(
-        took < Duration::from_secs(3),
+        took < Duration::from_secs(60),
         "bounded by the budget: {took:?}"
     );
     assert_eq!(
