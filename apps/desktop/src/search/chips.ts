@@ -270,6 +270,28 @@ export function toggleLanguage(filters: Filters, code: string): Filters {
   return next;
 }
 
+/**
+ * How many chips of these widths fit on one row of `available` px. When not all of them
+ * fit, the row also holds the "+N" chip (`moreWidth`).
+ */
+export function chipsThatFit(
+  widths: readonly number[],
+  available: number,
+  moreWidth: number,
+  gap: number,
+): number {
+  const all = widths.reduce((sum, w) => sum + w + gap, -gap);
+  if (all <= available) return widths.length;
+  let used = moreWidth;
+  let fit = 0;
+  for (const width of widths) {
+    used += gap + width;
+    if (used > available) break;
+    fit += 1;
+  }
+  return fit;
+}
+
 /** The display name of a language preset code. */
 export function languageName(languages: readonly LanguagePreset[], code: string): string {
   return languages.find((l) => l.code === code)?.name ?? code;

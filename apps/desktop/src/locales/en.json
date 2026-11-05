@@ -250,6 +250,30 @@
     }
   },
   "home": {
+    "sort": {
+      "by": "Sorted by {key}",
+      "byDescending": "Sorted by {key}, descending",
+      "change": "change",
+      "changeLabel": "change sort order",
+      "menu": "Sort order",
+      "bestMatch": "Best match",
+      "descending": "Descending",
+      "keys": {
+        "bestMatch": "best match",
+        "activation": "activation",
+        "name": "name",
+        "styleCount": "styles",
+        "weightLine": "weight",
+        "weightRange": "weight",
+        "format": "format",
+        "version": "version",
+        "manufacturer": "manufacturer",
+        "location": "location",
+        "license": "license",
+        "added": "date added",
+        "tags": "tags"
+      }
+    },
     "allFonts": "All fonts",
     "selected": "{count} selected",
     "families": {
@@ -392,6 +416,10 @@
   },
   "chips": {
     "options": "Filter options",
+    "more": {
+      "one": "+{count} more filter",
+      "other": "+{count} more filters"
+    },
     "remove": "Remove filter {name}",
     "filters": "Filters",
     "chipLabel": "{name}, {families}",

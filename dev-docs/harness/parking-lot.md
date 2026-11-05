@@ -357,3 +357,4 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-05
 
 - [E41.1 #447] apps/desktop/src/components/FontGrid.vue:545 — the keyboard cursor mark is only an inset `box-shadow`, and nothing under `apps/desktop/src` has a `forced-colors` rule, so Windows High Contrast should drop the mark on an unselected card; from the CSS, not rendered.
+- [E41.4 #450] apps/desktop/src/components/ui/UiDrawer.vue:39 — `returnTo.focus()` has no fallback when the opener is gone or hidden, for any drawer user.

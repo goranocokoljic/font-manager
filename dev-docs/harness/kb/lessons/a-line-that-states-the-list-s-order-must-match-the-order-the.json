@@ -1,0 +1,20 @@
+{
+  "id": "a-line-that-states-the-list-s-order-must-match-the-order-the",
+  "title": "A line that states the list's order must match the order the API was asked for",
+  "category": "correctness",
+  "rule": "When the UI states how a list is sorted, derive that text from the request it sends, and send an explicit order wherever the API's default differs from the text. fm-core's default for a search is a ranking: fewest missing characters under a coverage filter, best match for text, and only then the name. The TypeScript MockApi does not reproduce those near misses, so a component test over it passes while the line is false. Test the request the store sends for each filter kind, on both sides of the condition.",
+  "rationale": "E41.4 (#450): the count line said 'Sorted by name' under a language filter while fm-core listed families by fewest missing characters first.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    450
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**",
+    "apps/desktop/src/components/**",
+    "crates/fm-core/src/index/search.rs"
+  ],
+  "first_seen": "2026-11-05T21:43:46.796Z",
+  "last_seen": "2026-11-05T21:43:46.796Z"
+}

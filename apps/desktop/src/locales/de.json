@@ -250,6 +250,30 @@
     }
   },
   "home": {
+    "sort": {
+      "by": "Sortiert nach {key}",
+      "byDescending": "Sortiert nach {key}, absteigend",
+      "change": "ändern",
+      "changeLabel": "ändern: Sortierung",
+      "menu": "Sortierung",
+      "bestMatch": "Beste Übereinstimmung",
+      "descending": "Absteigend",
+      "keys": {
+        "bestMatch": "bester Übereinstimmung",
+        "activation": "Aktivierung",
+        "name": "Name",
+        "styleCount": "Schnitten",
+        "weightLine": "Stärke",
+        "weightRange": "Stärke",
+        "format": "Format",
+        "version": "Version",
+        "manufacturer": "Hersteller",
+        "location": "Speicherort",
+        "license": "Lizenz",
+        "added": "Datum hinzugefügt",
+        "tags": "Tags"
+      }
+    },
     "allFonts": "Alle Schriften",
     "selected": "{count} ausgewählt",
     "families": {
@@ -392,6 +416,10 @@
   },
   "chips": {
     "options": "Filteroptionen",
+    "more": {
+      "one": "+{count} weiterer Filter",
+      "other": "+{count} weitere Filter"
+    },
     "remove": "Filter {name} entfernen",
     "filters": "Filter",
     "chipLabel": "{name}, {families}",

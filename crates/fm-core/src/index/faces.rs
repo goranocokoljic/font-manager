@@ -377,6 +377,7 @@ impl Index {
     pub fn collection_specimen(&self, collection: CollectionId) -> FmResult<CollectionSpecimen> {
         let name = self.collection(collection)?.name;
         let found = self.search(&SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 collection: Some(collection),

@@ -833,6 +833,7 @@ fn dispatch(api: &dyn Api, name: &str, value: Value) -> Result<Value, ApiError> 
                 ..Filters::default()
             };
             to_json(&api.search(SearchRequest {
+                order: None,
                 query: a.query,
                 filters,
                 rule: None,

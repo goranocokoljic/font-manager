@@ -225,6 +225,7 @@ pub fn search(api: &dyn Api, query: &str, flags: &SearchFlags) -> Result<Vec<Fam
     let mut hits = Vec::new();
     loop {
         let page = api.search(SearchRequest {
+            order: None,
             query: query.into(),
             filters: flags.filters(),
             rule: None,

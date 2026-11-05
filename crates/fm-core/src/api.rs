@@ -1459,6 +1459,7 @@ impl WorkflowService for CoreApi {
         let coverage = brief::coverage_reason(&req.languages);
         let index = self.lock();
         let found = index.search(&SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 supports: (!req.languages.is_empty()).then(|| Supports::Languages {
