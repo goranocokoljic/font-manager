@@ -18,6 +18,7 @@ import { applyItems, matchesPaths, retrieveDigest, rulesMarkdown, readStore } fr
 import { matchCheck, osOf, excerpt, infraReason, latestRuns } from './ci-wait.mjs';
 import { summaryLine } from './epic-sync.mjs';
 import { contractRemovals, commitCi, decide, latestPerName } from './merge-check.mjs';
+import { classifyJobs, prVerdict } from './main-check.mjs';
 
 const cfg = structuredClone(DEFAULT_CONFIG);
 
@@ -438,5 +439,32 @@ describe('loop-check budget signal (opt-in, #275)', async () => {
     const r = run(['--budget']);
     assert.equal(r.status, 2, r.stdout);
     assert.match(r.stdout, /LOOPCHECK: stop \| 3 of the last 5 stories went over budget/);
+  });
+});
+
+describe('keeper: main-check', () => {
+  const ok = (name) => ({ name, conclusion: 'success', steps: [{ name: 'Set up job', conclusion: 'success' }] });
+  test('a job that died without a failed step is an infra problem; a failed step is a test problem', () => {
+    const cancelled = { name: 'macos', conclusion: 'cancelled', steps: [] };
+    const neverRan = { name: 'macos', conclusion: 'failure', steps: [{ name: 'Set up job', conclusion: 'success' }] };
+    const failedStep = { name: 'windows', conclusion: 'failure', steps: [
+      { name: 'Set up job', conclusion: 'success' }, { name: 'Frontend and harness tests', conclusion: 'failure' }] };
+    assert.equal(classifyJobs([ok('linux'), cancelled]).kind, 'infra');
+    assert.equal(classifyJobs([ok('linux'), neverRan]).kind, 'infra');
+    const t = classifyJobs([ok('linux'), cancelled, failedStep]);
+    assert.equal(t.kind, 'test');
+    assert.deepEqual(t.failed.map((f) => [f.name, f.step, f.infra]), [['macos', null, true], ['windows', 'Frontend and harness tests', false]]);
+    assert.equal(classifyJobs([ok('linux'), ok('macos')]).kind, 'none');
+    assert.equal(classifyJobs([ok('linux'), { name: 'bench', conclusion: 'skipped', steps: [] }]).kind, 'none');
+  });
+
+  test('the fix PR is green only when every required job passed; one red job is red; else pending', () => {
+    const req = ['ci / windows', 'ci / macos', 'ci / linux'];
+    const c = (windows, macos, linux) => [{ name: 'windows', state: windows }, { name: 'macos', state: macos }, { name: 'linux', state: linux }, { name: 'bench', state: 'SKIPPED' }];
+    assert.equal(prVerdict(c('SUCCESS', 'SUCCESS', 'SUCCESS'), req), 'green');
+    assert.equal(prVerdict(c('SUCCESS', 'FAILURE', 'SUCCESS'), req), 'red');
+    assert.equal(prVerdict(c('SUCCESS', 'PENDING', 'SUCCESS'), req), 'pending');
+    assert.equal(prVerdict([{ name: 'windows', state: 'SUCCESS' }], req), 'pending', 'missing jobs are not green');
+    assert.equal(prVerdict(c('SUCCESS', 'CANCELLED', 'SUCCESS'), req), 'red');
   });
 });

@@ -43,6 +43,11 @@ export const DEFAULT_CONFIG = {
   auto_merge: { exclude_tracks: ['platform'], max_branch_updates: 3, max_syncs: 2 },
   idle: { poll_min: 10, max_hours: 8 },
   main_red: { poll_min: 10, max_hours: 6 },
+  keeper: {
+    poll_min: 10, worktree: '../font-manager-keeper', restart_lanes: true, lane_restart_min: 30,
+    fix_main: true, max_fixes_per_day: 3,
+    retry_blocks: ['ci-wait failed', 'CI timeout', 'could not update the branch', 'merge-check failed'],
+  },
   review: { max_cycles: 3, model: 'inherit' },
   contract_epics: ['E1', 'E25'],
   close_epics: true,

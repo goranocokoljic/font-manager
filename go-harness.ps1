@@ -45,6 +45,9 @@
 #   ./go-harness.ps1 -Lane core -NoWorktree        # run in THIS checkout (to watch the first story)
 #   ./go-harness.ps1 -Lane core -Model fable       # default opus
 #   ./go-harness.ps1 -Lane core -Budget            # stop a story that goes over its size budget
+#   ./go-harness.ps1 -Lane keeper                  # the keeper: keeps main green, restarts dead lanes, retries transient blocks
+#   ./go-harness.ps1 -Lane keeper -DryRun          # one keeper look; prints what it would do, touches nothing
+#   ./go-harness.ps1 -Lane keeper -MaxStories 1    # one keeper look, for real, then exit
 #   ./go-harness.ps1 -GraduateOnly                 # just the KB graduation review
 #   ./go-harness.ps1 -EpicSync                     # just post epic summaries / close finished epics
 #
@@ -52,7 +55,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('core', 'ui')]
+    [ValidateSet('core', 'ui', 'keeper')]
     [string]$Lane,
 
     # Restrict the lane to these issue numbers (Definition of Ready still applies).
@@ -627,7 +630,10 @@ function Invoke-Stage {
         'sync'     { 'main is merged into the branch, every conflict is resolved, the preflight passed and the merge is pushed' }
         'review'   { 'the last review has zero open must findings and the bookkeeping commit is pushed' }
         'finalize' { 'criteria are ticked or marked pending with evidence, the summary is posted and the PR is ready (or a fix was pushed for CI)' }
+        'fix-main' { 'a PR with the fix for main is open and the local checks passed' }
     }
+    $cmd = if ($Stage -eq 'fix-main') { "/fix-main $Flags" } else { "/go-cycle $($s.issue) --stage $Stage $Flags" }
+    $who = if ($s.issue) { "issue-$($s.issue)" } else { $s.id }
     for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         $script:Attempt = $attempt
         $script:StageStart = Get-Date
@@ -636,7 +642,7 @@ function Invoke-Stage {
         while ($true) {
             $note = if ($attempt -gt 1 -or $waits -gt 0) { "`nNOTE: a previous run of this stage was interrupted. Resume from the first unfinished step; read .harness/notes/issue-$($s.issue).md; do not redo finished work." } else { '' }
             $prompt = @"
-/go-cycle $($s.issue) --stage $Stage $Flags
+$cmd
 $note
 Run fully autonomously: do not pause for confirmation. Never merge the PR.
 When the stage is finished, print the result on the VERY LAST line, nothing after it:
@@ -644,7 +650,7 @@ When the stage is finished, print the result on the VERY LAST line, nothing afte
   - exactly "${BLOCKED}: <one-line reason>" if a stop condition in the skill applies (a human must decide)
   - exactly "${FAIL}: <one-line reason>" if something broke that you cannot get past
 "@
-            $log = Join-Path $logDir ("issue-{0}-{1}-{2}.log" -f $s.issue, $Stage, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+            $log = Join-Path $logDir ("{0}-{1}-{2}.log" -f $who, $Stage, (Get-Date -Format 'yyyyMMdd-HHmmss'))
             Write-Log "=== #$($s.issue) $($s.id) stage $Stage (attempt $attempt/$maxAttempts$(if ($s.session) { ', resuming session' })) log: $log ===" 'Cyan'
             $text = Invoke-ClaudeRun -Prompt $prompt -LogPath $log -ResumeId $s.session
             # A --resume that cannot find its session fails fast: retry cold once.
@@ -686,6 +692,7 @@ When the stage is finished, print the result on the VERY LAST line, nothing afte
 function Get-StatePath { Join-Path $stateDir "$Lane.json" }
 
 function Save-State {
+    if ($Lane -eq 'keeper') { return }   # the keeper's memory is keeper.json (Save-KeeperMemory)
     if ($script:Story) { $script:Story | ConvertTo-Json -Depth 6 | Set-Content -Path (Get-StatePath) -Encoding utf8 }
 }
 
@@ -1057,7 +1064,7 @@ function Invoke-Story {
 # --------------------------------------------------------------------------
 function Initialize-Worktree {
     if ($NoWorktree) { $script:Work = $PSScriptRoot; return }
-    $def = $Cfg.lanes.$Lane
+    $def = if ($Lane -eq 'keeper') { @{ worktree = ($Cfg.keeper.worktree ?? '../font-manager-keeper') } } else { $Cfg.lanes.$Lane }
     $wt = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot $def.worktree))
     git -C $PSScriptRoot fetch -q origin 2>$null
     if (-not (Test-Path (Join-Path $wt '.git'))) {
@@ -1071,12 +1078,12 @@ function Initialize-Worktree {
 # A fresh story starts from a clean origin/main. Leftovers of a stopped story
 # are stashed (never discarded).
 function Reset-Worktree {
-    param([int]$Issue)
+    param([string]$For)
     if ($NoWorktree) { return }
     git -C $script:Work fetch -q origin 2>$null
     $dirty = (git -C $script:Work status --porcelain 2>$null | Out-String).Trim()
     if ($dirty) {
-        git -C $script:Work stash push -u -q -m "go-harness: leftovers before #$Issue" 2>$null
+        git -C $script:Work stash push -u -q -m "go-harness: leftovers before $For" 2>$null
         Write-Log "    worktree had uncommitted changes: stashed ('git -C $($script:Work) stash list')" 'Yellow'
     }
     git -C $script:Work checkout -q --detach "origin/$($Cfg.base_branch)" 2>$null
@@ -1089,10 +1096,11 @@ function Reset-Worktree {
 # lock whose process is gone (power failure, closed terminal) is stale and
 # is taken over. -DryRun, -GraduateOnly and -EpicSync never get here.
 # --------------------------------------------------------------------------
-function Get-LockPath { Join-Path $stateDir "$Lane.lock" }
+function Get-LockPath { param([string]$Of = $Lane) Join-Path $stateDir "$Of.lock" }
 
 function Read-LaneLock {
-    try { Get-Content (Get-LockPath) -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null }
+    param([string]$Of = $Lane)
+    try { Get-Content (Get-LockPath -Of $Of) -Raw -ErrorAction Stop | ConvertFrom-Json } catch { $null }
 }
 
 # $true when the lock's process is still a running PowerShell.
@@ -1279,6 +1287,307 @@ function Invoke-GraduationReview {
 }
 
 # --------------------------------------------------------------------------
+# The keeper lane (-Lane keeper). The story lanes fix their own PRs; nobody
+# owned main, and a lane that ended stayed ended until a person typed the
+# command. The keeper looks every keeper.poll_min minutes:
+#   1. main red  -> re-run its failed jobs once per commit (a flaky test, a
+#      runner that never started). Still red with a failed step -> ONE
+#      /fix-main agent run in the keeper worktree: a PR that fixes the flaky
+#      test or reverts the bad commit. The keeper merges that PR itself when
+#      its CI is green (the merge gate would refuse: main is red). Red again
+#      -> a human must look. At most keeper.max_fixes_per_day fixes.
+#   2. a story lane with no live process -> start it in a new terminal tab
+#      (not more often than keeper.lane_restart_min; never while its last 3
+#      stories ended blocked: that looks systemic, a human must look).
+#   3. a harness:blocked story whose block reason matches keeper.retry_blocks
+#      (GitHub hiccups, not decisions) -> remove the label once; the lane
+#      takes the story again.
+# Memory: .harness/state/keeper.json. Records: .harness/keeper.jsonl.
+# -DryRun prints what one look would do and changes nothing.
+# --------------------------------------------------------------------------
+$keeperFile  = Join-Path $stateDir 'keeper.json'
+$keeperJsonl = Join-Path $HarnessDir 'keeper.jsonl'
+$script:KeeperDry = $false
+
+function Get-KeeperMemory {
+    $m = $null
+    if (Test-Path $keeperFile) { try { $m = Get-Content $keeperFile -Raw | ConvertFrom-Json -AsHashtable } catch { } }
+    if (-not $m) { $m = @{} }
+    foreach ($k in 'rerun', 'fix', 'restart', 'unblock', 'noted') { if (-not $m[$k]) { $m[$k] = @{} } }
+    return $m
+}
+
+function Save-KeeperMemory {
+    param($M)
+    if ($script:KeeperDry) { return }
+    $M | ConvertTo-Json -Depth 8 | Set-Content -Path $keeperFile -Encoding utf8
+}
+
+function Write-KeeperRecord {
+    param([string]$Action, [hashtable]$Extra = @{})
+    if ($script:KeeperDry) { return }
+    $rec = [ordered]@{ ts = (Get-Date).ToString('o'); action = $Action }
+    foreach ($k in $Extra.Keys) { $rec[$k] = $Extra[$k] }
+    Add-Content -Path $keeperJsonl -Value ($rec | ConvertTo-Json -Depth 6 -Compress)
+}
+
+# Runs $Do, or only says what it would do in -DryRun.
+function Invoke-KeeperAction {
+    param([string]$What, [scriptblock]$Do)
+    if ($script:KeeperDry) { Write-Log "    [dry] would $What" 'Yellow'; return }
+    Write-Log "    $What" 'Yellow'
+    & $Do
+}
+
+# Say a thing once per key (the memory remembers), so a long red main does not
+# repeat the same line every ten minutes.
+function Write-KeeperOnce {
+    param($M, [string]$Key, [string]$Text, [string]$Color = 'Red')
+    if ($M.noted[$Key]) { return }
+    Write-Log $Text $Color
+    $M.noted[$Key] = (Get-Date).ToString('o')
+}
+
+function Get-StoryRecords {
+    if (-not (Test-Path $storiesJsonl)) { return ,@() }
+    return ,@(Get-Content $storiesJsonl | Where-Object { $_.Trim() } | ForEach-Object { try { $_ | ConvertFrom-Json } catch { } } | Where-Object { $_ })
+}
+
+# ---- 2. lanes alive ---------------------------------------------------------
+
+# $true when the lane's last $MaxConsecutiveFails stories all ended blocked or failed.
+function Test-LaneStreak {
+    param([string]$Of)
+    $recs = @(Get-StoryRecords | Where-Object { $_.lane -eq $Of } | Sort-Object ts)
+    if ($recs.Count -lt $MaxConsecutiveFails) { return $false }
+    $tail = @($recs | Select-Object -Last $MaxConsecutiveFails)
+    return @($tail | Where-Object { $_.outcome -in 'blocked', 'failed' }).Count -eq $MaxConsecutiveFails
+}
+
+# A new Windows Terminal tab when wt is there (the panel needs a terminal), else a new window.
+function Start-Lane {
+    param([string]$Of)
+    $laneArgs = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'go-harness.ps1'), '-Lane', $Of, '-Model', $Model)
+    if (Get-Command wt.exe -ErrorAction SilentlyContinue) {
+        Start-Process wt.exe -ArgumentList (@('-w', '0', 'new-tab', '--title', "go-harness $Of", 'pwsh') + $laneArgs) | Out-Null
+    } else {
+        Start-Process pwsh -ArgumentList $laneArgs | Out-Null
+    }
+}
+
+function Keep-LanesAlive {
+    param($M)
+    if (-not [bool]($Cfg.keeper.restart_lanes ?? $true)) { return }
+    $cool = [double]($Cfg.keeper.lane_restart_min ?? 30)
+    foreach ($l in @($Cfg.lanes.PSObject.Properties.Name)) {
+        if (Test-LockAlive (Read-LaneLock -Of $l)) { continue }
+        if (Test-LaneStreak $l) {
+            Write-KeeperOnce $M "streak-$l" "    lane $($l): its last $MaxConsecutiveFails stories ended blocked - not restarted; a human must look ($summaryMd)"
+            continue
+        }
+        $M.noted.Remove("streak-$l")
+        $last = $M.restart[$l]
+        if ($last -and ((Get-Date) - [datetime]$last).TotalMinutes -lt $cool) { continue }
+        Invoke-KeeperAction "start lane $l (no live process)" { Start-Lane $l }
+        $M.restart[$l] = (Get-Date).ToString('o')
+        Write-KeeperRecord 'lane-start' @{ lane = $l }
+    }
+}
+
+# ---- 1. main green ----------------------------------------------------------
+
+function Get-MainCheck {
+    param([string[]]$Arguments)
+    $r = Invoke-Node 'main-check.mjs' $Arguments
+    $v = $null; try { $v = $r.Out | ConvertFrom-Json -Depth 20 } catch { }
+    if (-not $v) { throw "main-check failed: $($r.Err.Trim())" }
+    return $v
+}
+
+# Our open fix PRs: merge when green, re-run once when red, give up after that.
+function Update-FixPrs {
+    param($M)
+    foreach ($sha in @($M.fix.Keys)) {
+        $f = $M.fix[$sha]
+        if ($f.outcome -ne 'open' -or -not $f.pr) { continue }
+        $sha7 = $sha.Substring(0, 7)
+        $pr = Get-MainCheck @('--pr', "$($f.pr)")
+        switch ($pr.status) {
+            'green' {
+                $branch = (gh pr view $f.pr --json headRefName -q .headRefName 2>$null | Out-String).Trim()
+                Invoke-KeeperAction "merge fix PR #$($f.pr) for main $sha7 (CI green)" {
+                    $out = gh pr merge $f.pr --squash --match-head-commit $pr.sha 2>&1
+                    $out | ForEach-Object { Write-Log "    $_" 'DarkGray' }
+                    if ($LASTEXITCODE -eq 0) {
+                        $f.outcome = 'merged'
+                        if ($branch) {
+                            git -C $script:Work checkout -q --detach 2>&1 | Out-Null
+                            git -C $script:Work branch -D $branch 2>&1 | Out-Null
+                            gh api -X DELETE "repos/{owner}/{repo}/git/refs/heads/$branch" 2>&1 | Out-Null
+                        }
+                        Write-Log "=== fix PR #$($f.pr) MERGED: main gets a new commit; CI decides ===" 'Green'
+                    } else { Write-Log "    merge failed; trying again next look" 'Yellow' }
+                }
+                Write-KeeperRecord 'fix-merge' @{ sha = $sha; pr = $f.pr; ok = ($f.outcome -eq 'merged') }
+            }
+            'red' {
+                if (-not $f.rerun) {
+                    Invoke-KeeperAction "re-run the failed CI jobs of fix PR #$($f.pr) once (flaky?)" {
+                        gh run list --commit $pr.sha --json databaseId,conclusion 2>$null | ConvertFrom-Json |
+                            Where-Object { $_.conclusion -in 'failure', 'timed_out', 'cancelled' } |
+                            ForEach-Object { gh run rerun $_.databaseId --failed 2>&1 | Out-Null }
+                    }
+                    $f.rerun = $true
+                } else {
+                    $f.outcome = 'failed'
+                    Invoke-KeeperAction "give up on fix PR #$($f.pr): CI red twice" {
+                        gh pr comment $f.pr --body "go-keeper: CI is red on this fix too (twice). A human must look at main $sha7 and this PR." 2>$null | Out-Null
+                    }
+                    Write-Log "=== fix PR #$($f.pr) for main $sha7 is red too. A human must look. ===" 'Red'
+                    $script:HadFailures = $true
+                    Write-KeeperRecord 'fix-failed' @{ sha = $sha; pr = $f.pr }
+                }
+            }
+            'merged' { $f.outcome = 'merged' }
+            'closed' { $f.outcome = 'closed'; Write-Log "    fix PR #$($f.pr) was closed by a human" 'Yellow' }
+            default  { Write-Log "    fix PR #$($f.pr) for main $($sha7): CI still running" 'DarkGray' }
+        }
+    }
+}
+
+function Invoke-FixMain {
+    param($Verdict, $M)
+    $sha = [string]$Verdict.sha; $sha7 = $sha.Substring(0, 7)
+    $file = Join-Path $HarnessDir "ci/main-$sha7.json"
+    if ($script:KeeperDry) { Write-Log "    [dry] would run /fix-main --ci $file in $($script:Work)" 'Yellow'; return }
+    New-Item -ItemType Directory -Force -Path (Split-Path $file) | Out-Null
+    $Verdict | ConvertTo-Json -Depth 20 | Set-Content -Path $file -Encoding utf8
+    Write-Log "=== main $sha7 is red with a failed step after a re-run: running /fix-main (log in $logDir) ===" 'Cyan'
+    Reset-Worktree -For "main-$sha7"
+    $script:Story = [ordered]@{
+        issue = 0; id = "main-$sha7"; title = "fix main at $sha7"; epic = ''; size = 'S'; track = 'keeper'
+        budget_usd = 1e9; numeric = $false; session = ''; pr = 0
+        claim_ts = (Get-Date).ToString('o'); green_ts = $null
+        ci_attempts = 0; ci_failed_platforms = @(); finalize_runs = 0; merge_updates = 0; sync_runs = 0
+        billed_usd = 0.0; purecontext_calls = 0; review_rounds = 0; must_total = 0; must_fixed = 0; should_total = 0; rejected_total = 0
+        bench = $null
+    }
+    $M.fix[$sha] = @{ ts = (Get-Date).ToString('o'); outcome = 'running'; pr = 0 }
+    Save-KeeperMemory $M
+    $r = Invoke-Stage 'fix-main' "--ci $file"
+    $cost = [double]$script:Story.billed_usd
+    $pr = 0
+    if ($r.Verdict -eq 'ok') {
+        $hit = gh pr list --state open --head "fix-main-$sha7" --json number -q '.[0].number' 2>$null
+        if ($hit) { $pr = [int]$hit }
+    }
+    $M.fix[$sha] = @{ ts = (Get-Date).ToString('o'); outcome = $(if ($pr) { 'open' } else { 'failed' }); pr = $pr; verdict = $r.Verdict; reason = $r.Reason; cost_usd = $cost }
+    Write-KeeperRecord 'fix-main' @{ sha = $sha; kind = $Verdict.kind; verdict = $r.Verdict; pr = $pr; reason = $r.Reason; cost_usd = $cost }
+    if ($pr) { Write-Log "=== fix PR #$pr for main $sha7 is open (USD $('{0:N2}' -f $cost)); the keeper merges it when its CI is green ===" 'Green' }
+    else {
+        Write-Log "=== /fix-main for $sha7 ended $($r.Verdict): $($r.Reason). A human must look at main. ===" 'Red'
+        $script:HadFailures = $true
+    }
+    $script:Story = $null; $script:Stage = ''; $script:Phase = $null
+}
+
+function Keep-MainGreen {
+    param($M)
+    Update-FixPrs $M
+    $v = Get-MainCheck @('--out', (Join-Path $HarnessDir 'ci/main.json'))
+    $sha = [string]$v.sha; $sha7 = if ($sha) { $sha.Substring(0, 7) } else { '?' }
+    switch ($v.status) {
+        'green'   { Write-Log "    main is green at $sha7" 'Green'; return }
+        'pending' { Write-Log "    main: CI is running at $sha7" 'DarkGray'; return }
+    }
+    $why = @($v.failed | ForEach-Object { "$($_.name) " + $(if ($_.step) { "(step: $($_.step))" } else { "($($_.conclusion), no step failed)" }) }) -join ', '
+    Write-Log "    main is RED at $sha7 [$($v.kind)]: $why" 'Red'
+    $fix = $M.fix[$sha]
+    if ($fix) {
+        switch ($fix.outcome) {
+            'open'    { return }   # Update-FixPrs follows it
+            'running' { Write-Log "    a /fix-main run for $sha7 did not finish last time; trying once more" 'Yellow'; $M.fix.Remove($sha) }
+            'merged'  { Write-Log "    the fix for $sha7 is merged; waiting for CI on the new main commit" 'DarkGray'; return }
+            default   { Write-KeeperOnce $M "fix-$sha7" "    main $sha7 stays red: the keeper's fix ended $($fix.outcome) ($($fix.reason)). A human must look."; return }
+        }
+    }
+    # First answer to a red main: re-run its failed jobs once (the lane does the same at its merge gate).
+    if (-not $M.rerun[$sha] -and [int]($v.attempt ?? 1) -le 1) {
+        Invoke-KeeperAction "re-run the failed jobs of main run $($v.run_id) once (flaky test or dead runner?)" { gh run rerun $v.run_id --failed 2>&1 | Out-Null }
+        $M.rerun[$sha] = (Get-Date).ToString('o')
+        Write-KeeperRecord 'main-rerun' @{ sha = $sha; run = $v.run_id; kind = $v.kind }
+        return
+    }
+    if ($v.kind -eq 'infra') {
+        # No step failed: the runners. A code fix cannot help; try again every hour.
+        $last = if ($M.rerun[$sha]) { [datetime]$M.rerun[$sha] } else { (Get-Date).AddHours(-2) }
+        if (((Get-Date) - $last).TotalMinutes -ge 60) {
+            Invoke-KeeperAction "re-run main run $($v.run_id) again (runners never started the job; hourly)" { gh run rerun $v.run_id --failed 2>&1 | Out-Null }
+            $M.rerun[$sha] = (Get-Date).ToString('o')
+            Write-KeeperRecord 'main-rerun' @{ sha = $sha; run = $v.run_id; kind = $v.kind }
+        } else { Write-Log "    runner problem on main (no step failed); next re-run at $($last.AddMinutes(60).ToString('HH:mm'))" 'Yellow' }
+        return
+    }
+    if (-not [bool]($Cfg.keeper.fix_main ?? $true)) { Write-KeeperOnce $M "nofix-$sha7" "    main $sha7 is red after a re-run and keeper.fix_main is off. A human must look."; return }
+    $max = [int]($Cfg.keeper.max_fixes_per_day ?? 3)
+    $today = @($M.fix.Values | Where-Object { $_.ts -and ((Get-Date) - [datetime]$_.ts).TotalHours -lt 24 }).Count
+    if ($today -ge $max) { Write-KeeperOnce $M "max-$sha7" "    main $sha7 is red, but the keeper already ran $today fixes in 24 h (keeper.max_fixes_per_day $max). A human must look."; return }
+    Invoke-FixMain -Verdict $v -M $M
+}
+
+# ---- 3. transient blocks ----------------------------------------------------
+
+function Retry-TransientBlocks {
+    param($M)
+    $pats = @($Cfg.keeper.retry_blocks)
+    if (-not $pats.Count) { return }
+    $blocked = @(gh issue list --label 'harness:blocked' --state open --limit 200 --json number -q '.[].number' 2>$null | Where-Object { $_ })
+    if (-not $blocked.Count) { return }
+    $recs = @(Get-StoryRecords | Where-Object { $_.outcome -eq 'blocked' })
+    foreach ($n in $blocked) {
+        $rec = @($recs | Where-Object { [int]$_.issue -eq [int]$n } | Sort-Object ts) | Select-Object -Last 1
+        if (-not $rec) { continue }
+        $hit = @($pats | Where-Object { [string]$rec.reason -match [regex]::Escape([string]$_) }) | Select-Object -First 1
+        if (-not $hit) { continue }
+        $done = @($M.unblock["$n"])
+        if ($done -contains $rec.ts) { continue }          # this very block was retried already
+        if ($done.Count -ge 2) { Write-KeeperOnce $M "unblock-$n" "    #$($n): blocked for a transient reason again (3rd time) - left for a human"; continue }
+        Invoke-KeeperAction "unblock #$n (transient: $($rec.reason))" {
+            gh issue edit $n --remove-label 'harness:blocked' 2>&1 | Out-Null
+            gh issue comment $n --body "go-keeper: the block looked transient ($hit), not a decision. Removed the label harness:blocked; the lane takes the story again." 2>&1 | Out-Null
+        }
+        $M.unblock["$n"] = @($done + $rec.ts)
+        Write-KeeperRecord 'unblock' @{ issue = [int]$n; reason = $rec.reason }
+    }
+}
+
+# ---- the loop ---------------------------------------------------------------
+
+function Invoke-Keeper {
+    $poll = [double]($Cfg.keeper.poll_min ?? 10)
+    $ticks = 0
+    Write-Log ("=== go-keeper: a look every {0} min | fix_main {1} | restart_lanes {2} (every {3} min at most) | {4} ===" -f $poll,
+        $(if ([bool]($Cfg.keeper.fix_main ?? $true)) { 'on' } else { 'off' }), $(if ([bool]($Cfg.keeper.restart_lanes ?? $true)) { 'on' } else { 'off' }),
+        [int]($Cfg.keeper.lane_restart_min ?? 30), $(if ($script:KeeperDry) { 'DRY RUN: nothing is changed' } else { "memory $keeperFile" })) 'Cyan'
+    while ($true) {
+        $ticks++
+        $M = Get-KeeperMemory
+        Write-Log ("--- look {0} at {1} ---" -f $ticks, (Get-Date -Format 'HH:mm')) 'DarkGray'
+        try {
+            Keep-MainGreen $M
+            Keep-LanesAlive $M
+            Retry-TransientBlocks $M
+        } catch {
+            Write-Log "    this look failed: $($_.Exception.Message)" 'Red'
+            if (Test-NetworkError $_.Exception.Message) { Wait-Network | Out-Null }
+        }
+        Save-KeeperMemory $M
+        if ($script:KeeperDry -or ($MaxStories -gt 0 -and $ticks -ge $MaxStories)) { break }
+        Wait-Minutes $poll 'keeper: next look'
+    }
+}
+
+# --------------------------------------------------------------------------
 # Setup checks
 # --------------------------------------------------------------------------
 function Test-Setup {
@@ -1291,7 +1600,9 @@ function Test-Setup {
         git -C $script:Work cat-file -e "origin/$($Cfg.base_branch):$f" 2>$null
         if ($LASTEXITCODE -ne 0) { $bad += "origin/$($Cfg.base_branch) has no $f — the workspace does not exist yet (E1.1–E1.3 are human stories)" }
     }
-    foreach ($f in 'go-harness.config.json', '.claude/skills/go-cycle/SKILL.md', '.claude/commands/fm-review.md', 'scripts/harness/pick.mjs') {
+    $need = @('go-harness.config.json', '.claude/skills/go-cycle/SKILL.md', '.claude/commands/fm-review.md', 'scripts/harness/pick.mjs')
+    if ($Lane -eq 'keeper') { $need += '.claude/skills/fix-main/SKILL.md', 'scripts/harness/main-check.mjs' }
+    foreach ($f in $need) {
         git -C $script:Work cat-file -e "origin/$($Cfg.base_branch):$f" 2>$null
         if ($LASTEXITCODE -ne 0 -and -not $NoWorktree) { $bad += "origin/$($Cfg.base_branch) has no $f — commit and push the harness first (the lane worktree checks out main)" }
     }
@@ -1305,12 +1616,33 @@ if ($env:GO_HARNESS_NOEXEC) { return }   # dot-source for tests without running 
 
 if ($GraduateOnly) { Invoke-GraduationReview; exit 0 }
 if ($EpicSync) { $r = Invoke-Node 'epic-sync.mjs' @('--dir', $HarnessDir); Write-Host $r.Out $r.Err; exit $r.Code }
+if ($DryRun -and $Lane -eq 'keeper') {
+    $script:KeeperDry = $true; $script:PanelMode = $false; $script:Work = $PSScriptRoot
+    Invoke-Keeper
+    exit 0
+}
 if ($DryRun) {
     $r = Invoke-Node 'pick.mjs' (@('--dry-run') + $(if ($Lane) { @('--lane', $Lane) } else { @() }) + $(if ($Issues) { @('--issues', ($Issues -join ',')) } else { @() }))
     Write-Host $r.Out; if ($r.Err.Trim()) { Write-Host $r.Err -ForegroundColor Red }
     exit $r.Code
 }
-if (-not $Lane) { Write-Host 'Usage: ./go-harness.ps1 -Lane core|ui [options]   (or -DryRun, -GraduateOnly, -EpicSync)' -ForegroundColor Red; exit 2 }
+if (-not $Lane) { Write-Host 'Usage: ./go-harness.ps1 -Lane core|ui|keeper [options]   (or -DryRun, -GraduateOnly, -EpicSync)' -ForegroundColor Red; exit 2 }
+
+if ($Lane -eq 'keeper') {
+    $script:PanelMode = $false   # the keeper logs lines; the story panel belongs to the lanes
+    Lock-Lane
+    try {
+        Write-Log "=== go-harness: lane=keeper | model=$Model (for /fix-main) ===" 'Cyan'
+        Initialize-Worktree
+        Write-Log "    working in $($script:Work)" 'DarkGray'
+        $problems = Test-Setup
+        if ($problems) { foreach ($p in $problems) { Write-Log "    ✗ $p" 'Red' }; exit 2 }
+        Invoke-Keeper
+    }
+    finally { Unlock-Lane }
+    if ($script:HadFailures) { exit 1 }
+    exit 0
+}
 
 $ranAny = $false
 Lock-Lane   # one process per lane; a second start exits 2 before it touches anything
@@ -1373,7 +1705,7 @@ try {
         else { Write-Log "=== picked #$($plan.story.number) $($plan.story.id) $($plan.story.title) [$($plan.story.size), $($plan.story.track), budget `$$($plan.story.budget_usd)] ===" 'Cyan' }
 
         $script:Story = New-StoryState $plan.story
-        if ($script:Story.stage -eq 'build' -and -not $script:Story.session -and $plan.action -eq 'start') { Reset-Worktree -Issue $script:Story.issue }
+        if ($script:Story.stage -eq 'build' -and -not $script:Story.session -and $plan.action -eq 'start') { Reset-Worktree -For "#$($script:Story.issue)" }
         Save-State
         $ranAny = $true
         Invoke-Story
