@@ -320,7 +320,9 @@ pick; then commit the changed files in a PR.
 | lane says IDLE and waits | the other lane's PR touches the same area or closes a dependency; it asks again every 10 min (`-NoIdleWait` to end instead) |
 | lane stopped: "main stayed red" | fix `main`; the next run takes the ready PR back to the merge gate. With the keeper running, both happen by themselves |
 | keeper: "A human must look" in red | `main` is red after a re-run and a fix PR (`.harness/keeper.jsonl` says which); open the PR or the main run and decide |
-| keeper: "lane x: its last 3 stories ended blocked - not restarted" | read `.harness/fm-run-summary.md`, fix the cause, start the lane by hand once; the keeper takes over again |
+| keeper: "lane x: its last 3 stories ended blocked - not restarted" | read `.harness/fm-run-summary.md`, fix the cause, remove `harness:blocked` from the stories (or start the lane by hand once); the keeper restarts the lane at its next look |
+| keeper: "lane x: nothing to start" | normal: every open story of that lane waits on another story or on a human; the keeper does not open a tab for an idle lane |
+| story blocked with "not a git repository" | `gh` ran outside the repository (a terminal tab that opened in the home folder). Fixed 2026-11-05: the harness does `Set-Location` to the repository at start and the keeper opens tabs with `wt -d`. Unblock the story; the keeper also unblocks "could not update the branch" by itself |
 | keeper opens no tabs | `wt.exe` not on PATH: it opens PowerShell windows instead; or `keeper.restart_lanes` is false |
 | lane stopped: "GitHub did not run CI" | fix billing / the spending limit, then run the lane again: it resumes the story at CI |
 | `[wait] no connection to GitHub or the API` | the PC lost the network: the lane checks every `network.poll_min` minutes (5) for at most `network.max_hours` (48) and goes on by itself; a stage that failed for it is run again and not counted |
