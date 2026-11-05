@@ -908,11 +908,16 @@ fn ten_thousand_files_persist_in_under_ten_seconds() {
         with_coverage, done.faces,
         "coverage is part of the timed write"
     );
-    // The budget is for release builds. Unoptimized test builds on shared CI
-    // runners take 8 s normally and up to 15 s on a busy Windows runner, so
-    // they get three times the room. Release numbers come from scripts/bench.sh.
-    let budget = Duration::from_secs(if cfg!(debug_assertions) { 30 } else { 10 });
-    assert!(elapsed < budget, "{elapsed:?}");
+    // The 10 s budget is for release builds; the bench job measures it on all
+    // three systems (scripts/bench.sh). An unoptimized test build on a shared
+    // runner took 8 s on a quiet day and 50 s on a busy Windows runner
+    // (2026-11-05), so a debug build checks the result and skips the timing,
+    // like the search, pairing and similar tests on 10k faces.
+    if cfg!(debug_assertions) {
+        eprintln!("debug build: timing skipped");
+        return;
+    }
+    assert!(elapsed < Duration::from_secs(10), "{elapsed:?}");
 }
 
 /// Criterion 2 on the reference library (10k fonts): skipped without it.
