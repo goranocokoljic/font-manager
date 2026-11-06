@@ -216,7 +216,7 @@ test('two chips saved as a smart collection list the same families from the side
   const row = sidebar.getByRole('listitem', { name: 'Static picks' });
   await expect(row).toContainText('Smart');
   await expect(row.locator('.count')).not.toHaveText('0');
-  await row.getByRole('button', { name: 'Static picks' }).click();
+  await row.getByRole('button', { name: 'Static picks', exact: true }).click();
   await expect.poll(() => familyCount(page)).toBe(narrowed);
   await expect(page.getByRole('listitem', { name: 'Never saved' })).toHaveCount(0);
 });

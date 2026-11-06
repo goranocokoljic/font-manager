@@ -66,19 +66,41 @@ const line = ref<HTMLElement | null>(null);
 /** The text's size as a share of `sizePx`: below 1 when the text would not fit. */
 const fit = ref(1);
 
+/** Checks after the first measure; each takes at least 1 % off, so this is enough. */
+const MAX_REFITS = 8;
+let refits = 0;
+
+/** The text's exact width: `offsetWidth` rounds, and half a pixel is enough to cut it. */
+const lineWidth = () => line.value?.getBoundingClientRect().width ?? 0;
+
 // Measured once the text has its face. Without layout (no width to measure) it stays 1.
 watch(
   () => [props.text, props.sizePx, props.fitWidth, props.trackingEm, state.value] as const,
   () => {
-    const el = line.value;
-    if (!el || !props.fitWidth || !el.offsetWidth) {
+    refits = 0;
+    const width = lineWidth();
+    if (!props.fitWidth || !width) {
       fit.value = 1;
       return;
     }
-    // offsetWidth is the text at the size it has now: take that size out first.
-    fit.value = Math.min(1, (props.fitWidth * fit.value) / el.offsetWidth);
+    // The width is the text at the size it has now: take that size out first.
+    fit.value = Math.min(1, (props.fitWidth * fit.value) / width);
   },
   { flush: 'post', immediate: true },
+);
+
+// Text is not always in proportion to its size: without subpixel positioning (Chromium on
+// Linux) each glyph's advance is a whole pixel. So the new size is measured too, and
+// shrinks until the text fits.
+watch(
+  fit,
+  () => {
+    const width = lineWidth();
+    if (!props.fitWidth || width <= props.fitWidth || refits >= MAX_REFITS) return;
+    refits += 1;
+    fit.value *= Math.min(0.99, props.fitWidth / width);
+  },
+  { flush: 'post' },
 );
 
 const style = computed(() => ({

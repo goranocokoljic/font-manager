@@ -55,7 +55,7 @@ test('the activation button activates and deactivates the face', async ({ page }
   await page.goto('/#/?face=1');
   const panel = info(page);
   await expect(panel.getByTestId('health-badge')).toHaveText('OK');
-  await panel.getByRole('button', { name: 'Activate' }).click();
+  await panel.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(panel.getByTestId('activation-state')).toHaveText('Active for this session');
   await panel.getByRole('button', { name: 'Deactivate' }).click();
   await expect(panel.getByTestId('activation-state')).toHaveText('Not active');
@@ -66,7 +66,7 @@ test('an unsupported face shows its health and cannot be activated', async ({ pa
   const panel = info(page);
   await expect(panel.getByTestId('health-badge')).toContainText('Unsupported');
   await expect(panel.getByTestId('health-badge')).toContainText('Type 1 fonts cannot be activated');
-  await expect(panel.getByRole('button', { name: 'Activate' })).toBeDisabled();
+  await expect(panel.getByRole('button', { name: 'Activate', exact: true })).toBeDisabled();
 });
 
 test('nothing selected without a face in the URL', async ({ page }) => {
@@ -80,7 +80,7 @@ test('an activation from outside the inspector shows there without a click (E6.9
   await page.goto('/#/?face=1');
   const panel = info(page);
   await expect(panel.getByTestId('activation-state')).toHaveText('Not active');
-  await expect(panel.getByRole('button', { name: 'Activate' })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Activate', exact: true })).toBeVisible();
 
   // Dragging Inter out of the window (Font Switch) activates face 1 through the
   // API, not through the inspector; only the activationChanged event tells it.

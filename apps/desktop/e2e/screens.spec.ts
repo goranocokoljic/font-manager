@@ -162,7 +162,7 @@ test.describe('@screens', () => {
           await expect(page.locator('#app')).not.toBeEmpty();
           if (collectionName) {
             const sidebar = page.getByRole('region', { name: 'Collections' });
-            await sidebar.getByRole('button', { name: 'New', exact: true }).click();
+            await sidebar.getByRole('button', { name: 'New collection', exact: true }).click();
             const input = sidebar.getByRole('textbox', { name: 'New collection name' });
             await input.fill(collectionName);
             await input.press('Enter');

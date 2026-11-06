@@ -1191,17 +1191,15 @@ fn a_draft_rule_searches_like_the_saved_collection() {
 }
 
 /// The default smart collections in sidebar order.
-const DEFAULTS: [&str; 6] = [
-    "Recently added",
+const DEFAULTS: [&str; 4] = [
     "Recently activated",
     "Variable",
     "Monospace",
     "Web-licensed",
-    "Problems",
 ];
 
 #[test]
-fn a_new_library_gets_the_six_defaults_as_plain_rules() {
+fn a_new_library_gets_the_four_defaults_as_plain_rules() {
     let (mut index, _) = library();
     assert!(index.create_default_collections().expect("defaults"));
     let all = index.collections().expect("list");
@@ -1219,10 +1217,6 @@ fn a_new_library_gets_the_six_defaults_as_plain_rules() {
         f
     };
     assert_eq!(
-        rule("Recently added"),
-        want(|f| f.added_within_days = Some(30))
-    );
-    assert_eq!(
         rule("Recently activated"),
         want(|f| f.activated_within_days = Some(30))
     );
@@ -1232,7 +1226,111 @@ fn a_new_library_gets_the_six_defaults_as_plain_rules() {
         want(|f| f.classification = vec![Classification::Mono])
     );
     assert_eq!(rule("Web-licensed"), want(|f| f.web_ok = Some(true)));
-    assert_eq!(rule("Problems"), want(|f| f.problems = Some(true)));
+}
+
+/// A smart collection as an earlier version made the defaults, one plain rule.
+fn old_default(index: &mut Index, name: &str, rules: Filters, color: Option<&str>) -> CollectionId {
+    index
+        .create_collection(&CreateCollectionRequest {
+            name: name.into(),
+            parent: None,
+            rules: Some(rules),
+            rule_group: None,
+            color: color.map(Into::into),
+        })
+        .expect("old default")
+        .id
+}
+
+fn old_problems() -> Filters {
+    Filters {
+        problems: Some(true),
+        ..Filters::default()
+    }
+}
+
+fn old_recent() -> Filters {
+    Filters {
+        added_within_days: Some(30),
+        ..Filters::default()
+    }
+}
+
+/// E41.3: Problems appears once, and "Recently added" is a sidebar row.
+#[test]
+fn the_replaced_defaults_of_an_earlier_version_go_once() {
+    let (mut index, _) = library();
+    old_default(&mut index, "Recently added", old_recent(), None);
+    old_default(&mut index, "Problems", old_problems(), None);
+    create(&mut index, "Mine", None);
+    assert!(index.create_default_collections().expect("defaults"));
+    let names = tree(&index);
+    assert_eq!(names[0], "Mine");
+    assert!(
+        !names
+            .iter()
+            .any(|n| n == "Problems" || n == "Recently added"),
+        "{names:?}"
+    );
+    // Once: the same collection made again afterwards is the user's own.
+    old_default(&mut index, "Problems", old_problems(), None);
+    assert!(!index.create_default_collections().expect("defaults"));
+    assert!(tree(&index).iter().any(|n| n == "Problems"));
+}
+
+/// The upgrade itself: a library of an earlier version already has the mark of
+/// its defaults, so the retirement must hold on the path that makes nothing.
+#[test]
+fn a_library_that_had_its_defaults_loses_the_replaced_ones_for_good() {
+    let dir = crate::test_support::TempDir::new("collections-defaults-retired");
+    let path = dir.path().join(crate::index::INDEX_FILE);
+    {
+        let mut index = Index::open(&path).expect("open").index;
+        index
+            .conn
+            .execute(
+                "INSERT INTO index_meta (key, value) VALUES (?1, 'earlier')",
+                [DEFAULTS_KEY],
+            )
+            .expect("mark");
+        old_default(&mut index, "Recently added", old_recent(), None);
+        old_default(&mut index, "Problems", old_problems(), None);
+        create(&mut index, "Mine", None);
+        assert!(!index.create_default_collections().expect("defaults"));
+        assert_eq!(tree(&index), ["Mine"]);
+    }
+    // Written to the file, not only to this connection, and not done twice.
+    let mut index = Index::open(&path).expect("reopen").index;
+    assert_eq!(tree(&index), ["Mine"]);
+    old_default(&mut index, "Problems", old_problems(), None);
+    assert!(!index.create_default_collections().expect("defaults"));
+    assert!(tree(&index).iter().any(|n| n == "Problems"));
+}
+
+#[test]
+fn a_replaced_default_the_user_changed_stays() {
+    // Another rule under the name; a colour.
+    let (mut index, _) = library();
+    let other = Filters {
+        problems: Some(false),
+        ..Filters::default()
+    };
+    old_default(&mut index, "Problems", other, None);
+    old_default(&mut index, "Recently added", old_recent(), Some("teal"));
+    assert!(index.create_default_collections().expect("defaults"));
+    let names = tree(&index);
+    assert!(names.iter().any(|n| n == "Problems"), "{names:?}");
+    assert!(names.iter().any(|n| n == "Recently added"), "{names:?}");
+
+    // A child; a manual collection of that name.
+    let (mut index, _) = library();
+    let parent = old_default(&mut index, "Problems", old_problems(), None);
+    create(&mut index, "Kept", Some(parent));
+    create(&mut index, "Recently added", None);
+    assert!(index.create_default_collections().expect("defaults"));
+    let names = tree(&index);
+    assert!(names.iter().any(|n| n == "Problems"), "{names:?}");
+    assert!(names.iter().any(|n| n == "Recently added"), "{names:?}");
 }
 
 #[test]
@@ -1251,15 +1349,9 @@ fn defaults_are_made_once_and_a_renamed_or_deleted_one_stays_so() {
                 color: None,
             })
             .expect("rename");
-        index.delete_collection(id("Problems")).expect("delete");
+        index.delete_collection(id("Monospace")).expect("delete");
     }
-    let want = [
-        "Recently added",
-        "Recently activated",
-        "Variable fonts",
-        "Monospace",
-        "Web-licensed",
-    ];
+    let want = ["Recently activated", "Variable fonts", "Web-licensed"];
     // The next start.
     let mut index = Index::open(&path).expect("reopen").index;
     assert!(!index.create_default_collections().expect("defaults"));
@@ -1276,7 +1368,7 @@ fn a_default_whose_name_is_taken_is_skipped() {
     create(&mut index, "Variable", None);
     assert!(index.create_default_collections().expect("defaults"));
     let all = index.collections().expect("list");
-    assert_eq!(all.len(), 6);
+    assert_eq!(all.len(), 4);
     let variable: Vec<_> = all.iter().filter(|c| c.name == "Variable").collect();
     assert_eq!(variable.len(), 1);
     assert!(
@@ -1422,6 +1514,9 @@ fn on_the_fixtures_each_default_holds_exactly_its_faces() {
     ];
 
     assert!(index.create_default_collections().expect("defaults"));
+    // The sidebar's own rows replaced these two (E41.3); their rules still hold.
+    old_default(&mut index, "Recently added", old_recent(), None);
+    old_default(&mut index, "Problems", old_problems(), None);
     let all = index.collections().expect("list");
     for (name, want) in want {
         assert!(!want.is_empty(), "{name}: the fixtures hold no such face");

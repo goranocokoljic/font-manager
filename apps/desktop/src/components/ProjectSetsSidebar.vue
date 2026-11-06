@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import UiFoldButton from './ui/UiFoldButton.vue';
+import SidebarHead from './SidebarHead.vue';
+import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import { useFolded } from './useFolded';
 // The Project sets group of the sidebar: one button per set. Pressing a set makes
@@ -15,20 +16,18 @@ const { folded, toggle } = useFolded('sets');
 </script>
 
 <template>
-  <section class="sets" aria-labelledby="fm-sets-heading">
-    <header class="head">
-      <h2 id="fm-sets-heading" class="heading">
-        <UiFoldButton :folded="folded" controls="fm-sets-body" icon="box" @toggle="toggle">
-          {{ t('sets.heading') }}
-        </UiFoldButton>
-      </h2>
-      <UiIconButton
-        icon="import"
-        :label="t('sets.import')"
-        :title="t('sets.importTitle')"
-        @click="store.importSet()"
-      />
-    </header>
+  <section class="side-section" aria-labelledby="fm-sets-heading">
+    <SidebarHead id="fm-sets-heading" :folded="folded" controls="fm-sets-body" @toggle="toggle">
+      {{ t('sets.heading') }}
+      <template #actions>
+        <UiIconButton
+          icon="import"
+          :label="t('sets.import')"
+          :title="t('sets.importTitle')"
+          @click="store.importSet()"
+        />
+      </template>
+    </SidebarHead>
     <div v-show="!folded" id="fm-sets-body">
       <div v-if="store.imported" class="imported" role="status" aria-labelledby="fm-sets-imported">
         <p id="fm-sets-imported" class="imported-line">
@@ -55,12 +54,12 @@ const { folded, toggle } = useFolded('sets');
           </ul>
         </template>
       </div>
-      <p v-if="store.error" class="note" role="alert">{{ errorMessage(store.error) }}</p>
-      <ul v-else-if="store.sets.length" class="list" aria-labelledby="fm-sets-heading">
+      <p v-if="store.error" class="side-quiet" role="alert">{{ errorMessage(store.error) }}</p>
+      <ul v-else-if="store.sets.length" class="side-list" aria-labelledby="fm-sets-heading">
         <li v-for="set in store.sets" :key="set.id" class="item">
           <button
             type="button"
-            class="set"
+            class="side-row set"
             :aria-pressed="store.current?.id === set.id"
             :data-set="set.id"
             :title="
@@ -68,8 +67,9 @@ const { folded, toggle } = useFolded('sets');
             "
             @click="store.pick(set.id)"
           >
-            <span class="name">{{ set.name }}</span>
-            <span class="count">{{ formatNumber(set.faces.length) }}</span>
+            <span class="side-lead"><UiIcon name="box" /></span>
+            <span class="side-label">{{ set.name }}</span>
+            <span class="side-count count">{{ formatNumber(set.faces.length) }}</span>
           </button>
           <UiIconButton
             class="export"
@@ -80,33 +80,12 @@ const { folded, toggle } = useFolded('sets');
           />
         </li>
       </ul>
-      <p v-else class="note">{{ t('sets.empty') }}</p>
+      <p v-else class="side-quiet">{{ t('sets.empty') }}</p>
     </div>
   </section>
 </template>
 
 <style scoped>
-.sets {
-  padding: 8px;
-}
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px;
-}
-.heading {
-  margin: 0;
-  padding: 8px 0;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  font-weight: 600;
-}
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 .item {
   position: relative;
   display: flex;
@@ -135,7 +114,7 @@ const { folded, toggle } = useFolded('sets');
 }
 .item:hover .count,
 .item:focus-within .count {
-  visibility: hidden;
+  opacity: 0;
 }
 .imported {
   margin: 0 8px 4px;
@@ -158,44 +137,5 @@ const { folded, toggle } = useFolded('sets');
   margin: 0;
   padding-inline-start: 16px;
   color: var(--fm-muted);
-}
-.set {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--fm-radius-sm);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.set:hover,
-.set:focus-visible {
-  background-color: var(--fm-bg);
-}
-.set[aria-pressed='true'] {
-  color: var(--fm-fg);
-  font-weight: 600;
-}
-.name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.count,
-.note {
-  color: var(--fm-muted);
-  font-variant-numeric: tabular-nums;
-}
-.note {
-  margin: 0;
-  padding: 4px 8px;
 }
 </style>

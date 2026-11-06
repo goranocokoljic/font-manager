@@ -104,6 +104,20 @@ describe('collections sidebar', () => {
       expect(dot(w, 'Clients').exists()).toBe(false);
     });
 
+    it('marks a smart collection with the star before its name, not a dot or a pill', async () => {
+      const w = await mountSidebar();
+      await client.createCollection({ name: 'Bold', rules: { variable: true }, color: 'teal' });
+      await useCollectionsStore().refresh();
+      await flushPromises();
+      const star = w.get('li[aria-label="Bold"] [data-testid="collection-smart"]');
+      expect(star.element.nextElementSibling?.textContent).toContain('Bold');
+      expect((star.element as HTMLElement).style.color).toBe('var(--fm-collection-teal)');
+      expect(dot(w, 'Bold').exists()).toBe(false);
+      expect(w.find('li[aria-label="Brand"] [data-testid="collection-smart"]').exists()).toBe(
+        false,
+      );
+    });
+
     it('offers eight named swatches in a labeled group and marks the chosen one', async () => {
       const w = await mountSidebar();
       await pick(w, 'Brand', 'Coral');

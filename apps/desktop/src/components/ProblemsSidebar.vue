@@ -1,107 +1,80 @@
 <script setup lang="ts">
-// The Problems group of the sidebar: the total and one link per group that has
-// entries, each opening the Problems view filtered to it. The parent view loads
-// the problems store (the status bar shows the same total).
-import { computed } from 'vue';
+// The foot of the sidebar, pinned below its groups: Problems, the one place the app counts
+// them (a dot and the total, which opens the Problems view; the view filters by kind), and
+// the command palette's key. The parent view loads the problems store.
 import { RouterLink } from 'vue-router';
 import { t } from '../i18n';
-import { PROBLEM_GROUPS, useProblemsStore } from '../stores/problems';
-import UiFoldButton from './ui/UiFoldButton.vue';
-import { useFolded } from './useFolded';
+import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
+import { useCommandsStore } from '../stores/commands';
+import { useProblemsStore } from '../stores/problems';
 
 const store = useProblemsStore();
-const { folded, toggle } = useFolded('problems');
-const groups = computed(() => PROBLEM_GROUPS.filter((g) => store.counts[g.id] > 0));
+const commands = useCommandsStore();
+const chord = chordOf(ACTIONS.palette)!;
 </script>
 
 <template>
-  <section class="problems" aria-labelledby="fm-problems-heading">
-    <h2 id="fm-problems-heading" class="heading">
-      <UiFoldButton
-        icon="alert"
-        class="fold"
-        :folded="folded"
-        controls="fm-problems-list"
-        :aria-label="t('problems.title')"
-        @toggle="toggle"
-      />
-      <RouterLink :to="{ name: 'problems' }" class="link" data-testid="sidebar-problems">
-        <span class="name">{{ t('problems.title') }}</span>
-        <span class="count">{{ store.total }}</span>
+  <div class="foot">
+    <section class="problems" aria-labelledby="fm-problems-heading">
+      <h2 id="fm-problems-heading" class="sr-only">{{ t('problems.title') }}</h2>
+      <RouterLink :to="{ name: 'problems' }" class="link" data-testid="problem-count">
+        <span v-if="store.total" class="dot" data-testid="problem-dot" aria-hidden="true"></span>
+        <template v-if="store.total">{{ t('home.problems', { count: store.total }) }}</template>
+        <template v-else>{{ t('problems.noneShort') }}</template>
       </RouterLink>
-    </h2>
-    <ul
-      v-if="groups.length"
-      v-show="!folded"
-      id="fm-problems-list"
-      class="list"
-      aria-labelledby="fm-problems-heading"
+    </section>
+    <button
+      type="button"
+      class="palette"
+      :aria-keyshortcuts="ariaShortcut(chord)"
+      @click="commands.openPalette"
     >
-      <li v-for="g in groups" :key="g.id">
-        <RouterLink
-          :to="{ name: 'problems', query: { kind: g.id } }"
-          class="link"
-          :data-group="g.id"
-        >
-          <span class="name">{{ g.label }}</span>
-          <span class="count">{{ store.counts[g.id] }}</span>
-        </RouterLink>
-      </li>
-    </ul>
-  </section>
+      <span class="sr-only">{{ t('home.commands') }}</span>
+      <kbd>{{ formatChord(chord) }}</kbd>
+    </button>
+  </div>
 </template>
 
 <style scoped>
-.problems {
-  padding: 8px;
-}
-.heading {
+/* After the groups at the foot of a short sidebar, and in sight while a long one scrolls. */
+.foot {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--fm-z-sticky);
   display: flex;
+  flex: none;
   align-items: center;
-  margin: 0;
+  justify-content: space-between;
+  gap: var(--fm-space-2);
+  margin-block-start: auto;
+  padding: var(--fm-space-2) var(--fm-space-4);
+  background-color: var(--fm-surface);
   color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  font-weight: 600;
+  font-size: var(--fm-text-sm);
 }
-.heading .link {
-  flex: 1;
-  padding: 8px;
-  padding-inline-start: 4px;
-}
-.fold {
-  padding: 8px 0;
-  padding-inline-start: 8px;
-}
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-/* At least 24 px tall whatever the OS font's line height (WCAG 2.5.8). */
 .link {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  box-sizing: border-box;
+  gap: var(--fm-space-2);
   min-height: 24px;
-  padding: 4px 8px;
-  border-radius: var(--fm-radius-sm);
   color: inherit;
   text-decoration: none;
 }
 .link:hover,
 .link:focus-visible {
-  background-color: var(--fm-bg);
+  color: var(--fm-fg);
 }
-.name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--fm-danger);
 }
-.count {
-  color: var(--fm-muted);
-  font-variant-numeric: tabular-nums;
+.palette {
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  color: inherit;
 }
 </style>

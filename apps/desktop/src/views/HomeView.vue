@@ -16,6 +16,7 @@ import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import WallCountLine from '../components/WallCountLine.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
+import LibraryViewsSidebar from '../components/LibraryViewsSidebar.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
@@ -52,6 +53,7 @@ import { useActions, useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
+import { useLibraryViewsStore } from '../stores/libraryViews';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
@@ -79,6 +81,7 @@ const fontList = useFontListStore();
 const views = useViewsStore();
 const search = useSearchStore();
 const collections = useCollectionsStore();
+const libraryViews = useLibraryViewsStore();
 const sources = useSourcesStore();
 /** An open collection with nothing in it and nothing typed or chosen on top of it. */
 const emptyCollection = computed(
@@ -429,7 +432,6 @@ watch(
 );
 onBeforeUnmount(() => unregisterSaved.splice(0).forEach((u) => u()));
 
-const paletteChord = chordOf(ACTIONS.palette)!;
 const settingsChord = chordOf(ACTIONS.settings)!;
 const compareChord = chordOf(ACTIONS.compare)!;
 
@@ -480,13 +482,14 @@ function openFace(face: FaceId): void {
 <template>
   <MainLayout>
     <template #sidebar>
-      <SourcesSidebar />
+      <LibraryViewsSidebar />
       <QuickCollectionSidebar />
       <CollectionsSidebar />
       <TagsSidebar />
-      <ProblemsSidebar />
       <ProjectSetsSidebar />
+      <SourcesSidebar />
       <OnlineCatalogsSidebar />
+      <ProblemsSidebar />
     </template>
 
     <template #list>
@@ -507,7 +510,7 @@ function openFace(face: FaceId): void {
             :title="t('home.sidebarTitle')"
             @click="layout.toggleSidebar"
           />
-          <h1 class="title">{{ collections.open?.name ?? t('home.allFonts') }}</h1>
+          <h1 class="title">{{ collections.open?.name ?? libraryViews.currentLabel }}</h1>
           <SearchBox @leave="focusList" />
           <FilterChips v-show="!similar.open" class="filters" />
           <UiSegmentedControl
@@ -657,20 +660,9 @@ function openFace(face: FaceId): void {
       <p class="active-count" data-testid="active-count" role="status">
         {{ t('home.fontsActive', { count: activation.count }) }}
       </p>
-      <RouterLink :to="{ name: 'problems' }" class="hint" data-testid="problem-count">
-        {{ t('home.problems', { count: problems.total }) }}
-      </RouterLink>
       <RouterLink :to="{ name: 'conflicts' }" class="hint">{{ t('home.conflicts') }}</RouterLink>
       <p v-if="app.error" role="alert" class="error">{{ errorMessage(app.error) }}</p>
       <span class="status-end">
-        <button
-          type="button"
-          class="hint"
-          :aria-keyshortcuts="ariaShortcut(paletteChord)"
-          @click="commands.openPalette"
-        >
-          {{ t('home.commands') }} <kbd>{{ formatChord(paletteChord) }}</kbd>
-        </button>
         <RouterLink
           :to="{ name: 'settings' }"
           class="hint settings-link"

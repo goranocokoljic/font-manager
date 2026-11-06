@@ -4,6 +4,7 @@
 import { formatNumber, t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useQuickCollectionStore } from '../stores/quickCollection';
+import UiIcon from './ui/UiIcon.vue';
 
 const store = useQuickCollectionStore();
 const chord = chordOf(ACTIONS.quickCollection)!;
@@ -13,50 +14,23 @@ const chord = chordOf(ACTIONS.quickCollection)!;
   <section class="quick" :aria-label="t('quickCollection.title')">
     <button
       type="button"
-      class="entry"
+      class="side-row"
       data-testid="quick-collection"
       :aria-current="store.open ? 'true' : undefined"
       :title="t('quickCollection.entryTitle', { chord: formatChord(chord) })"
       :aria-keyshortcuts="ariaShortcut(chord)"
       @click="store.show"
     >
-      <span class="name">{{ t('quickCollection.title') }}</span>
-      <span class="count" data-testid="quick-count">{{ formatNumber(store.count) }}</span>
+      <span class="side-lead"><UiIcon name="zap" /></span>
+      <span class="side-label">{{ t('quickCollection.title') }}</span>
+      <span class="side-count" data-testid="quick-count">{{ formatNumber(store.count) }}</span>
     </button>
   </section>
 </template>
 
 <style scoped>
 .quick {
-  padding: 8px 8px 0;
-}
-.entry {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 8px;
-  border: 0;
-  border-radius: var(--fm-radius-sm);
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.entry:hover,
-.entry:focus-visible {
-  background-color: var(--fm-bg);
-}
-.entry[aria-current='true'] {
-  color: var(--fm-fg);
-  font-weight: 600;
-}
-.name {
-  flex: 1;
-}
-.count {
-  color: var(--fm-muted);
-  font-variant-numeric: tabular-nums;
+  flex: none;
+  padding-inline: var(--fm-space-2);
 }
 </style>

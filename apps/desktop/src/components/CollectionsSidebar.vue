@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import UiFoldButton from './ui/UiFoldButton.vue';
+import SidebarHead from './SidebarHead.vue';
 import UiIconButton from './ui/UiIconButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiPopover from './ui/UiPopover.vue';
 // The Collections group of the sidebar: every manual and smart collection as a
-// tree, with its face count. Click one to show it in the list. Make, rename,
+// tree, with its colour dot or, for a smart one, the star, and its face count.
+// Click one to show it in the list. Make, rename,
 // nest (In, Out), reorder (Up, Down) and delete them with the row buttons or by dragging a
 // collection onto another (top or bottom edge: before or after it; middle:
 // inside it). Drop fonts from the list on a collection to add them; the
@@ -15,9 +16,10 @@ import UiPopover from './ui/UiPopover.vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { COLLECTION_COLORS, collectionColorVar } from '../api/collectionColors';
 import type { CollectionId } from '../api/types';
-import { errorMessage, t } from '../i18n';
+import { errorMessage, formatNumber, t } from '../i18n';
 import { useFolded } from './useFolded';
 import { isFontDrag, pickOf, readFontDrop } from '../list/drag';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useCollectionsStore, type CollectionRow } from '../stores/collections';
 import { useCommandsStore } from '../stores/commands';
 import { useFontListStore } from '../stores/fontList';
@@ -30,8 +32,10 @@ const COLLECTION_MIME = 'application/x-fm-collection';
 type Zone = 'before' | 'inside' | 'after';
 
 const store = useCollectionsStore();
-// While the Quick Collection review is open, no collection is the current one.
+// While a review or a catalog is in the center, no collection is the current one.
 const quick = useQuickCollectionStore();
+const catalogs = useCatalogsStore();
+const listShown = computed(() => !quick.open && catalogs.open === null);
 const fontList = useFontListStore();
 const commands = useCommandsStore();
 const ruleEditor = useRuleEditorStore();
@@ -279,18 +283,15 @@ const { folded, toggle } = useFolded('collections');
 </script>
 
 <template>
-  <section class="collections" aria-labelledby="fm-collections-heading">
-    <header class="head">
-      <h2 id="fm-collections-heading" class="heading">
-        <UiFoldButton
-          :folded="folded"
-          controls="fm-collections-list"
-          icon="layers"
-          @toggle="toggle"
-          >{{ t('collections.heading') }}</UiFoldButton
-        >
-      </h2>
-      <span class="head-actions">
+  <section class="side-section" aria-labelledby="fm-collections-heading">
+    <SidebarHead
+      id="fm-collections-heading"
+      :folded="folded"
+      controls="fm-collections-list"
+      @toggle="toggle"
+    >
+      {{ t('collections.heading') }}
+      <template #actions>
         <UiIconButton
           icon="plus"
           :label="t('collections.new')"
@@ -303,30 +304,18 @@ const { folded, toggle } = useFolded('collections');
           :title="t('collections.newSmartTitle')"
           @click="ruleEditor.openNew()"
         />
-      </span>
-    </header>
+      </template>
+    </SidebarHead>
     <p v-if="store.error" role="alert" class="error">{{ errorMessage(store.error) }}</p>
-    <ul class="list" aria-labelledby="fm-collections-heading">
-      <li class="item">
-        <div class="row">
-          <button
-            type="button"
-            class="name"
-            :aria-current="!quick.open && store.openId == null ? 'true' : undefined"
-            @click="store.show(null)"
-          >
-            {{ t('collections.allFonts') }}
-          </button>
-        </div>
-      </li>
-    </ul>
-    <!-- "All fonts" stays when the group folds; the user's own collections fold away. -->
     <ul
       v-show="!folded"
       id="fm-collections-list"
-      class="list"
+      class="side-list"
       aria-labelledby="fm-collections-heading"
     >
+      <li v-if="!store.rows.length && !editing" class="side-quiet" data-testid="collections-empty">
+        {{ t('collections.empty') }}
+      </li>
       <li v-if="editing && editing.id == null && editing.parent == null" class="item">
         <form class="edit" @submit.prevent="commit">
           <input
@@ -340,11 +329,8 @@ const { folded, toggle } = useFolded('collections');
       <template v-for="row in store.rows" :key="row.collection.id">
         <li
           class="item"
-          :class="{
-            open: store.openId === row.collection.id,
-            [`drop-${target?.zone}`]: target?.id === row.collection.id,
-          }"
-          :style="{ paddingInlineStart: `${8 + row.depth * 14}px` }"
+          :class="{ [`drop-${target?.zone}`]: target?.id === row.collection.id }"
+          :style="{ paddingInlineStart: `${row.depth * 14}px` }"
           :data-collection="row.collection.id"
           :data-depth="row.depth"
           :aria-label="row.collection.name"
@@ -367,42 +353,60 @@ const { folded, toggle } = useFolded('collections');
               @keydown.esc="editing = null"
             />
           </form>
-          <div v-else class="row">
+          <div
+            v-else
+            class="side-row"
+            :class="{
+              current: listShown && store.openId === row.collection.id,
+              'smart-row': row.collection.rules,
+            }"
+          >
             <span
-              v-if="row.collection.color"
-              class="dot"
+              v-if="row.collection.rules"
+              class="side-lead smart"
+              data-testid="collection-smart"
+              :title="t('collections.smart')"
+              :style="
+                row.collection.color ? { color: collectionColorVar(row.collection.color) } : {}
+              "
+            >
+              <UiIcon name="star" /><span class="sr-only">{{ t('collections.smart') }}</span>
+            </span>
+            <span
+              v-else-if="row.collection.color"
+              class="side-lead dot"
               data-testid="collection-dot"
               :style="{ backgroundColor: collectionColorVar(row.collection.color) }"
               aria-hidden="true"
             ></span>
+            <span v-else class="side-lead" aria-hidden="true"></span>
             <button
               type="button"
-              class="name"
-              :aria-current="!quick.open && store.openId === row.collection.id ? 'true' : undefined"
+              class="side-label"
+              :aria-current="listShown && store.openId === row.collection.id ? 'true' : undefined"
               @click="store.show(row.collection.id)"
             >
               {{ row.collection.name }}
             </button>
-            <span v-if="row.collection.rules" class="smart" :title="t('collections.smart')">
-              <UiIcon name="sparkles" /><span class="sr-only">{{ t('collections.smart') }}</span>
-            </span>
-            <span class="count" :aria-label="countLabel(row.collection.faceCount)">{{
-              row.collection.faceCount
+            <span class="side-count count" :aria-label="countLabel(row.collection.faceCount)">{{
+              formatNumber(row.collection.faceCount)
             }}</span>
-            <UiIconButton
-              class="more"
-              icon="more"
-              :label="t('collections.moreLabel', { name: row.collection.name })"
-              aria-haspopup="menu"
-              :aria-expanded="menu?.id === row.collection.id ? 'true' : 'false'"
-              @click="openMenu(row, $event)"
-            />
+            <span class="side-actions">
+              <UiIconButton
+                class="more"
+                icon="more"
+                :label="t('collections.moreLabel', { name: row.collection.name })"
+                aria-haspopup="menu"
+                :aria-expanded="menu?.id === row.collection.id ? 'true' : 'false'"
+                @click="openMenu(row, $event)"
+              />
+            </span>
           </div>
         </li>
         <li
           v-if="editing && editing.id == null && editing.parent === row.collection.id"
           class="item"
-          :style="{ paddingInlineStart: `${22 + row.depth * 14}px` }"
+          :style="{ paddingInlineStart: `${14 + row.depth * 14}px` }"
         >
           <form class="edit" @submit.prevent="commit">
             <input
@@ -528,41 +532,8 @@ const { folded, toggle } = useFolded('collections');
 </template>
 
 <style scoped>
-.collections {
-  padding: 8px;
-}
-.head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 8px;
-}
-.head-actions {
-  display: flex;
-  gap: 4px;
-}
-.heading {
-  margin: 0;
-  padding: 8px 0;
-  color: var(--fm-muted);
-  font-size: var(--fm-text-xs);
-  font-weight: 600;
-}
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
 .item {
-  padding: 4px 8px;
   border-radius: var(--fm-radius-sm);
-}
-.item:hover,
-.item:focus-within {
-  background-color: var(--fm-bg);
-}
-.open {
-  background-color: var(--fm-bg);
 }
 .drop-inside {
   outline: 2px solid var(--fm-accent);
@@ -573,56 +544,19 @@ const { folded, toggle } = useFolded('collections');
 .drop-after {
   box-shadow: inset 0 -2px 0 var(--fm-accent);
 }
-.row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* A smart collection fills itself: its name reads quieter than the user's own. */
+.smart-row .side-label {
+  color: var(--fm-muted);
 }
-.name {
-  flex: 1;
-  min-width: 0;
-  padding: 0;
-  border: 0;
-  background-color: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* The row carries the hover tint; the name button must not add a second one. */
-.row .name:hover,
-.row .name:active {
-  background-image: none;
-}
-.name[aria-current='true'] {
+.smart-row.current .side-label {
   color: var(--fm-fg);
-  font-weight: 600;
 }
 .dot {
-  flex: none;
+  /* The 8 px dot, centered in the 16 px first column. */
   width: 8px;
   height: 8px;
+  margin-inline: 4px;
   border-radius: 50%;
-}
-.smart {
-  display: inline-flex;
-  flex: none;
-  color: var(--fm-muted);
-}
-.count {
-  color: var(--fm-muted);
-  font-variant-numeric: tabular-nums;
-}
-.more {
-  visibility: hidden;
-}
-.open .more,
-.item:hover .more,
-.item:focus-within .more,
-.more[aria-expanded='true'] {
-  visibility: visible;
 }
 .menu {
   display: flex;
@@ -665,6 +599,19 @@ const { folded, toggle } = useFolded('collections');
 }
 .menu button.swatch:focus-visible {
   outline-offset: 2px;
+}
+.edit input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--fm-accent);
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+}
+.edit {
+  padding-block: 2px;
 }
 .edit input {
   box-sizing: border-box;

@@ -2,10 +2,8 @@
 // A section heading that folds its group: chevron + label, one button. The parent owns
 // the body (`v-show` with `controls` as its id) and the folded state (`useFolded`).
 import UiChevron from './UiChevron.vue';
-import UiIcon from './UiIcon.vue';
-import type { IconName } from './icons';
 
-defineProps<{ folded: boolean; controls: string; icon?: IconName }>();
+defineProps<{ folded: boolean; controls: string }>();
 defineEmits<{ toggle: [] }>();
 </script>
 
@@ -18,7 +16,6 @@ defineEmits<{ toggle: [] }>();
     @click="$emit('toggle')"
   >
     <span class="chevron fm-directional" aria-hidden="true"><UiChevron :open="!folded" /></span>
-    <UiIcon v-if="icon" class="section-icon" :name="icon" />
     <slot />
   </button>
 </template>
@@ -37,10 +34,6 @@ defineEmits<{ toggle: [] }>();
 }
 .chevron {
   display: inline-flex;
-}
-.section-icon {
-  margin-inline-start: 2px;
-  opacity: 0.7;
 }
 .chevron :deep(svg) {
   width: 12px;

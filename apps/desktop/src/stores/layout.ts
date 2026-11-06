@@ -5,7 +5,7 @@ import { computed, ref, watch } from 'vue';
 export const NARROW_WIDTH = 1100;
 
 /** Width bounds of the resizable columns, in CSS px. */
-export const SIDEBAR = { min: 180, max: 400, initial: 240 } as const;
+export const SIDEBAR = { min: 180, max: 400, initial: 232 } as const;
 export const INSPECTOR = { min: 260, max: 480, initial: 320 } as const;
 
 /** The localStorage key of the saved layout (a view preference). */

@@ -42,8 +42,8 @@ health mark in the list. Font Manager does not delete or change the file.
 
 ## Problems
 
-**Problems** in the sidebar shows how many problems your library has. The status bar
-shows the same number. Select it to open the **Problems** view. The view lists:
+The bottom row of the sidebar shows how many problems your library has.
+Select it to open the **Problems** view. The view lists:
 
 | Group | What it means |
 |-------|---------------|

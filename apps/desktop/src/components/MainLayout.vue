@@ -184,6 +184,11 @@ onBeforeUnmount(() => {
   overflow: auto;
   background-color: var(--fm-surface);
 }
+/* A column, so the sidebar's foot can sit at its end. */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+}
 .list {
   display: flex;
   flex-direction: column;

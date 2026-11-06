@@ -848,6 +848,10 @@ export interface MockOptions {
   sidecarConflicts?: SidecarConflict[];
   /** Project sets (none by default). */
   sets?: ProjectSet[];
+  /** Collections at the top level (none by default); `rules` makes one smart. */
+  collections?: { name: string; color?: string; rules?: Filters; faces?: FaceId[] }[];
+  /** Faces that start as favorites (none by default). */
+  favoriteFaces?: FaceId[];
   /** Faces whose glyph map also holds 32,164 CJK and Hangul characters (e2e). */
   cjkFaces?: FaceId[];
   /** Faces active for the session from the start (none by default). */
@@ -2244,7 +2248,8 @@ export function createMockClient(options: MockOptions = {}): FmClient {
     ...Array.from({ length: options.extraFaces ?? 0 }, (_, i) => extraFamily(i, styles)).flat(),
   ].map((f) => {
     const tags = options.faceTags?.[f.face.id];
-    return tags ? { ...f, tags: [...tags] } : f;
+    const favorite = options.favoriteFaces?.includes(f.face.id) ?? false;
+    return tags || favorite ? { ...f, tags: [...(tags ?? f.tags)], favorite } : f;
   });
   // The wall's watched folder holds its own faces.
   if (options.library === 'wall') sources[0]!.faceCount = faces.length;
@@ -2463,6 +2468,21 @@ export function createMockClient(options: MockOptions = {}): FmClient {
   // Siblings keep the array's order; the list walks the tree from it.
   const collections: Collection[] = [];
   const members = new Map<CollectionId, Set<FaceId>>();
+  for (const seed of options.collections ?? []) {
+    const id = ++nextId;
+    collections.push({
+      id,
+      parent: null,
+      name: seed.name,
+      rules: seed.rules ?? null,
+      ruleGroup: seed.rules
+        ? { op: 'and', rules: [{ kind: 'filters', filters: seed.rules }] }
+        : null,
+      faceCount: 0,
+      color: seed.color ?? null,
+    });
+    if (seed.faces) members.set(id, new Set(seed.faces));
+  }
   const conflict = (name: string) => ({
     code: 'conflict' as const,
     message: `A collection named "${name}" already exists here.`,
@@ -3775,11 +3795,18 @@ function libraryFromUrl(): 'small' | 'wall' {
  */
 function wallExtras(): Pick<
   MockOptions,
-  'extraProblems' | 'duplicates' | 'sidecarConflicts' | 'sets'
+  | 'extraProblems'
+  | 'duplicates'
+  | 'sidecarConflicts'
+  | 'sets'
+  | 'collections'
+  | 'faceTags'
+  | 'favoriteFaces'
 > {
   const lib = mockWall();
   const first = lib.faces[0]!;
   const mono = lib.faces.find((d) => d.face.postscriptName === 'JetBrainsMono-Regular')!;
+  const ids = lib.faces.map((d) => d.face.id);
   return {
     extraProblems: wallProblems(lib),
     duplicates: wallDuplicates(lib),
@@ -3789,6 +3816,18 @@ function wallExtras(): Pick<
       family: first.face.familyName,
     })),
     sets: [{ id: 1, name: 'Client brand', faces: [first.face.id, mono.face.id] }],
+    // The sidebar of the target image (1-wall-word.png, E41.3).
+    collections: [
+      { name: 'Client brand', color: 'coral', faces: ids.slice(0, 12) },
+      { name: 'Editorial', color: 'orchid', faces: ids.slice(12, 43) },
+      { name: 'Video titles', color: 'slate', faces: ids.slice(43, 52) },
+      { name: 'Variable', rules: { variable: true } },
+      { name: 'Web-licensed', rules: { webOk: true } },
+    ],
+    faceTags: Object.fromEntries(
+      ['display', 'body', 'serbian', 'pitch'].map((tag, i) => [ids[i * 3]!, [tag]]),
+    ),
+    favoriteFaces: ids.slice(0, 23),
   };
 }
 
