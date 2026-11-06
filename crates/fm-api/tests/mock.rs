@@ -85,6 +85,7 @@ fn families_page_and_sort() {
     let fam = api.get_family(FamilyId(2)).unwrap();
     let styles: Vec<_> = fam.faces.iter().map(|f| f.style.as_str()).collect();
     assert_eq!(styles, ["Regular", "Italic", "Bold"]); // weight, then slant
+    assert_eq!(fam.default_face, Some(fam.faces[0].id));
 }
 
 #[test]

@@ -22,6 +22,50 @@ beforeEach(() => setActivePinia(createPinia()));
 afterEach(() => setClient(undefined));
 
 describe('the family page store', () => {
+  it('shows the default face, not the first, unless the route chooses one', async () => {
+    const { page } = await setup();
+    const family = (await client.listFamilies({})).items.find((f) => f.styleCount > 1)!.id;
+    const real = client.getFamily.bind(client);
+    client.getFamily = async (id) => {
+      const got = await real(id);
+      return { ...got, defaultFace: got.faces.at(-1)!.id };
+    };
+    await page.show(family);
+    const [first, last] = [page.faces[0]!, page.faces.at(-1)!];
+    expect(first.id).not.toBe(last.id);
+    expect(page.face?.id).toBe(last.id);
+    page.chosenFace = first.id;
+    expect(page.face?.id).toBe(first.id);
+  });
+
+  it('falls back to the first face when the API names no default', async () => {
+    const { page } = await setup();
+    const family = (await client.listFamilies({})).items.find((f) => f.styleCount > 1)!.id;
+    const real = client.getFamily.bind(client);
+    client.getFamily = async (id) => ({ ...(await real(id)), defaultFace: null });
+    await page.show(family);
+    expect(page.face?.id).toBe(page.faces[0]!.id);
+  });
+
+  it('reads the pins of its own family from every holder, and none of another', async () => {
+    client = createMockClient({ sets: [{ id: 9, name: 'Poster', faces: [1] }] });
+    setClient(client);
+    await useLibraryStore().load();
+    const page = useFamilyPageStore();
+    const brand = await client.createCollection({ name: 'Brand' });
+    const coordinates = [{ tag: 'wght', value: 537 }];
+    await client.pinInstance({ face: 1, name: 'In collection', coordinates, collection: brand.id });
+    await client.pinInstance({ face: 1, name: 'In set', coordinates, set: 9 });
+    await page.show((await client.getFace(1)).face.family);
+    await flushPromises();
+    expect(page.pins.map((p) => p.name).sort()).toEqual(['In collection', 'In set']);
+    await page.show((await client.getFace(6)).face.family);
+    await flushPromises();
+    expect(page.pins).toEqual([]);
+    await page.show(null);
+    expect(page.pins).toEqual([]);
+  });
+
   it('reads only whole numbers as a family id', () => {
     expect(parseFamilyId('7')).toBe(7);
     expect(parseFamilyId('abc')).toBeNull();

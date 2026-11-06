@@ -171,16 +171,16 @@ test('"Copy CSS" says so when the clipboard refuses', async ({ page }) => {
   await expect(panel.getByRole('status').filter({ hasText: 'Could not copy' })).toBeVisible();
 });
 
-test('"Copy CSS" is keyboard-reachable before the Reset button', async ({ page }) => {
+test('"Copy CSS" is keyboard-reachable after the last axis control', async ({ page }) => {
   const panel = await openAxes(page);
   const copy = panel.getByRole('button', { name: 'Copy CSS for the axes' });
-  await copy.focus();
-  await expect(copy).toBeFocused();
+  const pin = panel.getByRole('button', { name: 'Pin 400 as my instance' });
+  await pin.focus();
   await page.keyboard.press('Tab');
-  // Reset is disabled while nothing moved, so focus goes on to the slider.
-  await expect(wghtSlider(panel)).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
   await expect(copy).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(pin).toBeFocused();
+  await page.keyboard.press('Tab');
   await page.keyboard.press('Enter');
   await expect(
     panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ }),
@@ -206,7 +206,7 @@ test('sliders, fields, presets and the pin button are keyboard-reachable with la
   await expect(slider).toHaveValue('100');
 });
 
-test('"Pin this instance" saves a virtual style that shows as its own row in the collection', async ({
+test('"Pin … as my instance" saves a virtual style that shows as its own row in the collection', async ({
   page,
 }) => {
   await page.route('**/fmfont/*', (route) =>
@@ -228,7 +228,7 @@ test('"Pin this instance" saves a virtual style that shows as its own row in the
   await wghtSlider(panel).fill('620');
   await panel.getByRole('textbox', { name: 'Style name' }).fill('Semibold Pin');
   await selectOption(panel.getByRole('combobox', { name: 'Save in' }), { label: 'Brand' });
-  const pin = panel.getByRole('button', { name: 'Pin this instance' });
+  const pin = panel.getByRole('button', { name: 'Pin 620 as my instance' });
   await pin.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByText('Pinned “Semibold Pin” to Brand.')).toBeVisible();

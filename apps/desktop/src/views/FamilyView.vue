@@ -7,6 +7,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
+import FamilySample from '../components/FamilySample.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorDeveloper from '../components/InspectorDeveloper.vue';
 import InspectorFeatures from '../components/InspectorFeatures.vue';
@@ -24,7 +25,8 @@ import { ACTIONS, yieldsToFocus } from '../keyboard/keymap';
 import { FmFade } from '../motion';
 import { useHeldFace } from '../preview/useHeldFace';
 import { sampleText } from '../preview/sampleText';
-import { variationSettings } from '../preview/variations';
+import { useWeightScrub } from '../preview/useWeightScrub';
+import { coordinateSettings, variationSettings } from '../preview/variations';
 import { useAxesStore } from '../stores/axes';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { FAMILY_SECTIONS, parseFamilyId, useFamilyPageStore } from '../stores/familyPage';
@@ -89,13 +91,22 @@ const axesSet = useAxesStore();
 const features = useFeaturesStore();
 const palettes = usePalettesStore();
 /** What the axis row, the Features section and the palette picker set shows on the hero at once. */
+const shown = computed(() =>
+  selection.detail && selection.detail.face.id === page.face?.id ? selection.detail : null,
+);
+const heroVariation = computed(() =>
+  page.face ? variationSettings(shown.value?.axes ?? [], axesSet.values(page.face.id) ?? []) : '',
+);
+/** A Styles row moves with the axes the user moved; a variable row otherwise stays at its own default. */
+const movedVariation = computed(() =>
+  coordinateSettings((page.face && axesSet.values(page.face.id)) ?? []),
+);
 const specimenStyle = computed(() => {
   const face = page.face;
   if (!face || !heldFamily.value) return undefined;
-  const axes = selection.detail?.face.id === face.id ? selection.detail.axes : [];
   return {
     fontFamily: `'${heldFamily.value}'`,
-    fontVariationSettings: variationSettings(axes, axesSet.values(face.id) ?? []),
+    fontVariationSettings: heroVariation.value,
     fontFeatureSettings: features.settings(face.id),
     fontPalette: palettes.fontPaletteOf(ALL_FONTS_VIEW, face),
   };
@@ -103,6 +114,34 @@ const specimenStyle = computed(() => {
 const specimen = computed(() =>
   page.face ? sampleText(preview.settingsFor(ALL_FONTS_VIEW), page.face, preview.pangramText) : '',
 );
+
+const scrubAxis = computed(() => {
+  const axis = shown.value?.axes.find((a) => a.tag === 'wght');
+  return axis && (axis.max ?? 0) > (axis.min ?? 0) ? axis : null;
+});
+const scrub = useWeightScrub(faceId, scrubAxis);
+
+const license = computed(() => {
+  const open = page.summary?.openLicense;
+  if (open) return t(`info.openLicenses.${open}`);
+  const declared = page.summary?.declaredLicense;
+  return declared && declared !== 'unknown' ? t(`chips.licenses.${declared}`) : null;
+});
+/** "Variable, 4 axes · 18 named styles", or "6 styles" for a static face. */
+const counts = computed(() => {
+  const axes = shown.value?.axes.length ?? 0;
+  if (axes)
+    return t('family.variableCounts', {
+      axes: t('family.axisCount', { count: axes }),
+      styles: t('family.namedStyleCount', { count: shown.value?.instances.length ?? 0 }),
+    });
+  return page.summary ? t('family.styleCount', { count: page.summary.styleCount }) : null;
+});
+/** Foundry and year, then the counts and the licence; a part the font does not state is left out. */
+const metaParts = computed(() => {
+  const made = [page.summary?.foundry, page.detail?.year].filter((p) => p != null).join(' · ');
+  return [made, counts.value, license.value].filter((p): p is string => !!p);
+});
 
 const sections = computed(() =>
   FAMILY_SECTIONS.map((value) => ({ value, label: t(`family.sections.${value}`) })),
@@ -295,12 +334,25 @@ onBeforeUnmount(() => {
       </UiEmptyState>
       <template v-else>
         <section class="hero" data-testid="family-hero" :aria-label="t('family.hero')">
-          <h1 ref="title" class="name" tabindex="-1">{{ page.summary?.name }}</h1>
+          <div class="title-line">
+            <h1 ref="title" class="name" tabindex="-1">{{ page.summary?.name }}</h1>
+            <p v-if="page.summary" class="meta" data-testid="family-meta">
+              <span v-for="part in metaParts" :key="part" class="meta-part">{{ part }}</span>
+              <span class="state" :data-state="page.summary.activation">
+                <span class="dot" aria-hidden="true" />
+                {{ t(`columns.state.${page.summary.activation}`) }}
+              </span>
+            </p>
+          </div>
           <p
             class="specimen"
             data-testid="family-specimen"
-            :class="{ loading: !heldFamily }"
+            :class="{ loading: !heldFamily, scrubbable: scrubAxis }"
             :style="specimenStyle"
+            @pointerdown="scrub.onPointerDown"
+            @pointermove="scrub.onPointerMove"
+            @pointerup="scrub.onPointerEnd"
+            @pointercancel="scrub.onPointerEnd"
           >
             {{ specimen }}
           </p>
@@ -337,6 +389,24 @@ onBeforeUnmount(() => {
                       >
                         {{ f.style }}
                       </button>
+                      <FamilySample
+                        class="row-sample"
+                        data-testid="family-style-sample"
+                        aria-hidden="true"
+                        :face="f.id"
+                        :text="specimen"
+                        :variation="f.isVariable ? movedVariation : 'normal'"
+                      />
+                    </li>
+                    <li v-for="pin in page.pins" :key="`pin-${pin.id}`" data-testid="family-pin">
+                      <span class="style">{{ pin.name }}</span>
+                      <FamilySample
+                        class="row-sample"
+                        aria-hidden="true"
+                        :face="pin.face"
+                        :text="specimen"
+                        :variation="coordinateSettings(pin.coordinates)"
+                      />
                     </li>
                   </ul>
                   <InspectorGlyphs v-else-if="page.section === 'characters'" />
@@ -348,6 +418,15 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <aside class="rail" data-testid="family-rail" :aria-label="t('family.rail')">
+            <FamilySample
+              v-if="faceId !== null"
+              class="rail-sample"
+              data-testid="family-rail-sample"
+              aria-hidden="true"
+              :face="faceId"
+              :text="specimen"
+              :variation="heroVariation"
+            />
             <dl class="facts">
               <template v-if="page.detail?.designer">
                 <dt>{{ t('family.designer') }}</dt>
@@ -445,14 +524,53 @@ onBeforeUnmount(() => {
 .name:focus {
   outline: none;
 }
+.title-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--fm-space-1) var(--fm-space-3);
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fm-space-1) var(--fm-space-3);
+  margin: 0;
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--fm-muted);
+  border-radius: 50%;
+}
+.state[data-state='active'] .dot {
+  border-color: var(--fm-success);
+  background-color: var(--fm-success);
+}
+.state[data-state='partial'] .dot {
+  border-color: var(--fm-success);
+}
 .specimen {
   overflow: hidden;
   margin: var(--fm-space-3) 0;
-  font-size: clamp(48px, 9vw, 132px);
+  font-size: 132px;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
   view-transition-name: fm-family-specimen;
+}
+.scrubbable {
+  cursor: ew-resize;
+  touch-action: pan-y;
+  user-select: none;
 }
 /* Never a fallback font: nothing shows until the face has loaded. */
 .specimen.loading {
@@ -491,10 +609,20 @@ onBeforeUnmount(() => {
   list-style: none;
 }
 .styles li {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--fm-space-3);
   border-bottom: 1px solid var(--fm-border);
 }
+.row-sample {
+  font-size: var(--fm-text-lg);
+}
+.rail-sample {
+  margin-block-end: var(--fm-space-3);
+  font-size: var(--fm-text-lg);
+}
 .style {
-  width: 100%;
   padding: var(--fm-space-2) 0;
   border: 0;
   background: none;

@@ -127,7 +127,25 @@ describe('inspector axes tab', () => {
     // The same name again is a conflict the API reports; the tab shows it.
     await w.get('button.pin-button').trigger('click');
     await flushPromises();
-    expect(w.get('.pin [role="alert"]').text()).toContain('already has a style named');
+    expect(w.get('.pin-error').text()).toContain('already has a style named');
+  });
+
+  it('names the weight on the pin button and pins it in one click', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const made = await useClient().createCollection({ name: 'Brand' });
+    await useCollectionsStore().refresh();
+    await useSelectionStore().select(1);
+    const w = mount(InspectorAxes, { global: { plugins: [pinia] } });
+    await flushPromises();
+    await slider(w).setValue('537');
+    const button = w.get('button.pin-button');
+    expect(button.text()).toBe('Pin 537 as my instance');
+    await button.trigger('click');
+    await flushPromises();
+    expect(await useClient().listVirtualStyles({ collection: made.id })).toEqual([
+      expect.objectContaining({ name: 'Weight 537', coordinates: [{ tag: 'wght', value: 537 }] }),
+    ]);
   });
 
   it('starts the pin name at the named instance the axes are at', async () => {

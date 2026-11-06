@@ -8,6 +8,7 @@ import type {
   Family,
   FamilyId,
   FamilySummary,
+  VirtualStyle,
 } from '../api/types';
 import { errorMessage } from '../i18n';
 import { familyKey, type FamilyRow } from '../list/rows';
@@ -49,6 +50,7 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
   const pushed = ref(false);
   /** Bumped by every read; an answer to an older one is dropped. */
   let request = 0;
+  let pinRequest = 0;
 
   function takePushed(): boolean {
     const was = pushed.value;
@@ -73,10 +75,40 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
   const faces = computed(() => detail.value?.faces ?? []);
   /** The style the route names (`?face=`); one the family does not have counts as none. */
   const chosenFace = ref<FaceId | null>(null);
-  /** The face the page previews and its panels describe: the chosen style, else the first. */
+  /** The face the page previews and its panels describe: the chosen style, else the default. */
   const face = computed(
-    () => faces.value.find((f) => f.id === chosenFace.value) ?? faces.value[0] ?? null,
+    () =>
+      faces.value.find((f) => f.id === chosenFace.value) ??
+      faces.value.find((f) => f.id === detail.value?.defaultFace) ??
+      faces.value[0] ??
+      null,
   );
+  /** The instances pinned from this family, in every collection and set. */
+  const pins = shallowRef<VirtualStyle[]>([]);
+
+  /** Reads the family's pins. fm-api lists them per holder, so this asks each holder. */
+  async function readPins(): Promise<void> {
+    const mine = ++pinRequest;
+    const own = new Set(faces.value.filter((f) => f.isVariable).map((f) => f.id));
+    if (!own.size) {
+      pins.value = [];
+      return;
+    }
+    try {
+      const client = useClient();
+      const [collections, sets] = await Promise.all([client.listCollections(), client.listSets()]);
+      const lists = await Promise.all([
+        ...collections
+          .filter((c) => !c.rules)
+          .map((c) => client.listVirtualStyles({ collection: c.id })),
+        ...sets.map((s) => client.listVirtualStyles({ set: s.id })),
+      ]);
+      if (mine === pinRequest) pins.value = lists.flat().filter((v) => own.has(v.face));
+    } catch {
+      // Pins are extra rows: without them the family's own styles still show.
+      if (mine === pinRequest) pins.value = [];
+    }
+  }
 
   async function read(family: FamilyId): Promise<void> {
     const mine = ++request;
@@ -88,9 +120,11 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
       detail.value = got;
       favorite.value = meta?.favorite ?? false;
       error.value = null;
+      void readPins();
     } catch (e) {
       if (mine !== request) return;
       detail.value = null;
+      pins.value = [];
       error.value = e as ApiError;
     }
   }
@@ -102,6 +136,8 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     error.value = null;
     if (family === null) {
       request++;
+      pinRequest++;
+      pins.value = [];
       return;
     }
     await read(family);
@@ -178,6 +214,8 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     faces,
     chosenFace,
     face,
+    pins,
+    readPins,
     show,
     familyOf,
     toggleActivation,

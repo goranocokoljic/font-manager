@@ -800,7 +800,6 @@
   "axes": {
     "noFace": "Select a face to see its axes.",
     "none": "This font has no variation axes",
-    "hint": "Axes change this face's previews.",
     "cssLabel": "axes",
     "list": "Variation axes",
     "default": "Default",
@@ -808,14 +807,19 @@
     "range": "{min} to {max}, default",
     "typeNumber": "type a number",
     "instances": "Named instances",
-    "pin": "Pin this instance",
     "noHolder": "Make a manual collection or a project set to pin instances into.",
     "styleName": "Style name",
     "styleNamePlaceholder": "Condensed Semibold",
     "saveIn": "Save in",
     "setHolder": "Set: {name}",
     "pinned": "Pinned “{name}” to {holder}.",
-    "pinFailed": "The instance could not be pinned."
+    "pinFailed": "The instance could not be pinned.",
+    "atInstance": "= {name}",
+    "betweenInstances": "between instances",
+    "pinValue": "Pin {value} as my instance",
+    "pinPlain": "Pin as my instance",
+    "pinDefaultName": "Weight {value}",
+    "scrubHint": "Drag the specimen sideways to scrub weight"
   },
   "features": {
     "noFace": "Select a face to see its features.",
@@ -1431,7 +1435,20 @@
     "designer": "Designer",
     "foundry": "Foundry",
     "stylesFact": "Styles",
-    "developer": "Developer"
+    "developer": "Developer",
+    "variableCounts": "Variable, {axes} · {styles}",
+    "axisCount": {
+      "one": "{count} axis",
+      "other": "{count} axes"
+    },
+    "namedStyleCount": {
+      "one": "{count} named style",
+      "other": "{count} named styles"
+    },
+    "styleCount": {
+      "one": "{count} style",
+      "other": "{count} styles"
+    }
   },
   "studio": {
     "title": "Pairing Studio",

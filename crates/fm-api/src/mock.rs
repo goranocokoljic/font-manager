@@ -1753,9 +1753,23 @@ impl LibraryService for MockApi {
         let fam = st.family(family)?;
         let mut faces: Vec<FaceSummary> = st.family_faces(family).map(|f| st.summary(f)).collect();
         faces.sort_by_key(|f| (f.weight, f.width, f.slant != Slant::Upright));
+        // As fm-core: closest to weight 400, upright, normal width, lowest id.
+        let default_face = faces
+            .iter()
+            .min_by_key(|f| {
+                (
+                    f.weight.abs_diff(400),
+                    f.slant != Slant::Upright,
+                    f.width.abs_diff(5),
+                    f.id,
+                )
+            })
+            .map(|f| f.id);
         Ok(Family {
             summary: st.family_summary(fam),
             designer: Some(fam.designer.into()),
+            default_face,
+            year: None,
             faces,
         })
     }

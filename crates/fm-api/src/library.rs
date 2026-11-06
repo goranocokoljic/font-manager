@@ -470,6 +470,13 @@ pub struct Family {
     pub designer: Option<String>,
     /// Faces.
     pub faces: Vec<FaceSummary>,
+    /// The face that stands for the family (E42.2): closest to weight 400,
+    /// then upright, then normal width, then the lowest id.
+    #[serde(default)]
+    pub default_face: Option<FaceId>,
+    /// The earliest year the copyright of a face states (E42.2).
+    #[serde(default)]
+    pub year: Option<u16>,
 }
 
 /// An open-source license recognized from the license text.

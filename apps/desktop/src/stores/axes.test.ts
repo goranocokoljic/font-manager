@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Axis, NamedInstance } from '../api/types';
-import { axisStep, useAxesStore } from './axes';
+import { axisStep, instanceNear, useAxesStore, weightMarks } from './axes';
 
 const wght: Axis = { tag: 'wght', name: 'Weight', min: 100, default: 400, max: 900 };
 const wdth: Axis = { tag: 'wdth', name: 'Width', min: 75, default: 100, max: 125 };
@@ -96,5 +96,42 @@ describe('axes store', () => {
     expect(axisStep(wdth)).toBe(0.1);
     expect(axisStep(slnt)).toBe(0.1);
     expect(axisStep({ ...slnt, min: 0, max: 1 })).toBe(0.01);
+  });
+});
+
+describe('the named instances on the weight axis', () => {
+  const instance = (name: string, value: number) => ({
+    name,
+    coordinates: [{ tag: 'wght', value }],
+  });
+
+  it('marks instances lightest first and leaves out one with no weight', () => {
+    const marks = weightMarks([
+      instance('Bold', 700),
+      { name: 'Wide', coordinates: [{ tag: 'wdth', value: 125 }] },
+      instance('Thin', 100),
+    ]);
+    expect(marks).toEqual([
+      { name: 'Thin', value: 100 },
+      { name: 'Bold', value: 700 },
+    ]);
+  });
+
+  it('reads as the instance within 12 units and as none past that', () => {
+    const marks = [{ name: 'Medium', value: 500 }];
+    expect(instanceNear(marks, 500)).toBe('Medium');
+    expect(instanceNear(marks, 488)).toBe('Medium');
+    expect(instanceNear(marks, 512)).toBe('Medium');
+    expect(instanceNear(marks, 487)).toBeNull();
+    expect(instanceNear(marks, 513)).toBeNull();
+  });
+
+  it('picks the closer of two instances in reach', () => {
+    const marks = [
+      { name: 'Book', value: 450 },
+      { name: 'Regular', value: 460 },
+    ];
+    expect(instanceNear(marks, 453)).toBe('Book');
+    expect(instanceNear(marks, 458)).toBe('Regular');
   });
 });

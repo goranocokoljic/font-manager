@@ -17,6 +17,16 @@ export function variationSettings(axes: Axis[], values: AxisValue[] = []): strin
   return parts.length ? parts.join(', ') : 'normal';
 }
 
+/** The CSS value for exactly these coordinates; `normal` for none. */
+export function coordinateSettings(values: readonly AxisValue[]): string {
+  const parts = values.flatMap((v) =>
+    v.value != null && Number.isFinite(v.value) && /^[\x20-\x7e]{4}$/.test(v.tag)
+      ? [`"${v.tag.replace(/["\\]/g, '\\$&')}" ${v.value}`]
+      : [],
+  );
+  return parts.length ? parts.join(', ') : 'normal';
+}
+
 /** Axes of faces already asked for; a few numbers each, bounded. */
 const axesCache = new Map<FaceId, Promise<Axis[]>>();
 const AXES_CACHE_LIMIT = 2000;
