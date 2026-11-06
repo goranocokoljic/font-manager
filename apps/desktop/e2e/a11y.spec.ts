@@ -422,6 +422,17 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await violations(page), 'Developer').toEqual([]);
     });
 
+    test('the weight ramp of the Styles section', async ({ page }) => {
+      await open(page, '/family/1?face=1');
+      await inTheme(page);
+      await page
+        .getByRole('group', { name: 'Show the styles as' })
+        .getByRole('button', { name: 'Weight ramp' })
+        .click();
+      await expect(page.getByTestId('family-ramp-row')).toHaveCount(9);
+      expect(await violations(page)).toEqual([]);
+    });
+
     test('the family page, with its collection menu open', async ({ page }) => {
       await open(page, '/family/1');
       await inTheme(page);

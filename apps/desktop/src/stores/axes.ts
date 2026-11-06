@@ -23,7 +23,7 @@ function clamp(axis: Axis, value: number): number {
 }
 
 /** How far from a named instance the weight still reads as that instance. */
-const NEAR_INSTANCE = 12;
+export const NEAR_INSTANCE = 12;
 
 /** The named instances on the weight axis, lightest first: the ticks under its slider. */
 export function weightMarks(

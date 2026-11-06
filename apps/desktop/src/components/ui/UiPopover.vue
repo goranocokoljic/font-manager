@@ -14,7 +14,8 @@ const props = withDefaults(
   }>(),
   { matchWidth: false },
 );
-const emit = defineEmits<{ close: [] }>();
+// `placed`: the layer is visible, so an owner that moves the focus into it can do so now.
+const emit = defineEmits<{ close: []; placed: [] }>();
 
 const layer = ref<HTMLElement | null>(null);
 const style = ref<Record<string, string>>({});
@@ -86,6 +87,8 @@ watch(
     style.value = { left: '0px', top: '0px', visibility: 'hidden' };
     await nextTick();
     place();
+    await nextTick();
+    if (props.open) emit('placed');
   },
   { immediate: true },
 );

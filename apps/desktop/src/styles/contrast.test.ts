@@ -381,7 +381,7 @@ describe('the accent in the style sheets', () => {
       '.viewport:focus .slot.cursor .card',
       /box-shadow:\s*inset 0 0 0 2px var\(--fm-accent\)/,
     ],
-    ['switch on', 'components/InspectorFeatures.vue', ".switch[aria-checked='true']", ACCENT_FILL],
+    ['switch on', 'components/ui/UiSwitch.vue', ".ui-switch[aria-checked='true']", ACCENT_FILL],
     ['slider thumb', 'styles/theme.css', "input[type='range']::-webkit-slider-thumb", ACCENT_FILL],
     [
       'Firefox slider thumb',
@@ -407,9 +407,9 @@ describe('the accent in the style sheets', () => {
     expect(ruleOf('styles/theme.css', "input[type='radio']::before")).toContain(
       'background-color: var(--fm-on-accent)',
     );
-    expect(
-      ruleOf('components/InspectorFeatures.vue', ".switch[aria-checked='true'] .knob"),
-    ).toContain('background-color: var(--fm-on-accent)');
+    expect(ruleOf('components/ui/UiSwitch.vue', ".ui-switch[aria-checked='true'] .knob")).toContain(
+      'background-color: var(--fm-on-accent)',
+    );
   });
 });
 

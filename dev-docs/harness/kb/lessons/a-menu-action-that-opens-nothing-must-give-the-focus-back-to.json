@@ -5,14 +5,15 @@
   "rule": "When a menu or popover item is chosen and nothing takes the focus next (no input, dialog or new view opens), move the focus back to the button that opened the menu before the menu closes. Closing the menu removes the focused item, so the focus falls to body, and because a popover is teleported to the end of body, the next Tab starts at the end of the page. Test it with a Playwright step that picks the item with Enter and asserts the button is focused after any store refresh, and check that the test fails without the refocus.",
   "rationale": "E44.3 (#471): a colour picked by keyboard from the collection menu closed the menu without refocus, so the focus dropped to body and the user lost their place in the sidebar.",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
+    454,
     471
   ],
   "file_globs": [
     "apps/desktop/src/components/**/*.vue"
   ],
   "first_seen": "2026-11-04T05:22:52.634Z",
-  "last_seen": "2026-11-04T05:22:52.634Z"
+  "last_seen": "2026-11-06T21:40:20.096Z"
 }

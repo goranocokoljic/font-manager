@@ -193,13 +193,13 @@ test('a style in the Styles section is the one the panels describe', async ({ pa
     .getByRole('treeitem', { name: /^Sample 1,/ })
     .click({ position: { x: 300, y: 4 } });
   await page.keyboard.press('o');
-  const styles = sectionPanel(page, 'Styles').getByRole('button');
-  await expect(styles.first()).toHaveAttribute('aria-pressed', 'true');
-  await styles.nth(1).click();
-  await expect(styles.nth(1)).toHaveAttribute('aria-pressed', 'true');
-  await expect(styles.first()).toHaveAttribute('aria-pressed', 'false');
+  const styles = sectionPanel(page, 'Styles').getByTestId('family-style-row');
+  await expect(styles.first()).toHaveAttribute('aria-selected', 'true');
+  await styles.nth(1).click({ position: { x: 20, y: 20 } });
+  await expect(styles.nth(1)).toHaveAttribute('aria-selected', 'true');
+  await expect(styles.first()).toHaveAttribute('aria-selected', 'false');
   await expect(page).toHaveURL(/face=\d+/);
-  const name = (await styles.nth(1).textContent())!.trim();
+  const name = (await styles.nth(1).locator('.title').textContent())!.trim();
   const info = await showSection(page, 'Info');
   await expect(info.getByRole('heading', { name: `Sample 1 ${name}` })).toBeVisible();
 });

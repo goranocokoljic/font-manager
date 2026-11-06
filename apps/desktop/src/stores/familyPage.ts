@@ -5,18 +5,20 @@ import type {
   ActivationMode,
   ApiError,
   FaceId,
+  FaceSummary,
   Family,
   FamilyId,
   FamilySummary,
   VirtualStyle,
 } from '../api/types';
-import { errorMessage } from '../i18n';
-import { familyKey, type FamilyRow } from '../list/rows';
+import { errorMessage, t } from '../i18n';
+import { faceKey, familyKey, type FaceRow, type FamilyRow } from '../list/rows';
 import { useActivationStore } from './activation';
 import { useFontListStore } from './fontList';
 import { useLibraryStore } from './library';
 import { parseFaceId, useSelectionStore } from './selection';
 import { useToastStore } from './toast';
+import { useVirtualStylesStore } from './virtualStyles';
 
 /** A family id from a route param; family and face ids have the same form. */
 export const parseFamilyId: (value: unknown) => FamilyId | null = parseFaceId;
@@ -32,6 +34,9 @@ export const FAMILY_SECTIONS = [
 ] as const;
 export type FamilySection = (typeof FAMILY_SECTIONS)[number];
 
+/** The Styles section's list of named styles; any other view is the tag of a ramped axis. */
+export const NAMED_STYLES = 'named';
+
 /**
  * The family page (E42): which family it shows, its place in the list the user came from
  * and what its top bar acts on. The order is the font list's, so the arrows follow the
@@ -46,6 +51,8 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
   const error = ref<ApiError | null>(null);
   const favorite = ref(false);
   const section = ref<FamilySection>('styles');
+  /** What the Styles section lists: the named styles, or the ramp of the axis with this tag. */
+  const stylesView = ref<string>(NAMED_STYLES);
   /** Set by a push from the library; the page that mounts takes it to know how it came in. */
   const pushed = ref(false);
   /** Bumped by every read; an answer to an older one is dropped. */
@@ -184,6 +191,33 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     if (id.value === family.id) await read(family.id);
   }
 
+  /** One style's switch: activates that face in the set mode, or deactivates it. */
+  async function toggleFace(target: FaceSummary): Promise<void> {
+    const family = summary.value;
+    if (!family) return;
+    const row: FaceRow = {
+      kind: 'face',
+      key: faceKey(target.id),
+      face: target,
+      family,
+      position: faces.value.findIndex((f) => f.id === target.id) + 1,
+      count: faces.value.length,
+    };
+    await useActivationStore().toggleRows([row]);
+    if (id.value === family.id) await read(family.id);
+  }
+
+  /** Deletes a pinned instance from its holder; the face stays. */
+  async function deletePin(pin: VirtualStyle): Promise<void> {
+    try {
+      await useVirtualStylesStore().remove(pin.id);
+      await readPins();
+      useToastStore().show(t('family.pinDeleted', { name: pin.name }));
+    } catch (e) {
+      useToastStore().show(errorMessage(e));
+    }
+  }
+
   /** Favorites every face of the family, or none. The first face tells the current state. */
   async function toggleFavorite(): Promise<void> {
     const all = faces.value.map((f) => f.id);
@@ -204,6 +238,7 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     error,
     favorite,
     section,
+    stylesView,
     pushed,
     takePushed,
     index,
@@ -219,6 +254,8 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     show,
     familyOf,
     toggleActivation,
+    toggleFace,
+    deletePin,
     toggleFavorite,
   };
 });
