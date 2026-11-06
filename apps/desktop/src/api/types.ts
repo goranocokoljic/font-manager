@@ -1212,6 +1212,13 @@ export type Family = {
 	designer: string | null,
 	/**  Faces. */
 	faces: FaceSummary[],
+	/**
+	 *  The face that stands for the family (E42.2): closest to weight 400,
+	 *  then upright, then normal width, then the lowest id.
+	 */
+	defaultFace?: FaceId | null,
+	/**  The earliest year the copyright of a face states (E42.2). */
+	year?: number | null,
 };
 
 /**  Whether a family's faces are active. */

@@ -524,6 +524,20 @@ fn a_family_lists_its_faces_and_the_inspector_reads_one() {
     let (lib, _, _) = Lib::scanned("api-family");
     let archivo = lib.family("Archivo");
     let family = lib.api.get_family(archivo.id).expect("family");
+    let default = family
+        .default_face
+        .and_then(|id| family.faces.iter().find(|f| f.id == id))
+        .expect("the family has a default face");
+    let closest = family.faces.iter().map(|f| f.weight.abs_diff(400)).min();
+    assert_eq!(Some(default.weight.abs_diff(400)), closest);
+    assert_eq!(default.slant, fm_api::common::Slant::Upright);
+    // The year is the earliest one the copyright states.
+    let copyright = lib.api.get_face(default.id).expect("detail").copyright;
+    let stated = copyright
+        .as_deref()
+        .and_then(crate::pairing::role::copyright_year);
+    assert!(stated.is_some(), "the fixture states a year: {copyright:?}");
+    assert_eq!(family.year, stated);
     assert_eq!(family.summary, archivo);
     let weights: Vec<u16> = family.faces.iter().map(|f| f.weight).collect();
     assert_eq!(weights, [600, 700]);

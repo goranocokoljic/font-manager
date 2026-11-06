@@ -800,7 +800,6 @@
   "axes": {
     "noFace": "Wähle einen Schnitt, um seine Achsen zu sehen.",
     "none": "Diese Schrift hat keine Variationsachsen",
-    "hint": "Achsen ändern die Vorschau dieses Schnitts.",
     "cssLabel": "Achsen",
     "list": "Variationsachsen",
     "default": "Standard",
@@ -808,14 +807,19 @@
     "range": "{min} bis {max}, Standard",
     "typeNumber": "gib eine Zahl ein",
     "instances": "Benannte Instanzen",
-    "pin": "Diese Instanz anheften",
     "noHolder": "Lege eine manuelle Sammlung oder ein Projekt-Set an, um Instanzen dort anzuheften.",
     "styleName": "Name des Schnitts",
     "styleNamePlaceholder": "Schmal Halbfett",
     "saveIn": "Speichern in",
     "setHolder": "Set: {name}",
     "pinned": "„{name}“ an {holder} angeheftet.",
-    "pinFailed": "Die Instanz konnte nicht angeheftet werden."
+    "pinFailed": "Die Instanz konnte nicht angeheftet werden.",
+    "atInstance": "= {name}",
+    "betweenInstances": "zwischen Instanzen",
+    "pinValue": "{value} als meine Instanz anheften",
+    "pinPlain": "Als meine Instanz anheften",
+    "pinDefaultName": "Gewicht {value}",
+    "scrubHint": "Ziehe das Muster seitwärts, um das Gewicht zu ändern"
   },
   "features": {
     "noFace": "Wähle einen Schnitt, um seine Features zu sehen.",
@@ -1431,7 +1435,20 @@
     "designer": "Designer",
     "foundry": "Schriftgießerei",
     "stylesFact": "Schnitte",
-    "developer": "Entwickler"
+    "developer": "Entwickler",
+    "variableCounts": "Variabel, {axes} · {styles}",
+    "axisCount": {
+      "one": "{count} Achse",
+      "other": "{count} Achsen"
+    },
+    "namedStyleCount": {
+      "one": "{count} benannter Schnitt",
+      "other": "{count} benannte Schnitte"
+    },
+    "styleCount": {
+      "one": "{count} Schnitt",
+      "other": "{count} Schnitte"
+    }
   },
   "studio": {
     "title": "Pairing Studio",

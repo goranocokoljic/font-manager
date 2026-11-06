@@ -215,7 +215,7 @@ export const mockFaces: FaceDetail[] = [
     fileSize: 121000,
     hash: '1'.padStart(64, '0'),
     version: 'Version 1.000',
-    copyright: 'Copyright Inter Authors',
+    copyright: 'Copyright 2016 Inter Authors',
     designer: 'Rasmus Andersson',
     vendorId: null,
     license: ofl,
@@ -2810,7 +2810,20 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       if (!list.length)
         throw { code: 'notFound' as const, message: `Family ${id} was not found.`, detail: null };
       const designer = find(list[0]!.id)!.designer;
-      return { summary: summaryOf(id), designer, faces: list } satisfies Family;
+      // As fm-core: closest to weight 400, upright, normal width, lowest id.
+      const closeness = (f: FaceSummary) => [
+        Math.abs(f.weight - 400),
+        f.slant === 'upright' ? 0 : 1,
+        Math.abs(f.width - 5),
+        f.id,
+      ];
+      const defaultFace = [...list].sort((a, b) => {
+        const [x, y] = [closeness(a), closeness(b)];
+        return x.reduce((order, v, i) => order || v - y[i]!, 0);
+      })[0]!.id;
+      const years = list.flatMap((f) => find(f.id)!.copyright?.match(/\b\d{4}\b/g) ?? []);
+      const year = years.length ? Math.min(...years.map(Number)) : null;
+      return { summary: summaryOf(id), designer, faces: list, defaultFace, year } satisfies Family;
     },
     search: async (req) => {
       const query = req.query ?? '';

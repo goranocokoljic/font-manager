@@ -22,8 +22,36 @@ function clamp(axis: Axis, value: number): number {
   return Math.min(axis.max ?? Infinity, Math.max(axis.min ?? -Infinity, value));
 }
 
+/** How far from a named instance the weight still reads as that instance. */
+const NEAR_INSTANCE = 12;
+
+/** The named instances on the weight axis, lightest first: the ticks under its slider. */
+export function weightMarks(
+  instances: readonly NamedInstance[],
+): { name: string; value: number }[] {
+  return instances
+    .flatMap((i) => {
+      const value = i.coordinates.find((c) => c.tag === 'wght')?.value;
+      return value != null ? [{ name: i.name, value }] : [];
+    })
+    .sort((a, b) => a.value - b.value);
+}
+
+/** The name of the mark `weight` reads as, the closest within ±12; null between marks. */
+export function instanceNear(
+  marks: readonly { name: string; value: number }[],
+  weight: number,
+): string | null {
+  let near: { name: string; value: number } | null = null;
+  for (const m of marks) {
+    const off = Math.abs(m.value - weight);
+    if (off <= NEAR_INSTANCE && (!near || off < Math.abs(near.value - weight))) near = m;
+  }
+  return near?.name ?? null;
+}
+
 /**
- * Variation coordinates set in the inspector's Axes tab, per face, while the app
+ * Variation coordinates set in the family page's axis row, per face, while the app
  * runs (not saved). Only axes moved away from their default are kept, so "Reset"
  * is forgetting the face. Preview rows of the face read `values` for their
  * `font-variation-settings`; the font is not reloaded.

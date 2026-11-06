@@ -90,6 +90,22 @@ struct FaceRow {
     open_license: Option<OpenLicense>,
 }
 
+/// The face that stands for a family: closest to weight 400, then upright,
+/// then normal width (5), then the lowest id.
+fn default_face(faces: &[FaceSummary]) -> Option<FaceId> {
+    faces
+        .iter()
+        .min_by_key(|f| {
+            (
+                f.weight.abs_diff(400),
+                f.slant != Slant::Upright,
+                f.width.abs_diff(5),
+                f.id,
+            )
+        })
+        .map(|f| f.id)
+}
+
 impl Index {
     /// The family `family` with every visible face, light to bold, narrow to
     /// wide, upright before italic. An id that is not a family's is `NotFound`.
@@ -99,15 +115,24 @@ impl Index {
         let ids = self.family_faces(family)?.ok_or_else(not_found)?;
         let mut faces = Vec::with_capacity(ids.len());
         let mut designer = None;
+        let mut year = None;
         for id in ids {
             let row = self.face_row(id)?;
             designer = designer.or(row.designer);
+            let stated = row
+                .parsed
+                .as_ref()
+                .and_then(|p| p.copyright.as_deref())
+                .and_then(crate::pairing::role::copyright_year);
+            year = year.into_iter().chain(stated).min();
             faces.push(row.summary);
         }
         faces.sort_by_key(|f| (f.weight, f.width, f.slant != Slant::Upright, f.id));
         Ok(Family {
             summary,
             designer,
+            default_face: default_face(&faces),
+            year,
             faces,
         })
     }
@@ -608,4 +633,39 @@ pub(super) fn fill_open_licenses(tx: &rusqlite::Transaction<'_>) -> rusqlite::Re
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod default_face_tests {
+    use super::*;
+
+    fn face(id: u32, weight: u16, width: u16, slant: Slant) -> FaceSummary {
+        FaceSummary {
+            id: FaceId(id),
+            family: FamilyId(1),
+            family_name: "F".into(),
+            style: String::new(),
+            postscript_name: String::new(),
+            weight,
+            width,
+            slant,
+            format: fm_api::common::FontFormat::Ttf,
+            is_variable: false,
+            active: None,
+            health: Health::Ok,
+        }
+    }
+
+    #[test]
+    fn the_default_face_is_the_closest_to_regular_not_the_first() {
+        let thin = face(1, 100, 5, Slant::Upright);
+        let italic = face(2, 400, 5, Slant::Italic);
+        let condensed = face(3, 400, 3, Slant::Upright);
+        let regular = face(4, 400, 5, Slant::Upright);
+        let faces = [thin.clone(), italic.clone(), condensed.clone(), regular];
+        assert_eq!(default_face(&faces), Some(FaceId(4)));
+        assert_eq!(default_face(&[thin.clone(), italic]), Some(FaceId(2)));
+        assert_eq!(default_face(&[thin, condensed]), Some(FaceId(3)));
+        assert_eq!(default_face(&[]), None);
+    }
 }
