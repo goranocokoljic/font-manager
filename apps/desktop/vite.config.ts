@@ -11,5 +11,7 @@ export default defineConfig({
     include: ['src/**/*.test.ts'],
     // The contrast test reads the theme's and the print palette's colors (`?raw`).
     css: { include: [/(theme|print)\.css/] },
+    // A CI runner can stall for about 10 s under the parallel load. No test here asserts its time.
+    testTimeout: 30_000,
   },
 });
