@@ -373,3 +373,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 ## 2026-11-07
 
 - [E42.4 #455] apps/desktop/src/styles/theme.css:377 — the global range track (`--fm-border-strong`, 16% alpha) is well under 3:1 on both grounds; only the thumb reaches 3:1.
+- [E42.5 #456] apps/desktop/src/views/FamilyView.vue:134 — the header counts named styles from the shown face only, while the rail's "Styles" reads 1 for the same family, so the two disagree.
+- [E42.5 #456] apps/desktop/src/components/FamilyCharacters.vue:257 — `searchText` starts empty and its watcher is not immediate, so switching section and back leaves the grid filtered by `glyphs.query` under an empty search field.
+- [E42.5 #456] apps/desktop/src/views/FamilyView.vue:430 — whole-button `fm-directional` mirroring is also here (besides InspectorInfo.vue:258 and InspectorLicense.vue:96), so the label mirrors in RTL.

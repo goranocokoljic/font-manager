@@ -1,0 +1,18 @@
+{
+  "id": "a-page-loader-must-let-a-second-caller-wait-for-a-page-alrea",
+  "title": "A page loader must let a second caller wait for a page already in flight",
+  "category": "correctness",
+  "rule": "When a store fetches list pages on demand and remembers which pages are pending, keep the pending promise (Map<page, Promise>) and have every caller await it; do not skip a pending page and return early. A caller that awaits ensure() and then reads the item (keyboard End, jump to selection) must find it. Test it with a mock whose listGlyphs/listFamilies answer is held by a gate or a delay: start two ensure() calls for the same page and assert the second resolves only after the answer and the item is there.",
+  "rationale": "E42.5 (#456): ensure() skipped in-flight pages, so End on a list longer than one page moved the cursor but never selected the glyph; tests passed because the mock answered at once.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    456
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**"
+  ],
+  "first_seen": "2026-11-06T23:20:33.539Z",
+  "last_seen": "2026-11-06T23:20:33.539Z"
+}

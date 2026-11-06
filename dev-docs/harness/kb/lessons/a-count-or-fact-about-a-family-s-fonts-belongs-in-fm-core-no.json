@@ -1,0 +1,19 @@
+{
+  "id": "a-count-or-fact-about-a-family-s-fonts-belongs-in-fm-core-no",
+  "title": "A count or fact about a family's fonts belongs in fm-core, not in a Pinia store",
+  "category": "architecture",
+  "rule": "When the UI shows a number or verdict that needs font knowledge (how many styles have a character, how many named instances a variable face counts as, which faces cover a script), do not compute it in a store or component from several API answers. Add an additive fm-api method backed by fm-core (it can read the stored cmap, instances and health directly), wire it through CoreApi, MockApi, fm-client, fm-endpoint and the Tauri command, and let the store only call it and drop stale answers. Test it in fm-core with fixtures and once through the api.rs entry path.",
+  "rationale": "E42.5 (#456): the 'in N of M styles' count summed per-face answers in stores/glyphs.ts and decided how a variable face counts, which breaks rule 1 and overcounted invisible characters.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    456
+  ],
+  "file_globs": [
+    "apps/desktop/src/stores/**",
+    "apps/desktop/src/components/**"
+  ],
+  "first_seen": "2026-11-06T23:20:33.539Z",
+  "last_seen": "2026-11-06T23:20:33.539Z"
+}
