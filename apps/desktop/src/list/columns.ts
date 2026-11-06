@@ -175,6 +175,11 @@ export function cycleSort(config: TableConfig, id: ColumnId): TableConfig {
   return { ...config, sort };
 }
 
+/** The columns the count line's menu sorts by: one per API key (Style sorts as Weight does). */
+export const SORT_COLUMNS: readonly ColumnId[] = COLUMNS.filter(
+  (c) => c.sortKey && c.id !== 'weightLine',
+).map((c) => c.id);
+
 /** The API order of a configuration. */
 export function orderOf(config: TableConfig): FamilyOrder | null {
   const by = config.sort && columnById(config.sort.column).sortKey;

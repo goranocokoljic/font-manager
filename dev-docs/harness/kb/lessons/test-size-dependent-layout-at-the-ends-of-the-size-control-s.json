@@ -1,0 +1,20 @@
+{
+  "id": "test-size-dependent-layout-at-the-ends-of-the-size-control-s",
+  "title": "Test size-dependent layout at the ends of the size control's range",
+  "category": "testing",
+  "rule": "When a layout depends on a user-set size (a slider, a density, a scale), assert in Playwright that the text stays inside its box at the largest and the smallest value, with scrollWidth and scrollHeight against clientWidth and clientHeight, not only at the default. Wrapped text in a fixed box also needs overflow-wrap for a run wider than the box.",
+  "rationale": "E41.2 (#448): Alphabet cut its capitals from slider 80 upward because a wrapped line could not break inside one long run, and a rounded box height lost a line that fit; the wrap test ran at slider 60 only.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    448
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/list/**/*.ts",
+    "apps/desktop/e2e/**/*.ts"
+  ],
+  "first_seen": "2026-11-05T23:20:02.968Z",
+  "last_seen": "2026-11-05T23:20:02.968Z"
+}

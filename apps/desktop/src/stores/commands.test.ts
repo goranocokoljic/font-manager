@@ -14,6 +14,28 @@ function action(id: string, title: string, extra: Partial<Action> = {}): Action 
 beforeEach(() => setActivePinia(createPinia()));
 
 describe('commands store', () => {
+  it('a key with two bindings runs the first enabled one', () => {
+    const commands = useCommandsStore();
+    const hasRow = ref(true);
+    const tag = action(ACTIONS.tag, 'Tag', { enabled: hasRow });
+    const field = action(ACTIONS.previewField, 'Field');
+    commands.register(field);
+    commands.register(tag);
+    expect(commands.handleKey(key({ key: 't' }))).toBe(true);
+    expect(tag.run).toHaveBeenCalledOnce();
+    expect(field.run).not.toHaveBeenCalled();
+    hasRow.value = false;
+    const e = key({ key: 't' });
+    expect(commands.handleKey(e)).toBe(true);
+    expect(e.defaultPrevented).toBe(true);
+    expect(field.run).toHaveBeenCalledOnce();
+    expect(tag.run).toHaveBeenCalledOnce();
+    // The palette owns every key while it is open: neither binding runs.
+    commands.openPalette();
+    expect(commands.handleKey(key({ key: 't' }))).toBe(false);
+    expect(field.run).toHaveBeenCalledOnce();
+  });
+
   it('registers, replaces and unregisters actions', () => {
     const commands = useCommandsStore();
     const undo = commands.register(action('x', 'First'));

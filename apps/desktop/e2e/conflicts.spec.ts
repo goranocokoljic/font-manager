@@ -10,7 +10,7 @@ test('activating a clashing face asks keep / replace for this session / cancel',
 }) => {
   await page.goto('/#/?face=6');
   const panel = info(page);
-  await panel.getByRole('button', { name: 'Activate' }).click();
+  await panel.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(question(page)).toContainText(
     'A system font already uses the PostScript name JetBrainsMono-Regular',
   );
@@ -20,12 +20,12 @@ test('activating a clashing face asks keep / replace for this session / cancel',
   await expect(question(page)).toBeHidden();
   await expect(panel.getByTestId('activation-state')).toHaveText('Not active');
 
-  await panel.getByRole('button', { name: 'Activate' }).click();
+  await panel.getByRole('button', { name: 'Activate', exact: true }).click();
   await question(page).getByRole('button', { name: 'Keep existing' }).click();
   await expect(panel.getByRole('alert')).toContainText('Not activated');
   await expect(panel.getByTestId('activation-state')).toHaveText('Not active');
 
-  await panel.getByRole('button', { name: 'Activate' }).click();
+  await panel.getByRole('button', { name: 'Activate', exact: true }).click();
   await question(page).getByRole('button', { name: 'Replace for this session' }).click();
   await expect(panel.getByTestId('activation-state')).toHaveText('Active for this session');
 });
@@ -36,7 +36,7 @@ test('the Conflicts view lists every clash and its winner', async ({ page }) => 
   await expect(page.getByText('No conflicts.')).toBeVisible();
 
   await page.goto('/#/?face=6');
-  await info(page).getByRole('button', { name: 'Activate' }).click();
+  await info(page).getByRole('button', { name: 'Activate', exact: true }).click();
   await question(page).getByRole('button', { name: 'Replace for this session' }).click();
   await expect(info(page).getByTestId('activation-state')).toHaveText('Active for this session');
 

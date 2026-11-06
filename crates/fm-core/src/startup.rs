@@ -163,12 +163,10 @@ mod tests {
         assert_eq!(
             names(&index),
             [
-                "Recently added",
                 "Recently activated",
                 "Variable",
                 "Monospace",
                 "Web-licensed",
-                "Problems",
             ]
         );
         assert!(
@@ -179,20 +177,14 @@ mod tests {
                 .all(|c| c.rule_group.is_some()),
             "every default is smart"
         );
-        let problems = index.collections().expect("list")[5].id;
-        index.delete_collection(problems).expect("delete");
+        let last = index.collections().expect("list")[3].id;
+        index.delete_collection(last).expect("delete");
         drop(index);
         // The next start does not make them again.
         let index = open_index(&paths).expect("reopened").index;
         assert_eq!(
             names(&index),
-            [
-                "Recently added",
-                "Recently activated",
-                "Variable",
-                "Monospace",
-                "Web-licensed",
-            ]
+            ["Recently activated", "Variable", "Monospace"]
         );
     }
 

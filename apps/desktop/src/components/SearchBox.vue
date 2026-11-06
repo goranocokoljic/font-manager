@@ -5,6 +5,10 @@ import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
 import { useSearchStore } from '../stores/search';
 
+const emit = defineEmits<{
+  /** Escape in an empty box: the focus goes back to the font list. */
+  leave: [];
+}>();
 const search = useSearchStore();
 const input = ref<HTMLInputElement | null>(null);
 const chord = chordOf(ACTIONS.search)!;
@@ -29,7 +33,10 @@ useActions([
 /** Escape empties the box, then leaves it. */
 function onEscape(): void {
   if (search.text) search.setText('');
-  else input.value?.blur();
+  else {
+    input.value?.blur();
+    emit('leave');
+  }
 }
 </script>
 

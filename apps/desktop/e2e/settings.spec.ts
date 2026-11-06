@@ -65,12 +65,12 @@ test('the activation choice applies to the next activation', async ({ page }) =>
 
   // Face 1 has no clash: permanent.
   await page.goto('/#/?face=1');
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(page.getByTestId('activation-state')).toHaveText('Active (permanent)');
 
   // Face 6 clashes with a system font: replaced without a question, for this session only.
   await page.goto('/#/?face=6');
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(page.getByTestId('activation-state')).toHaveText('Active for this session');
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
 });
@@ -79,7 +79,7 @@ test('the status bar counts active fonts as activation changes', async ({ page }
   await page.goto('/#/?face=1');
   const count = page.getByTestId('active-count');
   await expect(count).toHaveText('0 fonts active');
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(count).toHaveText('1 font active');
   await page.getByRole('button', { name: 'Deactivate' }).click();
   await expect(count).toHaveText('0 fonts active');

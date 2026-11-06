@@ -1,0 +1,19 @@
+{
+  "id": "a-focus-ring-must-keep-3-1-against-the-tint-its-own-focus-or",
+  "title": "A focus ring must keep 3:1 against the tint its own focus or selection puts behind it",
+  "category": "accessibility",
+  "rule": "When a row or container takes a tint on hover, on focus-within or when selected, and a control inside it uses the global accent ring, check the ring's contrast against the composited tint in both themes, not only against the flat surfaces. A surface that just reaches 3:1 falls under it with any tint. Draw the ring round the tinted element, on the plain surface, and add a Playwright check of the computed outline on the element that carries it, for the plain and the selected row.",
+  "rationale": "E41.3 (#449): the accent ring of a sidebar label sat on the row's hover and 7 % tints at 2.43:1 to 2.76:1, and contrast.test.ts checked the ring on flat surfaces only.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    449
+  ],
+  "file_globs": [
+    "apps/desktop/src/styles/**",
+    "apps/desktop/src/components/**"
+  ],
+  "first_seen": "2026-11-04T07:43:11.182Z",
+  "last_seen": "2026-11-04T07:43:11.182Z"
+}

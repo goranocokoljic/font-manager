@@ -194,11 +194,12 @@
     "settings": "Preview settings",
     "sample": "Sample",
     "language": "Language",
-    "customText": "Custom text",
-    "heroPlaceholder": "Type to preview your own text",
-    "options": "Options",
+    "customText": "Type to preview",
+    "heroPlaceholder": "Type to preview",
+    "options": "Preview options",
     "customPlaceholder": "Type a sample",
     "size": "Size",
+    "sizeGlyph": "A",
     "sizeSlider": "Size slider",
     "sizeInPixels": "Size in pixels",
     "autoSize": "Auto size",
@@ -237,6 +238,26 @@
       "px": "{size} px",
       "useToolbar": "Use toolbar size",
       "empty": "Select a family to preview it here."
+    },
+    "focusField": "Focus the preview field",
+    "preset": "Preset",
+    "noPangram": "No pangram for this language yet",
+    "presets": {
+      "word": "Word",
+      "pangram": "Pangram",
+      "alphabet": "Alphabet",
+      "numerals": "Numerals",
+      "paragraph": "Paragraph"
+    },
+    "hints": {
+      "custom": {
+        "one": "renders in {count} font",
+        "other": "renders in {count} fonts"
+      },
+      "pangram": "a pangram · every letter once",
+      "alphabet": "the character set at a glance",
+      "numerals": "figures · tabular where the font has them",
+      "paragraph": "body text at {size} px"
     }
   },
   "samples": {
@@ -246,10 +267,35 @@
       "lorem": "Lorem ipsum",
       "alphabet": "Alphabet",
       "numerals": "Numerals",
-      "fontName": "Font name"
+      "fontName": "Font name",
+      "paragraph": "Paragraph"
     }
   },
   "home": {
+    "sort": {
+      "by": "Sorted by {key}",
+      "byDescending": "Sorted by {key}, descending",
+      "change": "change",
+      "changeLabel": "change sort order",
+      "menu": "Sort order",
+      "bestMatch": "Best match",
+      "descending": "Descending",
+      "keys": {
+        "bestMatch": "best match",
+        "activation": "activation",
+        "name": "name",
+        "styleCount": "styles",
+        "weightLine": "weight",
+        "weightRange": "weight",
+        "format": "format",
+        "version": "version",
+        "manufacturer": "manufacturer",
+        "location": "location",
+        "license": "license",
+        "added": "date added",
+        "tags": "tags"
+      }
+    },
     "allFonts": "All fonts",
     "selected": "{count} selected",
     "families": {
@@ -300,7 +346,7 @@
       "platform": "Platform"
     },
     "sidebarGroups": {
-      "online": "Online catalogs"
+      "online": "Catalogs"
     },
     "actions": {
       "quickToggle": "Add the selected fonts to the Quick Collection, or remove them",
@@ -393,6 +439,10 @@
   },
   "chips": {
     "options": "Filter options",
+    "more": {
+      "one": "+{count} more filter",
+      "other": "+{count} more filters"
+    },
     "remove": "Remove filter {name}",
     "filters": "Filters",
     "chipLabel": "{name}, {families}",
@@ -537,7 +587,8 @@
       "sidebar": "Sidebar",
       "inspector": "Inspector",
       "settings": "Settings",
-      "openFamily": "Open the family page"
+      "openFamily": "Open the family page",
+      "previewField": "Focus the preview field"
     }
   },
   "palette": {
@@ -995,9 +1046,17 @@
     "comfortable": "Comfortable",
     "compact": "Compact"
   },
+  "libraryViews": {
+    "heading": "Library views",
+    "all": "All fonts",
+    "recent": "Recently added",
+    "activated": "Activated",
+    "favorites": "Favorites"
+  },
   "collections": {
     "heading": "Collections",
-    "new": "New",
+    "empty": "No collections yet",
+    "new": "New collection",
     "newTitle": "Make a collection",
     "newSmart": "New smart",
     "newSmartLabel": "New smart collection",
@@ -1157,16 +1216,11 @@
   },
   "tags": {
     "heading": "Tags",
-    "tagCount": {
-      "one": "{count} tag",
-      "other": "{count} tags"
-    },
     "fontCount": {
       "one": "{count} font",
       "other": "{count} fonts"
     },
     "empty": "No tags yet",
-    "emptyHint": "Select fonts, then press",
     "fallbackName": "Tag {id}"
   },
   "quickCollection": {
@@ -1434,6 +1488,7 @@
   },
   "problems": {
     "title": "Problems",
+    "noneShort": "No problems",
     "filters": "Show problems",
     "all": "All",
     "noneOfKind": "No problems of this kind.",
@@ -1518,6 +1573,7 @@
   },
   "sources": {
     "title": "Sources",
+    "empty": "No folders yet",
     "addFolder": "Add folder",
     "addFolderTitle": "Add a folder to the library",
     "scanningLibrary": "Scanning the library",
@@ -1542,6 +1598,7 @@
     "removeTitle": "Remove from the library. The files stay where they are."
   },
   "catalogs": {
+    "offShort": "off",
     "adobeFonts": {
       "name": "Adobe Fonts",
       "note": "Adobe Fonts are delivered encrypted through Creative Cloud, so no third-party app can manage them. Activate them in the Creative Cloud app.",

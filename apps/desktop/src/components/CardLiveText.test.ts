@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import CardLiveText from './CardLiveText.vue';
 
@@ -32,6 +32,65 @@ beforeEach(() => {
 });
 
 afterEach(() => setFaceLoader(undefined));
+
+describe('CardLiveText fits its width', () => {
+  /** Lays the line out as `measure` says for the font size on its card. */
+  function layOut(measure: (fontPx: number) => number) {
+    return vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const px = parseFloat(this.parentElement?.style.fontSize ?? '') || 0;
+      return { width: measure(px) } as DOMRect;
+    });
+  }
+  const fontPx = (card: VueWrapper) =>
+    parseFloat((card.get('[data-testid="card-live-text"]').element as HTMLElement).style.fontSize);
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('shrinks text in proportion when its width is in proportion to its size', async () => {
+    layOut((px) => px * 10);
+    const card = mount(CardLiveText, {
+      props: { face: 7, text: 'Wide', sizePx: 120, fitWidth: 500 },
+    });
+    await flushPromises();
+    expect(fontPx(card)).toBeCloseTo(50);
+    card.unmount();
+  });
+
+  it('keeps shrinking when whole-pixel glyphs leave the first size too wide', async () => {
+    // 20 glyphs, each a whole pixel wide: the width moves in steps of 20 px.
+    const width = (px: number) => 20 * Math.ceil(px / 2);
+    layOut(width);
+    const card = mount(CardLiveText, {
+      props: { face: 7, text: 'Wide', sizePx: 120, fitWidth: 510 },
+    });
+    await flushPromises();
+    expect(width(fontPx(card))).toBeLessThanOrEqual(510);
+    expect(fontPx(card)).toBeGreaterThan(45);
+    card.unmount();
+  });
+
+  it('counts half a pixel over as too wide', async () => {
+    layOut((px) => px * 10 + 0.4);
+    const card = mount(CardLiveText, {
+      props: { face: 7, text: 'Wide', sizePx: 120, fitWidth: 500 },
+    });
+    await flushPromises();
+    expect(fontPx(card) * 10 + 0.4).toBeLessThanOrEqual(500);
+    card.unmount();
+  });
+
+  it('leaves text that fits at its size', async () => {
+    layOut((px) => px * 2);
+    const card = mount(CardLiveText, {
+      props: { face: 7, text: 'Aa', sizePx: 120, fitWidth: 500 },
+    });
+    await flushPromises();
+    expect(fontPx(card)).toBe(120);
+    card.unmount();
+  });
+});
 
 describe('CardLiveText deferred while the grid moves fast (E35.8)', () => {
   it('shows an empty frame and loads nothing until defer is off', async () => {

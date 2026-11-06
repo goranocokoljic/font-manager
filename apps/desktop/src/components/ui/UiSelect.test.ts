@@ -54,6 +54,23 @@ describe('UiSelect', () => {
     expect(menu()).toBeNull();
   });
 
+  it('tells when the open menu chooses the current option again, and only then', async () => {
+    const { w } = mountSelect();
+    const button = w.get('button');
+    await pickOption(button, 'pangram');
+    expect(w.emitted('repick')).toEqual([['pangram']]);
+    expect(w.emitted('update:modelValue')).toBeUndefined();
+    expect(menu()).toBeNull();
+
+    // Type-ahead on the closed button that lands on the current option is not a choice.
+    await button.trigger('keydown', { key: 'p' });
+    expect(w.emitted('repick')).toEqual([['pangram']]);
+
+    await pickOption(button, 'alphabet');
+    expect(w.emitted('repick')).toEqual([['pangram']]);
+    expect(w.emitted('update:modelValue')).toEqual([['alphabet']]);
+  });
+
   it('marks the chosen option and will not take a disabled one', async () => {
     const { w } = mountSelect();
     await w.get('button').trigger('click');

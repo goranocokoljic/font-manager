@@ -384,7 +384,8 @@ test.describe('the top bar', () => {
 
   test('Favorite toggles and stays for the family', async ({ page }) => {
     await setup(page);
-    await page.goto('/?mockLibrary=wall#/family/501');
+    // Past the wall's seeded favorites: the first 23 faces start as favorites.
+    await page.goto('/?mockLibrary=wall#/family/530');
     const fav = page.getByRole('button', { name: 'Favorite', exact: true });
     await expect(fav).toHaveAttribute('aria-pressed', 'false');
     await fav.click();
@@ -399,7 +400,7 @@ test.describe('the top bar', () => {
     await setup(page);
     await page.goto('/?mockLibrary=wall#/');
     const sidebar = page.getByRole('region', { name: 'Collections' });
-    await sidebar.getByRole('button', { name: 'New', exact: true }).click();
+    await sidebar.getByRole('button', { name: 'New collection', exact: true }).click();
     const input = sidebar.getByRole('textbox', { name: 'New collection name' });
     await input.fill('Picks');
     await input.press('Enter');
@@ -414,7 +415,7 @@ test.describe('the top bar', () => {
     await page.getByRole('combobox', { name: 'Add to collection' }).click();
     await expect(page.getByRole('option', { name: 'Picks' })).toBeVisible();
     // The tint alone is too faint to show which option Enter takes.
-    await expect(page.getByRole('option', { name: 'Picks' })).toHaveCSS('box-shadow', /inset$/);
+    await expect(page.getByRole('option', { selected: true })).toHaveCSS('box-shadow', /inset$/);
     await page.keyboard.press('ArrowRight');
     await onFamilyPage(page);
     const url = page.url();

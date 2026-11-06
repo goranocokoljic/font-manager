@@ -9,7 +9,7 @@ const open = (page: Page, name: string) =>
   row(page, name).getByRole('button', { name, exact: true }).click();
 
 async function make(page: Page, name: string) {
-  await sidebar(page).getByRole('button', { name: 'New', exact: true }).click();
+  await sidebar(page).getByRole('button', { name: 'New collection', exact: true }).click();
   const input = sidebar(page).getByRole('textbox', { name: 'New collection name' });
   await input.fill(name);
   await input.press('Enter');
@@ -130,7 +130,10 @@ test('fonts dragged from the list land in a collection, and the sidebar counts t
   await open(page, 'Mono');
   await expect(page.getByRole('heading', { name: 'Mono' })).toBeVisible();
   await expect(list.getByRole('treeitem')).toHaveCount(1);
-  await sidebar(page).getByRole('button', { name: 'All fonts' }).click();
+  await page
+    .getByRole('navigation', { name: 'Library' })
+    .getByRole('button', { name: 'All fonts' })
+    .click();
   await expect(page.getByRole('heading', { name: 'All fonts' })).toBeVisible();
 });
 

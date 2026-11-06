@@ -6,6 +6,8 @@ import {
   CUSTOM_TEXT_MAX,
   DEFAULT_PREVIEW,
   PREVIEW_STORAGE_KEY,
+  RECENT_LANGUAGES_KEY,
+  RECENT_LANGUAGES_MAX,
   normalizePreview,
   previewRowHeight,
   usePreviewStore,
@@ -26,6 +28,71 @@ afterEach(() => {
 
 /** The mock API's pangram for `code`. */
 const pangramOf = (code: string) => mockLanguages.find((l) => l.code === code)!.pangram!;
+
+describe('preview presets (E41.2)', () => {
+  it('each chip sets its layout and text; Word keeps the typed text', () => {
+    const store = freshStore();
+    store.update('all', { customText: 'Hamburg' });
+    store.applyPreset('all', 'alphabet');
+    expect(store.settingsFor('all')).toMatchObject({ preset: 'alphabet', sample: 'alphabet' });
+    store.applyPreset('all', 'word');
+    expect(store.settingsFor('all')).toMatchObject({
+      preset: 'word',
+      sample: 'custom',
+      customText: 'Hamburg',
+    });
+    expect(store.settingsFor('collection-3').preset).toBe('word');
+  });
+
+  it('keeps the preset per view through a reload; an unknown one falls back', async () => {
+    const store = freshStore();
+    store.applyPreset('all', 'paragraph');
+    store.update('other', { sizePx: 60 });
+    await nextTick();
+    const again = freshStore();
+    expect(again.settingsFor('all').preset).toBe('paragraph');
+    expect(again.settingsFor('other').preset).toBe('word');
+    expect(normalizePreview({ preset: 'poster' }).preset).toBe('word');
+    // A view saved before E41.2 has no preset.
+    expect(normalizePreview({ sample: 'lorem' }).preset).toBe('word');
+  });
+
+  it('a chosen language goes first, once, and is remembered; the list has a limit', async () => {
+    setClient(createMockClient());
+    const store = freshStore();
+    await store.loadPangrams();
+    store.chooseLanguage('all', 'de');
+    store.chooseLanguage('all', 'sr-Cyrl');
+    store.chooseLanguage('all', 'de');
+    expect(store.settingsFor('all')).toMatchObject({
+      language: 'de',
+      sample: 'pangram',
+      preset: 'pangram',
+    });
+    expect(store.languagePicks.slice(0, 2).map((l) => l.code)).toEqual(['de', 'sr-Cyrl']);
+    expect(store.languagePicks).toHaveLength(mockLanguages.length);
+    expect(new Set(store.languagePicks.map((l) => l.code)).size).toBe(mockLanguages.length);
+
+    const again = freshStore();
+    await again.loadPangrams();
+    expect(again.languagePicks[0]!.code).toBe('de');
+
+    for (const code of mockLanguages.map((l) => l.code)) again.chooseLanguage('all', code);
+    expect(again.recentLanguages).toHaveLength(RECENT_LANGUAGES_MAX);
+  });
+
+  it('ignores a damaged recent list and a recent language the API no longer has', async () => {
+    setClient(createMockClient());
+    localStorage.setItem(RECENT_LANGUAGES_KEY, '{oops');
+    expect(freshStore().recentLanguages).toEqual([]);
+    localStorage.setItem(RECENT_LANGUAGES_KEY, JSON.stringify(['xx', 42, 'de']));
+    const store = freshStore();
+    await store.loadPangrams();
+    expect(store.recentLanguages).toEqual(['xx', 'de']);
+    expect(store.languagePicks[0]!.code).toBe('de');
+    expect(store.languagePicks.map((l) => l.code)).not.toContain('xx');
+  });
+});
 
 describe('preview store', () => {
   it('starts every view at the defaults', () => {

@@ -1,0 +1,120 @@
+/* The sidebar is one quiet paper panel (E41.3): every group shares these rows, so an icon,
+   a label and a count line up from the top of the panel to its foot. --fm-side-row is
+   30 px, 24 px in the compact density. */
+.side-section {
+  flex: none;
+  margin-block-start: var(--fm-space-3);
+  padding-inline: var(--fm-space-2);
+}
+.side-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.side-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-2);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--fm-side-row);
+  padding: 0 var(--fm-space-2);
+  border: 0;
+  border-radius: var(--fm-radius-sm);
+  background-color: transparent;
+  color: var(--fm-fg);
+  font: inherit;
+  text-align: start;
+  text-decoration: none;
+}
+.side-row:hover,
+.side-row:focus-within {
+  background-color: var(--fm-hover);
+}
+.side-row.current,
+.side-row[aria-current='true'],
+.side-row[aria-pressed='true'] {
+  background-color: var(--fm-side-active);
+  font-weight: 500;
+}
+/* The row carries the tint; a button must not add the baseline's second one. */
+button.side-row:hover,
+button.side-row:active,
+button.side-label:hover,
+button.side-label:active {
+  background-image: none;
+}
+/* The first column, 16 px: a Lucide icon, a colour dot or nothing, so labels line up. */
+.side-lead {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--fm-icon-size);
+  height: var(--fm-icon-size);
+  color: var(--fm-muted);
+}
+.side-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+button.side-label {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+/* The focus ring of a label goes round its row, on the plain panel: the accent is under 3:1
+   on the row's own tint. */
+.side-row:has(> button.side-label:focus-visible) {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: 2px;
+}
+button.side-label:focus-visible {
+  outline: none;
+}
+/* A label button takes the whole row under the pointer; the row's own actions sit above it. */
+button.side-label::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.side-count {
+  flex: none;
+  margin-inline-start: auto;
+  color: var(--fm-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* A row's actions come over its end under the pointer and under keyboard focus. Opacity,
+   not visibility: they stay in the tab order, so the keyboard reaches them. */
+.side-actions {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: var(--fm-space-1);
+  z-index: var(--fm-z-raised);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background-color: var(--fm-surface);
+  opacity: 0;
+  transition: opacity var(--fm-motion-fast) var(--fm-ease);
+}
+.side-row:hover .side-actions,
+.side-row:focus-within .side-actions,
+.side-actions:has([aria-expanded='true']) {
+  opacity: 1;
+}
+/* An empty section is this one line. */
+.side-quiet {
+  margin: 0;
+  padding: var(--fm-space-1) var(--fm-space-2);
+  color: var(--fm-muted);
+  font-size: var(--fm-text-sm);
+}

@@ -33,6 +33,8 @@ export const ICONS = {
   arrowRight: '<path d="M3 8h10M9 4l4 4-4 4"/>',
   folderPlus:
     '<path d="M2.5 4.5v7a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H8L6.8 3.5H3.5a1 1 0 0 0-1 1zM8 7.5v3M6.5 9h3"/>',
+  clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 4.8V8l2.2 1.3"/>',
+  zap: '<path d="M8.8 2.5L3.5 9h4l-.3 4.5L12.5 7h-4z"/>',
   more: '<path d="M3.5 8h.01M8 8h.01M12.5 8h.01" stroke-width="2"/>',
   power: '<path d="M8 2.5v5M4.7 4.6a5 5 0 1 0 6.6 0"/>',
   // A lens with "≈" inside: "find what looks like this", not zoom (a "+" read as zoom in).

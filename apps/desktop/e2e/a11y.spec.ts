@@ -157,7 +157,7 @@ test('every interactive element of the Conflicts view and the clash question has
   await open(page, '/?face=6');
   await page
     .getByRole('tabpanel', { name: 'Info' })
-    .getByRole('button', { name: 'Activate' })
+    .getByRole('button', { name: 'Activate', exact: true })
     .click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   expect(await unnamedControls(page)).toEqual([]);
@@ -191,7 +191,8 @@ test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) =
       const el = document.activeElement;
       if (!el || el === document.body) return null;
       // The ring is an outline of at least 2 px, or a box-shadow ring (the pane divider).
-      const s = getComputedStyle(el);
+      // A sidebar row's label has its ring round the row, off the row's tint (E41.3).
+      const s = getComputedStyle(el.matches('button.side-label') ? el.parentElement! : el);
       const width = parseFloat(s.outlineWidth);
       const visible = (s.outlineStyle !== 'none' && width >= 2) || s.boxShadow !== 'none';
       return { id: el.outerHTML.slice(0, 120), visible };
@@ -217,7 +218,7 @@ test('the list announces family, style and activation state', async ({ page }) =
   await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, not active$/);
   await style.click();
   await page.keyboard.press('Enter'); // open it in the inspector
-  await page.getByRole('button', { name: 'Activate' }).click();
+  await page.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, active for this session$/);
   await expect(family).toHaveAccessibleName('Sample 1, 2 styles, partly active');
 });

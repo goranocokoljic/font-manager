@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { selectOption } from './select';
 
 // E19.3: a right-to-left UI language mirrors the chrome; the preview text keeps
 // its own direction. No RTL catalog ships yet, so the check runs the CLDR bidi
@@ -41,8 +40,7 @@ const columns = (page: Page) => ({
 /** The Hebrew face's sample after typing `text` as the list's custom sample text. */
 async function sample(page: Page, text: string) {
   const controls = page.getByRole('group', { name: 'Preview settings' });
-  await selectOption(controls.getByLabel('Sample'), 'custom');
-  await controls.getByLabel('Custom text').fill(text);
+  await controls.getByLabel('Type to preview').fill(text);
   const shown = page.locator('[data-face="9"] .sample');
   await expect(shown).toHaveText(text);
   return shown;
@@ -186,7 +184,8 @@ test.describe('in right-to-left chrome', () => {
     const first = await edges(cards.nth(0));
     const second = await edges(cards.nth(1));
     expect(second.right).toBeLessThanOrEqual(first.left + 1);
-    expect(first.right).toBeGreaterThan((await edges(grid)).right - 24);
+    // The first card sits at the right edge, past the wall's 26 px inset (and a scrollbar).
+    expect(first.right).toBeGreaterThan((await edges(grid)).right - 48);
 
     await cards.nth(0).click();
     await expect(cards.nth(0)).toHaveAttribute('aria-selected', 'true');

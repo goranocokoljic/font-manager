@@ -107,6 +107,23 @@ describe.each([
   });
 });
 
+// E41.3: the sidebar's paper, and the open row's 7 % tint over it.
+describe('the sidebar', () => {
+  it('is on the paper tint in light and on surface-2 in dark', () => {
+    expect(light.surface).toBe('#f6f5f2');
+    expect(dark.surface).toBe(dark['surface-2']);
+  });
+
+  it.each([
+    ['light', light, '#000000', /--fm-side-active:\s*rgb\(0 0 0 \/ 7%\)/],
+    ['dark', dark, '#ffffff', /--fm-side-active:\s*rgb\(255 255 255 \/ 7%\)/],
+  ])('keeps %s text at least 4.5:1 on the open row', (_, p, ink, token) => {
+    expect(theme).toMatch(token);
+    for (const k of ['fg', 'muted'])
+      expect(contrast(rgb(p[k]!), tint(ink, 0.07, p.surface!)), k).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('text the browser colors by default', () => {
   it('placeholders use the muted color at full opacity', () => {
     // `muted` is in the checked text colors above; the browser default is not.
@@ -345,8 +362,7 @@ describe('the accent in the style sheets', () => {
     ['primary button', 'views/ProblemsView.vue', '.button.primary'],
     ['activate button', 'components/InspectorInfo.vue', '.activate'],
     ['count badge', 'components/ui/UiBadge.vue', '.tone-accent'],
-    ['pressed chip', 'components/FilterChips.vue', ".chip[aria-pressed='true'], .chip.active"],
-    ['filters chip', 'components/FilterChips.vue', ".opener.on, .opener[aria-expanded='true']"],
+    ['pressed chip', 'components/FilterChips.vue', ".chip[aria-pressed='true']"],
     ['toast action', 'components/ToastMessage.vue', '.action'],
     ['active segment', 'components/ui/UiSegmentedControl.vue', ".seg[aria-pressed='true']"],
     ['active Compare mode', 'components/CompareSheet.vue', '.mode:has(input:checked)'],

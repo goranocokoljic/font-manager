@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { selectOption } from './select';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -33,8 +32,7 @@ test('a font that lacks characters of the sample previews its own letters with a
   await expect(row(7).locator('.sample')).toHaveText(/The quick brown fox/);
   await expect(page.getByTestId('fallback-hint')).toHaveCount(0);
 
-  await selectOption(controls.getByLabel('Sample'), 'custom');
-  await controls.getByLabel('Custom text').fill('Љубав');
+  await controls.getByLabel('Type to preview').fill('Љубав');
   await expect(row(1).locator('.sample')).toHaveText('Љубав');
   await expect(row(6).locator('.sample')).toHaveText('Љубав');
   await expect(hint(1)).toHaveCount(0);
@@ -48,7 +46,7 @@ test('a font that lacks characters of the sample previews its own letters with a
   );
 
   // Covered text again: the sample comes back and the hint goes.
-  await controls.getByLabel('Custom text').fill('Größe');
+  await controls.getByLabel('Type to preview').fill('Größe');
   await expect(row(7).locator('.sample')).toHaveText('Größe');
   await expect(page.getByTestId('fallback-hint')).toHaveCount(0);
 });

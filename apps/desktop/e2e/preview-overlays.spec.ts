@@ -145,6 +145,7 @@ test('the outline toggle draws outlines in every view mode and turns off again',
   const strip = await openTableStrip(page);
   expect(await strip.evaluate(fill)).toBe('rgba(0, 0, 0, 0)');
 
+  await showPreviewOptions(page);
   await controls.getByRole('checkbox', { name: 'Outline' }).uncheck();
   await expect.poll(() => strip.evaluate(fill)).toBe(solid);
   await modeButton(page, 'Grid').click();
@@ -170,10 +171,20 @@ test('the tracking slider applies in every view mode and in the preview strip', 
   );
 
   await modeButton(page, 'Grid').click();
-  // Cards show live text at the 36 px thumbnail size while tracking is on.
-  await expect(
-    page.getByRole('listbox', { name: 'Font grid' }).getByTestId('card-live-text').first(),
-  ).toHaveCSS('letter-spacing', '18px');
+  // Cards show live text while tracking is on, at 0.5 em of whatever size fits the card.
+  const live = page
+    .getByRole('listbox', { name: 'Font grid' })
+    .getByTestId('card-live-text')
+    .first();
+  await expect(live).toBeVisible();
+  await expect
+    .poll(() =>
+      live.evaluate((el) => {
+        const s = getComputedStyle(el);
+        return parseFloat(s.letterSpacing) / parseFloat(s.fontSize);
+      }),
+    )
+    .toBeCloseTo(0.5, 3);
 
   await modeButton(page, 'Waterfall').click();
   const line = page.getByTestId('waterfall-line').first();
@@ -184,6 +195,7 @@ test('the tracking slider applies in every view mode and in the preview strip', 
   await expect(strip).toHaveCSS('letter-spacing', '14px');
 
   // Keyboard: an arrow on the slider steps it by 0.01 em.
+  await showPreviewOptions(page);
   await slider.focus();
   await page.keyboard.press('ArrowLeft');
   await expect(controls.getByLabel('Tracking in em')).toHaveValue('0.49');

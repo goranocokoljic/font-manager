@@ -153,13 +153,13 @@ impl Lib {
     }
 
     /// Scans and returns the events up to the scan's last one: its
-    /// `LibraryChanged` when `changes`, else its `ScanFinished`.
+    /// `LibraryChanged` when `changes`, else its `ScanFinished`. A
+    /// `LibraryChanged` before the `ScanFinished` is not this scan's: it is
+    /// the end of an earlier scan, sent before this scan has written.
     fn scan(&self, source: Option<SourceId>, changes: bool) -> Vec<Event> {
         let rx = self.api.subscribe();
         let job = self.api.scan(ScanRequest { source }).expect("scan");
         let mut events = Vec::new();
-        // `LibraryChanged` names no job, and the one of an earlier scan can
-        // still come: only one after this job's `ScanFinished` is this job's.
         let mut finished = false;
         let deadline = Instant::now() + WAIT;
         loop {
@@ -3461,6 +3461,7 @@ fn the_license_inventory_of_a_collection_lists_only_its_families() {
     let mut variable: Vec<String> = lib
         .api
         .search(SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 variable: Some(true),
@@ -4120,6 +4121,7 @@ fn page_families(page: &str) -> Vec<String> {
 fn searched_families(lib: &Lib, collection: CollectionId) -> Vec<String> {
     lib.api
         .search(SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 collection: Some(collection),

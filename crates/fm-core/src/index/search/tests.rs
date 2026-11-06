@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use fm_api::common::{Classification, Embedding, Health, Page};
-use fm_api::library::SourceKind;
+use fm_api::library::{FamilyOrder, FamilySortKey, SourceKind};
 use fm_api::search::{FilterCount, FilterCounts, Filters, Supports, WeightRange, WidthRange};
 use fm_api::{ErrorCode, SourceId};
 use rusqlite::Connection;
@@ -321,6 +321,52 @@ fn an_empty_query_lists_every_family_by_name() {
             "Source Sans"
         ]
     );
+}
+
+#[test]
+fn an_order_replaces_the_ranking_before_the_page_window() {
+    let (index, _) = indexed(&library());
+    let ordered = |query: &str, page: Page| {
+        index
+            .search(&SearchRequest {
+                query: query.into(),
+                order: Some(FamilyOrder {
+                    by: FamilySortKey::Name,
+                    descending: true,
+                }),
+                page,
+                ..SearchRequest::default()
+            })
+            .expect("search")
+    };
+    let all = Page {
+        offset: 0,
+        limit: 100,
+    };
+    assert_eq!(
+        names(&ordered("", all)),
+        [
+            "Source Sans",
+            "Roboto Condensed",
+            "Roboto",
+            "Inter",
+            "Helvetica Neue",
+            "Black Ops One"
+        ]
+    );
+    // A text query ranks "Roboto" first; the order wins over that.
+    assert_eq!(names(&search(&index, "roboto"))[0], "Roboto");
+    assert_eq!(names(&ordered("roboto", all))[0], "Roboto Condensed");
+    // The window is over the ordered families, and the total stays the whole result.
+    let window = ordered(
+        "",
+        Page {
+            offset: 1,
+            limit: 1,
+        },
+    );
+    assert_eq!(names(&window), ["Roboto Condensed"]);
+    assert_eq!(window.total, 6);
 }
 
 #[test]

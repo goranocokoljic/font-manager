@@ -1,12 +1,19 @@
 <script setup lang="ts">
-// The preview controls above a font list: sample text, size, auto size, line
-// height, tracking, the metrics lines and outline toggles, alignment, colors and the
-// preview surface. Every change goes to
-// the preview store for `view`, which every row of that list reads.
-import { computed, ref, useId } from 'vue';
+// The row above a font list (E41.2): the preview field with its hint, the preset chips,
+// the Language picker and one button for the Preview options popover, which holds the rest:
+// sample, size, auto size, line height, tracking, the metrics lines and outline toggles,
+// alignment, colors and the preview surface. Every change goes to the preview store for
+// `view`, which every row of that list reads.
+import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { t } from '../i18n';
+import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
+import { PARAGRAPH_PX, type WallPreset } from '../list/grid';
+import { useActions } from '../stores/commands';
 import UiButton from './ui/UiButton.vue';
-import { SAMPLE_KINDS } from '../preview/sampleText';
+import UiIcon from './ui/UiIcon.vue';
+import UiIconButton from './ui/UiIconButton.vue';
+import { SAMPLE_KINDS, sampleTextFor } from '../preview/sampleText';
+import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import UiNumberField from './ui/UiNumberField.vue';
 import UiSelect from './ui/UiSelect.vue';
 import {
@@ -14,34 +21,134 @@ import {
   SIZE,
   TRACKING,
   usePreviewStore,
+  WALL_PRESET_IDS,
   type Alignment,
   type AutoSize,
   type PreviewSettings,
   type Surface,
 } from '../stores/preview';
 
-const props = defineProps<{ view: string }>();
+const props = defineProps<{
+  view: string;
+  /** The size slider's range, when the view mode has its own (the wall's 24–120). */
+  sizeRange?: { readonly min: number; readonly max: number; readonly step: number };
+  /** The fonts the field's text renders in, for its hint. */
+  fontCount?: number;
+  /** Draws the size slider in the row, for a view with no top bar to hold it. */
+  inlineSize?: boolean;
+}>();
+const emit = defineEmits<{
+  /** Escape in the field: the focus goes back to the font list. */
+  leave: [];
+}>();
 
 const store = usePreviewStore();
 void store.loadPangrams();
 // A select is labelled by `for`: wrapped in its label, its option texts would join the name.
 const uid = useId();
 const s = computed(() => store.settingsFor(props.view));
-/** The second row (line height, tracking, colours…) is one click away, closed by default. */
+/** The popover (line height, tracking, colours…) is one click away, closed by default. */
 const optionsOpen = ref(false);
 const optionsId = `${uid}-options`;
+const toggle = ref<HTMLElement | null>(null);
+const panel = ref<HTMLElement | null>(null);
 
-/** Typing in the hero field makes the sample custom text; nothing else to switch first. */
+function closeOptions(): void {
+  optionsOpen.value = false;
+  toggle.value?.querySelector('button')?.focus();
+}
+
+/** A press outside closes the popover; a Select's menu in it lives in <body>. */
+function onPressOutside(e: PointerEvent): void {
+  const target = e.target;
+  if (!(target instanceof Element)) return;
+  if (panel.value?.contains(target) || toggle.value?.contains(target)) return;
+  if (target.closest('[data-ui-popover]')) return;
+  optionsOpen.value = false;
+}
+watch(optionsOpen, (open) => {
+  if (open) document.addEventListener('pointerdown', onPressOutside, true);
+  else document.removeEventListener('pointerdown', onPressOutside, true);
+});
+onBeforeUnmount(() => document.removeEventListener('pointerdown', onPressOutside, true));
+
+const field = ref<HTMLInputElement | null>(null);
+const fieldChord = chordOf(ACTIONS.previewField)!;
+
+useActions([
+  {
+    id: ACTIONS.previewField,
+    // Getters: the palette shows the title in the language chosen now.
+    get title() {
+      return t('preview.focusField');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    // A modal dialog keeps the focus; the field behind it is out of reach.
+    enabled: () => !document.querySelector('[role="dialog"][aria-modal="true"]'),
+    run: () => {
+      field.value?.focus();
+      field.value?.select();
+    },
+  },
+]);
+
+/** The field's text: what the rows show, except that it stays empty for the font names. */
+const fieldText = computed(() =>
+  s.value.sample === 'fontName' ? '' : sampleTextFor(s.value, '', store.pangramText),
+);
+
+/** Typing makes the sample custom text and keeps the preset's layout. */
 function typeSample(e: Event): void {
   set({ sample: 'custom', customText: (e.target as HTMLInputElement).value });
 }
+
+/** A stock text goes at the first key; the user's own text stays to be edited. */
+function selectStock(): void {
+  if (s.value.sample !== 'custom') field.value?.select();
+}
+
+function leaveField(): void {
+  field.value?.blur();
+  emit('leave');
+}
+
+const chips: readonly WallPreset[] = WALL_PRESET_IDS;
+
+/** The note at the field's end: what the text on the wall is. */
+const hint = computed(() => {
+  switch (s.value.sample) {
+    case 'pangram':
+      return t('preview.hints.pangram');
+    case 'alphabet':
+      return t('preview.hints.alphabet');
+    case 'numerals':
+      return t('preview.hints.numerals');
+    case 'paragraph':
+      return t('preview.hints.paragraph', { size: PARAGRAPH_PX });
+    default:
+      return props.fontCount === undefined
+        ? ''
+        : t('preview.hints.custom', { count: props.fontCount });
+  }
+});
 
 function set(patch: Partial<PreviewSettings>): void {
   store.update(props.view, patch);
 }
 
 type NumberKey = 'sizePx' | 'lineHeight' | 'trackingEm';
-const BOUNDS = { sizePx: SIZE, lineHeight: LINE_HEIGHT, trackingEm: TRACKING } as const;
+const size = computed(() => props.sizeRange ?? SIZE);
+const BOUNDS = computed(() => ({
+  sizePx: size.value,
+  lineHeight: LINE_HEIGHT,
+  trackingEm: TRACKING,
+}));
+/** The size the slider shows: a saved size outside the view mode's range shows at its end. */
+const shownSize = computed(() =>
+  Math.min(size.value.max, Math.max(size.value.min, s.value.sizePx)),
+);
 /** The number fields' setting keys, so the template holds no key literals. */
 const KEY = { size: 'sizePx', lineHeight: 'lineHeight', tracking: 'trackingEm' } as const;
 
@@ -54,8 +161,9 @@ function slid(key: NumberKey, e: Event): void {
 }
 function typed(key: NumberKey, value: number | '', commit: boolean): void {
   if (value === '') return;
-  const b = BOUNDS[key];
-  if (commit || (value >= b.min && value <= b.max)) set({ [key]: value });
+  const b = BOUNDS.value[key];
+  if (commit) set({ [key]: Math.min(b.max, Math.max(b.min, value)) });
+  else if (value >= b.min && value <= b.max) set({ [key]: value });
 }
 
 // The labels are read where they are shown (`preview.aligns.*`) or when the options are
@@ -64,7 +172,12 @@ const alignments: Alignment[] = ['start', 'center', 'end'];
 const autoSizes: AutoSize[] = ['off', 'xHeight', 'capHeight'];
 const surfaces: Surface[] = ['auto', 'light', 'dark'];
 const languageOptions = computed(() =>
-  store.pangramLanguages.map((lang) => ({ value: lang.code, label: lang.name })),
+  store.languagePicks.map((lang) => ({
+    value: lang.code,
+    label: lang.name,
+    disabled: !lang.pangram,
+    title: lang.pangram ? undefined : t('preview.noPangram'),
+  })),
 );
 const autoSizeOptions = computed(() =>
   autoSizes.map((value) => ({ value, label: t(`preview.autoSizes.${value}`) })),
@@ -93,8 +206,72 @@ function colorFrom(e: Event): string {
 <template>
   <div class="controls" role="group" :aria-label="t('preview.settings')">
     <div class="main">
+      <label class="hero">
+        <span class="sr-only">{{ t('preview.customText') }}</span>
+        <input
+          ref="field"
+          type="text"
+          dir="auto"
+          autocomplete="off"
+          spellcheck="false"
+          :aria-keyshortcuts="ariaShortcut(fieldChord)"
+          :value="fieldText"
+          :placeholder="t('preview.heroPlaceholder')"
+          @focus="selectStock"
+          @input="typeSample"
+          @keydown.esc.prevent="leaveField"
+        />
+        <span v-if="hint" class="hint" data-testid="preview-hint">{{ hint }}</span>
+      </label>
+      <div class="chips" role="group" :aria-label="t('preview.preset')">
+        <button
+          v-for="p in chips"
+          :key="p"
+          type="button"
+          class="chip"
+          :aria-pressed="s.preset === p"
+          @click="store.applyPreset(view, p)"
+        >
+          {{ t(`preview.presets.${p}`) }}
+        </button>
+      </div>
+      <span class="divider" aria-hidden="true" />
+      <div class="language">
+        <UiIcon name="globe" />
+        <label :for="`${uid}-language`" class="sr-only">{{ t('preview.language') }}</label>
+        <UiSelect
+          :id="`${uid}-language`"
+          :model-value="s.language"
+          :options="languageOptions"
+          :fit="false"
+          @update:model-value="store.chooseLanguage(view, $event)"
+          @repick="store.chooseLanguage(view, $event)"
+        />
+      </div>
+      <PreviewSizeSlider v-if="inlineSize" :view="view" :size-range="sizeRange" />
+      <span ref="toggle" class="options-toggle">
+        <UiIconButton
+          icon="sliders"
+          :label="t('preview.options')"
+          :title="t('preview.options')"
+          :aria-expanded="optionsOpen"
+          :aria-controls="optionsId"
+          @click="optionsOpen = !optionsOpen"
+          @keydown.esc="optionsOpen && closeOptions()"
+        />
+      </span>
+    </div>
+    <div
+      v-show="optionsOpen"
+      :id="optionsId"
+      ref="panel"
+      class="more"
+      role="group"
+      :aria-label="t('preview.options')"
+      @keydown.esc="closeOptions"
+    >
       <div class="field">
-        <label :for="`${uid}-sample`" class="sr-only">{{ t('preview.sample') }}</label>
+        <label :for="`${uid}-sample`">{{ t('preview.sample') }}</label>
         <UiSelect
           :id="`${uid}-sample`"
           :model-value="s.sample"
@@ -102,57 +279,19 @@ function colorFrom(e: Event): string {
           @update:model-value="set({ sample: $event })"
         />
       </div>
-      <label class="hero">
-        <span class="sr-only">{{ t('preview.customText') }}</span>
-        <input
-          type="text"
-          dir="auto"
-          :value="s.sample === 'custom' ? s.customText : ''"
-          :placeholder="t('preview.heroPlaceholder')"
-          @input="typeSample"
-        />
-      </label>
-      <div v-if="s.sample === 'pangram'" class="field">
-        <label :for="`${uid}-language`" class="sr-only">{{ t('preview.language') }}</label>
-        <UiSelect
-          :id="`${uid}-language`"
-          :model-value="s.language"
-          :options="languageOptions"
-          @update:model-value="set({ language: $event })"
-        />
-      </div>
-      <div class="field" role="group" aria-labelledby="fm-preview-size">
-        <span id="fm-preview-size" class="sr-only">{{ t('preview.size') }}</span>
-        <input
-          type="range"
-          :aria-label="t('preview.sizeSlider')"
-          :min="SIZE.min"
-          :max="SIZE.max"
-          :step="SIZE.step"
-          :value="s.sizePx"
-          @input="slid(KEY.size, $event)"
-        />
+      <div class="field">
+        <span>{{ t('preview.size') }}</span>
         <UiNumberField
           class="number"
           :aria-label="t('preview.sizeInPixels')"
-          :min="SIZE.min"
-          :max="SIZE.max"
-          :step="SIZE.step"
-          :model-value="s.sizePx"
+          :min="size.min"
+          :max="size.max"
+          :step="size.step"
+          :model-value="shownSize"
           @update:model-value="typed(KEY.size, $event, false)"
           @commit="typed(KEY.size, $event, true)"
         />
       </div>
-      <UiButton
-        class="options-toggle"
-        :aria-expanded="optionsOpen"
-        :aria-controls="optionsId"
-        @click="optionsOpen = !optionsOpen"
-      >
-        {{ t('preview.options') }}
-      </UiButton>
-    </div>
-    <div v-show="optionsOpen" :id="optionsId" class="more">
       <div class="field">
         <label :for="`${uid}-auto-size`" :title="t('preview.autoSizeHint')">{{
           t('preview.autoSize')
@@ -263,41 +402,123 @@ function colorFrom(e: Event): string {
 
 <style scoped>
 .controls {
+  position: relative;
   display: flex;
   flex-direction: column;
-  border-bottom: 1px solid var(--fm-border);
   font-size: var(--fm-text-sm);
 }
-.main,
+.main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--fm-space-2) 12px;
+  padding: 14px 26px 6px;
+  container-type: inline-size;
+}
+/* The field's hairline is its only edge: --fm-control-border keeps it at 3:1. */
+.hero {
+  display: flex;
+  flex: 1 1 280px;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--fm-control-border);
+  border-radius: var(--fm-radius-md);
+  background-color: var(--fm-bg);
+}
+/* Too narrow for one row: the field takes its own, so the divider never ends a row alone. */
+@container (max-width: 900px) {
+  .hero {
+    flex-basis: 100%;
+  }
+}
+.hero:focus-within {
+  outline: 2px solid var(--fm-accent);
+  outline-offset: -1px;
+}
+.hero input {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--fm-text-lg);
+}
+.hero input:focus {
+  outline: none;
+}
+.hint {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fm-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.chips {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.chip {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--fm-border-strong);
+  border-radius: 999px;
+  background-color: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.chip:hover {
+  background-color: var(--fm-surface);
+}
+.chip[aria-pressed='true'] {
+  border-color: var(--fm-fg);
+  background-color: var(--fm-fg);
+  color: var(--fm-bg);
+}
+.divider {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background-color: var(--fm-border);
+}
+.language {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--fm-space-1);
+  color: var(--fm-muted);
+}
+.options-toggle {
+  display: inline-flex;
+  flex: none;
+}
+/* In the group's DOM, not a <body> layer: unlike UiPopover it takes the focus and tab order. */
 .more {
+  position: absolute;
+  top: 100%;
+  z-index: var(--fm-z-popover);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--fm-gap) 16px;
-  padding: 8px 16px;
-}
-.main {
-  flex-wrap: nowrap;
-  gap: 12px;
-}
-.more {
-  border-top: 1px solid var(--fm-border);
-  background-color: var(--fm-surface);
-}
-.hero {
-  flex: 1 1 200px;
-  min-width: 0;
-}
-.hero input {
-  width: 100%;
-  padding: 6px 12px;
-  border: 1px solid var(--fm-control-border);
+  box-sizing: border-box;
+  width: min(400px, calc(100% - 52px));
+  max-height: 60vh;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--fm-border-strong);
   border-radius: var(--fm-radius-md);
-  background-color: var(--fm-surface);
-  font-size: var(--fm-text-lg);
-}
-.hero input:focus-visible {
-  outline-offset: 0;
+  background-color: var(--fm-surface-2);
+  box-shadow: var(--fm-shadow-2);
+  inset-inline-end: 26px;
 }
 .field {
   display: flex;
@@ -307,21 +528,6 @@ function colorFrom(e: Event): string {
 .field > span,
 .field > label {
   color: var(--fm-muted);
-}
-.grow {
-  flex: 1 1 160px;
-}
-.grow input {
-  flex: 1;
-  min-width: 0;
-}
-input[type='text'] {
-  padding: 2px 4px;
-  border: 1px solid var(--fm-control-border);
-  border-radius: var(--fm-radius-sm);
-  background-color: var(--fm-bg);
-  color: inherit;
-  font: inherit;
 }
 .field .number {
   width: 7em;
@@ -341,7 +547,8 @@ input[type='color'] {
   border-radius: var(--fm-radius-sm);
   background-color: transparent;
 }
-:focus-visible {
+.chip:focus-visible,
+.more :focus-visible {
   outline: 2px solid var(--fm-accent);
   outline-offset: 1px;
 }

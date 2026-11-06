@@ -33,7 +33,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `Space` | Quick look: the selected font in a large preview; `Space` or `Escape` closes it |
 | `C` | Pin the selected font to Compare (up to 4 fonts) |
 | `B` | Add the selected fonts to the Quick Collection, or remove them if they are in it |
-| `T` | Open the tagging panel for the selected fonts |
+| `T` | Open the tagging panel for the selected fonts; with no font selected, go to the preview field (`Esc` returns to the list) |
 | `S` | Find the fonts that look like the selected font |
 | `O` | Open the family page of the selected font (a double-click on its row or card does the same) |
 

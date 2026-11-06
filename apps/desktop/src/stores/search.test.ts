@@ -41,6 +41,44 @@ describe('search store', () => {
     expect(search.counts.formats?.length).toBeGreaterThan(0);
   });
 
+  it('asks for the library order when it searches, and not for the counts alone', async () => {
+    const search = await setup();
+    const library = useLibraryStore();
+    await library.setOrder({ by: 'name', descending: true });
+    await flushPromises();
+    // No search: the one family is for the counts, an order costs for nothing.
+    expect(requests.at(-1)?.order).toBeUndefined();
+    search.setFilters({ slant: 'italic' });
+    await flushPromises();
+    expect(requests.at(-1)?.order).toEqual({ by: 'name', descending: true });
+    expect(search.hits!.map((h) => h.family.name)).toEqual(['Sample 2', 'Sample 1']);
+    // The order changes while filtered: the results follow it.
+    await library.setOrder({ by: 'name', descending: false });
+    await flushPromises();
+    expect(search.hits!.map((h) => h.family.name)).toEqual(['Sample 1', 'Sample 2']);
+  });
+
+  it('asks for name order under a language filter with nothing typed, where the line says so', async () => {
+    const search = await setup();
+    const languages = { supports: { kind: 'languages' as const, codes: ['pl'] } };
+    search.setFilters(languages);
+    await flushPromises();
+    expect(requests.at(-1)?.order).toEqual({ by: 'name', descending: false });
+    // Another filter is in name order already, and a text search is ranked: no order.
+    search.setFilters({ slant: 'italic' });
+    await flushPromises();
+    expect(requests.at(-1)?.order).toBeUndefined();
+    search.setFilters(languages);
+    search.query = 'sample';
+    await search.run();
+    expect(requests.at(-1)?.order).toBeUndefined();
+    // A chosen order wins over it.
+    search.query = '';
+    await useLibraryStore().setOrder({ by: 'styleCount', descending: true });
+    await flushPromises();
+    expect(requests.at(-1)?.order).toEqual({ by: 'styleCount', descending: true });
+  });
+
   it(`waits ${SEARCH_DEBOUNCE_MS} ms after the last key, then searches once`, async () => {
     const search = await setup();
     vi.useFakeTimers();

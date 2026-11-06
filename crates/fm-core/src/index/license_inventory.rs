@@ -34,6 +34,7 @@ impl Index {
         collection: Option<CollectionId>,
     ) -> FmResult<Vec<InventoryRow>> {
         let found = self.search(&SearchRequest {
+            order: None,
             query: String::new(),
             filters: Filters {
                 collection,

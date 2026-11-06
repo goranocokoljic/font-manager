@@ -163,7 +163,7 @@ that family shows in **Problems** any more, you can delete the copy.
 
 ### Resolve a conflict
 
-1. Select **Problems** in the sidebar, then the **Sidecar conflicts** group.
+1. Select the problem count in the bottom row of the sidebar, then **Sidecar conflicts**.
 2. Each conflict shows the family, the field (for example **Rating**), the value on
    **This computer** and the value on the **Other computer**.
 3. Select **Keep mine** to keep your value, or **Use theirs** to take the other value.

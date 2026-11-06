@@ -194,11 +194,12 @@
     "settings": "Vorschau-Einstellungen",
     "sample": "Beispiel",
     "language": "Sprache",
-    "customText": "Eigener Text",
-    "heroPlaceholder": "Eigenen Text eingeben",
-    "options": "Optionen",
+    "customText": "Zum Testen tippen",
+    "heroPlaceholder": "Zum Testen tippen",
+    "options": "Vorschauoptionen",
     "customPlaceholder": "Beispieltext eingeben",
     "size": "Größe",
+    "sizeGlyph": "A",
     "sizeSlider": "Größenregler",
     "sizeInPixels": "Größe in Pixeln",
     "autoSize": "Automatische Größe",
@@ -237,6 +238,26 @@
       "px": "{size} px",
       "useToolbar": "Größe der Werkzeugleiste verwenden",
       "empty": "Wähle eine Familie, um sie hier in der Vorschau zu sehen."
+    },
+    "focusField": "Vorschaufeld fokussieren",
+    "preset": "Vorlage",
+    "noPangram": "Für diese Sprache gibt es noch kein Pangramm",
+    "presets": {
+      "word": "Wort",
+      "pangram": "Pangramm",
+      "alphabet": "Alphabet",
+      "numerals": "Ziffern",
+      "paragraph": "Absatz"
+    },
+    "hints": {
+      "custom": {
+        "one": "erscheint in {count} Schrift",
+        "other": "erscheint in {count} Schriften"
+      },
+      "pangram": "ein Pangramm · jeder Buchstabe einmal",
+      "alphabet": "der Zeichensatz auf einen Blick",
+      "numerals": "Ziffern · tabellarisch, wo die Schrift sie hat",
+      "paragraph": "Fließtext in {size} px"
     }
   },
   "samples": {
@@ -246,10 +267,35 @@
       "lorem": "Lorem ipsum",
       "alphabet": "Alphabet",
       "numerals": "Ziffern",
-      "fontName": "Schriftname"
+      "fontName": "Schriftname",
+      "paragraph": "Absatz"
     }
   },
   "home": {
+    "sort": {
+      "by": "Sortiert nach {key}",
+      "byDescending": "Sortiert nach {key}, absteigend",
+      "change": "ändern",
+      "changeLabel": "ändern: Sortierung",
+      "menu": "Sortierung",
+      "bestMatch": "Beste Übereinstimmung",
+      "descending": "Absteigend",
+      "keys": {
+        "bestMatch": "bester Übereinstimmung",
+        "activation": "Aktivierung",
+        "name": "Name",
+        "styleCount": "Schnitten",
+        "weightLine": "Stärke",
+        "weightRange": "Stärke",
+        "format": "Format",
+        "version": "Version",
+        "manufacturer": "Hersteller",
+        "location": "Speicherort",
+        "license": "Lizenz",
+        "added": "Datum hinzugefügt",
+        "tags": "Tags"
+      }
+    },
     "allFonts": "Alle Schriften",
     "selected": "{count} ausgewählt",
     "families": {
@@ -300,7 +346,7 @@
       "platform": "Plattform"
     },
     "sidebarGroups": {
-      "online": "Online-Kataloge"
+      "online": "Kataloge"
     },
     "actions": {
       "quickToggle": "Ausgewählte Schriften zur Schnellsammlung hinzufügen oder daraus entfernen",
@@ -393,6 +439,10 @@
   },
   "chips": {
     "options": "Filteroptionen",
+    "more": {
+      "one": "+{count} weiterer Filter",
+      "other": "+{count} weitere Filter"
+    },
     "remove": "Filter {name} entfernen",
     "filters": "Filter",
     "chipLabel": "{name}, {families}",
@@ -537,7 +587,8 @@
       "sidebar": "Seitenleiste",
       "inspector": "Inspektor",
       "settings": "Einstellungen",
-      "openFamily": "Familienseite öffnen"
+      "openFamily": "Familienseite öffnen",
+      "previewField": "Vorschaufeld fokussieren"
     }
   },
   "palette": {
@@ -995,9 +1046,17 @@
     "comfortable": "Komfortabel",
     "compact": "Kompakt"
   },
+  "libraryViews": {
+    "heading": "Bibliotheksansichten",
+    "all": "Alle Schriften",
+    "recent": "Kürzlich hinzugefügt",
+    "activated": "Aktiviert",
+    "favorites": "Favoriten"
+  },
   "collections": {
+    "empty": "Noch keine Sammlungen",
     "heading": "Sammlungen",
-    "new": "Neu",
+    "new": "Neue Sammlung",
     "newTitle": "Sammlung anlegen",
     "newSmart": "Neu (intelligent)",
     "newSmartLabel": "Neue intelligente Sammlung",
@@ -1157,16 +1216,11 @@
   },
   "tags": {
     "heading": "Tags",
-    "tagCount": {
-      "one": "{count} Tag",
-      "other": "{count} Tags"
-    },
     "fontCount": {
       "one": "{count} Schrift",
       "other": "{count} Schriften"
     },
     "empty": "Noch keine Tags",
-    "emptyHint": "Wähle Schriften, dann drücke",
     "fallbackName": "Tag {id}"
   },
   "quickCollection": {
@@ -1433,6 +1487,7 @@
     "face": "Schriftschnitt {id}"
   },
   "problems": {
+    "noneShort": "Keine Probleme",
     "title": "Probleme",
     "filters": "Probleme anzeigen",
     "all": "Alle",
@@ -1518,6 +1573,7 @@
   },
   "sources": {
     "title": "Quellen",
+    "empty": "Noch keine Ordner",
     "addFolder": "Ordner hinzufügen",
     "addFolderTitle": "Einen Ordner zur Bibliothek hinzufügen",
     "scanningLibrary": "Bibliothek wird eingelesen",
@@ -1542,6 +1598,7 @@
     "removeTitle": "Aus der Bibliothek entfernen. Die Dateien bleiben, wo sie sind."
   },
   "catalogs": {
+    "offShort": "aus",
     "adobeFonts": {
       "name": "Adobe Fonts",
       "note": "Adobe Fonts werden verschlüsselt über Creative Cloud geliefert, daher kann keine Drittanbieter-App sie verwalten. Aktivieren Sie sie in der Creative Cloud-App.",

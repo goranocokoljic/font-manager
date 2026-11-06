@@ -36,7 +36,8 @@ if (-not (Test-Path $script)) { throw "go-harness.ps1 not found at $script" }
 $wt = Get-Command wt.exe -ErrorAction SilentlyContinue
 $laneArgs = "-NoProfile -NoExit -File `"$script`" -Lane keeper -Model $Model"
 $action = if ($wt) {
-    New-ScheduledTaskAction -Execute $wt.Source -Argument "-w 0 new-tab --title `"go-harness keeper`" `"$pwsh`" $laneArgs" -WorkingDirectory $repo
+    # -d: without it the tab opens in the home folder and every gh call fails ("not a git repository").
+    New-ScheduledTaskAction -Execute $wt.Source -Argument "-w 0 new-tab -d `"$repo`" --title `"go-harness keeper`" `"$pwsh`" $laneArgs" -WorkingDirectory $repo
 } else {
     New-ScheduledTaskAction -Execute $pwsh -Argument $laneArgs -WorkingDirectory $repo
 }
