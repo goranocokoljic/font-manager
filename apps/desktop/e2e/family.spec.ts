@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const font = readFileSync(
   fileURLToPath(
@@ -26,6 +26,27 @@ const tree = (page: Page) => page.getByRole('tree', { name: 'Font list' });
 const familyRows = (page: Page) => tree(page).locator('[aria-level="1"]');
 const position = (page: Page) => page.getByTestId('family-position');
 const onFamilyPage = (page: Page) => expect(page).toHaveURL(/#\/family\/\d+/);
+
+/**
+ * The key of a family row all on screen, under the table's header, so a click on it does not
+ * scroll. The virtualised view renders the rows at a new position a frame after the scroll, so
+ * this waits for one. A key and not `nth()`: an index means another row once the list redraws.
+ */
+async function rowOnScreen(viewport: Locator): Promise<string> {
+  const find = () =>
+    viewport.evaluate((el) => {
+      const box = el.getBoundingClientRect();
+      return [...el.querySelectorAll<HTMLElement>('[data-key^="family:"]')]
+        .find((row) => {
+          const r = row.getBoundingClientRect();
+          return r.top >= box.top + 60 && r.bottom <= box.bottom;
+        })
+        ?.getAttribute('data-key');
+    });
+  let key: string | null | undefined;
+  await expect.poll(async () => (key = await find())).toBeTruthy();
+  return key!;
+}
 
 test.describe('opening a family page', () => {
   for (const mode of ['list', 'table', 'grid', 'waterfall']) {
@@ -174,8 +195,9 @@ test.describe('going back', () => {
       await familyRows(page).first().click();
       await list.evaluate((el) => (el.scrollTop = 1500));
       await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(1500);
-      const row = familyRows(page).nth(4);
-      await row.click();
+      const row = list.locator(`[data-key="${await rowOnScreen(list)}"]`);
+      await row.click({ position: { x: 200, y: 20 } });
+      await expect(row).toHaveAttribute('aria-selected', 'true');
       const label = await row.getAttribute('aria-label');
       const url = page.url();
       const before = await list.evaluate((el) => el.scrollTop);
@@ -207,21 +229,7 @@ test.describe('going back', () => {
       // Not on a line's edge: only the exact place passes.
       await viewport.evaluate((el) => (el.scrollTop = 1537));
       await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBeGreaterThan(1000);
-      // A row all on screen, under the table's header, so the click does not scroll. The
-      // virtualised view renders the rows at the new position a frame after the scroll, so
-      // wait for one.
-      const findKey = () =>
-        viewport.evaluate((el) => {
-          const box = el.getBoundingClientRect();
-          return [...el.querySelectorAll<HTMLElement>('[data-key^="family:"]')]
-            .find((row) => {
-              const r = row.getBoundingClientRect();
-              return r.top >= box.top + 60 && r.bottom <= box.bottom;
-            })
-            ?.getAttribute('data-key');
-        });
-      let key: string | null | undefined;
-      await expect.poll(async () => (key = await findKey())).toBeTruthy();
+      const key = await rowOnScreen(viewport);
       await page
         .locator(`[data-key="${key}"]`)
         .first()
