@@ -167,9 +167,7 @@ test('the card shows the glyph at 160 px with name, code, styles and live altern
   const detail = card(panel);
   await expect(detail.getByLabel('Code', { exact: true })).toHaveText('U+0061');
   await expect(detail.getByLabel('Name', { exact: true })).toHaveText('a');
-  await expect(detail.getByLabel('In styles', { exact: true })).toHaveText(
-    /^(all \d+|\d+ of \d+)$/,
-  );
+  await expect(detail.getByLabel('In styles', { exact: true })).toHaveText('all 4');
   const big = detail.getByTestId('glyph-big');
   await expect(big).toHaveCSS('font-size', '160px');
   await expect(big).toHaveCSS('font-family', /fm-face-1/);
@@ -177,6 +175,30 @@ test('the card shows the glyph at 160 px with name, code, styles and live altern
   const alternate = detail.getByRole('list', { name: 'Alternates' }).getByRole('listitem').first();
   await expect(alternate).toContainText('Stylistic set 1');
   await expect(alternate.locator('.alternate-char')).toHaveCSS('font-feature-settings', /"ss01"/);
+});
+
+test('the card draws the axis ends of the glyph live', async ({ page }) => {
+  const panel = await openGlyphs(page, { cjk: false });
+  await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0041');
+  const list = card(panel).getByRole('list', { name: 'Alternates' });
+  for (const value of [100, 900])
+    await expect(
+      list
+        .getByRole('listitem')
+        .filter({ hasText: `Weight ${value}` })
+        .locator('.alternate-char'),
+    ).toHaveCSS('font-variation-settings', `"wght" ${value}`);
+});
+
+test('End on a long list selects the last character, and the card follows', async ({ page }) => {
+  const panel = await openGlyphs(page);
+  await grid(panel).focus();
+  await page.keyboard.press('End');
+  await expect(card(panel).getByLabel('Code', { exact: true })).toHaveText('U+D7A3');
+  await expect(panel.getByRole('gridcell', { name: /^U\+D7A3 / })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 test('Tab reaches the card; Escape closes it and returns to the grid', async ({ page }) => {

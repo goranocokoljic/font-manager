@@ -4,11 +4,11 @@ import { useClient } from '../api/client';
 import type {
   ApiError,
   FaceId,
-  FaceSummary,
   GlyphBlock,
   GlyphDetail,
   GlyphInfo,
   GlyphPage,
+  GlyphStyles,
   GlyphsRequest,
   Health,
 } from '../api/types';
@@ -18,12 +18,6 @@ export const GLYPH_PAGE = 500;
 
 /** How long the selection must rest before asking every style whether it has the character. */
 export const STYLE_COUNT_DELAY = 120;
-
-/** How many of a family's styles have a character. */
-export interface GlyphStyleCount {
-  have: number;
-  total: number;
-}
 
 /**
  * The glyph map of one face (the family page's Characters section), as fm-core lists it:
@@ -52,7 +46,7 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   const detail = ref<GlyphDetail | null>(null);
   const detailError = ref<ApiError | null>(null);
   /** How many of the family's styles have the selected character, once fm-core answers. */
-  const styleCount = ref<GlyphStyleCount | null>(null);
+  const styleCount = ref<GlyphStyles | null>(null);
   const styleCountFailed = ref(false);
   /** Pages of the current list by page number. */
   const pages = shallowReactive(new Map<number, GlyphInfo[]>());
@@ -62,11 +56,10 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   // Answers to an older list are dropped.
   let request = 0;
   let detailRequest = 0;
-  const pending = new Set<number>();
+  /** Pages on their way; a second asker waits for the same answer. */
+  const pending = new Map<number, Promise<void>>();
   let styleRequest = 0;
   let styleTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Named styles of a variable face, asked for once per open. */
-  const styleWeights = new Map<FaceId, number>();
 
   const req = (page: number): GlyphsRequest => ({
     face: face.value!,
@@ -108,7 +101,6 @@ export const useGlyphsStore = defineStore('glyphs', () => {
   async function open(id: FaceId): Promise<void> {
     if (id === face.value) return;
     face.value = id;
-    styleWeights.clear();
     query.value = '';
     block.value = null;
     void select(null);
@@ -136,26 +128,35 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     await load();
   }
 
-  /** Fetches the pages holding list indexes `start` (inclusive) to `end` (exclusive). */
+  async function loadPage(p: number, mine: number): Promise<void> {
+    try {
+      const page = await useClient().listGlyphs(req(p));
+      if (mine === request) pages.set(p, page.items);
+    } catch (e) {
+      if (mine === request) error.value = e as ApiError;
+    } finally {
+      if (mine === request) pending.delete(p);
+    }
+  }
+
+  /**
+   * Fetches the pages holding list indexes `start` (inclusive) to `end` (exclusive), and resolves
+   * when they are in, also when another caller had already asked for them.
+   */
   async function ensure(start: number, end: number): Promise<void> {
     if (face.value === null || end <= start) return;
     const mine = request;
-    const wanted: number[] = [];
-    for (let p = Math.floor(start / GLYPH_PAGE); p * GLYPH_PAGE < Math.min(end, total.value); p++)
-      if (!pages.has(p) && !pending.has(p)) wanted.push(p);
-    await Promise.all(
-      wanted.map(async (p) => {
-        pending.add(p);
-        try {
-          const page = await useClient().listGlyphs(req(p));
-          if (mine === request) pages.set(p, page.items);
-        } catch (e) {
-          if (mine === request) error.value = e as ApiError;
-        } finally {
-          if (mine === request) pending.delete(p);
-        }
-      }),
-    );
+    const waits: Promise<void>[] = [];
+    for (let p = Math.floor(start / GLYPH_PAGE); p * GLYPH_PAGE < Math.min(end, total.value); p++) {
+      if (pages.has(p)) continue;
+      let wait = pending.get(p);
+      if (!wait) {
+        wait = loadPage(p, mine);
+        pending.set(p, wait);
+      }
+      waits.push(wait);
+    }
+    await Promise.all(waits);
   }
 
   /** The character at list index `i`, or undefined while its page loads. */
@@ -178,44 +179,21 @@ export const useGlyphsStore = defineStore('glyphs', () => {
     }
   }
 
-  /** The styles a face stands for: a variable face is its named styles, a static face itself. */
-  async function styleWeight(f: FaceSummary): Promise<number> {
-    if (!f.isVariable) return 1;
-    let weight = styleWeights.get(f.id);
-    if (weight === undefined) {
-      weight = Math.max(1, (await useClient().getFace(f.id)).instances.length);
-      styleWeights.set(f.id, weight);
-    }
-    return weight;
-  }
-
   /**
-   * Counts the styles of `faces` that have `codePoint`, as fm-core's `check_coverage` says. It
-   * waits for the selection to rest: the arrow keys move it faster than a family can answer.
+   * Asks fm-core how many styles of the family have `codePoint`. It waits for the selection to
+   * rest: the arrow keys move it faster than a family can answer.
    */
-  function countStyles(codePoint: number | null, faces: readonly FaceSummary[]): void {
+  function countStyles(codePoint: number | null): void {
     const mine = ++styleRequest;
     clearTimeout(styleTimer);
     styleCount.value = null;
     styleCountFailed.value = false;
-    if (codePoint === null || !faces.length) return;
+    const of = face.value;
+    if (codePoint === null || of === null) return;
     styleTimer = setTimeout(async () => {
-      const text = String.fromCodePoint(codePoint);
       try {
-        const answers = await Promise.all(
-          faces.map(async (f) => {
-            const [weight, report] = await Promise.all([
-              styleWeight(f),
-              useClient().checkCoverage({ face: f.id, target: { kind: 'text', text } }),
-            ]);
-            return { weight, complete: report.complete };
-          }),
-        );
-        if (mine !== styleRequest) return;
-        styleCount.value = {
-          have: answers.reduce((n, a) => n + (a.complete ? a.weight : 0), 0),
-          total: answers.reduce((n, a) => n + a.weight, 0),
-        };
+        const got = await useClient().glyphStyles({ face: of, codePoint });
+        if (mine === styleRequest) styleCount.value = got;
       } catch {
         if (mine === styleRequest) styleCountFailed.value = true;
       }

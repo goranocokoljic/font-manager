@@ -60,6 +60,7 @@ service!(LibraryService {
     resolve_sidecar_conflict(req: ResolveSidecarConflictRequest) -> ();
     list_glyphs(req: GlyphsRequest) -> GlyphPage;
     get_glyph(req: GlyphRequest) -> GlyphDetail;
+    glyph_styles(req: GlyphRequest) -> GlyphStyles;
     resolve_font(req: ResolveFontRequest) -> FontMatches;
     font_switch_payload(face: FaceId) -> FontSwitchPayload;
 });

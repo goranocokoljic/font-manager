@@ -1069,6 +1069,17 @@ pub struct GlyphRequest {
     pub code_point: u32,
 }
 
+/// How many styles of a face's family map a character (E42.5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
+#[serde(rename_all = "camelCase")]
+pub struct GlyphStyles {
+    /// The styles that map it.
+    pub have: u32,
+    /// All styles of the family: a variable face counts as its named
+    /// instances (at least one), a static face as one.
+    pub total: u32,
+}
+
 /// The detail of one mapped character of a face.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 #[serde(rename_all = "camelCase")]
@@ -1328,6 +1339,11 @@ pub trait LibraryService {
     /// `NotFound` for an unknown face or a character the face does not map;
     /// a malformed font is a detail with `Broken` health, never an error.
     fn get_glyph(&self, req: GlyphRequest) -> ApiResult<GlyphDetail>;
+    /// How many styles of the family of `req.face` map `req.code_point`
+    /// (E42.5), from each face's stored `cmap`, so a space or a zero-width
+    /// character counts like any other. A face whose stored `cmap` cannot be
+    /// read counts as not mapping it. `NotFound` for an unknown face.
+    fn glyph_styles(&self, req: GlyphRequest) -> ApiResult<GlyphStyles>;
     /// The faces a `<font>` argument names (E26.1): a face id, else every
     /// face whose PostScript name, else full name, else family (alone or
     /// with the style) equals it, ignoring case. Only faces the library

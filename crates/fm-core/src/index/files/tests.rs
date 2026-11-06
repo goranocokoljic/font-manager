@@ -825,6 +825,56 @@ fn a_damaged_cmap_affects_only_its_own_face() {
     );
 }
 
+/// E42.5: the count comes from each face's own `cmap`: a face that lacks the
+/// character or whose `cmap` is damaged is not counted, and does not fail the
+/// answer for the others.
+#[test]
+fn glyph_styles_counts_the_faces_that_map_the_character() {
+    use fm_api::FaceId;
+    use fm_api::library::{GlyphRequest, GlyphStyles};
+
+    let (mut index, source) = memory_db();
+    let mut files = copies(3, STATIC);
+    files[1].path = PathBuf::from("/fonts/damaged.ttf");
+    files[2].path = PathBuf::from("/fonts/no-map.ttf");
+    index.persist_files(source, &files).expect("persist");
+    let face = face_id(&index, "/fonts/batch/00000.ttf");
+    let count = |index: &Index, code_point| {
+        index
+            .glyph_styles(&GlyphRequest { face, code_point })
+            .expect("count")
+    };
+    assert_eq!(count(&index, 0x61), GlyphStyles { have: 3, total: 3 });
+    assert_eq!(count(&index, 0x10_FFFD), GlyphStyles { have: 0, total: 3 });
+
+    let set = crate::coverage::CodePointSet::from_code_points([0x62_u32]);
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = ?1 WHERE id = ?2",
+            rusqlite::params![set.to_bytes(), face_id(&index, "/fonts/no-map.ttf").0],
+        )
+        .expect("narrow the cmap");
+    assert_eq!(count(&index, 0x61), GlyphStyles { have: 2, total: 3 });
+    index
+        .conn
+        .execute(
+            "UPDATE face SET cmap = x'010203' WHERE id = ?1",
+            [face_id(&index, "/fonts/damaged.ttf").0],
+        )
+        .expect("damage the cmap");
+    assert_eq!(count(&index, 0x61), GlyphStyles { have: 1, total: 3 });
+
+    let unknown = index.glyph_styles(&GlyphRequest {
+        face: FaceId(9999),
+        code_point: 0x61,
+    });
+    assert_eq!(
+        unknown.expect_err("unknown face").code(),
+        ErrorCode::NotFound
+    );
+}
+
 /// New preset data (an app update) computes the stored coverage again on
 /// open, from the stored cmap and locl, without reading a font file.
 #[test]

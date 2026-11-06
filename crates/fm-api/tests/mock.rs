@@ -1968,6 +1968,33 @@ fn the_glyph_detail_matches_the_glyph_map_and_names_features() {
     assert_eq!(err.code, ErrorCode::NotFound);
 }
 
+#[test]
+// Face 1 and its italic are variable, with four named instances each.
+fn glyph_styles_counts_a_variable_face_as_its_named_instances() {
+    let api = api();
+    let count = |code_point| {
+        api.glyph_styles(GlyphRequest {
+            face: FaceId(1),
+            code_point,
+        })
+        .unwrap()
+    };
+    assert_eq!(
+        count('a' as u32),
+        fm_api::library::GlyphStyles { have: 8, total: 8 }
+    );
+    assert_eq!(count(0x10_FFFD).have, 0);
+    assert_eq!(
+        api.glyph_styles(GlyphRequest {
+            face: FaceId(999),
+            code_point: 0x41,
+        })
+        .unwrap_err()
+        .code,
+        ErrorCode::NotFound
+    );
+}
+
 fn svg(api: &Arc<dyn Api>, c: char, wght: Option<f32>) -> Result<String, fm_api::ApiError> {
     api.export_glyph_svg(GlyphSvgRequest {
         face: FaceId(1),

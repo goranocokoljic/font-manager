@@ -283,11 +283,9 @@ const detailBroken = computed(() =>
 );
 
 // 'In N of M styles' asks every style of the family, and asks again when the family changes.
-watch(
-  [() => sel.value?.codePoint ?? null, () => page.faces],
-  ([cp, faces]) => glyphs.countStyles(cp, faces),
-  { immediate: true },
-);
+watch([() => sel.value?.codePoint ?? null, () => page.faces], ([cp]) => glyphs.countStyles(cp), {
+  immediate: true,
+});
 const stylesText = computed(() => {
   if (glyphs.styleCountFailed) return t('glyphs.advanceUnknown');
   const count = glyphs.styleCount;

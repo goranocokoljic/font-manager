@@ -1818,6 +1818,28 @@ fn the_glyph_detail_reads_the_face_file() {
     assert_eq!(unknown.expect_err("unknown face").code, ErrorCode::NotFound);
 }
 
+/// E42.5: a variable family counts its named instances, through the real API.
+#[test]
+fn glyph_styles_counts_a_variable_face_as_its_named_instances() {
+    let (lib, _, _) = Lib::scanned("api-glyph-styles");
+    let family = lib.family("Asap Sharp");
+    let faces = lib.api.get_family(family.id).expect("family").faces;
+    let mut styles = 0;
+    for face in &faces {
+        assert!(face.is_variable, "the fixture family is variable");
+        styles += lib.api.get_face(face.id).expect("face").instances.len();
+    }
+    assert!(styles > faces.len(), "the fixture has named instances");
+    let got = lib
+        .api
+        .glyph_styles(GlyphRequest {
+            face: faces[0].id,
+            code_point: 0x41,
+        })
+        .expect("count");
+    assert_eq!((got.have as usize, got.total as usize), (styles, styles));
+}
+
 /// Every file under `dir`, relative, sorted.
 fn files_under(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();

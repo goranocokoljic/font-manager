@@ -165,6 +165,26 @@ fn get_glyph_returns_the_glyph_detail() {
 }
 
 #[test]
+fn glyph_styles_returns_the_count() {
+    let got: fm_api::library::GlyphStyles = invoke_with(
+        "glyph_styles",
+        serde_json::json!({ "req": { "face": 1, "codePoint": 0x61 } }),
+    )
+    .unwrap()
+    .unwrap()
+    .deserialize()
+    .unwrap();
+    let expected = MockApi::new()
+        .glyph_styles(GlyphRequest {
+            face: FaceId(1),
+            code_point: 0x61,
+        })
+        .unwrap();
+    assert_eq!(got, expected);
+    assert!(got.total > 0);
+}
+
+#[test]
 fn families_round_trip_through_fm_api() {
     let api = MockApi::new();
     let page: Paged<FamilySummary> = invoke_with("list_families", serde_json::json!({ "req": {} }))

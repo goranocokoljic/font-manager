@@ -46,7 +46,7 @@ use crate::library::{
     AddSourceRequest, AppInfo, DuplicateCopy, DuplicateGroup, DuplicateKind, FaceDetail,
     FaceSummary, Family, FamilyActivation, FamilySort, FamilySummary, FontMatch, FontMatches,
     FontNames, FontSwitchPayload, GlyphBlock, GlyphDetail, GlyphInfo, GlyphPage, GlyphRequest,
-    GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions,
+    GlyphStyles, GlyphsRequest, ImportMode, KeepCopyRequest, LicenseInfo, LicensePermissions,
     LicensePermissionsSource, LicenseType, ListFamiliesRequest, OpenLicense, Platform, Problem,
     ProblemKind, Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
     SetSourcePausedRequest, SidecarConflict, Source, SourceKind, StyleMark, TrashMove,
@@ -2006,6 +2006,29 @@ impl LibraryService for MockApi {
             health: Health::Ok,
             unicode_version: "17.0.0".into(),
         })
+    }
+
+    /// The faces of the family that have the character, a variable face
+    /// counting as its named instances, as fm-core counts them.
+    fn glyph_styles(&self, req: GlyphRequest) -> ApiResult<GlyphStyles> {
+        let st = self.state();
+        let family = st.face(req.face)?.detail.face.family;
+        let c = char::from_u32(req.code_point);
+        let (mut have, mut total) = (0, 0);
+        for f in st.family_faces(family) {
+            let styles = if f.detail.face.is_variable {
+                u32::try_from(f.detail.instances.len())
+                    .unwrap_or(u32::MAX)
+                    .max(1)
+            } else {
+                1
+            };
+            total += styles;
+            if c.is_some_and(|c| f.chars.contains(&c)) {
+                have += styles;
+            }
+        }
+        Ok(GlyphStyles { have, total })
     }
 
     /// The glyph as `list_glyphs` lists it. Lower-case letters are replaced

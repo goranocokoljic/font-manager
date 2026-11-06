@@ -58,10 +58,10 @@ use fm_api::layout::{
 };
 use fm_api::library::{
     AddSourceRequest, AppInfo, DuplicateGroup, FaceDetail, Family, FamilySummary, FontMatches,
-    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphsRequest, ImportMode,
-    KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem, Resolution,
-    ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest, SetSourcePausedRequest,
-    SidecarConflict, Source, SourceKind,
+    FontSwitchPayload, GlyphDetail, GlyphPage, GlyphRequest, GlyphStyles, GlyphsRequest,
+    ImportMode, KeepCopyRequest, LibraryService, ListFamiliesRequest, Platform, Problem,
+    Resolution, ResolveFontRequest, ResolveSidecarConflictRequest, ScanRequest,
+    SetSourcePausedRequest, SidecarConflict, Source, SourceKind,
 };
 use fm_api::organization::{
     Collection, CollectionFacesRequest, CreateCollectionRequest, CreateSetRequest,
@@ -922,6 +922,10 @@ impl LibraryService for CoreApi {
             file.collection_index,
             req.code_point,
         )?)
+    }
+
+    fn glyph_styles(&self, req: GlyphRequest) -> ApiResult<GlyphStyles> {
+        Ok(self.lock().glyph_styles(&req)?)
     }
 
     /// Reads the names of the visible faces, then matches outside the lock.

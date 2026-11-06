@@ -3,6 +3,8 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient } from '../api/client';
 import { createMockClient } from '../api/mock';
+import type { FaceDetail } from '../api/types';
+import { useAxesStore } from '../stores/axes';
 import { useFamilyPageStore } from '../stores/familyPage';
 import { STYLE_COUNT_DELAY, useGlyphsStore } from '../stores/glyphs';
 import { useGlyphCompareStore } from '../stores/glyphCompare';
@@ -135,12 +137,21 @@ describe('the Characters section', () => {
     expect(w.find('[aria-label="Selected glyph"]').exists()).toBe(true);
   });
 
-  it('End reaches a character on a page that has not loaded, and selects it', async () => {
+  it('End reaches a character on a page still on its way, and selects it', async () => {
+    // Answers take real time, as over IPC: a mock that answers at once hides the race.
+    const mock = createMockClient({ cjkFaces: [1] });
+    setClient({
+      ...mock,
+      listGlyphs: async (req) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return mock.listGlyphs(req);
+      },
+    });
     const w = await mountWith(1);
     const glyphs = useGlyphsStore();
+    await vi.waitFor(() => expect(glyphs.item(0)).toBeDefined());
     await w.get('[role="grid"]').trigger('keydown', { key: 'End' });
-    await flushPromises();
-    expect(glyphs.selected).not.toBeNull();
+    await vi.waitFor(() => expect(glyphs.selected).not.toBeNull());
     expect(glyphs.selected).toEqual(glyphs.item(glyphs.total - 1));
   });
 
@@ -214,22 +225,72 @@ describe('the Characters section', () => {
     expect(card(w).text()).toContain('none');
   });
 
-  it("the card's 'in styles' counts the family, once the selection rests", async () => {
+  it.each([
+    [{ have: 2, total: 3 }, '2 of 3'],
+    [{ have: 3, total: 3 }, 'all 3'],
+    [{ have: 1, total: 1 }, '1 of 1'],
+    [{ have: 0, total: 3 }, '0 of 3'],
+  ])("the card's 'in styles' shows fm-core's answer %j as %s", async (count, text) => {
+    setClient({ ...createMockClient({ cjkFaces: [1] }), glyphStyles: async () => count });
     const w = await mountWith(1);
     vi.useFakeTimers();
     try {
       await w.get('[data-code-point="65"]').trigger('click');
-      expect(card(w).get('[aria-labelledby="fm-glyph-styles"]').text()).toBe('loading…');
+      const shown = () => card(w).get('[aria-labelledby="fm-glyph-styles"]').text();
+      expect(shown()).toBe('loading…');
       await vi.advanceTimersByTimeAsync(STYLE_COUNT_DELAY);
       await flushPromises();
-      const { styleCount } = useGlyphsStore();
-      expect(styleCount?.total).toBeGreaterThan(0);
-      expect(card(w).get('[aria-labelledby="fm-glyph-styles"]').text()).toMatch(
-        /^(all \d+|\d+ of \d+)$/,
-      );
+      expect(shown()).toBe(text);
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("the card's 'in styles' says unknown when fm-core cannot answer", async () => {
+    setClient({
+      ...createMockClient({ cjkFaces: [1] }),
+      glyphStyles: () => Promise.reject({ code: 'notFound', message: 'gone' }),
+    });
+    const w = await mountWith(1);
+    vi.useFakeTimers();
+    try {
+      await w.get('[data-code-point="65"]').trigger('click');
+      await vi.advanceTimersByTimeAsync(STYLE_COUNT_DELAY);
+      await flushPromises();
+      expect(card(w).get('[aria-labelledby="fm-glyph-styles"]').text()).toBe('unknown');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the card's alternates draw both ends of each axis, live", async () => {
+    const w = await mountWith(1);
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    const alternates = w.findAll('[data-testid="glyph-alternate"]');
+    const end = (label: string) =>
+      alternates.find((a) => a.text().includes(label))!.get('.alternate-char');
+    expect(end('Weight 100').attributes('style')).toContain('"wght" 100');
+    expect(end('Weight 900').attributes('style')).toContain('"wght" 900');
+    expect(end('Weight 100').text()).toBe('A');
+    expect(end('Weight 100').attributes('style')).toContain('fm-test');
+  });
+
+  it('an axis end keeps the other axes where the axis row moved them', async () => {
+    const w = await mountWith(1);
+    const detail = JSON.parse(JSON.stringify(useSelectionStore().detail!)) as FaceDetail;
+    const opsz = { tag: 'opsz', name: 'Optical', min: 9, default: 14, max: 144 };
+    detail.axes.push(opsz);
+    await w.setProps({ detail });
+    useAxesStore().set(1, opsz, 30);
+    await w.get('[data-code-point="65"]').trigger('click');
+    await flushPromises();
+    const heavy = w
+      .findAll('[data-testid="glyph-alternate"]')
+      .find((a) => a.text().includes('Weight 900'))!;
+    const style = heavy.get('.alternate-char').attributes('style');
+    expect(style).toContain('"wght" 900');
+    expect(style).toContain('"opsz" 30');
   });
 
   it('Copy glyph copies the character itself', async () => {

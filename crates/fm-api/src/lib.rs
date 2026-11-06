@@ -168,6 +168,7 @@ pub fn types() -> specta::Types {
         library::GlyphBlock,
         library::GlyphRequest,
         library::GlyphDetail,
+        library::GlyphStyles,
         library::ResolveFontRequest,
         library::FontMatches,
         library::FontSwitchPayload,
