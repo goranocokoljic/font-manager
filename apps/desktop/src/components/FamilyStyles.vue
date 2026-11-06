@@ -299,6 +299,7 @@ async function deleteMenuPin(): Promise<void> {
         role="row"
         :aria-label="rowLabel(row)"
         :aria-current="row.ring ? 'true' : undefined"
+        :aria-selected="row.face ? row.face.id === heroFace?.id : undefined"
         :tabindex="i === current ? 0 : -1"
         :data-row="i"
         :data-testid="row.pin ? 'family-pin' : row.stop ? 'family-ramp-row' : 'family-style-row'"
@@ -424,6 +425,9 @@ async function deleteMenuPin(): Promise<void> {
   align-items: center;
   gap: var(--fm-space-1);
   overflow-wrap: anywhere;
+}
+.row[aria-selected='true'] .title {
+  font-weight: 600;
 }
 .meta {
   color: var(--fm-muted);
