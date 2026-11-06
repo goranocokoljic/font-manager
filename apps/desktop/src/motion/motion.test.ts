@@ -88,6 +88,31 @@ describe('withViewTransition', () => {
     expect(fn).toHaveBeenCalledOnce();
   });
 
+  it('tells the caller when the transition has finished, not before', async () => {
+    let finish = () => {};
+    const start = vi.fn((update: () => void | Promise<void>) => ({
+      updateCallbackDone: Promise.resolve().then(update),
+      ready: Promise.resolve(),
+      finished: new Promise<void>((resolve) => (finish = resolve)),
+    }));
+    Object.defineProperty(document, 'startViewTransition', { value: start, configurable: true });
+    const finished = vi.fn();
+    await withViewTransition(() => {}, finished);
+    expect(finished).not.toHaveBeenCalled();
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(finished).toHaveBeenCalledOnce();
+  });
+
+  it('calls finished after fn when nothing animates, also when fn fails', async () => {
+    const finished = vi.fn();
+    await expect(
+      withViewTransition(() => Promise.reject(new Error('no')), finished),
+    ).rejects.toThrow('no');
+    expect(finished).toHaveBeenCalledOnce();
+  });
+
   it('calls it as a method of the document, or a browser throws', async () => {
     const start = fakeViewTransitions();
     await withViewTransition(() => {});

@@ -60,13 +60,24 @@ defineSlots<{
 const slots = useSlots();
 const palettes = usePalettesStore();
 
-const emit = defineEmits<{ 'edit-text': [index: number, text: string] }>();
+const emit = defineEmits<{
+  'edit-text': [index: number, text: string];
+  /** The face has loaded or failed, so the text has its final height. */
+  settled: [];
+}>();
 
 type LoadState = 'loading' | 'ready' | 'failed';
 
 const loader = useFaceLoader();
 const state = ref<LoadState>('loading');
 let held: FaceId | null = null;
+
+function settle(face: FaceId, result: LoadState): void {
+  if (held !== face) return;
+  state.value = result;
+  // After the render of the new state, when the text has its height.
+  void nextTick(() => emit('settled'));
+}
 
 function hold(face: FaceId | null): void {
   if (held === face) return;
@@ -75,12 +86,8 @@ function hold(face: FaceId | null): void {
   if (face === null) return;
   state.value = 'loading';
   loader.acquire(face).then(
-    () => {
-      if (held === face) state.value = 'ready';
-    },
-    () => {
-      if (held === face) state.value = 'failed';
-    },
+    () => settle(face, 'ready'),
+    () => settle(face, 'failed'),
   );
 }
 
@@ -209,6 +216,7 @@ function blockFamily(i: number): string {
     "
     :data-preset="layout?.preset ?? undefined"
     :data-state="face ? state : undefined"
+    :data-family="face?.family"
   >
     <template v-if="face && layout">
       <header

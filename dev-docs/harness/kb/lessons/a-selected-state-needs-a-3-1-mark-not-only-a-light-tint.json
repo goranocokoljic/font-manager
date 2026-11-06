@@ -5,15 +5,17 @@
   "rule": "When rows or items can be selected (multi-select lists, trees, grids), mark every selected item with something that reaches 3:1 against an unselected one in every theme and preview surface — a solid `--fm-accent` bar or border, not only a translucent tint (a 16% accent tint is about 1.3:1). The focus ring on the cursor item does not count: it marks one item, not the selection. Add a Playwright check under both color schemes that selects items away from the cursor and computes the ratio from the computed colors.",
   "rationale": "E5.2 (#65): the font list marked selected rows only with a 16% accent tint (≈1.27:1 light, ≈1.32:1 dark); only the cursor row had a ring, so a multi-selection was unreadable for low-vision users (WCAG 1.4.11).",
   "severity": "must",
-  "status": "candidate",
-  "occurrences": 1,
+  "status": "active",
+  "occurrences": 2,
   "source_issues": [
-    65
+    65,
+    452
   ],
   "file_globs": [
     "apps/desktop/src/**/*.vue",
-    "apps/desktop/src/styles/**/*.css"
+    "apps/desktop/src/styles/**/*.css",
+    "apps/desktop/src/components/**/*.vue"
   ],
   "first_seen": "2026-10-18T00:50:36.191Z",
-  "last_seen": "2026-10-18T00:50:36.191Z"
+  "last_seen": "2026-11-04T10:41:19.504Z"
 }

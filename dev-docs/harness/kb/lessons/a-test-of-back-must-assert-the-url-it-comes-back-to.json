@@ -1,0 +1,18 @@
+{
+  "id": "a-test-of-back-must-assert-the-url-it-comes-back-to",
+  "title": "A test of Back must assert the URL it comes back to",
+  "category": "testing",
+  "rule": "When a test goes Back from a pushed page, capture page.url() before the push and assert toHaveURL(url) after Back. A visible list or a kept filter also holds when the code replaced the entry with a fresh route, so it cannot tell a pop from a replace. Do this after the steps that could add history too, such as next and previous arrows.",
+  "rationale": "E42.1 (#452): with the family arrows changed to router.push, Esc replaced to #/ and lost the ?face= query, and the arrows test still passed because it checked only the tree and the search box.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    452
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-06T04:52:11.887Z",
+  "last_seen": "2026-11-06T04:52:11.887Z"
+}

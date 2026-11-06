@@ -420,6 +420,16 @@ for (const colorScheme of ['light', 'dark'] as const) {
       }
     });
 
+    test('the family page, with its collection menu open', async ({ page }) => {
+      await open(page, '/family/1');
+      await inTheme(page);
+      await expect(page.getByTestId('family-specimen')).toBeVisible();
+      expect(await violations(page), 'page').toEqual([]);
+      await page.getByRole('combobox', { name: 'Add to collection' }).click();
+      await expect(page.getByText('No collections to add to')).toBeVisible();
+      expect(await violations(page), 'menu').toEqual([]);
+    });
+
     test('every Settings tab', async ({ page }) => {
       await open(page, '/settings');
       await inTheme(page);

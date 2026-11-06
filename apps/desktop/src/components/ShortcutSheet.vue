@@ -42,6 +42,7 @@ const groups = computed(() => [
   {
     title: t('shortcuts.groups.fonts'),
     rows: [
+      { label: t('shortcuts.rows.openFamily'), keys: [chord(ACTIONS.openFamily)] },
       { label: t('shortcuts.rows.quickLook'), keys: [chord(ACTIONS.quickLook)] },
       { label: t('shortcuts.rows.activate'), keys: [chord(ACTIONS.activateSession)] },
       { label: t('shortcuts.rows.activatePermanent'), keys: [chord(ACTIONS.activatePermanent)] },

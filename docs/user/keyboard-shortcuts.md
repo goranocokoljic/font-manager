@@ -35,6 +35,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `B` | Add the selected fonts to the Quick Collection, or remove them if they are in it |
 | `T` | Open the tagging panel for the selected fonts; with no font selected, go to the preview field (`Esc` returns to the list) |
 | `S` | Find the fonts that look like the selected font |
+| `O` | Open the family page of the selected font (a double-click on its row or card does the same) |
 
 Keys without `Ctrl` do not work while you type in a text box, so you can type an "a"
 in the search box.

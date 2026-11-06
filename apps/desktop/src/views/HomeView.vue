@@ -55,7 +55,6 @@ import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
 import { useLibraryViewsStore } from '../stores/libraryViews';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
-import { useProblemsStore } from '../stores/problems';
 import { useQuickCollectionStore } from '../stores/quickCollection';
 import { useQuickLookStore } from '../stores/quickLook';
 import { useCatalogsStore } from '../stores/catalogs';
@@ -68,6 +67,8 @@ import type { ActivationMode, FaceId, LayoutPreset } from '../api/types';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useTextLayoutsStore } from '../stores/textLayouts';
 import { LAYOUT_PRESETS, PRESET_LABELS, useViewsStore, type ViewMode } from '../stores/views';
+import { useFamilyNavigation } from './useFamilyNavigation';
+import { useLiveLibrary } from './useLiveLibrary';
 
 const app = useAppStore();
 const layout = useLayoutStore();
@@ -75,7 +76,6 @@ const selection = useSelectionStore();
 const commands = useCommandsStore();
 const library = useLibraryStore();
 const activation = useActivationStore();
-const problems = useProblemsStore();
 const preview = usePreviewStore();
 const fontList = useFontListStore();
 const views = useViewsStore();
@@ -191,23 +191,31 @@ function openStudio(): void {
   });
 }
 
+useLiveLibrary('family');
 onMounted(() => {
   void app.load();
-  void library.load();
-  void activation.load();
-  void selection.start();
-  void problems.load();
   void search.loadLanguages();
   void sets.load();
   void quick.load();
   void compare.loadSaved();
 });
-onBeforeUnmount(() => {
-  void library.stop();
-  void activation.stop();
-  void selection.stop();
-  void problems.stop();
+
+// The family page (E42.1): O, the palette or a double-click on a row or card, in any view.
+// The Layout mode has no rows; it opens the family it shows.
+const familyNav = useFamilyNavigation();
+const openableFamily = computed(() => {
+  if (quick.open || catalogs.current) return null;
+  return mode.value === 'layout' ? layoutFamily.value : (fontList.cursorRow?.family.id ?? null);
 });
+
+function onDoubleClick(e: MouseEvent): void {
+  const el = e.target instanceof Element ? e.target : null;
+  if (!el || el.closest('button, input, a, .twisty, [role="slider"], [contenteditable="true"]'))
+    return;
+  const key = el.closest('[data-key]')?.getAttribute('data-key');
+  const row = fontList.rows.find((r) => r.key === key);
+  if (row) void familyNav.open(row.family.id);
+}
 
 // One style (or nothing) selected: A acts on the inspector's face, which shows the
 // outcome. Several rows or a family: on all of them, with a toast that can undo it.
@@ -284,6 +292,17 @@ useActions([
     },
     enabled: () => pinTarget.value !== null,
     run: () => (pinTarget.value ? similar.openFor(pinTarget.value) : undefined),
+  },
+  {
+    id: ACTIONS.openFamily,
+    get title() {
+      return t('home.actions.openFamily');
+    },
+    get group() {
+      return t('palette.groups.view');
+    },
+    enabled: () => openableFamily.value !== null,
+    run: () => (openableFamily.value !== null ? familyNav.open(openableFamily.value) : undefined),
   },
   {
     id: ACTIONS.quickLook,
@@ -465,6 +484,29 @@ function showFace(face: FaceId): void {
 
 const browse = ref<HTMLElement | null>(null);
 
+// The Layout view scrolls by itself, without the rows' anchor: its place goes to the store's
+// held scroll as it leaves for a family page (E42.1). It has no lines, so 0 keeps it apart
+// from a view's place. The place comes back on mount and again once the font has set the
+// text's height, which can be too short for it before that.
+const LAYOUT_LINE = 0;
+const layoutViewport = () => browse.value?.querySelector<HTMLElement>('.layout') ?? null;
+let layoutTop = fontList.heldScrollTop(LAYOUT_LINE, LAYOUT_LINE);
+if (layoutTop !== null) fontList.dropHeldScroll();
+
+function restoreLayoutScroll(): void {
+  const el = layoutViewport();
+  if (el && layoutTop !== null) el.scrollTop = layoutTop;
+}
+function layoutSettled(): void {
+  restoreLayoutScroll();
+  layoutTop = null;
+}
+onMounted(restoreLayoutScroll);
+onBeforeUnmount(() => {
+  const el = layoutViewport();
+  if (el) fontList.viewLeft(el.scrollTop, LAYOUT_LINE, LAYOUT_LINE);
+});
+
 /** Escape in the search box or the preview field: back to the font list the keys drive. */
 function focusList(): void {
   browse.value
@@ -559,7 +601,7 @@ function openFace(face: FaceId): void {
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
           />
         </header>
-        <div v-show="!similar.open" ref="browse" class="browse">
+        <div v-show="!similar.open" ref="browse" class="browse" @dblclick="onDoubleClick">
           <CollectionHeader />
           <PreviewControls
             :view="ALL_FONTS_VIEW"
@@ -592,6 +634,7 @@ function openFace(face: FaceId): void {
               :width="textLayouts.width"
               :set-width-lock="textLayouts.setWidthLock"
               @edit-text="textLayouts.setBlockText"
+              @settled="layoutSettled"
             />
           </template>
           <FontGrid

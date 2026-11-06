@@ -5,7 +5,7 @@
 // above is expanded) and the anchor family moves to another row, the view
 // scrolls it back to the top. `jumped` hears of every scroll the anchor makes, so a
 // view can count it as settled at once (E35.8).
-import { watch, type Ref } from 'vue';
+import { onBeforeUnmount, watch, type Ref } from 'vue';
 import { useFontListStore } from '../stores/fontList';
 
 export interface ScrollAnchor {
@@ -32,9 +32,11 @@ export function useScrollAnchor(
 
   function restore(): void {
     const el = viewport.value;
+    if (!el) return;
+    const held = list.heldScrollTop(linePx(), perLine());
     const i = list.anchorIndex;
-    if (!el || i < 0) return;
-    const top = Math.floor(i / perLine()) * linePx();
+    if (held === null && i < 0) return;
+    const top = held ?? Math.floor(i / perLine()) * linePx();
     if (el.scrollTop === top) return;
     el.scrollTop = top;
     restored = el.scrollTop;
@@ -47,6 +49,7 @@ export function useScrollAnchor(
       return;
     }
     restored = null;
+    list.dropHeldScroll();
     const n = perLine();
     const start = Math.floor(scrollTop / linePx()) * n;
     list.setAnchor(start, start + n);
@@ -61,6 +64,11 @@ export function useScrollAnchor(
     },
     { flush: 'post' },
   );
+
+  onBeforeUnmount(() => {
+    const el = viewport.value;
+    if (el) list.viewLeft(el.scrollTop, linePx(), perLine());
+  });
 
   return { restore, track };
 }
