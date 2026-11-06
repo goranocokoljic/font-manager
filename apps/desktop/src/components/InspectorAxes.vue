@@ -343,7 +343,7 @@ onMounted(() => {
   inset-inline-start: calc(7px + var(--at) * (100% - 14px));
   width: 1px;
   height: 6px;
-  background-color: var(--fm-border-strong);
+  background-color: var(--fm-muted);
 }
 .at {
   flex: none;

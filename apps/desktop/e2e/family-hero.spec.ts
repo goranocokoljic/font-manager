@@ -209,3 +209,35 @@ test('"Copy CSS" on the row puts font-variation-settings on the clipboard', asyn
     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
     .toBe('font-variation-settings: "wght" 600;');
 });
+
+for (const colorScheme of ['light', 'dark'] as const) {
+  test(`the instance ticks reach 3:1 against the page in the ${colorScheme} theme`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ colorScheme });
+    await open(page);
+    const ratio = await axesRow(page)
+      .locator('.tick')
+      .first()
+      .evaluate((el) => {
+        const channels = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+        const lum = ([r, g, b]: number[]) => {
+          const lin = [r!, g!, b!].map((v) => {
+            const s = v / 255;
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+          });
+          return 0.2126 * lin[0]! + 0.7152 * lin[1]! + 0.0722 * lin[2]!;
+        };
+        const page = channels(
+          getComputedStyle(document.querySelector('.family-page')!).backgroundColor,
+        );
+        const tick = channels(getComputedStyle(el).backgroundColor);
+        // A translucent tick shows the page through it.
+        const alpha = tick[3] ?? 1;
+        const shown = [0, 1, 2].map((i) => tick[i]! * alpha + page[i]! * (1 - alpha));
+        const [a, b] = [lum(shown), lum(page)].sort((x, y) => y - x);
+        return (a! + 0.05) / (b! + 0.05);
+      });
+    expect(ratio).toBeGreaterThanOrEqual(3);
+  });
+}
