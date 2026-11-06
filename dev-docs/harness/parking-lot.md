@@ -367,3 +367,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E41.5 #451] apps/desktop/src/components/InspectorInfo.vue:258 — "Technical details" and the license toggle (InspectorLicense.vue:96) carry `fm-directional` on the whole button, so their label mirrors in right-to-left chrome.
 - [E41.5 #451] apps/desktop/src/views/useFamilyNavigation.ts:108 — `back()` restores focus only if the row of the family is on screen, so after the arrows step to a family whose row is off screen, Esc leaves focus on body.
 - [E42.2 #453] apps/desktop/src/components/InspectorAxes.vue:85 — `reset()` makes the focused Reset button disabled and moves focus nowhere, so a keyboard user's focus drops.
+- [E42.3 #454] apps/desktop/src/components/CollectionsSidebar.vue:236 — it moves focus into the menu after two `nextTick`s, the timing that failed for the same `UiPopover` layer in this story, and its only focus test is jsdom; not reproduced.
+- [E42.3 #454] apps/desktop/src/components/CollectionsSidebar.vue:275 — Tab calls `closeMenu()` with no refocus, the pattern that dropped the focus to body in FamilyStyles; read, not run.
