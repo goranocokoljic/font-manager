@@ -341,6 +341,13 @@ test.describe('the keyboard', () => {
     await expect(rows.nth(1)).toBeFocused();
     await expect(rows.nth(1)).toHaveAttribute('tabindex', '0');
     await expect(rows.first()).toHaveAttribute('tabindex', '-1');
+    // The controls of the row with the tab stop are in the tab order; those of another are not.
+    for (const name of [/^Copy CSS/, /^Compare/]) {
+      await expect(rows.nth(1).getByRole('button', { name })).toHaveAttribute('tabindex', '0');
+      await expect(rows.first().getByRole('button', { name })).toHaveAttribute('tabindex', '-1');
+    }
+    await expect(rows.nth(1).getByRole('switch')).toHaveAttribute('tabindex', '0');
+    await expect(rows.first().getByRole('switch')).toHaveAttribute('tabindex', '-1');
     await rows.last().focus();
     await page.keyboard.press('ArrowDown');
     await expect(rows.last()).toBeFocused();
