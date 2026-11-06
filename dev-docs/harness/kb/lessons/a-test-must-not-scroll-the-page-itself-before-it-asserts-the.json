@@ -1,0 +1,18 @@
+{
+  "id": "a-test-must-not-scroll-the-page-itself-before-it-asserts-the",
+  "title": "A test must not scroll the page itself before it asserts the element is in the viewport",
+  "category": "testing",
+  "rule": "When a test proves that the app brings an element into view (`toBeInViewport`, a position check), do not call `scrollIntoViewIfNeeded` or `hover` on that element first: both scroll the page and make the assertion unable to fail. If the assertion fails after a layout change, fix the app. Moving a part from a pane to a longer page often means the app must now scroll the page as well as its inner scroller.",
+  "rationale": "E41.5 (#451): the glyph-search spec, moved to the family page, gained a `scrollIntoViewIfNeeded` before `toBeInViewport`, which hid that the searched glyph landed below the window at 1280x800.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    451
+  ],
+  "file_globs": [
+    "apps/desktop/e2e/**"
+  ],
+  "first_seen": "2026-11-06T07:17:18.904Z",
+  "last_seen": "2026-11-06T07:17:18.904Z"
+}
