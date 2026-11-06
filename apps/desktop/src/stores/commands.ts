@@ -9,7 +9,7 @@ import {
   type MaybeRefOrGetter,
 } from 'vue';
 import { fuzzyMatch } from '../keyboard/fuzzy';
-import { ACTIONS, bindingFor, chordOf, type Chord } from '../keyboard/keymap';
+import { ACTIONS, bindingsFor, chordOf, type Chord } from '../keyboard/keymap';
 
 /** Something the user can do, listed in the command palette. */
 export interface Action {
@@ -95,17 +95,18 @@ export const useCommandsStore = defineStore('commands', () => {
     else openPalette();
   }
 
-  /** Runs the action bound to the key, if any; returns true when the key was used. */
+  /** Runs the first enabled action bound to the key; returns true when the key was used. */
   function handleKey(e: KeyboardEvent): boolean {
     if (e.defaultPrevented || e.isComposing) return false;
-    const binding = bindingFor(e);
-    if (!binding) return false;
-    // While the palette is open only its own toggle works; it owns every other key.
-    if (open.value && binding.action !== ACTIONS.palette) return false;
-    if (e.repeat && !binding.chord.mod) return false;
-    if (!run(binding.action)) return false;
-    e.preventDefault();
-    return true;
+    for (const binding of bindingsFor(e)) {
+      // While the palette is open only its own toggle works; it owns every other key.
+      if (open.value && binding.action !== ACTIONS.palette) continue;
+      if (e.repeat && !binding.chord.mod) continue;
+      if (!run(binding.action)) continue;
+      e.preventDefault();
+      return true;
+    }
+    return false;
   }
 
   return {

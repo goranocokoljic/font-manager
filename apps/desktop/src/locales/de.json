@@ -194,11 +194,12 @@
     "settings": "Vorschau-Einstellungen",
     "sample": "Beispiel",
     "language": "Sprache",
-    "customText": "Eigener Text",
-    "heroPlaceholder": "Eigenen Text eingeben",
-    "options": "Optionen",
+    "customText": "Zum Testen tippen",
+    "heroPlaceholder": "Zum Testen tippen",
+    "options": "Vorschauoptionen",
     "customPlaceholder": "Beispieltext eingeben",
     "size": "Größe",
+    "sizeGlyph": "A",
     "sizeSlider": "Größenregler",
     "sizeInPixels": "Größe in Pixeln",
     "autoSize": "Automatische Größe",
@@ -237,6 +238,26 @@
       "px": "{size} px",
       "useToolbar": "Größe der Werkzeugleiste verwenden",
       "empty": "Wähle eine Familie, um sie hier in der Vorschau zu sehen."
+    },
+    "focusField": "Vorschaufeld fokussieren",
+    "preset": "Vorlage",
+    "noPangram": "Für diese Sprache gibt es noch kein Pangramm",
+    "presets": {
+      "word": "Wort",
+      "pangram": "Pangramm",
+      "alphabet": "Alphabet",
+      "numerals": "Ziffern",
+      "paragraph": "Absatz"
+    },
+    "hints": {
+      "custom": {
+        "one": "erscheint in {count} Schrift",
+        "other": "erscheint in {count} Schriften"
+      },
+      "pangram": "ein Pangramm · jeder Buchstabe einmal",
+      "alphabet": "der Zeichensatz auf einen Blick",
+      "numerals": "Ziffern · tabellarisch, wo die Schrift sie hat",
+      "paragraph": "Fließtext in {size} px"
     }
   },
   "samples": {
@@ -246,7 +267,8 @@
       "lorem": "Lorem ipsum",
       "alphabet": "Alphabet",
       "numerals": "Ziffern",
-      "fontName": "Schriftname"
+      "fontName": "Schriftname",
+      "paragraph": "Absatz"
     }
   },
   "home": {
@@ -563,7 +585,8 @@
       "views": "Liste, Tabelle, Raster, Kaskade, Layout",
       "sidebar": "Seitenleiste",
       "inspector": "Inspektor",
-      "settings": "Einstellungen"
+      "settings": "Einstellungen",
+      "previewField": "Vorschaufeld fokussieren"
     }
   },
   "palette": {

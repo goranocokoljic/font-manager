@@ -147,18 +147,23 @@ test('chips that do not fit collapse into +N on one row', async ({ page }) => {
   const shown = bar(page).getByRole('button', { name: /^Remove filter/ });
   const more = bar(page).getByRole('button', { name: /^\+\d+ more filter/ });
   await expect(more).toBeVisible();
-  const visible = await shown.count();
-  await expect(more).toHaveText(`+${total - visible}`);
-  expect(visible).toBeLessThan(total);
 
-  // One row: every chip on the line of the button, and none past the end of the bar.
-  const barBox = (await bar(page).boundingBox())!;
-  const moreBox = (await more.boundingBox())!;
-  expect(moreBox.x + moreBox.width).toBeLessThanOrEqual(barBox.x + barBox.width + 1);
-  for (let i = 0; i < visible; i++) {
-    const box = (await shown.nth(i).boundingBox())!;
-    expect(Math.abs(box.y + box.height / 2 - (moreBox.y + moreBox.height / 2))).toBeLessThan(2);
-  }
+  // The inspector closes a moment after the window shrinks, and the bar then takes the
+  // room: until that happens, the bar is narrower than the chips measured for it.
+  await expect(async () => {
+    const visible = await shown.count();
+    await expect(more).toHaveText(`+${total - visible}`, { timeout: 500 });
+    expect(visible).toBeLessThan(total);
+
+    // One row: every chip on the line of the button, and none past the end of the bar.
+    const barBox = (await bar(page).boundingBox())!;
+    const moreBox = (await more.boundingBox())!;
+    expect(moreBox.x + moreBox.width).toBeLessThanOrEqual(barBox.x + barBox.width + 1);
+    for (let i = 0; i < visible; i++) {
+      const box = (await shown.nth(i).boundingBox())!;
+      expect(Math.abs(box.y + box.height / 2 - (moreBox.y + moreBox.height / 2))).toBeLessThan(2);
+    }
+  }).toPass();
 
   // +N opens the drawer, where all of them are.
   await more.click();

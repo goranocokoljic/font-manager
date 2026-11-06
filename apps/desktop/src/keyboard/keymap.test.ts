@@ -4,6 +4,7 @@ import {
   KEYMAP,
   ariaShortcut,
   bindingFor,
+  bindingsFor,
   chordOf,
   formatChord,
   matches,
@@ -47,9 +48,14 @@ describe('keymap', () => {
     expect(chordOf(action)).toEqual(chord);
   });
 
-  it('gives every chord one action', () => {
+  it('gives every chord one action, but for T: Tag first, then the preview field', () => {
     const chords = KEYMAP.map((b) => JSON.stringify(b.chord));
-    expect(new Set(chords).size).toBe(chords.length);
+    const shared = chords.filter((c, i) => chords.indexOf(c) !== i);
+    expect(shared).toEqual([JSON.stringify({ key: 't' })]);
+    expect(bindingsFor(key({ key: 't' })).map((b) => b.action)).toEqual([
+      ACTIONS.tag,
+      ACTIONS.previewField,
+    ]);
   });
 
   it('keeps Ctrl/Cmd+I for the inspector', () => {

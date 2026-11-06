@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { optionLabels, selectOption } from './select';
+import { optionLabels, showPreviewOptions } from './select';
 
 // E22.6: Adobe Fonts is listed under Online catalogs as a note and a link. The
 // browser-mode mock opens the link in a new tab, standing in for the default
@@ -146,13 +146,11 @@ test('turn Google Fonts on, browse, search and change the sample text, by keyboa
 
   // The same preview controls: a custom sample text shows in every row.
   const controls = page.getByRole('group', { name: 'Preview settings' });
-  const sample = controls.getByRole('combobox', { name: 'Sample' });
-  await sample.focus();
-  await selectOption(sample, 'custom');
-  const text = controls.getByRole('textbox', { name: 'Custom text' });
+  const text = controls.getByRole('textbox', { name: 'Type to preview' });
   await text.focus();
   await page.keyboard.type('Hamburgefonstiv');
   await expect(catalogRows(page).locator('.sample')).toHaveText(Array(4).fill('Hamburgefonstiv'));
+  await showPreviewOptions(page);
   const size = controls.getByRole('textbox', { name: /Size/ });
   await size.fill('48');
   await size.press('Enter');

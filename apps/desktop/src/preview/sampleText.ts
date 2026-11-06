@@ -5,11 +5,12 @@ import type { FaceSummary } from '../api/types';
 import { t } from '../i18n';
 
 /** Which text the preview rows show. */
-export type SampleKind = 'custom' | 'pangram' | 'lorem' | 'alphabet' | 'numerals' | 'fontName';
+export type SampleKind =
+  'custom' | 'pangram' | 'lorem' | 'alphabet' | 'numerals' | 'paragraph' | 'fontName';
 
 // Getters: the menu label is read in the language shown now; the texts below are specimens.
 export const SAMPLE_KINDS: { value: SampleKind; label: string }[] = (
-  ['pangram', 'custom', 'lorem', 'alphabet', 'numerals', 'fontName'] as const
+  ['pangram', 'custom', 'lorem', 'alphabet', 'numerals', 'paragraph', 'fontName'] as const
 ).map((value) => ({
   value,
   get label() {
@@ -28,8 +29,14 @@ const HANT_REGIONS = new Set(['TW', 'HK', 'MO']);
 
 export const LOREM =
   'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.';
-export const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz';
-export const NUMERALS = '0123456789 $€£¥ %‰ +−×÷= ½¼¾ #&@';
+export const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz';
+export const NUMERALS = '0123456789';
+export const SYMBOLS = '$€£¥ %‰ +−×÷= ½¼¾ #&@';
+/** The Alphabet sample: the character set at a glance (board `1-wall-alphabet.png`). */
+export const ALPHABET = `${LETTERS} ${NUMERALS} !?&@%`;
+/** The Paragraph sample: body text (board `1-wall-paragraph.png`). */
+export const PARAGRAPH =
+  'Typography is the craft of endowing human language with a durable visual form. It exists to honor content, and a page set with care invites the reader in and keeps them reading.';
 
 /** Whether `value` has the shape of a language preset code. */
 export function isLanguageCode(value: unknown): value is string {
@@ -104,6 +111,8 @@ export function sampleTextFor(
       return ALPHABET;
     case 'numerals':
       return NUMERALS;
+    case 'paragraph':
+      return PARAGRAPH;
     case 'fontName':
       return name;
   }

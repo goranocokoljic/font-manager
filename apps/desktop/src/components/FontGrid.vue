@@ -12,7 +12,9 @@
 // it there, and a card that was off screen just appears at its place.
 // A face whose family has a color palette chosen (E16.3) shows live text in
 // that palette instead, as a mask cannot show colors; so does every card while
-// outline or tracking is on (E16.1). The grid shares the list's cursor, selection
+// outline or tracking is on (E16.1), every card of a wrapped preset (E41.2: a thumbnail is
+// one line), and a card waiting for the thumbnail of a text just typed, so a key repaints
+// the wall on the next frame. The grid shares the list's cursor, selection
 // and keyboard model; Up/Down move by a line, Left/Right by a card, Enter expands a
 // family or opens a style. While the grid moves fast (E35.8, `list/settle.ts`) cards
 // ask for no thumbnails or faces and show their empty frame; once it settles, the
@@ -33,11 +35,14 @@ import {
   specimenScale,
   specimenText,
   WALL,
+  WALL_PRESETS,
   wallCardHeight,
   wallCardWidth,
   wallColumns,
   wallLinePx,
   wallSize,
+  wallSpecimenPx,
+  wrappedLines,
 } from '../list/grid';
 import { handleListKey, modeOf } from '../list/keys';
 import { useRowPreviews } from '../list/previews';
@@ -136,8 +141,13 @@ watch(
 );
 onBeforeUnmount(() => clearTimeout(reflowTimer));
 
-const linePx = computed(() => wallLinePx(layoutPx.value));
-const columns = computed(() => wallColumns(width.value, layoutPx.value));
+const preset = computed(() => props.preview.preset);
+/** The specimen's size now: the slider, scaled by the preset. */
+const specimenPx = computed(() => wallSpecimenPx(sizePx.value, preset.value));
+const wrapped = computed(() => WALL_PRESETS[preset.value].wrapped);
+
+const linePx = computed(() => wallLinePx(layoutPx.value, preset.value));
+const columns = computed(() => wallColumns(width.value, layoutPx.value, preset.value));
 const cardWidth = computed(() => wallCardWidth(width.value, columns.value));
 const count = computed(() => list.rows.length);
 const range = computed(() =>
@@ -215,7 +225,29 @@ const { previewOf } = useRowPreviews(
  * Cards draw live webview text instead of the thumbnail while outline or tracking is
  * on (E16.1): the thumbnail is a one-color mask rendered without either.
  */
-const liveText = computed(() => props.preview.outline || props.preview.trackingEm !== 0);
+const liveText = computed(
+  () => props.preview.outline || props.preview.trackingEm !== 0 || wrapped.value,
+);
+
+/**
+ * True once a text was typed or chosen here: from then on a card with no thumbnail for its
+ * text draws it live at once. `typing` holds back the thumbnails until the keys rest, as
+ * each key would ask for a render of every card.
+ */
+const textChanged = ref(false);
+const typing = ref(false);
+let typingTimer: ReturnType<typeof setTimeout> | undefined;
+watch(
+  [() => props.preview.sample, () => props.preview.customText, () => props.preview.language],
+  () => {
+    textChanged.value = true;
+    typing.value = true;
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => (typing.value = false), SETTLE_MS);
+  },
+  { flush: 'sync' },
+);
+onBeforeUnmount(() => clearTimeout(typingTimer));
 
 const rowId = (row: ListRow) => `fm-card-${row.key.replace(':', '-')}`;
 
@@ -234,14 +266,24 @@ onBeforeUnmount(() => clearTimeout(textTimer));
 /** The room of the specimen's text, at the size it was chosen for. */
 const textWidth = computed(
   () =>
-    specimenBox(wallCardWidth(width.value, wallColumns(width.value, textPx.value)), textPx.value)
-      .width,
+    specimenBox(
+      wallCardWidth(width.value, wallColumns(width.value, textPx.value, preset.value)),
+      textPx.value,
+      preset.value,
+    ).width,
 );
 /** The room a specimen has right now. */
-const box = computed(() => specimenBox(cardWidth.value, layoutPx.value));
+const box = computed(() => specimenBox(cardWidth.value, layoutPx.value, preset.value));
+/** The line height and the lines of a wrapped specimen. */
+const wrapLineHeight = computed(
+  () => WALL_PRESETS[preset.value].lineHeight ?? props.preview.lineHeight,
+);
+const wrapLines = computed(() =>
+  wrappedLines(box.value.height, specimenPx.value, wrapLineHeight.value),
+);
 
-/** A thumbnail and the size it was rendered at, which depends on its text. */
-type HeldThumbnail = Thumbnail & { renderPx: number };
+/** A thumbnail, the size it was rendered at, and the sample it was cut from. */
+type HeldThumbnail = Thumbnail & { renderPx: number; sample: string };
 
 /** A card's last thumbnail: it stays up while the thumbnail of a new text is on its way. */
 let lastThumbs = new Map<string, HeldThumbnail>();
@@ -250,18 +292,25 @@ const visible = computed(() => {
   const thumbs = new Map<string, HeldThumbnail>();
   const items = rendered.value.map((row, i) => {
     const p = previewOf(row);
-    const text = specimenText(p.text, textWidth.value, textPx.value);
+    const text = wrapped.value
+      ? p.text.trim()
+      : specimenText(p.text, textWidth.value, wallSpecimenPx(textPx.value, preset.value));
     const face = p.face;
     const palette = face ? palettes.fontPaletteOf(ALL_FONTS_VIEW, face) : undefined;
-    const live = !!palette || liveText.value;
+    const usesThumb = !!face && !palette && !liveText.value;
     const renderPx = specimenRenderPx(text, deviceScale());
-    const fresh = face && !live ? thumbnails.get(face.id, text, renderPx) : undefined;
+    const fresh = face && usesThumb ? thumbnails.get(face.id, text, renderPx) : undefined;
+    // A held thumbnail shows the same sample at another cut; another sample is a stale text.
+    const last = usesThumb ? lastThumbs.get(row.key) : undefined;
     const thumb = fresh
-      ? { ...fresh, renderPx }
-      : face && !live
-        ? lastThumbs.get(row.key)
+      ? { ...fresh, renderPx, sample: p.sample }
+      : last?.sample === p.sample
+        ? last
         : undefined;
     if (thumb) thumbs.set(row.key, thumb);
+    const failed =
+      face && usesThumb && !thumb ? thumbnails.hasFailed(face.id, text, renderPx) : false;
+    const live = !usesThumb || (!thumb && !failed && textChanged.value);
     return {
       row,
       index: range.value.start + i,
@@ -270,10 +319,11 @@ const visible = computed(() => {
       text,
       fallback: p.fallback,
       palette,
+      usesThumb,
       live,
       thumb,
       renderPx,
-      failed: face && !live && !thumb ? thumbnails.hasFailed(face.id, text, renderPx) : false,
+      failed,
       name: row.kind === 'face' ? styleName(row) : row.family.name,
     };
   });
@@ -283,9 +333,9 @@ const visible = computed(() => {
 
 // Ask for the thumbnails of the cards on screen, once the grid has settled.
 watchEffect(() => {
-  if (!motion.settled.value) return;
+  if (!motion.settled.value || typing.value) return;
   for (const item of visible.value)
-    if (item.face && item.text && !item.live)
+    if (item.face && item.text && item.usesThumb)
       thumbnails.want(item.face.id, item.text, item.renderPx);
 });
 
@@ -295,7 +345,7 @@ function cardStyle(index: number) {
   const line = Math.floor(index / cols);
   return {
     width: `${cardWidth.value}px`,
-    height: `${wallCardHeight(layoutPx.value)}px`,
+    height: `${wallCardHeight(layoutPx.value, preset.value)}px`,
     top: `${WALL.gap + line * linePx.value}px`,
     insetInlineStart: `${WALL.inset + (index % cols) * (cardWidth.value + WALL.gap)}px`,
   };
@@ -305,7 +355,7 @@ function thumbStyle(thumb: HeldThumbnail | undefined) {
   const color = props.preview.textColor ?? undefined;
   if (!thumb) return { color };
   const image = `url("${thumb.url}")`;
-  const scale = sizePx.value / thumb.renderPx;
+  const scale = specimenPx.value / thumb.renderPx;
   const w = thumb.width * scale;
   const h = thumb.height * scale;
   const fit = specimenScale(w, h, box.value);
@@ -387,6 +437,7 @@ function onToggle(row: ListRow): void {
     :style="viewportStyle"
     :data-surface="preview.surface"
     :data-columns="columns"
+    :data-preset="preset"
     role="listbox"
     tabindex="0"
     :aria-label="t('grid.label')"
@@ -428,8 +479,10 @@ function onToggle(row: ListRow): void {
             :face="item.face.id"
             :text="item.text"
             :palette="item.palette"
-            :size-px="sizePx"
-            :fit-width="box.width"
+            :size-px="specimenPx"
+            :fit-width="wrapped ? undefined : box.width"
+            :wrap-lines="wrapped ? wrapLines : undefined"
+            :line-height="wrapped ? wrapLineHeight : undefined"
             :tracking-em="preview.trackingEm"
             :outline="preview.outline"
             :color="preview.textColor"

@@ -145,6 +145,7 @@ test('the outline toggle draws outlines in every view mode and turns off again',
   const strip = await openTableStrip(page);
   expect(await strip.evaluate(fill)).toBe('rgba(0, 0, 0, 0)');
 
+  await showPreviewOptions(page);
   await controls.getByRole('checkbox', { name: 'Outline' }).uncheck();
   await expect.poll(() => strip.evaluate(fill)).toBe(solid);
   await modeButton(page, 'Grid').click();
@@ -194,6 +195,7 @@ test('the tracking slider applies in every view mode and in the preview strip', 
   await expect(strip).toHaveCSS('letter-spacing', '14px');
 
   // Keyboard: an arrow on the slider steps it by 0.01 em.
+  await showPreviewOptions(page);
   await slider.focus();
   await page.keyboard.press('ArrowLeft');
   await expect(controls.getByLabel('Tracking in em')).toHaveValue('0.49');

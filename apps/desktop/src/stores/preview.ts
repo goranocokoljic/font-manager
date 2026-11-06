@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { computed, ref, watch } from 'vue';
 import type { Density, LanguagePreset, SizeBasis } from '../api/types';
 import { DEFAULT_DENSITY, DENSITY_ROWS } from '../list/density';
+import type { WallPreset } from '../list/grid';
 import {
   FALLBACK_LANGUAGE,
   isLanguageCode,
@@ -13,6 +14,27 @@ import { useSearchStore } from './search';
 
 /** The localStorage key of the saved preview settings (a view preference). */
 export const PREVIEW_STORAGE_KEY = 'fm.preview.v1';
+/** The localStorage key of the languages chosen last (a view preference of every view). */
+export const RECENT_LANGUAGES_KEY = 'fm.preview.recentLanguages.v1';
+/** How many recent languages the picker lists first. */
+export const RECENT_LANGUAGES_MAX = 5;
+
+/** The preset chips, in their order on screen. */
+export const WALL_PRESET_IDS: readonly WallPreset[] = [
+  'word',
+  'pangram',
+  'alphabet',
+  'numerals',
+  'paragraph',
+];
+/** The sample each chip puts on the wall. Word is the user's own text. */
+const PRESET_SAMPLE: Record<WallPreset, SampleKind> = {
+  word: 'custom',
+  pangram: 'pangram',
+  alphabet: 'alphabet',
+  numerals: 'numerals',
+  paragraph: 'paragraph',
+};
 
 /** The view the "All fonts" list uses. Later views (collections, sets) pass their own id. */
 export const ALL_FONTS_VIEW = 'all';
@@ -31,6 +53,8 @@ export type Surface = 'auto' | 'light' | 'dark';
 export type AutoSize = 'off' | SizeBasis;
 
 export interface PreviewSettings {
+  /** The wall's layout (E41.2). Lists take its text only, through `sample`. */
+  preset: WallPreset;
   sample: SampleKind;
   customText: string;
   /** Language preset code of the pangram (`sr-Cyrl`). */
@@ -54,6 +78,7 @@ export interface PreviewSettings {
 }
 
 export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
+  preset: 'word',
   sample: 'pangram',
   customText: '',
   language: FALLBACK_LANGUAGE,
@@ -102,6 +127,7 @@ export function normalizePreview(raw: unknown): PreviewSettings {
   >;
   const d = DEFAULT_PREVIEW;
   return {
+    preset: pick(r.preset, WALL_PRESET_IDS, d.preset),
     sample: pick(
       r.sample,
       SAMPLE_KINDS.map((k) => k.value),
@@ -145,6 +171,17 @@ function readSaved(storage: Storage | undefined): Record<string, PreviewSettings
     // A damaged entry falls back to the defaults.
   }
   return views;
+}
+
+function readRecent(storage: Storage | undefined): string[] {
+  try {
+    const parsed: unknown = JSON.parse(storage?.getItem(RECENT_LANGUAGES_KEY) ?? 'null');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isLanguageCode).slice(0, RECENT_LANGUAGES_MAX);
+  } catch {
+    // A damaged entry starts the list again.
+    return [];
+  }
 }
 
 /** The UI/OS languages, most wanted first; empty where the webview gives none. */
@@ -211,6 +248,38 @@ export const usePreviewStore = defineStore('preview', () => {
     views.value = { ...views.value, [view]: normalizePreview({ ...settingsFor(view), ...patch }) };
   }
 
+  /** A preset chip: the wall's layout and its text. */
+  function applyPreset(view: string, preset: WallPreset): void {
+    update(view, { preset, sample: PRESET_SAMPLE[preset] });
+  }
+
+  const recentLanguages = ref<string[]>(readRecent(storage));
+
+  /** The Language picker: that language's pangram goes on the wall, and it becomes recent. */
+  function chooseLanguage(view: string, language: string): void {
+    update(view, { language, preset: 'pangram', sample: PRESET_SAMPLE.pangram });
+    recentLanguages.value = [
+      language,
+      ...recentLanguages.value.filter((c) => c !== language),
+    ].slice(0, RECENT_LANGUAGES_MAX);
+    try {
+      storage?.setItem(RECENT_LANGUAGES_KEY, JSON.stringify(recentLanguages.value));
+    } catch {
+      // Storage full or blocked: the list still works for this session.
+    }
+  }
+
+  /**
+   * The languages the picker lists: the recent ones first, then the rest in the API's
+   * order. A language without a pangram has nothing to show, so it cannot be chosen.
+   */
+  const languagePicks = computed(() => {
+    const known = new Map(search.languages.map((l) => [l.code, l]));
+    const recent = recentLanguages.value.flatMap((c) => known.get(c) ?? []);
+    const rest = search.languages.filter((l) => !recent.includes(l));
+    return [...recent, ...rest];
+  });
+
   /** Puts `view` back to the defaults. */
   function reset(view: string): void {
     const rest = { ...views.value };
@@ -234,6 +303,10 @@ export const usePreviewStore = defineStore('preview', () => {
     pangramText,
     settingsFor,
     update,
+    applyPreset,
+    recentLanguages,
+    chooseLanguage,
+    languagePicks,
     reset,
   };
 });
