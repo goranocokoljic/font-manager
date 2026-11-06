@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilySample from '../components/FamilySample.vue';
+import FamilyStyles from '../components/FamilyStyles.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorDeveloper from '../components/InspectorDeveloper.vue';
 import InspectorFeatures from '../components/InspectorFeatures.vue';
@@ -26,7 +27,7 @@ import { FmFade } from '../motion';
 import { useHeldFace } from '../preview/useHeldFace';
 import { sampleText } from '../preview/sampleText';
 import { useWeightScrub } from '../preview/useWeightScrub';
-import { coordinateSettings, variationSettings } from '../preview/variations';
+import { variationSettings } from '../preview/variations';
 import { useAxesStore } from '../stores/axes';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { FAMILY_SECTIONS, parseFamilyId, useFamilyPageStore } from '../stores/familyPage';
@@ -96,10 +97,6 @@ const shown = computed(() =>
 );
 const heroVariation = computed(() =>
   page.face ? variationSettings(shown.value?.axes ?? [], axesSet.values(page.face.id) ?? []) : '',
-);
-/** A Styles row moves with the axes the user moved; a variable row otherwise stays at its own default. */
-const movedVariation = computed(() =>
-  coordinateSettings((page.face && axesSet.values(page.face.id)) ?? []),
 );
 const specimenStyle = computed(() => {
   const face = page.face;
@@ -379,36 +376,12 @@ onBeforeUnmount(() => {
                   :data-section="page.section"
                   :aria-label="t(`family.sections.${page.section}`)"
                 >
-                  <ul v-if="page.section === 'styles'" class="styles">
-                    <li v-for="f in page.faces" :key="f.id">
-                      <button
-                        type="button"
-                        class="style"
-                        :aria-pressed="f.id === page.face?.id"
-                        @click="chooseStyle(f.id)"
-                      >
-                        {{ f.style }}
-                      </button>
-                      <FamilySample
-                        class="row-sample"
-                        data-testid="family-style-sample"
-                        aria-hidden="true"
-                        :face="f.id"
-                        :text="specimen"
-                        :variation="f.isVariable ? movedVariation : 'normal'"
-                      />
-                    </li>
-                    <li v-for="pin in page.pins" :key="`pin-${pin.id}`" data-testid="family-pin">
-                      <span class="style">{{ pin.name }}</span>
-                      <FamilySample
-                        class="row-sample"
-                        aria-hidden="true"
-                        :face="pin.face"
-                        :text="specimen"
-                        :variation="coordinateSettings(pin.coordinates)"
-                      />
-                    </li>
-                  </ul>
+                  <FamilyStyles
+                    v-if="page.section === 'styles'"
+                    :detail="shown"
+                    :text="specimen"
+                    @choose="chooseStyle"
+                  />
                   <InspectorGlyphs v-else-if="page.section === 'characters'" />
                   <InspectorFeatures v-else-if="page.section === 'features'" />
                   <InspectorInfo v-else-if="page.section === 'info'" />
@@ -603,36 +576,9 @@ onBeforeUnmount(() => {
   grid-area: 1 / 1;
   min-width: 0;
 }
-.styles {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.styles li {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-  align-items: center;
-  column-gap: var(--fm-space-3);
-  border-bottom: 1px solid var(--fm-border);
-}
-.row-sample {
-  font-size: var(--fm-text-lg);
-}
 .rail-sample {
   margin-block-end: var(--fm-space-3);
   font-size: var(--fm-text-lg);
-}
-.style {
-  padding: var(--fm-space-2) 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-.style[aria-pressed='true'] {
-  font-weight: 600;
 }
 .developer {
   display: flex;

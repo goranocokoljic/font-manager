@@ -14,6 +14,7 @@ import { useHeldFace } from '../preview/useHeldFace';
 import InspectorTabHead from './InspectorTabHead.vue';
 import CopyCss from './CopyCss.vue';
 import UiButton from './ui/UiButton.vue';
+import UiSwitch from './ui/UiSwitch.vue';
 
 const selection = useSelectionStore();
 const features = useFeaturesStore();
@@ -94,17 +95,7 @@ function reset(): void {
               <span class="sample on" :style="sampleStyle(f, 1)">{{ sample(f) }}</span>
             </span>
           </span>
-          <button
-            type="button"
-            role="switch"
-            class="switch"
-            :aria-checked="on(f)"
-            :aria-label="label(f)"
-            :data-tag="f.tag"
-            @click="toggle(f)"
-          >
-            <span class="knob" aria-hidden="true" />
-          </button>
+          <UiSwitch :checked="on(f)" :aria-label="label(f)" :data-tag="f.tag" @click="toggle(f)" />
         </li>
       </ul>
       <section v-if="automatic.length" aria-labelledby="fm-features-automatic">
@@ -179,38 +170,5 @@ h3 {
   margin-inline-start: 4px;
   color: var(--fm-muted);
   font-family: var(--fm-font-mono);
-}
-.switch {
-  position: relative;
-  box-sizing: border-box;
-  flex: none;
-  width: 32px;
-  height: 18px;
-  padding: 0;
-  border: 1px solid var(--fm-border-strong);
-  border-radius: var(--fm-radius-md);
-  background-color: var(--fm-surface-2);
-  transition:
-    background-color var(--fm-motion-fast) var(--fm-ease),
-    border-color var(--fm-motion-fast) var(--fm-ease);
-}
-.knob {
-  position: absolute;
-  top: 50%;
-  inset-inline-start: 3px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--fm-control-border);
-  transform: translateY(-50%);
-  transition: inset-inline-start var(--fm-motion-fast) var(--fm-ease);
-}
-.switch[aria-checked='true'] {
-  border-color: var(--fm-accent);
-  background: var(--fm-accent);
-}
-.switch[aria-checked='true'] .knob {
-  inset-inline-start: 17px;
-  background-color: var(--fm-on-accent);
 }
 </style>

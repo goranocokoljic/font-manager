@@ -3,10 +3,12 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, type FmClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE } from '../api/mock';
+import { errorMessage } from '../i18n';
 import { useFamilyPageStore, parseFamilyId } from './familyPage';
 import { useFontListStore } from './fontList';
 import { useLibraryStore } from './library';
 import { useSearchStore } from './search';
+import { useToastStore } from './toast';
 
 let client: FmClient;
 
@@ -181,6 +183,75 @@ describe('the family page store', () => {
     const active = await client.listActive();
     expect(active.find((a) => a.face === first!.id)?.mode).toBe('permanent');
     for (const f of rest) expect(active.find((a) => a.face === f.id)?.mode).toBe('session');
+  });
+
+  it('toggles one face and leaves the others of the family alone', async () => {
+    const { page, list } = await setup();
+    await page.show(list.families[list.families.length - 1]!.id);
+    const [first, second, third] = page.faces;
+    await client.activate({
+      target: { kind: 'faces', faces: [second!.id] },
+      mode: 'permanent',
+      onConflict: 'replace',
+    });
+    await page.show(page.id);
+
+    await page.toggleFace(page.faces[0]!);
+    let active = await client.listActive();
+    expect(active.some((a) => a.face === first!.id)).toBe(true);
+    expect(active.find((a) => a.face === second!.id)?.mode).toBe('permanent');
+    expect(active.some((a) => a.face === third!.id)).toBe(false);
+    // The page reads the family again, so the row's switch shows the new state.
+    expect(page.faces[0]!.active).not.toBeNull();
+
+    await page.toggleFace(page.faces[0]!);
+    active = await client.listActive();
+    expect(active.some((a) => a.face === first!.id)).toBe(false);
+    expect(active.find((a) => a.face === second!.id)?.mode).toBe('permanent');
+    expect(page.faces[0]!.active).toBeNull();
+  });
+
+  it('deletes one pin, and its face and the other pin stay', async () => {
+    client = createMockClient({});
+    setClient(client);
+    await useLibraryStore().load();
+    const page = useFamilyPageStore();
+    const brand = await client.createCollection({ name: 'Brand' });
+    const coordinates = [{ tag: 'wght', value: 537 }];
+    const gone = await client.pinInstance({
+      face: 1,
+      name: 'Gone',
+      coordinates,
+      collection: brand.id,
+    });
+    await client.pinInstance({ face: 1, name: 'Kept', coordinates, collection: brand.id });
+    await page.show((await client.getFace(1)).face.family);
+    await flushPromises();
+    await page.deletePin(gone);
+    expect(page.pins.map((p) => p.name)).toEqual(['Kept']);
+    expect(useToastStore().toast?.message).toContain('Gone');
+    expect((await client.getFace(1)).face.id).toBe(1);
+  });
+
+  it('keeps the pin and tells why when the API refuses to delete it', async () => {
+    client = createMockClient({});
+    setClient(client);
+    await useLibraryStore().load();
+    const page = useFamilyPageStore();
+    const brand = await client.createCollection({ name: 'Brand' });
+    const pin = await client.pinInstance({
+      face: 1,
+      name: 'Stays',
+      coordinates: [{ tag: 'wght', value: 537 }],
+      collection: brand.id,
+    });
+    await page.show((await client.getFace(1)).face.family);
+    await flushPromises();
+    const refused = { kind: 'internal', message: 'no' };
+    vi.spyOn(client, 'deleteVirtualStyle').mockRejectedValue(refused);
+    await page.deletePin(pin);
+    expect(page.pins.map((p) => p.name)).toEqual(['Stays']);
+    expect(useToastStore().toast?.message).toBe(errorMessage(refused));
   });
 
   it('favorites every face of the family, and takes it back', async () => {

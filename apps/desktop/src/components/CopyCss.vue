@@ -10,6 +10,8 @@ const props = defineProps<{
   label: string;
   /** The declaration to copy (`font-variation-settings: "wght" 650;`). */
   css: () => Promise<string>;
+  /** For a row with one tab stop: the button's place in the tab order. */
+  tabindex?: number;
 }>();
 
 const { status, copy } = useCopy();
@@ -21,7 +23,11 @@ const { status, copy } = useCopy();
       <template v-if="status === 'copied'">{{ t('common.copied') }}</template>
       <template v-else-if="status === 'failed'">{{ t('copy.failed') }}</template>
     </span>
-    <UiButton :aria-label="t('copy.cssFor', { label })" @click="copy(props.css())">
+    <UiButton
+      :aria-label="t('copy.cssFor', { label })"
+      :tabindex="tabindex"
+      @click="copy(props.css())"
+    >
       {{ t('copy.css') }}
     </UiButton>
   </span>
