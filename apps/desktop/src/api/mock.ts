@@ -2816,7 +2816,14 @@ export function createMockClient(options: MockOptions = {}): FmClient {
       const query = req.query ?? '';
       const filters = req.filters ?? {};
       const rule = req.rule ?? null;
-      const all = hits(query, filters, rule);
+      const found = hits(query, filters, rule);
+      // As fm-core: an order replaces the ranking, before the page window.
+      const all = req.order
+        ? sortFamilies(
+            found.map((h) => h.family),
+            req.order,
+          ).map((f) => found.find((h) => h.family.id === f.id)!)
+        : found;
       const offset = req.page?.offset ?? 0;
       const limit = req.page?.limit ?? 100;
       return {

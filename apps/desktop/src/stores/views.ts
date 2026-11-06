@@ -128,10 +128,9 @@ export const useViewsStore = defineStore('views', () => {
   const presetFor = (view: string): LayoutPreset => stateOf(view).preset;
   const layoutFor = (view: string): string => stateOf(view).layout;
 
-  /** The API order of `view`: the table's sort column in table mode, else the default. */
+  /** The API order of `view`, in every mode: the count line says it and offers to change it. */
   function orderFor(view: string): FamilyOrder | null {
-    const s = stateOf(view);
-    return s.mode === 'table' ? orderOf(s.table) : null;
+    return orderOf(stateOf(view).table);
   }
 
   function setMode(view: string, mode: ViewMode): void {
@@ -151,6 +150,9 @@ export const useViewsStore = defineStore('views', () => {
   }
 
   const sortBy = (view: string, id: ColumnId) => updateTable(view, (t) => cycleSort(t, id));
+  /** Sorts by this column; `null`: the default order (best match, or A to Z). */
+  const setSort = (view: string, column: ColumnId | null, descending = false) =>
+    updateTable(view, (t) => ({ ...t, sort: column && { column, descending } }));
   const moveColumn = (view: string, id: ColumnId, to: number) =>
     updateTable(view, (t) => moveIn(t, id, to));
   const toggleColumn = (view: string, id: ColumnId) => updateTable(view, (t) => toggleIn(t, id));
@@ -187,6 +189,7 @@ export const useViewsStore = defineStore('views', () => {
     setPreset,
     setLayout,
     sortBy,
+    setSort,
     moveColumn,
     toggleColumn,
     setStripSize,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
@@ -14,6 +14,7 @@ import LayoutActions from '../components/LayoutActions.vue';
 import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
+import WallCountLine from '../components/WallCountLine.vue';
 import InspectorPanel from '../components/InspectorPanel.vue';
 import LibraryViewsSidebar from '../components/LibraryViewsSidebar.vue';
 import UiButton from '../components/ui/UiButton.vue';
@@ -25,6 +26,7 @@ import UiSegmentedControl from '../components/ui/UiSegmentedControl.vue';
 import MainLayout from '../components/MainLayout.vue';
 import OnlineCatalogsSidebar from '../components/OnlineCatalogsSidebar.vue';
 import PreviewControls from '../components/PreviewControls.vue';
+import PreviewSizeSlider from '../components/PreviewSizeSlider.vue';
 import PreviewStrip from '../components/PreviewStrip.vue';
 import UiSelect from '../components/ui/UiSelect.vue';
 import ProblemsSidebar from '../components/ProblemsSidebar.vue';
@@ -461,6 +463,15 @@ function showFace(face: FaceId): void {
   void router.replace({ query: { ...route.query, face: String(face) } });
 }
 
+const browse = ref<HTMLElement | null>(null);
+
+/** Escape in the search box or the preview field: back to the font list the keys drive. */
+function focusList(): void {
+  browse.value
+    ?.querySelector<HTMLElement>('[role="listbox"], [role="tree"], [role="treegrid"]')
+    ?.focus({ preventScroll: true });
+}
+
 /** Enter on a style: show it, opening the inspector when it is hidden. */
 function openFace(face: FaceId): void {
   showFace(face);
@@ -500,15 +511,8 @@ function openFace(face: FaceId): void {
             @click="layout.toggleSidebar"
           />
           <h1 class="title">{{ collections.open?.name ?? libraryViews.currentLabel }}</h1>
-          <SearchBox />
-          <p class="count" role="status">
-            <template v-if="fontList.selectedCount > 1">{{
-              t('home.selected', { count: fontList.selectedCount })
-            }}</template>
-            <template v-else-if="search.hits">{{
-              t('home.families', { count: search.total })
-            }}</template>
-          </p>
+          <SearchBox @leave="focusList" />
+          <FilterChips v-show="!similar.open" class="filters" />
           <UiSegmentedControl
             :model-value="mode"
             :options="modeOptions"
@@ -550,14 +554,20 @@ function openFace(face: FaceId): void {
             :title="t('home.inspectorTitle')"
             @click="layout.toggleInspector"
           />
-        </header>
-        <div v-show="!similar.open" class="browse">
-          <CollectionHeader />
-          <FilterChips />
-          <PreviewControls
+          <PreviewSizeSlider
             :view="ALL_FONTS_VIEW"
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
           />
+        </header>
+        <div v-show="!similar.open" ref="browse" class="browse">
+          <CollectionHeader />
+          <PreviewControls
+            :view="ALL_FONTS_VIEW"
+            :size-range="mode === 'grid' ? WALL_SIZE : undefined"
+            :font-count="search.total"
+            @leave="focusList"
+          />
+          <WallCountLine :view="ALL_FONTS_VIEW" />
           <template v-if="fontList.families.length && mode === 'table'">
             <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
             <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
@@ -675,23 +685,38 @@ function openFace(face: FaceId): void {
   min-height: 0;
 }
 .toolbar {
+  /* A stacking level of its own, above the view below: the Columns menu opens over it. */
+  position: relative;
+  z-index: 1;
+  container-type: inline-size;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
   gap: var(--fm-space-1);
-  height: 48px;
-  padding: 0 var(--fm-space-3);
+  min-height: 48px;
+  padding: var(--fm-space-2) var(--fm-space-3);
   border-bottom: 1px solid var(--fm-border);
+}
+/* The rest of the bar: Filters and its chips, one row. */
+.filters {
+  flex: 1 1 0;
+  min-width: 120px;
+}
+/* A column too narrow for both: the filters take a row of their own under the controls. */
+@container (max-width: 960px) {
+  .filters {
+    order: 1;
+    flex-basis: 100%;
+  }
+  .title {
+    flex: 1;
+  }
 }
 .title {
   margin: 0;
   font-size: var(--fm-text-md);
   font-weight: 600;
-}
-.count {
-  flex: 1;
-  margin: 0;
-  color: var(--fm-muted);
+  white-space: nowrap;
 }
 /* In the layout file bar: at its own end. */
 .studio {

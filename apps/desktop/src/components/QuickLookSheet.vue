@@ -12,7 +12,14 @@ import { t } from '../i18n';
 import UiIconButton from './ui/UiIconButton.vue';
 import { sheetReturnTarget } from '../keyboard/returnFocus';
 import { useFaceLoader } from '../preview/faceLoader';
-import { ALPHABET, LOREM, NUMERALS, fontNameSample, sampleText } from '../preview/sampleText';
+import {
+  LETTERS,
+  LOREM,
+  NUMERALS,
+  SYMBOLS,
+  fontNameSample,
+  sampleText,
+} from '../preview/sampleText';
 import { useFontListStore } from '../stores/fontList';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useQuickLookStore } from '../stores/quickLook';
@@ -57,7 +64,7 @@ const text = computed(() =>
 const font = computed(() =>
   family.value ? `"${family.value}", var(--fm-preview-fallback, system-ui), sans-serif` : undefined,
 );
-const alphabet = `${ALPHABET}  ${NUMERALS}`;
+const alphabet = `${LETTERS}  ${NUMERALS} ${SYMBOLS}`;
 const SIZES = [12, 14, 18, 24, 36];
 
 // The list cursor follows the arrows; the sheet shows whatever face it lands on.

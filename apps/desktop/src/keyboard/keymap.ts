@@ -25,6 +25,7 @@ export const ACTIONS = {
   compare: 'compare.add',
   quickCollection: 'quickCollection.toggle',
   tag: 'tags.openPanel',
+  previewField: 'preview.focusField',
   similar: 'face.findSimilar',
   viewMode: (n: 1 | 2 | 3 | 4 | 5) => `view.mode${n}`,
   settings: 'settings.open',
@@ -41,6 +42,8 @@ export const ACTIONS = {
  * T opens the multi-tagging panel for the selected fonts (E13.4).
  * S finds the fonts that look like the selected one (E23.3).
  * Arrows and Enter inside the font list belong to the list itself (E5.2).
+ * T with no row to tag focuses the preview field (E41.2): a chord with two bindings runs
+ * the first one enabled, in this order.
  */
 export const KEYMAP: readonly Binding[] = [
   { action: ACTIONS.search, chord: { key: '/' } },
@@ -51,6 +54,7 @@ export const KEYMAP: readonly Binding[] = [
   { action: ACTIONS.compare, chord: { key: 'c' } },
   { action: ACTIONS.quickCollection, chord: { key: 'b' } },
   { action: ACTIONS.tag, chord: { key: 't' } },
+  { action: ACTIONS.previewField, chord: { key: 't' } },
   { action: ACTIONS.similar, chord: { key: 's' } },
   ...([1, 2, 3, 4, 5] as const).map((n) => ({
     action: ACTIONS.viewMode(n),
@@ -141,9 +145,14 @@ export function yieldsToFocus(e: KeyboardEvent, chord: Chord): boolean {
   return chord.key === 'space' && isControl(el);
 }
 
-/** The binding the event triggers, if any. */
+/** The bindings the event can trigger, in keymap order. */
+export function bindingsFor(e: KeyboardEvent): Binding[] {
+  return KEYMAP.filter((b) => matches(e, b.chord) && !yieldsToFocus(e, b.chord));
+}
+
+/** The first binding the event triggers, if any. */
 export function bindingFor(e: KeyboardEvent): Binding | undefined {
-  return KEYMAP.find((b) => matches(e, b.chord) && !yieldsToFocus(e, b.chord));
+  return bindingsFor(e)[0];
 }
 
 /** True on macOS, where the modifier shows as ⌘. */

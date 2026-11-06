@@ -5,6 +5,7 @@ import {
   ALPHABET,
   LOREM,
   NUMERALS,
+  PARAGRAPH,
   pickLanguage,
   SAMPLE_KINDS,
   sampleText as sampleTextWith,
@@ -36,7 +37,7 @@ describe('sample texts', () => {
 
   it('offers every sample kind of the criterion', () => {
     expect(SAMPLE_KINDS.map((k) => k.value).sort()).toEqual(
-      ['alphabet', 'custom', 'fontName', 'lorem', 'numerals', 'pangram'].sort(),
+      ['alphabet', 'custom', 'fontName', 'lorem', 'numerals', 'paragraph', 'pangram'].sort(),
     );
   });
 
@@ -44,6 +45,7 @@ describe('sample texts', () => {
     expect(sampleText({ ...base, sample: 'lorem' }, face)).toBe(LOREM);
     expect(sampleText({ ...base, sample: 'alphabet' }, face)).toBe(ALPHABET);
     expect(sampleText({ ...base, sample: 'numerals' }, face)).toBe(NUMERALS);
+    expect(sampleText({ ...base, sample: 'paragraph' }, face)).toBe(PARAGRAPH);
     expect(sampleText({ ...base, sample: 'pangram' }, face)).toBe('English pangram');
     expect(sampleText({ ...base, sample: 'custom', customText: 'Hamburgefonstiv' }, face)).toBe(
       'Hamburgefonstiv',

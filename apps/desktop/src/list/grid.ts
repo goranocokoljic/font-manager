@@ -76,13 +76,85 @@ export const WALL = {
 export const wallSize = (sizePx: number) =>
   Math.min(WALL_SIZE.max, Math.max(WALL_SIZE.min, sizePx));
 
-/** The narrowest card at `sizePx`. */
-export const wallMinWidth = (sizePx: number) =>
-  Math.max(WALL.minWidth, Math.round(wallSize(sizePx) * WALL.widthPerPx));
+/** The preset chips (E41.2): each is a different layout of the wall. */
+export type WallPreset = 'word' | 'pangram' | 'alphabet' | 'numerals' | 'paragraph';
+
+/** The body size of the Paragraph preset, in CSS px: the slider does not change it. */
+export const PARAGRAPH_PX = 17;
+
+/**
+ * Each preset's layout (boards `1-wall-<preset>.png`). `scale` is the slider's factor;
+ * Paragraph has none, its size is fixed. Widths and heights are per px of specimen text.
+ * `lineHeight` is set for a preset of wrapped text; null takes the view's line height.
+ */
+export const WALL_PRESETS: Record<
+  WallPreset,
+  {
+    scale: number | null;
+    minWidth: number;
+    widthPerPx: number;
+    heightPerPx: number;
+    wrapped: boolean;
+    lineHeight: number | null;
+  }
+> = {
+  word: {
+    scale: 1,
+    minWidth: WALL.minWidth,
+    widthPerPx: WALL.widthPerPx,
+    heightPerPx: WALL.heightPerPx,
+    wrapped: false,
+    lineHeight: null,
+  },
+  pangram: {
+    scale: 0.6,
+    minWidth: 520,
+    widthPerPx: 7.5,
+    heightPerPx: 3.6,
+    wrapped: false,
+    lineHeight: null,
+  },
+  alphabet: {
+    scale: 0.42,
+    minWidth: 520,
+    widthPerPx: 10,
+    heightPerPx: 6,
+    wrapped: true,
+    lineHeight: null,
+  },
+  numerals: {
+    scale: 0.75,
+    minWidth: WALL.minWidth,
+    widthPerPx: WALL.widthPerPx,
+    heightPerPx: WALL.heightPerPx,
+    wrapped: false,
+    lineHeight: null,
+  },
+  paragraph: {
+    scale: null,
+    minWidth: 520,
+    widthPerPx: 0,
+    heightPerPx: 7.7,
+    wrapped: true,
+    lineHeight: 1.45,
+  },
+};
+
+/** The specimen's text size for the slider's `sizePx` in `preset`. */
+export function wallSpecimenPx(sizePx: number, preset: WallPreset = 'word'): number {
+  const { scale } = WALL_PRESETS[preset];
+  return scale === null ? PARAGRAPH_PX : wallSize(sizePx) * scale;
+}
+
+/** The narrowest card at `sizePx` in `preset`. */
+export function wallMinWidth(sizePx: number, preset: WallPreset = 'word'): number {
+  const p = WALL_PRESETS[preset];
+  return Math.max(p.minWidth, Math.round(wallSpecimenPx(sizePx, preset) * p.widthPerPx));
+}
 
 /** Cards per line in a viewport `width` px wide at `sizePx`; at least one. */
-export function wallColumns(width: number, sizePx: number): number {
-  return gridColumns(width - 2 * WALL.inset + WALL.gap, wallMinWidth(sizePx) + WALL.gap);
+export function wallColumns(width: number, sizePx: number, preset: WallPreset = 'word'): number {
+  return gridColumns(width - 2 * WALL.inset + WALL.gap, wallMinWidth(sizePx, preset) + WALL.gap);
 }
 
 /** A card's width when `columns` cards share a viewport `width` px wide. */
@@ -90,17 +162,25 @@ export const wallCardWidth = (width: number, columns: number) =>
   Math.max(0, (width - 2 * WALL.inset - (columns - 1) * WALL.gap) / columns);
 
 /** A card's height at `sizePx`. */
-export const wallCardHeight = (sizePx: number) =>
-  Math.round(wallSize(sizePx) * WALL.heightPerPx) + WALL.chromePx;
+export const wallCardHeight = (sizePx: number, preset: WallPreset = 'word') =>
+  Math.round(wallSpecimenPx(sizePx, preset) * WALL_PRESETS[preset].heightPerPx) + WALL.chromePx;
 
 /** A line's height at `sizePx`: its card and the gap under it. */
-export const wallLinePx = (sizePx: number) => wallCardHeight(sizePx) + WALL.gap;
+export const wallLinePx = (sizePx: number, preset: WallPreset = 'word') =>
+  wallCardHeight(sizePx, preset) + WALL.gap;
 
 /** The room a card's specimen has, in CSS px. */
-export const specimenBox = (cardWidth: number, sizePx: number) => ({
+export const specimenBox = (cardWidth: number, sizePx: number, preset: WallPreset = 'word') => ({
   width: Math.max(0, cardWidth - 2 * WALL.paddingPx),
-  height: Math.max(0, wallCardHeight(sizePx) - WALL.chromePx),
+  height: Math.max(0, wallCardHeight(sizePx, preset) - WALL.chromePx),
 });
+
+/**
+ * The lines of wrapped text that fit `height` px; at least one, so no line is cut.
+ * `height` is rounded to a whole px: half a px of slack keeps a line that fits exactly.
+ */
+export const wrappedLines = (height: number, specimenPx: number, lineHeight: number) =>
+  Math.max(1, Math.floor((height + 0.5) / (specimenPx * lineHeight)));
 
 /** Longest specimen, in characters: a guard for long text without spaces (Chinese, say). */
 export const SPECIMEN_TEXT_MAX = 64;

@@ -193,7 +193,15 @@ impl FamilyOrder {
     /// Sorts `rows` in this order. Every implementation of
     /// [`LibraryService::list_families`] uses this, so the order is one.
     pub fn sort(&self, rows: &mut [FamilySummary]) {
-        rows.sort_by_cached_key(|f| (self.key(f), f.name.to_lowercase(), f.id.0));
+        self.sort_by_family(rows, |f| f);
+    }
+
+    /// Sorts `rows`, each with a family row, in this order (the same one as [`Self::sort`]).
+    pub fn sort_by_family<T>(&self, rows: &mut [T], family: impl Fn(&T) -> &FamilySummary) {
+        rows.sort_by_cached_key(|row| {
+            let f = family(row);
+            (self.key(f), f.name.to_lowercase(), f.id.0)
+        });
     }
 
     /// The sort key of one row: values first (reversed when descending), then

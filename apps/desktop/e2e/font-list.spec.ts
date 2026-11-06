@@ -168,7 +168,7 @@ test('Enter on a style opens the inspector when it is hidden', async ({ page }) 
 
 test('multi-select with Shift, Ctrl/Cmd and the mouse', async ({ page }) => {
   const tree = await open(page, '?mockFaces=3&mockStyles=4');
-  const status = page.locator('.toolbar [role="status"]');
+  const status = page.getByTestId('count-line').getByRole('status');
   const selected = tree.locator('[role="treeitem"][aria-selected="true"]');
   await tree.getByRole('treeitem', { name: 'Inter, 1 style' }).click();
   await page.keyboard.press('Shift+ArrowDown');
@@ -194,7 +194,7 @@ test('multi-select with Shift, Ctrl/Cmd and the mouse', async ({ page }) => {
   await expect(status).toHaveText('6 selected');
   await page.keyboard.press('ArrowUp');
   await expect(selected).toHaveCount(1);
-  await expect(status).toHaveText('');
+  await expect(status).toHaveText('6 families');
 });
 
 for (const scheme of ['light', 'dark'] as const) {

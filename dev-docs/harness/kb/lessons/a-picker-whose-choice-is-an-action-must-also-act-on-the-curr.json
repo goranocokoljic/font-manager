@@ -1,0 +1,19 @@
+{
+  "id": "a-picker-whose-choice-is-an-action-must-also-act-on-the-curr",
+  "title": "A picker whose choice is an action must also act on the current option",
+  "category": "correctness",
+  "rule": "When choosing an option in UiSelect does more than set a value (it puts text on the wall, runs a command, moves something to the top of a recent list), wire @repick as well as @update:model-value. update:modelValue fires only on a change, so picking the option already shown would do nothing. Test it by picking the current option after another control changed the state.",
+  "rationale": "E41.2 (#448): the Language picker did nothing when the user picked the language it already showed, so that language's pangram did not go on the wall; the tests only ever picked a different language.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    448
+  ],
+  "file_globs": [
+    "apps/desktop/src/components/**/*.vue",
+    "apps/desktop/src/components/ui/UiSelect.vue"
+  ],
+  "first_seen": "2026-11-05T23:20:02.968Z",
+  "last_seen": "2026-11-05T23:20:02.968Z"
+}

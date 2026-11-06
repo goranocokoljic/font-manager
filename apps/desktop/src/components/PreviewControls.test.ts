@@ -1,9 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mockLanguages } from '../api/mock';
+import { ACTIONS } from '../keyboard/keymap';
+import { PARAGRAPH } from '../preview/sampleText';
+import { useCommandsStore } from '../stores/commands';
 import { usePreviewStore } from '../stores/preview';
 import PreviewControls from './PreviewControls.vue';
+import PreviewSizeSlider from './PreviewSizeSlider.vue';
 import { pickOption, selectOptions } from './ui/testing';
 
 beforeEach(() => {
@@ -11,30 +15,231 @@ beforeEach(() => {
   setActivePinia(createPinia());
 });
 
-function mountControls(view = 'all') {
-  return { wrapper: mount(PreviewControls, { props: { view } }), store: usePreviewStore() };
+function mountControls(view = 'all', props: Record<string, unknown> = {}) {
+  return {
+    wrapper: mount(PreviewControls, { props: { view, ...props }, attachTo: document.body }),
+    store: usePreviewStore(),
+  };
 }
 
+let mounted: ReturnType<typeof mountControls>['wrapper'] | undefined;
+function controls(view = 'all', props: Record<string, unknown> = {}) {
+  const got = mountControls(view, props);
+  mounted = got.wrapper;
+  return got;
+}
+afterEach(() => {
+  mounted?.unmount();
+  mounted = undefined;
+});
+
+const selectLabelled = (w: ReturnType<typeof mountControls>['wrapper'], name: string) => {
+  const label = w.findAll('label').find((l) => l.text() === name)!;
+  return w.get(`[role="combobox"]#${label.attributes('for')}`);
+};
+const field = (w: ReturnType<typeof mountControls>['wrapper']) => w.get('input[type="text"]');
+
 describe('PreviewControls', () => {
-  it('chooses the sample kind, the pangram language and custom text', async () => {
-    const { wrapper, store } = mountControls();
-    await pickOption(wrapper.get('[role="combobox"]'), 'pangram');
+  it('shows a field, the five chips, a language picker and one options button', async () => {
+    const { wrapper } = controls();
     await flushPromises();
-    const language = wrapper.findAll('[role="combobox"]')[1]!;
-    // The picker lists the API's languages that have a pangram, by name.
-    const withPangram = mockLanguages.filter((l) => l.pangram);
-    const options = await selectOptions(language);
-    expect(options).toEqual(withPangram.map((l) => [l.code, l.name]));
-    expect(options.some(([, label]) => label === 'Maltese')).toBe(false);
+    expect(field(wrapper).attributes('placeholder')).toBe('Type to preview');
+    expect(wrapper.findAll('.chip').map((c) => c.text())).toEqual([
+      'Word',
+      'Pangram',
+      'Alphabet',
+      'Numerals',
+      'Paragraph',
+    ]);
+    expect(wrapper.find('.divider').exists()).toBe(true);
+    expect(selectLabelled(wrapper, 'Language').isVisible()).toBe(true);
+    const row = wrapper.get('.main');
+    expect(row.element.lastElementChild!.querySelector('button')!.getAttribute('aria-label')).toBe(
+      'Preview options',
+    );
+    // Nothing else in the row: no sample picker, size or colour until the popover opens.
+    expect(row.findAll('input').map((i) => i.attributes('type'))).toEqual(['text']);
+    expect(row.findAll('[role="combobox"]')).toHaveLength(1);
+    expect(wrapper.get('.more').isVisible()).toBe(false);
+  });
+
+  it('a chip sets the layout and its text, and marks itself', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    const chip = (name: string) => wrapper.findAll('.chip').find((c) => c.text() === name)!;
+    await chip('Paragraph').trigger('click');
+    expect(store.settingsFor('all')).toMatchObject({ preset: 'paragraph', sample: 'paragraph' });
+    expect((field(wrapper).element as HTMLInputElement).value).toBe(PARAGRAPH);
+    expect(chip('Paragraph').attributes('aria-pressed')).toBe('true');
+    expect(chip('Word').attributes('aria-pressed')).toBe('false');
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('body text at 17 px');
+    await chip('Numerals').trigger('click');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('0123456789');
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toContain('figures');
+  });
+
+  it('typing keeps the preset and makes the text custom; the hint counts the fonts', async () => {
+    const { wrapper, store } = controls('all', { fontCount: 1137 });
+    await flushPromises();
+    await wrapper
+      .findAll('.chip')
+      .find((c) => c.text() === 'Pangram')!
+      .trigger('click');
+    await field(wrapper).setValue('Handgloves');
+    expect(store.settingsFor('all')).toMatchObject({
+      preset: 'pangram',
+      sample: 'custom',
+      customText: 'Handgloves',
+    });
+    expect(wrapper.get('[data-testid="preview-hint"]').text()).toBe('renders in 1,137 fonts');
+  });
+
+  it('focus selects a stock text, so the first key replaces it; own text stays to edit', async () => {
+    const { wrapper } = controls();
+    await flushPromises();
+    await wrapper
+      .findAll('.chip')
+      .find((c) => c.text() === 'Numerals')!
+      .trigger('click');
+    const input = field(wrapper).element as HTMLInputElement;
+    input.focus();
+    expect(input.value.slice(input.selectionStart!, input.selectionEnd!)).toBe('0123456789');
+    input.blur();
+    await field(wrapper).setValue('Hamburg');
+    input.setSelectionRange(0, 0);
+    input.blur();
+    input.focus();
+    expect(input.selectionEnd).toBe(0);
+  });
+
+  it('the Word chip with no text left empties the field for the placeholder', async () => {
+    const { wrapper } = controls();
+    await flushPromises();
+    expect((field(wrapper).element as HTMLInputElement).value).not.toBe('');
+    await wrapper
+      .findAll('.chip')
+      .find((c) => c.text() === 'Word')!
+      .trigger('click');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('');
+  });
+
+  it('lists the recent languages first and every API language; one puts its pangram up', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    const language = selectLabelled(wrapper, 'Language');
+    const before = await selectOptions(language);
+    expect(before.map(([code]) => code)).toEqual(mockLanguages.map((l) => l.code));
     await pickOption(language, 'sr-Cyrl');
-    expect(store.settingsFor('all').language).toBe('sr-Cyrl');
-    await pickOption(wrapper.get('[role="combobox"]'), 'custom');
-    await wrapper.get('input[type="text"]').setValue('Handgloves');
-    expect(store.settingsFor('all')).toMatchObject({ sample: 'custom', customText: 'Handgloves' });
+    expect(store.settingsFor('all')).toMatchObject({
+      language: 'sr-Cyrl',
+      sample: 'pangram',
+      preset: 'pangram',
+    });
+    const after = await selectOptions(language);
+    expect(after[0]![0]).toBe('sr-Cyrl');
+    expect(after).toHaveLength(mockLanguages.length);
+    expect((field(wrapper).element as HTMLInputElement).value).toBe(
+      mockLanguages.find((l) => l.code === 'sr-Cyrl')!.pangram,
+    );
+  });
+
+  it('picking the language it already shows puts that pangram up too', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    const language = selectLabelled(wrapper, 'Language');
+    store.update('all', { sample: 'custom', customText: 'Hamburg' });
+    await flushPromises();
+    await pickOption(language, store.settingsFor('all').language);
+    expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'pangram' });
+
+    store.applyPreset('all', 'alphabet');
+    await flushPromises();
+    await pickOption(language, store.settingsFor('all').language);
+    expect(store.settingsFor('all')).toMatchObject({ sample: 'pangram', preset: 'pangram' });
+  });
+
+  it('cannot choose a language that has no pangram', async () => {
+    const { wrapper, store } = controls();
+    await flushPromises();
+    const language = selectLabelled(wrapper, 'Language');
+    expect((await selectOptions(language)).some(([, label]) => label === 'Maltese')).toBe(true);
+    await language.trigger('click');
+    await flushPromises();
+    const maltese = [...document.querySelectorAll('.ui-popover [role="option"]')].find(
+      (o) => o.textContent?.trim() === 'Maltese',
+    ) as HTMLElement;
+    expect(maltese.getAttribute('aria-disabled')).toBe('true');
+    maltese.click();
+    await flushPromises();
+    expect(store.settingsFor('all').language).not.toBe('mt');
+  });
+
+  it('opens the options from one button; a press outside or Escape closes them', async () => {
+    const { wrapper } = controls();
+    const toggle = wrapper.get('button[aria-label="Preview options"]');
+    const panel = wrapper.get('.more');
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+    await toggle.trigger('click');
+    expect(panel.isVisible()).toBe(true);
+    expect(toggle.attributes('aria-expanded')).toBe('true');
+    // A press inside stays open; the panel holds every remaining control.
+    wrapper
+      .get('input[aria-label="Line height"]')
+      .element.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(panel.isVisible()).toBe(true);
+    for (const name of [
+      'Size in pixels',
+      'Line height',
+      'Tracking in em',
+      'Text color',
+      'Background color',
+    ]) {
+      expect(panel.find(`input[aria-label="${name}"]`).exists()).toBe(true);
+    }
+    expect(panel.text()).toContain('Auto size');
+    expect(panel.text()).toContain('Metrics');
+    expect(panel.text()).toContain('Outline');
+    expect(panel.text()).toContain('Surface');
+    expect(panel.find('[aria-label="Alignment"]').exists()).toBe(true);
+
+    document.body.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+    await flushPromises();
+    expect(panel.isVisible()).toBe(false);
+
+    await toggle.trigger('click');
+    await wrapper.get('input[aria-label="Line height"]').trigger('keydown', { key: 'Escape' });
+    expect(panel.isVisible()).toBe(false);
+    expect(document.activeElement).toBe(toggle.element);
+  });
+
+  it('T focuses and selects the field; Escape leaves it for the list', async () => {
+    const { wrapper } = controls();
+    await flushPromises();
+    await field(wrapper).setValue('Hamburg');
+    (field(wrapper).element as HTMLInputElement).blur();
+    expect(useCommandsStore().run(ACTIONS.previewField)).toBe(true);
+    const input = field(wrapper).element as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    expect(input.value.slice(input.selectionStart!, input.selectionEnd!)).toBe('Hamburg');
+    await field(wrapper).trigger('keydown', { key: 'Escape' });
+    expect(wrapper.emitted('leave')).toHaveLength(1);
+    expect(document.activeElement).not.toBe(input);
+  });
+
+  it('T leaves the focus alone while a modal dialog is open', async () => {
+    const { wrapper } = controls();
+    const modal = document.createElement('div');
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    document.body.append(modal);
+    expect(useCommandsStore().run(ACTIONS.previewField)).toBe(false);
+    expect(document.activeElement).not.toBe(field(wrapper).element);
+    modal.remove();
   });
 
   it('applies a typed size only inside the bounds and clamps it on change', async () => {
-    const { wrapper, store } = mountControls();
+    const { wrapper, store } = controls();
     const size = wrapper.get('input[aria-label="Size in pixels"]');
     const type = async (text: string) => {
       (size.element as HTMLInputElement).value = text;
@@ -51,13 +256,15 @@ describe('PreviewControls', () => {
   });
 
   it('sets line height, tracking, alignment, colors and surface', async () => {
-    const { wrapper, store } = mountControls();
+    const { wrapper, store } = controls();
     await wrapper.get('input[aria-label="Line height"]').setValue('1.6');
     await wrapper.get('input[aria-label="Tracking in em"]').setValue('0.1');
-    await wrapper.get('button[aria-pressed="false"]:nth-of-type(2)').trigger('click');
+    await wrapper
+      .get('[aria-label="Alignment"] button[aria-pressed="false"]:nth-of-type(2)')
+      .trigger('click');
     await wrapper.get('input[aria-label="Text color"]').setValue('#123456');
     await wrapper.get('input[aria-label="Background color"]').setValue('#fedcba');
-    await pickOption(wrapper.findAll('[role="combobox"]').at(-1)!, 'dark');
+    await pickOption(selectLabelled(wrapper, 'Surface'), 'dark');
     expect(store.settingsFor('all')).toMatchObject({
       lineHeight: 1.6,
       trackingEm: 0.1,
@@ -66,12 +273,21 @@ describe('PreviewControls', () => {
       backgroundColor: '#fedcba',
       surface: 'dark',
     });
-    expect(wrapper.get('button[aria-pressed="true"]').text()).toBe('Center');
+    expect(wrapper.get('[aria-label="Alignment"] button[aria-pressed="true"]').text()).toBe(
+      'Center',
+    );
+  });
+
+  it('chooses the sample kind in the options, with the font name among them', async () => {
+    const { wrapper, store } = controls();
+    await pickOption(selectLabelled(wrapper, 'Sample'), 'fontName');
+    expect(store.settingsFor('all').sample).toBe('fontName');
+    expect((field(wrapper).element as HTMLInputElement).value).toBe('');
   });
 
   it('changes only its own view, and Reset puts it back to the defaults', async () => {
-    const { wrapper, store } = mountControls('collection-3');
-    await wrapper.get('input[aria-label="Size slider"]').setValue('200');
+    const { wrapper, store } = controls('collection-3');
+    await wrapper.get('input[aria-label="Size in pixels"]').setValue('200');
     expect(store.settingsFor('collection-3').sizePx).toBe(200);
     expect(store.settingsFor('all').sizePx).toBe(28);
     await wrapper.findAll('button').at(-1)!.trigger('click');
@@ -79,9 +295,8 @@ describe('PreviewControls', () => {
   });
 
   it('sets auto size from a labelled select (Off, x-height, Cap height)', async () => {
-    const { wrapper, store } = mountControls('collection-3');
-    const label = wrapper.findAll('label').find((l) => l.text() === 'Auto size')!;
-    const select = wrapper.get(`[role="combobox"]#${label.attributes('for')}`);
+    const { wrapper, store } = controls('collection-3');
+    const select = selectLabelled(wrapper, 'Auto size');
     expect((await selectOptions(select)).map(([, label]) => label)).toEqual([
       'Off',
       'x-height',
@@ -96,7 +311,7 @@ describe('PreviewControls', () => {
   });
 
   it('has a tracking slider from -0.2 to 1 em next to the number field', async () => {
-    const { wrapper, store } = mountControls();
+    const { wrapper, store } = controls();
     const slider = wrapper.get('input[type="range"][aria-label="Tracking slider"]');
     expect(slider.attributes()).toMatchObject({ min: '-0.2', max: '1', step: '0.01' });
     await slider.setValue('0.35');
@@ -112,7 +327,7 @@ describe('PreviewControls', () => {
   });
 
   it('toggles metrics and outline from labelled checkboxes, per view', async () => {
-    const { wrapper, store } = mountControls('collection-3');
+    const { wrapper, store } = controls('collection-3');
     const box = (name: string) =>
       wrapper
         .findAll('label')
@@ -127,5 +342,32 @@ describe('PreviewControls', () => {
     await box('Metrics').setValue(false);
     expect(store.settingsFor('collection-3').metrics).toBe(false);
     expect((box('Outline').element as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+describe('PreviewSizeSlider', () => {
+  it('sets the size of its own view and shows a saved size at the end of its range', async () => {
+    const slider = mount(PreviewSizeSlider, {
+      props: { view: 'all', sizeRange: { min: 24, max: 120, step: 1 } },
+    });
+    const store = usePreviewStore();
+    const input = slider.get('input[aria-label="Size slider"]');
+    await input.setValue('60');
+    expect(store.settingsFor('all').sizePx).toBe(60);
+    expect(store.settingsFor('collection-3').sizePx).toBe(28);
+    store.update('all', { sizePx: 200 });
+    await flushPromises();
+    expect((input.element as HTMLInputElement).value).toBe('120');
+    slider.unmount();
+  });
+
+  it('is in the row only when the view asks for it', () => {
+    expect(controls().wrapper.find('input[aria-label="Size slider"]').exists()).toBe(false);
+    mounted?.unmount();
+    expect(
+      controls('all', { inlineSize: true })
+        .wrapper.find('input[aria-label="Size slider"]')
+        .exists(),
+    ).toBe(true);
   });
 });

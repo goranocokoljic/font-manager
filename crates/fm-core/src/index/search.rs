@@ -246,17 +246,27 @@ impl Index {
                 .then(a.id.cmp(&b.id))
         });
         let total = u32::try_from(ranked.len()).unwrap_or(u32::MAX);
-        let families = ranked
-            .into_iter()
-            .skip(req.page.offset as usize)
-            .take(req.page.limit as usize)
-            .map(|hit| FamilyHit {
-                family: summary(hit.members, &cache),
-                faces: hit.faces,
-                score: hit.score,
-                missing: hit.missing,
-            })
-            .collect();
+        let (offset, limit) = (req.page.offset as usize, req.page.limit as usize);
+        let family_hit = |hit: Ranked<'_>| FamilyHit {
+            family: summary(hit.members, &cache),
+            faces: hit.faces,
+            score: hit.score,
+            missing: hit.missing,
+        };
+        let families = match req.order {
+            None => ranked
+                .into_iter()
+                .skip(offset)
+                .take(limit)
+                .map(family_hit)
+                .collect(),
+            // The order reads the summaries, so this builds all of them, not one page.
+            Some(order) => {
+                let mut all: Vec<FamilyHit> = ranked.into_iter().map(family_hit).collect();
+                order.sort_by_family(&mut all, |hit| &hit.family);
+                all.into_iter().skip(offset).take(limit).collect()
+            }
+        };
         Ok(SearchResponse {
             families,
             total,

@@ -194,11 +194,12 @@
     "settings": "Preview settings",
     "sample": "Sample",
     "language": "Language",
-    "customText": "Custom text",
-    "heroPlaceholder": "Type to preview your own text",
-    "options": "Options",
+    "customText": "Type to preview",
+    "heroPlaceholder": "Type to preview",
+    "options": "Preview options",
     "customPlaceholder": "Type a sample",
     "size": "Size",
+    "sizeGlyph": "A",
     "sizeSlider": "Size slider",
     "sizeInPixels": "Size in pixels",
     "autoSize": "Auto size",
@@ -237,6 +238,26 @@
       "px": "{size} px",
       "useToolbar": "Use toolbar size",
       "empty": "Select a family to preview it here."
+    },
+    "focusField": "Focus the preview field",
+    "preset": "Preset",
+    "noPangram": "No pangram for this language yet",
+    "presets": {
+      "word": "Word",
+      "pangram": "Pangram",
+      "alphabet": "Alphabet",
+      "numerals": "Numerals",
+      "paragraph": "Paragraph"
+    },
+    "hints": {
+      "custom": {
+        "one": "renders in {count} font",
+        "other": "renders in {count} fonts"
+      },
+      "pangram": "a pangram · every letter once",
+      "alphabet": "the character set at a glance",
+      "numerals": "figures · tabular where the font has them",
+      "paragraph": "body text at {size} px"
     }
   },
   "samples": {
@@ -246,10 +267,35 @@
       "lorem": "Lorem ipsum",
       "alphabet": "Alphabet",
       "numerals": "Numerals",
-      "fontName": "Font name"
+      "fontName": "Font name",
+      "paragraph": "Paragraph"
     }
   },
   "home": {
+    "sort": {
+      "by": "Sorted by {key}",
+      "byDescending": "Sorted by {key}, descending",
+      "change": "change",
+      "changeLabel": "change sort order",
+      "menu": "Sort order",
+      "bestMatch": "Best match",
+      "descending": "Descending",
+      "keys": {
+        "bestMatch": "best match",
+        "activation": "activation",
+        "name": "name",
+        "styleCount": "styles",
+        "weightLine": "weight",
+        "weightRange": "weight",
+        "format": "format",
+        "version": "version",
+        "manufacturer": "manufacturer",
+        "location": "location",
+        "license": "license",
+        "added": "date added",
+        "tags": "tags"
+      }
+    },
     "allFonts": "All fonts",
     "selected": "{count} selected",
     "families": {
@@ -392,6 +438,10 @@
   },
   "chips": {
     "options": "Filter options",
+    "more": {
+      "one": "+{count} more filter",
+      "other": "+{count} more filters"
+    },
     "remove": "Remove filter {name}",
     "filters": "Filters",
     "chipLabel": "{name}, {families}",
@@ -535,7 +585,8 @@
       "views": "List, Table, Grid, Waterfall, Layout",
       "sidebar": "Sidebar",
       "inspector": "Inspector",
-      "settings": "Settings"
+      "settings": "Settings",
+      "previewField": "Focus the preview field"
     }
   },
   "palette": {
