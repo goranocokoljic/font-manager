@@ -1431,6 +1431,21 @@
       "info": "Info"
     },
     "sectionLater": "This section comes in a later update.",
+    "textHint": "Reading test · three sizes, your line length",
+    "textMeasure": "Measure",
+    "textMeasureValue": "{value} ch",
+    "textLeading": "Leading",
+    "textGround": "Ground",
+    "textPaper": "Paper",
+    "textInk": "Ink",
+    "textColumns": "The passage at three sizes",
+    "textSize": "{size} px",
+    "textRoles": {
+      "captions": "captions",
+      "body": "body",
+      "lead": "lead"
+    },
+    "textInverted": "The other ground · the same text at the body size",
     "stylesList": "Styles of this family",
     "stylesView": "Show the styles as",
     "namedStyles": "Named styles · {count}",

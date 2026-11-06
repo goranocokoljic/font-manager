@@ -13,6 +13,7 @@ import type {
 } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { faceKey, familyKey, type FaceRow, type FamilyRow } from '../list/rows';
+import { LEADING, MEASURE } from '../preview/readingTest';
 import { useActivationStore } from './activation';
 import { useFontListStore } from './fontList';
 import { useLibraryStore } from './library';
@@ -37,6 +38,9 @@ export type FamilySection = (typeof FAMILY_SECTIONS)[number];
 /** The Styles section's list of named styles; any other view is the tag of a ramped axis. */
 export const NAMED_STYLES = 'named';
 
+/** The ground of the Text section: dark on light, or light on dark. */
+export type TextGround = 'paper' | 'ink';
+
 /**
  * The family page (E42): which family it shows, its place in the list the user came from
  * and what its top bar acts on. The order is the font list's, so the arrows follow the
@@ -53,6 +57,10 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
   const section = ref<FamilySection>('styles');
   /** What the Styles section lists: the named styles, or the ramp of the axis with this tag. */
   const stylesView = ref<string>(NAMED_STYLES);
+  /** The Text section's settings: they stay while the arrows change the family. */
+  const textMeasure = ref<number>(MEASURE.default);
+  const textLeading = ref<number>(LEADING.default);
+  const textGround = ref<TextGround>('paper');
   /** Set by a push from the library; the page that mounts takes it to know how it came in. */
   const pushed = ref(false);
   /** Bumped by every read; an answer to an older one is dropped. */
@@ -239,6 +247,9 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     favorite,
     section,
     stylesView,
+    textMeasure,
+    textLeading,
+    textGround,
     pushed,
     takePushed,
     index,

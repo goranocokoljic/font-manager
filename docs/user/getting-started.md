@@ -73,6 +73,11 @@ your team, read [Shared libraries](shared-libraries.md).
   or click the name to open the family page. It shows everything about the family:
   styles, axes, characters, features, license, notes and the data for developers.
   Press `Esc` to go back. Press `Space` for a quick look without leaving the list.
+- Open the **Text** section of the family page to read a passage at 12, 17 and 24 px.
+  **Measure** sets the line length and **Leading** sets the space between the lines.
+  **Paper** and **Ink** change the ground. The passage is your preview text when it has
+  more than 80 characters. Otherwise it is a stock passage. If the preview preset is
+  **Paragraph**, a family opens on this section.
 - Open the **Features** section of the family page to see the OpenType features of the
   font, for example small capitals or oldstyle figures. Turn a feature on or off and
   the preview of that font changes. **Reset** sets the features back to the default.
