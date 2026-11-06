@@ -446,6 +446,7 @@ async function deleteMenuPin(): Promise<void> {
 .hover-actions {
   display: flex;
   align-items: center;
+  align-self: stretch;
   justify-self: end;
   gap: var(--fm-space-1);
   padding-inline-start: var(--fm-space-2);

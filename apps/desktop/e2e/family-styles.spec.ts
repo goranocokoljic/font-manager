@@ -440,3 +440,24 @@ for (const colorScheme of ['light', 'dark'] as const) {
     expect(ratio).toBeGreaterThanOrEqual(3);
   });
 }
+
+test.describe('@screens', () => {
+  const dir = process.env.FM_SCREENS_DIR;
+  test.skip(!dir, 'FM_SCREENS_DIR is not set');
+  for (const [width, height] of [
+    [1280, 800],
+    [1000, 700],
+  ] as const) {
+    test(`the named styles and the ramp at ${width}x${height}`, async ({ page }) => {
+      await page.setViewportSize({ width, height });
+      await open(page, CRIMSON);
+      await row(page, 'Bold, 700').getByRole('switch').click();
+      await row(page, 'Regular, 400').hover();
+      await page.screenshot({ path: `${dir}/styles-named-${width}x${height}.png` });
+      await open(page, ASAP);
+      await views(page).getByRole('button', { name: 'Weight', exact: true }).click();
+      await expect(list(page).getByTestId('family-ramp-row')).toHaveCount(9);
+      await page.screenshot({ path: `${dir}/styles-ramp-${width}x${height}.png` });
+    });
+  }
+});
