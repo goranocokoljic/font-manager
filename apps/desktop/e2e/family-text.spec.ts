@@ -55,6 +55,16 @@ const ground = (page: Page, name: 'Paper' | 'Ink') =>
   page.getByRole('group', { name: 'Ground' }).getByRole('button', { name });
 
 const widthOf = (el: Locator) => el.evaluate((n) => n.getBoundingClientRect().width);
+/** The width of 1ch in the font and size of `el`; 100 of them, as layout rounds a box to 1/64 px. */
+const chOf = (el: Locator) =>
+  el.evaluate((n) => {
+    const probe = document.createElement('span');
+    probe.style.cssText = 'display: block; width: 100ch; height: 0';
+    n.append(probe);
+    const width = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    return width;
+  });
 
 function luminance(rgb: number[]): number {
   const [r, g, b] = rgb.map((v) => {
@@ -154,8 +164,10 @@ test.describe('the sliders', () => {
     // The columns share one width.
     expect(narrow[1]).toBeCloseTo(narrow[0]!, 2);
     expect(narrow[2]).toBeCloseTo(narrow[0]!, 2);
-    // The ink block has the same measure at the body size.
-    expect((await widthOf(inkPassage(page))) / narrow[0]!).toBeCloseTo(17 / 12, 2);
+    // 40 ch as the browser measures it: the columns at the caption size, the ink at the body size.
+    // Not a ratio of the two sizes: hinted text on Linux rounds a ch to whole pixels.
+    expect(narrow[0]).toBeCloseTo(40 * (await chOf(passage(page, 12))), 1);
+    expect(await widthOf(inkPassage(page))).toBeCloseTo(40 * (await chOf(inkPassage(page))), 1);
   });
 
   test('leading runs 1.10 to 1.80 and sets the line height of all three and the ink', async ({
