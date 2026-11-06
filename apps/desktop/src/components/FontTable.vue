@@ -53,8 +53,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The face the cursor shows changed (a style, or a family's first style). */
   cursorFace: [face: FaceId];
-  /** Enter on a style: show it in the inspector. */
-  open: [face: FaceId];
+  /** Enter on a row: open its family page. */
+  open: [row: ListRow];
 }>();
 
 /** Viewport height before the first measurement (and where there is no layout). */
@@ -125,7 +125,7 @@ const visible = computed(() =>
   }),
 );
 
-// The cursor family's faces show in the preview strip and the inspector.
+// The cursor family's faces show in the preview strip.
 watchEffect(() => {
   const row = list.cursorRow;
   const id = row?.family.id;
@@ -185,7 +185,7 @@ watch(
 function onKeyDown(e: KeyboardEvent): void {
   if (e.target !== viewport.value) return; // keys on a header button are the button's
   const page = Math.max(1, Math.floor(bodyHeight.value / rowPx.value));
-  if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
+  if (!handleListKey(e, list, { page, count: count.value, open: (row) => emit('open', row) }))
     return;
   e.preventDefault();
   void revealCursor();
@@ -430,7 +430,7 @@ function cellOf(row: ListRow, id: ColumnId): Cell {
                 @click.stop="onToggle(item.row)"
                 ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
               /></span>
-              <bdi class="text" :title="cellOf(item.row, col.id).text">{{
+              <bdi class="text" data-family-name :title="cellOf(item.row, col.id).text">{{
                 cellOf(item.row, col.id).text
               }}</bdi>
             </template>

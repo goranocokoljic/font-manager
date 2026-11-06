@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { nextTick } from 'vue';
 import PaneDivider from '../components/PaneDivider.vue';
-import { INSPECTOR, LAYOUT_STORAGE_KEY, SIDEBAR, clampWidth, useLayoutStore } from './layout';
+import { LAYOUT_STORAGE_KEY, SIDEBAR, clampWidth, useLayoutStore } from './layout';
 
 function freshStore() {
   setActivePinia(createPinia());
@@ -13,66 +13,47 @@ function freshStore() {
 beforeEach(() => localStorage.clear());
 
 describe('layout store', () => {
-  it('starts with the default widths and the inspector open', () => {
+  it('starts with the default width and the sidebar open', () => {
     const layout = freshStore();
     expect(layout.sidebarWidth).toBe(SIDEBAR.initial);
     expect(SIDEBAR.initial).toBe(232);
-    expect(layout.inspectorWidth).toBe(INSPECTOR.initial);
-    expect(layout.inspectorVisible).toBe(true);
+    expect(layout.sidebarOpen).toBe(true);
   });
 
-  it('keeps column widths inside their bounds', () => {
+  it('keeps the sidebar width inside its bounds', () => {
     const layout = freshStore();
     layout.setSidebarWidth(10);
     expect(layout.sidebarWidth).toBe(SIDEBAR.min);
-    layout.setInspectorWidth(5000);
-    expect(layout.inspectorWidth).toBe(INSPECTOR.max);
+    layout.setSidebarWidth(5000);
+    expect(layout.sidebarWidth).toBe(SIDEBAR.max);
     layout.setSidebarWidth(250.6);
     expect(layout.sidebarWidth).toBe(251);
   });
 
-  it('hides the inspector on a narrow window and reveals it with the toggle', () => {
-    const layout = freshStore();
-    layout.setNarrow(true);
-    expect(layout.inspectorVisible).toBe(false);
-    layout.toggleInspector();
-    expect(layout.inspectorVisible).toBe(true);
-    // The session reveal does not change the saved wide-window choice.
-    expect(layout.inspectorOpen).toBe(true);
-    layout.toggleInspector();
-    expect(layout.inspectorVisible).toBe(false);
-  });
-
-  it('collapses again when the window turns narrow after a reveal', () => {
-    const layout = freshStore();
-    layout.setNarrow(true);
-    layout.toggleInspector();
-    layout.setNarrow(false);
-    layout.setNarrow(true);
-    expect(layout.inspectorVisible).toBe(false);
-  });
-
-  it('returns to the saved choice when the window widens', () => {
-    const layout = freshStore();
-    layout.toggleInspector();
-    expect(layout.inspectorVisible).toBe(false);
-    layout.setNarrow(true);
-    layout.toggleInspector();
-    layout.setNarrow(false);
-    expect(layout.inspectorVisible).toBe(false);
-  });
-
-  it('restores widths and inspector state in a new session', async () => {
+  it('restores the width and the closed sidebar in a new session', async () => {
     const first = freshStore();
     first.setSidebarWidth(300);
-    first.setInspectorWidth(400);
-    first.toggleInspector();
+    first.toggleSidebar();
     await nextTick();
 
     const second = freshStore();
     expect(second.sidebarWidth).toBe(300);
-    expect(second.inspectorWidth).toBe(400);
-    expect(second.inspectorOpen).toBe(false);
+    expect(second.sidebarOpen).toBe(false);
+  });
+
+  it('reads a layout saved with the old inspector fields and drops them', async () => {
+    localStorage.setItem(
+      LAYOUT_STORAGE_KEY,
+      JSON.stringify({ sidebarWidth: 300, inspectorWidth: 400, inspectorOpen: false }),
+    );
+    const layout = freshStore();
+    expect(layout.sidebarWidth).toBe(300);
+    layout.setSidebarWidth(310);
+    await nextTick();
+    expect(JSON.parse(localStorage.getItem(LAYOUT_STORAGE_KEY)!)).toEqual({
+      sidebarWidth: 310,
+      sidebarOpen: true,
+    });
   });
 
   it('falls back to defaults when the saved layout is damaged', () => {
@@ -81,12 +62,11 @@ describe('layout store', () => {
 
     localStorage.setItem(
       LAYOUT_STORAGE_KEY,
-      JSON.stringify({ sidebarWidth: 'wide', inspectorWidth: 9999, inspectorOpen: 'yes' }),
+      JSON.stringify({ sidebarWidth: 'wide', sidebarOpen: 'yes' }),
     );
     const layout = freshStore();
     expect(layout.sidebarWidth).toBe(SIDEBAR.initial);
-    expect(layout.inspectorWidth).toBe(INSPECTOR.max);
-    expect(layout.inspectorOpen).toBe(true);
+    expect(layout.sidebarOpen).toBe(true);
   });
 
   it('gives the initial width for anything not a finite number', () => {

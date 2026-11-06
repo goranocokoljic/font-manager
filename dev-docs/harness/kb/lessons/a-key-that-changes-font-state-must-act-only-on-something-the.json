@@ -1,0 +1,19 @@
+{
+  "id": "a-key-that-changes-font-state-must-act-only-on-something-the",
+  "title": "A key that changes font state must act only on something the screen shows",
+  "category": "user-files",
+  "rule": "When a keyboard or palette action activates or deactivates fonts, check that its target is visible: a selected row, or a detail view. A store value that outlives the row (a `?face=` in the URL, a last-loaded detail) is not a target, so disable the action when nothing is selected. When a story removes the pane that showed a value, list every action that still reads that value.",
+  "rationale": "E41.5 (#451): removing the inspector left A and Shift+A acting on the face named by `?face=` after a search hid its row, so a registration changed with nothing on the wall naming the font.",
+  "severity": "must",
+  "status": "candidate",
+  "occurrences": 1,
+  "source_issues": [
+    451
+  ],
+  "file_globs": [
+    "apps/desktop/src/views/**",
+    "apps/desktop/src/stores/selection.ts"
+  ],
+  "first_seen": "2026-11-06T07:17:18.904Z",
+  "last_seen": "2026-11-06T07:17:18.904Z"
+}

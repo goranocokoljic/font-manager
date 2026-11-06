@@ -1,22 +1,17 @@
 <script setup lang="ts">
-// The main window: sidebar | font list | inspector, with a status bar below.
-// Widths and inspector visibility come from the layout store; this component
-// wires the window width into it and offers the layout actions (inspector
+// The main window: sidebar | font list, with a status bar below. The sidebar's width and
+// visibility come from the layout store; this component offers the layout actions (sidebar
 // toggle, go to a column). Each column is a tab stop, so Tab moves between columns.
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { ref } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS } from '../keyboard/keymap';
 import { useActions } from '../stores/commands';
-import { INSPECTOR, NARROW_WIDTH, SIDEBAR, useLayoutStore } from '../stores/layout';
+import { SIDEBAR, useLayoutStore } from '../stores/layout';
 import PaneDivider from './PaneDivider.vue';
 
 const layout = useLayoutStore();
 const sidebar = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
-const inspector = ref<HTMLElement | null>(null);
-
-let query: MediaQueryList | undefined;
-const onWidthChange = (e: { matches: boolean }) => layout.setNarrow(e.matches);
 
 /** The font view in the list column: list, table, grid or waterfall. */
 const FONT_VIEW = '[role="tree"], [role="treegrid"], [role="listbox"]';
@@ -33,24 +28,8 @@ function onListKey(e: KeyboardEvent): void {
   view.focus();
 }
 
-async function goToInspector(): Promise<void> {
-  if (!layout.inspectorVisible) layout.toggleInspector();
-  await nextTick();
-  inspector.value?.focus();
-}
-
 // Getters: the palette shows the titles in the language chosen now.
 useActions([
-  {
-    id: ACTIONS.inspector,
-    get title() {
-      return t('layout.actions.toggleInspector');
-    },
-    get group() {
-      return t('palette.groups.view');
-    },
-    run: layout.toggleInspector,
-  },
   {
     id: ACTIONS.sidebar,
     get title() {
@@ -81,29 +60,7 @@ useActions([
     },
     run: () => list.value?.focus(),
   },
-  {
-    id: 'focus.inspector',
-    get title() {
-      return t('layout.actions.goInspector');
-    },
-    get group() {
-      return t('palette.groups.go');
-    },
-    run: goToInspector,
-  },
 ]);
-
-onMounted(() => {
-  query = window.matchMedia?.(`(max-width: ${NARROW_WIDTH - 0.02}px)`);
-  if (query) {
-    onWidthChange(query);
-    query.addEventListener('change', onWidthChange);
-  }
-});
-
-onBeforeUnmount(() => {
-  query?.removeEventListener('change', onWidthChange);
-});
 </script>
 
 <template>
@@ -139,27 +96,6 @@ onBeforeUnmount(() => {
       >
         <slot name="list" />
       </main>
-      <template v-if="layout.inspectorVisible">
-        <PaneDivider
-          :label="t('layout.resizeInspector')"
-          controls="fm-inspector"
-          :value="layout.inspectorWidth"
-          :min="INSPECTOR.min"
-          :max="INSPECTOR.max"
-          :direction="-1"
-          @resize="layout.setInspectorWidth"
-        />
-        <aside
-          id="fm-inspector"
-          ref="inspector"
-          class="inspector column"
-          tabindex="0"
-          :aria-label="t('layout.inspector')"
-          :style="{ width: `${layout.inspectorWidth}px` }"
-        >
-          <slot name="inspector" />
-        </aside>
-      </template>
     </div>
     <footer class="status">
       <slot name="status" />
@@ -178,16 +114,13 @@ onBeforeUnmount(() => {
   flex: 1;
   min-height: 0;
 }
-.sidebar,
-.inspector {
-  flex: none;
-  overflow: auto;
-  background-color: var(--fm-surface);
-}
 /* A column, so the sidebar's foot can sit at its end. */
 .sidebar {
   display: flex;
+  flex: none;
   flex-direction: column;
+  overflow: auto;
+  background-color: var(--fm-surface);
 }
 .list {
   display: flex;

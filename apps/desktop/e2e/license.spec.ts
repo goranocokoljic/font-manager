@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { selectOption } from './select';
+import { openSection, sectionPanel } from './family-page';
 
 // Browser mode runs on the mock client; no family has a declared license yet.
 // The mock file picker returns `/Users/demo/Downloads/receipt-<n>.pdf`.
-const info = (page: Page) => page.getByRole('tabpanel', { name: 'Info' });
+const info = (page: Page) => sectionPanel(page, 'Info');
 
 async function openOn(page: Page, face: number) {
   await page.route('**/fmfont/*', (route) => route.fulfill({ status: 404 }));
-  await page.goto(`/#/?face=${face}`);
+  await openSection(page, face, 'Info');
   await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
   // The form is folded while the family has no declaration; its heading opens it.
   const toggle = info(page).getByRole('button', { name: 'Your license for this family' });
@@ -57,9 +58,9 @@ test('the License section declares, keeps and clears a family license from the k
   await expect(form.getByRole('button', { name: 'Clear license' })).toBeEnabled();
 
   // Another face and back: the declaration is stored.
-  await page.evaluate(() => (location.hash = '#/?face=6'));
+  await page.evaluate(() => (location.hash = '#/family/3?face=6'));
   await expect(info(page).getByLabel('License type')).toHaveAttribute('data-value', '');
-  await page.evaluate(() => (location.hash = '#/?face=1'));
+  await page.evaluate(() => (location.hash = '#/family/1?face=1'));
   await expect(type).toHaveAttribute('data-value', 'web');
   await expect(seats).toHaveValue('5');
   await expect(date).toHaveValue('2026-03-01');

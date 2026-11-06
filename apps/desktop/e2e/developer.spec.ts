@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { axesRow, hero, openDeveloper, showSection } from './family-page';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -12,37 +13,37 @@ const fixture = readFileSync(
 );
 
 // MockApi face 1 (Inter Regular): wght 100–900, default 400; smcp off by default.
-async function open(page: Page, { showInspector = false } = {}) {
+async function open(page: Page) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto('/#/?face=1');
-  // Narrow windows hide the inspector until asked.
-  if (showInspector) await page.getByRole('button', { name: 'Inspector' }).click();
+  await page.goto('/#/family/1?face=1');
 }
 
 async function moveWghtAndTurnOnSmcp(page: Page, wght: string) {
-  await page.getByRole('tab', { name: 'Axes' }).click();
-  const axes = page.getByRole('tabpanel', { name: 'Axes' });
+  const axes = axesRow(page);
   await axes.getByRole('textbox', { name: 'Weight (wght) value' }).fill(wght);
   await axes.getByRole('textbox', { name: 'Weight (wght) value' }).press('Enter');
-  await page.getByRole('tab', { name: 'Features' }).click();
-  await page
-    .getByRole('tabpanel', { name: 'Features' })
-    .getByRole('switch', { name: 'Small capitals (smcp)' })
-    .click();
+  const features = await showSection(page, 'Features');
+  await features.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
 }
 
-const developer = (page: Page) => page.getByRole('tabpanel', { name: 'Developer' });
+const developer = (page: Page) => page.locator('#fm-family-developer');
 const snippet = (page: Page) => developer(page).getByTestId('css-snippet');
 
-test('the Developer tab comes after Glyphs and reads normal while nothing changed', async ({
+test('the Developer part ends the rail and reads normal while nothing changed', async ({
   page,
 }) => {
   await open(page);
-  const tabs = page.getByRole('tablist', { name: 'Inspector tabs' }).getByRole('tab');
-  await expect(tabs).toHaveText(['Info', 'Axes', 'Features', 'Glyphs', 'Developer']);
-  await page.getByRole('tab', { name: 'Developer' }).click();
+  const toggle = page
+    .getByTestId('family-rail')
+    .locator('> *')
+    .last()
+    .locator('xpath=preceding-sibling::button[1]');
+  await expect(toggle).toHaveText('Developer');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await openDeveloper(page);
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
   await expect(snippet(page)).toHaveText(
     'font-variation-settings: normal;\nfont-feature-settings: normal;',
   );
@@ -51,12 +52,12 @@ test('the Developer tab comes after Glyphs and reads normal while nothing change
 test('the copied snippet is what the selected row applies', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await open(page);
-  const sample = page.locator('[data-face="1"] .sample').first();
+  const sample = hero(page);
   await moveWghtAndTurnOnSmcp(page, '650');
   await expect(sample).toHaveCSS('font-variation-settings', '"wght" 650');
   await expect(sample).toHaveCSS('font-feature-settings', /"smcp"/);
 
-  await page.getByRole('tab', { name: 'Developer' }).click();
+  await openDeveloper(page);
   await expect(snippet(page)).toHaveText(
     'font-variation-settings: "wght" 650;\nfont-feature-settings: "smcp" 1;',
   );
@@ -79,57 +80,43 @@ test('the copied snippet is what the selected row applies', async ({ page, conte
   expect(parsed).toEqual(applied);
 });
 
-test('the snippet follows the sliders and switches without reopening the tab', async ({ page }) => {
+test('the snippet follows the sliders and switches while it is open', async ({ page }) => {
   await open(page);
-  await page.getByRole('tab', { name: 'Developer' }).click();
+  await openDeveloper(page);
   await expect(snippet(page)).toContainText('font-variation-settings: normal;');
   await moveWghtAndTurnOnSmcp(page, '700');
-  await page.getByRole('tab', { name: 'Developer' }).click();
   await expect(snippet(page)).toHaveText(
     'font-variation-settings: "wght" 700;\nfont-feature-settings: "smcp" 1;',
   );
   // The Reset buttons bring both back to normal.
-  await page.getByRole('tab', { name: 'Axes' }).click();
-  await page.getByRole('tabpanel', { name: 'Axes' }).getByRole('button', { name: 'Reset' }).click();
-  await page.getByRole('tab', { name: 'Developer' }).click();
+  await axesRow(page).getByRole('button', { name: 'Reset' }).click();
   await expect(snippet(page)).toHaveText(
     'font-variation-settings: normal;\nfont-feature-settings: "smcp" 1;',
   );
 });
 
-test('the Developer tab follows the tabs pattern and Copy is reachable by keyboard', async ({
-  page,
-}) => {
+test('the Developer expander works from the keyboard and Copy is reachable', async ({ page }) => {
   await open(page);
-  const info = page.getByRole('tab', { name: 'Info' });
-  const dev = page.getByRole('tab', { name: 'Developer' });
-  await info.focus();
-  await page.keyboard.press('End');
-  await expect(dev).toBeFocused();
-  await expect(dev).toHaveAttribute('aria-selected', 'true');
-  await expect(dev).toHaveAttribute('tabindex', '0');
-  await expect(info).toHaveAttribute('tabindex', '-1');
-  await expect(developer(page)).toBeVisible();
-  // It wraps: ArrowRight from the last tab is Info, ArrowLeft back is Developer.
-  await page.keyboard.press('ArrowRight');
-  await expect(info).toBeFocused();
-  await page.keyboard.press('ArrowLeft');
-  await expect(dev).toBeFocused();
-  await page.keyboard.press('Home');
-  await expect(info).toBeFocused();
-  await page.keyboard.press('End');
+  const toggle = page.getByRole('button', { name: 'Developer', exact: true });
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  await expect(snippet(page)).toBeVisible();
 
-  // Tab: the panel, then the Copy button; Enter copies.
+  // Tab: the Copy button; Enter copies.
   await page.evaluate(() => {
     navigator.clipboard.writeText = () => Promise.reject(new Error('refused'));
   });
   const copy = developer(page).getByRole('button', { name: 'Copy the CSS snippet' });
   await page.keyboard.press('Tab');
-  await expect(developer(page)).toBeFocused();
-  await page.keyboard.press('Tab');
   await expect(copy).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(developer(page).getByRole('status')).toHaveText('Could not copy');
+
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(snippet(page)).toHaveCount(0);
 });
 
 // Screenshots of the Developer tab for UI reviews: FM_SCREENS_DIR=<dir> pnpm test:e2e --grep @screens
@@ -144,9 +131,9 @@ test.describe('@screens developer tab', () => {
       test(`developer-${scheme}-${vp.width}x${vp.height}`, async ({ page }) => {
         await page.setViewportSize(vp);
         await page.emulateMedia({ colorScheme: scheme });
-        await open(page, { showInspector: vp.width < 1280 });
+        await open(page);
         await moveWghtAndTurnOnSmcp(page, '650');
-        await page.getByRole('tab', { name: 'Developer' }).click();
+        await openDeveloper(page);
         await expect(snippet(page)).toContainText('"smcp" 1');
         await page.screenshot({
           path: `${dir}/developer-${scheme}-${vp.width}x${vp.height}.png`,

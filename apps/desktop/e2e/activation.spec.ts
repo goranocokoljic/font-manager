@@ -63,8 +63,9 @@ test('a family with some active styles shows a partial dot; Shift+A makes all pe
   await page.keyboard.press('a');
   await expect(style.locator('[data-activation]')).toHaveAttribute('data-activation', 'active');
   await expect(dot(page, 'Sample 1')).toHaveAttribute('data-activation', 'partial');
-  // One style is not a bulk action: its outcome is in the inspector, not a toast.
+  // One style is not a bulk action: its state shows in the count line, not a toast.
   await expect(toast(page)).toHaveCount(0);
+  await expect(page.getByTestId('selected-row-state')).toHaveText('active for this session');
 
   await family.click();
   await page.keyboard.press('Shift+A');

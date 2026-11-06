@@ -58,9 +58,10 @@ describe('keymap', () => {
     ]);
   });
 
-  it('keeps Ctrl/Cmd+I for the inspector', () => {
-    expect(bindingFor(key({ key: 'i', ctrlKey: true }))?.action).toBe(ACTIONS.inspector);
-    expect(bindingFor(key({ key: 'I', metaKey: true }))?.action).toBe(ACTIONS.inspector);
+  it('has no inspector chord left: ] and Ctrl/Cmd+I are free', () => {
+    expect(bindingFor(key({ key: ']' }))).toBeUndefined();
+    expect(bindingFor(key({ key: 'i', ctrlKey: true }))).toBeUndefined();
+    expect(bindingFor(key({ key: 'I', metaKey: true }))).toBeUndefined();
   });
 
   it('accepts Ctrl or Cmd as the modifier', () => {

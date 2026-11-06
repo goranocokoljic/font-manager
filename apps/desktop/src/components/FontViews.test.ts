@@ -7,7 +7,7 @@ import { setClient, useClient, type FmClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
 import type { PreviewRequest } from '../api/types';
 import { specimenBox, WALL, wallCardWidth, wallColumns, wallLinePx } from '../list/grid';
-import { familyKey } from '../list/rows';
+import { familyKey, type ListRow } from '../list/rows';
 import { WATERFALL_SIZES, waterfallRowPx } from '../list/waterfall';
 import { FRAME_MS, SETTLE_MS } from '../list/settle';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
@@ -152,11 +152,15 @@ describe('FontGrid', () => {
     expect(box.attributes('aria-activedescendant')).toBe(
       `fm-card-family-${list.rows[3]!.family.id}`,
     );
-    // Enter on a family card expands it: its styles follow as cards.
-    list.moveCursor(list.rows.findIndex((r) => r.kind === 'family' && r.family.styleCount > 1));
+    // Enter on a family card asks for its family page and leaves the card folded.
+    const at = list.rows.findIndex((r) => r.kind === 'family' && r.family.styleCount > 1);
+    list.moveCursor(at);
     await box.trigger('keydown', { key: 'Enter' });
     await flushPromises();
-    expect(list.expanded.size).toBe(1);
+    expect(list.expanded.size).toBe(0);
+    expect((grid.emitted('open') as [ListRow][]).map(([row]) => row.key)).toEqual([
+      list.rows[at]!.key,
+    ]);
   });
 
   it('a failed thumbnail says so', async () => {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
+import ActivationNotice from '../components/ActivationNotice.vue';
 import AdobeFontsNote from '../components/AdobeFontsNote.vue';
 import CatalogBrowser from '../components/CatalogBrowser.vue';
 import CollectionHeader from '../components/CollectionHeader.vue';
@@ -15,7 +16,6 @@ import FontList from '../components/FontList.vue';
 import FontTable from '../components/FontTable.vue';
 import FontWaterfall from '../components/FontWaterfall.vue';
 import WallCountLine from '../components/WallCountLine.vue';
-import InspectorPanel from '../components/InspectorPanel.vue';
 import LibraryViewsSidebar from '../components/LibraryViewsSidebar.vue';
 import UiButton from '../components/ui/UiButton.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
@@ -44,12 +44,14 @@ import TagsSidebar from '../components/TagsSidebar.vue';
 import { errorMessage, t } from '../i18n';
 import { DENSITIES } from '../list/density';
 import { WALL_SIZE } from '../list/grid';
+import type { ListRow } from '../list/rows';
 import { ACTIONS, ariaShortcut, chordOf, formatChord } from '../keyboard/keymap';
 import { useActivationStore } from '../stores/activation';
 import { useAppStore } from '../stores/app';
 import { useCollectionsStore } from '../stores/collections';
 import { MAX_PINS, useCompareStore } from '../stores/compare';
 import { useActions, useCommandsStore } from '../stores/commands';
+import { useFamilyPageStore } from '../stores/familyPage';
 import { useFontListStore } from '../stores/fontList';
 import { useLayoutStore } from '../stores/layout';
 import { useLibraryStore } from '../stores/library';
@@ -200,13 +202,32 @@ onMounted(() => {
   void compare.loadSaved();
 });
 
-// The family page (E42.1): O, the palette or a double-click on a row or card, in any view.
-// The Layout mode has no rows; it opens the family it shows.
+// The family page (E42.1, E41.5): Enter, a click on a name, O, the palette or a double-click on
+// a row or card, in any view. The Layout mode has no rows; it opens the family it shows.
 const familyNav = useFamilyNavigation();
+const familyPage = useFamilyPageStore();
 const openableFamily = computed(() => {
   if (quick.open || catalogs.current) return null;
   return mode.value === 'layout' ? layoutFamily.value : (fontList.cursorRow?.family.id ?? null);
 });
+
+/** Opens the row's family page, on the style when the row is one. */
+async function openRow(row: ListRow): Promise<void> {
+  // The click that got here also moved the cursor: its URL change must end before the push,
+  // or the router drops the push for the newer navigation.
+  await nextTick();
+  await faceNavigation;
+  await familyNav.open(row.family.id, row.kind === 'face' ? row.face.id : undefined);
+}
+
+function onNameClick(e: MouseEvent): void {
+  if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  const el = e.target instanceof Element ? e.target : null;
+  if (!el?.closest('[data-family-name]')) return;
+  const key = el.closest('[data-key]')?.getAttribute('data-key');
+  const row = fontList.rows.find((r) => r.key === key);
+  if (row) void openRow(row);
+}
 
 function onDoubleClick(e: MouseEvent): void {
   const el = e.target instanceof Element ? e.target : null;
@@ -214,23 +235,27 @@ function onDoubleClick(e: MouseEvent): void {
     return;
   const key = el.closest('[data-key]')?.getAttribute('data-key');
   const row = fontList.rows.find((r) => r.key === key);
-  if (row) void familyNav.open(row.family.id);
+  if (row) void openRow(row);
 }
 
-// One style (or nothing) selected: A acts on the inspector's face, which shows the
-// outcome. Several rows or a family: on all of them, with a toast that can undo it.
+// One style selected: A acts on its face, and the count line shows the new state. Several rows
+// or a family: on all of them, with a toast that can undo it. Nothing selected: nothing happens,
+// though `?face=` may still name a face: its row is gone, and nothing here would show the change.
 const bulkSelection = computed(() => {
   const rows = fontList.selectedRows;
   return rows.length > 1 || rows[0]?.kind === 'family';
 });
-const canToggle = () => (bulkSelection.value ? !activation.busy : selection.canActivate);
+const canToggle = () => {
+  if (!fontList.selectedRows.length) return false;
+  return bulkSelection.value ? !activation.busy : selection.canActivate;
+};
 const toggle = (mode: ActivationMode) =>
   bulkSelection.value
     ? activation.toggleRows(fontList.selectedRows, mode)
     : selection.toggleActivation(mode);
 
 // C pins the selected face to Compare, and S finds the faces similar to it: the
-// inspector's once its detail has loaded, else the list cursor's (the row just moved
+// selected face once its detail has loaded, else the list cursor's (the row just moved
 // to, whose detail is still on its way).
 const pinTarget = computed(() => {
   const shown = selection.detail?.face;
@@ -302,7 +327,11 @@ useActions([
       return t('palette.groups.view');
     },
     enabled: () => openableFamily.value !== null,
-    run: () => (openableFamily.value !== null ? familyNav.open(openableFamily.value) : undefined),
+    run: () => {
+      const cursor = fontList.cursorRow;
+      if (mode.value !== 'layout' && cursor) return openRow(cursor);
+      return openableFamily.value !== null ? familyNav.open(openableFamily.value) : undefined;
+    },
   },
   {
     id: ACTIONS.quickLook,
@@ -476,10 +505,13 @@ watch(
   { immediate: true },
 );
 
-/** The face under the list's cursor goes to the inspector. */
+/** The newest change of `?face=`, so a push can wait for it. */
+let faceNavigation: Promise<unknown> = Promise.resolve();
+
+/** The face under the list's cursor goes to the URL, and from there to the selection store. */
 function showFace(face: FaceId): void {
   if (parseFaceId(route.query.face) === face) return;
-  void router.replace({ query: { ...route.query, face: String(face) } });
+  faceNavigation = router.replace({ query: { ...route.query, face: String(face) } });
 }
 
 const browse = ref<HTMLElement | null>(null);
@@ -514,10 +546,20 @@ function focusList(): void {
     ?.focus({ preventScroll: true });
 }
 
-/** Enter on a style: show it, opening the inspector when it is hidden. */
-function openFace(face: FaceId): void {
-  showFace(face);
-  if (!layout.inspectorVisible) layout.toggleInspector();
+// A panel that came back with the library has no element to give the focus back to.
+watch(
+  () => similar.open,
+  async (open) => {
+    if (open) return;
+    await nextTick();
+    if (document.activeElement === document.body) focusList();
+  },
+);
+
+/** A face picked outside the rows (a Similar result, a document's font): its family page. */
+async function openFace(face: FaceId): Promise<void> {
+  const family = await familyPage.familyOf(face);
+  if (family !== null) await familyNav.open(family, face);
 }
 </script>
 
@@ -587,21 +629,18 @@ function openFace(face: FaceId): void {
           >
             <span class="pins">{{ compare.pins.length }}</span>
           </UiIconButton>
-          <UiIconButton
-            icon="inspector"
-            :label="t('home.inspector')"
-            aria-controls="fm-inspector"
-            aria-keyshortcuts="Control+I Meta+I"
-            :aria-pressed="layout.inspectorVisible"
-            :title="t('home.inspectorTitle')"
-            @click="layout.toggleInspector"
-          />
           <PreviewSizeSlider
             :view="ALL_FONTS_VIEW"
             :size-range="mode === 'grid' ? WALL_SIZE : undefined"
           />
         </header>
-        <div v-show="!similar.open" ref="browse" class="browse" @dblclick="onDoubleClick">
+        <div
+          v-show="!similar.open"
+          ref="browse"
+          class="browse"
+          @click="onNameClick"
+          @dblclick="onDoubleClick"
+        >
           <CollectionHeader />
           <PreviewControls
             :view="ALL_FONTS_VIEW"
@@ -610,9 +649,10 @@ function openFace(face: FaceId): void {
             @leave="focusList"
           />
           <WallCountLine :view="ALL_FONTS_VIEW" />
+          <ActivationNotice />
           <template v-if="fontList.families.length && mode === 'table'">
             <PreviewStrip :view="ALL_FONTS_VIEW" :preview="preview.settingsFor(ALL_FONTS_VIEW)" />
-            <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openFace" />
+            <FontTable :view="ALL_FONTS_VIEW" @cursor-face="showFace" @open="openRow" />
           </template>
           <template v-else-if="fontList.families.length && mode === 'layout'">
             <LayoutActions @opened="(id) => views.setLayout(ALL_FONTS_VIEW, id)">
@@ -641,19 +681,19 @@ function openFace(face: FaceId): void {
             v-else-if="fontList.families.length && mode === 'grid'"
             :preview="preview.settingsFor(ALL_FONTS_VIEW)"
             @cursor-face="showFace"
-            @open="openFace"
+            @open="openRow"
           />
           <FontWaterfall
             v-else-if="fontList.families.length && mode === 'waterfall'"
             :preview="preview.settingsFor(ALL_FONTS_VIEW)"
             @cursor-face="showFace"
-            @open="openFace"
+            @open="openRow"
           />
           <FontList
             v-else-if="fontList.families.length"
             :preview="preview.settingsFor(ALL_FONTS_VIEW)"
             @cursor-face="showFace"
-            @open="openFace"
+            @open="openRow"
           />
           <section v-else class="empty" :aria-label="t('home.fontList')">
             <p v-if="library.error" role="alert" class="error">{{ errorMessage(library.error) }}</p>
@@ -695,10 +735,6 @@ function openFace(face: FaceId): void {
       <SmartRuleEditor />
     </template>
 
-    <template #inspector>
-      <InspectorPanel />
-    </template>
-
     <template #status>
       <p class="active-count" data-testid="active-count" role="status">
         {{ t('home.fontsActive', { count: activation.count }) }}
@@ -726,6 +762,13 @@ function openFace(face: FaceId): void {
   flex: 1;
   flex-direction: column;
   min-height: 0;
+}
+/* A name in a row or card opens the family page. */
+.browse :deep([data-family-name]) {
+  cursor: pointer;
+}
+.browse :deep([data-family-name]:hover) {
+  text-decoration: underline;
 }
 .toolbar {
   /* A stacking level of its own, above the view below: the Columns menu opens over it. */

@@ -37,8 +37,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The face the cursor shows changed (a style, or a family's first style). */
   cursorFace: [face: FaceId];
-  /** Enter on a style: show it in the inspector. */
-  open: [face: FaceId];
+  /** Enter on a row: open its family page. */
+  open: [row: ListRow];
 }>();
 
 /** Viewport height before the first measurement (and where there is no layout). */
@@ -154,7 +154,7 @@ async function revealCursor(): Promise<void> {
 
 function onKeyDown(e: KeyboardEvent): void {
   const page = Math.max(1, Math.floor(height.value / rowPx.value));
-  if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
+  if (!handleListKey(e, list, { page, count: count.value, open: (row) => emit('open', row) }))
     return;
   e.preventDefault();
   void revealCursor();
@@ -226,7 +226,7 @@ function onToggle(row: ListRow): void {
             ><UiChevron v-if="!item.row.single" :open="item.row.expanded"
           /></span>
           <ActivationDot :state="rowActivation(item.row)" />
-          <bdi class="name">{{
+          <bdi class="name" data-family-name>{{
             item.row.kind === 'face'
               ? `${item.row.family.name} ${styleName(item.row)}`
               : item.row.family.name

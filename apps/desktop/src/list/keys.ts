@@ -1,14 +1,14 @@
 // The keyboard model of the font list, shared by the list and the table views:
 // arrows, Home/End, PageUp/PageDown move the cursor; Right/Left expand/collapse;
-// Enter toggles a family or opens a style; Shift extends the selection,
+// Enter opens the row's family page; Shift extends the selection,
 // Ctrl/Cmd moves without selecting, Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A
 // selects all. Plain Space is the app's quick-look key, so it is left alone.
 // The grid view lays rows out in `columns` per line: Up/Down then move by a
-// line of cards and Left/Right by one card (Enter, or Alt+Right / Alt+Left, opens and closes a family).
+// line of cards and Left/Right by one card (Alt+Right / Alt+Left opens and closes a family).
 // Left/Right follow what the user sees: in right-to-left chrome they swap.
 import { inlineKey } from '../i18n';
-import type { FaceId } from '../api/types';
 import type { useFontListStore } from '../stores/fontList';
+import type { ListRow } from './rows';
 import type { SelectMode } from './selection';
 
 type FontListStore = ReturnType<typeof useFontListStore>;
@@ -27,7 +27,7 @@ export function modeOf(e: KeyboardEvent | MouseEvent): SelectMode {
 export function handleListKey(
   e: KeyboardEvent,
   list: FontListStore,
-  opts: { page: number; count: number; open: (face: FaceId) => void; columns?: number },
+  opts: { page: number; count: number; open: (row: ListRow) => void; columns?: number },
 ): boolean {
   const mod = e.ctrlKey || e.metaKey;
   const row = list.cursorRow;
@@ -78,8 +78,7 @@ export function handleListKey(
       return true;
     case 'Enter':
       if (mod || e.shiftKey || !row) return false;
-      if (row.kind === 'family') list.toggleExpanded(row.family.id);
-      else opts.open(row.face.id);
+      opts.open(row);
       return true;
     case ' ':
       if (!mod) return false;

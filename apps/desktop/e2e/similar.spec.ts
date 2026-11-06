@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { sectionPanel, showSection } from './family-page';
 
 // "Find similar" (E23.3) on the mock client: from the list row (its action and the S
 // key), the inspector header and the command palette. `mockFaces=3&mockStyles=4` adds
@@ -28,7 +29,7 @@ async function open(page: Page, query = '?mockFaces=3&mockStyles=4', route = '/'
 const panel = (page: Page, name: string | RegExp = /^Similar to /) =>
   page.getByRole('region', { name });
 const results = (page: Page) => panel(page).getByRole('list', { name: 'Similar fonts' });
-const info = (page: Page) => page.getByRole('tabpanel', { name: 'Info' });
+const info = (page: Page) => sectionPanel(page, 'Info');
 
 /** The face name of a result button, from its label "<name>, <n>% similar". */
 async function nameOf(result: Locator): Promise<string> {
@@ -54,7 +55,7 @@ async function expectResults(page: Page): Promise<void> {
   await expect(buttons.first().locator('.row')).toHaveAttribute('data-state', 'ready');
 }
 
-test('the row action opens "Similar to" and a click selects the result in the list and inspector', async ({
+test('the row action opens "Similar to" and a click opens the result on its family page', async ({
   page,
 }) => {
   const tree = await open(page);
@@ -73,10 +74,14 @@ test('the row action opens "Similar to" and a click selects the result in the li
     .first();
   const name = await nameOf(sample);
   await sample.click();
-  await expect(sample).toHaveAttribute('aria-current', 'true');
+  await showSection(page, 'Info');
   await expect(info(page).getByRole('heading', { name })).toBeVisible();
-  // The panel replaces the list; closing it shows the picked face selected.
+  // Back: the results are still there, the pick marked.
   await page.keyboard.press('Escape');
+  await expect(panel(page)).toBeVisible();
+  await expect(sample).toHaveAttribute('aria-current', 'true');
+  // The panel replaces the list; closing it shows the picked face selected.
+  await panel(page).getByRole('button', { name: 'Close the similar fonts' }).click();
   await expect(tree.locator('[role="treeitem"][aria-selected="true"]')).toHaveAccessibleName(
     // A one-style family is selected as its family row, not as a style row.
     new RegExp(`^(${name}|${name.replace(/ \S+$/, '')}), `),
@@ -89,7 +94,7 @@ test('S on the selected row opens the panel; arrows and Enter select; Escape clo
   const tree = await open(page);
   await tree.getByRole('treeitem', { name: 'Inter, 1 style' }).click();
   await page.keyboard.press('ArrowDown'); // JetBrains Mono
-  await expect(info(page).getByRole('heading', { name: 'JetBrains Mono Regular' })).toBeVisible();
+  await expect(page.getByTestId('selected-row')).toContainText('JetBrains Mono');
   await page.keyboard.press('s');
   await expect(panel(page, 'Similar to JetBrains Mono Regular')).toBeVisible();
   await expectResults(page);
@@ -99,11 +104,15 @@ test('S on the selected row opens the panel; arrows and Enter select; Escape clo
   await page.keyboard.press('ArrowDown');
   await expect(buttons.nth(1)).toBeFocused();
   const name = await nameOf(buttons.nth(1));
-  await page.keyboard.press('Enter');
-  await expect(info(page).getByRole('heading', { name })).toBeVisible();
   // Tab reaches every result; Shift+Tab back to the close button.
   await page.keyboard.press('Tab');
   await expect(buttons.nth(2)).toBeFocused();
+  await buttons.nth(1).focus();
+  await page.keyboard.press('Enter');
+  await showSection(page, 'Info');
+  await expect(info(page).getByRole('heading', { name })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(buttons.nth(1)).toHaveAttribute('aria-current', 'true');
   await buttons.first().focus();
   await page.keyboard.press('Shift+Tab');
   await expect(panel(page).getByRole('button', { name: 'Close the similar fonts' })).toBeFocused();
@@ -117,10 +126,14 @@ test('S on the selected row opens the panel; arrows and Enter select; Escape clo
   );
 });
 
-test('the inspector header opens the panel for the shown face', async ({ page }) => {
-  await open(page, '?mockFaces=3&mockStyles=4', '/?face=6');
+test('the family page opens the panel for the shown face', async ({ page }) => {
+  await page.route('**/fmfont/*', (r) =>
+    r.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+  );
+  await page.goto('/?mockFaces=3&mockStyles=4#/family/3?face=6');
+  await showSection(page, 'Info');
   await expect(info(page).getByRole('heading', { name: 'JetBrains Mono Regular' })).toBeVisible();
-  const button = info(page).getByRole('button', { name: 'Find similar' });
+  const button = page.getByRole('button', { name: 'Find similar' });
   await expect(button).toHaveAttribute('aria-keyshortcuts', 'S');
   await button.focus();
   await page.keyboard.press('Enter');
@@ -132,7 +145,7 @@ test('the inspector header opens the panel for the shown face', async ({ page })
 
 test('the command palette lists the action with its key and runs it', async ({ page }) => {
   await open(page, '?mockFaces=3&mockStyles=4', '/?face=1');
-  await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
+  await expect(page.getByTestId('selected-row')).toContainText('Inter');
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('similar');
   const option = page.getByRole('option', { name: /Find similar fonts/ });
@@ -145,7 +158,7 @@ test('the command palette lists the action with its key and runs it', async ({ p
 
 test('no similar face shows a plain message', async ({ page }) => {
   await open(page, '?mockSimilar=1', '/?face=1');
-  await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
+  await expect(page.getByTestId('selected-row')).toContainText('Inter');
   await page.getByRole('main').focus();
   await page.keyboard.press('s');
   await expect(panel(page).getByRole('status')).toHaveText(
@@ -155,9 +168,8 @@ test('no similar face shows a plain message', async ({ page }) => {
 });
 
 test('an error from the core shows a plain message', async ({ page }) => {
-  await open(page, '?mockSimilar=2', '/?face=1');
-  await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
-  await info(page).getByRole('button', { name: 'Find similar' }).click();
+  await page.goto('/?mockSimilar=2#/family/1?face=1');
+  await page.getByRole('button', { name: 'Find similar' }).click();
   await expect(panel(page).getByRole('alert')).toHaveText(
     'Font Manager could not find similar fonts. Finding similar fonts is not available yet.',
   );

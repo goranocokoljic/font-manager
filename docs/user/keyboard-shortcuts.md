@@ -9,7 +9,6 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `Ctrl+K` | Open or close the command palette |
 | `/` | Go to the search box |
 | `Ctrl+,` | Open the settings (also in the File menu, in the Font Manager menu on a Mac, in the tray menu and in the status bar) |
-| `Ctrl+I` | Show or hide the inspector |
 
 ## In the font list
 
@@ -19,7 +18,7 @@ On a Mac, use `Cmd` where this page says `Ctrl`. Both keys work on every system.
 | `Page Up` and `Page Down` | Go up or down one screen |
 | `Home` and `End` | Go to the first or last row |
 | `Right` and `Left` | Show or hide the styles of a family (in the grid: go to the next or previous card) |
-| `Enter` | Show or hide the styles of a family, or open a style |
+| `Enter` | Open the family page of the font |
 | `Shift+Up` and `Shift+Down` | Add the next rows to the selection |
 | `Ctrl+Space` | Add the row to the selection, or take it out |
 | `Ctrl+A` | Select all fonts |
@@ -67,7 +66,7 @@ already have.
 ## In the similar fonts
 
 Select a font and press `S`. You can also click **Similar** on the row (point to
-the row to see it), click **Find similar** in the inspector, or run **Find similar
+the row to see it), click **Find similar** on the family page, or run **Find similar
 fonts** in the command palette. The panel **Similar to** opens below the font list.
 It shows the fonts that look like the selected font, closest first. Each font shows
 the preview text in that font, how similar it is in percent, and why.
@@ -76,11 +75,11 @@ the preview text in that font, how similar it is in percent, and why.
 |-----|--------------|
 | `Up` and `Down` | Go to the previous or next font |
 | `Home` and `End` | Go to the first or last font |
-| `Enter` | Select the font in the font list and show it in the inspector |
+| `Enter` | Open the family page of the font |
 | `Tab` | Go to the next font, or to the close button |
 | `Esc` | Close the panel |
 
-If a search or a filter hides the font in the list, the inspector still shows it.
+If a search or a filter hides the font in the list, its family page still shows it.
 
 ## In the layout
 
@@ -131,9 +130,9 @@ The **Help** commands in the palette open these pages, like the **Help** menu do
 
 ## Moving between the parts of the window
 
-Press `Tab` to go from the sidebar to the font list and then to the inspector.
-In the inspector, `Left` and `Right` move between the **Info**, **Features** and
-**Glyphs** tabs. On a feature switch, `Space` turns the feature on or off.
+Press `Tab` to go from the sidebar to the font list. On the family page, `Tab` moves
+between the sections and their controls, and `Left` and `Right` go to the previous or
+next family. `Esc` goes back to the list. On a feature switch, `Space` turns the feature on or off.
 In the glyph grid, the arrow keys move from character to character, `Home` and `End`
 go to the first and the last character, and `Enter` selects the character.
 Letter and number keys also work on keyboards for other alphabets, for example

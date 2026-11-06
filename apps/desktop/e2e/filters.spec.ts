@@ -148,8 +148,8 @@ test('chips that do not fit collapse into +N on one row', async ({ page }) => {
   const more = bar(page).getByRole('button', { name: /^\+\d+ more filter/ });
   await expect(more).toBeVisible();
 
-  // The inspector closes a moment after the window shrinks, and the bar then takes the
-  // room: until that happens, the bar is narrower than the chips measured for it.
+  // The bar takes the room a moment after the window shrinks: until that happens, it is
+  // narrower than the chips measured for it.
   await expect(async () => {
     const visible = await shown.count();
     await expect(more).toHaveText(`+${total - visible}`, { timeout: 500 });

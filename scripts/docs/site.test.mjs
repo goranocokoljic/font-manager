@@ -68,7 +68,7 @@ test('the site uses no script and loads nothing from the network', () => {
 
 test('the shortcuts page lists every key of the keymap', () => {
   const html = page('keyboard-shortcuts');
-  for (const key of ['Ctrl+K', '/', 'Space', 'A', 'Shift+A', 'C', '1', '2', 'Ctrl+,', 'Ctrl+I']) {
+  for (const key of ['Ctrl+K', '/', 'Space', 'A', 'Shift+A', 'C', '1', '2', 'Ctrl+,', 'Enter']) {
     assert.ok(html.includes(`<code>${key}</code>`), key);
   }
 });

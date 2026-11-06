@@ -208,6 +208,8 @@ watch(
     if (i >= 0) {
       cursor.value = i;
       await reveal(i);
+      // The grid scrolls inside itself; on a long family page it can start below the window.
+      document.getElementById(cellId(i))?.scrollIntoView?.({ block: 'nearest' });
     }
   },
 );

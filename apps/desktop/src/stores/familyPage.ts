@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia';
 import { computed, ref, shallowRef, watch } from 'vue';
 import { useClient } from '../api/client';
-import type { ActivationMode, ApiError, Family, FamilyId, FamilySummary } from '../api/types';
+import type {
+  ActivationMode,
+  ApiError,
+  FaceId,
+  Family,
+  FamilyId,
+  FamilySummary,
+} from '../api/types';
 import { errorMessage } from '../i18n';
 import { familyKey, type FamilyRow } from '../list/rows';
 import { useActivationStore } from './activation';
@@ -64,8 +71,12 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     () => fontList.families[index.value] ?? detail.value?.summary ?? null,
   );
   const faces = computed(() => detail.value?.faces ?? []);
-  /** The face the page previews until the hero (E42.2) can choose another. */
-  const face = computed(() => faces.value[0] ?? null);
+  /** The style the route names (`?face=`); one the family does not have counts as none. */
+  const chosenFace = ref<FaceId | null>(null);
+  /** The face the page previews and its panels describe: the chosen style, else the first. */
+  const face = computed(
+    () => faces.value.find((f) => f.id === chosenFace.value) ?? faces.value[0] ?? null,
+  );
 
   async function read(family: FamilyId): Promise<void> {
     const mine = ++request;
@@ -103,6 +114,24 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
       if (id.value !== null) void read(id.value);
     },
   );
+
+  // A favorite set in the Info section on the first face is the state the top bar shows.
+  watch(
+    () => useSelectionStore().detail,
+    (shown) => {
+      if (shown && shown.face.id === faces.value[0]?.id) favorite.value = shown.favorite;
+    },
+  );
+
+  /** The family a face from elsewhere (a Similar result, a document's font) belongs to. */
+  async function familyOf(of: FaceId): Promise<FamilyId | null> {
+    try {
+      return (await useClient().getFace(of)).face.family;
+    } catch (e) {
+      useToastStore().show(errorMessage(e));
+      return null;
+    }
+  }
 
   /** Activates what is inactive, or deactivates a fully active family, as A does on its row. */
   async function toggleActivation(mode?: ActivationMode): Promise<void> {
@@ -147,8 +176,10 @@ export const useFamilyPageStore = defineStore('familyPage', () => {
     next,
     summary,
     faces,
+    chosenFace,
     face,
     show,
+    familyOf,
     toggleActivation,
     toggleFavorite,
   };

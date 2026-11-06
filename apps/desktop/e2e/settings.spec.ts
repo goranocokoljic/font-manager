@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection, sectionPanel } from './family-page';
 
 const tab = (page: Page, name: string) => page.getByRole('tab', { name });
 const bg = (page: Page) => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
@@ -64,13 +65,14 @@ test('the activation choice applies to the next activation', async ({ page }) =>
   await page.getByRole('button', { name: 'Close' }).click();
 
   // Face 1 has no clash: permanent.
-  await page.goto('/#/?face=1');
-  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await page.goto('/#/settings?section=activation');
+  await openSection(page, 1, 'Info');
+  await sectionPanel(page, 'Info').getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(page.getByTestId('activation-state')).toHaveText('Active (permanent)');
 
   // Face 6 clashes with a system font: replaced without a question, for this session only.
-  await page.goto('/#/?face=6');
-  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await openSection(page, 6, 'Info');
+  await sectionPanel(page, 'Info').getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(page.getByTestId('activation-state')).toHaveText('Active for this session');
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
 });
@@ -79,9 +81,11 @@ test('the status bar counts active fonts as activation changes', async ({ page }
   await page.goto('/#/?face=1');
   const count = page.getByTestId('active-count');
   await expect(count).toHaveText('0 fonts active');
-  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await page.getByTestId('selected-row').waitFor();
+  await page.getByRole('tree', { name: 'Font list' }).focus();
+  await page.keyboard.press('a');
   await expect(count).toHaveText('1 font active');
-  await page.getByRole('button', { name: 'Deactivate' }).click();
+  await page.keyboard.press('a');
   await expect(count).toHaveText('0 fonts active');
 });
 

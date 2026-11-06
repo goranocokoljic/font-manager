@@ -87,7 +87,7 @@ describe('command palette', () => {
   it('moves with the arrows and runs the active action with Enter', async () => {
     await mountApp();
     const layout = useLayoutStore();
-    expect(layout.inspectorVisible).toBe(true);
+    expect(layout.sidebarOpen).toBe(true);
     useCommandsStore().openPalette();
     await flushPromises();
     expect(input()!.getAttribute('aria-activedescendant')).toBe(options()[0].id);
@@ -96,11 +96,11 @@ describe('command palette', () => {
     await press({ key: 'ArrowUp' });
     await press({ key: 'ArrowUp' });
     expect(options().at(-1)!.getAttribute('aria-selected')).toBe('true');
-    await wrapper!.find('input[role="combobox"]').setValue('hide insp');
+    await wrapper!.find('input[role="combobox"]').setValue('hide side');
     expect(options()[0].getAttribute('aria-selected')).toBe('true');
-    expect(options()[0].textContent).toContain('Show or hide the inspector');
+    expect(options()[0].textContent).toContain('Show or hide the sidebar');
     await press({ key: 'Enter' });
-    expect(layout.inspectorVisible).toBe(false);
+    expect(layout.sidebarOpen).toBe(false);
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
@@ -186,34 +186,32 @@ describe('keyboard model in the app', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('Ctrl/Cmd+I still toggles the inspector', async () => {
+  it('[ toggles the sidebar; ] and Ctrl/Cmd+I no longer do anything', async () => {
     await mountApp();
     const layout = useLayoutStore();
+    const columns = () => document.querySelectorAll('.column').length;
+    await press({ key: ']' }, window);
     await press({ key: 'i', ctrlKey: true }, window);
-    expect(layout.inspectorVisible).toBe(false);
     await press({ key: 'i', metaKey: true }, window);
-    expect(layout.inspectorVisible).toBe(true);
+    expect(columns()).toBe(2);
+    expect(useCommandsStore().actions.some((a) => a.id === 'view.toggleInspector')).toBe(false);
+    await press({ key: '[' }, window);
+    expect(layout.sidebarOpen).toBe(false);
+    expect(columns()).toBe(1);
   });
 
   it('makes each column a labelled tab stop in order', async () => {
     await mountApp();
     const columns = [...document.querySelectorAll<HTMLElement>('.column')];
-    expect(columns.map((c) => c.getAttribute('aria-label'))).toEqual([
-      'Library',
-      'Fonts',
-      'Inspector',
-    ]);
+    expect(columns.map((c) => c.getAttribute('aria-label'))).toEqual(['Library', 'Fonts']);
     for (const c of columns) expect(c.tabIndex).toBe(0);
   });
 
-  it('"Go to the inspector" reopens a hidden inspector and focuses it', async () => {
+  it('"Go to the font list" focuses that column; no action goes to an inspector', async () => {
     await mountApp();
-    const layout = useLayoutStore();
-    layout.toggleInspector();
+    expect(useCommandsStore().actions.some((a) => a.id === 'focus.inspector')).toBe(false);
+    useCommandsStore().run('focus.list');
     await flushPromises();
-    useCommandsStore().run('focus.inspector');
-    await flushPromises();
-    expect(layout.inspectorVisible).toBe(true);
-    expect(document.activeElement?.id).toBe('fm-inspector');
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Fonts');
   });
 });

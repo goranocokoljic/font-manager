@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { axesRow, faceHash, hero } from './family-page';
 import { selectOption } from './select';
 
 const fixture = readFileSync(
@@ -14,14 +15,12 @@ const fixture = readFileSync(
 
 // MockApi face 1 (Inter Regular): one axis, wght 100–900, default 400; named
 // instances Thin, Regular, Bold, Black. Face 6 is static.
-async function openAxes(page: Page, { showInspector = false, hash = '/#/?face=1' } = {}) {
+async function openAxes(page: Page, face = 1) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto(hash);
-  if (showInspector) await page.getByRole('button', { name: 'Inspector' }).click();
-  await page.getByRole('tab', { name: 'Axes' }).click();
-  return page.getByRole('tabpanel', { name: 'Axes' });
+  await page.goto(`/${faceHash(face)}`);
+  return axesRow(page);
 }
 
 const wghtSlider = (panel: ReturnType<Page['getByRole']>) =>
@@ -29,12 +28,15 @@ const wghtSlider = (panel: ReturnType<Page['getByRole']>) =>
 const wghtField = (panel: ReturnType<Page['getByRole']>) =>
   panel.getByRole('textbox', { name: 'Weight (wght) value' });
 
-test('the Axes tab sits next to Info and shows each axis with its range and default', async ({
+test('the axis row sits under the hero and shows each axis with its range and default', async ({
   page,
 }) => {
   const panel = await openAxes(page);
-  const tabs = page.getByRole('tablist', { name: 'Inspector tabs' }).getByRole('tab');
-  await expect(tabs).toHaveText(['Info', 'Axes', 'Features', 'Glyphs', 'Developer']);
+  const under = await hero(page).evaluate(
+    (el, row) => el.compareDocumentPosition(row!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    await panel.elementHandle(),
+  );
+  expect(under).toBeTruthy();
   const slider = wghtSlider(panel);
   await expect(slider).toHaveAttribute('min', '100');
   await expect(slider).toHaveAttribute('max', '900');
@@ -44,34 +46,43 @@ test('the Axes tab sits next to Info and shows each axis with its range and defa
 });
 
 test('a static face says it has no variation axes', async ({ page }) => {
-  const panel = await openAxes(page, { hash: '/#/?face=6' });
-  await expect(panel).toContainText('This font has no variation axes');
+  const panel = await openAxes(page, 6);
+  await expect(panel).toContainText('No variable axes');
   await expect(panel.getByRole('slider')).toHaveCount(0);
 });
 
-test("moving the wght slider changes the row's computed font-variation-settings", async ({
+test("moving the wght slider changes the hero and the row's font-variation-settings", async ({
   page,
 }) => {
   const panel = await openAxes(page);
-  const row = page.locator('[data-face="1"]').first();
-  await expect(row).toHaveAttribute('data-state', 'ready');
-  const sample = row.locator('.sample');
+  const sample = hero(page);
   await expect(sample).toHaveCSS('font-variation-settings', '"wght" 400');
   await wghtSlider(panel).fill('700');
   await expect(sample).toHaveCSS('font-variation-settings', '"wght" 700');
-  // The font was not loaded again.
-  await expect(row).toHaveAttribute('data-state', 'ready');
-  // Another face's row is untouched.
+  // Another face is untouched.
+  await page.evaluate(() => (location.hash = '#/family/3?face=6'));
+  await expect(page.getByTestId('family-panel')).toContainText('Regular');
+  await expect(sample).toHaveCSS('font-variation-settings', 'normal');
+  await page.evaluate(() => (location.hash = '#/family/1?face=1'));
+  await expect(sample).toHaveCSS('font-variation-settings', '"wght" 700');
+  // The list's row follows.
+  await page.getByRole('button', { name: 'Library' }).click();
+  const row = page.locator('[data-face="1"]').first();
+  await expect(row.locator('.sample')).toHaveCSS('font-variation-settings', '"wght" 700');
   await expect(page.locator('[data-face="6"] .sample').first()).toHaveCSS(
     'font-variation-settings',
     'normal',
   );
+  await page.evaluate(() => (location.hash = '#/family/1?face=1'));
   await panel.getByRole('button', { name: 'Reset' }).click();
   await expect(sample).toHaveCSS('font-variation-settings', '"wght" 400');
 });
 
 test('the preview strip follows the axes of its face', async ({ page }) => {
-  const panel = await openAxes(page);
+  await page.route('**/fmfont/*', (route) =>
+    route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+  );
+  await page.goto('/#/');
   await page
     .getByRole('group', { name: 'View mode' })
     .getByRole('button', { name: 'Table' })
@@ -84,7 +95,9 @@ test('the preview strip follows the axes of its face', async ({ page }) => {
     .getByRole('region', { name: 'Preview strip' })
     .locator('[data-face="1"] .sample');
   await expect(sample).toHaveCSS('font-variation-settings', '"wght" 400');
-  await wghtSlider(panel).fill('250');
+  await page.keyboard.press('o');
+  await wghtSlider(axesRow(page)).fill('250');
+  await page.getByRole('button', { name: 'Library' }).click();
   await expect(sample).toHaveCSS('font-variation-settings', '"wght" 250');
 });
 
@@ -92,7 +105,7 @@ test('a typed value is clamped; a non-number is rejected without changing the pr
   page,
 }) => {
   const panel = await openAxes(page);
-  const sample = page.locator('[data-face="1"] .sample').first();
+  const sample = hero(page);
   const field = wghtField(panel);
   await field.fill('1200');
   await field.press('Enter');
@@ -115,10 +128,7 @@ test('choosing a named instance sets the slider to its coordinates', async ({ pa
     'aria-pressed',
     'true',
   );
-  await expect(page.locator('[data-face="1"] .sample').first()).toHaveCSS(
-    'font-variation-settings',
-    '"wght" 700',
-  );
+  await expect(hero(page)).toHaveCSS('font-variation-settings', '"wght" 700');
 });
 
 test('"Copy CSS" copies font-variation-settings for the moved axes, as the preview applies them', async ({
@@ -127,7 +137,7 @@ test('"Copy CSS" copies font-variation-settings for the moved axes, as the previ
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const panel = await openAxes(page);
-  const sample = page.locator('[data-face="1"] .sample').first();
+  const sample = hero(page);
   const copy = panel.getByRole('button', { name: 'Copy CSS for the axes' });
   const status = panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ });
   const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
@@ -199,7 +209,10 @@ test('sliders, fields, presets and the pin button are keyboard-reachable with la
 test('"Pin this instance" saves a virtual style that shows as its own row in the collection', async ({
   page,
 }) => {
-  const panel = await openAxes(page);
+  await page.route('**/fmfont/*', (route) =>
+    route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+  );
+  await page.goto('/#/');
   // A manual collection to pin into.
   const sidebar = page.getByRole('region', { name: 'Collections' });
   await sidebar.getByRole('button', { name: 'New collection', exact: true }).click();
@@ -208,6 +221,10 @@ test('"Pin this instance" saves a virtual style that shows as its own row in the
   await input.press('Enter');
   await expect(sidebar.getByRole('listitem', { name: 'Brand', exact: true })).toBeVisible();
 
+  const tree = page.getByRole('tree');
+  await tree.getByRole('treeitem', { name: /^Inter,/ }).click();
+  await page.keyboard.press('o');
+  const panel = axesRow(page);
   await wghtSlider(panel).fill('620');
   await panel.getByRole('textbox', { name: 'Style name' }).fill('Semibold Pin');
   await selectOption(panel.getByRole('combobox', { name: 'Save in' }), { label: 'Brand' });
@@ -215,21 +232,24 @@ test('"Pin this instance" saves a virtual style that shows as its own row in the
   await pin.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByText('Pinned “Semibold Pin” to Brand.')).toBeVisible();
+  await page.getByRole('button', { name: 'Library' }).click();
 
   // Open the collection: Inter is listed for its pin; its expanded rows show only the pin.
   await sidebar
     .getByRole('listitem', { name: 'Brand', exact: true })
     .getByRole('button', { name: 'Brand', exact: true })
     .click();
-  const tree = page.getByRole('tree');
   await tree.getByRole('treeitem', { name: /^Inter,/ }).click();
   await page.keyboard.press('ArrowRight');
   const style = tree.getByRole('treeitem', { name: /Semibold Pin, pinned instance/ });
   await expect(style).toBeVisible();
   await expect(tree.getByRole('treeitem', { level: 2 })).toHaveCount(1);
   await expect(style.locator('.sample')).toHaveCSS('font-variation-settings', '"wght" 620');
-  // The Axes tab moving the face does not move the pinned row.
+  // Moving the face on its family page does not move the pinned row.
+  await tree.getByRole('treeitem', { name: /^Inter,/ }).click();
+  await page.keyboard.press('o');
   await panel.getByRole('button', { name: 'Reset' }).click();
+  await page.getByRole('button', { name: 'Library' }).click();
   await expect(style.locator('.sample')).toHaveCSS('font-variation-settings', '"wght" 620');
 });
 
@@ -268,12 +288,9 @@ test.describe('@screens axes tab', () => {
       test(`axes-${scheme}-${vp.width}x${vp.height}`, async ({ page }) => {
         await page.setViewportSize(vp);
         await page.emulateMedia({ colorScheme: scheme });
-        const panel = await openAxes(page, { showInspector: vp.width < 1280 });
+        const panel = await openAxes(page);
         await wghtSlider(panel).fill('700');
-        await expect(page.locator('[data-face="1"]').first()).toHaveAttribute(
-          'data-state',
-          'ready',
-        );
+        await expect(hero(page)).toHaveCSS('font-variation-settings', '"wght" 700');
         await page.screenshot({
           path: `${dir}/axes-${scheme}-${vp.width}x${vp.height}.png`,
           fullPage: true,

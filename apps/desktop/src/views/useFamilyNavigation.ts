@@ -3,7 +3,7 @@
 // (MOTION.md, "Open a family"); a webview without view transitions gets the page's own slide.
 import { nextTick } from 'vue';
 import { useRouter } from 'vue-router';
-import type { FamilyId } from '../api/types';
+import type { FaceId, FamilyId } from '../api/types';
 import { familyKey } from '../list/rows';
 import { withViewTransition } from '../motion';
 import { useFamilyPageStore } from '../stores/familyPage';
@@ -59,8 +59,8 @@ export function useFamilyNavigation() {
   const page = useFamilyPageStore();
   const list = useFontListStore();
 
-  /** Pushes the family page from the library. */
-  async function open(family: FamilyId): Promise<void> {
+  /** Pushes the family page from the library, on `face` when a style was the one chosen. */
+  async function open(family: FamilyId, face?: FaceId): Promise<void> {
     share(specimenOf(family));
     page.section = 'styles';
     page.pushed = true;
@@ -68,7 +68,11 @@ export function useFamilyNavigation() {
       // The view records where it is as it leaves, and Back brings it to that place.
       list.holdScroll(true);
       // The row leaves with the library, so the only element left with the name is the hero.
-      await router.push({ name: 'family', params: { id: String(family) } });
+      await router.push({
+        name: 'family',
+        params: { id: String(family) },
+        query: face === undefined ? {} : { face: String(face) },
+      });
       await nextTick();
       list.holdScroll(false);
     });

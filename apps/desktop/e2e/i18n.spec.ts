@@ -53,7 +53,8 @@ const englishOnly: RegExp[] = (() => {
 })();
 
 /** Library data of the mock, not UI text: the source folder `/Users/demo/Fonts`. */
-const MOCK_DATA = new Set(['Fonts']);
+// The font's own axis name is data too: the axis row shows it as the font has it.
+const MOCK_DATA = new Set(['Fonts', 'Weight']);
 
 /** Every text the user reads or hears now: text nodes and text attributes. */
 function shownTexts(page: Page): Promise<string[]> {
@@ -96,9 +97,14 @@ test('choosing Deutsch relabels the main window, Settings and the palette at onc
 
   await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { name: 'Alle Schriften' })).toBeVisible();
-  // The first family is selected, so the inspector's Info tab shows too.
-  await expect(page.getByRole('tab', { name: 'Infos' })).toBeVisible();
   await expectNoEnglish(page, 'the main window');
+
+  // The family page's Info section, with what the inspector showed.
+  await page.goto('/#/family/1?face=1');
+  await page.getByRole('group', { name: 'Bereich' }).getByRole('button').last().click();
+  await expect(page.locator('[data-section="info"]')).toBeVisible();
+  await expectNoEnglish(page, 'the family page');
+  await page.goto('/#/');
 
   await page.keyboard.press('ControlOrMeta+k');
   await expect(page.getByRole('dialog')).toBeVisible();

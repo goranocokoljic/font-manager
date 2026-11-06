@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { mockFaces } from '../api/mock';
 import type { FaceSummary, FamilySummary } from '../api/types';
-import { faceKey, familyKey, flattenRows, rowLabel, type FaceRow, type FamilyRow } from './rows';
+import {
+  faceKey,
+  familyKey,
+  flattenRows,
+  rowLabel,
+  rowStateLabel,
+  type FaceRow,
+  type FamilyRow,
+} from './rows';
 
 const family = (id: number, name: string): FamilySummary => ({
   id,
@@ -89,5 +97,35 @@ describe('rowLabel', () => {
       'Quartz Sans Semibold Italic, active for this session',
     );
     expect(rowLabel(faceRow('permanent'))).toBe('Quartz Sans Semibold Italic, active permanently');
+  });
+});
+
+describe('rowStateLabel', () => {
+  const familyRow = (activation: FamilySummary['activation']): FamilyRow => ({
+    kind: 'family',
+    key: familyKey(7),
+    family: { ...family(7, 'Quartz Sans'), activation },
+    position: 1,
+    expanded: false,
+  });
+  const faceRow = (active: FaceSummary['active']): FaceRow => ({
+    kind: 'face',
+    key: faceKey(70),
+    face: { ...face(70, 7, 'Bold'), active },
+    family: family(7, 'Quartz Sans'),
+    position: 1,
+    count: 2,
+  });
+
+  it('names the state of a family row', () => {
+    expect(rowStateLabel(familyRow('inactive'))).toBe('not active');
+    expect(rowStateLabel(familyRow('partial'))).toBe('partly active');
+    expect(rowStateLabel(familyRow('active'))).toBe('active');
+  });
+
+  it('tells the modes of a style row apart', () => {
+    expect(rowStateLabel(faceRow(null))).toBe('not active');
+    expect(rowStateLabel(faceRow('session'))).toBe('active for this session');
+    expect(rowStateLabel(faceRow('permanent'))).toBe('active permanently');
   });
 });

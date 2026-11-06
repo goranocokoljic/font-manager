@@ -1,11 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection, sectionPanel } from './family-page';
 
-const info = (page: Page) => page.getByRole('tabpanel', { name: 'Info' });
+const info = (page: Page) => sectionPanel(page, 'Info');
 
 test('the Info tab shows the selected face with every field', async ({ page }) => {
-  await page.goto('/#/?face=1');
-  await expect(page.getByRole('tab', { name: 'Info' })).toHaveAttribute('aria-selected', 'true');
-  const panel = info(page);
+  const panel = await openSection(page, 1, 'Info');
   await expect(panel.getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
   await panel.getByRole('button', { name: 'Technical details' }).click();
   for (const section of [
@@ -34,8 +33,7 @@ test('the Info tab shows the selected face with every field', async ({ page }) =
 
 test('names and paths copy on click', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await page.goto('/#/?face=1');
-  const panel = info(page);
+  const panel = await openSection(page, 1, 'Info');
   await panel.getByRole('button', { name: 'Technical details' }).click();
   for (const [label, value] of [
     ['PostScript name', 'Inter-Regular'],
@@ -52,8 +50,7 @@ test('names and paths copy on click', async ({ page, context }) => {
 });
 
 test('the activation button activates and deactivates the face', async ({ page }) => {
-  await page.goto('/#/?face=1');
-  const panel = info(page);
+  const panel = await openSection(page, 1, 'Info');
   await expect(panel.getByTestId('health-badge')).toHaveText('OK');
   await panel.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(panel.getByTestId('activation-state')).toHaveText('Active for this session');
@@ -62,42 +59,28 @@ test('the activation button activates and deactivates the face', async ({ page }
 });
 
 test('an unsupported face shows its health and cannot be activated', async ({ page }) => {
-  await page.goto('/#/?face=7');
-  const panel = info(page);
+  const panel = await openSection(page, 7, 'Info');
   await expect(panel.getByTestId('health-badge')).toContainText('Unsupported');
   await expect(panel.getByTestId('health-badge')).toContainText('Type 1 fonts cannot be activated');
   await expect(panel.getByRole('button', { name: 'Activate', exact: true })).toBeDisabled();
 });
 
-test('nothing selected without a face in the URL', async ({ page }) => {
-  await page.goto('/');
-  await expect(info(page)).toContainText('Nothing selected');
+test('a family page without a face in the URL describes its first style', async ({ page }) => {
+  await page.goto('/#/family/1');
+  await page.getByRole('group', { name: 'Section' }).getByRole('button', { name: 'Info' }).click();
+  await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
 });
 
 test('an activation from outside the inspector shows there without a click (E6.9)', async ({
   page,
 }) => {
-  await page.goto('/#/?face=1');
-  const panel = info(page);
+  const panel = await openSection(page, 1, 'Info');
   await expect(panel.getByTestId('activation-state')).toHaveText('Not active');
   await expect(panel.getByRole('button', { name: 'Activate', exact: true })).toBeVisible();
 
-  // Dragging Inter out of the window (Font Switch) activates face 1 through the
-  // API, not through the inspector; only the activationChanged event tells it.
-  const row = page
-    .getByRole('tree', { name: 'Font list' })
-    .getByRole('treeitem', { name: /^Inter,/ });
-  await row.dispatchEvent('pointerdown');
-  await expect
-    .poll(async () => {
-      const dataTransfer = await page.evaluateHandle(() => new DataTransfer());
-      await row.dispatchEvent('dragstart', { dataTransfer });
-      return dataTransfer.evaluate((dt) => dt.types.includes('application/x-fm-font-switch'));
-    })
-    .toBe(true);
-  await page.evaluate(() =>
-    document.dispatchEvent(new DragEvent('dragleave', { clientX: -1, clientY: 40 })),
-  );
+  // The top bar activates the family through the activation store, not the Info section;
+  // only the activationChanged event tells the panel.
+  await page.getByRole('button', { name: 'Activate family' }).click();
 
   await expect(panel.getByTestId('activation-state')).toHaveText('Active for this session');
   await expect(panel.getByRole('button', { name: 'Deactivate' })).toBeVisible();

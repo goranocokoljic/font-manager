@@ -14,7 +14,7 @@ system where the file is.
 Select one or more fonts and press the key. Press it again to deactivate them. If only
 some of the selected fonts are active, the key activates the rest. A family activates or
 deactivates with all its styles. In the settings, under **Activation**, you choose which
-kind the **Activate** button in the inspector uses.
+kind the **Activate** button in the **Info** section of the family page uses.
 
 ## See what is active
 
@@ -70,8 +70,8 @@ for this session, so the app can use it. The font stays active after the
 drop; the app does not deactivate it. If the font cannot be activated, a
 message tells you why.
 
-With the keyboard: select the font, open the **Developer** tab of the
-inspector and choose **Copy for Font Switch**. This copies the same data to
+With the keyboard: press `Enter` on the font to open its family page, open
+**Developer** at the end of the right column and choose **Copy for Font Switch**. This copies the same data to
 the clipboard.
 
 ## Fonts a document needs

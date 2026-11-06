@@ -69,9 +69,11 @@ your team, read [Shared libraries](shared-libraries.md).
   size. Click **Compact rows** again to go back to comfortable rows. You can also choose
   **Use compact rows** or **Use comfortable rows** in the command palette, or
   **Density** in **Settings**. Font Manager keeps your choice.
-- Select a font to see its details in the inspector on the right. Press `Ctrl+I`
-  (`Cmd+I` on a Mac) to show or hide the inspector.
-- Open the **Features** tab of the inspector to see the OpenType features of the
+- Select a font to see its name and state in the line above the list. Press `Enter`
+  or click the name to open the family page. It shows everything about the family:
+  styles, axes, characters, features, license, notes and the data for developers.
+  Press `Esc` to go back. Press `Space` for a quick look without leaving the list.
+- Open the **Features** section of the family page to see the OpenType features of the
   font, for example small capitals or oldstyle figures. Turn a feature on or off and
   the preview of that font changes. **Reset** sets the features back to the default.
   Features that the text engine applies by itself show "applied automatically". The

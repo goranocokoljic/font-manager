@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openSection, sectionPanel, showSection } from './family-page';
 
 // Browser mode runs on the mock client; no face or family has notes yet.
-const info = (page: Page) => page.getByRole('tabpanel', { name: 'Info' });
+const info = (page: Page) => sectionPanel(page, 'Info');
 
 async function openTableOn(page: Page, face: number) {
   await page.route('**/fmfont/*', (route) => route.fulfill({ status: 404 }));
@@ -19,10 +20,18 @@ test('the Info tab saves face and family notes on blur, and the Notes column sho
   page,
 }) => {
   const grid = await openTableOn(page, 1);
+  const row = grid.getByRole('row', { name: /^Inter,/ });
+  const notesCell = row.locator('[data-column="notes"]');
+  await expect(notesCell).toHaveText('');
+  const toTable = () => page.getByRole('button', { name: 'Library' }).click();
+  const toPage = async () => {
+    await row.click();
+    await page.keyboard.press('o');
+    await showSection(page, 'Info');
+  };
+  await toPage();
   const panel = info(page);
   await expect(panel.getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
-  const notesCell = grid.getByRole('row', { name: /^Inter,/ }).locator('[data-column="notes"]');
-  await expect(notesCell).toHaveText('');
 
   // Labelled multi-line fields, one for the face and one for its family.
   const faceNotes = panel.getByRole('textbox', { name: 'Notes', exact: true });
@@ -31,20 +40,22 @@ test('the Info tab saves face and family notes on blur, and the Notes column sho
   await expect(familyNotes).toHaveJSProperty('tagName', 'TEXTAREA');
 
   await familyNotes.fill('Licensed for the 2026 rebrand\nDesktop only');
-  // Nothing is saved while typing.
-  await expect(notesCell).toHaveText('');
   // Leaving the field saves; the list hears of it through `libraryChanged`.
   await faceNotes.focus();
+  await toTable();
   await expect(notesCell).toHaveText(/Licensed for the 2026 rebrand/);
-  await faceNotes.fill('Headlines only');
+  await toPage();
+  await panel.getByRole('textbox', { name: 'Notes', exact: true }).fill('Headlines only');
   await page.keyboard.press('Tab');
+  await toTable();
   // The face note is the face's: the family's Notes cell does not show it.
   await expect(notesCell).not.toContainText('Headlines only');
+  await toPage();
 
   // Another face and back: both are stored.
-  await page.evaluate(() => (location.hash = '#/?face=6'));
+  await page.evaluate(() => (location.hash = '#/family/3?face=6'));
   await expect(panel.getByRole('textbox', { name: 'Family notes' })).toHaveValue('');
-  await page.evaluate(() => (location.hash = '#/?face=1'));
+  await page.evaluate(() => (location.hash = '#/family/1?face=1'));
   await expect(panel.getByRole('textbox', { name: 'Notes', exact: true })).toHaveValue(
     'Headlines only',
   );
@@ -55,6 +66,8 @@ test('the Info tab saves face and family notes on blur, and the Notes column sho
   // An empty field clears the family note.
   await panel.getByRole('textbox', { name: 'Family notes' }).fill('');
   await page.keyboard.press('Tab');
+  // The hash moves above made entries a Back would pop to: go to the library by its own hash.
+  await page.evaluate(() => (location.hash = '#/'));
   await expect(notesCell).toHaveText('');
 });
 
@@ -79,7 +92,7 @@ const borderContrast = (page: Page, name: string) =>
 for (const scheme of ['light', 'dark'] as const) {
   test(`the notes fields are outlined at 3:1 or more (${scheme})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: scheme });
-    await page.goto('/#/?face=1');
+    await openSection(page, 1, 'Info');
     await expect(info(page).getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
     for (const name of ['Notes', 'Family notes'])
       expect(await borderContrast(page, name)).toBeGreaterThanOrEqual(3);

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { hero, openSection, showSection, sectionPanel } from './family-page';
 
 const fixture = readFileSync(
   fileURLToPath(
@@ -13,15 +14,11 @@ const fixture = readFileSync(
 
 // MockApi face 1 (Inter Regular): ccmp (automatic), kern and liga (on by
 // default), onum, smcp, ss01.
-async function openFeatures(page: Page, { showInspector = false } = {}) {
+async function openFeatures(page: Page) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto('/#/?face=1');
-  // Narrow windows hide the inspector until asked.
-  if (showInspector) await page.getByRole('button', { name: 'Inspector' }).click();
-  await page.getByRole('tab', { name: 'Features' }).click();
-  const panel = page.getByRole('tabpanel', { name: 'Features' });
+  const panel = await openSection(page, 1, 'Features');
   await expect(panel.getByRole('switch').first()).toBeVisible();
   return panel;
 }
@@ -30,10 +27,6 @@ test('the Features tab lists every feature by name and tag at the browser defaul
   page,
 }) => {
   const panel = await openFeatures(page);
-  await expect(page.getByRole('tab', { name: 'Features' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  );
   for (const [label, on] of [
     ['Kerning (kern)', true],
     ['Standard ligatures (liga)', true],
@@ -50,22 +43,17 @@ test('the Features tab lists every feature by name and tag at the browser defaul
   await expect(auto).toContainText('Glyph composition and decomposition');
 });
 
-test("toggling smcp changes the row's computed font-feature-settings; Reset restores it", async ({
+test("toggling smcp changes the hero's computed font-feature-settings; Reset restores it", async ({
   page,
 }) => {
   const panel = await openFeatures(page);
-  const sample = page.locator('[data-face="1"] .sample').first();
+  const sample = hero(page);
   await expect(sample).toHaveCSS('font-feature-settings', 'normal');
 
   const smcp = panel.getByRole('switch', { name: 'Small capitals (smcp)' });
   await smcp.click();
   await expect(smcp).toHaveAttribute('aria-checked', 'true');
   await expect(sample).toHaveCSS('font-feature-settings', /"smcp"/);
-  // Another face's row is untouched.
-  await expect(page.locator('[data-face="6"] .sample').first()).toHaveCSS(
-    'font-feature-settings',
-    'normal',
-  );
 
   await panel.getByRole('switch', { name: 'Kerning (kern)' }).click();
   await expect(sample).toHaveCSS('font-feature-settings', /"kern" 0/);
@@ -81,7 +69,7 @@ test('"Copy CSS" copies font-feature-settings for the changed features, as the p
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const panel = await openFeatures(page);
-  const sample = page.locator('[data-face="1"] .sample').first();
+  const sample = hero(page);
   const copy = panel.getByRole('button', { name: 'Copy CSS for the features' });
   const status = panel.getByRole('status').filter({ hasText: /Copied|Could not copy/ });
   const clipboard = () => page.evaluate(() => navigator.clipboard.readText());
@@ -125,7 +113,10 @@ test('"Copy CSS" for features is keyboard-reachable and says when the clipboard 
 });
 
 test('the preview strip follows the switches of its face', async ({ page }) => {
-  const panel = await openFeatures(page);
+  await page.route('**/fmfont/*', (route) =>
+    route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+  );
+  await page.goto('/#/');
   await page
     .getByRole('group', { name: 'View mode' })
     .getByRole('button', { name: 'Table' })
@@ -135,7 +126,10 @@ test('the preview strip follows the switches of its face', async ({ page }) => {
   const strip = page.getByRole('region', { name: 'Preview strip' });
   const sample = strip.locator('[data-face="1"] .sample');
   await expect(sample).toHaveCSS('font-feature-settings', 'normal');
+  await page.keyboard.press('o');
+  const panel = await showSection(page, 'Features');
   await panel.getByRole('switch', { name: 'Oldstyle figures (onum)' }).click();
+  await page.getByRole('button', { name: 'Library' }).click();
   await expect(sample).toHaveCSS('font-feature-settings', /"onum"/);
 });
 
@@ -155,21 +149,25 @@ test('every switch is reachable and operable from the keyboard', async ({ page }
   await expect(switches.nth(4)).toHaveAttribute('aria-checked', 'false');
 });
 
-test('arrow keys move between the inspector tabs', async ({ page }) => {
-  await page.goto('/#/?face=1');
-  const info = page.getByRole('tab', { name: 'Info' });
-  await info.focus();
-  // Info, Axes, Features, Glyphs.
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Axes' })).toBeFocused();
-  await page.keyboard.press('ArrowRight');
-  const features = page.getByRole('tab', { name: 'Features' });
+test('the keyboard moves between the sections and leaves the arrows to the family', async ({
+  page,
+}) => {
+  await page.goto('/#/family/1?face=1');
+  const sections = page.getByRole('group', { name: 'Section' });
+  const styles = sections.getByRole('button', { name: 'Styles' });
+  await styles.focus();
+  // Styles, Text, Characters, Features.
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Tab');
+  const features = sections.getByRole('button', { name: 'Features' });
   await expect(features).toBeFocused();
-  await expect(features).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel', { name: 'Features' })).toBeVisible();
-  await page.keyboard.press('ArrowLeft');
-  await page.keyboard.press('ArrowLeft');
-  await expect(info).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Enter');
+  await expect(features).toHaveAttribute('aria-pressed', 'true');
+  await expect(sectionPanel(page, 'Features')).toBeVisible();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Enter');
+  await expect(styles).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('the switches are kept per face while the app runs', async ({ page }) => {
@@ -177,18 +175,15 @@ test('the switches are kept per face while the app runs', async ({ page }) => {
   const smcp = panel.getByRole('switch', { name: 'Small capitals (smcp)' });
   await smcp.click();
   // Another face starts at its defaults; coming back keeps the switch.
-  await page.evaluate(() => (location.hash = '#/?face=6'));
+  await page.evaluate(() => (location.hash = '#/family/3?face=6'));
   await expect(panel.getByRole('switch')).toHaveCount(2);
   await expect(panel.getByRole('switch', { name: 'Kerning (kern)' })).toHaveAttribute(
     'aria-checked',
     'true',
   );
-  await page.evaluate(() => (location.hash = '#/?face=1'));
+  await page.evaluate(() => (location.hash = '#/family/1?face=1'));
   await expect(smcp).toHaveAttribute('aria-checked', 'true');
-  await expect(page.locator('[data-face="1"] .sample').first()).toHaveCSS(
-    'font-feature-settings',
-    /"smcp"/,
-  );
+  await expect(hero(page)).toHaveCSS('font-feature-settings', /"smcp"/);
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {
@@ -229,12 +224,9 @@ test.describe('@screens features tab', () => {
       test(`features-${scheme}-${vp.width}x${vp.height}`, async ({ page }) => {
         await page.setViewportSize(vp);
         await page.emulateMedia({ colorScheme: scheme });
-        const panel = await openFeatures(page, { showInspector: vp.width < 1280 });
+        const panel = await openFeatures(page);
         await panel.getByRole('switch', { name: 'Small capitals (smcp)' }).click();
-        await expect(page.locator('[data-face="1"]').first()).toHaveAttribute(
-          'data-state',
-          'ready',
-        );
+        await expect(hero(page)).toHaveCSS('font-feature-settings', /"smcp"/);
         await page.screenshot({
           path: `${dir}/features-${scheme}-${vp.width}x${vp.height}.png`,
           fullPage: true,

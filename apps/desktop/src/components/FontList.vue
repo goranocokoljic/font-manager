@@ -8,8 +8,7 @@
 //
 // Focus stays on the tree; the cursor row is its `aria-activedescendant`, so
 // the list is one Tab stop. Keys: arrows, Home/End, PageUp/PageDown move;
-// Right/Left expand/collapse; Enter toggles a family or opens a style in the
-// inspector; Shift extends the selection, Ctrl/Cmd moves without selecting,
+// Right/Left expand/collapse; Enter opens the row's family page; Shift extends the selection, Ctrl/Cmd moves without selecting,
 // Ctrl/Cmd+Space toggles a row, Ctrl/Cmd+A selects all. Plain Space is the
 // app's quick-look key, so the list leaves it alone.
 //
@@ -61,8 +60,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The face the cursor shows changed (a style, or a family's first style). */
   cursorFace: [face: FaceId];
-  /** Enter on a style: show it in the inspector. */
-  open: [face: FaceId];
+  /** Enter on a row: open its family page. */
+  open: [row: ListRow];
 }>();
 
 const list = useFontListStore();
@@ -217,7 +216,7 @@ watch(
 
 function onKeyDown(e: KeyboardEvent): void {
   const page = Math.max(1, Math.floor(height.value / rowPx.value));
-  if (!handleListKey(e, list, { page, count: count.value, open: (face) => emit('open', face) }))
+  if (!handleListKey(e, list, { page, count: count.value, open: (row) => emit('open', row) }))
     return;
   e.preventDefault();
   void revealCursor();
@@ -406,7 +405,7 @@ function onToggle(row: ListRow): void {
           :data-state="motion.settled.value ? undefined : 'deferred'"
         >
           <span class="label"
-            ><ActivationDot :state="rowActivation(item.row)" /><bdi>{{
+            ><ActivationDot :state="rowActivation(item.row)" /><bdi data-family-name>{{
               item.row.family.name
             }}</bdi></span
           >

@@ -182,7 +182,7 @@ test('focus stays in the sheet; Escape returns to the list with the selection ke
   );
   await expect(selected).toHaveAttribute('data-key', before!);
   expect(page.url()).toBe(url);
-  await expect(page.getByTestId('activation-state')).toHaveText('Not active');
+  await expect(page.getByTestId('selected-row-state')).toHaveText('not active');
 
   // The pins stay for the session: reopening shows them again.
   await compareButton(page).click();

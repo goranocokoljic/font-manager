@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setClient, useClient } from '../api/client';
 import { createMockClient, EXTRA_ID_BASE, mockLanguages, type MockOptions } from '../api/mock';
+import type { ListRow } from '../list/rows';
 import { FRAME_MS, SETTLE_MS } from '../list/settle';
 import { FaceLoader, setFaceLoader, type FontFaceSetLike } from '../preview/faceLoader';
 import { ALPHABET } from '../preview/sampleText';
@@ -261,16 +262,16 @@ describe('FontList keyboard and selection', () => {
     list.unmount();
   });
 
-  it('Enter expands and collapses a family; Right and Left do too', async () => {
+  it('Enter opens a family and leaves it folded; Right and Left expand and collapse', async () => {
     const { list, press, active } = await keyed();
     await press('End');
     await press('ArrowUp'); // Sample 1
     await press('Enter');
-    expect(list.get(`#fm-row-family-${EXTRA_ID_BASE}`).attributes('aria-expanded')).toBe('true');
-    expect(items(list)).toHaveLength(9);
-    await press('Enter');
+    const opened = list.emitted('open') as [ListRow][];
+    expect(opened.map(([row]) => row.key)).toEqual([`family:${EXTRA_ID_BASE}`]);
     expect(items(list)).toHaveLength(5);
     await press('ArrowRight');
+    expect(list.get(`#fm-row-family-${EXTRA_ID_BASE}`).attributes('aria-expanded')).toBe('true');
     expect(items(list)).toHaveLength(9);
     await press('ArrowRight'); // into the first style
     expect(active()).toBe(`fm-row-face-${EXTRA_ID_BASE}`);
@@ -288,7 +289,8 @@ describe('FontList keyboard and selection', () => {
     await press('ArrowDown');
     await press('ArrowDown'); // Italic
     await press('Enter');
-    expect(list.emitted('open')).toEqual([[EXTRA_ID_BASE + 2]]);
+    const opened = list.emitted('open') as [ListRow][];
+    expect(opened.map(([row]) => row.key)).toEqual([`face:${EXTRA_ID_BASE + 2}`]);
     expect(list.emitted('cursorFace')!.at(-1)).toEqual([EXTRA_ID_BASE + 2]);
     list.unmount();
   });
