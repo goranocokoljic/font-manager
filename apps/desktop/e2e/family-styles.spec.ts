@@ -312,6 +312,28 @@ test.describe('pinned instances', () => {
     await expect(page.getByTestId('family-pin')).toHaveCount(1);
   });
 
+  test('Tab in the menu closes it and goes on from its button, both ways', async ({ page }) => {
+    await page.route('**/fmfont/*', (route) =>
+      route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+    );
+    await pin537(page);
+    const pinned = page.getByTestId('family-pin');
+    const more = pinned.getByRole('button', { name: 'More for Weight 537' });
+
+    await more.click();
+    await expect(page.getByRole('menuitem')).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    // The pin is the last row, so the next stop is the rail, not the top of the page.
+    await expect(page.getByRole('button', { name: 'Developer', exact: true })).toBeFocused();
+
+    await more.click();
+    await expect(page.getByRole('menuitem')).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(page.getByRole('menu')).toHaveCount(0);
+    await expect(pinned.getByRole('button', { name: /^Copy CSS/ })).toBeFocused();
+  });
+
   test('Enter sets the hero to the coordinates of the pin', async ({ page }) => {
     await page.route('**/fmfont/*', (route) =>
       route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),

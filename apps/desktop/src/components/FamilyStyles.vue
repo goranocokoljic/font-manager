@@ -253,6 +253,8 @@ function closeMenu(): void {
 function onMenuKey(e: KeyboardEvent): void {
   e.stopPropagation();
   if (e.key === 'Tab') {
+    // The layer ends <body>, so Tab from it would leave the page: it goes on from the button.
+    menuAnchor.value?.focus();
     closeMenu();
   } else if (e.key === 'Escape') {
     e.preventDefault();
