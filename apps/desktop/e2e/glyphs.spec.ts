@@ -55,8 +55,6 @@ test('search by code point scrolls to and selects the glyph', async ({ page }) =
   const panel = await openGlyphs(page);
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+AC01');
   const cell = panel.getByRole('gridcell', { name: /^U\+AC01 / });
-  // Rendered at all means the grid scrolled there: it holds only the lines on screen.
-  await cell.scrollIntoViewIfNeeded();
   await expect(cell).toBeInViewport();
   await expect(cell).toHaveAttribute('aria-selected', 'true');
   await expect(panel.getByRole('region', { name: 'Selected glyph' })).toContainText('U+AC01');

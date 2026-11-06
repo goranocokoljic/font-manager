@@ -109,6 +109,27 @@ for (const m of MODES) {
   });
 }
 
+test('with no row selected, A leaves alone the face the URL still names', async ({ page }) => {
+  await page.goto('/?mockActive=6#/');
+  const tree = page.getByRole('tree', { name: 'Font list' });
+  const active = page.getByText(/^\d+ fonts? active$/);
+  await expect(active).toHaveText('1 font active');
+  await tree
+    .getByRole('treeitem', { name: /^JetBrains Mono,/ })
+    .click({ position: { x: 600, y: 4 } });
+  await expect(page).toHaveURL(/face=6/);
+  await page.getByRole('searchbox').fill('Inter');
+  await expect(tree.getByRole('treeitem')).toHaveCount(1);
+  await expect(page.getByTestId('selected-row')).toHaveCount(0);
+  await expect(page).toHaveURL(/face=6/);
+  await tree.focus();
+  await page.keyboard.press('a');
+  // The key ran first: Inter comes on after it, and the hidden face is still active.
+  await tree.getByRole('treeitem', { name: /^Inter,/ }).click({ position: { x: 600, y: 4 } });
+  await page.keyboard.press('a');
+  await expect(active).toHaveText('2 fonts active');
+});
+
 test('the table keeps its column menu', async ({ page }) => {
   await open(page, 'table');
   await expect(page.getByRole('treegrid', { name: 'Font table' })).toBeVisible();

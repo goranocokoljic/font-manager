@@ -59,15 +59,20 @@ test('the Conflicts view lists every clash and its winner', async ({ page }) => 
 test('A on a clashing style in the list asks the same question under the count line', async ({
   page,
 }) => {
-  // The face comes from the URL and a search hides its row, so A acts on the one face.
-  await page.goto('/#/?face=6');
+  // A family row acts on all its styles with a toast; one style row acts on that face. The wall's
+  // JetBrains Mono has several styles, and its Regular clashes with the system copy.
+  await page.goto('/?mockLibrary=wall#/');
   const onWall = page.getByRole('alertdialog', { name: 'Font name already in use' });
-  await page.getByTestId('selected-row').waitFor();
-  await page.getByRole('searchbox').fill('Inter');
+  await page.getByRole('searchbox').fill('JetBrains');
   const tree = page.getByRole('tree', { name: 'Font list' });
-  await expect(tree.getByRole('treeitem')).toHaveCount(1);
-  await expect(page.getByTestId('selected-row')).toHaveCount(0);
-  await tree.focus();
+  await tree
+    .getByRole('treeitem', { name: /^JetBrains Mono,/ })
+    .click({ position: { x: 600, y: 4 } });
+  await page.keyboard.press('ArrowRight');
+  await tree
+    .getByRole('treeitem', { name: /^JetBrains Mono Regular,/ })
+    .click({ position: { x: 600, y: 4 } });
+  await expect(page.getByTestId('selected-row')).toContainText('JetBrains Mono Regular');
   await page.keyboard.press('a');
   await expect(onWall).toContainText('JetBrainsMono-Regular');
   await expect(onWall.getByRole('button', { name: 'Keep existing' })).toBeFocused();

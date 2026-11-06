@@ -238,13 +238,17 @@ function onDoubleClick(e: MouseEvent): void {
   if (row) void openRow(row);
 }
 
-// One style (or nothing) selected: A acts on the selected face, and the count line shows the
-// new state. Several rows or a family: on all of them, with a toast that can undo it.
+// One style selected: A acts on its face, and the count line shows the new state. Several rows
+// or a family: on all of them, with a toast that can undo it. Nothing selected: nothing happens,
+// though `?face=` may still name a face: its row is gone, and nothing here would show the change.
 const bulkSelection = computed(() => {
   const rows = fontList.selectedRows;
   return rows.length > 1 || rows[0]?.kind === 'family';
 });
-const canToggle = () => (bulkSelection.value ? !activation.busy : selection.canActivate);
+const canToggle = () => {
+  if (!fontList.selectedRows.length) return false;
+  return bulkSelection.value ? !activation.busy : selection.canActivate;
+};
 const toggle = (mode: ActivationMode) =>
   bulkSelection.value
     ? activation.toggleRows(fontList.selectedRows, mode)
