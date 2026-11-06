@@ -14,10 +14,23 @@ export const SHARED_SPECIMEN = 'fm-family-specimen';
 const OPENING = 'fm-family-opening';
 const CLOSING = 'fm-family-closing';
 
+/** The first text block on screen of a Layout view that shows `family`. */
+function layoutSpecimenOf(family: FamilyId): HTMLElement | null {
+  const layout = document.querySelector<HTMLElement>(`.layout[data-family="${family}"]`);
+  if (!layout) return null;
+  const box = layout.getBoundingClientRect();
+  return (
+    [...layout.querySelectorAll<HTMLElement>('.cell')].find((cell) => {
+      const r = cell.getBoundingClientRect();
+      return r.bottom > box.top && r.top < box.bottom;
+    }) ?? null
+  );
+}
+
 /** The row or card of `family` when it is on screen, its specimen if it has a separate one. */
 function specimenOf(family: FamilyId): HTMLElement | null {
   const row = document.querySelector<HTMLElement>(`[data-key="${familyKey(family)}"]`);
-  if (!row) return null;
+  if (!row) return layoutSpecimenOf(family);
   const box = row.getBoundingClientRect();
   if (box.bottom <= 0 || box.top >= window.innerHeight) return null;
   return row.querySelector<HTMLElement>('.sample, .thumb') ?? row;

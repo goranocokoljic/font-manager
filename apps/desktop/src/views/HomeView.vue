@@ -484,6 +484,29 @@ function showFace(face: FaceId): void {
 
 const browse = ref<HTMLElement | null>(null);
 
+// The Layout view scrolls by itself, without the rows' anchor: its place goes to the store's
+// held scroll as it leaves for a family page (E42.1). It has no lines, so 0 keeps it apart
+// from a view's place. The place comes back on mount and again once the font has set the
+// text's height, which can be too short for it before that.
+const LAYOUT_LINE = 0;
+const layoutViewport = () => browse.value?.querySelector<HTMLElement>('.layout') ?? null;
+let layoutTop = fontList.heldScrollTop(LAYOUT_LINE, LAYOUT_LINE);
+if (layoutTop !== null) fontList.dropHeldScroll();
+
+function restoreLayoutScroll(): void {
+  const el = layoutViewport();
+  if (el && layoutTop !== null) el.scrollTop = layoutTop;
+}
+function layoutSettled(): void {
+  restoreLayoutScroll();
+  layoutTop = null;
+}
+onMounted(restoreLayoutScroll);
+onBeforeUnmount(() => {
+  const el = layoutViewport();
+  if (el) fontList.viewLeft(el.scrollTop, LAYOUT_LINE, LAYOUT_LINE);
+});
+
 /** Escape in the search box or the preview field: back to the font list the keys drive. */
 function focusList(): void {
   browse.value
@@ -611,6 +634,7 @@ function openFace(face: FaceId): void {
               :width="textLayouts.width"
               :set-width-lock="textLayouts.setWidthLock"
               @edit-text="textLayouts.setBlockText"
+              @settled="layoutSettled"
             />
           </template>
           <FontGrid

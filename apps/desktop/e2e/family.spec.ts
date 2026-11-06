@@ -244,6 +244,51 @@ test.describe('going back', () => {
     });
   }
 
+  test('the Layout view moves its specimen and gets its scroll back', async ({ page }) => {
+    await page.setViewportSize({ width: 1000, height: 500 });
+    await setup(page, 'layout');
+    await page.goto('/?mockLibrary=wall#/');
+    const layout = page.locator('.layout');
+    await expect(layout).toHaveAttribute('data-state', 'ready');
+    const top = await layout.evaluate((el) => {
+      el.scrollTop = 60;
+      return el.scrollTop;
+    });
+    expect(top).toBeGreaterThan(0);
+    // The shared name on each side, as each transition takes its snapshot of that side.
+    await page.evaluate(() => {
+      const w = window as never as { named: boolean[] };
+      w.named = [];
+      const isNamed = () =>
+        [...document.querySelectorAll<HTMLElement>('.layout .cell')].some(
+          (el) => el.style.viewTransitionName === 'fm-family-specimen',
+        );
+      const start = document.startViewTransition.bind(document);
+      document.startViewTransition = ((cb: () => Promise<void>) => {
+        const going = document.documentElement.classList.contains('fm-family-opening');
+        if (going) w.named.push(isNamed());
+        return start(async () => {
+          await cb();
+          if (!going) w.named.push(isNamed());
+        });
+      }) as typeof document.startViewTransition;
+    });
+    await page.keyboard.press('o');
+    await onFamilyPage(page);
+    await expect(page.locator('html')).not.toHaveClass(/fm-family-opening/);
+    await page.keyboard.press('Escape');
+    await expect(page).not.toHaveURL(/family/);
+    await expect(page.locator('html')).not.toHaveClass(/fm-family-closing/);
+    await expect(layout).toHaveAttribute('data-state', 'ready');
+    await expect.poll(() => layout.evaluate((el) => el.scrollTop)).toBe(top);
+    expect(await page.evaluate(() => (window as never as { named: boolean[] }).named)).toEqual([
+      true,
+      true,
+    ]);
+    // Back gives the keyboard to the view again.
+    await expect(layout).toBeFocused();
+  });
+
   test('Back comes back to the same place inside an expanded family', async ({ page }) => {
     await setup(page, 'list');
     await page.goto('/?mockLibrary=wall#/');
@@ -348,12 +393,16 @@ test.describe('the top bar', () => {
     expect(shown).toBeGreaterThan(1);
     const second = await familyRows(page).nth(1).getAttribute('data-key');
     await familyRows(page).first().click();
+    await expect(page).toHaveURL(/face=\d+/);
+    const url = page.url();
     await page.keyboard.press('o');
     await expect(position(page)).toContainText(`1 of ${shown}`);
     await page.keyboard.press('ArrowRight');
     await expect(page).toHaveURL(new RegExp(`#/family/${second!.replace('family:', '')}$`));
     await expect(position(page)).toContainText(`2 of ${shown}`);
     await page.keyboard.press('Escape');
+    // A pop: the arrows added no history, so the list's own URL comes back with its face.
+    await expect(page).toHaveURL(url);
     await expect(tree(page)).toBeVisible();
     await expect(page.getByRole('searchbox').first()).toHaveValue('Serif');
   });
