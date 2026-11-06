@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { showSection } from './family-page';
 
 // The accent per theme (E40.3), as the page really paints it: rings and fills take the
 // accent, words on a fill take on-accent. styles/contrast.test.ts checks the ratios.
@@ -49,8 +50,9 @@ for (const [colorScheme, accent, onAccent] of [
     });
 
     test('the activation toggle is an accent fill with on-accent text', async ({ page }) => {
-      await page.getByRole('treeitem').first().click();
-      const toggle = page.locator('.activate').first();
+      await page.goto('/#/family/1?face=1');
+      const info = await showSection(page, 'Info');
+      const toggle = info.locator('.activate');
       await expect(toggle).toBeVisible();
       await expect(toggle).toHaveAttribute('aria-pressed', 'false');
       await expect(toggle).toHaveCSS('background-color', accent);

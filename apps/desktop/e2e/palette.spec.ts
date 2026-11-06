@@ -3,7 +3,6 @@ import { expect, test, type Page } from '@playwright/test';
 const palette = (page: Page) => page.getByRole('dialog', { name: 'Command palette' });
 const query = (page: Page) => page.getByRole('combobox', { name: 'Search commands' });
 const options = (page: Page) => palette(page).getByRole('option');
-const inspector = (page: Page) => page.getByRole('complementary', { name: 'Inspector' });
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
@@ -14,16 +13,15 @@ test('Ctrl/Cmd+K opens the palette with every action, fuzzy search narrows it', 
   page,
 }) => {
   await page.goto('/#/?face=1');
-  await expect(page.getByTestId('activation-state')).toHaveText('Not active');
+  await expect(page.getByTestId('selected-row-state')).toHaveText('not active');
   await page.keyboard.press('ControlOrMeta+k');
   await expect(palette(page)).toBeVisible();
   await expect(query(page)).toBeFocused();
   for (const title of [
     'Show all commands',
-    'Show or hide the inspector',
+    'Show or hide the sidebar',
     'Go to the sidebar',
     'Go to the font list',
-    'Go to the inspector',
     'Activate or deactivate for this session',
     'Activate or deactivate permanently',
   ])
@@ -41,24 +39,24 @@ test('Ctrl/Cmd+K opens the palette with every action, fuzzy search narrows it', 
   await expect(page.getByRole('main')).toBeFocused();
 });
 
-test('keyboard only: activate, go to columns and hide the inspector', async ({ page }) => {
+test('keyboard only: activate, go to columns and hide the sidebar', async ({ page }) => {
   await page.goto('/#/?face=1');
-  const state = page.getByTestId('activation-state');
-  await expect(state).toHaveText('Not active');
+  const state = page.getByTestId('selected-row-state');
+  await expect(state).toHaveText('not active');
 
   // A and Shift+A from the keyboard model.
   await page.keyboard.press('a');
-  await expect(state).toHaveText('Active for this session');
+  await expect(state).toHaveText('active');
   await page.keyboard.press('Shift+A');
-  await expect(state).toHaveText('Active (permanent)');
+  await expect(state).toHaveText('active');
   await page.keyboard.press('Shift+A');
-  await expect(state).toHaveText('Not active');
+  await expect(state).toHaveText('not active');
 
   // The same actions through the palette.
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('session');
   await page.keyboard.press('Enter');
-  await expect(state).toHaveText('Active for this session');
+  await expect(state).toHaveText('active');
 
   // Tab moves from a column into its controls; columns follow in order:
   // sidebar, its divider, then the list.
@@ -78,25 +76,29 @@ test('keyboard only: activate, go to columns and hide the inspector', async ({ p
   await expect(page.getByRole('separator', { name: 'Resize sidebar' })).toBeFocused();
 
   await page.keyboard.press('ControlOrMeta+k');
-  await page.keyboard.type('hide insp');
+  await page.keyboard.type('hide side');
   await page.keyboard.press('Enter');
-  await expect(inspector(page)).toBeHidden();
+  const library = page.getByRole('navigation', { name: 'Library' });
+  await expect(library).toBeHidden();
 
   await page.keyboard.press('ControlOrMeta+k');
-  await page.keyboard.type('go insp');
+  await page.keyboard.type('hide side');
   await page.keyboard.press('Enter');
-  await expect(inspector(page)).toBeVisible();
-  await expect(inspector(page)).toBeFocused();
+  await expect(library).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('go side');
+  await page.keyboard.press('Enter');
+  await expect(library).toBeFocused();
 });
 
 test('typing in the palette does not trigger single-key shortcuts', async ({ page }) => {
   await page.goto('/#/?face=1');
-  await expect(page.getByTestId('activation-state')).toHaveText('Not active');
+  await expect(page.getByTestId('selected-row-state')).toHaveText('not active');
   await page.keyboard.press('ControlOrMeta+k');
   await page.keyboard.type('a');
   await expect(query(page)).toHaveValue('a');
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('activation-state')).toHaveText('Not active');
+  await expect(page.getByTestId('selected-row-state')).toHaveText('not active');
 });
 
 test('the status bar hint opens the palette', async ({ page }) => {

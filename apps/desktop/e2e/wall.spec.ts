@@ -21,8 +21,6 @@ async function openWall(page: Page, query = '?mockLibrary=wall'): Promise<Locato
   );
   await page.goto(`/${query}#/`);
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
-  // E41.5 removes the inspector from the wall; the board has none.
-  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
   await page
     .getByRole('group', { name: 'View mode' })
     .getByRole('button', { name: 'Grid' })
@@ -302,7 +300,7 @@ test.describe('the wall', () => {
     await expect.poll(shadow).not.toBe('none');
   });
 
-  test('Space opens Quick Look, A toggles activation, Enter acts as in the other views', async ({
+  test('Space opens Quick Look, A toggles activation, Enter opens the family page', async ({
     page,
   }) => {
     const wall = await openWall(page);
@@ -319,12 +317,10 @@ test.describe('the wall', () => {
     await page.keyboard.press('a');
     await expect(family).not.toHaveAttribute('aria-label', /not active/);
 
-    // Until the family page exists (E42.1), Enter opens the family's styles, as today.
-    const before = await cards(wall).count();
     await family.click();
     await page.keyboard.press('Enter');
-    await expect(wall.locator('.slot.face').first()).toBeVisible();
-    expect(await cards(wall).count()).toBeGreaterThanOrEqual(before);
+    await expect(page).toHaveURL(/#\/family\/\d+/);
+    await expect(page.getByRole('heading', { name: 'Crimson Pro', level: 1 })).toBeVisible();
   });
 
   test('the slider holds 60 fps with 1,000 families', async ({ page }) => {

@@ -106,13 +106,16 @@ test('"Copy for Font Switch" is reached by the keyboard and copies the payload',
   context,
 }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
-  await open(page, '#/?face=1');
-  await page.getByRole('tab', { name: 'Developer' }).click();
+  await page.route('**/fmfont/*', (route) =>
+    route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
+  );
+  await page.goto('/#/family/1?face=1');
+  await page.getByRole('button', { name: 'Developer', exact: true }).click();
   const button = page.getByRole('button', { name: 'Copy for Font Switch: Inter Regular' });
   await expect(button).toHaveText('Copy for Font Switch');
 
-  // Tab from the tab: the panel, its Copy button, then this one.
-  await page.getByRole('tab', { name: 'Developer' }).focus();
+  // Tab from the expander: its Copy button, then this one.
+  await page.getByRole('button', { name: 'Developer', exact: true }).focus();
   for (let i = 0; i < 5; i++) {
     if (await button.evaluate((el) => el === document.activeElement)) break;
     await page.keyboard.press('Tab');

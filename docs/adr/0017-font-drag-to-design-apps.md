@@ -58,7 +58,7 @@ conflict setting. Activation registers from the file's current path
 (ADR 0008); nothing is deactivated when the drag ends, so the dropped text
 keeps its font. A failed or skipped activation shows a toast.
 
-**Keyboard.** The Developer tab of the inspector has "Copy for Font
+**Keyboard.** The Developer part of the family page has "Copy for Font
 Switch", which puts the payload JSON on the clipboard for the selected face.
 
 **Tauri's drop handler is off.** The main window sets

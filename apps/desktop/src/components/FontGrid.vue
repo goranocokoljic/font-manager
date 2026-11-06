@@ -73,8 +73,8 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** The face the cursor shows changed (a style, or a family's first style). */
   cursorFace: [face: FaceId];
-  /** Enter on a style: show it in the inspector. */
-  open: [face: FaceId];
+  /** Enter on a row: open its family page. */
+  open: [row: ListRow];
 }>();
 
 /** Viewport size before the first measurement (and where there is no layout). */
@@ -406,7 +406,7 @@ function onKeyDown(e: KeyboardEvent): void {
     page,
     count: count.value,
     columns: columns.value,
-    open: (f: FaceId) => emit('open', f),
+    open: (row: ListRow) => emit('open', row),
   };
   if (!handleListKey(e, list, opts)) return;
   e.preventDefault();
@@ -512,7 +512,7 @@ function onToggle(row: ListRow): void {
           <div class="meta">
             <span class="lead">
               <ActivationDot :state="rowActivation(item.row)" />
-              <bdi class="name">{{ item.name }}</bdi>
+              <bdi class="name" data-family-name>{{ item.name }}</bdi>
             </span>
             <span v-if="item.face?.isVariable" class="detail" data-testid="card-variable">
               <span class="count">{{ t('list.variable') }}</span>

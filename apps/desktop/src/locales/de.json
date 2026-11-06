@@ -172,9 +172,9 @@
       "score": "{percent} % passend",
       "reasons": "Warum: {reasons}",
       "add": "Zum Vergleich hinzufügen",
-      "addLabel": "{name} zum Vergleich hinzufügen",
+      "addLabel": "Zum Vergleich hinzufügen: {name}",
       "pinned": "Angeheftet",
-      "pinnedLabel": "{name} ist angeheftet"
+      "pinnedLabel": "Angeheftet: {name}"
     },
     "toasts": {
       "already": "{name} ist bereits zum Vergleich angeheftet.",
@@ -324,8 +324,6 @@
     "compareButton": "Vergleichen {pinned}/{max}",
     "sidebar": "Seitenleiste",
     "sidebarTitle": "Seitenleiste ein- oder ausblenden ([)",
-    "inspectorTitle": "Inspektor ein- oder ausblenden (Strg+I / ⌘I)",
-    "inspector": "Inspektor",
     "fontList": "Schriftliste",
     "noMatches": "Versuche eine kürzere Suche oder weniger Filter.",
     "commands": "Befehle",
@@ -402,30 +400,16 @@
   "layout": {
     "library": "Bibliothek",
     "fonts": "Schriften",
-    "inspector": "Inspektor",
     "resizeSidebar": "Seitenleiste in der Breite ändern",
-    "resizeInspector": "Inspektor in der Breite ändern",
     "actions": {
-      "toggleInspector": "Inspektor ein- oder ausblenden",
       "toggleSidebar": "Seitenleiste ein- oder ausblenden",
       "goSidebar": "Zur Seitenleiste wechseln",
-      "goList": "Zur Schriftliste wechseln",
-      "goInspector": "Zum Inspektor wechseln"
-    }
-  },
-  "inspector": {
-    "tabsLabel": "Inspektor-Tabs",
-    "tabs": {
-      "info": "Infos",
-      "axes": "Achsen",
-      "features": "Funktionen",
-      "glyphs": "Glyphen",
-      "developer": "Entwickler"
+      "goList": "Zur Schriftliste wechseln"
     }
   },
   "developer": {
     "noFace": "Wähle einen Schnitt, um sein CSS zu sehen.",
-    "hint": "Das CSS für die Achsen und Features aus den Tabs Achsen und Features.",
+    "hint": "Das CSS für die auf dieser Seite gesetzten Achsen und Features.",
     "copyLabel": "CSS-Ausschnitt kopieren"
   },
   "fontSwitch": {
@@ -585,7 +569,6 @@
       "similar": "Ähnliche finden",
       "views": "Liste, Tabelle, Raster, Kaskade, Layout",
       "sidebar": "Seitenleiste",
-      "inspector": "Inspektor",
       "settings": "Einstellungen",
       "openFamily": "Familienseite öffnen",
       "previewField": "Vorschaufeld fokussieren"
@@ -1433,7 +1416,6 @@
     "notFoundBody": "Der Link nennt keine Familie aus Ihrer Bibliothek.",
     "hero": "Schriftprobe",
     "axes": "Achsen",
-    "axesVariable": "Variable Schrift",
     "axesStatic": "Keine variablen Achsen",
     "sectionSwitch": "Bereich",
     "sections": {
@@ -1448,7 +1430,8 @@
     "rail": "Über diese Familie",
     "designer": "Designer",
     "foundry": "Schriftgießerei",
-    "stylesFact": "Schnitte"
+    "stylesFact": "Schnitte",
+    "developer": "Entwickler"
   },
   "studio": {
     "title": "Pairing Studio",
@@ -1704,7 +1687,7 @@
       "other": "+{count} weitere Schnitte"
     },
     "reasons": "Warum: {reasons}",
-    "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet sie aus. Der Inspektor zeigt sie."
+    "notInList": "Die Liste zeigt {name} gerade nicht: Eine Suche oder ein Filter blendet die Schrift aus."
   },
   "documentFonts": {
     "action": "Schriften eines Dokuments prüfen …",

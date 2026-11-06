@@ -172,9 +172,9 @@
       "score": "{percent}% match",
       "reasons": "Why: {reasons}",
       "add": "Add to compare",
-      "addLabel": "Add {name} to Compare",
+      "addLabel": "Add to compare: {name}",
       "pinned": "Pinned",
-      "pinnedLabel": "{name} is pinned"
+      "pinnedLabel": "Pinned: {name}"
     },
     "toasts": {
       "already": "{name} is already pinned to Compare.",
@@ -324,8 +324,6 @@
     "compareButton": "Compare {pinned}/{max}",
     "sidebar": "Sidebar",
     "sidebarTitle": "Show or hide the sidebar ([)",
-    "inspectorTitle": "Show or hide the inspector (Ctrl+I / ⌘I)",
-    "inspector": "Inspector",
     "fontList": "Font list",
     "noMatches": "Try a shorter search or fewer filters.",
     "commands": "Commands",
@@ -402,30 +400,16 @@
   "layout": {
     "library": "Library",
     "fonts": "Fonts",
-    "inspector": "Inspector",
     "resizeSidebar": "Resize sidebar",
-    "resizeInspector": "Resize inspector",
     "actions": {
-      "toggleInspector": "Show or hide the inspector",
       "toggleSidebar": "Show or hide the sidebar",
       "goSidebar": "Go to the sidebar",
-      "goList": "Go to the font list",
-      "goInspector": "Go to the inspector"
-    }
-  },
-  "inspector": {
-    "tabsLabel": "Inspector tabs",
-    "tabs": {
-      "info": "Info",
-      "axes": "Axes",
-      "features": "Features",
-      "glyphs": "Glyphs",
-      "developer": "Developer"
+      "goList": "Go to the font list"
     }
   },
   "developer": {
     "noFace": "Select a face to see its CSS.",
-    "hint": "The CSS for the axes and features set in the Axes and Features tabs.",
+    "hint": "The CSS for the axes and features set on this page.",
     "copyLabel": "Copy the CSS snippet"
   },
   "fontSwitch": {
@@ -585,7 +569,6 @@
       "similar": "Find similar",
       "views": "List, Table, Grid, Waterfall, Layout",
       "sidebar": "Sidebar",
-      "inspector": "Inspector",
       "settings": "Settings",
       "openFamily": "Open the family page",
       "previewField": "Focus the preview field"
@@ -1433,7 +1416,6 @@
     "notFoundBody": "The link does not name a family in your library.",
     "hero": "Specimen",
     "axes": "Axes",
-    "axesVariable": "Variable font",
     "axesStatic": "No variable axes",
     "sectionSwitch": "Section",
     "sections": {
@@ -1448,7 +1430,8 @@
     "rail": "About this family",
     "designer": "Designer",
     "foundry": "Foundry",
-    "stylesFact": "Styles"
+    "stylesFact": "Styles",
+    "developer": "Developer"
   },
   "studio": {
     "title": "Pairing Studio",
@@ -1704,7 +1687,7 @@
       "other": "+{count} more styles"
     },
     "reasons": "Why: {reasons}",
-    "notInList": "The list does not show {name} now: a search or a filter hides it. The inspector shows it."
+    "notInList": "The list does not show {name} now: a search or a filter hides it."
   },
   "documentFonts": {
     "action": "Check a document's fonts…",

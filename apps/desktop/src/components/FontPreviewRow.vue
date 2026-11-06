@@ -255,7 +255,7 @@ const deferredStyle = computed(() => ({
   <div class="row" :data-face="face.id" :data-state="state">
     <span class="label">
       <slot name="lead" />
-      <bdi>{{ name }}</bdi>
+      <bdi data-family-name>{{ name }}</bdi>
       <slot name="detail" />
       <UiBadge v-if="showVariable && face.isVariable">{{ t('list.variable') }}</UiBadge>
       <UiBadge

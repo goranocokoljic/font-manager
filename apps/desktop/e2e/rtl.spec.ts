@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { showSection } from './family-page';
 
 // E19.3: a right-to-left UI language mirrors the chrome; the preview text keeps
 // its own direction. No RTL catalog ships yet, so the check runs the CLDR bidi
@@ -34,7 +35,6 @@ async function edges(locator: Locator) {
 const columns = (page: Page) => ({
   sidebar: page.getByRole('navigation', { name: 'Library' }),
   list: page.getByRole('main', { name: 'Fonts' }),
-  inspector: page.getByRole('complementary', { name: 'Inspector' }),
 });
 
 /** The Hebrew face's sample after typing `text` as the list's custom sample text. */
@@ -46,26 +46,24 @@ async function sample(page: Page, text: string) {
   return shown;
 }
 
-/** Selects the Hebrew face's family, so the inspector shows it. */
+/** Selects the Hebrew face's family, so the count line names it. */
 async function selectHebrew(page: Page) {
-  await page.getByRole('treeitem', { name: /^Frank רוחל/ }).click();
-  await expect(columns(page).inspector.locator('h2')).toContainText('Frank רוחל');
+  await page.getByRole('treeitem', { name: /^Frank רוחל/ }).click({ position: { x: 4, y: 4 } });
+  await expect(page.getByTestId('selected-row')).toContainText('Frank רוחל');
 }
 
 const HEBREW = 'שלום עולם';
 const LATIN = 'Hamburgefonstiv';
 
 test.describe('in left-to-right chrome', () => {
-  test('sidebar, list, inspector run left to right; a Hebrew sample runs right to left', async ({
+  test('sidebar and list run left to right; a Hebrew sample runs right to left', async ({
     page,
   }) => {
     await open(page);
     await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
-    const { sidebar, list, inspector } = columns(page);
-    await expect(inspector).toBeVisible();
+    const { sidebar, list } = columns(page);
     await expect(sidebar).toHaveCSS('direction', 'ltr');
     expect((await edges(sidebar)).right).toBeLessThanOrEqual((await edges(list)).left + 1);
-    expect((await edges(list)).right).toBeLessThanOrEqual((await edges(inspector)).left + 1);
 
     // The sample's direction follows its text, not the chrome.
     const hebrew = await sample(page, HEBREW);
@@ -88,17 +86,15 @@ test.describe('in left-to-right chrome', () => {
 test.describe('in right-to-left chrome', () => {
   test.use({ locale: 'ar-XB' });
 
-  test('the layout mirrors: sidebar right, inspector left, text from the right, icons flipped', async ({
+  test('the layout mirrors: sidebar right, text from the right, icons flipped', async ({
     page,
   }) => {
     await open(page);
     const html = page.locator('html');
     await expect(html).toHaveAttribute('dir', 'rtl');
     await expect(html).toHaveAttribute('lang', 'ar-XB');
-    const { sidebar, list, inspector } = columns(page);
-    await expect(inspector).toBeVisible();
-    // Mirrored: inspector | list | sidebar from left to right.
-    expect((await edges(inspector)).right).toBeLessThanOrEqual((await edges(list)).left + 1);
+    const { sidebar, list } = columns(page);
+    // Mirrored: list | sidebar from left to right.
     expect((await edges(list)).right).toBeLessThanOrEqual((await edges(sidebar)).left + 1);
     const viewport = page.viewportSize()!;
     expect((await edges(sidebar)).right).toBeGreaterThan(viewport.width - 2);
@@ -129,14 +125,16 @@ test.describe('in right-to-left chrome', () => {
     await expect(hebrew).toHaveCSS('direction', 'rtl');
   });
 
-  test('names and paths are bidi-isolated in the list, inspector and status bar', async ({
+  test('names and paths are bidi-isolated in the list, the count line and the family page', async ({
     page,
   }) => {
     await open(page);
     await selectHebrew(page);
     const row = page.getByRole('treeitem', { name: /^Frank רוחל/ });
     await expect(row.locator('.label bdi')).toHaveText('Frank רוחל');
-    const inspector = columns(page).inspector;
+    await expect(page.getByTestId('selected-row').locator('bdi')).toHaveText('Frank רוחל');
+    await page.keyboard.press('Enter');
+    const inspector = await showSection(page, 'Info');
     await expect(inspector.locator('h2 bdi')).toHaveText(/^Frank רוחל /);
     await inspector.getByRole('button', { name: 'Technical details' }).click();
     await expect(inspector.getByRole('button', { name: /^Copy path/ }).locator('bdi')).toHaveText(
@@ -147,7 +145,7 @@ test.describe('in right-to-left chrome', () => {
     await expect(inspector.locator('h2 bdi')).toHaveCSS('unicode-bidi', 'isolate');
   });
 
-  test('arrow keys follow what the user sees: divider and inspector tabs', async ({ page }) => {
+  test('arrow keys follow what the user sees: divider and family page', async ({ page }) => {
     await open(page);
     // The sidebar is on the right: ArrowLeft moves the divider left, widening it.
     const divider = page.getByRole('separator', { name: 'Resize sidebar' });
@@ -160,16 +158,19 @@ test.describe('in right-to-left chrome', () => {
     await expect(divider).toHaveAttribute('aria-valuenow', String(before));
     expect((await edges(columns(page).sidebar)).left).toBeGreaterThan(box);
 
-    // The tabs run from the right: ArrowLeft goes to the next one (Axes after Info).
+    // The sections run from the right, and ArrowLeft goes to the next family.
     await selectHebrew(page);
-    const info = page.getByRole('tab', { name: 'Info' });
-    const axes = page.getByRole('tab', { name: 'Axes' });
-    expect((await edges(axes)).right).toBeLessThanOrEqual((await edges(info)).left + 1);
-    await info.click();
+    await page.keyboard.press('o');
+    const sections = page.locator('.switch').getByRole('button');
+    const first = sections.first();
+    const second = sections.nth(1);
+    expect((await edges(second)).right).toBeLessThanOrEqual((await edges(first)).left + 1);
+    const position = page.getByTestId('family-position');
+    const at = await position.textContent();
     await page.keyboard.press('ArrowLeft');
-    await expect(axes).toBeFocused();
+    await expect(position).not.toHaveText(at!);
     await page.keyboard.press('ArrowRight');
-    await expect(info).toBeFocused();
+    await expect(position).toHaveText(at!);
   });
 
   test('the grid runs from the right, and ArrowLeft goes to the next card', async ({ page }) => {

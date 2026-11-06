@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { openDeveloper, showSection } from './family-page';
 import { selectOption } from './select';
 
 // The accessibility baseline (E5.10): every control has a name and a visible
@@ -154,11 +155,9 @@ test('every interactive element in Settings has a name', async ({ page }) => {
 test('every interactive element of the Conflicts view and the clash question has a name', async ({
   page,
 }) => {
-  await open(page, '/?face=6');
-  await page
-    .getByRole('tabpanel', { name: 'Info' })
-    .getByRole('button', { name: 'Activate', exact: true })
-    .click();
+  await open(page, '/family/3?face=6');
+  const info = await showSection(page, 'Info');
+  await info.getByRole('button', { name: 'Activate', exact: true }).click();
   await expect(page.getByRole('alertdialog')).toBeVisible();
   expect(await unnamedControls(page)).toEqual([]);
   await page.getByRole('button', { name: 'Replace for this session' }).click();
@@ -167,10 +166,9 @@ test('every interactive element of the Conflicts view and the clash question has
   expect(await unnamedControls(page)).toEqual([]);
 });
 
-test('every interactive element of the inspector Developer tab has a name', async ({ page }) => {
-  await open(page, '/?face=1');
-  await page.getByRole('tab', { name: 'Developer' }).click();
-  const panel = page.getByRole('tabpanel', { name: 'Developer' });
+test('every interactive element of the family page Developer part has a name', async ({ page }) => {
+  await open(page, '/family/1?face=1');
+  const panel = await openDeveloper(page);
   await expect(panel.getByRole('button', { name: 'Copy the CSS snippet' })).toBeEnabled();
   expect(await unnamedControls(page)).toEqual([]);
 });
@@ -192,7 +190,11 @@ test('keyboard focus shows a visible ring on every Tab stop', async ({ page }) =
       if (!el || el === document.body) return null;
       // The ring is an outline of at least 2 px, or a box-shadow ring (the pane divider).
       // A sidebar row's label has its ring round the row, off the row's tint (E41.3).
-      const s = getComputedStyle(el.matches('button.side-label') ? el.parentElement! : el);
+      // The preview field's ring is round its whole hero control (E41.2).
+      const ringed = el.matches('button.side-label')
+        ? el.parentElement!
+        : (el.closest('.hero') ?? el);
+      const s = getComputedStyle(ringed);
       const width = parseFloat(s.outlineWidth);
       const visible = (s.outlineStyle !== 'none' && width >= 2) || s.boxShadow !== 'none';
       return { id: el.outerHTML.slice(0, 120), visible };
@@ -216,9 +218,8 @@ test('the list announces family, style and activation state', async ({ page }) =
   await family.locator('.twisty').click();
   const style = tree.getByRole('treeitem', { level: 2 }).first();
   await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, not active$/);
-  await style.click();
-  await page.keyboard.press('Enter'); // open it in the inspector
-  await page.getByRole('button', { name: 'Activate', exact: true }).click();
+  await style.click({ position: { x: 4, y: 4 } });
+  await page.keyboard.press('a');
   await expect(style).toHaveAccessibleName(/^Sample 1 \S.*, active for this session$/);
   await expect(family).toHaveAccessibleName('Sample 1, 2 styles, partly active');
 });
@@ -369,7 +370,7 @@ async function violations(page: Page): Promise<string[]> {
 }
 
 const VIEW_MODES = ['List', 'Table', 'Grid', 'Waterfall', 'Layout'];
-const INSPECTOR_TABS = ['Info', 'Axes', 'Features', 'Glyphs', 'Developer'];
+const FAMILY_SECTIONS = ['Styles', 'Text', 'Characters', 'Features', 'Pairings', 'Info'] as const;
 
 for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`WCAG 2.2 AA scan, ${colorScheme} theme`, () => {
@@ -410,14 +411,15 @@ for (const colorScheme of ['light', 'dark'] as const) {
       expect(await violations(page), 'quick look').toEqual([]);
     });
 
-    test('every inspector tab', async ({ page }) => {
-      await open(page, '/?face=1');
+    test('every section of the family page and its Developer part', async ({ page }) => {
+      await open(page, '/family/1?face=1');
       await inTheme(page);
-      for (const tab of INSPECTOR_TABS) {
-        await page.getByRole('tab', { name: tab }).click();
-        await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible();
-        expect(await violations(page), tab).toEqual([]);
+      for (const section of FAMILY_SECTIONS) {
+        await showSection(page, section);
+        expect(await violations(page), section).toEqual([]);
       }
+      await openDeveloper(page);
+      expect(await violations(page), 'Developer').toEqual([]);
     });
 
     test('the family page, with its collection menu open', async ({ page }) => {
@@ -520,8 +522,6 @@ test('Tab moves between the columns and wraps around: the focus is never trapped
     'div separator Resize sidebar',
     'main  Fonts',
     'div tree Font list',
-    'div separator Resize inspector',
-    'aside  Inspector',
   ];
   for (const c of columns) expect(at(c), c).toBeGreaterThanOrEqual(0);
   expect(columns.map(at)).toEqual(columns.map(at).sort((a, b) => a - b));
@@ -560,7 +560,7 @@ test('every action of the keyboard model works without a mouse', async ({ page }
   await page.keyboard.press('ArrowDown');
   const family = tree.getByRole('treeitem', { name: /^Sample 1,/ });
   await expect(tree).toHaveAttribute('aria-activedescendant', (await family.getAttribute('id'))!);
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowRight');
   await expect(family).toHaveAttribute('aria-expanded', 'true');
   await page.keyboard.press('ArrowDown');
   const style = tree.getByRole('treeitem', { level: 2 }).first();

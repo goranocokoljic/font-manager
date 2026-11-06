@@ -7,7 +7,7 @@
 // Keys: Tab reaches the close button and every result; Up/Down (Home/End) move
 // between results; Enter or a click selects the result in the list and the
 // inspector; Escape closes and gives the focus back to where it was.
-import { computed, nextTick, ref, watch, watchEffect } from 'vue';
+import { computed, nextTick, ref, watch, watchEffect, onMounted } from 'vue';
 import type { FaceId, FaceSummary, SimilarFace } from '../api/types';
 import { errorMessage, t } from '../i18n';
 import { sampleText } from '../preview/sampleText';
@@ -139,6 +139,11 @@ async function select(face: FaceSummary): Promise<void> {
   emit('select', face.id);
   hidden.value = (await similar.pick(face)) ? null : nameOf(face);
 }
+
+// Back from a result's family page: the panel is still open, and the keys are its own.
+onMounted(() => {
+  if (similar.open) root.value?.focus();
+});
 
 function close(): void {
   similar.close();

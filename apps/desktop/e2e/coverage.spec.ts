@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { openSection } from './family-page';
 
 // E11.3: the coverage list of the Glyphs tab, on the MockApi.
 const fixture = readFileSync(
@@ -18,9 +19,7 @@ async function openCoverage(page: Page, face: number) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto(`/#/?face=${face}`);
-  await page.getByRole('tab', { name: 'Glyphs' }).click();
-  const panel = page.getByRole('tabpanel', { name: 'Glyphs' });
+  const panel = await openSection(page, face, 'Characters');
   const coverage = panel.getByRole('region', { name: 'Coverage' });
   await expect(coverage.getByRole('list', { name: 'Unicode blocks' })).toBeVisible();
   return { panel, coverage };

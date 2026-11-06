@@ -30,7 +30,6 @@ export const ACTIONS = {
   openFamily: 'family.open',
   viewMode: (n: 1 | 2 | 3 | 4 | 5) => `view.mode${n}`,
   settings: 'settings.open',
-  inspector: 'view.toggleInspector',
   sidebar: 'view.toggleSidebar',
   shortcuts: 'shortcuts.toggle',
 } as const;
@@ -38,7 +37,7 @@ export const ACTIONS = {
 /**
  * Spec, UX design → Keyboard model: `/` search · Ctrl/Cmd+K command palette · Space
  * quick-look · A toggle session activation · Shift+A permanent · C add to compare ·
- * 1–5 view modes · Ctrl/Cmd+, settings. Ctrl/Cmd+I (inspector) comes from E5.1.
+ * 1–5 view modes · Ctrl/Cmd+, settings.
  * B adds the selected fonts to the Quick Collection or removes them (E13.3).
  * T opens the multi-tagging panel for the selected fonts (E13.4).
  * S finds the fonts that look like the selected one (E23.3).
@@ -64,9 +63,7 @@ export const KEYMAP: readonly Binding[] = [
     chord: { key: String(n) },
   })),
   { action: ACTIONS.settings, chord: { key: ',', mod: true } },
-  { action: ACTIONS.inspector, chord: { key: 'i', mod: true } },
   { action: ACTIONS.sidebar, chord: { key: '[' } },
-  { action: ACTIONS.inspector, chord: { key: ']' } },
   { action: ACTIONS.shortcuts, chord: { key: '?' } },
 ];
 

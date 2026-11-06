@@ -55,7 +55,7 @@ test('the Pairings panel suggests fonts for the first pin; Add to compare pins o
   }
 
   // Tab reaches the labelled button; Enter pins the suggestion.
-  const add = panel(page).getByRole('button', { name: 'Add Sample 1 Regular to Compare' });
+  const add = panel(page).getByRole('button', { name: 'Add to compare: Sample 1 Regular' });
   await expect(add).toHaveAccessibleDescription('Why: same designer, similar x-height');
   for (let i = 0; i < 20; i++) {
     if (await add.evaluate((el) => el === document.activeElement)) break;
@@ -70,7 +70,7 @@ test('the Pairings panel suggests fonts for the first pin; Add to compare pins o
   await expect(pinned(page).nth(1)).toContainText('Sample 1 Regular');
 
   // The button stays where the focus is, now marked as pinned.
-  const done = panel(page).getByRole('button', { name: 'Sample 1 Regular is pinned' });
+  const done = panel(page).getByRole('button', { name: 'Pinned: Sample 1 Regular' });
   await expect(done).toBeFocused();
   await expect(done).toHaveAttribute('aria-disabled', 'true');
   await expect(done).toHaveText('Pinned');

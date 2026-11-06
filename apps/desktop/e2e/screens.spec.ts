@@ -20,13 +20,13 @@ const routes = (process.env.FM_SCREENS_ROUTES ?? '/')
   .split(',')
   .map((r) => r.trim())
   .filter(Boolean);
-// FM_SCREENS_TAB=Glyphs opens that inspector tab before the shot.
+// FM_SCREENS_TAB=Characters opens that section of the family page (a /family/1 route) before the shot.
 const tab = process.env.FM_SCREENS_TAB;
-// FM_SCREENS_GLYPH=U+0061 then searches the Glyphs tab for it, opening its detail.
+// FM_SCREENS_GLYPH=U+0061 then searches the Characters section for it, opening its detail.
 const glyph = process.env.FM_SCREENS_GLYPH;
 // FM_SCREENS_COMPARE=JetBrains then opens "Compare with…" on that glyph and picks the first font found.
 const compareWith = process.env.FM_SCREENS_COMPARE;
-// FM_SCREENS_COVERAGE=Polish then opens that language in the Glyphs tab's coverage list and scrolls to it.
+// FM_SCREENS_COVERAGE=Polish then opens that language in the Characters section's coverage list and scrolls to it.
 const coverageOf = process.env.FM_SCREENS_COVERAGE;
 // FM_SCREENS_STORAGE='{"fm.views.v1":"..."}' seeds localStorage (view preferences) before the page loads.
 const storage: Record<string, string> = JSON.parse(process.env.FM_SCREENS_STORAGE ?? '{}');
@@ -184,12 +184,14 @@ test.describe('@screens', () => {
           }
           if (press) await page.keyboard.press(press);
           if (tab) {
-            // Narrow windows hide the inspector until asked.
-            const target = page.getByRole('tab', { name: tab });
-            if (!(await target.isVisible()))
-              await page.getByRole('button', { name: 'Inspector' }).click();
-            await target.click();
-            await expect(page.getByRole('tabpanel', { name: tab })).toBeVisible();
+            await page
+              .getByRole('group', { name: 'Section' })
+              .getByRole('button', { name: tab, exact: true })
+              .click();
+            await expect(
+              page.locator(`[data-testid="family-panel"][data-section="${tab.toLowerCase()}"]`),
+            ).toBeVisible();
+            await page.waitForTimeout(400); // the old section fades out, the new one loads
             if (glyph) {
               await page.getByRole('searchbox', { name: 'Search glyphs' }).fill(glyph);
               await expect(page.getByRole('region', { name: 'Selected glyph' })).toBeVisible();

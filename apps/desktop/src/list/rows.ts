@@ -117,22 +117,22 @@ const FAMILY_STATE: Record<FamilySummary['activation'], string> = {
  */
 export function rowLabel(row: ListRow): string {
   if (row.kind === 'family') {
-    const { name, styleCount: n, activation } = row.family;
     return t('list.row.family', {
-      name,
-      styles: styleCount(n),
-      state: t(FAMILY_STATE[activation] as MessageKey),
+      name: row.family.name,
+      styles: styleCount(row.family.styleCount),
+      state: rowStateLabel(row),
     });
   }
-  const { familyName, active } = row.face;
   const style = row.virtual
     ? t('list.row.pinnedInstance', { name: row.virtual.name })
     : row.face.style;
-  const state =
-    active === 'permanent'
-      ? t('list.row.activePermanently')
-      : active === 'session'
-        ? t('list.row.activeSession')
-        : t('list.row.notActive');
-  return t('list.row.face', { family: familyName, style, state });
+  return t('list.row.face', { family: row.face.familyName, style, state: rowStateLabel(row) });
+}
+
+/** The activation state of a row in words, for the row's label and the count line. */
+export function rowStateLabel(row: ListRow): string {
+  if (row.kind === 'family') return t(FAMILY_STATE[row.family.activation] as MessageKey);
+  const { active } = row.face;
+  if (active === 'permanent') return t('list.row.activePermanently');
+  return active === 'session' ? t('list.row.activeSession') : t('list.row.notActive');
 }

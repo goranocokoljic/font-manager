@@ -236,7 +236,6 @@ for (const locale of ['en-US', 'de-DE']) {
     }) => {
       await serveFonts(page);
       await page.goto('/?mockCatalog=1');
-      await expect(page.locator('#fm-inspector')).toBeVisible();
       await page.getByTestId('catalog-googleFonts').click();
       await expect(page.getByTestId('catalog-list').getByRole('listitem')).toHaveCount(4);
       const column = (await page.locator('main.list').boundingBox())!;

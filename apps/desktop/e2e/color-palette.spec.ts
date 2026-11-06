@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { hero, showSection } from './family-page';
 
 // E16.3: the MockApi color face (`?mockColor=1`, face 8, "Color Play") has two palettes.
 // The webview gets CairoPlay with its CPAL replaced by a version 1 table of two
@@ -53,21 +54,21 @@ async function open(page: Page) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: font }),
   );
-  await page.goto('/?mockColor=1#/?face=8');
+  await page.goto('/?mockColor=1#/family/8?face=8');
+  await showSection(page, 'Info');
   await expect(page.getByRole('radiogroup', { name: 'Color palette' })).toBeVisible();
 }
 
-/** The sample of Color Play's row in the font list, once its font has loaded. */
+/** The hero of Color Play's family page, once its font has loaded. */
 async function listSample(page: Page) {
-  const row = page.getByRole('tree', { name: 'Font list' }).locator('.row[data-face="8"]').first();
-  await expect(row).toHaveAttribute('data-state', 'ready');
-  return row.locator('.sample');
+  await expect(hero(page)).not.toHaveClass(/loading/);
+  return hero(page);
 }
 
 const palette = (sample: Awaited<ReturnType<typeof listSample>>) =>
   sample.evaluate((el) => getComputedStyle(el).fontPalette);
 
-test('picking the second palette by keyboard redraws the row in it and the choice stays', async ({
+test('picking the second palette by keyboard redraws the hero in it and the choice stays', async ({
   page,
 }) => {
   await open(page);
@@ -101,6 +102,7 @@ test('picking the second palette by keyboard redraws the row in it and the choic
 
   // The choice is a view preference: it is there after a reload.
   await page.reload();
+  await showSection(page, 'Info');
   await expect(
     page
       .getByRole('radiogroup', { name: 'Color palette' })
@@ -115,6 +117,7 @@ test('the chosen palette applies in every view mode', async ({ page }) => {
     .getByRole('radiogroup', { name: 'Color palette' })
     .getByRole('radio', { name: 'Palette 2' })
     .check();
+  await page.getByRole('button', { name: 'Library' }).click();
   const modes = page.getByRole('group', { name: 'View mode' });
   const computed = (selector: string) =>
     page

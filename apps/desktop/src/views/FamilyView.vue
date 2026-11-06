@@ -1,12 +1,20 @@
 <script setup lang="ts">
 // The family page (E42.1): the frame every section of E42 lives in. Only the panel under the
 // section switch changes with the section; the hero, the axis row and the rail stay mounted,
-// so what is chosen there carries across sections. E42.2 to E42.9 fill the parts.
+// so what is chosen there carries across sections. E42.2 to E42.9 fill the parts; until then the
+// inspector's parts live here (E41.5). They read the selection store, so the page keeps the face
+// it shows selected: the `?face=` of the route, else the family's first.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
+import InspectorAxes from '../components/InspectorAxes.vue';
+import InspectorDeveloper from '../components/InspectorDeveloper.vue';
+import InspectorFeatures from '../components/InspectorFeatures.vue';
+import InspectorGlyphs from '../components/InspectorGlyphs.vue';
+import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
+import UiChevron from '../components/ui/UiChevron.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
@@ -16,20 +24,27 @@ import { ACTIONS, yieldsToFocus } from '../keyboard/keymap';
 import { FmFade } from '../motion';
 import { useHeldFace } from '../preview/useHeldFace';
 import { sampleText } from '../preview/sampleText';
+import { variationSettings } from '../preview/variations';
+import { useAxesStore } from '../stores/axes';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { FAMILY_SECTIONS, parseFamilyId, useFamilyPageStore } from '../stores/familyPage';
+import { useFeaturesStore } from '../stores/features';
+import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
+import { parseFaceId, useSelectionStore } from '../stores/selection';
 import { useSimilarStore } from '../stores/similar';
 import { useTaggingStore } from '../stores/tagging';
 import { useFamilyNavigation } from './useFamilyNavigation';
 import { useLiveLibrary } from './useLiveLibrary';
 
 const route = useRoute();
+const router = useRouter();
 const page = useFamilyPageStore();
 const commands = useCommandsStore();
 const preview = usePreviewStore();
 const search = useSearchStore();
+const selection = useSelectionStore();
 const similar = useSimilarStore();
 const tagging = useTaggingStore();
 const { back, step } = useFamilyNavigation();
@@ -44,12 +59,47 @@ watch(
   { immediate: true },
 );
 
+watch(
+  () => route.query.face,
+  (face) => {
+    if (route.name === 'family') page.chosenFace = parseFaceId(face);
+  },
+  { immediate: true },
+);
+watch(
+  () => page.face?.id ?? null,
+  (face) => void selection.select(face),
+  { immediate: true },
+);
+
+/** A style in the list: the page and its panels show that one. */
+function chooseStyle(face: number): void {
+  void router.replace({ query: { face: String(face) } });
+}
+
+const developerOpen = ref(false);
+
 // The webview's own transition moves the specimen; without one the page slides in. A deep
 // link and a reload just appear.
 const slideIn = page.takePushed() && typeof document.startViewTransition !== 'function';
 
 const faceId = computed(() => page.face?.id ?? null);
 const heldFamily = useHeldFace(faceId);
+const axesSet = useAxesStore();
+const features = useFeaturesStore();
+const palettes = usePalettesStore();
+/** What the axis row, the Features section and the palette picker set shows on the hero at once. */
+const specimenStyle = computed(() => {
+  const face = page.face;
+  if (!face || !heldFamily.value) return undefined;
+  const axes = selection.detail?.face.id === face.id ? selection.detail.axes : [];
+  return {
+    fontFamily: `'${heldFamily.value}'`,
+    fontVariationSettings: variationSettings(axes, axesSet.values(face.id) ?? []),
+    fontFeatureSettings: features.settings(face.id),
+    fontPalette: palettes.fontPaletteOf(ALL_FONTS_VIEW, face),
+  };
+});
 const specimen = computed(() =>
   page.face ? sampleText(preview.settingsFor(ALL_FONTS_VIEW), page.face, preview.pangramText) : '',
 );
@@ -134,22 +184,25 @@ function onKey(e: KeyboardEvent): void {
   if (e.defaultPrevented || e.isComposing || commands.open) return;
   if (document.querySelector('[aria-modal="true"]')) return;
   if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+  // The notes save when their field loses the focus: Escape leaves the field and stays here.
+  const typing = yieldsToFocus(e, { key: e.key });
   if (e.altKey) {
-    if (e.key === 'ArrowLeft' && !e.repeat) {
-      e.preventDefault();
-      void back();
-    }
-    return;
-  }
-  if (e.key === 'Escape') {
-    if (!e.repeat) {
+    if (e.key === 'ArrowLeft' && !e.repeat && !typing) {
       e.preventDefault();
       void back();
     }
     return;
   }
   const el = e.target instanceof Element ? e.target : null;
-  if (yieldsToFocus(e, { key: e.key }) || el?.closest('input, [role="slider"]')) return;
+  if (e.key === 'Escape') {
+    if (!e.repeat) {
+      e.preventDefault();
+      if (typing && el instanceof HTMLElement) el.blur();
+      else void back();
+    }
+    return;
+  }
+  if (typing || el?.closest('input, [role="slider"]')) return;
   const key = inlineKey(e.key);
   if (key === 'ArrowLeft') step(page.previous);
   else if (key === 'ArrowRight') step(page.next);
@@ -247,13 +300,14 @@ onBeforeUnmount(() => {
             class="specimen"
             data-testid="family-specimen"
             :class="{ loading: !heldFamily }"
-            :style="heldFamily ? { fontFamily: `'${heldFamily}'` } : undefined"
+            :style="specimenStyle"
           >
             {{ specimen }}
           </p>
         </section>
         <section class="axes" data-testid="family-axes" :aria-label="t('family.axes')">
-          {{ page.summary?.isVariable ? t('family.axesVariable') : t('family.axesStatic') }}
+          <InspectorAxes v-if="page.face?.isVariable" />
+          <template v-else>{{ t('family.axesStatic') }}</template>
         </section>
         <UiSegmentedControl
           v-model="page.section"
@@ -274,8 +328,20 @@ onBeforeUnmount(() => {
                   :aria-label="t(`family.sections.${page.section}`)"
                 >
                   <ul v-if="page.section === 'styles'" class="styles">
-                    <li v-for="f in page.faces" :key="f.id">{{ f.style }}</li>
+                    <li v-for="f in page.faces" :key="f.id">
+                      <button
+                        type="button"
+                        class="style"
+                        :aria-pressed="f.id === page.face?.id"
+                        @click="chooseStyle(f.id)"
+                      >
+                        {{ f.style }}
+                      </button>
+                    </li>
                   </ul>
+                  <InspectorGlyphs v-else-if="page.section === 'characters'" />
+                  <InspectorFeatures v-else-if="page.section === 'features'" />
+                  <InspectorInfo v-else-if="page.section === 'info'" />
                   <p v-else class="quiet">{{ t('family.sectionLater') }}</p>
                 </section>
               </FmFade>
@@ -296,6 +362,20 @@ onBeforeUnmount(() => {
                 <dd class="count">{{ page.summary.styleCount }}</dd>
               </template>
             </dl>
+            <button
+              type="button"
+              class="developer fm-directional"
+              aria-controls="fm-family-developer"
+              :aria-expanded="developerOpen"
+              @click="developerOpen = !developerOpen"
+            >
+              <UiChevron :open="developerOpen" />
+              {{ t('family.developer') }}
+            </button>
+            <!-- Mounted only while open: it asks fm-core for the CSS as the state changes. -->
+            <div id="fm-family-developer">
+              <InspectorDeveloper v-if="developerOpen" />
+            </div>
           </aside>
         </div>
       </template>
@@ -411,8 +491,35 @@ onBeforeUnmount(() => {
   list-style: none;
 }
 .styles li {
-  padding: var(--fm-space-2) 0;
   border-bottom: 1px solid var(--fm-border);
+}
+.style {
+  width: 100%;
+  padding: var(--fm-space-2) 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.style[aria-pressed='true'] {
+  font-weight: 600;
+}
+.developer {
+  display: flex;
+  align-items: center;
+  gap: var(--fm-space-1);
+  width: 100%;
+  margin-block-start: var(--fm-space-4);
+  padding: var(--fm-space-2) 0 0;
+  border: 0;
+  border-block-start: 1px solid var(--fm-border);
+  background: none;
+  color: var(--fm-muted);
+  font: inherit;
+  font-size: var(--fm-text-sm);
+  cursor: pointer;
 }
 .quiet {
   margin: 0;

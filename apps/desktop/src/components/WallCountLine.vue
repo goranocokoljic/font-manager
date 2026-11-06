@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// The line above the wall: how many families there are, which filters gave them, and
-// how they are sorted, with a menu to change that. The API does the sorting.
+// The line above the wall: how many families there are, which filters gave them, the one
+// selected row with its state, and how they are sorted, with a menu to change that. The API
+// does the sorting.
 import { computed, nextTick, ref, useId } from 'vue';
 import { errorMessage, t, type MessageKey } from '../i18n';
 import { columnById, SORT_COLUMNS, type ColumnId } from '../list/columns';
+import { rowStateLabel, styleName } from '../list/rows';
 import { useActiveFilters } from '../search/activeFilters';
 import { useFontListStore } from '../stores/fontList';
 import { useSearchStore } from '../stores/search';
@@ -18,6 +20,14 @@ const { labels } = useActiveFilters();
 const uid = useId();
 
 const selecting = computed(() => fontList.selectedCount > 1);
+const selectedRow = computed(() =>
+  fontList.selectedRows.length === 1 ? fontList.selectedRows[0]! : null,
+);
+const selectedName = computed(() => {
+  const row = selectedRow.value;
+  if (!row) return '';
+  return row.kind === 'family' ? row.family.name : `${row.family.name} ${styleName(row)}`;
+});
 const familyCount = computed(() => (search.hits ? search.total : fontList.families.length));
 /** Nothing to count before the first answer, or in an empty library (its empty state says so). */
 const shown = computed(() => search.hits !== null || fontList.families.length > 0);
@@ -79,6 +89,11 @@ function onFocusOut(e: FocusEvent): void {
         <strong>{{ t('home.families', { count: familyCount }) }}</strong>
         <template v-for="label in labels" :key="label"> · {{ label }}</template>
       </template>
+    </p>
+    <p v-if="selectedRow" class="selected-row" data-testid="selected-row">
+      <bdi class="selected-name">{{ selectedName }}</bdi>
+      <span aria-hidden="true">·</span>
+      <span data-testid="selected-row-state">{{ rowStateLabel(selectedRow) }}</span>
     </p>
     <div class="sort" @keydown.esc.stop="close">
       <span>{{ sortText }}</span> ·
@@ -151,6 +166,21 @@ function onFocusOut(e: FocusEvent): void {
 .error {
   margin: 0;
   color: var(--fm-danger);
+}
+.selected-row {
+  display: flex;
+  flex: 0 1 auto;
+  gap: var(--fm-space-1);
+  min-width: 0;
+  max-width: 50%;
+  margin: 0;
+  white-space: nowrap;
+}
+.selected-name {
+  overflow: hidden;
+  color: var(--fm-fg);
+  font-weight: 500;
+  text-overflow: ellipsis;
 }
 .sort {
   position: relative;

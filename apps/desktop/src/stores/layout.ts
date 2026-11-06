@@ -1,20 +1,14 @@
 import { defineStore } from 'pinia';
-import { computed, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 
-/** Under this window width the inspector collapses (spec: hidden on narrow windows). */
-export const NARROW_WIDTH = 1100;
-
-/** Width bounds of the resizable columns, in CSS px. */
+/** Width bounds of the resizable sidebar, in CSS px. */
 export const SIDEBAR = { min: 180, max: 400, initial: 232 } as const;
-export const INSPECTOR = { min: 260, max: 480, initial: 320 } as const;
 
 /** The localStorage key of the saved layout (a view preference). */
 export const LAYOUT_STORAGE_KEY = 'fm.layout.v1';
 
 interface SavedLayout {
   sidebarWidth: number;
-  inspectorWidth: number;
-  inspectorOpen: boolean;
   sidebarOpen: boolean;
 }
 
@@ -34,8 +28,6 @@ function readSaved(storage: Storage | undefined): SavedLayout {
   }
   return {
     sidebarWidth: clampWidth(raw.sidebarWidth, SIDEBAR),
-    inspectorWidth: clampWidth(raw.inspectorWidth, INSPECTOR),
-    inspectorOpen: typeof raw.inspectorOpen === 'boolean' ? raw.inspectorOpen : true,
     sidebarOpen: typeof raw.sidebarOpen === 'boolean' ? raw.sidebarOpen : true,
   };
 }
@@ -48,53 +40,25 @@ function browserStorage(): Storage | undefined {
   }
 }
 
-/**
- * Column widths and inspector visibility of the main window. `inspectorOpen` is the
- * wide-window choice and is saved; on a narrow window the inspector is hidden until the
- * shortcut reveals it for the session.
- */
+/** The sidebar's width and visibility in the main window, saved as a view preference. */
 export const useLayoutStore = defineStore('layout', () => {
   const storage = browserStorage();
   const saved = readSaved(storage);
 
   const sidebarWidth = ref(saved.sidebarWidth);
-  const inspectorWidth = ref(saved.inspectorWidth);
-  const inspectorOpen = ref(saved.inspectorOpen);
   const sidebarOpen = ref(saved.sidebarOpen);
-  const narrow = ref(false);
-  const narrowReveal = ref(false);
-
-  const inspectorVisible = computed(() =>
-    narrow.value ? narrowReveal.value : inspectorOpen.value,
-  );
 
   function setSidebarWidth(px: number): void {
     sidebarWidth.value = clampWidth(px, SIDEBAR);
-  }
-
-  function setInspectorWidth(px: number): void {
-    inspectorWidth.value = clampWidth(px, INSPECTOR);
-  }
-
-  function setNarrow(value: boolean): void {
-    if (narrow.value !== value) narrowReveal.value = false;
-    narrow.value = value;
-  }
-
-  function toggleInspector(): void {
-    if (narrow.value) narrowReveal.value = !narrowReveal.value;
-    else inspectorOpen.value = !inspectorOpen.value;
   }
 
   function toggleSidebar(): void {
     sidebarOpen.value = !sidebarOpen.value;
   }
 
-  watch([sidebarWidth, inspectorWidth, inspectorOpen, sidebarOpen], () => {
+  watch([sidebarWidth, sidebarOpen], () => {
     const value: SavedLayout = {
       sidebarWidth: sidebarWidth.value,
-      inspectorWidth: inspectorWidth.value,
-      inspectorOpen: inspectorOpen.value,
       sidebarOpen: sidebarOpen.value,
     };
     try {
@@ -106,15 +70,8 @@ export const useLayoutStore = defineStore('layout', () => {
 
   return {
     sidebarWidth,
-    inspectorWidth,
-    inspectorOpen,
     sidebarOpen,
-    narrow,
-    inspectorVisible,
     setSidebarWidth,
-    setInspectorWidth,
-    setNarrow,
-    toggleInspector,
     toggleSidebar,
   };
 });

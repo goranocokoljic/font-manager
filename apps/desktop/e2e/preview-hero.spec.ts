@@ -20,8 +20,6 @@ async function openWall(page: Page): Promise<Locator> {
   );
   await page.goto('/?mockLibrary=wall#/');
   await expect(page.getByRole('tree', { name: 'Font list' })).toBeVisible();
-  // E41.5 removes the inspector from the wall; the board has none.
-  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
   await page
     .getByRole('group', { name: 'View mode' })
     .getByRole('button', { name: 'Grid' })

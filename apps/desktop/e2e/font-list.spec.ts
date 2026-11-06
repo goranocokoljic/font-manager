@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { showSection } from './family-page';
 
 // Preview rows load face files from `/fmfont/<id>`; serve one fixture for all.
 const fixture = readFileSync(
@@ -113,21 +114,21 @@ test('expanding a family shows its styles inline', async ({ page }) => {
   await expect(styles).toHaveCount(0);
 });
 
-test('arrows, Enter and Tab work in the list, and the inspector follows', async ({ page }) => {
+test('arrows, Enter and Tab work in the list, and the count line follows', async ({ page }) => {
   const tree = await open(page, '?mockFaces=3&mockStyles=4');
-  await tree.getByRole('treeitem', { name: 'Inter, 1 style' }).click();
+  const selected = page.getByTestId('selected-row');
+  await tree.getByRole('treeitem', { name: 'Inter, 1 style' }).click({ position: { x: 4, y: 4 } });
   await expect(tree).toBeFocused();
   await expect(page).toHaveURL(/face=1\b/);
-  const info = page.getByRole('tabpanel', { name: 'Info' });
-  await expect(info.getByRole('heading', { name: 'Inter Regular' })).toBeVisible();
+  await expect(selected).toContainText('Inter');
 
   await page.keyboard.press('ArrowDown');
   await expect(tree).toHaveAttribute('aria-activedescendant', 'fm-row-family-3');
-  await expect(info.getByRole('heading', { name: 'JetBrains Mono Regular' })).toBeVisible();
+  await expect(selected).toContainText('JetBrains Mono');
 
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown'); // Sample 1
-  await page.keyboard.press('Enter');
+  await page.keyboard.press('ArrowRight');
   await expect(tree.getByRole('treeitem', { name: SAMPLE_1 })).toHaveAttribute(
     'aria-expanded',
     'true',
@@ -136,34 +137,29 @@ test('arrows, Enter and Tab work in the list, and the inspector follows', async 
   await page.keyboard.press('ArrowDown'); // Italic
   const italic = tree.getByRole('treeitem', { name: 'Sample 1 Italic, not active', exact: true });
   await expect(italic).toHaveAttribute('aria-selected', 'true');
-  await expect(info.getByRole('heading', { name: 'Sample 1 Italic' })).toBeVisible();
+  await expect(selected).toContainText('Sample 1 Italic');
   await page.keyboard.press('ArrowLeft'); // to the family
   await page.keyboard.press('ArrowLeft'); // collapse
   await expect(italic).toHaveCount(0);
 
-  // Tab leaves the list in one press (to the inspector's divider, then the inspector);
-  // Shift+Tab comes back to the same row.
+  // Tab leaves the list in one press; Shift+Tab comes back to the same row.
   await page.keyboard.press('Tab');
-  await expect(page.getByRole('separator', { name: 'Resize inspector' })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(page.locator('#fm-inspector')).toBeFocused();
-  await page.keyboard.press('Shift+Tab');
+  await expect(tree).not.toBeFocused();
   await page.keyboard.press('Shift+Tab');
   await expect(tree).toBeFocused();
   await expect(tree).toHaveAttribute('aria-activedescendant', 'fm-row-family-1000');
 });
 
-test('Enter on a style opens the inspector when it is hidden', async ({ page }) => {
-  await page.setViewportSize({ width: 1000, height: 700 }); // inspector collapsed
+test('Enter on a style opens the family page on that style', async ({ page }) => {
+  await page.setViewportSize({ width: 1000, height: 700 });
   const tree = await open(page, '?mockFaces=3&mockStyles=4');
   await expect(page.locator('#fm-inspector')).toHaveCount(0);
-  await tree.getByRole('treeitem', { name: SAMPLE_1 }).click();
+  await tree.getByRole('treeitem', { name: SAMPLE_1 }).click({ position: { x: 4, y: 4 } });
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
-  await expect(
-    page.getByRole('tabpanel', { name: 'Info' }).getByRole('heading', { name: 'Sample 1 Regular' }),
-  ).toBeVisible();
+  const info = await showSection(page, 'Info');
+  await expect(info.getByRole('heading', { name: 'Sample 1 Regular' })).toBeVisible();
 });
 
 test('multi-select with Shift, Ctrl/Cmd and the mouse', async ({ page }) => {

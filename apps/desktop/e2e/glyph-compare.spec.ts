@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { openSection } from './family-page';
 
 // A fixture with Cyrillic, so the webview draws Ж from a real font.
 const fixture = readFileSync(
@@ -17,9 +18,7 @@ async function openDetail(page: Page) {
   await page.route('**/fmfont/*', (route) =>
     route.fulfill({ status: 200, contentType: 'font/ttf', body: fixture }),
   );
-  await page.goto('/#/?face=1');
-  await page.getByRole('tab', { name: 'Glyphs' }).click();
-  const panel = page.getByRole('tabpanel', { name: 'Glyphs' });
+  const panel = await openSection(page, 1, 'Characters');
   await panel.getByRole('searchbox', { name: 'Search glyphs' }).fill('U+0416');
   const detail = panel.getByRole('region', { name: 'Selected glyph' });
   await expect(detail.getByLabel('Code point', { exact: true })).toHaveText('U+0416');
