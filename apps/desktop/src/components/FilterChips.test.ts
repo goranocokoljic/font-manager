@@ -6,6 +6,7 @@ import { createMockClient } from '../api/mock';
 import type { Filters } from '../api/types';
 import { useCollectionsStore } from '../stores/collections';
 import { useLibraryStore } from '../stores/library';
+import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
 import FilterChips from './FilterChips.vue';
 
@@ -143,5 +144,37 @@ describe('the filter bar', () => {
     const w = await mountChips({ slant: 'italic' });
     expect(w.get('.more-chips').classes()).toContain('spilled');
     expect(w.findAll('.chip.active.spilled')).toHaveLength(0);
+  });
+});
+
+describe('the renders-your-text chip (E43.3)', () => {
+  const SERBIAN = 'čađavog štos';
+
+  it('shows the count line switch as a removable chip counted in the Filters badge', async () => {
+    localStorage.clear();
+    const w = await mountChips({ classification: ['sans'] });
+    const search = useSearchStore();
+    expect(w.get('button.opener .count').text()).toBe('1');
+    search.setCoverText(SERBIAN);
+    search.setHideMissing(true);
+    await flushPromises();
+    const chip = w.get('[data-testid="renders-text-chip"]');
+    expect(chip.attributes('aria-label')).toBe('Remove filter Renders your text');
+    expect(w.get('button.opener .count').text()).toBe('2');
+
+    // The switch is remembered with the All fonts view: removing the chip turns it off there.
+    const preview = usePreviewStore();
+    preview.update(ALL_FONTS_VIEW, { hideMissing: true });
+    await chip.trigger('click');
+    await flushPromises();
+    expect(preview.settingsFor(ALL_FONTS_VIEW).hideMissing).toBe(false);
+  });
+
+  it('has no chip while the switch has no text to check', async () => {
+    const w = await mountChips();
+    useSearchStore().setHideMissing(true);
+    await flushPromises();
+    expect(w.find('[data-testid="renders-text-chip"]').exists()).toBe(false);
+    expect(w.find('button.opener .count').exists()).toBe(false);
   });
 });

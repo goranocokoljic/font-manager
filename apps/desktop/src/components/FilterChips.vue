@@ -23,7 +23,7 @@ import UiDrawer from './ui/UiDrawer.vue';
 const search = useSearchStore();
 const collections = useCollectionsStore();
 const preview = usePreviewStore();
-const { groups, languages, chips: active, labels } = useActiveFilters();
+const { groups, languages, rendersText, chips: active, labels } = useActiveFilters();
 
 /** The first languages sit in the drawer; the rest hide behind an expander. */
 const LANGUAGES_SHOWN = 10;
@@ -33,7 +33,18 @@ const shownLanguages = computed(() => {
   if (allLanguages.value) return all;
   return all.filter((l, i) => i < LANGUAGES_SHOWN || languages.value.includes(l.code));
 });
-const filtering = computed(() => hasFilters(search.filters));
+const filtering = computed(() => hasFilters(search.filters) || rendersText.value);
+
+/** The count line's switch (E43.3) is remembered with the All fonts view: off goes there. */
+function stopHiding(): void {
+  preview.update(ALL_FONTS_VIEW, { hideMissing: false });
+}
+
+/** Clear: every filter, the count line's switch too. */
+function clearAll(): void {
+  search.setFilters({});
+  stopHiding();
+}
 
 // The facets live in a drawer; the bar shows only what is chosen, as chips to remove.
 const drawerOpen = ref(false);
@@ -219,6 +230,20 @@ async function save(): Promise<void> {
         </svg>
       </button>
       <button
+        v-if="rendersText"
+        type="button"
+        class="chip active"
+        data-testid="renders-text-chip"
+        :class="{ spilled: active.length + languages.length >= fit }"
+        :aria-label="t('chips.remove', { name: t('chips.rendersText') })"
+        @click="remove(stopHiding)"
+      >
+        {{ t('chips.rendersText') }}
+        <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+          <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+      </button>
+      <button
         ref="more"
         type="button"
         class="chip more-chips"
@@ -237,7 +262,7 @@ async function save(): Promise<void> {
       @close="drawerOpen = false"
     >
       <div class="actions">
-        <button v-if="filtering" type="button" class="link" @click="search.setFilters({})">
+        <button v-if="filtering" type="button" class="link" @click="clearAll">
           {{ t('chips.clear') }}
         </button>
         <form

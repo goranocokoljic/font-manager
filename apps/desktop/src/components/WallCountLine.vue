@@ -3,7 +3,8 @@
 // selected row with its state, and how they are sorted, with a menu to change that. The API
 // does the sorting. With your own text past Basic Latin on the wall it says how many of the
 // families render it completely (E43.1; the API checks the coverage), and the reading rows
-// add their body size and line height.
+// add their body size and line height. A switch beside the count hides the families with
+// missing glyphs (E43.3): a filter remembered with the view, shown as a chip by the Filters.
 import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { errorMessage, t, type MessageKey } from '../i18n';
 import { columnById, SORT_COLUMNS, type ColumnId } from '../list/columns';
@@ -14,6 +15,7 @@ import { useFontListStore } from '../stores/fontList';
 import { usePreviewStore } from '../stores/preview';
 import { useSearchStore } from '../stores/search';
 import { useViewsStore } from '../stores/views';
+import UiSwitch from './ui/UiSwitch.vue';
 
 const props = defineProps<{
   view: string;
@@ -49,11 +51,33 @@ const coverText = computed(() => {
   return beyondBasicLatin(text) ? text : '';
 });
 watch(coverText, (text) => search.setCoverText(text), { immediate: true });
-onBeforeUnmount(() => search.setCoverText(''));
+watch(
+  () => settings.value.hideMissing,
+  (on) => search.setHideMissing(on),
+  { immediate: true },
+);
+onBeforeUnmount(() => {
+  search.setCoverText('');
+  search.setHideMissing(false);
+});
 /** How many of the families render your text completely; null when not counted. */
 const covering = computed(() =>
   coverText.value && search.coverText === coverText.value ? search.coverTotal : null,
 );
+/** The families before the switch hides any (with it on, the list holds only the covering). */
+const coverBase = computed(() => search.coverBase ?? familyCount.value);
+/** How many the switch hides, or would hide. */
+const missing = computed(() =>
+  covering.value === null ? 0 : Math.max(0, coverBase.value - covering.value),
+);
+const hideOn = computed(() => settings.value.hideMissing);
+/** The switch shows while it can hide something, and while it is on (to turn it off). */
+const showSwitch = computed(
+  () => !selecting.value && covering.value !== null && (missing.value > 0 || hideOn.value),
+);
+function setHide(on: boolean): void {
+  preview.update(props.view, { hideMissing: on });
+}
 const bodyText = computed(() =>
   t('home.bodySize', {
     size: settings.value.bodySizePx,
@@ -110,21 +134,35 @@ function onFocusOut(e: FocusEvent): void {
 <template>
   <div v-show="shown || search.error" class="line" data-testid="count-line">
     <p v-if="search.error" role="alert" class="error">{{ errorMessage(search.error) }}</p>
-    <p class="count" role="status" :title="labels.join(' · ') || undefined">
+    <p
+      class="count"
+      :class="{ tight: showSwitch }"
+      role="status"
+      :title="labels.join(' · ') || undefined"
+    >
       <template v-if="selecting">{{
         t('home.selected', { count: fontList.selectedCount })
       }}</template>
       <template v-else-if="shown && covering !== null">
         <strong data-testid="renders-text">{{
-          t('home.rendersText.count', { covered: covering, count: familyCount })
+          t('home.rendersText.count', { covered: covering, count: coverBase })
         }}</strong>
-        {{ t('home.rendersText.tail', { count: familyCount }) }}
+        {{ t('home.rendersText.tail', { count: coverBase }) }}
       </template>
       <template v-else-if="shown">
         <strong>{{ t('home.families', { count: familyCount }) }}</strong>
         <template v-for="label in labels" :key="label"> · {{ label }}</template>
       </template>
     </p>
+    <label v-if="showSwitch" class="hide" data-testid="hide-missing">
+      <UiSwitch
+        :id="`${uid}-hide`"
+        :checked="hideOn"
+        :aria-labelledby="`${uid}-hide-label`"
+        @click="setHide(!hideOn)"
+      />
+      <span :id="`${uid}-hide-label`">{{ t('home.rendersText.hide', { count: missing }) }}</span>
+    </label>
     <p v-if="selectedRow" class="selected-row" data-testid="selected-row">
       <bdi class="selected-name">{{ selectedName }}</bdi>
       <span aria-hidden="true">·</span>
@@ -194,6 +232,24 @@ function onFocusOut(e: FocusEvent): void {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.count.tight {
+  flex: 0 1 auto;
+}
+/* The switch sits right after the count; the rest of the line stays at the end. */
+.hide {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  align-self: center;
+  gap: var(--fm-space-2);
+  min-width: 0;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hide span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .count strong {
   color: var(--fm-fg);

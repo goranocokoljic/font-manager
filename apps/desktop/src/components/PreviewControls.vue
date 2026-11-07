@@ -8,7 +8,9 @@ import { computed, onBeforeUnmount, ref, useId, watch } from 'vue';
 import { t } from '../i18n';
 import { ACTIONS, ariaShortcut, chordOf } from '../keyboard/keymap';
 import { wallLayout, type WallPreset } from '../list/grid';
+import { languageName } from '../search/chips';
 import { useActions } from '../stores/commands';
+import { useSearchStore } from '../stores/search';
 import UiButton from './ui/UiButton.vue';
 import UiIcon from './ui/UiIcon.vue';
 import UiIconButton from './ui/UiIconButton.vue';
@@ -44,6 +46,7 @@ const emit = defineEmits<{
 }>();
 
 const store = usePreviewStore();
+const search = useSearchStore();
 void store.loadPangrams();
 // A select is labelled by `for`: wrapped in its label, its option texts would join the name.
 const uid = useId();
@@ -124,8 +127,20 @@ const chips: readonly WallPreset[] = WALL_PRESET_IDS;
 const layout = computed(() => wallLayout(s.value.preset, s.value.sample, s.value.customText));
 const rows = computed(() => layout.value === 'paragraph');
 
+/**
+ * The language the API detects in your own text (E43.3): only while the count line checks
+ * this field's text, so the note and the count speak of the same text.
+ */
+const detectedLanguage = computed(() => {
+  const own = s.value.sample === 'custom' ? s.value.customText.trim() : '';
+  const best = own && search.coverText === own ? search.detected[0] : undefined;
+  return best ? languageName(search.languages, best.code) : '';
+});
+
 /** The note at the field's end: what the text on the wall is. */
 const hint = computed(() => {
+  if (detectedLanguage.value)
+    return t('preview.hints.detected', { language: detectedLanguage.value });
   switch (s.value.sample) {
     case 'pangram':
       return t('preview.hints.pangram');

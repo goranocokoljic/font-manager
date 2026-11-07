@@ -22,11 +22,14 @@ export function useActiveFilters() {
   const groups = computed(() => chipGroups(search.filters, search.counts, sourceName, tags.nameOf));
   const languages = computed(() => chosenLanguages(search.filters));
   const chips = computed(() => groups.value.flatMap((g) => g.chips.filter((c) => c.selected)));
+  /** The count line's switch hides the families missing glyphs of your text (E43.3). */
+  const rendersText = computed(() => search.hiding);
   /** Every chosen filter's name, in the order the chips show them. */
   const labels = computed(() => [
     ...chips.value.map((c) => c.label),
     ...languages.value.map((code) => languageName(search.languages, code)),
+    ...(rendersText.value ? [t('chips.rendersText')] : []),
   ]);
 
-  return { groups, languages, chips, labels };
+  return { groups, languages, rendersText, chips, labels };
 }

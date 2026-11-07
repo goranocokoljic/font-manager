@@ -81,6 +81,11 @@ export interface PreviewSettings {
   bodySizePx: number;
   /** The line height of the wall's reading rows (E43.1). */
   bodyLineHeight: number;
+  /**
+   * The count line's "Hide the N with missing glyphs" switch (E43.3): the list keeps only
+   * the families that render your own text completely. A filter, remembered with the view.
+   */
+  hideMissing: boolean;
 }
 
 export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
@@ -100,6 +105,7 @@ export const DEFAULT_PREVIEW: Readonly<PreviewSettings> = Object.freeze({
   outline: false,
   bodySizePx: PARAGRAPH_PX,
   bodyLineHeight: PARAGRAPH_LINE_HEIGHT,
+  hideMissing: false,
 });
 
 const ALIGNMENTS: readonly Alignment[] = ['start', 'center', 'end'];
@@ -156,6 +162,7 @@ export function normalizePreview(raw: unknown): PreviewSettings {
     outline: typeof r.outline === 'boolean' ? r.outline : d.outline,
     bodySizePx: clampSetting(r.bodySizePx, BODY_SIZE, d.bodySizePx),
     bodyLineHeight: clampSetting(r.bodyLineHeight, LINE_HEIGHT, d.bodyLineHeight),
+    hideMissing: typeof r.hideMissing === 'boolean' ? r.hideMissing : d.hideMissing,
   };
 }
 
