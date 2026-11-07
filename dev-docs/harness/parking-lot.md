@@ -389,3 +389,6 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E42.9 #460] apps/desktop/src/components/GlyphCoverage.vue:29 — `isComplete` counts a 0/0 language as complete, unlike the rail's `completeLanguages`, so the two can disagree on such a preset.
 - [E43.1 #465] apps/desktop/src/components/PreviewControls.vue:139 — the field hint still reads "renders in N fonts" next to the new "N of M families render your text completely" count; E43.2 owns that hint.
 - [E43.1 #465] apps/desktop/src/stores/library.ts:169 — a `libraryChanged` event does not re-run an active search directly; `search.total`/`hits` follow only through the `library.families` watcher in the search store.
+- [E43.3 #467] apps/desktop/src/stores/search.ts:249 — `saveAsSmartCollection` saves only `filters`, so a smart collection saved with the renders-text chip on drops that condition.
+- [E43.3 #467] apps/desktop/src/stores/search.ts:101 — `run()` clears the search box's debounce timer before `query.value = text.value`, so a chip click within the debounce after typing drops the typed query.
+- [E43.3 #467] apps/desktop/src/components/FilterChips.vue:422 — a spilled chip is reachable only via "+N", which opens the drawer; the drawer has no control for the renders-text chip except Clear.
