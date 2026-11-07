@@ -392,3 +392,5 @@ Format: `- [<story id> #<issue>] path:line — <one sentence>` under a date head
 - [E43.3 #467] apps/desktop/src/stores/search.ts:249 — `saveAsSmartCollection` saves only `filters`, so a smart collection saved with the renders-text chip on drops that condition.
 - [E43.3 #467] apps/desktop/src/stores/search.ts:101 — `run()` clears the search box's debounce timer before `query.value = text.value`, so a chip click within the debounce after typing drops the typed query.
 - [E43.3 #467] apps/desktop/src/components/FilterChips.vue:422 — a spilled chip is reachable only via "+N", which opens the drawer; the drawer has no control for the renders-text chip except Clear.
+- [E43.4 #468] apps/desktop/src/views/FamilyView.vue:152 — the hero's fontFamily has no fallback stack, so until the sampleTexts answer arrives a missing character briefly renders in the browser's default font.
+- [E43.4 #468] apps/desktop/src/components/FontGrid.vue:112 — a user-chosen preview background (--fm-card-bg) sits under the card's meta line; the meta text colours are never contrast-checked against it.
