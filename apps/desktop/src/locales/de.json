@@ -1427,7 +1427,7 @@
     "deactivate": "Familie deaktivieren",
     "backAction": "Zurück zur Bibliothek",
     "notFound": "Keine solche Familie",
-    "notFoundBody": "Der Link nennt keine Familie aus Ihrer Bibliothek.",
+    "notFoundBody": "Der Link nennt keine Familie aus deiner Bibliothek.",
     "hero": "Schriftprobe",
     "axes": "Achsen",
     "axesStatic": "Keine variablen Achsen",
@@ -1440,6 +1440,20 @@
       "pairings": "Kombinationen",
       "info": "Info"
     },
+    "pairingRole": "Diese Familie",
+    "pairingRoles": {
+      "headline": "für Überschriften",
+      "body": "für Fließtext"
+    },
+    "pairingHints": {
+      "headline": "Diese Familie setzt die Überschrift · Schriften aus deiner Bibliothek für den Fließtext",
+      "body": "Diese Familie setzt den Fließtext · Schriften aus deiner Bibliothek für die Überschrift"
+    },
+    "pairingsList": "Vorgeschlagene Paarungen",
+    "pairingsLoading": "Paarungen werden gesucht…",
+    "pairingsNone": "Noch keine Schrift in deiner Bibliothek passt zu dieser Familie.",
+    "pairingsError": "Font Manager konnte keine Paarungen vorschlagen. {message}",
+    "browseCatalogs": "Kataloge durchsuchen",
     "sectionLater": "Dieser Bereich kommt in einem späteren Update.",
     "textHint": "Lesetest · drei Größen, Ihre Zeilenlänge",
     "textMeasure": "Satzbreite",

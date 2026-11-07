@@ -8,6 +8,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FamilyCharacters from '../components/FamilyCharacters.vue';
 import FamilyFeatures from '../components/FamilyFeatures.vue';
+import FamilyPairings from '../components/FamilyPairings.vue';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
 import FamilySample from '../components/FamilySample.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
@@ -30,8 +31,10 @@ import { sampleText } from '../preview/sampleText';
 import { useWeightScrub } from '../preview/useWeightScrub';
 import { variationSettings } from '../preview/variations';
 import { useAxesStore } from '../stores/axes';
+import { useCatalogsStore } from '../stores/catalogs';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { FAMILY_SECTIONS, parseFamilyId, useFamilyPageStore } from '../stores/familyPage';
+import type { PairingCard } from '../stores/familyPairings';
 import { useFeaturesStore } from '../stores/features';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
@@ -82,6 +85,23 @@ function chooseStyle(face: number): void {
 }
 
 const developerOpen = ref(false);
+
+/** A pairing card opens the Studio: the body face is the panel's, the headline face its block's. */
+function openPairing(card: PairingCard): void {
+  void router.push({
+    name: 'studio',
+    query: { face: String(card.body), headline: String(card.headline) },
+  });
+}
+
+/** No candidate in the library: the library shows the first online catalog to browse. */
+const catalogs = useCatalogsStore();
+async function browseCatalogs(): Promise<void> {
+  await catalogs.load();
+  const first = catalogs.catalogs[0];
+  if (first) catalogs.show(first.id);
+  await back();
+}
 
 // The webview's own transition moves the specimen; without one the page slides in. A deep
 // link and a reload just appear.
@@ -398,6 +418,13 @@ onBeforeUnmount(() => {
                     v-else-if="page.section === 'features'"
                     :detail="shown"
                     :text="specimen"
+                  />
+                  <FamilyPairings
+                    v-else-if="page.section === 'pairings'"
+                    :face="faceId"
+                    :text="specimen"
+                    @open="openPairing"
+                    @browse="browseCatalogs"
                   />
                   <InspectorInfo v-else-if="page.section === 'info'" />
                   <p v-else class="quiet">{{ t('family.sectionLater') }}</p>

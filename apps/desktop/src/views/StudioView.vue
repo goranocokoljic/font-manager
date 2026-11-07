@@ -13,6 +13,10 @@
 // narrow (E24.3). The first is the URL's layout in the library's store; "Add panel" adds a
 // copy of the panel that had the focus last, with its own store and block fonts. The studio
 // store keeps the panels, so they are there again when the studio opens later.
+//
+// A pairing card of the family page (E42.7) opens `?face=<body>&headline=<face>`: the panel's
+// face sets the body and the first panel's headline block is set in the headline face, once
+// for each layout the panel shows.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import StudioPanel from '../components/StudioPanel.vue';
@@ -21,7 +25,7 @@ import { t } from '../i18n';
 import { useCommandsStore } from '../stores/commands';
 import { ALL_FONTS_VIEW } from '../stores/preview';
 import { parseFaceId, useSelectionStore } from '../stores/selection';
-import { FIRST_PANEL, MAX_PANELS, useStudioStore } from '../stores/studio';
+import { FIRST_PANEL, MAX_PANELS, layoutsOf, useStudioStore } from '../stores/studio';
 import { useViewsStore } from '../stores/views';
 
 const route = useRoute();
@@ -46,6 +50,22 @@ const face = computed(() => {
 });
 const fontName = computed(() =>
   face.value ? `${face.value.familyName} ${face.value.style}` : t('studio.noFont'),
+);
+
+// The pairing's headline face, once the first panel's layout has loaded.
+const headline = computed(() => parseFaceId(route.query.headline));
+const firstLayouts = layoutsOf(FIRST_PANEL);
+let pairingLoaded: string | null = null;
+watch(
+  () => [headline.value, firstLayouts.saved?.id, firstLayouts.draft] as const,
+  ([face, id, draft]) => {
+    if (face === null || !id || !draft) return;
+    const key = `${face}@${id}`;
+    if (pairingLoaded === key) return;
+    pairingLoaded = key;
+    void studio.loadPairing(id, draft.blocks, face);
+  },
+  { immediate: true },
 );
 
 /** The panel "Add panel" copies: the one that had the focus last, else the last one. */
