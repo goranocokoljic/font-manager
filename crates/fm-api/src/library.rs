@@ -477,6 +477,18 @@ pub struct Family {
     /// The earliest year the copyright of a face states (E42.2).
     #[serde(default)]
     pub year: Option<u16>,
+    /// The collections, manual and smart, that hold at least one face of the
+    /// family now, in id order (E42.9: the family page's "Used in").
+    #[serde(default)]
+    pub collections: Vec<CollectionId>,
+    /// The font files its faces are in; a collection file counts once
+    /// (E42.9: the rail's "Format").
+    #[serde(default)]
+    pub file_count: u32,
+    /// The size of those files in bytes, each counted once; `u32::MAX` when
+    /// larger (E42.9).
+    #[serde(default)]
+    pub file_bytes: u32,
 }
 
 /// An open-source license recognized from the license text.

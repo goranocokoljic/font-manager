@@ -631,6 +631,49 @@ fn search_groups_by_family_and_reports_near_misses() {
 }
 
 #[test]
+fn a_family_lists_the_collections_that_hold_it() {
+    let api = api();
+    assert!(api.get_family(FamilyId(2)).unwrap().collections.is_empty());
+    let manual = api
+        .create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Picks".into(),
+            parent: None,
+            rules: None,
+            color: None,
+        })
+        .unwrap();
+    let smart = api
+        .create_collection(CreateCollectionRequest {
+            rule_group: None,
+            name: "Variable".into(),
+            parent: None,
+            rules: Some(Filters {
+                variable: Some(true),
+                ..Filters::default()
+            }),
+            color: None,
+        })
+        .unwrap();
+    api.add_to_collection(CollectionFacesRequest {
+        collection: manual.id,
+        faces: Vec::new(),
+        families: vec![FamilyId(2)],
+    })
+    .unwrap();
+    let fam = api.get_family(FamilyId(2)).unwrap();
+    let mut want = vec![manual.id];
+    if fam.summary.is_variable {
+        want.push(smart.id);
+    }
+    assert_eq!(fam.collections, want);
+    // Source Serif 4: three faces, each in its own file.
+    assert_eq!(fam.file_count, 3);
+    let one = api.get_face(fam.faces[0].id).unwrap().file_size;
+    assert!(fam.file_bytes >= one && one > 0);
+}
+
+#[test]
 fn collections_nest_reorder_and_take_families() {
     let api = api();
     let make = |name: &str, parent| {

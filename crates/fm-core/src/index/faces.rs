@@ -116,8 +116,10 @@ impl Index {
         let mut faces = Vec::with_capacity(ids.len());
         let mut designer = None;
         let mut year = None;
+        let mut files: HashMap<PathBuf, u64> = HashMap::new();
         for id in ids {
             let row = self.face_row(id)?;
+            files.insert(row.file.path.clone(), row.size);
             designer = designer.or(row.designer);
             let stated = row
                 .parsed
@@ -128,11 +130,15 @@ impl Index {
             faces.push(row.summary);
         }
         faces.sort_by_key(|f| (f.weight, f.width, f.slant != Slant::Upright, f.id));
+        let ids: Vec<FaceId> = faces.iter().map(|f| f.id).collect();
         Ok(Family {
             summary,
             designer,
             default_face: default_face(&faces),
             year,
+            collections: self.collections_holding(&ids)?,
+            file_count: u32::try_from(files.len()).unwrap_or(u32::MAX),
+            file_bytes: u32::try_from(files.values().sum::<u64>()).unwrap_or(u32::MAX),
             faces,
         })
     }

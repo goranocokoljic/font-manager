@@ -13,7 +13,7 @@ import type {
   OpenLicense,
   WeightRange,
 } from '../api/types';
-import { locale, t } from '../i18n';
+import { formatNumber, locale, t } from '../i18n';
 import { clampSetting, SIZE } from '../stores/preview';
 
 export type ColumnId =
@@ -275,4 +275,14 @@ export function dateText(iso: string, tag: string = locale()): string {
   const d = new Date(iso);
   if (!iso || Number.isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat(tag, { dateStyle: 'medium', timeZone: 'UTC' }).format(d);
+}
+
+/** "1.1 MB", "46 kB": decimal units, as the file managers of all three systems show them. */
+export function fileSizeText(bytes: number): string {
+  const mb = bytes >= 1_000_000;
+  return formatNumber(mb ? bytes / 1_000_000 : bytes / 1000, {
+    style: 'unit',
+    unit: mb ? 'megabyte' : 'kilobyte',
+    maximumFractionDigits: 1,
+  });
 }

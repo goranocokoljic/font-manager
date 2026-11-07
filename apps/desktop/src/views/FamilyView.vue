@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // The family page (E42.1): the frame every section of E42 lives in. Only the panel under the
 // section switch changes with the section; the hero, the axis row and the rail stay mounted,
-// so what is chosen there carries across sections. E42.2 to E42.9 fill the parts; until then the
-// inspector's parts live here (E41.5). They read the selection store, so the page keeps the face
-// it shows selected: the `?face=` of the route, else the family's first.
+// so what is chosen there carries across sections. E42.2 to E42.9 fill the parts; a language
+// chosen in the rail (E42.9) previews the whole page in its pangram. They read the selection
+// store, so the page keeps the face it shows selected: the `?face=` of the route, else the
+// family's first.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import FamilyCharacters from '../components/FamilyCharacters.vue';
@@ -11,15 +12,13 @@ import FamilyFeatures from '../components/FamilyFeatures.vue';
 import FamilyInfo from '../components/FamilyInfo.vue';
 import FamilyPairings from '../components/FamilyPairings.vue';
 import FamilyCollectionMenu from '../components/FamilyCollectionMenu.vue';
-import FamilySample from '../components/FamilySample.vue';
+import FamilyRail from '../components/FamilyRail.vue';
 import FamilyStyles from '../components/FamilyStyles.vue';
-import FamilyTechnical from '../components/FamilyTechnical.vue';
 import FamilyText from '../components/FamilyText.vue';
 import InspectorAxes from '../components/InspectorAxes.vue';
 import InspectorInfo from '../components/InspectorInfo.vue';
 import TaggingPanel from '../components/TaggingPanel.vue';
 import UiButton from '../components/ui/UiButton.vue';
-import UiChevron from '../components/ui/UiChevron.vue';
 import UiEmptyState from '../components/ui/UiEmptyState.vue';
 import UiIcon from '../components/ui/UiIcon.vue';
 import UiIconButton from '../components/ui/UiIconButton.vue';
@@ -32,10 +31,13 @@ import { sampleText } from '../preview/sampleText';
 import { useWeightScrub } from '../preview/useWeightScrub';
 import { variationSettings } from '../preview/variations';
 import { useAxesStore } from '../stores/axes';
+import type { CollectionId, PairingSuggestion } from '../api/types';
 import { useCatalogsStore } from '../stores/catalogs';
+import { useCollectionsStore } from '../stores/collections';
 import { useActions, useCommandsStore } from '../stores/commands';
 import { FAMILY_SECTIONS, parseFamilyId, useFamilyPageStore } from '../stores/familyPage';
 import type { PairingCard } from '../stores/familyPairings';
+import { useFamilyRailStore } from '../stores/familyRail';
 import { useFeaturesStore } from '../stores/features';
 import { usePalettesStore } from '../stores/palettes';
 import { ALL_FONTS_VIEW, usePreviewStore } from '../stores/preview';
@@ -85,14 +87,36 @@ function chooseStyle(face: number): void {
   void router.replace({ query: { face: String(face) } });
 }
 
-const developerOpen = ref(false);
-
 /** A pairing card opens the Studio: the body face is the panel's, the headline face its block's. */
 function openPairing(card: PairingCard): void {
   void router.push({
     name: 'studio',
     query: { face: String(card.body), headline: String(card.headline) },
   });
+}
+
+/** The rail's "Open in Pairing Studio": this face sets the headline, the top pairing the body. */
+function openStudio(top: PairingSuggestion | null): void {
+  const face = page.face?.id;
+  if (face === undefined) return;
+  void router.push({
+    name: 'studio',
+    query: top ? { face: String(top.face.id), headline: String(face) } : { face: String(face) },
+  });
+}
+
+/** "Used in": the library shows that collection. */
+const collections = useCollectionsStore();
+// Adding the family to a collection, here or elsewhere, changes what "Used in" lists.
+watch(
+  () => collections.collections,
+  () => {
+    if (page.id !== null) void page.show(page.id);
+  },
+);
+async function openCollection(id: CollectionId): Promise<void> {
+  collections.show(id);
+  await back();
 }
 
 /** No candidate in the library: the library shows the first online catalog to browse. */
@@ -109,6 +133,8 @@ async function browseCatalogs(): Promise<void> {
 const slideIn = page.takePushed() && typeof document.startViewTransition !== 'function';
 
 const faceId = computed(() => page.face?.id ?? null);
+const rail = useFamilyRailStore();
+watch(faceId, (id) => void rail.load(id), { immediate: true });
 const heldFamily = useHeldFace(faceId);
 const axesSet = useAxesStore();
 const features = useFeaturesStore();
@@ -130,9 +156,14 @@ const specimenStyle = computed(() => {
     fontPalette: palettes.fontPaletteOf(ALL_FONTS_VIEW, face),
   };
 });
-const specimen = computed(() =>
-  page.face ? sampleText(preview.settingsFor(ALL_FONTS_VIEW), page.face, preview.pangramText) : '',
-);
+/** The page's preview text: the rail's language when one is chosen (E42.9), else the user's. */
+const specimen = computed(() => {
+  if (!page.face) return '';
+  return (
+    rail.textOf(search.languages) ??
+    sampleText(preview.settingsFor(ALL_FONTS_VIEW), page.face, preview.pangramText)
+  );
+});
 
 const scrubAxis = computed(() => {
   const axis = shown.value?.axes.find((a) => a.tag === 'wght');
@@ -274,11 +305,13 @@ onMounted(() => {
   title.value?.focus();
   window.addEventListener('keydown', onKey);
   void search.loadLanguages();
+  void collections.refresh();
 });
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKey);
   // Nothing on screen needs the family any more, so library changes stop reading it.
   void page.show(null);
+  void rail.load(null);
 });
 </script>
 
@@ -444,44 +477,19 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <aside class="rail" data-testid="family-rail" :aria-label="t('family.rail')">
-            <FamilySample
-              v-if="faceId !== null"
-              class="rail-sample"
-              data-testid="family-rail-sample"
-              aria-hidden="true"
+            <FamilyRail
               :face="faceId"
+              :detail="shown"
+              :family="page.detail"
+              :summary="page.summary"
+              :presets="search.languages"
+              :collections="collections.collections"
               :text="specimen"
               :variation="heroVariation"
               :features="specimenStyle?.fontFeatureSettings"
+              @studio="openStudio"
+              @collection="openCollection"
             />
-            <dl class="facts">
-              <template v-if="page.detail?.designer">
-                <dt>{{ t('family.designer') }}</dt>
-                <dd>{{ page.detail.designer }}</dd>
-              </template>
-              <template v-if="page.summary?.foundry">
-                <dt>{{ t('family.foundry') }}</dt>
-                <dd>{{ page.summary.foundry }}</dd>
-              </template>
-              <template v-if="page.summary">
-                <dt>{{ t('family.stylesFact') }}</dt>
-                <dd class="count">{{ page.summary.styleCount }}</dd>
-              </template>
-            </dl>
-            <button
-              type="button"
-              class="developer fm-directional"
-              aria-controls="fm-family-developer"
-              :aria-expanded="developerOpen"
-              @click="developerOpen = !developerOpen"
-            >
-              <UiChevron :open="developerOpen" />
-              {{ t('family.technical') }}
-            </button>
-            <!-- Mounted only while open: it asks fm-core for the CSS as the state changes. -->
-            <div id="fm-family-developer">
-              <FamilyTechnical v-if="developerOpen" :detail="shown" />
-            </div>
           </aside>
         </div>
       </template>
@@ -630,25 +638,6 @@ onBeforeUnmount(() => {
   grid-area: 1 / 1;
   min-width: 0;
 }
-.rail-sample {
-  margin-block-end: var(--fm-space-3);
-  font-size: var(--fm-text-lg);
-}
-.developer {
-  display: flex;
-  align-items: center;
-  gap: var(--fm-space-1);
-  width: 100%;
-  margin-block-start: var(--fm-space-4);
-  padding: var(--fm-space-2) 0 0;
-  border: 0;
-  border-block-start: 1px solid var(--fm-border);
-  background: none;
-  color: var(--fm-muted);
-  font: inherit;
-  font-size: var(--fm-text-sm);
-  cursor: pointer;
-}
 .yours.yours {
   margin-block-start: var(--fm-space-5);
   padding: var(--fm-space-4) 0 0;
@@ -657,22 +646,6 @@ onBeforeUnmount(() => {
 .quiet {
   margin: 0;
   color: var(--fm-muted);
-}
-.facts {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--fm-space-1) var(--fm-space-3);
-  margin: 0;
-  font-size: var(--fm-text-sm);
-}
-.facts dt {
-  color: var(--fm-muted);
-}
-.facts dd {
-  margin: 0;
-}
-.count {
-  font-variant-numeric: tabular-nums;
 }
 /* MOTION.md "Open a family", fallback: 24 px from the end side over a fade. */
 .slide-in {

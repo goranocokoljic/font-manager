@@ -1767,11 +1767,30 @@ impl LibraryService for MockApi {
                 )
             })
             .map(|f| f.id);
+        // As fm-core: every collection that holds a face of the family, in id order.
+        let mut collections: Vec<CollectionId> = st
+            .collections
+            .iter()
+            .map(|c| c.id)
+            .filter(|&c| {
+                st.family_faces(family)
+                    .any(|f| st.in_collection(f, c, &[]).unwrap_or(false))
+            })
+            .collect();
+        collections.sort_unstable();
+        // As fm-core: each file once.
+        let files: HashMap<&str, u32> = st
+            .family_faces(family)
+            .map(|f| (f.detail.path.as_str(), f.detail.file_size))
+            .collect();
         Ok(Family {
+            file_count: u32::try_from(files.len()).unwrap_or(u32::MAX),
+            file_bytes: files.values().fold(0_u32, |a, b| a.saturating_add(*b)),
             summary: st.family_summary(fam),
             designer: Some(fam.designer.into()),
             default_face,
             year: None,
+            collections,
             faces,
         })
     }
